@@ -34,7 +34,6 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
-import { appSetting } from '~/modules/storage/app-storage'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -115,9 +114,7 @@ const BROWSER_BOOKMARKS_PROVIDER_ID = 'touch-browser-data.browser-bookmarks'
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
-const showAdvancedSettings = computed(() =>
-  Boolean(props.forceAdvancedSettings || appSetting?.dev?.advancedSettings)
-)
+const showAdvancedSettings = computed(() => Boolean(props.forceAdvancedSettings))
 const indexedSourceDiagnosticsById = computed(() => {
   return new Map(
     (sourceDiagnostics.value?.sources ?? []).map((source) => [source.descriptor.id, source])

@@ -1,6 +1,7 @@
 <script name="Storagable" setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, ref } from 'vue'
@@ -113,6 +114,7 @@ const errorMessage = ref<string | null>(null)
 const report = ref<StorageUsageReport | null>(null)
 const cleaningKey = ref<string | null>(null)
 const transport = useTuffTransport()
+const downloadSdk = useDownloadSdk()
 function sendRaw<TRequest, TResponse>(eventName: string, payload?: TRequest) {
   const event = defineRawEvent<TRequest, TResponse>(eventName)
   return transport.send(event, payload as TRequest)
@@ -478,8 +480,26 @@ async function loadAll(): Promise<void> {
   void loadDatabaseTables()
 }
 
+/**
+ * The chunk cache path comes from the download module rather than the storage report, which only
+ * walks the app data root. Failing to read it just leaves the row showing a dash.
+ */
+const tempDirPath = ref('')
+
+async function loadTempDirPath(): Promise<void> {
+  try {
+    const response = await downloadSdk.getConfig()
+    if (response.success && response.config) {
+      tempDirPath.value = response.config.storage.tempDir
+    }
+  } catch {
+    // Non-critical: the row degrades to a dash.
+  }
+}
+
 onMounted(() => {
   void loadAll()
+  void loadTempDirPath()
 })
 </script>
 
@@ -760,6 +780,33 @@ onMounted(() => {
             </div>
           </div>
         </template>
+
+        <!--
+          Paths live here rather than on the downloads page: the chunk cache is an engine-internal
+          location, and "where does this app keep things on disk" is the question this page answers.
+          The downloads page points here for it.
+        -->
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title">位置</div>
+          </div>
+          <div class="path-rows">
+            <div class="path-row">
+              <div class="path-text">
+                <div class="path-label">数据目录</div>
+                <div class="muted">索引、数据库与插件配置的存放位置。</div>
+              </div>
+              <code class="path-value">{{ report?.rootPath || '—' }}</code>
+            </div>
+            <div class="path-row">
+              <div class="path-text">
+                <div class="path-label">临时目录</div>
+                <div class="muted">下载切片缓存，任务完成后自动回收。</div>
+              </div>
+              <code class="path-value">{{ tempDirPath || '—' }}</code>
+            </div>
+          </div>
+        </div>
       </div>
     </ViewTemplate>
 

@@ -64,6 +64,18 @@ interface UpdateSystemConfig {
 const RENDERER_OVERRIDE_STATE_FILE = 'renderer-override.json'
 const RENDERER_OVERRIDE_DIR = 'renderer-override'
 const ENABLE_RENDERER_OVERRIDE = process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
+
+/**
+ * Whether the renderer-override switch is reachable at all in this process.
+ *
+ * The feature is gated twice — by this environment variable and by the persisted setting — so the
+ * settings UI needs the first half to decide whether to render the row. Without it the switch has
+ * to be drawn permanently disabled next to a note telling the user to relaunch with an env var,
+ * which reads as a broken control rather than an unavailable capability.
+ */
+export function isRendererOverrideAvailable(): boolean {
+  return ENABLE_RENDERER_OVERRIDE
+}
 const updateSystemLog = createLogger('UpdateSystem')
 
 interface RendererOverrideState {

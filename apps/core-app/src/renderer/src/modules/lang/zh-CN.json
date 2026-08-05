@@ -159,8 +159,6 @@
     },
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
-    "advancedSettings": "高级设置",
-    "advancedSettingsDesc": "启用后显示文件索引、应用索引调度、下载、数据分析与存储设置",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
   },
   "settingLanguage": {
@@ -529,9 +527,6 @@
     "enableAssistantDesc": "启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。",
     "floatingBall": "显示悬浮球",
     "floatingBallDesc": "在桌面上显示可拖动的悬浮入口；点击后打开文本指令面板。",
-    "assistantName": "助手名称",
-    "assistantNameDesc": "显示在 Assistant 面板顶部的名称。",
-    "assistantNamePlaceholder": "阿洛 aler",
     "voiceWake": "语音唤醒",
     "voiceWakeDesc": "开启后悬浮球和面板才会请求语音识别；关闭时只保留文本输入。",
     "wakeWords": "唤醒词",
@@ -611,7 +606,6 @@
     "completeBrowserLoginToast": "请在浏览器中完成登录。",
     "loginPageReopenedToast": "已重新打开登录页面。",
     "tokenRequired": "请输入 token",
-    "secureStorageTitle": "登录凭证保护",
     "syncNow": "立即同步",
     "syncEnableFirst": "请先开启同步",
     "syncComplete": "同步完成",
@@ -621,15 +615,6 @@
       "enabled": "同步已开启。",
       "userDisabled": "你已手动关闭，同步不会在登录时自动恢复。",
       "disabled": "同步已关闭。"
-    },
-    "secureStorage": {
-      "enabledToast": "已启用登录凭证保护",
-      "disabledToast": "已关闭登录凭证保护。",
-      "disabledDescription": "启用登录凭证保护后，本地凭证防护更强，登录更安全。",
-      "checkingDescription": "正在检测本地凭证保护后端。",
-      "unavailableDescription": "本地凭证保护当前不可用；可用时开启后能提供更强防护，登录更安全。",
-      "enabledDescription": "登录凭证保护已启用：凭证由本机 root 密钥加密保存，防护更强。",
-      "sessionModeReminder": "登录凭证保护已关闭；可在账户设置中开启，以获得更强的本地凭证防护。"
     },
     "syncStatus": {
       "unrecorded": "未记录",
@@ -928,9 +913,80 @@
   "shell": {
     "search": "搜索",
     "newChat": "新建对话",
-    "intelligence": "智能",
     "store": "市场",
-    "setting": "设置"
+    "setting": "设置",
+    "collapseSidebar": "收起侧边栏",
+    "expandSidebar": "展开侧边栏",
+    "back": "后退",
+    "forward": "前进",
+    "minimizeWindow": "最小化",
+    "maximizeWindow": "最大化",
+    "restoreWindow": "还原",
+    "closeWindow": "关闭"
+  },
+  "home": {
+    "greeting": "今天想做点什么？",
+    "placeholder": "塔芙来帮你做任何事",
+    "autoContext": "Auto Context",
+    "autoContextHint": "开启后模型会按需自动取用联网、文件、剪贴板与关联数据",
+    "model": "选择模型与推理强度",
+    "modelName": "Tuff 智能",
+    "effortHigh": "高",
+    "attach": "添加附件",
+    "voice": "语音输入",
+    "send": "发送",
+    "stop": "停止生成",
+    "retry": "重试",
+    "thinking": "正在思考",
+    "error": {
+      "noProvider": "还没有可用的 AI 提供商，去「设置 · AI」配置一个再试",
+      "empty": "模型没有返回任何内容",
+      "generic": "这轮回复失败了"
+    },
+    "pill": {
+      "searchFiles": "用自然语言搜索文件",
+      "translateClipboard": "翻译剪贴板",
+      "tidyDownloads": "整理下载目录",
+      "runScript": "运行工作区脚本"
+    }
+  },
+  "settingsNav": {
+    "back": "返回 Tuff",
+    "search": "搜索设置",
+    "group": {
+      "preference": "偏好",
+      "capability": "能力",
+      "system": "系统"
+    },
+    "category": {
+      "overview": "总览",
+      "general": "通用",
+      "appearance": "外观",
+      "intelligence": "智能",
+      "plugins": "插件与工具",
+      "fileIndex": "文件索引",
+      "update": "更新",
+      "network": "网络",
+      "download": "下载",
+      "storage": "存储",
+      "about": "关于"
+    }
+  },
+  "settingsOverview": {
+    "tagline": "为创造者们重新构想的命令栏",
+    "account": "账户",
+    "general": "常规"
+  },
+  "settingsEntries": {
+    "installedPlugins": "已安装插件",
+    "downloadCenter": "下载中心",
+    "downloadCenterDesc": "查看下载任务与历史记录。",
+    "open": "打开",
+    "intelligenceDesc": "模型通道、能力、提示词与审计。",
+    "application": "应用",
+    "applicationDesc": "查看与管理已安装的应用。",
+    "store": "插件市场",
+    "storeDesc": "浏览、安装与管理插件。"
   },
   "store": {
     "title": "插件市场",
@@ -942,6 +998,7 @@
     "loading": "正在加载官方插件...",
     "refresh": "刷新",
     "install": "安装",
+    "market": "市场",
     "installed": "已安装",
     "docs": "文档",
     "cli": "CLI",
@@ -2132,6 +2189,7 @@
     "title": "Tuff"
   },
   "router": {
+    "home": "首页",
     "login": "请先登录!",
     "permission": "您没有权限!",
     "pluginStore": "插件市场",
@@ -2475,9 +2533,20 @@
       "resetTempDir": "恢复默认目录",
       "selectTempDirTitle": "选择下载临时目录",
       "selectTempDirConfirm": "使用此目录",
+      "defaultDestination": "下载位置",
+      "defaultDestinationDesc": "完成的文件默认保存到这里；单个任务可在下载时另选",
+      "selectDestinationTitle": "选择下载位置",
+      "selectDestinationConfirm": "使用此目录",
+      "notSet": "未设置",
+      "choose": "选择…",
+      "notifyOnComplete": "完成后通知",
+      "notifyOnCompleteDesc": "任务完成或失败时发送系统通知",
+      "retry": "失败重试",
+      "retryDesc": "切片失败后自动重试的次数",
+      "cleanTemp": "清理临时文件",
       "defaultPath": "默认路径",
       "noRetry": "不重试",
-      "days": "天",
+      "days": "{days} 天",
       "actions": "操作",
       "actionsDesc": "管理下载设置和临时文件",
       "cleanupTemp": "清理临时文件",
@@ -2525,6 +2594,14 @@
       "proxyAuthDesc": "认证凭据只通过安全存储引用读取，本页不保存明文账号密码",
       "proxyAuthConfigured": "已配置安全凭据引用",
       "proxyAuthNotConfigured": "未配置",
+      "customProxy": "自定义代理",
+      "customProxyDesc": "HTTP(S)、SOCKS、PAC 地址与绕过规则。仅在自定义模式下生效",
+      "customProxyHint": "留空的项不会生效。凭据请在「代理认证」中单独设置，本页不保存明文账号密码。",
+      "separateHttps": "为 HTTPS 单独设置地址",
+      "configure": "配置…",
+      "cancel": "取消",
+      "pauseOnInstability": "不稳定时暂停",
+      "pauseOnInstabilityDesc": "连续失败后短暂暂停请求，成功后自动恢复；关闭则始终立即重试",
       "policyGroupTitle": "网络策略",
       "policyGroupDesc": "配置统一网络请求的超时、重试和失败冷却",
       "timeoutMs": "请求超时",
@@ -3622,17 +3699,14 @@
         "monthly": "每月一次",
         "never": "不自动检查"
       },
-      "autoDownloadTitle": "自动下载更新",
       "autoDownloadDesc": "发现新版本时自动下载更新包",
       "autoDownloadDescManual": "发现新版本时自动下载安装包，后续仍需通过系统安装器完成更新",
       "autoDownloadDescMac": "自动下载 macOS 更新包；应用更新时会通过重启完成接管。",
       "autoDownloadDescWindows": "自动下载 Windows 安装器；后续仍会明确启动 Windows 安装器。",
       "autoDownloadDescLinux": "自动下载 Linux 安装包；打开并完成安装仍需手动操作。",
-      "installOnNormalQuitTitle": "正常退出时安装",
-      "installOnNormalQuitDesc": "更新包下载并验证完成后，在应用下次正常退出时安装。关闭后仍可手动触发安装。",
       "installOnNormalQuitLocked": "该版本没有权威 N/N-1 降级兼容证据，已锁定正常退出安装；更新就绪后仍可手动立即安装。",
       "rendererOverrideTitle": "Renderer Override（实验性）",
-      "rendererOverrideDesc": "手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。",
+      "rendererOverrideDesc": "实验性能力，仅在以 TUFF_ENABLE_RENDERER_OVERRIDE=1 启动时可见；关闭后需重新以该变量启动才能再次开启。",
       "statusTitle": "状态",
       "status": {
         "loading": "正在加载更新状态…",
@@ -3747,8 +3821,6 @@
       "assetsCompatibilityMissingChecksum": "缺少校验信息",
       "evidenceTitle": "诊断证据",
       "evidenceDesc": "导出权威生命周期快照、降级/恢复元数据、缓存版本、平台接管模式，以及明确的 macOS native trust 验证状态。",
-      "copyEvidence": "复制证据",
-      "saveEvidence": "保存证据",
       "evidenceMissing": "请先加载更新状态",
       "evidenceCopied": "更新诊断证据已复制",
       "evidenceCopyFailed": "复制更新诊断证据失败",
@@ -3786,8 +3858,6 @@
         "loadFailed": "加载更新设置失败",
         "channelSaved": "已切换到 {channel}，正在检查更新",
         "frequencySaved": "检查频率已保存",
-        "autoDownloadSaved": "自动下载设置已保存",
-        "installOnNormalQuitSaved": "正常退出安装设置已保存",
         "rendererOverrideSaved": "Renderer Override 设置已保存",
         "saveFailed": "保存更新设置失败",
         "actionUnavailableForPhase": "当前更新生命周期阶段不允许执行此操作。",
@@ -3802,8 +3872,16 @@
         "macSilentUpdateNotWritable": "Tuff 无法在不弹出密码框的情况下替换当前应用。请将 Tuff 移动或重新安装到当前用户可管理的 Applications 位置后重试。",
         "macSilentUpdateUntrusted": "当前 Tuff 不是经过官方验证的 macOS 构建，已阻止静默更新。",
         "cacheCleared": "更新缓存已清空",
-        "cacheClearFailed": "清空更新缓存失败"
-      }
+        "cacheClearFailed": "清空更新缓存失败",
+        "installModeSaved": "安装方式已保存"
+      },
+      "installMode": {
+        "title": "安装方式",
+        "manual": "仅提醒",
+        "onQuit": "自动下载，退出时安装",
+        "immediate": "自动下载并立即安装"
+      },
+      "exportEvidence": "导出诊断"
     },
     "updateModal": {
       "title": "发现新版本",
@@ -3861,8 +3939,8 @@
       "notificationsDesc": "允许应用显示系统通知；macOS 授权状态可能需要在系统设置中确认。",
       "autoStart": "开机自动启动",
       "autoStartDesc": "系统启动时自动运行应用",
-      "showTray": "显示托盘图标",
-      "showTrayDesc": "在系统托盘显示应用图标",
+      "backgroundMode": "关闭后继续在后台运行",
+      "backgroundModeDesc": "隐藏窗口并通过系统托盘保持 Tuff 可用",
       "hideDock": "不在 Dock 栏显示",
       "hideDockDesc": "关闭主窗口后不显示 Dock 图标",
       "startSilent": "静默启动",
@@ -4208,7 +4286,6 @@
       "microphonePermissionSettingsOpened": "已完成麦克风权限请求，请点击“重试语音输入”",
       "microphonePermissionSettingsUnavailable": "无法请求或打开麦克风权限设置，请在系统隐私设置中允许 Tuff 使用麦克风",
       "retryVoiceInput": "重试语音输入",
-
       "openIntelligenceSettings": "前往 AI 渠道设置",
       "openingIntelligenceSettings": "正在打开 AI 设置...",
       "intelligenceSettingsOpened": "已打开 AI 渠道设置，请检查登录、额度和 provider 后重试",

@@ -17,8 +17,8 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import type { TuffEvent } from '@talex-touch/utils/transport'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
-import { desc, eq } from 'drizzle-orm'
-import { shell } from 'electron'
+import { and, desc, eq, inArray, lt } from 'drizzle-orm'
+import { app, shell } from 'electron'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -112,6 +112,8 @@ export class DownloadCenterModule extends BaseModule {
       ...defaultDownloadConfig,
       storage: {
         ...defaultDownloadConfig.storage,
+        // Resolved here rather than in the shared default, which cannot reach Electron's paths.
+        defaultDestination: app.getPath('downloads'),
         tempDir: path.join(moduleDir, 'temp')
       }
     }
@@ -164,6 +166,7 @@ export class DownloadCenterModule extends BaseModule {
     // module loading pipeline. Temp cleanup is non-critical and can run later.
     setTimeout(() => {
       void this.cleanupTempFiles()
+      void this.pruneExpiredHistory()
     }, 30_000)
 
     const t4 = performance.now()
@@ -254,10 +257,59 @@ export class DownloadCenterModule extends BaseModule {
     }, 0)
   }
 
+  /**
+   * Drops history and finished tasks older than `storage.historyRetention` days.
+   *
+   * `DatabaseService.cleanupExpiredData` implements the same sweep but was never called from
+   * anywhere, and it opens its own libsql client while this module runs on the shared
+   * `databaseModule` connection — so the retention setting had no effect at all. This runs on the
+   * shared connection instead of adopting a second one.
+   */
+  private async pruneExpiredHistory(): Promise<void> {
+    const days = this.config.storage.historyRetention
+    if (!Number.isFinite(days) || days <= 0) {
+      return
+    }
+
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+
+    try {
+      const db = this.getDb()
+      await db.delete(downloadHistory).where(lt(downloadHistory.createdAt, cutoff))
+
+      const staleTasks = await db
+        .select({ id: downloadTasks.id })
+        .from(downloadTasks)
+        .where(
+          and(
+            eq(downloadTasks.status, DownloadStatus.COMPLETED),
+            lt(downloadTasks.completedAt, cutoff)
+          )
+        )
+
+      if (staleTasks.length === 0) {
+        return
+      }
+
+      const ids = staleTasks.map((task) => task.id)
+      // Chunks first: they reference the task, and an interrupted sweep should not strand them.
+      await db.delete(downloadChunks).where(inArray(downloadChunks.taskId, ids))
+      await db.delete(downloadTasks).where(inArray(downloadTasks.id, ids))
+
+      downloadCenterLog.info('Pruned expired download history', {
+        meta: { days, tasks: ids.length }
+      })
+    } catch (error) {
+      downloadCenterLog.warn('Failed to prune expired download history', { error })
+    }
+  }
+
   // 添加下载任务
   async addTask(request: DownloadRequest): Promise<string> {
     const taskId = request.id || randomUUID()
     const now = new Date()
+    // Callers that do not care where the file lands get the configured download folder.
+    const destination = request.destination || this.config.storage.defaultDestination
 
     // 计算优先级
     const priority = this.priorityCalculator.calculatePriority(request)
@@ -266,7 +318,7 @@ export class DownloadCenterModule extends BaseModule {
     const task: DownloadTask = {
       id: taskId,
       url: request.url,
-      destination: request.destination,
+      destination,
       filename: request.filename || path.basename(request.url),
       priority,
       module: request.module,
@@ -289,7 +341,7 @@ export class DownloadCenterModule extends BaseModule {
       .values({
         id: taskId,
         url: request.url,
-        destination: request.destination,
+        destination,
         filename: task.filename,
         priority,
         module: request.module,
@@ -749,6 +801,11 @@ export class DownloadCenterModule extends BaseModule {
     // 如果临时目录配置改变，更新 ChunkManager
     if (config.storage?.tempDir) {
       this.chunkManager.setBaseTempDir(config.storage.tempDir)
+    }
+    // Without this the switch would only take effect after a restart, which is how the three
+    // concurrency booleans used to behave before their controls were removed.
+    if (typeof config.notifyOnComplete === 'boolean') {
+      this.notificationService.updateConfig({ downloadComplete: config.notifyOnComplete })
     }
   }
 

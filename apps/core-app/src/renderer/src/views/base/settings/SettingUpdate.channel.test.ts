@@ -205,7 +205,37 @@ describe('SettingUpdate channel selection', () => {
     expect(channelSelect.element.value).toBe(AppPreviewChannel.RELEASE)
     expect(channelSelect.text()).toContain('settings.settingUpdate.channels.release')
     expect(channelSelect.text()).toContain('settings.settingUpdate.channels.beta')
-    expect(wrapper.text()).not.toContain('settings.settingUpdate.frequencyTitle')
+    // Check frequency used to hide behind the advanced flag; artboard `aRjnd` makes it a normal row.
+    expect(wrapper.text()).toContain('settings.settingUpdate.frequencyTitle')
+
+    wrapper.unmount()
+  })
+
+  it('offers install mode as one ordered choice instead of two switches', async () => {
+    const wrapper = mountSettingUpdate()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('settings.settingUpdate.installMode.title')
+    expect(text).toContain('settings.settingUpdate.installMode.manual')
+    expect(text).toContain('settings.settingUpdate.installMode.immediate')
+    // The two switches these replaced must be gone.
+    expect(text).not.toContain('settings.settingUpdate.autoDownloadTitle')
+    expect(text).not.toContain('settings.settingUpdate.installOnNormalQuitTitle')
+
+    wrapper.unmount()
+  })
+
+  it('drops the eight-field lifecycle grid and the duplicate trust block', async () => {
+    const wrapper = mountSettingUpdate()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).not.toContain('settings.settingUpdate.lifecycle.fields.targetVersion')
+    expect(text).not.toContain('settings.settingUpdate.lifecycle.fields.rollbackCompatible')
+    expect(wrapper.findAll('.native-trust-status')).toHaveLength(0)
+    // Diagnostics ship through a single export action rather than a copy/save pair.
+    expect(text).toContain('settings.settingUpdate.exportEvidence')
 
     wrapper.unmount()
   })

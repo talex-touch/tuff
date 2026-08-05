@@ -183,6 +183,17 @@ export class ClipboardModule extends BaseModule {
   })
   private readonly metaPersistence = new ClipboardMetaPersistence({
     getDatabase: () => this.db,
+    resolveAuxDb: () => {
+      // Enqueue-time resolution (R3): refresh the module-wide capture so
+      // reads and every other this.db write stay coherent with the write
+      // target once the background aux init completes.
+      const db = databaseModule.getAuxDb()
+      if (db !== this.db) {
+        this.db = db
+        this.historyPersistence.setDatabase(db)
+      }
+      return { db, isAux: databaseModule.isAuxReady() }
+    },
     isDestroyed: () => this.isDestroyed,
     logDebug: (message, data?: LogOptions) => {
       clipboardLog.debug(message, data)
@@ -861,8 +872,8 @@ export class ClipboardModule extends BaseModule {
       metadata
     }
 
-    const inserted = await this.metaPersistence.withDbWrite('clipboard.custom.persist', () =>
-      this.db!.insert(clipboardHistory).values(record).returning()
+    const inserted = await this.metaPersistence.withDbWrite('clipboard.custom.persist', (db) =>
+      db.insert(clipboardHistory).values(record).returning()
     )
     if (inserted.length === 0) {
       return null

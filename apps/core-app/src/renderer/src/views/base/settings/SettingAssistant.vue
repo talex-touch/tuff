@@ -8,6 +8,13 @@ import { appSetting } from '~/modules/storage/app-storage'
 
 const { t } = useI18n()
 
+const props = withDefaults(
+  defineProps<{
+    mode?: 'standard' | 'advanced'
+  }>(),
+  { mode: 'standard' }
+)
+
 const assistantEnabled = computed({
   get: () => appSetting.assistant?.enabled === true,
   set: (value: boolean) => {
@@ -43,15 +50,6 @@ const voiceWakeEnabled = computed({
   }
 })
 
-const assistantName = computed({
-  get: () => appSetting.assistant?.name || '阿洛 aler',
-  set: (value: string | number) => {
-    ensureAssistantSettings()
-    const next = String(value).trim()
-    appSetting.assistant.name = next || '阿洛 aler'
-  }
-})
-
 const wakeWords = computed({
   get: () => appSetting.voiceWake?.wakeWords?.join(', ') || '阿洛, aler',
   set: (value: string | number) => {
@@ -67,23 +65,15 @@ const wakeWords = computed({
 function ensureAssistantSettings(): void {
   if (!appSetting.assistant || typeof appSetting.assistant !== 'object') {
     appSetting.assistant = {
-      name: '阿洛 aler',
-      identifier: 'aler',
       enabled: false
     }
-  }
-  if (typeof appSetting.assistant.name !== 'string' || !appSetting.assistant.name.trim()) {
-    appSetting.assistant.name = '阿洛 aler'
-  }
-  if (
-    typeof appSetting.assistant.identifier !== 'string' ||
-    !appSetting.assistant.identifier.trim()
-  ) {
-    appSetting.assistant.identifier = 'aler'
   }
   if (typeof appSetting.assistant.enabled !== 'boolean') {
     appSetting.assistant.enabled = false
   }
+  const assistantSettings = appSetting.assistant as Record<string, unknown>
+  delete assistantSettings.name
+  delete assistantSettings.identifier
 
   if (!appSetting.floatingBall || typeof appSetting.floatingBall !== 'object') {
     appSetting.floatingBall = {
@@ -162,6 +152,7 @@ watch(
     memory-name="setting-assistant"
   >
     <TuffBlockSwitch
+      v-if="props.mode === 'standard'"
       v-model="assistantEnabled"
       :title="t('settingAssistant.enableAssistant')"
       :description="t('settingAssistant.enableAssistantDesc')"
@@ -170,6 +161,7 @@ watch(
     />
 
     <TuffBlockSwitch
+      v-if="props.mode === 'advanced'"
       v-model="floatingBallEnabled"
       :title="t('settingAssistant.floatingBall')"
       :description="t('settingAssistant.floatingBallDesc')"
@@ -177,16 +169,8 @@ watch(
       active-icon="i-carbon-dot-mark"
     />
 
-    <TuffBlockInput
-      v-model="assistantName"
-      :title="t('settingAssistant.assistantName')"
-      :description="t('settingAssistant.assistantNameDesc')"
-      :placeholder="t('settingAssistant.assistantNamePlaceholder')"
-      default-icon="i-carbon-user-avatar"
-      active-icon="i-carbon-user-avatar-filled"
-    />
-
     <TuffBlockSwitch
+      v-if="props.mode === 'advanced'"
       v-model="voiceWakeEnabled"
       :title="t('settingAssistant.voiceWake')"
       :description="t('settingAssistant.voiceWakeDesc')"
@@ -195,6 +179,7 @@ watch(
     />
 
     <TuffBlockInput
+      v-if="props.mode === 'advanced'"
       v-model="wakeWords"
       :title="t('settingAssistant.wakeWords')"
       :description="t('settingAssistant.wakeWordsDesc')"

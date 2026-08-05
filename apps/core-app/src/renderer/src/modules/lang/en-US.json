@@ -159,8 +159,6 @@
     },
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
-    "advancedSettings": "Advanced Settings",
-    "advancedSettingsDesc": "Show file indexing, app index scheduling, download, analytics, and storage settings",
     "systemInfoPlaceholder": "System information is only available in development mode"
   },
   "settingLanguage": {
@@ -529,9 +527,6 @@
     "enableAssistantDesc": "Assistant entries such as the floating ball and voice panel only respond when this is enabled. It stays off by default.",
     "floatingBall": "Show floating ball",
     "floatingBallDesc": "Show a draggable desktop entry. Click it to open the text command panel.",
-    "assistantName": "Assistant name",
-    "assistantNameDesc": "Name shown at the top of the Assistant panel.",
-    "assistantNamePlaceholder": "Alo aler",
     "voiceWake": "Voice wake",
     "voiceWakeDesc": "When enabled, the floating ball and panel may request speech recognition. When disabled, only text input is used.",
     "wakeWords": "Wake words",
@@ -611,7 +606,6 @@
     "completeBrowserLoginToast": "Complete sign-in in your browser.",
     "loginPageReopenedToast": "Sign-in page reopened.",
     "tokenRequired": "Enter a token",
-    "secureStorageTitle": "Login credential protection",
     "syncNow": "Sync now",
     "syncEnableFirst": "Turn on sync first",
     "syncComplete": "Sync complete",
@@ -621,15 +615,6 @@
       "enabled": "Sync is on.",
       "userDisabled": "You turned sync off; it will not automatically resume after sign-in.",
       "disabled": "Sync is off."
-    },
-    "secureStorage": {
-      "enabledToast": "Login credential protection enabled",
-      "disabledToast": "Login credential protection disabled.",
-      "disabledDescription": "Enable login credential protection for stronger local credential protection and safer sign-in.",
-      "checkingDescription": "Checking the local credential protection backend.",
-      "unavailableDescription": "Local credential protection is unavailable. When available, enabling it gives stronger protection and safer sign-in.",
-      "enabledDescription": "Login credential protection is enabled: credentials are encrypted with this device's root key for stronger protection.",
-      "sessionModeReminder": "Login credential protection is off. Enable it in Account settings for stronger local credential protection."
     },
     "syncStatus": {
       "unrecorded": "Not recorded",
@@ -928,9 +913,80 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
-    "intelligence": "Intelligence",
     "store": "Store",
-    "setting": "Settings"
+    "setting": "Settings",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "back": "Back",
+    "forward": "Forward",
+    "minimizeWindow": "Minimize",
+    "maximizeWindow": "Maximize",
+    "restoreWindow": "Restore",
+    "closeWindow": "Close"
+  },
+  "home": {
+    "greeting": "What shall we do today?",
+    "placeholder": "Ask Tuff to do anything",
+    "autoContext": "Auto Context",
+    "autoContextHint": "Lets the model pull web, file, clipboard and related context on demand",
+    "model": "Choose model and reasoning effort",
+    "modelName": "Tuff Auto",
+    "effortHigh": "High",
+    "attach": "Add attachment",
+    "voice": "Voice input",
+    "send": "Send",
+    "stop": "Stop generating",
+    "retry": "Retry",
+    "thinking": "Thinking",
+    "error": {
+      "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
+      "empty": "The model returned nothing",
+      "generic": "This reply failed"
+    },
+    "pill": {
+      "searchFiles": "Search files in plain language",
+      "translateClipboard": "Translate the clipboard",
+      "tidyDownloads": "Tidy the downloads folder",
+      "runScript": "Run a workspace script"
+    }
+  },
+  "settingsNav": {
+    "back": "Back to Tuff",
+    "search": "Search settings",
+    "group": {
+      "preference": "Preferences",
+      "capability": "Capabilities",
+      "system": "System"
+    },
+    "category": {
+      "overview": "Overview",
+      "general": "General",
+      "appearance": "Appearance",
+      "intelligence": "Intelligence",
+      "plugins": "Plugins & Tools",
+      "fileIndex": "File Index",
+      "update": "Update",
+      "network": "Network",
+      "download": "Downloads",
+      "storage": "Storage",
+      "about": "About"
+    }
+  },
+  "settingsOverview": {
+    "tagline": "The command bar, reimagined for makers",
+    "account": "Account",
+    "general": "General"
+  },
+  "settingsEntries": {
+    "installedPlugins": "Installed Plugins",
+    "downloadCenter": "Download Center",
+    "downloadCenterDesc": "Track download tasks and history.",
+    "open": "Open",
+    "intelligenceDesc": "Model channels, capabilities, prompts and audit.",
+    "application": "Applications",
+    "applicationDesc": "Browse and manage installed applications.",
+    "store": "Plugin Store",
+    "storeDesc": "Browse, install and manage plugins."
   },
   "store": {
     "title": "Plugin Store",
@@ -942,6 +998,7 @@
     "loading": "Loading official plugins...",
     "refresh": "Refresh",
     "install": "Install",
+    "market": "Store",
     "installed": "Installed",
     "docs": "Docs",
     "cli": "CLI",
@@ -2156,6 +2213,7 @@
     "title": "Tuff"
   },
   "router": {
+    "home": "Home",
     "login": "Please login first!",
     "permission": "You don't have permission!",
     "pluginStore": "Plugin Store",
@@ -2499,9 +2557,20 @@
       "resetTempDir": "Use Default Folder",
       "selectTempDirTitle": "Select Download Temp Directory",
       "selectTempDirConfirm": "Use This Folder",
+      "defaultDestination": "Download location",
+      "defaultDestinationDesc": "Where finished files are saved unless a task picks its own folder",
+      "selectDestinationTitle": "Select Download Location",
+      "selectDestinationConfirm": "Use This Folder",
+      "notSet": "Not set",
+      "choose": "Choose…",
+      "notifyOnComplete": "Notify when finished",
+      "notifyOnCompleteDesc": "Send a system notification when a task completes or fails",
+      "retry": "Retry on failure",
+      "retryDesc": "How many times a failed chunk is retried",
+      "cleanTemp": "Clear temp files",
       "defaultPath": "Default Path",
       "noRetry": "No Retry",
-      "days": "days",
+      "days": "{days} days",
       "actions": "Actions",
       "actionsDesc": "Manage download settings and temporary files",
       "cleanupTemp": "Cleanup Temp Files",
@@ -2549,6 +2618,14 @@
       "proxyAuthDesc": "Credentials are read only through secure-store references. This page does not save plaintext usernames or passwords.",
       "proxyAuthConfigured": "Secure credential reference configured",
       "proxyAuthNotConfigured": "Not configured",
+      "customProxy": "Custom proxy",
+      "customProxyDesc": "HTTP(S), SOCKS, PAC URL and bypass rules. Only applies in custom mode",
+      "customProxyHint": "Fields left blank are ignored. Credentials belong in Proxy Authentication; this page never stores plaintext.",
+      "separateHttps": "Use a separate address for HTTPS",
+      "configure": "Configure…",
+      "cancel": "Cancel",
+      "pauseOnInstability": "Pause when unstable",
+      "pauseOnInstabilityDesc": "Briefly pause requests after repeated failures and resume on success; off retries immediately",
       "policyGroupTitle": "Network Policy",
       "policyGroupDesc": "Configure timeout, retry, and failure cooldown for shared network requests",
       "timeoutMs": "Request Timeout",
@@ -3654,17 +3731,14 @@
         "monthly": "Every month",
         "never": "Never"
       },
-      "autoDownloadTitle": "Auto Download Updates",
       "autoDownloadDesc": "Automatically download updates when available",
       "autoDownloadDescManual": "Automatically download the installer when available; system installation still remains manual",
       "autoDownloadDescMac": "Download the macOS update package automatically; applying it uses a restart handoff.",
       "autoDownloadDescWindows": "Download the Windows installer automatically; Windows still shows the installer handoff.",
       "autoDownloadDescLinux": "Download the Linux package automatically; opening and installing the package remains manual.",
-      "installOnNormalQuitTitle": "Install on Normal Quit",
-      "installOnNormalQuitDesc": "Install a verified downloaded update the next time the app exits normally. Disable this to keep installation manual.",
       "installOnNormalQuitLocked": "Normal-quit installation is locked because this release has no authoritative N/N-1 rollback compatibility evidence. Install Now remains available when ready.",
       "rendererOverrideTitle": "Renderer Override (Experimental)",
-      "rendererOverrideDesc": "Manually enable the experimental renderer override (requires TUFF_ENABLE_RENDERER_OVERRIDE=1).",
+      "rendererOverrideDesc": "Experimental. Only shown when launched with TUFF_ENABLE_RENDERER_OVERRIDE=1; relaunch with that variable to turn it back on.",
       "statusTitle": "Status",
       "status": {
         "loading": "Loading update status…",
@@ -3791,8 +3865,6 @@
       "assetsCompatibilityMissingChecksum": "Missing checksum",
       "evidenceTitle": "Diagnostic Evidence",
       "evidenceDesc": "Export the authoritative lifecycle snapshot, rollback/recovery metadata, cached release, platform handoff mode, and explicit macOS native-trust verification status.",
-      "copyEvidence": "Copy Evidence",
-      "saveEvidence": "Save Evidence",
       "evidenceMissing": "Load update status first",
       "evidenceCopied": "Update diagnostic evidence copied",
       "evidenceCopyFailed": "Failed to copy update diagnostic evidence",
@@ -3830,8 +3902,6 @@
         "loadFailed": "Failed to load update settings",
         "channelSaved": "Switched to {channel}; checking for updates",
         "frequencySaved": "Frequency saved",
-        "autoDownloadSaved": "Auto download setting saved",
-        "installOnNormalQuitSaved": "Normal-quit installation setting saved",
         "rendererOverrideSaved": "Renderer override setting saved",
         "saveFailed": "Failed to save settings",
         "actionUnavailableForPhase": "This action is unavailable in the current update lifecycle phase.",
@@ -3846,8 +3916,16 @@
         "macSilentUpdateNotWritable": "Tuff cannot replace the current app without a password prompt. Move or reinstall Tuff in an Applications location managed by your user, then retry.",
         "macSilentUpdateUntrusted": "Silent update is blocked because this Tuff build is not an officially verified macOS package.",
         "cacheCleared": "Update cache cleared",
-        "cacheClearFailed": "Failed to clear cache"
-      }
+        "cacheClearFailed": "Failed to clear cache",
+        "installModeSaved": "Install mode saved"
+      },
+      "installMode": {
+        "title": "Install mode",
+        "manual": "Notify only",
+        "onQuit": "Download, install on quit",
+        "immediate": "Download and install now"
+      },
+      "exportEvidence": "Export diagnostics"
     },
     "updateModal": {
       "title": "New Version Available",
@@ -3905,8 +3983,8 @@
       "notificationsDesc": "Allow the app to display system notifications. On macOS, the granted state may need to be confirmed in System Settings.",
       "autoStart": "Auto Start on Boot",
       "autoStartDesc": "Automatically launch app when system starts",
-      "showTray": "Show Tray Icon",
-      "showTrayDesc": "Display app icon in system tray",
+      "backgroundMode": "Keep running after closing",
+      "backgroundModeDesc": "Hide the window and keep Tuff available from the system tray",
       "hideDock": "Hide Dock Icon",
       "hideDockDesc": "Hide Dock icon after closing main window",
       "startSilent": "Silent Start",
