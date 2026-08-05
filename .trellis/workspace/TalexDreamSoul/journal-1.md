@@ -1669,3 +1669,46 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 - TxChatComposer 原地扩展:paste/drop → `attachmentAdd(File[])`、dragenter/leave 计数器防高亮抖动、**补上缺失的 IME isComposing 守卫**(HomePage 手写版有、组件版一直没有)。
 - 坑:barrel 对同名类型双源 `export *` 会静默歧义化——tool-call-card 不 re-export `AiToolCallPart`。
 - 全量门:1016 测试/typecheck/lint/build 全绿;动画手感 review 门并入④集成验。提交 87e67d03c / 7b4e4d6fa。
+
+
+## Session 49: Database single-writer root fix: land search split, de-amplify write queue
+
+**Date**: 2026-08-05
+**Task**: Database single-writer root fix: land search split, de-amplify write queue
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to four interlocking mechanisms (dual writers on database.db behind the dark #295 split flag; ~20 call sites sleeping busy-backoff inside the global write queue; aux fallback/stale-capture + compat dual-writes; boot write storms). Landed scheduler-native delayed-re-enqueue retry, converged all call sites onto scheduleDbWrite/scheduleAuxWrite with live home resolution, split the queue into per-file lanes, gated boot maintenance writers. Three app-run validation rounds caught and fixed three ship-blockers in the parked split (schema parity fixups, read/write home split-brains incl. embeddings, missing bootstrap reindex) plus the 2d.3 write-path migration; V2 ran zero BUSY/FK, DB_SEARCH_SPLIT_ENABLED default flipped ON. Compat dual-writes retired; contracts captured in .trellis/spec/main-process/database-write-contracts.md.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `90aa26b17` | (see git log) |
+| `3c62566fb` | (see git log) |
+| `052d1d506` | (see git log) |
+| `08b64b650` | (see git log) |
+| `95d7fb3c3` | (see git log) |
+| `d12af493e` | (see git log) |
+| `571af84ed` | (see git log) |
+| `cd39bdbf6` | (see git log) |
+| `c2350bc6c` | (see git log) |
+| `ab904670a` | (see git log) |
+| `e91a4b085` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

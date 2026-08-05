@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 48
+- **Total Sessions**: 49
 - **Last Active**: 2026-08-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1663 | Active |
+| `journal-1.md` | ~1714 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 49 | 2026-08-05 | Database single-writer root fix: land search split, de-amplify write queue | `90aa26b17`, `3c62566fb`, `052d1d506`, `08b64b650`, `95d7fb3c3`, `d12af493e`, `571af84ed`, `cd39bdbf6`, `c2350bc6c`, `ab904670a`, `e91a4b085` | `TalexDreamSoul/app-shell-v2` |
 | 48 | 2026-08-05 | 下载空闲超时、死开关甄别与深色对比度核对 | `5f3edaabb`, `c5fbf1485` | `TalexDreamSoul/app-shell-v2` |
 | 47 | 2026-08-05 | 设置页 IA 重构：拆页、选项收敛与死开关清理 | `ea78b1fa8`, `3d7aeca04`, `b977006ea`, `7624798d5`, `c1b82bf3d`, `eb7133ba9`, `3cec262c8`, `3afd2df39`, `eaec11f87`, `d2068e611` | `TalexDreamSoul/app-shell-v2` |
 | 46 | 2026-08-04 | CoreBox packaged runtime performance closure | `15a47a91c`, `92f7eeb0b`, `0619fe42e` | `master` |
