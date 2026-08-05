@@ -23,6 +23,44 @@ function getNetworkStatusCode(error: unknown): number | null {
   return Number.isInteger(parsed) ? parsed : null
 }
 
+/**
+ * An abort signal for "no bytes arrived for a while" rather than "the whole transfer took a while".
+ *
+ * `AbortSignal.timeout` covers the entire request including the response body, so handing it to a
+ * streaming download aborts any transfer longer than the window — a 30s timeout killed every file
+ * that took more than 30s to arrive, however healthy the connection. This resets on every chunk,
+ * so it only fires when the peer has actually gone quiet.
+ */
+function createIdleTimeout(idleMs: number): {
+  signal: AbortSignal
+  touch: () => void
+  dispose: () => void
+} {
+  const controller = new AbortController()
+  let timer: NodeJS.Timeout | null = null
+
+  const arm = (): void => {
+    if (idleMs <= 0) return
+    timer = setTimeout(() => controller.abort(new Error('DOWNLOAD_IDLE_TIMEOUT')), idleMs)
+  }
+
+  const dispose = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = null
+  }
+
+  arm()
+
+  return {
+    signal: controller.signal,
+    touch: () => {
+      dispose()
+      arm()
+    },
+    dispose
+  }
+}
+
 export class DownloadWorker {
   private readonly maxConcurrent: number
   private activeTasks: Set<string> = new Set()
@@ -333,14 +371,23 @@ export class DownloadWorker {
     const outputPath = path.join(task.destination, task.filename)
     await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
-    const response = await getNetworkService().requestStream({
-      method: 'GET',
-      url: task.url,
-      headers,
-      responseType: 'stream',
-      timeoutMs: this.config.network.timeout,
-      retryPolicy: { maxRetries: 0 }
-    })
+    // `network.timeout` is read as an idle window here, not a deadline for the whole transfer.
+    const idle = createIdleTimeout(this.config.network.timeout)
+
+    let response: Awaited<ReturnType<ReturnType<typeof getNetworkService>['requestStream']>>
+    try {
+      response = await getNetworkService().requestStream({
+        method: 'GET',
+        url: task.url,
+        headers,
+        responseType: 'stream',
+        signal: idle.signal,
+        retryPolicy: { maxRetries: 0 }
+      })
+    } catch (error) {
+      idle.dispose()
+      throw error
+    }
 
     const normalizedHeaders: Record<string, string | number | string[] | undefined | null> = {
       ...response.headers
@@ -354,6 +401,7 @@ export class DownloadWorker {
     }
 
     response.stream.on('data', (data: Buffer) => {
+      idle.touch()
       downloadedSize += data.length
       progressTracker.updateProgress(downloadedSize, totalSize)
     })
@@ -379,6 +427,8 @@ export class DownloadWorker {
         }
       }
       throw error
+    } finally {
+      idle.dispose()
     }
 
     return { totalSize, downloadedSize }
