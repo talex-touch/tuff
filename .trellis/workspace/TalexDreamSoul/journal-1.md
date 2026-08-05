@@ -1562,3 +1562,12 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 ### Next Steps
 
 - None - task complete
+
+## 2026-08-05 · 08-04-db-single-writer-root-fix · Phases 1–4 landed
+
+- 根因四层(research/root-cause-analysis.md):R1 双写连接(split flag 默认关)、R2 全局队列内重试睡眠(~20 处)、R3 aux 回落/compat 双写、R4 启动写风暴。
+- Phase 1 调度器原生 busy 重试(延迟重排队,退避不占队头)→ commit 90aa26b17;Phase 2 调用点收敛 scheduleDbWrite/scheduleAuxWrite(enqueue 时解析 aux,修掉 stale-capture 类缺陷)→ commit 3c62566fb。注意:这两个提交由并发 Pi 批量提交会话(pi-rewind 019fd0a9…)从共享工作树创建,内容逐项核验正确;规划工件被扫进 49e4f454b。
+- Phase 3 按库分车道(primary/aux 各自队列+忙退避计时器;WAL gating 读主车道;聚合 stats 形状不变+lanes 明细)→ commit 052d1d506(本会话)。
+- Phase 4 启动期维护写门控(telemetry retention 窗口内跳过且不报 PARTIAL;backfill/UsageSummary 延后;manual-delete 永不门控)→ commit 08b64b650(本会话)。
+- 测试:db/database/privacy/sentry/app-provider/usage-summary 全绿;box-tool/ai 既有 23 失败归因于 privacy #301 测试 mock 缺 PRIVACY_DATA_CATEGORIES 与 shell-chrome 拉入 temp-file 单例(证据:db 提交 diff 零新增相关 import 边),非本任务范围。
+- 待办:V1 验证跑(TUFF_DB_SEARCH_SPLIT_ENABLED=1,被用户 dev 实例单实例锁阻塞)→ Phase 5 翻默认 → V2 全默认验证 → Phase 6 compat 双写退役 → spec 固化(单文件单写者 / 队列不睡眠)。
