@@ -8,19 +8,20 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as schema from '../../db/schema'
 import { ReportQueueStore } from './report-queue-store'
 
-let client: Client | undefined
+let clients: Client[] = []
 let directory: string | undefined
 
 afterEach(async () => {
-  client?.close()
-  client = undefined
+  for (const client of clients) client.close()
+  clients = []
   if (directory) await rm(directory, { recursive: true, force: true })
   directory = undefined
 })
 
-async function createStore(maxItems: number): Promise<ReportQueueStore> {
-  directory = await mkdtemp(join(tmpdir(), 'tuff-report-queue-'))
-  client = createClient({ url: `file:${join(directory, 'queue.sqlite')}` })
+async function createQueueClient(fileName: string): Promise<Client> {
+  directory ??= await mkdtemp(join(tmpdir(), 'tuff-report-queue-'))
+  const client = createClient({ url: `file:${join(directory, fileName)}` })
+  clients.push(client)
   await client.execute(`
     CREATE TABLE analytics_report_queue (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +33,11 @@ async function createStore(maxItems: number): Promise<ReportQueueStore> {
       last_error TEXT
     )
   `)
+  return client
+}
+
+async function createStore(maxItems: number): Promise<ReportQueueStore> {
+  const client = await createQueueClient('queue.sqlite')
   return new ReportQueueStore({ auxDb: drizzle(client, { schema }), maxItems })
 }
 
@@ -60,5 +66,50 @@ describe('ReportQueueStore', () => {
     expect((await store.list())[0]?.lastError).toBe('ANALYTICS_REPORT_FAILED')
     expect(await store.prune(2)).toBe(1)
     expect((await store.list()).map((row) => row.createdAt)).toEqual([2])
+  })
+
+  it('writes land on aux only; legacy primary rows stay read-only (compat mirror retired)', async () => {
+    const auxClient = await createQueueClient('aux.sqlite')
+    const coreClient = await createQueueClient('core.sqlite')
+    const store = new ReportQueueStore({
+      auxDb: drizzle(auxClient, { schema }),
+      coreDb: drizzle(coreClient, { schema }),
+      maxItems: 10
+    })
+
+    await coreClient.execute({
+      sql: `INSERT INTO analytics_report_queue (endpoint, payload, created_at, retry_count)
+            VALUES (?, ?, ?, 0)`,
+      args: ['https://telemetry.invalid/report', '{"legacy":true}', 1]
+    })
+
+    // Read fallback stays: with aux empty, list() surfaces the legacy rows.
+    const [legacyRow] = await store.list()
+    expect(legacyRow.payload.legacy).toBe(true)
+
+    // The retired `${label}.compat` mirror would have replayed these writes on
+    // the primary DB (bumping retry state, deleting/pruning the legacy row).
+    // Since 2026-08-05 they must leave the primary DB untouched.
+    await store.markAttempt(legacyRow.id, 'ANALYTICS_REPORT_FAILED')
+    await store.remove(legacyRow.id)
+    expect(await store.prune(10)).toBe(0)
+
+    const coreRows = await coreClient.execute(
+      'SELECT retry_count, last_error FROM analytics_report_queue'
+    )
+    expect(coreRows.rows).toHaveLength(1)
+    expect(Number(coreRows.rows[0]?.retry_count)).toBe(0)
+    expect(coreRows.rows[0]?.last_error).toBeNull()
+
+    // New writes land on aux only; the legacy primary row count is unchanged.
+    await store.insert({
+      endpoint: 'https://telemetry.invalid/report',
+      payload: { fresh: true },
+      createdAt: 2
+    })
+    const auxCount = await auxClient.execute('SELECT COUNT(*) AS n FROM analytics_report_queue')
+    expect(Number(auxCount.rows[0]?.n)).toBe(1)
+    const coreCount = await coreClient.execute('SELECT COUNT(*) AS n FROM analytics_report_queue')
+    expect(Number(coreCount.rows[0]?.n)).toBe(1)
   })
 })

@@ -2,7 +2,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import type { AuxDbResolver, ScheduleOptions } from '../../db/db-write'
 import { and, eq, isNotNull, lt } from 'drizzle-orm'
-import { scheduleAuxWrite, scheduleDbWrite } from '../../db/db-write'
+import { scheduleAuxWrite } from '../../db/db-write'
 import * as dbSchema from '../../db/schema'
 
 export interface TelemetryUploadStatsRecord {
@@ -151,24 +151,14 @@ export class TelemetryUploadStatsStore {
           )
         )
 
+    // `.compat` dual-write retired (design D5): aux is the sole write home
+    // since 2026-08-05. Primary-DB rows are legacy read-only — `get()` keeps
+    // its read-fallback for one more release, then the rows are removable.
     const auxResult = await scheduleAuxWrite(
       'telemetry.upload-stats.retention.aux',
       (db) => clearOn(db),
       { ...TELEMETRY_WRITE_OPTIONS, resolveDb: this.resolveAuxDb }
     )
-    let cleared = Number(auxResult.rowsAffected ?? 0)
-
-    // `.compat` dual-write on the primary DB — kept until the Phase 6
-    // retirement; routes through the primary write path explicitly.
-    const coreDb = this.coreDb
-    if (coreDb && cleared < limit && !signal?.aborted) {
-      const compatResult = await scheduleDbWrite(
-        'telemetry.upload-stats.retention.compat',
-        () => clearOn(coreDb),
-        TELEMETRY_WRITE_OPTIONS
-      )
-      cleared += Number(compatResult.rowsAffected ?? 0)
-    }
-    return cleared
+    return Number(auxResult.rowsAffected ?? 0)
   }
 }
