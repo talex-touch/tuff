@@ -40,7 +40,7 @@ const routeTitleSource = computed(() => {
         exponential
         :div-count="10"
         position="top"
-        height="24px"
+        height="40px"
         :strength="1.4"
         :opacity="0.9"
         :z-index="20"
@@ -49,7 +49,7 @@ const routeTitleSource = computed(() => {
         exponential
         :div-count="10"
         position="bottom"
-        height="24px"
+        height="40px"
         :strength="1.4"
         :opacity="0.9"
         :z-index="20"
