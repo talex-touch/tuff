@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 47
+- **Total Sessions**: 48
 - **Last Active**: 2026-08-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1615 | Active |
+| `journal-1.md` | ~1663 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 48 | 2026-08-05 | 下载空闲超时、死开关甄别与深色对比度核对 | `5f3edaabb`, `c5fbf1485` | `TalexDreamSoul/app-shell-v2` |
 | 47 | 2026-08-05 | 设置页 IA 重构：拆页、选项收敛与死开关清理 | `ea78b1fa8`, `3d7aeca04`, `b977006ea`, `7624798d5`, `c1b82bf3d`, `eb7133ba9`, `3cec262c8`, `3afd2df39`, `eaec11f87`, `d2068e611` | `TalexDreamSoul/app-shell-v2` |
 | 46 | 2026-08-04 | CoreBox packaged runtime performance closure | `15a47a91c`, `92f7eeb0b`, `0619fe42e` | `master` |
 | 45 | 2026-08-02 | 推送 CoreApp 快捷键作用域修复 | `d8549845f` | `master` |
