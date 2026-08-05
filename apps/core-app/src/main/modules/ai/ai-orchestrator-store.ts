@@ -15,7 +15,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { and, asc, desc, eq, gte, inArray, or } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../db/db-write'
 import {
   aiAgentProfiles,
   aiAutomationRuns,
@@ -210,7 +210,7 @@ export class AiOrchestratorStore {
 
     if (existing.length === 0) {
       const now = Date.now()
-      await dbWriteScheduler.schedule(
+      await scheduleDbWrite(
         'ai-orchestrator.profile.default',
         async () => {
           await db.insert(aiAgentProfiles).values({
@@ -297,7 +297,7 @@ export class AiOrchestratorStore {
       throw new Error('Profile id and name are required')
     }
 
-    await dbWriteScheduler.schedule('ai-orchestrator.profile.save', async () => {
+    await scheduleDbWrite('ai-orchestrator.profile.save', async () => {
       await databaseModule
         .getDb()
         .insert(aiAgentProfiles)
@@ -337,7 +337,7 @@ export class AiOrchestratorStore {
   }
 
   async saveImportScan(scan: AiImportScanResult): Promise<void> {
-    await dbWriteScheduler.schedule('ai-orchestrator.import.scan', async () => {
+    await scheduleDbWrite('ai-orchestrator.import.scan', async () => {
       const db = databaseModule.getDb()
       await db.transaction(async (tx) => {
         await tx.insert(aiImportScans).values({
@@ -410,7 +410,7 @@ export class AiOrchestratorStore {
     let currentByCandidate = new Map<string, typeof aiImportItems.$inferSelect>()
     let sourceMissingRows: Array<typeof aiImportItems.$inferSelect> = []
 
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.import.apply',
       async () => {
         let restoreSecretRefs: (() => Promise<void>) | undefined
@@ -678,7 +678,7 @@ export class AiOrchestratorStore {
   }
 
   async setImportedItemActive(itemId: string, active: boolean): Promise<AiImportedConfigItem> {
-    await dbWriteScheduler.schedule('ai-import.item.toggle', async () => {
+    await scheduleDbWrite('ai-import.item.toggle', async () => {
       await databaseModule
         .getDb()
         .update(aiImportItems)
@@ -727,7 +727,7 @@ export class AiOrchestratorStore {
     const requestedAlias = alias?.trim()
     const baseAlias = requestedAlias || `${source.alias || source.name} (Local)`
     let cloneAlias = ''
-    await dbWriteScheduler.schedule('ai-import.item.clone', async () => {
+    await scheduleDbWrite('ai-import.item.clone', async () => {
       await db.transaction(async (tx) => {
         const currentSource = await tx
           .select({ id: aiImportItems.id })
@@ -801,7 +801,7 @@ export class AiOrchestratorStore {
   async deleteImportedItem(itemId: string): Promise<boolean> {
     const db = databaseModule.getDb()
     let deleted = false
-    await dbWriteScheduler.schedule('ai-import.item.delete', async () => {
+    await scheduleDbWrite('ai-import.item.delete', async () => {
       let restoreSecretRefs: (() => Promise<void>) | undefined
       try {
         await db.transaction(async (tx) => {
@@ -855,7 +855,7 @@ export class AiOrchestratorStore {
   }
 
   async createOrchestratorRun(run: AiOrchestratorRunRecord): Promise<void> {
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.run.create',
       async () => {
         await databaseModule
@@ -893,7 +893,7 @@ export class AiOrchestratorStore {
     patch: Partial<Omit<AiOrchestratorRunRecord, 'id' | 'createdAt'>>
   ): Promise<void> {
     const now = Date.now()
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.run.update',
       async () => {
         await databaseModule
@@ -935,7 +935,7 @@ export class AiOrchestratorStore {
     level: AiOrchestratorEvent['level'] = 'info'
   ): Promise<AiOrchestratorEvent> {
     let event: AiOrchestratorEvent | undefined
-    await dbWriteScheduler.schedule('ai-orchestrator.event.append', async () => {
+    await scheduleDbWrite('ai-orchestrator.event.append', async () => {
       let previousSeq = this.eventSeq.get(runId)
       if (previousSeq === undefined) {
         const rows = await databaseModule
@@ -1037,7 +1037,7 @@ export class AiOrchestratorStore {
       throw new Error('Automation id, name, and objective are required')
     }
 
-    await dbWriteScheduler.schedule('ai-orchestrator.automation.save', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation.save', async () => {
       await databaseModule
         .getDb()
         .insert(aiAutomations)
@@ -1107,14 +1107,14 @@ export class AiOrchestratorStore {
       .where(eq(aiAutomations.id, automationId))
       .limit(1)
     if (rows.length === 0) return false
-    await dbWriteScheduler.schedule('ai-orchestrator.automation.delete', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation.delete', async () => {
       await databaseModule.getDb().delete(aiAutomations).where(eq(aiAutomations.id, automationId))
     })
     return true
   }
 
   async createAutomationRun(run: AiAutomationRunRecord): Promise<void> {
-    await dbWriteScheduler.schedule('ai-orchestrator.automation-run.create', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation-run.create', async () => {
       await databaseModule
         .getDb()
         .insert(aiAutomationRuns)
@@ -1143,7 +1143,7 @@ export class AiOrchestratorStore {
     patch: Partial<Omit<AiAutomationRunRecord, 'id' | 'automationId' | 'createdAt'>>
   ): Promise<void> {
     const now = Date.now()
-    await dbWriteScheduler.schedule('ai-orchestrator.automation-run.update', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation-run.update', async () => {
       await databaseModule
         .getDb()
         .update(aiAutomationRuns)
@@ -1206,7 +1206,7 @@ export class AiOrchestratorStore {
 
   private async markInterruptedRuns(): Promise<void> {
     const now = Date.now()
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.recovery.mark-interrupted',
       async () => {
         const db = databaseModule.getDb()

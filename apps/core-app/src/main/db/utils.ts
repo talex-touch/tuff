@@ -1,6 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { scheduleAuxWrite } from './db-write'
+import { resolveCurrentAuxDb, scheduleAuxWrite } from './db-write'
 import * as schema from './schema'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
@@ -76,7 +76,17 @@ function createDbUtilsInternal(
 
   return {
     getDb: () => db,
-    getAuxDb: () => auxDb,
+    /**
+     * The aux handle `scheduleAuxWrite` targets RIGHT NOW (live resolution),
+     * falling back to the construction-time capture only before DatabaseModule
+     * registers the resolver (unit tests). A dbUtils instance is typically
+     * created during module init — before the background aux init completes —
+     * so the captured handle can be the primary fallback for the whole process
+     * lifetime while aux-owned writes (plugin_analytics, clipboard_history,
+     * recommendation_cache) land on the real aux file: reads through this
+     * getter stay coherent with that write home (R3 stale-capture defect).
+     */
+    getAuxDb: () => resolveCurrentAuxDb()?.db ?? auxDb,
     /**
      * The split-aware read home for FILE-INDEX domain state (files rows written
      * by the worker, scan_progress, keyword coverage). Any read that feeds an
@@ -492,13 +502,19 @@ function createDbUtilsInternal(
 
     // Recommendation Cache
     async getRecommendationCache(cacheKey: string) {
-      const primary = await auxDb
+      // Read the SAME home setRecommendationCache targets right now (live
+      // resolution — the construction-time auxDb capture may still be the
+      // primary fallback, which would make the cache silently write-only:
+      // writes on real aux, reads pinned to the primary). Then fall back to
+      // the primary db for legacy rows written during the fallback window.
+      const liveAuxDb = resolveCurrentAuxDb()?.db ?? auxDb
+      const cached = await liveAuxDb
         .select()
         .from(schema.recommendationCache)
         .where(eq(schema.recommendationCache.cacheKey, cacheKey))
         .get()
-      if (primary) return primary
-      if (auxDb === db) return null
+      if (cached) return cached
+      if (liveAuxDb === db) return null
       return db
         .select()
         .from(schema.recommendationCache)
