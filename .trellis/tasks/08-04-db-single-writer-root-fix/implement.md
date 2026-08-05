@@ -18,68 +18,68 @@ Never touch unrelated dirty files in the working tree (90 dirty paths from other
 
 ## Phase 1 — Scheduler-native busy retry (commit A)
 
-- [ ] 1.1 `db/sqlite-retry.ts`: export `incrementSqliteBusyRetryCount()` and
+- [x] 1.1 `db/sqlite-retry.ts`: export `incrementSqliteBusyRetryCount()` and
       `notifySqliteRetryExhausted(event)` (reuse existing listener registry; no
       behavior change for `withSqliteRetry` itself).
-- [ ] 1.2 `db/db-write-scheduler.ts`: add `busyRetries/busyBaseDelayMs/busyMaxDelayMs`
+- [x] 1.2 `db/db-write-scheduler.ts`: add `busyRetries/busyBaseDelayMs/busyMaxDelayMs`
       to options + label policies (defaults: background/best_effort 6, interactive 3,
       critical 6); add `busyAttempts`/`nextEligibleAt` to tasks; eligibility-aware
       `pickNextTaskIndex`; idle-timer re-kick when nothing eligible; busy → re-enqueue
       with backoff; exhausted → notify + reject + circuit accounting on final failure
       only; preserve `enqueuedAt` across re-enqueues.
-- [ ] 1.3 Unit tests (new or extend `db/db-write-scheduler.test.ts` if present; else
+- [x] 1.3 Unit tests (new or extend `db/db-write-scheduler.test.ts` if present; else
       create): busy task backs off while a second task executes in between (no
       head-of-line block); exhaustion rejects with original error + exhausted event
       fired once; droppable task ages out during backoff; non-busy error rejects
       without retry; nested schedule (taskContext) unchanged.
-- [ ] 1.4 Validate: `cd apps/core-app && npx vitest run src/main/db/` and
+- [x] 1.4 Validate: `cd apps/core-app && npx vitest run src/main/db/` and
       `npm run typecheck:node`.
 - Rollback point: revert commit A (no call sites depend on new options yet).
 
 ## Phase 2 — Call-site convergence (commit B)
 
-- [ ] 2.1 Create `db/db-write.ts`: `scheduleDbWrite`, `scheduleAuxWrite` (enqueue-time
+- [x] 2.1 Create `db/db-write.ts`: `scheduleDbWrite`, `scheduleAuxWrite` (enqueue-time
       `{db, lane}` resolution per design; lane is a no-op passthrough until Phase 3 —
       accept and store the option now).
-- [ ] 2.2 Migrate call sites (design.md D3 inventory; re-grep first:
+- [x] 2.2 Migrate call sites (design.md D3 inventory; re-grep first:
       `grep -rn "withSqliteRetry" apps/core-app/src/main --include="*.ts" | grep -v test`):
       delete inner `withSqliteRetry`, delete per-module `withDbWrite`/`withWrite`
       wrappers, keep labels and per-label options identical (telemetry 15s maxQueueWait,
       app-config `retries:3, baseDelayMs:50`, recommendation latest_wins budgetKey, …).
-- [ ] 2.3 Route bypasses through the helper: `recommendation-engine.ts` analytics
+- [x] 2.3 Route bypasses through the helper: `recommendation-engine.ts` analytics
       insert, `db/utils.ts` `cleanExpiredRecommendationCache`.
-- [ ] 2.4 V3 (adjacent-defect verification): for each aux store (telemetry, analytics
+- [x] 2.4 V3 (adjacent-defect verification): for each aux store (telemetry, analytics
       report-queue, analytics db-store, clipboard-meta, ocr, recommendation), confirm
       construction timing vs background aux init; note which ones held a stale primary
       fallback. Fix via `scheduleAuxWrite`'s enqueue-time resolution; record findings in
       the task journal (this is in-scope: it is R3's mechanism, not scope creep).
-- [ ] 2.5 Grep gate: `grep -rn "schedule([^)]*withSqliteRetry" apps/core-app/src/main
+- [x] 2.5 Grep gate: `grep -rn "schedule([^)]*withSqliteRetry" apps/core-app/src/main
       --include="*.ts" | grep -v test` → 0 hits. Remaining `withSqliteRetry` usages
       must be non-scheduler paths (worker direct mode, reads) — list them in the
       journal with one-line justification each.
-- [ ] 2.6 Validate: `npm run typecheck` (node+web) + `npx vitest run` for touched
+- [x] 2.6 Validate: `npm run typecheck` (node+web) + `npx vitest run` for touched
       module suites (database, storage, ocr, analytics, search-engine, catalog).
 - Rollback point: revert commit B (A stays safe).
 
 ## Phase 3 — Per-file lanes (commit C)
 
-- [ ] 3.1 Scheduler: per-lane queues + loops (`'primary' | 'aux'`), per-lane
+- [x] 3.1 Scheduler: per-lane queues + loops (`'primary' | 'aux'`), per-lane
       `getStats`/`getDetailedStats` breakdown with backward-compatible aggregates;
       `drain()`/`waitForCapacity` across lanes; WAL-checkpoint busy-gating reads
       primary lane only (`database/index.ts` `getDbSchedulerBusyReason`).
-- [ ] 3.2 `scheduleAuxWrite` activates real lane routing.
-- [ ] 3.3 Tests: aux task proceeds while primary task is in busy backoff; drain waits
+- [x] 3.2 `scheduleAuxWrite` activates real lane routing.
+- [x] 3.3 Tests: aux task proceeds while primary task is in busy backoff; drain waits
       both lanes; health-snapshot aggregates unchanged shape.
-- [ ] 3.4 Validate: vitest db/ + database module suite; typecheck:node.
+- [x] 3.4 Validate: vitest db/ + database module suite; typecheck:node.
 - Rollback point: revert commit C.
 
 ## Phase 4 — Startup gating (commit D)
 
-- [ ] 4.1 Telemetry retention caller (privacy scheduled cleanup): skip DB-write portion
+- [x] 4.1 Telemetry retention caller (privacy scheduled cleanup): skip DB-write portion
       inside `isInStartupDegradeWindow()`; next run covers it.
-- [ ] 4.2 App-provider startup backfill: defer past the degrade window.
-- [ ] 4.3 UsageSummaryService: initial delay past the window.
-- [ ] 4.4 Validate: typecheck:node + affected suites; grep no other boot-time
+- [x] 4.2 App-provider startup backfill: defer past the degrade window.
+- [x] 4.3 UsageSummaryService: initial delay past the window.
+- [x] 4.4 Validate: typecheck:node + affected suites; grep no other boot-time
       `schedule(` callers fire before `ALL_MODULES_LOADED` with heavy writes (spot
       check app logs in Phase 6).
 - Rollback point: revert commit D.
