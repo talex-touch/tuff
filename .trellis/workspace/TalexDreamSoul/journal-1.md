@@ -1661,3 +1661,11 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 ### Next Steps
 
 - None - task complete
+
+## 2026-08-05 · tuffex-ai-attachments-toolcards · ③落地(分部模型+附件+工具卡)
+
+- parts 模型纯可选增量(`AiElementMessage.parts?`,text/reasoning/tool-call/attachment 四类),旧 content 消费方零改动;TxAiConversation 过滤器补"parts-only 空 content 不滤掉"。
+- 新组件×3:TxAttachmentTray(缩略+进度环+TxModal 预览)、TxToolCallCard(四态+`result` Widget 展面槽+320px 内滚约束,零 arrow-js import)、TxReasoningDisclosure(shimmer 思考态+时长完结态);折叠动画统一 grid-rows 0fr↔1fr 免测高。
+- TxChatComposer 原地扩展:paste/drop → `attachmentAdd(File[])`、dragenter/leave 计数器防高亮抖动、**补上缺失的 IME isComposing 守卫**(HomePage 手写版有、组件版一直没有)。
+- 坑:barrel 对同名类型双源 `export *` 会静默歧义化——tool-call-card 不 re-export `AiToolCallPart`。
+- 全量门:1016 测试/typecheck/lint/build 全绿;动画手感 review 门并入④集成验。提交 87e67d03c / 7b4e4d6fa。
