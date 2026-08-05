@@ -19,6 +19,14 @@ import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/ent
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 import { redactProviderConfigDocument } from '../ai/provider-credential-service'
 
+export const AUTH_REAUTHENTICATION_REQUIRED_FIELD = 'requiresReauthenticationOnNextStartup'
+export const LEGACY_AUTH_PROTECTION_FIELDS = [
+  'useSecureStorage',
+  'secureStorageUserOverridden',
+  'secureStorageReminderShown',
+  'secureStorageUnavailable'
+] as const
+
 export interface EverythingSettings {
   enabled?: boolean
   cliPath?: string | null
@@ -68,6 +76,55 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function omitLegacyAuthProtectionFields(auth: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...auth }
+  for (const key of LEGACY_AUTH_PROTECTION_FIELDS) {
+    delete normalized[key]
+  }
+  return normalized
+}
+
+function getAuthSettings(value: unknown): Record<string, unknown> | null {
+  if (!isPlainObject(value) || !isPlainObject(value.auth)) {
+    return null
+  }
+  return value.auth
+}
+
+function isAuthReauthenticationRequired(value: unknown): boolean {
+  return getAuthSettings(value)?.[AUTH_REAUTHENTICATION_REQUIRED_FIELD] === true
+}
+
+/**
+ * Keep the recovery marker out of renderer and sync projections. It is only
+ * meaningful to the main-owned AuthModule and must never become a user setting.
+ */
+export function omitMainOwnedAuthSettings(value: object): object {
+  if (!isPlainObject(value)) return value
+  const auth = getAuthSettings(value)
+  if (!auth) return { ...value }
+
+  const projectedAuth = omitLegacyAuthProtectionFields(auth)
+  delete projectedAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD]
+  return { ...value, auth: projectedAuth }
+}
+
+/**
+ * Renderer and remote-sync settings writes retain the local marker. Only
+ * AuthModule can change the recovery decision through a durable main write.
+ */
+export function preserveMainOwnedAuthSettings(value: unknown, current: unknown): unknown {
+  if (!isPlainObject(value)) return value
+
+  const incomingAuth = getAuthSettings(value)
+  const nextAuth = incomingAuth ? omitLegacyAuthProtectionFields(incomingAuth) : {}
+  delete nextAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD]
+  if (isAuthReauthenticationRequired(current)) {
+    nextAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD] = true
+  }
+  return { ...value, auth: nextAuth }
+}
+
 function normalizeObject<T>(value: unknown, fallback: T): T {
   return isPlainObject(value) ? (value as T) : fallback
 }
@@ -78,9 +135,11 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   const setup = isPlainObject(value.setup) ? value.setup : {}
   const window = isPlainObject(value.window) ? value.window : {}
   const omniPanel = isPlainObject(value.omniPanel) ? value.omniPanel : {}
+  const auth = getAuthSettings(value)
 
   return {
     ...value,
+    ...(auth ? { auth: omitLegacyAuthProtectionFields(auth) } : {}),
     setup: {
       ...setup,
       hideDock: typeof setup.hideDock === 'boolean' ? setup.hideDock : fallback.setup.hideDock

@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-07-30",
+  "updatedAt": "2026-08-04",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -47,18 +47,25 @@
       "id": "nexus-auth-session",
       "classification": "identity-session",
       "owner": "AuthModule",
-      "storageLocations": ["secure-store.json: auth-token", "main-memory session state"],
-      "writers": ["main-owned auth lifecycle"],
+      "storageLocations": [
+        "secure-store.json: AES-256-GCM auth.token envelope",
+        "config/local-secret.v1.key: local random secret material",
+        "app settings auth.requiresReauthenticationOnNextStartup: non-sensitive fail-closed marker",
+        "main-memory session state"
+      ],
+      "writers": ["main-owned AuthModule protected-storage and fail-closed marker lifecycle"],
       "readers": ["main-side Nexus runtime injection"],
-      "exportPolicy": "never portable and never ordinary export",
-      "deletionPolicy": "logout or app-data reset",
-      "retentionPolicy": "session/account lifecycle",
-      "rendererExposure": "redacted auth state only",
+      "exportPolicy": "never portable and never ordinary export; the local secret and auth token are not exportable",
+      "deletionPolicy": "logout or app-data reset; AuthModule durably sets its non-sensitive reauthentication marker before protected token mutation, clears the token, and clears the marker only after token deletion succeeds",
+      "retentionPolicy": "protected token persists only after validated local-secret AES-256-GCM storage; token write/read/health/validation or marker persistence failure leaves the marker fail-closed, keeps an accepted token memory-only, and blocks the next startup from restoring any prior ciphertext until protected cleanup succeeds",
+      "rendererExposure": "redacted auth state only; the main-owned reauthentication marker is omitted from renderer and sync settings projections",
       "portable": false,
-      "migrationStatus": "secure-main-owned",
+      "migrationStatus": "forced-protected-storage; legacy user override fields are removed at AuthModule startup; non-sensitive fail-closed marker is main-owned and not a user setting",
       "evidence": [
-        "apps/core-app/src/main/modules/ai/provider-runtime.ts#symbol=normalizeProviderForRuntime",
-        "apps/core-app/src/main/modules/privacy/portable-secret-catalog.ts#symbol=PORTABLE_SECRET_CATALOG_V1"
+        "apps/core-app/src/main/modules/auth/index.ts#symbol=loadAuthToken",
+        "apps/core-app/src/main/modules/auth/index.test.ts#test=does not restore a stale protected token after a failed write leaves its cleanup incomplete",
+        "apps/core-app/src/main/modules/auth/index.test.ts#test=keeps the fail-closed marker after sign-out cannot clear the protected token",
+        "apps/core-app/src/main/utils/secure-store.ts#symbol=encodeEnvelope"
       ]
     },
     {
@@ -83,9 +90,9 @@
       "id": "machine-seed",
       "classification": "device-identity",
       "owner": "SecureStore",
-      "storageLocations": ["local-secret.v1.key", "OS/local secure backend material"],
-      "writers": ["main-owned secure-store initialization"],
-      "readers": ["secure-store envelope crypto"],
+      "storageLocations": ["config/local-secret.v1.key: local random secret material"],
+      "writers": ["main-owned local-secret initialization"],
+      "readers": ["local-secret AES-256-GCM envelope crypto"],
       "exportPolicy": "never portable and never ordinary export",
       "deletionPolicy": "app-data reset/uninstall data removal",
       "retentionPolicy": "device installation lifecycle",

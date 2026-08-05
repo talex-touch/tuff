@@ -32,14 +32,19 @@ import os from 'node:os'
 import { shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import {
+  type SecureStoreHealth,
   getSecureStoreHealth,
-  getSecureStoreValue,
+  getSecureStoreValueStrict,
   setSecureStoreValue
 } from '../../utils/secure-store'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
+import {
+  AUTH_REAUTHENTICATION_REQUIRED_FIELD,
+  LEGACY_AUTH_PROTECTION_FIELDS
+} from '../storage/main-storage-registry'
 import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '../nexus/runtime-base'
-import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
+import { getMainConfig, saveMainConfig, saveMainConfigDurable } from '../storage'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 
 const authLog = getLogger('auth')
@@ -60,6 +65,12 @@ const VISIBLE_AUTH_EVIDENCE_DEVICE_START_JSON = 'TUFF_VISIBLE_EVIDENCE_AUTH_DEVI
 const VISIBLE_AUTH_EVIDENCE_BROWSER_OPEN_FAIL = 'TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL'
 const VISIBLE_AUTH_EVIDENCE_POLL_STATUS = 'TUFF_VISIBLE_EVIDENCE_AUTH_POLL_STATUS'
 const VISIBLE_AUTH_EVIDENCE_POLL_DELAY_MS = 'TUFF_VISIBLE_EVIDENCE_AUTH_POLL_DELAY_MS'
+const UNAVAILABLE_SECURE_STORE_HEALTH: SecureStoreHealth = Object.freeze({
+  backend: 'unavailable' as const,
+  available: false,
+  degraded: true,
+  reason: 'Local encrypted storage is unavailable'
+})
 
 type AuthStateListener = (state: AuthState) => void
 
@@ -77,7 +88,6 @@ let transport: ITuffTransportMain | null = null
 let requestRendererValue: (<T>(eventName: string) => Promise<T | null>) | null = null
 
 let authToken: string | null = null
-let authUseSecureStorage = false
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
@@ -293,8 +303,10 @@ async function getSecureValue(key: string): Promise<string | null> {
   if (!appRootPath) {
     throw new Error('[AuthModule] App root path is not ready')
   }
-  return await getSecureStoreValue(appRootPath, key, getSecureValuePurpose(key), (message, error) =>
-    authLog.warn(message, { error })
+  return await getSecureStoreValueStrict(appRootPath, key, getSecureValuePurpose(key), () =>
+    authLog.warn('Secure store read failed', {
+      meta: { reason: 'secure-store-read-failed' }
+    })
   )
 }
 
@@ -302,15 +314,11 @@ async function setSecureValue(key: string, value: string | null): Promise<boolea
   if (!appRootPath) {
     throw new Error('[AuthModule] App root path is not ready')
   }
-  return await setSecureStoreValue(
-    appRootPath,
-    key,
-    value,
-    getSecureValuePurpose(key),
-    (message, error) => {
-      authLog.warn(message, { error })
-    }
-  )
+  return await setSecureStoreValue(appRootPath, key, value, getSecureValuePurpose(key), () => {
+    authLog.warn('Secure store write failed', {
+      meta: { reason: 'secure-store-write-failed' }
+    })
+  })
 }
 
 function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
@@ -334,18 +342,56 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
 }
 
 async function loadAuthToken(): Promise<void> {
-  authUseSecureStorage = isAuthTokenSecureStorageEnabled()
+  normalizeAuthSettings()
   authLog.info('Loading auth token', {
-    meta: { credentialProtectionEnabled: authUseSecureStorage }
+    meta: { credentialProtectionEnabled: true }
   })
 
-  const secureStoreHealth = await getSecureStoreHealth(appRootPath)
-  setSecureStorageDegradedState(authUseSecureStorage && !secureStoreHealth.available)
-  authToken = await getSecureValue(AUTH_TOKEN_KEY)
+  if (isAuthReauthenticationRequired()) {
+    authToken = null
+    const deleted = await deletePersistedAuthToken()
+    if (deleted) {
+      await persistAuthReauthenticationRequired(false)
+    }
+    authLog.info('Auth token load blocked by fail-closed marker', {
+      meta: { reason: 'auth-reauthentication-required' }
+    })
+    return
+  }
+
+  let secureStoreHealth = UNAVAILABLE_SECURE_STORE_HEALTH
+  let secureStoreHealthCheckFailed = false
+  try {
+    secureStoreHealth = await getSecureStoreHealth(appRootPath)
+  } catch {
+    secureStoreHealthCheckFailed = true
+    authLog.warn(
+      'Secure auth persistence health check failed; login state can only remain in memory',
+      {
+        meta: { reason: 'secure-store-health-check-failed' }
+      }
+    )
+  }
+  if (!secureStoreHealth.available) {
+    authToken = null
+    await invalidateAuthTokenPersistence(
+      secureStoreHealthCheckFailed ? 'secure-store-health-check-failed' : 'secure-store-unavailable'
+    )
+  } else {
+    try {
+      authToken = await getSecureValue(AUTH_TOKEN_KEY)
+    } catch {
+      authToken = null
+      await invalidateAuthTokenPersistence('secure-store-read-failed')
+      authLog.warn('Secure auth persistence unreadable; login state can only remain in memory', {
+        meta: { reason: 'secure-store-read-failed' }
+      })
+    }
+  }
   authLog.info('Auth token load completed', {
     meta: {
       hasToken: Boolean(authToken),
-      credentialProtectionEnabled: authUseSecureStorage,
+      credentialProtectionEnabled: true,
       secureStoreAvailable: secureStoreHealth.available,
       secureStoreBackend: secureStoreHealth.backend,
       secureStoreDegraded: secureStoreHealth.degraded
@@ -353,27 +399,72 @@ async function loadAuthToken(): Promise<void> {
   })
   if (!secureStoreHealth.available) {
     authLog.warn('Secure auth persistence unavailable; login state can only remain in memory', {
-      reason: secureStoreHealth.reason
+      meta: { reason: 'secure-store-unavailable' }
     })
   } else if (secureStoreHealth.degraded) {
     authLog.info('Auth uses local encrypted secure store', {
-      backend: secureStoreHealth.backend,
-      reason: secureStoreHealth.reason
+      meta: { reason: 'secure-store-degraded', backend: secureStoreHealth.backend }
     })
   }
+}
+
+async function deletePersistedAuthToken(): Promise<boolean> {
+  try {
+    const deleted = await setSecureValue(AUTH_TOKEN_KEY, null)
+    if (deleted) {
+      return true
+    }
+  } catch {
+    // The marker remains the durable fail-closed recovery gate when cleanup is unavailable.
+  }
+  authLog.warn('Secure auth persistence cleanup failed', {
+    meta: { reason: 'secure-store-write-failed' }
+  })
+  return false
+}
+
+async function invalidateAuthTokenPersistence(reason: string): Promise<void> {
+  await persistAuthReauthenticationRequired(true)
+  const deleted = await deletePersistedAuthToken()
+  authLog.warn('Auth persistence entered fail-closed mode', {
+    meta: { reason, protectedTokenDeleted: deleted }
+  })
+}
+
+async function persistAuthToken(nextToken: string): Promise<boolean> {
+  const markerPersisted = await persistAuthReauthenticationRequired(true)
+  if (!markerPersisted) {
+    await deletePersistedAuthToken()
+    return false
+  }
+
+  let persisted = false
+  try {
+    persisted = await setSecureValue(AUTH_TOKEN_KEY, nextToken)
+  } catch {
+    persisted = false
+  }
+  if (!persisted) {
+    await deletePersistedAuthToken()
+    return false
+  }
+
+  return await persistAuthReauthenticationRequired(false)
 }
 
 async function setAuthToken(nextToken: string): Promise<void> {
   authToken = nextToken
   authLog.info('Auth token accepted', {
-    meta: {
-      tokenLength: nextToken.length,
-      credentialProtectionEnabled: authUseSecureStorage
-    }
+    meta: { credentialProtectionEnabled: true }
   })
-  const persisted = await setSecureValue(AUTH_TOKEN_KEY, nextToken)
+  const persisted = await persistAuthToken(nextToken)
+  if (!persisted) {
+    authLog.warn('Secure auth persistence write failed; login state can only remain in memory', {
+      meta: { reason: 'secure-store-write-failed' }
+    })
+  }
   authLog.info('Auth token persistence completed', {
-    meta: { persisted, credentialProtectionEnabled: authUseSecureStorage }
+    meta: { persisted, credentialProtectionEnabled: true }
   })
 }
 
@@ -381,9 +472,12 @@ async function clearAuthToken(): Promise<void> {
   const hadToken = Boolean(authToken)
   authToken = null
   authLog.info('Clearing auth token', {
-    meta: { hadToken, credentialProtectionEnabled: authUseSecureStorage }
+    meta: { hadToken, credentialProtectionEnabled: true }
   })
-  await setSecureValue(AUTH_TOKEN_KEY, null)
+  await persistAuthReauthenticationRequired(true)
+  if (await deletePersistedAuthToken()) {
+    await persistAuthReauthenticationRequired(false)
+  }
 }
 
 function ensureSecuritySettings(appSettings: AppSetting): void {
@@ -398,102 +492,74 @@ function ensureSecuritySettings(appSettings: AppSetting): void {
 function ensureAuthSettings(appSettings: AppSetting): void {
   if (!appSettings.auth) {
     appSettings.auth = { ...appSettingOriginData.auth }
-    return
-  }
-
-  const authSettings = appSettings.auth as {
-    useSecureStorage?: unknown
-    secureStorageUserOverridden?: unknown
-    secureStorageReminderShown?: unknown
-    secureStorageUnavailable?: unknown
-  }
-
-  if (typeof authSettings.secureStorageUserOverridden !== 'boolean') {
-    authSettings.secureStorageUserOverridden = false
-  }
-  if (typeof authSettings.useSecureStorage !== 'boolean') {
-    authSettings.useSecureStorage = appSettingOriginData.auth.useSecureStorage
-  } else if (!authSettings.secureStorageUserOverridden && !authSettings.useSecureStorage) {
-    authSettings.useSecureStorage = appSettingOriginData.auth.useSecureStorage
-  }
-  if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
-    authSettings.secureStorageReminderShown = false
-  }
-  if (typeof authSettings.secureStorageUnavailable !== 'boolean') {
-    authSettings.secureStorageUnavailable = false
   }
 }
 
-function isAuthTokenSecureStorageEnabled(appSettings?: AppSetting): boolean {
-  const resolvedSettings = appSettings ?? (getMainConfig(StorageList.APP_SETTING) as AppSetting)
-  ensureAuthSettings(resolvedSettings)
-  const authSettings = resolvedSettings.auth as { useSecureStorage?: unknown }
-  return authSettings.useSecureStorage === true
+function isAuthReauthenticationRequired(): boolean {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  const authSettings = appSettings.auth
+  return (
+    typeof authSettings === 'object' &&
+    authSettings !== null &&
+    !Array.isArray(authSettings) &&
+    (authSettings as Record<string, unknown>)[AUTH_REAUTHENTICATION_REQUIRED_FIELD] === true
+  )
 }
 
-async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): Promise<void> {
-  const nextEnabled = isAuthTokenSecureStorageEnabled(nextAppSetting)
-  if (nextEnabled === authUseSecureStorage) {
-    if (nextEnabled) {
-      const secureStoreHealth = await getSecureStoreHealth(appRootPath)
-      setSecureStorageDegradedState(!secureStoreHealth.available)
-    } else {
-      setSecureStorageDegradedState(false)
+async function persistAuthReauthenticationRequired(required: boolean): Promise<boolean> {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  const authSettings =
+    typeof appSettings.auth === 'object' &&
+    appSettings.auth !== null &&
+    !Array.isArray(appSettings.auth)
+      ? (appSettings.auth as Record<string, unknown>)
+      : {}
+  if ((authSettings[AUTH_REAUTHENTICATION_REQUIRED_FIELD] === true) === required) {
+    return true
+  }
+
+  const nextAppSettings = {
+    ...appSettings,
+    auth: {
+      ...appSettingOriginData.auth,
+      ...authSettings,
+      [AUTH_REAUTHENTICATION_REQUIRED_FIELD]: required
     }
-    return
-  }
-
-  authUseSecureStorage = nextEnabled
-  if (!authUseSecureStorage) {
-    markSecureStorageUserOverridden(true)
-    setSecureStorageDegradedState(false)
-    authLog.info(
-      'Auth credential protection disabled by user preference; persisted sign-in remains available'
-    )
-    return
-  }
-
-  markSecureStorageUserOverridden(true)
-  const secureStoreHealth = await getSecureStoreHealth(appRootPath)
-  setSecureStorageDegradedState(!secureStoreHealth.available)
-
-  if (!authToken) {
-    if (!secureStoreHealth.available) {
-      authLog.warn('Secure storage unavailable; auth entered session-only mode', {
-        reason: secureStoreHealth.reason
-      })
+  } as AppSetting
+  try {
+    const result = await saveMainConfigDurable(StorageList.APP_SETTING, nextAppSettings, {
+      force: true
+    })
+    if (result.success) {
+      return true
     }
-    return
+  } catch {
+    // The current process may retain an in-memory session, but startup recovery is not trusted.
   }
-
-  const persisted = await setSecureValue(AUTH_TOKEN_KEY, authToken)
-  if (!persisted) {
-    authLog.warn('Secure storage unavailable; auth entered session-only mode')
-    return
-  }
-  authLog.info('Auth secure storage enabled by user preference')
+  authLog.warn('Failed to persist auth reauthentication marker', {
+    meta: {
+      reason: required
+        ? 'auth-reauthentication-marker-set-failed'
+        : 'auth-reauthentication-marker-clear-failed'
+    }
+  })
+  return false
 }
 
-function markSecureStorageUserOverridden(overridden: boolean): void {
+function normalizeAuthSettings(): void {
   const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
   ensureAuthSettings(appSettings)
-  const authSettings = appSettings.auth as { secureStorageUserOverridden?: boolean }
-  if (authSettings.secureStorageUserOverridden === overridden) {
-    return
+  const authSettings = appSettings.auth as Record<string, unknown>
+  let changed = false
+  for (const key of LEGACY_AUTH_PROTECTION_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(authSettings, key)) {
+      delete authSettings[key]
+      changed = true
+    }
   }
-  authSettings.secureStorageUserOverridden = overridden
-  saveMainConfig(StorageList.APP_SETTING, appSettings)
-}
-
-function setSecureStorageDegradedState(unavailable: boolean): void {
-  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
-  ensureAuthSettings(appSettings)
-  const authSettings = appSettings.auth as { secureStorageUnavailable?: boolean }
-  if (authSettings.secureStorageUnavailable === unavailable) {
-    return
+  if (changed) {
+    saveMainConfig(StorageList.APP_SETTING, appSettings)
   }
-  authSettings.secureStorageUnavailable = unavailable
-  saveMainConfig(StorageList.APP_SETTING, appSettings)
 }
 
 function ensureSyncSettings(appSettings: AppSetting): void {
@@ -1576,7 +1642,6 @@ export function applyStepUpToken(token: string): void {
 type AuthModuleTestState = {
   appRootPath?: string
   authToken?: string | null
-  authUseSecureStorage?: boolean
 }
 
 function resetAuthModuleTestState(): void {
@@ -1593,7 +1658,6 @@ function resetAuthModuleTestState(): void {
   transport = null
   requestRendererValue = null
   authToken = null
-  authUseSecureStorage = false
   stepUpToken = null
   stepUpTokenExpiresAt = 0
   deviceAuthLoginAttempt += 1
@@ -1607,18 +1671,15 @@ function setAuthModuleTestState(nextState: AuthModuleTestState): void {
   if (Object.prototype.hasOwnProperty.call(nextState, 'authToken')) {
     authToken = nextState.authToken ?? null
   }
-  if (Object.prototype.hasOwnProperty.call(nextState, 'authUseSecureStorage')) {
-    authUseSecureStorage = nextState.authUseSecureStorage === true
-  }
 }
 
 export const __test__ = {
   loadAuthToken,
+  setAuthToken,
   clearAuthToken,
   initializeAuthState,
   getCachedAuthUser,
   getState: cloneAuthState,
-  handleAuthStoragePreferenceChanged,
   resetState: resetAuthModuleTestState,
   setState: setAuthModuleTestState
 }
@@ -1627,7 +1688,6 @@ export class AuthModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('AuthModule')
   name: ModuleKey = AuthModule.key
   private transportDisposers: Array<() => void> = []
-  private appSettingUnsubscribe: (() => void) | null = null
 
   constructor() {
     super(AuthModule.key)
@@ -1791,12 +1851,6 @@ export class AuthModule extends BaseModule<TalexEvents> {
       })
     )
 
-    if (!this.appSettingUnsubscribe) {
-      this.appSettingUnsubscribe = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
-        void handleAuthStoragePreferenceChanged(data as AppSetting)
-      })
-    }
-
     void (async () => {
       await loadAuthToken()
       ensureDeviceProfile()
@@ -1808,10 +1862,6 @@ export class AuthModule extends BaseModule<TalexEvents> {
     if (authStartupRefreshTimer) {
       clearTimeout(authStartupRefreshTimer)
       authStartupRefreshTimer = null
-    }
-    if (this.appSettingUnsubscribe) {
-      this.appSettingUnsubscribe()
-      this.appSettingUnsubscribe = null
     }
     for (const dispose of this.transportDisposers) {
       try {
