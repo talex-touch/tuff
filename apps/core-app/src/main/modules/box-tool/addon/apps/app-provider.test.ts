@@ -18,6 +18,7 @@ import {
   getAppsMock,
   getHarnessLogger,
   getMainConfigMock,
+  getStartupDegradeWindowRemainingMsMock,
   loadSubject,
   getWatchPathsMock,
   pinyinMock,
@@ -189,6 +190,7 @@ describe('appProvider rebuild maintenance', () => {
       deletedApps: []
     })
     getMainConfigMock.mockReturnValue(undefined)
+    getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
     pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
       if (options?.pattern === 'first') {
         return value === '聊天应用' ? 'WX' : value
@@ -2901,6 +2903,37 @@ describe('appProvider rebuild maintenance', () => {
 
       expect(appRuntimeScanMock).not.toHaveBeenCalled()
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('defers the startup backfill timer past the DB startup degrade window', async () => {
+    vi.useFakeTimers()
+    try {
+      // Startup write-storm gate (R4): 105s of the 120s degrade window remain.
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(105_000)
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      privateProvider.dbUtils = {}
+      privateProvider.searchIndex = {}
+      privateProvider.appIndexSettings.startupBackfillEnabled = true
+      privateProvider._shouldRunStartupBackfill = vi.fn(async () => ({ allowed: true }))
+
+      privateProvider._scheduleStartupBackfill()
+
+      // The historic 15s initial delay must not fire inside the window…
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(appRuntimeScanMock).not.toHaveBeenCalled()
+
+      // …and the deferred one-shot fires once the window remainder elapses.
+      await vi.advanceTimersByTimeAsync(90_000)
+      await withTimeout(
+        privateProvider.startupBackfillTask ?? Promise.resolve(),
+        'deferred startup backfill'
+      )
+      expect(appRuntimeScanMock).toHaveBeenCalledTimes(1)
+    } finally {
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
       vi.useRealTimers()
     }
   })

@@ -40,6 +40,7 @@ const appProviderMocks = vi.hoisted(() => {
     ensureAppIconMock: vi.fn<() => Promise<string | null>>(async () => null),
     getLoggerMock: vi.fn((namespace: string) => resolveLogger(namespace)),
     getMainConfigMock: vi.fn(),
+    getStartupDegradeWindowRemainingMsMock: vi.fn((): number => 0),
     getWatchPathsMock: vi.fn((): string[] => []),
     registerPollingMock: vi.fn(),
     runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
@@ -85,6 +86,8 @@ export const getAppInfoByPathMock = appProviderMocks.getAppInfoByPathMock
 export const ensureAppIconMock = appProviderMocks.ensureAppIconMock
 export const getLoggerMock = appProviderMocks.getLoggerMock
 export const getMainConfigMock = appProviderMocks.getMainConfigMock
+export const getStartupDegradeWindowRemainingMsMock =
+  appProviderMocks.getStartupDegradeWindowRemainingMsMock
 export const getWatchPathsMock = appProviderMocks.getWatchPathsMock
 export const registerPollingMock = appProviderMocks.registerPollingMock
 export const runAdaptiveTaskQueueMock = appProviderMocks.runAdaptiveTaskQueueMock
@@ -215,6 +218,17 @@ vi.mock('../../../../db/db-write-scheduler', () => ({
 vi.mock('../../../../db/sqlite-retry', () => ({
   withSqliteRetry: withSqliteRetryMock
 }))
+
+// Real uptime-based window checks are unusable under vitest (worker process
+// uptime is usually inside the 120s startup degrade window); default to
+// "window already over" so timing-sensitive tests keep their historic delays.
+vi.mock('../../../../db/runtime-flags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../db/runtime-flags')>()
+  return {
+    ...actual,
+    getStartupDegradeWindowRemainingMs: appProviderMocks.getStartupDegradeWindowRemainingMsMock
+  }
+})
 
 vi.mock('../../../../db/utils', () => ({
   createDbUtils: vi.fn(() => null)
