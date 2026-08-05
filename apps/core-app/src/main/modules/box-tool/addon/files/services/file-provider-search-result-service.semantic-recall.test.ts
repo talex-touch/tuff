@@ -44,7 +44,9 @@ function makeService(opts: {
 
   const deps: FileProviderSearchResultServiceDeps = {
     providerId: 'files',
-    getDbUtils: () => ({ getDb }) as never,
+    // Split off in unit tests: getFileIndexReadDb falls back to the primary
+    // handle, mirroring createDbUtils' flag-off behavior.
+    getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
     getSearchIndex: () => null,
     buildItem: (file) =>
       ({

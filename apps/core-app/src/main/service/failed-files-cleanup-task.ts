@@ -1,9 +1,8 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../db/schema'
 import type { BackgroundTask } from './background-task-service'
-import { and, eq, lt } from 'drizzle-orm'
+import { and, eq, inArray, lt } from 'drizzle-orm'
 import { fileIndexProgress, files as filesSchema } from '../db/schema'
-import { createDbUtils } from '../db/utils'
 import { fileProviderLog } from '../utils/logger'
 
 /**
@@ -19,6 +18,35 @@ export interface FailedFilesCleanupTaskOptions {
 }
 
 /**
+ * Connection routing for the cleanup task. All handles/flags are resolved PER
+ * CALL (never captured at construction): the previous constructor-captured
+ * `createDbUtils(db)` predated the search split and kept the task pinned to
+ * whatever connection existed at background-task registration time — the
+ * aux/split resolver-timing trap class.
+ */
+export interface FailedFilesCleanupTaskDeps {
+  /**
+   * Split-aware read home for file-index state (`files` +
+   * `file_index_progress` live in the worker-owned search-index.db when the
+   * split is on; the primary otherwise).
+   */
+  getReadDb: () => LibSQLDatabase<typeof schema> | null
+  /** Flag-off write connection (byte-identical legacy path). */
+  getPrimaryDb: () => LibSQLDatabase<typeof schema> | null
+  /** True when file-index tables live in the worker-owned search file. */
+  isSearchSplitEnabled?: () => boolean
+  /**
+   * Forward delete statements to the search-index worker — the sole writer of
+   * its DB file. Required when the split is on; the task fails closed (skips)
+   * rather than writing the search file from the main thread.
+   */
+  execSearchIndexWrite?: (
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode?: 'single' | 'transaction'
+  ) => Promise<unknown>
+}
+
+/**
  * Failed files cleanup task
  */
 export class FailedFilesCleanupTask implements BackgroundTask {
@@ -28,14 +56,11 @@ export class FailedFilesCleanupTask implements BackgroundTask {
   readonly canInterrupt = true
   readonly estimatedDuration = 5 * 60 * 1000
 
-  private dbUtils: ReturnType<typeof createDbUtils> | null = null
+  private readonly deps: FailedFilesCleanupTaskDeps
   private options: FailedFilesCleanupTaskOptions
 
-  constructor(
-    db: LibSQLDatabase<typeof schema>,
-    options: Partial<FailedFilesCleanupTaskOptions> = {}
-  ) {
-    this.dbUtils = createDbUtils(db)
+  constructor(deps: FailedFilesCleanupTaskDeps, options: Partial<FailedFilesCleanupTaskOptions> = {}) {
+    this.deps = deps
     this.options = {
       maxRetryAge: 24 * 60 * 60 * 1000, // 24小时
       batchSize: 100,
@@ -45,7 +70,8 @@ export class FailedFilesCleanupTask implements BackgroundTask {
   }
 
   async execute(): Promise<void> {
-    if (!this.dbUtils) {
+    const readDb = this.deps.getReadDb()
+    if (!readDb) {
       throw new Error('Database utils not initialized')
     }
 
@@ -55,8 +81,7 @@ export class FailedFilesCleanupTask implements BackgroundTask {
     const cutoffTime = startTime - this.options.maxRetryAge
 
     try {
-      const failedFiles = await this.dbUtils
-        .getDb()
+      const failedFiles = await readDb
         .select({
           id: fileIndexProgress.fileId,
           path: filesSchema.path,
@@ -81,16 +106,32 @@ export class FailedFilesCleanupTask implements BackgroundTask {
       }
 
       const fileIds = failedFiles.map((f) => f.id)
-      await this.dbUtils
-        .getDb()
-        .delete(fileIndexProgress)
-        .where(eq(fileIndexProgress.fileId, fileIds[0]))
 
-      for (let i = 1; i < fileIds.length; i++) {
-        await this.dbUtils
-          .getDb()
+      if (this.deps.isSearchSplitEnabled?.() === true) {
+        // Split on: file_index_progress lives in the worker-owned search
+        // file. Forward ONE delete through the worker (its sole writer); the
+        // ids above came from the same home via getReadDb().
+        const execWrite = this.deps.execSearchIndexWrite
+        if (!execWrite) {
+          throw new Error('FAILED_FILES_CLEANUP_REQUIRES_SEARCH_INDEX_WRITER')
+        }
+        const compiled = readDb
           .delete(fileIndexProgress)
-          .where(eq(fileIndexProgress.fileId, fileIds[i]))
+          .where(inArray(fileIndexProgress.fileId, fileIds))
+          .toSQL()
+        await execWrite([{ sql: compiled.sql, args: compiled.params }], 'single')
+      } else {
+        // Flag off: byte-identical legacy path (per-id deletes on the
+        // primary connection).
+        const primaryDb = this.deps.getPrimaryDb()
+        if (!primaryDb) {
+          throw new Error('Database utils not initialized')
+        }
+        await primaryDb.delete(fileIndexProgress).where(eq(fileIndexProgress.fileId, fileIds[0]))
+
+        for (let i = 1; i < fileIds.length; i++) {
+          await primaryDb.delete(fileIndexProgress).where(eq(fileIndexProgress.fileId, fileIds[i]))
+        }
       }
 
       const duration = Date.now() - startTime
@@ -119,13 +160,13 @@ export class FailedFilesCleanupTask implements BackgroundTask {
 
 /**
  * Create failed files cleanup task
- * @param db Database instance
+ * @param deps Per-call connection routing (split-aware)
  * @param options Configuration options
  * @returns Failed files cleanup task instance
  */
 export function createFailedFilesCleanupTask(
-  db: LibSQLDatabase<typeof schema>,
+  deps: FailedFilesCleanupTaskDeps,
   options?: Partial<FailedFilesCleanupTaskOptions>
 ): FailedFilesCleanupTask {
-  return new FailedFilesCleanupTask(db, options)
+  return new FailedFilesCleanupTask(deps, options)
 }

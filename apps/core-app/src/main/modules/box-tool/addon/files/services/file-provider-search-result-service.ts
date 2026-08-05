@@ -230,8 +230,13 @@ export class FileProviderSearchResultService {
     const candidatePaths = [...candidateIds].slice(0, 120)
     searchLogger.fileDataFetch(candidatePaths.length)
     const dataFetchStart = this.now()
+    // Candidate rows MUST come from the split-aware read home: the index that
+    // produced these candidates is the worker's file, and a miss below feeds
+    // cleanupStaleCandidates — a DESTRUCTIVE removal from that same index.
+    // Reading the primary here under the split would judge live search-home
+    // entries against a stale/empty catalog and delete them.
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,
@@ -346,8 +351,11 @@ export class FileProviderSearchResultService {
     }
     if (scoreByFileId.size === 0) return []
 
+    // embeddings.sourceId carries the ids of the home the worker writes —
+    // resolving them against the primary would be a cross-home id collision
+    // (the wrong file could be displayed). Same-home read only.
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,
@@ -402,7 +410,7 @@ export class FileProviderSearchResultService {
     const extensions = resolveExtensionsForTypeFilters(typeFilters)
     if (!dbUtils || extensions.length === 0) return this.empty(query)
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,
@@ -437,7 +445,7 @@ export class FileProviderSearchResultService {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils || extensionFilters.length === 0) return this.empty(query)
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,

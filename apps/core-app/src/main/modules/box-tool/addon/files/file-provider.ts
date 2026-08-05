@@ -567,7 +567,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       runAutoIndexing: () => this.runAutoIndexing(),
       logDebug: (message, meta) => this.logDebug(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta),
-      logError: (message, error, meta) => this.logError(message, error, meta)
+      logError: (message, error, meta) => this.logError(message, error, meta),
+      // Resolved per call (never captured): the failed-files cleanup task
+      // reads file_index_progress from the split-aware home, so its deletes
+      // must route to the SAME home — through the worker when the split is
+      // on. Leaving these unwired would read search-home ids and delete
+      // primary rows by those ids (cross-home id collision).
+      isSearchSplitEnabled: () =>
+        Boolean(this.initializationContext?.databaseManager.isSearchSplitEnabled()),
+      execSearchIndexWrite: async (statements, mode) =>
+        await searchIndexWriter.execWrite(statements, mode)
     })
     this.assetService = new FileProviderAssetService({
       getDbUtils: () => this.dbUtils,
@@ -672,8 +681,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       buildRecord: (rawPath, options) => this.buildFileRecord(rawPath, options),
       getExistingRows: async (paths) => {
         if (!this.dbUtils || paths.length === 0) return []
+        // Split-aware home: the planner's insert-vs-update decision AND the
+        // row ids embedded in its update records must come from the SAME file
+        // the worker writes (search-index.db when the split is on). Reading
+        // the primary here fed PRIMARY row ids into worker-side
+        // updateFileMetadata — the 2d.3 cross-home id-collision hazard.
         return await this.dbUtils
-          .getDb()
+          .getFileIndexReadDb()
           .select()
           .from(filesSchema)
           .where(inArray(filesSchema.path, paths))
@@ -731,8 +745,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getIndexedFileRecordsPage: async (afterId, limit, runOptions) => {
         runOptions?.signal?.throwIfAborted()
         if (!this.dbUtils) return []
+        // Cleanup deletes are keyed by these ids — read the home the delete
+        // will target (worker-owned search file under the split).
         return await this.dbUtils
-          .getDb()
+          .getFileIndexReadDb()
           .select({ path: filesSchema.path, id: filesSchema.id })
           .from(filesSchema)
           .where(and(eq(filesSchema.type, 'file'), gt(filesSchema.id, afterId)))
@@ -1037,8 +1053,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
     ]
     if (paths.length === 0) return
+    // Worker-committed rows live in the worker's home; the ids on these rows
+    // feed extension/icon writes (which are routed to the same home), so the
+    // read must come from it too.
     const files = await this.dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select()
       .from(filesSchema)
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
@@ -1055,6 +1074,56 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
     }
     return this.filePersistencePort
+  }
+
+  /**
+   * Split topology resolved PER CALL (never captured): whether the file-index
+   * tables live in the worker-owned search-index.db. See issue #295 and the
+   * embedding split-brain (constructor capture was the bug class).
+   */
+  private isSearchSplitEnabledNow(): boolean {
+    return Boolean(this.initializationContext?.databaseManager.isSearchSplitEnabled())
+  }
+
+  /**
+   * Compile the files+embeddings delete pair for a set of file ids. The
+   * builder connection is only used for SQL compilation — the statements
+   * execute on the search-index worker's connection (the sole writer of its
+   * file). Ids MUST come from the split-aware read home
+   * (`getFileIndexReadDb()`), never from the primary, so a primary row id can
+   * never address the wrong search-home row (2d.3 id-collision hazard).
+   */
+  private buildSearchIndexFileDeleteStatements(
+    fileIds: number[]
+  ): Array<{ sql: string; args: unknown[] }> {
+    const builder = this.dbUtils!.getDb()
+    const deleteFiles = builder.delete(filesSchema).where(inArray(filesSchema.id, fileIds)).toSQL()
+    const sourceIds = fileIds.map((id) => String(id))
+    const deleteEmbeddings = builder
+      .delete(embeddingsSchema)
+      .where(
+        and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
+      )
+      .toSQL()
+    return [
+      { sql: deleteFiles.sql, args: deleteFiles.params },
+      { sql: deleteEmbeddings.sql, args: deleteEmbeddings.params }
+    ]
+  }
+
+  /**
+   * Split-on delete path: forward the files+embeddings deletes to the
+   * search-index worker as ONE atomic batch. Never wrapped in
+   * `scheduleDbWrite` — the write executes on the worker connection, and
+   * holding the primary write lane across a cross-thread round trip is the
+   * head-of-line-blocking anti-pattern the scheduler work removed.
+   */
+  private async execSearchIndexFileDeletes(fileIds: number[]): Promise<void> {
+    if (fileIds.length === 0) return
+    await searchIndexWriter.execWrite(
+      this.buildSearchIndexFileDeleteStatements(fileIds),
+      'transaction'
+    )
   }
 
   private requireRuntimeMutationDelegate(): FileIndexedSourceRuntimeMutationDelegate {
@@ -1810,6 +1879,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       await this.waitForSearchIndexDrain(reason, mutationLeaseId)
     } catch (error) {
+      // Deliberate consistency lever, with a known cost: when post-scan
+      // content/embedding enrichment cannot drain within
+      // FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS (30s), the catch below CLEARS
+      // scan_progress so the next eligible scan re-runs and re-dispatches
+      // enrichment (there is no standalone resume-from-file_index_progress
+      // path). Consequence on a large first index: the scan-completion
+      // scan_progress rows written moments earlier are wiped again each run
+      // until enrichment fits the drain window, so every eligible auto-scan
+      // re-walks all roots (observed as sp=0 in the 2026-08-05 split
+      // validation runs). Not corruption — re-scan converges — but if this
+      // loop shows up in steady-state logs ('Search index drain timed out
+      // after indexed-source scan'), the fix belongs in the enrichment
+      // contract (resume from file_index_progress), not here.
       if (mutationLeaseId !== undefined) {
         this.cancelledIndexWorkerMutationLeases.add(mutationLeaseId)
         this.indexSchedulerService.cancelLease(mutationLeaseId)
@@ -2086,7 +2168,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const db = this.dbUtils.getDb()
+    // Live index stats (files / progress / embeddings) belong to the
+    // file-index domain — read the home the worker writes.
+    const db = this.dbUtils.getFileIndexReadDb()
 
     const [
       totalFilesResult,
@@ -2277,7 +2361,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async getFailedFiles(): Promise<FileIndexFailedFilesResult> {
     if (!this.dbUtils) return { files: [] }
 
-    const db = this.dbUtils.getDb()
+    // Same home as the failed-files cleanup task reads/deletes.
+    const db = this.dbUtils.getFileIndexReadDb()
     const rows = await db
       .select({
         fileId: fileIndexProgress.fileId,
@@ -2714,10 +2799,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  // The reconciliation seen-paths TEMP table is connection-local, and
+  // getMissingReconciliationDbFiles JOINs it against `files` — so the temp
+  // table and the files read must live on the SAME connection: the split-aware
+  // read home. TEMP-schema writes never touch the search file's main schema,
+  // so the worker's sole-writer invariant holds (split off → primary handle,
+  // byte-identical).
   private async prepareReconciliationSeenPaths(options?: FileIndexRunOptions): Promise<void> {
     options?.signal?.throwIfAborted()
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    const db = this.dbUtils.getDb()
+    const db = this.dbUtils.getFileIndexReadDb()
     await scheduleDbWrite('file-reconciliation.seen.prepare', async () => {
       options?.signal?.throwIfAborted()
       await db.run(sql`DROP TABLE IF EXISTS temp.file_reconciliation_seen_paths`)
@@ -2736,7 +2827,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (paths.length === 0) return
     options?.signal?.throwIfAborted()
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    const db = this.dbUtils.getDb()
+    const db = this.dbUtils.getFileIndexReadDb()
     await scheduleDbWrite('file-reconciliation.seen.record', async () => {
       options?.signal?.throwIfAborted()
       await db.run(sql`
@@ -2756,8 +2847,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (paths.length === 0) return []
     options?.signal?.throwIfAborted()
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+    // Ids feed reconciliation update/delete records — same-home read (2d.3).
     return await this.dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({ id: filesSchema.id, path: filesSchema.path, mtime: filesSchema.mtime })
       .from(filesSchema)
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
@@ -2777,7 +2869,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .replace(/!/g, '!!')
       .replace(/%/g, '!%')
       .replace(/_/g, '!_')
-    return await this.dbUtils.getDb().all<FileProviderReconciliationDbRecord>(sql`
+    return await this.dbUtils.getFileIndexReadDb().all<FileProviderReconciliationDbRecord>(sql`
       SELECT f.id, f.path, f.mtime
       FROM files AS f
       WHERE f.type = 'file'
@@ -2795,7 +2887,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async clearReconciliationSeenPaths(_options?: FileIndexRunOptions): Promise<void> {
     if (!this.dbUtils) return
-    const db = this.dbUtils.getDb()
+    const db = this.dbUtils.getFileIndexReadDb()
     await scheduleDbWrite('file-reconciliation.seen.clear', async () => {
       await db.run(sql`DROP TABLE IF EXISTS temp.file_reconciliation_seen_paths`)
     })
@@ -2905,8 +2997,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async findIncrementalDeleteRecords(paths: string[]): Promise<IndexedWriteDeleteRecord[]> {
     if (!this.dbUtils || paths.length === 0) return []
+    // Ids feed the incremental delete — same-home read (2d.3).
     return await this.dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({ id: filesSchema.id, path: filesSchema.path })
       .from(filesSchema)
       .where(inArray(filesSchema.path, paths))
@@ -2914,8 +3007,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async deleteIncrementalRecords(records: IndexedWriteDeleteRecord[]): Promise<void> {
     if (!this.dbUtils || records.length === 0) return
-    const db = this.dbUtils.getDb()
     const idsToDelete = records.map((file) => file.id)
+    if (this.isSearchSplitEnabledNow()) {
+      // Watch-event deletes target the worker-owned home; ids came from the
+      // split-aware read (findIncrementalDeleteRecords).
+      await this.execSearchIndexFileDeletes(idsToDelete)
+      return
+    }
+    const db = this.dbUtils.getDb()
     await scheduleDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
@@ -2924,9 +3023,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async deleteCleanupRecords(records: IndexedWriteDeleteRecord[]): Promise<void> {
     if (!this.dbUtils || records.length === 0) return
-    const db = this.dbUtils.getDb()
     const idsToDelete = records.map((file) => file.id)
     const pathsToDelete = records.map((file) => file.path)
+    if (this.isSearchSplitEnabledNow()) {
+      await this.execSearchIndexFileDeletes(idsToDelete)
+      // deletePaths resolves the split per call and forwards the
+      // scan_progress delete through the worker itself; the db argument is
+      // only used on the flag-off path.
+      await this.scanProgressService.deletePaths(this.dbUtils.getFileIndexReadDb(), pathsToDelete)
+      return
+    }
+    const db = this.dbUtils.getDb()
     await scheduleDbWrite('file-index.cleanup.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
@@ -2945,8 +3052,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       normalizePath: (rawPath) => path.normalize(rawPath),
       findExisting: async () => [],
       deleteRecords: async (resolvedRecords) => {
-        const db = this.dbUtils!.getDb()
         const idsToDelete = resolvedRecords.map((file) => file.id)
+        if (this.isSearchSplitEnabledNow()) {
+          for (const chunk of chunkArray(idsToDelete, 50)) {
+            await appTaskGate.waitForIdle()
+            // No dbWriteScheduler capacity gate here: the write executes on
+            // the worker connection, which serializes through its own
+            // admission gate — the primary queue depth is unrelated.
+            await this.execSearchIndexFileDeletes(chunk)
+          }
+          return
+        }
+        const db = this.dbUtils!.getDb()
         for (const chunk of chunkArray(idsToDelete, 50)) {
           await appTaskGate.waitForIdle()
           await dbWriteScheduler.waitForCapacity(4)
@@ -3035,6 +3152,36 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
     if (acceptedRecords.length === 0) return []
+
+    if (this.isSearchSplitEnabledNow()) {
+      // Watch-event inserts target the worker-owned home. The persistence
+      // port's upsertFiles returns the SEARCH-home rows (including their ids),
+      // so downstream extension/indexing side effects are keyed by the ids of
+      // the file the worker actually wrote — never primary ids (2d.3).
+      // Deviation from the parked design's "forward exact SQL": the port's
+      // conflict set additionally refreshes isDir/type, which is immaterial
+      // here — the planner only routes paths without an existing row to
+      // insert, and a same-path race writes an identical isDir/type shape.
+      // displayName is untouched by both conflict sets.
+      if (!(await this.ensureSearchIndexWorkerReady('file-index.incremental.insert'))) {
+        throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
+      }
+      const persisted = (await this.requireFilePersistencePort().upsertFiles(
+        acceptedRecords.map((record) => ({
+          path: record.path,
+          name: record.name,
+          extension: record.extension ?? null,
+          size: typeof record.size === 'number' ? record.size : null,
+          mtime: record.mtime,
+          ctime: record.ctime,
+          // Optional-with-default columns: mirror the flag-off insert defaults.
+          lastIndexedAt: record.lastIndexedAt ?? new Date(0),
+          isDir: record.isDir === true,
+          type: record.type ?? 'file'
+        }))
+      )) as unknown as Array<typeof filesSchema.$inferSelect>
+      return persisted
+    }
 
     const db = this.dbUtils.getDb()
     return await scheduleDbWrite('file-index.incremental.insert', () =>
@@ -3330,7 +3477,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * FilePersistencePort. The worker is the single writer of the `files` table;
    * the main process must never issue `UPDATE files` on its own connection
    * (issue #476 SQLITE_BUSY root cause). Rows are located strictly by
-   * `files.id`; missing ids are skipped by the repository.
+   * `files.id`; missing ids are skipped by the repository. Those ids MUST be
+   * home-stable: they come from split-aware reads (`getFileIndexReadDb()` in
+   * getExistingRows / the reconciliation readers), so under the split they are
+   * the SEARCH file's own row ids — a primary row id must never reach this
+   * port or a watch-modify could update the wrong search-home row (2d.3).
    */
   private async updateFileMetadataChunk(records: FileUpdateRecord[]): Promise<void> {
     if (records.length === 0) return
@@ -3358,7 +3509,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<Array<typeof filesSchema.$inferSelect>> {
     if (!this.dbUtils || files.length === 0) return []
     const ids = files.map((file) => file.id)
-    return await this.dbUtils.getDb().select().from(filesSchema).where(inArray(filesSchema.id, ids))
+    // Read back the rows the worker just updated — from the worker's home.
+    return await this.dbUtils
+      .getFileIndexReadDb()
+      .select()
+      .from(filesSchema)
+      .where(inArray(filesSchema.id, ids))
   }
 
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
@@ -3440,9 +3596,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           return
         }
 
-        await scheduleDbWrite('file-index.extensions.upsert', () =>
-          this.dbUtils!.addFileExtensions(extensionsToAdd)
-        )
+        if (this.isSearchSplitEnabledNow()) {
+          // addFileExtensions is split-routed (execWrite → worker, the sole
+          // writer of its file). Do NOT wrap it in scheduleDbWrite here: that
+          // would hold the primary write lane through a cross-thread round
+          // trip for a write that never touches the primary file.
+          await this.dbUtils!.addFileExtensions(extensionsToAdd)
+        } else {
+          await scheduleDbWrite('file-index.extensions.upsert', () =>
+            this.dbUtils!.addFileExtensions(extensionsToAdd)
+          )
+        }
       }
     } catch (error) {
       status = 'failed'
@@ -3543,7 +3707,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return { summary: {}, entries: [] }
     }
 
-    const db = this.dbUtils.getDb()
+    const db = this.dbUtils.getFileIndexReadDb()
     const limit = paths && paths.length > 0 ? undefined : 50
 
     const rows = await db

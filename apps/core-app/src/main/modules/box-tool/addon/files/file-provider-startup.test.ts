@@ -123,6 +123,10 @@ vi.mock('./embedding-service', () => ({
 
 vi.mock('./services/file-provider-watch-service', () => ({
   FileProviderWatchService: vi.fn().mockImplementation((deps) => ({
+    // Constructor deps stash: the provider singleton constructs its services
+    // once at import, and afterEach's vi.clearAllMocks() wipes the
+    // constructor's mock.calls — the instance field survives.
+    __deps: deps,
     getCurrentSettings: vi.fn(() => ({
       autoScanEnabled: true,
       autoScanIntervalMs: 86_400_000,
@@ -780,6 +784,7 @@ describe('file-provider startup readiness', () => {
             }
           }
         }
+        getFileIndexReadDb?: () => unknown
       } | null
       streamIndexedSourceSnapshot: (request: {
         sourceId: string
@@ -1281,7 +1286,9 @@ describe('file-provider startup readiness', () => {
       type: 'file',
       isDir: false
     }))
-    provider.dbUtils = { getDb: () => db }
+    // Split off in this harness: the file-index read home falls back to the
+    // primary handle (mirrors createDbUtils' flag-off behavior).
+    provider.dbUtils = { getDb: () => db, getFileIndexReadDb: () => db }
 
     try {
       await expect(
@@ -1346,6 +1353,47 @@ describe('file-provider startup readiness', () => {
       ).resolves.toEqual([])
     } finally {
       provider.isWithinWatchRoots = originalIsWithinWatchRoots
+    }
+  })
+
+  it('wires per-call split routing into the watch service for the failed-files cleanup task', async () => {
+    // Regression for the 2d.3 cross-home hazard: without these deps the
+    // cleanup task defaults to split-off and would read failed-file ids from
+    // the search home while deleting file_index_progress rows by those ids on
+    // the PRIMARY connection.
+    const watchDeps = (
+      fileProvider as unknown as {
+        watchService: {
+          __deps?: {
+            isSearchSplitEnabled?: () => boolean
+            execSearchIndexWrite?: (
+              statements: Array<{ sql: string; args: unknown[] }>,
+              mode?: 'single' | 'transaction'
+            ) => Promise<unknown>
+          }
+        }
+      }
+    ).watchService.__deps
+
+    expect(watchDeps).toBeDefined()
+    expect(typeof watchDeps?.isSearchSplitEnabled).toBe('function')
+    expect(typeof watchDeps?.execSearchIndexWrite).toBe('function')
+
+    // Per-call resolution (never constructor capture): the flag must follow
+    // the provider's LIVE initialization context.
+    const provider = fileProvider as unknown as { initializationContext: unknown }
+    const originalContext = provider.initializationContext
+    try {
+      provider.initializationContext = {
+        databaseManager: { isSearchSplitEnabled: () => true }
+      }
+      expect(watchDeps!.isSearchSplitEnabled!()).toBe(true)
+      provider.initializationContext = {
+        databaseManager: { isSearchSplitEnabled: () => false }
+      }
+      expect(watchDeps!.isSearchSplitEnabled!()).toBe(false)
+    } finally {
+      provider.initializationContext = originalContext
     }
   })
 
@@ -1442,7 +1490,11 @@ describe('file-provider startup readiness', () => {
     }))
     const cleanup = createDeferred<undefined>()
 
-    provider.dbUtils = { getDb: () => ({ select: selectMock }) }
+    const searchDbHandle = { select: selectMock }
+    provider.dbUtils = {
+      getDb: () => searchDbHandle,
+      getFileIndexReadDb: () => searchDbHandle
+    }
     provider.searchIndex = {
       lookupByKeywords: vi.fn(
         async () => new Map([['report', [{ itemId: stalePath, priority: 100 }]]])
@@ -1535,8 +1587,10 @@ describe('file-provider startup readiness', () => {
     ])
     const ftsSearchMock = vi.fn(async () => [{ itemId: ftsFile.path, score: 0.25 }])
 
+    const parallelReadHandle = { select: selectMock }
     provider.dbUtils = {
-      getDb: () => ({ select: selectMock })
+      getDb: () => parallelReadHandle,
+      getFileIndexReadDb: () => parallelReadHandle
     }
     provider.searchIndex = {
       lookupByKeywords: lookupByKeywordsMock,
@@ -1824,11 +1878,16 @@ describe('file-provider metadata update writer ownership (issue #476)', () => {
   function installDbUtils(provider: FileProviderUpdateExecutorTestApi) {
     const mainDbUpdate = vi.fn()
     const selectWhere = vi.fn()
+    // One shared handle for both accessors (split off ⇒ read home === primary):
+    // update-refresh reads go through getFileIndexReadDb, while mainDbUpdate
+    // proves no UPDATE ever runs on a main-thread connection via either handle.
+    const handle = {
+      select: () => ({ from: () => ({ where: selectWhere }) }),
+      update: mainDbUpdate
+    }
     provider.dbUtils = {
-      getDb: () => ({
-        select: () => ({ from: () => ({ where: selectWhere }) }),
-        update: mainDbUpdate
-      })
+      getDb: () => handle,
+      getFileIndexReadDb: () => handle
     }
     return { mainDbUpdate, selectWhere }
   }
