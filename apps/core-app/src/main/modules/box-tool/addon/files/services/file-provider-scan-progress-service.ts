@@ -14,6 +14,7 @@ import {
 import { inArray, sql } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 import {
+  buildScanProgressDeleteStatement,
   buildScanProgressPathInClause,
   resolveScanProgressSchemaShape
 } from '../../../search-engine/scan-progress-schema'
@@ -60,6 +61,21 @@ export interface FileProviderScanProgressServiceDeps {
       sourceId?: string
     ) => Promise<number | void>
   }
+  /**
+   * True when the search split is on (scan_progress lives in the worker-owned
+   * search-index.db). Resolved per call — never captured — so the service
+   * always agrees with the database module's current topology.
+   */
+  isSearchSplitEnabled?: () => boolean
+  /**
+   * Forward a write statement to the search-index worker (its connection is
+   * the sole writer of search-index.db). Required when the split is on;
+   * deletes fall back to the local connection when the split is off.
+   */
+  execSearchIndexWrite?: (
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode?: 'single' | 'transaction'
+  ) => Promise<unknown>
 }
 
 export class FileProviderScanProgressService {
@@ -68,6 +84,10 @@ export class FileProviderScanProgressService {
   private readonly normalizePath: NonNullable<FileProviderScanProgressServiceDeps['normalizePath']>
   private readonly ensureSearchIndexWorkerReady: FileProviderScanProgressServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderScanProgressServiceDeps['getSearchIndexWorker']
+  private readonly isSearchSplitEnabled: NonNullable<
+    FileProviderScanProgressServiceDeps['isSearchSplitEnabled']
+  >
+  private readonly execSearchIndexWrite: FileProviderScanProgressServiceDeps['execSearchIndexWrite']
   private readonly evidenceService = new IndexedSourceProgressEvidenceService()
   private readonly progressStore: IndexedSourceProgressStoreService
   private lastUpsertSnapshot: FileProviderScanProgressUpsertSnapshot | null = null
@@ -78,6 +98,8 @@ export class FileProviderScanProgressService {
     this.normalizePath = deps.normalizePath ?? ((path) => path)
     this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
     this.getSearchIndexWorker = deps.getSearchIndexWorker
+    this.isSearchSplitEnabled = deps.isSearchSplitEnabled ?? (() => false)
+    this.execSearchIndexWrite = deps.execSearchIndexWrite
     this.progressStore = new IndexedSourceProgressStoreService({
       loadCompletedPaths: () => this.loadCompletedPaths(),
       deleteCompletedPaths: (paths) => this.deleteCompletedPaths(paths),
@@ -129,7 +151,12 @@ export class FileProviderScanProgressService {
       return new Set()
     }
 
-    const db = dbUtils.getDb()
+    // Read the SAME home the worker writes: scan_progress upserts go through
+    // the worker (search-index.db when the split is on). Reading the primary
+    // here made stale pre-split rows report every root as completed, so the
+    // full scan never ran and the search file stayed empty (V1 ship-blocker
+    // #3). Falls back to the primary when the split is off.
+    const db = dbUtils.getFileIndexReadDb()
     const scopedPaths = expandIndexedSourceProgressPaths(watchPaths ?? [], this.normalizePath)
     const shape = await resolveScanProgressSchemaShape(db)
     if (shape.sourceScoped) {
@@ -170,7 +197,8 @@ export class FileProviderScanProgressService {
       return null
     }
 
-    const db = dbUtils.getDb()
+    // Same-home read as loadCompletedPaths (see comment there).
+    const db = dbUtils.getFileIndexReadDb()
     const scopedPaths = expandIndexedSourceProgressPaths(watchPaths, this.normalizePath)
     const shape = await resolveScanProgressSchemaShape(db)
     const sourceScopedCompletedScans = shape.sourceScoped
@@ -303,6 +331,28 @@ export class FileProviderScanProgressService {
     db?: LibSQLDatabase<typeof schema>
   ): Promise<void> {
     if (paths.length === 0) {
+      return
+    }
+
+    // Split on: the live scan_progress rows are in the worker-owned
+    // search-index.db, and the worker is that file's sole writer — forward the
+    // DELETE through execWrite instead of running it on a main-process
+    // connection (which would either contend on the worker's file or silently
+    // delete stale primary rows while the live rows survive).
+    if (this.isSearchSplitEnabled()) {
+      if (!this.execSearchIndexWrite) {
+        throw new Error('SCAN_PROGRESS_DELETE_REQUIRES_SEARCH_INDEX_WRITER')
+      }
+      const readDb = this.getDbUtils()?.getFileIndexReadDb()
+      if (!readDb) return
+      const shape = await resolveScanProgressSchemaShape(readDb)
+      const statement = buildScanProgressDeleteStatement({
+        sourceScoped: shape.sourceScoped,
+        sourceId: this.sourceId,
+        paths
+      })
+      if (!statement) return
+      await this.execSearchIndexWrite([statement], 'single')
       return
     }
 

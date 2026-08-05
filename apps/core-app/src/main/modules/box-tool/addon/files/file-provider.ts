@@ -148,6 +148,7 @@ import {
 } from './services/file-provider-integrity-service'
 import { FileProviderScanProgressService } from './services/file-provider-scan-progress-service'
 import { FileProviderRuntimeResetService } from './services/file-provider-runtime-reset-service'
+import { shouldBootstrapFileReindex } from './services/file-provider-bootstrap-reindex'
 import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
 import { FileProviderIndexSchedulerService } from './services/file-provider-index-scheduler-service'
 import { FileProviderIndexPersistEntryMapperService } from './services/file-provider-index-persist-entry-mapper-service'
@@ -421,6 +422,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private backgroundStartupPromise: Promise<void> | null = null
   private backgroundStartupReady = false
   private backgroundStartupError: Error | null = null
+  /** Once-per-boot guard for the split-topology bootstrap reindex net. */
+  private bootstrapReindexChecked = false
   /** Stable public projection of the last background startup failure. */
   private backgroundStartupFailure: { code: string; retryable: boolean; reportId: string } | null =
     null
@@ -607,7 +610,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getScanProgressPaths: () => [...this.watchPaths],
       withDbWrite: (label, operation) =>
         scheduleDbWrite(label, operation, { priority: 'interactive', dropPolicy: 'none' }),
-      logInfo: (message, meta) => this.logInfo(message, meta)
+      logInfo: (message, meta) => this.logInfo(message, meta),
+      // Resolved per call (never captured): the split decides whether the
+      // scan_progress clear targets the worker-owned search file.
+      isSearchSplitEnabled: () =>
+        Boolean(this.initializationContext?.databaseManager.isSearchSplitEnabled()),
+      execSearchIndexWrite: async (statements, mode) =>
+        await searchIndexWriter.execWrite(statements, mode)
     })
     this.integrityService = new FileProviderIntegrityService({
       sourceId: this.id,
@@ -629,7 +638,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       normalizePath: (rawPath) => this.normalizePath(rawPath),
       ensureSearchIndexWorkerReady: (reason) => this.ensureSearchIndexWorkerReady(reason),
-      getSearchIndexWorker: () => this.requireFilePersistencePort()
+      getSearchIndexWorker: () => this.requireFilePersistencePort(),
+      isSearchSplitEnabled: () =>
+        Boolean(this.initializationContext?.databaseManager.isSearchSplitEnabled()),
+      execSearchIndexWrite: async (statements, mode) =>
+        await searchIndexWriter.execWrite(statements, mode)
     })
     this.scanStrategyService = new FileProviderScanStrategyService({
       getCompletedPaths: (watchPaths) => this.scanProgressService.getCompletedPaths(watchPaths),
@@ -1280,6 +1293,57 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return await this.requireRuntimeMutationDelegate().countSource(providerId, mutationLeaseId)
   }
 
+  /**
+   * Layer-2 bootstrap/self-heal reindex for the split topology (V1
+   * ship-blocker #3). The primary trigger for a fresh search-index.db is
+   * scan-progress emptiness (empty file → full scan); this net additionally
+   * covers "index rows lost but scan_progress survived", where the eligibility
+   * gate would stay closed forever. At most once per boot; idempotent (a
+   * populated index is a no-op); deliberately NOT deferred by the startup
+   * degrade window — an empty index is missing user-visible search capability,
+   * not background maintenance. All failures are contained.
+   */
+  private async maybeRunBootstrapReindex(): Promise<void> {
+    if (this.shuttingDown || this.bootstrapReindexChecked) return
+    this.bootstrapReindexChecked = true
+
+    try {
+      const splitEnabled = Boolean(
+        this.initializationContext?.databaseManager.isSearchSplitEnabled()
+      )
+      let indexedCount: number | null = null
+      if (splitEnabled) {
+        indexedCount = await this.countSearchIndexByProvider(this.id, 'bootstrap.emptiness-check')
+      }
+      const decision = shouldBootstrapFileReindex({
+        splitEnabled,
+        indexedCount,
+        watchRootCount: this.watchPaths.length,
+        alreadyChecked: false
+      })
+      if (!decision.run) {
+        this.logDebug('Search index bootstrap reindex not needed', {
+          reason: decision.reason,
+          indexedCount,
+          watchRoots: this.watchPaths.length
+        })
+        return
+      }
+
+      this.logInfo(
+        `Search index bootstrap reindex scheduled: search_index empty for '${this.id}' with ${this.watchPaths.length} watch root(s)`
+      )
+      await this.requireRuntimeMutationDelegate().scanSource(IndexedSourceScanReasons.Startup)
+      this.logInfo('Search index bootstrap reindex completed', {
+        indexedCount: await this.countSearchIndexByProvider(this.id, 'bootstrap.completion-check')
+      })
+    } catch (error) {
+      // Contained: the runtime serializes concurrent scans, so "already in
+      // progress" style failures here mean the normal path took over.
+      this.logWarn('Search index bootstrap reindex failed', error)
+    }
+  }
+
   private async upsertSearchIndexFiles(
     records: UpsertFileRecord[],
     reason: string
@@ -1488,6 +1552,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         if (workerReady) {
           this.backgroundStartupReady = true
+          // Layer-2 safety net for the split topology: if the (rebuildable)
+          // search file holds zero index rows while watch roots exist, force
+          // one Startup scan. Fire-and-forget with contained errors — a net
+          // failure must never reject the startup chain (V1 lesson: an
+          // uncontained worker-init rejection killed search for the session).
+          void this.maybeRunBootstrapReindex()
         } else {
           const error = new Error('Search index worker initialization failed')
           this.backgroundStartupError = error
@@ -1677,8 +1747,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       if (request.signal?.aborted) {
         throw request.signal.reason ?? new Error('file-indexed-source-scan-aborted')
       }
+      // File rows live in the worker-owned home under the split — stream the
+      // snapshot from the same home the worker writes (primary when off).
       const rows = await dbUtils
-        .getDb()
+        .getFileIndexReadDb()
         .select()
         .from(filesSchema)
         .where(and(eq(filesSchema.type, 'file'), gt(filesSchema.id, lastId)))
@@ -3143,7 +3215,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.logDebug('Starting index process')
     if (!this.dbUtils) return stats
 
-    const db = this.dbUtils.getDb()
+    // Integrity compares FTS rows (worker home) against files rows — both
+    // counts must come from the SAME home or the check flags phantom
+    // inconsistencies (primary's stale file rows vs the search file's index).
+    const db = this.dbUtils.getFileIndexReadDb()
     // file_index_progress 表由数据库迁移自动创建，无需手动创建
     const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
 

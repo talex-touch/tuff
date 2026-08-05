@@ -77,6 +77,17 @@ function createDbUtilsInternal(
   return {
     getDb: () => db,
     getAuxDb: () => auxDb,
+    /**
+     * The split-aware read home for FILE-INDEX domain state (files rows written
+     * by the worker, scan_progress, keyword coverage). Any read that feeds an
+     * index-write decision (scan gating, integrity counts, migration streaming)
+     * must use this handle so it reads the SAME home the worker writes —
+     * reading the primary while the worker writes search-index.db was the
+     * V1 split-validation blocker (stale primary state said "already
+     * indexed/scanned" and no data ever reached the search file). Falls back to
+     * the primary db when the split is off (byte-identical behavior).
+     */
+    getFileIndexReadDb: () => readDb,
 
     // Keyword Mappings
     async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {

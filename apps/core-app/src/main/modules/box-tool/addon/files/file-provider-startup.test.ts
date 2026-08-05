@@ -816,14 +816,18 @@ describe('file-provider startup readiness', () => {
       .mockResolvedValueOnce(firstPage)
       .mockResolvedValueOnce(secondPage)
       .mockResolvedValueOnce([])
-    provider.dbUtils = {
-      getDb: () => ({
-        select: () => ({
-          from: () => ({
-            where: () => ({ orderBy: () => ({ limit }) })
-          })
+    const pagedHandle = {
+      select: () => ({
+        from: () => ({
+          where: () => ({ orderBy: () => ({ limit }) })
         })
       })
+    }
+    provider.dbUtils = {
+      getDb: () => pagedHandle,
+      // Migration streaming reads through the split-aware read home (same
+      // handle as the primary with the split off).
+      getFileIndexReadDb: () => pagedHandle
     }
 
     try {
