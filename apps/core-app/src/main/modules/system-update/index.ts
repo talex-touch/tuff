@@ -7,8 +7,7 @@ import { AppPreviewChannel, resolveUpdateChannelLabel, splitUpdateTag } from '@t
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { eq, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../db/db-write'
 import { BaseModule } from '../abstract-base-module'
 import { fxRateProvider } from '../box-tool/addon/preview/providers'
 import { databaseModule } from '../database'
@@ -190,16 +189,13 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     }, delayMs)
   }
 
+  // Label-prefixing wrapper only: busy retry is scheduler-owned.
   private async scheduleWrite<T>(
     label: string,
     operation: () => Promise<T>,
     options?: ScheduleOptions
   ): Promise<T> {
-    return dbWriteScheduler.schedule(
-      `system-update.${label}`,
-      () => withSqliteRetry(operation, { label: `system-update.${label}` }),
-      options
-    )
+    return scheduleDbWrite(`system-update.${label}`, operation, options)
   }
 
   private scheduleRefreshPoll(initialDelayMs: number): void {

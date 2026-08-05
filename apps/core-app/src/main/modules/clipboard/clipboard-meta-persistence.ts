@@ -1,10 +1,10 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import type { ScheduleOptions } from '../../db/db-write-scheduler'
+import type { AuxDbResolver, MainDatabase } from '../../db/db-write'
 import type { LogOptions } from '../../utils/logger'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleAuxWrite } from '../../db/db-write'
 import { clipboardHistoryMeta } from '../../db/schema'
-import { withSqliteRetry } from '../../db/sqlite-retry'
 
 export interface ClipboardMetaEntry {
   key: string
@@ -13,6 +13,14 @@ export interface ClipboardMetaEntry {
 
 export interface ClipboardMetaPersistenceOptions {
   getDatabase: () => LibSQLDatabase<typeof schema> | undefined
+  /**
+   * Live aux resolution used for every scheduled write (enqueue-time). The
+   * clipboard module passes a resolver that also refreshes its own captured
+   * handle so reads stay coherent with the write target. Optional so unit
+   * tests can inject a fixed fake; defaults to the global DatabaseModule
+   * resolver.
+   */
+  resolveAuxDb?: AuxDbResolver
   isDestroyed: () => boolean
   logDebug: (message: string, data?: LogOptions) => void
   logWarn: (message: string, data?: LogOptions) => void
@@ -31,12 +39,20 @@ export function isDroppedDbWriteTaskError(error: unknown): boolean {
 export class ClipboardMetaPersistence {
   constructor(private readonly options: ClipboardMetaPersistenceOptions) {}
 
+  /**
+   * Shared clipboard write entry: schedules through the aux write path and
+   * hands the operation the enqueue-time-resolved database handle. Callers
+   * must write through the provided `db`, never a captured module field.
+   */
   public async withDbWrite<T>(
     label: string,
-    operation: () => Promise<T>,
+    operation: (db: MainDatabase) => Promise<T>,
     options?: ScheduleOptions
   ): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
+    return scheduleAuxWrite(label, operation, {
+      ...options,
+      resolveDb: this.options.resolveAuxDb
+    })
   }
 
   public async persistMetaEntries(
@@ -45,8 +61,8 @@ export class ClipboardMetaPersistence {
     entries?: ClipboardMetaEntry[],
     options?: ScheduleOptions
   ): Promise<void> {
-    const db = this.options.getDatabase()
-    if (!db) return
+    // Readiness gate only; the write resolves its own handle at enqueue time.
+    if (!this.options.getDatabase()) return
 
     const resolvedEntries =
       entries && entries.length > 0
@@ -64,7 +80,7 @@ export class ClipboardMetaPersistence {
 
     await this.withDbWrite(
       'clipboard.meta',
-      () => db.insert(clipboardHistoryMeta).values(values),
+      (db) => db.insert(clipboardHistoryMeta).values(values),
       options
     )
   }

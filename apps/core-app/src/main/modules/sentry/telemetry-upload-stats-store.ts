@@ -1,9 +1,9 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
+import type { AuxDbResolver, ScheduleOptions } from '../../db/db-write'
 import { and, eq, isNotNull, lt } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleAuxWrite, scheduleDbWrite } from '../../db/db-write'
 import * as dbSchema from '../../db/schema'
-import { withSqliteRetry } from '../../db/sqlite-retry'
 
 export interface TelemetryUploadStatsRecord {
   searchCount: number
@@ -28,6 +28,19 @@ const TELEMETRY_FAILURE_CODES = new Set([
 interface TelemetryUploadStatsStoreDeps {
   auxDb: LibSQLDatabase<typeof schema>
   coreDb?: LibSQLDatabase<typeof schema>
+  /**
+   * Live aux-DB resolution (enqueue-time). Production passes the
+   * databaseModule-backed resolver so a store constructed before the
+   * background aux init cannot pin the primary fallback forever; tests that
+   * inject a fixed fake `auxDb` can omit it.
+   */
+  resolveAuxDb?: AuxDbResolver
+}
+
+const TELEMETRY_WRITE_OPTIONS: ScheduleOptions = {
+  priority: 'background',
+  dropPolicy: 'none',
+  maxQueueWaitMs: 15_000
 }
 
 export function sanitizeTelemetryFailureCode(value: unknown): string | null {
@@ -38,20 +51,23 @@ export function sanitizeTelemetryFailureCode(value: unknown): string | null {
 }
 
 export class TelemetryUploadStatsStore {
-  private readonly auxDb: LibSQLDatabase<typeof schema>
-  private readonly coreDb: LibSQLDatabase<typeof schema> | null
+  private readonly resolveAuxDb: AuxDbResolver
+  private readonly coreDbDep: LibSQLDatabase<typeof schema> | null
 
-  constructor({ auxDb, coreDb }: TelemetryUploadStatsStoreDeps) {
-    this.auxDb = auxDb
-    this.coreDb = coreDb && coreDb !== auxDb ? coreDb : null
+  constructor({ auxDb, coreDb, resolveAuxDb }: TelemetryUploadStatsStoreDeps) {
+    this.resolveAuxDb = resolveAuxDb ?? (() => ({ db: auxDb, isAux: true }))
+    this.coreDbDep = coreDb ?? null
   }
 
-  private async withWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
-      priority: 'background',
-      dropPolicy: 'none',
-      maxQueueWaitMs: 15_000
-    })
+  // Both handles resolve live so reads stay coherent with the enqueue-time
+  // write target while the aux DB finishes its background init.
+  private get auxDb(): LibSQLDatabase<typeof schema> {
+    return this.resolveAuxDb().db
+  }
+
+  private get coreDb(): LibSQLDatabase<typeof schema> | null {
+    if (!this.coreDbDep) return null
+    return this.coreDbDep !== this.resolveAuxDb().db ? this.coreDbDep : null
   }
 
   async get(): Promise<TelemetryUploadStatsRecord | null> {
@@ -88,22 +104,13 @@ export class TelemetryUploadStatsStore {
 
   async upsert(record: TelemetryUploadStatsRecord): Promise<void> {
     const lastFailureMessage = sanitizeTelemetryFailureCode(record.lastFailureMessage)
-    await this.withWrite('telemetry.upload-stats.upsert', () =>
-      this.auxDb
-        .insert(dbSchema.telemetryUploadStats)
-        .values({
-          id: TELEMETRY_UPLOAD_STATS_ID,
-          searchCount: record.searchCount,
-          totalUploads: record.totalUploads,
-          failedUploads: record.failedUploads,
-          lastUploadTime: record.lastUploadTime,
-          lastFailureAt: record.lastFailureAt,
-          lastFailureMessage,
-          updatedAt: record.updatedAt
-        })
-        .onConflictDoUpdate({
-          target: dbSchema.telemetryUploadStats.id,
-          set: {
+    await scheduleAuxWrite(
+      'telemetry.upload-stats.upsert',
+      (db) =>
+        db
+          .insert(dbSchema.telemetryUploadStats)
+          .values({
+            id: TELEMETRY_UPLOAD_STATS_ID,
             searchCount: record.searchCount,
             totalUploads: record.totalUploads,
             failedUploads: record.failedUploads,
@@ -111,8 +118,20 @@ export class TelemetryUploadStatsStore {
             lastFailureAt: record.lastFailureAt,
             lastFailureMessage,
             updatedAt: record.updatedAt
-          }
-        })
+          })
+          .onConflictDoUpdate({
+            target: dbSchema.telemetryUploadStats.id,
+            set: {
+              searchCount: record.searchCount,
+              totalUploads: record.totalUploads,
+              failedUploads: record.failedUploads,
+              lastUploadTime: record.lastUploadTime,
+              lastFailureAt: record.lastFailureAt,
+              lastFailureMessage,
+              updatedAt: record.updatedAt
+            }
+          }),
+      { ...TELEMETRY_WRITE_OPTIONS, resolveDb: this.resolveAuxDb }
     )
   }
 
@@ -120,25 +139,35 @@ export class TelemetryUploadStatsStore {
     const limit = Math.min(2, Math.max(0, Math.floor(maxRows)))
     if (limit === 0 || signal?.aborted) return 0
 
-    const clear = async (db: LibSQLDatabase<typeof schema>, suffix: string): Promise<number> => {
-      const result = await this.withWrite(`telemetry.upload-stats.retention.${suffix}`, () =>
-        db
-          .update(dbSchema.telemetryUploadStats)
-          .set({ lastFailureAt: null, lastFailureMessage: null })
-          .where(
-            and(
-              eq(dbSchema.telemetryUploadStats.id, TELEMETRY_UPLOAD_STATS_ID),
-              isNotNull(dbSchema.telemetryUploadStats.lastFailureAt),
-              lt(dbSchema.telemetryUploadStats.lastFailureAt, cutoffMs)
-            )
+    const clearOn = (db: LibSQLDatabase<typeof schema>) =>
+      db
+        .update(dbSchema.telemetryUploadStats)
+        .set({ lastFailureAt: null, lastFailureMessage: null })
+        .where(
+          and(
+            eq(dbSchema.telemetryUploadStats.id, TELEMETRY_UPLOAD_STATS_ID),
+            isNotNull(dbSchema.telemetryUploadStats.lastFailureAt),
+            lt(dbSchema.telemetryUploadStats.lastFailureAt, cutoffMs)
           )
-      )
-      return Number(result.rowsAffected ?? 0)
-    }
+        )
 
-    let cleared = await clear(this.auxDb, 'aux')
-    if (this.coreDb && cleared < limit && !signal?.aborted) {
-      cleared += await clear(this.coreDb, 'compat')
+    const auxResult = await scheduleAuxWrite(
+      'telemetry.upload-stats.retention.aux',
+      (db) => clearOn(db),
+      { ...TELEMETRY_WRITE_OPTIONS, resolveDb: this.resolveAuxDb }
+    )
+    let cleared = Number(auxResult.rowsAffected ?? 0)
+
+    // `.compat` dual-write on the primary DB — kept until the Phase 6
+    // retirement; routes through the primary write path explicitly.
+    const coreDb = this.coreDb
+    if (coreDb && cleared < limit && !signal?.aborted) {
+      const compatResult = await scheduleDbWrite(
+        'telemetry.upload-stats.retention.compat',
+        () => clearOn(coreDb),
+        TELEMETRY_WRITE_OPTIONS
+      )
+      cleared += Number(compatResult.rowsAffected ?? 0)
     }
     return cleared
   }

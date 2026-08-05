@@ -1,8 +1,7 @@
 import type { DbUtils } from '../../../db/utils'
 import { desc, eq } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
-import { dbWriteScheduler } from '../../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../../db/db-write'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 
@@ -80,8 +79,9 @@ export class TimeStatsAggregator {
         }
       }
 
-      // 3. 批量写入数据库 — 抽出事务体，通过统一的单写入队列 (dbWriteScheduler)
-      //    串行化，并用共享 withSqliteRetry 处理 SQLITE_BUSY（异步退避，不阻塞事件循环）。
+      // 3. 批量写入数据库 — 抽出事务体，通过统一的单写入队列 (scheduleDbWrite)
+      //    串行化；SQLITE_BUSY 由调度器自身以「延迟重新入队」处理（退避发生在
+      //    排队期间，不占用写循环、不阻塞事件循环）。
       let updatedCount = 0
       const allStats = Array.from(statsMap.values())
 
@@ -117,11 +117,10 @@ export class TimeStatsAggregator {
           }
         })
 
-      await dbWriteScheduler.schedule(
-        'usage.time-stats.aggregate',
-        () => withSqliteRetry(writeAggregatedStats, { label: 'usage.time-stats.aggregate' }),
-        { priority: 'background', dropPolicy: 'none' }
-      )
+      await scheduleDbWrite('usage.time-stats.aggregate', writeAggregatedStats, {
+        priority: 'background',
+        dropPolicy: 'none'
+      })
 
       const duration = performance.now() - startTime
       log.debug(`Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`)

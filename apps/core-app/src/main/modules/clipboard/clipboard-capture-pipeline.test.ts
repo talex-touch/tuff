@@ -94,9 +94,14 @@ vi.mock('../../utils/perf-monitor', () => ({
 
 function createPipeline() {
   const helper = new ClipboardHelper()
+  const db = {
+    insert: vi.fn(() => ({ values: mocks.values }))
+  }
   const metaPersistence = {
-    withDbWrite: vi.fn(async (_label: string, operation: () => Promise<unknown>) => {
-      return await operation()
+    // Mirrors the production contract: the operation receives the
+    // enqueue-time-resolved database handle.
+    withDbWrite: vi.fn(async (_label: string, operation: (db: unknown) => Promise<unknown>) => {
+      return await operation(db)
     }),
     persistMetaEntriesSafely: vi.fn()
   }
@@ -108,9 +113,6 @@ function createPipeline() {
   const notifyTransportChange = vi.fn()
   const rememberFreshness = vi.fn()
   const enqueueStageB = vi.fn()
-  const db = {
-    insert: vi.fn(() => ({ values: mocks.values }))
-  }
   let lastSuccessfulScanAt: number | null = null
   let lastImagePersistAt = 0
   let cooldownUntil = 0

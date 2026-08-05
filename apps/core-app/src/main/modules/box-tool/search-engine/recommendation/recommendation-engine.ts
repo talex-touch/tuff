@@ -9,9 +9,8 @@ import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { scheduleAuxWrite } from '../../../../db/db-write'
 import * as schema from '../../../../db/schema'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { getSentryService } from '../../../sentry'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
@@ -159,7 +158,6 @@ export class RecommendationEngine {
   }
 
   private recordRecommendationPerf(eventType: string, metadata: Record<string, unknown>): void {
-    const db = this.dbUtils.getAuxDb()
     const payload = {
       pluginName: RECOMMENDATION_PERF_PLUGIN,
       eventType,
@@ -167,18 +165,15 @@ export class RecommendationEngine {
       timestamp: Date.now()
     }
 
-    void dbWriteScheduler
-      .schedule(
-        'analytics.plugin',
-        () =>
-          withSqliteRetry(() => db.insert(schema.pluginAnalytics).values(payload), {
-            label: 'recommendation.perf'
-          }),
-        { priority: 'best_effort', dropPolicy: 'latest_wins', budgetKey: 'recommendation.perf' }
-      )
-      .catch((error) => {
-        recommendationLog.debug('Failed to record perf metrics', { meta: toErrorMeta(error) })
-      })
+    // plugin_analytics is aux-owned: resolve the handle at enqueue time instead
+    // of via dbUtils' construction-time aux capture (see db/db-write.ts).
+    void scheduleAuxWrite(
+      'analytics.plugin',
+      (db) => db.insert(schema.pluginAnalytics).values(payload),
+      { priority: 'best_effort', dropPolicy: 'latest_wins', budgetKey: 'recommendation.perf' }
+    ).catch((error) => {
+      recommendationLog.debug('Failed to record perf metrics', { meta: toErrorMeta(error) })
+    })
   }
 
   private async reportRecommendationTelemetry(): Promise<void> {

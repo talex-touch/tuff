@@ -19,6 +19,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, lte, lt, or, sql } from 'drizzle-orm'
 import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleAuxWrite } from '../../db/db-write'
 import {
   clipboardHistory,
   clipboardHistoryMeta,
@@ -26,7 +27,6 @@ import {
   ocrJobs,
   ocrResults
 } from '../../db/schema'
-import { withSqliteRetry } from '../../db/sqlite-retry'
 import {
   INTERNAL_SYSTEM_OCR_PROVIDER_ID,
   ensureIntelligenceConfigLoaded,
@@ -394,12 +394,24 @@ class OcrService {
     this.initialized = true
   }
 
+  /**
+   * OCR write entry: schedules through the aux write path with enqueue-time
+   * resolution (R3 stale-capture fix) and refreshes the service's own capture
+   * so the poll-loop reads stay coherent with the write target.
+   */
   private async withDbWrite<T>(
     label: string,
-    operation: () => Promise<T>,
+    operation: (db: LibSQLDatabase<typeof schema>) => Promise<T>,
     options?: ScheduleOptions
   ): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
+    return scheduleAuxWrite(label, operation, {
+      ...options,
+      resolveDb: () => {
+        const db = databaseModule.getAuxDb()
+        this.db = db
+        return { db, isAux: databaseModule.isAuxReady() }
+      }
+    })
   }
 
   private registerChannels(): void {
@@ -687,8 +699,8 @@ class OcrService {
       }
     }
 
-    await this.withDbWrite('ocr.jobs.enqueue', () =>
-      this.db!.insert(ocrJobs).values({
+    await this.withDbWrite('ocr.jobs.enqueue', (db) =>
+      db.insert(ocrJobs).values({
         clipboardId,
         status: 'pending',
         attempts: 0,
@@ -951,8 +963,9 @@ class OcrService {
         const skipStartWrite =
           dbWriteScheduler.getStats().queued >= OCR_START_WRITE_SKIP_QUEUE_DEPTH
         if (!skipStartWrite) {
-          await this.withDbWrite('ocr.jobs.start', () =>
-            this.db!.update(ocrJobs)
+          await this.withDbWrite('ocr.jobs.start', (db) =>
+            db
+              .update(ocrJobs)
               .set({
                 status: 'processing',
                 attempts: attemptCount,
@@ -1105,8 +1118,9 @@ class OcrService {
     const retryDelaySeconds = getRetryDelaySeconds(reason)
     const nextRetryAt = new Date(Date.now() + retryDelaySeconds * 1000)
 
-    await this.withDbWrite('ocr.jobs.retry', () =>
-      this.db!.update(ocrJobs)
+    await this.withDbWrite('ocr.jobs.retry', (db) =>
+      db
+        .update(ocrJobs)
         .set({
           attempts: currentAttempts,
           status: 'pending',
@@ -1214,8 +1228,8 @@ class OcrService {
       usage: invocation.usage
     }
 
-    await this.withDbWrite('ocr.persist.success', async () =>
-      this.db!.transaction(async (tx) => {
+    await this.withDbWrite('ocr.persist.success', async (db) =>
+      db.transaction(async (tx) => {
         await tx.insert(ocrResults).values({
           jobId,
           text: trimmedTextForDb,
@@ -1460,8 +1474,9 @@ class OcrService {
     const retryDelaySeconds = status === 'pending' ? getRetryDelaySeconds(reason) : null
     const nextRetryAt = retryDelaySeconds ? new Date(Date.now() + retryDelaySeconds * 1000) : null
 
-    await this.withDbWrite('ocr.jobs.fail', () =>
-      this.db!.update(ocrJobs)
+    await this.withDbWrite('ocr.jobs.fail', (db) =>
+      db
+        .update(ocrJobs)
         .set({
           attempts,
           status,
@@ -1520,8 +1535,8 @@ class OcrService {
       value: JSON.stringify(value ?? null)
     }))
 
-    await this.withDbWrite('ocr.clipboard.meta', async () =>
-      this.db!.transaction(async (tx) => {
+    await this.withDbWrite('ocr.clipboard.meta', async (db) =>
+      db.transaction(async (tx) => {
         if (insertValues.length > 0) {
           await tx.insert(clipboardHistoryMeta).values(insertValues)
         }
@@ -1606,8 +1621,9 @@ class OcrService {
     const writeLabel = getOcrConfigWriteLabel(key)
     await this.withDbWrite(
       writeLabel,
-      () =>
-        this.db!.insert(config)
+      (db) =>
+        db
+          .insert(config)
           .values({ key, value: serialized })
           .onConflictDoUpdate({
             target: config.key,

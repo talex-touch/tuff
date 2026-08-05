@@ -14,7 +14,7 @@ import type {
   KnowledgeSourceType
 } from '@talex-touch/utils/types/intelligence'
 import crypto from 'node:crypto'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../db/db-write'
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
@@ -219,8 +219,9 @@ export class LocalKnowledgeEngine {
     return client
   }
 
+  // Option-bundling wrapper only: busy retry is scheduler-owned.
   private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+    return scheduleDbWrite(label, operation, {
       priority: 'background',
       maxQueueWaitMs: 8_000
     })

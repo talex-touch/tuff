@@ -69,13 +69,14 @@ import { notificationModule } from '../../../notification'
 import { operationalErrorService } from '../../../observability'
 import { t } from '../../../../utils/i18n-helper'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
-import { dbWriteScheduler, type ScheduleOptions } from '../../../../db/db-write-scheduler'
+import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../../db/db-write'
 import {
   embeddings as embeddingsSchema,
   fileIndexProgress,
   files as filesSchema
 } from '../../../../db/schema'
-import { isSqliteBusyError, withSqliteRetry } from '../../../../db/sqlite-retry'
+import { isSqliteBusyError } from '../../../../db/sqlite-retry'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
@@ -441,14 +442,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
   }
 
-  private async withDbWrite<T>(
-    label: string,
-    operation: () => Promise<T>,
-    options?: ScheduleOptions
-  ): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
-  }
-
   private async waitForCacheWriteCapacity(maxQueued: number, label: string): Promise<boolean> {
     try {
       await dbWriteScheduler.waitForCapacity(maxQueued)
@@ -575,7 +568,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     this.assetService = new FileProviderAssetService({
       getDbUtils: () => this.dbUtils,
-      withDbWrite: (label, operation) => this.withDbWrite(label, operation),
+      withDbWrite: (label, operation) => scheduleDbWrite(label, operation),
       waitForWriteCapacity: (maxQueued, label) => this.waitForCacheWriteCapacity(maxQueued, label),
       waitForIdle: async () => {
         await appTaskGate.waitForIdle()
@@ -594,7 +587,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       emptyLogo: EMPTY_OPENER_LOGO,
       enableFileIconExtraction: this.enableFileIconExtraction,
       getDbUtils: () => this.dbUtils,
-      withDbWrite: (label, operation) => this.withDbWrite(label, operation),
+      withDbWrite: (label, operation) => scheduleDbWrite(label, operation),
       getStoredOpeners: () => {
         const raw = getMainConfig(StorageList.OPENERS) as unknown
         return raw && typeof raw === 'object' && !Array.isArray(raw)
@@ -613,7 +606,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       normalizePath: (rawPath) => this.normalizePath(rawPath),
       getScanProgressPaths: () => [...this.watchPaths],
       withDbWrite: (label, operation) =>
-        this.withDbWrite(label, operation, { priority: 'interactive', dropPolicy: 'none' }),
+        scheduleDbWrite(label, operation, { priority: 'interactive', dropPolicy: 'none' }),
       logInfo: (message, meta) => this.logInfo(message, meta)
     })
     this.integrityService = new FileProviderIntegrityService({
@@ -2642,7 +2635,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?.signal?.throwIfAborted()
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
     const db = this.dbUtils.getDb()
-    await this.withDbWrite('file-reconciliation.seen.prepare', async () => {
+    await scheduleDbWrite('file-reconciliation.seen.prepare', async () => {
       options?.signal?.throwIfAborted()
       await db.run(sql`DROP TABLE IF EXISTS temp.file_reconciliation_seen_paths`)
       await db.run(sql`
@@ -2661,7 +2654,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?.signal?.throwIfAborted()
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
     const db = this.dbUtils.getDb()
-    await this.withDbWrite('file-reconciliation.seen.record', async () => {
+    await scheduleDbWrite('file-reconciliation.seen.record', async () => {
       options?.signal?.throwIfAborted()
       await db.run(sql`
         INSERT OR IGNORE INTO file_reconciliation_seen_paths (path)
@@ -2720,7 +2713,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async clearReconciliationSeenPaths(_options?: FileIndexRunOptions): Promise<void> {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
-    await this.withDbWrite('file-reconciliation.seen.clear', async () => {
+    await scheduleDbWrite('file-reconciliation.seen.clear', async () => {
       await db.run(sql`DROP TABLE IF EXISTS temp.file_reconciliation_seen_paths`)
     })
   }
@@ -2840,7 +2833,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils || records.length === 0) return
     const db = this.dbUtils.getDb()
     const idsToDelete = records.map((file) => file.id)
-    await this.withDbWrite('file-index.incremental.delete', async () => {
+    await scheduleDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
     })
@@ -2851,7 +2844,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const db = this.dbUtils.getDb()
     const idsToDelete = records.map((file) => file.id)
     const pathsToDelete = records.map((file) => file.path)
-    await this.withDbWrite('file-index.cleanup.delete', async () => {
+    await scheduleDbWrite('file-index.cleanup.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
       await this.scanProgressService.deletePaths(db, pathsToDelete)
@@ -2874,7 +2867,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         for (const chunk of chunkArray(idsToDelete, 50)) {
           await appTaskGate.waitForIdle()
           await dbWriteScheduler.waitForCapacity(4)
-          await this.withDbWrite('file-index.reconcile.delete', async () => {
+          await scheduleDbWrite('file-index.reconcile.delete', async () => {
             await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
             await this.deleteEmbeddingsByFileIds(db, chunk)
           })
@@ -2961,7 +2954,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (acceptedRecords.length === 0) return []
 
     const db = this.dbUtils.getDb()
-    return await this.withDbWrite('file-index.incremental.insert', () =>
+    return await scheduleDbWrite('file-index.incremental.insert', () =>
       db
         .insert(filesSchema)
         .values(acceptedRecords)
@@ -3361,7 +3354,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           return
         }
 
-        await this.withDbWrite('file-index.extensions.upsert', () =>
+        await scheduleDbWrite('file-index.extensions.upsert', () =>
           this.dbUtils!.addFileExtensions(extensionsToAdd)
         )
       }

@@ -5,8 +5,7 @@ import { performance } from 'node:perf_hooks'
 import { eq, and, sql } from 'drizzle-orm'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { embeddings as embeddingsSchema } from '../../../../db/schema'
-import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../../../db/db-write'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
 import { enterPerfContext } from '../../../../utils/perf-context'
 
@@ -90,30 +89,22 @@ export class EmbeddingService {
       const result = await tuffIntelligence.embedding.generate({ text: truncated })
       const vector = result.result
 
-      await dbWriteScheduler.schedule('embedding.index', () =>
-        withSqliteRetry(
-          async () => {
-            // Upsert: delete old then insert new
-            await this.db
-              .delete(embeddingsSchema)
-              .where(
-                and(
-                  eq(embeddingsSchema.sourceId, fileId),
-                  eq(embeddingsSchema.sourceType, SOURCE_TYPE)
-                )
-              )
+      await scheduleDbWrite('embedding.index', async () => {
+        // Upsert: delete old then insert new
+        await this.db
+          .delete(embeddingsSchema)
+          .where(
+            and(eq(embeddingsSchema.sourceId, fileId), eq(embeddingsSchema.sourceType, SOURCE_TYPE))
+          )
 
-            await this.db.insert(embeddingsSchema).values({
-              sourceId: fileId,
-              sourceType: SOURCE_TYPE,
-              embedding: vector,
-              model: result.model || 'unknown',
-              contentHash
-            })
-          },
-          { label: 'embedding.index' }
-        )
-      )
+        await this.db.insert(embeddingsSchema).values({
+          sourceId: fileId,
+          sourceType: SOURCE_TYPE,
+          embedding: vector,
+          model: result.model || 'unknown',
+          contentHash
+        })
+      })
     } catch (err) {
       logger.warn(`Failed to index embedding for file ${fileId}: ${err}`)
     }
@@ -160,23 +151,15 @@ export class EmbeddingService {
   async removeFiles(fileIds: string[]): Promise<void> {
     if (fileIds.length === 0) return
 
-    await dbWriteScheduler.schedule('embedding.remove', () =>
-      withSqliteRetry(
-        async () => {
-          for (const fileId of fileIds) {
-            await this.db
-              .delete(embeddingsSchema)
-              .where(
-                and(
-                  eq(embeddingsSchema.sourceId, fileId),
-                  eq(embeddingsSchema.sourceType, SOURCE_TYPE)
-                )
-              )
-          }
-        },
-        { label: 'embedding.remove' }
-      )
-    )
+    await scheduleDbWrite('embedding.remove', async () => {
+      for (const fileId of fileIds) {
+        await this.db
+          .delete(embeddingsSchema)
+          .where(
+            and(eq(embeddingsSchema.sourceId, fileId), eq(embeddingsSchema.sourceType, SOURCE_TYPE))
+          )
+      }
+    })
   }
 
   /**

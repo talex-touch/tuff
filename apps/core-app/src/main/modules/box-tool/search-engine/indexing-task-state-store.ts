@@ -10,9 +10,8 @@ import {
   IndexedSourceResetReasons
 } from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../db/db-write'
 import * as schema from '../../../db/schema'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
 
 const taskHistoryKinds = new Set<IndexedSourceTaskHistoryEntry['kind']>([
   'scan',
@@ -80,29 +79,25 @@ export class SqliteIndexingTaskStateStore implements IndexingTaskStateStore {
   async save(sourceId: string, state: IndexedSourceRuntimeTaskState): Promise<void> {
     const stateJson = JSON.stringify(sanitizeTaskState(state) ?? {})
     const updatedAt = new Date()
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'indexing.task-state.save',
-      () =>
-        withSqliteRetry(
-          async () => {
-            await this.ensureReady()
-            await this.db
-              .insert(schema.indexedSourceTaskState)
-              .values({
-                sourceId,
-                stateJson,
-                updatedAt
-              })
-              .onConflictDoUpdate({
-                target: schema.indexedSourceTaskState.sourceId,
-                set: {
-                  stateJson,
-                  updatedAt
-                }
-              })
-          },
-          { label: 'indexing.task-state.save' }
-        ),
+      async () => {
+        await this.ensureReady()
+        await this.db
+          .insert(schema.indexedSourceTaskState)
+          .values({
+            sourceId,
+            stateJson,
+            updatedAt
+          })
+          .onConflictDoUpdate({
+            target: schema.indexedSourceTaskState.sourceId,
+            set: {
+              stateJson,
+              updatedAt
+            }
+          })
+      },
       {
         priority: 'best_effort',
         dropPolicy: 'latest_wins',
@@ -113,33 +108,25 @@ export class SqliteIndexingTaskStateStore implements IndexingTaskStateStore {
   }
 
   async delete(sourceId: string): Promise<void> {
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'indexing.task-state.delete',
-      () =>
-        withSqliteRetry(
-          async () => {
-            await this.ensureReady()
-            await this.db
-              .delete(schema.indexedSourceTaskState)
-              .where(eq(schema.indexedSourceTaskState.sourceId, sourceId))
-          },
-          { label: 'indexing.task-state.delete' }
-        ),
+      async () => {
+        await this.ensureReady()
+        await this.db
+          .delete(schema.indexedSourceTaskState)
+          .where(eq(schema.indexedSourceTaskState.sourceId, sourceId))
+      },
       { priority: 'best_effort', maxQueueWaitMs: 10_000 }
     )
   }
 
   async clear(): Promise<void> {
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'indexing.task-state.clear',
-      () =>
-        withSqliteRetry(
-          async () => {
-            await this.ensureReady()
-            await this.db.delete(schema.indexedSourceTaskState)
-          },
-          { label: 'indexing.task-state.clear' }
-        ),
+      async () => {
+        await this.ensureReady()
+        await this.db.delete(schema.indexedSourceTaskState)
+      },
       { priority: 'best_effort', maxQueueWaitMs: 10_000 }
     )
   }
