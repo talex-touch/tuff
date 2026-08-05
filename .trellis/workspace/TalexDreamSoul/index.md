@@ -30,7 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 47 | 2026-08-05 | 本机 AI CLI 快速调用 | `41a8b95f836af907f716c1e923667fcee222a037` | `master` |
+| 47 | 2026-08-05 | 本机 AI CLI 快速调用 | `64bc4b5143890173871ccd543c03562ff2f29e59` | `master` |
 | 46 | 2026-08-04 | CoreBox packaged runtime performance closure | `15a47a91c`, `92f7eeb0b`, `0619fe42e` | `master` |
 | 45 | 2026-08-02 | 推送 CoreApp 快捷键作用域修复 | `d8549845f` | `master` |
 | 44 | 2026-08-02 | 修正 CoreApp 快捷键作用域 | `d8549845f` | `master` |
