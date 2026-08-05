@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import type { AiElementMessage } from './types'
+import type { AiElementMessage, AiMessagePart } from './types'
 import { computed } from 'vue'
+import TxAttachmentTray from '../../attachment-tray/src/TxAttachmentTray.vue'
 import TxMarkdownView from '../../markdown-view/src/TxMarkdownView.vue'
+import TxReasoningDisclosure from '../../reasoning-disclosure/src/TxReasoningDisclosure.vue'
+import TxToolCallCard from '../../tool-call-card/src/TxToolCallCard.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -22,6 +25,26 @@ const props = withDefaults(
 defineOptions({
   name: 'TxAiMessage',
 })
+
+/** Parts mode replaces the content-string rendering; absent parts = legacy path, untouched. */
+const parts = computed<AiMessagePart[]>(() => props.message.parts ?? [])
+const hasParts = computed(() => parts.value.length > 0)
+
+/**
+ * Only the last text part of a still-streaming message is live — everything
+ * before it has settled. Injected markdown renderers key their cursor off this.
+ */
+const lastTextIndex = computed(() => {
+  for (let index = parts.value.length - 1; index >= 0; index -= 1) {
+    if (parts.value[index]?.type === 'text')
+      return index
+  }
+  return -1
+})
+
+function isPartStreaming(index: number): boolean {
+  return props.message.status === 'streaming' && index === lastTextIndex.value
+}
 
 const roleLabel = computed(() => {
   if (props.message.name)
@@ -80,11 +103,65 @@ const statusLabel = computed(() => {
 
       <div class="tx-ai-message__content">
         <slot :message="message">
-          <div v-if="(message.status === 'pending' || message.status === 'streaming') && !message.content" class="tx-ai-message__typing" role="status" :aria-label="typingLabel">
+          <div
+            v-if="(message.status === 'pending' || message.status === 'streaming') && !message.content && !hasParts"
+            class="tx-ai-message__typing"
+            role="status"
+            :aria-label="typingLabel"
+          >
             <span />
             <span />
             <span />
           </div>
+
+          <div v-else-if="hasParts" class="tx-ai-message__parts">
+            <template v-for="(part, index) in parts" :key="index">
+              <div v-if="part.type === 'text'" class="tx-ai-message__part tx-ai-message__part--text">
+                <slot
+                  name="markdown-renderer"
+                  :part="part"
+                  :message="message"
+                  :streaming="isPartStreaming(index)"
+                >
+                  <TxMarkdownView v-if="markdown" :content="part.text" />
+                  <p v-else>
+{{ part.text }}
+</p>
+                </slot>
+              </div>
+
+              <div
+                v-else-if="part.type === 'reasoning'"
+                class="tx-ai-message__part tx-ai-message__part--reasoning"
+              >
+                <TxReasoningDisclosure
+                  :text="part.text"
+                  :streaming="!part.done && message.status === 'streaming'"
+                  :duration-ms="part.durationMs"
+                />
+              </div>
+
+              <div
+                v-else-if="part.type === 'tool-call'"
+                class="tx-ai-message__part tx-ai-message__part--tool"
+                :data-status="part.status"
+              >
+                <TxToolCallCard :tool-call="part">
+                  <template v-if="$slots['tool-result']" #result="resultProps">
+                    <slot name="tool-result" :part="resultProps.toolCall" />
+                  </template>
+                </TxToolCallCard>
+              </div>
+
+              <div
+                v-else-if="part.type === 'attachment'"
+                class="tx-ai-message__part tx-ai-message__part--attachments"
+              >
+                <TxAttachmentTray :attachments="part.attachments" />
+              </div>
+            </template>
+          </div>
+
           <div v-else class="tx-ai-message__response" :class="{ 'is-streaming': message.status === 'streaming' }">
             <TxMarkdownView v-if="markdown" :content="message.content" />
             <p v-else>
@@ -195,6 +272,20 @@ const statusLabel = computed(() => {
 .tx-ai-message__content p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.tx-ai-message__parts {
+  display: grid;
+  gap: 10px;
+}
+
+.tx-ai-message__part {
+  min-width: 0;
+}
+
+.tx-ai-message__part-label {
+  color: var(--tx-text-color-secondary, #6b7280);
+  font-size: 12px;
 }
 
 .tx-ai-message__typing {

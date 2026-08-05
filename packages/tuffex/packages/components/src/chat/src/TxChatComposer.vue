@@ -64,6 +64,80 @@ const canSend = computed(() => {
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 void textareaRef.value
 
+// ---------------------------------------------------------------------------
+// Attachment intake: paste and drag-and-drop both funnel into `attachmentAdd`.
+// The composer only surfaces the File objects — uploading is the consumer's.
+// ---------------------------------------------------------------------------
+
+function onPaste(event: ClipboardEvent): void {
+  // The raw event keeps flowing for existing consumers.
+  emit('paste', event)
+
+  if (!canAttach.value)
+    return
+
+  const items = event.clipboardData?.items
+  if (!items)
+    return
+
+  const files: File[] = []
+  for (const item of Array.from(items)) {
+    if (item.kind !== 'file')
+      continue
+    const file = item.getAsFile()
+    if (file)
+      files.push(file)
+  }
+
+  if (files.length === 0)
+    return
+
+  // Stops platform side text like a Finder-copied file's name from landing in
+  // the textarea; plain text pastes carry no file items and never reach here.
+  event.preventDefault()
+  emit('attachmentAdd', files)
+}
+
+/**
+ * Enter/leave events fire per descendant; the pair count is the only reliable
+ * "still inside" signal, so the highlight doesn't flicker crossing children.
+ */
+const dragDepth = ref(0)
+const isDragover = computed(() => dragDepth.value > 0)
+
+function dragHasFiles(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
+function onDragEnter(event: DragEvent): void {
+  if (!canAttach.value || !dragHasFiles(event))
+    return
+  event.preventDefault()
+  dragDepth.value += 1
+}
+
+function onDragOver(event: DragEvent): void {
+  if (!isDragover.value)
+    return
+  // Required — without it the browser refuses the drop.
+  event.preventDefault()
+}
+
+function onDragLeave(): void {
+  dragDepth.value = Math.max(0, dragDepth.value - 1)
+}
+
+function onDrop(event: DragEvent): void {
+  if (!isDragover.value)
+    return
+  event.preventDefault()
+  dragDepth.value = 0
+
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (files.length > 0)
+    emit('attachmentAdd', files)
+}
+
 function trySend(): void {
   if (!canSend.value)
     return
@@ -78,6 +152,9 @@ function onAttachmentClick(): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  // Enter during IME composition confirms the candidate, never sends.
+  if (e.isComposing)
+    return
   if (!props.sendOnEnter)
     return
   if (e.key !== 'Enter')
@@ -104,7 +181,14 @@ function onKeydown(e: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="tx-chat-composer" :class="{ 'is-disabled': disabled, 'is-submitting': submitting }">
+  <div
+    class="tx-chat-composer"
+    :class="{ 'is-disabled': disabled, 'is-submitting': submitting, 'is-dragover': isDragover }"
+    @dragenter="onDragEnter"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
     <div v-if="attachmentItems.length > 0 || $slots.attachments" class="tx-chat-composer__attachments">
       <slot name="attachments" :attachments="attachmentItems">
         <span
@@ -130,7 +214,7 @@ function onKeydown(e: KeyboardEvent): void {
         :disabled="disabled"
         :rows="minRows"
         @keydown="onKeydown"
-        @paste="emit('paste', $event as ClipboardEvent)"
+        @paste="onPaste($event as ClipboardEvent)"
         @focus="emit('focus', $event)"
         @blur="emit('blur', $event)"
       />
@@ -284,5 +368,11 @@ function onKeydown(e: KeyboardEvent): void {
 
 .tx-chat-composer.is-disabled {
   opacity: 0.75;
+}
+
+.tx-chat-composer.is-dragover {
+  border-color: var(--tx-color-primary, #409eff);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 5%, var(--tx-fill-color-blank, #fff));
 }
 </style>
