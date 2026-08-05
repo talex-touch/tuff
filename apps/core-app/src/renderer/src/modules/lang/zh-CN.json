@@ -411,6 +411,10 @@
     "dashboardDesc": "在 Nexus 查看详细的使用统计和趋势"
   },
   "settingTools": {
+    "autoContextGroupTitle": "上下文",
+    "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
+    "autoContext": "Auto Context",
+    "autoContextDesc": "开启后模型按需自动取用联网、文件检索、剪贴板与关联数据，无需逐条挑选工具；关闭后每次都要手动指定。",
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
     "customPlaceholder": "自定义占位文本",

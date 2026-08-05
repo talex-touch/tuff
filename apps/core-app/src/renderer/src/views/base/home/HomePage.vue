@@ -8,6 +8,7 @@ import {
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 } from '~/modules/conversation/conversation-error-display'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
+import { appSetting } from '~/modules/storage/app-storage'
 
 /**
  * Home empty state from artboard `JVvAr`, plus the in-place conversation from task
@@ -40,9 +41,15 @@ const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.val
  * standalone Auto Context toggle on the left, and a model + reasoning-effort pill next to send.
  * Enabling individual tools moved to 「设置 · 插件与工具」, so nothing here opens a tool list.
  *
- * Local state only — persistence and the model menu land with the conversation work.
+ * Backed by `appSetting` rather than a local ref: this is the same preference the settings page
+ * manages, and a local one would reset on every navigation. The model menu still has no picker.
  */
-const autoContext = ref(true)
+const autoContext = computed({
+  get: () => appSetting.tools?.autoContext !== false,
+  set: (value: boolean) => {
+    if (appSetting.tools) appSetting.tools.autoContext = value
+  }
+})
 
 const quickPills = [
   { icon: 'i-ri-file-search-line', key: 'searchFiles' },

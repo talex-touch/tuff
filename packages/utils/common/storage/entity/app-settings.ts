@@ -205,6 +205,15 @@ const _appSettingOriginData = {
     machineCodeAttestedAt: '',
   },
   tools: {
+    /**
+     * Lets the model pull web, file, clipboard and related context on demand instead of making
+     * the user pick tools per message.
+     *
+     * Lives here rather than on the composer because the composer switch and the settings row are
+     * the same preference: a local `ref` in the composer would reset on every navigation and would
+     * have nothing for 「设置 · 插件与工具」 to manage.
+     */
+    autoContext: true,
     autoPaste: {
       enable: true,
       time: 5,
