@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "质量检查基线"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对新增 / 删除的 shell 组件是否合规"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核对 utils 契约变更是否纯增量、无 any 泄漏"}
+{"file": ".trellis/spec/frontend/release-testing.md", "reason": "无 Windows / Linux 实机时的验证边界"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "确认删除 ShellTopBar / ShellBackRow / raised 变体后无重复实现残留"}

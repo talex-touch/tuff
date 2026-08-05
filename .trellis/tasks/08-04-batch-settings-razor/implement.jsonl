@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "CoreApp frontend ownership and pre-development checklist"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "Main-owned credential and secure-store lifecycle contract"}
+{"file": ".trellis/tasks/08-04-batch-settings-razor/research/credential-protection-current-state.md", "reason": "Verified credential protection behavior and product decisions"}
+{"file": ".trellis/tasks/08-04-batch-settings-razor/research/settings-option-inventory.md", "reason": "Complete settings inventory and dispositions"}

@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端规范索引，落地 shell 组件前的总入口"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "新增 ShellChromeBar / ShellWindowControls 需遵循的组件约定"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useShellSidebar / useHistoryNavigation 两个 composable 的写法约束"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "侧栏宽度经 appSetting.shell 持久化，需按状态管理约定接入"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "packages/utils 新增事件与存储字段的类型契约要求"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "改动横跨主进程 / utils 契约 / 渲染层三层"}

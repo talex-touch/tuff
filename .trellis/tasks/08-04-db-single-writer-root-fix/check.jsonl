@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-04-db-single-writer-root-fix/research/root-cause-analysis.md", "reason": "核对每个 R1-R4 机制是否被对应 commit 消除,而非仅缓解"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "check 阶段质量基线"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "核对 grep gate:src/main 无残留 schedule+withSqliteRetry 内包模式、无新增 ad-hoc 包装"}

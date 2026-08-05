@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-04-db-single-writer-root-fix/research/root-cause-analysis.md", "reason": "全链路根因分析:R1-R4 机制、file:line 证据、调用点清单——实现前必读"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Phase 2 将 ~20 处重复 withDbWrite 包装收敛为共享助手,遵循复用规范"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "改动横跨 main process / worker 线程 / 调度层,需跨层数据流思维"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "Phase 4 触碰 privacy cleanup 的 retention 写入时序,须不破坏数据生命周期约定"}

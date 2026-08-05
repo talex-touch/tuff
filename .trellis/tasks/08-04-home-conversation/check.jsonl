@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "check 阶段的质量基线"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对状态机不变量落地"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对 token 使用与两态切换"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "渲染层↔主进程流式通路的跨层核对"}
