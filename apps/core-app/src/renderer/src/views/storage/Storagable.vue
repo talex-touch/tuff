@@ -1037,6 +1037,43 @@ onMounted(() => {
   color: var(--tx-text-color-secondary);
 }
 
+.path-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.path-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.path-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.path-label {
+  font-size: 13px;
+}
+
+.path-value {
+  // Wraps rather than ellipsises: a truncated path cannot be read back, and these are long enough
+  // that truncation would hit every time.
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-secondary);
+  word-break: break-all;
+  font-size: 11px;
+}
+
 .btn.action {
   padding: 6px 10px;
   font-size: 12px;
