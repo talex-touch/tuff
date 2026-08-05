@@ -44,6 +44,14 @@ import ThemePreviewIcon from './sub/ThemePreviewIcon.vue'
 import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
+
+/**
+ * Mounted inside `SettingsPage` when it backs the appearance category, which already supplies the
+ * heading, scroll container and edge fades. Rendering its own `ViewTemplate` there would stack two
+ * headings and two scrollers on one body.
+ */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+const shell = computed(() => (props.embedded ? 'div' : ViewTemplate))
 const transport = useTuffTransport()
 const themeStyleLog = createRendererLogger('ThemeStyle')
 type OpenFileRequest = Record<string, unknown>
@@ -481,7 +489,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
 
 <template>
   <div class="ThemeStyle-Page">
-    <ViewTemplate :title="t('themeStyle.styles')">
+    <component :is="shell" v-bind="embedded ? {} : { title: t('themeStyle.styles') }">
       <WindowSectionVue>
         <SectionItem v-model="windowPreference" title="pure" :label="t('themeStyle.windowPure')" />
         <SectionItem
@@ -873,7 +881,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           <ThemePreviewIcon variant="guide" :active="active" />
         </template>
       </TuffBlockSwitch>
-    </ViewTemplate>
+    </component>
 
     <Teleport to="body">
       <div v-if="windowPreferenceLoading" class="ThemeStyle-WindowLoadingMask">

@@ -1,13 +1,18 @@
 <script lang="ts" name="SettingAppearancePage" setup>
+import { useI18n } from 'vue-i18n'
+import SettingsPage from '~/components/settings/SettingsPage.vue'
 import ThemeStyle from '~/views/base/styles/ThemeStyle.vue'
 
 /**
- * Mounted full-bleed rather than inside `SettingsPage`: `ThemeStyle` is a complete page with
- * its own heading, scroll container and nested `/styles/theme` child route. Wrapping it would
- * double the chrome and break that child route.
+ * `ThemeStyle` used to be mounted full-bleed because it is a complete page with its own heading
+ * and scroller, which left appearance as the one category with no page title. `embedded` drops
+ * that inner chrome so this body reads like every other one.
  */
+const { t } = useI18n()
 </script>
 
 <template>
-  <ThemeStyle />
+  <SettingsPage :title="t('settingsNav.category.appearance')">
+    <ThemeStyle embedded />
+  </SettingsPage>
 </template>
