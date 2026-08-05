@@ -21,11 +21,15 @@ const { canGoBack, canGoForward, goBack, goForward } = useHistoryNavigation()
 
 /**
  * Narrowing the sidebar sheds the bar's contents in stages rather than letting them ellipsis
- * into unreadable stubs. The rail is exempt: it lays the same controls out in a column, where
- * the width no longer decides what fits.
+ * into unreadable stubs.
+ *
+ * The rail sheds history too. Wrapped onto their own centred line the two arrows sat directly
+ * above the settings back row, and three bare glyphs in a column gave no way to tell "step back
+ * through the visit stack" apart from "leave settings" — the kind of mis-click you cannot undo
+ * by clicking again.
  */
 const showBrandLabel = computed(() => !collapsed.value && width.value >= SIDEBAR_BRAND_LABEL_MIN)
-const showHistory = computed(() => collapsed.value || width.value >= SIDEBAR_HISTORY_MIN)
+const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HISTORY_MIN)
 </script>
 
 <template>
@@ -240,12 +244,6 @@ const showHistory = computed(() => collapsed.value || width.value >= SIDEBAR_HIS
 
   .ShellChromeBar-Spacer {
     display: none;
-  }
-
-  .ShellChromeBar-History {
-    width: 100%;
-    justify-content: center;
-    margin-left: 0;
   }
 }
 </style>
