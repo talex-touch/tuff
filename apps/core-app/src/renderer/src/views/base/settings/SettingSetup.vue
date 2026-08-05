@@ -46,7 +46,14 @@ const settingSetupLog = createRendererLogger('SettingSetup')
 // Keep file-access metadata fresh for diagnostics even though this page no longer renders a card.
 const { check: checkFileAccess } = useFileAccessPermission()
 const showAdvancedSettings = computed(() => false)
-const showPermissionRecovery = false
+/**
+ * The permission rows were switched off wholesale by a hardcoded `false`, so the four the artboard
+ * calls for never rendered — even though `platform-permission-service` on the main side was
+ * answering `system/permission/check` the whole time. Which rows apply is already decided per row
+ * by the platform flags; this only asks whether any of them do, so Linux does not get an empty
+ * card where the group used to be.
+ */
+const showPermissionRecovery = computed(() => isMacOS.value || isWindows.value)
 const showLegacySystemControls = false
 
 interface PermissionState {
@@ -595,6 +602,7 @@ function getStatusIconClass(status: string): string {
     two groups.
   -->
   <TuffGroupBlock
+    v-if="showPermissionRecovery"
     :name="t('settings.setup.permissionsGroupTitle')"
     :description="t('settings.setup.permissionsGroupDesc')"
     :collapsible="false"
@@ -755,7 +763,7 @@ function getStatusIconClass(status: string): string {
     />
 
     <TuffBlockSwitch
-      v-if="showAdvancedSettings && isMacOS && traySettingsAvailable"
+      v-if="isMacOS && traySettingsAvailable"
       v-model="settings.hideDock"
       :title="t('settings.setup.hideDock')"
       :description="t('settings.setup.hideDockDesc')"
@@ -767,7 +775,6 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSwitch>
 
     <TuffBlockSwitch
-      v-if="showAdvancedSettings"
       v-model="settings.startSilent"
       :title="t('settings.setup.startSilent')"
       :description="t('settings.setup.startSilentDesc')"
