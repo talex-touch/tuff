@@ -5,9 +5,8 @@ import type * as schema from '../../db/schema'
 import crypto from 'node:crypto'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { and, asc, desc, eq, gt, gte, inArray, lt, lte, or, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../db/db-write'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
-import { withSqliteRetry } from '../../db/sqlite-retry'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { databaseModule } from '../database'
@@ -263,10 +262,6 @@ export class IntelligenceAuditLogger {
     return databaseModule.getDb()
   }
 
-  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
-  }
-
   /**
    * Generate a unique trace ID
    */
@@ -459,7 +454,7 @@ export class IntelligenceAuditLogger {
     try {
       const db = this.getDb()
 
-      await this.withDbWrite('intelligence.audit.flush', async () => {
+      await scheduleDbWrite('intelligence.audit.flush', async () => {
         await db.transaction(async (tx) => {
           await tx.insert(intelligenceAuditLogs).values(rows)
 
@@ -709,21 +704,17 @@ export class IntelligenceAuditLogger {
     }
     if (signal.aborted) return { deletedCount: 0, hasMore: false, cancelled: true, cursor }
 
-    const result = await dbWriteScheduler.schedule(
+    const result = await scheduleDbWrite(
       'intelligence.audit.retention',
       () =>
-        withSqliteRetry(
-          () =>
-            db
-              .delete(intelligenceAuditLogs)
-              .where(
-                and(
-                  inArray(intelligenceAuditLogs.id, ids),
-                  lt(intelligenceAuditLogs.timestamp, cutoffMs)
-                )
-              ),
-          { label: 'intelligence.audit.retention' }
-        ),
+        db
+          .delete(intelligenceAuditLogs)
+          .where(
+            and(
+              inArray(intelligenceAuditLogs.id, ids),
+              lt(intelligenceAuditLogs.timestamp, cutoffMs)
+            )
+          ),
       {
         priority: 'background',
         dropPolicy: 'none',

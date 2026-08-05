@@ -2,8 +2,7 @@ import type { TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../db/utils'
 import { sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
-import { dbWriteScheduler } from '../../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../../db/db-write'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('QueryCompletionService')
@@ -48,48 +47,43 @@ export class QueryCompletionService {
     const label = 'query-completions.record'
 
     try {
-      await dbWriteScheduler.schedule(label, () =>
-        withSqliteRetry(
-          async () => {
-            const existing = await db
-              .select()
-              .from(schema.queryCompletions)
-              .where(
-                sql`${schema.queryCompletions.prefix} = ${prefix}
-                      AND ${schema.queryCompletions.sourceId} = ${item.source.id}
-                      AND ${schema.queryCompletions.itemId} = ${item.id}`
-              )
-              .get()
+      await scheduleDbWrite(label, async () => {
+        const existing = await db
+          .select()
+          .from(schema.queryCompletions)
+          .where(
+            sql`${schema.queryCompletions.prefix} = ${prefix}
+                  AND ${schema.queryCompletions.sourceId} = ${item.source.id}
+                  AND ${schema.queryCompletions.itemId} = ${item.id}`
+          )
+          .get()
 
-            if (existing) {
-              const newCount = existing.completionCount + 1
-              const newAvgLength =
-                (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
+        if (existing) {
+          const newCount = existing.completionCount + 1
+          const newAvgLength =
+            (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
 
-              await db
-                .update(schema.queryCompletions)
-                .set({
-                  completionCount: newCount,
-                  lastCompleted: new Date(),
-                  avgQueryLength: newAvgLength
-                })
-                .where(sql`id = ${existing.id}`)
-              return
-            }
-
-            await db.insert(schema.queryCompletions).values({
-              prefix,
-              sourceId: item.source.id,
-              itemId: item.id,
-              completionCount: 1,
+          await db
+            .update(schema.queryCompletions)
+            .set({
+              completionCount: newCount,
               lastCompleted: new Date(),
-              avgQueryLength: queryLength,
-              createdAt: new Date()
+              avgQueryLength: newAvgLength
             })
-          },
-          { label }
-        )
-      )
+            .where(sql`id = ${existing.id}`)
+          return
+        }
+
+        await db.insert(schema.queryCompletions).values({
+          prefix,
+          sourceId: item.source.id,
+          itemId: item.id,
+          completionCount: 1,
+          lastCompleted: new Date(),
+          avgQueryLength: queryLength,
+          createdAt: new Date()
+        })
+      })
 
       const duration = performance.now() - start
       this.stats.totalRecorded++
@@ -216,16 +210,12 @@ export class QueryCompletionService {
       const expirationDate = new Date()
       expirationDate.setDate(expirationDate.getDate() - retentionDays)
 
-      await dbWriteScheduler.schedule(
+      await scheduleDbWrite(
         'query-completions.cleanup',
         () =>
-          withSqliteRetry(
-            () =>
-              db
-                .delete(schema.queryCompletions)
-                .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`),
-            { label: 'query-completions.cleanup' }
-          ),
+          db
+            .delete(schema.queryCompletions)
+            .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`),
         { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
       )
 

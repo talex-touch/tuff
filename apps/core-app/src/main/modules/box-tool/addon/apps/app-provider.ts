@@ -58,8 +58,8 @@ import type {
   FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
 import { config as configSchema, fileExtensions, files as filesSchema } from '../../../../db/schema'
-import { dbWriteScheduler, type DbWritePriority } from '../../../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { type DbWritePriority } from '../../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../../db/db-write'
 
 import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/utils'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
@@ -465,10 +465,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     operation: () => Promise<T>,
     priority: DbWritePriority = 'background'
   ): Promise<T> {
-    return await dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
-      priority,
-      dropPolicy: 'none'
-    })
+    // Busy retry is scheduler-owned (delayed re-enqueue); no inner withSqliteRetry.
+    return await scheduleDbWrite(label, operation, { priority, dropPolicy: 'none' })
   }
 
   private async runAppTransaction<T>(
@@ -3734,15 +3732,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const db = this.dbUtils.getDb()
     try {
-      await dbWriteScheduler.schedule(`app-provider.config.${key}`, () =>
-        withSqliteRetry(
-          () =>
-            db.insert(configSchema).values({ key, value }).onConflictDoUpdate({
-              target: configSchema.key,
-              set: { value }
-            }),
-          { label: `app-provider.config.${key}` }
-        )
+      await scheduleDbWrite(`app-provider.config.${key}`, () =>
+        db.insert(configSchema).values({ key, value }).onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value }
+        })
       )
       return true
     } catch (error) {

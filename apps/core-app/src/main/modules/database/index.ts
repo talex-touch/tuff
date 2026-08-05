@@ -17,6 +17,7 @@ import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { setAuxDbResolver } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   getSqliteBusyRetryCount,
@@ -1090,6 +1091,13 @@ export class DatabaseModule extends BaseModule {
     this.client = createClient({ url: `file:${dbPath}` })
 
     this.db = drizzle(this.client, { schema })
+
+    // Register the enqueue-time aux resolver for scheduleAuxWrite (db/db-write.ts).
+    // db/ must not import modules/, so the wiring lives here. getAuxDb() falls
+    // back to the primary db until the background aux init completes; resolving
+    // per write (instead of capturing at store construction) is what keeps
+    // aux-owned writes off database.db once the aux file is ready.
+    setAuxDbResolver(() => ({ db: this.getAuxDb(), isAux: this.isAuxReady() }))
 
     // Configure SQLite for better concurrency
     try {

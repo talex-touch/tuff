@@ -360,7 +360,10 @@ export class SentryServiceModule extends BaseModule {
     try {
       this.telemetryStatsStore = new TelemetryUploadStatsStore({
         auxDb: databaseModule.getAuxDb(),
-        coreDb: databaseModule.getDb()
+        coreDb: databaseModule.getDb(),
+        // Live resolution: this store is often constructed during startup,
+        // before the background aux init completes (R3 stale-capture defect).
+        resolveAuxDb: () => ({ db: databaseModule.getAuxDb(), isAux: databaseModule.isAuxReady() })
       })
       return this.telemetryStatsStore
     } catch {
@@ -383,7 +386,8 @@ export class SentryServiceModule extends BaseModule {
     try {
       this.reportQueueStore = new ReportQueueStore({
         auxDb: databaseModule.getAuxDb(),
-        coreDb: databaseModule.getDb()
+        coreDb: databaseModule.getDb(),
+        resolveAuxDb: () => ({ db: databaseModule.getAuxDb(), isAux: databaseModule.isAuxReady() })
       })
       return this.reportQueueStore
     } catch {

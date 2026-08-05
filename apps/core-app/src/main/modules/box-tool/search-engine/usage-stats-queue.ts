@@ -3,8 +3,8 @@ import type * as schema from '../../../db/schema'
 import type { ScheduleOptions } from '../../../db/db-write-scheduler'
 import { sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../db/db-write'
 import { itemUsageStats } from '../../../db/schema'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 
 const usageStatsQueueLog = createLogger('UsageStatsQueue')
@@ -55,8 +55,9 @@ const DEFAULT_OPTIONS: Required<UsageStatsQueueOptions> = {
  * Batch write queue for usage stats to reduce database write operations
  * Aggregates increments in memory and writes them in lower-frequency batches.
  *
- * Uses DbWriteScheduler + withSqliteRetry to avoid SQLITE_BUSY contention
- * with the search-index worker thread.
+ * Uses the shared write queue (scheduleDbWrite) to avoid SQLITE_BUSY
+ * contention with the search-index worker thread; the scheduler itself owns
+ * busy retry via delayed re-enqueue.
  */
 export class UsageStatsQueue {
   private searchQueue = new Map<string, AggregatedUsageRecord>()
@@ -293,58 +294,54 @@ export class UsageStatsQueue {
   ): Promise<void> {
     if (records.length === 0) return
 
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       label,
       () =>
-        withSqliteRetry(
-          () =>
-            this.db.transaction(async (tx) => {
-              const now = new Date()
-              for (const record of records) {
-                const lastSearchedTs = UsageStatsQueue.toUnixTs(record.lastSearched)
-                const lastExecutedTs = UsageStatsQueue.toUnixTs(record.lastExecuted)
-                const lastCancelledTs = UsageStatsQueue.toUnixTs(record.lastCancelled)
+        this.db.transaction(async (tx) => {
+          const now = new Date()
+          for (const record of records) {
+            const lastSearchedTs = UsageStatsQueue.toUnixTs(record.lastSearched)
+            const lastExecutedTs = UsageStatsQueue.toUnixTs(record.lastExecuted)
+            const lastCancelledTs = UsageStatsQueue.toUnixTs(record.lastCancelled)
 
-                await tx
-                  .insert(itemUsageStats)
-                  .values({
-                    sourceId: record.sourceId,
-                    itemId: record.itemId,
-                    sourceType: record.sourceType,
-                    searchCount: record.searchCount,
-                    executeCount: record.executeCount,
-                    cancelCount: record.cancelCount,
-                    lastSearched: record.lastSearched,
-                    lastExecuted: record.lastExecuted,
-                    lastCancelled: record.lastCancelled,
-                    createdAt: now,
-                    updatedAt: now
-                  })
-                  .onConflictDoUpdate({
-                    target: [itemUsageStats.sourceId, itemUsageStats.itemId],
-                    set: {
-                      searchCount: sql`${itemUsageStats.searchCount} + ${record.searchCount}`,
-                      executeCount: sql`${itemUsageStats.executeCount} + ${record.executeCount}`,
-                      cancelCount: sql`${itemUsageStats.cancelCount} + ${record.cancelCount}`,
-                      lastSearched:
-                        lastSearchedTs == null
-                          ? sql`${itemUsageStats.lastSearched}`
-                          : sql<number>`MAX(COALESCE(${itemUsageStats.lastSearched}, 0), ${lastSearchedTs})`,
-                      lastExecuted:
-                        lastExecutedTs == null
-                          ? sql`${itemUsageStats.lastExecuted}`
-                          : sql<number>`MAX(COALESCE(${itemUsageStats.lastExecuted}, 0), ${lastExecutedTs})`,
-                      lastCancelled:
-                        lastCancelledTs == null
-                          ? sql`${itemUsageStats.lastCancelled}`
-                          : sql<number>`MAX(COALESCE(${itemUsageStats.lastCancelled}, 0), ${lastCancelledTs})`,
-                      updatedAt: now
-                    }
-                  })
-              }
-            }),
-          { label }
-        ),
+            await tx
+              .insert(itemUsageStats)
+              .values({
+                sourceId: record.sourceId,
+                itemId: record.itemId,
+                sourceType: record.sourceType,
+                searchCount: record.searchCount,
+                executeCount: record.executeCount,
+                cancelCount: record.cancelCount,
+                lastSearched: record.lastSearched,
+                lastExecuted: record.lastExecuted,
+                lastCancelled: record.lastCancelled,
+                createdAt: now,
+                updatedAt: now
+              })
+              .onConflictDoUpdate({
+                target: [itemUsageStats.sourceId, itemUsageStats.itemId],
+                set: {
+                  searchCount: sql`${itemUsageStats.searchCount} + ${record.searchCount}`,
+                  executeCount: sql`${itemUsageStats.executeCount} + ${record.executeCount}`,
+                  cancelCount: sql`${itemUsageStats.cancelCount} + ${record.cancelCount}`,
+                  lastSearched:
+                    lastSearchedTs == null
+                      ? sql`${itemUsageStats.lastSearched}`
+                      : sql<number>`MAX(COALESCE(${itemUsageStats.lastSearched}, 0), ${lastSearchedTs})`,
+                  lastExecuted:
+                    lastExecutedTs == null
+                      ? sql`${itemUsageStats.lastExecuted}`
+                      : sql<number>`MAX(COALESCE(${itemUsageStats.lastExecuted}, 0), ${lastExecutedTs})`,
+                  lastCancelled:
+                    lastCancelledTs == null
+                      ? sql`${itemUsageStats.lastCancelled}`
+                      : sql<number>`MAX(COALESCE(${itemUsageStats.lastCancelled}, 0), ${lastCancelledTs})`,
+                  updatedAt: now
+                }
+              })
+          }
+        }),
       options
     )
   }

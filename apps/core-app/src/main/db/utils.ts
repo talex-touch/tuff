@@ -1,8 +1,7 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from './db-write-scheduler'
+import { scheduleAuxWrite } from './db-write'
 import * as schema from './schema'
-import { withSqliteRetry } from './sqlite-retry'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
 
@@ -501,29 +500,29 @@ function createDbUtilsInternal(
       const recommendedItems = JSON.stringify(sanitizedItems)
       const createdAt = new Date()
 
-      return dbWriteScheduler.schedule(
+      // recommendation_cache is an aux-owned hot table: resolve the handle at
+      // enqueue time (scheduleAuxWrite) instead of using the auxDb captured at
+      // createDbUtils() time, which may still be the primary fallback when the
+      // dbUtils instance was constructed before the background aux init.
+      return scheduleAuxWrite(
         'recommendation.cache',
-        () =>
-          withSqliteRetry(
-            () =>
-              auxDb
-                .insert(schema.recommendationCache)
-                .values({
-                  cacheKey,
-                  recommendedItems,
-                  createdAt,
-                  expiresAt
-                })
-                .onConflictDoUpdate({
-                  target: schema.recommendationCache.cacheKey,
-                  set: {
-                    recommendedItems,
-                    createdAt,
-                    expiresAt
-                  }
-                }),
-            { label: 'recommendation.cache' }
-          ),
+        (db) =>
+          db
+            .insert(schema.recommendationCache)
+            .values({
+              cacheKey,
+              recommendedItems,
+              createdAt,
+              expiresAt
+            })
+            .onConflictDoUpdate({
+              target: schema.recommendationCache.cacheKey,
+              set: {
+                recommendedItems,
+                createdAt,
+                expiresAt
+              }
+            }),
         {
           priority: 'best_effort',
           dropPolicy: 'latest_wins',
@@ -535,9 +534,16 @@ function createDbUtilsInternal(
 
     async cleanExpiredRecommendationCache() {
       const now = new Date()
-      return auxDb
-        .delete(schema.recommendationCache)
-        .where(sql`${schema.recommendationCache.expiresAt} < ${now.getTime()}`)
+      // Previously a scheduler-bypassing direct delete; route through the
+      // single-writer queue like every other main-process write.
+      return scheduleAuxWrite(
+        'recommendation.cache.clean',
+        (db) =>
+          db
+            .delete(schema.recommendationCache)
+            .where(sql`${schema.recommendationCache.expiresAt} < ${now.getTime()}`),
+        { priority: 'best_effort', dropPolicy: 'drop' }
+      )
     },
 
     // Plugin Data

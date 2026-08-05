@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../db/db-write'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
@@ -203,14 +204,15 @@ export class SearchIndexService {
   }
 
   /**
-   * Schedule a write operation: in directMode, execute immediately;
-   * otherwise go through DbWriteScheduler + SQLite retry.
+   * Schedule a write operation. In directMode (worker thread — no scheduler,
+   * off the main thread) retry locally with withSqliteRetry; otherwise go
+   * through the shared write queue, whose scheduler owns SQLITE_BUSY retry.
    */
   private async scheduleWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
     if (this.directMode) {
       return withSqliteRetry(operation, { label })
     }
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+    return scheduleDbWrite(label, operation)
   }
 
   private createLogBucket(): SearchIndexLogBucket {
