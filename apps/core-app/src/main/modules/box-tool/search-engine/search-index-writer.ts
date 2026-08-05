@@ -196,6 +196,12 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       })
       .catch((error) => {
         const normalized = error instanceof Error ? error : new Error(String(error))
+        // Init failure marks the writer 'failed': every subsequent write fails
+        // fast in waitUntilReady() with this error until a fresh initialize()
+        // retries (the provider-load retry path). Deliberately NO fallback to
+        // opening database.db when the split is on — a second writer on the
+        // primary file would recreate the dual-writer SQLITE_BUSY topology the
+        // search split exists to remove (issue #295).
         this.readiness = { state: 'failed', error: normalized }
         this.initializationPromise = null
         throw normalized

@@ -1867,7 +1867,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.searchIndex = context.searchIndex
 
     try {
-      this.embeddingService = new EmbeddingService(context.databaseManager.getDb())
+      // Same split-aware routing as the dbUtils context above, but resolved at
+      // CALL time (never captured): when the split is on, embeddings live in
+      // the worker-owned search file (writes forwarded via execWrite, reads
+      // from the search connection); when off, everything stays on the
+      // primary db. Capturing getDb() here was the embedding split-brain:
+      // EmbeddingService wrote the primary while dbUtils routed to the worker.
+      this.embeddingService = new EmbeddingService({
+        isSplitEnabled: () => context.databaseManager.isSearchSplitEnabled(),
+        getReadDb: () => context.databaseManager.getSearchDb(),
+        getPrimaryDb: () => context.databaseManager.getDb(),
+        execWrite: async (statements, mode) => await searchIndexWriter.execWrite(statements, mode)
+      })
     } catch (error) {
       this.logWarn('EmbeddingService init failed, semantic search disabled', error)
     }

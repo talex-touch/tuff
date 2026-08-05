@@ -27,11 +27,66 @@ interface CachedEmbedding {
   timestamp: number
 }
 
+/**
+ * Split-aware database routing for embeddings, mirroring the dbUtils split
+ * context (db/utils.ts, issue #295): embeddings are a split-routed table, so
+ * they must have exactly ONE home — the worker-owned search file when the
+ * split is on, the primary file when it is off. Every member is resolved PER
+ * CALL, never captured at construction, so late fallbacks (the aux
+ * resolver-timing trap class) cannot leave this service writing a stale file.
+ */
+export interface EmbeddingDbRouting {
+  /** Call-time split decision — mirrors DbUtilsSplitContext.enabled. */
+  isSplitEnabled(): boolean
+  /** Read connection: the search file when the split is on (falls back to primary until ready). */
+  getReadDb(): LibSQLDatabase<typeof schema>
+  /** Primary connection: builds compiled statements and runs split-off scheduled writes. */
+  getPrimaryDb(): LibSQLDatabase<typeof schema>
+  /** Split-on writes: forward compiled statements to the worker — the sole writer of its file. */
+  execWrite(
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode?: 'single' | 'transaction'
+  ): Promise<unknown>
+}
+
+interface CompilableQuery {
+  toSQL(): { sql: string; params: unknown[] }
+}
+
 export class EmbeddingService {
   private available: boolean | null = null
   private queryCache = new Map<string, CachedEmbedding>()
 
-  constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
+  constructor(private readonly routing: EmbeddingDbRouting) {}
+
+  /**
+   * Mirror of dbUtils' split-aware runWrite (db/utils.ts): split on → compile
+   * the drizzle builders and forward them to the worker; split off → await the
+   * builders on the primary db under the shared write scheduler
+   * (scheduleDbWrite keeps the existing labels and busy-retry semantics).
+   */
+  private async runWrite(
+    label: string,
+    queries: CompilableQuery[],
+    mode: 'single' | 'transaction' = 'single'
+  ): Promise<void> {
+    if (queries.length === 0) return
+
+    if (this.routing.isSplitEnabled()) {
+      const statements = queries.map((query) => {
+        const compiled = query.toSQL()
+        return { sql: compiled.sql, args: compiled.params }
+      })
+      await this.routing.execWrite(statements, mode)
+      return
+    }
+
+    await scheduleDbWrite(label, async () => {
+      for (const query of queries) {
+        await (query as unknown as Promise<unknown>)
+      }
+    })
+  }
 
   /**
    * Check if the embedding capability is available.
@@ -73,7 +128,8 @@ export class EmbeddingService {
     const contentHash = this.hashContent(truncated)
 
     // Check if embedding already exists with same hash
-    const existing = await this.db
+    const existing = await this.routing
+      .getReadDb()
       .select({ id: embeddingsSchema.id, contentHash: embeddingsSchema.contentHash })
       .from(embeddingsSchema)
       .where(
@@ -89,22 +145,30 @@ export class EmbeddingService {
       const result = await tuffIntelligence.embedding.generate({ text: truncated })
       const vector = result.result
 
-      await scheduleDbWrite('embedding.index', async () => {
-        // Upsert: delete old then insert new
-        await this.db
-          .delete(embeddingsSchema)
-          .where(
-            and(eq(embeddingsSchema.sourceId, fileId), eq(embeddingsSchema.sourceType, SOURCE_TYPE))
-          )
-
-        await this.db.insert(embeddingsSchema).values({
-          sourceId: fileId,
-          sourceType: SOURCE_TYPE,
-          embedding: vector,
-          model: result.model || 'unknown',
-          contentHash
-        })
-      })
+      // Upsert: delete old then insert new (one atomic transaction on the
+      // worker path so the delete/insert pair cannot tear).
+      const writeDb = this.routing.getPrimaryDb()
+      await this.runWrite(
+        'embedding.index',
+        [
+          writeDb
+            .delete(embeddingsSchema)
+            .where(
+              and(
+                eq(embeddingsSchema.sourceId, fileId),
+                eq(embeddingsSchema.sourceType, SOURCE_TYPE)
+              )
+            ),
+          writeDb.insert(embeddingsSchema).values({
+            sourceId: fileId,
+            sourceType: SOURCE_TYPE,
+            embedding: vector,
+            model: result.model || 'unknown',
+            contentHash
+          })
+        ],
+        'transaction'
+      )
     } catch (err) {
       logger.warn(`Failed to index embedding for file ${fileId}: ${err}`)
     }
@@ -151,15 +215,17 @@ export class EmbeddingService {
   async removeFiles(fileIds: string[]): Promise<void> {
     if (fileIds.length === 0) return
 
-    await scheduleDbWrite('embedding.remove', async () => {
-      for (const fileId of fileIds) {
-        await this.db
+    const writeDb = this.routing.getPrimaryDb()
+    await this.runWrite(
+      'embedding.remove',
+      fileIds.map((fileId) =>
+        writeDb
           .delete(embeddingsSchema)
           .where(
             and(eq(embeddingsSchema.sourceId, fileId), eq(embeddingsSchema.sourceType, SOURCE_TYPE))
           )
-      }
-    })
+      )
+    )
   }
 
   /**
@@ -185,7 +251,8 @@ export class EmbeddingService {
       // no ANN index, so scoring every persisted file embedding can spike CPU
       // and memory on large file indexes.
       const scanLimit = Math.max(limit, SEMANTIC_SEARCH_SCAN_LIMIT)
-      const rows = await this.db
+      const rows = await this.routing
+        .getReadDb()
         .select({
           sourceId: embeddingsSchema.sourceId,
           embedding: embeddingsSchema.embedding
@@ -228,7 +295,8 @@ export class EmbeddingService {
    * Get embedding count for monitoring.
    */
   async getEmbeddingCount(): Promise<number> {
-    const result = await this.db
+    const result = await this.routing
+      .getReadDb()
       .select({ count: sql<number>`count(*)` })
       .from(embeddingsSchema)
       .where(eq(embeddingsSchema.sourceType, SOURCE_TYPE))

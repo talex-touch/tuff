@@ -324,7 +324,14 @@ export class SearchProviderRegistry {
     const decision = await onboardingGate.waitForDecision()
     if (decision.state === 'allowed') {
       this.clearOnboardingSubscription()
-      await this.ensureLoaded(reason)
+      // Containment (V1 2026-08-04): the only production caller is a
+      // fire-and-forget ALL_MODULES_LOADED listener, so a provider-load
+      // rejection here escaped as an UNHANDLED_REJECTION with no degrade path
+      // (e.g. the search-index worker failing to init on a fresh
+      // search-index.db). Route through the same warn-log + backoff-retry
+      // containment the deferred onboarding path uses: CoreBox continues
+      // degraded and search recovers if a later attempt succeeds.
+      await this.ensureLoadedWithRetry(reason)
       return decision
     }
 

@@ -161,6 +161,40 @@ describe('scan progress schema helpers', () => {
     }
   })
 
+  it('migrates a fresh legacy-shaped EMPTY table (the shape drizzle migrations leave on a new search-index.db)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tuff-scan-progress-empty-legacy-'))
+    try {
+      const client = createClient({ url: `file:${join(dir, 'empty-legacy.sqlite')}` })
+      const db = drizzle(client)
+      await client.execute(
+        'CREATE TABLE scan_progress (path text PRIMARY KEY, last_scanned integer NOT NULL)'
+      )
+
+      await expect(planScanProgressSourceScopeMigration(db)).resolves.toMatchObject({
+        status: 'ready',
+        tableExists: true,
+        sourceScoped: false,
+        existingRows: 0,
+        rowsToMigrate: 0,
+        blockers: []
+      })
+      await expect(runScanProgressSourceScopeMigration(db)).resolves.toMatchObject({
+        executed: true,
+        migratedRows: 0,
+        backupTable: 'scan_progress_path_only_backup'
+      })
+      await expect(resolveScanProgressSchemaShape(db)).resolves.toEqual({
+        tableExists: true,
+        sourceScoped: true,
+        sourceIdColumn: true,
+        primaryKeyColumns: ['source_id', 'path']
+      })
+      client.close()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('blocks migration when path-only rows are unsafe', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tuff-scan-progress-blocked-'))
     try {

@@ -405,6 +405,19 @@ async function handleInit(message: InitMessage): Promise<void> {
 
   const { dbPath } = message
 
+  // A previous init attempt may have failed AFTER opening its connection
+  // (e.g. schema drift during warmup). Close that stale handle before opening
+  // a new one, or every init retry leaks an open sqlite connection.
+  const staleClient = client
+  client = null
+  if (staleClient) {
+    try {
+      staleClient.close()
+    } catch (error) {
+      searchIndexWorkerLog.warn('Failed to close stale DB client before re-init', { error })
+    }
+  }
+
   const workerClient = createClient({ url: `file:${dbPath}` })
   client = workerClient
 
