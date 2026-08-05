@@ -398,6 +398,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private searchIndex: SearchIndexService | null = null
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
+  /**
+   * Set when a Startup-reason backfill skipped its filesystem diff + DB writes
+   * because it ran inside the startup degrade window (R4). scanIndexedSource
+   * must then NOT stamp the last-backfill timestamp — the window-gated timer
+   * re-run owns the real (write-performing) backfill, and stamping early would
+   * make its dev recent-backfill guard skip it.
+   */
+  private startupBackfillWritesDeferred = false
   private startupIndexHealthCheckStarted = false
   private volatileLastBackfillTime: number | null = null
   private volatileLastFullSyncTime: number | null = null
@@ -1007,7 +1015,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       } while (!backfillSettled)
 
       await task
-      await this._setLastBackfillTime(Date.now())
+      if (this.startupBackfillWritesDeferred) {
+        // The backfill deferred its writes past the degrade window: leave the
+        // last-backfill timestamp untouched so the timer-driven re-run is not
+        // skipped by the dev recent-backfill guard (and isAppIndexWarming
+        // keeps reporting an unfinished first pass on a true first launch).
+        this.startupBackfillWritesDeferred = false
+      } else {
+        await this._setLastBackfillTime(Date.now())
+      }
       yield* this.buildChangedIndexedSourceRecordBatches(
         request.sourceId,
         fingerprints,
@@ -2174,6 +2190,37 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     signal?.throwIfAborted()
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping startup backfill', LogStyle.error)
+      return
+    }
+
+    // Startup write-storm gate (R4), boot-path edition. The window-gated timer
+    // in _scheduleStartupBackfill() no longer owns boot: since the Runtime
+    // writer-ownership change, the boot backfill runs inline through
+    // search-core's initial app scan (runInitialAppScan → scanIndexedSource →
+    // here) ~1-2s after boot, so the gate must live on this shared execution
+    // path. Inside the window we skip the mdls/filesystem diff and every DB
+    // write it can produce (backfill-add, backfill-update, icon-pointer
+    // repair) and arm the deferred timer to run the real backfill after the
+    // window. First launch is exempt (last-backfill timestamp still null, the
+    // same signal isAppIndexWarming uses): initial population is what makes
+    // apps searchable, and there is no startup indexing load worth protecting
+    // ahead of it.
+    const degradeRemainingMs = getStartupDegradeWindowRemainingMs()
+    if (degradeRemainingMs > 0 && (await this._getLastBackfillTime()) !== null) {
+      this.startupBackfillWritesDeferred = true
+      logApp(
+        `Startup backfill deferred past DB degrade window (${Math.round(
+          degradeRemainingMs / 1000
+        )}s remaining)`,
+        LogStyle.info
+      )
+      // Arm the window-gated timer unless one is already pending/running; the
+      // started-latch only guards double-arming, so release it for this
+      // deliberate deferral re-arm (bounded: the window itself expires).
+      if (this.startupBackfillTimer === null && this.startupBackfillTask === null) {
+        this.startupBackfillStarted = false
+        this._scheduleStartupBackfill()
+      }
       return
     }
 

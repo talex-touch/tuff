@@ -2938,6 +2938,91 @@ describe('appProvider rebuild maintenance', () => {
     }
   })
 
+  it('defers boot-path backfill writes inside the degrade window and arms the timer re-run', async () => {
+    // R4 boot-path gate: the Runtime initial app scan runs the backfill inline
+    // ~1-2s after boot (scanIndexedSource → _runStartupBackfill), bypassing
+    // the _scheduleStartupBackfill timer entirely. The inline run must skip
+    // the filesystem diff and every backfill DB write during the window and
+    // hand ownership to the window-gated timer.
+    vi.useFakeTimers()
+    let armedProvider: ReturnType<typeof asPrivateProvider> | null = null
+    try {
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(105_000)
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      armedProvider = privateProvider
+      const getFilesByType = vi.fn()
+      privateProvider.dbUtils = { getFilesByType }
+      privateProvider.searchIndex = {}
+      privateProvider.appIndexSettings.startupBackfillEnabled = true
+      privateProvider._getLastBackfillTime = vi.fn(async () => 1_700_000_000_000)
+
+      await privateProvider._performStartupBackfill()
+
+      expect(getAppsMock).not.toHaveBeenCalled()
+      expect(getFilesByType).not.toHaveBeenCalled()
+      expect(privateProvider.startupBackfillWritesDeferred).toBe(true)
+      // The deferred timer re-run is armed for the remaining window.
+      expect(privateProvider.startupBackfillTimer).not.toBeNull()
+    } finally {
+      if (armedProvider?.startupBackfillTimer) {
+        clearTimeout(armedProvider.startupBackfillTimer)
+        armedProvider.startupBackfillTimer = null
+      }
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
+      vi.useRealTimers()
+    }
+  })
+
+  it('still performs the first-launch backfill inside the degrade window', async () => {
+    // First launch (no completed backfill yet): initial population is what
+    // makes apps searchable, so the degrade window must not defer it.
+    getStartupDegradeWindowRemainingMsMock.mockReturnValue(105_000)
+    try {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      privateProvider.dbUtils = { getFilesByType: vi.fn().mockResolvedValue([]) }
+      privateProvider.searchIndex = {}
+      privateProvider.fetchExtensionsForFiles = vi.fn().mockResolvedValue([])
+      privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
+      privateProvider._getLastBackfillTime = vi.fn(async () => null)
+
+      await privateProvider._performStartupBackfill()
+
+      expect(getAppsMock).toHaveBeenCalledWith({ forceRefresh: true })
+      expect(privateProvider.startupBackfillWritesDeferred).toBe(false)
+    } finally {
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
+    }
+  })
+
+  it('does not stamp the last-backfill timestamp when the backfill deferred its writes', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider._runStartupBackfill = vi.fn(async () => {
+      // Simulates the in-window deferral outcome of _performStartupBackfill.
+      privateProvider.startupBackfillWritesDeferred = true
+    })
+    const stamp = vi
+      .spyOn(privateProvider as never, '_setLastBackfillTime')
+      .mockResolvedValue(undefined as never)
+    privateProvider.buildIndexedSourceRecordBatches = vi.fn(async function* () {
+      yield { sourceId: 'app-provider', records: [] }
+    })
+
+    for await (const batch of appProvider.scanIndexedSource({
+      sourceId: 'app-provider',
+      reason: 'startup'
+    })) {
+      void batch
+    }
+
+    // The timer-driven re-run owns the stamp; stamping here would let the dev
+    // recent-backfill guard skip the deferred (write-performing) run.
+    expect(stamp).not.toHaveBeenCalled()
+    expect(privateProvider.startupBackfillWritesDeferred).toBe(false)
+  })
+
   it('commits scanned app additions in bounded chunks', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)

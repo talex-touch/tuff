@@ -54,6 +54,13 @@ export interface FileProviderWatchServiceDeps {
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   logError: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
+  /** See FileProviderScanProgressServiceDeps — resolved per call, never captured. */
+  isSearchSplitEnabled?: () => boolean
+  /** Worker-forwarded write path for the split topology (sole writer of search-index.db). */
+  execSearchIndexWrite?: (
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode?: 'single' | 'transaction'
+  ) => Promise<unknown>
 }
 
 export class FileProviderWatchService {
@@ -66,6 +73,11 @@ export class FileProviderWatchService {
   private readonly logDebug: FileProviderWatchServiceDeps['logDebug']
   private readonly logWarn: FileProviderWatchServiceDeps['logWarn']
   private readonly logError: FileProviderWatchServiceDeps['logError']
+
+  private readonly isSearchSplitEnabled: NonNullable<
+    FileProviderWatchServiceDeps['isSearchSplitEnabled']
+  >
+  private readonly execSearchIndexWrite: FileProviderWatchServiceDeps['execSearchIndexWrite']
 
   private watchPaths: string[]
   private normalizedWatchPaths: string[]
@@ -98,6 +110,8 @@ export class FileProviderWatchService {
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
     this.logError = deps.logError
+    this.isSearchSplitEnabled = deps.isSearchSplitEnabled ?? (() => false)
+    this.execSearchIndexWrite = deps.execSearchIndexWrite
     const rootSet = resolveIndexedWatchRootSet({
       basePaths: deps.baseWatchPaths,
       normalizePath: deps.normalizePath
@@ -252,12 +266,24 @@ export class FileProviderWatchService {
       taskTimeoutMs: 30 * 60 * 1000
     })
 
-    const db = dbUtils.getDb() as LibSQLDatabase<typeof schema>
-    const cleanupTask = createFailedFilesCleanupTask(db, {
-      maxRetryAge: 24 * 60 * 60 * 1000,
-      batchSize: 100,
-      maxRetries: 3
-    })
+    // Per-call resolution (never constructor capture): the task must follow
+    // the live split topology — file_index_progress rows sit in the
+    // worker-owned search file when the split is on, and their deletes are
+    // forwarded to the worker instead of running on a main-thread connection.
+    const cleanupTask = createFailedFilesCleanupTask(
+      {
+        getReadDb: () =>
+          (this.getDbUtils()?.getFileIndexReadDb() as LibSQLDatabase<typeof schema>) ?? null,
+        getPrimaryDb: () => (this.getDbUtils()?.getDb() as LibSQLDatabase<typeof schema>) ?? null,
+        isSearchSplitEnabled: () => this.isSearchSplitEnabled(),
+        execSearchIndexWrite: this.execSearchIndexWrite
+      },
+      {
+        maxRetryAge: 24 * 60 * 60 * 1000,
+        batchSize: 100,
+        maxRetries: 3
+      }
+    )
 
     this.backgroundTaskService.registerTask(cleanupTask)
 

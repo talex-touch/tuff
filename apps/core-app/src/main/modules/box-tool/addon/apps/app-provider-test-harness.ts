@@ -705,6 +705,8 @@ export type AppProviderPrivate = {
   isInitializing: Promise<void> | null
   shuttingDown: boolean
   startupBackfillTask: Promise<void> | null
+  startupBackfillTimer: NodeJS.Timeout | null
+  startupBackfillWritesDeferred: boolean
   appIndexSettings: Partial<{
     startupBackfillEnabled: boolean
     startupBackfillRetryMax: number
