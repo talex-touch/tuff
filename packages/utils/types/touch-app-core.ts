@@ -35,6 +35,34 @@ export namespace TalexTouch {
     minimize: () => void
 
     /**
+     * Maximizes the window.
+     */
+    maximize: () => void
+
+    /**
+     * Restores the window from its maximized state.
+     */
+    unmaximize: () => void
+
+    /**
+     * Whether the window is currently maximized.
+     */
+    isMaximized: () => boolean
+
+    /**
+     * Toggles the maximized state, resolving to the state after the toggle.
+     */
+    toggleMaximize: () => boolean
+
+    /**
+     * Subscribes to maximized-state changes, including OS-driven ones the renderer never
+     * requested (title-bar double click, keyboard shortcut, edge snapping).
+     *
+     * @returns A disposer that detaches the listeners.
+     */
+    onMaximizedChanged: (listener: (maximized: boolean) => void) => () => void
+
+    /**
      * Opens the devtools.
      *
      * When `contents` is a `<webview>` tag, the `mode` would be `detach` by default,

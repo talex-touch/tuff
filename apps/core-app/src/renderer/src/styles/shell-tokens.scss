@@ -26,7 +26,12 @@
 
   --shell-primary: #2b7fd9;
   --shell-primary-soft: #2b7fd91a;
+  --shell-primary-border: #2b7fd93d;
   --shell-on-primary: #ffffff;
+
+  --shell-danger: #c4342b;
+  --shell-danger-soft: #c4342b14;
+  --shell-danger-border: #c4342b3d;
 
   --shell-shadow: #0000000f;
 
@@ -54,8 +59,39 @@
   --shell-fs-h1: 26px;
   --shell-fs-display: 30px;
 
+  // Starting width only. `AppShell` overrides this per render from the persisted sidebar width,
+  // so the sidebar still has a sane width during the first frames, before storage has loaded.
   --shell-sidebar-width: 260px;
-  --shell-topbar-height: 52px;
+
+  /**
+   * Horizontal room the floating window buttons occupy in the top-right corner.
+   *
+   * Zero on macOS, where the native traffic lights live in the sidebar instead. A page whose
+   * first row carries its own top-right controls should reserve this much `padding-right`,
+   * otherwise the buttons sit on top of it — the shell has no top bar to keep them apart.
+   */
+  --shell-window-controls-inset: 0px;
+
+  /** Vertical room the same buttons occupy. Use it to push a top-anchored block below them. */
+  --shell-window-controls-height: 0px;
+}
+
+.platform-win32,
+.platform-linux {
+  // 3 buttons x 32px + the control strip's own 4px padding on each side.
+  --shell-window-controls-inset: 104px;
+  --shell-window-controls-height: 36px;
+}
+
+/**
+ * Keeps a page's top-right controls clear of the floating window buttons.
+ *
+ * Put it on the trailing group of a first row that reaches the top of the main area — as a
+ * margin rather than container padding, so the row's own background and bottom border still
+ * span the full width. Collapses to nothing on macOS.
+ */
+.shell-chrome-safe-inline-end {
+  margin-right: var(--shell-window-controls-inset);
 }
 
 .dark {
@@ -73,6 +109,11 @@
 
   --shell-primary: #4e9ae6;
   --shell-primary-soft: #4e9ae626;
+  --shell-primary-border: #4e9ae64d;
+
+  --shell-danger: #e0655c;
+  --shell-danger-soft: #e0655c26;
+  --shell-danger-border: #e0655c4d;
 
   --shell-shadow: #00000047;
 }
@@ -88,6 +129,11 @@ html.contrast {
 
   --shell-primary: var(--tx-color-primary);
   --shell-primary-soft: var(--tx-color-primary-light-9);
+
+  --shell-danger: var(--tx-color-danger);
+  --shell-danger-soft: var(--tx-color-danger-light-9);
+  // A 24%-alpha hairline disappears at high contrast; the failure surface needs a real edge.
+  --shell-danger-border: var(--tx-color-danger);
 }
 
 html.dark.contrast {
@@ -101,4 +147,8 @@ html.dark.contrast {
 
   --shell-primary: var(--tx-color-primary);
   --shell-primary-soft: var(--tx-color-primary-dark-2);
+
+  --shell-danger: var(--tx-color-danger);
+  --shell-danger-soft: var(--tx-color-danger-light-9);
+  --shell-danger-border: var(--tx-color-danger);
 }

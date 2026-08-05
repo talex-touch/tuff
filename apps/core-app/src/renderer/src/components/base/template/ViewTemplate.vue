@@ -142,5 +142,10 @@ const routeTitleSource = computed(() => {
   width: 100%;
 
   box-sizing: border-box;
+
+  // Restates the template's `py-6` so the Windows/Linux window buttons, which float over the
+  // top-right corner with no top bar to sit in, do not land on whatever header the page puts
+  // first. Zero on macOS, where the buttons live in the sidebar.
+  padding-top: calc(1.5rem + var(--shell-window-controls-height));
 }
 </style>

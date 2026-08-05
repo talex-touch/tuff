@@ -539,7 +539,7 @@ onBeforeUnmount(() => {
             <div class="prompt-main-header">
               <div>
                 <p class="prompt-main-eyebrow">
-                  {{ t('flatNavBar.intelligence') }}
+                  {{ t('router.intelligence') }}
                 </p>
                 <h1>{{ t('settings.intelligence.promptPageTitle') }}</h1>
                 <p class="prompt-main-desc">

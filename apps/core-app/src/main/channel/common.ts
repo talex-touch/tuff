@@ -1395,6 +1395,17 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.window.close, () => closeApp(touchApp)),
       transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
       transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
+      transport.on(AppEvents.window.maximize, () => touchApp.window.maximize()),
+      transport.on(AppEvents.window.unmaximize, () => touchApp.window.unmaximize()),
+      transport.on(AppEvents.window.toggleMaximize, () => touchApp.window.toggleMaximize()),
+      transport.on(AppEvents.window.isMaximized, () => touchApp.window.isMaximized()),
+      // Pushed rather than polled: the state also changes from title-bar double clicks, the OS
+      // shortcut and edge snapping, none of which the renderer sees.
+      touchApp.window.onMaximizedChanged((maximized) => {
+        void transport
+          .sendTo(touchApp.window.window.webContents, AppEvents.window.maximizedChanged, maximized)
+          .catch(() => {})
+      }),
       transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
       transport.on(AppEvents.window.show, () => {
         touchApp.window.window.show()

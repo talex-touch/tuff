@@ -41,7 +41,14 @@ function activate(): void {
 </script>
 
 <template>
-  <button class="ShellNavItem" :class="{ active: isActive }" type="button" @click="activate">
+  <button
+    class="ShellNavItem"
+    :class="{ active: isActive }"
+    type="button"
+    :aria-current="isActive ? 'page' : undefined"
+    :title="label"
+    @click="activate"
+  >
     <span class="ShellNavItem-Icon" :class="icon" />
     <span class="ShellNavItem-Label">{{ label }}</span>
     <span v-if="badge !== undefined" class="ShellNavItem-Badge">{{ badge }}</span>
@@ -54,8 +61,8 @@ function activate(): void {
   gap: 10px;
   align-items: center;
   width: 100%;
-  padding: 7px 10px;
-  border: none;
+  padding: 6px 9px;
+  border: 1px solid transparent;
   border-radius: var(--shell-radius-md);
   background: transparent;
   color: var(--shell-text-regular);
@@ -72,15 +79,34 @@ function activate(): void {
   }
 
   &.active {
+    border-color: transparent;
     background: var(--shell-primary-soft);
     color: var(--shell-primary);
   }
+
+  // Rail mode stacks the label under the icon instead of dropping it. Eleven settings glyphs
+  // are not self-evident, and a named column stays scannable at any width.
+  .is-rail & {
+    flex-direction: column;
+    gap: 3px;
+    justify-content: center;
+    padding: 6px 2px;
+    text-align: center;
+  }
 }
 
+/**
+ * Fixed at every sidebar width. `flex: 0 0 auto` alone is not enough: the generated icon class
+ * sizes itself in `em`, so the glyph would ride whatever font-size it inherits. Pinning
+ * `font-size` too keeps the column of icons identical from 360px down to the rail.
+ */
 .ShellNavItem-Icon {
   flex: 0 0 auto;
   width: 16px;
+  min-width: 16px;
   height: 16px;
+  min-height: 16px;
+  font-size: 16px;
 }
 
 .ShellNavItem-Label {
@@ -94,6 +120,15 @@ function activate(): void {
   .active & {
     font-weight: 500;
   }
+
+  // One step down rather than hidden. `flex: 0 0 auto` because the rail lays the item out as a
+  // column, where the label must take its own height instead of stretching along the main axis.
+  .is-rail & {
+    flex: 0 0 auto;
+    max-width: 100%;
+    font-size: 10px;
+    line-height: 1.25;
+  }
 }
 
 .ShellNavItem-Badge {
@@ -103,5 +138,9 @@ function activate(): void {
   background: var(--shell-surface-2);
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
+
+  .is-rail & {
+    display: none;
+  }
 }
 </style>

@@ -677,7 +677,7 @@ describe('CommonChannelModule private helpers', () => {
       const module = new CommonChannelModule()
       await module.onInit({
         app: {
-          window: { window: {} },
+          window: { window: {}, onMaximizedChanged: () => () => {} },
           app: { addListener: vi.fn() }
         }
       } as never)
@@ -748,7 +748,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -787,7 +787,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -822,7 +822,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -919,7 +919,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1066,7 +1066,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1140,7 +1140,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1200,7 +1200,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1242,7 +1242,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1346,7 +1346,7 @@ describe('CommonChannelModule private helpers', () => {
       const module = new CommonChannelModule()
       await module.onInit({
         app: {
-          window: { window: {} },
+          window: { window: {}, onMaximizedChanged: () => () => {} },
           app: { addListener: vi.fn() }
         }
       } as never)
@@ -1412,7 +1412,7 @@ describe('CommonChannelModule private helpers', () => {
       const module = new CommonChannelModule()
       await module.onInit({
         app: {
-          window: { window: {} },
+          window: { window: {}, onMaximizedChanged: () => () => {} },
           app: { addListener: vi.fn() }
         }
       } as never)
@@ -1481,7 +1481,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1641,7 +1641,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1742,7 +1742,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1962,7 +1962,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
