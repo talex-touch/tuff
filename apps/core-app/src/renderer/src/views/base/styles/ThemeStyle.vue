@@ -509,7 +509,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       <TuffGroupBlock
         :name="t('themeStyle.personalized')"
         :description="t('themeStyle.personalizedDesc')"
-        memory-name="theme-style-personalized"
+        :collapsible="false"
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="personalized" :active="active" />
@@ -768,7 +768,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       <TuffGroupBlock
         :name="t('themeStyle.emphasis')"
         :description="t('themeStyle.emphasisDesc')"
-        memory-name="theme-style-emphasis"
+        :collapsible="false"
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="emphasis" :active="active" />
@@ -798,7 +798,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       <TuffGroupBlock
         :name="t('themeStyle.animationGroupTitle')"
         :description="t('themeStyle.animationGroupDesc')"
-        memory-name="theme-style-animation"
+        :collapsible="false"
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="animation" :active="active" />

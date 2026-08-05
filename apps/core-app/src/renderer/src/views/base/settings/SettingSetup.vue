@@ -589,12 +589,15 @@ function getStatusIconClass(status: string): string {
 </script>
 
 <template>
+  <!--
+    Permissions and preferences were one block, so a row you can only satisfy in System Settings
+    sat in the same list as a switch you flip here. They answer different questions and now read as
+    two groups.
+  -->
   <TuffGroupBlock
-    :name="t('settings.setup.groupTitle')"
-    :description="t('settings.setup.groupDesc')"
-    default-icon="i-carbon-settings-services"
-    active-icon="i-carbon-settings-check"
-    memory-name="setting-setup"
+    :name="t('settings.setup.permissionsGroupTitle')"
+    :description="t('settings.setup.permissionsGroupDesc')"
+    :collapsible="false"
   >
     <!-- Permissions Section -->
     <TuffBlockSlot
@@ -605,8 +608,6 @@ function getStatusIconClass(status: string): string {
       :disabled="
         permissions.accessibility.status === 'unsupported' && !permissions.accessibility.canRequest
       "
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
     >
       <template #tags>
         <TuffMacOSTag />
@@ -639,8 +640,6 @@ function getStatusIconClass(status: string): string {
         permissions.fullDiskAccess.status === 'unsupported' &&
         !permissions.fullDiskAccess.canRequest
       "
-      default-icon="i-carbon-folder"
-      active-icon="i-carbon-folder-details"
     >
       <template #tags>
         <TuffMacOSTag />
@@ -672,8 +671,6 @@ function getStatusIconClass(status: string): string {
       :disabled="
         permissions.microphone.status === 'unsupported' && !permissions.microphone.canRequest
       "
-      default-icon="i-carbon-microphone"
-      active-icon="i-carbon-microphone-filled"
     >
       <TuffStatusBadge
         size="md"
@@ -700,8 +697,6 @@ function getStatusIconClass(status: string): string {
       :disabled="
         permissions.notifications.status === 'unsupported' && !permissions.notifications.canRequest
       "
-      default-icon="i-carbon-notification"
-      active-icon="i-carbon-notification"
     >
       <TuffStatusBadge
         size="md"
@@ -727,8 +722,6 @@ function getStatusIconClass(status: string): string {
       :title="t('settings.setup.adminPrivileges')"
       :description="t('settings.setup.adminPrivilegesDesc')"
       :active="permissions.adminPrivileges.status === 'granted'"
-      default-icon="i-carbon-security"
-      active-icon="i-carbon-security"
     >
       <template #tags>
         <TuffWindowsTag />
@@ -740,14 +733,17 @@ function getStatusIconClass(status: string): string {
         :text="getStatusText(permissions.adminPrivileges.status)"
       />
     </TuffBlockSlot>
+  </TuffGroupBlock>
 
-    <!-- Settings Section -->
+  <TuffGroupBlock
+    :name="t('settings.setup.startupGroupTitle')"
+    :description="t('settings.setup.startupGroupDesc')"
+    :collapsible="false"
+  >
     <TuffBlockSwitch
       v-model="settings.autoStart"
       :title="t('settings.setup.autoStart')"
       :description="t('settings.setup.autoStartDesc')"
-      default-icon="i-carbon-play"
-      active-icon="i-carbon-play-filled"
       @update:model-value="updateAutoStart"
     />
 
@@ -756,8 +752,6 @@ function getStatusIconClass(status: string): string {
       v-model="continueInBackground"
       :title="t('settings.setup.backgroundMode')"
       :description="t('settings.setup.backgroundModeDesc')"
-      default-icon="i-carbon-portfolio"
-      active-icon="i-carbon-portfolio"
     />
 
     <TuffBlockSwitch
@@ -765,8 +759,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.hideDock"
       :title="t('settings.setup.hideDock')"
       :description="t('settings.setup.hideDockDesc')"
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
       @update:model-value="updateHideDock"
     >
       <template #tags>
@@ -779,8 +771,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.startSilent"
       :title="t('settings.setup.startSilent')"
       :description="t('settings.setup.startSilentDesc')"
-      default-icon="i-carbon-notification-off"
-      active-icon="i-carbon-notification-off"
       @update:model-value="updateStartSilent"
     />
 
@@ -789,8 +779,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.omniAutoMountFeature"
       :title="t('settings.setup.omniAutoMountFeature')"
       :description="t('settings.setup.omniAutoMountFeatureDesc')"
-      default-icon="i-carbon-data-share"
-      active-icon="i-carbon-data-share"
       @update:model-value="updateOmniAutoMountFeature"
     />
 
@@ -799,8 +787,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.hideNoisySystemApps"
       :title="t('settings.setup.hideNoisySystemApps')"
       :description="t('settings.setup.hideNoisySystemAppsDesc')"
-      default-icon="i-carbon-filter"
-      active-icon="i-carbon-filter"
       @update:model-value="updateHideNoisySystemApps"
     />
 
@@ -809,8 +795,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.customDesktop"
       :title="t('settings.setup.customDesktop')"
       :description="t('settings.setup.customDesktopDesc')"
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
       @update:model-value="updateCustomDesktop"
     >
       <template #tags>
@@ -824,8 +808,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.runAsAdmin"
       :title="t('settings.setup.runAsAdmin')"
       :description="t('settings.setup.runAsAdminDesc')"
-      default-icon="i-carbon-user-avatar"
-      active-icon="i-carbon-user-avatar-filled"
       @update:model-value="updateRunAsAdmin"
     >
       <template #tags>

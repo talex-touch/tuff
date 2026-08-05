@@ -801,8 +801,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.coreBox.customPlaceholder"
       :title="t('settingTools.customPlaceholder')"
       :description="t('settingTools.customPlaceholderDesc')"
-      default-icon="i-carbon-text-short-paragraph"
-      active-icon="i-carbon-text-short-paragraph"
     >
       <template #control>
         <TxInput
@@ -823,8 +821,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-if="!props.advancedOnly"
       :title="t('settingTools.usage')"
       :description="t('settingTools.usageDesc')"
-      default-icon="i-carbon-book"
-      active-icon="i-carbon-book"
     >
       <TxButton variant="flat" type="primary" @click.stop="rerunBeginnerGuide">
         {{ t('settingTools.usageAction') }}
@@ -835,8 +831,6 @@ watch(shortcutsDialogVisible, (visible) => {
     <TuffBlockSlot
       :title="t('settingTools.shortcutsTitle')"
       :description="t('settingTools.shortcutsDesc')"
-      default-icon="i-carbon-keyboard"
-      active-icon="i-carbon-keyboard"
       class="ShortcutEntry"
       :class="{ 'ShortcutEntry--hidden': shortcutsDialogVisible }"
     >
@@ -853,8 +847,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.omniPanel.mouseLongPressDurationMs"
       :title="t('settingTools.omniPanelMouseLongPressDuration')"
       :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
       :disabled="!omniPanelMouseTriggerEnabled"
     >
       <TxSelectItem
@@ -872,8 +864,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.tools.autoPaste.time"
       :title="t('settingTools.autoPaste')"
       :description="t('settingTools.autoPasteDesc')"
-      default-icon="i-carbon-copy"
-      active-icon="i-carbon-copy"
     >
       <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
@@ -899,8 +889,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.tools.autoClear"
       :title="t('settingTools.autoClear')"
       :description="t('settingTools.autoClearDesc')"
-      default-icon="i-carbon-erase"
-      active-icon="i-carbon-erase"
     >
       <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
@@ -922,8 +910,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.tools.clipboardPolling.interval"
       :title="t('settingTools.clipboardPollingInterval')"
       :description="t('settingTools.clipboardPollingIntervalDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
     >
       <TxSelectItem :value="1">1 {{ t('settingTools.sec') }}</TxSelectItem>
       <TxSelectItem :value="3">3 {{ t('settingTools.sec') }}</TxSelectItem>
@@ -938,16 +924,12 @@ watch(shortcutsDialogVisible, (visible) => {
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
         :title="t('settingTools.clipboardPollingLowBattery')"
         :description="t('settingTools.clipboardPollingLowBatteryDesc')"
-        default-icon="i-carbon-battery-charging"
-        active-icon="i-carbon-battery-charging"
       />
 
       <TuffBlockSelect
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.interval"
         :title="t('settingTools.clipboardPollingLowBatteryInterval')"
         :description="t('settingTools.clipboardPollingLowBatteryIntervalDesc')"
-        default-icon="i-carbon-battery-empty"
-        active-icon="i-carbon-battery-empty"
         :disabled="clipboardPollingLowBatteryDisabled"
       >
         <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
@@ -961,8 +943,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.tools.autoHide"
       :title="t('settingTools.autoHide')"
       :description="t('settingTools.autoHideDesc')"
-      default-icon="i-carbon-view-off"
-      active-icon="i-carbon-view-off"
     />
 
     <!-- Recommendation Enabled switch -->
@@ -971,8 +951,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.recommendation.enabled"
       :title="t('settingTools.recommendationEnabled')"
       :description="t('settingTools.recommendationEnabledDesc')"
-      default-icon="i-carbon-star"
-      active-icon="i-carbon-star-filled"
     />
 
     <!-- Recommendation Show Reason switch -->
@@ -981,8 +959,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.recommendation.showReason"
       :title="t('settingTools.recommendationShowReason')"
       :description="t('settingTools.recommendationShowReasonDesc')"
-      default-icon="i-carbon-information"
-      active-icon="i-carbon-information-filled"
     />
 
     <!-- Recommendation Max Items select -->
@@ -991,8 +967,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.recommendation.maxItems"
       :title="t('settingTools.recommendationMaxItems')"
       :description="t('settingTools.recommendationMaxItemsDesc')"
-      default-icon="i-carbon-list"
-      active-icon="i-carbon-list"
     >
       <TxSelectItem :value="5"> 5 </TxSelectItem>
       <TxSelectItem :value="10"> 10 </TxSelectItem>
