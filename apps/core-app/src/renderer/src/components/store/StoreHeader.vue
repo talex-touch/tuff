@@ -80,14 +80,14 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
       style="--fake-opacity: 0.5"
     >
       <TxRadioGroup v-model="tabs" glass>
-        <TxRadio value="store" :label="t('flatNavBar.store')" />
+        <TxRadio value="store" :label="t('store.market')" />
         <TxRadio value="installed" :label="t('store.installed')" />
         <TxRadio v-if="showPublisherTab" value="publisher" :label="t('store.publisher.tab')" />
         <TxRadio value="docs" :label="t('store.docs')" />
         <TxRadio v-if="showCliTab" value="cli" :label="t('store.cli')" />
       </TxRadioGroup>
 
-      <div v-if="tabs === 'store'" flex items-center gap-2>
+      <div v-if="tabs === 'store'" flex items-center gap-2 class="shell-chrome-safe-inline-end">
         <div flex items-center gap-2 text-xs>
           <span op-60 whitespace-nowrap text="[var(--tx-text-color-regular)]">
             {{ sourcesCount }} {{ t('store.sources') }}

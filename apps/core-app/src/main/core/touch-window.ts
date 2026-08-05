@@ -110,6 +110,51 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window.minimize()
   }
 
+  maximize(): void {
+    this.window.maximize()
+  }
+
+  unmaximize(): void {
+    this.window.unmaximize()
+  }
+
+  isMaximized(): boolean {
+    return this.window.isMaximized()
+  }
+
+  /**
+   * Toggles the maximized state and reports the state after the toggle.
+   */
+  toggleMaximize(): boolean {
+    if (this.window.isMaximized()) {
+      this.window.unmaximize()
+      return false
+    }
+
+    this.window.maximize()
+    return true
+  }
+
+  /**
+   * Subscribes to maximize/unmaximize, which fire for OS-driven changes too — double-clicking
+   * the title bar, the keyboard shortcut and edge snapping never round-trip through the
+   * renderer, so a custom window-control button cannot track the state from its own clicks.
+   *
+   * @returns A disposer that detaches both listeners.
+   */
+  onMaximizedChanged(listener: (maximized: boolean) => void): () => void {
+    const handleMaximize = (): void => listener(true)
+    const handleUnmaximize = (): void => listener(false)
+
+    this.window.on('maximize', handleMaximize)
+    this.window.on('unmaximize', handleUnmaximize)
+
+    return () => {
+      this.window.off('maximize', handleMaximize)
+      this.window.off('unmaximize', handleUnmaximize)
+    }
+  }
+
   openDevTools(options?: OpenDevToolsOptions): void {
     touchWindowLog.debug('Open DevTools', { meta: { hasOptions: Boolean(options) } })
     this.window.webContents.openDevTools(options)

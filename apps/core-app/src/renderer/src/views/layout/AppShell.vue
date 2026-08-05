@@ -1,9 +1,11 @@
 <script lang="ts" name="AppShell" setup>
 import { computed, onMounted } from 'vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
-import ShellTopBar from '~/components/shell/ShellTopBar.vue'
+import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
+import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import {
   normalizeWindowPreference,
   themeStyle,
@@ -32,6 +34,8 @@ const routeTransitionName = computed(() => {
   }
 })
 const { wallpaperActive, wallpaperStyle } = useWallpaper()
+const { platform, isMac } = useRendererPlatform()
+const { width: sidebarWidth, isDragging: isResizingSidebar } = useShellSidebar()
 const touchBlur = computed(
   () => isRefractionWindow.value || isFilterWindow.value || wallpaperActive.value
 )
@@ -60,7 +64,13 @@ const windowOpacityVars = computed<Record<string, string>>(() => {
   }
 })
 const wrapperStyle = computed<Record<string, string | number>>(() => {
-  const style: Record<string, string | number> = { ...windowOpacityVars.value }
+  const style: Record<string, string | number> = {
+    ...windowOpacityVars.value,
+    // Written as a CSS variable rather than pushed onto the sidebar element so a resize is a
+    // pure style recalculation — the main area is `flex: 1 1 auto` and reflows on its own,
+    // without any component seeing a prop change.
+    '--shell-sidebar-width': `${sidebarWidth.value}px`
+  }
   if (wallpaperActive.value) {
     style['--fake-index'] = -2
   }
@@ -132,23 +142,25 @@ onMounted(() => {
 <template>
   <div
     class="AppShell fake-background"
-    :class="{
-      'window-pure': isPureWindow,
-      'window-refraction': isRefractionWindow,
-      'window-filter': isFilterWindow,
-      coloring,
-      contrast,
-      'touch-blur': touchBlur
-    }"
+    :class="[
+      `platform-${platform}`,
+      {
+        'window-pure': isPureWindow,
+        'window-refraction': isRefractionWindow,
+        'window-filter': isFilterWindow,
+        coloring,
+        contrast,
+        'touch-blur': touchBlur,
+        'is-resizing': isResizingSidebar
+      }
+    ]"
     :style="wrapperStyle"
   >
     <div v-if="wallpaperActive" class="AppWallpaper" :style="wallpaperStyle" />
 
     <ShellSidebar />
 
-    <main class="AppShell-Main">
-      <ShellTopBar />
-
+    <main class="AppShell-Main fake-background">
       <div class="AppShell-View">
         <router-view v-slot="{ Component, route }">
           <transition
@@ -165,6 +177,8 @@ onMounted(() => {
         </router-view>
       </div>
     </main>
+
+    <ShellWindowControls v-if="!isMac" />
   </div>
 </template>
 
@@ -277,6 +291,22 @@ onMounted(() => {
   &.window-filter .AppShell-View {
     --fake-opacity: 0.85;
   }
+
+  // While the grip is held, suppress text selection across the whole shell and let the sidebar
+  // track the pointer exactly — a width transition would lag behind the cursor and make the
+  // snap thresholds fire at the wrong position.
+  &.is-resizing {
+    user-select: none;
+    cursor: col-resize;
+
+    // The sidebar is a window drag region whose geometry would otherwise be recomputed on every
+    // frame of the resize. macOS re-syncs the window shape each time, which shows up as the
+    // sidebar flickering behind the cursor.
+    .ShellSidebar,
+    .ShellChromeBar {
+      -webkit-app-region: no-drag;
+    }
+  }
 }
 
 .AppShell-Main {
@@ -286,7 +316,32 @@ onMounted(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--shell-bg);
+
+  // Same reasoning as ShellSidebar: paint through `.fake-background`'s ::before so the
+  // window's transparency survives. A solid `background` here would make the whole app opaque.
+  background: transparent;
+  --fake-color: var(--shell-bg);
+  --fake-radius: 0;
+
+  /**
+   * Nearly solid, unlike the sidebar's 0.5.
+   *
+   * The v2 artboard paints this column flat `$bg` and reserves translucency for the sidebar —
+   * that difference is what makes the split read as two surfaces. Sharing the sidebar's value
+   * left body copy sitting straight on the wallpaper, with no stable backdrop behind it.
+   * The remaining sliver keeps a hint of what is behind under the blur-backed window modes.
+   */
+  --fake-opacity: 0.94;
+}
+
+/**
+ * Controls are not text. Selecting a button label serves nobody and turns any drag that starts on
+ * one into a selection sweep across the page; body copy, values and paths stay selectable.
+ */
+.AppShell button,
+.AppShell [role='button'],
+.AppShell [role='tab'] {
+  user-select: none;
 }
 
 .AppShell-View {

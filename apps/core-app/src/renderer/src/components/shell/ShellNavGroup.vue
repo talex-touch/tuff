@@ -24,6 +24,11 @@ defineProps<{
 
 .ShellNavGroup-LabelWrap {
   padding: 8px 10px 4px;
+
+  // No room for a heading in rail mode; the group's items stay, separated by the gap alone.
+  .is-rail & {
+    display: none;
+  }
 }
 
 .ShellNavGroup-Label {

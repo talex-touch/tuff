@@ -1,9 +1,4 @@
-import type {
-  CoreBoxCanvasConfig,
-  CoreBoxThemeConfig,
-  LayoutAtomConfig,
-  LayoutCanvasConfig,
-} from './layout-atom-types'
+import type { CoreBoxCanvasConfig, CoreBoxThemeConfig, LayoutAtomConfig, LayoutCanvasConfig } from './layout-atom-types'
 
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
@@ -149,16 +144,11 @@ const _appSettingOriginData = {
     deviceId: '',
     deviceName: '',
     devicePlatform: '',
-    useSecureStorage: true,
-    secureStorageUserOverridden: false,
-    secureStorageReminderShown: false,
-    secureStorageUnavailable: false,
   },
   dev: {
     autoCloseDev: true,
     runtimeServer: 'production' as 'production' | 'local',
     developerMode: false,
-    advancedSettings: false,
   },
   lang: {
     followSystem: true,
@@ -171,8 +161,6 @@ const _appSettingOriginData = {
     settings: 0,
   },
   assistant: {
-    name: '阿洛 aler',
-    identifier: 'aler',
     enabled: false,
   },
   omniPanel: {
@@ -373,6 +361,13 @@ const _appSettingOriginData = {
     closeToTray: true,
     startMinimized: false,
     startSilent: true,
+  },
+  shell: {
+    /** Sidebar width in px while expanded. Clamped on read — a hand-edited config or a
+     * cross-version rollback can carry a value outside the range the UI allows. */
+    sidebarWidth: 260,
+    /** Whether the sidebar is collapsed to the icon-only rail. */
+    sidebarCollapsed: false,
   },
   setup: {
     fileAccess: false,

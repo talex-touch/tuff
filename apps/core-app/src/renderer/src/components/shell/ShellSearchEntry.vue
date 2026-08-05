@@ -12,7 +12,13 @@ defineEmits<{ activate: [] }>()
 </script>
 
 <template>
-  <button class="ShellSearchEntry" type="button" @click="$emit('activate')">
+  <button
+    class="ShellSearchEntry"
+    type="button"
+    :title="placeholder"
+    :aria-label="placeholder"
+    @click="$emit('activate')"
+  >
     <span class="ShellSearchEntry-Icon i-ri-search-line" />
     <span class="ShellSearchEntry-Placeholder">{{ placeholder }}</span>
     <span v-if="kbd" class="ShellSearchEntry-Kbd">{{ kbd }}</span>
@@ -25,8 +31,8 @@ defineEmits<{ activate: [] }>()
   gap: 8px;
   align-items: center;
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 9px;
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
   background: var(--shell-bg);
@@ -38,6 +44,12 @@ defineEmits<{ activate: [] }>()
 
   &:hover {
     border-color: var(--shell-border-strong);
+  }
+
+  // Rail mode keeps the affordance as a square icon button; the label moves to the tooltip.
+  .is-rail & {
+    justify-content: center;
+    padding: 0;
   }
 }
 
@@ -56,6 +68,10 @@ defineEmits<{ activate: [] }>()
   text-overflow: ellipsis;
   color: var(--shell-text-muted);
   font-size: 12.5px;
+
+  .is-rail & {
+    display: none;
+  }
 }
 
 .ShellSearchEntry-Kbd {
@@ -65,5 +81,9 @@ defineEmits<{ activate: [] }>()
   background: var(--shell-surface-2);
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
+
+  .is-rail & {
+    display: none;
+  }
 }
 </style>
