@@ -1571,3 +1571,45 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 - Phase 4 启动期维护写门控(telemetry retention 窗口内跳过且不报 PARTIAL;backfill/UsageSummary 延后;manual-delete 永不门控)→ commit 08b64b650(本会话)。
 - 测试:db/database/privacy/sentry/app-provider/usage-summary 全绿;box-tool/ai 既有 23 失败归因于 privacy #301 测试 mock 缺 PRIVACY_DATA_CATEGORIES 与 shell-chrome 拉入 temp-file 单例(证据:db 提交 diff 零新增相关 import 边),非本任务范围。
 - 待办:V1 验证跑(TUFF_DB_SEARCH_SPLIT_ENABLED=1,被用户 dev 实例单实例锁阻塞)→ Phase 5 翻默认 → V2 全默认验证 → Phase 6 compat 双写退役 → spec 固化(单文件单写者 / 队列不睡眠)。
+
+
+## Session 47: 设置页 IA 重构：拆页、选项收敛与死开关清理
+
+**Date**: 2026-08-05
+**Task**: 设置页 IA 重构：拆页、选项收敛与死开关清理
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+把「网络与更新」拆成 更新/网络/下载 三个分类，存储从中转页改为直呈内容，解散 advanced 并新增 file-index，11 个分类页统一 SettingsPage 外壳。选项集按设计稿收敛：更新页合并安装方式、删 8 字段诊断网格与重复信任块；网络页把代理五项收进模态、阈值+冷却合并为一个开关；下载页删五个引擎参数、新增下载位置与完成后通知。清掉多处硬编码 false 的死开关——SettingUpdate 的 showAdvancedSettings、SettingSetup 的 showPermissionRecovery（整个权限区从不渲染，而 main 侧 platform-permission-service 一直在响应）、Renderer Override 改为 env 条件渲染。接线三处此前无消费者的配置：historyRetention（cleanupExpiredData 已实现却从无调用者）、NotificationConfig 的 downloadComplete 与 updateAvailable。Auto Context 从 composer 本地 ref 落到 appSetting，与设置页共用一个键。20/22 验收达成，未达成两条已在 prd 标注原因。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea78b1fa8` | (see git log) |
+| `3d7aeca04` | (see git log) |
+| `b977006ea` | (see git log) |
+| `7624798d5` | (see git log) |
+| `c1b82bf3d` | (see git log) |
+| `eb7133ba9` | (see git log) |
+| `3cec262c8` | (see git log) |
+| `3afd2df39` | (see git log) |
+| `eaec11f87` | (see git log) |
+| `d2068e611` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
