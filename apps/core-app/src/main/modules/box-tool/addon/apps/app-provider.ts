@@ -63,7 +63,6 @@ import { scheduleDbWrite } from '../../../../db/db-write'
 import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 
 import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/utils'
-import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { iconService } from '../../../../service/icon-service'
@@ -752,11 +751,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const loadStart = startTiming()
     logApp('Loading AppProvider service...', LogStyle.process)
     this.context = context
-    this.dbUtils = createDbUtils(context.databaseManager.getDb(), undefined, {
-      enabled: context.databaseManager.isSearchSplitEnabled(),
-      searchDb: context.databaseManager.getSearchDb(),
-      writer: searchIndexWriter
-    })
+    // The app CATALOG (files/file_extensions rows of type 'app', including
+    // user-authored managed entries) lives on the PRIMARY db: every write in
+    // this provider is a raw transaction on getDb(), and manual entries are
+    // user data that must not move into the rebuildable search-index.db. So
+    // reads must target the primary too — passing the search-split context here
+    // (c86d82db5) routed catalog READS to the empty search file while the raw
+    // txn WRITES stayed on the primary, and with the split on the record-batch
+    // builder then found zero apps and never pushed anything into the search
+    // index (V1 2026-08-05 ship-blocker #3). The search-index HOME is bridged
+    // by the push pipeline instead: catalog rows → indexed-source records →
+    // worker-owned search_index/keyword_mappings in search-index.db.
+    this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
 
     this.loadAppIndexSettings()

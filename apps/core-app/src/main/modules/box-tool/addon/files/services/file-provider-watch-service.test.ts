@@ -93,9 +93,13 @@ function createDbUtils(
     return rows.filter((row) => scopedPaths.has(row.path))
   })
 
+  const handle = { all }
   return {
     dbUtils: {
-      getDb: vi.fn(() => ({ all }))
+      getDb: vi.fn(() => handle),
+      // Scan eligibility reads through the split-aware read home; with the
+      // split off (the default in these tests) it is the same handle.
+      getFileIndexReadDb: vi.fn(() => handle)
     },
     all
   }
@@ -177,6 +181,28 @@ describe('file-provider-watch-service', () => {
     expect(all).toHaveBeenCalledWith(expect.objectContaining({ queryChunks: expect.any(Array) }))
     expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
     expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
+  })
+
+  // V1 ship-blocker #3 regression: with the split on, eligibility must read the
+  // (empty) search home — stale primary scan_progress rows must not be able to
+  // mark every root "recently scanned" and suppress the full scan forever.
+  it('reads eligibility from the split read home, not the stale primary db', async () => {
+    const stalePrimary = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: new Date() },
+      { path: '/tmp/tuff-index-b', lastScanned: new Date() }
+    ])
+    const emptySearchHome = createDbUtils([])
+    const dbUtils = {
+      getDb: stalePrimary.dbUtils.getDb,
+      getFileIndexReadDb: emptySearchHome.dbUtils.getFileIndexReadDb
+    }
+    const service = createService({ dbUtils })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+    expect(eligibility.lastScannedAt).toBeNull()
+    expect(stalePrimary.dbUtils.getDb).not.toHaveBeenCalled()
   })
 
   it('reads source-scoped scan progress for the file provider source', async () => {

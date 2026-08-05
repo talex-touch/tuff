@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  buildScanProgressDeleteStatement,
   normalizeScanProgressSourceId,
   planScanProgressSourceScopeMigration,
   resolveScanProgressSchemaShape,
@@ -257,6 +258,69 @@ describe('scan progress schema helpers', () => {
         sourceIdColumn: true,
         primaryKeyColumns: ['source_id', 'path']
       })
+      client.close()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('builds worker-forwardable scan_progress delete statements for both schema shapes', () => {
+    expect(
+      buildScanProgressDeleteStatement({
+        sourceScoped: true,
+        sourceId: 'file-provider',
+        paths: ['/a', '/b']
+      })
+    ).toEqual({
+      sql: 'DELETE FROM scan_progress WHERE source_id = ? AND path IN (?, ?)',
+      args: ['file-provider', '/a', '/b']
+    })
+
+    expect(
+      buildScanProgressDeleteStatement({
+        sourceScoped: false,
+        sourceId: 'file-provider',
+        paths: ['/only']
+      })
+    ).toEqual({
+      sql: 'DELETE FROM scan_progress WHERE path IN (?)',
+      args: ['/only']
+    })
+
+    expect(
+      buildScanProgressDeleteStatement({ sourceScoped: true, sourceId: 'x', paths: [] })
+    ).toBeNull()
+  })
+
+  it('executes the built delete statement correctly against a real source-scoped table', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tuff-scan-progress-delete-'))
+    try {
+      const client = createClient({ url: `file:${join(dir, 'delete.sqlite')}` })
+      await client.execute(`
+        CREATE TABLE scan_progress (
+          source_id text NOT NULL,
+          path text NOT NULL,
+          last_scanned integer NOT NULL,
+          PRIMARY KEY(source_id, path)
+        )
+      `)
+      await client.execute({
+        sql: 'INSERT INTO scan_progress(source_id, path, last_scanned) VALUES (?, ?, ?), (?, ?, ?)',
+        args: ['file-provider', '/a', 1, 'other-provider', '/a', 2]
+      })
+
+      const statement = buildScanProgressDeleteStatement({
+        sourceScoped: true,
+        sourceId: 'file-provider',
+        paths: ['/a']
+      })
+      await client.execute({
+        sql: statement!.sql,
+        args: statement!.args as (string | number)[]
+      })
+
+      const rows = await client.execute('SELECT source_id AS sourceId FROM scan_progress')
+      expect(rows.rows).toEqual([{ sourceId: 'other-provider' }])
       client.close()
     } finally {
       await rm(dir, { recursive: true, force: true })

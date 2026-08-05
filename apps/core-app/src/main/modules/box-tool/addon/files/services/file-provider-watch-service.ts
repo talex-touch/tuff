@@ -300,7 +300,12 @@ export class FileProviderWatchService {
       return { newPaths: [], stalePaths: [], lastScannedAt: null }
     }
 
-    const db = dbUtils.getDb()
+    // Eligibility must read the home the worker writes scan_progress into
+    // (search-index.db when the split is on). Reading the primary here let
+    // stale pre-split rows mark every root "recently scanned", so
+    // shouldRunAutoIndexing never allowed a scan and the empty search file was
+    // never populated (V1 ship-blocker #3). Split off → same handle as before.
+    const db = dbUtils.getFileIndexReadDb()
     const scopedPaths = expandIndexedSourceProgressPaths(this.watchPaths, this.normalizePath)
     const shape = await resolveScanProgressSchemaShape(db)
     const completedScans =

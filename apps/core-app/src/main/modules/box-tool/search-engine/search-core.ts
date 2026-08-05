@@ -1915,7 +1915,13 @@ export class SearchEngineCore
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.searchUsageService.initialize(db)
     searchEngineLog.debug('Initializing RecommendationEngine')
-    instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
+    // Second handle: app-catalog reads (primary db) for rebuilding app
+    // recommendation items — the app catalog does not move into the search
+    // file under the split. Split off → both handles read the primary.
+    instance.recommendationEngine = new RecommendationEngine(
+      instance.dbUtils,
+      createDbUtils(db, auxDb)
+    )
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
     instance.indexingRuntime = indexingRuntime
     registerCoreIndexedSources(instance.indexingRuntime)

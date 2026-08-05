@@ -57,7 +57,18 @@ function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
 
 /** Rebuilds TuffItems from ScoredItems by querying DB and applying provider logic */
 export class ItemRebuilder {
-  constructor(private dbUtils: DbUtils) {}
+  /**
+   * Two read homes under the search split (issue #295): FILE rows are written
+   * by the worker into search-index.db (read via the split-aware `dbUtils`),
+   * while APP rows are the app provider's catalog on the PRIMARY db —
+   * including user-authored managed entries — and must be read from there
+   * (`appCatalogDbUtils`). With the split off both handles are the primary and
+   * behavior is byte-identical.
+   */
+  constructor(
+    private dbUtils: DbUtils,
+    private appCatalogDbUtils: DbUtils = dbUtils
+  ) {}
 
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
     if (scoredItems.length === 0) return []
@@ -113,10 +124,10 @@ export class ItemRebuilder {
 
       const [appsByPath, appsByBundleId] = await Promise.all([
         pathItems.length > 0
-          ? this.dbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
+          ? this.appCatalogDbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
           : Promise.resolve([]),
         bundleIdItems.length > 0
-          ? this.dbUtils.getFilesByBundleIds(bundleIdItems.map((i) => i.itemId))
+          ? this.appCatalogDbUtils.getFilesByBundleIds(bundleIdItems.map((i) => i.itemId))
           : Promise.resolve([])
       ])
 
@@ -146,7 +157,7 @@ export class ItemRebuilder {
 
   private async fetchExtensionsForApps(apps: AppRow[]): Promise<AppWithExtensions[]> {
     const fileIds = apps.map((app) => app.id)
-    const extensions = await this.dbUtils.getFileExtensionsByFileIds(fileIds)
+    const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(fileIds)
 
     return apps.map((app) => ({
       ...app,

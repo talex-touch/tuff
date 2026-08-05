@@ -18,14 +18,18 @@ function createDbUtils(rowCount: number) {
   const all = vi.fn(async () => [{ name: 'path' }, { name: 'last_scanned' }])
   const run = vi.fn(async () => undefined)
 
+  const handle = {
+    all,
+    run,
+    select,
+    delete: deleteTable
+  }
   return {
     dbUtils: {
-      getDb: vi.fn(() => ({
-        all,
-        run,
-        select,
-        delete: deleteTable
-      }))
+      getDb: vi.fn(() => handle),
+      // Reads route through the split-aware read home; with the split off
+      // (these tests' default) it is the same connection as getDb().
+      getFileIndexReadDb: vi.fn(() => handle)
     },
     all,
     run,
@@ -43,6 +47,11 @@ function createService(input: {
   scanProgressPaths?: string[]
   normalizePath?: (path: string) => string
   withDbWrite?: <T>(label: string, operation: () => Promise<T>) => Promise<T>
+  isSearchSplitEnabled?: () => boolean
+  execSearchIndexWrite?: (
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode?: 'single' | 'transaction'
+  ) => Promise<unknown>
 }) {
   const withDbWriteSpy = vi.fn()
   const withDbWrite = async <T>(label: string, operation: () => Promise<T>): Promise<T> => {
@@ -59,7 +68,9 @@ function createService(input: {
       normalizePath: input.normalizePath,
       getScanProgressPaths: () => input.scanProgressPaths ?? ['/a', '/b'],
       withDbWrite,
-      logInfo
+      logInfo,
+      isSearchSplitEnabled: input.isSearchSplitEnabled,
+      execSearchIndexWrite: input.execSearchIndexWrite
     }),
     withDbWrite: withDbWriteSpy
   }
@@ -220,6 +231,59 @@ describe('file-provider-runtime-reset-service', () => {
     })
   })
 
+  // V1 ship-blocker #3 regression: the reset clear is the integrity
+  // self-heal's lever — with the split on it must count AND delete against the
+  // worker-owned home, never run the delete on a main-process connection.
+  it('forwards the scan-progress clear through the worker when the split is on', async () => {
+    const { dbUtils, deleteTable, run } = createDbUtils(3)
+    const execSearchIndexWrite = vi.fn(async () => [])
+    const { service, withDbWrite } = createService({
+      dbUtils,
+      isSearchSplitEnabled: () => true,
+      execSearchIndexWrite
+    })
+
+    const result = await service.reset({
+      request: {
+        sourceId: 'file-provider',
+        reason: 'integrity-repair'
+      },
+      operationReasonPrefix: 'file-index.integrity-repair'
+    })
+
+    expect(execSearchIndexWrite).toHaveBeenCalledTimes(1)
+    const [statements, mode] = execSearchIndexWrite.mock.calls[0] as unknown as [
+      Array<{ sql: string; args: unknown[] }>,
+      string
+    ]
+    expect(mode).toBe('single')
+    expect(statements[0]!.sql).toContain('DELETE FROM scan_progress')
+    expect(statements[0]!.args).toEqual(['/a', '/b'])
+    // No local-connection delete and no scheduled main-db write.
+    expect(deleteTable).not.toHaveBeenCalled()
+    expect(run).not.toHaveBeenCalled()
+    expect(withDbWrite).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ clearedScanProgress: true, scanProgressRows: 3 })
+  })
+
+  it('fails closed when the split is on but no worker write path is provided', async () => {
+    const { dbUtils } = createDbUtils(3)
+    const { service } = createService({
+      dbUtils,
+      isSearchSplitEnabled: () => true
+    })
+
+    await expect(
+      service.reset({
+        request: {
+          sourceId: 'file-provider',
+          reason: 'integrity-repair'
+        },
+        operationReasonPrefix: 'file-index.integrity-repair'
+      })
+    ).rejects.toThrow('SCAN_PROGRESS_RESET_REQUIRES_SEARCH_INDEX_WRITER')
+  })
+
   it('keeps source-scoped scan progress rows isolated during reset cleanup', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tuff-runtime-reset-scan-progress-'))
     try {
@@ -253,7 +317,7 @@ describe('file-provider-runtime-reset-service', () => {
           ]
         })
         const { service } = createService({
-          dbUtils: { getDb: () => db },
+          dbUtils: { getDb: () => db, getFileIndexReadDb: () => db },
           scanProgressPaths: ['/a']
         })
 

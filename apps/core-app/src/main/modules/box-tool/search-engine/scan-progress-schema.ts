@@ -47,6 +47,33 @@ export function buildScanProgressPathInClause(paths: readonly string[]): SQL {
   )})`
 }
 
+/**
+ * Plain-SQL scan_progress DELETE for forwarding through the search-index
+ * worker's `execWrite` when the split is enabled. The worker is the sole
+ * writer of search-index.db, so the main process must never run this DELETE
+ * on its own connection against the search file — and running it on the
+ * primary instead silently misses the live rows (read-side fix routes reads to
+ * the search home; this keeps the deletes pointed at the same home).
+ */
+export function buildScanProgressDeleteStatement(input: {
+  sourceScoped: boolean
+  sourceId: string
+  paths: readonly string[]
+}): { sql: string; args: unknown[] } | null {
+  if (input.paths.length === 0) return null
+  const placeholders = input.paths.map(() => '?').join(', ')
+  if (input.sourceScoped) {
+    return {
+      sql: `DELETE FROM scan_progress WHERE source_id = ? AND path IN (${placeholders})`,
+      args: [input.sourceId, ...input.paths]
+    }
+  }
+  return {
+    sql: `DELETE FROM scan_progress WHERE path IN (${placeholders})`,
+    args: [...input.paths]
+  }
+}
+
 export function normalizeScanProgressSourceId(sourceId: unknown): string {
   return typeof sourceId === 'string' && sourceId.trim().length > 0 ? sourceId : 'file-provider'
 }

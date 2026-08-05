@@ -95,9 +95,18 @@ export class RecommendationEngine {
   private static readonly SEMANTIC_AI_FAILURE_THRESHOLD = 3
   private static readonly SEMANTIC_AI_COOLDOWN_MS = 5 * 60 * 1000
 
-  constructor(private dbUtils: DbUtils) {
+  /**
+   * `appCatalogDbUtils` is a primary-bound handle for rebuilding APP items:
+   * the app catalog stays on the primary db under the search split, while the
+   * split-aware `dbUtils` reads FILE rows from the worker-owned search file.
+   * Defaults to `dbUtils` (split off → identical).
+   */
+  constructor(
+    private dbUtils: DbUtils,
+    appCatalogDbUtils: DbUtils = dbUtils
+  ) {
     this.contextProvider = new ContextProvider()
-    this.itemRebuilder = new ItemRebuilder(dbUtils)
+    this.itemRebuilder = new ItemRebuilder(dbUtils, appCatalogDbUtils)
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
