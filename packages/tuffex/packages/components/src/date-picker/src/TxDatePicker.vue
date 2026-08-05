@@ -662,7 +662,7 @@ function onCancel() {
 }
 
 .tx-date-picker-calendar__cell.is-selected {
-  color: var(--tx-color-white, #fff);
+  color: var(--tx-color-on-primary, #fff);
   background: linear-gradient(135deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, #111827));
   box-shadow: 0 8px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
 }

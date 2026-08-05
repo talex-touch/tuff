@@ -110,6 +110,13 @@
   --shell-primary: #4e9ae6;
   --shell-primary-soft: #4e9ae626;
   --shell-primary-border: #4e9ae64d;
+  /**
+   * Dark mode lightens the accent, so it inherits the light `#ffffff` ink at 2.96:1 without
+   * this — below AA on every filled primary control. Material's dark-theme model applies:
+   * lighter accent, darker ink. This lands at 5.24:1, and 8.28:1 under `html.dark.contrast`,
+   * where `--shell-primary` re-points to the even lighter `--tx-color-primary`.
+   */
+  --shell-on-primary: #0a2540;
 
   --shell-danger: #e0655c;
   --shell-danger-soft: #e0655c26;
@@ -129,6 +136,9 @@ html.contrast {
 
   --shell-primary: var(--tx-color-primary);
   --shell-primary-soft: var(--tx-color-primary-light-9);
+  // Same reason as `--shell-danger-border` below, plus this one would otherwise keep the
+  // design-palette blue after `--shell-primary` has already re-pointed to the contrast ramp.
+  --shell-primary-border: var(--tx-color-primary);
 
   --shell-danger: var(--tx-color-danger);
   --shell-danger-soft: var(--tx-color-danger-light-9);
@@ -147,6 +157,9 @@ html.dark.contrast {
 
   --shell-primary: var(--tx-color-primary);
   --shell-primary-soft: var(--tx-color-primary-dark-2);
+  --shell-primary-border: var(--tx-color-primary);
+  // `--shell-on-primary` deliberately falls through from `.dark`: the contrast ramp's
+  // `#7cc4ff` is lighter still, so the same dark ink reads at 8.28:1 here.
 
   --shell-danger: var(--tx-color-danger);
   --shell-danger-soft: var(--tx-color-danger-light-9);
