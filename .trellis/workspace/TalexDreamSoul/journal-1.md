@@ -1613,3 +1613,9 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 ### Next Steps
 
 - None - task complete
+
+## 2026-08-05 · db-single-writer-root-fix · V1 验证闭环(三轮)
+
+- V1 抓出 3 个 ship-blocker:①新 search 库缺带外 schema 修补(provider_id / scan_progress 形态)+ worker init 拒绝逃逸;②embedding 写脑裂 + 句柄泄漏 + 索引齐平(审计);③「首启重建」无触发器——实为双向镜像脑裂(app 目录读空 search 家/写主库;文件扫描调度读主库旧 scan_progress)。均已修复并提交(schema-complete/fail-safe 提交 + unify-index-homes/bootstrap 提交)。
+- 第三轮 0.2/0.3 全过:4678 条目重建入 search 文件、二次启动跳过、全程零 BUSY。
+- 默认开关暂不翻:2d.3 增量写路径(parked 07-28 任务 migrate-search-index-split-write-paths)未迁移,watch 修改存在跨库 id 碰撞风险;另 scan_progress 持久化存疑、Phase4 backfill 门控需复核。flag-off 拓扑下 Phase1-4 已实测消除全部用户症状(31 分钟零 BUSY 对照)。
