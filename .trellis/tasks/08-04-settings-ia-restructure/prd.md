@@ -55,23 +55,22 @@
 - [x] `/setting/storage-usage` 直接呈现存储占用内容，不再是跳转到 `/setting/storage` 的链接页。
 
 ### B. 选项集
-- [ ] 更新页：更新渠道 / 检查频率 / 安装方式 / 有新版本时通知 四行 + 状态卡 + 更新诊断一行。信任警告全页只出现一次。
-      → 前三行、状态卡、诊断行、单一信任警告已达成；**「有新版本时通知」未做**，`NotificationConfig.updateAvailable` 没有 transport 通道，加 UI 会造出一个不生效的控件。
+- [x] 更新页：更新渠道 / 检查频率 / 安装方式 / 有新版本时通知 四行 + 状态卡 + 更新诊断一行。信任警告全页只出现一次。
 - [x] 更新页不再渲染 8 字段诊断网格；相关信息只通过「导出诊断」产出。
 - [x] 未设 `TUFF_ENABLE_RENDERER_OVERRIDE` 时，Renderer Override 行**不渲染**；设了才在「高级」分组出现，行内标出变量名。
 - [x] 网络页：代理模式 / 自定义代理 / 代理认证 + 请求超时 / 失败重试 / 不稳定时暂停，共 6 行。HTTP/HTTPS/SOCKS/PAC/绕过规则收进「自定义代理」二级表单。
 - [x] 下载页：下载位置 / 完成后通知 + 最大并发 / 失败重试 / 历史记录保留 + 下载中心入口（空闲超时按「已知缺口」1 未上线）。
 - [x] 下载页不再出现 `autoAdjust` / `networkAware` / `priorityBased` / `chunk.size` / `chunk.resume` 五个控件。
 - [x] 临时目录出现在存储页而非下载页。
-- [ ] 通用页：权限四行（辅助功能 / 完全磁盘访问 / 麦克风 / 通知）+ 启动与后台四行。
-      → 已拆成「权限」「启动与后台」两组并去掉折叠头与行图标；行本身是原样搬运，实际为 6 权限行（含 Windows 管理员权限）+ 8 开关，未按稿裁到 4+4。
+- [x] 通用页：权限四行（辅助功能 / 完全磁盘访问 / 麦克风 / 通知）+ 启动与后台四行。
+      → macOS 上正好四行权限 + 开机自启 / 静默启动 / 显示托盘 / 不在 Dock 显示。此前 `showPermissionRecovery` 是硬编码 `false`，整个权限区从不渲染；`showAdvancedSettings` 同样写死，藏掉了后两个开关。Windows 另有「管理员权限」，Linux 无权限行时整组不渲染。
 - [ ] 外观页：窗口效果三选一 + 自定义 CoreBox + 个性化四行。
-      → 三个分组已扁平化；窗口效果与 CoreBox 区块沿用现有实现，个性化实为 3 行，未按稿重排。
+      → 四个控件（色彩风格 / 主页壁纸 / 窗口模糊 / 窗口透明度）齐全可用，分组已扁平化；但模糊与透明度渲染在一个自定义滑杆面板里（另含亮度），不是两条 `TuffBlock` 行。差异是分组形式，功能无缺。未改：那个面板带实时预览，无目视手段的情况下重排风险高于收益。
 
 ### C. 数据契约
 - [x] 新增默认下载目录字段并在下载页可读可写；新建任务未显式指定 `destination` 时使用该值。
-- [ ] `NotificationConfig.downloadComplete` 与 `updateAvailable` 有对应 UI 且可持久化。
-      → `downloadComplete` 已接（经 `DownloadConfig.notifyOnComplete` 复用既有通道）；`updateAvailable` 未接。
+- [x] `NotificationConfig.downloadComplete` 与 `updateAvailable` 有对应 UI 且可持久化。
+      → 分别经 `DownloadConfig.notifyOnComplete` 与 `UpdateSettings.notifyOnUpdate` 复用既有通道；两者都在设置改动时立即下发给 `NotificationService`，并在启动时应用一次。
 - [x] `storage.historyRetention` 与 `storage.autoCleanup`：要么补上 main 侧消费者，要么从 `DownloadConfig` 中移除。**不接受保留一个不生效的控件。**
 - [x] `concurrency.autoAdjust/networkAware/priorityBased` 三个字段的 UI 移除后，字段本身保留且默认值不变（不改变现有运行时行为）。
 
@@ -80,7 +79,7 @@
 - [x] `pnpm lint` 无新增错误。
 - [x] `apps/core-app` 既有测试全绿，特别是 `SettingUpdate.channel.test.ts`、`setting-network-form.test.ts`、`AppSettings.layout.test.ts`、`update-diagnostic-evidence.test.ts`。
 - [ ] 每个改动页面手动走查一遍：无控件溢出、无空分组、无死链。
-      → 未执行。静态核对了分类/路由/文件一一对应、11 页均用 `SettingsPage`、死引用为零，但未在运行的应用里逐页目视。
+      → **目视未执行**。可自动化的部分已补成 `categories.smoke.test.ts`：分类表键/路径/图标唯一且自洽、每个分类都有对应页面文件、无孤儿页面文件、无空分组、系统组顺序符合画板。不覆盖「页面能否渲染」——导入页面会拉起需要 Electron channel 的 SDK 单例。
 
 ## 已知缺口（本任务不解决，需另立）
 
