@@ -19,5 +19,10 @@ const text = computed(() => {
 </script>
 
 <template>
-  <TuffBlockTag :label="text" icon="i-simple-icons-apple" color="#0a84ff" size="sm" />
+  <!--
+    Neutral rather than the vendor colour: these sit next to permission status chips, where
+    green/red/grey already carry meaning. A blue or green platform badge competed with that,
+    and the glyph alone left the label reading "Only" with no noun.
+  -->
+  <TuffBlockTag :label="text" color="var(--tx-text-color-secondary)" size="sm" />
 </template>
