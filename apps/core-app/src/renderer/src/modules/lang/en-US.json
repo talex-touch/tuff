@@ -2240,6 +2240,7 @@
   },
   "router": {
     "home": "Home",
+    "homeConversation": "Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
     "pluginStore": "Plugin Store",
@@ -3943,8 +3944,11 @@
         "macSilentUpdateUntrusted": "Silent update is blocked because this Tuff build is not an officially verified macOS package.",
         "cacheCleared": "Update cache cleared",
         "cacheClearFailed": "Failed to clear cache",
-        "installModeSaved": "Install mode saved"
+        "installModeSaved": "Install mode saved",
+        "notifyOnUpdateSaved": "Notification preference saved"
       },
+      "notifyOnUpdate": "Notify on new version",
+      "notifyOnUpdateDesc": "Send a system notification when an update is found or finishes downloading.",
       "installMode": {
         "title": "Install mode",
         "manual": "Notify only",

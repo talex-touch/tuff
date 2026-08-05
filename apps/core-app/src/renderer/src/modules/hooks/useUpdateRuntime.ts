@@ -106,6 +106,7 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
     installOnNormalQuit: true,
     rendererOverrideEnabled: false,
     rendererOverrideAvailable: false,
+    notifyOnUpdate: true,
     cacheEnabled: true,
     cacheTTL: 30,
     rateLimitEnabled: true,
@@ -182,6 +183,9 @@ export function useUpdateRuntime() {
         }
         if (typeof nextSettings.rendererOverrideAvailable !== 'boolean') {
           nextSettings.rendererOverrideAvailable = false
+        }
+        if (typeof nextSettings.notifyOnUpdate !== 'boolean') {
+          nextSettings.notifyOnUpdate = true
         }
         if (typeof nextSettings.installOnNormalQuit !== 'boolean') {
           nextSettings.installOnNormalQuit = true

@@ -2216,6 +2216,7 @@
   },
   "router": {
     "home": "首页",
+    "homeConversation": "对话",
     "login": "请先登录!",
     "permission": "您没有权限!",
     "pluginStore": "插件市场",
@@ -3899,8 +3900,11 @@
         "macSilentUpdateUntrusted": "当前 Tuff 不是经过官方验证的 macOS 构建，已阻止静默更新。",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败",
-        "installModeSaved": "安装方式已保存"
+        "installModeSaved": "安装方式已保存",
+        "notifyOnUpdateSaved": "通知设置已保存"
       },
+      "notifyOnUpdate": "有新版本时通知",
+      "notifyOnUpdateDesc": "检查到可用更新或下载完成时发送系统通知。",
       "installMode": {
         "title": "安装方式",
         "manual": "仅提醒",

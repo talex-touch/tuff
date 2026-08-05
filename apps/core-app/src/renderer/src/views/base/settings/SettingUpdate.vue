@@ -71,6 +71,8 @@ const rendererOverrideEnabled = ref(false)
  * user to relaunch with the variable, which reads as a broken control.
  */
 const rendererOverrideAvailable = ref(false)
+/** Forwarded to `NotificationService` for both "update found" and "download finished". */
+const notifyOnUpdate = ref(true)
 const cachedRelease = ref<CachedUpdateRecord | null>(null)
 const buildVerificationStatus = ref<BuildVerificationStatus | null>(null)
 let buildVerificationStatusDisposer: (() => void) | null = null
@@ -80,6 +82,7 @@ const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const rendererOverrideSaving = ref(false)
+const notifyOnUpdateSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
 const isMacAutoInstallPlatform = computed(() => isMac.value)
@@ -312,6 +315,7 @@ async function loadSettings(): Promise<void> {
     installOnNormalQuitEnabled.value = fetched.installOnNormalQuit ?? true
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
     rendererOverrideAvailable.value = fetched.rendererOverrideAvailable ?? false
+    notifyOnUpdate.value = fetched.notifyOnUpdate ?? true
     await refreshStatus()
     await refreshCachedRelease(selectedChannel.value)
   } catch (error) {
@@ -396,6 +400,25 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     frequencySaving.value = false
+  }
+}
+
+async function handleNotifyOnUpdateChange(value: boolean): Promise<void> {
+  if (!settings.value || notifyOnUpdateSaving.value) return
+
+  const previous = notifyOnUpdate.value
+  notifyOnUpdate.value = value
+  notifyOnUpdateSaving.value = true
+  try {
+    await updateSettings({ notifyOnUpdate: value })
+    settings.value.notifyOnUpdate = value
+    toast.success(t('settings.settingUpdate.messages.notifyOnUpdateSaved'))
+  } catch (error) {
+    settingUpdateLog.error('Failed to update notification preference', error)
+    notifyOnUpdate.value = previous
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
+  } finally {
+    notifyOnUpdateSaving.value = false
   }
 }
 
@@ -720,6 +743,14 @@ function openAssetsDialog(): void {
         {{ mode.label }}
       </TxSelectItem>
     </TuffBlockSelect>
+
+    <tuff-block-switch
+      v-model="notifyOnUpdate"
+      :title="t('settings.settingUpdate.notifyOnUpdate')"
+      :description="t('settings.settingUpdate.notifyOnUpdateDesc')"
+      :disabled="fetching || notifyOnUpdateSaving"
+      @update:model-value="handleNotifyOnUpdateChange"
+    />
 
     <!-- Only exists when launched with the env var; see `rendererOverrideAvailable`. -->
     <tuff-block-switch

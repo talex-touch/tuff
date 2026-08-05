@@ -296,6 +296,14 @@ export interface UpdateSettings {
    */
   rendererOverrideEnabled?: boolean
   /**
+   * Send a system notification when an update is found or finishes downloading.
+   *
+   * Rides on `UpdateSettings` rather than `NotificationConfig`: the latter has no transport
+   * channel of its own, and this is an update preference, so it belongs with the settings that
+   * already persist. The main process forwards it to `NotificationService`.
+   */
+  notifyOnUpdate?: boolean
+  /**
    * Read-only: whether renderer override is reachable in this process at all.
    *
    * Derived from `TUFF_ENABLE_RENDERER_OVERRIDE` in the main process, never persisted, and ignored
