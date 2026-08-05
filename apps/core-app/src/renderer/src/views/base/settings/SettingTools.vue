@@ -953,27 +953,6 @@ watch(shortcutsDialogVisible, (visible) => {
       :description="t('settingTools.recommendationEnabledDesc')"
     />
 
-    <!-- Recommendation Show Reason switch -->
-    <TuffBlockSwitch
-      v-if="showLegacySystemControls"
-      v-model="appSetting.recommendation.showReason"
-      :title="t('settingTools.recommendationShowReason')"
-      :description="t('settingTools.recommendationShowReasonDesc')"
-    />
-
-    <!-- Recommendation Max Items select -->
-    <TuffBlockSelect
-      v-if="showLegacySystemControls"
-      v-model="appSetting.recommendation.maxItems"
-      :title="t('settingTools.recommendationMaxItems')"
-      :description="t('settingTools.recommendationMaxItemsDesc')"
-    >
-      <TxSelectItem :value="5"> 5 </TxSelectItem>
-      <TxSelectItem :value="10"> 10 </TxSelectItem>
-      <TxSelectItem :value="15"> 15 </TxSelectItem>
-      <TxSelectItem :value="20"> 20 </TxSelectItem>
-    </TuffBlockSelect>
-
     <template v-if="showLegacySystemControls">
       <TuffBlockSwitch
         v-for="item in recommendationSemanticItems"
