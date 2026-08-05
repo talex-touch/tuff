@@ -135,6 +135,38 @@ describe('SourceScopedIndexWriterRouter visibility publication', () => {
   })
 })
 
+describe('SearchIndexWriter worker init failure', () => {
+  it('marks the writer failed and fails subsequent writes fast with the init error', async () => {
+    // Regression (V1 2026-08-04): worker init died on a schema-drifted
+    // search-index.db. The rejection must flow to the initialize() caller
+    // exactly once, flag the writer unavailable, and make every later write
+    // fail fast — never silently reopen another database file.
+    const initError = new Error('SQLITE_ERROR: table keyword_mappings has no column named provider_id')
+    const client = {
+      init: vi.fn<(dbPath: string) => Promise<void>>(async () => {
+        throw initError
+      }),
+      applyProviderItems: vi.fn(),
+      getPendingCount: vi.fn(() => 0)
+    }
+    const writer = new SearchIndexWriter({ client: client as unknown as SearchIndexWorkerClient })
+
+    await expect(writer.initialize('/tmp/search-index.db')).rejects.toBe(initError)
+    expect(writer.getStatus().readiness).toBe('failed')
+
+    await expect(writer.indexItems('file-provider', [indexedItem('file:/tmp/one.txt')])).rejects.toBe(
+      initError
+    )
+    expect(client.init).toHaveBeenCalledTimes(1)
+    expect(client.applyProviderItems).not.toHaveBeenCalled()
+
+    // A fresh initialize() (the provider-load retry path) re-attempts the init.
+    client.init.mockImplementationOnce(async () => undefined)
+    await expect(writer.initialize('/tmp/search-index.db')).resolves.toBeUndefined()
+    expect(writer.getStatus().readiness).toBe('ready')
+  })
+})
+
 describe('SearchIndexWriter file persistence port', () => {
   it('routes metadata updates through admission to the worker client', async () => {
     const summary = { requested: 2, updated: 1, missingFileIds: [42] }

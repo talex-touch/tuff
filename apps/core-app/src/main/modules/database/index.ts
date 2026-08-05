@@ -977,14 +977,36 @@ export class DatabaseModule extends BaseModule {
       await this.configureSqliteClient(this.searchClient, 'search')
       await this.ensureDatabaseIntegrity(this.searchDbPath, 'search', this.probeDbIntegrity)
       // Search/file-index tables are rebuildable — no data migration. Apply the
-      // same drizzle migrations to the dedicated file so the search-owned tables
-      // (files, file_extensions, search_index_meta, scan_progress, …) match the
-      // primary schema exactly; providers re-index on the next scan. Redundant
-      // main-domain tables created here stay empty and are harmless.
+      // same drizzle migrations to the dedicated file; providers re-index on
+      // the next scan. Redundant main-domain tables created here stay empty and
+      // are harmless.
       const searchDb = drizzle(this.searchClient!, { schema })
       const migrationsFolder = path.resolve(this.resolveMigrationsFolder())
       if (fse.existsSync(migrationsFolder)) {
         await migrate(searchDb, { migrationsFolder })
+      }
+      // Drizzle migrations alone do NOT produce primary-parity schema: the
+      // primary receives out-of-band fixups after migrate() (the
+      // keyword_mappings.provider_id column and the source-scoped scan_progress
+      // shape). Every out-of-band fixup a search-owned table depends on must
+      // run here too, or the worker fails on the fresh file (V1 2026-08-04:
+      // CREATE INDEX ... ON keyword_mappings(provider_id, keyword) →
+      // SQLITE_ERROR). Both fixups are fail-closed on this path: a failure
+      // aborts search init and the catch below falls back to the shared
+      // primary topology — exactly the flag-off behavior.
+      await this.applyKeywordMappingsProviderColumnFixup(this.searchClient!)
+      await this.applyScanProgressSourceScopeFixup(searchDb)
+      // Perf-index parity: embeddings are split-routed, so the worker's
+      // delete/select by (source_type, source_id) needs the same index the
+      // primary gets from ensureSearchPerformanceIndexes(). Best-effort like
+      // that primary path — a missing perf index must not abort the split
+      // (unlike the two correctness fixups above).
+      try {
+        await this.searchClient!.execute(
+          'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)'
+        )
+      } catch (error) {
+        dbLog.warn('Failed to ensure idx_embeddings_source on search database', { error })
       }
       if (this.destroying) return
       this.searchDb = searchDb
@@ -1279,24 +1301,69 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
-  private async ensureKeywordMappingsProviderColumn(): Promise<void> {
-    if (!this.client) return
+  /**
+   * Add the out-of-band `keyword_mappings.provider_id` column on the given
+   * connection. The column exists in the drizzle schema but no generated
+   * migration creates it, so EVERY database file hosting keyword_mappings
+   * needs this fixup after migrate(). Throws on failure — callers own the
+   * degrade policy (primary: warn + continue; search file: abort split init
+   * and fall back to the primary topology).
+   */
+  private async applyKeywordMappingsProviderColumnFixup(client: Client): Promise<void> {
+    const check = await client.execute(
+      "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
+    )
+    if (check.rows.length > 0) {
+      return
+    }
+
+    dbLog.info('Adding missing column `keyword_mappings.provider_id`')
+    await client.execute(
+      "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
+    )
+  }
+
+  private async ensureKeywordMappingsProviderColumn(
+    client: Client | null = this.client
+  ): Promise<void> {
+    if (!client) return
 
     try {
-      const check = await this.client.execute(
-        "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
-      )
-      if (check.rows.length > 0) {
-        return
-      }
-
-      dbLog.info('Adding missing column `keyword_mappings.provider_id`')
-      await this.client.execute(
-        "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
-      )
+      await this.applyKeywordMappingsProviderColumnFixup(client)
     } catch (error) {
       dbLog.warn('Failed to set up `provider_id` column pre-migration', { error })
     }
+  }
+
+  /**
+   * Bring `scan_progress` on the SEARCH file to the source-scoped shape
+   * (PRIMARY KEY(source_id, path)) that the worker and file-provider write.
+   * The generated migration still creates the legacy path-only shape; the
+   * primary file is upgraded separately by
+   * ensureScanProgressSourceScopeMigration(). Plan-gated and idempotent
+   * (no-op once source-scoped). Throws on a 'blocked' plan or a failed run:
+   * proceeding would hand the worker a schema it cannot write, so search init
+   * must fail and fall back to the primary topology instead.
+   */
+  private async applyScanProgressSourceScopeFixup(
+    db: LibSQLDatabase<typeof schema>
+  ): Promise<void> {
+    const plan = await planScanProgressSourceScopeMigration(db, { sourceId: 'file-provider' })
+    if (plan.status === 'not-needed') {
+      return
+    }
+
+    if (plan.status === 'blocked') {
+      dbLog.warn('scan_progress source-scope migration blocked on search database', {
+        meta: { blockers: plan.blockers, existingRows: plan.existingRows }
+      })
+      throw new Error(`SEARCH_DB_SCAN_PROGRESS_MIGRATION_BLOCKED:${plan.blockers.join(',')}`)
+    }
+
+    const result = await runScanProgressSourceScopeMigration(db, { sourceId: 'file-provider' })
+    dbLog.info('scan_progress source-scope migration completed on search database', {
+      meta: { executed: result.executed, migratedRows: result.migratedRows }
+    })
   }
 
   private async ensureScanProgressSourceScopeMigration(): Promise<void> {
