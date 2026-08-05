@@ -411,6 +411,10 @@
     "dashboardDesc": "View detailed usage stats and trends in Nexus"
   },
   "settingTools": {
+    "autoContextGroupTitle": "Context",
+    "autoContextGroupDesc": "Controls which local information the model may reach for during a conversation.",
+    "autoContext": "Auto Context",
+    "autoContextDesc": "Lets the model pull web results, file search, clipboard and related data on demand instead of picking tools per message. Off means specifying them every time.",
     "groupTitle": "Utilities",
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
     "customPlaceholder": "Custom Placeholder",

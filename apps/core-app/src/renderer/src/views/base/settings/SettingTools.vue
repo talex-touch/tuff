@@ -53,6 +53,17 @@ const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
 const showAdvancedSettings = computed(() => props.advancedOnly)
+
+/**
+ * Same stored preference the home composer's Auto Context button writes, so the two never
+ * disagree. Defaults to on for configs saved before the key existed.
+ */
+const autoContextEnabled = computed({
+  get: () => appSetting.tools?.autoContext !== false,
+  set: (value: boolean) => {
+    if (appSetting.tools) appSetting.tools.autoContext = value
+  }
+})
 const showLegacySystemControls = computed(() => false)
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
@@ -228,6 +239,7 @@ function normalizeSelectNumber(
 function ensureClipboardPollingSettings(): void {
   if (!appSetting.tools || typeof appSetting.tools !== 'object') {
     appSetting.tools = {
+      autoContext: true,
       autoPaste: {
         enable: true,
         time: 5
@@ -760,13 +772,29 @@ watch(shortcutsDialogVisible, (visible) => {
   Displays utility settings in a structured layout with switches, slots, and selects.
 -->
 <template>
+  <!--
+    The destination for the composer's 「在设置中管理工具与权限」. Auto Context is the switch the
+    composer surfaces; enabling or disabling individual capabilities belongs here, which is why the
+    composer's popover carries no tool list of its own.
+  -->
+  <TuffGroupBlock
+    v-if="!props.advancedOnly"
+    :name="t('settingTools.autoContextGroupTitle')"
+    :description="t('settingTools.autoContextGroupDesc')"
+    :collapsible="false"
+  >
+    <TuffBlockSwitch
+      v-model="autoContextEnabled"
+      :title="t('settingTools.autoContext')"
+      :description="t('settingTools.autoContextDesc')"
+    />
+  </TuffGroupBlock>
+
   <!-- Utilities group block -->
   <TuffGroupBlock
     :name="t('settingTools.groupTitle')"
     :description="t('settingTools.groupDesc')"
-    default-icon="i-carbon-app-switcher"
-    active-icon="i-carbon-application"
-    memory-name="setting-tools"
+    :collapsible="false"
   >
     <!-- Custom CoreBox Placeholder -->
     <TuffBlockInput
