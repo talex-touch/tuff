@@ -34,7 +34,12 @@ interface RetryLogState {
 const RETRY_LOG_STATE = new Map<string, RetryLogState>()
 let retryExhaustedListener: SqliteRetryExhaustedListener | null = null
 
-function nextRetryLogState(
+/**
+ * Shared per-label throttle for SQLITE_BUSY retry logs. Both `withSqliteRetry`
+ * and the DB write scheduler's busy re-enqueue path report through this state,
+ * so a contended label logs at most once per throttle window process-wide.
+ */
+export function nextSqliteBusyRetryLogState(
   label: string,
   throttleMs: number
 ): { shouldLog: boolean; suppressed: number } {
@@ -171,6 +176,15 @@ export function getSqliteBusyRetryCount(): number {
   return SQLITE_BUSY_RETRY_COUNT
 }
 
+/**
+ * Count one SQLITE_BUSY retry attempt. Incremented by `withSqliteRetry` and by
+ * the DB write scheduler's delayed re-enqueue path so the DatabaseModule
+ * health snapshot's `busyRetryDelta` covers both retry mechanisms.
+ */
+export function incrementSqliteBusyRetryCount(): void {
+  SQLITE_BUSY_RETRY_COUNT += 1
+}
+
 export function setSqliteRetryExhaustedListener(
   listener: SqliteRetryExhaustedListener | null
 ): () => void {
@@ -180,7 +194,12 @@ export function setSqliteRetryExhaustedListener(
   }
 }
 
-function notifyRetryExhausted(event: SqliteRetryExhaustedEvent): void {
+/**
+ * Fire the process-wide retry-exhausted listener (DatabaseModule reports it as
+ * DATABASE_BUSY_RETRY_EXHAUSTED). Exposed so the DB write scheduler's
+ * scheduler-owned busy retries emit the exact same event as `withSqliteRetry`.
+ */
+export function notifySqliteRetryExhausted(event: SqliteRetryExhaustedEvent): void {
   try {
     retryExhaustedListener?.(event)
   } catch (error) {
@@ -188,7 +207,12 @@ function notifyRetryExhausted(event: SqliteRetryExhaustedEvent): void {
   }
 }
 
-function resolveSqliteErrorIdentity(error: unknown): { code?: string; rawCode?: number } {
+/**
+ * Extract the first `code`/`rawCode` found along an error's cause chain.
+ * Shared decoder for SQLite error identity — do not re-cast these fields at
+ * call sites.
+ */
+export function resolveSqliteErrorIdentity(error: unknown): { code?: string; rawCode?: number } {
   const visited = new Set<unknown>()
   let code: string | undefined
   let rawCode: number | undefined
@@ -207,6 +231,22 @@ function resolveSqliteErrorIdentity(error: unknown): { code?: string; rawCode?: 
     current = record.cause ?? record.original ?? record.error
   }
   return { code, rawCode }
+}
+
+/**
+ * Exponential busy-backoff with jitter: `baseDelayMs * 2^attempt` capped at
+ * `maxDelayMs`, then ±`jitterRatio` random jitter. Single implementation
+ * shared by `withSqliteRetry` and the DB write scheduler's delayed re-enqueue.
+ */
+export function computeSqliteBusyBackoffMs(
+  attempt: number,
+  baseDelayMs: number,
+  maxDelayMs: number,
+  jitterRatio: number
+): number {
+  const backoffBase = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt)
+  const jitter = backoffBase * jitterRatio
+  return Math.max(0, Math.round(backoffBase + (Math.random() * 2 - 1) * jitter))
 }
 
 export async function withSqliteRetry<T>(
@@ -230,7 +270,7 @@ export async function withSqliteRetry<T>(
       const busy = isSqliteBusyError(error)
       if (!busy) throw error
       if (attempt >= retries) {
-        notifyRetryExhausted({
+        notifySqliteRetryExhausted({
           label,
           attempts: attempt + 1,
           elapsedMs: Math.max(0, Date.now() - startedAt),
@@ -240,12 +280,10 @@ export async function withSqliteRetry<T>(
         throw error
       }
 
-      const backoffBase = Math.min(maxDelayMs, baseDelayMs * 2 ** attempt)
-      const jitter = backoffBase * jitterRatio
-      const backoff = Math.max(0, Math.round(backoffBase + (Math.random() * 2 - 1) * jitter))
+      const backoff = computeSqliteBusyBackoffMs(attempt, baseDelayMs, maxDelayMs, jitterRatio)
 
-      const logState = nextRetryLogState(label, logThrottleMs)
-      SQLITE_BUSY_RETRY_COUNT += 1
+      const logState = nextSqliteBusyRetryLogState(label, logThrottleMs)
+      incrementSqliteBusyRetryCount()
       if (logState.shouldLog) {
         log.warn(`SQLITE_BUSY during ${label}, retry ${attempt + 1}/${retries}`, {
           meta: {
