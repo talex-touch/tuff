@@ -151,6 +151,7 @@ code: |
 | `disabled` | `boolean` | `false` | Disables the native range input and suppresses tooltip display. |
 | `showValue` | `boolean` | `false` | Renders the formatted current value beside the slider. |
 | `formatValue` | `(value: number) => string` | - | Formats the visible side value; also feeds tooltip text when `tooltipFormatter` is absent. |
+| `thumbSurface` | `boolean` | `true` | Refractive disc behind the thumb: fades in on hover, swells while dragging, blurring and saturating whatever the slider sits on. Pass `false` for a flat thumb and to skip the `backdrop-filter` layer. |
 | `showTooltip` | `boolean` | `true` | Enables tooltip rendering when the trigger condition is met. |
 | `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | Controls when the tooltip is visible: while dragging, on hover/drag, or always. |
 | `tooltipFormatter` | `(value: number) => string` | - | Formats tooltip text independently from `formatValue`. |

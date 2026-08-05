@@ -119,7 +119,9 @@ const circleDashStyle = computed(() => ({
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--tx-text-color-secondary, #6b7280);
+  // Hosts on a different palette (an app shell with its own token layer, a colored surface)
+  // need one hook to recolor the whole indicator instead of restyling each variant.
+  color: var(--tx-typing-indicator-color, var(--tx-text-color-secondary, #6b7280));
   font-size: 12px;
 }
 
@@ -165,7 +167,10 @@ const circleDashStyle = computed(() => ({
 
 .tx-typing-indicator__dot {
   border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 72%, transparent);
+  // Every other variant paints from currentColor; dots read the palette variable directly,
+  // which made them the one loader a host could not recolor. Default is unchanged — the root
+  // resolves its color to that same variable.
+  background: color-mix(in srgb, currentColor 72%, transparent);
   animation: tx-typing-indicator-bounce 1.1s infinite ease-in-out;
 }
 

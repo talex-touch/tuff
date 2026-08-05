@@ -130,6 +130,76 @@ describe('txSlider', () => {
     removeSpy.mockRestore()
   })
 
+  it('paints from the input while the parent has not echoed the value back', async () => {
+    // Pre-fix the fill was derived from `modelValue`, so it only caught up after
+    // emit -> parent -> prop. A parent that persists on write (storage/IPC) made the
+    // fill visibly trail the native thumb for the whole drag.
+    const wrapper = mount(TxSlider, {
+      props: { modelValue: 0, min: 0, max: 100, showTooltip: false, showValue: true },
+    })
+
+    await wrapper.find('input').setValue('80')
+
+    // `modelValue` is still 0 — the parent never wrote it back.
+    expect(wrapper.props('modelValue')).toBe(0)
+    expect(wrapper.find('.tx-slider__range').attributes('style')).toContain('width: 80%')
+    expect(wrapper.find('.tx-slider__value').text()).toBe('80')
+  })
+
+  it('lets a parent that clamps the value override what was painted', async () => {
+    const wrapper = mount(TxSlider, {
+      props: { modelValue: 0, min: 0, max: 100, showTooltip: false, showValue: true },
+    })
+
+    await wrapper.find('input').setValue('80')
+    expect(wrapper.find('.tx-slider__value').text()).toBe('80')
+
+    await wrapper.setProps({ modelValue: 50 })
+    expect(wrapper.find('.tx-slider__value').text()).toBe('50')
+    expect(wrapper.find('.tx-slider__range').attributes('style')).toContain('width: 50%')
+  })
+
+  it('exposes hover and drag as classes that survive the pointer leaving the track', async () => {
+    // Pre-fix `dragging` was tracked in JS but never reached the DOM, so the drag
+    // visuals rode `:hover`/`:active` and collapsed the moment the pointer left the
+    // element — which a drag does constantly, since it is captured on `window`.
+    const wrapper = mount(TxSlider, { props: { modelValue: 40 } })
+
+    await wrapper.find('.tx-slider__main').trigger('pointerenter')
+    expect(wrapper.classes()).toContain('is-hovering')
+
+    await wrapper.find('input').trigger('pointerdown')
+    expect(wrapper.classes()).toContain('is-dragging')
+
+    await wrapper.find('.tx-slider__main').trigger('pointerleave')
+    expect(wrapper.classes()).not.toContain('is-hovering')
+    expect(wrapper.classes()).toContain('is-dragging')
+
+    window.dispatchEvent(new Event('pointerup'))
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('is-dragging')
+  })
+
+  it('never reports hover or drag while disabled', async () => {
+    const wrapper = mount(TxSlider, { props: { modelValue: 40, disabled: true } })
+
+    await wrapper.find('.tx-slider__main').trigger('pointerenter')
+    await wrapper.find('input').trigger('pointerdown')
+
+    expect(wrapper.classes()).not.toContain('is-hovering')
+    expect(wrapper.classes()).not.toContain('is-dragging')
+  })
+
+  it('does not raise the keyboard focus ring for a drag-initiated focus', async () => {
+    const wrapper = mount(TxSlider, { props: { modelValue: 40 } })
+    const input = wrapper.find('input')
+
+    await input.trigger('pointerdown')
+    await input.trigger('focus')
+
+    expect(wrapper.classes()).not.toContain('is-focused')
+  })
+
   it('names the range input and surfaces aria-valuetext only when a formatter is set', () => {
     // Pre-fix the input had no accessible name (a host aria-label landed on the
     // wrapper div) and a custom formatter was never announced to AT.

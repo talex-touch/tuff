@@ -99,6 +99,12 @@ code: |
 | `circleDashGapDeg` | `number` | `12` | circle-dash 模式 gap 角度(deg) |
 | `barsSize` | `number` | `12` | bars 模式高度(px) |
 
+### CSS Variables
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | 指示器整体颜色。所有变体（含 dots）都从它派生，宿主使用自有 token 体系时用它一处改色。 |
+
 ## Events
 
 `TxTypingIndicator` 不派发组件事件。它是被动的 `role="status"` 状态指示器。
