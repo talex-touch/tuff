@@ -1,1 +1,5 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "renderer 层规范索引"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useHomeConversation 是新组合式函数，需遵守 hook 契约"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "对话状态机（idle/streaming + 消息状态）的状态归属约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "HomePage 空态/消息态切换与 token 使用约束"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "流式事件与 SDK 结果的类型收窄"}
