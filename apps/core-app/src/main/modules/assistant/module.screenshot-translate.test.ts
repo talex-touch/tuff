@@ -1549,9 +1549,7 @@ describe('AssistantModule screenshot translation', () => {
     mocks.getMainConfig.mockReturnValue(
       mocks.createEnabledSetting({
         assistant: {
-          enabled: false,
-          name: '阿洛 aler',
-          identifier: 'aler'
+          enabled: false
         }
       })
     )

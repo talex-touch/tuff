@@ -105,6 +105,7 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
     autoDownload: true,
     installOnNormalQuit: true,
     rendererOverrideEnabled: false,
+    rendererOverrideAvailable: false,
     cacheEnabled: true,
     cacheTTL: 30,
     rateLimitEnabled: true,
@@ -179,6 +180,9 @@ export function useUpdateRuntime() {
         if (typeof nextSettings.rendererOverrideEnabled !== 'boolean') {
           nextSettings.rendererOverrideEnabled = false
         }
+        if (typeof nextSettings.rendererOverrideAvailable !== 'boolean') {
+          nextSettings.rendererOverrideAvailable = false
+        }
         if (typeof nextSettings.installOnNormalQuit !== 'boolean') {
           nextSettings.installOnNormalQuit = true
         }
@@ -202,6 +206,12 @@ export function useUpdateRuntime() {
 
     if ('lastCheckedAt' in payload) {
       delete (payload as Record<string, unknown>).lastCheckedAt
+    }
+
+    // Derived from the process environment on the main side; writing it back would persist a
+    // value that the next launch recomputes anyway.
+    if ('rendererOverrideAvailable' in payload) {
+      delete (payload as Record<string, unknown>).rendererOverrideAvailable
     }
 
     if ('frequency' in payload && payload.frequency) {

@@ -94,29 +94,12 @@ vi.mock('@talex-touch/utils/transport', () => ({
   })
 }))
 
-vi.mock('@talex-touch/utils/common/storage/entity/app-settings', () => ({
-  appSettingOriginData: {
-    auth: {
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    }
-  }
-}))
-
 vi.mock('@talex-touch/utils/env', () => ({
   isDevEnv: () => false
 }))
 
 vi.mock('~/modules/storage/app-storage', () => ({
   appSetting: {
-    auth: {
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    },
     security: {
       machineCodeHash: '',
       machineCodeAttestedAt: ''

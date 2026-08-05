@@ -24,7 +24,6 @@ import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
-import { appSetting } from '~/modules/storage/app-storage'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
@@ -66,6 +65,12 @@ const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
 const autoDownloadEnabled = ref<boolean>(true)
 const installOnNormalQuitEnabled = ref(true)
 const rendererOverrideEnabled = ref(false)
+/**
+ * Mirrors `TUFF_ENABLE_RENDERER_OVERRIDE` in the main process. When false the row is not rendered
+ * at all — the switch was previously drawn permanently disabled with a description telling the
+ * user to relaunch with the variable, which reads as a broken control.
+ */
+const rendererOverrideAvailable = ref(false)
 const cachedRelease = ref<CachedUpdateRecord | null>(null)
 const buildVerificationStatus = ref<BuildVerificationStatus | null>(null)
 let buildVerificationStatusDisposer: (() => void) | null = null
@@ -74,8 +79,6 @@ const assetsDialogVisible = ref(false)
 const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
-const autoDownloadSaving = ref(false)
-const installOnQuitSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
@@ -117,13 +120,9 @@ const channelDescription = computed(() =>
   )
 )
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
-// Non-advanced mode keeps the status minimal; the full diagnostics grid only
-// expands for advanced users or whenever there is an error worth surfacing.
-const lifecycleExpanded = computed(
-  () => showAdvancedSettings.value || Boolean(lifecycleSnapshot.value?.error)
-)
+/** The status row only expands when there is an error worth reading. */
+const lifecycleExpanded = computed(() => Boolean(lifecycleSnapshot.value?.error))
 const showNativeTrustVerified = computed(
   () => isMacAutoInstallPlatform.value && nativeTrust.value.status === 'pass'
 )
@@ -139,14 +138,39 @@ const lifecycleStatusDescription = computed(() => {
   }
   return t(lifecycleDisplay.value.descriptionKey)
 })
-const displayedInstallOnNormalQuit = computed({
-  get: () => lifecycleDisplay.value.canEnableNormalQuit && installOnNormalQuitEnabled.value,
-  set: (value: boolean) => {
-    if (lifecycleDisplay.value.canEnableNormalQuit) {
-      installOnNormalQuitEnabled.value = value
-    }
-  }
+/**
+ * `autoDownload` and `installOnNormalQuit` used to be two switches whose combined meaning users
+ * had to infer, and the second one sat permanently disabled whenever the build lacked downgrade
+ * evidence. Artboard `aRjnd` folds them into one ordered choice; the locked case simply drops the
+ * middle option instead of showing a dead toggle.
+ */
+type InstallMode = 'manual' | 'onQuit' | 'immediate'
+
+const installModeSaving = ref(false)
+
+const installMode = computed<InstallMode>(() => {
+  if (!autoDownloadEnabled.value) return 'manual'
+  return lifecycleDisplay.value.canEnableNormalQuit && installOnNormalQuitEnabled.value
+    ? 'onQuit'
+    : 'immediate'
 })
+
+const installModeOptions = computed(() => {
+  const options: { value: InstallMode; label: string }[] = [
+    { value: 'manual', label: t('settings.settingUpdate.installMode.manual') }
+  ]
+  if (lifecycleDisplay.value.canEnableNormalQuit) {
+    options.push({ value: 'onQuit', label: t('settings.settingUpdate.installMode.onQuit') })
+  }
+  options.push({ value: 'immediate', label: t('settings.settingUpdate.installMode.immediate') })
+  return options
+})
+
+const installModeDescription = computed(() =>
+  lifecycleDisplay.value.canEnableNormalQuit
+    ? autoDownloadDescription.value
+    : t('settings.settingUpdate.installOnNormalQuitLocked')
+)
 
 const runtimeArch = computed(() => getRuntimeArch())
 const currentRuntimeLabel = computed(() =>
@@ -195,11 +219,6 @@ const autoDownloadDescription = computed(() => {
   if (platform.value === 'win32') return t('settings.settingUpdate.autoDownloadDescWindows')
   return t('settings.settingUpdate.autoDownloadDescLinux')
 })
-const installOnQuitDescription = computed(() =>
-  lifecycleDisplay.value.canEnableNormalQuit
-    ? t('settings.settingUpdate.installOnNormalQuitDesc')
-    : t('settings.settingUpdate.installOnNormalQuitLocked')
-)
 const installActionDescription = computed(() => {
   if (platform.value === 'darwin') return t('settings.settingUpdate.actions.restartMacDesc')
   if (platform.value === 'win32')
@@ -292,6 +311,7 @@ async function loadSettings(): Promise<void> {
     autoDownloadEnabled.value = fetched.autoDownload ?? true
     installOnNormalQuitEnabled.value = fetched.installOnNormalQuit ?? true
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
+    rendererOverrideAvailable.value = fetched.rendererOverrideAvailable ?? false
     await refreshStatus()
     await refreshCachedRelease(selectedChannel.value)
   } catch (error) {
@@ -379,43 +399,30 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
   }
 }
 
-async function handleAutoDownloadChange(value: boolean): Promise<void> {
-  if (!settings.value || autoDownloadSaving.value) return
+/** Writes both underlying flags in one call so the two can never drift out of sync. */
+async function handleInstallModeChange(value: InstallMode): Promise<void> {
+  if (!settings.value || installModeSaving.value) return
 
-  const previous = autoDownloadEnabled.value
-  autoDownloadEnabled.value = value
-  autoDownloadSaving.value = true
+  const previousAutoDownload = autoDownloadEnabled.value
+  const previousInstallOnQuit = installOnNormalQuitEnabled.value
+  const autoDownload = value !== 'manual'
+  const installOnNormalQuit = value === 'onQuit'
+
+  autoDownloadEnabled.value = autoDownload
+  installOnNormalQuitEnabled.value = installOnNormalQuit
+  installModeSaving.value = true
   try {
-    await updateSettings({ autoDownload: value })
-    settings.value.autoDownload = value
-    toast.success(t('settings.settingUpdate.messages.autoDownloadSaved'))
+    await updateSettings({ autoDownload, installOnNormalQuit })
+    settings.value.autoDownload = autoDownload
+    settings.value.installOnNormalQuit = installOnNormalQuit
+    toast.success(t('settings.settingUpdate.messages.installModeSaved'))
   } catch (error) {
-    settingUpdateLog.error('Failed to update auto download', error)
-    autoDownloadEnabled.value = previous
+    settingUpdateLog.error('Failed to update install mode', error)
+    autoDownloadEnabled.value = previousAutoDownload
+    installOnNormalQuitEnabled.value = previousInstallOnQuit
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
-    autoDownloadSaving.value = false
-  }
-}
-
-async function handleInstallOnQuitChange(value: boolean): Promise<void> {
-  if (!settings.value || installOnQuitSaving.value || !lifecycleDisplay.value.canEnableNormalQuit) {
-    return
-  }
-
-  const previous = installOnNormalQuitEnabled.value
-  installOnNormalQuitEnabled.value = value
-  installOnQuitSaving.value = true
-  try {
-    await updateSettings({ installOnNormalQuit: value })
-    settings.value.installOnNormalQuit = value
-    toast.success(t('settings.settingUpdate.messages.installOnNormalQuitSaved'))
-  } catch (error) {
-    settingUpdateLog.error('Failed to update automatic installer handoff', error)
-    installOnNormalQuitEnabled.value = previous
-    toast.error(t('settings.settingUpdate.messages.saveFailed'))
-  } finally {
-    installOnQuitSaving.value = false
+    installModeSaving.value = false
   }
 }
 
@@ -556,22 +563,6 @@ function buildCurrentUpdateEvidence() {
   })
 }
 
-async function copyUpdateEvidence(): Promise<void> {
-  const payload = buildCurrentUpdateEvidence()
-  if (!payload) {
-    toast.error(t('settings.settingUpdate.evidenceMissing'))
-    return
-  }
-
-  try {
-    await navigator.clipboard.writeText(formatUpdateDiagnosticEvidenceJson(payload))
-    toast.success(t('settings.settingUpdate.evidenceCopied'))
-  } catch (error) {
-    settingUpdateLog.error('Failed to copy update diagnostic evidence', error)
-    toast.error(t('settings.settingUpdate.evidenceCopyFailed'))
-  }
-}
-
 function saveUpdateEvidence(): void {
   const payload = buildCurrentUpdateEvidence()
   if (!payload) {
@@ -589,22 +580,6 @@ function saveUpdateEvidence(): void {
   link.click()
   URL.revokeObjectURL(url)
   toast.success(t('settings.settingUpdate.evidenceSaved'))
-}
-
-function formatTimestamp(value: number | null | undefined): string {
-  return typeof value === 'number'
-    ? new Date(value).toLocaleString()
-    : t('settings.settingUpdate.lifecycle.unavailable')
-}
-
-function formatLifecycleValue(value: string | null | undefined): string {
-  return value || t('settings.settingUpdate.lifecycle.unavailable')
-}
-
-function formatLifecycleBoolean(value: boolean | null | undefined): string {
-  return value
-    ? t('settings.settingUpdate.lifecycle.boolean.yes')
-    : t('settings.settingUpdate.lifecycle.boolean.no')
 }
 
 function formatFileSize(bytes: number): string {
@@ -686,9 +661,7 @@ function openAssetsDialog(): void {
     data-settings-section="update"
     :name="t('settings.settingUpdate.groupTitle')"
     :description="t('settings.settingUpdate.groupDesc')"
-    default-icon="i-carbon-update-now"
-    active-icon="i-carbon-upgrade"
-    memory-name="setting-update"
+    :collapsible="false"
   >
     <div
       v-if="nativeTrustDisplay.showCriticalAlert"
@@ -716,8 +689,6 @@ function openAssetsDialog(): void {
       v-model="selectedChannel"
       :title="t('settings.settingUpdate.channelTitle')"
       :description="channelDescription"
-      default-icon="i-carbon-software"
-      active-icon="i-carbon-software-resource"
       :disabled="channelSelectDisabled"
       @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
     >
@@ -726,60 +697,50 @@ function openAssetsDialog(): void {
       </TxSelectItem>
     </TuffBlockSelect>
 
-    <template v-if="showAdvancedSettings">
-      <TuffBlockSelect
-        v-model="selectedFrequency"
-        :title="t('settings.settingUpdate.frequencyTitle')"
-        :description="t('settings.settingUpdate.frequencyDesc')"
-        default-icon="i-carbon-reminder"
-        active-icon="i-carbon-reminder-medical"
-        :disabled="frequencySelectDisabled"
-        @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
-      >
-        <TxSelectItem v-for="freq in frequencyOptions" :key="freq.value" :value="freq.value">
-          {{ freq.label }}
-        </TxSelectItem>
-      </TuffBlockSelect>
-    </template>
+    <TuffBlockSelect
+      v-model="selectedFrequency"
+      :title="t('settings.settingUpdate.frequencyTitle')"
+      :description="t('settings.settingUpdate.frequencyDesc')"
+      :disabled="frequencySelectDisabled"
+      @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
+    >
+      <TxSelectItem v-for="freq in frequencyOptions" :key="freq.value" :value="freq.value">
+        {{ freq.label }}
+      </TxSelectItem>
+    </TuffBlockSelect>
 
-    <tuff-block-switch
-      v-model="autoDownloadEnabled"
-      :title="t('settings.settingUpdate.autoDownloadTitle')"
-      :description="autoDownloadDescription"
-      default-icon="i-carbon-download"
-      active-icon="i-carbon-download"
-      :disabled="fetching || autoDownloadSaving"
-      @update:model-value="handleAutoDownloadChange"
-    />
+    <TuffBlockSelect
+      :model-value="installMode"
+      :title="t('settings.settingUpdate.installMode.title')"
+      :description="installModeDescription"
+      :disabled="fetching || installModeSaving"
+      @update:model-value="(value) => handleInstallModeChange(value as InstallMode)"
+    >
+      <TxSelectItem v-for="mode in installModeOptions" :key="mode.value" :value="mode.value">
+        {{ mode.label }}
+      </TxSelectItem>
+    </TuffBlockSelect>
 
+    <!-- Only exists when launched with the env var; see `rendererOverrideAvailable`. -->
     <tuff-block-switch
-      v-model="displayedInstallOnNormalQuit"
-      :title="t('settings.settingUpdate.installOnNormalQuitTitle')"
-      :description="installOnQuitDescription"
-      default-icon="i-carbon-install"
-      active-icon="i-carbon-install"
-      :disabled="fetching || installOnQuitSaving || !lifecycleDisplay.canEnableNormalQuit"
-      @update:model-value="handleInstallOnQuitChange"
-    />
-
-    <tuff-block-switch
-      v-if="showAdvancedSettings"
+      v-if="rendererOverrideAvailable"
       v-model="rendererOverrideEnabled"
       :title="t('settings.settingUpdate.rendererOverrideTitle')"
       :description="t('settings.settingUpdate.rendererOverrideDesc')"
-      default-icon="i-carbon-layers"
-      active-icon="i-carbon-layers"
       :disabled="fetching || rendererOverrideSaving"
       @update:model-value="handleRendererOverrideChange"
     />
 
+    <!--
+      Status and its primary action are one row: the eight-field lifecycle grid that used to sit
+      here read "不可用" on every line for a healthy install, and duplicated the native-trust alert
+      already shown above. That detail now ships through 「导出诊断」 instead.
+    -->
     <TuffBlockSlot
       class="lifecycle-status-slot"
       :class="{ 'lifecycle-advanced': lifecycleExpanded }"
       :title="lifecycleStatusTitle"
-      :description="lifecycleStatusDescription"
-      default-icon="i-carbon-time"
-      active-icon="i-carbon-time"
+      :description="primaryActionDescription || lifecycleStatusDescription"
     >
       <div class="lifecycle-panel">
         <div class="lifecycle-status-row">
@@ -787,84 +748,16 @@ function openAssetsDialog(): void {
             <span class="lifecycle-badge-dot" aria-hidden="true" />
             {{ lifecycleStatusTitle }}
           </span>
-          <code v-if="showAdvancedSettings" class="lifecycle-phase-code">{{
-            lifecycleDisplay.phase
-          }}</code>
           <span v-if="showNativeTrustVerified" class="lifecycle-verified">
             <i class="i-carbon-security" aria-hidden="true" />
             {{ t('settings.settingUpdate.nativeTrust.verifiedBadge') }}
           </span>
         </div>
-        <p v-if="!showAdvancedSettings && lifecycleSnapshot?.error" class="lifecycle-error-line">
+        <p v-if="lifecycleSnapshot?.error" class="lifecycle-error-line">
           {{ lifecycleSnapshot.error.message }}
         </p>
-        <dl v-if="showAdvancedSettings" class="lifecycle-metadata">
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.targetVersion') }}</dt>
-            <dd>{{ formatLifecycleValue(lifecycleSnapshot?.targetVersion) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.revision') }}</dt>
-            <dd>{{ lifecycleSnapshot?.revision ?? 0 }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.rollbackFromVersion') }}</dt>
-            <dd>{{ formatLifecycleValue(lifecycleSnapshot?.rollbackFromVersion) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.rollbackCompatible') }}</dt>
-            <dd>{{ formatLifecycleBoolean(lifecycleSnapshot?.rollbackCompatible) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.previousVersion') }}</dt>
-            <dd>{{ formatLifecycleValue(lifecycleSnapshot?.previousVersion) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.recoveryAvailable') }}</dt>
-            <dd>{{ formatLifecycleBoolean(lifecycleSnapshot?.recoveryAvailable) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.lastCheck') }}</dt>
-            <dd>{{ formatTimestamp(lifecycleSnapshot?.lastCheckAt) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('settings.settingUpdate.lifecycle.fields.error') }}</dt>
-            <dd>
-              {{
-                lifecycleSnapshot?.error?.code || t('settings.settingUpdate.lifecycle.error.none')
-              }}
-            </dd>
-          </div>
-        </dl>
-        <div v-if="showAdvancedSettings && lifecycleSnapshot?.error" class="lifecycle-error">
-          <strong>{{ lifecycleSnapshot.error.code }}</strong>
-          <span>{{ lifecycleSnapshot.error.message }}</span>
-          <small>
-            {{
-              lifecycleSnapshot.error.retryable
-                ? t('settings.settingUpdate.lifecycle.error.retryable')
-                : t('settings.settingUpdate.lifecycle.error.notRetryable')
-            }}
-          </small>
-        </div>
-        <div
-          v-if="showAdvancedSettings && isMacAutoInstallPlatform"
-          class="native-trust-status"
-          :class="`is-${nativeTrustDisplay.tone}`"
-        >
-          <strong>{{ t(nativeTrustDisplay.titleKey) }}</strong>
-          <span>{{ t(nativeTrustDisplay.descriptionKey) }}</span>
-          <code>{{ nativeTrustDisplay.code }}</code>
-        </div>
       </div>
-    </TuffBlockSlot>
 
-    <TuffBlockSlot
-      :title="t('settings.settingUpdate.actionsTitle')"
-      :description="primaryActionDescription"
-      default-icon="i-carbon-settings-adjust"
-      active-icon="i-carbon-settings-adjust"
-    >
       <TxButton
         v-if="primaryActionKind === 'install'"
         variant="flat"
@@ -903,8 +796,6 @@ function openAssetsDialog(): void {
       v-if="cachedRelease?.release"
       :title="t('settings.settingUpdate.assetsTitle')"
       :description="t('settings.settingUpdate.assetsDesc')"
-      default-icon="i-carbon-cloud-download"
-      active-icon="i-carbon-cloud-download"
     >
       <div class="assets-summary">
         {{ assetsSummary }}
@@ -914,21 +805,17 @@ function openAssetsDialog(): void {
       </TxButton>
     </TuffBlockSlot>
 
+    <!--
+      One export action rather than a copy/save pair: both produced the same payload, and this is
+      now the only surface carrying the lifecycle detail that the removed grid used to print.
+    -->
     <TuffBlockSlot
-      v-if="showAdvancedSettings"
       :title="t('settings.settingUpdate.evidenceTitle')"
       :description="t('settings.settingUpdate.evidenceDesc')"
-      default-icon="i-carbon-document-export"
-      active-icon="i-carbon-document-export"
     >
-      <div class="evidence-actions">
-        <TxButton variant="flat" @click="copyUpdateEvidence">
-          {{ t('settings.settingUpdate.copyEvidence') }}
-        </TxButton>
-        <TxButton variant="flat" @click="saveUpdateEvidence">
-          {{ t('settings.settingUpdate.saveEvidence') }}
-        </TxButton>
-      </div>
+      <TxButton variant="flat" @click="saveUpdateEvidence">
+        {{ t('settings.settingUpdate.exportEvidence') }}
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 

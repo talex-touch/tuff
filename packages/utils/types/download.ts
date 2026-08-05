@@ -120,15 +120,30 @@ export interface DownloadConfig {
     maxRetries: number // 最大重试次数
   }
   storage: {
-    tempDir: string // 临时目录
+    /**
+     * Where finished files land when a request does not name a destination.
+     *
+     * Previously `destination` was per-request only, so "where do my downloads go" — the first
+     * thing every browser and download manager exposes — had no setting at all, while the
+     * engine-internal `tempDir` did. Resolved in the main process; empty means "not resolved yet".
+     */
+    defaultDestination: string
+    tempDir: string // 临时目录（切片缓存，非用户产物）
     historyRetention: number // 历史保留天数
-    autoCleanup: boolean // 自动清理
   }
   network: {
     timeout: number // 超时时间
     retryDelay: number // 重试延迟
     maxRetries: number // 最大重试次数
   }
+  /**
+   * Send a system notification when a task finishes or fails.
+   *
+   * Rides on `DownloadConfig` rather than `NotificationConfig`: the latter has no transport channel
+   * of its own, and this is a download preference, so it belongs with the settings that already
+   * persist. The main process forwards it to `NotificationService`.
+   */
+  notifyOnComplete: boolean
 }
 
 // 网络状态接口
@@ -189,13 +204,14 @@ export const defaultDownloadConfig: DownloadConfig = {
     maxRetries: 3,
   },
   storage: {
+    defaultDestination: '', // 运行时由主进程解析为系统下载目录
     tempDir: '', // 将在运行时设置
     historyRetention: 30,
-    autoCleanup: true,
   },
   network: {
     timeout: 30000,
     retryDelay: 5000,
     maxRetries: 3,
   },
+  notifyOnComplete: true,
 }

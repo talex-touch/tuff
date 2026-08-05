@@ -68,7 +68,9 @@ describe('setting-network-form', () => {
       mode: 'custom',
       custom: {
         httpProxy: 'http://127.0.0.1:7890',
-        httpsProxy: '',
+        // With `separateHttpsProxy` off the HTTP address is mirrored, so the stored config states
+        // outright what HTTPS uses instead of leaving the main process to infer it from a blank.
+        httpsProxy: 'http://127.0.0.1:7890',
         socksProxy: '',
         pacUrl: '',
         bypass: ['localhost', '127.0.0.1']
@@ -78,6 +80,46 @@ describe('setting-network-form', () => {
     expect(request.timeoutMs).toBe(100)
     expect(request.retry?.maxDelayMs).toBe(1000)
     expect(request.retry?.backoffFactor).toBe(1)
+  })
+
+  it('keeps a distinct HTTPS address when the separate switch is on', () => {
+    const request = toNetworkConfigUpdateRequest({
+      ...createDefaultNetworkSettingsForm(),
+      proxyMode: 'custom' as const,
+      separateHttpsProxy: true,
+      httpProxy: 'http://127.0.0.1:7890',
+      httpsProxy: ' http://127.0.0.1:7891 '
+    })
+
+    expect(request.proxy?.custom?.httpsProxy).toBe('http://127.0.0.1:7891')
+  })
+
+  it('maps the instability switch onto the cooldown window', () => {
+    const off = toNetworkConfigUpdateRequest({
+      ...createDefaultNetworkSettingsForm(),
+      pauseOnInstability: false
+    })
+    // Zero makes the guard's cooldown expire instantly, which is how "never pause" is expressed.
+    expect(off.cooldown?.cooldownMs).toBe(0)
+
+    const on = toNetworkConfigUpdateRequest({
+      ...createDefaultNetworkSettingsForm(),
+      pauseOnInstability: true,
+      cooldownMs: 0
+    })
+    // A stored zero must not survive re-enabling, or the switch would report on while doing nothing.
+    expect(on.cooldown?.cooldownMs).toBeGreaterThan(0)
+  })
+
+  it('treats an HTTPS address equal to HTTP as not separately configured', () => {
+    const form = toNetworkSettingsForm({
+      proxy: {
+        mode: 'custom',
+        custom: { httpProxy: 'http://127.0.0.1:7890', httpsProxy: 'http://127.0.0.1:7890' }
+      }
+    } as never)
+
+    expect(form.separateHttpsProxy).toBe(false)
   })
 
   it('deduplicates bypass rules without reordering them', () => {

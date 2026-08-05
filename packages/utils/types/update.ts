@@ -296,6 +296,14 @@ export interface UpdateSettings {
    */
   rendererOverrideEnabled?: boolean
   /**
+   * Read-only: whether renderer override is reachable in this process at all.
+   *
+   * Derived from `TUFF_ENABLE_RENDERER_OVERRIDE` in the main process, never persisted, and ignored
+   * on write. The setting above only takes effect when this is true, so the UI uses it to decide
+   * whether the control exists rather than drawing a permanently disabled switch.
+   */
+  rendererOverrideAvailable?: boolean
+  /**
    * Timestamp (ms) of the last successful update check.
    */
   lastCheckedAt?: number | null

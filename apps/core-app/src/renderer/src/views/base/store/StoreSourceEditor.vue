@@ -9,7 +9,6 @@ import { useI18n } from 'vue-i18n'
 import { vDraggable } from 'vue-draggable-plus'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
-import { appSetting } from '~/modules/storage/app-storage'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
 
 const props = withDefaults(
@@ -38,13 +37,7 @@ const storageState = storeSourcesStorage.get()
 const sources = storageState.sources
 const showCreateDialog = ref(false)
 const createDialogSource = ref<HTMLElement | null>(null)
-const isAdvancedMode = computed(() => {
-  const advancedSettings = appSetting?.dev?.advancedSettings
-  if (typeof advancedSettings === 'string') {
-    return advancedSettings === 'true' || advancedSettings === '1'
-  }
-  return advancedSettings === true
-})
+const isAdvancedMode = computed(() => false)
 const sortableSources = computed(() => sources.filter((item) => !item.outdated))
 const outdatedSources = computed(() => sources.filter((item) => item.outdated))
 const visibleOutdatedSources = computed(() => (isAdvancedMode.value ? outdatedSources.value : []))

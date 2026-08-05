@@ -181,8 +181,9 @@ function resetAppSetting(): void {
   appSettingMock.quickOps = createQuickOpsSetting()
 }
 
-function mountSettingTools() {
+function mountSettingTools(advancedOnly = false) {
   return mount(SettingTools, {
+    props: { advancedOnly },
     global: {
       stubs: {
         TuffGroupBlock: { template: '<section><slot /></section>' },
@@ -236,7 +237,7 @@ describe('SettingTools QuickOps settings boundary', () => {
     await nextTick()
     const text = wrapper.text()
 
-    expect(text).toContain('settingTools.autoPaste')
+    expect(text).not.toContain('settingTools.autoPaste')
     expect(text).not.toContain('settingTools.quickOpsEnabled')
     expect(text).not.toContain('settingTools.quickOpsShowRunningSessions')
     expect(text).not.toContain('settingTools.quickOpsDefaultKeepAwakeDuration')
@@ -260,20 +261,16 @@ describe('SettingTools QuickOps settings boundary', () => {
     expect(text).not.toContain('writing sprint 45/12')
   })
 
-  it('shows low-frequency utility controls only when advanced settings are enabled', async () => {
-    const wrapper = mountSettingTools()
-    await nextTick()
-
-    expect(wrapper.text()).not.toContain('settingTools.autoPaste')
-    expect(wrapper.text()).not.toContain('settingTools.autoClear')
-    expect(wrapper.text()).not.toContain('settingTools.autoHide')
-
-    appSettingMock.dev.advancedSettings = true
+  it('shows only allowed low-frequency utility controls in the explicit advanced page', async () => {
+    const wrapper = mountSettingTools(true)
     await nextTick()
 
     expect(wrapper.text()).toContain('settingTools.autoPaste')
-    expect(wrapper.text()).toContain('settingTools.autoClear')
     expect(wrapper.text()).toContain('settingTools.autoHide')
+    expect(wrapper.text()).not.toContain('settingTools.usage')
+    expect(wrapper.text()).not.toContain('settingTools.autoClear')
+    expect(wrapper.text()).not.toContain('settingTools.clipboardPollingInterval')
+    expect(wrapper.text()).not.toContain('settingTools.recommendationEnabled')
 
     wrapper.unmount()
   })

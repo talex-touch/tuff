@@ -5,6 +5,17 @@ export type NetworkProxyMode = NetworkProxyConfig['mode']
 
 export interface NetworkSettingsForm {
   proxyMode: NetworkProxyMode
+  /**
+   * UI-only. Almost every setup routes HTTP and HTTPS through the same address, so the form keeps
+   * one field and only reveals `httpsProxy` when this is on — the persisted shape is unchanged.
+   */
+  separateHttpsProxy: boolean
+  /**
+   * UI-only. Folds `failureThreshold` / `cooldownMs` / `autoResetOnSuccess` into one switch: the
+   * three knobs describe a single behaviour that users either want or do not. Off writes
+   * `cooldownMs: 0`, which the guard treats as "never pause" (`cooldownUntil` expires instantly).
+   */
+  pauseOnInstability: boolean
   httpProxy: string
   httpsProxy: string
   socksProxy: string
@@ -25,6 +36,8 @@ export interface NetworkSettingsForm {
 
 export const DEFAULT_NETWORK_SETTINGS_FORM: NetworkSettingsForm = Object.freeze({
   proxyMode: 'system',
+  separateHttpsProxy: false,
+  pauseOnInstability: true,
   httpProxy: '',
   httpsProxy: '',
   socksProxy: '',
@@ -111,10 +124,18 @@ export function toNetworkSettingsForm(
   const retry = config?.retry ?? {}
   const cooldown = config?.cooldown ?? {}
 
+  const httpProxy = typeof custom.httpProxy === 'string' ? custom.httpProxy : ''
+  const httpsProxy = typeof custom.httpsProxy === 'string' ? custom.httpsProxy : ''
+  const cooldownMs = normalizeNumber(cooldown.cooldownMs, DEFAULT_NETWORK_SETTINGS_FORM.cooldownMs)
+
   return {
     proxyMode: normalizeProxyMode(proxy.mode),
-    httpProxy: typeof custom.httpProxy === 'string' ? custom.httpProxy : '',
-    httpsProxy: typeof custom.httpsProxy === 'string' ? custom.httpsProxy : '',
+    // Only counts as "separate" when it actually differs; an HTTPS value mirroring HTTP is what
+    // saving with the checkbox off produces.
+    separateHttpsProxy: Boolean(httpsProxy.trim()) && httpsProxy.trim() !== httpProxy.trim(),
+    pauseOnInstability: cooldownMs > 0,
+    httpProxy,
+    httpsProxy,
     socksProxy: typeof custom.socksProxy === 'string' ? custom.socksProxy : '',
     pacUrl: typeof custom.pacUrl === 'string' ? custom.pacUrl : '',
     bypassText: joinBypassRules(custom.bypass),
@@ -159,12 +180,16 @@ export function toNetworkConfigUpdateRequest(
     normalizeNumber(form.maxDelayMs, DEFAULT_NETWORK_SETTINGS_FORM.maxDelayMs)
   )
 
+  const httpProxy = form.httpProxy.trim()
+
   return {
     proxy: {
       mode: normalizeProxyMode(form.proxyMode),
       custom: {
-        httpProxy: form.httpProxy.trim(),
-        httpsProxy: form.httpsProxy.trim(),
+        httpProxy,
+        // Mirroring HTTP keeps the stored config explicit, so the main process never has to guess
+        // what an empty HTTPS entry means.
+        httpsProxy: form.separateHttpsProxy ? form.httpsProxy.trim() : httpProxy,
         socksProxy: form.socksProxy.trim(),
         pacUrl: form.pacUrl.trim(),
         bypass: splitBypassRules(form.bypassText)
@@ -189,7 +214,13 @@ export function toNetworkConfigUpdateRequest(
         DEFAULT_NETWORK_SETTINGS_FORM.failureThreshold,
         1
       ),
-      cooldownMs: normalizeNumber(form.cooldownMs, DEFAULT_NETWORK_SETTINGS_FORM.cooldownMs),
+      // Zero disables the guard outright: `cooldownUntil` lands in the past, so every request is
+      // allowed straight through. Falling back to the default keeps a stored 0 from sticking once
+      // the switch is turned back on.
+      cooldownMs: form.pauseOnInstability
+        ? normalizeNumber(form.cooldownMs, DEFAULT_NETWORK_SETTINGS_FORM.cooldownMs) ||
+          DEFAULT_NETWORK_SETTINGS_FORM.cooldownMs
+        : 0,
       autoResetOnSuccess: form.autoResetOnSuccess
     },
     timeoutMs: normalizeNumber(form.timeoutMs, DEFAULT_NETWORK_SETTINGS_FORM.timeoutMs, 100)

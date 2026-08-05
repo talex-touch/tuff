@@ -20,8 +20,7 @@ export function ensureRuntimeServerSettings(): TuffNexusRuntimeServer {
     appSetting.dev = {
       autoCloseDev: true,
       runtimeServer: 'production',
-      developerMode: false,
-      advancedSettings: false
+      developerMode: false
     }
   }
 

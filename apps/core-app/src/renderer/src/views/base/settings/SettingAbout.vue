@@ -68,14 +68,7 @@ const developerMode = computed({
   }
 })
 
-const advancedSettings = computed({
-  get: () => Boolean(appSetting?.dev?.advancedSettings),
-  set: (val: boolean) => {
-    if (appSetting?.dev) {
-      appSetting.dev.advancedSettings = val
-    }
-  }
-})
+const showDeveloperControls = computed(() => import.meta.env.DEV)
 
 onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
@@ -275,37 +268,12 @@ function openSoftwareLicense() {
     memory-name="setting-about"
   >
     <TuffBlockSwitch
+      v-if="showDeveloperControls"
       v-model="developerMode"
       :title="t('settingAbout.developerMode')"
       :description="t('settingAbout.developerModeDesc')"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
-    />
-
-    <TuffBlockSwitch
-      v-model="advancedSettings"
-      :title="t('settingAbout.advancedSettings')"
-      :description="t('settingAbout.advancedSettingsDesc')"
-      default-icon="i-carbon-settings"
-      active-icon="i-carbon-settings"
-    />
-
-    <TuffBlockSwitch
-      v-if="advancedSettings"
-      v-model="appSetting.dashboard.enable"
-      :title="t('settingAbout.dashboard')"
-      :description="t('settingAbout.dashboardDesc')"
-      default-icon="i-carbon-dashboard"
-      active-icon="i-carbon-dashboard"
-    />
-
-    <TuffBlockSwitch
-      v-if="advancedSettings"
-      v-model="appSetting.searchEngine.logsEnabled"
-      :title="t('settingAbout.searchEngineLogs')"
-      :description="t('settingAbout.searchEngineLogsDesc')"
-      default-icon="i-carbon-warning-alt"
-      active-icon="i-carbon-warning-alt"
     />
 
     <TuffBlockLine :title="t('settingAbout.version')">
@@ -447,8 +415,13 @@ function openSoftwareLicense() {
     <TuffBlockLine :title="t('settingAbout.v8')" :description="runtimeVersions?.v8" />
     <TuffBlockLine :title="t('settingAbout.os')">
       <template #description>
-        <span flex gap-0 items-center>
-          <OSIcon ml-8 :os="os?.version" />
+        <!--
+          `ml-8` used to push the glyph 2rem off the left edge while `gap-0` left it touching the
+          text, and `items-center` centred it against the whole wrapped block instead of the first
+          line. The gap belongs between icon and text, and the icon belongs on line one.
+        -->
+        <span flex gap-1.5 items-start>
+          <span class="SettingAbout-OSIconSlot"><OSIcon :os="os?.version" /></span>
           <span>{{ os?.version }}</span>
         </span>
       </template>
@@ -501,6 +474,18 @@ function openSoftwareLicense() {
 </template>
 
 <style lang="scss">
+/**
+ * The OS glyph has to sit on the first line of a value that wraps, so it gets a box exactly one
+ * line tall and centres inside it. `1lh` tracks whatever line-height the description uses, which
+ * beats guessing a margin that breaks the moment the type scale changes.
+ */
+.SettingAbout-OSIconSlot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 1lh;
+}
+
 /** Usage visualization styles */
 .Usage {
   /** Background fill for usage percentage */

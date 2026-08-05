@@ -595,7 +595,7 @@ onUnmounted(() => {
           </h1>
           <p class="debug-subtitle">System Status Monitor - Real-time Application Health</p>
         </div>
-        <div class="header-controls">
+        <div class="header-controls shell-chrome-safe-inline-end">
           <div class="control-group">
             <label class="control-label">ROWS</label>
             <select v-model.number="limit" :disabled="loading" class="debug-select">

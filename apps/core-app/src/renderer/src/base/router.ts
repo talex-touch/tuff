@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-import { nextTick } from 'vue'
+import type { RouteLocationNormalizedLoaded, RouteRecordRaw } from 'vue-router'
 import { isDevEnv } from '@talex-touch/utils/env'
-import {
-  createRouter,
-  createWebHashHistory,
-  type RouteLocationNormalizedLoaded,
-  type RouteRecordRaw
-} from 'vue-router'
-import { appSetting } from '~/modules/storage/app-storage'
+import { nextTick } from 'vue'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
+import {
+  DEFAULT_SETTING_PATH,
+  LEGACY_SECTION_REDIRECTS,
+  SETTING_CATEGORIES
+} from '~/modules/settings/categories'
+import { appSetting } from '~/modules/storage/app-storage'
 import { createStylesRouteRecord } from './style-routes'
 
 const ROUTE_NAVIGATE_WARN_MS = 200
@@ -64,10 +65,56 @@ function withRouteComponentPerf<T>(label: string, loader: () => Promise<T>): () 
   }
 }
 
+/**
+ * One route per settings category, driven by the same table the sidebar renders from, so a
+ * category can never appear in the nav without a route behind it.
+ */
+function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): RouteRecordRaw[] {
+  const loaders: Record<string, () => Promise<unknown>> = {
+    overview: () => import('../views/base/settings/categories/SettingOverviewPage.vue'),
+    general: () => import('../views/base/settings/categories/SettingGeneralPage.vue'),
+    appearance: () => import('../views/base/settings/categories/SettingAppearancePage.vue'),
+    intelligence: () => import('../views/base/settings/categories/SettingIntelligencePage.vue'),
+    plugins: () => import('../views/base/settings/categories/SettingPluginsPage.vue'),
+    'file-index': () => import('../views/base/settings/categories/SettingFileIndexPage.vue'),
+    update: () => import('../views/base/settings/categories/SettingUpdatePage.vue'),
+    network: () => import('../views/base/settings/categories/SettingNetworkPage.vue'),
+    download: () => import('../views/base/settings/categories/SettingDownloadPage.vue'),
+    // Renders the storage report directly. The former `SettingStoragePage` was a transit page
+    // whose entire content was two rows linking to this same view.
+    'storage-usage': () => import('../views/storage/Storagable.vue'),
+    about: () => import('../views/base/settings/categories/SettingAboutPage.vue')
+  }
+
+  return SETTING_CATEGORIES.map((category) => ({
+    path: category.path,
+    name: `$I18n:router.appSettings.${category.key}`,
+    component: withPerf(
+      category.path,
+      loaders[category.key] as () => Promise<{ default: unknown }>
+    ),
+    meta: {
+      index: 1,
+      keepAlive: true,
+      // Per-category cache keys keep each page's scroll position across category switches.
+      keepAliveKey: `setting-${category.key}`
+    }
+  })) as RouteRecordRaw[]
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/setting'
+    redirect: '/home'
+  },
+  {
+    path: '/home',
+    name: '$I18n:router.home',
+    component: withRouteComponentPerf('/home', () => import('../views/base/home/HomePage.vue')),
+    meta: {
+      index: 0,
+      keepAlive: true
+    }
   },
   {
     path: '/store',
@@ -177,27 +224,21 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/setting',
-    name: '$I18n:router.appSettings',
-    component: withRouteComponentPerf(
-      '/setting',
-      () => import('../views/base/settings/AppSettings.vue')
-    ),
-    meta: {
-      index: 1,
-      keepAlive: true
-    }
+    redirect: DEFAULT_SETTING_PATH
+  },
+  ...createSettingCategoryRoutes(withRouteComponentPerf),
+  {
+    // The `advanced` category was dissolved: its proxy settings moved to `network`, the
+    // assistant block to `intelligence` and the tools block to `plugins`. Kept as a redirect
+    // so existing deep links (and `?section=` fallbacks) do not 404.
+    path: '/setting/advanced',
+    redirect: '/setting/network'
   },
   {
+    // Storage now lives on the `storage-usage` category route so the sidebar item lands straight
+    // on the report. Kept as a redirect for deep links that still use the old path.
     path: '/setting/storage',
-    name: '$I18n:router.storagable',
-    component: withRouteComponentPerf(
-      '/setting/storage',
-      () => import('../views/storage/Storagable.vue')
-    ),
-    meta: {
-      index: 1,
-      keepAlive: true
-    }
+    redirect: '/setting/storage-usage'
   },
   {
     path: '/intelligence',
@@ -299,6 +340,27 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+})
+
+/**
+ * Keeps `/setting?section=<id>` deep links working after settings moved from one long page to
+ * per-category routes. Those links are still emitted by notifications and other modules.
+ */
+router.beforeEach((to, _from, next) => {
+  const section = typeof to.query.section === 'string' ? to.query.section : ''
+  if (!section || !to.path.startsWith('/setting')) {
+    next()
+    return
+  }
+
+  const target = LEGACY_SECTION_REDIRECTS[section]
+  if (!target || to.path === target) {
+    next()
+    return
+  }
+
+  const { section: _dropped, ...rest } = to.query
+  next({ path: target, query: rest, replace: true })
 })
 
 router.beforeEach((to, _from, next) => {

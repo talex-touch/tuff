@@ -11,8 +11,9 @@ import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
@@ -30,6 +31,7 @@ const { t } = useI18n()
 const downloadSdk = useDownloadSdk()
 const transport = useTuffTransport()
 const settingDownloadLog = createRendererLogger('SettingDownload')
+const router = useRouter()
 const openFileEvent = defineRawEvent<
   {
     title?: string
@@ -58,15 +60,16 @@ const downloadConfig = ref<DownloadConfig>({
     maxRetries: 3
   },
   storage: {
+    defaultDestination: '',
     tempDir: '',
-    historyRetention: 30,
-    autoCleanup: true
+    historyRetention: 30
   },
   network: {
     timeout: 30000,
     retryDelay: 5000,
     maxRetries: 3
-  }
+  },
+  notifyOnComplete: true
 })
 
 const loading = ref(false)
@@ -115,12 +118,36 @@ function onConfigChange() {
   updateDownloadConfig()
 }
 
-async function chooseTempDir(): Promise<void> {
+const destinationLabel = computed(
+  () => downloadConfig.value.storage.defaultDestination || t('settings.settingDownload.notSet')
+)
+
+/**
+ * One control for what used to be `chunk.autoRetry` plus `chunk.maxRetries`: turning retries off
+ * is the same statement as a count of zero, and two rows made that look like two decisions.
+ */
+const retryCount = computed(() =>
+  downloadConfig.value.chunk.autoRetry ? downloadConfig.value.chunk.maxRetries : 0
+)
+
+function applyRetryCount(value: number): void {
+  downloadConfig.value.chunk.autoRetry = value > 0
+  if (value > 0) {
+    downloadConfig.value.chunk.maxRetries = value
+  }
+  void updateDownloadConfig()
+}
+
+function openDownloadCenter(): void {
+  void router.push('/downloads')
+}
+
+async function chooseDestination(): Promise<void> {
   try {
     const result = await transport.send(openFileEvent, {
-      title: t('settings.settingDownload.selectTempDirTitle'),
-      buttonLabel: t('settings.settingDownload.selectTempDirConfirm'),
-      defaultPath: downloadConfig.value.storage.tempDir || undefined,
+      title: t('settings.settingDownload.selectDestinationTitle'),
+      buttonLabel: t('settings.settingDownload.selectDestinationConfirm'),
+      defaultPath: downloadConfig.value.storage.defaultDestination || undefined,
       properties: ['openDirectory']
     })
     const nextPath = result?.filePaths?.[0]
@@ -128,21 +155,12 @@ async function chooseTempDir(): Promise<void> {
       return
     }
 
-    downloadConfig.value.storage.tempDir = nextPath
+    downloadConfig.value.storage.defaultDestination = nextPath
     await updateDownloadConfig()
   } catch (error) {
-    settingDownloadLog.error('Failed to select temp dir', error)
-    toast.error(t('settings.settingDownload.messages.tempDirSelectFailed'))
+    settingDownloadLog.error('Failed to select download destination', error)
+    toast.error(t('settings.settingDownload.messages.destinationSelectFailed'))
   }
-}
-
-async function resetTempDir(): Promise<void> {
-  if (!downloadConfig.value.storage.tempDir) {
-    return
-  }
-
-  downloadConfig.value.storage.tempDir = ''
-  await updateDownloadConfig()
 }
 
 // Restore default settings
@@ -161,15 +179,17 @@ async function restoreDefaults() {
       maxRetries: 3
     },
     storage: {
-      tempDir: downloadConfig.value.storage.tempDir, // Keep current temp dir
-      historyRetention: 30,
-      autoCleanup: true
+      // Both paths are resolved by the main process; resetting them here would blank them out.
+      defaultDestination: downloadConfig.value.storage.defaultDestination,
+      tempDir: downloadConfig.value.storage.tempDir,
+      historyRetention: 30
     },
     network: {
       timeout: 30000,
       retryDelay: 5000,
       maxRetries: 3
-    }
+    },
+    notifyOnComplete: true
   }
   await updateDownloadConfig()
   toast.success(t('settings.settingDownload.messages.defaultsRestored'))
@@ -192,24 +212,6 @@ async function cleanupTempFiles() {
     cleaningTemp.value = false
   }
 }
-
-// Format file size for display
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
-}
-
-// Format timeout for display
-function formatTimeout(ms: number): string {
-  if (ms >= 60000) {
-    return `${(ms / 60000).toFixed(0)}${t('settings.settingDownload.timeUnits.minutes')}`
-  } else {
-    return `${(ms / 1000).toFixed(0)}${t('settings.settingDownload.timeUnits.seconds')}`
-  }
-}
 </script>
 
 <!--
@@ -218,265 +220,99 @@ function formatTimeout(ms: number): string {
   Displays download settings in a structured layout with switches, selects, and inputs.
 -->
 <template>
-  <!-- Download settings group block -->
+  <!--
+    Download center first: the task list is what people come here for, and it used to sit at the
+    very bottom under an "Entries" heading.
+  -->
   <TuffGroupBlock
-    class="setting-download-group"
     :name="t('settings.settingDownload.groupTitle')"
     :description="t('settings.settingDownload.groupDesc')"
-    default-icon="i-carbon-cloud-download"
-    active-icon="i-carbon-cloud"
-    memory-name="setting-download"
+    :collapsible="false"
   >
-    <!-- Concurrency Settings -->
+    <TuffBlockSlot
+      :title="t('settingsEntries.downloadCenter')"
+      :description="t('settingsEntries.downloadCenterDesc')"
+    >
+      <TxButton variant="flat" @click.stop="openDownloadCenter">
+        {{ t('settingsEntries.open') }}
+      </TxButton>
+    </TuffBlockSlot>
+
+    <!--
+      Where finished files land. This had no setting at all before — only the engine's chunk cache
+      did, which is backwards from every browser and download manager.
+    -->
+    <TuffBlockSlot
+      :title="t('settings.settingDownload.defaultDestination')"
+      :description="t('settings.settingDownload.defaultDestinationDesc')"
+    >
+      <span class="SettingDownload-Path">{{ destinationLabel }}</span>
+      <TxButton variant="flat" :disabled="loading" @click.stop="chooseDestination">
+        {{ t('settings.settingDownload.choose') }}
+      </TxButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSwitch
+      v-model="downloadConfig.notifyOnComplete"
+      :title="t('settings.settingDownload.notifyOnComplete')"
+      :description="t('settings.settingDownload.notifyOnCompleteDesc')"
+      :disabled="loading"
+      @update:model-value="onConfigChange"
+    />
+
     <TuffBlockSelect
       v-model="downloadConfig.concurrency.maxConcurrent"
       :title="t('settings.settingDownload.maxConcurrent')"
       :description="t('settings.settingDownload.maxConcurrentDesc')"
-      default-icon="i-carbon-flow"
-      active-icon="i-carbon-flow-stream"
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TxSelectItem :value="1"> 1 </TxSelectItem>
-      <TxSelectItem :value="2"> 2 </TxSelectItem>
-      <TxSelectItem :value="3"> 3 </TxSelectItem>
-      <TxSelectItem :value="4"> 4 </TxSelectItem>
-      <TxSelectItem :value="5"> 5 </TxSelectItem>
-      <TxSelectItem :value="8"> 8 </TxSelectItem>
-      <TxSelectItem :value="10"> 10 </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSwitch
-      v-model="downloadConfig.concurrency.autoAdjust"
-      :title="t('settings.settingDownload.autoAdjust')"
-      :description="t('settings.settingDownload.autoAdjustDesc')"
-      default-icon="i-carbon-settings-adjust"
-      active-icon="i-carbon-settings-adjust"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    />
-
-    <TuffBlockSwitch
-      v-model="downloadConfig.concurrency.networkAware"
-      :title="t('settings.settingDownload.networkAware')"
-      :description="t('settings.settingDownload.networkAwareDesc')"
-      default-icon="i-carbon-network-3"
-      active-icon="i-carbon-network-3"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    />
-
-    <TuffBlockSwitch
-      v-model="downloadConfig.concurrency.priorityBased"
-      :title="t('settings.settingDownload.priorityBased')"
-      :description="t('settings.settingDownload.priorityBasedDesc')"
-      default-icon="i-carbon-task-star"
-      active-icon="i-carbon-task-star"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    />
-
-    <!-- Chunk Settings -->
-    <TuffBlockSelect
-      v-model="downloadConfig.chunk.size"
-      :title="t('settings.settingDownload.chunkSize')"
-      :description="t('settings.settingDownload.chunkSizeDesc')"
-      default-icon="i-carbon-data-volume"
-      active-icon="i-carbon-data-volume"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    >
-      <TxSelectItem :value="256 * 1024">
-        {{ formatFileSize(256 * 1024) }}
-      </TxSelectItem>
-      <TxSelectItem :value="512 * 1024">
-        {{ formatFileSize(512 * 1024) }}
-      </TxSelectItem>
-      <TxSelectItem :value="1024 * 1024">
-        {{ formatFileSize(1024 * 1024) }}
-      </TxSelectItem>
-      <TxSelectItem :value="2 * 1024 * 1024">
-        {{ formatFileSize(2 * 1024 * 1024) }}
-      </TxSelectItem>
-      <TxSelectItem :value="4 * 1024 * 1024">
-        {{ formatFileSize(4 * 1024 * 1024) }}
-      </TxSelectItem>
-      <TxSelectItem :value="8 * 1024 * 1024">
-        {{ formatFileSize(8 * 1024 * 1024) }}
+      <TxSelectItem v-for="value in [1, 2, 3, 5, 8]" :key="value" :value="value">
+        {{ value }}
       </TxSelectItem>
     </TuffBlockSelect>
 
-    <TuffBlockSwitch
-      v-model="downloadConfig.chunk.resume"
-      :title="t('settings.settingDownload.enableResume')"
-      :description="t('settings.settingDownload.enableResumeDesc')"
-      default-icon="i-carbon-restart"
-      active-icon="i-carbon-restart"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    />
-
-    <TuffBlockSwitch
-      v-model="downloadConfig.chunk.autoRetry"
-      :title="t('settings.settingDownload.autoRetry')"
-      :description="t('settings.settingDownload.autoRetryDesc')"
-      default-icon="i-carbon-renew"
-      active-icon="i-carbon-renew"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    />
-
+    <!--
+      `chunk.autoRetry` and `chunk.maxRetries` were two controls for one decision; "off" is just a
+      count of zero. The chunk size, resume flag and the three scheduler booleans are gone from the
+      UI but kept in the config: they are engine tuning, and the booleans only applied on restart.
+    -->
     <TuffBlockSelect
-      v-model="downloadConfig.chunk.maxRetries"
-      :title="t('settings.settingDownload.maxRetries')"
-      :description="t('settings.settingDownload.maxRetriesDesc')"
-      default-icon="i-carbon-repeat"
-      active-icon="i-carbon-repeat"
+      :model-value="retryCount"
+      :title="t('settings.settingDownload.retry')"
+      :description="t('settings.settingDownload.retryDesc')"
       :disabled="loading"
-      @update:model-value="onConfigChange"
+      @update:model-value="(value) => applyRetryCount(Number(value))"
     >
       <TxSelectItem :value="0">
         {{ t('settings.settingDownload.noRetry') }}
       </TxSelectItem>
-      <TxSelectItem :value="1"> 1 </TxSelectItem>
-      <TxSelectItem :value="2"> 2 </TxSelectItem>
-      <TxSelectItem :value="3"> 3 </TxSelectItem>
-      <TxSelectItem :value="5"> 5 </TxSelectItem>
-      <TxSelectItem :value="10"> 10 </TxSelectItem>
+      <TxSelectItem v-for="value in [3, 5, 10]" :key="value" :value="value">
+        {{ value }}
+      </TxSelectItem>
     </TuffBlockSelect>
 
-    <!-- Storage Settings -->
     <TuffBlockSelect
       v-model="downloadConfig.storage.historyRetention"
       :title="t('settings.settingDownload.historyRetention')"
       :description="t('settings.settingDownload.historyRetentionDesc')"
-      default-icon="i-carbon-calendar"
-      active-icon="i-carbon-calendar"
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TxSelectItem :value="7"> 7 {{ t('settings.settingDownload.days') }} </TxSelectItem>
-      <TxSelectItem :value="14"> 14 {{ t('settings.settingDownload.days') }} </TxSelectItem>
-      <TxSelectItem :value="30"> 30 {{ t('settings.settingDownload.days') }} </TxSelectItem>
-      <TxSelectItem :value="60"> 60 {{ t('settings.settingDownload.days') }} </TxSelectItem>
-      <TxSelectItem :value="90"> 90 {{ t('settings.settingDownload.days') }} </TxSelectItem>
-      <TxSelectItem :value="365"> 365 {{ t('settings.settingDownload.days') }} </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSwitch
-      v-model="downloadConfig.storage.autoCleanup"
-      :title="t('settings.settingDownload.autoCleanup')"
-      :description="t('settings.settingDownload.autoCleanupDesc')"
-      default-icon="i-carbon-clean"
-      active-icon="i-carbon-clean"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    />
-
-    <!-- Network Settings -->
-    <TuffBlockSelect
-      v-model="downloadConfig.network.timeout"
-      :title="t('settings.settingDownload.timeout')"
-      :description="t('settings.settingDownload.timeoutDesc')"
-      default-icon="i-carbon-time"
-      active-icon="i-carbon-time"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    >
-      <TxSelectItem :value="10000">
-        {{ formatTimeout(10000) }}
-      </TxSelectItem>
-      <TxSelectItem :value="20000">
-        {{ formatTimeout(20000) }}
-      </TxSelectItem>
-      <TxSelectItem :value="30000">
-        {{ formatTimeout(30000) }}
-      </TxSelectItem>
-      <TxSelectItem :value="60000">
-        {{ formatTimeout(60000) }}
-      </TxSelectItem>
-      <TxSelectItem :value="120000">
-        {{ formatTimeout(120000) }}
+      <TxSelectItem v-for="days in [7, 30, 90, 365]" :key="days" :value="days">
+        {{ t('settings.settingDownload.days', { days }) }}
       </TxSelectItem>
     </TuffBlockSelect>
 
-    <TuffBlockSelect
-      v-model="downloadConfig.network.retryDelay"
-      :title="t('settings.settingDownload.retryDelay')"
-      :description="t('settings.settingDownload.retryDelayDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    >
-      <TxSelectItem :value="1000"> 1s </TxSelectItem>
-      <TxSelectItem :value="2000"> 2s </TxSelectItem>
-      <TxSelectItem :value="3000"> 3s </TxSelectItem>
-      <TxSelectItem :value="5000"> 5s </TxSelectItem>
-      <TxSelectItem :value="10000"> 10s </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-model="downloadConfig.network.maxRetries"
-      :title="t('settings.settingDownload.networkMaxRetries')"
-      :description="t('settings.settingDownload.networkMaxRetriesDesc')"
-      default-icon="i-carbon-repeat"
-      active-icon="i-carbon-repeat"
-      :disabled="loading"
-      @update:model-value="onConfigChange"
-    >
-      <TxSelectItem :value="0">
-        {{ t('settings.settingDownload.noRetry') }}
-      </TxSelectItem>
-      <TxSelectItem :value="1"> 1 </TxSelectItem>
-      <TxSelectItem :value="2"> 2 </TxSelectItem>
-      <TxSelectItem :value="3"> 3 </TxSelectItem>
-      <TxSelectItem :value="5"> 5 </TxSelectItem>
-      <TxSelectItem :value="10"> 10 </TxSelectItem>
-    </TuffBlockSelect>
-
-    <!-- Storage path display -->
     <TuffBlockSlot
-      class="setting-download-wide-slot"
-      :title="t('settings.settingDownload.tempDir')"
-      :description="t('settings.settingDownload.tempDirDesc')"
-      default-icon="i-carbon-folder"
-      active-icon="i-carbon-folder-open"
-      :active="Boolean(downloadConfig.storage.tempDir)"
-    >
-      <div class="storage-controls">
-        <div class="storage-path-display">
-          {{ downloadConfig.storage.tempDir || t('settings.settingDownload.defaultPath') }}
-        </div>
-        <div class="storage-actions">
-          <TxButton variant="flat" size="sm" :disabled="loading" @click.stop="chooseTempDir">
-            {{ t('settings.settingDownload.browse') }}
-          </TxButton>
-          <TxButton
-            variant="flat"
-            size="sm"
-            :disabled="loading || !downloadConfig.storage.tempDir"
-            @click.stop="resetTempDir"
-          >
-            {{ t('settings.settingDownload.resetTempDir') }}
-          </TxButton>
-        </div>
-      </div>
-    </TuffBlockSlot>
-
-    <!-- Actions -->
-    <TuffBlockSlot
-      class="setting-download-wide-slot"
       :title="t('settings.settingDownload.actions')"
       :description="t('settings.settingDownload.actionsDesc')"
-      default-icon="i-carbon-settings-adjust"
-      active-icon="i-carbon-settings-adjust"
     >
-      <div class="actions-container">
-        <TxButton variant="flat" :loading="cleaningTemp" @click="cleanupTempFiles">
-          {{ t('settings.settingDownload.cleanupTemp') }}
+      <div class="SettingDownload-Actions">
+        <TxButton variant="flat" :loading="cleaningTemp" @click.stop="cleanupTempFiles">
+          {{ t('settings.settingDownload.cleanTemp') }}
         </TxButton>
-        <TxButton variant="flat" :loading="loading" @click="restoreDefaults">
+        <TxButton variant="flat" :disabled="loading" @click.stop="restoreDefaults">
           {{ t('settings.settingDownload.restoreDefaults') }}
         </TxButton>
       </div>

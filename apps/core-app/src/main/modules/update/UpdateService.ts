@@ -59,7 +59,7 @@ import { ReleaseNotesService } from './release-notes-service'
 import { UpdateActionController } from './services/update-action-controller'
 import { UpdateInstallCoordinator } from './services/update-install-coordinator'
 import { UpdateDownloadAdapter } from './services/update-download-adapter'
-import { UpdateSystem } from './update-system'
+import { isRendererOverrideAvailable, UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
 import type { NotificationService } from '../download/notification-service'
 
@@ -435,7 +435,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }),
 
       tx.on(UpdateEvents.getSettings, async () => {
-        return { success: true, data: this.settings }
+        // `rendererOverrideAvailable` is derived from the process environment rather than stored,
+        // so it rides along with the settings instead of needing its own channel.
+        return {
+          success: true,
+          data: {
+            ...this.settings,
+            rendererOverrideAvailable: isRendererOverrideAvailable()
+          }
+        }
       }),
 
       tx.on(

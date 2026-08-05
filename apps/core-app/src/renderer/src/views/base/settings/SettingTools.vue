@@ -31,6 +31,13 @@ import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
 import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
 
+const props = withDefaults(
+  defineProps<{
+    advancedOnly?: boolean
+  }>(),
+  { advancedOnly: false }
+)
+
 const { t } = useI18n()
 const transport = useTuffTransport()
 const { isMac } = useRendererPlatform()
@@ -45,7 +52,8 @@ const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const showAdvancedSettings = computed(() => props.advancedOnly)
+const showLegacySystemControls = computed(() => false)
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
@@ -784,6 +792,7 @@ watch(shortcutsDialogVisible, (visible) => {
       entirely while believing they were only turning off a tutorial.
     -->
     <TuffBlockSlot
+      v-if="!props.advancedOnly"
       :title="t('settingTools.usage')"
       :description="t('settingTools.usageDesc')"
       default-icon="i-carbon-book"
@@ -858,7 +867,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Auto clear time selection -->
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
+      v-if="showLegacySystemControls"
       v-model="appSetting.tools.autoClear"
       :title="t('settingTools.autoClear')"
       :description="t('settingTools.autoClearDesc')"
@@ -881,7 +890,7 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSelect>
 
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
+      v-if="showLegacySystemControls"
       v-model="appSetting.tools.clipboardPolling.interval"
       :title="t('settingTools.clipboardPollingInterval')"
       :description="t('settingTools.clipboardPollingIntervalDesc')"
@@ -896,7 +905,7 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
     </TuffBlockSelect>
 
-    <template v-if="showAdvancedSettings">
+    <template v-if="showLegacySystemControls">
       <TuffBlockSwitch
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
         :title="t('settingTools.clipboardPollingLowBattery')"
@@ -930,6 +939,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Recommendation Enabled switch -->
     <TuffBlockSwitch
+      v-if="showLegacySystemControls"
       v-model="appSetting.recommendation.enabled"
       :title="t('settingTools.recommendationEnabled')"
       :description="t('settingTools.recommendationEnabledDesc')"
@@ -939,6 +949,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Recommendation Show Reason switch -->
     <TuffBlockSwitch
+      v-if="showLegacySystemControls"
       v-model="appSetting.recommendation.showReason"
       :title="t('settingTools.recommendationShowReason')"
       :description="t('settingTools.recommendationShowReasonDesc')"
@@ -948,7 +959,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Recommendation Max Items select -->
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
+      v-if="showLegacySystemControls"
       v-model="appSetting.recommendation.maxItems"
       :title="t('settingTools.recommendationMaxItems')"
       :description="t('settingTools.recommendationMaxItemsDesc')"
@@ -961,7 +972,7 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="20"> 20 </TxSelectItem>
     </TuffBlockSelect>
 
-    <template v-if="showAdvancedSettings">
+    <template v-if="showLegacySystemControls">
       <TuffBlockSwitch
         v-for="item in recommendationSemanticItems"
         :key="item.key"
