@@ -4,6 +4,28 @@
 
 ---
 
+## Scenario: Forced Main-Owned Auth Credential Persistence
+
+### Scope / Trigger
+
+- Trigger: changing `AuthModule` login-token persistence, legacy `auth.useSecureStorage` settings, or the `nexus-auth-session` sensitive-data inventory entry.
+- `auth.token` has one persistent path: CoreApp's local-secret secure store. The renderer never reads, writes, diagnoses, or configures this path; `auth.requiresReauthenticationOnNextStartup` is a main-owned, non-sensitive fail-closed marker rather than a user setting or protection override.
+
+### Contracts
+
+- The deployed backend is `local-secret`: a locally generated random secret in `config/local-secret.v1.key` derives AES-256-GCM protection for the `auth.token` envelope in `secure-store.json`.
+- This is not OS Keychain, Credential Locker, libsecret, Electron `safeStorage`, a hardware key, or an OS root key. The local secret and token are never portable or ordinary-exportable.
+- `AuthModule` removes legacy `useSecureStorage`, `secureStorageUserOverridden`, `secureStorageReminderShown`, and `secureStorageUnavailable` fields at startup. Historical `false` and override values cannot select an unprotected or alternate persistence path. It only persists the non-sensitive `auth.requiresReauthenticationOnNextStartup` marker in ordinary app settings; no token, key, or user-controllable protection state enters that store. The shared renderer setting default, renderer Storage projections, and sync snapshots omit the marker, while generic renderer/sync writes preserve the current main-owned value.
+- Before each protected auth-token write, `AuthModule` durably persists `auth.requiresReauthenticationOnNextStartup: true`. It writes no new token if this marker cannot be persisted; only a successful encrypted token write followed by durable marker clearing permits future restoration. A marker-write, secure-store creation/write, envelope validation/decryption, read, health-check, or marker-clear failure leaves the current authenticated process memory-only and never uses an ordinary settings/JSON/log/sync fallback.
+- At cold start, a true marker prevents any token read or restore. Main best-effort deletes `auth.token` from the protected store and clears the marker only after that deletion succeeds; a failed cleanup preserves the marker. Logout and auth-unauthorized cleanup clear in-memory state, persist the marker before protected-token deletion, and clear it only after that deletion succeeds. Main diagnostics use stable state/reason projections and do not include token values, local-secret material, paths, or native errors.
+
+### Tests Required
+
+- Auth-module tests cover removal of every legacy override field, healthy protected cold-start restore, unavailable/unreadable protected cold starts, marker persistence before token writes, a failed write plus incomplete protected-token cleanup followed by a blocked restart, marker-write/marker-clear failures, and logout deletion with marker retention on deletion failure.
+- `docs/engineering/sensitive-data-inventory.json` records the exact local-secret AES-256-GCM backend, non-portability, and memory-only failure lifecycle; `corepack pnpm privacy:inventory:verify` must pass.
+
+---
+
 ## Scenario: Portable Encrypted Secret Backup And Atomic Restore
 
 ### 1. Scope / Trigger

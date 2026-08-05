@@ -16,7 +16,6 @@ import {
 } from 'vue'
 import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
 import { appSetting } from '../storage/app-storage'
 import { getGlobalI18nInstance } from '../lang/i18n'
@@ -160,44 +159,6 @@ function resolveAuthUiMessage(key: string, fallback: string): string {
   return typeof translated === 'string' && translated !== key ? translated : fallback
 }
 
-function ensureAuthPreferenceSettings(): void {
-  if (!appSetting.auth) {
-    appSetting.auth = { ...appSettingOriginData.auth }
-    return
-  }
-  if (typeof appSetting.auth.secureStorageUserOverridden !== 'boolean') {
-    appSetting.auth.secureStorageUserOverridden = false
-  }
-  if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
-  } else if (!appSetting.auth.secureStorageUserOverridden && !appSetting.auth.useSecureStorage) {
-    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
-  }
-  if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
-    appSetting.auth.secureStorageReminderShown = false
-  }
-  if (typeof appSetting.auth.secureStorageUnavailable !== 'boolean') {
-    appSetting.auth.secureStorageUnavailable = false
-  }
-}
-
-function remindSecureStoragePreferenceOnce(): void {
-  ensureAuthPreferenceSettings()
-  if (appSetting.auth.useSecureStorage) {
-    return
-  }
-  if (appSetting.auth.secureStorageReminderShown) {
-    return
-  }
-  appSetting.auth.secureStorageReminderShown = true
-  toast.info(
-    resolveAuthUiMessage(
-      'settingUser.secureStorage.sessionModeReminder',
-      'Login credential protection is off. Enable it in Account settings for stronger local credential protection.'
-    )
-  )
-}
-
 function syncSentryUser(nextUser: AuthUser | null): void {
   void (async () => {
     try {
@@ -235,7 +196,6 @@ function applyAuthState(nextState: AuthState): void {
   syncSentryUser(authState.user)
 
   if (authState.isSignedIn && !wasSignedIn) {
-    remindSecureStoragePreferenceOnce()
     void runSyncBootstrap().catch(() => {
       // ignore sync bootstrap failure
     })

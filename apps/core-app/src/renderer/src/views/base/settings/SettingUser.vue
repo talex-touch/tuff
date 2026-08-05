@@ -2,11 +2,9 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { formatCompactAccountLabel, formatCompactEmail } from '@talex-touch/utils/account'
-import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents, ClipboardEvents } from '@talex-touch/utils/transport/events'
+import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import CreditsSummaryBlock from '~/components/account/CreditsSummaryBlock.vue'
@@ -23,7 +21,6 @@ import {
   getRuntimeServerMode,
   setRuntimeServerMode
 } from '~/modules/nexus/runtime-base'
-import { triggerManualSync } from '~/modules/sync'
 import { appSetting } from '~/modules/storage/app-storage'
 import { resolveLoginManualHint } from './login-recovery-display'
 
@@ -42,8 +39,6 @@ const { isLoggedIn, displayName, displayEmail, avatarUrl, displayInitial } = use
 const profileEditorVisible = ref(false)
 const loginDialogVisible = ref(false)
 const loginErrorMessage = ref('')
-const syncSubmitting = ref(false)
-const secureStoreHealth = ref<SecureStoreHealthResponse | null>(null)
 const loginLinkCopyState = ref<'idle' | 'pending' | 'success' | 'failed'>('idle')
 const loginCodeCopyState = ref<'idle' | 'pending' | 'success' | 'failed'>('idle')
 
@@ -56,30 +51,7 @@ function ensureSecuritySettings() {
   }
 }
 
-function ensureAuthSettings() {
-  if (!appSetting.auth) {
-    appSetting.auth = { ...appSettingOriginData.auth }
-    return
-  }
-
-  if (typeof appSetting.auth.secureStorageUserOverridden !== 'boolean') {
-    appSetting.auth.secureStorageUserOverridden = false
-  }
-  if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
-  } else if (!appSetting.auth.secureStorageUserOverridden && !appSetting.auth.useSecureStorage) {
-    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
-  }
-  if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
-    appSetting.auth.secureStorageReminderShown = false
-  }
-  if (typeof appSetting.auth.secureStorageUnavailable !== 'boolean') {
-    appSetting.auth.secureStorageUnavailable = false
-  }
-}
-
 ensureSecuritySettings()
-ensureAuthSettings()
 
 const syncEnabled = computed({
   get: () => getSyncPreferenceState().enabled,
@@ -106,93 +78,7 @@ const syncToggleDescription = computed(() => {
     : t('settingUser.syncDescriptions.disabled')
 })
 
-function formatIsoTime(value: string): string {
-  const normalized = value.trim()
-  if (!normalized) {
-    return t('settingUser.syncStatus.unrecorded')
-  }
-  const timestamp = Date.parse(normalized)
-  if (!Number.isFinite(timestamp)) {
-    return normalized
-  }
-  return new Date(timestamp).toLocaleString()
-}
-
-const syncRuntimeDescription = computed(() => {
-  const sync = getSyncPreferenceState()
-  const statusTextMap: Record<string, string> = {
-    idle: t('settingUser.syncStatus.status.idle'),
-    syncing: t('settingUser.syncStatus.status.syncing'),
-    paused: t('settingUser.syncStatus.status.paused'),
-    error: t('settingUser.syncStatus.status.error')
-  }
-  const statusText = statusTextMap[sync.status] ?? sync.status
-  const lastSuccess = formatIsoTime(sync.lastSuccessAt ?? '')
-  const queueDepth = Number.isFinite(sync.queueDepth) ? sync.queueDepth : 0
-  const lastPush = formatIsoTime(sync.lastPushAt ?? '')
-  const lastPull = formatIsoTime(sync.lastPullAt ?? '')
-  const errorCode = (sync.lastErrorCode ?? '').trim()
-  const blockedTextMap: Record<string, string> = {
-    quota: t('settingUser.syncStatus.blocked.quota'),
-    device: t('settingUser.syncStatus.blocked.device'),
-    auth: t('settingUser.syncStatus.blocked.auth')
-  }
-  const blockedText = blockedTextMap[sync.blockedReason] ?? ''
-  const parts = [
-    t('settingUser.syncStatus.parts.status', { status: statusText }),
-    t('settingUser.syncStatus.parts.lastSuccess', { value: lastSuccess }),
-    t('settingUser.syncStatus.parts.lastPush', { value: lastPush }),
-    t('settingUser.syncStatus.parts.lastPull', { value: lastPull }),
-    t('settingUser.syncStatus.parts.queue', { count: queueDepth })
-  ]
-  if (blockedText) {
-    parts.push(t('settingUser.syncStatus.parts.blocked', { reason: blockedText }))
-  }
-  if (errorCode) {
-    parts.push(t('settingUser.syncStatus.parts.error', { code: errorCode }))
-  }
-  return parts.join(' · ')
-})
-
-const secureStorageEnabled = computed({
-  get: () => Boolean(appSetting.auth?.useSecureStorage),
-  set: (val: boolean) => {
-    ensureAuthSettings()
-    const enabled = Boolean(val)
-    appSetting.auth.useSecureStorage = enabled
-    appSetting.auth.secureStorageUserOverridden = true
-    if (enabled) {
-      toast.success(t('settingUser.secureStorage.enabledToast'))
-      void refreshSecureStoreHealth()
-      return
-    }
-    toast.info(t('settingUser.secureStorage.disabledToast'))
-  }
-})
-
 const showRuntimeApiServer = computed(() => isDevEnv() && !isLoggedIn.value)
-
-const secureStorageDescription = computed(() => {
-  if (!secureStorageEnabled.value) {
-    return t('settingUser.secureStorage.disabledDescription')
-  }
-
-  const health = secureStoreHealth.value
-  if (!health) {
-    return t('settingUser.secureStorage.checkingDescription')
-  }
-  if (!health.available || appSetting.auth?.secureStorageUnavailable === true) {
-    return t('settingUser.secureStorage.unavailableDescription')
-  }
-  if (health.backend === 'local-secret') {
-    return t('settingUser.secureStorage.enabledDescription')
-  }
-  return t('settingUser.secureStorage.unavailableDescription')
-})
-
-const canTriggerManualSync = computed(
-  () => isLoggedIn.value && syncEnabled.value && !syncSubmitting.value
-)
 
 const useLocalServer = computed({
   get: () => getRuntimeServerMode() === 'local',
@@ -319,47 +205,6 @@ async function handleLogout() {
 function openProfileEditor() {
   profileEditorVisible.value = true
 }
-
-async function handleSyncNow() {
-  if (!isLoggedIn.value) {
-    return
-  }
-  if (!syncEnabled.value) {
-    toast.info(t('settingUser.syncEnableFirst'))
-    return
-  }
-  if (syncSubmitting.value) {
-    return
-  }
-
-  syncSubmitting.value = true
-  try {
-    await triggerManualSync('user')
-    toast.success(t('settingUser.syncComplete'))
-  } catch (error) {
-    const message = error instanceof Error ? error.message : t('settingUser.syncFailed')
-    toast.error(message || t('settingUser.syncFailed'))
-  } finally {
-    syncSubmitting.value = false
-  }
-}
-
-async function refreshSecureStoreHealth() {
-  try {
-    secureStoreHealth.value = await transport.send(AppEvents.system.getSecureStoreHealth)
-  } catch {
-    secureStoreHealth.value = {
-      backend: 'unavailable',
-      available: false,
-      degraded: true,
-      reason: 'Failed to query secure store health'
-    }
-  }
-}
-
-onMounted(() => {
-  void refreshSecureStoreHealth()
-})
 </script>
 
 <template>
@@ -417,33 +262,6 @@ onMounted(() => {
       default-icon="i-carbon-cloud-satellite-config"
       active-icon="i-carbon-cloud-satellite"
     />
-
-    <TuffBlockSwitch
-      v-model="secureStorageEnabled"
-      :title="t('settingUser.secureStorageTitle')"
-      :description="secureStorageDescription"
-      default-icon="i-carbon-locked"
-      active-icon="i-carbon-locked"
-    />
-
-    <TuffBlockSlot
-      v-if="isLoggedIn"
-      :title="t('settingUser.syncStatusTitle')"
-      :description="syncRuntimeDescription"
-      default-icon="i-carbon-time"
-      active-icon="i-carbon-time"
-    >
-      <TxButton
-        variant="flat"
-        size="sm"
-        type="primary"
-        :loading="syncSubmitting"
-        :disabled="!canTriggerManualSync"
-        @click.stop="handleSyncNow"
-      >
-        {{ t('settingUser.syncNow') }}
-      </TxButton>
-    </TuffBlockSlot>
 
     <TuffBlockSlot
       v-else

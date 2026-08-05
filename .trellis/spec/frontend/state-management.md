@@ -31,22 +31,22 @@ Use Pinia when multiple CoreApp renderer views or subscriptions need the same st
 Example: `apps/core-app/src/renderer/src/stores/plugin.ts`
 
 ```ts
-export const usePluginStore = defineStore("plugin", () => {
-  const plugins = reactive(new Map<string, ITouchPlugin>());
+export const usePluginStore = defineStore('plugin', () => {
+  const plugins = reactive(new Map<string, ITouchPlugin>())
 
   function handleStateEvent(event: PluginStateEvent): void {
     switch (event.type) {
-      case "added":
-        setPlugin(event.plugin);
-        break;
-      case "removed":
-        deletePlugin(event.name);
-        break;
+      case 'added':
+        setPlugin(event.plugin)
+        break
+      case 'removed':
+        deletePlugin(event.name)
+        break
     }
   }
 
-  return { plugins, handleStateEvent, initialize };
-});
+  return { plugins, handleStateEvent, initialize }
+})
 ```
 
 This is a good pattern for host-subscribed renderer state: typed event in, normalized store state out.
@@ -118,8 +118,7 @@ if (onboardingDone) appSetting.setup.hideDock = true
 ##### Correct
 
 ```ts
-const enabled =
-  typeof storedValue === 'boolean' ? storedValue : appSettingOriginData.setup.hideDock
+const enabled = typeof storedValue === 'boolean' ? storedValue : appSettingOriginData.setup.hideDock
 // Onboarding persists the resolved/user-selected value; it never forces true.
 ```
 
@@ -134,70 +133,54 @@ const enabled =
 
 #### 1. Scope / Trigger
 
-- Trigger: CoreApp account settings change login credential protection (`appSetting.auth.useSecureStorage`) or auth token persistence.
-- The setting controls local credential encryption strength, not whether the app preserves signed-in state.
+- Trigger: changing CoreApp auth-token persistence, the main-owned `auth.requiresReauthenticationOnNextStartup` marker, or historical `auth.useSecureStorage` fields.
+- Login credentials are a mandatory device-local security baseline, not a renderer preference. `auth.token` has one persistent path: the local-secret AES-256-GCM secure store.
 
 #### 2. Signatures
 
 ```ts
-type AuthSettings = {
-  useSecureStorage: boolean;
-  secureStorageUserOverridden: boolean;
-  secureStorageUnavailable: boolean;
-};
-
-async function loadAuthToken(): Promise<void>;
-async function setAuthToken(nextToken: string): Promise<void>;
-async function clearAuthToken(): Promise<void>;
-async function handleAuthStoragePreferenceChanged(
-  nextAppSetting: AppSetting,
-): Promise<void>;
+async function loadAuthToken(): Promise<void>
+async function setAuthToken(nextToken: string): Promise<void>
+async function clearAuthToken(): Promise<void>
 ```
 
 #### 3. Contracts
 
-- `auth.token` is the persisted login token key in CoreApp secure-store.
-- `useSecureStorage === false` means login credential protection is disabled, but `loadAuthToken()` still attempts to read persisted `auth.token`.
-- Disabling credential protection with `handleAuthStoragePreferenceChanged()` must not write `auth.token = null`.
-- `clearAuthToken()` is sign-out / unauthorized cleanup and must clear persisted `auth.token` even when credential protection is disabled.
-- Account UI copy must describe stronger local credential protection only; it must not promise or deny restart persistence.
+- `AuthModule` removes `useSecureStorage`, `secureStorageUserOverridden`, `secureStorageReminderShown`, and `secureStorageUnavailable`; settings normalization keeps those historical fields from returning through renderer or sync payloads.
+- `auth.requiresReauthenticationOnNextStartup` is non-sensitive but main-owned. It is absent from renderer defaults, renderer projections and sync payloads; generic renderer/sync writes preserve the current local marker.
+- Before writing a token, main durably sets the marker to `true`. It writes no new token if that step fails. Only a successful encrypted token write followed by durable marker clearing permits a later cold-start restore.
+- A true marker blocks every token read at cold start. Main deletes the protected token first and clears the marker only after deletion succeeds. Failed marker writes/clears, health checks, secure-store creation/read/validation/write, or cleanup leave auth fail-closed and memory-only; there is no ordinary settings, JSON, log, or sync token fallback.
+- Logout and unauthorized cleanup clear in-memory auth, then use the same marker-before-delete ordering. A delete failure retains the marker, so a stale protected token cannot restore.
 
 #### 4. Validation & Error Matrix
 
-- Secure-store readable + token exists -> restore signed-in state from `auth.token`.
-- Secure-store unavailable -> keep only in-memory auth state and surface degraded secure-store state when protection is enabled.
-- User toggles credential protection off -> preserve in-memory and persisted token.
-- User signs out or remote auth is unauthorized -> clear in-memory token and persisted `auth.token`.
+- Healthy local-secret store + marker absent/false + valid token -> restore from protected storage.
+- Marker true -> do not read the token; delete it best-effort and retain the marker if deletion fails.
+- Marker persistence failure -> keep the newly accepted token memory-only and do not write it to protected storage.
+- Protected-store health/read/validation/write failure -> keep current process memory-only and block future restoration until cleanup succeeds.
+- Logout/unauthorized protected-token deletion failure -> retain marker and restore no stale token on restart.
 
-#### 5. Good/Base/Bad Cases
+#### 5. Tests Required
 
-- Good: disabled credential protection still restores `persisted-token` on cold startup.
-- Base: enabled credential protection restores and persists the token through secure-store.
-- Bad: treating `useSecureStorage === false` as session-only and skipping `getSecureStoreValue()`.
+- Auth tests cover legacy-field removal, healthy restore, marker write/clear ordering and failure, unavailable/unreadable protected stores, blocked marker cold starts, and logout cleanup failure.
+- Storage boundary tests prove renderer and sync projections omit the marker and external writes preserve the local main-owned value.
+- `corepack pnpm privacy:inventory:verify`, focused tests, CoreApp type checks, lint, and `git diff --check` pass.
 
-#### 6. Tests Required
-
-- Main auth test: cold startup reads `auth.token` when `useSecureStorage === false` and `secureStorageUserOverridden === true`.
-- Main auth test: disabling credential protection through `handleAuthStoragePreferenceChanged()` does not clear `auth.token`.
-- Main auth test: `clearAuthToken()` clears `auth.token` even when protection is disabled.
-- Renderer account settings test: credential protection copy is i18n-backed and does not contain restart/session-only persistence language.
-
-#### 7. Wrong vs Correct
+#### 6. Wrong vs Correct
 
 ##### Wrong
 
 ```ts
-if (!authUseSecureStorage) {
-  authToken = null;
-  return;
-}
+appSetting.auth.requiresReauthenticationOnNextStartup = false
+await saveRendererSettings(appSetting)
 ```
 
 ##### Correct
 
 ```ts
-authUseSecureStorage = isAuthTokenSecureStorageEnabled();
-authToken = await getSecureValue(AUTH_TOKEN_KEY);
+await persistMainOwnedReauthenticationMarker(true)
+await setSecureValue('auth.token', token)
+await persistMainOwnedReauthenticationMarker(false)
 ```
 
 ### Nexus SSR And Client State
@@ -306,23 +289,23 @@ CoreBoxEvents.item.execute: { item: TuffItem; searchResult?: TuffSearchResult } 
 #### Wrong
 
 ```ts
-pendingQueryContext = context;
-searchVal.value = value;
-void handleSearchImmediate({ force: true });
+pendingQueryContext = context
+searchVal.value = value
+void handleSearchImmediate({ force: true })
 // watcher dispatches another contextless search; execute trusts whichever result wins
 ```
 
 #### Correct
 
 ```ts
-programmaticQueryValue = value;
-oneShotQueryContext = context;
-searchVal.value = value;
-void handleSearchImmediate({ force: true });
+programmaticQueryValue = value
+oneShotQueryContext = context
+searchVal.value = value
+void handleSearchImmediate({ force: true })
 
 // Immediately before item.execute:
-serializedSearchResult.query.context = oneShotQueryContext;
-oneShotQueryContext = undefined;
+serializedSearchResult.query.context = oneShotQueryContext
+oneShotQueryContext = undefined
 ```
 
 ## Scenario: CoreApp Storage Hydration and Onboarding Admission
@@ -413,22 +396,22 @@ OnboardingGate.retry(): Promise<OnboardingGateDecision>
 
 ```ts
 try {
-  return getMainConfig(StorageList.APP_SETTING).beginner.init;
+  return getMainConfig(StorageList.APP_SETTING).beginner.init
 } catch {
-  return true;
+  return true
 }
 ```
 
 #### Correct
 
 ```ts
-const decision = onboardingGate.evaluate();
-if (decision.state !== "allowed") {
-  routeToExistingOnboardingOrRecoverySurface(decision.reason);
-  return;
+const decision = onboardingGate.evaluate()
+if (decision.state !== 'allowed') {
+  routeToExistingOnboardingOrRecoverySurface(decision.reason)
+  return
 }
 
-await providerRegistry.loadWhenOnboardingAllows("all-modules-loaded");
+await providerRegistry.loadWhenOnboardingAllows('all-modules-loaded')
 ```
 
 ## Scenario: CoreApp Application Configuration SQLite Source of Truth

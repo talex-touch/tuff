@@ -70,6 +70,97 @@ describe('StorageModule', () => {
     await storage.onDestroy()
   })
 
+  it('keeps the auth recovery marker main-owned across renderer storage handlers', async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), 'tuff-storage-auth-marker-'))
+    const storage = new StorageModule()
+    await storage.init({
+      app: { channel: {} },
+      file: { create: true, dirName: 'config', dirPath: configDir }
+    } as unknown as Parameters<StorageModule['init']>[0])
+
+    storage.saveConfig(
+      StorageList.APP_SETTING,
+      {
+        auth: {
+          deviceId: 'main-device',
+          requiresReauthenticationOnNextStartup: true
+        }
+      },
+      false,
+      true
+    )
+
+    const registrations = transportMocks.on.mock.calls as unknown as Array<
+      readonly [unknown, unknown]
+    >
+    const getHandler = registrations.find(([event]) => event === StorageEvents.app.get)?.[1] as
+      | ((request: { key: string }) => object)
+      | undefined
+    const getVersionedHandler = registrations.find(
+      ([event]) => event === StorageEvents.app.getVersioned
+    )?.[1] as ((request: { key: string }) => { data: object; version: number } | null) | undefined
+    const setHandler = registrations.find(([event]) => event === StorageEvents.app.set)?.[1] as
+      | ((request: { key: string; value: object }) => void)
+      | undefined
+    const saveHandler = registrations.find(([event]) => event === StorageEvents.app.save)?.[1] as
+      | ((request: {
+          key: string
+          value: object
+        }) => Promise<{ success: boolean; version: number }>)
+      | undefined
+    const deleteHandler = registrations.find(
+      ([event]) => event === StorageEvents.app.delete
+    )?.[1] as ((request: { key: string }) => void) | undefined
+
+    const rendererProjection = getHandler?.({ key: StorageList.APP_SETTING })
+    const rendererVersionedProjection = getVersionedHandler?.({ key: StorageList.APP_SETTING })
+    expect(rendererProjection).toMatchObject({
+      auth: { deviceId: 'main-device' }
+    })
+    expect(rendererVersionedProjection?.data).toMatchObject({
+      auth: { deviceId: 'main-device' }
+    })
+    expect(rendererProjection).not.toHaveProperty('auth.requiresReauthenticationOnNextStartup')
+    expect(rendererVersionedProjection?.data).not.toHaveProperty(
+      'auth.requiresReauthenticationOnNextStartup'
+    )
+
+    setHandler?.({
+      key: StorageList.APP_SETTING,
+      value: {
+        auth: {
+          deviceId: 'renderer-set',
+          requiresReauthenticationOnNextStartup: false,
+          useSecureStorage: false
+        }
+      }
+    })
+    await saveHandler?.({
+      key: StorageList.APP_SETTING,
+      value: {
+        auth: {
+          deviceId: 'renderer-save',
+          requiresReauthenticationOnNextStartup: false,
+          secureStorageUserOverridden: true
+        }
+      }
+    })
+    deleteHandler?.({ key: StorageList.APP_SETTING })
+
+    expect(storage.getConfig(StorageList.APP_SETTING)).toMatchObject({
+      auth: {
+        deviceId: 'renderer-save',
+        requiresReauthenticationOnNextStartup: true
+      }
+    })
+    expect(storage.getConfig(StorageList.APP_SETTING)).not.toHaveProperty('auth.useSecureStorage')
+    expect(storage.getConfig(StorageList.APP_SETTING)).not.toHaveProperty(
+      'auth.secureStorageUserOverridden'
+    )
+
+    await storage.onDestroy()
+  })
+
   it('persists an accepted lifecycle-critical save before replying', async () => {
     const configDir = mkdtempSync(path.join(tmpdir(), 'tuff-storage-persist-'))
     const storage = new StorageModule()

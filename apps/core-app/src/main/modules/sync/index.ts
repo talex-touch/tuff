@@ -31,6 +31,10 @@ import {
 import { pluginModule } from '../plugin/plugin-module'
 import { TouchPlugin } from '../plugin/plugin'
 import {
+  omitMainOwnedAuthSettings,
+  preserveMainOwnedAuthSettings
+} from '../storage/main-storage-registry'
+import {
   PluginStorageUpdatedEvent,
   TalexEvents as TouchEvents,
   touchEventBus
@@ -673,7 +677,9 @@ async function collectStorageSnapshots(
       continue
     }
 
-    const rawText = JSON.stringify(raw)
+    const syncPayload =
+      qualifiedName === StorageList.APP_SETTING ? omitMainOwnedAuthSettings(raw) : raw
+    const rawText = JSON.stringify(syncPayload)
     const encrypted = await encryptSyncPayload(rawText)
     const payloadEnc = encrypted.payloadEnc
     const payloadSize = textEncoder.encode(payloadEnc).byteLength
@@ -1014,7 +1020,14 @@ async function applyPulledStorageItems(
 
     try {
       const parsed = JSON.parse(payload.rawText) as Record<string, unknown>
-      const { merged, patched } = mergeLocalPatch(qualifiedName, parsed)
+      const remoteData =
+        qualifiedName === StorageList.APP_SETTING
+          ? (preserveMainOwnedAuthSettings(
+              parsed,
+              getMainStorageConfig(StorageList.APP_SETTING)
+            ) as Record<string, unknown>)
+          : parsed
+      const { merged, patched } = mergeLocalPatch(qualifiedName, remoteData)
       remoteApplyInFlight.add(qualifiedName)
       const result = saveConfig(qualifiedName, merged, false, true, undefined, undefined)
       remoteApplyInFlight.delete(qualifiedName)

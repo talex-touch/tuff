@@ -19,7 +19,12 @@ import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
-import { mainStorageRegistry, resolveMainStorageValue } from './main-storage-registry'
+import {
+  mainStorageRegistry,
+  omitMainOwnedAuthSettings,
+  preserveMainOwnedAuthSettings,
+  resolveMainStorageValue
+} from './main-storage-registry'
 import { ApplicationConfigRepository, type AppConfigRecord } from './app-config-repository'
 import { buildSearchEngineLogsSettingMigrationPlan } from './search-engine-logs-setting-transfer'
 import {
@@ -430,10 +435,32 @@ export class StorageModule extends BaseModule {
   }
 
   private projectConfigForRenderer(name: string, value: object): object {
+    if (name === StorageList.APP_SETTING) {
+      return omitMainOwnedAuthSettings(value)
+    }
     if (name === StorageList.IntelligenceConfig) {
       return redactProviderConfigDocument(value)
     }
     return value
+  }
+
+  private preserveMainOwnedAppSettingsFromRenderer(name: string, payload: unknown): unknown {
+    if (name !== StorageList.APP_SETTING) {
+      return payload
+    }
+
+    if (typeof payload !== 'string') {
+      return preserveMainOwnedAuthSettings(payload, this.getConfig(StorageList.APP_SETTING))
+    }
+
+    try {
+      const parsed = JSON.parse(payload)
+      return JSON.stringify(
+        preserveMainOwnedAuthSettings(parsed, this.getConfig(StorageList.APP_SETTING))
+      )
+    } catch {
+      return payload
+    }
   }
 
   private containsProviderCredential(name: string, payload: unknown): boolean {
@@ -488,7 +515,7 @@ export class StorageModule extends BaseModule {
         }
         this.saveConfig(
           request.key,
-          request.value ?? {},
+          this.preserveMainOwnedAppSettingsFromRenderer(request.key, request.value ?? {}),
           false,
           false,
           context?.sender?.id,
@@ -502,7 +529,10 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return { success: false, version: 0 }
         }
-        const payload = typeof request.content === 'string' ? request.content : request.value
+        const payload = this.preserveMainOwnedAppSettingsFromRenderer(
+          request.key,
+          typeof request.content === 'string' ? request.content : request.value
+        )
         if (this.containsProviderCredential(request.key, payload)) {
           storageLog.warn('Rejected plaintext credential in Intelligence config storage save')
           return { success: false, version: this.cache.getVersion(request.key) }
@@ -547,6 +577,9 @@ export class StorageModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(StorageEvents.app.delete, (request, context) => {
         if (!request?.key || typeof request.key !== 'string') {
+          return
+        }
+        if (request.key === StorageList.APP_SETTING) {
           return
         }
         this.saveConfig(request.key, JSON.stringify({}), true, true, context?.sender?.id, undefined)
