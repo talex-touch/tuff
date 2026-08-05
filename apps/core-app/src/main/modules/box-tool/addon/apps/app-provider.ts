@@ -60,6 +60,7 @@ import type {
 import { config as configSchema, fileExtensions, files as filesSchema } from '../../../../db/schema'
 import { type DbWritePriority } from '../../../../db/db-write-scheduler'
 import { scheduleDbWrite } from '../../../../db/db-write'
+import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 
 import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/utils'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
@@ -2036,9 +2037,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.startupBackfillStarted = true
 
     const isDevelopmentRuntime = this.isDevelopmentRuntime()
-    const delayMs = isDevelopmentRuntime
+    const baseDelayMs = isDevelopmentRuntime
       ? STARTUP_BACKFILL_INITIAL_DELAY_MS + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
       : STARTUP_BACKFILL_INITIAL_DELAY_MS
+    // Startup write-storm gate (R4): defer the backfill (and its batched
+    // backfill-add/backfill-update writes) past the DB startup degrade window.
+    const delayMs = Math.max(baseDelayMs, getStartupDegradeWindowRemainingMs())
     logApp(`Scheduling startup backfill (deferred ${Math.round(delayMs / 1000)}s)`, LogStyle.info)
     this.startupBackfillTimer = setTimeout(() => {
       this.startupBackfillTimer = null

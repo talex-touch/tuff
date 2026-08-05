@@ -33,3 +33,14 @@ export function isInStartupDegradeWindow(windowMs = STARTUP_DEGRADE_WINDOW_MS): 
   if (!STARTUP_DEGRADE_ENABLED) return false
   return getProcessUptimeMs() < Math.max(0, windowMs)
 }
+
+/**
+ * Milliseconds left in the startup degrade window (0 once the window has
+ * passed or when `TUFF_STARTUP_DEGRADE_ENABLED=0`). Boot-time maintenance
+ * writers use this to defer their first write past the startup write storm
+ * (R4) instead of hand-rolling the same window arithmetic.
+ */
+export function getStartupDegradeWindowRemainingMs(windowMs = STARTUP_DEGRADE_WINDOW_MS): number {
+  if (!STARTUP_DEGRADE_ENABLED) return 0
+  return Math.max(0, Math.max(0, windowMs) - getProcessUptimeMs())
+}

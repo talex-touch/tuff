@@ -1,6 +1,7 @@
 import type { DbUtils } from '../../../db/utils'
 import type { Primitive } from '../../../utils/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getStartupDegradeWindowRemainingMs } from '../../../db/runtime-flags'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { TimeStatsAggregator } from './time-stats-aggregator'
@@ -23,6 +24,8 @@ const DEFAULT_CONFIG: SummaryConfig = {
   autoCleanup: false,
   summaryInterval: 24 * 60 * 60 * 1000
 }
+
+const SUMMARY_INITIAL_DELAY_MS = 30_000
 
 /** Periodically rebuild time-based usage stats. Retention is owned by the privacy lifecycle. */
 export class UsageSummaryService {
@@ -67,7 +70,13 @@ export class UsageSummaryService {
           log.error('Scheduled summary failed', { error })
         }
       },
-      { interval: this.config.summaryInterval, unit: 'milliseconds', initialDelayMs: 30_000 }
+      {
+        interval: this.config.summaryInterval,
+        unit: 'milliseconds',
+        // Startup write-storm gate (R4): the initial run lands past the DB
+        // startup degrade window; the 24h cadence itself is unchanged.
+        initialDelayMs: SUMMARY_INITIAL_DELAY_MS + getStartupDegradeWindowRemainingMs()
+      }
     )
     this.pollingService.start()
   }
