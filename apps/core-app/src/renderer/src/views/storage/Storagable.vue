@@ -115,6 +115,14 @@ const report = ref<StorageUsageReport | null>(null)
 const cleaningKey = ref<string | null>(null)
 const transport = useTuffTransport()
 const downloadSdk = useDownloadSdk()
+
+/**
+ * Mounted inside `SettingsPage` when it backs the storage category, which already supplies the
+ * heading, scroll container and edge fades. Rendering its own `ViewTemplate` there would stack
+ * two headings and two scrollers.
+ */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+const shell = computed(() => (props.embedded ? 'div' : ViewTemplate))
 function sendRaw<TRequest, TResponse>(eventName: string, payload?: TRequest) {
   const event = defineRawEvent<TRequest, TResponse>(eventName)
   return transport.send(event, payload as TRequest)
@@ -505,7 +513,7 @@ onMounted(() => {
 
 <template>
   <div class="Storagable-Page">
-    <ViewTemplate title="$I18n:router.storagable">
+    <component :is="shell" v-bind="embedded ? {} : { title: '$I18n:router.storagable' }">
       <div class="Storagable-Container">
         <PrivacyDataSection />
 
@@ -808,7 +816,7 @@ onMounted(() => {
           </div>
         </div>
       </div>
-    </ViewTemplate>
+    </component>
 
     <TxBottomDialog
       v-if="cleanupConfirmVisible"

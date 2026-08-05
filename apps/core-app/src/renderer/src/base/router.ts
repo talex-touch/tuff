@@ -80,9 +80,7 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
     update: () => import('../views/base/settings/categories/SettingUpdatePage.vue'),
     network: () => import('../views/base/settings/categories/SettingNetworkPage.vue'),
     download: () => import('../views/base/settings/categories/SettingDownloadPage.vue'),
-    // Renders the storage report directly. The former `SettingStoragePage` was a transit page
-    // whose entire content was two rows linking to this same view.
-    'storage-usage': () => import('../views/storage/Storagable.vue'),
+    'storage-usage': () => import('../views/base/settings/categories/SettingStoragePage.vue'),
     about: () => import('../views/base/settings/categories/SettingAboutPage.vue')
   }
 
