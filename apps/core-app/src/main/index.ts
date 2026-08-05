@@ -31,6 +31,7 @@ import { extensionLoaderModule } from './modules/extension-loader'
 import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
 import { shortcutModule } from './modules/global-shortcon'
+import { localAiCliModule } from './modules/local-ai-cli'
 import { notificationModule } from './modules/notification'
 import { omniPanelModule } from './modules/omni-panel'
 import { networkModule } from './modules/network'
@@ -187,6 +188,7 @@ const foregroundModulesToLoad = [
   updateServiceModule,
   systemUpdateModule,
   intelligenceModule,
+  localAiCliModule,
   voiceModule,
   pluginModule,
   pluginLogModule,

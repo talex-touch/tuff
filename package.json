@@ -108,6 +108,7 @@
       "ffmpeg-static",
       "get-windows",
       "msgpackr-extract",
+      "node-pty",
       "protobufjs",
       "puppeteer",
       "sharp",

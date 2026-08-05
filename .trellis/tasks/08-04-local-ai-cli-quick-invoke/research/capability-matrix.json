@@ -1,0 +1,38 @@
+{
+  "generatedFrom": "local protocol probes",
+  "environment": "macOS arm64 beta gate",
+  "providers": {
+    "pi": {
+      "taskRead": true,
+      "taskWriteApproval": false,
+      "terminalRead": true,
+      "terminalWriteApproval": false,
+      "resume": true,
+      "reason": "RPC read path proven; no bundled before-tool approval extension"
+    },
+    "codex": {
+      "taskRead": true,
+      "taskWriteApproval": true,
+      "terminalRead": true,
+      "terminalWriteApproval": false,
+      "resume": true,
+      "approvalProtocol": "app-server requestApproval"
+    },
+    "claude": {
+      "taskRead": true,
+      "taskWriteApproval": true,
+      "terminalRead": true,
+      "terminalWriteApproval": false,
+      "resume": true,
+      "approvalProtocol": "Agent SDK canUseTool with flag-layer ask rules"
+    },
+    "oh-my-pi": {
+      "taskRead": true,
+      "taskWriteApproval": true,
+      "terminalRead": true,
+      "terminalWriteApproval": false,
+      "resume": true,
+      "approvalProtocol": "ACP session/request_permission"
+    }
+  }
+}

@@ -69,6 +69,7 @@ import {
   omniPanelFeatureRefreshEvent,
   omniPanelFeatureReorderEvent,
   omniPanelHideEvent,
+  omniPanelRendererReadyEvent,
   omniPanelShowEvent
 } from '../../../shared/events/omni-panel'
 import { createDesktopContextCapsule } from '../../../shared/intelligence/desktop-context-capsule'
@@ -82,6 +83,7 @@ const MAX_LONG_PRESS_MS = 3000
 const LONG_PRESS_MOVE_THRESHOLD = 6
 const SHORTCUT_HOLD_MS = 500
 const SHORTCUT_RELEASE_GRACE_MS = 220
+const RENDERER_READY_TIMEOUT_MS = 5000
 const OMNI_PANEL_SHORTCUT_ID = 'core.omniPanel.toggle'
 const OMNI_PANEL_MOUSE_TRIGGER_ID = 'core.omniPanel.mouseLongPress'
 const OMNI_PANEL_SHORTCUT_OWNER = 'module.omni-panel'
@@ -93,6 +95,8 @@ const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
   'mouse-long-press',
   'manual',
   'command',
+  'corebox-local-ai',
+  'local-ai-shortcut',
   'unknown'
 ]
 const SELECTION_TRANSLATE_SCENE_ID = 'corebox.selection.translate'
@@ -310,6 +314,9 @@ export class OmniPanelModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
   private panelWindow: TouchWindow | null = null
+  private panelRendererReady = true
+  private panelRendererReadyWaiters = new Set<(ready: boolean) => void>()
+  private contextDeliveryPending = false
   private inputHook: InputHookApi | null = null
   private inputHookKeys: InputHookKeyMap | null = null
   private mouseLongPressEnabled = false
@@ -765,6 +772,23 @@ export class OmniPanelModule extends BaseModule {
       this.transport.on(omniPanelHideEvent, async () => {
         this.hide()
       }),
+      this.transport.on(omniPanelRendererReadyEvent, () => {
+        const hadPendingDelivery = this.contextDeliveryPending
+        this.markPanelRendererReady()
+        if (hadPendingDelivery) return
+
+        const transport = this.transport
+        const panelWindow = this.panelWindow
+        const context = this.lastContext
+        if (!transport || !panelWindow || panelWindow.window.isDestroyed()) return
+        void transport
+          .sendTo(panelWindow.window.webContents, omniPanelContextEvent, context)
+          .catch((error) => {
+            omniPanelLog.debug('Failed to replay OmniPanel context after renderer readiness', {
+              error
+            })
+          })
+      }),
       this.transport.on(omniPanelFeatureListEvent, async () => {
         return this.buildFeatureListResponse()
       }),
@@ -777,6 +801,41 @@ export class OmniPanelModule extends BaseModule {
     )
   }
 
+  private markPanelRendererReady(): void {
+    this.panelRendererReady = true
+    for (const resolve of this.panelRendererReadyWaiters) {
+      resolve(true)
+    }
+    this.panelRendererReadyWaiters.clear()
+  }
+
+  private resetPanelRendererReady(): void {
+    this.panelRendererReady = false
+  }
+
+  private clearPanelRendererReady(): void {
+    this.panelRendererReady = false
+    for (const resolve of this.panelRendererReadyWaiters) {
+      resolve(false)
+    }
+    this.panelRendererReadyWaiters.clear()
+  }
+
+  private async waitForPanelRendererReady(): Promise<boolean> {
+    if (this.panelRendererReady) return true
+
+    return await new Promise<boolean>((resolve) => {
+      let timeout: NodeJS.Timeout | undefined
+      const finish = (ready: boolean): void => {
+        clearTimeout(timeout)
+        this.panelRendererReadyWaiters.delete(finish)
+        resolve(ready)
+      }
+      this.panelRendererReadyWaiters.add(finish)
+      timeout = setTimeout(() => finish(false), RENDERER_READY_TIMEOUT_MS)
+    })
+  }
+
   private async ensureWindow(): Promise<TouchWindow> {
     if (this.panelWindow && !this.panelWindow.window.isDestroyed()) {
       return this.panelWindow
@@ -784,10 +843,17 @@ export class OmniPanelModule extends BaseModule {
 
     // OmniPanel is the slide-out command panel — always visible across all
     // macOS Spaces so it's reachable without the user needing to switch.
+    this.resetPanelRendererReady()
     const window = new TouchWindow({ ...OmniPanelWindowOption })
     window.window.setVisibleOnAllWorkspaces(true)
     window.window.setAlwaysOnTop(true, 'floating')
+    if (typeof window.window.webContents.on === 'function') {
+      window.window.webContents.on('did-start-loading', () => {
+        this.resetPanelRendererReady()
+      })
+    }
     window.window.on('closed', () => {
+      this.clearPanelRendererReady()
       this.panelWindow = null
     })
     window.window.on('hide', () => {})
@@ -813,10 +879,29 @@ export class OmniPanelModule extends BaseModule {
     return window
   }
 
+  hideForPasteBack(): void {
+    this.hide()
+  }
+
+  async showLocalAi(draftText?: string): Promise<void> {
+    await this.show({
+      captureSelection: !draftText,
+      source: 'local-ai-shortcut',
+      draftText
+    })
+  }
+  async restoreLocalAi(): Promise<void> {
+    const targetWindow = await this.ensureWindow()
+    this.positionWindowNearCursor(targetWindow)
+    targetWindow.window.show()
+    targetWindow.window.focus()
+  }
+
   private async show(options?: OmniPanelShowRequest): Promise<void> {
     const targetWindow = await this.ensureWindow()
     const normalizedSource = normalizeContextSource(options?.source)
-    let text = ''
+    let text =
+      typeof options?.draftText === 'string' ? options.draftText.trim().slice(0, 12_000) : ''
     let captureResult: SelectionCaptureResult | undefined
 
     if (options?.captureSelection !== false) {
@@ -970,9 +1055,27 @@ export class OmniPanelModule extends BaseModule {
       capsule: capsule ?? (await this.buildDesktopContextCapsule(text, source, capturedAt))
     }
     this.lastContext = payload
+    this.contextDeliveryPending = true
 
-    await this.transport.sendTo(this.panelWindow.window.webContents, omniPanelContextEvent, payload)
-    this.notifyFeatureRefresh('context-updated')
+    const rendererReady = await this.waitForPanelRendererReady()
+    if (!rendererReady) {
+      this.contextDeliveryPending = false
+      omniPanelLog.debug('Deferred OmniPanel context until renderer readiness', {
+        meta: { source }
+      })
+      return
+    }
+
+    try {
+      await this.transport.sendTo(
+        this.panelWindow.window.webContents,
+        omniPanelContextEvent,
+        payload
+      )
+      this.notifyFeatureRefresh('context-updated')
+    } finally {
+      this.contextDeliveryPending = false
+    }
   }
 
   private async buildDesktopContextCapsule(

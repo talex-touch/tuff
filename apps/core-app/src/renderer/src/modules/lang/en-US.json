@@ -538,6 +538,85 @@
     "wakeWordsDesc": "Separate multiple wake words with commas.",
     "wakeWordsPlaceholder": "Alo, aler"
   },
+  "settingLocalAiCli": {
+    "groupTitle": "Local AI agents",
+    "groupDesc": "Quickly invoke Pi, Codex, Claude Code, or OMP already installed and authenticated on this Mac. Off by default; CoreApp validates every request before spawning a process.",
+    "betaLabel": "macOS Beta · local process",
+    "refresh": "Detect again",
+    "enable": "Enable local AI agents",
+    "enableDesc": "Allows CoreBox and OmniPanel to request local agents. Opening Settings never starts a CLI process.",
+    "locate": "Choose executable",
+    "defaultProvider": "Default agent",
+    "defaultProviderDesc": "Only allowed agents are listed. Automatic uses the first available agent.",
+    "defaultAutomatic": "Automatic",
+    "providerUnavailable": "No compatible executable detected",
+    "providerUnavailableWithReason": "Unavailable: {reason}",
+    "capabilities": {
+      "quickReply": "Quick reply",
+      "taskApproval": "Per-task approval",
+      "terminal": "Interactive terminal",
+      "terminalApproval": "Per-terminal approval",
+      "resume": "Resume session",
+      "unavailable": "No capability is available for this version"
+    },
+    "messages": {
+      "loadFailed": "Could not load local agent status",
+      "saveFailed": "Could not save local agent settings",
+      "locateFailed": "The selected executable did not pass the provider version check"
+    }
+  },
+  "localAiCliPanel": {
+    "actionTitle": "Send to local agent",
+    "actionSubtitle": "Invoke an authenticated Pi, Codex, Claude Code, or OMP",
+    "title": "Local AI agent",
+    "subtitle": "Prompts are sent only through stdin or a local protocol",
+    "close": "Close local agent panel",
+    "disabled": "First use requires enabling the feature and allowing at least one agent in Settings. The draft is preserved and will not run automatically.",
+    "openSettings": "Open Settings",
+    "provider": "Agent",
+    "access": "Access mode",
+    "answerOnly": "Answer only",
+    "workspaceRead": "Read isolated workspace",
+    "workspaceWriteApproval": "Write isolated workspace (approve each tool)",
+    "placeholder": "Describe the task for the local agent…",
+    "run": "Run",
+    "stop": "Stop",
+    "copy": "Copy result",
+    "copied": "Local agent result copied",
+    "continueInTerminal": "Continue in terminal",
+    "terminalFailed": "Could not open the local agent terminal",
+    "running": "The local agent is working…",
+    "failed": "Task failed ({code})",
+    "cancelled": "Task cancelled",
+    "deny": "Deny",
+    "allowOnce": "Allow once",
+    "pasteBack": "Paste back to source",
+    "pastedBack": "Pasted back to the captured source app",
+    "pasteBackReasons": {
+      "target-unavailable": "No safe source app was captured",
+      "target-drift": "The active app or window changed; paste-back was blocked",
+      "capture-expired": "The source target expired; reopen the panel",
+      "unsupported": "Safe paste-back is unavailable on this system"
+    },
+    "templates": {
+      "summarize": "Summarize",
+      "explain": "Explain",
+      "rewrite": "Rewrite",
+      "nextSteps": "Next steps"
+    },
+    "prompts": {
+      "summarize": "Summarize the following content while preserving key facts and conclusions:",
+      "explain": "Explain the following content clearly and accurately:",
+      "rewrite": "Rewrite the following content to make it clearer and more natural:",
+      "nextSteps": "Based on the following context, propose concrete next steps:"
+    },
+    "context": {
+      "selection": "Selected text",
+      "clipboard": "Clipboard text",
+      "activeApp": "Active app",
+      "activeWindow": "Active window"
+    }
+  },
   "permission": {
     "system": {
       "shortcut": {

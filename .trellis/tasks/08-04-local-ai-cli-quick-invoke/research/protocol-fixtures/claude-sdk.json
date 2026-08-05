@@ -1,0 +1,17 @@
+{
+  "provider": "claude",
+  "protocol": "claude-agent-sdk",
+  "options": {
+    "pathToClaudeCodeExecutable": "<verified-user-binary>",
+    "permissionMode": "default",
+    "settings": { "permissions": { "ask": ["Bash", "Edit", "Write"] } }
+  },
+  "events": [
+    { "type": "system", "subtype": "init", "session_id": "session_1" },
+    { "type": "assistant", "tool_use": "synthetic-write" },
+    { "type": "canUseTool", "decision": "deny" },
+    { "type": "stream_event", "event": "content_block_delta", "text": "READY" },
+    { "type": "result", "subtype": "success" }
+  ],
+  "approvalProbes": { "allowOnce": "completed", "deny": "completed" }
+}

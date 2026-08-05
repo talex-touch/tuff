@@ -1,0 +1,16 @@
+{
+  "provider": "oh-my-pi",
+  "protocol": "acp-v1-jsonrpc",
+  "events": [
+    { "direction": "client", "id": 1, "method": "initialize" },
+    { "direction": "agent", "id": 1, "result": { "protocolVersion": 1 } },
+    { "direction": "client", "id": 2, "method": "session/new" },
+    { "direction": "agent", "id": 2, "result": { "sessionId": "session_1" } },
+    { "direction": "client", "id": 3, "method": "session/prompt", "prompt": "<synthetic>" },
+    { "direction": "agent", "method": "session/update", "sessionUpdate": "agent_message_chunk", "text": "READY" },
+    { "direction": "agent", "id": 41, "method": "session/request_permission", "tool": "synthetic-write" },
+    { "direction": "client", "id": 41, "outcome": "reject_once" },
+    { "direction": "agent", "id": 3, "result": { "stopReason": "end_turn" } }
+  ],
+  "approvalProbes": { "allowOnce": "completed", "deny": "completed" }
+}
