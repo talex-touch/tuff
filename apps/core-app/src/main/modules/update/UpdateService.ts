@@ -157,6 +157,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     const typedDownloadCenter = downloadCenterModule as DownloadCenterModule
     this.updateNotificationService = typedDownloadCenter.getNotificationService()
+    // The stored preference has to reach the service on boot too, not only when the switch moves.
+    if (typeof this.settings.notifyOnUpdate === 'boolean') {
+      this.updateNotificationService.updateConfig({
+        updateAvailable: this.settings.notifyOnUpdate,
+        updateDownloadComplete: this.settings.notifyOnUpdate
+      })
+    }
     this.updateSystem = new UpdateSystem(typedDownloadCenter, {
       autoDownload: this.settings.autoDownload,
       autoCheck: this.settings.enabled,
@@ -485,6 +492,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               }
               if (sanitizedSettings.updateChannel) {
                 this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
+              }
+              if (typeof sanitizedSettings.notifyOnUpdate === 'boolean') {
+                // Applied straight away rather than at next launch: a notification preference the
+                // user has to restart for reads as broken.
+                this.updateNotificationService?.updateConfig({
+                  updateAvailable: sanitizedSettings.notifyOnUpdate,
+                  updateDownloadComplete: sanitizedSettings.notifyOnUpdate
+                })
               }
               if (typeof sanitizedSettings.rendererOverrideEnabled === 'boolean') {
                 const enabled = sanitizedSettings.rendererOverrideEnabled
