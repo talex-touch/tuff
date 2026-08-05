@@ -151,6 +151,7 @@ code: |
 | `disabled` | `boolean` | `false` | 禁用 |
 | `showValue` | `boolean` | `false` | 右侧显示当前值 |
 | `formatValue` | `(value: number) => string` | - | 格式化显示值 |
+| `thumbSurface` | `boolean` | `true` | 滑钮背后的折射圆盘：hover 淡入、拖拽胀大，对背景做模糊与增彩。传 `false` 得到扁平滑钮，同时省掉 `backdrop-filter` 图层 |
 | `showTooltip` | `boolean` | `true` | 是否显示 tooltip |
 | `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip 显示触发方式 |
 | `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化 |

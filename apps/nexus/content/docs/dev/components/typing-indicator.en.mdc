@@ -99,6 +99,12 @@ code: |
 | `circleDashGapDeg` | `number` | `12` | Gap angle in degrees for the repeating conic pattern. |
 | `barsSize` | `number` | `12` | Height in pixels for the `bars` loader. |
 
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | Color for the whole indicator. Every variant, dots included, derives from it, so a host on its own token layer recolors the loader in one place. |
+
 ## Events
 
 `TxTypingIndicator` does not emit component events. It is a passive `role="status"` indicator.

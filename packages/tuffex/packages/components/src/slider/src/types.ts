@@ -14,6 +14,13 @@ export interface SliderProps {
   ariaLabelledby?: string
   showValue?: boolean
   formatValue?: (value: number) => string
+  /**
+   * Refractive disc rendered behind the thumb: it blurs and saturates whatever the slider
+   * sits on, so the handle reads as a piece of glass rather than a flat dot. Fades in on
+   * hover and swells while dragging. Pass `false` for a flat thumb (and to skip the
+   * `backdrop-filter` layer entirely).
+   */
+  thumbSurface?: boolean
   showTooltip?: boolean
   tooltipTrigger?: 'drag' | 'hover' | 'always'
   tooltipFormatter?: (value: number) => string
