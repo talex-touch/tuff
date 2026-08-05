@@ -1,6 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { DB_QOS_ENABLED } from './runtime-flags'
-import { isSqliteBusyError } from './sqlite-retry'
+import {
+  computeSqliteBusyBackoffMs,
+  incrementSqliteBusyRetryCount,
+  isSqliteBusyError,
+  nextSqliteBusyRetryLogState,
+  notifySqliteRetryExhausted,
+  resolveSqliteErrorIdentity
+} from './sqlite-retry'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('DbWriteScheduler')
@@ -9,6 +16,7 @@ const taskContext = new AsyncLocalStorage<boolean>()
 
 export type DbWritePriority = 'critical' | 'interactive' | 'background' | 'best_effort'
 export type DbWriteDropPolicy = 'none' | 'drop' | 'latest_wins'
+export type DbWriteLane = 'primary' | 'aux'
 
 export interface DbWriteLabelPolicy {
   priority: DbWritePriority
@@ -17,6 +25,15 @@ export interface DbWriteLabelPolicy {
   dropPolicy?: DbWriteDropPolicy
   maxBusyFailures?: number
   circuitOpenMs?: number
+  /**
+   * Scheduler-owned SQLITE_BUSY retries via delayed re-enqueue: the backoff is
+   * spent queued (other tasks keep executing), never while holding the write
+   * loop. `0` disables scheduler retry (busy failures reject immediately).
+   * Default by priority: interactive → 3, everything else → 6.
+   */
+  busyRetries?: number
+  busyBaseDelayMs?: number
+  busyMaxDelayMs?: number
 }
 
 export interface DbWriteTask<T> {
@@ -32,6 +49,17 @@ export interface DbWriteTask<T> {
   dropPolicy: DbWriteDropPolicy
   maxBusyFailures: number
   circuitOpenMs: number
+  busyRetries: number
+  busyBaseDelayMs: number
+  busyMaxDelayMs: number
+  /** Target SQLite file. Accepted and stored; activated by the per-file lane split (Phase 3). */
+  lane: DbWriteLane
+  /** Scheduler-owned busy retries already consumed by this task. */
+  busyAttempts: number
+  /** Epoch ms before which the task must not be dequeued (busy backoff park). 0 = eligible now. */
+  nextEligibleAt: number
+  /** Cumulative ms this task spent parked for its own busy backoff. */
+  busyBackoffTotalMs: number
 }
 
 export interface ScheduleOptions {
@@ -41,6 +69,16 @@ export interface ScheduleOptions {
   dropPolicy?: DbWriteDropPolicy
   maxBusyFailures?: number
   circuitOpenMs?: number
+  /** See {@link DbWriteLabelPolicy.busyRetries}. */
+  busyRetries?: number
+  busyBaseDelayMs?: number
+  busyMaxDelayMs?: number
+  /**
+   * Which SQLite file the write targets (`'primary'` = database.db, `'aux'` =
+   * database-aux.db). Accepted and stored, but not yet acted on: the per-lane
+   * queues land with the lane split (Phase 3). Passing it changes no behavior.
+   */
+  lane?: DbWriteLane
 }
 
 interface LabelRuntimeStats {
@@ -70,6 +108,16 @@ const LABEL_STATS_LOG_THROTTLE_MS = 60_000
 const LABEL_STATS_TOP_N = 6
 const DEFAULT_MAX_BUSY_FAILURES = 3
 const DEFAULT_CIRCUIT_OPEN_MS = 15_000
+const DEFAULT_BUSY_BASE_DELAY_MS = 200
+const DEFAULT_BUSY_MAX_DELAY_MS = 3_000
+const BUSY_BACKOFF_JITTER_RATIO = 0.2
+const BUSY_RETRY_LOG_THROTTLE_MS = 30_000
+const DEFAULT_BUSY_RETRIES_BY_PRIORITY: Record<DbWritePriority, number> = {
+  critical: 6,
+  interactive: 3,
+  background: 6,
+  best_effort: 6
+}
 
 export class DbWriteScheduler {
   private queue: DbWriteTask<unknown>[] = []
@@ -83,6 +131,11 @@ export class DbWriteScheduler {
   private labelPolicies = new Map<string, DbWriteLabelPolicy>()
   private lastLabelStatsLogAt = 0
   private sequence = 0
+  /**
+   * Wake-up timer for the earliest parked (busy-backoff) task. Armed only when
+   * the loop is released because nothing is eligible; cleared on every kick.
+   */
+  private eligibilityTimer: ReturnType<typeof setTimeout> | null = null
 
   private enqueue<T>(task: DbWriteTask<T>): void {
     this.queue.push(task as DbWriteTask<unknown>)
@@ -258,7 +311,16 @@ export class DbWriteScheduler {
     label: string,
     options?: ScheduleOptions
   ): Required<
-    Pick<DbWriteLabelPolicy, 'priority' | 'dropPolicy' | 'maxBusyFailures' | 'circuitOpenMs'>
+    Pick<
+      DbWriteLabelPolicy,
+      | 'priority'
+      | 'dropPolicy'
+      | 'maxBusyFailures'
+      | 'circuitOpenMs'
+      | 'busyRetries'
+      | 'busyBaseDelayMs'
+      | 'busyMaxDelayMs'
+    >
   > &
     Pick<DbWriteLabelPolicy, 'maxQueueWaitMs' | 'budgetKey'> {
     const defaultPolicy = this.resolveDefaultLabelPolicy(label)
@@ -275,6 +337,10 @@ export class DbWriteScheduler {
     if (typeof options?.maxBusyFailures === 'number')
       merged.maxBusyFailures = options.maxBusyFailures
     if (typeof options?.circuitOpenMs === 'number') merged.circuitOpenMs = options.circuitOpenMs
+    if (typeof options?.busyRetries === 'number') merged.busyRetries = options.busyRetries
+    if (typeof options?.busyBaseDelayMs === 'number')
+      merged.busyBaseDelayMs = options.busyBaseDelayMs
+    if (typeof options?.busyMaxDelayMs === 'number') merged.busyMaxDelayMs = options.busyMaxDelayMs
     if (
       (!merged.maxQueueWaitMs || merged.maxQueueWaitMs <= 0) &&
       (merged.dropPolicy === 'drop' || merged.dropPolicy === 'latest_wins')
@@ -285,13 +351,20 @@ export class DbWriteScheduler {
       merged.budgetKey = label
     }
 
+    const priority = merged.priority ?? 'background'
     return {
-      priority: merged.priority ?? 'background',
+      priority,
       dropPolicy: merged.dropPolicy ?? 'none',
       maxQueueWaitMs: merged.maxQueueWaitMs,
       budgetKey: merged.budgetKey,
       maxBusyFailures: Math.max(1, merged.maxBusyFailures ?? DEFAULT_MAX_BUSY_FAILURES),
-      circuitOpenMs: Math.max(1_000, merged.circuitOpenMs ?? DEFAULT_CIRCUIT_OPEN_MS)
+      circuitOpenMs: Math.max(1_000, merged.circuitOpenMs ?? DEFAULT_CIRCUIT_OPEN_MS),
+      busyRetries: Math.max(
+        0,
+        Math.floor(merged.busyRetries ?? DEFAULT_BUSY_RETRIES_BY_PRIORITY[priority])
+      ),
+      busyBaseDelayMs: Math.max(0, merged.busyBaseDelayMs ?? DEFAULT_BUSY_BASE_DELAY_MS),
+      busyMaxDelayMs: Math.max(0, merged.busyMaxDelayMs ?? DEFAULT_BUSY_MAX_DELAY_MS)
     }
   }
 
@@ -372,7 +445,14 @@ export class DbWriteScheduler {
       budgetKey: policy.budgetKey,
       dropPolicy: policy.dropPolicy,
       maxBusyFailures: policy.maxBusyFailures,
-      circuitOpenMs: policy.circuitOpenMs
+      circuitOpenMs: policy.circuitOpenMs,
+      busyRetries: policy.busyRetries,
+      busyBaseDelayMs: policy.busyBaseDelayMs,
+      busyMaxDelayMs: policy.busyMaxDelayMs,
+      lane: options?.lane ?? 'primary',
+      busyAttempts: 0,
+      nextEligibleAt: 0,
+      busyBackoffTotalMs: 0
     }
 
     if (this.shouldRejectByCircuit(task)) {
@@ -460,35 +540,68 @@ export class DbWriteScheduler {
     })
   }
 
-  private pickNextTaskIndex(): number {
-    if (!DB_QOS_ENABLED) return 0
-    if (this.queue.length <= 1) return 0
+  /**
+   * Pick the next ELIGIBLE task (`nextEligibleAt <= now`), by priority weight
+   * then FIFO sequence. Tasks parked for busy backoff are skipped so their
+   * backoff is spent queued instead of blocking the head of the queue.
+   * Returns -1 when the queue holds only parked tasks.
+   */
+  private pickNextTaskIndex(now: number): number {
+    let bestIdx = -1
+    let bestWeight = -1
+    let bestSeq = Number.MAX_SAFE_INTEGER
 
-    let bestIdx = 0
-    let bestWeight = PRIORITY_WEIGHT[this.queue[0].priority]
-    let bestSeq = this.queue[0].sequence
-
-    for (let i = 1; i < this.queue.length; i++) {
+    for (let i = 0; i < this.queue.length; i++) {
       const candidate = this.queue[i]
+      if (candidate.nextEligibleAt > now) continue
+      // Legacy non-QoS mode: FIFO by queue position among eligible tasks.
+      if (!DB_QOS_ENABLED) return i
+
       const weight = PRIORITY_WEIGHT[candidate.priority]
-      if (weight > bestWeight) {
+      if (weight > bestWeight || (weight === bestWeight && candidate.sequence < bestSeq)) {
         bestIdx = i
         bestWeight = weight
-        bestSeq = candidate.sequence
-        continue
-      }
-      if (weight === bestWeight && candidate.sequence < bestSeq) {
-        bestIdx = i
         bestSeq = candidate.sequence
       }
     }
     return bestIdx
   }
 
+  private clearEligibilityTimer(): void {
+    if (this.eligibilityTimer !== null) {
+      clearTimeout(this.eligibilityTimer)
+      this.eligibilityTimer = null
+    }
+  }
+
+  /**
+   * Arm a single wake-up for the earliest parked task. Called only when the
+   * processing loop is released with a non-empty queue of ineligible tasks;
+   * any subsequent `kick()` (new enqueue, drain) clears and supersedes it.
+   */
+  private armEligibilityTimer(now: number): void {
+    let minEligibleAt = Number.POSITIVE_INFINITY
+    for (const task of this.queue) {
+      if (task.nextEligibleAt < minEligibleAt) minEligibleAt = task.nextEligibleAt
+    }
+    if (!Number.isFinite(minEligibleAt)) return
+
+    const delayMs = Math.max(1, minEligibleAt - now + 1)
+    this.clearEligibilityTimer()
+    this.eligibilityTimer = setTimeout(() => {
+      this.eligibilityTimer = null
+      this.kick()
+    }, delayMs)
+  }
+
   private kick(): void {
     if (this.processing) return
     if (this.queue.length === 0) return
 
+    // The loop re-evaluates eligibility itself and re-arms the timer when it
+    // parks again, so a pending wake-up is always safe to drop here. This also
+    // guarantees a newly enqueued eligible task never waits behind the timer.
+    this.clearEligibilityTimer()
     void this.processLoop()
   }
 
@@ -557,6 +670,65 @@ export class DbWriteScheduler {
     return false
   }
 
+  /**
+   * Scheduler-owned SQLITE_BUSY retry (design D2): re-enqueue the SAME task
+   * object with delayed eligibility so its backoff is spent queued while other
+   * tasks execute. Returns false when the failure must settle instead
+   * (non-busy error, retries disabled, or retries exhausted).
+   */
+  private tryParkForBusyRetry(task: DbWriteTask<unknown>, error: unknown): boolean {
+    if (task.busyRetries <= 0) return false
+    if (!isSqliteBusyError(error)) return false
+    if (task.busyAttempts >= task.busyRetries) return false
+
+    task.busyAttempts += 1
+    incrementSqliteBusyRetryCount()
+    const backoffMs = computeSqliteBusyBackoffMs(
+      task.busyAttempts - 1,
+      task.busyBaseDelayMs,
+      task.busyMaxDelayMs,
+      BUSY_BACKOFF_JITTER_RATIO
+    )
+    task.nextEligibleAt = Date.now() + backoffMs
+    task.busyBackoffTotalMs += backoffMs
+    // Same task object: enqueuedAt, sequence, and promise callbacks preserved.
+    // Aging (shouldDropTaskByWait) keeps measuring from the original
+    // enqueuedAt, so a busy-looping droppable task drops instead of retrying
+    // forever. Not re-counted as enqueued: one schedule() call settles once.
+    this.queue.push(task)
+
+    const logState = nextSqliteBusyRetryLogState(task.label, BUSY_RETRY_LOG_THROTTLE_MS)
+    if (logState.shouldLog) {
+      log.warn(`SQLITE_BUSY during ${task.label}, retry ${task.busyAttempts}/${task.busyRetries}`, {
+        meta: {
+          delayMs: backoffMs,
+          suppressedRetries: logState.suppressed > 0 ? logState.suppressed : undefined
+        }
+      })
+    }
+    return true
+  }
+
+  private settleTaskFailure(task: DbWriteTask<unknown>, error: unknown, waitedMs: number): void {
+    if (task.busyRetries > 0 && task.busyAttempts >= task.busyRetries && isSqliteBusyError(error)) {
+      // Scheduler-owned busy retries are exhausted: emit the exact event
+      // withSqliteRetry would, so DatabaseModule keeps reporting
+      // DATABASE_BUSY_RETRY_EXHAUSTED with unchanged labels.
+      notifySqliteRetryExhausted({
+        label: task.label,
+        attempts: task.busyAttempts + 1,
+        elapsedMs: Math.max(0, Date.now() - task.enqueuedAt),
+        ...resolveSqliteErrorIdentity(error),
+        error
+      })
+    }
+    // Circuit accounting fires only on this final failure (once per
+    // schedule() call), so circuit thresholds keep their meaning.
+    this.markTaskFailure(task, error)
+    this.recordTaskSettled(task.label, waitedMs, 'failed')
+    task.reject(error)
+  }
+
   private async processLoop(): Promise<void> {
     if (this.processing) return
 
@@ -564,19 +736,31 @@ export class DbWriteScheduler {
 
     let taskCount = 0
     while (this.queue.length > 0) {
-      const taskIdx = this.pickNextTaskIndex()
+      const now = Date.now()
+      const taskIdx = this.pickNextTaskIndex(now)
+      if (taskIdx < 0) {
+        // Every queued task is parked for busy backoff: release the loop and
+        // arm one wake-up for the earliest eligibility. Never sleep (or spin)
+        // while holding the write loop; backoff time is spent queued.
+        this.armEligibilityTimer(now)
+        break
+      }
+
       const [task] = this.queue.splice(taskIdx, 1)
-      const waitedMs = Date.now() - task.enqueuedAt
+      const waitedMs = now - task.enqueuedAt
       this.currentTaskLabel = task.label
       this.currentTaskPriority = task.priority
 
-      if (waitedMs > 2000) {
+      // The slow-wait warning measures head-of-line queue blocking, so the
+      // task's own deliberate busy-backoff parks are excluded.
+      const blockedWaitMs = waitedMs - task.busyBackoffTotalMs
+      if (blockedWaitMs > 2000) {
         // Rate-limit slow-wait warnings: only log every 20th occurrence
         // during heavy indexing to avoid flooding the log with 11K+ entries.
         taskCount++
         if (taskCount <= 3 || taskCount % 20 === 0) {
           log.warn(
-            `DB write task waited ${waitedMs}ms: ${task.label}` +
+            `DB write task waited ${blockedWaitMs}ms: ${task.label}` +
               (taskCount > 3 ? ` (${taskCount} slow tasks so far)` : '')
           )
         }
@@ -612,9 +796,11 @@ export class DbWriteScheduler {
         this.recordTaskSettled(task.label, waitedMs, 'executed')
         task.resolve(result)
       } catch (error) {
-        this.markTaskFailure(task, error)
-        this.recordTaskSettled(task.label, waitedMs, 'failed')
-        task.reject(error)
+        // Busy failures re-enter the queue with delayed eligibility instead of
+        // settling; everything else (or exhausted retries) settles as failed.
+        if (!this.tryParkForBusyRetry(task, error)) {
+          this.settleTaskFailure(task, error, waitedMs)
+        }
       } finally {
         this.currentTaskLabel = null
         this.currentTaskPriority = null
