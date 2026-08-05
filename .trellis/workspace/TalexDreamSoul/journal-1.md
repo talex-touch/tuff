@@ -1627,3 +1627,37 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 - ②TxConversationStream:live zone 恒为末条(免虚拟↔实挂搬家抖动)、位置缓存按 key(prepend 平移不失效)、原生滚动+IO sentinel+手动锚定(better-scroll 方案否决);loader 签名修订为 () => Promise<{hasMore}>(数据完全受控,消费方自行 unshift)。23 单测。
 - 两个硬坑:①Vue 缺省 Boolean prop 铸 false 吃掉 hasMoreInitial 的 ??回退(withDefaults 显式 undefined 解);②vue-tsc 泛型 SFC expose 面是解包后类型(atBottom 是 boolean 不是 Ref),drift 契约双向失败抓出,且整体结构比较对实例化顺序敏感——契约里先断言 keyof 再比整体。已写 memory。
 - 全量门:tuffex 985 测试/typecheck/lint/build 全绿。①② 的【review 门】真机手测(mermaid 观感、触控板惯性滚动)留到④集成时一并验。
+
+
+## Session 48: 下载空闲超时、死开关甄别与深色对比度核对
+
+**Date**: 2026-08-05
+**Task**: 下载空闲超时、死开关甄别与深色对比度核对
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+修掉下载超时语义：network.timeout 经 AbortSignal.timeout 挂在 fetch 上，对流式响应会连同 body 一起中止，30 秒设置等于杀死所有超过 30 秒的下载。requestStream 本就优先用调用方 signal，故在 download-worker 侧传一个每收 chunk 就重置的空闲计时器，不改 network-service。死开关甄别：上一轮在 SettingUpdate/SettingSetup 挖出的硬编码 false 是真问题，但 SettingTools 的同类门控不是——它有两个用例明确钉住边界，且删改设置属于 08-04-batch-settings-razor 的决定，误解除后已用 git show HEAD 单文件还原，只保留 recommendation.maxItems/showReason 两个零消费者控件的删除。深色态：本次改过的 11 个文件零硬编码颜色；但 --shell-on-primary 未在 .dark 重定义，白字在深色 primary #4e9ae6 上仅 2.96:1（浅色 4.09:1），两者均低于 WCAG AA，因与设计稿一致且属品牌色决定，未擅自修改，待拍板。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f3edaabb` | (see git log) |
+| `c5fbf1485` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
