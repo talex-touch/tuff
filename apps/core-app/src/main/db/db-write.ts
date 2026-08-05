@@ -39,6 +39,20 @@ export function setAuxDbResolver(resolver: AuxDbResolver): void {
   auxDbResolver = resolver
 }
 
+/**
+ * Live view of the aux handle `scheduleAuxWrite` would target right now.
+ * READ paths that must stay coherent with aux writes (e.g. dbUtils'
+ * `getAuxDb()` consumers) use this instead of a construction-time capture,
+ * which can hold the primary fallback for the whole process lifetime when the
+ * capturing object was built before the background aux init completed (R3
+ * stale-capture defect). Returns `null` until DatabaseModule registers the
+ * resolver (unit tests without the database module, or too-early callers) —
+ * callers keep their own captured fallback for that window.
+ */
+export function resolveCurrentAuxDb(): AuxDbResolution | null {
+  return auxDbResolver ? auxDbResolver() : null
+}
+
 export interface AuxWriteOptions extends ScheduleOptions {
   /**
    * Dependency-injection override for the aux-DB resolution (unit tests, or a
