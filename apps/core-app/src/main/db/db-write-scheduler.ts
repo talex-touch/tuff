@@ -52,7 +52,7 @@ export interface DbWriteTask<T> {
   busyRetries: number
   busyBaseDelayMs: number
   busyMaxDelayMs: number
-  /** Target SQLite file. Accepted and stored; activated by the per-file lane split (Phase 3). */
+  /** Target SQLite file; selects the per-lane queue/loop the task runs in. */
   lane: DbWriteLane
   /** Scheduler-owned busy retries already consumed by this task. */
   busyAttempts: number
@@ -75,8 +75,10 @@ export interface ScheduleOptions {
   busyMaxDelayMs?: number
   /**
    * Which SQLite file the write targets (`'primary'` = database.db, `'aux'` =
-   * database-aux.db). Accepted and stored, but not yet acted on: the per-lane
-   * queues land with the lane split (Phase 3). Passing it changes no behavior.
+   * database-aux.db). Each lane has its own queue and single-writer loop and
+   * the lanes execute concurrently (different files — no lock contention), so
+   * an aux write never queues behind primary-file contention and vice versa.
+   * Default `'primary'`.
    */
   lane?: DbWriteLane
 }
@@ -94,6 +96,43 @@ interface LabelRuntimeStats {
 interface LabelRuntimeState {
   consecutiveBusyFailures: number
   circuitOpenUntil: number
+}
+
+/** Per-lane snapshot exposed by {@link DbWriteScheduler.getStats}. */
+export interface DbWriteLaneStats {
+  queued: number
+  processing: boolean
+  currentTaskLabel: string | null
+  currentTaskPriority: DbWritePriority | null
+}
+
+/**
+ * One SQLite file's write queue: its own FIFO+priority queue, its own
+ * single-task processing loop, and its own busy-backoff wake-up timer.
+ * Label policies, circuits, and label stats stay scheduler-global (a label
+ * always targets one file, so labels never cross lanes).
+ */
+interface LaneState {
+  queue: DbWriteTask<unknown>[]
+  processing: boolean
+  currentTaskLabel: string | null
+  currentTaskPriority: DbWritePriority | null
+  /**
+   * Wake-up timer for the earliest parked (busy-backoff) task in this lane.
+   * Armed only when the lane loop is released because nothing is eligible;
+   * cleared on every kick of this lane.
+   */
+  eligibilityTimer: ReturnType<typeof setTimeout> | null
+}
+
+function createLaneState(): LaneState {
+  return {
+    queue: [],
+    processing: false,
+    currentTaskLabel: null,
+    currentTaskPriority: null,
+    eligibilityTimer: null
+  }
 }
 
 const PRIORITY_WEIGHT: Record<DbWritePriority, number> = {
@@ -119,26 +158,82 @@ const DEFAULT_BUSY_RETRIES_BY_PRIORITY: Record<DbWritePriority, number> = {
   best_effort: 6
 }
 
+/**
+ * Main-process SQLite write scheduler with one lane per database file
+ * (design D3/FR4): `'primary'` → database.db, `'aux'` → database-aux.db.
+ * Each lane executes at most one task at a time (single writer per file) and
+ * the lanes run concurrently, so backlog or busy-backoff on one file never
+ * blocks writes to the other. Busy failures are retried by delayed re-enqueue
+ * into the task's own lane — backoff time is spent queued, never while holding
+ * a lane loop. Drain/capacity waiters and label policies/circuits/stats are
+ * scheduler-global.
+ */
 export class DbWriteScheduler {
-  private queue: DbWriteTask<unknown>[] = []
-  private processing = false
-  private currentTaskLabel: string | null = null
-  private currentTaskPriority: DbWritePriority | null = null
+  private lanes: Record<DbWriteLane, LaneState> = {
+    primary: createLaneState(),
+    aux: createLaneState()
+  }
   private drainResolvers: Array<() => void> = []
   private capacityResolvers: Array<{ maxQueued: number; resolve: () => void }> = []
   private labelStats = new Map<string, LabelRuntimeStats>()
   private labelRuntime = new Map<string, LabelRuntimeState>()
   private labelPolicies = new Map<string, DbWriteLabelPolicy>()
   private lastLabelStatsLogAt = 0
+  // Global monotonic sequence: FIFO ties are broken per lane, but one counter
+  // for both lanes keeps enqueue order comparable across the scheduler.
   private sequence = 0
+
+  private laneStates(): LaneState[] {
+    return [this.lanes.primary, this.lanes.aux]
+  }
+
+  private getTotalQueued(): number {
+    let total = 0
+    for (const lane of this.laneStates()) total += lane.queue.length
+    return total
+  }
+
+  private isAnyLaneProcessing(): boolean {
+    return this.laneStates().some((lane) => lane.processing)
+  }
+
+  private isFullyIdle(): boolean {
+    return this.laneStates().every((lane) => !lane.processing && lane.queue.length === 0)
+  }
+
   /**
-   * Wake-up timer for the earliest parked (busy-backoff) task. Armed only when
-   * the loop is released because nothing is eligible; cleared on every kick.
+   * Aggregate "current task" for the backward-compatible stats shape: the
+   * primary lane's current task when it is executing one, else the aux
+   * lane's. (The legacy shape had a single loop; with lanes there can be two
+   * concurrent current tasks — the per-lane truth lives in `lanes`.)
    */
-  private eligibilityTimer: ReturnType<typeof setTimeout> | null = null
+  private getAggregateCurrentTask(): {
+    label: string | null
+    priority: DbWritePriority | null
+  } {
+    const primary = this.lanes.primary
+    if (primary.currentTaskLabel !== null) {
+      return { label: primary.currentTaskLabel, priority: primary.currentTaskPriority }
+    }
+    const aux = this.lanes.aux
+    return { label: aux.currentTaskLabel, priority: aux.currentTaskPriority }
+  }
+
+  private getLaneStatsBreakdown(): Record<DbWriteLane, DbWriteLaneStats> {
+    const snapshot = (lane: DbWriteLane): DbWriteLaneStats => {
+      const state = this.lanes[lane]
+      return {
+        queued: state.queue.length,
+        processing: state.processing,
+        currentTaskLabel: state.currentTaskLabel,
+        currentTaskPriority: state.currentTaskPriority
+      }
+    }
+    return { primary: snapshot('primary'), aux: snapshot('aux') }
+  }
 
   private enqueue<T>(task: DbWriteTask<T>): void {
-    this.queue.push(task as DbWriteTask<unknown>)
+    this.lanes[task.lane].queue.push(task as DbWriteTask<unknown>)
     this.recordTaskEnqueued(task.label)
   }
 
@@ -199,8 +294,10 @@ export class DbWriteScheduler {
       background: 0,
       best_effort: 0
     }
-    for (const task of this.queue) {
-      summary[task.priority] += 1
+    for (const lane of this.laneStates()) {
+      for (const task of lane.queue) {
+        summary[task.priority] += 1
+      }
     }
     return summary
   }
@@ -255,13 +352,18 @@ export class DbWriteScheduler {
       )
       .join(' | ')
 
+    const current = this.getAggregateCurrentTask()
     log.info('DB write scheduler label stats', {
       meta: {
-        queued: this.queue.length,
+        queued: this.getTotalQueued(),
         queuedByPriority: JSON.stringify(this.getQueueSummaryByPriority()),
-        processing: this.processing,
-        currentTaskLabel: this.currentTaskLabel,
-        currentTaskPriority: this.currentTaskPriority,
+        queuedByLane: JSON.stringify({
+          primary: this.lanes.primary.queue.length,
+          aux: this.lanes.aux.queue.length
+        }),
+        processing: this.isAnyLaneProcessing(),
+        currentTaskLabel: current.label,
+        currentTaskPriority: current.priority,
         topLabelsSummary,
         openCircuits: this.getCircuitSummary() || undefined
       }
@@ -377,11 +479,17 @@ export class DbWriteScheduler {
     return state.circuitOpenUntil > Date.now()
   }
 
-  private dropQueuedByBudgetKey(task: Pick<DbWriteTask<unknown>, 'budgetKey' | 'label'>): void {
+  private dropQueuedByBudgetKey(
+    task: Pick<DbWriteTask<unknown>, 'budgetKey' | 'label' | 'lane'>
+  ): void {
     if (!task.budgetKey) return
 
+    // latest_wins sweeps only the incoming task's own lane. Budget keys and
+    // labels are lane-stable in practice (a label always writes one file), and
+    // the lane boundary keeps a sweep from reaching into another file's queue.
+    const laneState = this.lanes[task.lane]
     const remaining: DbWriteTask<unknown>[] = []
-    for (const queued of this.queue) {
+    for (const queued of laneState.queue) {
       if (queued.budgetKey === task.budgetKey) {
         const waitedMs = Date.now() - queued.enqueuedAt
         this.recordTaskSettled(queued.label, waitedMs, 'dropped')
@@ -394,7 +502,7 @@ export class DbWriteScheduler {
         remaining.push(queued)
       }
     }
-    this.queue = remaining
+    laneState.queue = remaining
   }
 
   public registerLabelPolicy(label: string, policy: DbWriteLabelPolicy): void {
@@ -428,6 +536,10 @@ export class DbWriteScheduler {
     operation: () => Promise<T>,
     options?: ScheduleOptions
   ): Promise<T> {
+    // Reentrancy guard: a schedule() issued from inside a running task executes
+    // directly — even when it targets the OTHER lane. Deadlock avoidance trumps
+    // lane placement for this edge case (nested cross-lane writes are rare and
+    // the LibSQL binding serializes executes on the thread anyway).
     if (taskContext.getStore()) {
       return operation()
     }
@@ -468,24 +580,41 @@ export class DbWriteScheduler {
       }
 
       this.enqueue(task)
-      this.kick()
+      this.kick(task.lane)
     })
   }
 
+  /**
+   * Backward-compatible aggregate over both lanes plus a per-lane breakdown:
+   * - `queued` — SUM of queued tasks across lanes.
+   * - `processing` — true when ANY lane is executing a task.
+   * - `currentTaskLabel`/`currentTaskPriority` — the primary lane's current
+   *   task when it has one, else the aux lane's (see
+   *   {@link DbWriteScheduler.getAggregateCurrentTask}).
+   * Per-lane truth is in `lanes`.
+   */
   getStats(): {
     queued: number
     processing: boolean
     currentTaskLabel: string | null
     currentTaskPriority: DbWritePriority | null
+    lanes: Record<DbWriteLane, DbWriteLaneStats>
   } {
+    const current = this.getAggregateCurrentTask()
     return {
-      queued: this.queue.length,
-      processing: this.processing,
-      currentTaskLabel: this.currentTaskLabel,
-      currentTaskPriority: this.currentTaskPriority
+      queued: this.getTotalQueued(),
+      processing: this.isAnyLaneProcessing(),
+      currentTaskLabel: current.label,
+      currentTaskPriority: current.priority,
+      lanes: this.getLaneStatsBreakdown()
     }
   }
 
+  /**
+   * Same aggregate semantics as {@link DbWriteScheduler.getStats} (sum/any
+   * across lanes, primary-first current task) with label/circuit detail and a
+   * per-lane breakdown.
+   */
   getDetailedStats(): {
     queued: number
     queuedByPriority: Record<DbWritePriority, number>
@@ -495,6 +624,7 @@ export class DbWriteScheduler {
     sqliteBusyRatio: number
     busyFailures: number
     circuits: ReturnType<DbWriteScheduler['getCircuitStates']>
+    lanes: Record<DbWriteLane, DbWriteLaneStats>
   } {
     const totals = Array.from(this.labelStats.values()).reduce(
       (acc, item) => {
@@ -505,54 +635,64 @@ export class DbWriteScheduler {
       { failed: 0, busyFailed: 0 }
     )
 
+    const current = this.getAggregateCurrentTask()
     return {
-      queued: this.queue.length,
+      queued: this.getTotalQueued(),
       queuedByPriority: this.getQueueSummaryByPriority(),
-      processing: this.processing,
-      currentTaskLabel: this.currentTaskLabel,
-      currentTaskPriority: this.currentTaskPriority,
+      processing: this.isAnyLaneProcessing(),
+      currentTaskLabel: current.label,
+      currentTaskPriority: current.priority,
       busyFailures: totals.busyFailed,
       sqliteBusyRatio:
         totals.failed > 0 ? Number((totals.busyFailed / totals.failed).toFixed(3)) : 0,
-      circuits: this.getCircuitStates()
+      circuits: this.getCircuitStates(),
+      lanes: this.getLaneStatsBreakdown()
     }
   }
 
   /**
-   * Wait until the queue depth drops below `maxQueued`.
-   * Use this to apply backpressure on producers that generate DB tasks
-   * faster than they can be consumed (e.g. fullScan fire-and-forget chains).
+   * Wait until the TOTAL queue depth (sum across both lanes) drops below
+   * `maxQueued`. Use this to apply backpressure on producers that generate DB
+   * tasks faster than they can be consumed (e.g. fullScan fire-and-forget
+   * chains). Backpressure is deliberately global: it bounds scheduler memory
+   * and event-loop pressure, which both lanes share.
    */
   async waitForCapacity(maxQueued: number): Promise<void> {
-    if (this.queue.length < maxQueued) return
+    if (this.getTotalQueued() < maxQueued) return
 
     await new Promise<void>((resolve) => {
       this.capacityResolvers.push({ maxQueued, resolve })
     })
   }
 
+  /**
+   * Resolve when EVERY lane is idle with an empty queue. Tasks parked for busy
+   * backoff still count as queued, so drain waits out their delayed retries in
+   * both lanes instead of resolving early.
+   */
   async drain(): Promise<void> {
-    if (!this.processing && this.queue.length === 0) return
+    if (this.isFullyIdle()) return
 
     await new Promise<void>((resolve) => {
       this.drainResolvers.push(resolve)
-      this.kick()
+      this.kick('primary')
+      this.kick('aux')
     })
   }
 
   /**
-   * Pick the next ELIGIBLE task (`nextEligibleAt <= now`), by priority weight
-   * then FIFO sequence. Tasks parked for busy backoff are skipped so their
-   * backoff is spent queued instead of blocking the head of the queue.
-   * Returns -1 when the queue holds only parked tasks.
+   * Pick the next ELIGIBLE task (`nextEligibleAt <= now`) from one lane's
+   * queue, by priority weight then FIFO sequence. Tasks parked for busy
+   * backoff are skipped so their backoff is spent queued instead of blocking
+   * the head of the lane. Returns -1 when the lane holds only parked tasks.
    */
-  private pickNextTaskIndex(now: number): number {
+  private pickNextTaskIndex(laneState: LaneState, now: number): number {
     let bestIdx = -1
     let bestWeight = -1
     let bestSeq = Number.MAX_SAFE_INTEGER
 
-    for (let i = 0; i < this.queue.length; i++) {
-      const candidate = this.queue[i]
+    for (let i = 0; i < laneState.queue.length; i++) {
+      const candidate = laneState.queue[i]
       if (candidate.nextEligibleAt > now) continue
       // Legacy non-QoS mode: FIFO by queue position among eligible tasks.
       if (!DB_QOS_ENABLED) return i
@@ -567,56 +707,72 @@ export class DbWriteScheduler {
     return bestIdx
   }
 
-  private clearEligibilityTimer(): void {
-    if (this.eligibilityTimer !== null) {
-      clearTimeout(this.eligibilityTimer)
-      this.eligibilityTimer = null
+  private clearEligibilityTimer(laneState: LaneState): void {
+    if (laneState.eligibilityTimer !== null) {
+      clearTimeout(laneState.eligibilityTimer)
+      laneState.eligibilityTimer = null
     }
   }
 
   /**
-   * Arm a single wake-up for the earliest parked task. Called only when the
-   * processing loop is released with a non-empty queue of ineligible tasks;
-   * any subsequent `kick()` (new enqueue, drain) clears and supersedes it.
+   * Arm a single wake-up for the earliest parked task in one lane. Called only
+   * when that lane's loop is released with a non-empty queue of ineligible
+   * tasks; any subsequent kick of the same lane (new enqueue, drain) clears
+   * and supersedes it. Lanes park and wake independently.
    */
-  private armEligibilityTimer(now: number): void {
+  private armEligibilityTimer(lane: DbWriteLane, now: number): void {
+    const laneState = this.lanes[lane]
     let minEligibleAt = Number.POSITIVE_INFINITY
-    for (const task of this.queue) {
+    for (const task of laneState.queue) {
       if (task.nextEligibleAt < minEligibleAt) minEligibleAt = task.nextEligibleAt
     }
     if (!Number.isFinite(minEligibleAt)) return
 
     const delayMs = Math.max(1, minEligibleAt - now + 1)
-    this.clearEligibilityTimer()
-    this.eligibilityTimer = setTimeout(() => {
-      this.eligibilityTimer = null
-      this.kick()
+    this.clearEligibilityTimer(laneState)
+    laneState.eligibilityTimer = setTimeout(() => {
+      laneState.eligibilityTimer = null
+      this.kick(lane)
     }, delayMs)
   }
 
-  private kick(): void {
-    if (this.processing) return
-    if (this.queue.length === 0) return
+  private kick(lane: DbWriteLane): void {
+    const laneState = this.lanes[lane]
+    if (laneState.processing) return
+    if (laneState.queue.length === 0) return
 
-    // The loop re-evaluates eligibility itself and re-arms the timer when it
-    // parks again, so a pending wake-up is always safe to drop here. This also
-    // guarantees a newly enqueued eligible task never waits behind the timer.
-    this.clearEligibilityTimer()
-    void this.processLoop()
+    // The lane loop re-evaluates eligibility itself and re-arms the timer when
+    // it parks again, so a pending wake-up is always safe to drop here. This
+    // also guarantees a newly enqueued eligible task never waits behind the
+    // timer.
+    this.clearEligibilityTimer(laneState)
+    void this.processLoop(lane)
   }
 
   private notifyCapacityWaiters(): void {
     if (this.capacityResolvers.length === 0) return
 
+    const totalQueued = this.getTotalQueued()
     const remaining: typeof this.capacityResolvers = []
     for (const waiter of this.capacityResolvers) {
-      if (this.queue.length < waiter.maxQueued) {
+      if (totalQueued < waiter.maxQueued) {
         waiter.resolve()
       } else {
         remaining.push(waiter)
       }
     }
     this.capacityResolvers = remaining
+  }
+
+  private maybeResolveDrainWaiters(): void {
+    if (this.drainResolvers.length === 0) return
+    if (!this.isFullyIdle()) return
+
+    const resolvers = this.drainResolvers
+    this.drainResolvers = []
+    for (const resolve of resolvers) {
+      resolve()
+    }
   }
 
   private openCircuitForTask(task: DbWriteTask<unknown>): void {
@@ -691,11 +847,13 @@ export class DbWriteScheduler {
     )
     task.nextEligibleAt = Date.now() + backoffMs
     task.busyBackoffTotalMs += backoffMs
-    // Same task object: enqueuedAt, sequence, and promise callbacks preserved.
-    // Aging (shouldDropTaskByWait) keeps measuring from the original
-    // enqueuedAt, so a busy-looping droppable task drops instead of retrying
-    // forever. Not re-counted as enqueued: one schedule() call settles once.
-    this.queue.push(task)
+    // Same task object: enqueuedAt, sequence, promise callbacks, and lane
+    // preserved — the park re-enters the task's OWN lane, so the backoff never
+    // leaks into the other file's queue. Aging (shouldDropTaskByWait) keeps
+    // measuring from the original enqueuedAt, so a busy-looping droppable task
+    // drops instead of retrying forever. Not re-counted as enqueued: one
+    // schedule() call settles once.
+    this.lanes[task.lane].queue.push(task)
 
     const logState = nextSqliteBusyRetryLogState(task.label, BUSY_RETRY_LOG_THROTTLE_MS)
     if (logState.shouldLog) {
@@ -729,27 +887,36 @@ export class DbWriteScheduler {
     task.reject(error)
   }
 
-  private async processLoop(): Promise<void> {
-    if (this.processing) return
+  /**
+   * One lane's processing loop: executes that lane's tasks one at a time
+   * (single writer per file). Both lane loops may be in flight concurrently —
+   * they interleave on the event loop (the LibSQL local binding is synchronous
+   * per execute) but neither ever waits for the other lane's queue, backoff
+   * park, or file lock.
+   */
+  private async processLoop(lane: DbWriteLane): Promise<void> {
+    const laneState = this.lanes[lane]
+    if (laneState.processing) return
 
-    this.processing = true
+    laneState.processing = true
 
     let taskCount = 0
-    while (this.queue.length > 0) {
+    while (laneState.queue.length > 0) {
       const now = Date.now()
-      const taskIdx = this.pickNextTaskIndex(now)
+      const taskIdx = this.pickNextTaskIndex(laneState, now)
       if (taskIdx < 0) {
-        // Every queued task is parked for busy backoff: release the loop and
-        // arm one wake-up for the earliest eligibility. Never sleep (or spin)
-        // while holding the write loop; backoff time is spent queued.
-        this.armEligibilityTimer(now)
+        // Every task queued in this lane is parked for busy backoff: release
+        // the lane loop and arm one wake-up for the earliest eligibility.
+        // Never sleep (or spin) while holding a lane loop; backoff time is
+        // spent queued. The other lane is unaffected.
+        this.armEligibilityTimer(lane, now)
         break
       }
 
-      const [task] = this.queue.splice(taskIdx, 1)
+      const [task] = laneState.queue.splice(taskIdx, 1)
       const waitedMs = now - task.enqueuedAt
-      this.currentTaskLabel = task.label
-      this.currentTaskPriority = task.priority
+      laneState.currentTaskLabel = task.label
+      laneState.currentTaskPriority = task.priority
 
       // The slow-wait warning measures head-of-line queue blocking, so the
       // task's own deliberate busy-backoff parks are excluded.
@@ -773,8 +940,8 @@ export class DbWriteScheduler {
         task.reject(
           new Error(`DB write task dropped after ${waitedMs}ms queue wait: ${task.label}`)
         )
-        this.currentTaskLabel = null
-        this.currentTaskPriority = null
+        laneState.currentTaskLabel = null
+        laneState.currentTaskPriority = null
         this.notifyCapacityWaiters()
         this.maybeLogLabelStats()
         continue
@@ -783,8 +950,8 @@ export class DbWriteScheduler {
       if (this.shouldRejectByCircuit(task)) {
         this.recordTaskSettled(task.label, waitedMs, 'dropped')
         task.reject(new Error(`DB write task dropped by circuit breaker: ${task.label}`))
-        this.currentTaskLabel = null
-        this.currentTaskPriority = null
+        laneState.currentTaskLabel = null
+        laneState.currentTaskPriority = null
         this.notifyCapacityWaiters()
         this.maybeLogLabelStats()
         continue
@@ -796,14 +963,14 @@ export class DbWriteScheduler {
         this.recordTaskSettled(task.label, waitedMs, 'executed')
         task.resolve(result)
       } catch (error) {
-        // Busy failures re-enter the queue with delayed eligibility instead of
-        // settling; everything else (or exhausted retries) settles as failed.
+        // Busy failures re-enter their lane with delayed eligibility instead
+        // of settling; everything else (or exhausted retries) settles failed.
         if (!this.tryParkForBusyRetry(task, error)) {
           this.settleTaskFailure(task, error, waitedMs)
         }
       } finally {
-        this.currentTaskLabel = null
-        this.currentTaskPriority = null
+        laneState.currentTaskLabel = null
+        laneState.currentTaskPriority = null
       }
 
       // Notify capacity waiters after completing a task
@@ -814,18 +981,14 @@ export class DbWriteScheduler {
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
 
-    this.processing = false
+    laneState.processing = false
 
-    // Final capacity notification when queue is empty
+    // Final capacity notification when this lane goes idle.
     this.notifyCapacityWaiters()
 
-    if (this.queue.length === 0) {
-      const resolvers = this.drainResolvers
-      this.drainResolvers = []
-      for (const resolve of resolvers) {
-        resolve()
-      }
-    }
+    // Drain resolves only when EVERY lane is idle and empty (a lane that broke
+    // out parked still has queued tasks, so drain keeps waiting for its timer).
+    this.maybeResolveDrainWaiters()
   }
 }
 

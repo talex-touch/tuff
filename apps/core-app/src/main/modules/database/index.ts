@@ -481,12 +481,17 @@ export class DatabaseModule extends BaseModule {
   } | null {
     const stats = dbWriteScheduler.getStats()
     this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
-    if (stats.queued > 0 || stats.processing) {
+    // WAL checkpoints run against the PRIMARY file (database.db), so the busy
+    // gate consults the primary lane only: an aux-lane backlog writes a
+    // different file and must not skip a primary-file checkpoint (lane split,
+    // design D3/FR4).
+    const primaryLane = stats.lanes.primary
+    if (primaryLane.queued > 0 || primaryLane.processing) {
       return {
         reason: 'db-write-scheduler',
-        queued: stats.queued,
-        processing: stats.processing,
-        currentTaskLabel: stats.currentTaskLabel ?? undefined
+        queued: primaryLane.queued,
+        processing: primaryLane.processing,
+        currentTaskLabel: primaryLane.currentTaskLabel ?? undefined
       }
     }
     return null
@@ -654,7 +659,11 @@ export class DatabaseModule extends BaseModule {
       busyRetryCount,
       busyRetryDelta,
       schedulerBusyFailureDelta,
+      // Aggregate depth (sum across lanes) keeps the snapshot shape; per-lane
+      // depths locate which FILE a backlog belongs to (lane split).
       schedulerQueueDepth: scheduler.queued,
+      schedulerQueueDepthPrimary: scheduler.lanes.primary.queued,
+      schedulerQueueDepthAux: scheduler.lanes.aux.queued,
       schedulerQueuePeak: this.schedulerQueuePeak,
       writerPending: writer.pending,
       writerActive: writer.activeAdmissions,
@@ -706,11 +715,14 @@ export class DatabaseModule extends BaseModule {
     pollingService.register(
       DB_WAL_TRUNCATE_TASK_ID,
       async () => {
-        const queueDepth = dbWriteScheduler.getStats().queued
-        this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
-        if (queueDepth > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
+        const stats = dbWriteScheduler.getStats()
+        this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
+        // Primary-lane depth only: TRUNCATE checkpoints the primary file, and
+        // an aux-lane backlog must not defer it (lane split, design D3/FR4).
+        const primaryQueueDepth = stats.lanes.primary.queued
+        if (primaryQueueDepth > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
           dbLog.info('Skipping WAL TRUNCATE checkpoint due to active write backlog', {
-            meta: { schedulerQueueDepth: queueDepth }
+            meta: { schedulerQueueDepth: primaryQueueDepth }
           })
           return
         }

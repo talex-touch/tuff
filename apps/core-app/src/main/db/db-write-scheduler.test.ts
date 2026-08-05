@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DbWriteScheduler } from './db-write-scheduler'
+import { DbWriteScheduler, dbWriteScheduler } from './db-write-scheduler'
+import type { MainDatabase } from './db-write'
+import { scheduleAuxWrite } from './db-write'
 import { setSqliteRetryExhaustedListener } from './sqlite-retry'
 
 function sleep(ms: number): Promise<void> {
@@ -386,13 +388,63 @@ describe('DbWriteScheduler scheduler-native busy retry', () => {
     expect(order).toEqual(['outer:start', 'inner', 'outer:end'])
   })
 
-  it('lane 选项当前仅被接受存储，不改变任何执行行为（Phase 3 激活）', async () => {
+})
+
+// Phase 3 lane split: the pre-split test asserting "lane is accepted but
+// changes no behavior" (aux queued behind primary) is superseded by this block.
+describe('DbWriteScheduler per-file lanes', () => {
+  it('primary 任务处于 busy 退避停靠时，aux 任务照常执行（无跨 lane 阻塞）', async () => {
+    const scheduler = new DbWriteScheduler()
+    const order: string[] = []
+    let primaryCalls = 0
+
+    // busyBaseDelayMs: 60 → first backoff is ≥48ms even with -20% jitter, so
+    // the assertions below run while the primary task is still parked.
+    const primary = scheduler.schedule(
+      'lane-test.primary-busy',
+      async () => {
+        primaryCalls += 1
+        if (primaryCalls === 1) throw sqliteBusyError()
+        order.push('primary:success')
+        return 'primary'
+      },
+      { lane: 'primary', busyRetries: 2, busyBaseDelayMs: 60, busyMaxDelayMs: 120 }
+    )
+
+    await sleep(10)
+    // The primary task failed once and is parked in its lane (queued, not
+    // executing, loop released).
+    expect(primaryCalls).toBe(1)
+    const parked = scheduler.getStats()
+    expect(parked.lanes.primary.queued).toBe(1)
+    expect(parked.lanes.primary.processing).toBe(false)
+
+    const aux = scheduler.schedule(
+      'lane-test.aux-during-backoff',
+      async () => {
+        order.push('aux:success')
+        return 'aux'
+      },
+      { lane: 'aux' }
+    )
+
+    await expect(aux).resolves.toBe('aux')
+    // Aux completed while the primary task was still parked for backoff.
+    expect(order).toEqual(['aux:success'])
+    expect(primaryCalls).toBe(1)
+
+    await expect(primary).resolves.toBe('primary')
+    expect(order).toEqual(['aux:success', 'primary:success'])
+    expect(primaryCalls).toBe(2)
+  })
+
+  it('两条 lane 并发执行：aux 任务在 primary 任务执行期间完整运行（事件序证明交错）', async () => {
     const scheduler = new DbWriteScheduler()
     const order: string[] = []
 
     const primaryGate = createGate()
     const primary = scheduler.schedule(
-      'scheduler-test.lane-primary',
+      'lane-test.primary-hold',
       async () => {
         order.push('primary:start')
         await primaryGate.wait
@@ -402,23 +454,257 @@ describe('DbWriteScheduler scheduler-native busy retry', () => {
       { lane: 'primary' }
     )
 
-    // Aux 任务仍与 primary 任务共用同一队列/单写循环：在 Phase 3 之前，
-    // 传 lane 不得产生并行执行或任何排序差异。
+    const auxGate = createGate()
     const aux = scheduler.schedule(
-      'scheduler-test.lane-aux',
+      'lane-test.aux-interleaved',
       async () => {
-        order.push('aux')
+        order.push('aux:start')
+        await auxGate.wait
+        order.push('aux:end')
         return 'aux'
       },
       { lane: 'aux' }
     )
 
     await sleep(20)
-    expect(order).toEqual(['primary:start'])
+    // Both lanes picked up their task concurrently: aux started while the
+    // primary task was (and still is) mid-execution.
+    expect(order).toEqual(['primary:start', 'aux:start'])
+
+    auxGate.release()
+    await expect(aux).resolves.toBe('aux')
+    expect(order).toEqual(['primary:start', 'aux:start', 'aux:end'])
 
     primaryGate.release()
     await expect(primary).resolves.toBe('primary')
-    await expect(aux).resolves.toBe('aux')
-    expect(order).toEqual(['primary:start', 'primary:end', 'aux'])
+    expect(order).toEqual(['primary:start', 'aux:start', 'aux:end', 'primary:end'])
+  })
+
+  it('drain 需等待两条 lane 全部清空（含 busy 退避停靠中的任务）', async () => {
+    const scheduler = new DbWriteScheduler()
+    let auxCalls = 0
+    let primaryDone = false
+
+    const aux = scheduler.schedule(
+      'lane-test.aux-busy-drain',
+      async () => {
+        auxCalls += 1
+        if (auxCalls === 1) throw sqliteBusyError()
+        return auxCalls
+      },
+      { lane: 'aux', busyRetries: 2, busyBaseDelayMs: 15, busyMaxDelayMs: 60 }
+    )
+    const primary = scheduler.schedule(
+      'lane-test.primary-quick',
+      async () => {
+        primaryDone = true
+        return 'primary'
+      },
+      { lane: 'primary' }
+    )
+
+    await scheduler.drain()
+    // Drain resolved only after the parked aux retry ran to completion.
+    expect(auxCalls).toBe(2)
+    expect(primaryDone).toBe(true)
+    const stats = scheduler.getStats()
+    expect(stats.queued).toBe(0)
+    expect(stats.processing).toBe(false)
+    expect(stats.lanes.primary.queued).toBe(0)
+    expect(stats.lanes.aux.queued).toBe(0)
+    await expect(aux).resolves.toBe(2)
+    await expect(primary).resolves.toBe('primary')
+  })
+
+  it('latest_wins budgetKey 清扫仅丢弃同一 lane 内排队的任务', async () => {
+    const scheduler = new DbWriteScheduler()
+
+    // Hold both lanes so the budget-key tasks stay QUEUED (the sweep only
+    // touches queued tasks, never the executing one).
+    const primaryGate = createGate()
+    const primaryHold = scheduler.schedule(
+      'lane-test.primary-hold',
+      async () => {
+        await primaryGate.wait
+      },
+      { lane: 'primary' }
+    )
+    const auxGate = createGate()
+    const auxHold = scheduler.schedule(
+      'lane-test.aux-hold',
+      async () => {
+        await auxGate.wait
+      },
+      { lane: 'aux' }
+    )
+
+    const sharedBudget = {
+      dropPolicy: 'latest_wins' as const,
+      budgetKey: 'lane-test.shared-budget'
+    }
+    let staleRan = false
+    const stalePrimary = scheduler.schedule(
+      'lane-test.primary-stale',
+      async () => {
+        staleRan = true
+        return 'stale'
+      },
+      { lane: 'primary', ...sharedBudget }
+    )
+    let auxSurvivorRan = false
+    const auxSurvivor = scheduler.schedule(
+      'lane-test.aux-survivor',
+      async () => {
+        auxSurvivorRan = true
+        return 'aux'
+      },
+      { lane: 'aux', ...sharedBudget }
+    )
+
+    // Newest primary-lane task with the SAME budgetKey sweeps its own lane
+    // only: the queued aux task must survive.
+    const freshPrimary = scheduler.schedule('lane-test.primary-fresh', async () => 'fresh', {
+      lane: 'primary',
+      ...sharedBudget
+    })
+
+    await expect(stalePrimary).rejects.toThrow('latest_wins')
+    expect(scheduler.getStats().lanes.aux.queued).toBe(1)
+
+    auxGate.release()
+    await expect(auxHold).resolves.toBeUndefined()
+    await expect(auxSurvivor).resolves.toBe('aux')
+    expect(auxSurvivorRan).toBe(true)
+    expect(staleRan).toBe(false)
+
+    primaryGate.release()
+    await expect(primaryHold).resolves.toBeUndefined()
+    await expect(freshPrimary).resolves.toBe('fresh')
+  })
+
+  it('getStats/getDetailedStats 聚合字段保持旧形状（sum/any/primary 优先），并提供 per-lane 细分', async () => {
+    const scheduler = new DbWriteScheduler()
+
+    const idleLane = {
+      queued: 0,
+      processing: false,
+      currentTaskLabel: null,
+      currentTaskPriority: null
+    }
+    const idle = scheduler.getStats()
+    expect(idle).toEqual({
+      queued: 0,
+      processing: false,
+      currentTaskLabel: null,
+      currentTaskPriority: null,
+      lanes: { primary: idleLane, aux: idleLane }
+    })
+
+    const primaryGate = createGate()
+    const primaryHold = scheduler.schedule(
+      'lane-test.stats-primary-hold',
+      async () => {
+        await primaryGate.wait
+      },
+      { lane: 'primary', priority: 'interactive' }
+    )
+    const auxGate = createGate()
+    const auxHold = scheduler.schedule(
+      'lane-test.stats-aux-hold',
+      async () => {
+        await auxGate.wait
+      },
+      { lane: 'aux', priority: 'background' }
+    )
+    const queuedPrimary = scheduler.schedule('lane-test.stats-primary-queued', async () => 'p2', {
+      lane: 'primary'
+    })
+    const queuedAux = scheduler.schedule('lane-test.stats-aux-queued', async () => 'a2', {
+      lane: 'aux'
+    })
+
+    const busy = scheduler.getStats()
+    // Aggregates: queued = SUM across lanes, processing = ANY lane executing,
+    // current task = the PRIMARY lane's while it has one.
+    expect(busy.queued).toBe(2)
+    expect(busy.processing).toBe(true)
+    expect(busy.currentTaskLabel).toBe('lane-test.stats-primary-hold')
+    expect(busy.currentTaskPriority).toBe('interactive')
+    expect(busy.lanes.primary).toEqual({
+      queued: 1,
+      processing: true,
+      currentTaskLabel: 'lane-test.stats-primary-hold',
+      currentTaskPriority: 'interactive'
+    })
+    expect(busy.lanes.aux).toEqual({
+      queued: 1,
+      processing: true,
+      currentTaskLabel: 'lane-test.stats-aux-hold',
+      currentTaskPriority: 'background'
+    })
+
+    const detailed = scheduler.getDetailedStats()
+    expect(detailed.queued).toBe(2)
+    // Both queued tasks fall back to the default 'background' label policy.
+    expect(detailed.queuedByPriority.background).toBe(2)
+    expect(detailed.processing).toBe(true)
+    expect(detailed.currentTaskLabel).toBe('lane-test.stats-primary-hold')
+    expect(detailed.currentTaskPriority).toBe('interactive')
+    expect(detailed.lanes).toEqual(busy.lanes)
+
+    // Once the primary lane empties, the aggregate current task falls back to
+    // the aux lane's.
+    primaryGate.release()
+    await primaryHold
+    await expect(queuedPrimary).resolves.toBe('p2')
+    await sleep(10)
+    const auxOnly = scheduler.getStats()
+    expect(auxOnly.lanes.primary.processing).toBe(false)
+    expect(auxOnly.lanes.primary.queued).toBe(0)
+    expect(auxOnly.processing).toBe(true)
+    expect(auxOnly.currentTaskLabel).toBe('lane-test.stats-aux-hold')
+    expect(auxOnly.currentTaskPriority).toBe('background')
+
+    auxGate.release()
+    await auxHold
+    await expect(queuedAux).resolves.toBe('a2')
+    await scheduler.drain()
+    expect(scheduler.getStats().processing).toBe(false)
+    expect(scheduler.getStats().queued).toBe(0)
+  })
+
+  it('scheduleAuxWrite 端到端：真实 aux 句柄进入 aux lane，不排在 primary 拥堵之后', async () => {
+    // Uses the SINGLETON scheduler (scheduleAuxWrite routes through it); the
+    // gate + final drain leave it empty for other suites.
+    const auxDb = { id: 'fake-aux-db' } as unknown as MainDatabase
+
+    const primaryGate = createGate()
+    const primaryHold = dbWriteScheduler.schedule(
+      'lane-test.singleton-primary-hold',
+      async () => {
+        await primaryGate.wait
+      },
+      { lane: 'primary' }
+    )
+
+    let receivedDb: MainDatabase | null = null
+    const aux = scheduleAuxWrite(
+      'lane-test.singleton-aux-write',
+      async (db) => {
+        receivedDb = db
+        return 'aux-done'
+      },
+      { resolveDb: () => ({ db: auxDb, isAux: true }) }
+    )
+
+    // The aux write resolves while the primary lane is still blocked: proof it
+    // was enqueued into (and executed by) the aux lane.
+    await expect(aux).resolves.toBe('aux-done')
+    expect(receivedDb).toBe(auxDb)
+    expect(dbWriteScheduler.getStats().lanes.primary.processing).toBe(true)
+
+    primaryGate.release()
+    await primaryHold
+    await dbWriteScheduler.drain()
   })
 })

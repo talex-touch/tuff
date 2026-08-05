@@ -72,6 +72,11 @@ export function scheduleDbWrite<T>(
  * database.db exactly during the startup contention peak. Resolving per write
  * makes the operation receive whichever handle is correct right now, and the
  * recorded lane always matches the file actually written.
+ *
+ * The lane is live routing (per-file lane split): the scheduler runs one
+ * queue+loop per lane, so a real-aux write never queues behind primary-file
+ * contention. During the fallback window (`isAux: false`) the write correctly
+ * joins the primary lane, because that IS the file it will write.
  */
 export async function scheduleAuxWrite<T>(
   label: string,
