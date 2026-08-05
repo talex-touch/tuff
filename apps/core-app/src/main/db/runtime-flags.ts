@@ -17,10 +17,13 @@ export const DB_AUX_ENABLED = parseEnvBoolean('TUFF_DB_AUX_ENABLED', true)
 // When enabled, the search-index worker gets its OWN sqlite file
 // (`search-index.db`) instead of sharing `database.db` with the main process,
 // so each file has a single writer connection and the two never contend for the
-// WAL writer lock (issue #295). Default OFF — flipping it on triggers a one-time
-// full reindex on first launch (search data is rebuildable). Ships dark until
-// validated by an app-run.
-export const DB_SEARCH_SPLIT_ENABLED = parseEnvBoolean('TUFF_DB_SEARCH_SPLIT_ENABLED', false)
+// WAL writer lock (issue #295). Default ON since 2026-08-05, validated by app
+// runs (schema parity fixups, bootstrap reindex, 2d.3 write-path migration all
+// landed; V2 run showed zero BUSY/FK). First launch with an empty search file
+// triggers a one-time full reindex (search data is rebuildable).
+// TUFF_DB_SEARCH_SPLIT_ENABLED=0 is the emergency kill switch back to the
+// shared-file topology.
+export const DB_SEARCH_SPLIT_ENABLED = parseEnvBoolean('TUFF_DB_SEARCH_SPLIT_ENABLED', true)
 export const DB_QOS_ENABLED = parseEnvBoolean('TUFF_DB_QOS_ENABLED', true)
 export const STARTUP_DEGRADE_ENABLED = parseEnvBoolean('TUFF_STARTUP_DEGRADE_ENABLED', true)
 export const STARTUP_DEGRADE_WINDOW_MS = 120_000
