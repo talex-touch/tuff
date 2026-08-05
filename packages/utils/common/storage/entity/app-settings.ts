@@ -184,6 +184,16 @@ const _appSettingOriginData = {
       items: [] as Array<Record<string, unknown>>,
     },
   },
+  localAiCli: {
+    enabled: false,
+    defaultProvider: null as null | 'pi' | 'codex' | 'claude' | 'oh-my-pi',
+    providers: {
+      'pi': { enabled: false, executableOverride: '' },
+      'codex': { enabled: false, executableOverride: '' },
+      'claude': { enabled: false, executableOverride: '' },
+      'oh-my-pi': { enabled: false, executableOverride: '' },
+    },
+  },
   floatingBall: {
     enabled: false,
     size: 56,

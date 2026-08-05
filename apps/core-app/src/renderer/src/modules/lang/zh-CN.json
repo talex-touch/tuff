@@ -538,6 +538,85 @@
     "wakeWordsDesc": "多个唤醒词用英文逗号分隔。",
     "wakeWordsPlaceholder": "阿洛, aler"
   },
+  "settingLocalAiCli": {
+    "groupTitle": "本机 AI 代理",
+    "groupDesc": "快速调用这台 Mac 已安装并完成登录的 Pi、Codex、Claude Code 或 OMP。默认关闭，所有任务均由 CoreApp 主进程校验后启动。",
+    "betaLabel": "macOS Beta · 本机进程",
+    "refresh": "重新探测",
+    "enable": "启用本机 AI 代理",
+    "enableDesc": "启用后才允许 CoreBox 和 OmniPanel 请求本机代理；不会在设置页自动启动任何 CLI。",
+    "locate": "选择程序",
+    "defaultProvider": "默认代理",
+    "defaultProviderDesc": "仅列出已允许的代理；自动选择会使用第一个可用代理。",
+    "defaultAutomatic": "自动选择",
+    "providerUnavailable": "未探测到可用程序",
+    "providerUnavailableWithReason": "不可用：{reason}",
+    "capabilities": {
+      "quickReply": "快速问答",
+      "taskApproval": "任务逐次审批",
+      "terminal": "交互终端",
+      "terminalApproval": "终端逐次审批",
+      "resume": "续接会话",
+      "unavailable": "当前版本无可用能力"
+    },
+    "messages": {
+      "loadFailed": "无法读取本机代理状态",
+      "saveFailed": "无法保存本机代理设置",
+      "locateFailed": "所选程序未通过代理版本校验"
+    }
+  },
+  "localAiCliPanel": {
+    "actionTitle": "交给本机代理",
+    "actionSubtitle": "调用已登录的 Pi、Codex、Claude Code 或 OMP",
+    "title": "本机 AI 代理",
+    "subtitle": "提示词仅通过 stdin / 本机协议发送",
+    "close": "关闭本机代理面板",
+    "disabled": "首次使用需要先在设置中启用功能并允许至少一个代理。草稿会保留，但不会自动执行。",
+    "openSettings": "打开设置",
+    "provider": "代理",
+    "access": "访问模式",
+    "answerOnly": "仅回答",
+    "workspaceRead": "读取隔离工作目录",
+    "workspaceWriteApproval": "写入隔离目录（逐次审批）",
+    "placeholder": "输入要交给本机代理的任务…",
+    "run": "运行",
+    "stop": "停止",
+    "copy": "复制结果",
+    "copied": "已复制本机代理结果",
+    "continueInTerminal": "在终端继续",
+    "terminalFailed": "无法打开本机代理终端",
+    "running": "本机代理正在处理…",
+    "failed": "任务失败（{code}）",
+    "cancelled": "任务已取消",
+    "deny": "拒绝",
+    "allowOnce": "仅允许一次",
+    "pasteBack": "回填到原应用",
+    "pastedBack": "已回填到捕获的原应用",
+    "pasteBackReasons": {
+      "target-unavailable": "未捕获到可安全回填的原应用",
+      "target-drift": "当前应用或窗口已变化，已阻止回填",
+      "capture-expired": "原应用目标已过期，请重新打开面板",
+      "unsupported": "当前系统未提供安全回填能力"
+    },
+    "templates": {
+      "summarize": "摘要",
+      "explain": "解释",
+      "rewrite": "改写",
+      "nextSteps": "下一步"
+    },
+    "prompts": {
+      "summarize": "请总结以下内容，保留关键事实与结论：",
+      "explain": "请用清晰、准确的方式解释以下内容：",
+      "rewrite": "请改写以下内容，使表达更清晰自然：",
+      "nextSteps": "请基于以下上下文给出可执行的下一步建议："
+    },
+    "context": {
+      "selection": "选中文本",
+      "clipboard": "剪贴板文本",
+      "activeApp": "当前应用",
+      "activeWindow": "当前窗口"
+    }
+  },
   "permission": {
     "system": {
       "shortcut": {

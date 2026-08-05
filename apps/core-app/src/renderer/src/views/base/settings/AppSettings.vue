@@ -16,6 +16,7 @@ const SettingDownload = defineAsyncComponent(() => import('./SettingDownload.vue
 const SettingEverything = defineAsyncComponent(() => import('./SettingEverything.vue'))
 const SettingFileIndex = defineAsyncComponent(() => import('./SettingFileIndex.vue'))
 const SettingNetwork = defineAsyncComponent(() => import('./SettingNetwork.vue'))
+const SettingLocalAiCli = defineAsyncComponent(() => import('./SettingLocalAiCli.vue'))
 const SettingSentry = defineAsyncComponent(() => import('./SettingSentry.vue'))
 const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue'))
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
@@ -57,6 +58,8 @@ watch(
       <SettingTools />
 
       <SettingAssistant />
+
+      <SettingLocalAiCli data-settings-section="local-ai-cli" />
 
       <div
         v-if="showAdvancedSettings"

@@ -78,6 +78,33 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   const setup = isPlainObject(value.setup) ? value.setup : {}
   const window = isPlainObject(value.window) ? value.window : {}
   const omniPanel = isPlainObject(value.omniPanel) ? value.omniPanel : {}
+  const localAiCli = isPlainObject(value.localAiCli) ? value.localAiCli : {}
+  const localAiCliProviders = isPlainObject(localAiCli.providers) ? localAiCli.providers : {}
+  const providerIds = ['pi', 'codex', 'claude', 'oh-my-pi'] as const
+  const normalizedProviders = Object.fromEntries(
+    providerIds.map((providerId) => {
+      const candidate = isPlainObject(localAiCliProviders[providerId])
+        ? localAiCliProviders[providerId]
+        : {}
+      const providerFallback = fallback.localAiCli.providers[providerId]
+      return [
+        providerId,
+        {
+          enabled:
+            typeof candidate.enabled === 'boolean' ? candidate.enabled : providerFallback.enabled,
+          executableOverride:
+            typeof candidate.executableOverride === 'string'
+              ? candidate.executableOverride.trim()
+              : providerFallback.executableOverride
+        }
+      ]
+    })
+  ) as AppSetting['localAiCli']['providers']
+  const defaultProvider = providerIds.includes(
+    localAiCli.defaultProvider as (typeof providerIds)[number]
+  )
+    ? (localAiCli.defaultProvider as AppSetting['localAiCli']['defaultProvider'])
+    : fallback.localAiCli.defaultProvider
 
   return {
     ...value,
@@ -96,6 +123,12 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
         typeof omniPanel.autoMountFirstFeatureOnPluginInstall === 'boolean'
           ? omniPanel.autoMountFirstFeatureOnPluginInstall
           : fallback.omniPanel.autoMountFirstFeatureOnPluginInstall
+    },
+    localAiCli: {
+      enabled:
+        typeof localAiCli.enabled === 'boolean' ? localAiCli.enabled : fallback.localAiCli.enabled,
+      defaultProvider,
+      providers: normalizedProviders
     }
   } as AppSetting
 }

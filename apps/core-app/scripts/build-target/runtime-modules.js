@@ -38,6 +38,8 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     { name: '@vue/compiler-sfc', location: 'resources' },
     { name: 'esbuild', location: 'resources' },
     { name: 'sharp', location: 'resources' },
+    { name: 'node-pty', location: 'resources' },
+    { name: '@anthropic-ai/claude-agent-sdk', location: 'resources' },
     // ffmpeg-static / ffprobe-static are intentionally NOT copied to resources/node_modules:
     // thumbnail-service.ts is their only consumer and resolves them from app.asar.unpacked via
     // normalizeAsarUnpackedPath (asarUnpack already places working binaries there). A resources

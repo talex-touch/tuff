@@ -1,0 +1,11 @@
+{
+  "provider": "pi",
+  "protocol": "rpc-jsonl",
+  "events": [
+    { "direction": "client", "type": "prompt", "message": "<synthetic>" },
+    { "direction": "agent", "type": "session", "id": "session_1" },
+    { "direction": "agent", "type": "message_update", "assistantMessageEvent": { "type": "text_delta", "delta": "READY" } },
+    { "direction": "agent", "type": "agent_end" }
+  ],
+  "writeApproval": "unavailable"
+}

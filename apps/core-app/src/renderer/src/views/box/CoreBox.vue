@@ -5,6 +5,7 @@ import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -41,6 +42,7 @@ import { resolveCoreBoxCompletionDisplay } from './completion-display'
 import TagSection from './tag/TagSection.vue'
 import { devLog } from '~/utils/dev-log'
 import { useI18n } from 'vue-i18n'
+import { omniPanelShowEvent } from '../../../../shared/events/omni-panel'
 
 declare global {
   interface Window {
@@ -51,6 +53,8 @@ declare global {
 const scrollbar = ref()
 const boxInputRef = ref()
 const transport = useTuffTransport()
+const localAiCli = createLocalAiCliSdk(transport)
+const localAiCliAvailable = ref(false)
 const router = useRouter()
 const { t } = useI18n()
 const { isMac } = useRendererPlatform()
@@ -153,6 +157,23 @@ const canSubmitFeaturePrompt = computed(
 function handleSubmitFeaturePrompt(): void {
   if (!canSubmitFeaturePrompt.value || !activeSendTargetItem.value) return
   void handleExecute(activeSendTargetItem.value)
+}
+
+async function refreshLocalAiCliAvailability(): Promise<void> {
+  try {
+    localAiCliAvailable.value = (await localAiCli.getStatus()).betaAvailable
+  } catch {
+    localAiCliAvailable.value = false
+  }
+}
+
+async function handleOpenLocalAiCli(): Promise<void> {
+  await transport.send(omniPanelShowEvent, {
+    captureSelection: false,
+    source: 'corebox-local-ai',
+    draftText: searchVal.value
+  })
+  await transport.send(CoreBoxEvents.ui.hide, undefined)
 }
 
 function isPluginWidgetRenderItem(item: TuffItem | null | undefined): item is TuffItem {
@@ -660,6 +681,7 @@ const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusInput
 
 onMounted(() => {
   resetAutoPasteState()
+  void refreshLocalAiCliAvailability()
 })
 
 onBeforeUnmount(() => {
@@ -871,7 +893,19 @@ const customCss = computed(() => {
           >
             <TuffIcon :icon="{ type: 'class', value: 'i-ri-send-plane-2-fill' }" />
           </button>
-          <TuffIcon v-else :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+          <template v-else>
+            <button
+              v-if="localAiCliAvailable"
+              class="CoreBox-SendButton CoreBox-LocalAiButton"
+              type="button"
+              :aria-label="t('localAiCliPanel.actionTitle')"
+              :title="t('localAiCliPanel.actionSubtitle')"
+              @click.stop="handleOpenLocalAiCli"
+            >
+              <TuffIcon :icon="{ type: 'class', value: 'i-ri-terminal-box-line' }" />
+            </button>
+            <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+          </template>
         </div>
       </template>
     </div>

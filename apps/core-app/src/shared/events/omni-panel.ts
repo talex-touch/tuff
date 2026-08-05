@@ -10,6 +10,8 @@ export interface OmniPanelShowRequest {
    * Source for diagnostics (shortcut, mouse-long-press, command).
    */
   source?: OmniPanelContextSource | string
+  /** Bounded draft text forwarded from a trusted host surface such as CoreBox. */
+  draftText?: string
 }
 
 export type OmniPanelContextSource =
@@ -17,6 +19,8 @@ export type OmniPanelContextSource =
   | 'mouse-long-press'
   | 'manual'
   | 'command'
+  | 'corebox-local-ai'
+  | 'local-ai-shortcut'
   | 'unknown'
 
 export type OmniPanelSelectionSupportLevel = 'supported' | 'best_effort' | 'unsupported'
@@ -148,6 +152,8 @@ export const omniPanelToggleEvent = defineRawEvent<OmniPanelShowRequest | undefi
 export const omniPanelContextEvent = defineRawEvent<OmniPanelContextPayload, void>(
   'omni-panel:context'
 )
+
+export const omniPanelRendererReadyEvent = defineRawEvent<void, void>('omni-panel:renderer-ready')
 
 export const omniPanelFeatureListEvent = defineEvent('omni-panel')
   .module('feature')

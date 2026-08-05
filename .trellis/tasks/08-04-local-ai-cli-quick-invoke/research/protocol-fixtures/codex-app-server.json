@@ -1,0 +1,15 @@
+{
+  "provider": "codex",
+  "protocol": "app-server-jsonrpc",
+  "events": [
+    { "direction": "client", "id": 1, "method": "initialize" },
+    { "direction": "client", "id": 2, "method": "thread/start", "approvalPolicy": "untrusted", "sandbox": "workspace-write" },
+    { "direction": "agent", "id": 2, "result": { "thread": { "id": "thread_1" } } },
+    { "direction": "client", "id": 3, "method": "turn/start", "input": "<synthetic>" },
+    { "direction": "agent", "id": 51, "method": "item/commandExecution/requestApproval", "reason": "<bounded-synthetic>" },
+    { "direction": "client", "id": 51, "decision": "decline" },
+    { "direction": "agent", "method": "item/agentMessage/delta", "delta": "READY" },
+    { "direction": "agent", "method": "turn/completed", "status": "completed" }
+  ],
+  "approvalProbes": { "allowOnce": "completed", "deny": "completed" }
+}

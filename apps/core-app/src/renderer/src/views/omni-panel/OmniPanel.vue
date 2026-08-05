@@ -7,9 +7,10 @@ import type {
   OmniPanelFeatureListResponse
 } from '../../../../shared/events/omni-panel'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import {
@@ -17,8 +18,10 @@ import {
   omniPanelFeatureExecuteEvent,
   omniPanelFeatureListEvent,
   omniPanelFeatureRefreshEvent,
+  omniPanelRendererReadyEvent,
   omniPanelHideEvent
 } from '../../../../shared/events/omni-panel'
+import LocalAiCliPanel from './components/LocalAiCliPanel.vue'
 import OmniPanelActionList from './components/OmniPanelActionList.vue'
 import OmniPanelSearchBar from './components/OmniPanelSearchBar.vue'
 import {
@@ -42,8 +45,10 @@ import { createRendererLogger } from '../../utils/renderer-log'
 const { t } = useI18n()
 const transport = useTuffTransport()
 const intelligence = useIntelligenceSdk()
+const localAiCli = createLocalAiCliSdk(transport)
 const omniPanelLog = createRendererLogger('OmniPanel')
 const ACTION_GRID_COLUMNS = 3
+const LOCAL_AI_CLI_FEATURE_ID = 'builtin.local-ai-cli'
 
 const selectedText = ref('')
 const hasSelection = ref(false)
@@ -62,6 +67,8 @@ const searchKeyword = ref('')
 const features = ref<OmniPanelFeatureItemPayload[]>([])
 const focusedIndex = ref(-1)
 const searchBarRef = ref<InstanceType<typeof OmniPanelSearchBar> | null>(null)
+const localAiPanelRef = ref<InstanceType<typeof LocalAiCliPanel> | null>(null)
+const preserveLocalAiDraftOnClose = ref(false)
 const replaceClipboardConfirming = ref(false)
 const aiClipboardError = ref('')
 let previousFocusedElement: HTMLElement | null = null
@@ -168,6 +175,11 @@ watch(
 )
 
 async function closePanel(): Promise<void> {
+  if (preserveLocalAiDraftOnClose.value) {
+    preserveLocalAiDraftOnClose.value = false
+  } else {
+    await localAiPanelRef.value?.reset()
+  }
   await transport.send(omniPanelHideEvent)
   previousFocusedElement?.focus?.()
 }
@@ -177,7 +189,28 @@ async function loadFeatures(): Promise<void> {
   try {
     const response = await transport.send(omniPanelFeatureListEvent)
     const payload = response as OmniPanelFeatureListResponse
-    features.value = Array.isArray(payload?.features) ? payload.features : []
+    const nextFeatures = Array.isArray(payload?.features) ? [...payload.features] : []
+    try {
+      const localStatus = await localAiCli.getStatus()
+      if (localStatus.betaAvailable) {
+        const now = Date.now()
+        nextFeatures.push({
+          id: LOCAL_AI_CLI_FEATURE_ID,
+          source: 'builtin',
+          target: 'system',
+          title: t('localAiCliPanel.actionTitle'),
+          subtitle: t('localAiCliPanel.actionSubtitle'),
+          icon: { type: 'class', value: 'i-ri-terminal-box-line' },
+          enabled: true,
+          order: -1,
+          updatedAt: now,
+          createdAt: now
+        })
+      }
+    } catch (error) {
+      omniPanelLog.debug('Local AI CLI action is unavailable', error)
+    }
+    features.value = nextFeatures
     focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, features.value.length)
   } catch (error) {
     omniPanelLog.error('Failed to load features', error)
@@ -199,6 +232,13 @@ function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse):
 
 async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
   if (executingId.value) return
+  if (item.id === LOCAL_AI_CLI_FEATURE_ID) {
+    await localAiPanelRef.value?.open({
+      prompt: selectedText.value || searchKeyword.value,
+      capsule: contextCapsule.value
+    })
+    return
+  }
   if (item.unavailable) {
     toast.error(item.unavailableReason?.message || t('corebox.omniPanel.featureUnavailable'))
     return
@@ -368,6 +408,14 @@ function handleContext(payload: OmniPanelContextPayload): void {
   selectionIssueMessage.value = payload.selectionIssueMessage || ''
   contextCapsule.value = payload.capsule
   clearAiPreview()
+  if (payload.source === 'corebox-local-ai' || payload.source === 'local-ai-shortcut') {
+    void nextTick(() =>
+      localAiPanelRef.value?.open({
+        prompt: payload.text || '',
+        capsule: payload.capsule
+      })
+    )
+  }
 }
 
 function focusSearchBar(): void {
@@ -447,6 +495,9 @@ onMounted(async () => {
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('blur', closePanel)
+  void transport.send(omniPanelRendererReadyEvent).catch((error) => {
+    omniPanelLog.error('Failed to announce OmniPanel renderer readiness', error)
+  })
   await loadFeatures()
   focusSearchBar()
 })
@@ -482,6 +533,13 @@ onBeforeUnmount(() => {
       :executing-id="executingId"
       @focus="(index) => (focusedIndex = index)"
       @execute="executeFeature"
+    />
+
+    <LocalAiCliPanel
+      ref="localAiPanelRef"
+      @close="focusSearchBar"
+      @settings-opened="preserveLocalAiDraftOnClose = true"
+      @paste-back-started="preserveLocalAiDraftOnClose = true"
     />
 
     <section v-if="aiPreview" class="OmniPanelAiPreview" :class="`is-${aiPreviewStatusTone}`">

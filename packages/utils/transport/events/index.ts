@@ -566,28 +566,30 @@ import type {
 import { defineEvent, defineRawEvent } from '../event/builder'
 import { AppEvents } from './app'
 import { AccountEvents, AuthEvents } from './auth'
+import { LocalAiCliEvents } from './local-ai-cli'
 import { MetaOverlayEvents } from './meta-overlay'
-import { OpenerEvents } from './opener'
 
 // ============================================================================
 // Clipboard Events
 // ============================================================================
 
-import { PluginBroadcastEvents } from './plugin-broadcast'
+import { OpenerEvents } from './opener'
 
 // ============================================================================
 // MetaOverlay Events
 // ============================================================================
 
+import { PluginBroadcastEvents } from './plugin-broadcast'
 import { PrivacyEvents } from './privacy'
-import { SyncEvents } from './sync'
 
 // ============================================================================
 // File Index Events
 // ============================================================================
 
+import { SyncEvents } from './sync'
 import { TerminalEvents } from './terminal'
 
+export * from './local-ai-cli'
 // Re-export all types for convenience
 export * from './screenshot-session'
 export * from './types'
@@ -2639,6 +2641,7 @@ export const TuffEvents = {
   sentry: SentryEvents,
   sync: SyncEvents,
   terminal: TerminalEvents,
+  localAiCli: LocalAiCliEvents,
   opener: OpenerEvents,
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
@@ -2652,6 +2655,7 @@ export {
   AccountEvents,
   AppEvents,
   AuthEvents,
+  LocalAiCliEvents,
   MetaOverlayEvents,
   OpenerEvents,
   PluginBroadcastEvents,
