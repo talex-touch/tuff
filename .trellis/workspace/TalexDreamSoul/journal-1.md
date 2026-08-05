@@ -1562,3 +1562,36 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 47: 本机 AI CLI 快速调用
+
+**Date**: 2026-08-05
+**Task**: 本机 AI CLI 快速调用
+**Branch**: `master`
+
+### Summary
+
+完成 macOS Beta 本机 Pi、Codex、Claude Code、OMP 快速调用，包含双重启用门控、OmniPanel 任务流、逐工具审批、原生 PTY 续接和打包验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `41a8b95f836af907f716c1e923667fcee222a037` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
