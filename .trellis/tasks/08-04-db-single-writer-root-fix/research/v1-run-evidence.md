@@ -88,3 +88,15 @@ Pre-flip caveats (default stays OFF until resolved):
 3. Phase-4 backfill deferral: run 3 logged "Startup backfill ... complete in 0.72s" at
    ~1.7s after boot — verify the degrade-window deferral survived the app-provider
    split-context change (expected ≥45s in dev).
+
+## V2 final run + default flip (2026-08-05 ~03:20)
+
+After the 2d.3 migration landed: 5-minute split-on run with zero SQLITE_BUSY, zero
+FOREIGN KEY failures (run 3 had 171 extensions + 3181 icon FK failures — the
+cross-home id class, now eliminated), zero retry exhaustion, zero unhandled.
+`DB_SEARCH_SPLIT_ENABLED` default flipped to true (commit "enable the search-index
+single-writer split by default"); `TUFF_DB_SEARCH_SPLIT_ENABLED=0` is the kill switch.
+Post-flip quality check fixed 2 findings (live aux read home; 2 stray scheduler call
+sites) and Phase 6 retired the .compat dual-writes. Task-scope suites: 1382+ tests
+passing; remaining failures proven owned by concurrent work (trace mock gap, #301
+mock gaps, uncommitted 0035 migration, electron.vite.config type cascade).

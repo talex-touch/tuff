@@ -6,12 +6,12 @@ Never touch unrelated dirty files in the working tree (90 dirty paths from other
 
 ## Phase 0 — Baseline & split validation evidence (V1)
 
-- [ ] 0.1 Record baseline: run `pnpm core:dev` (defaults), capture startup log; note
+- [x] 0.1 Record baseline: run `pnpm core:dev` (defaults), capture startup log; note
       `DATABASE_BUSY_RETRY_EXHAUSTED` / `DB write task waited` occurrences.
-- [ ] 0.2 Run `TUFF_DB_SEARCH_SPLIT_ENABLED=1 pnpm core:dev`; verify:
+- [x] 0.2 Run `TUFF_DB_SEARCH_SPLIT_ENABLED=1 pnpm core:dev`; verify:
       `Search index database initialized`, worker `Initialized`, reindex completes,
       CoreBox search returns results, zero busy-exhausted on primary.
-- [ ] 0.3 Relaunch (flag still on): reindex skipped (scan progress persisted); search
+- [x] 0.3 Relaunch (flag still on): reindex skipped (scan progress persisted); search
       still works. Save both logs into `research/` of this task.
 - Gate G0: if V1 fails, STOP — fix the split before any scheduler work (root cause
   first). Do not proceed to Phase 1 with a broken split.
@@ -86,23 +86,23 @@ Never touch unrelated dirty files in the working tree (90 dirty paths from other
 
 ## Phase 5 — Flip the split default (commit E)
 
-- [ ] 5.1 `runtime-flags.ts`: `DB_SEARCH_SPLIT_ENABLED` default → `true`; rewrite the
+- [x] 5.1 `runtime-flags.ts`: `DB_SEARCH_SPLIT_ENABLED` default → `true`; rewrite the
       comment (validated on 2026-08-04 app-run; env kill switch documented).
-- [ ] 5.2 Confirm fallback path still compiles/tests with flag forced off
+- [x] 5.2 Confirm fallback path still compiles/tests with flag forced off
       (`TUFF_DB_SEARCH_SPLIT_ENABLED=0` smoke run).
 - Rollback point: env var at runtime; revert one-liner in code.
 
 ## Phase 6 — Full validation run (V2) + compat retirement (commit F)
 
-- [ ] 6.1 V2: `pnpm core:dev` with all-default env, cold start → 5 min (startup
+- [x] 6.1 V2: `pnpm core:dev` with all-default env, cold start → 5 min (startup
       indexing + CoreBox toggles + a few searches). PASS = zero
       `DATABASE_BUSY_RETRY_EXHAUSTED`, zero `DB write task waited >2000ms`, zero
       `storage.polling` timeout; `search-index.db` present and growing; health
       snapshot `busyRetryDelta` ≈ 0.
-- [ ] 6.2 Compare against 0.1 baseline; save log to `research/`.
-- [ ] 6.3 Commit F: remove `.compat` writes (telemetry `clearFailureBefore` coreDb
+- [x] 6.2 Compare against 0.1 baseline; save log to `research/`.
+- [x] 6.3 Commit F: remove `.compat` writes (telemetry `clearFailureBefore` coreDb
       branch, report-queue coreDb write); keep read-fallbacks; update their tests.
-- [ ] 6.4 Re-run touched suites + typecheck.
+- [x] 6.4 Re-run touched suites + typecheck.
 - Gate G6: if V2 shows any busy-exhausted event, treat as defect — diagnose lane/retry
   first, do NOT paper over with raised timeouts.
 
@@ -115,7 +115,7 @@ Never touch unrelated dirty files in the working tree (90 dirty paths from other
 - [ ] 7.2 Debug retrospective (`trellis-break-loop`): why did #295's fix ship dark for
       2 weeks — capture "validation-gated flags need an owner + deadline" as process
       learning.
-- [ ] 7.3 Commits per rollout order A–F (scoped files only; verify with
+- [x] 7.3 Commits per rollout order A–F (scoped files only; verify with
       `git show HEAD:path`, never stash/checkout).
 
 ## Validation commands (reference)
