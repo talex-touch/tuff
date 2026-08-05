@@ -934,6 +934,9 @@
     "autoContext": "Auto Context",
     "autoContextHint": "Lets the model pull web, file, clipboard and related context on demand",
     "model": "Choose model and reasoning effort",
+    "openPanel": "Open side panel",
+    "closePanel": "Close side panel",
+    "moreActions": "More actions",
     "modelName": "Tuff Auto",
     "effortHigh": "High",
     "attach": "Add attachment",
@@ -2521,9 +2524,9 @@
   },
   "settings": {
     "platformTags": {
-      "macOnly": "Only",
-      "windowsOnly": "Windows only",
-      "linuxOnly": "Linux only",
+      "macOnly": "macOS",
+      "windowsOnly": "Windows",
+      "linuxOnly": "Linux",
       "beta": "Beta"
     },
     "settingDownload": {

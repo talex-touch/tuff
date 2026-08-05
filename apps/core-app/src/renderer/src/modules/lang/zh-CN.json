@@ -934,6 +934,9 @@
     "autoContext": "Auto Context",
     "autoContextHint": "开启后模型会按需自动取用联网、文件、剪贴板与关联数据",
     "model": "选择模型与推理强度",
+    "openPanel": "展开右侧面板",
+    "closePanel": "收起右侧面板",
+    "moreActions": "更多操作",
     "modelName": "Tuff 智能",
     "effortHigh": "高",
     "attach": "添加附件",
@@ -2497,9 +2500,9 @@
   },
   "settings": {
     "platformTags": {
-      "macOnly": "仅限",
-      "windowsOnly": "仅限 Windows",
-      "linuxOnly": "仅限 Linux",
+      "macOnly": "macOS",
+      "windowsOnly": "Windows",
+      "linuxOnly": "Linux",
       "beta": "Beta"
     },
     "settingDownload": {
