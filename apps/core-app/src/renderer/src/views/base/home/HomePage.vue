@@ -1583,17 +1583,19 @@ watch(
   }
 
   /* While a response runs, the box wears the TuffIntelligence gradient as a
-     living ring: a crisp rim plus a blurred halo, masked to the frame. The
-     layers drift in opposite directions on co-prime periods while their hues
-     slide round the wheel and the halo breathes — no two moments align, so it
-     reads as weather, not as a spinner. */
+     living ring: a hairline rim plus a wide, washed halo, masked to the frame.
+     The layers drift in opposite directions on co-prime periods while their
+     hues slide round the wheel and the halo breathes — no two moments align,
+     so it reads as weather, not as a spinner. Everything stays low-amplitude
+     on purpose: the ring should sit at the edge of attention, not compete
+     with the reply. */
   &.is-live::before,
   &.is-live::after {
     content: '';
     position: absolute;
     inset: -1px;
     border-radius: inherit;
-    padding: 2px;
+    padding: 1.5px;
     background: linear-gradient(
       var(--home-glow-angle),
       #0894ff 0%,
@@ -1613,19 +1615,21 @@ watch(
   }
 
   &.is-live::before {
-    inset: -3px;
-    padding: 6px;
-    filter: blur(var(--home-glow-blur)) hue-rotate(var(--home-glow-hue));
-    opacity: 0.5;
+    inset: -5px;
+    padding: 8px;
+    filter: blur(var(--home-glow-blur)) saturate(0.9) hue-rotate(var(--home-glow-hue));
+    opacity: 0.3;
     animation:
       home-glow-spin 11s linear infinite reverse,
       home-glow-hue 9s linear infinite,
-      home-glow-breathe 6.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      home-glow-breathe 8.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
   &.is-live::after {
-    filter: hue-rotate(var(--home-glow-hue));
-    opacity: 0.85;
+    /* The half-pixel blur melts the hairline into the frame edge — without it
+       the ring reads as a sticker laid on top rather than light in the rim. */
+    filter: blur(0.5px) saturate(0.8) hue-rotate(var(--home-glow-hue));
+    opacity: 0.44;
     animation:
       home-glow-spin 8s linear infinite,
       home-glow-hue 13s linear infinite reverse,
@@ -2017,7 +2021,7 @@ textarea.HomePage-Input:focus-visible {
 @property --home-glow-blur {
   syntax: '<length>';
   inherits: false;
-  initial-value: 9px;
+  initial-value: 14px;
 }
 
 @keyframes home-glow-spin {
@@ -2035,26 +2039,26 @@ textarea.HomePage-Input:focus-visible {
 @keyframes home-glow-breathe {
   0%,
   100% {
-    --home-glow-blur: 8px;
+    --home-glow-blur: 14px;
 
-    opacity: 0.38;
+    opacity: 0.24;
   }
 
   50% {
-    --home-glow-blur: 12px;
+    --home-glow-blur: 17px;
 
-    opacity: 0.6;
+    opacity: 0.34;
   }
 }
 
 @keyframes home-glow-rim {
   0%,
   100% {
-    opacity: 0.72;
+    opacity: 0.38;
   }
 
   50% {
-    opacity: 0.92;
+    opacity: 0.5;
   }
 }
 
