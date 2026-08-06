@@ -184,6 +184,27 @@ describe('txSelect', () => {
     expect(wrapper.findComponent(TxSelectItem).classes()).toContain('is-selected')
   })
 
+  it('does not mark a zero-valued option selected while nothing is selected', async () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: '',
+      },
+      slots: {
+        default: '<TxSelectItem :value="0" label="Zero" />',
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+        components: { TxSelectItem },
+      },
+    })
+    await nextTick()
+
+    // Number('') is 0, so numeric coercion used to make the unselected empty
+    // default compare equal to an option whose value is 0.
+    expect(wrapper.findComponent(TxSelectItem).classes()).not.toContain('is-selected')
+    expect(wrapper.find('.tuff-select__trigger input').element.value).toBe('')
+  })
+
   it('renders loading and empty states', async () => {
     const wrapper = mount(TxSelect, {
       props: {
