@@ -18,7 +18,7 @@
 
 ## 安全、任务记录与文档质量
 
-- **Dependabot 告警尚未逐项分诊** — 当前可核验基线仍为 2026-08-04 推送回执的 51 个告警（3 critical、20 high、25 moderate、3 low）。需在 GitHub Security dashboard 确认每项运行时可达性、升级或豁免理由及回归门禁；该数字不是漏洞可达性结论。跟踪：[#483](https://github.com/talex-touch/tuff/issues/483)。
+- **Dependabot 告警尚未逐项分诊** — 2026-08-06 推送回执确认当前基线为 51 个告警（3 critical、20 high、25 moderate、3 low）。需在 GitHub Security dashboard 确认每项运行时可达性、升级或豁免理由及回归门禁；该数字不是漏洞可达性结论。跟踪：[#483](https://github.com/talex-touch/tuff/issues/483)。
 - **Trellis 外部处置尚未闭环** — #302 与 #296–#301 已关闭并有 superseding 460/460 验证；`07-27-audit-plugin-privileged-security` 仍未记录 closure disposition。`07-28-tuffex-docs-audit` 已 8 天无任务状态元数据，仍未记录 #362 与 #363–#474 的整改归属、排序和集成闭环条件；其 421 项审计结论（含 59 项 high）仍由公开 issue 跟踪。应更新或归档任务，不重报历史已修复安全漏洞。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)、[#362](https://github.com/talex-touch/tuff/issues/362)。
 - **模板 JSONL 污染活跃任务证据** — 60 个活跃任务的 110 个 `implement.jsonl` / `check.jsonl` 仍含 `_example` 行；其中 `07-27-base-anchor-liquid-animation`、`07-27-fix-plugin-folder-button`、`08-04-batch-settings-razor`、`08-04-shell-chrome-resizable-sidebar` 已有真实记录却仍保留模板行。已有真实上下文或检查记录的任务必须删掉模板行；继续执行的任务需写入真实记录；无后续动作的任务应同步终态或归档。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)。
 - **进行中任务的可执行状态元数据不完整** — 26 个 `in_progress` 任务没有 `meta.blocker` 或 `meta.nextAction`；其中 `07-26-install-launch-v2-4-13-beta.23`（10.1 天）、`07-28-tuffex-docs-audit`（8.0 天）和 `07-29-macos-screenshot-capture-core`（6.1 天）已超过六天无更新，应先补具体下一步、验收命令/产物或终态。其余 23 个记录在 2026-08-04 至 2026-08-06 有变动，但仍应在下一次状态更新时补齐元数据，避免后续审计误判。
