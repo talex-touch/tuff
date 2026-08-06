@@ -70,6 +70,17 @@
 - [x] 随经典恢复而复活:组/行图标、折叠+展开记忆(含 4 处默认折叠点恢复折叠)、`toggle` 事件
 - [x] 验证:vue-tsc 0 错;vitest 30 文件 160 用例全绿;包内 eslint 0 错(1 条 prettier 空行手工修复)
 
+## Step 8 · 遗留决策落地(2026-08-06 用户令:「2+3 参考最佳实践优化」)
+
+- [ ] **shell 语义色 token**:`--shell-success/warning/info` 各带 `-soft`/`-border`,值取自设计稿变量(success `#2C8C5A`/`#46B57C`、warning `#B57A18`/`#D9A441`、info `#6E6E73`/`#98989D`,soft=14/26 alpha、border=3D/4D);与既有 `--shell-danger` 核对一致性;高对比模式循既有模式处理
+- [ ] **恢复被压平的语义色**:文件索引管理器(system/managed、scanned/manual、attention/filtered)与诊断阶段 chip(hit/miss/skipped)接新 token;SettingChip 语气扩展;TuffStatusBadge 从 `--tx-color-*` 迁 shell token(soft 底+同色实心前景)
+- [ ] **Workflow 子页**:硬编码深色调色板 → shell token 随主题;320/1fr/360 固定三栏改为适配 940 列的响应式布局,行为零改动
+- [x] **i18n 修复(根因是错命名空间,非缺文案)**:9 个「缺失键」中 8 个在 `settings.intelligence.*` 下**本就中英齐全**,是 `IntelligencePromptSelector.vue` 误写为 `intelligence.*`(同文件混用两个命名空间)。子代理受「不动 .vue」约束先加了别名;主会话查明根因后**改组件 path 为 `settings.intelligence.*` 并删除全部别名**,消除同一文案两处漂移。真正新增的只有 `intelligence.search.clear`(en 取 `TuffAsideSearchBar` prop 默认值,zh 对齐兄弟键语域)
+- [x] **单语键**:4 个 zh-only(`settings.intelligence.{userMessage,promptVariables}{Label,Placeholder}`)补 en——同样是既有字符串挂错父节点(`settings.settingAISDK.*`),照抄到正确节点;12 个 en-only 全路径 grep 确认零引用(排除 Nexus catalog 与 JS 变量名假阳性),按纪律**只报不删**
+- [x] **顺带修无障碍误标**:`IntelligenceCapabilitiesPage:385` 与 `IntelligencePromptsPage:493` 把 `common.close` 当 clear-label,读屏播报「关闭」而非「清除搜索」;三个智能页搜索栏现统一用 `intelligence.search.clear`
+- [x] 验证:两 catalog parse OK、重复键 0、别名 0 残留;vue-tsc 0 错;intelligence+lang 5 文件 42 用例绿;包内 eslint 0 错(1 条因 key path 变长触发的 prettier 折行手工修复)
+- [x] **动效组 Beta 标**:维持移除(HEAD 起即死代码,恢复=新增视觉噪音,违背「不新增可见 UI」;如未来确需标注,挂 `#tags` 并按中性 chip 约定)
+
 ## Step 6 · 收口
 
 - [ ] `pnpm lint`(注意 CoreApp 包内配置与根配置尾逗号规则相反,判 delta 不判零、不整文件 --fix)

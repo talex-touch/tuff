@@ -4640,7 +4640,8 @@
     "customCompatible": "自定义（OpenAI 兼容）",
     "compatible": "兼容",
     "search": {
-      "placeholder": "搜索提供商..."
+      "placeholder": "搜索提供商...",
+      "clear": "清除搜索"
     },
     "list": {
       "enabled": "已启用的提供商",
