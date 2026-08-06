@@ -188,7 +188,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
   // Blocks animate once, on insertion: settled blocks never remount, so they
   // never replay this; the growing tail patches in place, so it doesn't either.
   &.is-streaming .tx-stream-md__block {
-    animation: tx-stream-md-reveal 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: tx-stream-md-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   // The ChatGPT-style line reveal: while streaming, the tail block's bottom
@@ -197,9 +197,31 @@ function isSuppressedFence(block: StreamBlock): boolean {
   // reads as disabled text, not as ink arriving. (A per-delta re-fade on the
   // tail element was tried and retired — restarting on every chunk pins the
   // whole growing element at its floor opacity for the entire stream.)
+  //
+  // The floor rides a registered custom property so it *transitions*: when the
+  // stream moves past a block, or settles entirely, its ink rises to full over
+  // half a second instead of snapping with the class flip. The mask stays
+  // applied through both hand-offs — `--last` outside streaming, every block
+  // during it — because a mask that disappears cannot fade. The dim zone is
+  // capped at a third of the block so a two-line answer never reads half
+  // disabled while it streams.
+  .tx-stream-md__block--last,
+  &.is-streaming .tx-stream-md__block {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - min(2em, 33%)),
+      rgb(0 0 0 / var(--tx-stream-md-ink)) 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - min(2em, 33%)),
+      rgb(0 0 0 / var(--tx-stream-md-ink)) 100%
+    );
+    transition: --tx-stream-md-ink 0.5s ease;
+  }
+
   &.is-streaming .tx-stream-md__block--last {
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2em), rgb(0 0 0 / 40%) 100%);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 2em), rgb(0 0 0 / 40%) 100%);
+    --tx-stream-md-ink: 0.4;
   }
 
   .tx-stream-md__markup--tail > p:last-child::after,
@@ -214,16 +236,20 @@ function isSuppressedFence(block: StreamBlock): boolean {
     display: inline-block;
     margin-left: 2px;
     color: var(--tx-color-primary, #409eff);
-    animation: tx-stream-md-blink 1s steps(2, start) infinite;
+    animation: tx-stream-md-blink 1.1s ease-in-out infinite;
   }
 
+  // Zero layout height: the glyph overflows into the gap below the last
+  // block, so the standalone cursor never adds a phantom empty line between
+  // the text and whatever the host renders after it.
   .tx-stream-md__cursor {
-    height: 1.2em;
+    height: 0;
+    line-height: 1.2;
 
     &::before {
       content: '▍';
       color: var(--tx-color-primary, #409eff);
-      animation: tx-stream-md-blink 1s steps(2, start) infinite;
+      animation: tx-stream-md-blink 1.1s ease-in-out infinite;
     }
   }
 
@@ -381,11 +407,19 @@ function isSuppressedFence(block: StreamBlock): boolean {
   }
 }
 
+/* Interpolable mask floor — this registration is what makes the dim *settle*
+   rather than snap when a block leaves the streaming tail. */
+@property --tx-stream-md-ink {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
 @keyframes tx-stream-md-reveal {
   from {
-    opacity: 0.55;
-    transform: translateY(3px);
-    filter: blur(2px);
+    opacity: 0.4;
+    transform: translateY(4px);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
@@ -394,9 +428,11 @@ function isSuppressedFence(block: StreamBlock): boolean {
   }
 }
 
+/* A breath, not a square wave: the hard steps() blink read as a terminal
+   artefact next to prose that otherwise fades in softly. */
 @keyframes tx-stream-md-blink {
   50% {
-    opacity: 0;
+    opacity: 0.15;
   }
 }
 
