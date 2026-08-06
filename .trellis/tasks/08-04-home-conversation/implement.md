@@ -86,6 +86,17 @@ pnpm lint
 
 `TxTypingIndicator` 的 dots 是唯一不走 `currentColor` 的 loader 变体（其余 4 个都走），宿主换不了色。改为 `currentColor` 并新增 `--tx-typing-indicator-color` 钩子，默认值不变（根节点的 color 仍解析到同一个变量）。zh/en 文档各补一节 `### CSS Variables`。纯 CSS 改动，jsdom 测不到计算样式，未加测试；`packages/tuffex` chat 三个测试文件 20 passed，dist 已重建。
 
+## R3 侧栏历史（2026-08-06 完成）
+
+范围只取 R3 的侧栏半项；ModePill 半项已随「模型选择移入 composer 弹层」的设计变更转给 08-06-model-menu-sources。
+
+- [x] `useConversationHistory` 的 `conversations` / `loading` 提升为模块级共享 ref——HomePage 负责 persist、侧栏负责渲染，各持一份实例会导致每次发送后侧栏不刷新；补跨实例共享的单测
+- [x] 新增 `conversation-buckets.ts` 纯函数：按本地日历日分 今天 / 昨天 / 近 7 天 / 更早 四桶，`setDate` 算边界防 DST 漂移，空桶不出标题；6 条单测覆盖边界（午夜归今天、7 天窗口内外、乱序重排）
+- [x] 新增 `ShellConversationList.vue` 填掉 ShellSidebar 预留的 conversations 槽位（槽位改为直接内嵌组件）：`ShellNavGroup` 复用分桶标题，行样式对齐 `ShellNavItem`（hover surface-2 / active primary-soft），悬停浮现删除键，删除当前对话跳回 `/home`，首载走 TxSkeleton 骨架，rail 态整体隐藏，长列表列内滚动
+- [x] i18n：zh/en 各补 `shell.history.*` 七键（label/today/yesterday/week/earlier/untitled/delete）
+
+**验证**：`vitest` conversation 两文件 19 passed；`typecheck:web` 自身零报错（现存唯一报错在 `SettingSkeleton.vue`，属并行设置流的未提交改动，未触碰）；eslint 触碰文件零报错。
+
 ## 已知偏离
 
 - 无。对话态版式已有画板实测值；剩余差异全部登记在 S6。

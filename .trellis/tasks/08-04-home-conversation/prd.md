@@ -22,8 +22,8 @@
 |---|---|---|
 | R1 | 首页就地对话：发送 → 内置 AI 通道流式回复 → 增量渲染 → 可停止 → 错误可读。**不落库、不加路由** | 通路已完成，缺可用 provider |
 | R1.5 | 本地 `pi` CLI provider + 未配置引导：让首页在零凭据下真能出字 | 进行中 |
-| R2 | 数据层与持久化：两张表 + 迁移 + 对话 transport + `/home/c/:id` | 未开始 |
-| R3 | 侧栏历史分桶 + TopBar ModePill 接真实模型列表 | 未开始 |
+| R2 | 数据层与持久化：两张表 + 迁移 + 对话 transport + `/home/c/:id` | 已完成（`fe581a6be` 落地，`903bcf129` 修 PK 作用域） |
+| R3 | 侧栏历史分桶 + TopBar ModePill 接真实模型列表 | 侧栏历史已完成（2026-08-06）；ModePill 半项由 08-06-model-menu-sources 承接——设计已把模型选择移进 composer 弹层，TopBar 不再放 ModePill |
 
 R1 的产物必须是可弃的最小面：消息只在内存里，刷新即丢。R2 接手时把内存 store 换成 transport，不重写 UI。
 
