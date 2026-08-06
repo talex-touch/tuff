@@ -102,36 +102,38 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
 
   const [existing] = await db.select().from(conversations).where(eq(conversations.id, input.id))
 
-  // One scheduled unit: the delete and the re-insert must not be separated by another writer, or a
-  // concurrent read would see the thread with its messages already gone.
+  // One scheduled unit so no other writer interleaves; one transaction so a failed insert rolls
+  // the delete back — otherwise an insert error leaves the thread wiped with nothing written.
   await scheduleDbWrite('conversation.save', async () => {
-    if (existing) {
-      await db
-        .update(conversations)
-        .set({ title: input.title, updatedAt: now })
-        .where(eq(conversations.id, input.id))
-    } else {
-      await db
-        .insert(conversations)
-        .values({ id: input.id, title: input.title, createdAt: now, updatedAt: now })
-    }
+    await db.transaction(async (tx) => {
+      if (existing) {
+        await tx
+          .update(conversations)
+          .set({ title: input.title, updatedAt: now })
+          .where(eq(conversations.id, input.id))
+      } else {
+        await tx
+          .insert(conversations)
+          .values({ id: input.id, title: input.title, createdAt: now, updatedAt: now })
+      }
 
-    await db.delete(conversationMessages).where(eq(conversationMessages.conversationId, input.id))
+      await tx.delete(conversationMessages).where(eq(conversationMessages.conversationId, input.id))
 
-    if (input.messages.length > 0) {
-      await db.insert(conversationMessages).values(
-        input.messages.map((message, index) => ({
-          id: message.id,
-          conversationId: input.id,
-          role: message.role,
-          content: message.content,
-          status: message.status,
-          meta: message.meta ? JSON.stringify(message.meta) : null,
-          seq: index,
-          createdAt: message.createdAt ?? now
-        }))
-      )
-    }
+      if (input.messages.length > 0) {
+        await tx.insert(conversationMessages).values(
+          input.messages.map((message, index) => ({
+            id: message.id,
+            conversationId: input.id,
+            role: message.role,
+            content: message.content,
+            status: message.status,
+            meta: message.meta ? JSON.stringify(message.meta) : null,
+            seq: index,
+            createdAt: message.createdAt ?? now
+          }))
+        )
+      }
+    })
   })
 
   return {

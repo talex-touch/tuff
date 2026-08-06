@@ -408,10 +408,11 @@ export class WindowManager {
     // Native visibility can run renderer onShow before the canonical show event arrives.
     // Publish shortcut intent before exposing the window so AutoPaste sees the correct trigger.
     if (triggeredByShortcut) {
-      const transport = this.getTransport()
-      void transport
-        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-        .catch(() => {})
+      this.getTransport().broadcastToWindow(
+        window.window.id,
+        CoreBoxEvents.ui.shortcutTriggered,
+        undefined
+      )
     }
 
     if (shouldFocus) {
@@ -431,10 +432,11 @@ export class WindowManager {
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
 
     if (triggeredByShortcut) {
-      const transport = this.getTransport()
-      void transport
-        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-        .catch(() => {})
+      this.getTransport().broadcastToWindow(
+        window.window.id,
+        CoreBoxEvents.ui.shortcutTriggered,
+        undefined
+      )
     }
     setTimeout(() => {
       if (window.window.isDestroyed()) return
@@ -565,6 +567,7 @@ export class WindowManager {
         this.boundsController.animate(currentWindow.window, bounds, {
           minHeight: COREBOX_MIN_HEIGHT
         })
+        coreBoxWindowLog.debug('Shrunk window to compact mode')
       } else {
         this.boundsController.stopAnimation()
         const restoreResizable = this.boundsController.prepareTemporaryResize(currentWindow.window)
@@ -591,9 +594,8 @@ export class WindowManager {
         }
       }
     } else {
-      coreBoxWindowLog.error('No current window available for shrinking')
+      coreBoxWindowLog.debug('CoreBox window is not created yet, skipping shrink')
     }
-    coreBoxWindowLog.debug('Shrunk window to compact mode')
   }
 
   /**
