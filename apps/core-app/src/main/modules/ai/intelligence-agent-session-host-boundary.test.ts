@@ -47,6 +47,10 @@ vi.mock('../sentry/sentry-service', () => {
 
 import { IntelligenceModule } from './intelligence-module'
 
+// safeApiHandler redacts every thrown message behind one public string, so the
+// host-only code is only observable on the stream boundary and in the logs.
+const SAFE_PUBLIC_ERROR = 'The operation failed. Please retry.'
+
 type EventDefinition = { toEventName: () => string }
 type ApiResponse = { ok: boolean; result?: unknown; error?: string }
 type ApiHandler = (payload: unknown, context: HandlerContext) => Promise<ApiResponse>
@@ -150,7 +154,7 @@ describe('intelligenceModule agent session host boundary', () => {
 
       await expect(handler(payload, pluginContext())).resolves.toEqual({
         ok: false,
-        error: 'INTELLIGENCE_HOST_ONLY_CAPABILITY'
+        error: SAFE_PUBLIC_ERROR
       })
       expect(operation).not.toHaveBeenCalled()
     }

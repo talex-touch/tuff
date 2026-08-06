@@ -38,6 +38,10 @@ vi.mock('../sentry/sentry-service', () => {
   }
 })
 
+// safeApiHandler redacts every thrown message behind one public string, so the
+// rejection reason is carried by the untouched-service assertions, not the payload.
+const SAFE_PUBLIC_ERROR = 'The operation failed. Please retry.'
+
 type EventDefinition = { toEventName: () => string }
 type ApiResponse = { ok: boolean; result?: unknown; error?: string }
 type WorkflowHandler = (payload: unknown, context: HandlerContext) => Promise<ApiResponse>
@@ -151,7 +155,7 @@ describe('intelligenceModule workflow control-plane host boundary', () => {
 
       await expect(getHandler(handlers, eventName)(payload, pluginContext())).resolves.toEqual({
         ok: false,
-        error: 'INTELLIGENCE_HOST_ONLY_CAPABILITY'
+        error: SAFE_PUBLIC_ERROR
       })
       expect(waitForAgentRuntime).not.toHaveBeenCalled()
       expectWorkflowServiceUntouched()

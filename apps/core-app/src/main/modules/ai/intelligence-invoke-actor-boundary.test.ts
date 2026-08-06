@@ -1,8 +1,13 @@
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { StreamContext } from '@talex-touch/utils/transport/types'
+import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './intelligence-test-harness'
+// Static, not a dynamic import inside the test body: this module graph costs
+// ~20s to transform cold, which blew the 5s per-test timeout and cascaded into
+// half-registered handler maps. Collection is not timeout-bounded.
+import { IntelligenceModule } from './intelligence-module'
 import { intelligenceTtsService } from './intelligence-tts-service'
 
 vi.mock('../sentry/sentry-service', () => {
@@ -71,10 +76,7 @@ interface InvokeChannelRegistrar {
   registerInvokeChannels: (registerInvoke: unknown, registerStream: unknown) => void
 }
 
-async function registerInvokeHandlers() {
-  const { IntelligenceModule } = await import('./intelligence-module')
-  const { intelligenceApiEvents } =
-    await import('@talex-touch/utils/transport/sdk/domains/intelligence')
+function registerInvokeHandlers() {
   const invokeHandlers = new Map<string, InvokeHandler>()
   const streamHandlers = new Map<string, StreamHandler>()
   const registerInvoke = vi.fn(
@@ -117,7 +119,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('binds missing and spoofed plugin invoke callers without losing request options', async () => {
-    const { intelligenceApiEvents, invokeHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
     const handler = invokeHandlers.get(intelligenceApiEvents.invoke.toEventName())
 
     expect(handler).toBeDefined()
@@ -168,7 +170,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('binds the authenticated plugin caller for streams while preserving options', async () => {
-    const { intelligenceApiEvents, streamHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, streamHandlers } = registerInvokeHandlers()
     const handler = streamHandlers.get(intelligenceApiEvents.stream.toEventName())
 
     expect(handler).toBeDefined()
@@ -207,7 +209,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('binds missing and spoofed plugin chat callers while retaining provider and prompt metadata', async () => {
-    const { intelligenceApiEvents, invokeHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
     const handler = invokeHandlers.get(intelligenceApiEvents.chatLangChain.toEventName())
 
     expect(handler).toBeDefined()
@@ -262,7 +264,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('binds missing and spoofed plugin TTS callers through the audio runtime', async () => {
-    const { intelligenceApiEvents, invokeHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
     const handler = invokeHandlers.get(intelligenceApiEvents.ttsSpeak.toEventName())
 
     expect(handler).toBeDefined()
@@ -347,7 +349,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('preserves frozen host chat payload metadata and caller', async () => {
-    const { intelligenceApiEvents, invokeHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
     const handler = invokeHandlers.get(intelligenceApiEvents.chatLangChain.toEventName())
 
     expect(handler).toBeDefined()
@@ -386,7 +388,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('preserves frozen host TTS payload metadata and caller through the audio runtime', async () => {
-    const { intelligenceApiEvents, invokeHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
     const handler = invokeHandlers.get(intelligenceApiEvents.ttsSpeak.toEventName())
 
     expect(handler).toBeDefined()
@@ -441,7 +443,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('fails closed for autonomous generic plugin requests while text chat remains callable', async () => {
-    const { intelligenceApiEvents, invokeHandlers, streamHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers, streamHandlers } = registerInvokeHandlers()
     const invokeHandler = invokeHandlers.get(intelligenceApiEvents.invoke.toEventName())
     const streamHandler = streamHandlers.get(intelligenceApiEvents.stream.toEventName())
 
@@ -485,7 +487,7 @@ describe('intelligenceModule invoke actor boundary', () => {
   })
 
   it('preserves host invoke options and caller exactly', async () => {
-    const { intelligenceApiEvents, invokeHandlers } = await registerInvokeHandlers()
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
     const handler = invokeHandlers.get(intelligenceApiEvents.invoke.toEventName())
 
     expect(handler).toBeDefined()
