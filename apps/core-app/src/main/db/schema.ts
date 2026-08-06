@@ -1649,3 +1649,51 @@ export const aiAutomationRuns = sqliteTable(
     orchestratorIdx: index('idx_ai_automation_runs_orchestrator').on(table.orchestratorRunId)
   })
 )
+
+// =============================================================================
+// Home conversations
+// =============================================================================
+
+/**
+ * A home-surface conversation thread.
+ *
+ * The title is stored verbatim: the top bar and the sidebar both ellipsise on overflow, and a
+ * string truncated on the way in could never be un-truncated once the display width changed.
+ */
+export const conversations = sqliteTable(
+  'conversations',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull().default(''),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    // The sidebar lists newest-first and buckets by time, so every read is ordered by this column.
+    updatedIdx: index('idx_conversations_updated').on(table.updatedAt)
+  })
+)
+
+export const conversationMessages = sqliteTable(
+  'conversation_messages',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    content: text('content').notNull().default(''),
+    status: text('status').notNull(),
+    /** JSON `ConversationTurnMeta` — provider, model, token usage and latency for the turn. */
+    meta: text('meta'),
+    /**
+     * Explicit ordering rather than `created_at`: two messages of one turn are written in the same
+     * millisecond, and a retry rewrites a message without moving it in the thread.
+     */
+    seq: integer('seq').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    threadIdx: index('idx_conversation_messages_thread').on(table.conversationId, table.seq)
+  })
+)

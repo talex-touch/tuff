@@ -1,6 +1,7 @@
 export * from './agents'
 export * from './agents-store'
 export * from './app'
+export * from './conversation'
 export * from './disposable'
 export * from './download'
 export * from './file-index-projection'
