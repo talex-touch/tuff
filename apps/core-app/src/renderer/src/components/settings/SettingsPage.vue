@@ -124,18 +124,6 @@ function goBack(): void {
 }
 
 /**
- * `TuffGroupBlock` carries its own bottom margin for the many pages that stack blocks in a
- * parent with no `gap` of its own. Here the column's `gap` already sets the rhythm, so the two
- * would add up and push sections ~11px past the artboard's 20.
- *
- * Direct children only: a block nested inside a page's own sub-layout keeps the margin, since
- * that layout has no gap to replace it with.
- */
-.SettingsPage-Column > :deep(.TGroupBlock-Container) {
-  margin-bottom: 0;
-}
-
-/**
  * Fill mode's slot host. A definite height for whatever it wraps: `height: 100%` inside a
  * scrolling column resolves to nothing, which is how a master/detail split ends up invisible.
  */
