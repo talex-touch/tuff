@@ -186,6 +186,40 @@ describe('txDropdownMenu', () => {
     expect(document.activeElement).toBe(nestedItem.element)
   })
 
+  it('navigates menuitemradio and menuitemcheckbox rows like plain menu items', async () => {
+    const wrapper = mount(TxDropdownMenu, {
+      attachTo: document.body,
+      props: { modelValue: true },
+      slots: {
+        trigger: '<button class="trigger">Permissions</button>',
+        default: `
+          <button class="radio-off" role="menuitemradio" aria-checked="false">Off</button>
+          <button class="radio-blocked" role="menuitemradio" aria-checked="false" aria-disabled="true">Blocked</button>
+          <button class="check-verbose" role="menuitemcheckbox" aria-checked="true">Verbose</button>
+        `,
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+    await nextTick()
+
+    const radioOff = wrapper.find<HTMLElement>('.radio-off')
+    const checkVerbose = wrapper.find<HTMLElement>('.check-verbose')
+
+    // The radio is the first enabled item the open focuses — the selector under test.
+    expect(document.activeElement).toBe(radioOff.element)
+
+    await radioOff.trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(checkVerbose.element)
+
+    await checkVerbose.trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(radioOff.element)
+
+    await radioOff.trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(checkVerbose.element)
+  })
+
   it('selects enabled items and closes the parent dropdown when closeOnSelect is enabled', async () => {
     const close = vi.fn()
     const wrapper = mount(TxDropdownItem, {
