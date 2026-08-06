@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, onMounted, onUpdated, ref } from 'vue'
 
 defineOptions({ name: 'TxMessageActions' })
 
@@ -14,6 +14,8 @@ const props = withDefaults(
     copyLabel?: string
     copiedLabel?: string
     regenerateLabel?: string
+    /** Accessible name for the toolbar grouping. @default 'Message actions' */
+    label?: string
   }>(),
   {
     regenerable: false,
@@ -21,6 +23,7 @@ const props = withDefaults(
     copyLabel: 'Copy',
     copiedLabel: 'Copied',
     regenerateLabel: 'Regenerate',
+    label: 'Message actions',
   },
 )
 
@@ -28,6 +31,69 @@ const emit = defineEmits<{
   copy: [text: string]
   regenerate: []
 }>()
+
+/**
+ * ARIA toolbar: one tab stop for the whole bar, arrow keys between controls.
+ * The controls are read from the DOM rather than bound per button so slot
+ * content joins the same roving order.
+ */
+const rootRef = ref<HTMLElement | null>(null)
+const activeIndex = ref(0)
+
+function controls(): HTMLElement[] {
+  const root = rootRef.value
+  if (!root)
+    return []
+  return Array.from(root.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'))
+}
+
+function syncTabStops(): void {
+  const items = controls()
+  if (!items.length)
+    return
+  const active = Math.min(activeIndex.value, items.length - 1)
+  items.forEach((el, index) => {
+    el.tabIndex = index === active ? 0 : -1
+  })
+}
+
+onMounted(syncTabStops)
+onUpdated(syncTabStops)
+
+function handleKeydown(event: KeyboardEvent): void {
+  const items = controls()
+  if (!items.length)
+    return
+
+  const current = items.indexOf(document.activeElement as HTMLElement)
+  if (current === -1)
+    return
+
+  let next = current
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      next = (current + 1) % items.length
+      break
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      next = (current - 1 + items.length) % items.length
+      break
+    case 'Home':
+      next = 0
+      break
+    case 'End':
+      next = items.length - 1
+      break
+    default:
+      return
+  }
+
+  event.preventDefault()
+  activeIndex.value = next
+  items[next]?.focus()
+  void nextTick(syncTabStops)
+}
 
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
@@ -53,7 +119,14 @@ async function copy(): Promise<void> {
 </script>
 
 <template>
-  <div class="tx-message-actions" :class="{ 'has-appear': appear }" role="toolbar">
+  <div
+    ref="rootRef"
+    class="tx-message-actions"
+    :class="{ 'has-appear': appear }"
+    role="toolbar"
+    :aria-label="label"
+    @keydown="handleKeydown"
+  >
     <button
       v-if="copyText !== undefined"
       type="button"
