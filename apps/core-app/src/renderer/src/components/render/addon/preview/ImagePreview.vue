@@ -1,7 +1,10 @@
 <script setup lang="ts" name="ImagePreview">
 import type { TuffItem } from '@talex-touch/utils'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { buildTfileUrl } from '~/utils/tfile-url'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   item: TuffItem
@@ -31,7 +34,13 @@ function handleLoad() {
       <i class="i-ri-image-line error-icon" />
       <span class="error-text">Failed to load image</span>
     </div>
-    <img v-show="!imageError" :src="imageSrc" @error="handleError" @load="handleLoad" />
+    <img
+      v-show="!imageError"
+      :src="imageSrc"
+      :alt="t('common.imagePreviewAlt', '图片预览')"
+      @error="handleError"
+      @load="handleLoad"
+    />
   </div>
 </template>
 

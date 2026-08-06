@@ -4288,6 +4288,8 @@
       "preparingFiles": "Preparing files…"
     },
   "common": {
+    "imagePreviewAlt": "Image preview",
+    "wallpaperPreviewAlt": "Custom background preview",
     "loadMore": "Load more",
     "copy": "Copy",
     "copied": "Copied",

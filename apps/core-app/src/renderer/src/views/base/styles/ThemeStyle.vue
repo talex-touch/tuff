@@ -602,6 +602,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           <div v-if="customBgPath" class="theme-style-wallpaper-preview">
             <img
               :src="customBgPreviewUrl"
+              :alt="t('common.wallpaperPreviewAlt', '自定义背景预览')"
               class="h-24 w-full object-cover"
               :style="{
                 filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
