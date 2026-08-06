@@ -273,13 +273,20 @@ function runEntrance(id: string): void {
     enteringMessages.delete(id)
     return
   }
-  const entrance = animateRaw(el, arrivalKeyframes(22, 0.04), {
+  // `backwards`, not `both`: the first keyframe covers the pre-start frame
+  // (the `--enter` class covers the pre-animation render), and leaving no
+  // forward fill means a finished entrance holds no composited state. The
+  // hide class leaves at impact, while the animation still owns opacity —
+  // never at the finish edge, where removal could flash.
+  animateRaw(el, arrivalKeyframes(22, 0.04), {
     duration: SPRING_MS,
     easing: 'linear',
-    fill: 'both'
+    fill: 'backwards'
   })
-  entrance.finished.catch(() => {}).finally(() => enteringMessages.delete(id))
-  window.setTimeout(() => knockRows(el, 0.6), SPRING_IMPACT_MS)
+  window.setTimeout(() => {
+    enteringMessages.delete(id)
+    knockRows(el, 0.6)
+  }, SPRING_IMPACT_MS)
 }
 
 /**
@@ -520,7 +527,9 @@ function animateSendFlight(composerEl: HTMLElement | null): void {
     return
   }
 
-  const flight = animateRaw(
+  // Same fill discipline as `runEntrance`: backwards to cover the launch
+  // frame, no forward fill left behind, hide class released at impact.
+  animateRaw(
     bubble,
     SPRING.map(({ o, x, v }) => ({
       offset: o,
@@ -530,9 +539,8 @@ function animateSendFlight(composerEl: HTMLElement | null): void {
       filter: `blur(${(6 * Math.max(0, 1 - o / 0.3)).toFixed(1)}px)`,
       opacity: Math.min(1, 0.5 + o / 0.4)
     })),
-    { duration: SPRING_MS, easing: 'linear', fill: 'both' }
+    { duration: SPRING_MS, easing: 'linear', fill: 'backwards' }
   )
-  flight.finished.catch(() => {}).finally(() => enteringMessages.delete(sent.id))
 
   // Launch recoil; composited additively so it stacks on the first-send FLIP
   // instead of replacing it.
@@ -547,7 +555,10 @@ function animateSendFlight(composerEl: HTMLElement | null): void {
   )
 
   // A full-strength hit: the bubble arrives carrying the send's momentum.
-  window.setTimeout(() => knockRows(bubble, 1), SPRING_IMPACT_MS)
+  window.setTimeout(() => {
+    enteringMessages.delete(sent.id)
+    knockRows(bubble, 1)
+  }, SPRING_IMPACT_MS)
 }
 
 /**
@@ -1487,12 +1498,12 @@ watch(
   }
 
   /* While a response runs, the box wears the TuffIntelligence gradient as
-     living light: a hairline rim in the frame edge plus a wide halo bleeding
-     well past the box, both cut from one conic wheel (oklch keeps the colour
-     travel luminous instead of muddying between stops). The layers spin in
-     opposite directions and breathe on co-prime periods, so no two moments
-     align — weather, not a spinner. The layers are always present and gated
-     by `--home-glow-on`, which is what lets the light fade in and out instead
+     living light: a hairline rim in the frame edge plus a tight bloom around
+     it, both cut from one conic wheel (oklch keeps the colour travel luminous
+     instead of muddying between stops). The layers spin in opposite
+     directions and breathe on co-prime periods, so no two moments align —
+     weather, not a spinner. The layers are always present and gated by
+     `--home-glow-on`, which is what lets the light fade in and out instead
      of snapping with the class. */
   &::before,
   &::after {
@@ -1520,15 +1531,18 @@ watch(
     mask-composite: exclude;
   }
 
-  /* The halo: a ring as thick as its blur is wide, so the smear keeps a bright
-     core at the frame and falls away over ~40px instead of reading as a dirty
-     border. `::before` paints under the box's children — the inward bleed lands
+  /* The bloom: a compact ring, blurred slightly less than it is thick, so the
+     light stays a vivid band hugging the frame and dies within ~14px — wide
+     low-alpha spreads curdle into pastel fog on a light surface. The radius
+     grows with the inset so the corners stay concentric instead of pooling.
+     `::before` paints under the box's children — the inward bleed lands
      beneath the glass, never over the text. */
   &::before {
-    inset: -22px;
-    padding: 22px;
-    filter: blur(18px) saturate(0.85);
-    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.24);
+    inset: -6px;
+    border-radius: calc(var(--shell-radius-2xl) + 6px);
+    padding: 8px;
+    filter: blur(7px) saturate(1.05);
+    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.45);
     animation:
       home-glow-spin 17s linear infinite reverse,
       home-glow-breathe 7.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
@@ -1538,7 +1552,7 @@ watch(
     /* The half-pixel blur melts the hairline into the frame edge — without it
        the ring reads as a sticker laid on top rather than light in the rim. */
     filter: blur(0.5px);
-    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.55);
+    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.62);
     animation:
       home-glow-spin 11s linear infinite,
       home-glow-rim 5.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
