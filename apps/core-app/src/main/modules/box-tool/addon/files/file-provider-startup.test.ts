@@ -229,6 +229,9 @@ interface MutableFileProvider {
   } | null
   setFilePersistencePort: (port: FilePersistencePort | null) => void
   setIndexedSourceRuntimeMutationDelegate: (delegate: unknown | null) => void
+  pathNormalizationScheduled: boolean
+  pathNormalizationAttempted: boolean
+  pathNormalizationTimer: NodeJS.Timeout | null
 }
 
 interface FileProviderShutdownTestApi extends MutableFileProvider {
@@ -544,6 +547,13 @@ function resetProviderState(provider: MutableFileProvider): void {
   provider.isInitializing = null
   provider.shuttingDown = false
   provider.openersChannelRegistered = false
+  // The NFC migration is once-per-boot, and the provider is a module singleton:
+  // without this every later startup test would inherit the first one's timer.
+  if (provider.pathNormalizationTimer) clearTimeout(provider.pathNormalizationTimer)
+  provider.pathNormalizationTimer = null
+  provider.pathNormalizationScheduled = false
+  // Also the reconciliation-deferral half of the same once-per-boot state.
+  provider.pathNormalizationAttempted = false
 }
 
 beforeEach(() => {
@@ -882,7 +892,8 @@ describe('file-provider startup readiness', () => {
       for await (const batch of provider.scanDirectoryBatchesWithWorker('/tmp')) batches.push(batch)
 
       expect(batches).toEqual([[{ path: '/tmp/direct.txt' }]])
-      expect(direct).toHaveBeenCalledWith('/tmp', undefined, undefined)
+      // 4th arg is the scan-stats sink, forwarded to the fallback scanner.
+      expect(direct).toHaveBeenCalledWith('/tmp', undefined, undefined, undefined)
     } finally {
       provider.scanDirectoryBatchesDirectStream = originalDirect
       fileScanBatches.mockReset()
@@ -1950,5 +1961,100 @@ describe('file-provider metadata update writer ownership (issue #476)', () => {
     expect(filePersistenceUpdateFileMetadata).not.toHaveBeenCalled()
     expect(mainDbUpdate).not.toHaveBeenCalled()
     expect(selectWhere).not.toHaveBeenCalled()
+  })
+})
+
+interface FileProviderStaleCandidateTestApi extends FileProviderIndexingLifecycleTestApi {
+  cleanupStaleSearchCandidates: (itemIds: string[]) => void
+  cleanupStaleFileResult: (file: { id: number; path: string }, reason: string) => void
+}
+
+describe('stale search candidate cleanup', () => {
+  it('removes only the candidates the filesystem confirms are gone', async () => {
+    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-candidates-'))
+    const livePath = path.join(dir, 'live.txt')
+    const missingPath = path.join(dir, 'gone.txt')
+    await fs.writeFile(livePath, 'x')
+
+    try {
+      provider.cleanupStaleSearchCandidates([livePath, missingPath])
+
+      await vi.waitFor(() => {
+        expect(filePersistenceRemoveFile).toHaveBeenCalled()
+      })
+      // The live file only missed the row lookup; deleting its index entry is
+      // the wrongful-deletion bug this guard exists for.
+      expect(filePersistenceRemoveFile).toHaveBeenCalledTimes(1)
+      expect(filePersistenceRemoveFile).toHaveBeenCalledWith(missingPath)
+      expect(runtimeApplyDelta).toHaveBeenCalledTimes(1)
+      expect(runtimeApplyDelta).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'delete', path: missingPath })
+      )
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('removes nothing when every candidate still exists on disk', async () => {
+    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-candidates-'))
+    const livePath = path.join(dir, 'live.txt')
+    await fs.writeFile(livePath, 'x')
+
+    try {
+      provider.cleanupStaleSearchCandidates([livePath])
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(filePersistenceRemoveFile).not.toHaveBeenCalled()
+      expect(runtimeApplyDelta).not.toHaveBeenCalled()
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the row when a search result only failed its renderable existence check', async () => {
+    // normalizeFileSearchItem drops an item whose file "does not exist" per
+    // existsSync — which is also what a revoked-permission directory looks
+    // like. The row may only go when the filesystem answers ENOENT.
+    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-results-'))
+    const livePath = path.join(dir, 'live.txt')
+    await fs.writeFile(livePath, 'x')
+
+    try {
+      provider.cleanupStaleFileResult({ id: 1, path: livePath }, 'search-result')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(filePersistenceRemoveFile).not.toHaveBeenCalled()
+      expect(runtimeApplyDelta).not.toHaveBeenCalled()
+
+      provider.cleanupStaleFileResult({ id: 2, path: path.join(dir, 'gone.txt') }, 'search-result')
+      await vi.waitFor(() => {
+        expect(filePersistenceRemoveFile).toHaveBeenCalledWith(path.join(dir, 'gone.txt'))
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('path normalization migration scheduling', () => {
+  it('arms the migration from the live startup path, and only on darwin', async () => {
+    // The gate is only worth anything on the entry point the app really runs:
+    // onLoad → background startup → schedule. Deferred, never inline, so the
+    // pass cannot join the startup write storm (write contracts §7). Off
+    // darwin the repair does not apply at all, so nothing is armed and
+    // reconciliation is never deferred.
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    resetProviderState(provider)
+    const armsMigration = process.platform === 'darwin'
+
+    await provider.onLoad(createContext())
+    await provider.backgroundStartupPromise
+
+    expect(provider.backgroundStartupReady).toBe(true)
+    expect(provider.pathNormalizationScheduled).toBe(armsMigration)
+    expect(provider.pathNormalizationTimer === null).toBe(!armsMigration)
   })
 })

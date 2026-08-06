@@ -13,6 +13,8 @@ function diskFile(path: string, mtime: number) {
 }
 
 describe('file-provider-reconciliation-diff-service', () => {
+  // Timestamps are whole seconds: the diff compares at the second precision of
+  // the files.mtime column, so sub-second fixtures collapse into one second.
   it('computes added, updated, and deleted records with duplicate disk paths ignored', () => {
     const service = new FileProviderReconciliationDiffService({
       reconcileWithWorker: vi.fn(),
@@ -21,30 +23,30 @@ describe('file-provider-reconciliation-diff-service', () => {
 
     const result = service.compute(
       [
-        diskFile('/watch/new.txt', 20),
-        diskFile('/watch/update.txt', 30),
-        diskFile('/watch/update.txt', 40),
-        diskFile('/other/external.txt', 10)
+        diskFile('/watch/new.txt', 20_000),
+        diskFile('/watch/update.txt', 30_000),
+        diskFile('/watch/update.txt', 40_000),
+        diskFile('/other/external.txt', 10_000)
       ],
       [
-        { id: 1, path: '/watch/update.txt', mtime: 10 },
-        { id: 2, path: '/watch/delete.txt', mtime: 10 },
-        { id: 3, path: '/other/keep.txt', mtime: 10 }
+        { id: 1, path: '/watch/update.txt', mtime: 10_000 },
+        { id: 2, path: '/watch/delete.txt', mtime: 10_000 },
+        { id: 3, path: '/other/keep.txt', mtime: 10_000 }
       ],
       ['/watch']
     )
 
     expect(result.filesToAdd).toEqual([
-      diskFile('/watch/new.txt', 20),
-      diskFile('/other/external.txt', 10)
+      diskFile('/watch/new.txt', 20_000),
+      diskFile('/other/external.txt', 10_000)
     ])
-    expect(result.filesToUpdate).toEqual([{ ...diskFile('/watch/update.txt', 30), id: 1 }])
+    expect(result.filesToUpdate).toEqual([{ ...diskFile('/watch/update.txt', 30_000), id: 1 }])
     expect(result.deletedIds).toEqual([2])
   })
 
   it('uses worker result when worker succeeds', async () => {
     const workerResult = {
-      filesToAdd: [diskFile('/watch/new.txt', 20)],
+      filesToAdd: [diskFile('/watch/new.txt', 20_000)],
       filesToUpdate: [],
       deletedIds: []
     }
@@ -68,9 +70,9 @@ describe('file-provider-reconciliation-diff-service', () => {
       logWarn
     })
 
-    const result = await service.reconcile([diskFile('/watch/new.txt', 20)], [], ['/watch'])
+    const result = await service.reconcile([diskFile('/watch/new.txt', 20_000)], [], ['/watch'])
 
-    expect(result.filesToAdd).toEqual([diskFile('/watch/new.txt', 20)])
+    expect(result.filesToAdd).toEqual([diskFile('/watch/new.txt', 20_000)])
     expect(result.filesToUpdate).toEqual([])
     expect(result.deletedIds).toEqual([])
     expect(logWarn).toHaveBeenCalledWith(

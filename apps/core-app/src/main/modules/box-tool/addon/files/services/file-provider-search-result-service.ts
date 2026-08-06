@@ -253,7 +253,14 @@ export class FileProviderSearchResultService {
     })
 
     const filesMap = this.groupRows(rows)
-    const stalePaths = candidatePaths.filter((filePath) => !filesMap.has(filePath))
+    // Stale means the index handed us a candidate the files table has NO row
+    // for — measured against the raw rows, never against filesMap. groupRows
+    // drops rows that getSearchExclusionReason hides from THIS query (and the
+    // type/extension filters below drop more); those files are alive and
+    // indexed, and routing them into cleanup deleted real index rows on every
+    // search that surfaced them.
+    const indexedPaths = new Set(rows.map((row) => row.file.path))
+    const stalePaths = candidatePaths.filter((filePath) => !indexedPaths.has(filePath))
     if (stalePaths.length > 0) this.deps.cleanupStaleCandidates(stalePaths)
     this.filterByTypes(filesMap, typeFilters)
     this.filterByExtensions(filesMap, extensionFilters)
