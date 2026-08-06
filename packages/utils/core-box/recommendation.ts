@@ -80,7 +80,17 @@ export interface ScoredItem {
   sourceId: string
   itemId: string
   score: number
-  source: 'frequent' | 'time-based' | 'recent' | 'trending' | 'context' | 'plugin'
+  source:
+    | 'frequent'
+    | 'time-based'
+    | 'recent'
+    | 'trending'
+    | 'context'
+    | 'plugin'
+    /** Installed within the novelty window and never executed yet */
+    | 'newly-installed'
+    /** Catalog ordering used when there is no usage history at all */
+    | 'cold-start'
   reason?: string
 }
 
@@ -127,7 +137,7 @@ export interface RecommendProvider {
 export interface RecommendationBadge {
   text: string
   icon: string
-  variant: 'frequent' | 'intelligent' | 'recent' | 'trending'
+  variant: 'frequent' | 'intelligent' | 'recent' | 'trending' | 'newly-installed'
 }
 
 /**

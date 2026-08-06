@@ -93,6 +93,8 @@ const badgeStyle = computed(() => {
       return 'bg-gray-500/10 text-gray-500'
     case 'trending':
       return 'bg-green-500/10 text-green-500'
+    case 'newly-installed':
+      return 'bg-violet-500/10 text-violet-500'
     default:
       return 'bg-primary-500/10 text-primary-500'
   }

@@ -150,6 +150,20 @@ describe('darwin app info', () => {
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
+  it('reports the bundle birth time as the scanned install time', async () => {
+    const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp')
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'ChatApp.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    // Filesystems that cannot report a birth time hand back the epoch, and the scanner must leave
+    // `createdAt` unset there rather than persist 1970 as an install time.
+    const { birthtime } = await fs.stat(appPath)
+    expect(appInfo?.createdAt).toEqual(birthtime.getTime() > 0 ? birthtime : undefined)
+  })
+
   it('prefers localized strings without calling mdls during fresh scan', async () => {
     const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp', {
       localizedDisplayName: '聊天应用'

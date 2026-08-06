@@ -6,6 +6,17 @@ const intelligenceSdkMock = vi.hoisted(() => ({
   ragRerank: vi.fn()
 }))
 
+const exposureServiceMock = vi.hoisted(() => ({
+  setTaggedKeys: vi.fn(),
+  recordExposure: vi.fn(),
+  recordClick: vi.fn(),
+  getHitRate: vi.fn(async () => [])
+}))
+
+vi.mock('./recommendation-exposure-service', () => ({
+  recommendationExposureService: exposureServiceMock
+}))
+
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
     getInstance: () => ({
@@ -91,10 +102,14 @@ vi.mock('./item-rebuilder', () => ({
 }))
 
 import {
+  calculateNoveltyFactor,
   calculateTimeContextBoost,
   calculateTimeRelevanceScore,
   RecommendationEngine
 } from './recommendation-engine'
+
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
 
 const morningContext: ContextSignal = {
   time: {
@@ -164,8 +179,70 @@ function createDbUtils() {
     getRecommendationCache: vi.fn(
       async (_cacheKey: string): Promise<RecommendationCacheRecord | null> => null
     ),
-    setRecommendationCache: vi.fn(async () => undefined)
+    setRecommendationCache: vi.fn(async () => undefined),
+    getUsageStatsBatch: vi.fn(
+      async (_keys: Array<{ sourceId: string; itemId: string }>) =>
+        [] as ReturnType<typeof createUsageStats>[]
+    )
   }
+}
+
+/** A `files` row as the app catalog stores it, with `ctime` = first indexed. */
+function createCatalogApp(path: string, indexedAgoMs: number, id: number) {
+  return {
+    id,
+    path,
+    name: path.split('/').pop(),
+    displayName: path.split('/').pop(),
+    ctime: new Date(Date.now() - indexedAgoMs),
+    mtime: new Date(Date.now() - indexedAgoMs)
+  }
+}
+
+/**
+ * App-catalog handle: `getFilesByType` plus the `installedAt` extension rows,
+ * which is the whole contract the freshness gate reads (the app provider owns
+ * the write side).
+ */
+function createCatalogDbUtils(
+  apps: ReturnType<typeof createCatalogApp>[],
+  installedAgoMsByFileId: Record<number, number>
+) {
+  return {
+    ...createDbUtils(),
+    getFilesByType: vi.fn(async () => apps),
+    getFileExtensionsByFileIds: vi.fn(async (fileIds: number[], _keys?: string[]) =>
+      fileIds.flatMap((fileId) => {
+        const installedAgoMs = installedAgoMsByFileId[fileId]
+        if (installedAgoMs === undefined) return []
+        return [{ fileId, key: 'installedAt', value: String(Date.now() - installedAgoMs) }]
+      })
+    )
+  }
+}
+
+/** Wires an engine so only the freshness dimension produces candidates. */
+function stubDimensions(
+  engine: RecommendationEngine,
+  overrides: Record<string, unknown> = {}
+): void {
+  Object.assign(engine as unknown as Record<string, unknown>, {
+    contextProvider: {
+      getCurrentContext: vi.fn(async () => morningContext),
+      generateCacheKey: () => 'freshness-key'
+    },
+    scheduleTrendBackfill: vi.fn(),
+    getPinnedItems: vi.fn(async () => []),
+    getFrequentItems: vi.fn(async () => []),
+    getRecentItems: vi.fn(async () => []),
+    getTimeBasedTopItems: vi.fn(async () => []),
+    getTrendingItems: vi.fn(async () => ({
+      items: [],
+      perf: { durationMs: 0, rowCount: 0, ready: true }
+    })),
+    getPluginCandidates: vi.fn(async () => []),
+    ...overrides
+  })
 }
 
 function createUsageStats(
@@ -1421,6 +1498,33 @@ describe('RecommendationEngine', () => {
     expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'cold-start' })
   })
 
+  it('orders the cold-start catalog by install stamp rather than index time', async () => {
+    const dbUtils = createDbUtils()
+    // Everything entered the index in the same first-scan batch, so ctime alone
+    // cannot separate these two — the install stamps are the only real signal,
+    // and they run opposite to the ctime tiebreak.
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/OldBundle.app', 30 * DAY_MS, 1),
+        createCatalogApp('/Applications/NewBundle.app', 30 * DAY_MS + 1, 2)
+      ],
+      { 1: 400 * DAY_MS, 2: 20 * DAY_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(0, 0) }))
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/NewBundle.app',
+      '/Applications/OldBundle.app'
+    ])
+    expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'cold-start' })
+  })
+
   it('prefers real usage over the cold-start catalog', async () => {
     const dbUtils = createDbUtils()
     const getFilesByType = vi.fn(async () => [
@@ -1498,5 +1602,194 @@ describe('RecommendationEngine', () => {
     // The already-open app is demoted despite 20x the usage, and the terminal
     // is promoted because the foreground app is an IDE.
     expect(result.items[0]?.id).toBe('/Applications/Terminal.app')
+  })
+
+  it('ranks an app installed two hours ago above an established habit', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Fresh.app', 2 * HOUR_MS, 1)],
+      { 1: 2 * HOUR_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Habit.app',
+          sourceType: 'application',
+          usageStats: createUsageStats('/Applications/Habit.app', {
+            executeCount: 40,
+            lastExecuted: new Date(Date.now() - HOUR_MS)
+          })
+        }
+      ])
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/Fresh.app',
+      '/Applications/Habit.app'
+    ])
+    expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'newly-installed' })
+  })
+
+  it('treats an app as new only when the install stamp and the index row are both fresh', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/Fresh.app', 2 * HOUR_MS, 1),
+        // Self-update: the bundle was rewritten today, but we indexed it in March.
+        createCatalogApp('/Applications/SelfUpdated.app', 60 * DAY_MS, 2),
+        // First full scan on an old machine: new row, ancient bundle.
+        createCatalogApp('/Applications/FirstScan.app', 2 * HOUR_MS, 3),
+        // Indexed before the app provider started writing install stamps.
+        createCatalogApp('/Applications/NoStamp.app', 2 * HOUR_MS, 4)
+      ],
+      { 1: 2 * HOUR_MS, 2: 3 * HOUR_MS, 3: 400 * DAY_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+    stubDimensions(engine)
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+  })
+
+  it('fades novelty from full strength at 48h to nothing at 7 days', () => {
+    expect(calculateNoveltyFactor(0)).toBe(1)
+    expect(calculateNoveltyFactor(48 * HOUR_MS)).toBe(1)
+    expect(calculateNoveltyFactor(7 * DAY_MS)).toBe(0)
+    expect(calculateNoveltyFactor(8 * DAY_MS)).toBe(0)
+    // Halfway across the 48h → 7d ramp.
+    expect(calculateNoveltyFactor(48 * HOUR_MS + (5 * DAY_MS) / 2)).toBeCloseTo(0.5, 10)
+    // Clock skew: a stamp from the future is as new as it gets, not negative.
+    expect(calculateNoveltyFactor(-HOUR_MS)).toBe(1)
+  })
+
+  it('hands ranking back to frecency once the new app has been executed', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getUsageStatsBatch = vi.fn(async () => [
+      createUsageStats('/Applications/Fresh.app', {
+        executeCount: 1,
+        lastExecuted: new Date(Date.now() - 3 * HOUR_MS)
+      })
+    ])
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Fresh.app', 2 * HOUR_MS, 1)],
+      { 1: 2 * HOUR_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Habit.app',
+          sourceType: 'application',
+          usageStats: createUsageStats('/Applications/Habit.app', {
+            executeCount: 40,
+            lastExecuted: new Date(Date.now() - HOUR_MS)
+          })
+        }
+      ])
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    // Boost gone, but the app is still a candidate — it just ranks on usage now.
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/Habit.app',
+      '/Applications/Fresh.app'
+    ])
+  })
+
+  it('keeps the newly installed app in a grid the diversity filter trims', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Fresh.app', 2 * HOUR_MS, 1)],
+      { 1: 2 * HOUR_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      // Same sourceType as the new app, so the per-type cap applies to all of them.
+      getFrequentItems: vi.fn(async () =>
+        Array.from({ length: 14 }, (_, index) => ({
+          sourceId: 'app-provider',
+          itemId: `/Applications/Habit${index}.app`,
+          sourceType: 'application',
+          usageStats: createUsageStats(`/Applications/Habit${index}.app`, {
+            executeCount: 30 - index,
+            lastExecuted: new Date(Date.now() - HOUR_MS)
+          })
+        }))
+      )
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items.map((item) => item.id)).toContain('/Applications/Fresh.app')
+  })
+
+  it('stops serving the persisted ranking after the cache is invalidated', async () => {
+    const dbUtils = createDbUtils()
+    const staleItem = {
+      id: '/Applications/Stale.app',
+      source: { id: 'app-provider', type: 'app', name: 'app-provider' },
+      kind: 'app',
+      render: { mode: 'default', basic: { title: 'Stale' } },
+      scoring: { final: 1 },
+      meta: { recommendation: { source: 'frequent', score: 1 } }
+    }
+    dbUtils.getRecommendationCache = vi.fn(async () => ({
+      cacheKey: 'freshness-key',
+      recommendedItems: JSON.stringify([staleItem]),
+      createdAt: new Date(Date.now() - 60_000),
+      expiresAt: new Date(Date.now() + 20 * 60_000)
+    }))
+    const catalog = createCatalogDbUtils([createCatalogApp('/Applications/Fresh.app', 30_000, 1)], {
+      1: 30_000
+    })
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+    stubDimensions(engine)
+
+    const beforeInstall = await engine.recommend({ limit: 5 })
+    expect(beforeInstall.fromCache).toBe(true)
+    expect(beforeInstall.items.map((item) => item.id)).toEqual(['/Applications/Stale.app'])
+
+    // What the app index commit does when the new app lands.
+    engine.invalidateCache()
+    const afterInstall = await engine.recommend({ limit: 5 })
+
+    expect(afterInstall.fromCache).toBe(false)
+    expect(afterInstall.items.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+  })
+
+  it('tags the newly installed ids it returned so exposure can be sliced', async () => {
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Fresh.app', 2 * HOUR_MS, 1)],
+      { 1: 2 * HOUR_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+
+    stubDimensions(engine, {
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Habit.app',
+          sourceType: 'application',
+          usageStats: createUsageStats('/Applications/Habit.app', { executeCount: 40 })
+        }
+      ])
+    })
+
+    await engine.recommend({ limit: 5 })
+
+    expect(exposureServiceMock.setTaggedKeys).toHaveBeenLastCalledWith('newly-installed', [
+      'app-provider:/Applications/Fresh.app'
+    ])
   })
 })

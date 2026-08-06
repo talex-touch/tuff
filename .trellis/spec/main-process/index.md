@@ -23,6 +23,11 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   delivery modes: notification events must use `broadcastToWindow` (sendTo hangs a
   60s pending timer whose WARN `.catch()` cannot suppress), delivery-target identity,
   port allowlist, stable-mock test contract.
+- [recommendation-freshness-contracts.md](recommendation-freshness-contracts.md) —
+  `installedAt` extension (write-once via conflict-do-nothing, watch-now fallback),
+  double-gate freshness predicate, novelty→frecency handoff, the THREE
+  `recommendation.source` union files, cache-invalidation read-guard vs cleanup
+  deletion, exposure slice tag rules.
 - [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached

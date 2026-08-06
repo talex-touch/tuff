@@ -563,7 +563,9 @@ export class ItemRebuilder {
       recent: 'Recent',
       trending: 'Trending',
       context: 'Smart Match',
-      plugin: 'Plugin'
+      plugin: 'Plugin',
+      'newly-installed': 'Just Installed',
+      'cold-start': 'Suggested'
     }
     return labels[scored.source] || 'Recommended'
   }
@@ -575,7 +577,13 @@ export class ItemRebuilder {
       recent: { text: '最近', icon: 'i-ri-history-line', variant: 'recent' },
       trending: { text: '趋势', icon: 'i-ri-line-chart-line', variant: 'trending' },
       context: { text: '智能推荐', icon: 'i-ri-sparkling-line', variant: 'intelligent' },
-      plugin: { text: '插件', icon: 'i-ri-puzzle-line', variant: 'plugin' }
+      plugin: { text: '插件', icon: 'i-ri-puzzle-line', variant: 'plugin' },
+      'newly-installed': {
+        text: '新安装',
+        icon: 'i-ri-download-2-line',
+        variant: 'newly-installed'
+      },
+      'cold-start': { text: '推荐', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
     }
     return (
       badges[scored.source] || {

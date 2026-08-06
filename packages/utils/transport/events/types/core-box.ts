@@ -424,6 +424,8 @@ export interface TuffMeta {
       | 'trending'
       | 'pinned'
       | 'context'
+      | 'cold-start'
+      | 'newly-installed'
     score?: number
   }
 

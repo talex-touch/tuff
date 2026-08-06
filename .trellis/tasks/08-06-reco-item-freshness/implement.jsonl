@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-06-reco-item-freshness/design.md", "reason": "本任务技术设计:installedAt 数据契约、双门新鲜判定、分块文件所有权,实施前必读"}
+{"file": ".trellis/tasks/08-06-reco-scenario-playbook/research/scenario-matrix.md", "reason": "场景卡 S1.1/S1.3/S1.5 的意图假设、衰减、badge、评估口径(需求源头)"}
+{"file": ".trellis/tasks/08-05-search-audit-remediation/research/reco-signals-audit.md", "reason": "推荐信号体系现状、稳定层/易变层分层约定、三原则(隐私/可解释/可评估)与既有 R1-R2 落地记录"}
