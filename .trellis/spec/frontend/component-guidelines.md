@@ -81,6 +81,42 @@ See `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`.
 
 ---
 
+## Loading States
+
+A skeleton is the default loading state, not an optional polish pass. Ship it with the first version of a view; do not leave it as follow-up work.
+
+**When a skeleton applies**
+
+- First load of a page or region whose layout is known before the data arrives.
+- Not for a background refresh of already-rendered content: keep the content on screen. Replacing it with a skeleton is a regression, not a loading state.
+- Not for a small local action: use the control's own pending state instead.
+- Not when the layout depends on the data (unknown row counts, variable-shape results): use an empty state or a plain pending affordance.
+
+**Match the real layout**
+
+- The skeleton must mirror the loaded layout: same group count, same row count, same row height and spacing.
+- A skeleton that does not match still shifts the page when content lands, which is the one thing it exists to prevent. "The page shows a skeleton" is not the bar; "nothing moves when data arrives" is.
+- Build the skeleton from the same containers the loaded view uses, so the two cannot drift apart.
+
+**Reuse the primitives**
+
+- Settings-style rows: `TxRowSkeleton` from `@talex-touch/tuffex/skeleton`, with `rows`, `leading`, `description`, `trailing`, and `separated` describing the real row.
+- CoreApp settings pages: `SettingSkeleton` (`components/settings/SettingSkeleton.vue`), which composes `SettingSection` + `TxRowSkeleton` and declares the real group structure.
+- Free-form bars: `TxSkeleton`. App shell: `TxLayoutSkeleton`.
+- Do not hand-roll placeholder `div`s or a local `@keyframes`. The shimmer, its timing, and the reduced-motion guard live in the `skeleton-surface` / `skeleton-keyframes` mixins in `packages/tuffex/packages/components/style/mixins.scss`; a component emits the keyframes once and applies the surface per placeholder element.
+- Tune colour through `--tx-skeleton-base-color` rather than restyling the bars.
+
+**Do not let it flash**
+
+- Bind the skeleton through `useDeferredLoading` from `@talex-touch/tuffex/skeleton`. Data that arrives inside `delay` shows no skeleton at all, and a skeleton that does appear stays for `minDuration` instead of vanishing half-drawn.
+
+**Accessibility**
+
+- Skeletons are decorative: mark them `aria-hidden="true"` and keep focusable elements out of them.
+- Animation must respect `prefers-reduced-motion: reduce`. The shared mixin already drops the motion while keeping the placeholder, since the placeholder is what holds the layout steady.
+
+---
+
 ## Accessibility
 
 Interactive controls must be semantic.
