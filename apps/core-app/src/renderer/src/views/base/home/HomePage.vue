@@ -76,13 +76,7 @@ const conversation = useHomeConversation({
 })
 const { isEmpty, isStreaming, lastTurn, messages } = conversation
 
-/** Only one menu at a time — the two pills are the same control shown in two places. */
-const openMenu = ref<'top' | 'composer' | null>(null)
 const panelOpen = ref(false)
-
-function toggleMenu(which: 'top' | 'composer'): void {
-  openMenu.value = openMenu.value === which ? null : which
-}
 
 /** The pill shows the pinned model when there is one, and the routing label when there is not. */
 const modelLabel = computed(() => selectedModel.value ?? t('home.modelName'))
@@ -561,15 +555,15 @@ function resolveErrorTitle(code: string | undefined): string {
 
 /**
  * Retrying a missing provider reruns the same failure forever, so that one case swaps the retry for
- * a way out. `/intelligence/channels` is where a provider is actually enabled — the settings AI page
- * only cross-links to it.
+ * a way out. `/setting/intelligence/channels` is where a provider is actually enabled — the
+ * intelligence settings page only cross-links to it.
  */
 function isProviderUnavailable(code: string | undefined): boolean {
   return code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 }
 
 function openProviderSettings(): void {
-  void router.push('/intelligence/channels')
+  void router.push('/setting/intelligence/channels')
 }
 
 // ============================================================================
@@ -772,14 +766,8 @@ watch(
       :title="conversationTitle"
       :model-name="modelLabel"
       :panel-open="panelOpen"
-      :menu-open="openMenu === 'top'"
-      @select-model="toggleMenu('top')"
       @toggle-panel="panelOpen = !panelOpen"
-    >
-      <template #menu>
-        <HomeModelMenu :open="openMenu === 'top'" align="left" @close="openMenu = null" />
-      </template>
-    </HomeTopBar>
+    />
 
     <div class="HomePage-Split">
       <div class="HomePage-Body">
@@ -1132,23 +1120,20 @@ watch(
 
                 <div class="HomePage-ToolRight">
                   <div class="HomePage-ModelSlot">
-                    <button
-                      class="HomePage-ModelPill"
-                      type="button"
-                      data-model-pill
-                      :aria-label="t('home.model')"
-                      :aria-expanded="openMenu === 'composer'"
-                      @click="toggleMenu('composer')"
-                    >
-                      <span class="HomePage-ModelName">{{ modelLabel }}</span>
-                      <span class="HomePage-ModelEffort">{{ t('home.effortHigh') }}</span>
-                      <span class="i-ri-arrow-down-s-line" />
-                    </button>
-                    <HomeModelMenu
-                      :open="openMenu === 'composer'"
-                      align="right"
-                      @close="openMenu = null"
-                    />
+                    <HomeModelMenu placement="top-end">
+                      <template #trigger="{ open }">
+                        <button
+                          class="HomePage-ModelPill"
+                          type="button"
+                          :aria-label="t('home.model')"
+                          :aria-expanded="open"
+                        >
+                          <span class="HomePage-ModelName">{{ modelLabel }}</span>
+                          <span class="HomePage-ModelEffort">{{ t('home.effortHigh') }}</span>
+                          <span class="i-ri-arrow-down-s-line" />
+                        </button>
+                      </template>
+                    </HomeModelMenu>
                   </div>
                   <button
                     class="HomePage-RoundBtn borderless"
