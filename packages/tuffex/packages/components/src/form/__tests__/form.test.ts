@@ -129,4 +129,54 @@ describe('txForm', () => {
 
     expect((wrapper.vm as any).model.name).toBe('')
   })
+
+  it('enforces the required prop when the item declares no rules', async () => {
+    const wrapper = mount({
+      components: { TxForm, TxFormItem, TuffInput },
+      setup() {
+        const model = reactive({ name: '' })
+        const formRef = ref<any>(null)
+        return { model, formRef }
+      },
+      template: `
+        <TxForm ref="formRef" :model="model">
+          <TxFormItem prop="name" label="Name" required>
+            <TuffInput v-model="model.name" />
+          </TxFormItem>
+        </TxForm>
+      `,
+    })
+
+    // The item renders the required marker, so validate() must not pass on empty.
+    expect(wrapper.find('.tx-form-item').classes()).toContain('is-required')
+
+    const form = (wrapper.vm as any).formRef
+    expect(await form.validate()).toBe(false)
+    expect(wrapper.find('.tx-form-item__error').text()).toBe('Name is required')
+
+    ;(wrapper.vm as any).model.name = 'Alice'
+    await nextTick()
+
+    expect(await form.validate()).toBe(true)
+  })
+
+  it('leaves an optional item with no rules passing', async () => {
+    const wrapper = mount({
+      components: { TxForm, TxFormItem, TuffInput },
+      setup() {
+        const model = reactive({ nickname: '' })
+        const formRef = ref<any>(null)
+        return { model, formRef }
+      },
+      template: `
+        <TxForm ref="formRef" :model="model">
+          <TxFormItem prop="nickname" label="Nickname">
+            <TuffInput v-model="model.nickname" />
+          </TxFormItem>
+        </TxForm>
+      `,
+    })
+
+    expect(await (wrapper.vm as any).formRef.validate()).toBe(true)
+  })
 })
