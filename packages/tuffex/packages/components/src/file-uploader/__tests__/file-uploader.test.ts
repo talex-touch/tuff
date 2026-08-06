@@ -116,4 +116,66 @@ describe('txFileUploader', () => {
     await wrapper.find('.tx-file-uploader__remove').trigger('click')
     expect(wrapper.emitted('remove')).toBeTruthy()
   })
+
+  it('enforces accept on the drop path, not just the picker', async () => {
+    const wrapper = mount(TxFileUploader, {
+      props: { modelValue: [], accept: 'image/png' },
+    })
+
+    const png = new File(['p'], 'shot.png', { type: 'image/png' })
+    const video = new File(['v'], 'clip.mp4', { type: 'video/mp4' })
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', { value: { files: [video, png] } })
+    wrapper.find('.tx-file-uploader').element.dispatchEvent(event)
+    await wrapper.vm.$nextTick()
+
+    // The browser applies `accept` to the picker only; the drop path used to add
+    // anything, so a declared-unacceptable type reached modelValue.
+    const emitted = wrapper.emitted('update:modelValue') as Array<[FileUploaderFile[]]> | undefined
+    expect(emitted?.[0]?.[0]).toHaveLength(1)
+    expect(emitted?.[0]?.[0]?.[0]?.name).toBe('shot.png')
+  })
+
+  it('matches accept by extension and wildcard group', async () => {
+    const wrapper = mount(TxFileUploader, {
+      props: { modelValue: [], accept: '.pdf,image/*' },
+    })
+
+    const pdf = new File(['d'], 'doc.pdf', { type: 'application/pdf' })
+    const jpg = new File(['j'], 'pic.jpg', { type: 'image/jpeg' })
+    const txt = new File(['t'], 'notes.txt', { type: 'text/plain' })
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', { value: { files: [pdf, jpg, txt] } })
+    wrapper.find('.tx-file-uploader').element.dispatchEvent(event)
+    await wrapper.vm.$nextTick()
+
+    const emitted = wrapper.emitted('update:modelValue') as Array<[FileUploaderFile[]]> | undefined
+    expect(emitted?.[0]?.[0]?.map(f => f.name)).toEqual(['doc.pdf', 'pic.jpg'])
+  })
+
+  it('replaces the file instead of accumulating when multiple is false', async () => {
+    const wrapper = mount(TxFileUploader, {
+      props: { modelValue: [], multiple: false },
+    })
+
+    async function pick(name: string) {
+      const input = wrapper.find('input[type="file"]')
+      Object.defineProperty(input.element, 'files', {
+        value: [new File(['x'], name, { type: 'text/plain' })],
+        configurable: true,
+      })
+      await input.trigger('change')
+      const emitted = wrapper.emitted('update:modelValue') as Array<[FileUploaderFile[]]> | undefined
+      const next = emitted?.at(-1)?.[0] ?? []
+      await wrapper.setProps({ modelValue: next })
+      return next
+    }
+
+    await pick('a.pdf')
+    const second = await pick('b.pdf')
+
+    // A single-file uploader owns one slot; it used to grow toward `max`.
+    expect(second).toHaveLength(1)
+    expect(second[0]?.name).toBe('b.pdf')
+  })
 })

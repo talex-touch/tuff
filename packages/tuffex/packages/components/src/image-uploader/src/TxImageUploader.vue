@@ -49,7 +49,12 @@ function onInputChange(e: Event): void {
   if (!files.length)
     return
 
-  const remain = Math.max(0, (props.max ?? 9) - value.value.length)
+  // A single-image uploader owns one slot: a new pick replaces the previous
+  // image (and releases its object URL) rather than accumulating toward `max`.
+  const single = !props.multiple
+  const remain = single
+    ? 1
+    : Math.max(0, (props.max ?? 9) - value.value.length)
   const take = remain > 0 ? files.slice(0, remain) : []
   if (!take.length)
     return
@@ -64,6 +69,17 @@ function onInputChange(e: Event): void {
       file: f,
     }
   })
+
+  if (single) {
+    for (const item of value.value) {
+      if (item.file && item.url && objectUrls.has(item.url)) {
+        URL.revokeObjectURL(item.url)
+        objectUrls.delete(item.url)
+      }
+    }
+    sync(added)
+    return
+  }
 
   sync([...value.value, ...added])
 }
