@@ -256,6 +256,115 @@ describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {
   })
 })
 
+/**
+ * Shapes taken from `research/evidence-pi-retry-stall.ndjson`: one `pi` process that ran the same
+ * prompt four times, discarded three of them, and still exited 0.
+ */
+describe('parsePiCliLine commit and rollback', () => {
+  const FAILED_END_LINE = JSON.stringify({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [],
+      provider: 'codex',
+      model: 'gpt-5.6-terra',
+      stopReason: 'error',
+      errorMessage: 'Request aborted\n\n[stall-watchdog-retry] provider returned error'
+    }
+  })
+
+  const RETRY_START_LINE = JSON.stringify({
+    type: 'auto_retry_start',
+    attempt: 1,
+    maxAttempts: 3,
+    delayMs: 2000,
+    errorMessage: 'Request aborted'
+  })
+
+  it('commits the text of a message pi settled', () => {
+    expect(parsePiCliLine(MESSAGE_END_LINE)).toMatchObject({
+      stopReason: 'stop',
+      partEvent: { kind: 'message-commit' }
+    })
+  })
+
+  it('withholds the commit from a message that ended in an error', () => {
+    const event = parsePiCliLine(FAILED_END_LINE)
+    expect(event).not.toHaveProperty('partEvent')
+    expect(event?.stopReason).toBe('error')
+    expect(event?.failure).toContain('stall-watchdog-retry')
+  })
+
+  it('ignores the stopReason on message_start, which describes a message still being written', () => {
+    // `pending` on a healthy run and `aborted` on a failed one — committing on either would settle
+    // text mid-flight or discard a message pi had not given up on yet.
+    const aborted = MESSAGE_START_LINE.replace('"stopReason":"pending"', '"stopReason":"aborted"')
+    for (const line of [MESSAGE_START_LINE, aborted]) {
+      expect(parsePiCliLine(line)).not.toHaveProperty('partEvent')
+      expect(parsePiCliLine(line)).not.toHaveProperty('stopReason')
+    }
+  })
+
+  it('does not commit twice when turn_end repeats the message that just settled', () => {
+    const line = MESSAGE_END_LINE.replace('"type":"message_end"', '"type":"turn_end"')
+    expect(parsePiCliLine(line)).not.toHaveProperty('partEvent')
+  })
+
+  it('rolls back the abandoned attempt when pi restarts the turn', () => {
+    expect(parsePiCliLine(RETRY_START_LINE)).toEqual({
+      partEvent: { kind: 'text-reset' },
+      retry: { attempt: 1, maxAttempts: 3, delayMs: 2000 }
+    })
+  })
+
+  it('reports the reason when the retry budget runs out', () => {
+    const line = JSON.stringify({
+      type: 'auto_retry_end',
+      success: false,
+      attempt: 3,
+      finalError: 'Request aborted\n\n[stall-watchdog-retry] provider returned error'
+    })
+    expect(parsePiCliLine(line)?.failure).toContain('Request aborted')
+  })
+
+  it('stays quiet when a retry eventually succeeded', () => {
+    expect(parsePiCliLine('{"type":"auto_retry_end","success":true,"attempt":2}')).toBeNull()
+  })
+
+  it('surfaces one rollback per abandoned attempt across a four-attempt run', () => {
+    const lines = [
+      ...[1, 2, 3].flatMap((attempt) => [
+        MESSAGE_START_LINE,
+        DELTA_LINE,
+        FAILED_END_LINE,
+        JSON.stringify({ type: 'agent_end', willRetry: true }),
+        JSON.stringify({ type: 'auto_retry_start', attempt, maxAttempts: 3, delayMs: 2000 })
+      ]),
+      MESSAGE_START_LINE,
+      DELTA_LINE,
+      MESSAGE_END_LINE,
+      '{"type":"agent_settled"}'
+    ]
+
+    const kinds = lines.map((line) => parsePiCliLine(line)?.partEvent?.kind)
+
+    expect(kinds.filter((kind) => kind === 'text-reset')).toHaveLength(3)
+    expect(kinds.filter((kind) => kind === 'message-commit')).toHaveLength(1)
+  })
+
+  it('leaves a tool loop alone: every message in it settles for real', () => {
+    // A turn legitimately contains several assistant messages (text → toolCall → toolResult →
+    // text). Each is committed and none is rolled back, or the tool card and its lead-in would
+    // disappear the moment the answer after them had to be rewritten.
+    const toolUseEnd = MESSAGE_END_LINE.replace('"stopReason":"stop"', '"stopReason":"toolUse"')
+    const events = [DELTA_LINE, toolUseEnd, MESSAGE_START_LINE, DELTA_LINE, MESSAGE_END_LINE].map(
+      (line) => parsePiCliLine(line)?.partEvent?.kind
+    )
+
+    expect(events).toEqual([undefined, 'message-commit', undefined, undefined, 'message-commit'])
+  })
+})
+
 describe('buildPiArgs tool allowlist', () => {
   const prompt = { systemPrompt: 'sys', prompt: 'User: hi' }
 

@@ -515,11 +515,19 @@ export interface IntelligenceInvokeResult<T = any> {
  * Streaming response chunk.
  */
 /**
- * A structured event inside a streamed turn — reasoning spans and tool calls.
- * Providers that run an agent loop (pi CLI first; cloud tool-use later) emit
- * these alongside text deltas; surfaces assemble them into message parts.
+ * A structured event inside a streamed turn — reasoning spans, tool calls, and the commit points
+ * that say which text is final. Providers that run an agent loop (pi CLI first; cloud tool-use
+ * later) emit these alongside text deltas; surfaces assemble them into message parts.
+ *
+ * A delta is a preview. A provider whose agent retries a failed message discards everything it
+ * streamed for that message and writes it again, so a surface that only appends shows the
+ * abandoned attempt next to the real answer. `message-commit` marks text the upstream settled on;
+ * `text-reset` rolls back to the last commit, leaving earlier committed messages of the same turn
+ * (a tool loop's leading text, its tool cards) untouched.
  */
 export type IntelligencePartEvent =
+  | { kind: "message-commit" }
+  | { kind: "text-reset" }
   | { kind: "reasoning-start" }
   | { kind: "reasoning-delta"; delta: string }
   | { kind: "reasoning-end"; durationMs?: number }

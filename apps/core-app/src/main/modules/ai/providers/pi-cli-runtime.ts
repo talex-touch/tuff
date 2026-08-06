@@ -284,6 +284,21 @@ export interface PiCliEvent {
   done?: boolean
   /** Structured reasoning/tool event extracted from the agent loop. */
   partEvent?: IntelligencePartEvent
+  /** How the assistant message that just ended settled: `stop`, `error`, `aborted`, … */
+  stopReason?: string
+  /** Why the run failed, in `pi`'s own words. Set by a failed message or a spent retry budget. */
+  failure?: string
+  /** Set on `auto_retry_start`, for the log line that records how often this happens. */
+  retry?: { attempt: number; maxAttempts: number; delayMs: number }
+}
+
+/**
+ * The two stop reasons that mean the message carried no answer. `pi` deletes such a message from
+ * its own agent state before retrying, so text streamed under one of these is provisional even
+ * though it already reached stdout.
+ */
+export function isFailedStopReason(stopReason: string | undefined): boolean {
+  return stopReason === 'error' || stopReason === 'aborted'
 }
 
 /**
@@ -435,7 +450,46 @@ export function parsePiCliLine(line: string): PiCliEvent | null {
     if (provider) event.provider = provider
     if (model) event.model = model
     if (usage) event.usage = usage
+
+    // Only `message_end` settles a message. `message_start` carries a `stopReason` too — `pending`
+    // while the text streams, `aborted` on a run that already failed — and `turn_end` repeats the
+    // one `message_end` just reported, so reading either would commit text mid-flight or count the
+    // same failure twice.
+    const stopReason = type === 'message_end' ? readString(message.stopReason) : undefined
+    if (stopReason) {
+      event.stopReason = stopReason
+      if (isFailedStopReason(stopReason)) {
+        const errorMessage = readString(message.errorMessage)
+        if (errorMessage) event.failure = errorMessage
+      } else {
+        // `pi` kept this message, so the text streamed since the last commit is final. A tool loop
+        // commits several times per turn, once per assistant message it settles.
+        event.partEvent = { kind: 'message-commit' }
+      }
+    }
+
     return Object.keys(event).length ? event : null
+  }
+
+  // `pi` retries a failed turn inside the same process: it drops the abandoned assistant message
+  // from its agent state and runs the prompt again, but the deltas it already wrote to stdout
+  // cannot be recalled. Without this signal the next attempt's answer lands on top of the one pi
+  // just threw away, and the user reads the same paragraph N times.
+  if (type === 'auto_retry_start') {
+    return {
+      partEvent: { kind: 'text-reset' },
+      retry: {
+        attempt: readCount(record.attempt),
+        maxAttempts: readCount(record.maxAttempts),
+        delayMs: readCount(record.delayMs)
+      }
+    }
+  }
+
+  // The retry budget is spent. In `--mode json` this is the only place the reason surfaces: that
+  // mode exits 0 whatever happened, so the exit code cannot stand in for it.
+  if (type === 'auto_retry_end' && record.success !== true) {
+    return { failure: readString(record.finalError) ?? 'pi exhausted its automatic retries' }
   }
 
   if (type === 'agent_settled') return { done: true }

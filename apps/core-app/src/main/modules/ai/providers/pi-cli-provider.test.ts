@@ -291,6 +291,120 @@ describe('PiCliProvider.chat', () => {
   })
 })
 
+/**
+ * `pi`'s agent retries a failed turn inside the same process, and the text it already wrote to
+ * stdout cannot be recalled — the whole reason the home surface used to show the same answer four
+ * times over. The stubs below replay that event order from
+ * `research/evidence-pi-retry-stall.ndjson`.
+ */
+describe('PiCliProvider retries inside one run', () => {
+  const ANSWER = '我通过大量文本、代码和对话示例训练。'
+
+  /** Three attempts pi threw away, then one it kept. */
+  const RETRYING_RUN = `
+    const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+    const answer = ${JSON.stringify(ANSWER)}
+    for (const attempt of [1, 2, 3]) {
+      emit({ type: 'message_start', message: { role: 'assistant', provider: 'codex', model: 'gpt-5.6-terra', stopReason: 'pending' } })
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: answer } })
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'Request aborted' } })
+      emit({ type: 'turn_end', message: { role: 'assistant', stopReason: 'error' } })
+      emit({ type: 'agent_end', willRetry: true })
+      emit({ type: 'auto_retry_start', attempt, maxAttempts: 3, delayMs: 2000 })
+    }
+    emit({ type: 'message_start', message: { role: 'assistant', stopReason: 'pending' } })
+    emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: answer } })
+    emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop', usage: { input: 1, output: 2, totalTokens: 3 } } })
+    emit({ type: 'auto_retry_end', success: true, attempt: 3 })
+    emit({ type: 'agent_settled' })
+  `
+
+  it('keeps one copy of an answer pi wrote four times', async () => {
+    await writeStub(RETRYING_RUN)
+
+    const result = await provider().chat(userTurn(), {})
+
+    expect(result.result).toBe(ANSWER)
+  })
+
+  it('still streams every attempt, and marks the three that were withdrawn', async () => {
+    // The deltas are a live preview and stay on the wire; what the fix changes is that each
+    // discarded attempt is followed by the rollback that takes it back off screen.
+    await writeStub(RETRYING_RUN)
+
+    const kinds: string[] = []
+    let deltas = 0
+    for await (const chunk of provider().chatStream(userTurn(), {})) {
+      if (chunk.delta) deltas += 1
+      if (chunk.partEvent) kinds.push(chunk.partEvent.kind)
+    }
+
+    expect(deltas).toBe(4)
+    expect(kinds.filter((kind) => kind === 'text-reset')).toHaveLength(3)
+    expect(kinds.filter((kind) => kind === 'message-commit')).toHaveLength(1)
+  })
+
+  it('rolls back only the rewritten message, not the tool call before it', async () => {
+    // A turn holds several assistant messages; pi deletes just the last one. Rolling the whole
+    // turn back would erase the text and tool card the user already watched settle.
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      const partial = { content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: {} }] }
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Checking. ' } })
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_start', contentIndex: 0, partial } })
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse' } })
+      emit({ type: 'message_end', message: { role: 'toolResult', toolCallId: 'call_1', toolName: 'read', content: [{ type: 'text', text: 'ok' }], isError: false } })
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'half an ans' } })
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'Request aborted' } })
+      emit({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 2000 })
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Done.' } })
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop' } })
+      emit({ type: 'agent_settled' })
+    `)
+
+    const result = await provider().chat(userTurn(), {})
+
+    expect(result.result).toBe('Checking. Done.')
+  })
+
+  it('reports why a run that failed every attempt produced nothing', async () => {
+    // `pi --mode json` exits 0 whatever happened, so before this the app showed an empty bubble
+    // with no explanation while the reason sat in a line it had thrown away.
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      for (const attempt of [1, 2, 3]) {
+        emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'Request aborted' } })
+        emit({ type: 'auto_retry_start', attempt, maxAttempts: 3, delayMs: 2000 })
+      }
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'Request aborted' } })
+      emit({ type: 'auto_retry_end', success: false, attempt: 3, finalError: 'Request aborted\\n\\n[stall-watchdog-retry] provider returned error' })
+      emit({ type: 'agent_settled' })
+      process.exit(0)
+    `)
+
+    await expect(async () => {
+      for await (const _chunk of provider().chatStream(userTurn(), {})) void _chunk
+    }).rejects.toThrow(/stall-watchdog-retry/)
+  })
+
+  it('keeps a partial answer when only the closing message failed', async () => {
+    // Something did settle, so the turn has an answer to show; failing it outright would throw
+    // away text the user has already read.
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Checking. ' } })
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse' } })
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'and then' } })
+      emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'Request aborted' } })
+      emit({ type: 'agent_settled' })
+    `)
+
+    await expect(provider().chat(userTurn(), {})).resolves.toMatchObject({
+      result: 'Checking. and then'
+    })
+  })
+})
+
 describe('PiCliProvider.embedding', () => {
   it('refuses rather than silently returning an empty vector', async () => {
     await expect(provider().embedding({ text: 'x' }, {})).rejects.toThrow(/not supported/)

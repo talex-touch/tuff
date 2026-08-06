@@ -4,6 +4,7 @@ import type {
   IntelligenceChatPayload,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligencePartEvent,
   IntelligenceStreamOptions
 } from '@talex-touch/utils/types/intelligence'
 import type { ConversationIntelligenceSdk } from './useHomeConversation'
@@ -790,5 +791,137 @@ describe('part assembly', () => {
     void conversation.retry()
     await flush()
     expect(conversation.messages.value[1]?.parts).toBeUndefined()
+  })
+})
+
+/**
+ * `pi` retries a failed message inside the same run and cannot recall the deltas it already sent,
+ * so the stream says which text it stands behind: `message-commit` settles a message, `text-reset`
+ * withdraws everything since the last one.
+ */
+describe('withdrawn attempts', () => {
+  function events(handlers: IntelligenceStreamOptions<string>) {
+    return {
+      delta: (text: string) =>
+        handlers.onDelta?.(text, { type: 'delta', capabilityId: 'text.chat' }),
+      part: (partEvent: IntelligencePartEvent) =>
+        handlers.onPartEvent?.(partEvent, { type: 'part', capabilityId: 'text.chat' })
+    }
+  }
+
+  it('shows only the attempt that survived', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('introduce yourself')
+    await flush()
+    const emit = events(double.emit())
+
+    emit.delta('I was trained on text. ')
+    emit.part({ kind: 'text-reset' })
+    emit.delta('I was trained on text and code.')
+    emit.part({ kind: 'message-commit' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(conversation.messages.value[1]).toMatchObject({
+      content: 'I was trained on text and code.',
+      status: 'complete'
+    })
+  })
+
+  it('keeps the committed text and tool card when the message after them is rewritten', async () => {
+    // pi deletes only the last assistant message of the turn. Clearing the bubble instead of
+    // rolling back to the last commit would take the lead-in and the tool card with it — and a
+    // long answer failing after a tool result is the common way this happens.
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('find the file')
+    await flush()
+    const emit = events(double.emit())
+
+    emit.delta('Checking. ')
+    emit.part({ kind: 'tool-start', callId: 'c1', name: 'read' })
+    emit.part({ kind: 'tool-input-end', callId: 'c1', input: { path: '/tmp/x' } })
+    emit.part({ kind: 'message-commit' })
+    emit.part({ kind: 'tool-result', callId: 'c1', name: 'read', output: 'ok', isError: false })
+    emit.delta('half an ans')
+    emit.part({ kind: 'text-reset' })
+    emit.delta('Done.')
+    emit.part({ kind: 'message-commit' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    const assistant = conversation.messages.value[1]
+    expect(assistant?.content).toBe('Checking. Done.')
+
+    const parts = assistant?.parts ?? []
+    expect(parts.map((part) => part.type)).toEqual(['text', 'tool-call', 'text'])
+    expect(parts[0]).toMatchObject({ text: 'Checking. ' })
+    expect(parts[1]).toMatchObject({ id: 'c1', status: 'done', output: 'ok' })
+    expect(parts[2]).toMatchObject({ text: 'Done.' })
+  })
+
+  it('drops the whole message when nothing had been committed yet', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('do it')
+    await flush()
+    const emit = events(double.emit())
+
+    emit.delta('Working. ')
+    emit.part({ kind: 'reasoning-start' })
+    emit.part({ kind: 'reasoning-delta', delta: 'half a thought' })
+    emit.part({ kind: 'text-reset' })
+    emit.delta('Answer.')
+    emit.part({ kind: 'message-commit' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    const assistant = conversation.messages.value[1]
+    expect(assistant?.content).toBe('Answer.')
+    // The abandoned reasoning span went with the text it belonged to.
+    expect(assistant?.parts?.map((part) => part.type)).toEqual(['text'])
+  })
+
+  it('leaves a plain turn out of parts mode, commit or no commit', async () => {
+    // Every healthy turn ends in a commit, so treating it as a structured event would put every
+    // message into the parts view and change how a plain answer renders.
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hi')
+    await flush()
+    const emit = events(double.emit())
+
+    emit.delta('Hello.')
+    emit.part({ kind: 'message-commit' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(conversation.messages.value[1]?.parts).toBeUndefined()
+  })
+
+  it('still falls back to a plain call when every attempt was withdrawn', async () => {
+    // The rolled-back deltas are not an answer, so the turn is still eligible for the
+    // non-streaming path rather than settling as an empty bubble.
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    const emit = events(double.emit())
+
+    emit.part({ kind: 'text-reset' })
+    double.emit().onError?.(new Error('[UNKNOWN:text.chat] pi ended the run without an answer'))
+    await turn
+
+    expect(double.chatPayloads).toHaveLength(1)
+    expect(conversation.messages.value[1]).toMatchObject({
+      content: 'fallback reply',
+      status: 'complete'
+    })
   })
 })
