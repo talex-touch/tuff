@@ -63,7 +63,38 @@ export interface AiAttachmentPart {
   attachments: AiAttachment[]
 }
 
-export type AiMessagePart = AiTextPart | AiReasoningPart | AiToolCallPart | AiAttachmentPart
+export interface AiSourceItem {
+  id: string
+  url: string
+  title?: string
+  favicon?: string
+}
+
+/** References backing an answer — web results, MCP resources, cited files. */
+export interface AiSourcesPart {
+  type: 'sources'
+  sources: AiSourceItem[]
+}
+
+export type AiMessagePart = AiTextPart | AiReasoningPart | AiToolCallPart | AiAttachmentPart | AiSourcesPart
+
+/** A follow-up the user can tap to send — rendered after a settled reply. */
+export interface AiSuggestion {
+  id: string
+  text: string
+}
+
+/**
+ * One step of a multi-step reasoning/tool sequence, derived by the consumer
+ * from a message's parts (a thinking span or a tool call each become a step).
+ */
+export interface AiChainStep {
+  id: string
+  kind: 'thinking' | 'tool'
+  title: string
+  body?: string
+  status: 'active' | 'done' | 'error'
+}
 
 export interface AiElementMessage {
   id: string
