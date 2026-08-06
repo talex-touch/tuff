@@ -61,6 +61,15 @@
 - **交接 Step 3**:迁 SettingPluginsPage / SettingOverviewPage 时必须删掉显式 `SettingDivider`,否则与容器注入的发丝线成双线
 - 遗留(完成报告列出):六个 landing 分区组件成孤儿(IntelligenceHeader/Channels/Capabilities/Prompts/LocalSkills/Future,归 settings-rewrite 清理);Workflow 子页 940 列内偏挤(固定 320+360 双栏,中栏 ≈228px,Step 6 走查定夺);`settingsEntries.intelligenceDesc` 键闲置未删
 
+## Step 7 · 样式方向回退(2026-08-06 晚,用户终局拍板「都要改成 2,不是设计稿这种」)— ✅ 完成
+
+- [x] `TuffGroupBlock.vue` / `TuffBlockSlot.vue` / `TuffBlockLine.vue` / `TuffBlockSwitch.vue` 按文件从 `2e8339013^` 恢复经典版本(`git show` 重定向,未用 checkout/stash;四文件历史确认无并发提交夹层)
+- [x] 经典组件最小扩展:`name` 改为可选(默认 `''`),无 `name` 时不渲染 56px 组头(纯净卡片形态)——供迁移期新增的 5 处无标签卡(PluginsPage/AppDiagnostic ×2/AppIndexManager/PlatformCapabilities)与 SettingSkeleton 的可空标签使用
+- [x] 移除 `SettingsPage.vue` 与 `SettingSkeleton.vue` 的 margin 中和规则(画板 20px 节奏随版式一并废弃,恢复经典自带间距;骨架建构在 TuffGroupBlock 上,自动镜像经典观感)
+- [x] 保留:统一 TuffGroupBlock(SettingSection 删除不回退)、智能并入设置、外观页内容重组、SettingRow `background-color` 修正、i18n 文案对齐
+- [x] 随经典恢复而复活:组/行图标、折叠+展开记忆(含 4 处默认折叠点恢复折叠)、`toggle` 事件
+- [x] 验证:vue-tsc 0 错;vitest 30 文件 160 用例全绿;包内 eslint 0 错(1 条 prettier 空行手工修复)
+
 ## Step 6 · 收口
 
 - [ ] `pnpm lint`(注意 CoreApp 包内配置与根配置尾逗号规则相反,判 delta 不判零、不整文件 --fix)

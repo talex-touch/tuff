@@ -64,12 +64,5 @@ withDefaults(
    */
   --tx-skeleton-base-color: var(--shell-surface-2);
   --tx-skeleton-row-separator-color: var(--shell-border);
-
-  // Same reason as in `SettingsPage`: the gap above is the whole rhythm, and the block's own
-  // bottom margin would add to it. The real sections have theirs dropped by the column, so
-  // keeping it here would put the placeholders ~11px apart from where the content lands.
-  > :deep(.TGroupBlock-Container) {
-    margin-bottom: 0;
-  }
 }
 </style>
