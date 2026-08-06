@@ -245,6 +245,12 @@ watch(
     color: var(--tx-text-color-primary, #111827);
   }
 
+  // The live step's tail dims like streaming prose — same reveal language.
+  &.is-thinking .tx-chain-of-thought__step[data-status='active'] .tx-chain-of-thought__body {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), rgb(0 0 0 / 40%) 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), rgb(0 0 0 / 40%) 100%);
+  }
+
   .tx-chain-of-thought__body {
     max-height: 140px;
     margin-top: 4px;

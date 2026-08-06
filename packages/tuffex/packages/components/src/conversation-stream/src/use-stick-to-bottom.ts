@@ -27,7 +27,6 @@ export function useStickToBottom(
   const atBottom = ref(true)
   const following = ref(true)
   let programmatic = false
-  let programmaticTarget = 0
 
   function measure(): boolean {
     const el = element.value
@@ -40,9 +39,13 @@ export function useStickToBottom(
     atBottom.value = measure()
     if (programmatic) {
       const el = element.value
-      // Smooth scrolls emit many intermediate events on the way; release only
-      // on arrival at the recorded destination (allowing sub-pixel slack).
-      if (!el || el.scrollTop >= programmaticTarget - 1)
+      // Release only on arrival at the *live* bottom, not the recorded one:
+      // virtualized spacers settle a frame after a send, so the destination
+      // measured at issue time can be stale — releasing there lets the
+      // browser's own scroll-anchoring adjustment read as a user scroll and
+      // kill following. Real user escapes go through handleWheel, which
+      // ignores this guard entirely.
+      if (!el || el.scrollTop >= el.scrollHeight - el.clientHeight - 1)
         programmatic = false
       return
     }
@@ -72,10 +75,8 @@ export function useStickToBottom(
     // Arm the guard only when movement is actually pending — an instant
     // scroll that changed nothing emits no event, and a stale guard would
     // swallow the next real user scroll.
-    if (behavior === 'smooth' ? target > before : el.scrollTop !== before) {
+    if (behavior === 'smooth' ? target > before : el.scrollTop !== before)
       programmatic = true
-      programmaticTarget = behavior === 'smooth' ? target : el.scrollTop
-    }
   }
 
   /** Called when content grew (stream delta, new message). */

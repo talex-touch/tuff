@@ -5,6 +5,7 @@ import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
+import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
@@ -229,7 +230,12 @@ async function submit(): Promise<void> {
   }
 
   streamRef.value?.scrollToBottom()
-  animateSendFlight(composerEl)
+  // One frame later: the virtualized spacers have settled, so the flight
+  // measures true rects and the re-assert lands on the real bottom.
+  requestAnimationFrame(() => {
+    streamRef.value?.scrollToBottom()
+    animateSendFlight(composerEl)
+  })
   await turn
 }
 
@@ -595,6 +601,13 @@ watch(
                     <p v-if="message.attachments?.length" class="HomePage-AttachHint">
                       {{ t('home.attachmentNotSent') }}
                     </p>
+                    <TxMessageActions
+                      class="HomePage-MsgActions is-resting"
+                      :appear="false"
+                      :copy-text="message.content"
+                      :copy-label="t('home.copy')"
+                      :copied-label="t('home.copied')"
+                    />
                   </template>
 
                   <template v-else>
@@ -664,6 +677,20 @@ watch(
                         {{ t('home.retry') }}
                       </button>
                     </div>
+
+                    <!-- Surfaces out of a blur once the answer settles; the last
+                         reply keeps it on show, older ones reveal on hover. -->
+                    <TxMessageActions
+                      v-if="message.status === 'complete'"
+                      class="HomePage-MsgActions"
+                      :class="{ 'is-resting': index !== messages.length - 1 }"
+                      :copy-text="message.content"
+                      :regenerable="index === messages.length - 1 && !isStreaming"
+                      :copy-label="t('home.copy')"
+                      :copied-label="t('home.copied')"
+                      :regenerate-label="t('home.regenerate')"
+                      @regenerate="conversation.retry()"
+                    />
                   </template>
                 </div>
               </div>
@@ -1090,6 +1117,21 @@ watch(
 
 .HomePage-Thinking {
   margin: 2px 0;
+}
+
+.HomePage-MsgActions {
+  margin-top: 2px;
+
+  /* Older messages keep a quiet surface; the bar returns under the pointer. */
+  &.is-resting {
+    opacity: 0;
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.HomePage-Message:hover .HomePage-MsgActions.is-resting,
+.HomePage-MsgActions.is-resting:focus-within {
+  opacity: 1;
 }
 
 .HomePage-Error {

@@ -972,6 +972,9 @@
     "stop": "Stop generating",
     "retry": "Retry",
     "thinking": "Thinking",
+    "copy": "Copy",
+    "copied": "Copied",
+    "regenerate": "Regenerate",
     "error": {
       "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
       "empty": "The model returned nothing",
