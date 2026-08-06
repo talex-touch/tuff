@@ -5,6 +5,13 @@ export type AiCliProviderId =
   | "oh-my-pi"
   | "opencode";
 
+/**
+ * Where a stored item came from. Scans can only produce CLI providers, so the
+ * scan-side types stay on {@link AiCliProviderId}; only a persisted item can be
+ * `manual`, which is what the user typing a server into settings produces.
+ */
+export type AiImportOriginId = AiCliProviderId | "manual";
+
 export type AiRuntimeProviderId = "pi-core";
 
 export type AiImportItemKind =
@@ -38,7 +45,7 @@ export interface AiImportedConfigItem {
   id: string;
   candidateId: string;
   sourceId: string;
-  provider: AiCliProviderId;
+  provider: AiImportOriginId;
   sourceScope: AiImportScope;
   targetScope: AiImportTargetScope;
   workspaceRoot?: string;
