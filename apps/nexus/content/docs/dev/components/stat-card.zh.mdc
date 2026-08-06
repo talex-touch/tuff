@@ -12,7 +12,7 @@ verified: true
 
 `TxStatCard` 用于展示核心指标，可附加图标装饰、趋势对比或进度环。普通指标使用默认变体，趋势变化使用 `insight`，有明确 0-100 边界的健康度/容量/完成率使用 `variant="progress"` 或 `progress`。
 
-进度环会把数值裁剪到 0-100。`insight` 只有在 `from` 和 `to` 都是有限数字时才渲染，否则会退回普通指标布局。
+进度环会把数值裁剪到 0-100。`insight` 只有在 `from` 和 `to` 都是有限数字时才渲染，否则会退回普通指标布局。进度环激活（`progress` 或 `variant="progress"`）时，`insight` 不渲染，趋势块会被静默省略。
 
 ## 基础用法
 

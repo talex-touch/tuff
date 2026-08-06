@@ -69,11 +69,11 @@ rows:
 rows:
   - name: title
     type: string
-    default: "''"
+    default: '-'
     description: 条目标题
   - name: time
     type: string
-    default: "''"
+    default: '-'
     description: 时间文本
   - name: color
     type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
