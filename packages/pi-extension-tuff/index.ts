@@ -156,6 +156,49 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
     },
   },
   {
+    name: 'tuff_render_form',
+    label: 'Tuff: render form',
+    description:
+      'Show an interactive form in the conversation to collect structured input. Use this instead '
+      + 'of asking for several values in prose. The form appears as soon as this call returns, but '
+      + 'the answers arrive later as the user\'s own next message — never assume what was filled '
+      + 'in, and do not re-render the same form while waiting.',
+    promptSnippet: 'Collect structured input with a form',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Form title' },
+        description: { type: 'string', description: 'One line on what the form is for' },
+        submitLabel: { type: 'string', description: 'Label for the submit button' },
+        fields: {
+          type: 'array',
+          description: 'Up to 20 fields; every key must be unique',
+          items: {
+            type: 'object',
+            properties: {
+              key: { type: 'string', description: 'Identifier the answer comes back under' },
+              label: { type: 'string', description: 'Caption shown above the field' },
+              type: {
+                type: 'string',
+                description: 'text | textarea | number | select | checkbox',
+              },
+              options: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Choices; required for select, ignored otherwise',
+              },
+              required: { type: 'boolean', description: 'Blocks submission while empty' },
+              placeholder: { type: 'string', description: 'Hint shown in the empty field' },
+              default: { description: 'Pre-filled value, matching the field type' },
+            },
+            required: ['key', 'label', 'type'],
+          },
+        },
+      },
+      required: ['fields'],
+    },
+  },
+  {
     name: 'tuff_open_path',
     label: 'Tuff: open path',
     description:

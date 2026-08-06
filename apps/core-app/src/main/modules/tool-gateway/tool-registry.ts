@@ -1,9 +1,18 @@
+import type {
+  FormField,
+  FormFieldType,
+  FormFieldValue,
+  FormSpec
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import type { PluginFeatureSource } from './plugin-feature-source'
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
-import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import {
+  CHART_RESULT_PREFIX,
+  FORM_RESULT_PREFIX
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 
 /**
  * How much damage a tool can do, which decides whether a session-level
@@ -224,6 +233,95 @@ function stringifyMcpResult(value: unknown): string {
     return JSON.stringify(value, null, 2)
   } catch {
     return String(value)
+  }
+}
+
+const FORM_FIELD_TYPES = new Set<FormFieldType>([
+  'text',
+  'textarea',
+  'number',
+  'select',
+  'checkbox'
+])
+/** A card in a conversation, not a survey builder: past this nobody answers it. */
+const MAX_FORM_FIELDS = 20
+
+/**
+ * Keeps a default the field can actually hold and drops anything else, so one
+ * mistyped default never costs the user the whole form.
+ */
+function parseFormDefault(
+  type: FormFieldType,
+  value: unknown,
+  options: string[]
+): { default?: FormFieldValue } {
+  if (value === undefined || value === null) return {}
+  if (type === 'checkbox') return typeof value === 'boolean' ? { default: value } : {}
+  if (type === 'number') {
+    const numeric = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(numeric) ? { default: numeric } : {}
+  }
+  const text = String(value)
+  if (type === 'select') return options.includes(text) ? { default: text } : {}
+  return { default: text }
+}
+
+/**
+ * Validates a model-proposed form into a fixed shape.
+ *
+ * Same reasoning as `parseChartSpec`: the renderer assembles inputs from named
+ * fields, so the model describes what to ask rather than how to draw it. Errors
+ * name the offending field — the model gets one back and fixes that field
+ * instead of guessing at the whole spec.
+ */
+export function parseFormSpec(args: Record<string, unknown>): FormSpec | string {
+  const rawFields = Array.isArray(args.fields) ? args.fields : []
+  if (rawFields.length === 0) return 'fields must be a non-empty array'
+  if (rawFields.length > MAX_FORM_FIELDS) return `fields is limited to ${MAX_FORM_FIELDS} entries`
+
+  const fields: FormField[] = []
+  const keys = new Set<string>()
+  for (const [index, entry] of rawFields.entries()) {
+    const record = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null
+    const key = typeof record?.key === 'string' ? record.key.trim() : ''
+    if (!key) return `fields[${index}].key is required`
+    // Submitted values are keyed by this, so a repeat would silently drop one
+    // of the two answers.
+    if (keys.has(key)) return `fields[${index}].key "${key}" is already used`
+    keys.add(key)
+
+    const type = String(record?.type ?? '')
+      .trim()
+      .toLowerCase() as FormFieldType
+    if (!FORM_FIELD_TYPES.has(type)) {
+      return `field "${key}": type must be one of ${[...FORM_FIELD_TYPES].join(', ')}`
+    }
+
+    const options = Array.isArray(record?.options)
+      ? record.options.map((option) => String(option))
+      : []
+    if (type === 'select' && options.length === 0) {
+      return `field "${key}": select needs a non-empty options array`
+    }
+
+    const label = typeof record?.label === 'string' ? record.label.trim() : ''
+    fields.push({
+      key,
+      // A raw key reads worse than a sentence but better than a rejected form.
+      label: label || key,
+      type,
+      ...(type === 'select' ? { options } : {}),
+      ...(record?.required === true ? { required: true } : {}),
+      ...(typeof record?.placeholder === 'string' ? { placeholder: record.placeholder } : {}),
+      ...parseFormDefault(type, record?.default, options)
+    })
+  }
+
+  return {
+    ...(typeof args.title === 'string' ? { title: args.title } : {}),
+    ...(typeof args.description === 'string' ? { description: args.description } : {}),
+    ...(typeof args.submitLabel === 'string' ? { submitLabel: args.submitLabel } : {}),
+    fields
   }
 }
 
@@ -486,6 +584,21 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         } catch (error) {
           return { output: `Feature invocation failed: ${(error as Error).message}`, isError: true }
         }
+      }
+    },
+    {
+      name: 'tuff_render_form',
+      // Reads like tuff_render_chart: putting a form on screen touches nothing
+      // on the machine, and filling it in is the user's own deliberate action.
+      risk: 'read',
+      summarize: (args) => {
+        const title = readStringArg(args, 'title').trim()
+        return title ? `Show the form "${title}"` : 'Show a form in the conversation'
+      },
+      execute: async (args) => {
+        const spec = parseFormSpec(args)
+        if (typeof spec === 'string') return { output: `Invalid form: ${spec}`, isError: true }
+        return { output: `${FORM_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
     }
   ]

@@ -10,6 +10,41 @@ export type AgentToolRisk = 'read' | 'write' | 'execute'
  */
 export const CHART_RESULT_PREFIX = 'tuff:chart:'
 
+/**
+ * Marks a tool result as an interactive form. Same two-sided contract as the
+ * chart prefix: the main-process tool writes it, the renderer detects it.
+ */
+export const FORM_RESULT_PREFIX = 'tuff:form:'
+
+/** Field kinds a rendered form can ask for; each maps onto one tuffex input. */
+export type FormFieldType = 'text' | 'textarea' | 'number' | 'select' | 'checkbox'
+
+/** What one answered field carries back into the conversation. */
+export type FormFieldValue = string | number | boolean
+
+export interface FormField {
+  /** Names the answer in the submitted values; unique within one form. */
+  key: string
+  label: string
+  type: FormFieldType
+  /** Choices for `select`, which cannot render without them. */
+  options?: string[]
+  required?: boolean
+  placeholder?: string
+  default?: FormFieldValue
+}
+
+/**
+ * A model-proposed form, validated in the main process before it reaches the
+ * renderer. Declarative on purpose — the model describes fields, never code.
+ */
+export interface FormSpec {
+  title?: string
+  description?: string
+  fields: FormField[]
+  submitLabel?: string
+}
+
 export interface AgentToolConfirmRequest {
   requestId: string
   tool: string

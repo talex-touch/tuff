@@ -2,6 +2,7 @@
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
+import type { FormSpec } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
@@ -11,12 +12,16 @@ import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
-import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import {
+  CHART_RESULT_PREFIX,
+  FORM_RESULT_PREFIX
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
+import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toChainSteps } from '~/modules/conversation/chain-steps'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
@@ -214,6 +219,30 @@ function chartSpecOf(tool: AiToolCallPart): ToolChartSpec | null {
   } catch {
     return null
   }
+}
+
+function formSpecOf(tool: AiToolCallPart): FormSpec | null {
+  const output = tool.output
+  if (tool.status !== 'done' || !output?.startsWith(FORM_RESULT_PREFIX)) return null
+  try {
+    return JSON.parse(output.slice(FORM_RESULT_PREFIX.length)) as FormSpec
+  } catch {
+    return null
+  }
+}
+
+/** Ids of forms already answered this session — locks their cards. */
+const submittedForms = reactive(new Set<string>())
+
+/**
+ * A form submission continues the conversation as a plain user message: the
+ * model reads it like any other turn, so the loop needs no second channel.
+ */
+function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void {
+  submittedForms.add(tool.id)
+  const lines = Object.entries(values).map(([key, value]) => `${key}: ${String(value)}`)
+  draft.value = ''
+  void conversation.send(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`)
 }
 
 /** A lone tool call renders as its own card; two or more become the timeline. */
@@ -693,6 +722,18 @@ watch(
                     >
                       <template v-if="chartSpecOf(tool)" #result>
                         <ToolChartCard :spec="chartSpecOf(tool)!" />
+                      </template>
+                      <template v-else-if="formSpecOf(tool)" #result>
+                        <ToolFormCard
+                          :spec="formSpecOf(tool)!"
+                          :submitted="submittedForms.has(tool.id)"
+                          :submit-label="t('home.formSubmit')"
+                          :reset-label="t('home.formReset')"
+                          :required-hint="t('home.formRequired')"
+                          :submitted-label="t('home.formDone')"
+                          :select-placeholder="t('home.formSelect')"
+                          @submit="submitForm(tool, $event)"
+                        />
                       </template>
                     </TxToolCallCard>
 
