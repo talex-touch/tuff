@@ -5147,6 +5147,9 @@
     "confirmAndSend": "授权并发送"
   },
   "corebox": {
+    "opacity": "透明度",
+    "debug": "调试",
+    "alwaysOnTop": "置顶",
     "pin": "固定 CoreBox",
     "pinned": "已固定",
     "unpinned": "已取消固定",
