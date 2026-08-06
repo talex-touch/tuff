@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FileIndexFailedFile } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -15,6 +16,15 @@ const { t } = useI18n()
 const files = ref<FileIndexFailedFile[]>([])
 const loading = ref(true)
 const copiedId = ref<number | null>(null)
+
+/** Placeholder rows while the failure list is read. */
+const SKELETON_ITEMS = 5
+
+/**
+ * Bound straight to `loading`: the dialog loads once on mount and never
+ * refetches, so there is no rendered list a reload could blank.
+ */
+const showSkeleton = useDeferredLoading(loading)
 const failedFilesDialogLog = createRendererLogger('FailedFilesListDialog')
 
 onMounted(async () => {
@@ -73,7 +83,26 @@ function close() {
       </h3>
     </div>
 
-    <div v-if="loading" class="dialog-loading">
+    <!--
+      Applies: the dialog opens onto a list whose shape is known, and the spinner
+      it replaces occupied a fraction of the height the list needs, so the dialog
+      resized under the cursor every time it opened. Built from `.file-list` and
+      `.file-item` so the placeholder carries their padding, radius and border.
+    -->
+    <div v-if="showSkeleton" class="file-list-container" aria-hidden="true">
+      <div class="file-list-header">
+        <TxSkeleton :width="112" :height="12" :radius="4" />
+        <TxSkeleton variant="rect" :width="72" :height="24" :radius="6" />
+      </div>
+      <div class="file-list">
+        <div v-for="i in SKELETON_ITEMS" :key="i" class="file-item">
+          <TxSkeleton width="68%" :height="12" :radius="4" />
+          <TxSkeleton width="44%" :height="10" :radius="4" />
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="loading" class="dialog-loading">
       <div class="i-carbon-circle-dash text-24px animate-spin" />
     </div>
 

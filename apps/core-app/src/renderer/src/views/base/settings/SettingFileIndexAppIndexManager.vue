@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -42,6 +43,16 @@ const entries = ref<AppIndexManagedEntry[]>([])
 const pathInput = ref('')
 const loading = ref(false)
 const adding = ref(false)
+
+/** Placeholder entries while the managed index is first read. */
+const SKELETON_ENTRIES = 4
+
+/**
+ * First read only. `loading` also covers the reloads that follow adding or
+ * removing an entry, and those must leave the rendered list in place.
+ */
+const hasLoaded = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 const busyPath = ref<string | null>(null)
 const diagnosticMap = ref<Record<string, AppIndexDiagnoseResult>>({})
 const sourceFilter = ref<AppIndexEntrySourceFilter>('all')
@@ -136,6 +147,7 @@ async function loadEntries(): Promise<void> {
     toast.error(t('settings.settingFileIndex.appIndexManagerLoadFailed'))
   } finally {
     loading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -391,8 +403,26 @@ onMounted(() => {
       </div>
     </div>
 
+    <!--
+      Built from the list's own classes rather than the centred empty box the
+      loading text used to share: an empty box and a stack of entries are very
+      different heights, so the panel jumped once the index arrived.
+    -->
+    <div v-if="showSkeleton" class="app-index-manager-list" aria-hidden="true">
+      <div v-for="i in SKELETON_ENTRIES" :key="i" class="app-index-entry">
+        <div class="app-index-entry-main">
+          <div class="app-index-entry-title-row">
+            <TxSkeleton :width="164" :height="13" :radius="4" />
+            <TxSkeleton variant="rect" :width="52" :height="16" :radius="8" />
+            <TxSkeleton variant="rect" :width="64" :height="16" :radius="8" />
+          </div>
+          <TxSkeleton width="76%" :height="11" :radius="4" />
+        </div>
+      </div>
+    </div>
+
     <div
-      v-if="!hasEntries"
+      v-else-if="!hasEntries"
       :class="['app-index-manager-empty', `is-${emptyState?.tone || 'neutral'}`]"
     >
       <template v-if="loading">

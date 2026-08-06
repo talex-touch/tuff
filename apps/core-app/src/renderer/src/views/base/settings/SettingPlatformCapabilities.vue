@@ -6,6 +6,7 @@ import type {
   PlatformCapabilityStatus
 } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +28,18 @@ type PlatformCapabilityView = PlatformCapability & {
 
 const capabilities = ref<PlatformCapabilityView[]>([])
 const loading = ref(false)
+
+/** Two groups of three: the scan always returns at least a couple of scopes. */
+const SKELETON_GROUPS = 2
+const SKELETON_ITEMS_PER_GROUP = 3
+
+/**
+ * Only the first scan gets a skeleton. `loading` also covers the Refresh button,
+ * and swapping a rendered capability list back out for placeholders on a manual
+ * refresh loses the reader's place.
+ */
+const hasLoaded = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 const lastUpdated = ref<Date | null>(null)
 
 const scopeOrder: PlatformCapabilityScope[] = ['system', 'plugin', 'ai']
@@ -125,6 +138,7 @@ async function loadCapabilities() {
     toast.error(t('settings.settingPlatformCapabilities.messages.loadFailed'))
   } finally {
     loading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -174,7 +188,43 @@ onMounted(() => {
       </TxButton>
     </div>
 
-    <div v-if="loading" class="PlatformCapabilities-State">
+    <!--
+      Built from the list's own classes so the placeholder inherits the group and
+      item geometry; a line of centred text stood in for a stack of bordered
+      cards before, so the panel jumped every time the scan returned.
+    -->
+    <div v-if="showSkeleton" class="PlatformCapabilities-List" aria-hidden="true">
+      <div v-for="group in SKELETON_GROUPS" :key="group" class="PlatformCapabilities-Group">
+        <div class="PlatformCapabilities-GroupHeader">
+          <TxSkeleton :width="96" :height="12" :radius="4" />
+          <TxSkeleton :width="20" :height="12" :radius="4" />
+        </div>
+        <article v-for="i in SKELETON_ITEMS_PER_GROUP" :key="i" class="PlatformCapabilities-Item">
+          <div class="PlatformCapabilities-ItemMain">
+            <span class="PlatformCapabilities-Icon">
+              <TxSkeleton variant="rect" :width="18" :height="18" :radius="5" />
+            </span>
+            <div class="PlatformCapabilities-Text">
+              <div class="PlatformCapabilities-TitleRow">
+                <TxSkeleton :width="148" :height="14" :radius="4" />
+                <div class="PlatformCapabilities-Badges">
+                  <TxSkeleton variant="rect" :width="54" :height="18" :radius="9" />
+                  <TxSkeleton variant="rect" :width="46" :height="18" :radius="9" />
+                </div>
+              </div>
+              <TxSkeleton width="82%" :height="11" :radius="4" />
+            </div>
+          </div>
+          <div class="PlatformCapabilities-Detail">
+            <div class="PlatformCapabilities-MetaRow">
+              <TxSkeleton variant="rect" :width="112" :height="16" :radius="6" />
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div v-else-if="loading" class="PlatformCapabilities-State">
       {{ t('settings.settingPlatformCapabilities.loading') }}
     </div>
     <div v-else-if="groupedCapabilities.length === 0" class="PlatformCapabilities-State">
