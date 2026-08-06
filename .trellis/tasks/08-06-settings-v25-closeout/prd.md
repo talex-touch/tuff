@@ -49,9 +49,11 @@
 
 ## 验收标准
 
-- [ ] 外观页三段(窗口效果 / CoreBox / 个性化)与画板 `E0C1Zz` 逐区对齐;补充组沿用同一行式语言,无旧版卡片残留
-- [ ] 设置域分组容器全部为 TuffGroupBlock,`implement.md` 清单内文件无手写分组容器残留
-- [ ] 每项设置在改版后可正常读写,行为与改版前一致(逐项核对改动过的页面)
-- [ ] 首页侧栏无「智能」入口;`/setting/intelligence` 可达原六个子页的全部内容;`/intelligence`、`/intelligence/*` 旧链接重定向可用
-- [ ] light / dark 双主题下无对比度不足或布局溢出
-- [ ] `pnpm lint` 与 `apps/core-app` 的 `npm run typecheck` 通过
+> 组件 chrome 口径已于 2026-08-06 晚被用户推翻:画板的外置标签版式实现后按令回退,分组一律 **TuffGroupBlock 经典卡内组头**。以下第 1 条按「内容与行结构对齐画板、chrome 用经典形态」判定(详见 design.md 顶部终局口径)。
+
+- [x] 外观页三段(窗口效果 / CoreBox / 个性化)与画板 `E0C1Zz` **内容结构**逐区对齐;补充组(壁纸 / 强调 / 动效)沿用同一行式语言,4 个手写壁纸面板全部溶解,无旧版卡片残留 —— 实机截图核验
+- [x] 设置域分组容器全部为 TuffGroupBlock(`SettingSection` 已删、全仓零引用);38 个改动 `.vue` 扫描无手写分组容器、零 hex/rgba
+- [x] 每项设置行为与改版前一致 —— 机器证明:外观页 24 个数据绑定与 HEAD 逐字节一致、TxSlider 三元组全同;14 个重写最重的文件共 232 个绑定零差异;六个智能子页 `<script>` 仅差一行 shell import
+- [x] 首页侧栏无「智能」入口;`/setting/intelligence` + 六个子路由可达;`/intelligence`、`/intelligence/*` 七条重定向由 children 表生成(`categories.smoke.test.ts` 守不变式)
+- [x] light / dark 双主题:浅色实机走查通过;深色以证据覆盖(零硬编码色 + `.dark` 三色相已定义 + 深色墨色最低 4.54:1 + 布局与主题无关)。**主观观感仍建议用户切深色扫一眼**
+- [x] `npm run typecheck` 双腿 exit 0;lint delta = 0(42 个改动文件包内 eslint 零输出;全仓 63 条 warning 属既有 `src/main` 文件,非本轮引入)

@@ -18,7 +18,9 @@
 
 因此本任务原「不新增任何设置项 / 裁撤归 batch-settings-razor」的约束**不适用于**上述分类。`08-04-batch-settings-razor` 若启动，需以当前实际状态为基线重新盘点。
 
-本任务剩余范围：总览、智能、文件索引、关于四个分类。**第一轮改做「总览」**，`design.md` 第 1 节与 `implement.md` 中关于「外观」的部分已失效，需重写后再启动。
+**2026-08-06 追加收窄**：`08-06-settings-v25-closeout` 已接手并完成「智能」分类（六子页整体并入 `/setting/intelligence/*`、枢纽页重建、旧路由重定向）与「文件索引」分类的手写卡改造（AppIndexManager / AppDiagnostic），本任务均不再认领。该任务同时删除了 `SettingSection`、把设置域分组统一到 `TuffGroupBlock`（**经典卡内组头**，用户 2026-08-06 终局口径，画板的外置标签版式已实现后按用户要求回退，勿再采用），后续重写须沿用。留给本任务清理的死件：`AppSettings.vue`、`SettingHeader.vue`、`SettingMessages.vue`、`SettingPermission.vue`、`SettingWindow.vue`、`SettingSentry.vue`（均无挂载点）、死面 `styles/sub/ThemePreference.vue`（`/styles/theme` 无 router-view 渲染），以及六个智能落地页孤儿组件（`IntelligenceHeader/Channels/Capabilities/Prompts/LocalSkills/Future`）。
+
+本任务剩余范围：总览、关于两个分类。**第一轮改做「总览」**，`design.md` 第 1 节与 `implement.md` 中关于「外观」的部分已失效，需重写后再启动。
 
 外观分类的一个已决口径：画板 `E0C1Zz` 的「个性化」只画了 4 行，而现有外观页有 25 项。**本轮全部保留**，画板未画的按同一行式语言补成「壁纸滤镜 / 强调 / 动画」三组。设置项的裁撤归 `08-04-batch-settings-razor`，其规划尚未经用户批准，本任务不代做该决定。
 
