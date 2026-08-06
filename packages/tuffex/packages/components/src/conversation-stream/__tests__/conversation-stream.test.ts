@@ -293,4 +293,47 @@ describe('txConversationStream', () => {
     expect((control.element as any).scrollTop).toBe(500 * 96)
     expect(wrapper.vm.atBottom).toBe(true)
   })
+
+  it('observes the load-older sentinel after items arrive on an empty mount', async () => {
+    const loadOlder = vi.fn(async () => ({ items: [], hasMore: true }))
+    const wrapper = mountStream({ items: [], loadOlder, hasMoreInitial: true })
+    await nextTick()
+
+    // The sentinel lives in the non-empty branch, so an empty mount has none:
+    // the observer used to be built once in onMounted and stay unattached.
+    intersectionCallbacks = []
+
+    await wrapper.setProps({ items: makeMessages(0, 5) })
+    await nextTick()
+    await nextTick()
+
+    fireIntersection()
+    await nextTick()
+
+    expect(loadOlder).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('revives the history observer when hasMoreInitial is re-supplied', async () => {
+    const loadOlder = vi.fn(async () => ({ items: [], hasMore: false }))
+    const wrapper = mountStream({ items: makeMessages(0, 5), loadOlder, hasMoreInitial: true })
+    await nextTick()
+
+    fireIntersection()
+    await nextTick()
+    await nextTick()
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+
+    // hasMore is now false, which disconnects the observer. Swapping in a
+    // different conversation with hasMoreInitial: true must rebuild it —
+    // hasMore used to be seeded once at setup and never re-synced.
+    intersectionCallbacks = []
+    await wrapper.setProps({ hasMoreInitial: false })
+    await wrapper.setProps({ items: makeMessages(100, 5), hasMoreInitial: true })
+    await nextTick()
+    await nextTick()
+
+    expect(intersectionCallbacks.length).toBeGreaterThan(0)
+    wrapper.unmount()
+  })
 })
