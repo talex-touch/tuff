@@ -961,7 +961,7 @@
     "moreActions": "More actions",
     "modelAuto": "Auto",
     "modelLoading": "Loading available models…",
-    "modelEmpty": "No models available — configure an AI provider first",
+    "modelEmpty": "No models available — configure an AI provider or install the pi CLI",
     "configureProvider": "Configure",
     "panel": {
       "title": "Conversation info",
