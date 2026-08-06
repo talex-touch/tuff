@@ -2,6 +2,7 @@
 import type { CSSProperties } from 'vue'
 import type { SkeletonProps } from './types.ts'
 import { computed } from 'vue'
+import { toCssUnit } from './utils'
 
 defineOptions({
   name: 'TxSkeleton',
@@ -16,10 +17,6 @@ const props = withDefaults(defineProps<SkeletonProps>(), {
   lines: 1,
   gap: 10,
 })
-
-function toCssUnit(v: string | number): string {
-  return typeof v === 'number' ? `${v}px` : v
-}
 
 const itemStyle = computed<CSSProperties>(() => {
   const height = props.variant === 'text' ? toCssUnit(props.height) : toCssUnit(props.height)
@@ -64,14 +61,9 @@ const linesArray = computed(() => {
 </template>
 
 <style lang="scss">
-@keyframes tx-skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
+@use '../../../style/mixins.scss' as *;
+
+@include skeleton-keyframes;
 
 .tx-skeleton {
   display: flex;
@@ -83,14 +75,8 @@ const linesArray = computed(() => {
   width: var(--tx-skeleton-width, 100%);
   height: var(--tx-skeleton-height, 12px);
   border-radius: var(--tx-skeleton-radius, 8px);
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent) 0%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 95%, transparent) 50%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent) 100%
-  );
-  background-size: 200% 100%;
-  animation: tx-skeleton-shimmer 1.2s ease-in-out infinite;
+
+  @include skeleton-surface;
 }
 
 .tx-skeleton__item--circle {
