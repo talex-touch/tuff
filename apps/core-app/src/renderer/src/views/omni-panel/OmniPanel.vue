@@ -9,6 +9,7 @@ import type {
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
@@ -57,6 +58,13 @@ const selectionIssueCode = ref<'disabled' | 'empty' | 'failed' | 'unsupported' |
 const selectionIssueMessage = ref('')
 const contextCapsule = ref<OmniPanelDesktopContextCapsule | undefined>(undefined)
 const loading = ref(false)
+
+/**
+ * First fetch only. The panel reloads its features whenever it reopens, and a
+ * reopen with the previous tiles already on screen should not blank them.
+ */
+const hasLoadedFeatures = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoadedFeatures.value)
 const executingId = ref<string | null>(null)
 const searchKeyword = ref('')
 const features = ref<OmniPanelFeatureItemPayload[]>([])
@@ -184,6 +192,7 @@ async function loadFeatures(): Promise<void> {
     toast.error(t('corebox.omniPanel.loadFailed'))
   } finally {
     loading.value = false
+    hasLoadedFeatures.value = true
   }
 }
 
@@ -469,7 +478,20 @@ onBeforeUnmount(() => {
 
     <div class="OmniPanel__divider" />
 
-    <div v-if="loading" class="OmniPanel__state">
+    <!--
+      The action grid is a fixed three columns of square tiles, so placeholders
+      occupy exactly the space the features will; the line of centred text they
+      replace did not, and the panel resized as soon as the list arrived.
+    -->
+    <OmniPanelActionList
+      v-if="showSkeleton"
+      loading
+      :items="[]"
+      :focused-index="-1"
+      :executing-id="null"
+    />
+
+    <div v-else-if="loading" class="OmniPanel__state">
       {{ t('corebox.omniPanel.loading') }}
     </div>
     <div v-else-if="filteredFeatures.length === 0" class="OmniPanel__state">
