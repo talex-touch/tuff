@@ -1,5 +1,6 @@
 import type { AppSemanticAliasInput } from './app-semantic-catalog'
 import { normalizeStringList } from './app-utils'
+import { createAppCatalogNeedleMatcher } from './app-catalog-matching'
 
 export type AppToolSourceId = 'dev' | 'im' | 'design'
 
@@ -29,7 +30,7 @@ const IM_TOOL_ALIASES = [
 ]
 const DESIGN_TOOL_ALIASES = ['design', 'designer', 'creative', 'graphics', 'image', '设计', '作图']
 
-export const APP_TOOL_SOURCE_CATALOG_VERSION = 1
+export const APP_TOOL_SOURCE_CATALOG_VERSION = 2
 
 const APP_TOOL_SOURCE_CATALOG: readonly AppToolSourceCatalogEntry[] = [
   {
@@ -70,46 +71,13 @@ const APP_TOOL_SOURCE_CATALOG: readonly AppToolSourceCatalogEntry[] = [
   }
 ]
 
-function normalizeForMatch(value: string | null | undefined): string {
-  return value?.trim().toLowerCase() ?? ''
-}
-
-function basenameWithoutExtension(value: string | null | undefined): string {
-  const normalized = value?.trim()
-  if (!normalized) return ''
-
-  const baseName = normalized.split(/[\\/]/).filter(Boolean).pop() ?? normalized
-  return baseName.replace(/\.(app|exe|lnk|desktop)$/i, '')
-}
-
-function collectSearchText(app: AppSemanticAliasInput): string {
-  return normalizeForMatch(
-    [
-      app.name,
-      app.displayName,
-      app.fileName,
-      ...(app.alternateNames ?? []),
-      app.bundleId,
-      app.uniqueId,
-      app.stableId,
-      app.appIdentity,
-      app.path,
-      app.launchTarget,
-      app.displayPath,
-      app.description,
-      basenameWithoutExtension(app.path),
-      basenameWithoutExtension(app.launchTarget)
-    ].join(' ')
-  )
-}
-
 export function resolveAppToolSourceMatches(app: AppSemanticAliasInput): AppToolSourceMatch[] {
-  const searchText = collectSearchText(app)
-  if (!searchText) return []
+  const matcher = createAppCatalogNeedleMatcher(app)
+  if (!matcher.hasIdentity) return []
 
   const matches = new Map<AppToolSourceId, AppToolSourceMatch>()
   for (const entry of APP_TOOL_SOURCE_CATALOG) {
-    if (!entry.match.some((needle) => searchText.includes(needle.toLowerCase()))) {
+    if (!matcher.matchesAny(entry.match)) {
       continue
     }
 

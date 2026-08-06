@@ -135,6 +135,36 @@ describe('app semantic alias catalog', () => {
     )
   })
 
+  it('requires token boundaries so short needles cannot attach through substrings', () => {
+    const postgres = resolveAppSemanticAliases({
+      name: 'Postgres',
+      bundleId: 'com.postgresapp.Postgres2',
+      path: '/Applications/Postgres.app'
+    })
+    expect(postgres).not.toContain('telegram')
+    expect(postgres).not.toContain('im')
+    expect(
+      resolveAppToolSourceIds({ name: 'Postgres', path: '/Applications/Postgres.app' })
+    ).toEqual([])
+
+    const homeDirApp = resolveAppSemanticAliases({
+      name: 'Some Editor',
+      path: '/Users/tim/Applications/Some Editor.app'
+    })
+    expect(homeDirApp).not.toContain('im')
+    expect(homeDirApp).not.toContain('聊天')
+
+    expect(
+      resolveAppSemanticAliases({ name: 'Telegram', bundleId: 'org.telegram.desktop' })
+    ).toEqual(expect.arrayContaining(['im', 'telegram', 'tg']))
+    expect(resolveAppSemanticAliases({ name: 'TIM', bundleId: 'com.tencent.tim' })).toEqual(
+      expect.arrayContaining(['im', 'tim'])
+    )
+    expect(resolveAppSemanticAliases({ name: 'UTM', path: '/Applications/UTM.app' })).toEqual(
+      expect.arrayContaining(['vm', 'virtual', 'utm'])
+    )
+  })
+
   it('keeps ambiguous Illustrator away from the AI alias', () => {
     const aliases = resolveAppSemanticAliases({
       name: 'Adobe Illustrator',
