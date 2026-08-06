@@ -5,6 +5,7 @@ import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingSection from '~/components/settings/SettingSection.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import SettingAssistant from '../SettingAssistant.vue'
+import SettingSkillsMcp from '../SettingSkillsMcp.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -15,6 +16,9 @@ const router = useRouter()
     <SettingAssistant mode="standard" />
     <!-- Floating ball, voice wake and wake words; inherited from the dissolved `advanced` category. -->
     <SettingAssistant mode="advanced" />
+
+    <!-- What the home conversation can reach beyond the model: skills and MCP servers. -->
+    <SettingSkillsMcp />
 
     <!-- Cross-link to the standalone `/intelligence` surface; the label would just repeat the page title. -->
     <SettingSection>

@@ -1,9 +1,20 @@
 <script lang="ts" name="SettingChip" setup>
-withDefaults(defineProps<{ mono?: boolean }>(), { mono: false })
+withDefaults(
+  defineProps<{
+    mono?: boolean
+    /**
+     * Status colouring. `neutral` is the annotation chip (macOS / 可选 / Beta and any
+     * state that is simply unknown); `success` and `danger` are the only two the shell
+     * spends colour on, so a coloured chip always means a state the user can act on.
+     */
+    tone?: 'neutral' | 'success' | 'danger'
+  }>(),
+  { mono: false, tone: 'neutral' }
+)
 </script>
 
 <template>
-  <span class="SettingChip" :class="{ mono }"><slot /></span>
+  <span class="SettingChip" :class="[{ mono }, `tone-${tone}`]"><slot /></span>
 </template>
 
 <style lang="scss" scoped>
@@ -19,6 +30,18 @@ withDefaults(defineProps<{ mono?: boolean }>(), { mono: false })
 
   &.mono {
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+
+  // `--shell-*` carries no success ramp — the shell only ever needed a failure colour — so the
+  // positive state borrows the `--tx-*` one and softens it the same way the shell tokens do.
+  &.tone-success {
+    background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
+    color: var(--tx-color-success);
+  }
+
+  &.tone-danger {
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
   }
 }
 </style>

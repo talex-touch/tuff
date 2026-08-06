@@ -4,7 +4,9 @@ import type {
   AiAutomationRunRecord,
   AiImportApplyResult,
   AiImportCandidate,
+  AiImportItemKind,
   AiImportScanResult,
+  AiImportSecretDescriptor,
   AiImportedConfigItem,
   AiOrchestratorEvent,
   AiOrchestratorRunListRequest,
@@ -35,6 +37,32 @@ import type { AiPreparedImportItem } from './ai-import-types'
 
 const DEFAULT_PROFILE_ID = 'default-pi'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
+
+/**
+ * Origin marker for items the user typed in rather than imported. It doubles as
+ * the source id so `listActiveImportCandidates`, which is only ever asked about
+ * scanned sources, can never sweep a hand-entered item into an import decision.
+ */
+const MANUAL_ORIGIN_ID = 'manual'
+/**
+ * An item row needs a revision, which needs a scan; a hand-entered server has
+ * neither. One synthetic pair anchors all of them — and must be excluded from
+ * any future scan retention pass, since both foreign keys cascade on delete.
+ */
+const MANUAL_SCAN_ID = 'manual'
+const MANUAL_REVISION_ID = 'manual'
+
+export interface ManualImportedItemInput {
+  /** Caller-allocated so secret references can be derived before the write. */
+  itemId: string
+  kind: AiImportItemKind
+  name: string
+  projection: Record<string, unknown>
+  /** Must already be redacted: this is persisted verbatim. */
+  snapshot: Record<string, unknown>
+  secrets: AiImportSecretDescriptor[]
+  fingerprint: string
+}
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback
@@ -687,6 +715,126 @@ export class AiOrchestratorStore {
     })
     const item = await this.getImportedItem(itemId)
     if (!item) throw new Error(`Imported item ${itemId} not found`)
+    return item
+  }
+
+  /**
+   * Writes a hand-entered item into the imported-item table, so enable/disable,
+   * delete, and the runtime's MCP reconcile pass treat it exactly like an
+   * imported one. Secret values are the caller's job; what lands here is the
+   * descriptor list, and any reference this write orphans is dropped from the
+   * secure store.
+   */
+  async upsertManualImportedItem(input: ManualImportedItemInput): Promise<AiImportedConfigItem> {
+    const name = input.name.trim()
+    if (!input.itemId || !name) throw new Error('Manual item id and name are required')
+    const db = databaseModule.getDb()
+    const now = Date.now()
+
+    await scheduleDbWrite(
+      'ai-import.item.upsert-manual',
+      async () => {
+        let restoreSecretRefs: (() => Promise<void>) | undefined
+        try {
+          await db.transaction(async (tx) => {
+            const rows = await tx
+              .select()
+              .from(aiImportItems)
+              .where(eq(aiImportItems.current, true))
+            const existing = rows.find((row) => row.id === input.itemId)
+            if (existing && existing.provider !== MANUAL_ORIGIN_ID)
+              throw new Error(`Imported item ${input.itemId} was not created by hand`)
+
+            const retainedAuthRefs = new Set(
+              [
+                ...rows
+                  .filter((row) => row.id !== input.itemId)
+                  .flatMap((row) => parseJson<AiImportSecretDescriptor[]>(row.secrets, [])),
+                ...input.secrets
+              ]
+                .map((secret) => secret.authRef)
+                .filter((authRef): authRef is string => Boolean(authRef))
+            )
+            const authRefsToRemove = parseJson<AiImportSecretDescriptor[]>(existing?.secrets, [])
+              .map((secret) => secret.authRef)
+              .filter(
+                (authRef): authRef is string =>
+                  typeof authRef === 'string' && !retainedAuthRefs.has(authRef)
+              )
+            restoreSecretRefs = await removeSecureStoreRefs(authRefsToRemove)
+
+            await tx
+              .insert(aiImportScans)
+              .values({
+                id: MANUAL_SCAN_ID,
+                cwd: '',
+                sources: '[]',
+                candidates: '[]',
+                createdAt: now
+              })
+              .onConflictDoNothing()
+            await tx
+              .insert(aiImportRevisions)
+              .values({
+                id: MANUAL_REVISION_ID,
+                scanId: MANUAL_SCAN_ID,
+                importedCount: 0,
+                unchangedCount: 0,
+                removedCount: 0,
+                createdAt: now
+              })
+              .onConflictDoNothing()
+            await tx
+              .insert(aiImportItems)
+              .values({
+                id: input.itemId,
+                candidateId: input.itemId,
+                sourceId: MANUAL_ORIGIN_ID,
+                provider: MANUAL_ORIGIN_ID,
+                scope: 'user',
+                targetScope: 'global',
+                workspaceRoot: null,
+                kind: input.kind,
+                name,
+                alias: null,
+                sourceKey: input.itemId,
+                path: '',
+                fingerprint: input.fingerprint,
+                snapshot: JSON.stringify(input.snapshot),
+                contentRef: null,
+                projection: JSON.stringify(input.projection),
+                secrets: JSON.stringify(input.secrets),
+                state: 'active',
+                revisionId: MANUAL_REVISION_ID,
+                current: true,
+                active: existing?.active ?? true,
+                createdAt: existing?.createdAt ?? now,
+                updatedAt: now
+              })
+              .onConflictDoUpdate({
+                target: aiImportItems.id,
+                set: {
+                  name,
+                  fingerprint: input.fingerprint,
+                  snapshot: JSON.stringify(input.snapshot),
+                  projection: JSON.stringify(input.projection),
+                  secrets: JSON.stringify(input.secrets),
+                  state: 'active',
+                  current: true,
+                  updatedAt: now
+                }
+              })
+          })
+        } catch (error) {
+          if (restoreSecretRefs) await restoreSecretRefs()
+          throw error
+        }
+      },
+      { priority: 'interactive' }
+    )
+
+    const item = await this.getImportedItem(input.itemId)
+    if (!item) throw new Error(`Manual item ${input.itemId} was not persisted`)
     return item
   }
 

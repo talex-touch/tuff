@@ -66,6 +66,7 @@ import { getIntelligenceLocalEnvironment } from './intelligence-local-environmen
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
+import { registerMcpServerAdminChannels } from './mcp-server-admin-runtime'
 import { getProviderModelOptions } from './intelligence-provider-model-options'
 import {
   setIntelligenceAutonomousRuntimeAdapter,
@@ -613,6 +614,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private manager: IntelligenceProviderManager | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private agentChannelsCleanup: (() => void) | null = null
+  private mcpServerAdminCleanup: (() => void) | null = null
   private agentRuntimePromise: Promise<void> | null = null
 
   constructor() {
@@ -682,6 +684,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     if (this.agentChannelsCleanup) {
       this.agentChannelsCleanup()
       this.agentChannelsCleanup = null
+    }
+    if (this.mcpServerAdminCleanup) {
+      this.mcpServerAdminCleanup()
+      this.mcpServerAdminCleanup = null
     }
     await aiCliOrchestrator.shutdown()
     await intelligenceMcpRegistry.closeAll()
@@ -1149,6 +1155,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
     this.registerAiCliOrchestratorChannels(registerSafe)
+    this.mcpServerAdminCleanup ??= registerMcpServerAdminChannels(this.transport)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerHostOnlySafe)
     this.registerWorkflowChannels(registerHostOnlySafe)

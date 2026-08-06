@@ -11,5 +11,8 @@
   },
   "files": [
     "index.ts"
-  ]
+  ],
+  "scripts": {
+    "test": "vitest run"
+  }
 }

@@ -13,7 +13,7 @@ function isVisibleInWorkspace(item: AiImportedConfigItem, cwd: string): boolean 
   return path === '' || (!path.startsWith('..') && !isAbsolute(path))
 }
 
-function mcpProfilesFromItem(item: AiImportedConfigItem): IntelligenceMcpProfile[] {
+export function mcpProfilesFromItem(item: AiImportedConfigItem): IntelligenceMcpProfile[] {
   const profiles = item.normalizedProjection?.mcpProfiles
   return Array.isArray(profiles)
     ? profiles.filter((profile): profile is IntelligenceMcpProfile =>
