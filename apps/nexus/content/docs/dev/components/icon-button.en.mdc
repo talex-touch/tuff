@@ -59,7 +59,7 @@ code: |
 |------|------|---------|-------------|
 | `icon` | `string` | `''` | Icon class/name rendered through `TxIcon` when no default slot is provided. |
 | `label` | `string` | `''` | Accessible label. Required for icon-only actions. |
-| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Button size. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Button size. |
 | `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | Hit-area silhouette. |
 | `pressed` | `boolean` | - | Toggle state; forwarded to `aria-pressed` when defined. |
 | `disabled` | `boolean` | `false` | Native disabled state and visual disabled class. |

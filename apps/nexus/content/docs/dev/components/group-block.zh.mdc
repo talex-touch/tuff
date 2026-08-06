@@ -12,22 +12,6 @@ verified: true
 
 使用 GroupBlock 组织设置项、账号选项与紧凑的偏好行，统一图标、标签与控件布局。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const notifications = ref(true)
-const language = ref<'en' | 'zh'>('en')
-const theme = ref<'light' | 'dark' | 'auto'>('auto')
-const profileName = ref('Talex')
-const displayName = ref('Talex')
-const timezone = ref('local')
-const autoUpdate = ref(true)
-const loading = ref(true)
-const locked = ref(false)
-const dummy = ref(false)
-function handleClick() {}
-</script>
-
 ## 基础用法
 
 ### GroupBlock
@@ -461,7 +445,7 @@ code: |
 | `defaultIcon` | `TxIconSource \| string` | - | `active=false` 时图标；未提供激活图标时也作为回退。 |
 | `activeIcon` | `TxIconSource \| string` | - | `active=true` 时图标；未提供时回退到 `defaultIcon`。 |
 | `iconSize` | `number` | `20` | 图标像素尺寸。 |
-| `active` | `boolean` | `false` | 切换行的激活视觉状态与图标状态。 |
+| `active` | `boolean` | `false` | 为 `true` 时切换到 `activeIcon`，并把 `active` 传入 `icon`/`default` 插槽作用域；不改变行背景等视觉样式。 |
 | `disabled` | `boolean` | `false` | 应用禁用样式并阻止行点击事件。 |
 
 ### TxBlockSlot 事件
@@ -561,7 +545,6 @@ code: |
 | 插槽名 | 参数 | 说明 |
 |------|------|------|
 | `tags` | - | 透传到行标题区的元信息。 |
-
 
 ## 暴露方法
 

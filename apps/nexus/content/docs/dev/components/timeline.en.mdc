@@ -69,11 +69,11 @@ rows:
 rows:
   - name: title
     type: string
-    default: "''"
+    default: '-'
     description: Timeline item title
   - name: time
     type: string
-    default: "''"
+    default: '-'
     description: Time label
   - name: color
     type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
