@@ -1783,3 +1783,10 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - **thinking orbs**(fe0ae08b1):vendor 引擎(MIT v0.2.0)+TxThinkingOrb(随机每挂载);三落点(等待首token 28px/推理头/思维链头)。
 - 归属纪律:lang jsons+SettingTools+box-tool/reco+db/utils 是另一会话(reco-wire-existing-signals)在飞件,已避开;typecheck:node 的 9 错全在其范围。
 - 附件诊断存档:UI-only 是任务④有意留白(attachmentNotSent 提示在案);pi 支持 @files 位置参数,打通=临时落盘+@path+消息类型加字段,待立项。
+
+## 2026-08-06 · skills-mcp-config S4-S6 收口（代理撞限，主会话接力）
+
+- S4/S5 双代理在报告前撞会话额度上限,留 85% 成品:S4 三件套已装配齐(15 测试绿),S5 组件成品但缺挂载+全部 60 个 i18n 键。主会话接力:挂进 SettingIntelligencePage、写 zh/en skillsMcp 块、SettingChip tone 三档归属核实为 S5 所需。787e2c554。
+- **lang json 多会话并发的提交法**:git show HEAD 取基线→只应用自己的块→hash-object -w→update-index --cacheinfo。工作区他人未提交行原样保留。两次实战(c3cb09839 三键、787e2c554 68 行块)。
+- **S6 冒烟**:9223 竟是用户在用的实例(我的启动因 5173 被占而失败,dev log 才暴露)——已误导航两次,即刻恢复 #/home。教训:**驱动 CDP 前先验证实例归属(检查 dev log 有没有 Port already in use)**。冒烟改离 app:真 registry+真 npx server 集成测试 15.2s 绿(TUFF_MCP_SMOKE=1 opt-in 守卫)。
+- 遗留观察:用户实例导航到 /setting/intelligence 白屏(组件动态 import 正常,疑设置 shell 上下文问题),待用户从设置入口自然点击核实;pi 回复重复 5 遍的旧毛病再现(08-04 挂账)。

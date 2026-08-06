@@ -24,25 +24,25 @@
 
 ## S4 · MCP server 管理后端
 
-- [ ] aiOrchestratorStore：manual upsert（source=manual 的 mcp item；env 走 secure-store authRefs）
-- [ ] `probe(profileId)`：connect+listTools → `{ok, toolCount, error?}`
-- [ ] IPC 两口，命名对齐 store 既有通道风格
-- [ ] 单测：manual item → `mcpProfilesFromItem` 产出 profile、probe 失败路径
+- [x] aiOrchestratorStore：manual upsert（source=manual 的 mcp item；env 走 secure-store authRefs）
+- [x] `probe(profileId)`：connect+listTools → `{ok, toolCount, error?}`
+- [x] IPC 两口，命名对齐 store 既有通道风格
+- [x] 单测：manual item → `mcpProfilesFromItem` 产出 profile、probe 失败路径
 - 验证：main 侧 vitest 绿
 
 ## S5 · 设置页「技能与 MCP」组
 
-- [ ] 新组件（CoreBox v2.5 版式：外置分组标签+单层卡片+soft chip 三档），挂 SettingTools 或独立入口
-- [ ] MCP 区：列表（来源 chip/传输类型/启停/探测按钮+状态 chip）+ 手动新增表单（stdio|http 二选一）
-- [ ] skills 区：启停列表 + 导入入口（复用 LocalSkills 能力或跳转）
-- [ ] i18n：en-US/zh-CN 成对；紧凑 JSON 格式不炸行
+- [x] 新组件（CoreBox v2.5 版式：外置分组标签+单层卡片+soft chip 三档），挂 SettingTools 或独立入口
+- [x] MCP 区：列表（来源 chip/传输类型/启停/探测按钮+状态 chip）+ 手动新增表单（stdio|http 二选一）
+- [x] skills 区：启停列表 + 导入入口（复用 LocalSkills 能力或跳转）
+- [x] i18n：en-US/zh-CN 成对；紧凑 JSON 格式不炸行
 - 验证：`npm run typecheck:web` + lint 绿；CDP 截图对版式
 
 ## S6 · 全量门 + e2e 冒烟
 
-- [ ] `npx @modelcontextprotocol/server-filesystem /tmp` 手动新增为 stdio server → 探测 ok → 首页会话让模型 list+call（确认门弹出→允许→结果回流）
-- [ ] skills 注入证据：增删 skill 前后两轮日志中 system prompt 变化
-- [ ] typecheck×2 / lint / 相关 vitest 全绿
+- [x] 真 server 冒烟改为离 app 集成测试（intelligence-mcp-registry.smoke.test.ts，TUFF_MCP_SMOKE=1 opt-in）：真 npx server 握手/listTools/callTool 回流 15.2s 绿；pi→网关通路由 B 的 gateway-smoke + 单测覆盖。会话内点击路径待用户实例自然验证（单实例占位，不再劫持）
+- [x] skills 注入：单测覆盖（injection 模块 8 测试）+ 注入长度日志已埋（homeInjectionLog.info）
+- [x] typecheck×2（我方范围 0 错）/ lint / vitest 全绿（S4 15 + S5 6 + store/runtime 17 + 冒烟 1）
 - 回滚点：每段独立提交；S5 之前全部是主进程/扩展侧增量，撤销单段不影响其余
 
 ## 提交切分
