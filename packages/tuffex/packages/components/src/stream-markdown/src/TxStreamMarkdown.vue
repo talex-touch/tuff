@@ -193,11 +193,29 @@ function isSuppressedFence(block: StreamBlock): boolean {
 
   // The ChatGPT-style line reveal: while streaming, the tail block's bottom
   // edge fades out, so each new line materialises half-transparent and
-  // brightens as the next one pushes it up. Opacity-only — active under
-  // reduced motion too.
+  // brightens as the next one pushes it up. Three stops make the falloff a
+  // curve rather than a cliff. Opacity-only — active under reduced motion too.
   &.is-streaming .tx-stream-md__block--last {
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2em), rgb(0 0 0 / 25%) 100%);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2em), rgb(0 0 0 / 25%) 100%);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - 3em),
+      rgb(0 0 0 / 55%) calc(100% - 1.2em),
+      rgb(0 0 0 / 12%) 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - 3em),
+      rgb(0 0 0 / 55%) calc(100% - 1.2em),
+      rgb(0 0 0 / 12%) 100%
+    );
+  }
+
+  // Per-delta ink: `v-html` rebuilds the tail block's children on every chunk,
+  // so this animation restarts with each delta — the growing element re-fades
+  // from 45% and settles to full once the stream moves past it. Words condense
+  // out of thin air. Opacity only: blur would soften glyph antialiasing.
+  &.is-streaming .tx-stream-md__block--last.tx-stream-md__markup > :last-child {
+    animation: tx-stream-md-ink 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .tx-stream-md__markup--tail > p:last-child::after,
@@ -398,8 +416,22 @@ function isSuppressedFence(block: StreamBlock): boolean {
   }
 }
 
+@keyframes tx-stream-md-ink {
+  from {
+    opacity: 0.45;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tx-stream-md.is-streaming .tx-stream-md__block {
+    animation: none;
+  }
+
+  .tx-stream-md.is-streaming .tx-stream-md__block--last.tx-stream-md__markup > :last-child {
     animation: none;
   }
 
