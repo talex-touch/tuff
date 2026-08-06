@@ -23,11 +23,15 @@ const emit = defineEmits<TreeEmits>()
 const internalExpanded = ref(new Set<TreeKey>(props.defaultExpandedKeys ?? []))
 
 watch(
-  () => props.defaultExpandedKeys,
-  (next) => {
+  // Track the keys by value, not by array reference. Consumers routinely pass an
+  // inline `:default-expanded-keys="[...]"` literal, so any unrelated parent
+  // re-render produces a brand-new array; a reference watcher would then collapse
+  // whatever the user had expanded. Same hazard TxDataTable guards for defaultSort.
+  () => JSON.stringify(props.defaultExpandedKeys ?? []),
+  () => {
     if (props.expandedKeys !== undefined)
       return
-    internalExpanded.value = new Set(next ?? [])
+    internalExpanded.value = new Set(props.defaultExpandedKeys ?? [])
   },
 )
 

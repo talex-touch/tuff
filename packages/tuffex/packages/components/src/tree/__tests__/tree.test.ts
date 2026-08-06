@@ -141,4 +141,33 @@ describe('txTree', () => {
 
     wrapper.unmount()
   })
+
+  it('keeps user expansion when the parent re-renders an equal defaultExpandedKeys literal', async () => {
+    const wrapper = mount(TxTree, {
+      props: { nodes, defaultExpandedKeys: [] },
+    })
+
+    const alpha = wrapper.findAll<HTMLElement>('[role="treeitem"]')[0]
+    alpha?.element.focus()
+    await alpha?.trigger('keydown', { key: 'ArrowRight' })
+    expect(wrapper.text()).toContain('Alpha-1')
+
+    // An inline `:default-expanded-keys="[]"` literal is a brand-new array on
+    // every parent render; watching by reference collapsed the user's expansion.
+    await wrapper.setProps({ defaultExpandedKeys: [] })
+
+    expect(wrapper.text()).toContain('Alpha-1')
+  })
+
+  it('still applies defaultExpandedKeys when its contents actually change', async () => {
+    const wrapper = mount(TxTree, {
+      props: { nodes, defaultExpandedKeys: [] },
+    })
+
+    expect(wrapper.text()).not.toContain('Alpha-1')
+
+    await wrapper.setProps({ defaultExpandedKeys: ['a'] })
+
+    expect(wrapper.text()).toContain('Alpha-1')
+  })
 })
