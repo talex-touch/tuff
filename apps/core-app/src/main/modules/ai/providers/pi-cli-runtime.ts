@@ -226,10 +226,18 @@ export interface PiCliToolOptions {
   tools?: string[]
 }
 
+/**
+ * Builds the argument vector for one run.
+ *
+ * `attachmentPaths` are files already written to disk by the caller; they become `pi`'s `@file`
+ * positional arguments, which the CLI reads before the message that follows them
+ * (`pi [options] [@files...] [messages...]`).
+ */
 export function buildPiArgs(
   prompt: PiCliPrompt,
   model?: string,
-  toolOptions?: PiCliToolOptions
+  toolOptions?: PiCliToolOptions,
+  attachmentPaths: string[] = []
 ): string[] {
   const allowedTools = toolOptions?.tools?.filter((tool) => tool.trim()) ?? []
   const args = [
@@ -255,6 +263,7 @@ export function buildPiArgs(
   ]
 
   if (model) args.push('--model', model)
+  for (const path of attachmentPaths) args.push(`@${path}`)
   args.push(prompt.prompt)
   return args
 }

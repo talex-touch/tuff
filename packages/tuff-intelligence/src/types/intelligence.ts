@@ -439,6 +439,21 @@ export interface IntelligenceProviderConfig {
 }
 
 /**
+ * A binary the user attached to a turn.
+ *
+ * Carried inline as a data URL rather than as a path: the renderer holds the bytes in memory and
+ * only the main process may write to disk, so a path would name a file the sender cannot produce.
+ */
+export interface IntelligenceMessageAttachment {
+  /** Images are the only kind carried today; providers that cannot read one ignore the field. */
+  type: "image";
+  /** `data:image/(png|jpeg|webp|gif);base64,…`, re-validated by whoever consumes it. */
+  dataUrl: string;
+  /** Original filename, for display only — never trusted to decide the on-disk extension. */
+  name?: string;
+}
+
+/**
  * Chat message structure.
  */
 export interface IntelligenceMessage {
@@ -450,6 +465,11 @@ export interface IntelligenceMessage {
   metadata?: Record<string, any>;
   /** Optional sender name. */
   name?: string;
+  /**
+   * Attachments the user sent with this turn. Optional by design: a provider that cannot read
+   * binaries simply never looks at it, which is what keeps the degrade silent instead of fatal.
+   */
+  attachments?: IntelligenceMessageAttachment[];
 }
 
 /**

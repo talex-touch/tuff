@@ -144,6 +144,23 @@ describe('buildPiArgs', () => {
     expect(buildPiArgs(prompt, 'codex/gpt-5.6-terra')).toContain('--model')
     expect(buildPiArgs(prompt)).not.toContain('--model')
   })
+
+  it('passes attachments as @file positionals between the options and the message', () => {
+    // `pi [options] [@files...] [messages...]`: an @file after the message is read as part of the
+    // next positional group, so the order here is what makes the image visible to the model.
+    const args = buildPiArgs(prompt, 'codex/gpt-5.6-terra', undefined, [
+      '/tmp/tuff-attach-1.png',
+      '/tmp/tuff-attach-2.webp'
+    ])
+
+    expect(args.slice(-3)).toEqual(['@/tmp/tuff-attach-1.png', '@/tmp/tuff-attach-2.webp', 'hi'])
+    expect(args.indexOf('@/tmp/tuff-attach-1.png')).toBeGreaterThan(args.indexOf('--model'))
+  })
+
+  it('leaves the argument shape untouched when the turn carried no attachment', () => {
+    expect(buildPiArgs(prompt, undefined, undefined, [])).toEqual(buildPiArgs(prompt))
+    expect(buildPiArgs(prompt).some((arg) => arg.startsWith('@'))).toBe(false)
+  })
 })
 
 describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {

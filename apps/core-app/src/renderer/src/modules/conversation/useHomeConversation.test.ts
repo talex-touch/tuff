@@ -1,3 +1,4 @@
+import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   IntelligenceChatPayload,
@@ -301,6 +302,106 @@ describe('useHomeConversation', () => {
       error: undefined
     })
     expect(double.streamPayloads[1]?.messages).toEqual([{ role: 'user', content: 'hello' }])
+  })
+})
+
+describe('attachments on the wire', () => {
+  const PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgo='
+  const image: AiAttachment = { kind: 'image', id: 'att-1', url: PNG_DATA_URL, name: 'shot.png' }
+  const carried = [{ type: 'image', dataUrl: PNG_DATA_URL, name: 'shot.png' }]
+
+  it('carries the sent images on the turn the model is answering', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('what is this', [image])
+    await flush()
+    double.emit().onDelta?.('a cat', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(double.streamPayloads[0]?.messages).toEqual([
+      { role: 'user', content: 'what is this', attachments: carried }
+    ])
+  })
+
+  it('hands over a payload the IPC boundary can clone', async () => {
+    // Attachments read off a reactive message come back as a Proxy, which structuredClone refuses —
+    // the SDK double in these tests would never notice, but every real send would fail.
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('what is this', [image])
+    await flush()
+    double.emit().onDelta?.('a cat', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(() => structuredClone(double.streamPayloads[0])).not.toThrow()
+  })
+
+  it('re-sends the same images when the turn is retried', async () => {
+    // The composer let go of the attachments at send time, so a retry that rebuilt the payload from
+    // the tray would silently ask the model about an image it can no longer see.
+    const double = createSdkDouble({
+      chat: () => Promise.reject(new Error('[PROVIDER_UNAVAILABLE:text.chat] No enabled providers'))
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('what is this', [image])
+    await flush()
+    double.emit().onError?.(new Error('[PROVIDER_UNAVAILABLE:text.chat] No enabled providers'))
+    await turn
+
+    const retry = conversation.retry()
+    await flush()
+    double.emit().onDelta?.('a cat', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await retry
+
+    expect(double.streamPayloads[1]?.messages).toEqual([
+      { role: 'user', content: 'what is this', attachments: carried }
+    ])
+  })
+
+  it('leaves the images behind once their turn has been answered', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const first = conversation.send('what is this', [image])
+    await flush()
+    double.emit().onDelta?.('a cat', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await first
+
+    const second = conversation.send('and its colour?')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await second
+
+    expect(double.streamPayloads[1]?.messages).toEqual([
+      { role: 'user', content: 'what is this' },
+      { role: 'assistant', content: 'a cat' },
+      { role: 'user', content: 'and its colour?' }
+    ])
+  })
+
+  it('sends a plain turn when nothing attached can reach the model', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+    const file: AiAttachment = { kind: 'file', id: 'att-2', name: 'notes.pdf', size: 12 }
+
+    const turn = conversation.send('read this', [file])
+    await flush()
+    double.emit().onDelta?.('cannot', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(double.streamPayloads[0]?.messages).toEqual([{ role: 'user', content: 'read this' }])
+    // The bubble still shows it; the absence of `modelAttachments` is what the view reads as
+    // "this one stayed local" and keeps the hint under the message.
+    expect(conversation.messages.value[0]?.attachments).toEqual([file])
+    expect(conversation.messages.value[0]?.modelAttachments).toBeUndefined()
   })
 })
 
