@@ -1,0 +1,15 @@
+{
+  "name": "@talex-touch/pi-extension-tuff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Exposes Tuff-owned tools to the pi coding agent through the app's loopback gateway",
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "files": [
+    "index.ts"
+  ]
+}

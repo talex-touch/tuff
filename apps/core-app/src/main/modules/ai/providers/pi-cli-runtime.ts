@@ -4,8 +4,8 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
-import { access, readdir } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import { access, readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 
@@ -243,7 +243,9 @@ export function buildPiArgs(
     // History is owned by the app; letting `pi` persist its own would create a second source of
     // truth that survives beyond the conversation the user can see.
     '--no-session',
-    '--no-extensions',
+    // Tuff's own tools ship as a pi extension, so extensions must load once an
+    // allowlist exists — `--tools` still decides what any of them may expose.
+    ...(allowedTools.length > 0 ? [] : ['--no-extensions']),
     '--no-skills',
     // Without this, `pi` pulls AGENTS.md / CLAUDE.md from the working directory into a chat that has
     // nothing to do with the repository the app happens to be launched from.
