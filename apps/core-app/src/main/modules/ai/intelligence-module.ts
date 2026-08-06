@@ -73,7 +73,8 @@ import {
 } from './intelligence-sdk'
 import { intelligenceTtsService } from './intelligence-tts-service'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
-import { createCustomProvider } from './provider-factory'
+import { createCustomProvider, createLocalProvider } from './provider-factory'
+import { probePiCliAvailability } from './providers/pi-cli-runtime'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
 import {
@@ -84,7 +85,6 @@ import {
 } from './provider-credential-runtime'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
-import { LocalProvider } from './providers/local-provider'
 import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
@@ -656,6 +656,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // 打印配置文件内容（调试用）
     debugPrintConfig()
 
+    // 必须在首次应用配置之前 settle：provider 列表的组装是同步的，探测未完成时 pi provider 会被
+    // 当成不存在而整轮缺席，直到下一次配置变更才补上。
+    await this.probePiCliProvider()
+
     // 新 manager 必须先强制应用一次配置；后续订阅的当前值回放会被 signature 去重
     ensureIntelligenceConfigLoaded(true)
 
@@ -740,6 +744,24 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   /**
+   * 探测本机 `pi` CLI，决定是否把它作为零凭据的 `text.chat` provider 注入运行时配置。
+   *
+   * 探测失败不是错误：多数机器没装 `pi`，此时只是少一个 provider，不该拖垮整个模块的初始化。
+   */
+  private async probePiCliProvider(): Promise<void> {
+    try {
+      const available = await probePiCliAvailability()
+      if (available) {
+        intelligenceLog.success('Local pi CLI detected; registering as a text.chat provider')
+      } else {
+        intelligenceLog.info('Local pi CLI not found; skipping pi provider')
+      }
+    } catch (error) {
+      intelligenceLog.warn('Local pi CLI probe failed', { error })
+    }
+  }
+
+  /**
    * 注册内置 Provider Factories
    */
   private registerBuiltinProviders(): void {
@@ -763,10 +785,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       IntelligenceProviderType.SILICONFLOW,
       (config) => new SiliconflowProvider(config)
     )
-    this.manager.registerFactory(
-      IntelligenceProviderType.LOCAL,
-      (config) => new LocalProvider(config)
-    )
+    this.manager.registerFactory(IntelligenceProviderType.LOCAL, createLocalProvider)
 
     intelligenceLog.success('Builtin provider factories registered')
   }
