@@ -233,16 +233,22 @@ describe('txConversationStream', () => {
     fireResize(control.element, 600)
     await nextTick()
 
-    // Opening scroll pinned us to the bottom.
+    // Opening scroll pinned us to the bottom. Follow lands post-flush, so give it a tick.
     control.setScrollHeight(2400)
     fireResize(wrapper.find('.tx-conversation-stream__live').element, 300)
+    await nextTick()
     expect((control.element as any).scrollTop).toBe(2400)
+    // The browser acknowledges the programmatic scroll with an event at the
+    // target position; jsdom doesn't fire it on assignment, so simulate it —
+    // this is what releases the position-arrival guard.
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
 
     // Walk away, then grow again — position must hold and the pill appears.
     ;(control.element as any).scrollTop = 300
     await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
     control.setScrollHeight(3000)
     fireResize(wrapper.find('.tx-conversation-stream__live').element, 900)
+    await nextTick()
     expect((control.element as any).scrollTop).toBe(300)
 
     await nextTick()

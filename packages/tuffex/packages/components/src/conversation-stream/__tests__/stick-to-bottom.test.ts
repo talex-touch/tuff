@@ -114,6 +114,21 @@ describe('useStickToBottom', () => {
     expect(stick.atBottom.value).toBe(true)
   })
 
+  it('keeps following when content grows between the scroll and its async event', () => {
+    const { el, stick } = setup()
+    stick.scrollToBottom() // scrollTop -> 1000 (stub), arrival event still pending
+
+    // A stream delta lands before the browser delivers the scroll event, so
+    // the event arrives at the requested position but "not at the bottom".
+    el.scrollHeight = 2000
+    stick.handleScroll()
+
+    // Arrival at the programmed position must not read as the user leaving.
+    expect(stick.following.value).toBe(true)
+    stick.followIfSticking()
+    expect(el.scrollTop).toBe(2000)
+  })
+
   it('tolerates a missing element', () => {
     const elementRef = ref<HTMLElement | null>(null)
     const stick = useStickToBottom(elementRef)

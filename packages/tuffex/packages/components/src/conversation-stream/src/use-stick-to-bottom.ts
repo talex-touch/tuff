@@ -10,10 +10,14 @@ export interface StickToBottomOptions {
  * Follow-the-stream policy: keep the user pinned to the bottom while they are
  * already there, and never yank them back once they scroll away.
  *
- * Programmatic scrolls are disambiguated from user scrolls without comparing
- * positions: a programmatic scroll only ever travels *toward* the bottom, so
- * the guard stays up until a scroll event lands inside the threshold, and any
- * upward wheel input cancels it immediately — the user always wins.
+ * Programmatic scrolls are disambiguated from user scrolls by *position*, not
+ * by bottom-ness: the guard remembers where the programmatic scroll was going
+ * and releases when an event arrives at (or past) that position. Arrival must
+ * not be judged by `atBottom` — content routinely grows between issuing the
+ * scroll and its async event, so the event can land "not at the bottom
+ * anymore" while being exactly the scroll we asked for; reading that as the
+ * user walking away would silently disarm following. Any upward wheel input
+ * still cancels everything immediately — the user always wins.
  */
 export function useStickToBottom(
   element: Ref<HTMLElement | null>,
@@ -23,6 +27,7 @@ export function useStickToBottom(
   const atBottom = ref(true)
   const following = ref(true)
   let programmatic = false
+  let programmaticTarget = 0
 
   function measure(): boolean {
     const el = element.value
@@ -34,9 +39,10 @@ export function useStickToBottom(
   function handleScroll(): void {
     atBottom.value = measure()
     if (programmatic) {
-      // Smooth scrolls emit many intermediate events that are not the user
-      // walking away — release the guard only on arrival.
-      if (atBottom.value)
+      const el = element.value
+      // Smooth scrolls emit many intermediate events on the way; release only
+      // on arrival at the recorded destination (allowing sub-pixel slack).
+      if (!el || el.scrollTop >= programmaticTarget - 1)
         programmatic = false
       return
     }
@@ -55,15 +61,21 @@ export function useStickToBottom(
     const el = element.value
     if (!el)
       return
-    programmatic = true
     following.value = true
+    const before = el.scrollTop
+    const target = Math.max(0, el.scrollHeight - el.clientHeight)
     if (typeof el.scrollTo === 'function')
       el.scrollTo({ top: el.scrollHeight, behavior })
     else
       el.scrollTop = el.scrollHeight
     atBottom.value = measure()
-    if (atBottom.value)
-      programmatic = false
+    // Arm the guard only when movement is actually pending — an instant
+    // scroll that changed nothing emits no event, and a stale guard would
+    // swallow the next real user scroll.
+    if (behavior === 'smooth' ? target > before : el.scrollTop !== before) {
+      programmatic = true
+      programmaticTarget = behavior === 'smooth' ? target : el.scrollTop
+    }
   }
 
   /** Called when content grew (stream delta, new message). */
