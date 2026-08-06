@@ -4,6 +4,9 @@ Electron main-process (apps/core-app/src/main) coding contracts.
 
 ## Documents
 
+- [pi-provider-contracts.md](pi-provider-contracts.md) — renderer→main→pi
+  boundary: @files attachment channel (dual-mirrored types, spill validation
+  skip-not-fail, hint contract), stream commit/rollback semantics (pending).
 - [agent-tool-gateway-contracts.md](agent-tool-gateway-contracts.md) — how
   model-callable tools reach `pi`: loopback gateway topology, executor arg
   order, confirmation/remember semantics (proxy tools narrow rememberKey via
