@@ -76,8 +76,9 @@ export declare function snapshotCapture(sessionId: string): AudioSnapshot
 /** Returns only the NEW captured PCM since the last drain (raw 16-bit LE mono). Throws `session-not-found: <id>` for an unknown id. */
 export declare function drainCapture(sessionId: string): AudioPcmChunk
 export declare function stopCapture(sessionId: string): AudioCaptureResult
+/** Cancel the capture session and discard its buffered PCM. Throws `session-not-found: <id>` for an unknown id. */
 export declare function cancelCapture(sessionId: string): void
-/** Decode WAV/MP3 bytes and play them through the default output device. Returns immediately; playback continues on a native thread. Throws when the binding is unavailable or the audio can't be decoded. */
+/** Decode WAV/MP3 bytes and play them through the default output device. Returns immediately; playback continues on a native thread. Degrades to a no-op (`{ playbackId: '' }`) when the native binding is unavailable or disabled; throws when the audio can't be decoded. */
 export declare function playAudio(bytes: Buffer): AudioPlaybackStart
 /** Stop one playback by id, or all playbacks when omitted. Unknown/absent id is a no-op. */
 export declare function stopPlayback(playbackId?: string): void
