@@ -1,9 +1,12 @@
+import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   IntelligenceChatPayload,
+  IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceMessage,
-  IntelligenceStreamOptions
+  IntelligenceStreamOptions,
+  IntelligenceUsageInfo
 } from '@talex-touch/utils/types/intelligence'
 import type { ComputedRef } from 'vue'
 import type { ConversationError } from './conversation-error-display'
@@ -24,12 +27,38 @@ const CHAT_CAPABILITY_ID = 'text.chat'
 export type ConversationRole = 'user' | 'assistant'
 export type ConversationMessageStatus = 'complete' | 'streaming' | 'failed'
 
+/**
+ * What the backend reported about the turn that produced a message. Everything here arrives on the
+ * stream events themselves, so recording it costs nothing extra and is what the side panel shows.
+ */
+export interface ConversationTurnMeta {
+  provider?: string
+  model?: string
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  latencyMs?: number
+}
+
 export interface ConversationMessage {
   id: string
   role: ConversationRole
   content: string
   status: ConversationMessageStatus
   error?: ConversationError
+  meta?: ConversationTurnMeta
+  /**
+   * UI-only for now: providers take a plain string (`IntelligenceMessage.content`), so
+   * `toProviderMessages` never reads this, and `toSaveRequest`'s explicit field mapping never
+   * stores it — the degrade the PRD asks for holds by construction, not by filtering.
+   */
+  attachments?: AiAttachment[]
+}
+
+/** Provider / model the next turn should run on, as chosen in the model pill. */
+export interface ConversationRouting {
+  providerId?: string
+  model?: string
 }
 
 /**
@@ -40,25 +69,37 @@ export interface ConversationIntelligenceSdk {
   stream: (
     capabilityId: string,
     payload: IntelligenceChatPayload,
-    options: IntelligenceStreamOptions<string>
+    options: IntelligenceStreamOptions<string>,
+    invokeOptions?: IntelligenceInvokeOptions
   ) => Promise<StreamController>
   text: {
-    chat: (payload: IntelligenceChatPayload) => Promise<IntelligenceInvokeResult<string>>
+    chat: (
+      payload: IntelligenceChatPayload,
+      options?: IntelligenceInvokeOptions
+    ) => Promise<IntelligenceInvokeResult<string>>
   }
 }
 
 export interface UseHomeConversationOptions {
   /** Injectable for tests; defaults to the renderer intelligence SDK. */
   sdk?: ConversationIntelligenceSdk
+  /** Read at send time, not at setup, so changing the model mid-conversation takes effect. */
+  routing?: () => ConversationRouting | undefined
 }
 
 export interface UseHomeConversationReturn {
   messages: ComputedRef<ConversationMessage[]>
   isStreaming: ComputedRef<boolean>
   isEmpty: ComputedRef<boolean>
-  send: (text: string) => Promise<void>
+  /** Metadata of the most recent settled assistant turn, for the side panel. */
+  lastTurn: ComputedRef<ConversationTurnMeta | undefined>
+  send: (text: string, attachments?: AiAttachment[]) => Promise<void>
   stop: () => void
   retry: () => Promise<void>
+  /** Drops the thread and cancels any turn in flight — used when navigating to a blank `/home`. */
+  reset: () => void
+  /** Replaces the thread with a stored one. */
+  restore: (restored: ConversationMessage[]) => void
 }
 
 export function useHomeConversation(
@@ -67,6 +108,15 @@ export function useHomeConversation(
   const sdk = options.sdk ?? useIntelligenceSdk()
   const messages = ref<ConversationMessage[]>([])
   const streaming = ref(false)
+
+  function resolveInvokeOptions(): IntelligenceInvokeOptions | undefined {
+    const routing = options.routing?.()
+    if (!routing?.providerId && !routing?.model) return undefined
+    return {
+      ...(routing.providerId ? { preferredProviderId: routing.providerId } : {}),
+      ...(routing.model ? { modelPreference: [routing.model] } : {})
+    }
+  }
 
   let activeController: StreamController | null = null
   let activeTurn: { cancel: () => void } | null = null
@@ -101,7 +151,34 @@ export function useHomeConversation(
 
   async function runTurn(assistant: ConversationMessage): Promise<void> {
     const payload: IntelligenceChatPayload = { messages: toProviderMessages() }
+    const invokeOptions = resolveInvokeOptions()
+    const startedAt = Date.now()
     streaming.value = true
+
+    /**
+     * Merged rather than replaced: provider and model land on the first event, usage only on the
+     * last, and a later event that omits a field must not erase what an earlier one reported.
+     */
+    const recordMeta = (patch: ConversationTurnMeta): void => {
+      const next: ConversationTurnMeta = { ...(assistant.meta ?? {}) }
+      // Only defined values are copied. Spreading the patch wholesale would let an `end` event that
+      // omits `provider` overwrite the one `start` reported, blanking the side panel on completion.
+      for (const [key, value] of Object.entries(patch)) {
+        if (value !== undefined) {
+          ;(next as Record<string, unknown>)[key] = value
+        }
+      }
+      assistant.meta = next
+    }
+
+    const recordUsage = (usage: IntelligenceUsageInfo | undefined): void => {
+      if (!usage) return
+      recordMeta({
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens
+      })
+    }
 
     let settle: (() => void) | null = null
     const finished = new Promise<void>((resolve) => {
@@ -113,6 +190,7 @@ export function useHomeConversation(
 
     const conclude = (): void => {
       settled = true
+      recordMeta({ latencyMs: Date.now() - startedAt })
       activeController = null
       activeTurn = null
       streaming.value = false
@@ -145,9 +223,11 @@ export function useHomeConversation(
      */
     const fallback = async (streamError: unknown): Promise<void> => {
       try {
-        const result = await sdk.text.chat(payload)
+        const result = await sdk.text.chat(payload, invokeOptions)
         if (settled) return
         assistant.content = typeof result?.result === 'string' ? result.result : ''
+        recordMeta({ provider: result?.provider, model: result?.model })
+        recordUsage(result?.usage)
         complete()
       } catch (fallbackError) {
         // The fallback ran the same request without streaming, so its failure describes the
@@ -157,12 +237,23 @@ export function useHomeConversation(
     }
 
     const handlers: IntelligenceStreamOptions<string> = {
-      onDelta: (delta) => {
+      onStart: (event) => {
+        recordMeta({ provider: event.provider, model: event.model })
+      },
+      onDelta: (delta, event) => {
         if (settled || !delta) return
         received = true
         assistant.content += delta
+        // The routed backend can only name the effective provider once it has picked one, which for
+        // a fallback chain is after the first delta rather than at `start`.
+        if (!assistant.meta?.model) recordMeta({ provider: event.provider, model: event.model })
       },
-      onEnd: () => {
+      onUsage: (usage) => {
+        recordUsage(usage)
+      },
+      onEnd: (event) => {
+        recordMeta({ provider: event?.provider, model: event?.model })
+        recordUsage(event?.usage)
         complete()
       },
       onError: (error) => {
@@ -190,7 +281,7 @@ export function useHomeConversation(
     }
 
     try {
-      activeController = await sdk.stream(CHAT_CAPABILITY_ID, payload, handlers)
+      activeController = await sdk.stream(CHAT_CAPABILITY_ID, payload, handlers, invokeOptions)
     } catch (error) {
       // `stream()` rejects when the stream never starts (no stream-capable transport, handshake
       // failure). Nothing was emitted, so the non-streaming path is still worth trying.
@@ -201,11 +292,13 @@ export function useHomeConversation(
     await finished
   }
 
-  async function send(rawText: string): Promise<void> {
+  async function send(rawText: string, attachments?: AiAttachment[]): Promise<void> {
     const text = rawText.trim()
     if (!text || streaming.value) return
 
-    messages.value.push(createMessage('user', text, 'complete'))
+    const user = createMessage('user', text, 'complete')
+    if (attachments && attachments.length > 0) user.attachments = attachments
+    messages.value.push(user)
     messages.value.push(createMessage('assistant', '', 'streaming'))
 
     // Mutating the pushed object directly would bypass the array's reactive proxy, so the streaming
@@ -233,6 +326,30 @@ export function useHomeConversation(
     activeTurn?.cancel()
   }
 
+  /**
+   * Cancels before clearing, in both cases: a turn left running would keep appending deltas to a
+   * message that is no longer in the list, and its `conclude` would flip `streaming` back off under
+   * whatever thread had replaced it.
+   */
+  function discardActiveTurn(): void {
+    activeController?.cancel()
+    activeController = null
+    activeTurn = null
+    streaming.value = false
+  }
+
+  function reset(): void {
+    discardActiveTurn()
+    messages.value = []
+  }
+
+  function restore(restored: ConversationMessage[]): void {
+    discardActiveTurn()
+    messages.value = restored.map((message) => ({ ...message }))
+    // Ids come back from storage, so the counter has to clear them or a new turn would collide.
+    messageSeq = restored.length
+  }
+
   if (getCurrentScope()) {
     onScopeDispose(() => {
       activeController?.cancel()
@@ -245,8 +362,17 @@ export function useHomeConversation(
     messages: computed(() => messages.value),
     isStreaming: computed(() => streaming.value),
     isEmpty: computed(() => messages.value.length === 0),
+    lastTurn: computed(() => {
+      for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+        const message = messages.value[index]
+        if (message?.role === 'assistant' && message.meta) return message.meta
+      }
+      return undefined
+    }),
     send,
     stop,
-    retry
+    retry,
+    reset,
+    restore
   }
 }

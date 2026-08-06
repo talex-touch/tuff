@@ -25,6 +25,7 @@ import { buildVerificationModule } from './modules/build-verification'
 import { catalogModule } from './modules/catalog'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
+import { conversationModule } from './modules/conversation'
 import { divisionBoxModule } from './modules/division-box'
 import { downloadCenterModule } from './modules/download/download-center'
 import { extensionLoaderModule } from './modules/extension-loader'
@@ -168,6 +169,7 @@ const permissionModule = new PermissionModule()
 
 const foregroundModulesToLoad = [
   databaseModule,
+  conversationModule,
   storageModule,
   fileProtocolModule,
   shortcutModule,

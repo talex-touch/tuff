@@ -246,6 +246,13 @@
       "when": 1785369600000,
       "tag": "0034_privacy_retention_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785456000000,
+      "tag": "0035_home_conversations",
+      "breakpoints": true
     }
   ]
 }

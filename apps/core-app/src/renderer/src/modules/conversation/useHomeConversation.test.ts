@@ -34,6 +34,8 @@ interface SdkDouble {
   sdk: ConversationIntelligenceSdk
   /** Payloads handed to `stream()`, one entry per turn. */
   streamPayloads: IntelligenceChatPayload[]
+  /** Fourth argument of `stream()`, one entry per turn — what pins provider and model. */
+  invokeOptions: Array<unknown>
   chatPayloads: IntelligenceChatPayload[]
   cancel: ReturnType<typeof vi.fn>
   emit: () => IntelligenceStreamOptions<string>
@@ -46,6 +48,7 @@ function createSdkDouble(
   } = {}
 ): SdkDouble {
   const streamPayloads: IntelligenceChatPayload[] = []
+  const invokeOptions: Array<unknown> = []
   const chatPayloads: IntelligenceChatPayload[] = []
   const cancel = vi.fn()
   let handlers: IntelligenceStreamOptions<string> | null = null
@@ -53,8 +56,9 @@ function createSdkDouble(
   const controller: StreamController = { cancel, cancelled: false, streamId: 'stream-double' }
 
   const sdk: ConversationIntelligenceSdk = {
-    stream: async (_capabilityId, payload, options) => {
+    stream: async (_capabilityId, payload, options, streamInvokeOptions) => {
       streamPayloads.push(payload)
+      invokeOptions.push(streamInvokeOptions)
       handlers = options
       if (overrides.startStream) return overrides.startStream()
       return controller
@@ -71,6 +75,7 @@ function createSdkDouble(
   return {
     sdk,
     streamPayloads,
+    invokeOptions,
     chatPayloads,
     cancel,
     emit: () => {
@@ -294,5 +299,203 @@ describe('useHomeConversation', () => {
       error: undefined
     })
     expect(double.streamPayloads[1]?.messages).toEqual([{ role: 'user', content: 'hello' }])
+  })
+})
+
+describe('turn metadata', () => {
+  it('records provider, model, usage and latency for a streamed turn', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hi')
+    await flush()
+
+    double.emit().onStart?.({
+      type: 'start',
+      capabilityId: 'text.chat',
+      provider: 'pi-cli-default',
+      model: 'gpt-5.6-terra'
+    })
+    double.emit().onDelta?.('ok', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({
+      type: 'end',
+      capabilityId: 'text.chat',
+      usage: { promptTokens: 7, completionTokens: 3, totalTokens: 10 }
+    })
+    await turn
+
+    expect(conversation.lastTurn.value).toMatchObject({
+      provider: 'pi-cli-default',
+      model: 'gpt-5.6-terra',
+      promptTokens: 7,
+      completionTokens: 3,
+      totalTokens: 10
+    })
+    expect(typeof conversation.lastTurn.value?.latencyMs).toBe('number')
+  })
+
+  it('keeps an earlier provider when a later event omits it', async () => {
+    // `end` carries no provider on some transports; merging rather than replacing is what keeps the
+    // side panel from blanking out the moment the turn settles.
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hi')
+    await flush()
+    double.emit().onStart?.({
+      type: 'start',
+      capabilityId: 'text.chat',
+      provider: 'pi-cli-default',
+      model: 'gpt-5.6-terra'
+    })
+    double.emit().onDelta?.('ok', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(conversation.lastTurn.value?.provider).toBe('pi-cli-default')
+  })
+
+  it('records metadata from the non-streaming fallback too', async () => {
+    const double = createSdkDouble({
+      startStream: () => Promise.reject(new Error('no stream transport'))
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    await conversation.send('hi')
+
+    expect(conversation.lastTurn.value).toMatchObject({ provider: 'double', model: 'double' })
+  })
+})
+
+describe('routing', () => {
+  it('pins the chosen provider and model onto the request', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({
+      sdk: double.sdk,
+      routing: () => ({ providerId: 'pi-cli-default', model: 'gpt-5.6-terra' })
+    })
+
+    const turn = conversation.send('hi')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(double.invokeOptions[0]).toEqual({
+      preferredProviderId: 'pi-cli-default',
+      modelPreference: ['gpt-5.6-terra']
+    })
+  })
+
+  it('sends no routing options when nothing is pinned, leaving the backend to choose', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk, routing: () => ({}) })
+
+    const turn = conversation.send('hi')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(double.invokeOptions[0]).toBeUndefined()
+  })
+})
+
+describe('reset and restore', () => {
+  it('clears the thread and cancels a turn in flight', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    void conversation.send('hi')
+    await flush()
+    expect(conversation.isStreaming.value).toBe(true)
+
+    conversation.reset()
+
+    expect(conversation.messages.value).toEqual([])
+    expect(conversation.isEmpty.value).toBe(true)
+    expect(conversation.isStreaming.value).toBe(false)
+    expect(double.cancel).toHaveBeenCalled()
+  })
+
+  it('replaces the thread with a stored one', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    conversation.restore([
+      { id: 'u1', role: 'user', content: 'stored', status: 'complete' },
+      { id: 'a1', role: 'assistant', content: 'reply', status: 'complete' }
+    ])
+
+    expect(conversation.messages.value.map((message) => message.content)).toEqual([
+      'stored',
+      'reply'
+    ])
+    expect(conversation.isEmpty.value).toBe(false)
+  })
+
+  it('gives a new turn an id that cannot collide with restored ones', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    conversation.restore([
+      { id: 'user-1', role: 'user', content: 'stored', status: 'complete' },
+      { id: 'assistant-2', role: 'assistant', content: 'reply', status: 'complete' }
+    ])
+    void conversation.send('next')
+    await flush()
+
+    const ids = conversation.messages.value.map((message) => message.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('sends a restored thread back as provider context', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    conversation.restore([
+      { id: 'u1', role: 'user', content: 'stored', status: 'complete' },
+      { id: 'a1', role: 'assistant', content: 'reply', status: 'complete' }
+    ])
+    void conversation.send('next')
+    await flush()
+
+    expect(double.streamPayloads[0]?.messages.map((message) => message.content)).toEqual([
+      'stored',
+      'reply',
+      'next'
+    ])
+  })
+})
+
+describe('attachments', () => {
+  it('attaches files to the user message without leaking them into the provider payload', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const attachment = { kind: 'image' as const, id: 'att-1', url: 'blob:img', name: 'shot.png' }
+    const turn = conversation.send('look at this', [attachment])
+    await flush()
+
+    expect(conversation.messages.value[0]?.attachments).toEqual([attachment])
+
+    // `IntelligenceMessage` is `{ role, content }` only — the degrade the PRD asks for
+    // holds by construction, so the payload must carry no attachment residue at all.
+    const payload = double.streamPayloads[0]
+    expect(payload?.messages).toEqual([{ role: 'user', content: 'look at this' }])
+
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+  })
+
+  it('leaves the user message bare when no attachments ride along', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('plain', [])
+    await flush()
+
+    expect('attachments' in (conversation.messages.value[0] ?? {})).toBe(false)
+
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
   })
 })

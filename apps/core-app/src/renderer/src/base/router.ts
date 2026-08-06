@@ -32,6 +32,8 @@ const ROUTE_RENDER_WARN_MS = 350
 const isDev = isDevEnv()
 const ROUTE_COMPONENT_LOAD_WARN_MS = 150
 const STORE_ROUTE_CACHE_KEY = 'store-shell'
+/** `/home` and `/home/c/:id` are one surface, so they share a cache entry. */
+const HOME_ROUTE_CACHE_KEY = 'home-shell'
 
 function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
   const last = Array.isArray(route?.matched) ? route.matched[route.matched.length - 1] : null
@@ -111,7 +113,23 @@ const routes: RouteRecordRaw[] = [
     component: withRouteComponentPerf('/home', () => import('../views/base/home/HomePage.vue')),
     meta: {
       index: 0,
-      keepAlive: true
+      keepAlive: true,
+      keepAliveKey: HOME_ROUTE_CACHE_KEY
+    }
+  },
+  {
+    /**
+     * A stored conversation. Same component as `/home` and the same keep-alive key, so switching
+     * threads reuses one instance and the composer keeps focus — the id is read from the route
+     * param rather than from a fresh mount.
+     */
+    path: '/home/c/:id',
+    name: '$I18n:router.homeConversation',
+    component: withRouteComponentPerf('/home/c', () => import('../views/base/home/HomePage.vue')),
+    meta: {
+      index: 0,
+      keepAlive: true,
+      keepAliveKey: HOME_ROUTE_CACHE_KEY
     }
   },
   {
