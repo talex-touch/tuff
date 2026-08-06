@@ -697,8 +697,86 @@ describe('useSearch CoreBox reopen behavior', () => {
       expect.objectContaining({ toEventName: expect.any(Function) }),
       { immediate: true, reason: 'execute' }
     )
-    expect(String(state.send.mock.calls[0][0])).toBe('core-box:ui:hide')
-    expect(String(state.send.mock.calls[1][0])).toBe('core-box:item:execute')
+    // Relative order, not fixed indices: unrelated fire-and-forget traffic
+    // (e.g. recommendation exposure reporting) may interleave.
+    const sentEvents = state.send.mock.calls.map(([event]) => String(event))
+    expect(sentEvents[0]).toBe('core-box:ui:hide')
+    expect(sentEvents.indexOf('core-box:item:execute')).toBeGreaterThan(
+      sentEvents.indexOf('core-box:ui:hide')
+    )
+  })
+
+  it('reports rendered recommendation ids for local hit-rate accounting', async () => {
+    state.searchResultForRequest = () => ({
+      items: [
+        {
+          id: 'rebuilt-app',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Rebuilt app' } },
+          // The engine keys usage by the original ids, so exposure must report
+          // those and not the rebuilt item id.
+          meta: {
+            _originalSourceId: 'app-provider',
+            _originalItemId: '/Applications/Rebuilt.app',
+            recommendation: { source: 'frequent' }
+          }
+        } as TuffItem,
+        {
+          id: 'pinned-app',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Pinned app' } },
+          meta: { pinned: { isPinned: true } }
+        } as TuffItem
+      ],
+      query: { text: '', inputs: [] },
+      duration: 1,
+      sources: [],
+      sessionId: 'exposure-session'
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    const exposureCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:recommendation:report-exposure'
+    )
+
+    expect(exposureCall?.[1]).toEqual({
+      // Pinned items are user choices, not recommendations under evaluation.
+      itemKeys: ['app-provider:/Applications/Rebuilt.app'],
+      surface: 'core-box'
+    })
+  })
+
+  it('does not report an exposure when the recommendation list is empty', async () => {
+    state.searchResultForRequest = () => ({
+      items: [],
+      query: { text: '', inputs: [] },
+      duration: 1,
+      sources: [],
+      sessionId: 'empty-exposure-session'
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    expect(
+      state.send.mock.calls.filter(
+        ([event]) => String(event) === 'core-box:recommendation:report-exposure'
+      )
+    ).toHaveLength(0)
   })
 
   it('keeps the query visible when entering a plugin feature input session', async () => {

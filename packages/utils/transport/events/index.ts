@@ -122,6 +122,7 @@ import type {
   CoreBoxMetaOverlayItemActionPayload,
   CoreBoxNoResultsPayload,
   CoreBoxPreviewCopyRequest,
+  CoreBoxRecommendationExposureRequest,
   CoreBoxRecommendationRequest,
   CoreBoxRecommendationResponse,
   CoreBoxSearchEndPayload,
@@ -1356,6 +1357,15 @@ export const CoreBoxEvents = {
       .module('recommendation')
       .event('is-pinned')
       .define<CoreBoxIsPinnedRequest, CoreBoxIsPinnedResponse>(),
+
+    /**
+     * Report which recommendation items a surface rendered (local hit-rate@k
+     * accounting). Fire-and-forget: the renderer does not wait for a result.
+     */
+    reportExposure: defineEvent('core-box')
+      .module('recommendation')
+      .event('report-exposure')
+      .define<CoreBoxRecommendationExposureRequest, void>(),
   },
 
   /**

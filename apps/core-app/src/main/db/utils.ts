@@ -464,21 +464,6 @@ function createDbUtilsInternal(
     },
 
     // Item Time Stats
-    async upsertItemTimeStats(stats: typeof schema.itemTimeStats.$inferInsert) {
-      return db
-        .insert(schema.itemTimeStats)
-        .values(stats)
-        .onConflictDoUpdate({
-          target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
-          set: {
-            hourDistribution: stats.hourDistribution,
-            dayOfWeekDistribution: stats.dayOfWeekDistribution,
-            timeSlotDistribution: stats.timeSlotDistribution,
-            lastUpdated: stats.lastUpdated || new Date()
-          }
-        })
-    },
-
     async getItemTimeStatsBatch(keys: Array<{ sourceId: string; itemId: string }>) {
       if (keys.length === 0) return []
 

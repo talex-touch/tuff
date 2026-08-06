@@ -900,6 +900,31 @@ export function useSearch(
     }
   }
 
+  /**
+   * Reports the recommendation ids we just rendered so the main process can
+   * join them against executes for local hit-rate@k. Ids and order only, never
+   * content, and failures are ignored — this must never affect rendering.
+   */
+  const reportRecommendationExposure = (items: TuffItem[]): void => {
+    const itemKeys = items
+      .filter((item) => !item.meta?.pinned?.isPinned)
+      .map((item) => {
+        const meta = item.meta as Record<string, unknown> | undefined
+        const sourceId =
+          typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source.id
+        const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
+        return `${sourceId}:${itemId}`
+      })
+    if (itemKeys.length === 0) return
+
+    transport
+      .send(CoreBoxEvents.recommendation.reportExposure, {
+        itemKeys,
+        surface: isDetachedDivisionMode() ? 'division-box' : 'core-box'
+      })
+      .catch(() => {})
+  }
+
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
     const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
     currentSearchId.value = initialResult.sessionId || null
@@ -910,6 +935,8 @@ export function useSearch(
     boxOptions.layout = initialResult.containerLayout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
+
+    reportRecommendationExposure(filteredItems)
 
     nextTick(() => {
       window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))

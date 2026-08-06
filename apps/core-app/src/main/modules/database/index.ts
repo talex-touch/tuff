@@ -848,6 +848,16 @@ export class DatabaseModule extends BaseModule {
         expires_at integer NOT NULL
       )`,
       'CREATE INDEX IF NOT EXISTS idx_recommendation_cache_expires ON recommendation_cache (expires_at)',
+      `CREATE TABLE IF NOT EXISTS recommendation_exposure_daily (
+        day integer NOT NULL,
+        surface text NOT NULL,
+        k integer NOT NULL,
+        impressions integer NOT NULL DEFAULT 0,
+        clicks integer NOT NULL DEFAULT 0,
+        updated_at integer NOT NULL DEFAULT (strftime('%s', 'now')),
+        PRIMARY KEY (day, surface, k)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_recommendation_exposure_daily_day ON recommendation_exposure_daily (day)',
       `CREATE TABLE IF NOT EXISTS clipboard_history (
         id integer PRIMARY KEY AUTOINCREMENT,
         type text NOT NULL,

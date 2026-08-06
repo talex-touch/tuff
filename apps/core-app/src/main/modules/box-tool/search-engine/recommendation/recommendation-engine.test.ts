@@ -140,8 +140,6 @@ const devFocusCodeContext: ContextSignal = {
     powerMode: 'charging',
     isDNDEnabled: true,
     focusMode: 'active',
-    bluetoothAvailable: true,
-    bluetoothConnectedCount: 1,
     locationBucket: 'loc_work',
     timezone: 'Asia/Shanghai',
     unavailableSignals: []
@@ -241,7 +239,7 @@ describe('RecommendationEngine', () => {
     vi.useRealTimers()
   })
 
-  it('includes time slot and weekday in the production recommendation cache key', () => {
+  it('includes time slot and day type in the production recommendation cache key', () => {
     const provider = new ContextProvider()
     const tuesdayMorningContext: ContextSignal = {
       ...morningContext,
@@ -250,13 +248,21 @@ describe('RecommendationEngine', () => {
         dayOfWeek: 2
       }
     }
+    const sundayMorningContext: ContextSignal = {
+      ...morningContext,
+      time: {
+        ...morningContext.time,
+        dayOfWeek: 0
+      }
+    }
 
-    expect(provider.generateCacheKey(morningContext)).toBe('morning|1')
-    expect(provider.generateCacheKey(afternoonContext)).toBe('afternoon|1')
-    expect(provider.generateCacheKey(tuesdayMorningContext)).toBe('morning|2')
+    expect(provider.generateCacheKey(morningContext)).toBe('morning|workday')
+    expect(provider.generateCacheKey(afternoonContext)).toBe('afternoon|workday')
+    expect(provider.generateCacheKey(tuesdayMorningContext)).toBe('morning|workday')
+    expect(provider.generateCacheKey(sundayMorningContext)).toBe('morning|weekend')
   })
 
-  it('includes privacy-safe system state buckets in the recommendation cache key', () => {
+  it('keeps volatile system state out of the recommendation cache key', () => {
     const provider = new ContextProvider()
     const context: ContextSignal = {
       ...morningContext,
@@ -270,23 +276,20 @@ describe('RecommendationEngine', () => {
         powerMode: 'battery',
         isDNDEnabled: true,
         focusMode: 'active',
-        bluetoothAvailable: false,
-        bluetoothConnectedCount: 0,
         locationBucket: 'loc_12ab',
         timezone: 'Asia/Shanghai',
-        unavailableSignals: ['bluetooth']
+        unavailableSignals: []
       }
     }
 
     const key = provider.generateCacheKey(context)
 
-    expect(key).toContain('nt:wifi')
-    expect(key).toContain('nid:net_9f02')
-    expect(key).toContain('bat:80')
-    expect(key).toContain('pow:battery')
-    expect(key).toContain('dnd:1')
-    expect(key).toContain('bt:na')
-    expect(key).toContain('loc:loc_12ab')
+    expect(key).toBe('morning|workday|net:1')
+    expect(key).not.toContain('nid:')
+    expect(key).not.toContain('bat:')
+    expect(key).not.toContain('pow:')
+    expect(key).not.toContain('dnd:')
+    expect(key).not.toContain('loc:')
     expect(key).not.toContain('Asia/Shanghai')
   })
 
@@ -628,8 +631,6 @@ describe('RecommendationEngine', () => {
         powerMode: 'charging',
         isDNDEnabled: true,
         focusMode: 'active',
-        bluetoothAvailable: false,
-        bluetoothConnectedCount: 0,
         locationBucket: 'loc_focus',
         timezone: 'Asia/Shanghai',
         unavailableSignals: []
@@ -1222,5 +1223,280 @@ describe('RecommendationEngine', () => {
     expect(morning.items[0]?.id).toBe('morning-app')
     expect(afternoon.items[0]?.id).toBe('afternoon-app')
     expect(getCandidates).toHaveBeenCalledTimes(2)
+  })
+
+  it('serves a cache hit when only volatile context changed, and re-ranks for it', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const perfEvents: Array<{ eventType: string; metadata: Record<string, unknown> }> = []
+    // Same slow-moving context, different foreground app: the 15-min warm-up
+    // and the user's own request must land on the same cache entry.
+    const contexts: ContextSignal[] = [
+      morningContext,
+      {
+        ...morningContext,
+        foregroundApp: { bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' }
+      }
+    ]
+    const getCandidates = vi.fn(async () => ({
+      items: [
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.apple.Terminal',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+        },
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.apple.Preview',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('com.apple.Preview', { executeCount: 4 })
+        }
+      ],
+      perf: candidatePerf(2, 2)
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => contexts.shift() ?? morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates,
+      recordRecommendationPerf: (eventType: string, metadata: Record<string, unknown>) => {
+        perfEvents.push({ eventType, metadata })
+      }
+    })
+
+    const warmup = await engine.recommend({ limit: 5, forceRefresh: true })
+    const userRequest = await engine.recommend({ limit: 5 })
+
+    expect(warmup.items[0]?.id).toBe('com.apple.Preview')
+    expect(userRequest.fromCache).toBe(true)
+    expect(getCandidates).toHaveBeenCalledTimes(1)
+    expect(perfEvents.at(-1)?.metadata.cacheLayer).toBe('memory')
+    // Foreground = an IDE lifts the terminal past the more frequent app.
+    expect(userRequest.items[0]?.id).toBe('com.apple.Terminal')
+  })
+
+  it('keeps re-ranking idempotent across repeated cache hits', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const ideContext: ContextSignal = {
+      ...morningContext,
+      foregroundApp: { bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' }
+    }
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => ideContext),
+        generateCacheKey: () => 'stable-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+          }
+        ],
+        perf: candidatePerf(1, 1)
+      }))
+    })
+
+    const first = await engine.recommend({ limit: 5 })
+    const second = await engine.recommend({ limit: 5 })
+    const third = await engine.recommend({ limit: 5 })
+
+    expect(second.items[0]?.scoring?.final).toBe(first.items[0]?.scoring?.final)
+    expect(third.items[0]?.scoring?.final).toBe(first.items[0]?.scoring?.final)
+  })
+
+  it('never serves a clipboard URL action from the cache after the clipboard changed', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const clipboardContext = (marker: string): ContextSignal => ({
+      ...morningContext,
+      clipboard: {
+        type: 'text',
+        content: marker,
+        timestamp: Date.now(),
+        contentType: 'url',
+        meta: { isUrl: true }
+      }
+    })
+    const contexts = [clipboardContext('first-url'), clipboardContext('second-url')]
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => contexts.shift() ?? clipboardContext('second-url')),
+        generateCacheKey: () => 'stable-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      // The real getCandidates runs here on purpose: the regression was that it
+      // injected the clipboard URL action into the pool that gets cached.
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.apple.Terminal',
+          sourceType: 'app',
+          usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+        }
+      ]),
+      getRecentItems: vi.fn(async () => []),
+      getTimeBasedTopItems: vi.fn(async () => []),
+      getTrendingItems: vi.fn(async () => ({
+        items: [],
+        perf: { durationMs: 0, rowCount: 0, ready: true }
+      })),
+      getPluginCandidates: vi.fn(async () => [])
+    })
+
+    await engine.recommend({ limit: 5 })
+    const cached = await engine.recommend({ limit: 5 })
+
+    expect(cached.fromCache).toBe(true)
+    const urlActions = cached.items.filter((item) => item.id.startsWith('clipboard-url-open:'))
+    expect(urlActions.map((item) => item.id)).toEqual(['clipboard-url-open:second-url'])
+  })
+
+  it('recommends catalog apps on a cold start with no usage history', async () => {
+    const dbUtils = createDbUtils()
+    const catalogApps = [
+      {
+        id: 1,
+        path: '/Applications/Old.app',
+        name: 'Old',
+        displayName: 'Old',
+        ctime: new Date('2026-01-01T00:00:00.000Z'),
+        mtime: new Date('2026-01-01T00:00:00.000Z')
+      },
+      {
+        id: 2,
+        path: '/Applications/New.app',
+        name: 'New',
+        displayName: 'New',
+        ctime: new Date('2026-05-01T00:00:00.000Z'),
+        mtime: new Date('2026-05-01T00:00:00.000Z')
+      }
+    ]
+    const getFilesByType = vi.fn(async () => catalogApps)
+    const engine = new RecommendationEngine(
+      dbUtils as never,
+      { ...dbUtils, getFilesByType } as never
+    )
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: () => 'cold-start-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      // Fresh install: no usage rows anywhere.
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(0, 0) })),
+      getFrequentItems: vi.fn(async () => [])
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    expect(getFilesByType).toHaveBeenCalledWith('app')
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/New.app',
+      '/Applications/Old.app'
+    ])
+    expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'cold-start' })
+  })
+
+  it('prefers real usage over the cold-start catalog', async () => {
+    const dbUtils = createDbUtils()
+    const getFilesByType = vi.fn(async () => [
+      { id: 1, path: '/Applications/Catalog.app', name: 'Catalog', ctime: null, mtime: null }
+    ])
+    const engine = new RecommendationEngine(
+      dbUtils as never,
+      { ...dbUtils, getFilesByType } as never
+    )
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: () => 'fallback-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(0, 0) })),
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: 'used-app',
+          sourceType: 'app',
+          usageStats: createUsageStats('used-app', { executeCount: 9 })
+        }
+      ])
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['used-app'])
+    expect(getFilesByType).not.toHaveBeenCalled()
+  })
+
+  it('matches path-form app ids against the foreground app', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => ({
+          ...morningContext,
+          foregroundApp: { bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' }
+        })),
+        generateCacheKey: () => 'path-form-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            // Path-form id: what the app provider actually stores for scanned apps.
+            itemId: '/Applications/Visual Studio Code.app',
+            sourceType: 'application',
+            source: 'frequent',
+            usageStats: createUsageStats('/Applications/Visual Studio Code.app', {
+              executeCount: 20
+            })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: '/Applications/Terminal.app',
+            sourceType: 'application',
+            source: 'frequent',
+            usageStats: createUsageStats('/Applications/Terminal.app', { executeCount: 1 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    // The already-open app is demoted despite 20x the usage, and the terminal
+    // is promoted because the foreground app is an IDE.
+    expect(result.items[0]?.id).toBe('/Applications/Terminal.app')
   })
 })

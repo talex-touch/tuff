@@ -56,6 +56,7 @@ import { SearchIndexStoreAdapter } from './indexing-store-adapter'
 import { SqliteIndexingTaskStateStore } from './indexing-task-state-store'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
+import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
 import { SearchIndexService } from './search-index-service'
@@ -2033,7 +2034,9 @@ export class SearchEngineCore
       }
 
       try {
-        await instance.timeStatsAggregator.aggregateTimeStats()
+        // Explicit, user-triggered repair: forced past the flag that keeps the
+        // destructive rebuild off the scheduled path.
+        await instance.timeStatsAggregator.aggregateTimeStats({ force: true })
         return { success: true }
       } catch (error) {
         searchEngineLog.error('Failed to aggregate time stats', { error })
@@ -2042,6 +2045,13 @@ export class SearchEngineCore
     }
 
     transport.on(CoreBoxEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
+
+    transport.on(CoreBoxEvents.recommendation.reportExposure, async (data) => {
+      recommendationExposureService.recordExposure({
+        itemKeys: data?.itemKeys ?? [],
+        surface: data?.surface
+      })
+    })
 
     transport.on(CoreBoxEvents.item.togglePin, async (data) => {
       if (!instance.dbUtils) {

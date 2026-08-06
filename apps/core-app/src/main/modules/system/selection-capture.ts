@@ -7,6 +7,9 @@ import { createLogger } from '../../utils/logger'
 import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
 import { sendPlatformShortcut } from './desktop-shortcut'
 import { getXdotoolUnavailableReason } from './linux-desktop-tools'
+// Captured selections feed the recommendation context (hashed at ingest);
+// the store is separate so readers do not import this module's Electron deps.
+import { selectionSnapshotStore } from './selection-snapshot-store'
 
 const selectionCaptureLog = createLogger('SelectionCapture')
 const execFileAsync = promisify(execFile)
@@ -132,6 +135,7 @@ async function captureSelection(
   if (process.platform === 'darwin') {
     const directSelection = await captureMacSelectionTextDirectly()
     if (directSelection) {
+      selectionSnapshotStore.set({ text: directSelection, capturedAt })
       return {
         text: directSelection,
         ...baseResult
@@ -147,6 +151,9 @@ async function captureSelection(
     await withTimeout(sendPlatformShortcut('copy'), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
     await delay(COPY_RESULT_POLL_DELAY_MS)
     const text = clipboard.readText().trim()
+    if (text) {
+      selectionSnapshotStore.set({ text, capturedAt })
+    }
     result = text
       ? {
           text,
@@ -184,6 +191,9 @@ async function captureSelection(
   })
 
   if (!restored) {
+    // The caller is told the capture failed, so the snapshot must not survive
+    // it either.
+    selectionSnapshotStore.clear()
     return {
       text: '',
       ...baseResult,

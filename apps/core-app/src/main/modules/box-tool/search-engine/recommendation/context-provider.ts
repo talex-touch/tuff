@@ -14,8 +14,8 @@ interface RecommendationContextSources {
   time: boolean
   foregroundApp: boolean
   clipboard: boolean
+  selection: boolean
   network: boolean
-  bluetooth: boolean
   focus: boolean
   power: boolean
   location: boolean
@@ -25,12 +25,21 @@ const DEFAULT_CONTEXT_SOURCES: RecommendationContextSources = {
   time: true,
   foregroundApp: true,
   clipboard: true,
+  selection: true,
   network: true,
-  bluetooth: true,
   focus: true,
   power: true,
   location: true
 }
+
+/**
+ * Clipboard/selection entries older than this are treated as "not part of the
+ * current task". 5s only covered a copy immediately followed by the shortcut;
+ * 30s covers copy → switch app → open CoreBox.
+ */
+const CONTEXT_CONTENT_FRESHNESS_MS = 30_000
+const TIMEZONE_CHANGE_WINDOW_MS = 48 * 60 * 60 * 1000
+const RECOMMENDATION_RUNTIME_CONFIG = 'recommendation-runtime'
 
 const NEUTRAL_TIME_CONTEXT: TimePattern = {
   hourOfDay: 12,
@@ -53,8 +62,9 @@ export class ContextProvider {
    */
   async getCurrentContext(): Promise<ContextSignal> {
     const sources = await this.getContextSources()
-    const [clipboard, foregroundApp, systemState] = await Promise.all([
+    const [clipboard, selection, foregroundApp, systemState] = await Promise.all([
       sources.clipboard ? this.getClipboardContext() : Promise.resolve(undefined),
+      sources.selection ? this.getSelectionContext() : Promise.resolve(undefined),
       sources.foregroundApp ? this.getForegroundAppContext() : Promise.resolve(undefined),
       this.getSystemContext(sources)
     ])
@@ -62,6 +72,7 @@ export class ContextProvider {
     return {
       time: sources.time ? this.getTimeContext() : NEUTRAL_TIME_CONTEXT,
       clipboard,
+      selection,
       foregroundApp,
       systemState
     }
@@ -90,7 +101,8 @@ export class ContextProvider {
   }
 
   /**
-   * Retrieves clipboard context if content is recent (within 5 seconds).
+   * Retrieves clipboard context if content is recent
+   * (within {@link CONTEXT_CONTENT_FRESHNESS_MS}).
    *
    * @remarks
    * Dynamic import prevents circular dependency with clipboard module.
@@ -104,7 +116,8 @@ export class ContextProvider {
         return undefined
       }
 
-      const isRecent = Date.now() - new Date(latest.timestamp).getTime() < 5000
+      const isRecent =
+        Date.now() - new Date(latest.timestamp).getTime() < CONTEXT_CONTENT_FRESHNESS_MS
       if (!isRecent) {
         return undefined
       }
@@ -117,6 +130,36 @@ export class ContextProvider {
       }
     } catch (error) {
       contextProviderLog.debug('Failed to get clipboard context', {
+        meta: { reason: error instanceof Error ? error.message : String(error) }
+      })
+      return undefined
+    }
+  }
+
+  /**
+   * Retrieves the latest captured text selection, same freshness window and
+   * privacy tier as the clipboard: only the hash and the detected shape leave
+   * this method. Nothing here triggers a capture — the store only holds what
+   * an explicit user-initiated capture already produced.
+   */
+  private async getSelectionContext(): Promise<ContextSignal['selection']> {
+    try {
+      const { selectionSnapshotStore } = await import('../../../system/selection-snapshot-store')
+
+      const latest = selectionSnapshotStore.get()
+      if (!latest) return undefined
+
+      if (Date.now() - latest.capturedAt >= CONTEXT_CONTENT_FRESHNESS_MS) {
+        return undefined
+      }
+
+      return {
+        content: this.hashContent(latest.text),
+        timestamp: latest.capturedAt,
+        ...this.detectClipboardContentType({ type: 'text', content: latest.text } as IClipboardItem)
+      }
+    } catch (error) {
+      contextProviderLog.debug('Failed to get selection context', {
         meta: { reason: error instanceof Error ? error.message : String(error) }
       })
       return undefined
@@ -299,8 +342,8 @@ export class ContextProvider {
         time: raw.time !== false,
         foregroundApp: raw.foregroundApp !== false,
         clipboard: raw.clipboard !== false,
+        selection: raw.selection !== false,
         network: raw.network !== false,
-        bluetooth: raw.bluetooth !== false,
         focus: raw.focus !== false,
         power: raw.power !== false,
         location: raw.location !== false
@@ -319,13 +362,7 @@ export class ContextProvider {
   private async getSystemContext(
     sources: RecommendationContextSources
   ): Promise<ContextSignal['systemState']> {
-    if (
-      !sources.network &&
-      !sources.power &&
-      !sources.focus &&
-      !sources.bluetooth &&
-      !sources.location
-    ) {
+    if (!sources.network && !sources.power && !sources.focus && !sources.location) {
       return undefined
     }
 
@@ -363,18 +400,12 @@ export class ContextProvider {
       if (!focus.available) unavailableSignals.push('focus')
     }
 
-    if (sources.bluetooth) {
-      const bluetooth = this.getBluetoothContext()
-      state.bluetoothAvailable = bluetooth.available
-      state.bluetoothConnectedCount = bluetooth.connectedCount
-      if (!bluetooth.available) unavailableSignals.push('bluetooth')
-    }
-
     if (sources.location) {
       state.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
       state.locationBucket = this.hashContent(
         `${state.timezone || 'unknown'}:${this.getNetworkBucketForLocation()}`
       )
+      state.timezoneChanged = await this.resolveTimezoneChanged(state.timezone)
     }
 
     if (unavailableSignals.length === 0) {
@@ -471,8 +502,45 @@ export class ContextProvider {
     }
   }
 
-  private getBluetoothContext(): { available: boolean; connectedCount: number } {
-    return { available: false, connectedCount: 0 }
+  /**
+   * "Traveling" signal: true while the system timezone differs from the one we
+   * last persisted, for {@link TIMEZONE_CHANGE_WINDOW_MS} after the switch.
+   * The persisted record is runtime state, not a user setting, so it lives in
+   * its own config file rather than in app settings.
+   */
+  private async resolveTimezoneChanged(timezone: string | undefined): Promise<boolean> {
+    if (!timezone) return false
+
+    try {
+      const { getConfig, saveConfig, isMainStorageReady } = await import('../../../storage')
+      if (!isMainStorageReady()) return false
+
+      const stored = getConfig(RECOMMENDATION_RUNTIME_CONFIG) as {
+        lastTimezone?: unknown
+        timezoneChangedAt?: unknown
+      }
+      const lastTimezone = typeof stored?.lastTimezone === 'string' ? stored.lastTimezone : null
+      const changedAt =
+        typeof stored?.timezoneChangedAt === 'number' ? stored.timezoneChangedAt : null
+      const now = Date.now()
+
+      if (lastTimezone === timezone) {
+        return changedAt != null && now - changedAt < TIMEZONE_CHANGE_WINDOW_MS
+      }
+
+      // First run has no baseline — record the timezone without claiming a trip.
+      const timezoneChangedAt = lastTimezone == null ? null : now
+      saveConfig(
+        RECOMMENDATION_RUNTIME_CONFIG,
+        JSON.stringify({ ...stored, lastTimezone: timezone, timezoneChangedAt })
+      )
+      return timezoneChangedAt != null
+    } catch (error) {
+      contextProviderLog.debug('Failed to resolve timezone change signal', {
+        meta: { reason: error instanceof Error ? error.message : String(error) }
+      })
+      return false
+    }
   }
 
   private getNetworkBucketForLocation(): string {
@@ -482,41 +550,29 @@ export class ContextProvider {
 
   /**
    * Generates cache key from context signal.
+   *
+   * @remarks
+   * Only SLOW-MOVING context belongs here (time slot, workday/weekend, online
+   * flag). Volatile signals — clipboard, selection, foreground app, battery,
+   * power mode, DND, network identity — are deliberately absent: with them in
+   * the key the 15-min background refresh warmed a key the user's own request
+   * could never hit, so every visible request recomputed from scratch. They
+   * are re-applied per request by the engine's volatile re-rank stage instead.
    */
   generateCacheKey(context: ContextSignal): string {
-    const parts: string[] = [context.time.timeSlot, context.time.dayOfWeek.toString()]
-
-    if (context.clipboard) {
-      parts.push(`cb:${context.clipboard.type}:${context.clipboard.content}`)
-    }
-
-    if (context.foregroundApp) {
-      parts.push(`fg:${context.foregroundApp.bundleId}`)
-    }
+    const parts: string[] = [context.time.timeSlot, resolveDayType(context.time.dayOfWeek)]
 
     if (context.systemState) {
-      const batteryBucket =
-        typeof context.systemState.batteryLevel === 'number'
-          ? Math.floor(context.systemState.batteryLevel / 20) * 20
-          : 'unknown'
-      parts.push(
-        `net:${context.systemState.isOnline ? '1' : '0'}`,
-        `nt:${context.systemState.networkType || 'unknown'}`,
-        `nid:${context.systemState.networkIdHash || 'none'}`,
-        `bat:${batteryBucket}`,
-        `pow:${context.systemState.powerMode || 'unknown'}`,
-        `dnd:${context.systemState.isDNDEnabled ? '1' : '0'}`,
-        `bt:${
-          context.systemState.bluetoothAvailable
-            ? (context.systemState.bluetoothConnectedCount ?? 0)
-            : 'na'
-        }`,
-        `loc:${context.systemState.locationBucket || 'none'}`
-      )
+      parts.push(`net:${context.systemState.isOnline ? '1' : '0'}`)
     }
 
     return parts.join('|')
   }
+}
+
+/** Workday/weekend instead of the raw weekday: 7 key variants collapse to 2. */
+function resolveDayType(dayOfWeek: number): 'workday' | 'weekend' {
+  return dayOfWeek === 0 || dayOfWeek === 6 ? 'weekend' : 'workday'
 }
 
 export { ContextSignal, TimePattern }
