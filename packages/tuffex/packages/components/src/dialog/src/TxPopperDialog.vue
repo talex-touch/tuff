@@ -9,6 +9,7 @@ import {
 
   provide,
   ref,
+  useId,
 
 } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
@@ -26,6 +27,9 @@ const props = withDefaults(defineProps<PopperDialogProps>(), {
   comp: undefined,
   render: undefined,
 })
+
+const titleId = useId()
+const contentId = useId()
 
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
@@ -77,8 +81,8 @@ provide('destroy', destroy)
       :style="{ zIndex }"
       role="dialog"
       aria-modal="true"
-      :aria-labelledby="title ? 'tx-popper-dialog-title' : undefined"
-      :aria-describedby="message || messageHtml ? 'tx-popper-dialog-content' : undefined"
+      :aria-labelledby="title ? titleId : undefined"
+      :aria-describedby="message || messageHtml ? contentId : undefined"
       @keydown.esc="destroy"
     >
       <div
@@ -88,13 +92,13 @@ provide('destroy', destroy)
         <component :is="renderComp" v-if="renderComp" />
         <component :is="comp" v-else-if="comp" />
         <template v-else>
-          <p v-if="title" id="tx-popper-dialog-title" class="tx-popper-dialog__title">
+          <p v-if="title" :id="titleId" class="tx-popper-dialog__title">
             {{ title }}
           </p>
 
           <div
             v-if="message || messageHtml"
-            id="tx-popper-dialog-content"
+            :id="contentId"
             class="tx-popper-dialog__content"
           >
             <!-- eslint-disable-next-line vue/no-v-html -->
