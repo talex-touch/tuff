@@ -1,0 +1,30 @@
+{
+  "id": "ai-toolchain-suite",
+  "name": "ai-toolchain-suite",
+  "title": "AI 工具链：组件扩容、工具调用与智能基建",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-tuffex-ai-elements-port",
+    "08-05-home-tool-loop",
+    "08-05-skills-mcp-config"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
