@@ -8,8 +8,9 @@ import { createHash } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
-import { scheduleAuxWrite } from '../../../../db/db-write'
+import { and, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
+import { scheduleAuxWrite, scheduleDbWrite } from '../../../../db/db-write'
+import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import * as schema from '../../../../db/schema'
 import { getSentryService } from '../../../sentry'
 import { ContextProvider } from './context-provider'
@@ -20,8 +21,20 @@ import {
   DAY_MS,
   calculateTimeRelevanceScore,
   toDayBucket,
-  toErrorMeta
+  toErrorMeta,
+  toPrimitive,
+  type LogMeta
 } from './recommendation-utils'
+import {
+  UsageSourceIdentityMigration,
+  USAGE_SOURCE_IDENTITY_CONFIG_KEY,
+  type ItemTimeStatsKey,
+  type ItemTimeStatsMigrationPlan,
+  type ItemTimeStatsRow,
+  type UsageTrendKey,
+  type UsageTrendMigrationPlan,
+  type UsageTrendRow
+} from '../usage-source-identity-migration'
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
@@ -43,6 +56,7 @@ const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
+const USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS = 20_000
 const SEMANTIC_LOCAL_WEIGHT = 6e5
 const SEMANTIC_USAGE_PREFERENCE_WEIGHT = 3.5e5
 const SEMANTIC_USAGE_AVOIDANCE_WEIGHT = 5e5
@@ -58,6 +72,11 @@ const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS: RecommendationSemanticSettings =
   aiEmbeddingEnabled: false
 }
 const recommendationLog = createLogger('RecommendationEngine')
+
+function toLogMeta(meta?: Record<string, unknown>): LogMeta | undefined {
+  if (!meta) return undefined
+  return Object.fromEntries(Object.entries(meta).map(([key, value]) => [key, toPrimitive(value)]))
+}
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -80,6 +99,8 @@ export class RecommendationEngine {
   private readonly telemetryTaskId = 'recommendation.telemetry-report'
   private trendBackfillQueue: number[] | null = null
   private trendBackfillCompleted = false
+  private usageIdentityMigrationTimer: ReturnType<typeof setTimeout> | null = null
+  private usageIdentityMigrationScheduled = false
 
   /** Plugin-registered recommendation providers */
   private pluginProviders: Map<string, { pluginName: string; provider: RecommendProvider }> =
@@ -110,6 +131,252 @@ export class RecommendationEngine {
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
+    this.scheduleUsageIdentityMigration()
+  }
+
+  /**
+   * Boot-time maintenance writer (database-write-contracts §7): the one-time
+   * source-identity repair waits out the startup degrade window so its writes
+   * never join the startup write storm. The pass is idempotent and self-gated
+   * on a config version, so a re-schedule is harmless.
+   *
+   * It may interleave with the trend backfill, which reads the same logs: the
+   * pass re-keys `usage_logs` before it touches `usage_trend_daily`, so a tick
+   * landing after that reads migrated rows, and a tick that finished before the
+   * trend plan is loaded writes legacy-keyed rows the plan then folds in. One
+   * tick can still straddle both (grouped its rows from pre-migration logs, and
+   * upserted after the plan was read): that day's row stays legacy-keyed and is
+   * simply never read again — `hasTrendDataForDay` stops it being rebuilt, and
+   * the version key is already recorded.
+   */
+  private scheduleUsageIdentityMigration(): void {
+    if (this.usageIdentityMigrationScheduled) return
+    this.usageIdentityMigrationScheduled = true
+
+    const delayMs = Math.max(
+      USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS,
+      getStartupDegradeWindowRemainingMs()
+    )
+    this.usageIdentityMigrationTimer = setTimeout(() => {
+      this.usageIdentityMigrationTimer = null
+      // Built inside the chain: `getDb()` is synchronous, and a throw here would
+      // otherwise escape the timer callback as an uncaught main-process error.
+      void Promise.resolve()
+        .then(() => this.createUsageIdentityMigration().run())
+        .then((result) => {
+          if (result.status === 'skipped') {
+            recommendationLog.debug('Usage source identity migration skipped', {
+              meta: { reason: result.reason }
+            })
+          }
+        })
+        .catch((error) => {
+          recommendationLog.warn('Usage source identity migration failed', {
+            meta: toErrorMeta(error)
+          })
+        })
+    }, delayMs)
+  }
+
+  private createUsageIdentityMigration(): UsageSourceIdentityMigration {
+    const db = this.dbUtils.getDb()
+
+    return new UsageSourceIdentityMigration({
+      getAppliedVersion: async () => {
+        const row = await db
+          .select({ value: schema.config.value })
+          .from(schema.config)
+          .where(eq(schema.config.key, USAGE_SOURCE_IDENTITY_CONFIG_KEY))
+          .get()
+        if (!row?.value) return null
+        const parsed = Number.parseInt(row.value, 10)
+        return Number.isNaN(parsed) ? null : parsed
+      },
+      setAppliedVersion: async (version) => {
+        await scheduleDbWrite(
+          'usage.source-identity.version',
+          async () => {
+            await db
+              .insert(schema.config)
+              .values({ key: USAGE_SOURCE_IDENTITY_CONFIG_KEY, value: String(version) })
+              .onConflictDoUpdate({
+                target: schema.config.key,
+                set: { value: String(version) }
+              })
+          },
+          { priority: 'background', dropPolicy: 'none' }
+        )
+      },
+      rewriteUsageLogSource: async (from, to) => {
+        await scheduleDbWrite(
+          'usage.source-identity.logs',
+          async () => {
+            await db
+              .update(schema.usageLogs)
+              .set({ source: to })
+              .where(eq(schema.usageLogs.source, from))
+          },
+          { priority: 'background', dropPolicy: 'none' }
+        )
+      },
+      loadLegacyTrendRows: async (legacySources) =>
+        await db
+          .select({
+            sourceId: schema.usageTrendDaily.sourceId,
+            itemId: schema.usageTrendDaily.itemId,
+            day: schema.usageTrendDaily.day,
+            executeCount: schema.usageTrendDaily.executeCount
+          })
+          .from(schema.usageTrendDaily)
+          .where(inArray(schema.usageTrendDaily.sourceId, legacySources)),
+      loadTrendRowsByKeys: (keys) => this.loadTrendRowsByKeys(keys),
+      applyTrendMigration: (plan) => this.applyTrendMigration(plan),
+      loadLegacyTimeStatsRows: async (legacySources) =>
+        await db
+          .select({
+            sourceId: schema.itemTimeStats.sourceId,
+            itemId: schema.itemTimeStats.itemId,
+            hourDistribution: schema.itemTimeStats.hourDistribution,
+            dayOfWeekDistribution: schema.itemTimeStats.dayOfWeekDistribution,
+            timeSlotDistribution: schema.itemTimeStats.timeSlotDistribution
+          })
+          .from(schema.itemTimeStats)
+          .where(inArray(schema.itemTimeStats.sourceId, legacySources)),
+      loadTimeStatsRowsByKeys: (keys) => this.loadTimeStatsRowsByKeys(keys),
+      applyTimeStatsMigration: (plan) => this.applyTimeStatsMigration(plan),
+      logInfo: (message, meta) => recommendationLog.info(message, { meta: toLogMeta(meta) }),
+      logWarn: (message, error, meta) =>
+        recommendationLog.warn(message, { meta: { ...toLogMeta(meta), ...toErrorMeta(error) } })
+    })
+  }
+
+  /**
+   * Target rows for the id-keyed twins of the legacy rows. The coarse
+   * source/item filter is narrowed to the exact triples in JS — SQLite has no
+   * tuple IN and the affected set is small.
+   */
+  private async loadTrendRowsByKeys(keys: UsageTrendKey[]): Promise<UsageTrendRow[]> {
+    if (keys.length === 0) return []
+    const db = this.dbUtils.getDb()
+    const wanted = new Set(keys.map((key) => `${key.sourceId} ${key.itemId} ${key.day}`))
+
+    const rows = await db
+      .select({
+        sourceId: schema.usageTrendDaily.sourceId,
+        itemId: schema.usageTrendDaily.itemId,
+        day: schema.usageTrendDaily.day,
+        executeCount: schema.usageTrendDaily.executeCount
+      })
+      .from(schema.usageTrendDaily)
+      .where(
+        and(
+          inArray(schema.usageTrendDaily.sourceId, [...new Set(keys.map((key) => key.sourceId))]),
+          inArray(schema.usageTrendDaily.itemId, [...new Set(keys.map((key) => key.itemId))])
+        )
+      )
+
+    return rows.filter((row) => wanted.has(`${row.sourceId} ${row.itemId} ${row.day}`))
+  }
+
+  private async loadTimeStatsRowsByKeys(keys: ItemTimeStatsKey[]): Promise<ItemTimeStatsRow[]> {
+    if (keys.length === 0) return []
+    const db = this.dbUtils.getDb()
+    const wanted = new Set(keys.map((key) => `${key.sourceId} ${key.itemId}`))
+
+    const rows = await db
+      .select({
+        sourceId: schema.itemTimeStats.sourceId,
+        itemId: schema.itemTimeStats.itemId,
+        hourDistribution: schema.itemTimeStats.hourDistribution,
+        dayOfWeekDistribution: schema.itemTimeStats.dayOfWeekDistribution,
+        timeSlotDistribution: schema.itemTimeStats.timeSlotDistribution
+      })
+      .from(schema.itemTimeStats)
+      .where(
+        and(
+          inArray(schema.itemTimeStats.sourceId, [...new Set(keys.map((key) => key.sourceId))]),
+          inArray(schema.itemTimeStats.itemId, [...new Set(keys.map((key) => key.itemId))])
+        )
+      )
+
+    return rows.filter((row) => wanted.has(`${row.sourceId} ${row.itemId}`))
+  }
+
+  private async applyTrendMigration(plan: UsageTrendMigrationPlan): Promise<void> {
+    if (plan.rewrites.length === 0 && plan.merges.length === 0) return
+    const db = this.dbUtils.getDb()
+
+    await scheduleDbWrite(
+      'usage.source-identity.trend',
+      () =>
+        db.transaction(async (tx) => {
+          // Rewrites first (plan contract): a merge may target the row an
+          // earlier rewrite creates, and no rewrite can collide with a legacy
+          // row because legacy keys are types and targets are ids.
+          for (const rewrite of plan.rewrites) {
+            await tx
+              .update(schema.usageTrendDaily)
+              .set({ sourceId: rewrite.toSourceId })
+              .where(this.trendRowFilter(rewrite.from))
+          }
+          for (const merge of plan.merges) {
+            await tx
+              .update(schema.usageTrendDaily)
+              .set({ executeCount: merge.executeCount })
+              .where(this.trendRowFilter(merge.into))
+            await tx.delete(schema.usageTrendDaily).where(this.trendRowFilter(merge.from))
+          }
+        }),
+      { priority: 'background', dropPolicy: 'none' }
+    )
+  }
+
+  private async applyTimeStatsMigration(plan: ItemTimeStatsMigrationPlan): Promise<void> {
+    if (plan.rewrites.length === 0 && plan.merges.length === 0) return
+    const db = this.dbUtils.getDb()
+    const now = new Date()
+
+    await scheduleDbWrite(
+      'usage.source-identity.time-stats',
+      () =>
+        db.transaction(async (tx) => {
+          // Rewrites first — same plan contract as the trend table.
+          for (const rewrite of plan.rewrites) {
+            await tx
+              .update(schema.itemTimeStats)
+              .set({ sourceId: rewrite.toSourceId })
+              .where(this.timeStatsRowFilter(rewrite.from))
+          }
+          for (const merge of plan.merges) {
+            await tx
+              .update(schema.itemTimeStats)
+              .set({
+                hourDistribution: merge.hourDistribution,
+                dayOfWeekDistribution: merge.dayOfWeekDistribution,
+                timeSlotDistribution: merge.timeSlotDistribution,
+                lastUpdated: now
+              })
+              .where(this.timeStatsRowFilter(merge.into))
+            await tx.delete(schema.itemTimeStats).where(this.timeStatsRowFilter(merge.from))
+          }
+        }),
+      { priority: 'background', dropPolicy: 'none' }
+    )
+  }
+
+  private trendRowFilter(key: UsageTrendKey) {
+    return and(
+      eq(schema.usageTrendDaily.sourceId, key.sourceId),
+      eq(schema.usageTrendDaily.itemId, key.itemId),
+      eq(schema.usageTrendDaily.day, key.day)
+    )
+  }
+
+  private timeStatsRowFilter(key: ItemTimeStatsKey) {
+    return and(
+      eq(schema.itemTimeStats.sourceId, key.sourceId),
+      eq(schema.itemTimeStats.itemId, key.itemId)
+    )
   }
 
   /** Start background refresh timer */
@@ -483,6 +750,10 @@ export class RecommendationEngine {
     this.pollingService.unregister(this.refreshTaskId)
     this.pollingService.unregister(this.trendBackfillTaskId)
     this.pollingService.unregister(this.telemetryTaskId)
+    if (this.usageIdentityMigrationTimer) {
+      clearTimeout(this.usageIdentityMigrationTimer)
+      this.usageIdentityMigrationTimer = null
+    }
   }
 
   /**
@@ -835,11 +1106,24 @@ export class RecommendationEngine {
 
     const visiblePinnedItems = this.dedupeItems(pinnedItems).slice(0, limit)
     const pinnedIdentityKeys = new Set(visiblePinnedItems.map((item) => this.getItemIdentity(item)))
-    const visibleRecommendItems = this.dedupeItems(recommendItems)
-      .filter((item) => !pinnedIdentityKeys.has(this.getItemIdentity(item)))
-      .slice(0, Math.max(0, limit - visiblePinnedItems.length))
+    // Pinned items claim their slots first; the rest of the budget goes to the
+    // highest-scored recommendations, so ordering must precede the slice or a
+    // top-scored item silently falls off whenever anything is pinned.
+    const visibleRecommendItems = this.orderByFinalScore(
+      this.dedupeItems(recommendItems).filter(
+        (item) => !pinnedIdentityKeys.has(this.getItemIdentity(item))
+      )
+    ).slice(0, Math.max(0, limit - visiblePinnedItems.length))
 
     return [...visibleRecommendItems, ...visiblePinnedItems]
+  }
+
+  /** Descending by `scoring.final` (written by the rebuilder), ties keep input order. */
+  private orderByFinalScore(items: TuffItem[]): TuffItem[] {
+    return items
+      .map((item, index) => ({ item, index, score: item.scoring?.final ?? 0 }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(({ item }) => item)
   }
 
   /**

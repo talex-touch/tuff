@@ -29,6 +29,7 @@ import { createLogger } from '../../../utils/logger'
 import { DivisionBoxManager } from '../../division-box/manager'
 import { getPermissionModule } from '../../permission'
 import { getMainConfig, subscribeMainConfig } from '../../storage'
+import { captureForegroundAppSnapshot } from '../../system/foreground-app-snapshot'
 import { WindowBoundsController } from './bounds-controller'
 import { CoreBoxFocusPolicy } from './focus-policy'
 import { isBlockedCoreBoxFunctionKey } from './key-event'
@@ -384,6 +385,9 @@ export class WindowManager {
         .catch((error) => coreBoxWindowLog.error('Failed to create CoreBox for show', { error }))
       return
     }
+    // Before anything below takes focus: the recommendation context wants the
+    // app the user was in, and every later query answers "Touch".
+    captureForegroundAppSnapshot()
     this.focusPolicy.clearPendingBlurHide()
     this.boundsController.stopAnimation()
     this.updatePosition(window)

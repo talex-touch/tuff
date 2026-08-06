@@ -1,5 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import type { ActiveAppInfo } from '../../../system/active-app'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { foregroundAppSnapshotStore } from '../../../system/foreground-app-snapshot'
 import { ContextProvider } from './context-provider'
+
+const getActiveAppMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../../../system/active-app', () => ({
+  activeAppService: {
+    getActiveApp: getActiveAppMock
+  }
+}))
 
 vi.mock('../../../../utils/logger', () => ({
   createLogger: () => ({
@@ -33,6 +43,73 @@ vi.mock('../../../storage', () => ({
   })),
   isMainStorageReady: vi.fn(() => true)
 }))
+
+function createActiveApp(overrides: Partial<ActiveAppInfo> = {}): ActiveAppInfo {
+  return {
+    identifier: 'com.microsoft.VSCode',
+    displayName: 'Visual Studio Code',
+    bundleId: 'com.microsoft.VSCode',
+    processId: 4242,
+    executablePath: '/Applications/Visual Studio Code.app',
+    platform: 'macos',
+    windowTitle: 'index.ts',
+    lastUpdated: 0,
+    ...overrides
+  }
+}
+
+function readForegroundAppContext(
+  provider: ContextProvider
+): Promise<{ bundleId: string; name: string } | undefined> {
+  return (
+    provider as unknown as {
+      getForegroundAppContext: () => Promise<{ bundleId: string; name: string } | undefined>
+    }
+  ).getForegroundAppContext()
+}
+
+describe('ContextProvider foreground app', () => {
+  afterEach(() => {
+    foregroundAppSnapshotStore.clear()
+    getActiveAppMock.mockReset()
+  })
+
+  it('prefers the snapshot taken before CoreBox stole focus', async () => {
+    getActiveAppMock.mockResolvedValue(createActiveApp())
+    foregroundAppSnapshotStore.capture()
+    await vi.waitFor(() => expect(foregroundAppSnapshotStore.get()).not.toBeNull())
+    getActiveAppMock.mockResolvedValue(createActiveApp({ processId: process.pid }))
+
+    expect(await readForegroundAppContext(new ContextProvider())).toEqual({
+      bundleId: 'com.microsoft.VSCode',
+      name: 'Visual Studio Code'
+    })
+    expect(getActiveAppMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('queries live when no snapshot was taken', async () => {
+    getActiveAppMock.mockResolvedValue(createActiveApp())
+
+    expect(await readForegroundAppContext(new ContextProvider())).toEqual({
+      bundleId: 'com.microsoft.VSCode',
+      name: 'Visual Studio Code'
+    })
+    expect(getActiveAppMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports no foreground app when the answer is Touch itself', async () => {
+    getActiveAppMock.mockResolvedValue(
+      createActiveApp({
+        identifier: 'Touch',
+        displayName: 'Touch',
+        bundleId: 'com.tagzxia.app.tuff',
+        processId: process.pid
+      })
+    )
+
+    expect(await readForegroundAppContext(new ContextProvider())).toBeUndefined()
+  })
+})
 
 describe('ContextProvider', () => {
   it('honors disabled recommendation context sources', async () => {

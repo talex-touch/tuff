@@ -234,16 +234,31 @@ export class ContextProvider {
    * Retrieves foreground application context.
    *
    * @remarks
-   * Dynamic import prevents circular dependency with activeApp module.
+   * Prefers the snapshot CoreBox takes before it steals focus; a live query
+   * here would describe Touch, not the app the user came from. Dynamic import
+   * prevents circular dependency with activeApp module.
    */
   private async getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
     try {
-      const { activeAppService } = await import('../../../system/active-app')
-      const activeApp = await activeAppService.getActiveApp({
-        includeIcon: false
-      })
+      const { foregroundAppSnapshotStore, isSelfActiveApp } =
+        await import('../../../system/foreground-app-snapshot')
+
+      const snapshot = foregroundAppSnapshotStore.get()
+      let activeApp = snapshot?.app ?? null
+      if (!activeApp) {
+        const { activeAppService } = await import('../../../system/active-app')
+        activeApp = await activeAppService.getActiveApp({
+          includeIcon: false
+        })
+      }
 
       if (!activeApp || !activeApp.bundleId) {
+        return undefined
+      }
+
+      // Touch in the foreground is "no foreground signal", not a candidate to
+      // penalise: scoring treats a self-match as an already-open app (−50).
+      if (isSelfActiveApp(activeApp)) {
         return undefined
       }
 

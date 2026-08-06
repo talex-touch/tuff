@@ -73,13 +73,18 @@ vi.mock('../../../ai/intelligence-sdk', () => ({
 
 vi.mock('./item-rebuilder', () => ({
   ItemRebuilder: class {
-    async rebuildItems(items: Array<{ itemId: string; sourceId: string; source: string }>) {
+    // Mirrors the real rebuilder's contract: input (scored) order out, with the
+    // score published on scoring.final.
+    async rebuildItems(
+      items: Array<{ itemId: string; sourceId: string; source: string; score: number }>
+    ) {
       return items.map((item) => ({
         id: item.itemId,
         source: { id: item.sourceId, type: 'app', name: item.sourceId },
         kind: 'app',
         render: { mode: 'default', basic: { title: item.itemId } },
-        meta: { recommendation: { source: item.source } }
+        scoring: { final: item.score },
+        meta: { recommendation: { source: item.source, score: item.score } }
       }))
     }
   }
@@ -439,6 +444,68 @@ describe('RecommendationEngine', () => {
       id: 'pinned',
       itemIds: ['pinned-app']
     })
+  })
+
+  it('drops the lowest-scored recommendation, not the highest, when pinned items take a slot', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const candidates = [
+      {
+        sourceId: 'clipboard-history',
+        itemId: 'low-scored',
+        sourceType: 'history',
+        source: 'frequent' as const,
+        usageStats: createUsageStats('low-scored', { executeCount: 1 })
+      },
+      {
+        sourceId: 'app-provider',
+        itemId: 'high-scored',
+        sourceType: 'app',
+        source: 'frequent' as const,
+        usageStats: createUsageStats('high-scored', { executeCount: 50 })
+      }
+    ]
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}|pinned-truncation`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => [
+        {
+          sourceId: 'pinned-source',
+          itemId: 'pinned-app',
+          sourceType: 'pinned',
+          usageStats: createUsageStats('pinned-app')
+        }
+      ]),
+      getCandidates: vi.fn(async () => ({
+        items: candidates,
+        perf: candidatePerf(candidates.length)
+      })),
+      // A rebuild that hands back a different order than it was given (the
+      // per-source fan-out did exactly this): the truncation must still be
+      // decided by score.
+      itemRebuilder: {
+        rebuildItems: async (
+          items: Array<{ itemId: string; sourceId: string; source: string; score: number }>
+        ) =>
+          [...items].reverse().map((item) => ({
+            id: item.itemId,
+            source: { id: item.sourceId, type: 'app', name: item.sourceId },
+            kind: 'app',
+            render: { mode: 'default', basic: { title: item.itemId } },
+            scoring: { final: item.score },
+            meta: { recommendation: { source: item.source, score: item.score } }
+          }))
+      }
+    })
+
+    const result = await engine.recommend({ limit: 2 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['high-scored', 'pinned-app'])
   })
 
   it('separates persisted recommendation cache by pinned items', async () => {

@@ -70,6 +70,12 @@ export class ItemRebuilder {
     private appCatalogDbUtils: DbUtils = dbUtils
   ) {}
 
+  /**
+   * Rebuilding fans out per source, so the batches come back grouped by source
+   * (and, inside a batch, in DB row order) — the ranking `scoreAndRank` already
+   * computed. `mergeAndEnrichItems` puts the input order back before returning,
+   * so the caller always sees items ordered by recommendation score.
+   */
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
     if (scoredItems.length === 0) return []
 
@@ -506,39 +512,48 @@ export class ItemRebuilder {
 
   private mergeAndEnrichItems(items: TuffItem[], scoredItems: ScoredItem[]): TuffItem[] {
     const scoreMap = new Map<string, ScoredItem>()
-    for (const s of scoredItems) {
+    const rankByScored = new Map<ScoredItem, number>()
+    scoredItems.forEach((s, rank) => {
       scoreMap.set(s.itemId, s)
       scoreMap.set(`${s.sourceId}:${s.itemId}`, s)
+      rankByScored.set(s, rank)
+    })
+
+    const ranked: Array<{ item: TuffItem; rank: number }> = []
+
+    for (const item of items) {
+      const originalItemId = getMetaString(item, '_originalItemId')
+      const scored =
+        (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
+        scoreMap.get(item.id) ||
+        scoreMap.get(`${item.source.id}:${item.id}`) ||
+        this.findScoredByPartialMatch(item, scoredItems)
+      if (!scored) continue
+
+      const meta: Record<string, unknown> = {
+        ...(item.meta as Record<string, unknown> | undefined)
+      }
+      meta.recommendation = {
+        score: scored.score,
+        source: scored.source,
+        reason: this.getReasonLabel(scored),
+        isIntelligent: true,
+        badge: this.generateBadge(scored)
+      }
+      // Store original itemId for deduplication in recommendation-engine
+      meta._originalItemId = scored.itemId
+      meta._originalSourceId = scored.sourceId
+      item.meta = meta as TuffItem['meta']
+      // Absolute score, higher first — the same contract the tuff sorter writes
+      // for searched items, so anything ranking a mixed list reads one field.
+      item.scoring = { ...item.scoring, final: scored.score }
+
+      ranked.push({ item, rank: rankByScored.get(scored) ?? Number.MAX_SAFE_INTEGER })
     }
 
-    return items
-      .map((item) => {
-        const originalItemId = getMetaString(item, '_originalItemId')
-        const scored =
-          (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
-          scoreMap.get(item.id) ||
-          scoreMap.get(`${item.source.id}:${item.id}`) ||
-          this.findScoredByPartialMatch(item, scoredItems)
-        if (!scored) return null
-
-        const meta: Record<string, unknown> = {
-          ...(item.meta as Record<string, unknown> | undefined)
-        }
-        meta.recommendation = {
-          score: scored.score,
-          source: scored.source,
-          reason: this.getReasonLabel(scored),
-          isIntelligent: true,
-          badge: this.generateBadge(scored)
-        }
-        // Store original itemId for deduplication in recommendation-engine
-        meta._originalItemId = scored.itemId
-        meta._originalSourceId = scored.sourceId
-        item.meta = meta as TuffItem['meta']
-
-        return item
-      })
-      .filter((item): item is TuffItem => item !== null)
+    // Stable by rank: two rebuilt items resolving to one scored candidate keep
+    // the order their source batch produced them in.
+    return ranked.sort((a, b) => a.rank - b.rank).map(({ item }) => item)
   }
 
   private getReasonLabel(scored: ScoredItem): string {
