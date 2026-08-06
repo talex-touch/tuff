@@ -43,13 +43,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, extracted plugins in `plugins/` (7 independent plugin packages), and documentation in `apps/docs/`.
 
 ### Technology Stack
-- **Electron**: 40.0.0+ with Node.js 22.16.0+
-- **Vue**: 3.5.27+ with Vue Router 4.6.4 and Pinia 3.0.4
+- **Electron**: 41.10.1+ with Node.js 24.15.0+
+- **Vue**: 3.5.39+ with Vue Router 4.6.4 and Pinia 3.0.4
 - **TypeScript**: 5.9.3
-- **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.1, Electron-Builder 26.4.0
-- **UI**: Tuffex, UnoCSS 66.6.0, SASS 1.97.2
-- **Database**: Drizzle ORM 0.44.7 with LibSQL 0.15.15
-- **Utilities**: VueUse 14.1.0, Dayjs 1.11.19, @talex-touch/tuff-native (native OCR), XTerm 5.3.0
+- **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.6, Electron-Builder 26.15.3
+- **UI**: Tuffex, UnoCSS 66.7.5, SASS 1.101.0
+- **Database**: Drizzle ORM 0.45.2 with LibSQL 0.17.4
+- **Utilities**: VueUse 14.3.0, Dayjs 1.11.21, @talex-touch/tuff-native (native OCR), XTerm 5.3.0
 - **Logging**: log4js 6.9.1
 
 ### Core Application Architecture (apps/core-app/)
