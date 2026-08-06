@@ -365,4 +365,85 @@ describe('txSelect', () => {
     expect(options).toHaveLength(1)
     expect(options[0].text()).toContain('Beta')
   })
+
+  it('opens and commits the combobox from the keyboard', async () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: '',
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta' },
+        ],
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+    await nextTick()
+
+    const trigger = wrapper.find('.tuff-select__trigger input')
+    expect(trigger.attributes('role')).toBe('combobox')
+
+    // ArrowDown opens the panel and highlights the first option; nothing bound a
+    // keydown handler before, so there was no keyboard path to open it at all.
+    await trigger.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+
+    const firstId = wrapper.findAll('[role="option"]')[0]?.attributes('id')
+    expect(trigger.attributes('aria-activedescendant')).toBe(firstId)
+
+    await trigger.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    const secondId = wrapper.findAll('[role="option"]')[1]?.attributes('id')
+    expect(trigger.attributes('aria-activedescendant')).toBe(secondId)
+
+    await trigger.trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['beta'])
+  })
+
+  it('closes the combobox panel on Escape', async () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: '',
+        options: [{ value: 'alpha', label: 'Alpha' }],
+      },
+      global: { stubs: { TxPopover: PopoverStub } },
+    })
+    await nextTick()
+
+    const trigger = wrapper.find('.tuff-select__trigger input')
+    await trigger.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+
+    await trigger.trigger('keydown', { key: 'Escape' })
+    await nextTick()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+  })
+
+  it('skips disabled options during keyboard navigation', async () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: '',
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta', disabled: true },
+          { value: 'gamma', label: 'Gamma' },
+        ],
+      },
+      global: { stubs: { TxPopover: PopoverStub } },
+    })
+    await nextTick()
+
+    const trigger = wrapper.find('.tuff-select__trigger input')
+    await trigger.trigger('keydown', { key: 'ArrowDown' })
+    await trigger.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    await trigger.trigger('keydown', { key: 'Enter' })
+
+    // Beta is disabled, so the second step lands on Gamma.
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['gamma'])
+  })
 })

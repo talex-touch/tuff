@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { TxSelectModelValue, TxSelectOption, TxSelectOptionGroup, TxSelectOptionId, TxSelectOptionLike, TxSelectProps, TxSelectValue } from './types'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, useId, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
@@ -55,6 +55,7 @@ const emit = defineEmits<{
 }>()
 
 const isOpen = ref(false)
+const listDomId = `${useId() ?? 'tuff-select'}-list`
 const selectedLabel = ref('')
 const multiInput = ref('')
 
@@ -309,6 +310,97 @@ function removeSelectedValue(value: TxSelectValue) {
     return
   currentValue.value = selectedValues.value.filter(item => !isSelectValueEqual(item, value))
 }
+
+/**
+ * Keyboard support for the default (non-multiple) combobox. The trigger carried
+ * role="combobox"/aria-expanded but nothing bound a keydown handler, and
+ * TxBaseAnchor only wires click + a document-level Escape — so the panel could
+ * not be opened, navigated or committed from the keyboard at all.
+ */
+const navigableOptions = computed<TxSelectOption[]>(() => {
+  if (shouldRenderPropOptions.value) {
+    return renderedOptionGroups.value
+      .flatMap(group => group.options)
+      .filter(option => !option.disabled)
+  }
+  const q = (props.remote ? '' : searchQuery.value).trim().toLowerCase()
+  return registeredOptionList.value.filter(
+    option => !q || option.label.toLowerCase().includes(q),
+  )
+})
+
+const activeOptionIndex = ref(-1)
+
+const activeDescendantId = computed(() => {
+  const option = navigableOptions.value[activeOptionIndex.value]
+  return option ? optionDomId(option.value) : undefined
+})
+
+function optionDomId(value: string | number): string {
+  return `${listDomId}-opt-${encodeURIComponent(String(value))}`
+}
+
+function moveActiveOption(delta: number): void {
+  const options = navigableOptions.value
+  if (!options.length)
+    return
+  const from = activeOptionIndex.value
+  const next = from < 0
+    ? (delta > 0 ? 0 : options.length - 1)
+    : (from + delta + options.length) % options.length
+  activeOptionIndex.value = next
+}
+
+function handleTriggerKeydown(e: KeyboardEvent): void {
+  if (props.disabled)
+    return
+
+  switch (e.key) {
+    case 'ArrowDown':
+    case 'ArrowUp':
+      e.preventDefault()
+      if (!isOpen.value) {
+        isOpen.value = true
+        activeOptionIndex.value = e.key === 'ArrowDown' ? 0 : navigableOptions.value.length - 1
+        return
+      }
+      moveActiveOption(e.key === 'ArrowDown' ? 1 : -1)
+      break
+    case 'Enter':
+      if (!isOpen.value) {
+        e.preventDefault()
+        isOpen.value = true
+        return
+      }
+      {
+        const option = navigableOptions.value[activeOptionIndex.value]
+        if (option) {
+          e.preventDefault()
+          handleSelect(option.value, option.label)
+        }
+      }
+      break
+    case ' ':
+      // A readonly trigger cannot type a space, so it is an open affordance;
+      // an editable one must keep it as text input.
+      if (!isEditable.value && !isOpen.value) {
+        e.preventDefault()
+        isOpen.value = true
+      }
+      break
+    case 'Escape':
+      if (isOpen.value) {
+        e.preventDefault()
+        isOpen.value = false
+      }
+      break
+  }
+}
+
+watch(isOpen, (open) => {
+  if (!open)
+    activeOptionIndex.value = -1
+})
 
 function handleSelect(value: string | number, label: string) {
   if (props.multiple) {
@@ -670,7 +762,10 @@ onBeforeUnmount(() => {
             role="combobox"
             aria-haspopup="listbox"
             :aria-expanded="isOpen"
+            :aria-controls="listDomId"
+            :aria-activedescendant="activeDescendantId"
             @focus="openFromFocus"
+            @keydown="handleTriggerKeydown"
           >
             <template #suffix>
               <span class="tuff-select__arrow">
@@ -696,7 +791,7 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <div class="tuff-select__list" role="listbox" :aria-multiselectable="multiple || undefined">
+        <div :id="listDomId" class="tuff-select__list" role="listbox" :aria-multiselectable="multiple || undefined">
           <template v-if="shouldRenderPropOptions">
             <template v-for="group in renderedOptionGroups" :key="group.key">
               <div v-if="group.label" class="tuff-select__group-label">
@@ -712,6 +807,7 @@ onBeforeUnmount(() => {
                   'is-selected': isValueSelected(opt.value),
                   'is-disabled': opt.disabled,
                 }"
+                :id="optionDomId(opt.value)"
                 role="option"
                 :clickable="true"
                 :active="isValueSelected(opt.value)"
