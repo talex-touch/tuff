@@ -4,6 +4,7 @@ import type {
 } from '../../../search-engine/search-index-service'
 import type { FileTypeTag } from '../constants'
 import path from 'node:path'
+import { normalizeSearchText } from '@talex-touch/utils/search'
 import type { files as filesSchema } from '../../../../../db/schema'
 import { TYPE_ALIAS_MAP } from '../../../../../utils/file-types'
 import { KEYWORD_MAP, TYPE_TAG_EXTENSION_MAP, getTypeTagsForExtension } from '../constants'
@@ -63,10 +64,15 @@ export function buildSearchIndexItem(
   }
 }
 
+/**
+ * Build the FTS query string. Terms are cleaned with the shared charset rules
+ * (non-Latin scripts survive instead of being deleted); the tokens are quoted
+ * when SearchIndexService turns this string into an FTS5 MATCH expression.
+ */
 export function buildFtsQuery(terms: string[]): string {
   const tokens: string[] = []
   for (const term of terms) {
-    const cleaned = term.replace(/[^a-z0-9\u4E00-\u9FA5]+/gi, ' ').trim()
+    const cleaned = normalizeSearchText(term)
     if (!cleaned) continue
     tokens.push(...cleaned.split(/\s+/))
   }

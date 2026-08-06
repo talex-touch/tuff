@@ -1,6 +1,11 @@
 import type { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
+import {
+  buildSearchKeywordLookupTerms,
+  collectSearchKeywordMatches,
+  normalizeSearchText
+} from '@talex-touch/utils/search'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { DbUtils } from '../../../../../db/utils'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
@@ -137,13 +142,20 @@ export class FileProviderSearchResultService {
       return await this.buildExtensionOnlyResult(query, extensionFilters)
     }
 
-    const normalizedQuery = searchText.toLowerCase()
+    const normalizedQuery = searchText.normalize('NFC').toLowerCase()
     const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
     const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
-    const preciseLookupTerms = shouldCheckPhrase
-      ? Array.from(new Set([...terms, normalizedQuery]))
-      : terms
+    // Keywords are stored in cleaned form (and, for accented text, in a folded
+    // twin), so every term is looked up as typed, cleaned and folded. The whole
+    // cleaned query is looked up as a single keyword too, which is what reaches
+    // keywords containing spaces (multi-word aliases, full titles).
+    const cleanedQuery = normalizeSearchText(searchText)
+    const preciseLookupTerms = buildSearchKeywordLookupTerms([
+      ...terms,
+      normalizedQuery,
+      cleanedQuery
+    ])
     const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
     const shouldLookupPrefix = normalizedQuery.length <= 5
     const ftsQuery = buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
@@ -156,16 +168,18 @@ export class FileProviderSearchResultService {
     const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
       searchIndex.lookupByKeywords(this.deps.providerId, preciseLookupTerms, preciseSearchLimit),
       shouldLookupPrefix
-        ? searchIndex.lookupByKeywordPrefix(this.deps.providerId, normalizedQuery, 200)
+        ? searchIndex.lookupByKeywordPrefix(
+            this.deps.providerId,
+            cleanedQuery || normalizedQuery,
+            200
+          )
         : Promise.resolve([]),
       ftsQuery ? searchIndex.search(this.deps.providerId, ftsQuery, 150) : Promise.resolve([])
     ])
     if (signal.aborted) return this.empty(query)
 
     let preciseMatchPaths: Set<string> | null = null
-    const termMatches = terms.map(
-      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
-    )
+    const termMatches = terms.map((term) => collectSearchKeywordMatches(preciseResultMap, term))
     searchLogger.filePreciseQueries(1)
     searchLogger.filePreciseResults(termMatches.map((matches) => matches.size))
     if (termMatches.length > 0) {
@@ -182,9 +196,7 @@ export class FileProviderSearchResultService {
 
     if (shouldCheckPhrase) {
       const phraseStart = this.now()
-      const phraseSet = new Set(
-        (preciseResultMap.get(normalizedQuery) ?? []).map((entry) => entry.itemId)
-      )
+      const phraseSet = collectSearchKeywordMatches(preciseResultMap, normalizedQuery)
       if (phraseSet.size > 0) {
         preciseMatchPaths = preciseMatchPaths
           ? new Set([...preciseMatchPaths, ...phraseSet])

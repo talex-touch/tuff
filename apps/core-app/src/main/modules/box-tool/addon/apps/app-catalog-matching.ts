@@ -1,7 +1,8 @@
+import { HAN_CHAR_PATTERN } from '@talex-touch/utils/search'
 import type { AppSemanticAliasInput } from './app-semantic-catalog'
 
-const NEEDLE_TOKEN_REGEX = /[a-z0-9]+|[一-鿿]+/g
-const CJK_CHAR_REGEX = /[一-鿿]/
+const NEEDLE_TOKEN_REGEX = new RegExp(`[a-z0-9]+|${HAN_CHAR_PATTERN}+`, 'gu')
+const CJK_CHAR_REGEX = new RegExp(HAN_CHAR_PATTERN, 'u')
 const PATH_SEPARATOR_REGEX = /[\\/]/
 const KNOWN_APP_EXTENSION_REGEX = /\.(app|exe|lnk|desktop)$/i
 

@@ -158,6 +158,10 @@ import {
   type FilePathNormalizationRewrite,
   type FilePathNormalizationRow
 } from './services/file-provider-path-normalization-service'
+import {
+  FILE_KEYWORD_BACKFILL_VERSION,
+  FileProviderKeywordBackfillService
+} from './services/file-provider-keyword-backfill-service'
 import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
 import { FileProviderIndexSchedulerService } from './services/file-provider-index-scheduler-service'
@@ -187,6 +191,8 @@ const FILE_ICON_WRITE_MAX_QUEUE = 24
 /** Extra breathing room after the DB startup degrade window (contracts §7). */
 const FILE_PATH_NORMALIZATION_INITIAL_DELAY_MS = 30_000
 const FILE_PATH_NORMALIZATION_CONFIG_KEY = 'file_provider_path_normalization_version'
+const FILE_KEYWORD_BACKFILL_INITIAL_DELAY_MS = 30_000
+const FILE_KEYWORD_BACKFILL_CONFIG_KEY = 'file_provider_keyword_schema_version'
 const fileIntegrityEvidenceService = new IndexedSourceIntegrityEvidenceService()
 const indexFlushEvidenceService = new IndexedWriteFlushEvidenceService()
 
@@ -442,6 +448,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /** Set after the repair's first attempt, successful or not. */
   private pathNormalizationAttempted = false
   private pathNormalizationTimer: NodeJS.Timeout | null = null
+  /** Once-per-boot guard for the keyword schema backfill pass. */
+  private keywordBackfillScheduled = false
+  private keywordBackfillTimer: NodeJS.Timeout | null = null
   /** Stable public projection of the last background startup failure. */
   private backgroundStartupFailure: { code: string; retryable: boolean; reportId: string } | null =
     null
@@ -578,6 +587,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     },
     yieldBetweenPages: async () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
+    },
+    logInfo: (message, meta) => this.logInfo(message, meta),
+    logWarn: (message, error, meta) => this.logWarn(message, error, meta)
+  })
+  private readonly keywordBackfillService = new FileProviderKeywordBackfillService<
+    typeof filesSchema.$inferSelect
+  >({
+    getAppliedVersion: () => this.getKeywordBackfillAppliedVersion(),
+    setAppliedVersion: (version) => this.setKeywordBackfillAppliedVersion(version),
+    isReady: () => Boolean(this.dbUtils && this.indexedSourceRuntimeMutationDelegate),
+    loadRowsPage: (afterId, limit) => this.loadKeywordBackfillRowsPage(afterId, limit),
+    emitRows: (rows) => this.emitKeywordBackfillRows(rows),
+    waitForWriteCapacity: async () => {
+      await appTaskGate.waitForIdle()
+      await dbWriteScheduler.waitForCapacity(4)
     },
     logInfo: (message, meta) => this.logInfo(message, meta),
     logWarn: (message, error, meta) => this.logWarn(message, error, meta)
@@ -1054,6 +1078,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       // parked waiting for it.
       this.pathNormalizationAttempted = true
     }
+    if (this.keywordBackfillTimer) {
+      clearTimeout(this.keywordBackfillTimer)
+      this.keywordBackfillTimer = null
+    }
     try {
       const producerDrains: Promise<void>[] = []
       if (this.isInitializing) {
@@ -1529,6 +1557,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logDebug('File path normalization migration not applicable on this platform', {
         platform: process.platform
       })
+      this.scheduleKeywordSchemaBackfill()
       return
     }
     this.pathNormalizationScheduled = true
@@ -1560,8 +1589,104 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           // Attempted, not necessarily successful: reconciliation resumes
           // either way (see shouldDeferReconciliationForPathNormalization).
           this.pathNormalizationAttempted = true
+          // Queued behind the repair rather than run alongside it: both walk
+          // the whole files table, and the repair rewrites the very ids the
+          // backfill would re-emit under.
+          this.scheduleKeywordSchemaBackfill()
         })
     }, delayMs)
+  }
+
+  /**
+   * Boot-time maintenance writer (database-write-contracts §7): the one-time
+   * keyword rewrite for rows indexed under the previous charset rules. Reads
+   * no files — the keywords come from the indexed row — and is self-gated on a
+   * config version, so a re-schedule is harmless.
+   */
+  private scheduleKeywordSchemaBackfill(): void {
+    if (this.shuttingDown || this.keywordBackfillScheduled) return
+    this.keywordBackfillScheduled = true
+    const delayMs = Math.max(
+      FILE_KEYWORD_BACKFILL_INITIAL_DELAY_MS,
+      getStartupDegradeWindowRemainingMs()
+    )
+    this.logInfo('Scheduling file keyword schema backfill', {
+      version: FILE_KEYWORD_BACKFILL_VERSION,
+      deferredMs: Math.round(delayMs)
+    })
+    this.keywordBackfillTimer = setTimeout(() => {
+      this.keywordBackfillTimer = null
+      if (this.shuttingDown) return
+      void this.keywordBackfillService
+        .run()
+        .then((result) => {
+          if (result.status === 'skipped') {
+            this.logDebug('File keyword schema backfill skipped', { reason: result.reason })
+          }
+        })
+        .catch((error) => {
+          this.logWarn('File keyword schema backfill failed', error)
+        })
+    }, delayMs)
+  }
+
+  private async loadKeywordBackfillRowsPage(
+    afterId: number,
+    limit: number
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    if (!this.dbUtils) return []
+    // Split-aware home: the re-emit writes into the index the worker owns, so
+    // the rows must come from that same home (contracts §6).
+    return await this.dbUtils
+      .getFileIndexReadDb()
+      .select()
+      .from(filesSchema)
+      .where(gt(filesSchema.id, afterId))
+      .orderBy(filesSchema.id)
+      .limit(limit)
+  }
+
+  /**
+   * Re-emit indexed rows through the normal indexed-source write path. The
+   * writer compares each item's keyword hash before touching keyword_mappings,
+   * so rows already carrying current keywords cost a hash comparison and
+   * nothing else.
+   */
+  private async emitKeywordBackfillRows(
+    rows: Array<typeof filesSchema.$inferSelect>
+  ): Promise<void> {
+    if (rows.length === 0) return
+    await this.emitIndexedSourceRecordBatchFromBatch({
+      sourceId: this.id,
+      records: rows.map((row) => this.mapFileToIndexedSourceRecord(row))
+    })
+  }
+
+  private async getKeywordBackfillAppliedVersion(): Promise<number | null> {
+    if (!this.dbUtils) return null
+    const rows = await this.dbUtils
+      .getDb()
+      .select({ value: configSchema.value })
+      .from(configSchema)
+      .where(eq(configSchema.key, FILE_KEYWORD_BACKFILL_CONFIG_KEY))
+    const raw = rows[0]?.value
+    if (!raw) return null
+    const parsed = Number.parseInt(raw, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  private async setKeywordBackfillAppliedVersion(version: number): Promise<void> {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+    await scheduleDbWrite('file-index.keyword-backfill.version', async () => {
+      await db
+        .insert(configSchema)
+        .values({ key: FILE_KEYWORD_BACKFILL_CONFIG_KEY, value: String(version) })
+        .onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value: String(version) }
+        })
+    })
   }
 
   private resolveReconciliationDeferralReason(): string | null {
