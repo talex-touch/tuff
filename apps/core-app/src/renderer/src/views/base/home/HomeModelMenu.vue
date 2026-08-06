@@ -1,5 +1,6 @@
 <script lang="ts" name="HomeModelMenu" setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ModelChoice } from '~/modules/conversation/useModelOptions'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
 
@@ -12,6 +13,30 @@ const emit = defineEmits<{ (event: 'close'): void }>()
 
 const { t } = useI18n()
 const { choices, loading, load, select, isSelected, selection } = useModelOptions()
+
+interface ModelChoiceGroup {
+  providerId: string
+  providerName: string
+  items: ModelChoice[]
+}
+
+/**
+ * One group per provider, in the order the options arrived. The flat list
+ * repeated the provider under every row, which reads as noise once a single
+ * provider carries many models.
+ */
+const groups = computed<ModelChoiceGroup[]>(() => {
+  const byProvider = new Map<string, ModelChoiceGroup>()
+  for (const choice of choices.value) {
+    let group = byProvider.get(choice.providerId)
+    if (!group) {
+      group = { providerId: choice.providerId, providerName: choice.providerName, items: [] }
+      byProvider.set(choice.providerId, group)
+    }
+    group.items.push(choice)
+  }
+  return [...byProvider.values()]
+})
 
 const rootRef = ref<HTMLElement | null>(null)
 
@@ -79,21 +104,29 @@ onBeforeUnmount(() => {
     <!-- Not an error: a machine with no configured provider legitimately has nothing to list. -->
     <p v-else-if="!choices.length" class="HomeModelMenu-Hint">{{ t('home.modelEmpty') }}</p>
 
-    <button
-      v-for="choice in choices"
-      :key="`${choice.providerId}:${choice.model}`"
-      class="HomeModelMenu-Item"
-      type="button"
-      role="option"
-      :aria-selected="isSelected(choice)"
-      @click="choose(choice)"
+    <div
+      v-for="group in groups"
+      :key="group.providerId"
+      class="HomeModelMenu-Group"
+      role="group"
+      :aria-labelledby="`home-model-group-${group.providerId}`"
     >
-      <span class="HomeModelMenu-Label">
+      <p :id="`home-model-group-${group.providerId}`" class="HomeModelMenu-GroupLabel">
+        {{ group.providerName }}
+      </p>
+      <button
+        v-for="choice in group.items"
+        :key="`${choice.providerId}:${choice.model}`"
+        class="HomeModelMenu-Item"
+        type="button"
+        role="option"
+        :aria-selected="isSelected(choice)"
+        @click="choose(choice)"
+      >
         <span class="HomeModelMenu-Model">{{ choice.model }}</span>
-        <span class="HomeModelMenu-Provider">{{ choice.providerName }}</span>
-      </span>
-      <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
-    </button>
+        <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
+      </button>
+    </div>
   </div>
 </template>
 
@@ -146,22 +179,26 @@ onBeforeUnmount(() => {
   }
 }
 
-.HomeModelMenu-Label {
+.HomeModelMenu-Group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  gap: 1px;
+}
+
+/* A label, not an option: the provider names the block so the rows can stay one line each. */
+.HomeModelMenu-GroupLabel {
+  margin: 0;
+  padding: 8px 9px 3px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
 }
 
 .HomeModelMenu-Model {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.HomeModelMenu-Provider {
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
 }
 
 .HomeModelMenu-Check {
