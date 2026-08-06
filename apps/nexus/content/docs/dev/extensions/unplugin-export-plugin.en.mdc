@@ -398,6 +398,6 @@ code: |
 
 Check official example plugins:
 
-- [touch-image](https://github.com/AkraTech/talex-touch/tree/main/plugins/touch-image) - Image processing plugin
-- [touch-translation](https://github.com/AkraTech/talex-touch/tree/main/plugins/touch-translation) - Translation plugin
-- [touch-music](https://github.com/AkraTech/talex-touch/tree/main/plugins/touch-music) - Music player plugin
+- [touch-image](https://github.com/talex-touch/tuff/tree/main/plugins/touch-image) - Image processing plugin
+- [touch-translation](https://github.com/talex-touch/tuff/tree/main/plugins/touch-translation) - Translation plugin
+- [touch-music](https://github.com/talex-touch/tuff/tree/main/plugins/touch-music) - Music player plugin

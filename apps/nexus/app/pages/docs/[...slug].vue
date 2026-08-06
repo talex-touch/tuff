@@ -1363,7 +1363,7 @@ function enhanceInlineCode() {
   })
 }
 
-const GITHUB_REPO = 'AJLoveChina/talex-touch'
+const GITHUB_REPO = 'talex-touch/tuff'
 const editOnGitHubUrl = computed(() => {
   const path = doc.value?.path
   if (!path)
