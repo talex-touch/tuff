@@ -1,3 +1,9 @@
+// @ts-nocheck — vendored file, kept as close to upstream as possible.
+// Its hot render loops index into fixed-length dot/point arrays after bounds
+// arithmetic that TypeScript cannot follow, so `noUncheckedIndexedAccess`
+// (enabled repo-wide to match what apps/nexus already enforces) reports dozens
+// of false positives here. Satisfying them would mean rewriting upstream code
+// and fighting every future sync; correctness of this file is upstream's.
 // Vendored from thinking-orbs v0.2.0 (MIT © Jakub Antalik) — https://github.com/Jakubantalik/thinking-orbs
 // Web: a constellation wires itself — the "connecting" state. Nodes drift
 // on the sphere under slow value noise; any pair closer than `thr` grows an
