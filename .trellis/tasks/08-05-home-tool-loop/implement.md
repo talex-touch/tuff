@@ -10,8 +10,8 @@
 - 验证：`cd apps/core-app && npx vitest run src/main/modules/ai/providers`
 
 ### S2 parts 装配（renderer）
-- [ ] useHomeConversation：parts 状态机（reasoning/tool 归并、callId 配对、文本尾部累积）+ 序列化进 meta.parts（8KB/则截断）+ 恢复
-- [ ] 单测：事件序列 → parts 断言；持久化往返
+- [x] useHomeConversation：parts 状态机（reasoning/tool 归并、callId 配对、文本尾部累积）+ 序列化进 meta.parts（8KB/则截断）+ 恢复
+- [x] 单测：事件序列 → parts 断言；持久化往返（39 例全绿）
 - 验证：vitest conversation 目录全绿（既有 31+ 不回退）
 
 ### S3 工具网关 + 只读三工具（主进程）
