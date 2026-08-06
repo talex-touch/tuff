@@ -1838,3 +1838,11 @@ MCP client 已存在的翻案把 C 收窄为三桥一面：注入桥（surface �
 - 途中两代理撞额度上限,SendMessage 原地续跑无损;高负载(load 93-126)下 hook 超时定性为既有负载敏感 flake(search-core init),单跑全过。
 - 发现:db:generate 是死命令(drizzle-kit 未装,0015 起 22 个迁移手写)→迁移链+DDL parity 测试为正确门禁,记 E-NEW8;剪贴板 URL 候选的 content 是哈希非 URL(HEAD 既有,设计问题待决)。
 - 待用户:重启 dev 实例后跑 .trellis/tasks/08-05-realtime-index-freshness/verify-realtime-index-freshness.sh 验收「装 app ≤10s 可搜」。
+
+## 2026-08-06 · 三线收官：feature 工具、附件进模型、pi 重试根修
+
+- **feature 工具**(9022c763e):list/invoke 成对落地(前任代理流超时,继任续写其投影层不推倒);首页工具面板至此九件套一门。
+- **附件进模型**(647fb3f2a+d9a25ed5f):双镜像类型→spill(MIME 白名单/10MB/0600/跳过不炸轮)→@files 位置参数;vision 冒烟真凭实据(模型读回生成图文字)。提示文案改「实发对比」显隐。spec 落 pi-provider-contracts.md。
+- **pi 重复/空回复根修**(cd018f946):诊断代理实盘 NDJSON 证据(单进程 4 轮重放、json 模式恒退出 0)→主会话复审发现原案工具轮过度回滚缺陷→定形 commit/rollback(delta=预览,message_end=提交点,auto_retry_start=回滚);实施代理三处有据偏离全采纳(显式 stopReason 才 commit、尾部预览保留+抛错只看已提交、播种与水位交互加 textLength)。
+- **边界测试 mock 陈旧根治**:手列导出两级过期(PRIVACY_DATA_CATEGORIES→PLUGIN_STORAGE_ERROR_CODES→域事件全面缺)→importOriginal+Proxy 自动桩,4/7 套件复绿;余 3 套 HEAD 逐字节一致仍败=actor-boundary 流既有漂移,立 08-06-intelligence-boundary-drift 交接(决定性证据:未改文件同样失败)。
+- 教训:手列 mock 是定时炸弹,partial mock(importOriginal)/Proxy 桩才是可持续形态——已写进提交信息与交接任务。
