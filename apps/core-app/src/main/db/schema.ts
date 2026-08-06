@@ -1702,7 +1702,8 @@ export const conversations = sqliteTable(
 export const conversationMessages = sqliteTable(
   'conversation_messages',
   {
-    id: text('id').primaryKey(),
+    /** Renderer-assigned, only unique within its thread ('user-1', 'assistant-2', …). */
+    id: text('id').notNull(),
     conversationId: text('conversation_id')
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),
@@ -1719,6 +1720,9 @@ export const conversationMessages = sqliteTable(
     createdAt: integer('created_at').notNull()
   },
   (table) => ({
+    // Ids repeat across threads, so the key must be scoped by conversation — a global id PK made
+    // one thread's 'user-1' collide with every other thread's.
+    pk: primaryKey({ columns: [table.conversationId, table.id] }),
     threadIdx: index('idx_conversation_messages_thread').on(table.conversationId, table.seq)
   })
 )

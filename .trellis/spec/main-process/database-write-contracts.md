@@ -108,3 +108,53 @@ isolation, drain-with-parked), `db/utils.split.test.ts` + `embedding-service.spl
 (fail-closed), `app-provider.test.ts` backfill-gate cases. New writers copy these
 assertion shapes: split-on → worker-forwarded SQL carries no cross-home ids;
 split-off → byte-identical legacy behavior.
+
+## Scenario: authoring a schema migration (2026-08-06, from 0037)
+
+### 1. Scope / Trigger
+
+Any change under `resources/db/migrations/`. Migrations are **hand-written**: the
+drizzle-kit snapshot chain died at `meta/0014_snapshot.json` (0015+ have no snapshots)
+and drizzle-kit is not installed — `npm run db:generate` cannot work. Do not "fix"
+this by running a newer drizzle-kit: it would re-diff the whole schema against 0014.
+
+### 2. Signatures
+
+- SQL file: `NNNN_<snake_case_tag>.sql`, statements split by `--> statement-breakpoint`.
+- Journal entry: `{ idx: N, version: "7", when: <prev + 86_400_000>, tag, breakpoints: true }`.
+
+### 3. Contracts
+
+- **`when` must be the journal maximum.** The drizzle libsql migrator only applies
+  entries with `folderMillis` greater than the newest `created_at` already in the DB —
+  a non-max `when` silently never runs on upgraded installs. Repo convention: previous
+  entry + exactly one day (synthetic timestamps).
+- **Table rebuilds (PK/column-type changes)**: SQLite cannot ALTER a primary key.
+  Pattern: `CREATE __new_<table>` (verbatim copy of the current DDL, only the changed
+  line differs) → `INSERT INTO __new (explicit cols) SELECT explicit cols FROM old`
+  (explicit lists on both sides = column-order independent) → `DROP` → `RENAME` →
+  recreate indexes. No `PRAGMA foreign_keys` needed for **leaf child tables**:
+  `client.migrate()` already wraps the batch in `PRAGMA foreign_keys=off` + a deferred
+  transaction; verify nothing references the table before relying on this.
+- **Renderer-assigned ids are scope-local.** If the renderer generates ids per parent
+  ('user-1', 'assistant-2' per conversation), the PK must include the parent id.
+  A global text PK on such ids collides across parents (0037's root cause).
+
+### 4. Validation & error matrix
+
+| Condition | Outcome |
+|---|---|
+| `when` not journal max | migration silently skipped on existing installs |
+| INSERT SELECT without explicit columns | data scrambled if column order drifts |
+| Rebuild of a referenced (non-leaf) table w/o FK check | cascade/constraint breakage |
+
+### 5. Tests required
+
+Chain-application is already asserted by `recommendation-exposure-schema.test.ts`
+("applies cleanly on top of the full migration chain" iterates the journal) — a bad
+journal entry or SQL fails there. Add a table-specific schema test asserting the new
+PK/columns via `pragma_table_info` plus the behavior the change exists for
+(`conversation-messages-schema.test.ts` is the model: cross-parent insert allowed,
+in-parent duplicate rejected). Known debt: `retention-migration.test.ts` hard-codes
+`at(-1) === '0034…'` + journal length 35 — pre-existing red since 0035, needs re-slicing
+by the 0034 index (separate task).

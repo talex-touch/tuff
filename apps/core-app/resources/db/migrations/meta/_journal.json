@@ -260,6 +260,13 @@
       "when": 1785542400000,
       "tag": "0036_recommendation_exposure_daily",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785628800000,
+      "tag": "0037_conversation_messages_composite_pk",
+      "breakpoints": true
     }
   ]
 }

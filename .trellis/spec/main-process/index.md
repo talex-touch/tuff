@@ -16,7 +16,13 @@ Electron main-process (apps/core-app/src/main) coding contracts.
 - [database-write-contracts.md](database-write-contracts.md) — single-writer-per-file
   topology, `scheduleDbWrite`/`scheduleAuxWrite` call-site convention, scheduler
   busy-retry semantics (never sleep holding the queue), live home resolution,
-  search-split parity rules, boot-time maintenance write gating.
+  search-split parity rules, boot-time maintenance write gating; hand-written
+  migration authoring (snapshot chain dead at 0014, journal `when` must be max,
+  leaf-table rebuild pattern, renderer-assigned ids need parent-scoped PKs).
+- [channel-transport-contracts.md](channel-transport-contracts.md) — main→renderer
+  delivery modes: notification events must use `broadcastToWindow` (sendTo hangs a
+  60s pending timer whose WARN `.catch()` cannot suppress), delivery-target identity,
+  port allowlist, stable-mock test contract.
 - [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached
