@@ -22,7 +22,8 @@ import { reportPerfToMain } from '~/modules/perf/perf-report'
 import {
   DEFAULT_SETTING_PATH,
   LEGACY_SECTION_REDIRECTS,
-  SETTING_CATEGORIES
+  SETTING_CATEGORIES,
+  settingCategoryChildren
 } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createStylesRouteRecord } from './style-routes'
@@ -68,8 +69,12 @@ function withRouteComponentPerf<T>(label: string, loader: () => Promise<T>): () 
 }
 
 /**
- * One route per settings category, driven by the same table the sidebar renders from, so a
- * category can never appear in the nav without a route behind it.
+ * One route per settings category plus one per declared sub-page, driven by the same table the
+ * sidebar renders from, so a category can never appear in the nav without a route behind it.
+ *
+ * Sub-pages are registered as siblings rather than as vue-router `children`: a sub-page replaces
+ * its category page instead of rendering inside it, and category pages carry no `<router-view>`.
+ * The sidebar still shows the parent as selected, because `ShellNavItem` matches by path prefix.
  */
 function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): RouteRecordRaw[] {
   const loaders: Record<string, () => Promise<unknown>> = {
@@ -86,20 +91,83 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
     about: () => import('../views/base/settings/categories/SettingAboutPage.vue')
   }
 
-  return SETTING_CATEGORIES.map((category) => ({
-    path: category.path,
-    name: `$I18n:router.appSettings.${category.key}`,
-    component: withPerf(
-      category.path,
-      loaders[category.key] as () => Promise<{ default: unknown }>
-    ),
-    meta: {
-      index: 1,
-      keepAlive: true,
-      // Per-category cache keys keep each page's scroll position across category switches.
-      keepAliveKey: `setting-${category.key}`
+  /** Keyed `<category>/<sub-page>`, and named after the routes they replaced. */
+  const childLoaders: Record<string, { name: string; load: () => Promise<unknown> }> = {
+    'intelligence/channels': {
+      name: '$I18n:router.intelligenceChannels',
+      load: () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
+    },
+    'intelligence/prompts': {
+      name: '$I18n:router.intelligencePrompts',
+      load: () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
+    },
+    'intelligence/agents': {
+      name: '$I18n:router.intelligenceAgents',
+      load: () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
+    },
+    'intelligence/workflows': {
+      name: '$I18n:router.intelligenceWorkflows',
+      load: () => import('../views/base/intelligence/IntelligenceWorkflowPage.vue')
+    },
+    'intelligence/audit': {
+      name: '$I18n:router.intelligenceAudit',
+      load: () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
+    },
+    'intelligence/capabilities': {
+      name: '$I18n:router.intelligenceCapabilities',
+      load: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
     }
-  })) as RouteRecordRaw[]
+  }
+
+  return SETTING_CATEGORIES.flatMap((category) => [
+    {
+      path: category.path,
+      name: `$I18n:router.appSettings.${category.key}`,
+      component: withPerf(
+        category.path,
+        loaders[category.key] as () => Promise<{ default: unknown }>
+      ),
+      meta: {
+        index: 1,
+        keepAlive: true,
+        // Per-category cache keys keep each page's scroll position across category switches.
+        keepAliveKey: `setting-${category.key}`
+      }
+    },
+    ...(category.children ?? []).map((child) => {
+      const loader = childLoaders[`${category.key}/${child.key}`]
+      return {
+        path: child.path,
+        name: loader.name,
+        component: withPerf(child.path, loader.load as () => Promise<{ default: unknown }>),
+        meta: {
+          index: 1,
+          keepAlive: true,
+          parentRoute: category.path,
+          // A cache entry of its own, so leaving and re-entering a sub-page keeps its selection
+          // and scroll rather than restarting the category page's.
+          keepAliveKey: `setting-${category.key}-${child.key}`
+        }
+      }
+    })
+  ]) as RouteRecordRaw[]
+}
+
+/**
+ * Intelligence used to be a top-level surface. Plugins ship its old paths inside navigate
+ * actions (`plugins/touch-intelligence` declares `/intelligence/channels`, and the host
+ * allow-list validates that exact string), and those copies live in the user data directory
+ * across app updates — so these redirects are permanent, not a migration window.
+ */
+function createLegacyIntelligenceRedirects(): RouteRecordRaw[] {
+  const children = settingCategoryChildren('intelligence')
+  return [
+    { path: '/intelligence', redirect: '/setting/intelligence' },
+    ...children.map((child) => ({
+      path: `/intelligence/${child.key}`,
+      redirect: child.path
+    }))
+  ]
 }
 
 const routes: RouteRecordRaw[] = [
@@ -256,90 +324,7 @@ const routes: RouteRecordRaw[] = [
     path: '/setting/storage',
     redirect: '/setting/storage-usage'
   },
-  {
-    path: '/intelligence',
-    name: '$I18n:router.intelligence',
-    component: withRouteComponentPerf(
-      '/intelligence',
-      () => import('../views/base/intelligence/IntelligencePage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/channels',
-    name: '$I18n:router.intelligenceChannels',
-    component: withRouteComponentPerf(
-      '/intelligence/channels',
-      () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/capabilities',
-    name: '$I18n:router.intelligenceCapabilities',
-    component: withRouteComponentPerf(
-      '/intelligence/capabilities',
-      () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/prompts',
-    name: '$I18n:router.intelligencePrompts',
-    component: withRouteComponentPerf(
-      '/intelligence/prompts',
-      () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/audit',
-    name: '$I18n:router.intelligenceAudit',
-    component: withRouteComponentPerf(
-      '/intelligence/audit',
-      () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/agents',
-    name: '$I18n:router.intelligenceAgents',
-    component: withRouteComponentPerf(
-      '/intelligence/agents',
-      () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/workflows',
-    name: '$I18n:router.intelligenceWorkflows',
-    component: withRouteComponentPerf(
-      '/intelligence/workflows',
-      () => import('../views/base/intelligence/IntelligenceWorkflowPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
+  ...createLegacyIntelligenceRedirects(),
   {
     path: '/meta-overlay',
     name: '$I18n:router.metaOverlay',

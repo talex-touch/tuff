@@ -13,11 +13,11 @@ function handleDocsClick() {
 }
 
 function handleAgentsClick() {
-  router.push('/intelligence/agents')
+  router.push('/setting/intelligence/agents')
 }
 
 function handleWorkflowClick() {
-  router.push('/intelligence/workflows')
+  router.push('/setting/intelligence/workflows')
 }
 </script>
 

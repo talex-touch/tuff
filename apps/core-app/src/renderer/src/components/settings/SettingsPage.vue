@@ -1,7 +1,31 @@
 <script lang="ts" name="SettingsPage" setup>
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
+import { useRouter } from 'vue-router'
 
-defineProps<{ title: string }>()
+const props = withDefaults(
+  defineProps<{
+    title: string
+    /**
+     * Renders a way back to the page that links here, above the title. Sub-pages are siblings of
+     * their category route, so the sidebar shows no trail into them.
+     */
+    backTo?: string
+    backLabel?: string
+    /**
+     * Hands the column's height to the content instead of letting it grow and scroll. For pages
+     * that own their own scrolling — a master/detail split, say, which needs a definite height
+     * to size its two panes against.
+     */
+    fill?: boolean
+  }>(),
+  { backTo: undefined, backLabel: undefined, fill: false }
+)
+
+const router = useRouter()
+
+function goBack(): void {
+  if (props.backTo) void router.push(props.backTo)
+}
 </script>
 
 <template>
@@ -30,12 +54,21 @@ defineProps<{ title: string }>()
       :z-index="20"
     />
 
-    <div class="SettingsPage-Scroll">
-      <div class="SettingsPage-Column">
+    <div class="SettingsPage-Scroll" :class="{ 'is-fill': fill }">
+      <div class="SettingsPage-Column" :class="{ 'is-fill': fill }">
+        <button v-if="backTo && backLabel" class="SettingsPage-Back" type="button" @click="goBack">
+          <span class="SettingsPage-BackIcon i-ri-arrow-left-s-line" />
+          <span>{{ backLabel }}</span>
+        </button>
+
         <h1 class="SettingsPage-Title">
           {{ title }}
         </h1>
-        <slot />
+
+        <div v-if="fill" class="SettingsPage-Body">
+          <slot />
+        </div>
+        <slot v-else />
       </div>
     </div>
   </div>
@@ -57,6 +90,12 @@ defineProps<{ title: string }>()
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
+
+  // The content scrolls itself in fill mode; leaving the outer scroll on would let a pane's
+  // overflow push the column instead of scrolling inside it.
+  &.is-fill {
+    overflow: hidden;
+  }
 }
 
 .SettingsPage-Column {
@@ -77,6 +116,65 @@ defineProps<{ title: string }>()
    */
   padding: 56px 40px 36px;
   box-sizing: border-box;
+
+  &.is-fill {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+/**
+ * `TuffGroupBlock` carries its own bottom margin for the many pages that stack blocks in a
+ * parent with no `gap` of its own. Here the column's `gap` already sets the rhythm, so the two
+ * would add up and push sections ~11px past the artboard's 20.
+ *
+ * Direct children only: a block nested inside a page's own sub-layout keeps the margin, since
+ * that layout has no gap to replace it with.
+ */
+.SettingsPage-Column > :deep(.TGroupBlock-Container) {
+  margin-bottom: 0;
+}
+
+/**
+ * Fill mode's slot host. A definite height for whatever it wraps: `height: 100%` inside a
+ * scrolling column resolves to nothing, which is how a master/detail split ends up invisible.
+ */
+.SettingsPage-Body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.SettingsPage-Back {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  align-self: flex-start;
+  // Pulled up into the title's gap: this is a trail marker, not a row of its own.
+  margin-bottom: -12px;
+  padding: 4px 8px 4px 4px;
+  border: none;
+  border-radius: var(--shell-radius-md);
+  background: transparent;
+  color: var(--shell-text-secondary);
+  font-family: inherit;
+  font-size: var(--shell-fs-body);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+}
+
+.SettingsPage-BackIcon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
 }
 
 .SettingsPage-Title {

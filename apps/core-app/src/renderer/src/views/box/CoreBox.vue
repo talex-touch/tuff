@@ -1061,7 +1061,7 @@ const customCss = computed(() => {
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-full .BoxInput-Wrapper input {
-  border: 1px solid var(--tx-border-color-lighter);
+  border: none;
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-none .BoxInput-Wrapper input {

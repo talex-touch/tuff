@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
-import { TxScroll } from '@talex-touch/tuffex/scroll'
+import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
 import IntelligenceMemoryReview from '~/components/intelligence/audit/IntelligenceMemoryReview.vue'
 import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
@@ -35,138 +35,138 @@ function handleCacheExpirationBlur() {
 </script>
 
 <template>
-  <div class="flex h-full flex-col" role="main" aria-label="Intelligence Audit & Settings">
-    <TxScroll no-padding class="flex-1">
-      <div class="p-6">
-        <!-- Usage Statistics Section -->
-        <TuffGroupBlock
-          :name="t('intelligence.usage.title')"
-          :description="t('intelligence.usage.description')"
-          default-icon="i-carbon-analytics"
-          active-icon="i-carbon-analytics"
-          memory-name="intelligence-usage-stats"
-          :default-expanded="true"
-        >
-          <IntelligenceUsageStats />
-        </TuffGroupBlock>
+  <SettingsPage
+    :title="t('settingsIntelligenceHub.audit')"
+    back-to="/setting/intelligence"
+    :back-label="t('settingsIntelligenceHub.back')"
+  >
+    <!-- Usage Statistics Section -->
+    <TuffGroupBlock
+      :name="t('intelligence.usage.title')"
+      :description="t('intelligence.usage.description')"
+      default-icon="i-carbon-analytics"
+      active-icon="i-carbon-analytics"
+      memory-name="intelligence-usage-stats"
+      :default-expanded="true"
+    >
+      <IntelligenceUsageStats />
+    </TuffGroupBlock>
 
-        <!-- Usage Chart Section -->
-        <TuffGroupBlock
-          :name="t('intelligence.usage.chartTitle')"
-          :description="t('intelligence.usage.chartDescription')"
-          default-icon="i-carbon-chart-line"
-          active-icon="i-carbon-chart-line"
-          memory-name="intelligence-usage-chart"
-          :default-expanded="true"
-        >
-          <IntelligenceUsageChart :days="14" />
-        </TuffGroupBlock>
+    <!-- Usage Chart Section -->
+    <TuffGroupBlock
+      :name="t('intelligence.usage.chartTitle')"
+      :description="t('intelligence.usage.chartDescription')"
+      default-icon="i-carbon-chart-line"
+      active-icon="i-carbon-chart-line"
+      memory-name="intelligence-usage-chart"
+      :default-expanded="true"
+    >
+      <IntelligenceUsageChart :days="14" />
+    </TuffGroupBlock>
 
-        <!-- Memory Review Section -->
-        <TuffGroupBlock
-          :name="t('intelligence.memoryReview.title')"
-          :description="t('intelligence.memoryReview.description')"
-          default-icon="i-carbon-policy"
-          active-icon="i-carbon-policy"
-          memory-name="intelligence-memory-review"
-          :default-expanded="true"
-        >
-          <IntelligenceMemoryReview />
-        </TuffGroupBlock>
+    <!-- Memory Review Section -->
+    <TuffGroupBlock
+      :name="t('intelligence.memoryReview.title')"
+      :description="t('intelligence.memoryReview.description')"
+      default-icon="i-carbon-policy"
+      active-icon="i-carbon-policy"
+      memory-name="intelligence-memory-review"
+      :default-expanded="true"
+    >
+      <IntelligenceMemoryReview />
+    </TuffGroupBlock>
 
-        <!-- Audit Logs Section -->
-        <TuffGroupBlock
-          v-if="globalConfig.enableAudit"
-          :name="t('intelligence.audit.logsTitle')"
-          :description="t('intelligence.audit.logsDescription')"
-          default-icon="i-carbon-document-view"
-          active-icon="i-carbon-document-view"
-          memory-name="intelligence-audit-logs"
-          :default-expanded="true"
-        >
-          <IntelligenceAuditLogs />
-        </TuffGroupBlock>
+    <!-- Audit Logs Section -->
+    <TuffGroupBlock
+      v-if="globalConfig.enableAudit"
+      :name="t('intelligence.audit.logsTitle')"
+      :description="t('intelligence.audit.logsDescription')"
+      default-icon="i-carbon-document-view"
+      active-icon="i-carbon-document-view"
+      memory-name="intelligence-audit-logs"
+      :default-expanded="true"
+    >
+      <IntelligenceAuditLogs />
+    </TuffGroupBlock>
 
-        <!-- Global Settings Section -->
-        <TuffGroupBlock
-          :name="t('intelligence.global.title')"
-          :description="t('intelligence.global.description')"
-          default-icon="i-carbon-settings-adjust"
-          active-icon="i-carbon-settings-adjust"
-          memory-name="intelligence-global-settings"
-        >
-          <IntelligenceGlobalSettings v-model="globalConfig" @change="handleGlobalChange" />
-        </TuffGroupBlock>
+    <!-- Global Settings Section -->
+    <TuffGroupBlock
+      :name="t('intelligence.global.title')"
+      :description="t('intelligence.global.description')"
+      default-icon="i-carbon-settings-adjust"
+      active-icon="i-carbon-settings-adjust"
+      memory-name="intelligence-global-settings"
+    >
+      <IntelligenceGlobalSettings v-model="globalConfig" @change="handleGlobalChange" />
+    </TuffGroupBlock>
 
-        <!-- Audit Settings Section -->
-        <TuffGroupBlock
-          :name="t('intelligence.audit.title')"
-          :description="t('intelligence.audit.description')"
-          default-icon="i-carbon-event-schedule"
-          active-icon="i-carbon-event-schedule"
-          memory-name="intelligence-audit-settings"
-        >
-          <TuffBlockSlot
-            :title="t('intelligence.audit.enableTitle')"
-            :description="t('intelligence.audit.enableDescription')"
-            default-icon="i-carbon-checkmark"
-            active-icon="i-carbon-checkmark"
-            :active="globalConfig.enableAudit"
-          >
-            <TxSwitch v-model="globalConfig.enableAudit" @update:model-value="handleGlobalChange" />
-          </TuffBlockSlot>
-        </TuffGroupBlock>
+    <!-- Audit Settings Section -->
+    <TuffGroupBlock
+      :name="t('intelligence.audit.title')"
+      :description="t('intelligence.audit.description')"
+      default-icon="i-carbon-event-schedule"
+      active-icon="i-carbon-event-schedule"
+      memory-name="intelligence-audit-settings"
+    >
+      <TuffBlockSlot
+        :title="t('intelligence.audit.enableTitle')"
+        :description="t('intelligence.audit.enableDescription')"
+        default-icon="i-carbon-checkmark"
+        active-icon="i-carbon-checkmark"
+        :active="globalConfig.enableAudit"
+      >
+        <TxSwitch v-model="globalConfig.enableAudit" @update:model-value="handleGlobalChange" />
+      </TuffBlockSlot>
+    </TuffGroupBlock>
 
-        <!-- Cache Settings Section -->
-        <TuffGroupBlock
-          :name="t('intelligence.cache.title')"
-          :description="t('intelligence.cache.description')"
-          default-icon="i-carbon-data-base"
-          active-icon="i-carbon-data-base"
-          memory-name="intelligence-cache-settings"
-        >
-          <TuffBlockSlot
-            :title="t('intelligence.cache.enableTitle')"
-            :description="t('intelligence.cache.enableDescription')"
-            default-icon="i-carbon-checkmark"
-            active-icon="i-carbon-checkmark"
-            :active="globalConfig.enableCache"
-          >
-            <TxSwitch v-model="globalConfig.enableCache" @update:model-value="handleGlobalChange" />
-          </TuffBlockSlot>
+    <!-- Cache Settings Section -->
+    <TuffGroupBlock
+      :name="t('intelligence.cache.title')"
+      :description="t('intelligence.cache.description')"
+      default-icon="i-carbon-data-base"
+      active-icon="i-carbon-data-base"
+      memory-name="intelligence-cache-settings"
+    >
+      <TuffBlockSlot
+        :title="t('intelligence.cache.enableTitle')"
+        :description="t('intelligence.cache.enableDescription')"
+        default-icon="i-carbon-checkmark"
+        active-icon="i-carbon-checkmark"
+        :active="globalConfig.enableCache"
+      >
+        <TxSwitch v-model="globalConfig.enableCache" @update:model-value="handleGlobalChange" />
+      </TuffBlockSlot>
 
-          <TuffBlockInput
-            v-if="globalConfig.enableCache"
-            v-model="cacheExpirationInput"
-            :title="t('intelligence.cache.expirationTitle')"
-            :description="t('intelligence.cache.expirationDescription')"
-            default-icon="i-carbon-time"
-            active-icon="i-carbon-time"
-            @blur="handleCacheExpirationBlur"
-          >
-            <template #control="{ modelValue, update, focus, blur }">
-              <div class="flex items-center gap-2">
-                <input
-                  :value="modelValue"
-                  type="number"
-                  min="60"
-                  max="86400"
-                  :placeholder="t('intelligence.cache.expirationPlaceholder')"
-                  class="tuff-input flex-1"
-                  @input="update(($event.target as HTMLInputElement).value)"
-                  @focus="focus"
-                  @blur="blur"
-                />
-                <span class="text-sm text-[var(--tx-text-color-secondary)]">{{
-                  t('intelligence.cache.seconds')
-                }}</span>
-              </div>
-            </template>
-          </TuffBlockInput>
-        </TuffGroupBlock>
-      </div>
-    </TxScroll>
-  </div>
+      <TuffBlockInput
+        v-if="globalConfig.enableCache"
+        v-model="cacheExpirationInput"
+        :title="t('intelligence.cache.expirationTitle')"
+        :description="t('intelligence.cache.expirationDescription')"
+        default-icon="i-carbon-time"
+        active-icon="i-carbon-time"
+        @blur="handleCacheExpirationBlur"
+      >
+        <template #control="{ modelValue, update, focus, blur }">
+          <div class="flex items-center gap-2">
+            <input
+              :value="modelValue"
+              type="number"
+              min="60"
+              max="86400"
+              :placeholder="t('intelligence.cache.expirationPlaceholder')"
+              class="tuff-input flex-1"
+              @input="update(($event.target as HTMLInputElement).value)"
+              @focus="focus"
+              @blur="blur"
+            />
+            <span class="text-sm text-[var(--tx-text-color-secondary)]">{{
+              t('intelligence.cache.seconds')
+            }}</span>
+          </div>
+        </template>
+      </TuffBlockInput>
+    </TuffGroupBlock>
+  </SettingsPage>
 </template>
 
 <style lang="scss" scoped>

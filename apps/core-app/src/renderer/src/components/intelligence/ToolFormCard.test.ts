@@ -212,3 +212,81 @@ describe('ToolFormCard submitted state', () => {
     expect(textFieldValue(wrapper)).toBe('')
   })
 })
+
+describe('ToolFormCard drafts across virtualization', () => {
+  // The conversation stream virtualizes rows out of the DOM; an unmount takes
+  // this card's half-typed state with it. The host stores what `change` hands
+  // out and returns it through `initialValues` on remount — this suite is that
+  // round trip.
+  it('publishes every edit through change', async () => {
+    const wrapper = mountCard({
+      spec: spec({
+        fields: [
+          { key: 'name', label: 'Your name', type: 'text' },
+          { key: 'agree', label: 'Agree', type: 'checkbox' }
+        ]
+      })
+    })
+
+    await wrapper.get('input[type="text"]').setValue('Ada')
+    await wrapper.get('[role="checkbox"]').trigger('click')
+
+    expect(wrapper.emitted('change')).toEqual([
+      [{ name: 'Ada', agree: false }],
+      [{ name: 'Ada', agree: true }]
+    ])
+  })
+
+  it('seeds a remount from the stored draft, over the spec defaults', () => {
+    const wrapper = mount(ToolFormCard, {
+      props: {
+        spec: spec({
+          fields: [
+            { key: 'name', label: 'Your name', type: 'text', default: 'Ada' },
+            { key: 'notes', label: 'Notes', type: 'textarea' },
+            { key: 'agree', label: 'Agree', type: 'checkbox' }
+          ]
+        }),
+        initialValues: { name: 'Grace', agree: true }
+      }
+    })
+
+    expect(textFieldValue(wrapper)).toBe('Grace')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.get('[role="checkbox"]').attributes('aria-checked')).toBe('true')
+  })
+
+  it('ignores draft keys the spec does not know and type-mismatched values', () => {
+    const wrapper = mount(ToolFormCard, {
+      props: {
+        spec: spec({
+          fields: [
+            { key: 'name', label: 'Your name', type: 'text', default: 'Ada' },
+            { key: 'agree', label: 'Agree', type: 'checkbox' }
+          ]
+        }),
+        // A stale draft from an older spec: unknown key, boolean into a text
+        // field, string into a checkbox.
+        initialValues: { gone: 'x', name: true, agree: 'yes' }
+      }
+    })
+
+    expect(textFieldValue(wrapper)).toBe('Ada')
+    expect(wrapper.get('[role="checkbox"]').attributes('aria-checked')).toBe('false')
+  })
+
+  it('publishes the defaults again on reset — reset discards the draft', async () => {
+    const wrapper = mount(ToolFormCard, {
+      props: {
+        spec: spec({ fields: [{ key: 'name', label: 'Your name', type: 'text', default: 'Ada' }] }),
+        initialValues: { name: 'Grace' }
+      }
+    })
+
+    expect(textFieldValue(wrapper)).toBe('Grace')
+    await wrapper.get('button[type="button"]').trigger('click')
+
+    expect(textFieldValue(wrapper)).toBe('Ada')
+    expect(wrapper.emitted('change')).toEqual([[{ name: 'Ada' }]])
+  })
+})

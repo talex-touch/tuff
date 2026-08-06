@@ -6,7 +6,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlatInput from '~/components/base/input/FlatInput.vue'
-import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
+import SettingsPage from '~/components/settings/SettingsPage.vue'
 import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'
 
@@ -64,7 +64,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <ViewTemplate :title="t('intelligence.agents.title')">
+  <SettingsPage
+    :title="t('settingsIntelligenceHub.agents')"
+    back-to="/setting/intelligence"
+    :back-label="t('settingsIntelligenceHub.back')"
+    fill
+  >
     <div class="agents-page">
       <div class="agents-sidebar">
         <div class="sidebar-header">
@@ -90,7 +95,7 @@ onMounted(() => {
         </div>
       </div>
     </div>
-  </ViewTemplate>
+  </SettingsPage>
 </template>
 
 <style lang="scss" scoped>

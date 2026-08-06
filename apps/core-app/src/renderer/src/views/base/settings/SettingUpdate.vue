@@ -933,10 +933,13 @@ function openAssetsDialog(): void {
   display: flex;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--tx-color-danger) 30%, var(--tx-border-color-lighter));
-  background: color-mix(in srgb, var(--tx-color-danger) 8%, transparent);
-  color: var(--tx-color-danger);
+  /*
+   * No bottom edge of its own: the group card draws the hairline under every row, and the two
+   * stacked into a visible double line. `background-color`, not the shorthand, for the same
+   * reason — the hairline rides on the row's `background-image`.
+   */
+  background-color: var(--shell-danger-soft);
+  color: var(--shell-danger);
 }
 
 .native-trust-alert-icon {
@@ -973,7 +976,7 @@ function openAssetsDialog(): void {
 
 .native-trust-alert p {
   margin: 0;
-  color: var(--tx-text-color-primary);
+  color: var(--shell-text-primary);
   font-size: 12.5px;
   line-height: 1.5;
 }
@@ -989,8 +992,8 @@ function openAssetsDialog(): void {
 .native-trust-alert li {
   position: relative;
   padding-left: 14px;
-  color: var(--tx-text-color-regular);
-  font-size: 12px;
+  color: var(--shell-text-regular);
+  font-size: var(--shell-fs-sm);
   line-height: 1.45;
 }
 
@@ -1090,9 +1093,9 @@ function openAssetsDialog(): void {
 
 .lifecycle-error-line {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--shell-fs-sm);
   line-height: 1.45;
-  color: var(--tx-color-danger);
+  color: var(--shell-danger);
 }
 
 .lifecycle-phase-code,

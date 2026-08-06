@@ -798,8 +798,10 @@
     "randomRotation": "随机",
     "sequentialRotation": "顺序",
     "minutes": "分钟",
-    "blur": "模糊",
-    "opacity": "透明度",
+    "blur": "窗口模糊",
+    "blurDesc": "主页背景的模糊强度。",
+    "opacity": "窗口透明度",
+    "opacityDesc": "主页背景的不透明度。",
     "brightness": "亮度",
     "contrast": "对比度",
     "saturate": "饱和度",
@@ -817,6 +819,8 @@
     "folderRotationHint": "随机模式会从文件夹中抽取图片，顺序模式会按文件名轮换。",
     "folderRandomMode": "文件夹壁纸将随机轮播。",
     "folderSequentialMode": "文件夹壁纸将按文件名顺序轮播。",
+    "wallpaperGroup": "壁纸",
+    "wallpaperGroupDesc": "壁纸来源的细项与显示调整。",
     "emphasis": "强调",
     "emphasisDesc": "不同的人有不同的强调。避免随意使用清晰的颜色。",
     "coloring": "着色",
@@ -858,6 +862,7 @@
     },
     "customizeMain": "自定义主界面",
     "customizeMainDesc": "调整顶栏、侧栏、视图样式",
+    "coreBoxGroup": "CoreBox",
     "customizeCoreBox": "自定义 CoreBox",
     "customizeCoreBoxDesc": "调整搜索框 Logo、输入框样式",
     "atomEditorTitle": "自定义布局",
@@ -877,7 +882,7 @@
     "atomCustomCssTip": "仅对布局生效，将屏蔽不安全指令。"
   },
   "windowSection": {
-    "title": "窗口偏好",
+    "title": "窗口效果",
     "description": "选择你喜欢的窗口效果。"
   },
   "base": {
@@ -1046,6 +1051,22 @@
     "tagline": "为创造者们重新构想的命令栏",
     "account": "账户",
     "general": "常规"
+  },
+  "settingsIntelligenceHub": {
+    "label": "智能中心",
+    "back": "返回智能",
+    "channels": "模型渠道",
+    "channelsDesc": "模型服务商、凭据与连通性测试。",
+    "prompts": "提示词",
+    "promptsDesc": "提示词库、变量与版本。",
+    "agents": "Agents",
+    "agentsDesc": "Agent 定义与可用工具。",
+    "workflows": "工作流",
+    "workflowsDesc": "由 Agent 编排的多步自动化。",
+    "audit": "审计",
+    "auditDesc": "用量、日志、记忆复核与全局限制。",
+    "capabilities": "能力",
+    "capabilitiesDesc": "把能力绑定到渠道与模型。"
   },
   "settingsEntries": {
     "installedPlugins": "已安装插件",

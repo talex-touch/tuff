@@ -124,7 +124,8 @@ function openCoreBox(): void {
           <ShellNavItem icon="i-ri-edit-box-line" :label="t('shell.newChat')" to="/home" />
           <!--
             Intelligence moved under 「设置 · 智能」: it is configuration, not a place you switch to
-            alongside conversations and the store. `/intelligence` is reached from that page.
+            alongside conversations and the store. Its six pages are sub-routes of that category,
+            which `ShellNavItem` keeps selected by path prefix.
           -->
           <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store" />
         </nav>

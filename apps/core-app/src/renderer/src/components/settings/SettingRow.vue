@@ -52,7 +52,12 @@ defineEmits<{ activate: [] }>()
   width: 100%;
   padding: 12px 16px;
   border: none;
-  background: transparent;
+  /**
+   * `background-color`, never the `background` shorthand: `TuffGroupBlock` draws the hairline
+   * between its rows as a `background-image` on each child, and the shorthand would reset it —
+   * the row would silently lose its separator.
+   */
+  background-color: transparent;
   font-family: inherit;
   text-align: left;
   box-sizing: border-box;
@@ -61,7 +66,7 @@ defineEmits<{ activate: [] }>()
     transition: background-color 0.15s ease;
 
     &:hover {
-      background: var(--shell-surface);
+      background-color: var(--shell-surface);
     }
   }
 }
@@ -75,7 +80,7 @@ defineEmits<{ activate: [] }>()
   cursor: pointer;
 
   /*
-   * The row spans the full width of a `SettingSection` card, which clips its overflow, so the
+   * The row spans the full width of a `TuffGroupBlock` card, which clips its overflow, so the
    * global outward focus ring would be cut off at the card edges. Draw it inside instead. The
    * neutral band is dropped with it: the card interior is a known flat surface, so the accent
    * ring already has the contrast it needs.

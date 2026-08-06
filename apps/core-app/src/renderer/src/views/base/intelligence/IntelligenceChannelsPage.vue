@@ -11,6 +11,7 @@ import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
@@ -336,97 +337,107 @@ useKeyboardNavigation({
 </script>
 
 <template>
-  <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
-    <TuffAsideTemplate
-      v-model="searchQuery"
-      class="flex-1"
-      :search-placeholder="t('intelligence.search.placeholder')"
-      :clear-label="t('intelligence.search.clear')"
-      :main-aria-live="selectedProvider ? 'polite' : 'off'"
-      :main-edge-blur="false"
-    >
-      <template #default>
-        <IntelligenceList
-          class="h-full w-full"
-          aria-label="AI Provider List"
-          :providers="providers"
-          :selected-id="selectedProviderId"
-          :search-query="searchQuery"
-          @select="handleSelectProvider"
-        />
-      </template>
-
-      <template #footer>
-        <div class="space-y-2">
-          <TxButton
-            variant="flat"
-            class="w-full"
-            native-type="button"
-            :aria-label="t('settings.intelligence.addChannel')"
-            @click="handleAddProvider"
-          >
-            <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('settings.intelligence.addChannel') }}</span>
-          </TxButton>
-        </div>
-      </template>
-
-      <template #main>
-        <div :key="selectedProvider ? selectedProvider.id : 'empty'" class="h-full overflow-hidden">
-          <IntelligenceInfo
-            v-if="selectedProvider"
-            :provider="selectedProvider"
-            :test-result="testResult"
-            :is-testing="isTesting"
-            :is-syncing-from-nexus="isSyncingFromNexus"
-            :sync-message="syncMessage"
-            :sync-error="syncError"
-            @update="handleUpdateProvider"
-            @test="handleTestProvider"
-            @delete="handleDeleteProvider"
-            @duplicate="handleDuplicateProvider"
-            @edit-basic="handleOpenBasicEditor"
-            @sync-nexus="syncProvidersFromNexus"
+  <SettingsPage
+    :title="t('settingsIntelligenceHub.channels')"
+    back-to="/setting/intelligence"
+    :back-label="t('settingsIntelligenceHub.back')"
+    fill
+  >
+    <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
+      <TuffAsideTemplate
+        v-model="searchQuery"
+        class="flex-1"
+        :search-placeholder="t('intelligence.search.placeholder')"
+        :clear-label="t('intelligence.search.clear')"
+        :main-aria-live="selectedProvider ? 'polite' : 'off'"
+        :main-edge-blur="false"
+      >
+        <template #default>
+          <IntelligenceList
+            class="h-full w-full"
+            aria-label="AI Provider List"
+            :providers="providers"
+            :selected-id="selectedProviderId"
+            :search-query="searchQuery"
+            @select="handleSelectProvider"
           />
-          <IntelligenceEmptyState v-else />
-        </div>
-      </template>
-    </TuffAsideTemplate>
+        </template>
 
-    <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
-      {{ t('settings.intelligence.emptyProviders') }}
-    </p>
+        <template #footer>
+          <div class="space-y-2">
+            <TxButton
+              variant="flat"
+              class="w-full"
+              native-type="button"
+              :aria-label="t('settings.intelligence.addChannel')"
+              @click="handleAddProvider"
+            >
+              <i class="i-carbon-add" aria-hidden="true" />
+              <span>{{ t('settings.intelligence.addChannel') }}</span>
+            </TxButton>
+          </div>
+        </template>
 
-    <TuffDrawer
-      v-model:visible="basicEditorVisible"
-      :title="t('settings.intelligence.editProviderBasic')"
-    >
-      <div class="p-4 space-y-3">
-        <TuffBlockInput
-          v-model="basicDraft.name"
-          :title="t('settings.intelligence.providerName')"
-          :description="t('settings.intelligence.providerNameHint')"
-          :placeholder="t('settings.intelligence.providerNamePlaceholder')"
-          default-icon="i-carbon-text-font"
-          active-icon="i-carbon-text-font"
-        />
-        <TuffBlockInput
-          v-model="basicDraft.type"
-          :title="t('settings.intelligence.providerType')"
-          :description="t('settings.intelligence.providerTypeHint')"
-          placeholder="custom"
-          default-icon="i-carbon-api-1"
-          active-icon="i-carbon-api-1"
-        />
-        <div class="flex justify-end gap-2 pt-2">
-          <TxButton variant="flat" @click="basicEditorVisible = false">
-            {{ t('common.cancel') }}
-          </TxButton>
-          <TxButton type="primary" variant="flat" @click="handleSaveBasicEditor">
-            {{ t('common.confirm') }}
-          </TxButton>
+        <template #main>
+          <div
+            :key="selectedProvider ? selectedProvider.id : 'empty'"
+            class="h-full overflow-hidden"
+          >
+            <IntelligenceInfo
+              v-if="selectedProvider"
+              :provider="selectedProvider"
+              :test-result="testResult"
+              :is-testing="isTesting"
+              :is-syncing-from-nexus="isSyncingFromNexus"
+              :sync-message="syncMessage"
+              :sync-error="syncError"
+              @update="handleUpdateProvider"
+              @test="handleTestProvider"
+              @delete="handleDeleteProvider"
+              @duplicate="handleDuplicateProvider"
+              @edit-basic="handleOpenBasicEditor"
+              @sync-nexus="syncProvidersFromNexus"
+            />
+            <IntelligenceEmptyState v-else />
+          </div>
+        </template>
+      </TuffAsideTemplate>
+
+      <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
+        {{ t('settings.intelligence.emptyProviders') }}
+      </p>
+
+      <TuffDrawer
+        v-model:visible="basicEditorVisible"
+        :title="t('settings.intelligence.editProviderBasic')"
+      >
+        <div class="p-4 space-y-3">
+          <TuffBlockInput
+            v-model="basicDraft.name"
+            :title="t('settings.intelligence.providerName')"
+            :description="t('settings.intelligence.providerNameHint')"
+            :placeholder="t('settings.intelligence.providerNamePlaceholder')"
+            default-icon="i-carbon-text-font"
+            active-icon="i-carbon-text-font"
+          />
+          <TuffBlockInput
+            v-model="basicDraft.type"
+            :title="t('settings.intelligence.providerType')"
+            :description="t('settings.intelligence.providerTypeHint')"
+            placeholder="custom"
+            default-icon="i-carbon-api-1"
+            active-icon="i-carbon-api-1"
+          />
+          <div class="flex justify-end gap-2 pt-2">
+            <TxButton variant="flat" @click="basicEditorVisible = false">
+              {{ t('common.cancel') }}
+            </TxButton>
+            <TxButton type="primary" variant="flat" @click="handleSaveBasicEditor">
+              {{ t('common.confirm') }}
+            </TxButton>
+          </div>
         </div>
-      </div>
-    </TuffDrawer>
-  </div>
+      </TuffDrawer>
+    </div>
+  </SettingsPage>
 </template>

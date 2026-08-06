@@ -12,6 +12,11 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    __lintcheck_FileIndexFailDialog: typeof import('./src/components/file-index/__lintcheck_FileIndexFailDialog.vue')['default']
+    __lintcheck_HistoryCard: typeof import('./src/components/download/__lintcheck_HistoryCard.vue')['default']
+    __lintcheck_PreviewHistoryPanel: typeof import('./src/components/render/custom/__lintcheck_PreviewHistoryPanel.vue')['default']
+    __lintcheck_StorePluginMetaHeader: typeof import('./src/components/store/__lintcheck_StorePluginMetaHeader.vue')['default']
+    __lintcheck_WidgetFrame: typeof import('./src/components/render/__lintcheck_WidgetFrame.vue')['default']
     ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
     AgentDetail: typeof import('./src/components/intelligence/agents/AgentDetail.vue')['default']
     AgentItem: typeof import('./src/components/intelligence/agents/AgentItem.vue')['default']
@@ -146,11 +151,11 @@ declare module 'vue' {
     SettingDivider: typeof import('./src/components/settings/SettingDivider.vue')['default']
     SettingProgress: typeof import('./src/components/settings/SettingProgress.vue')['default']
     SettingRow: typeof import('./src/components/settings/SettingRow.vue')['default']
-    SettingSection: typeof import('./src/components/settings/SettingSection.vue')['default']
     SettingSkeleton: typeof import('./src/components/settings/SettingSkeleton.vue')['default']
     SettingsPage: typeof import('./src/components/settings/SettingsPage.vue')['default']
     ShellBackRow: typeof import('./src/components/shell/ShellBackRow.vue')['default']
     ShellChromeBar: typeof import('./src/components/shell/ShellChromeBar.vue')['default']
+    ShellConversationList: typeof import('./src/components/shell/ShellConversationList.vue')['default']
     ShellNavGroup: typeof import('./src/components/shell/ShellNavGroup.vue')['default']
     ShellNavItem: typeof import('./src/components/shell/ShellNavItem.vue')['default']
     ShellSearchEntry: typeof import('./src/components/shell/ShellSearchEntry.vue')['default']
@@ -233,6 +238,11 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
+  const __lintcheck_FileIndexFailDialog: typeof import('./src/components/file-index/__lintcheck_FileIndexFailDialog.vue')['default']
+  const __lintcheck_HistoryCard: typeof import('./src/components/download/__lintcheck_HistoryCard.vue')['default']
+  const __lintcheck_PreviewHistoryPanel: typeof import('./src/components/render/custom/__lintcheck_PreviewHistoryPanel.vue')['default']
+  const __lintcheck_StorePluginMetaHeader: typeof import('./src/components/store/__lintcheck_StorePluginMetaHeader.vue')['default']
+  const __lintcheck_WidgetFrame: typeof import('./src/components/render/__lintcheck_WidgetFrame.vue')['default']
   const ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
   const AgentDetail: typeof import('./src/components/intelligence/agents/AgentDetail.vue')['default']
   const AgentItem: typeof import('./src/components/intelligence/agents/AgentItem.vue')['default']
@@ -367,11 +377,11 @@ declare global {
   const SettingDivider: typeof import('./src/components/settings/SettingDivider.vue')['default']
   const SettingProgress: typeof import('./src/components/settings/SettingProgress.vue')['default']
   const SettingRow: typeof import('./src/components/settings/SettingRow.vue')['default']
-  const SettingSection: typeof import('./src/components/settings/SettingSection.vue')['default']
   const SettingSkeleton: typeof import('./src/components/settings/SettingSkeleton.vue')['default']
   const SettingsPage: typeof import('./src/components/settings/SettingsPage.vue')['default']
   const ShellBackRow: typeof import('./src/components/shell/ShellBackRow.vue')['default']
   const ShellChromeBar: typeof import('./src/components/shell/ShellChromeBar.vue')['default']
+  const ShellConversationList: typeof import('./src/components/shell/ShellConversationList.vue')['default']
   const ShellNavGroup: typeof import('./src/components/shell/ShellNavGroup.vue')['default']
   const ShellNavItem: typeof import('./src/components/shell/ShellNavItem.vue')['default']
   const ShellSearchEntry: typeof import('./src/components/shell/ShellSearchEntry.vue')['default']

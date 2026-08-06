@@ -1,6 +1,5 @@
 <script lang="ts" name="SettingOverviewPage" setup>
 import { useI18n } from 'vue-i18n'
-import SettingSection from '~/components/settings/SettingSection.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import SettingIdentityCard from '../SettingIdentityCard.vue'
 import SettingLanguage from '../SettingLanguage.vue'
@@ -17,12 +16,11 @@ const { t } = useI18n()
   <SettingsPage :title="t('settingsNav.category.overview')">
     <SettingIdentityCard />
 
-    <SettingSection :label="t('settingsOverview.account')" variant="bare">
-      <SettingUser />
-    </SettingSection>
-
-    <SettingSection :label="t('settingsOverview.general')" variant="bare">
-      <SettingLanguage />
-    </SettingSection>
+    <!--
+      Both mounted components are group blocks that already carry their own label and card, so
+      they sit here unwrapped: a section wrapper would have printed a second heading above them.
+    -->
+    <SettingUser />
+    <SettingLanguage />
   </SettingsPage>
 </template>

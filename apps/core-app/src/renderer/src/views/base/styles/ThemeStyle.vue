@@ -4,7 +4,6 @@ import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { TxSlider } from '@talex-touch/tuffex/slider'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { WALLPAPER_IMAGE_EXTENSIONS } from '@talex-touch/utils/common/wallpaper'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -16,6 +15,7 @@ import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import {
@@ -40,7 +40,6 @@ import CoreBoxCanvasSection from './CoreBoxCanvasSection.vue'
 import SectionItem from './SectionItem.vue'
 import { getWallpaperSourceHintKey } from './wallpaper-display-state'
 
-import ThemePreviewIcon from './sub/ThemePreviewIcon.vue'
 import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
@@ -219,6 +218,18 @@ const wallpaperLibrarySupported = computed(
 const wallpaperAdjustable = computed(() => {
   return hasConfiguredWallpaperSource(normalizeWallpaperBackground(appSetting.background))
 })
+/**
+ * Every row of the 壁纸 group is conditional on the selected source, so the group itself has to
+ * disappear as well — an empty hairline card is worse than no card.
+ */
+const showWallpaperGroup = computed(
+  () =>
+    Boolean(wallpaperSourceHint.value) ||
+    isCustomSource.value ||
+    isFolderSource.value ||
+    isDesktopSource.value ||
+    wallpaperAdjustable.value
+)
 const libraryEnabled = computed({
   get: () => appSetting.background?.library?.enabled ?? false,
   set: (val: boolean) => {
@@ -509,20 +520,13 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       <TuffGroupBlock
         :name="t('themeStyle.personalized')"
         :description="t('themeStyle.personalizedDesc')"
-        :collapsible="false"
       >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="personalized" :active="active" />
-        </template>
         <TuffBlockSelect
           v-model="styleValue"
           :title="t('themeStyle.colorStyle')"
           :description="t('themeStyle.colorStyleDesc')"
           @change="handleThemeChange"
         >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="palette" :active="active" />
-          </template>
           <TxSelectItem :value="0">
             {{ t('themeStyle.lightStyle') }}
           </TxSelectItem>
@@ -539,9 +543,9 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           :title="t('themeStyle.homepageWallpaper')"
           :description="t('themeStyle.homepageWallpaperDesc')"
         >
-          <template #icon="{ active }">
+          <!-- Kept as the only row icon on the page: it is the save indicator, not decoration. -->
+          <template #icon>
             <TxSpinner v-if="bgSaving" :size="14" />
-            <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
           </template>
           <TxSelectItem :value="0">
             {{ t('themeStyle.autoWallpaper') }}
@@ -562,283 +566,265 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
             {{ t('themeStyle.desktopWallpaper') }}
           </TxSelectItem>
         </TuffBlockSelect>
-        <div v-if="wallpaperSourceHint" class="theme-style-wallpaper-status">
+
+        <template v-if="wallpaperAdjustable">
+          <TuffBlockSlot :title="t('themeStyle.blur')" :description="t('themeStyle.blurDesc')">
+            <div class="ThemeStyle-Slider">
+              <div class="ThemeStyle-SliderTrack">
+                <TxSlider
+                  v-model="bgBlur"
+                  :min="0"
+                  :max="20"
+                  :step="1"
+                  :aria-label="t('themeStyle.blur')"
+                />
+              </div>
+              <span class="ThemeStyle-SliderValue">{{ bgBlur }}px</span>
+            </div>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            :title="t('themeStyle.opacity')"
+            :description="t('themeStyle.opacityDesc')"
+          >
+            <div class="ThemeStyle-Slider">
+              <div class="ThemeStyle-SliderTrack">
+                <TxSlider
+                  v-model="bgOpacity"
+                  :min="10"
+                  :max="100"
+                  :step="1"
+                  :aria-label="t('themeStyle.opacity')"
+                />
+              </div>
+              <span class="ThemeStyle-SliderValue">{{ bgOpacity }}%</span>
+            </div>
+          </TuffBlockSlot>
+        </template>
+      </TuffGroupBlock>
+
+      <!--
+        Wallpaper detail rows. The artboard only draws the four 个性化 rows above, so everything
+        that depends on the chosen source lives here in the same row language instead of in the
+        nested bordered panels this page used to grow.
+      -->
+      <TuffGroupBlock
+        v-if="showWallpaperGroup"
+        :name="t('themeStyle.wallpaperGroup')"
+        :description="t('themeStyle.wallpaperGroupDesc')"
+      >
+        <div v-if="wallpaperSourceHint" class="ThemeStyle-HintRow">
           <span class="i-ri-information-line" />
           <span>{{ wallpaperSourceHint }}</span>
         </div>
 
-        <div v-if="isCustomSource" class="theme-style-wallpaper-panel">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1">
-              <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                {{ t('themeStyle.customBackgroundImage', 'Custom Background Image') }}
-              </p>
-              <p v-if="customBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
-                {{ customBgPath }}
-              </p>
-              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.noImageSelected', 'No image selected') }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <TxButton
-                variant="bare"
-                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                @click="selectBackgroundImage"
-              >
-                {{ t('themeStyle.selectImage', 'Select') }}
-              </TxButton>
-              <TxButton
-                v-if="customBgPath"
-                variant="bare"
-                class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
-                @click="clearBackgroundImage"
-              >
-                {{ t('themeStyle.clearImage', 'Clear') }}
-              </TxButton>
-            </div>
-          </div>
+        <template v-if="isCustomSource">
+          <TuffBlockSlot
+            class="ThemeStyle-PathRow"
+            :title="t('themeStyle.customBackgroundImage', 'Custom Background Image')"
+            :description="customBgPath || t('themeStyle.noImageSelected', 'No image selected')"
+          >
+            <TxButton variant="bare" class="ThemeStyle-Action" @click="selectBackgroundImage">
+              {{ t('themeStyle.selectImage', 'Select') }}
+            </TxButton>
+            <TxButton
+              v-if="customBgPath"
+              variant="bare"
+              class="ThemeStyle-Action ThemeStyle-Action--danger"
+              @click="clearBackgroundImage"
+            >
+              {{ t('themeStyle.clearImage', 'Clear') }}
+            </TxButton>
+          </TuffBlockSlot>
 
-          <div v-if="customBgPath" class="theme-style-wallpaper-preview">
+          <div v-if="customBgPath" class="ThemeStyle-PreviewRow">
             <img
+              class="ThemeStyle-Preview"
               :src="customBgPreviewUrl"
-              class="h-24 w-full object-cover"
               :style="{
                 filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
                 opacity: bgOpacity / 100
               }"
             />
           </div>
-        </div>
+        </template>
 
-        <div v-if="isFolderSource" class="theme-style-wallpaper-panel">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1">
-              <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                {{ t('themeStyle.folder') }}
-              </p>
-              <p v-if="folderBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
-                {{ folderBgPath }}
-              </p>
-              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.noImageSelected') }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <TxButton
-                variant="bare"
-                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                @click="selectBackgroundFolder"
-              >
-                {{ t('themeStyle.selectFolder') }}
-              </TxButton>
-              <TxButton
-                v-if="folderBgPath"
-                variant="bare"
-                class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
-                @click="clearBackgroundFolder"
-              >
-                {{ t('themeStyle.clearFolder') }}
-              </TxButton>
-            </div>
-          </div>
+        <template v-if="isFolderSource">
+          <TuffBlockSlot
+            class="ThemeStyle-PathRow"
+            :title="t('themeStyle.folder')"
+            :description="folderBgPath || t('themeStyle.noImageSelected')"
+          >
+            <TxButton variant="bare" class="ThemeStyle-Action" @click="selectBackgroundFolder">
+              {{ t('themeStyle.selectFolder') }}
+            </TxButton>
+            <TxButton
+              v-if="folderBgPath"
+              variant="bare"
+              class="ThemeStyle-Action ThemeStyle-Action--danger"
+              @click="clearBackgroundFolder"
+            >
+              {{ t('themeStyle.clearFolder') }}
+            </TxButton>
+          </TuffBlockSlot>
 
-          <div v-if="folderBgPath" class="mt-4 space-y-2">
-            <div class="theme-style-wallpaper-mode-row">
-              <span class="text-xs text-black/60 dark:text-white/60">
-                {{ t('themeStyle.rotationMode') }}
-              </span>
+          <template v-if="folderBgPath">
+            <TuffBlockSlot
+              :title="t('themeStyle.rotationMode')"
+              :description="t('themeStyle.folderRotationHint')"
+            >
               <TxRadioGroup v-model="folderRotationMode" glass>
                 <TxRadio value="random" :label="t('themeStyle.randomRotation')" />
                 <TxRadio value="sequential" :label="t('themeStyle.sequentialRotation')" />
               </TxRadioGroup>
-            </div>
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-black/60 dark:text-white/60">{{
-                t('themeStyle.rotationInterval')
-              }}</span>
-              <span class="font-medium text-black/80 dark:text-white/80">
-                {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
-              </span>
-            </div>
-            <TxSlider v-model="folderIntervalMinutes" :min="5" :max="240" :step="5" />
-            <p class="text-xs text-black/40 dark:text-white/40">
-              {{ t('themeStyle.folderRotationHint') }}
-            </p>
-          </div>
-        </div>
+            </TuffBlockSlot>
 
-        <div v-if="isDesktopSource" class="theme-style-wallpaper-panel">
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1">
-              <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                {{ t('themeStyle.desktopWallpaper') }}
-              </p>
-              <p
-                v-if="desktopBgPath"
-                class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
-              >
-                {{ desktopBgPath }}
-              </p>
-              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.noImageSelected') }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <TxButton
-                variant="bare"
-                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                @click="refreshDesktopWallpaper"
-              >
-                {{ t('themeStyle.refreshDesktopWallpaper') }}
-              </TxButton>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="wallpaperAdjustable" class="theme-style-wallpaper-panel">
-          <div class="space-y-3">
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
+            <TuffBlockSlot :title="t('themeStyle.rotationInterval')">
+              <div class="ThemeStyle-Slider">
+                <div class="ThemeStyle-SliderTrack">
+                  <TxSlider
+                    v-model="folderIntervalMinutes"
+                    :min="5"
+                    :max="240"
+                    :step="5"
+                    :aria-label="t('themeStyle.rotationInterval')"
+                  />
+                </div>
+                <span class="ThemeStyle-SliderValue">
+                  {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
+                </span>
               </div>
-              <TxSlider v-model="bgBlur" :min="0" :max="20" :step="1" />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.opacity') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
-              </div>
-              <TxSlider v-model="bgOpacity" :min="10" :max="100" :step="1" />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{
-                  t('themeStyle.brightness')
-                }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80"
-                  >{{ bgBrightness }}%</span
-                >
-              </div>
-              <TxSlider v-model="bgBrightness" :min="50" :max="150" :step="1" />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.contrast') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgContrast }}%</span>
-              </div>
-              <TxSlider v-model="bgContrast" :min="50" :max="150" :step="1" />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.saturate') }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">{{ bgSaturate }}%</span>
-              </div>
-              <TxSlider v-model="bgSaturate" :min="50" :max="150" :step="1" />
-            </div>
-          </div>
-        </div>
-
-        <template v-if="wallpaperLibrarySupported">
-          <TuffBlockSwitch
-            v-model="libraryEnabled"
-            :title="t('themeStyle.copyToLibrary')"
-            :description="t('themeStyle.copyToLibraryDesc')"
-          >
-            <template #tags>
-              <TxTooltip
-                :content="t('themeStyle.copyToLibraryHint')"
-                :anchor="{ placement: 'top', showArrow: true }"
-              >
-                <TxButton
-                  variant="bare"
-                  native-type="button"
-                  class="theme-style-hint-btn"
-                  @click.stop
-                >
-                  <span class="i-carbon-information text-xs" />
-                </TxButton>
-              </TxTooltip>
-            </template>
-          </TuffBlockSwitch>
+            </TuffBlockSlot>
+          </template>
         </template>
+
+        <TuffBlockSlot
+          v-if="isDesktopSource"
+          class="ThemeStyle-PathRow"
+          :title="t('themeStyle.desktopWallpaper')"
+          :description="desktopBgPath || t('themeStyle.noImageSelected')"
+        >
+          <TxButton variant="bare" class="ThemeStyle-Action" @click="refreshDesktopWallpaper">
+            {{ t('themeStyle.refreshDesktopWallpaper') }}
+          </TxButton>
+        </TuffBlockSlot>
+
+        <template v-if="wallpaperAdjustable">
+          <TuffBlockSlot :title="t('themeStyle.brightness')">
+            <div class="ThemeStyle-Slider">
+              <div class="ThemeStyle-SliderTrack">
+                <TxSlider
+                  v-model="bgBrightness"
+                  :min="50"
+                  :max="150"
+                  :step="1"
+                  :aria-label="t('themeStyle.brightness')"
+                />
+              </div>
+              <span class="ThemeStyle-SliderValue">{{ bgBrightness }}%</span>
+            </div>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot :title="t('themeStyle.contrast')">
+            <div class="ThemeStyle-Slider">
+              <div class="ThemeStyle-SliderTrack">
+                <TxSlider
+                  v-model="bgContrast"
+                  :min="50"
+                  :max="150"
+                  :step="1"
+                  :aria-label="t('themeStyle.contrast')"
+                />
+              </div>
+              <span class="ThemeStyle-SliderValue">{{ bgContrast }}%</span>
+            </div>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot :title="t('themeStyle.saturate')">
+            <div class="ThemeStyle-Slider">
+              <div class="ThemeStyle-SliderTrack">
+                <TxSlider
+                  v-model="bgSaturate"
+                  :min="50"
+                  :max="150"
+                  :step="1"
+                  :aria-label="t('themeStyle.saturate')"
+                />
+              </div>
+              <span class="ThemeStyle-SliderValue">{{ bgSaturate }}%</span>
+            </div>
+          </TuffBlockSlot>
+        </template>
+
+        <TuffBlockSwitch
+          v-if="wallpaperLibrarySupported"
+          v-model="libraryEnabled"
+          :title="t('themeStyle.copyToLibrary')"
+          :description="t('themeStyle.copyToLibraryDesc')"
+        >
+          <template #tags>
+            <TxTooltip
+              :content="t('themeStyle.copyToLibraryHint')"
+              :anchor="{ placement: 'top', showArrow: true }"
+            >
+              <TxButton variant="bare" native-type="button" class="ThemeStyle-HintBtn" @click.stop>
+                <span class="i-carbon-information text-xs" />
+              </TxButton>
+            </TxTooltip>
+          </template>
+        </TuffBlockSwitch>
       </TuffGroupBlock>
 
-      <TuffGroupBlock
-        :name="t('themeStyle.emphasis')"
-        :description="t('themeStyle.emphasisDesc')"
-        :collapsible="false"
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="emphasis" :active="active" />
-        </template>
+      <TuffGroupBlock :name="t('themeStyle.emphasis')" :description="t('themeStyle.emphasisDesc')">
         <TuffBlockSwitch
           v-model="themeStyle.theme.addon.coloring"
           :title="t('themeStyle.coloring')"
           :description="t('themeStyle.coloringDesc')"
-        >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="coloring" :active="active" />
-          </template>
-        </TuffBlockSwitch>
+        />
 
         <TuffBlockSwitch
           v-model="themeStyle.theme.addon.contrast"
           :title="t('themeStyle.highContrast')"
           :description="t('themeStyle.highContrastDesc')"
-        >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="contrast" :active="active" />
-          </template>
-        </TuffBlockSwitch>
+        />
+
+        <!--
+          Used to float below the last group with no card of its own. It joins the theme add-on
+          group rather than the animation one: both are about the theme, and the artboard pins
+          个性化 to exactly four rows.
+        -->
+        <TuffBlockSwitch
+          guidance
+          :model-value="false"
+          :title="t('themeStyle.themeHelp')"
+          :description="t('themeStyle.themeHelpDesc')"
+        />
       </TuffGroupBlock>
 
       <!-- Animation settings group block -->
       <TuffGroupBlock
         :name="t('themeStyle.animationGroupTitle')"
         :description="t('themeStyle.animationGroupDesc')"
-        :collapsible="false"
       >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="animation" :active="active" />
-        </template>
         <!-- List item stagger animation switch -->
         <TuffBlockSwitch
           v-model="appSetting.animation.listItemStagger"
           :title="t('themeStyle.listItemStagger')"
           :description="t('themeStyle.listItemStaggerDesc')"
-        >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="stagger" :active="active" />
-          </template>
-          <template #suffix>
-            <TxStatusBadge text="Beta" status="warning" size="sm" />
-          </template>
-        </TuffBlockSwitch>
+        />
 
         <!-- Result transition animation switch -->
         <TuffBlockSwitch
           v-model="appSetting.animation.resultTransition"
           :title="t('themeStyle.resultTransition')"
           :description="t('themeStyle.resultTransitionDesc')"
-        >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="transition" :active="active" />
-          </template>
-          <template #suffix>
-            <TxStatusBadge text="Beta" status="warning" size="sm" />
-          </template>
-        </TuffBlockSwitch>
+        />
 
         <TuffBlockSelect
           v-model="routeTransitionStyle"
           :title="t('themeStyle.routeTransition')"
           :description="t('themeStyle.routeTransitionDesc')"
         >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="transition" :active="active" />
-          </template>
           <TxSelectItem value="slide">
             {{ t('themeStyle.routeTransitionSlide') }}
           </TxSelectItem>
@@ -855,14 +841,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           v-model="appSetting.animation.coreBoxResize"
           :title="t('themeStyle.coreBoxResize')"
           :description="t('themeStyle.coreBoxResizeDesc')"
-        >
-          <template #icon="{ active }">
-            <ThemePreviewIcon variant="transition" :active="active" />
-          </template>
-          <template #suffix>
-            <TxStatusBadge text="Beta" status="warning" size="sm" />
-          </template>
-        </TuffBlockSwitch>
+        />
 
         <TuffBlockSwitch
           v-model="appSetting.animation.autoDisableOnLowBattery"
@@ -870,17 +849,6 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           :description="t('themeStyle.lowBatteryModeDesc')"
         />
       </TuffGroupBlock>
-
-      <TuffBlockSwitch
-        guidance
-        :model-value="false"
-        :title="t('themeStyle.themeHelp')"
-        :description="t('themeStyle.themeHelpDesc')"
-      >
-        <template #icon="{ active }">
-          <ThemePreviewIcon variant="guide" :active="active" />
-        </template>
-      </TuffBlockSwitch>
     </component>
 
     <Teleport to="body">
@@ -924,48 +892,85 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
 </style>
 
 <style lang="scss" scoped>
-.theme-style-hint-btn {
+.ThemeStyle-HintBtn {
   min-width: 20px;
   width: 20px;
   height: 20px;
   padding: 0;
-  border-radius: 999px;
-  color: var(--tx-text-color-secondary);
+  border-radius: var(--shell-radius-full);
+  color: var(--shell-text-muted);
 }
 
-.theme-style-wallpaper-panel {
-  margin-top: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--tx-fill-color) 82%, transparent);
-}
-
-.theme-style-wallpaper-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 8px;
-  color: var(--tx-text-color-secondary);
-  background: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
-  font-size: 12px;
-}
-
-.theme-style-wallpaper-mode-row {
+/**
+ * Artboard `E0C1Zz` · 窗口模糊 / 窗口透明度: a fixed-width track with the current value pinned
+ * to its right, so a column of slider rows reads as one aligned stack.
+ */
+.ThemeStyle-Slider {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: var(--shell-space-3);
 }
 
-.theme-style-wallpaper-preview {
-  margin-top: 12px;
+.ThemeStyle-SliderTrack {
+  width: 160px;
+}
+
+.ThemeStyle-SliderValue {
+  /* 46 is the artboard's column; a `30 min` reading is allowed to widen it rather than clip. */
+  min-width: 46px;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/** Rows whose description is a filesystem path: one line, clipped, never a three-line wrap. */
+.ThemeStyle-PathRow :deep(p) {
   overflow: hidden;
-  border-radius: 8px;
-  border: 1px solid var(--tx-border-color);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ThemeStyle-HintRow {
+  display: flex;
+  align-items: center;
+  gap: var(--shell-space-2);
+  padding: 12px 16px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.5;
+}
+
+.ThemeStyle-PreviewRow {
+  padding: 12px 16px;
+}
+
+.ThemeStyle-Preview {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+}
+
+/** Same hairline-outlined button as the artboard's `Btn 编辑` / `Btn 选择目录`. */
+.ThemeStyle-Action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--shell-border-strong);
+  border-radius: var(--shell-radius-sm);
+  color: var(--shell-text-regular);
+  font-size: var(--shell-fs-sm);
+  font-weight: 500;
+}
+
+.ThemeStyle-Action--danger {
+  border-color: var(--shell-danger-border);
+  color: var(--shell-danger);
 }
 
 .ThemeStyle-WindowLoadingMask {

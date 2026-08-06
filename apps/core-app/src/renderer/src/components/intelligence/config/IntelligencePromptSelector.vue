@@ -91,7 +91,7 @@ function handleCustomInstructionsChange(value: string | number) {
 
 function handleManagePrompts() {
   // 跳转到提示词管理页面
-  router.push('/intelligence/prompts')
+  router.push('/setting/intelligence/prompts')
 }
 </script>
 

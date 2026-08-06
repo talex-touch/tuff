@@ -27,10 +27,9 @@ import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import SettingButton from '~/components/settings/SettingButton.vue'
 import SettingChip from '~/components/settings/SettingChip.vue'
-import SettingDivider from '~/components/settings/SettingDivider.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
-import SettingSection from '~/components/settings/SettingSection.vue'
 import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   isManualMcpServer,
@@ -451,7 +450,7 @@ async function deleteDraftServer(): Promise<void> {
 }
 
 function openIntelligence(): void {
-  void router.push('/intelligence')
+  void router.push('/setting/intelligence')
 }
 
 onMounted(() => {
@@ -467,7 +466,7 @@ onMounted(() => {
   -->
   <SettingSkeleton v-if="showSkeleton" :groups="skeletonGroups" />
 
-  <SettingSection v-else-if="loadError" :label="t('settings.skillsMcp.mcp.label')">
+  <TuffGroupBlock v-else-if="loadError" :name="t('settings.skillsMcp.mcp.label')">
     <SettingRow :title="t('settings.skillsMcp.loadFailed')" :description="loadError">
       <template #trailing>
         <SettingButton variant="secondary" @click="loadItems">
@@ -475,65 +474,65 @@ onMounted(() => {
         </SettingButton>
       </template>
     </SettingRow>
-  </SettingSection>
+  </TuffGroupBlock>
 
-  <SettingSection v-else :label="t('settings.skillsMcp.mcp.label')">
+  <!-- The card draws the hairline between its own rows, so none of these sections place one. -->
+  <TuffGroupBlock v-else :name="t('settings.skillsMcp.mcp.label')">
     <SettingRow v-if="showStateRow" :title="t('settings.skillsMcp.loading')" />
 
-    <template v-for="(row, index) in mcpRows" :key="row.item.id">
-      <SettingDivider v-if="index > 0 || showStateRow" />
-      <SettingRow :title="row.title" :description="row.description">
-        <template #trailing>
-          <SettingChip>
-            {{
-              row.manual
-                ? t('settings.skillsMcp.mcp.sourceManual')
-                : t('settings.skillsMcp.mcp.sourceImported')
-            }}
-          </SettingChip>
-          <SettingChip>{{ row.transportLabel }}</SettingChip>
+    <SettingRow
+      v-for="row in mcpRows"
+      :key="row.item.id"
+      :title="row.title"
+      :description="row.description"
+    >
+      <template #trailing>
+        <SettingChip>
+          {{
+            row.manual
+              ? t('settings.skillsMcp.mcp.sourceManual')
+              : t('settings.skillsMcp.mcp.sourceImported')
+          }}
+        </SettingChip>
+        <SettingChip>{{ row.transportLabel }}</SettingChip>
 
-          <!-- Only the failure state carries a reason worth a tooltip; the other two read fully. -->
-          <TxTooltip
-            v-if="row.probe.status === 'failed'"
-            :content="row.probe.error"
-            :anchor="{ placement: 'top', showArrow: true }"
-          >
-            <SettingChip tone="danger">{{ probeChipText(row.probe) }}</SettingChip>
-          </TxTooltip>
-          <SettingChip v-else :tone="probeChipTone(row.probe)">
-            {{ probeChipText(row.probe) }}
-          </SettingChip>
+        <!-- Only the failure state carries a reason worth a tooltip; the other two read fully. -->
+        <TxTooltip
+          v-if="row.probe.status === 'failed'"
+          :content="row.probe.error"
+          :anchor="{ placement: 'top', showArrow: true }"
+        >
+          <SettingChip tone="danger">{{ probeChipText(row.probe) }}</SettingChip>
+        </TxTooltip>
+        <SettingChip v-else :tone="probeChipTone(row.probe)">
+          {{ probeChipText(row.probe) }}
+        </SettingChip>
 
-          <SettingButton
-            variant="secondary"
-            :disabled="row.probe.status === 'probing'"
-            @click="probeServer(row.item)"
-          >
-            {{ t('settings.skillsMcp.mcp.probe') }}
-          </SettingButton>
-          <SettingButton v-if="row.manual" variant="secondary" @click="openEditDialog(row.item)">
-            {{ t('settings.skillsMcp.mcp.edit') }}
-          </SettingButton>
-          <TxSwitch
-            :model-value="row.item.active"
-            @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
-          />
-        </template>
-      </SettingRow>
-    </template>
+        <SettingButton
+          variant="secondary"
+          :disabled="row.probe.status === 'probing'"
+          @click="probeServer(row.item)"
+        >
+          {{ t('settings.skillsMcp.mcp.probe') }}
+        </SettingButton>
+        <SettingButton v-if="row.manual" variant="secondary" @click="openEditDialog(row.item)">
+          {{ t('settings.skillsMcp.mcp.edit') }}
+        </SettingButton>
+        <TxSwitch
+          :model-value="row.item.active"
+          @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
+        />
+      </template>
+    </SettingRow>
 
-    <template v-if="hiddenMcpCount > 0">
-      <SettingDivider />
-      <SettingRow
-        :title="t('settings.skillsMcp.mcp.viewAllTitle')"
-        :description="t('settings.skillsMcp.mcp.viewAllDesc', { count: hiddenMcpCount })"
-        navigable
-        @activate="openIntelligence"
-      />
-    </template>
+    <SettingRow
+      v-if="hiddenMcpCount > 0"
+      :title="t('settings.skillsMcp.mcp.viewAllTitle')"
+      :description="t('settings.skillsMcp.mcp.viewAllDesc', { count: hiddenMcpCount })"
+      navigable
+      @activate="openIntelligence"
+    />
 
-    <SettingDivider v-if="mcpRows.length > 0 || showStateRow" />
     <SettingRow :title="t('settings.skillsMcp.mcp.addTitle')" :description="addServerDescription">
       <template #trailing>
         <SettingButton @click="openCreateDialog">
@@ -541,34 +540,33 @@ onMounted(() => {
         </SettingButton>
       </template>
     </SettingRow>
-  </SettingSection>
+  </TuffGroupBlock>
 
-  <SettingSection v-if="!showSkeleton" :label="t('settings.skillsMcp.skills.label')">
+  <TuffGroupBlock v-if="!showSkeleton" :name="t('settings.skillsMcp.skills.label')">
     <SettingRow v-if="showStateRow" :title="t('settings.skillsMcp.loading')" />
 
-    <template v-for="(row, index) in skillRows" :key="row.item.id">
-      <SettingDivider v-if="index > 0 || showStateRow" />
-      <SettingRow :title="row.title" :description="row.description">
-        <template #trailing>
-          <TxSwitch
-            :model-value="row.item.active"
-            @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
-          />
-        </template>
-      </SettingRow>
-    </template>
+    <SettingRow
+      v-for="row in skillRows"
+      :key="row.item.id"
+      :title="row.title"
+      :description="row.description"
+    >
+      <template #trailing>
+        <TxSwitch
+          :model-value="row.item.active"
+          @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
+        />
+      </template>
+    </SettingRow>
 
-    <template v-if="hiddenSkillCount > 0">
-      <SettingDivider />
-      <SettingRow
-        :title="t('settings.skillsMcp.skills.viewAllTitle')"
-        :description="t('settings.skillsMcp.skills.viewAllDesc', { count: hiddenSkillCount })"
-        navigable
-        @activate="openIntelligence"
-      />
-    </template>
+    <SettingRow
+      v-if="hiddenSkillCount > 0"
+      :title="t('settings.skillsMcp.skills.viewAllTitle')"
+      :description="t('settings.skillsMcp.skills.viewAllDesc', { count: hiddenSkillCount })"
+      navigable
+      @activate="openIntelligence"
+    />
 
-    <SettingDivider v-if="skillRows.length > 0 || showStateRow" />
     <!-- Importing is the Intelligence surface's flow; duplicating its candidate list here would
          mean two places to keep in step with the scanner. -->
     <SettingRow
@@ -578,66 +576,54 @@ onMounted(() => {
       @activate="openIntelligence"
     />
 
-    <SettingDivider />
     <SettingRow
       :title="t('settings.skillsMcp.skills.injectionTitle')"
       :description="t('settings.skillsMcp.skills.injectionDesc')"
     />
-  </SettingSection>
+  </TuffGroupBlock>
 
   <!--
     Linked, not imported: these rows describe files that stay where the user put
     them, so removing a directory unlinks it and never deletes anything.
   -->
-  <SettingSection v-if="!showSkeleton" :label="t('settings.skillsMcp.localDirs.label')">
-    <template v-for="(row, index) in localDirRows" :key="row.path">
-      <SettingDivider v-if="index > 0" />
-      <SettingRow
-        :title="row.path"
-        :description="t('settings.skillsMcp.localDirs.dirDesc', { count: row.count })"
-      >
-        <template #trailing>
-          <SettingButton
-            variant="secondary"
-            :disabled="localBusy"
-            @click="removeLocalDir(row.path)"
-          >
-            {{ t('settings.skillsMcp.localDirs.remove') }}
-          </SettingButton>
-        </template>
-      </SettingRow>
-    </template>
+  <TuffGroupBlock v-if="!showSkeleton" :name="t('settings.skillsMcp.localDirs.label')">
+    <SettingRow
+      v-for="row in localDirRows"
+      :key="row.path"
+      :title="row.path"
+      :description="t('settings.skillsMcp.localDirs.dirDesc', { count: row.count })"
+    >
+      <template #trailing>
+        <SettingButton variant="secondary" :disabled="localBusy" @click="removeLocalDir(row.path)">
+          {{ t('settings.skillsMcp.localDirs.remove') }}
+        </SettingButton>
+      </template>
+    </SettingRow>
 
-    <template v-for="skill in localSkillRows" :key="skill.id">
-      <SettingDivider />
-      <SettingRow
-        :title="skill.name"
-        :description="skill.description || t('settings.skillsMcp.localDirs.noDescription')"
-      >
-        <template #trailing>
-          <SettingChip>{{ t('settings.skillsMcp.localDirs.linked') }}</SettingChip>
-          <TxSwitch
-            :model-value="skill.enabled"
-            :disabled="localBusy"
-            @update:model-value="(value) => setLocalSkillEnabled(skill, Boolean(value))"
-          />
-        </template>
-      </SettingRow>
-    </template>
+    <SettingRow
+      v-for="skill in localSkillRows"
+      :key="skill.id"
+      :title="skill.name"
+      :description="skill.description || t('settings.skillsMcp.localDirs.noDescription')"
+    >
+      <template #trailing>
+        <SettingChip>{{ t('settings.skillsMcp.localDirs.linked') }}</SettingChip>
+        <TxSwitch
+          :model-value="skill.enabled"
+          :disabled="localBusy"
+          @update:model-value="(value) => setLocalSkillEnabled(skill, Boolean(value))"
+        />
+      </template>
+    </SettingRow>
 
-    <template v-if="hiddenLocalSkillCount > 0">
-      <SettingDivider />
-      <SettingRow
-        :title="t('settings.skillsMcp.localDirs.showAllTitle')"
-        :description="
-          t('settings.skillsMcp.localDirs.showAllDesc', { count: hiddenLocalSkillCount })
-        "
-        navigable
-        @activate="showAllLocalSkills = true"
-      />
-    </template>
+    <SettingRow
+      v-if="hiddenLocalSkillCount > 0"
+      :title="t('settings.skillsMcp.localDirs.showAllTitle')"
+      :description="t('settings.skillsMcp.localDirs.showAllDesc', { count: hiddenLocalSkillCount })"
+      navigable
+      @activate="showAllLocalSkills = true"
+    />
 
-    <SettingDivider v-if="localDirRows.length > 0" />
     <SettingRow
       :title="t('settings.skillsMcp.localDirs.addTitle')"
       :description="
@@ -660,7 +646,7 @@ onMounted(() => {
         </SettingButton>
       </template>
     </SettingRow>
-  </SettingSection>
+  </TuffGroupBlock>
 
   <TxModal
     v-model="dialogVisible"

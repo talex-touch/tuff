@@ -798,8 +798,10 @@
     "randomRotation": "Random",
     "sequentialRotation": "Sequential",
     "minutes": "min",
-    "blur": "Blur",
-    "opacity": "Opacity",
+    "blur": "Window Blur",
+    "blurDesc": "Blur intensity of the home background.",
+    "opacity": "Window Opacity",
+    "opacityDesc": "Opacity of the home background.",
     "brightness": "Brightness",
     "contrast": "Contrast",
     "saturate": "Saturation",
@@ -817,6 +819,8 @@
     "folderRotationHint": "Random mode picks images from the folder. Sequential mode rotates by filename.",
     "folderRandomMode": "Folder wallpaper will rotate randomly.",
     "folderSequentialMode": "Folder wallpaper will rotate by filename.",
+    "wallpaperGroup": "Wallpaper",
+    "wallpaperGroupDesc": "Source details and display adjustments for the wallpaper.",
     "emphasis": "Emphasis",
     "emphasisDesc": "Different emphasis for different people. Avoid using clear colors randomly.",
     "coloring": "Coloring",
@@ -858,6 +862,7 @@
     },
     "customizeMain": "Customize Main Layout",
     "customizeMainDesc": "Adjust header, sidebar, view styles",
+    "coreBoxGroup": "CoreBox",
     "customizeCoreBox": "Customize CoreBox",
     "customizeCoreBoxDesc": "Adjust search box logo, input style",
     "atomEditorTitle": "Customize layout",
@@ -877,7 +882,7 @@
     "atomCustomCssTip": "Applied to app layout. Unsafe directives are blocked."
   },
   "windowSection": {
-    "title": "Window Preference",
+    "title": "Window Effects",
     "description": "Select the window effect that feels comfortable to you."
   },
   "base": {
@@ -1046,6 +1051,22 @@
     "tagline": "The command bar, reimagined for makers",
     "account": "Account",
     "general": "General"
+  },
+  "settingsIntelligenceHub": {
+    "label": "Intelligence Center",
+    "back": "Back to Intelligence",
+    "channels": "Channels",
+    "channelsDesc": "Model providers, credentials and connectivity tests.",
+    "prompts": "Prompts",
+    "promptsDesc": "Prompt library, variables and versions.",
+    "agents": "Agents",
+    "agentsDesc": "Agent definitions and the tools they may use.",
+    "workflows": "Workflows",
+    "workflowsDesc": "Multi-step automations built on agents.",
+    "audit": "Audit",
+    "auditDesc": "Usage, logs, memory review and global limits.",
+    "capabilities": "Capabilities",
+    "capabilitiesDesc": "Bind capabilities to providers and models."
   },
   "settingsEntries": {
     "installedPlugins": "Installed Plugins",

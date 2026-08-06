@@ -5,7 +5,7 @@ import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
+import SettingsPage from '~/components/settings/SettingsPage.vue'
 import {
   filterReviewQueueItems,
   resolveReviewQueueActionHint,
@@ -369,7 +369,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <ViewTemplate :title="t('intelligence.workflow.pageTitle')">
+  <SettingsPage
+    :title="t('settingsIntelligenceHub.workflows')"
+    back-to="/setting/intelligence"
+    :back-label="t('settingsIntelligenceHub.back')"
+  >
     <div class="workflow-page">
       <section class="workflow-sidebar card-panel">
         <div class="section-head">
@@ -1065,7 +1069,7 @@ onMounted(async () => {
         </div>
       </section>
     </div>
-  </ViewTemplate>
+  </SettingsPage>
 </template>
 
 <style scoped lang="scss">
