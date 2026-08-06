@@ -3459,6 +3459,9 @@
       "evidenceSaved": "Everything 诊断证据已保存"
     },
     "intelligence": {
+      "testLatency": "耗时",
+      "testTokenSpeed": "Token 速度",
+      "testStabilityAnalysis": "稳定性分析",
       "pageTitle": "塔塔智能",
       "pageDesc": "通过塔塔智能，你可以优雅调度每条渠道，编排专属能力，并在一块打磨精致的控制面板中掌控全程。",
       "channelsSection": "渠道",
