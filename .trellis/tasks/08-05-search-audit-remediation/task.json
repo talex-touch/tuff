@@ -1,0 +1,31 @@
+{
+  "id": "search-audit-remediation",
+  "name": "search-audit-remediation",
+  "title": "CoreBox search audit remediation",
+  "description": "Parent task for the 2026-08-06 three-way search audit remediation. Owns the audit findings as requirement source and the batch A-C task map; children are independently verifiable deliverables.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-semantic-catalog-token-boundary",
+    "08-05-search-sort-reaches-ui",
+    "08-05-file-index-data-safety",
+    "08-05-keyword-charset-unification"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
