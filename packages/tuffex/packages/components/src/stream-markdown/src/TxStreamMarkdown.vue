@@ -64,23 +64,21 @@ const canRender = computed(() => !props.sanitize || (sanitizerReady.value && !!s
 const blocks = shallowRef<StreamBlock[]>([])
 
 watch(
-  () => props.sanitize,
-  () => {
-    // Cached HTML was produced under the other mode — recompute everything.
-    stream.reset()
-  },
-)
-
-watch(
-  [() => props.content, canRender],
-  ([content, ok], previous) => {
+  [() => props.content, canRender, () => props.sanitize],
+  ([content, ok, sanitize], previous) => {
     if (!ok) {
       blocks.value = []
       return
     }
-    // The gate just opened: cached entries predate the sanitizer.
-    if (previous && previous[1] === false)
-      stream.reset()
+    if (previous) {
+      // Either the gate just opened (cached entries predate the sanitizer) or
+      // sanitize flipped (cached HTML was produced under the other mode).
+      // `sanitize` has to be a dependency, not just a separate reset watcher:
+      // flipping it leaves content and canRender untouched, so nothing else
+      // would re-run the render and the stale HTML would stay on screen.
+      if (previous[1] === false || previous[2] !== sanitize)
+        stream.reset()
+    }
     blocks.value = stream.update(content)
   },
   { immediate: true },
