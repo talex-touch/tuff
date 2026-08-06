@@ -20,7 +20,15 @@ interface ToolSpec {
   description: string
   promptSnippet: string
   parameters: unknown
-  execute: (args: Record<string, unknown>) => Promise<ToolResultBlock>
+  /**
+   * pi's own executor signature — verified against a live run: the tool call
+   * id comes first and the model's arguments second. Assuming `(args)` here
+   * silently hands the id to the tool as its parameters.
+   */
+  execute: (
+    toolCallId: string,
+    params: Record<string, unknown>,
+  ) => Promise<ToolResultBlock>
 }
 
 interface ExtensionApi {
@@ -39,6 +47,7 @@ function text(body: string, isError = false): ToolResultBlock {
 
 async function callGateway(
   tool: string,
+  callId: string,
   args: Record<string, unknown>,
 ): Promise<ToolResultBlock> {
   if (!GATEWAY_URL || !GATEWAY_TOKEN)
@@ -56,7 +65,7 @@ async function callGateway(
         'content-type': 'application/json',
         'authorization': `Bearer ${GATEWAY_TOKEN}`,
       },
-      body: JSON.stringify({ tool, args }),
+      body: JSON.stringify({ tool, callId, args }),
       signal: abort.signal,
     })
 
@@ -161,7 +170,7 @@ export default function tuffTools(pi: ExtensionApi): void {
   for (const spec of TOOLS) {
     pi.registerTool({
       ...spec,
-      execute: args => callGateway(spec.name, args ?? {}),
+      execute: (toolCallId, params) => callGateway(spec.name, toolCallId, params ?? {}),
     })
   }
 }
