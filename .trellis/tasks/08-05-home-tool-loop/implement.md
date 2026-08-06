@@ -5,8 +5,8 @@
 ## 顺序清单
 
 ### S1 协议与 runtime（可独立验证）
-- [ ] intelligence.ts：IntelligencePartEvent + onPartEvent + chunk.partEvent（全可选）
-- [ ] pi-cli-runtime：五类事件解析 + buildPiArgs 白名单模式；单测（真实 NDJSON fixture 取自 research 实测）
+- [x] intelligence.ts：IntelligencePartEvent（双类型家镜像：utils + tuff-intelligence；main sdk 发射 + renderer SDK 分发一并接通） + onPartEvent + chunk.partEvent（全可选）
+- [x] pi-cli-runtime：五类事件解析（+ provider partEvent 转发） + buildPiArgs 白名单模式；单测（真实 NDJSON fixture 取自 research 实测）
 - 验证：`cd apps/core-app && npx vitest run src/main/modules/ai/providers`
 
 ### S2 parts 装配（renderer）

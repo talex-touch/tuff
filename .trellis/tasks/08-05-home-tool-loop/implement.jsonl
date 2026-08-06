@@ -1,1 +1,3 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/08-05-ai-toolchain-suite/prd.md", "reason": "安全模型与跨子约束"}
+{"file": ".trellis/tasks/08-05-home-tool-loop/research/pi-tool-capability.md", "reason": "事件形状实测与映射表"}
+{"file": ".trellis/tasks/08-05-home-tool-loop/design.md", "reason": "协议层与网关设计"}
