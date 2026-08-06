@@ -62,10 +62,13 @@ export function resolveMcpTransport(item: AiImportedConfigItem): McpTransportSum
  * candidate id is a second, cheaper signal for items written before that contract settled.
  */
 export function isManualMcpServer(item: AiImportedConfigItem): boolean {
+  // Optional access despite the type: rows written before these fields settled
+  // reach the renderer with them missing, and one legacy row must not blank
+  // the whole settings subtree with a render-time TypeError.
   return (
     item.sourceId === MANUAL_MCP_SOURCE_ID ||
-    item.sourceId.startsWith(`${MANUAL_MCP_SOURCE_ID}:`) ||
-    item.candidateId.startsWith(`${MANUAL_MCP_SOURCE_ID}:`)
+    item.sourceId?.startsWith(`${MANUAL_MCP_SOURCE_ID}:`) === true ||
+    item.candidateId?.startsWith(`${MANUAL_MCP_SOURCE_ID}:`) === true
   )
 }
 
