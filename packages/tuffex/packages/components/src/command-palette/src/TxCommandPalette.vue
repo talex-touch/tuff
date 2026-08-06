@@ -20,7 +20,18 @@ const props = withDefaults(defineProps<CommandPaletteProps>(), {
 const emit = defineEmits<CommandPaletteEmits>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
-const query = ref('')
+const query = ref(props.query ?? '')
+
+// `update:query` was emitted with no matching prop, so v-model:query could only
+// ever be write-only. Accepting the prop closes the pair; leaving it undefined
+// keeps the palette uncontrolled.
+watch(
+  () => props.query,
+  (next) => {
+    if (next !== undefined && next !== query.value)
+      query.value = next
+  },
+)
 const activeIndex = ref(0)
 const zIndex = ref(getZIndex())
 const composing = ref(false)
