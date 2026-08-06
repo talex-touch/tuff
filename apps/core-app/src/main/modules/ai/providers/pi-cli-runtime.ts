@@ -1,5 +1,6 @@
 import type {
   IntelligenceMessage,
+  IntelligencePartEvent,
   IntelligenceProviderConfig,
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
@@ -216,14 +217,29 @@ export function buildPiPrompt(messages: IntelligenceMessage[]): PiCliPrompt {
   }
 }
 
-export function buildPiArgs(prompt: PiCliPrompt, model?: string): string[] {
+export interface PiCliToolOptions {
+  /**
+   * Explicit tool allowlist. The application decides what the agent may
+   * touch — this is never derived from pi's own defaults, and an empty or
+   * missing list keeps the historical `--no-tools` behaviour.
+   */
+  tools?: string[]
+}
+
+export function buildPiArgs(
+  prompt: PiCliPrompt,
+  model?: string,
+  toolOptions?: PiCliToolOptions
+): string[] {
+  const allowedTools = toolOptions?.tools?.filter((tool) => tool.trim()) ?? []
   const args = [
     '--print',
     '--mode',
     'json',
-    // The home surface grants no tool permissions, so the agent must not be able to read, write or
-    // run anything on the user's machine.
-    '--no-tools',
+    // Without an explicit allowlist the home surface grants no tool permissions:
+    // the agent must not be able to read, write or run anything on the user's
+    // machine. With one, only the named tools are enabled — never pi's defaults.
+    ...(allowedTools.length > 0 ? ['--tools', allowedTools.join(',')] : ['--no-tools']),
     // History is owned by the app; letting `pi` persist its own would create a second source of
     // truth that survives beyond the conversation the user can see.
     '--no-session',
@@ -255,6 +271,25 @@ export interface PiCliEvent {
   provider?: string
   model?: string
   done?: boolean
+  /** Structured reasoning/tool event extracted from the agent loop. */
+  partEvent?: IntelligencePartEvent
+}
+
+/**
+ * Digs the toolCall content piece a `toolcall_*` update refers to out of the
+ * partial assistant message, so callId/name/arguments come from the source of
+ * truth rather than from accumulating deltas ourselves.
+ */
+function readToolCallPiece(
+  record: PiJsonRecord
+): { id?: string; name?: string; args?: unknown } | null {
+  const index = typeof record.contentIndex === 'number' ? record.contentIndex : -1
+  const partial = asRecord(record.partial)
+  const content = Array.isArray(partial?.content) ? partial.content : null
+  if (!content || index < 0) return null
+  const piece = asRecord(content[index])
+  if (!piece || readString(piece.type) !== 'toolCall') return null
+  return { id: readString(piece.id), name: readString(piece.name), args: piece.arguments }
 }
 
 function asRecord(value: unknown): PiJsonRecord | null {
@@ -317,9 +352,66 @@ export function parsePiCliLine(line: string): PiCliEvent | null {
 
   if (type === 'message_update') {
     const event = asRecord(record.assistantMessageEvent)
-    if (!event || readString(event.type) !== 'text_delta') return null
-    const delta = readString(event.delta)
-    return delta ? { delta } : null
+    if (!event) return null
+    const eventType = readString(event.type)
+
+    if (eventType === 'text_delta') {
+      const delta = readString(event.delta)
+      return delta ? { delta } : null
+    }
+
+    if (eventType === 'thinking_start') return { partEvent: { kind: 'reasoning-start' } }
+    if (eventType === 'thinking_delta') {
+      const delta = readString(event.delta)
+      return delta ? { partEvent: { kind: 'reasoning-delta', delta } } : null
+    }
+    if (eventType === 'thinking_end') return { partEvent: { kind: 'reasoning-end' } }
+
+    if (eventType === 'toolcall_start') {
+      const piece = readToolCallPiece(event)
+      if (!piece?.id || !piece.name) return null
+      return { partEvent: { kind: 'tool-start', callId: piece.id, name: piece.name } }
+    }
+    if (eventType === 'toolcall_delta') {
+      const piece = readToolCallPiece(event)
+      const delta = readString(event.delta)
+      if (!piece?.id || !delta) return null
+      return { partEvent: { kind: 'tool-input-delta', callId: piece.id, delta } }
+    }
+    if (eventType === 'toolcall_end') {
+      const piece = readToolCallPiece(event)
+      if (!piece?.id) return null
+      return { partEvent: { kind: 'tool-input-end', callId: piece.id, input: piece.args } }
+    }
+
+    return null
+  }
+
+  // Tool results arrive as their own message role; checked before the
+  // assistant-metadata branch below, which ignores every other role.
+  if (type === 'message_end') {
+    const message = asRecord(record.message)
+    if (message && readString(message.role) === 'toolResult') {
+      const callId = readString(message.toolCallId)
+      const name = readString(message.toolName)
+      if (!callId || !name) return null
+      const content = Array.isArray(message.content) ? message.content : []
+      const output = content
+        .map((piece) => {
+          const text = asRecord(piece)
+          return text && readString(text.type) === 'text' ? (readString(text.text) ?? '') : ''
+        })
+        .join('')
+      return {
+        partEvent: {
+          kind: 'tool-result',
+          callId,
+          name,
+          output,
+          isError: message.isError === true
+        }
+      }
+    }
   }
 
   if (type === 'message_start' || type === 'message_end' || type === 'turn_end') {

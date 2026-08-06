@@ -145,3 +145,117 @@ describe('buildPiArgs', () => {
     expect(buildPiArgs(prompt)).not.toContain('--model')
   })
 })
+
+describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {
+  function update(inner: Record<string, unknown>): string {
+    return JSON.stringify({ type: 'message_update', assistantMessageEvent: inner })
+  }
+
+  const toolPiece = { type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: '/tmp/x' } }
+
+  it('maps thinking events onto reasoning part events', () => {
+    expect(parsePiCliLine(update({ type: 'thinking_start', contentIndex: 0 }))).toEqual({
+      partEvent: { kind: 'reasoning-start' }
+    })
+    expect(
+      parsePiCliLine(update({ type: 'thinking_delta', contentIndex: 0, delta: '思考' }))
+    ).toEqual({
+      partEvent: { kind: 'reasoning-delta', delta: '思考' }
+    })
+    expect(parsePiCliLine(update({ type: 'thinking_end', contentIndex: 0, content: '' }))).toEqual({
+      partEvent: { kind: 'reasoning-end' }
+    })
+  })
+
+  it('maps the tool call lifecycle with ids from the partial content piece', () => {
+    const partial = { content: [{ type: 'text', text: '' }, toolPiece] }
+
+    expect(parsePiCliLine(update({ type: 'toolcall_start', contentIndex: 1, partial }))).toEqual({
+      partEvent: { kind: 'tool-start', callId: 'call_1', name: 'read' }
+    })
+
+    expect(
+      parsePiCliLine(update({ type: 'toolcall_delta', contentIndex: 1, delta: '{"path', partial }))
+    ).toEqual({ partEvent: { kind: 'tool-input-delta', callId: 'call_1', delta: '{"path' } })
+
+    expect(parsePiCliLine(update({ type: 'toolcall_end', contentIndex: 1, partial }))).toEqual({
+      partEvent: { kind: 'tool-input-end', callId: 'call_1', input: { path: '/tmp/x' } }
+    })
+  })
+
+  it('maps toolResult messages onto tool-result events', () => {
+    const line = JSON.stringify({
+      type: 'message_end',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'call_1',
+        toolName: 'read',
+        content: [
+          { type: 'text', text: 'line1-' },
+          { type: 'text', text: 'probe' }
+        ],
+        isError: false
+      }
+    })
+
+    expect(parsePiCliLine(line)).toEqual({
+      partEvent: {
+        kind: 'tool-result',
+        callId: 'call_1',
+        name: 'read',
+        output: 'line1-probe',
+        isError: false
+      }
+    })
+  })
+
+  it('flags failed tool results', () => {
+    const line = JSON.stringify({
+      type: 'message_end',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'call_2',
+        toolName: 'read',
+        content: [{ type: 'text', text: 'denied' }],
+        isError: true
+      }
+    })
+
+    expect(parsePiCliLine(line)).toMatchObject({
+      partEvent: { kind: 'tool-result', isError: true }
+    })
+  })
+
+  it('ignores malformed tool updates without an id', () => {
+    expect(
+      parsePiCliLine(
+        update({
+          type: 'toolcall_start',
+          contentIndex: 0,
+          partial: { content: [{ type: 'text' }] }
+        })
+      )
+    ).toBeNull()
+  })
+})
+
+describe('buildPiArgs tool allowlist', () => {
+  const prompt = { systemPrompt: 'sys', prompt: 'User: hi' }
+
+  it('keeps --no-tools without an allowlist', () => {
+    expect(buildPiArgs(prompt)).toContain('--no-tools')
+    expect(buildPiArgs(prompt, undefined, { tools: [] })).toContain('--no-tools')
+  })
+
+  it('enables exactly the allowlisted tools', () => {
+    const args = buildPiArgs(prompt, undefined, { tools: ['read', 'tuff_search_files'] })
+    expect(args).not.toContain('--no-tools')
+    const flagIndex = args.indexOf('--tools')
+    expect(flagIndex).toBeGreaterThan(-1)
+    expect(args[flagIndex + 1]).toBe('read,tuff_search_files')
+  })
+
+  it('drops blank entries rather than emitting an empty allowlist', () => {
+    expect(buildPiArgs(prompt, undefined, { tools: [' ', ''] })).toContain('--no-tools')
+  })
+})
