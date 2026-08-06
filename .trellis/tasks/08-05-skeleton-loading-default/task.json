@@ -1,0 +1,31 @@
+{
+  "id": "skeleton-loading-default",
+  "name": "skeleton-loading-default",
+  "title": "Skeleton 骨架屏成为默认加载态",
+  "description": "把「骨架屏是默认加载态」确立为项目原则：写进 frontend spec，并改造设置页与其他异步页面的存量加载态",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-skeleton-spec-rule",
+    "08-05-skeleton-primitives",
+    "08-05-skeleton-settings-pages",
+    "08-05-skeleton-other-async-pages"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
