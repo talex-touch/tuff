@@ -11,7 +11,7 @@
 
 ## Acceptance Criteria
 
-- [ ] spec 校验矩阵单测（缺 key/重复 key/未知 type/超字段数/select 无 options）
-- [ ] ToolFormCard 组件测试：渲染各 type、required 拦截、提交 emit 契约、已提交态
-- [ ] 端到端（装配后）：让模型「做一个 2 字段调查表单」→ 卡片渲染 → 提交 → 模型基于提交值继续回复
-- [ ] typecheck×2 / lint / vitest 绿
+- [x] spec 校验矩阵单测（tool-registry.form.test.ts，网关套件 108 绿）
+- [x] ToolFormCard 组件测试（jsdom，含锁定态）
+- [ ] 端到端（装配后）：让模型「做一个 2 字段调查表单」→ 卡片渲染 → 提交 → 模型基于提交值继续回复 —— **待用户重启应用后真机验证**（主进程工具需重启加载）
+- [x] typecheck×2 / lint / vitest 绿（我方范围 0 错；ShortcutDialog 3 错属另一会话骨架屏在飞件）
