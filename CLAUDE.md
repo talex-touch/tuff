@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Core Application Development
 - `pnpm core:dev` - Start development server for the main Electron app
-- `pnpm core:build` - Build the main application for production
-- `pnpm core:build:beta` - Build beta version
-- `pnpm core:build:snapshot` - Build snapshot version
-- `pnpm core:build:release` - Build release version
+- `pnpm build` - Build the main application for production
+- `pnpm build:beta` - Build beta version
+- `pnpm build:snapshot` - Build snapshot version
+- `pnpm build:release` - Build release version
 
 ### Platform-Specific Builds
-- `pnpm core:build:snapshot:win` - Build Windows snapshot
-- `pnpm core:build:snapshot:mac` - Build macOS snapshot
-- `pnpm core:build:snapshot:linux` - Build Linux snapshot
+- `pnpm build:snapshot:win` - Build Windows snapshot
+- `pnpm build:snapshot:mac` - Build macOS snapshot
+- `pnpm build:snapshot:linux` - Build Linux snapshot
 
 ### Type Checking (within apps/core-app/)
 - `npm run typecheck` - TypeScript validation for both main and renderer processes
@@ -304,7 +304,7 @@ Modules subscribe to events: `touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, (
 
 ### Shared Utilities Package
 
-**`@talex-touch/utils`** (npm package v1.0.23) provides shared types and utilities:
+**`@talex-touch/utils`** (npm package v1.0.50) provides shared types and utilities:
 
 ```
 packages/utils/
