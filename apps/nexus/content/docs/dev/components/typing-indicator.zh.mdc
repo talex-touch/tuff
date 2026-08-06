@@ -84,10 +84,10 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | 样式变体 |
-| `text` | `string` | `'Typing…'` | 文案 |
+| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | 指示器视觉样式；`dots` 通用，`ai` 用于模型思考态，`bars`/`ring` 用于强调持续处理。 |
+| `text` | `string` | `'Typing…'` | `showText` 开启时显示的状态文案，按场景改写（如「正在生成…」）。 |
 | `showText` | `boolean` | `true` | 是否显示文案 |
-| `size` | `number` | `6` | dots 模式点尺寸(px) |
+| `size` | `number` | `6` | `dots` 变体的圆点直径（px）；随宿主字号放大时同步调大。 |
 | `gap` | `number` | `5` | dots 模式间距(px) |
 | `loaderSize` | `number` | `44` | ai 模式尺寸(px) |
 | `pureSize` | `number` | `14` | pure 模式尺寸(px) |

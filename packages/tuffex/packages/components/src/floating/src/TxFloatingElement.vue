@@ -19,7 +19,7 @@ const context = inject(TX_FLOATING_CONTEXT_KEY, null)
 function register() {
   if (!context || !elementRef.value)
     return
-  const resolvedDepth = props.depth ?? 0.01
+  const resolvedDepth = props.depth
   context.registerElement(elementId, elementRef.value, resolvedDepth)
 }
 

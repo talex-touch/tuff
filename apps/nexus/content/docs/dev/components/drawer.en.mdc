@@ -289,9 +289,9 @@ rows:
     type: 'boolean'
     default: 'true'
   - name: zIndex
-    description: 'Custom z-index'
+    description: 'Custom z-index. When unset the runtime z-index manager assigns one (seeded at `10000`, incremented per drawer); set it manually only to coexist with externally fixed layers.'
     type: 'number'
-    default: '1998'
+    default: '-'
 ---
 ::
 

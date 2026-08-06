@@ -65,7 +65,7 @@ code: |
 - 没有 `icon` 和默认插槽时，根节点添加 `none-prefix` 并使用单列布局。
 - 默认插槽会替换图标渲染；它是前缀内容，不是后缀或操作插槽。
 - `password=true` 渲染 `input type="password"`，并在 keydown 时启用 Caps Lock 检测。
-- Caps Lock 检测基于 key code 和 `shiftKey`；提示只作信息展示，并且只在密码模式出现。
+- Caps Lock 检测读取 `KeyboardEvent.getModifierState('CapsLock')` 的实时修饰键状态（不做 keyCode/`shiftKey` 推断）；提示只作信息展示，并且只在密码模式出现。
 - `area=true` 渲染 `textarea` 而不是 `input`，并添加 `area` 类以使用固定高度。
 - `nonWin=true` 会移除 `win` 类，从而关闭 Windows 风格的聚焦视觉。
 - 组件没有暴露 `disabled`、`readonly`、`name` 或校验 props；需要这些契约时应使用更完整的输入组件。

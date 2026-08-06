@@ -22,7 +22,7 @@ function toCssUnit(v: string | number): string {
 }
 
 const itemStyle = computed<CSSProperties>(() => {
-  const height = props.variant === 'text' ? toCssUnit(props.height) : toCssUnit(props.height)
+  const height = toCssUnit(props.height)
   const width = toCssUnit(props.width)
 
   const radius = props.variant === 'circle'

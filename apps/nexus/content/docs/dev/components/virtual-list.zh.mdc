@@ -78,6 +78,7 @@ function jumpToLatest() {
 - `itemKey` 可以是字段名或函数。字段值缺失时回退为可见项 index。
 - `scroll` 在内部滚动状态更新后发出 `{ scrollTop, startIndex, endIndex }`。
 - `scrollToIndex(index)` 会把负数 index 限制为 0，但不会限制超过最后一项的 index；调用方应传入有效索引。
+- 容器与行都保持语义中立（无 `role`/`aria-*`）。由于 DOM 中只有可见切片，需要无障碍列表语义时应由使用方在外层补 `role="list"`/`role="listitem"` 与 `aria-setsize`/`aria-posinset`（用真实的 `items.length` 与绝对索引，而非可见切片下标）。
 
 ## API
 

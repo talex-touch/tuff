@@ -307,7 +307,7 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `modelValue` / `v-model` | `string \| number \| Array<string \| number>` | `''` | 当前选中值；`multiple` 模式下为数组。 |
-| `placeholder` | `string` | `'请选择'` | 没有选中 label 时展示在触发器输入框中的占位文本。 |
+| `placeholder` | `string` | `'Please select'` | 没有选中 label 时展示在触发器输入框中的占位文本。 |
 | `disabled` | `boolean` | `false` | 禁用触发器，关闭下拉面板，并阻止选择选项。 |
 | `multiple` | `boolean` | `false` | 启用多选标签模式。 |
 | `status` | `'default' \| 'error' \| 'warning'` | `'default'` | 校验状态边框。 |
