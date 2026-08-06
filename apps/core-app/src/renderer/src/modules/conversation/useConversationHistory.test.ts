@@ -131,3 +131,75 @@ describe('createConversationId', () => {
     expect(createConversationId()).not.toBe(createConversationId())
   })
 })
+
+describe('parts persistence', () => {
+  it('folds parts into meta.parts on save and splits them back out on load', async () => {
+    const history = useConversationHistory()
+    await history.persist('c1', 'Title', [
+      message({
+        id: 'a1',
+        role: 'assistant',
+        content: 'Found it.',
+        meta: { provider: 'pi', model: 'gpt' },
+        parts: [
+          { type: 'reasoning', text: 'thinking', done: true },
+          { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'data' },
+          { type: 'text', text: 'Found it.' }
+        ]
+      })
+    ])
+
+    const saved = send.mock.calls[0]?.[1]
+    const savedMeta = saved.messages[0].meta
+    expect(savedMeta.provider).toBe('pi')
+    expect(Array.isArray(savedMeta.parts)).toBe(true)
+    expect(savedMeta.parts).toHaveLength(3)
+
+    // Round trip: get() returns what save stored; load() must split parts out.
+    send.mockResolvedValueOnce({
+      id: 'c1',
+      title: 'Title',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: 'Found it.',
+          status: 'complete',
+          seq: 0,
+          createdAt: 1,
+          meta: savedMeta
+        }
+      ]
+    })
+
+    const restored = await history.load('c1')
+    expect(restored?.[0]?.parts).toHaveLength(3)
+    expect(restored?.[0]?.parts?.[1]).toMatchObject({ type: 'tool-call', output: 'data' })
+    expect(restored?.[0]?.meta).toEqual({ provider: 'pi', model: 'gpt' })
+  })
+
+  it('truncates verbose tool output before storing', async () => {
+    const history = useConversationHistory()
+    const huge = 'x'.repeat(10 * 1024)
+    await history.persist('c1', 'Title', [
+      message({
+        id: 'a1',
+        role: 'assistant',
+        parts: [{ type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: huge }]
+      })
+    ])
+
+    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
+    expect(stored.output.length).toBeLessThanOrEqual(8 * 1024 + 1)
+    expect(stored.output.endsWith('…')).toBe(true)
+  })
+
+  it('stores no meta at all for plain messages', async () => {
+    const history = useConversationHistory()
+    await history.persist('c1', 'Title', [message({ id: 'u1' })])
+
+    expect(send.mock.calls[0]?.[1].messages[0].meta).toBeUndefined()
+  })
+})

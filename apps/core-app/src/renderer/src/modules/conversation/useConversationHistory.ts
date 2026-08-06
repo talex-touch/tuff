@@ -21,6 +21,28 @@ export function createConversationId(): string {
   return crypto.randomUUID()
 }
 
+/** Caps stored tool output/log/text spans so one verbose tool cannot bloat the row. */
+const STORED_PART_TEXT_LIMIT = 8 * 1024
+
+/**
+ * Parts survive persistence inside `meta.parts`. The JSON round-trip both
+ * detaches from the reactive proxies (structuredClone rejects them) and
+ * guarantees the payload is plain data; long fields are truncated afterwards.
+ */
+function toStoredParts(parts: ConversationMessage['parts']): unknown[] | undefined {
+  if (!parts || parts.length === 0) return undefined
+  const plain = JSON.parse(JSON.stringify(parts)) as Array<Record<string, unknown>>
+  for (const part of plain) {
+    for (const key of ['text', 'output', 'logs', 'input', 'error'] as const) {
+      const value = part[key]
+      if (typeof value === 'string' && value.length > STORED_PART_TEXT_LIMIT) {
+        part[key] = `${value.slice(0, STORED_PART_TEXT_LIMIT)}…`
+      }
+    }
+  }
+  return plain
+}
+
 function toSaveRequest(
   id: string,
   title: string,
@@ -34,16 +56,26 @@ function toSaveRequest(
      * the write, so a reload would otherwise restore a bubble that waits forever for deltas that
      * will never arrive.
      */
-    messages: messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      status: message.status === 'streaming' ? 'failed' : message.status,
+    messages: messages.map((message) => {
+      const storedParts = toStoredParts(message.parts)
       // `toRaw`: reading `meta` off a reactive message returns a Proxy, and the transport's
       // structuredClone rejects proxies — every save would fail. The spread keeps the stored
       // object detached from the live one.
-      meta: message.meta ? ({ ...toRaw(message.meta) } as Record<string, unknown>) : undefined
-    }))
+      const meta =
+        message.meta || storedParts
+          ? ({
+              ...(message.meta ? toRaw(message.meta) : {}),
+              ...(storedParts ? { parts: storedParts } : {})
+            } as Record<string, unknown>)
+          : undefined
+      return {
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        status: message.status === 'streaming' ? 'failed' : message.status,
+        meta
+      }
+    })
   }
 }
 
@@ -67,13 +99,19 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   async function load(id: string): Promise<ConversationMessage[] | null> {
     const detail = await sdk.get(id)
     if (!detail) return null
-    return detail.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      status: message.status,
-      meta: message.meta
-    })) as ConversationMessage[]
+    return detail.messages.map((message) => {
+      // Parts ride inside meta for storage; pull them back out so the meta the
+      // side panel reads stays the plain turn metadata it always was.
+      const { parts, ...meta } = (message.meta ?? {}) as Record<string, unknown>
+      return {
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        status: message.status,
+        meta: Object.keys(meta).length ? meta : undefined,
+        ...(Array.isArray(parts) && parts.length > 0 ? { parts } : {})
+      }
+    }) as ConversationMessage[]
   }
 
   async function persist(

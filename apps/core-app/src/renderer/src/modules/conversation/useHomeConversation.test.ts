@@ -499,3 +499,163 @@ describe('attachments', () => {
     await turn
   })
 })
+
+describe('part assembly', () => {
+  it('assembles reasoning, tool lifecycle and text into ordered parts', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('find the file')
+    await flush()
+    const handlers = double.emit()
+
+    handlers.onPartEvent?.({ kind: 'reasoning-start' }, { type: 'part', capabilityId: 'text.chat' })
+    handlers.onPartEvent?.(
+      { kind: 'reasoning-delta', delta: 'thinking about it' },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onPartEvent?.({ kind: 'reasoning-end' }, { type: 'part', capabilityId: 'text.chat' })
+    handlers.onPartEvent?.(
+      { kind: 'tool-start', callId: 'c1', name: 'tuff_search_files' },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onPartEvent?.(
+      { kind: 'tool-input-delta', callId: 'c1', delta: '{"query":' },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onPartEvent?.(
+      { kind: 'tool-input-end', callId: 'c1', input: { query: 'report' } },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onPartEvent?.(
+      {
+        kind: 'tool-result',
+        callId: 'c1',
+        name: 'tuff_search_files',
+        output: '3 hits',
+        isError: false
+      },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onDelta?.('Found three files.', { type: 'delta', capabilityId: 'text.chat' })
+    handlers.onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    const assistant = conversation.messages.value[1]
+    expect(assistant?.status).toBe('complete')
+    expect(assistant?.content).toBe('Found three files.')
+
+    const parts = assistant?.parts ?? []
+    expect(parts.map((part) => part.type)).toEqual(['reasoning', 'tool-call', 'text'])
+
+    expect(parts[0]).toMatchObject({ type: 'reasoning', text: 'thinking about it', done: true })
+    expect(parts[1]).toMatchObject({
+      type: 'tool-call',
+      id: 'c1',
+      status: 'done',
+      output: '3 hits'
+    })
+    expect((parts[1] as { input?: string }).input).toContain('"query"')
+    // Streaming input logs clear once the input settles.
+    expect((parts[1] as { logs?: string }).logs).toBeUndefined()
+    expect(parts[2]).toMatchObject({ type: 'text', text: 'Found three files.' })
+  })
+
+  it('upgrades to parts mode mid-turn without losing leading text', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    const handlers = double.emit()
+
+    handlers.onDelta?.('Let me check. ', { type: 'delta', capabilityId: 'text.chat' })
+    handlers.onPartEvent?.(
+      { kind: 'tool-start', callId: 'c9', name: 'read' },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onPartEvent?.(
+      { kind: 'tool-result', callId: 'c9', name: 'read', output: 'ok', isError: false },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onDelta?.('Done.', { type: 'delta', capabilityId: 'text.chat' })
+    handlers.onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    const parts = conversation.messages.value[1]?.parts ?? []
+    expect(parts.map((part) => part.type)).toEqual(['text', 'tool-call', 'text'])
+    expect(parts[0]).toMatchObject({ text: 'Let me check. ' })
+    expect(parts[2]).toMatchObject({ text: 'Done.' })
+  })
+
+  it('flags failed tool results as errors', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('do it')
+    await flush()
+    const handlers = double.emit()
+
+    handlers.onPartEvent?.(
+      { kind: 'tool-start', callId: 'cx', name: 'read' },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onPartEvent?.(
+      { kind: 'tool-result', callId: 'cx', name: 'read', output: 'User denied', isError: true },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    handlers.onDelta?.('Understood.', { type: 'delta', capabilityId: 'text.chat' })
+    handlers.onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(conversation.messages.value[1]?.parts?.[0]).toMatchObject({
+      type: 'tool-call',
+      status: 'error',
+      error: 'User denied'
+    })
+  })
+
+  it('settles dangling spans when the turn is stopped mid-tool', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    void conversation.send('long task')
+    await flush()
+    const handlers = double.emit()
+
+    handlers.onDelta?.('Working. ', { type: 'delta', capabilityId: 'text.chat' })
+    handlers.onPartEvent?.({ kind: 'reasoning-start' }, { type: 'part', capabilityId: 'text.chat' })
+    handlers.onPartEvent?.(
+      { kind: 'tool-start', callId: 'c2', name: 'read' },
+      { type: 'part', capabilityId: 'text.chat' }
+    )
+    conversation.stop()
+    await flush()
+
+    const parts = conversation.messages.value[1]?.parts ?? []
+    const reasoning = parts.find((part) => part.type === 'reasoning')
+    const tool = parts.find((part) => part.type === 'tool-call')
+    expect(reasoning).toMatchObject({ done: true })
+    expect(tool).toMatchObject({ status: 'error', error: 'Interrupted' })
+  })
+
+  it('clears parts on retry', async () => {
+    const double = createSdkDouble({
+      startStream: async () => {
+        throw new Error('boom')
+      },
+      chat: async () => {
+        throw new Error('boom')
+      }
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    await conversation.send('will fail')
+    expect(conversation.messages.value[1]?.status).toBe('failed')
+    conversation.messages.value[1]!.parts = [{ type: 'text', text: 'stale' }]
+
+    void conversation.retry()
+    await flush()
+    expect(conversation.messages.value[1]?.parts).toBeUndefined()
+  })
+})
