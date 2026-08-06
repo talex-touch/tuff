@@ -4240,6 +4240,8 @@
       "preparingFiles": "文件准备中..."
     },
   "common": {
+    "imagePreviewAlt": "图片预览",
+    "wallpaperPreviewAlt": "自定义背景预览",
     "loadMore": "加载更多",
     "copy": "复制",
     "copied": "已复制",

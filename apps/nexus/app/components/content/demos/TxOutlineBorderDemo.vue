@@ -12,7 +12,7 @@ const { locale } = useI18n()
         clip-mode="mask"
         clip-shape="hexagon"
       >
-        <img src="https://avatars.githubusercontent.com/u/3?v=4" style="width:48px;height:48px;object-fit:cover;">
+        <img src="https://avatars.githubusercontent.com/u/3?v=4" alt="Example user avatar" style="width:48px;height:48px;object-fit:cover;">
       </TxOutlineBorder>
     </div>
   </div>
@@ -25,7 +25,7 @@ const { locale } = useI18n()
         clip-mode="mask"
         clip-shape="hexagon"
       >
-        <img src="https://avatars.githubusercontent.com/u/3?v=4" style="width:48px;height:48px;object-fit:cover;">
+        <img src="https://avatars.githubusercontent.com/u/3?v=4" alt="Example user avatar" style="width:48px;height:48px;object-fit:cover;">
       </TxOutlineBorder>
     </div>
   </div>
