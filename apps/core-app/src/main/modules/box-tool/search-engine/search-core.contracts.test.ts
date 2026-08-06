@@ -529,12 +529,14 @@ describe('SearchEngineCore facade contracts', () => {
 
     await core.recordExecute('session-usage-1', item)
 
+    // Log, stats and trend rows all key on the provider id; only the separate
+    // source_type column carries the type.
     expect(state.addUsageLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'execute',
         itemId: 'executed-item',
         sessionId: 'session-usage-1',
-        source: 'application'
+        source: 'usage-provider'
       })
     )
     expect(state.incrementUsageSummary).toHaveBeenCalledWith('executed-item')

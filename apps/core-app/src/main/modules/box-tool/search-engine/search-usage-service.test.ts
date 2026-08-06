@@ -9,6 +9,7 @@ import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import * as schema from '../../../db/schema'
 import { createDbUtils } from '../../../db/utils'
 import { SearchUsageService } from './search-usage-service'
+import { TimeStatsAggregator } from './time-stats-aggregator'
 import { UsageSummaryService } from './usage-summary-service'
 
 const schemaMigrationUrls = [
@@ -87,6 +88,10 @@ describe('SearchUsageService execution persistence', () => {
           `)
         ).rows
       ).toEqual([{ itemId: 'app-item', clickCount: 1 }])
+      // usage_logs.source carries the provider id, the same key
+      // item_usage_stats / item_time_stats / usage_trend_daily use — the time
+      // aggregator copies this column into item_time_stats.sourceId, and a
+      // source TYPE here makes every later lookup miss.
       expect(
         (
           await client.execute(`
@@ -94,11 +99,57 @@ describe('SearchUsageService execution persistence', () => {
             FROM usage_logs
           `)
         ).rows
-      ).toEqual([{ itemId: 'app-item', source: 'application', action: 'execute' }])
+      ).toEqual([{ itemId: 'app-item', source: 'application-provider', action: 'execute' }])
+      expect(
+        (
+          await client.execute(`
+            SELECT source_id AS sourceId, item_id AS itemId, execute_count AS executeCount
+            FROM usage_trend_daily
+          `)
+        ).rows
+      ).toEqual([{ sourceId: 'application-provider', itemId: 'app-item', executeCount: 1 }])
 
       await new UsageSummaryService(dbUtils, { autoCleanup: false }).runSummary()
 
       expect((await readUsageStats()).rows).toEqual(expectedUsageStats)
+    } finally {
+      await dbWriteScheduler.drain()
+      client?.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('aggregates time stats under the key the time-based candidate lookup joins on', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'tuff-search-usage-time-stats-'))
+    let client: Client | undefined
+
+    try {
+      client = createClient({ url: `file:${join(directory, 'search-usage.sqlite')}` })
+      for (const migrationUrl of schemaMigrationUrls) {
+        await applyMigration(client, migrationUrl)
+      }
+
+      const db = drizzle(client, { schema })
+      const dbUtils = createDbUtils(db)
+      const usageService = new SearchUsageService({ getDbUtils: () => dbUtils })
+      usageService.initialize(db)
+
+      await usageService.recordExecute('time-stats-session', item, item.id)
+      await usageService.flush()
+      await dbWriteScheduler.drain()
+      await new TimeStatsAggregator(dbUtils).aggregateTimeStats()
+      await dbWriteScheduler.drain()
+
+      // The exact lookup getTimeBasedTopItems performs: item_time_stats rows
+      // are re-read through item_usage_stats, and a candidate only exists when
+      // both tables agree on the source key.
+      const timeStats = await dbUtils.getAllItemTimeStats()
+      const usageStats = await dbUtils.getUsageStatsBatch(
+        timeStats.map(({ sourceId, itemId }) => ({ sourceId, itemId }))
+      )
+
+      expect(timeStats.map((row) => row.sourceId)).toEqual(['application-provider'])
+      expect(usageStats).toHaveLength(1)
     } finally {
       await dbWriteScheduler.drain()
       client?.close()

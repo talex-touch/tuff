@@ -105,6 +105,74 @@ describe('ItemRebuilder', () => {
     })
   })
 
+  it('returns items in scored order across sources and publishes the score', async () => {
+    const dbUtils = {
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Demo.app',
+          name: 'Demo',
+          displayName: 'Demo',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: '/Applications/Demo.app',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Demo' } },
+        actions: [],
+        meta: {}
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    // The app candidate scores lowest, and app items are rebuilt in the first
+    // batch — grouping by source would surface it first.
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'plugin-recommend:demo-provider',
+        itemId: 'top-action',
+        sourceType: 'plugin-recommend',
+        usageStats,
+        source: 'plugin',
+        score: 9_000,
+        pluginCandidate: {
+          providerId: 'demo-provider',
+          id: 'top-action',
+          title: 'Top Action',
+          action: 'open'
+        }
+      },
+      {
+        sourceId: 'app-provider',
+        itemId: '/Applications/Demo.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 120
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+
+    expect(result.map((item) => item.id)).toEqual(['top-action', '/Applications/Demo.app'])
+    expect(result.map((item) => item.scoring?.final)).toEqual([9_000, 120])
+  })
+
   it('preserves plugin recommendation icon metadata and class badge icons', async () => {
     const rebuilder = new ItemRebuilder({} as never)
     const scoredItems: ScoredItem[] = [
