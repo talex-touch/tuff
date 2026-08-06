@@ -1,7 +1,17 @@
+<script lang="ts">
+/**
+ * The one menu the two pills may hold open between them — the old `openMenu` state machine's
+ * invariant. Pointer flows keep it on their own (the primitive's outside-click closes the other
+ * copy on pointerdown), but a keyboard activation of the other pill fires no pointerdown, so the
+ * newly opening copy closes the previous one through this hand-off.
+ */
+let closeActiveModelMenu: (() => void) | null = null
+</script>
+
 <script lang="ts" name="HomeModelMenu" setup>
 import type { ModelChoice } from '~/modules/conversation/useModelOptions'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
 
@@ -60,15 +70,26 @@ function onPanelKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') restoreFocusOnClose = true
 }
 
+function closeSelf(): void {
+  open.value = false
+}
+
 watch(open, (isOpen) => {
   if (isOpen) {
+    if (closeActiveModelMenu !== null && closeActiveModelMenu !== closeSelf) closeActiveModelMenu()
+    closeActiveModelMenu = closeSelf
     restoreFocusOnClose = false
     void load()
     return
   }
+  if (closeActiveModelMenu === closeSelf) closeActiveModelMenu = null
   if (restoreFocusOnClose) {
     void nextTick(() => triggerWrapRef.value?.querySelector('button')?.focus())
   }
+})
+
+onBeforeUnmount(() => {
+  if (closeActiveModelMenu === closeSelf) closeActiveModelMenu = null
 })
 </script>
 
@@ -89,7 +110,9 @@ watch(open, (isOpen) => {
       </span>
     </template>
 
-    <div class="HomeModelMenu" :aria-label="t('home.model')" @keydown="onPanelKeydown">
+    <!-- `group` so the label is announced: on a bare div `aria-label` is ignored, and the
+         old listbox named itself. The radio rows also belong inside a group per ARIA menus. -->
+    <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
       <button
         class="HomeModelMenu-Item"
         type="button"
