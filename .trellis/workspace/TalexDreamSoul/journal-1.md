@@ -1829,3 +1829,12 @@ MCP client 已存在的翻案把 C 收窄为三桥一面：注入桥（surface �
 ### Next Steps
 
 - None - task complete
+
+## 2026-08-05 · realtime-freshness + R2 · 豆包诊断落案与推荐信号接线
+
+- 豆包个案取证:直接原因=dev 实例运行期 out/main 被清空(import('./darwin') 失败 93 次),环境事故;照出 4 个 HEAD 真缺陷立项修复(research/realtime-chain-diagnosis.md 含链路图/逐条证伪/验收脚本)。
+- realtime(a09d10bdd):失败三态(failed≠not-app,Info.plist 存在性二分)+2/8/30s 排程退避+死信(64 上限,空集即撤 timer);合并窗 400/300ms 后到者胜(SDK 粘性 delete 会把自动升级的应用删掉,红绿锁死);健康探针文件系统集合差(NFC 归一+manifest 校验,仅两个启动决策点);lastIndexedAt 补写;dev mdls 门 >6h。装→可搜预算 1.5-2.5s,空闲零定时器。复核修 4(NFC 鲁棒/manifest 空壳/死信双所有权泄漏/上报口径)。
+- R2(3ee91b54a):小时分布等量纲进评分;缓存键只剩慢上下文+易变请求时重排(复核抓到剪贴板 URL 候选进缓存的真 bug,红绿修复);冷启动 app catalog 兜底;聚合增量化(全量重建降为门控修复路径,E-NEW5 收口);选区接入+时区切换;isAppSourceType 双拼写修 17 处恒假判定;hit-rate@k 本地指标(0036 aux 表,id 不落盘不进 Sentry)。
+- 途中两代理撞额度上限,SendMessage 原地续跑无损;高负载(load 93-126)下 hook 超时定性为既有负载敏感 flake(search-core init),单跑全过。
+- 发现:db:generate 是死命令(drizzle-kit 未装,0015 起 22 个迁移手写)→迁移链+DDL parity 测试为正确门禁,记 E-NEW8;剪贴板 URL 候选的 content 是哈希非 URL(HEAD 既有,设计问题待决)。
+- 待用户:重启 dev 实例后跑 .trellis/tasks/08-05-realtime-index-freshness/verify-realtime-index-freshness.sh 验收「装 app ≤10s 可搜」。
