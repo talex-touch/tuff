@@ -88,11 +88,11 @@ import { TxAiConversation } from '@talex-touch/intelligence-uikit'
 
 ## AI block mapping 边界
 
-`@talex-touch/intelligence-uikit/conversation` 只提供：
+`@talex-touch/intelligence-uikit` 的对话组件只提供：
 
 - AI block 到 `TxAiRichBlock` 的映射。
 - AI message 到 `TxAiMessageModel` 的映射。
-- `TxAIConversation` / `TxAIMessage` 兼容导出。
+- `TxAiConversation` / `TxAiMessage` 组件导出。
 
 禁止放入：
 
