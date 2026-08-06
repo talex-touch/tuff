@@ -2,6 +2,7 @@ import type { AiAttachment, AiMessagePart, AiToolCallPart } from '@talex-touch/t
 import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   IntelligenceChatPayload,
+  IntelligenceHomeSurfaceMetadata,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceMessage,
@@ -12,6 +13,7 @@ import type {
 import type { ComputedRef } from 'vue'
 import type { ConversationError } from './conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
 import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
@@ -92,6 +94,12 @@ export interface UseHomeConversationOptions {
   sdk?: ConversationIntelligenceSdk
   /** Read at send time, not at setup, so changing the model mid-conversation takes effect. */
   routing?: () => ConversationRouting | undefined
+  /**
+   * Whether main may add the user's imported skills and rules to this turn — the composer's Auto
+   * Context switch. A getter for the same reason routing is one, and defaulted on to match
+   * `appSetting.tools.autoContext`.
+   */
+  autoContext?: () => boolean
 }
 
 export interface UseHomeConversationReturn {
@@ -116,12 +124,18 @@ export function useHomeConversation(
   const messages = ref<ConversationMessage[]>([])
   const streaming = ref(false)
 
-  function resolveInvokeOptions(): IntelligenceInvokeOptions | undefined {
+  function resolveInvokeOptions(): IntelligenceInvokeOptions {
     const routing = options.routing?.()
-    if (!routing?.providerId && !routing?.model) return undefined
+    const metadata: IntelligenceHomeSurfaceMetadata = {
+      surface: INTELLIGENCE_HOME_SURFACE,
+      autoContext: options.autoContext?.() !== false
+    }
+    // The surface marker rides every turn, pinned model or not: it is what tells main this is a
+    // user conversation rather than a capability test running on the same `text.chat` id.
     return {
-      ...(routing.providerId ? { preferredProviderId: routing.providerId } : {}),
-      ...(routing.model ? { modelPreference: [routing.model] } : {})
+      ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
+      ...(routing?.model ? { modelPreference: [routing.model] } : {}),
+      metadata
     }
   }
 

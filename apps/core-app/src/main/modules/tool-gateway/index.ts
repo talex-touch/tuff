@@ -18,11 +18,16 @@ import { AgentToolEvents } from '@talex-touch/utils/transport/sdk/domains/agent-
 import { shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
+import { aiImportContentStore } from '../ai/ai-import-content-store'
+import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
+import { intelligenceMcpRegistry } from '../ai/intelligence-mcp-registry'
 import { setPiToolRuntimeResolver } from '../ai/providers/pi-cli-provider'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { createAgentContextSource } from './agent-context-source'
 import { startToolGateway } from './gateway-server'
 import { createToolRegistry } from './tool-registry'
 
+export * from './agent-context-source'
 export * from './gateway-server'
 export * from './tool-registry'
 
@@ -45,6 +50,19 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
   private handle: ToolGatewayHandle | null = null
   private enabled = false
   private pending = new Map<string, (decision: ConfirmationDecision) => void>()
+  /**
+   * MCP servers run in this process, under the registry the orchestrator
+   * already owns — the agent process never gets a server of its own, so every
+   * call still lands in front of the confirmation gate.
+   */
+  private readonly agentContext = createAgentContextSource({
+    listImportedItems: () => aiOrchestratorStore.listImportedItems(),
+    readContent: (contentRef) => aiImportContentStore.read(contentRef),
+    registerMcpProfile: (profile) => intelligenceMcpRegistry.registerProfile(profile),
+    listStructuredTools: (profileIds) => intelligenceMcpRegistry.listStructuredTools(profileIds),
+    callMcpTool: (profileId, toolName, input) =>
+      intelligenceMcpRegistry.callTool(profileId, toolName, input)
+  })
 
   constructor() {
     super(ToolGatewayModule.key, { create: false })
@@ -81,7 +99,8 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
           .filter((entry) => entry.name || entry.path)
           .slice(0, limit)
       },
-      openPath: async (path: string) => shell.openPath(path)
+      openPath: async (path: string) => shell.openPath(path),
+      agentContext: this.agentContext
     }
   }
 

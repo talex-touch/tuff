@@ -1,3 +1,4 @@
+import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
@@ -14,11 +15,24 @@ export interface ToolResult {
   isError: boolean
 }
 
+/** What the gateway needs to know about one specific call before running it. */
+export interface ToolCallPlan {
+  risk: ToolRisk
+  summary: string
+  /** Scope of a remembered approval; a tool that proxies others narrows it. */
+  rememberKey: string
+}
+
 export interface ToolDefinition {
   name: string
   risk: ToolRisk
   /** One-line description shown on the confirmation card. */
   summarize: (args: Record<string, unknown>) => string
+  /**
+   * Per-call override for tools that proxy something else, where the static
+   * risk above cannot know what is actually being invoked.
+   */
+  classify?: (args: Record<string, unknown>) => Promise<ToolCallPlan>
   execute: (args: Record<string, unknown>) => Promise<ToolResult>
 }
 
@@ -169,10 +183,50 @@ export function parseChartSpec(args: Record<string, unknown>): ChartSpec | strin
   }
 }
 
+/**
+ * MCP servers rank their tools on a four-level scale of their own. Only a tool
+ * the server itself marks read-only earns the rememberable `read` tier;
+ * everything else — including anything we failed to classify — re-asks on every
+ * call.
+ */
+export function mcpRiskToToolRisk(level: McpRiskLevel): ToolRisk {
+  return level === 'low' ? 'read' : 'execute'
+}
+
+/**
+ * `critical` is what the MCP registry assigns a tool carrying `destructiveHint`
+ * (or one whose name reads like a delete), so the mark earns its place on the
+ * confirmation card.
+ */
+function mcpSummary(serverName: string, toolName: string, level: McpRiskLevel): string {
+  return `${level === 'critical' ? '⚠ ' : ''}${serverName} / ${toolName}`
+}
+
+/** Matches the budget the orchestrator gives imported context. */
+const MAX_TOOL_TEXT_CHARS = 64 * 1024
+
+function truncateForModel(text: string): string {
+  return text.length > MAX_TOOL_TEXT_CHARS
+    ? `${text.slice(0, MAX_TOOL_TEXT_CHARS)}\n… truncated at ${MAX_TOOL_TEXT_CHARS} characters.`
+    : text
+}
+
+function stringifyMcpResult(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value === null || value === undefined) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
 export interface ToolRegistryOptions {
   /** Injected so the gateway can be tested without the search subsystem. */
   searchFiles: (query: string, limit: number) => Promise<Array<{ name: string; path: string }>>
   openPath: (path: string) => Promise<string>
+  /** The user's imported skills and MCP servers. */
+  agentContext: AgentContextSource
 }
 
 export function createToolRegistry(options: ToolRegistryOptions): Map<string, ToolDefinition> {
@@ -244,6 +298,106 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         // The payload rides the normal tool-result channel with a marker the
         // renderer recognises, so no second transport is needed for widgets.
         return { output: `${CHART_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
+      }
+    },
+    {
+      name: 'tuff_skill_read',
+      risk: 'read',
+      summarize: (args) => `Read imported skill ${readStringArg(args, 'id')}`,
+      execute: async (args) => {
+        const id = readStringArg(args, 'id').trim()
+        if (!id) return { output: 'id is required', isError: true }
+        try {
+          return {
+            output: truncateForModel(await options.agentContext.readSkill(id)),
+            isError: false
+          }
+        } catch (error) {
+          return { output: (error as Error).message, isError: true }
+        }
+      }
+    },
+    {
+      name: 'tuff_mcp_list_tools',
+      risk: 'read',
+      summarize: () => 'List the tools on the enabled MCP servers',
+      execute: async () => {
+        const servers = await options.agentContext.listMcpServers()
+        if (servers.length === 0) {
+          // A prompt, not an error: nothing is broken, the user simply has no
+          // server configured yet.
+          return {
+            output: 'No MCP servers are enabled. The user can add one in Settings, Skills & MCP.',
+            isError: false
+          }
+        }
+
+        const lines = ['server\ttool\tconfirmation\tdescription']
+        for (const server of servers) {
+          try {
+            const tools = await options.agentContext.listMcpTools(server.id)
+            if (tools.length === 0) {
+              lines.push(`${server.id}\t(no tools)`)
+              continue
+            }
+            for (const tool of tools) {
+              lines.push(
+                `${server.id}\t${tool.name}\t${mcpRiskToToolRisk(tool.risk)}\t${tool.description}`
+              )
+            }
+          } catch (error) {
+            // One unreachable server must not hide the rest of the catalogue.
+            lines.push(`${server.id}\tunavailable: ${(error as Error).message}`)
+          }
+        }
+        return { output: lines.join('\n'), isError: false }
+      }
+    },
+    {
+      name: 'tuff_mcp_call',
+      // Stands in only if `classify` cannot reach the server: the real risk
+      // belongs to the MCP tool being proxied, not to this forwarder.
+      risk: 'execute',
+      summarize: (args) => `${readStringArg(args, 'server')} / ${readStringArg(args, 'tool')}`,
+      classify: async (args) => {
+        const server = readStringArg(args, 'server').trim()
+        const tool = readStringArg(args, 'tool').trim()
+        // Keyed by the proxied tool rather than by `tuff_mcp_call`, so a
+        // remembered yes for one read-only tool never waves through another
+        // server's destructive one.
+        const fallback: ToolCallPlan = {
+          risk: 'execute',
+          summary: `${server} / ${tool}`,
+          rememberKey: `tuff_mcp_call:${server}/${tool}`
+        }
+        try {
+          const entry = (await options.agentContext.listMcpTools(server)).find(
+            (candidate) => candidate.name === tool
+          )
+          if (!entry) return fallback
+          return {
+            risk: mcpRiskToToolRisk(entry.risk),
+            summary: mcpSummary(entry.serverName, entry.name, entry.risk),
+            rememberKey: fallback.rememberKey
+          }
+        } catch {
+          // A server that cannot be reached cannot vouch for its tool: ask.
+          return fallback
+        }
+      },
+      execute: async (args) => {
+        const server = readStringArg(args, 'server').trim()
+        const tool = readStringArg(args, 'tool').trim()
+        if (!server || !tool) return { output: 'server and tool are required', isError: true }
+        const callArgs =
+          args.args && typeof args.args === 'object' ? (args.args as Record<string, unknown>) : {}
+
+        try {
+          const result = await options.agentContext.callMcpTool(server, tool, callArgs)
+          return { output: truncateForModel(stringifyMcpResult(result)), isError: false }
+        } catch (error) {
+          return { output: `MCP call failed: ${(error as Error).message}`, isError: true }
+        }
       }
     }
   ]

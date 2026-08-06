@@ -169,6 +169,53 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
       required: ['path'],
     },
   },
+  {
+    name: 'tuff_skill_read',
+    label: 'Tuff: read skill',
+    description:
+      'Read the full text of one of the user\'s imported skills. Your context lists the available '
+      + 'skills by id and description; pass one of those ids. This reads managed skill content '
+      + 'only — it is not a file reader.',
+    promptSnippet: 'Read an imported skill by id before following it',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Skill id, exactly as listed in your context' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'tuff_mcp_list_tools',
+    label: 'Tuff: list MCP tools',
+    description:
+      'List the tools exposed by the MCP servers the user has enabled, as tab-separated '
+      + 'server / tool / confirmation / description rows. Call this before tuff_mcp_call: the '
+      + 'catalogue changes whenever the user edits their servers, so never assume a tool exists.',
+    promptSnippet: 'Discover the user\'s MCP tools before calling one',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'tuff_mcp_call',
+    label: 'Tuff: call MCP tool',
+    description:
+      'Invoke one tool on one of the user\'s MCP servers. Use the exact server and tool values '
+      + 'from tuff_mcp_list_tools, and arguments matching that tool\'s schema. Anything the '
+      + 'server does not mark read-only asks the user every single time.',
+    promptSnippet: 'Call an MCP tool discovered through tuff_mcp_list_tools',
+    parameters: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', description: 'Server id from tuff_mcp_list_tools' },
+        tool: { type: 'string', description: 'Tool name from tuff_mcp_list_tools' },
+        args: { type: 'object', description: 'Arguments for the tool, per its own schema' },
+      },
+      required: ['server', 'tool'],
+    },
+  },
 ]
 
 export default function tuffTools(pi: ExtensionApi): void {
