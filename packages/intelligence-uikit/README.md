@@ -21,13 +21,10 @@ import {
 import '@talex-touch/intelligence-uikit/style.css'
 ```
 
-AI block 兼容入口：
+AI 对话组件（从包根导入，注意 `TxAiConversation` 的大小写）：
 
 ```ts
-import {
-  mapAIChatBlocksToAiBlocks,
-  TxAIConversation,
-} from '@talex-touch/intelligence-uikit/conversation'
+import { TxAiConversation } from '@talex-touch/intelligence-uikit'
 ```
 
 ## 组件矩阵
@@ -55,7 +52,7 @@ import {
 ### Phase 1：落地包结构
 
 - 新增 `packages/intelligence-uikit`。
-- 提供 `@talex-touch/intelligence-uikit`、`@talex-touch/intelligence-uikit/conversation`、`@talex-touch/intelligence-uikit/style.css`。
+- 提供 `@talex-touch/intelligence-uikit`、`@talex-touch/intelligence-uikit/style.css`。
 - README 固化组件矩阵、迁移策略、动效扩展规范。
 - 只提供组件骨架和稳定扩展点。
 
