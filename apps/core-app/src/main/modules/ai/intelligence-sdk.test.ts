@@ -2909,6 +2909,76 @@ describe('tuffIntelligenceSDK invoke', () => {
     })
   })
 
+  it('rolls the streamed result back to the last commit when a provider withdraws an attempt', async () => {
+    // A provider whose agent retries a message (the pi CLI) streams the abandoned attempt before
+    // it knows it will be abandoned. `end.result` is what the non-streaming consumers and the
+    // stored transcript read, so it has to be the surviving text, not every attempt in a row.
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    async function* streamChunks() {
+      yield { delta: 'Checking. ', done: false }
+      yield { delta: '', done: false, partEvent: { kind: 'message-commit' as const } }
+      yield { delta: 'half an ans', done: false }
+      yield { delta: '', done: false, partEvent: { kind: 'text-reset' as const } }
+      yield { delta: 'Done.', done: false }
+      yield { delta: '', done: false, partEvent: { kind: 'message-commit' as const } }
+      yield { delta: '', done: true }
+    }
+
+    const provider = createProvider(
+      {
+        id: 'chat-local',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Chat Local',
+        enabled: true,
+        priority: 1,
+        models: ['chat-local'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chatStream = vi.fn(() => streamChunks())
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [{ providerId: 'chat-local', priority: 1 }]
+        }
+      }
+    })
+
+    const events: IntelligenceStreamEvent<string>[] = []
+    for await (const event of sdk.stream<string>('text.chat', {
+      messages: [{ role: 'user', content: 'find the file' }]
+    })) {
+      events.push(event)
+    }
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'end',
+      result: 'Checking. Done.',
+      content: 'Checking. Done.'
+    })
+    // Deltas and the commit/rollback markers both stay on the wire — the surface needs them to
+    // take the withdrawn text back off screen.
+    expect(events.filter((event) => event.type === 'part')).toHaveLength(3)
+    expect(events.filter((event) => event.type === 'delta').map((event) => event.delta)).toEqual([
+      'Checking. ',
+      'half an ans',
+      'Done.'
+    ])
+  })
+
   it('adopts backend stream metadata for delta, usage, and end events', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'text.chat',

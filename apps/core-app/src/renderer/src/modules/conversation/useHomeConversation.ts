@@ -228,6 +228,59 @@ export function useHomeConversation(
     const ensureParts = (): AiMessagePart[] => (assistant.parts ??= [])
     let reasoningStartedAt: number | null = null
 
+    /**
+     * High-water mark of the text and parts the provider has committed.
+     *
+     * Deltas are a preview: a provider whose agent retries a failed message discards what it
+     * streamed for that message alone. Rolling back to this snapshot — rather than clearing the
+     * bubble — is what keeps a tool loop's earlier text and tool cards on screen when the message
+     * after them has to be written twice.
+     */
+    let committed = { contentLength: 0, partsLength: 0, textLength: 0 }
+
+    const commitParts = (): void => {
+      const parts = assistant.parts ?? []
+      const last = parts[parts.length - 1]
+      committed = {
+        contentLength: assistant.content.length,
+        partsLength: parts.length,
+        // The next delta merges into this text part instead of starting a new one, so the part
+        // count alone would not undo it.
+        textLength: last?.type === 'text' ? last.text.length : 0
+      }
+    }
+
+    /**
+     * Upgrades the message to parts mode, folding the text streamed so far into a leading part.
+     *
+     * That text can be partly committed already, so the snapshot has to be restated in terms of
+     * the part that now holds it — left alone, it would still say "zero parts" and the next
+     * rollback would take the upgrade down with the attempt it was undoing.
+     */
+    const seedParts = (): void => {
+      if (assistant.parts || !assistant.content) return
+      assistant.parts = [{ type: 'text', text: assistant.content }]
+      committed = {
+        ...committed,
+        partsLength: committed.contentLength > 0 ? 1 : 0,
+        textLength: committed.contentLength
+      }
+    }
+
+    const rollbackParts = (): void => {
+      assistant.content = assistant.content.slice(0, committed.contentLength)
+      const parts = assistant.parts
+      if (parts) {
+        // Truncated in place rather than replaced: the view renders this exact array instance.
+        parts.length = committed.partsLength
+        const last = parts[parts.length - 1]
+        if (last?.type === 'text') last.text = last.text.slice(0, committed.textLength)
+      }
+      // The discarded attempt may have been cut off mid-thought; its span is gone with the parts
+      // above, so a duration measured from it would land on whatever opens next.
+      reasoningStartedAt = null
+    }
+
     const appendTextPart = (delta: string): void => {
       const parts = ensureParts()
       const last = parts[parts.length - 1]
@@ -257,6 +310,17 @@ export function useHomeConversation(
     }
 
     const handlePartEvent = (event: IntelligencePartEvent): void => {
+      // Handled before `ensureParts`, which would otherwise flip every plain-text turn into parts
+      // mode — a healthy turn ends with a commit whether or not it used a single tool.
+      if (event.kind === 'message-commit') {
+        commitParts()
+        return
+      }
+      if (event.kind === 'text-reset') {
+        rollbackParts()
+        return
+      }
+
       const parts = ensureParts()
       switch (event.kind) {
         case 'reasoning-start':
@@ -393,12 +457,17 @@ export function useHomeConversation(
       },
       onPartEvent: (partEvent) => {
         if (settled) return
+        // Bookkeeping, not content: seeding a text part off a commit would put every turn into
+        // parts mode, and a rollback that arrives before anything survived must leave the turn
+        // eligible for the non-streaming fallback below.
+        if (partEvent.kind === 'message-commit' || partEvent.kind === 'text-reset') {
+          handlePartEvent(partEvent)
+          return
+        }
         received = true
         // The first structured event upgrades the message to parts mode; the
         // text accumulated so far becomes the leading text part.
-        if (!assistant.parts && assistant.content) {
-          assistant.parts = [{ type: 'text', text: assistant.content }]
-        }
+        seedParts()
         handlePartEvent(partEvent)
       },
       onUsage: (usage) => {
