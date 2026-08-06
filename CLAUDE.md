@@ -270,15 +270,16 @@ revokeKey(key: string): boolean
 **TouchEventBus** provides application-wide event dispatching:
 
 ```typescript
+// String enum — 33 members total (apps/core-app/src/main/core/eventbus/touch-event.ts)
 enum TalexEvents {
-  APP_READY,
-  APP_START,
-  APP_SECONDARY_LAUNCH,
-  ALL_MODULES_LOADED,
-  BEFORE_APP_QUIT,
-  WILL_QUIT,
-  WINDOW_ALL_CLOSED,
-  PLUGIN_STORAGE_UPDATED
+  BEFORE_APP_START = 'before-app-start',
+  APP_START = 'app-start',
+  APP_READY = 'app-ready',
+  ALL_MODULES_LOADED = 'all-modules-loaded',
+  BEFORE_MODULES_UNLOAD = 'before-modules-unload',
+  // …plugin, search-engine/*, and permission/* lifecycle events…
+  PERMISSION_GRANTED = 'permission/granted',
+  PERMISSION_REVOKED = 'permission/revoked',
 }
 ```
 
