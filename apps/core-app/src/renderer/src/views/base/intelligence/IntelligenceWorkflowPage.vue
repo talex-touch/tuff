@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligenceWorkflowPage" setup>
 import type { WorkflowStepKind } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -57,6 +58,17 @@ const {
   dismissReviewItem,
   resetReviewItemStatus
 } = useWorkflowEditor()
+
+/** Placeholder cards while the first workflow list is in flight. */
+const SKELETON_ITEMS = 4
+
+/**
+ * Derived rather than tracked with a first-load flag: `loading` comes from the
+ * editor composable, so the condition is stated in terms this page can see. An
+ * empty list is the only time there is nothing to preserve, which makes a
+ * later reload leave the rendered cards alone by construction.
+ */
+const showSkeleton = useDeferredLoading(() => loading.value && workflows.value.length === 0)
 
 const reviewQueueFilter = ref<WorkflowReviewQueueFilter>('all')
 
@@ -371,7 +383,24 @@ onMounted(async () => {
           </TxButton>
         </div>
 
-        <div class="workflow-list">
+        <!--
+          Reuses `.workflow-list-item` so the placeholder keeps the card's
+          border, 14px radius and padding. The list rendered nothing at all
+          while the first fetch was out, so the column snapped open on arrival.
+        -->
+        <div v-if="showSkeleton" class="workflow-list" aria-hidden="true">
+          <div v-for="i in SKELETON_ITEMS" :key="i" class="workflow-list-item">
+            <div class="workflow-list-item__title">
+              <TxSkeleton :width="132" :height="13" :radius="4" />
+              <TxSkeleton variant="rect" :width="48" :height="16" :radius="8" />
+            </div>
+            <div class="workflow-list-item__meta">
+              <TxSkeleton width="64%" :height="11" :radius="4" />
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="workflow-list">
           <button
             v-for="workflow in workflows"
             :key="workflow.id"

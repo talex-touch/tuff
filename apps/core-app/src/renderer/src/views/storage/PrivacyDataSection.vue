@@ -13,6 +13,7 @@ import type {
   PrivacySecretRestorePreview
 } from '@talex-touch/utils/transport/events/types/privacy'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import {
   PRIVACY_ERROR_CODES,
@@ -839,13 +840,37 @@ onBeforeUnmount(() => {
       >
     </header>
 
-    <p
+    <!--
+      The status region stays: assistive tech still needs to hear that the panel
+      is loading, and a placeholder bar announces nothing. So the text moves
+      out of sight rather than away, and the visible half becomes a skeleton of
+      the summary band. The category count is fixed, so this one matches the
+      loaded layout exactly rather than approximating it.
+    -->
+    <div
       v-if="initialLoading"
       class="PrivacyDataSection-Loading"
       data-testid="privacy-initial-loading"
       role="status"
-      v-text="t('privacyData.loading')"
-    />
+    >
+      <span class="sr-only" v-text="t('privacyData.loading')" />
+
+      <section class="PrivacyDataSection-Band" aria-hidden="true">
+        <TxSkeleton :width="72" :height="14" :radius="4" />
+        <div class="PrivacyDataSection-SummaryGrid">
+          <div
+            v-for="category in PRIVACY_SETTINGS_DATA_CATEGORIES"
+            :key="category"
+            class="PrivacyDataSection-SummaryRow"
+          >
+            <TxSkeleton width="70%" :height="12" :radius="4" />
+            <TxSkeleton width="54%" :height="11" :radius="4" />
+            <TxSkeleton width="46%" :height="11" :radius="4" />
+            <TxSkeleton width="62%" :height="11" :radius="4" />
+          </div>
+        </div>
+      </section>
+    </div>
 
     <template v-else-if="!loadFailed">
       <section class="PrivacyDataSection-Band">

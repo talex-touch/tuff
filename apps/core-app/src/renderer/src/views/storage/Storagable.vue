@@ -1,6 +1,7 @@
 <script name="Storagable" setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -530,7 +531,18 @@ onMounted(() => {
           {{ errorMessage }}
         </div>
 
-        <div v-if="!report && summaryLoading" class="loading">加载中…</div>
+        <!--
+          Reuses `.summary` and `.card`, so the three tiles occupy the grid the
+          report will fill. The `!report` guard was already right: it is what
+          keeps a manual refresh from replacing figures already on screen.
+        -->
+        <div v-if="!report && summaryLoading" class="summary" aria-hidden="true">
+          <div v-for="i in 3" :key="i" class="card">
+            <div class="label"><TxSkeleton :width="64" :height="11" :radius="4" /></div>
+            <div class="value"><TxSkeleton :width="88" :height="18" :radius="4" /></div>
+            <div class="sub"><TxSkeleton width="76%" :height="10" :radius="4" /></div>
+          </div>
+        </div>
 
         <template v-if="report">
           <div class="summary">
