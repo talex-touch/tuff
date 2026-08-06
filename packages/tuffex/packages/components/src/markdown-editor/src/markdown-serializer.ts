@@ -6,6 +6,25 @@ function textOf(node: Node): string {
   return node.textContent?.replace(/\u00a0/g, ' ') ?? ''
 }
 
+/**
+ * Text typed into the contenteditable surface is literal, so any markdown
+ * punctuation in it has to be escaped on the way out — otherwise `a | b` in a
+ * table cell re-emits as a column break, and `*text*` round-trips into emphasis
+ * the user never asked for.
+ *
+ * Only text nodes go through here. `code`/`pre` read their content with
+ * `textOf` directly and do their own escaping, so verbatim spans are untouched.
+ */
+function escapeMarkdownText(value: string): string {
+  return value
+    // Backslash first, or it would double-escape the escapes added below.
+    .replace(/\\/g, '\\\\')
+    .replace(/([`*_[\]|])/g, '\\$1')
+    // Block markers only bite at the start of a line.
+    .replace(/^(\s*)([#>+-])/gm, '$1\\$2')
+    .replace(/^(\s*)(\d+)\./gm, '$1$2\\.')
+}
+
 function normalizeMarkdown(markdown: string): string {
   return markdown
     .replace(/[ \t]+\n/g, '\n')
@@ -70,7 +89,7 @@ function serializeTable(element: HTMLElement): string {
 
 function serializeNode(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE)
-    return textOf(node)
+    return escapeMarkdownText(textOf(node))
 
   if (!isElement(node))
     return ''
