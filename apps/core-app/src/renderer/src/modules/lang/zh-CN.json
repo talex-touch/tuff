@@ -4199,6 +4199,7 @@
     }
   },
   "common": {
+    "loadMore": "加载更多",
     "copy": "复制",
     "copied": "已复制",
     "yes": "是",

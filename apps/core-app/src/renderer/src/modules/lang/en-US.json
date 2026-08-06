@@ -4247,6 +4247,7 @@
     }
   },
   "common": {
+    "loadMore": "Load more",
     "copy": "Copy",
     "copied": "Copied",
     "yes": "Yes",
