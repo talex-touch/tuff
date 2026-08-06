@@ -1,10 +1,12 @@
 <script name="UnifiedFileTag" setup lang="ts">
 import path from 'path-browserify'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
+const { t } = useI18n()
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp', 'ico'])
 const unifiedFileTagLog = createRendererLogger('UnifiedFileTag')
 
@@ -82,7 +84,7 @@ const fileCount = computed(() => filePaths.value.length)
  * First file name for display
  */
 const firstFileName = computed(() => {
-  if (filePaths.value.length === 0) return '文件准备中...'
+  if (filePaths.value.length === 0) return t('boxTag.preparingFiles', '文件准备中...')
   return path.basename(filePaths.value[0])
 })
 

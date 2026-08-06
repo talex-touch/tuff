@@ -48,7 +48,7 @@ const clipboardPreview = computed(() => {
   // If text is too long, truncate and show character count
   const maxLength = 30
   if (totalLength > maxLength) {
-    return `${preview.substring(0, maxLength)}... 共${totalLength}字`
+    return `${preview.substring(0, maxLength)}... ${t('boxTag.charCount', { count: totalLength })}`
   }
   return preview
 })

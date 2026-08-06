@@ -4220,6 +4220,12 @@
       "countSummary": "共 {count} 条",
       "noRecords": "暂无记录"
     },
+    "boxTag": {
+      "image": "图像",
+      "imageCount": "{count} 张图像",
+      "charCount": "共 {count} 字",
+      "preparingFiles": "文件准备中..."
+    },
   "common": {
     "loadMore": "加载更多",
     "copy": "复制",
