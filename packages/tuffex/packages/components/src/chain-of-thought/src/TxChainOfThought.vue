@@ -152,7 +152,7 @@ watch(
 
   .tx-chain-of-thought__chevron {
     display: inline-flex;
-    transition: transform 0.18s ease;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
     &.is-open {
       transform: rotate(180deg);
@@ -162,7 +162,7 @@ watch(
   .tx-chain-of-thought__collapse {
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.22s ease;
+    transition: grid-template-rows 0.26s cubic-bezier(0.4, 0, 0.2, 1);
 
     &.is-open {
       grid-template-rows: 1fr;

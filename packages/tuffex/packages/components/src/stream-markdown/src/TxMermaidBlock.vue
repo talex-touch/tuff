@@ -243,7 +243,7 @@ onBeforeUnmount(() => {
   place-items: center;
   padding: 48px;
   background: color-mix(in srgb, #000 55%, transparent);
-  animation: tx-mermaid-fade 0.18s ease-out both;
+  animation: tx-mermaid-fade 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .tx-mermaid-block__zoomed {
