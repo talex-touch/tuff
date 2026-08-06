@@ -961,7 +961,7 @@
     "moreActions": "更多操作",
     "modelAuto": "自动选择",
     "modelLoading": "正在读取可用模型…",
-    "modelEmpty": "没有可用的模型，先去配置一个 AI 提供方",
+    "modelEmpty": "没有可用的模型，先配置一个 AI 提供方或安装 pi CLI",
     "configureProvider": "去配置",
     "panel": {
       "title": "会话信息",

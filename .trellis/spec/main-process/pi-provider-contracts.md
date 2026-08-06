@@ -99,3 +99,35 @@ stream as a session log, never as one monotonic text buffer.
 Guard tests: tool-turn rollback (text₁ commit → tool cards → text₂ reset →
 text₂′ commit ⇒ text₁+text₂′ with cards intact); 4-attempt NDJSON fixture
 accumulates one copy; all-failed run throws `finalError`.
+
+## 7. Model catalogue reads (landed, task 08-06-model-menu-sources)
+
+**The model menu's pi row is filled from pi's own catalogue files; credentials
+never leave the reader.** `pi-model-catalog.ts` reads exactly two files under
+`PI_CODING_AGENT_DIR` (default `~/.pi/agent`): `models.json` (user-defined
+providers — carries plaintext `apiKey`s) and `models-store.json` (the built-in
+catalogue `pi update` maintains). `auth.json` is never opened.
+
+- **Secret boundary is the return type**: `listPiCliModels(): string[]` of
+  `<provider>/<id>` patterns — nothing else escapes, so no caller can log or
+  ship a key by accident. Warn lines carry a fixed reason string, never a
+  caught error: V8's `JSON.parse` message quotes source text, which here is
+  credential-bearing.
+- **Sync on purpose**: `getProviderModelOptions` feeds the plugin host through
+  a frozen sync dependency (`plugin-intelligence-host-service.ts`), so the
+  reader stays `readFileSync` + an mtime/size-signature cache instead of going
+  async and rippling through that surface.
+- **Defensive parse, silent degrade**: these files are pi internals, not a
+  contract. Unrecognised shapes skip entries; a corrupt file empties that
+  source and warns once per run; a missing file is silent (that is what "no
+  catalogue" looks like).
+- **Probed-absent vs unprobed**: only `getResolvedPiExecutable() === null`
+  (probed, absent) drops the pi row from model options; `undefined` (not yet
+  probed) must be treated as present — the same stance config assembly takes.
+  Custom `models.json` patterns win dedup collisions against the store.
+
+Guard tests: `pi-model-catalog.test.ts` (real temp dirs; asserts a fixture
+credential appears in neither patterns nor warnings, warn-once across cache
+invalidations); `intelligence-provider-model-options.test.ts` pi block (row
+filled from catalogue, probed-absent removal, unprobed retention, empty
+catalogue removal).
