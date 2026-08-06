@@ -23,12 +23,15 @@ import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { intelligenceMcpRegistry } from '../ai/intelligence-mcp-registry'
 import { setPiToolRuntimeResolver } from '../ai/providers/pi-cli-provider'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { pluginModule } from '../plugin/plugin-module'
 import { createAgentContextSource } from './agent-context-source'
 import { startToolGateway } from './gateway-server'
+import { createPluginFeatureSource } from './plugin-feature-source'
 import { createToolRegistry } from './tool-registry'
 
 export * from './agent-context-source'
 export * from './gateway-server'
+export * from './plugin-feature-source'
 export * from './tool-registry'
 
 const toolLog = getLogger('agent-tools')
@@ -62,6 +65,15 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
     listStructuredTools: (profileIds) => intelligenceMcpRegistry.listStructuredTools(profileIds),
     callMcpTool: (profileId, toolName, input) =>
       intelligenceMcpRegistry.callTool(profileId, toolName, input)
+  })
+
+  /**
+   * The plugin manager appears only once the plugin module has initialised, and
+   * the set changes as the user enables or reloads plugins — so the list is
+   * read per call rather than captured here.
+   */
+  private readonly pluginFeatures = createPluginFeatureSource({
+    listPlugins: () => [...(pluginModule.pluginManager?.plugins.values() ?? [])]
   })
 
   constructor() {
@@ -100,7 +112,8 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
           .slice(0, limit)
       },
       openPath: async (path: string) => shell.openPath(path),
-      agentContext: this.agentContext
+      agentContext: this.agentContext,
+      pluginFeatures: this.pluginFeatures
     }
   }
 

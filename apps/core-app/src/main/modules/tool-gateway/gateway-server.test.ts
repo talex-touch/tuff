@@ -1,5 +1,6 @@
 import type { AgentContextSource } from './agent-context-source'
 import type { ToolGatewayHandle } from './gateway-server'
+import type { PluginFeatureSource } from './plugin-feature-source'
 import type { ToolDefinition } from './tool-registry'
 import { Buffer } from 'node:buffer'
 import { request as httpRequest } from 'node:http'
@@ -16,6 +17,13 @@ const emptyAgentContext: AgentContextSource = {
   listMcpServers: async () => [],
   listMcpTools: async () => [],
   callMcpTool: async () => ''
+}
+
+/** Likewise the plugin feature tools — see `tool-registry.features.test.ts`. */
+const emptyPluginFeatures: PluginFeatureSource = {
+  listFeatures: () => [],
+  findFeature: () => null,
+  invokeFeature: async () => ({ handled: true })
 }
 
 afterEach(async () => {
@@ -266,7 +274,8 @@ describe('tool registry', () => {
   const registry = createToolRegistry({
     searchFiles: async () => [{ name: 'a.txt', path: '/tmp/a.txt' }],
     openPath: async () => '',
-    agentContext: emptyAgentContext
+    agentContext: emptyAgentContext,
+    pluginFeatures: emptyPluginFeatures
   })
 
   it('classifies risk so only reads are rememberable', () => {
@@ -308,7 +317,8 @@ describe('chart spec validation', () => {
   const registry = createToolRegistry({
     searchFiles: async () => [],
     openPath: async () => '',
-    agentContext: emptyAgentContext
+    agentContext: emptyAgentContext,
+    pluginFeatures: emptyPluginFeatures
   })
   const chart = registry.get('tuff_render_chart')!
 

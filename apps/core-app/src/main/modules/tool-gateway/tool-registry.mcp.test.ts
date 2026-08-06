@@ -17,7 +17,12 @@ function registryWith(context: Partial<AgentContextSource>): Map<string, ToolDef
   return createToolRegistry({
     searchFiles: async () => [],
     openPath: async () => '',
-    agentContext: agentContext(context)
+    agentContext: agentContext(context),
+    pluginFeatures: {
+      listFeatures: () => [],
+      findFeature: () => null,
+      invokeFeature: async () => ({ handled: true })
+    }
   })
 }
 
