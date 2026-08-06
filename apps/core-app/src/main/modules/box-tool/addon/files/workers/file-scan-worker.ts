@@ -40,6 +40,8 @@ interface FileScanDoneMessage {
   type: 'done'
   taskId: string
   scannedCount: number
+  /** Directory-read / stat failures across every path of this task. */
+  errorCount: number
 }
 
 interface FileScanErrorMessage {
@@ -100,11 +102,12 @@ async function processQueue(): Promise<void> {
   const controller = new AbortController()
   activeControllers.set(next.taskId, controller)
   let scannedCount = 0
+  let errorCount = 0
   let sequence = 0
 
   try {
     for (const scanPath of next.paths) {
-      await scanDirectoryBatches(
+      const stats = await scanDirectoryBatches(
         scanPath,
         async (batch) => {
           controller.signal.throwIfAborted()
@@ -128,12 +131,14 @@ async function processQueue(): Promise<void> {
         excludePathsSet,
         { batchSize, signal: controller.signal }
       )
+      errorCount += stats.errorCount
     }
 
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
-      scannedCount
+      scannedCount,
+      errorCount
     } satisfies FileScanDoneMessage)
   } catch (error) {
     parentPort?.postMessage({

@@ -72,6 +72,7 @@ import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlace
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { scheduleDbWrite } from '../../../../db/db-write'
 import {
+  config as configSchema,
   embeddings as embeddingsSchema,
   fileIndexProgress,
   files as filesSchema
@@ -90,6 +91,7 @@ import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { getTypeTagsForExtension, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
+import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
   isIndexableFile,
   mapFileToTuffItem,
@@ -97,7 +99,7 @@ import {
 } from './utils'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
-import { FileScanWorkerClient } from './workers/file-scan-worker-client'
+import { FileScanWorkerClient, type FileScanRunStats } from './workers/file-scan-worker-client'
 import { EmbeddingService } from './embedding-service'
 import { iconService } from '../../../../service/icon-service'
 import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
@@ -149,6 +151,14 @@ import {
 import { FileProviderScanProgressService } from './services/file-provider-scan-progress-service'
 import { FileProviderRuntimeResetService } from './services/file-provider-runtime-reset-service'
 import { shouldBootstrapFileReindex } from './services/file-provider-bootstrap-reindex'
+import {
+  FileProviderPathNormalizationService,
+  shouldDeferReconciliationForPathNormalization,
+  shouldRunPathNormalizationOnPlatform,
+  type FilePathNormalizationRewrite,
+  type FilePathNormalizationRow
+} from './services/file-provider-path-normalization-service'
+import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
 import { FileProviderIndexSchedulerService } from './services/file-provider-index-scheduler-service'
 import { FileProviderIndexPersistEntryMapperService } from './services/file-provider-index-persist-entry-mapper-service'
@@ -174,6 +184,9 @@ const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
+/** Extra breathing room after the DB startup degrade window (contracts §7). */
+const FILE_PATH_NORMALIZATION_INITIAL_DELAY_MS = 30_000
+const FILE_PATH_NORMALIZATION_CONFIG_KEY = 'file_provider_path_normalization_version'
 const fileIntegrityEvidenceService = new IndexedSourceIntegrityEvidenceService()
 const indexFlushEvidenceService = new IndexedWriteFlushEvidenceService()
 
@@ -424,6 +437,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private backgroundStartupError: Error | null = null
   /** Once-per-boot guard for the split-topology bootstrap reindex net. */
   private bootstrapReindexChecked = false
+  /** Once-per-boot guard for the NFC path repair pass. */
+  private pathNormalizationScheduled = false
+  /** Set after the repair's first attempt, successful or not. */
+  private pathNormalizationAttempted = false
+  private pathNormalizationTimer: NodeJS.Timeout | null = null
   /** Stable public projection of the last background startup failure. */
   private backgroundStartupFailure: { code: string; retryable: boolean; reportId: string } | null =
     null
@@ -534,6 +552,36 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly indexPersistEntryMapper: FileProviderIndexPersistEntryMapperService
   private readonly assetService: FileProviderAssetService
   private readonly searchResultService: FileProviderSearchResultService
+  private readonly pathNormalizationService = new FileProviderPathNormalizationService({
+    getAppliedVersion: () => this.getPathNormalizationAppliedVersion(),
+    setAppliedVersion: (version) => this.setPathNormalizationAppliedVersion(version),
+    loadRowsPage: (afterId, limit) => this.loadPathNormalizationRowsPage(afterId, limit),
+    loadRowsByPaths: (paths) => this.loadPathNormalizationRowsByPaths(paths),
+    rewritePath: (rewrite) => this.rewriteFilePathToNormalizedForm(rewrite),
+    removeIndexedFile: async (filePath) => {
+      if (!(await this.ensureSearchIndexWorkerReady('file-index.path-normalization.remove'))) {
+        throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
+      }
+      await this.requireFilePersistencePort().removeFile(filePath)
+      await this.removeSearchIndexItems([filePath], 'file-index.path-normalization.remove')
+    },
+    removeIndexEntry: (filePath) =>
+      this.removeSearchIndexItems([filePath], 'file-index.path-normalization.rekey'),
+    reindexRows: async (ids) => {
+      if (!this.dbUtils || ids.length === 0) return
+      const rows = await this.dbUtils
+        .getFileIndexReadDb()
+        .select()
+        .from(filesSchema)
+        .where(inArray(filesSchema.id, ids))
+      this.scheduleIndexing(rows, 'path-normalization')
+    },
+    yieldBetweenPages: async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    },
+    logInfo: (message, meta) => this.logInfo(message, meta),
+    logWarn: (message, error, meta) => this.logWarn(message, error, meta)
+  })
   private readonly watchRuntimeEmitter =
     new IndexedWriteRuntimeEmitterService<IndexedFileSourceRecordRow>({
       sourceId: this.id,
@@ -846,9 +894,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.getReconciliationDbFilesByPaths(paths, runOptions),
       getMissingDbFiles: (rootPath, afterId, limit, runOptions) =>
         this.getMissingReconciliationDbFiles(rootPath, afterId, limit, runOptions),
+      countRootRows: (rootPath, runOptions) =>
+        this.countReconciliationRootRows(rootPath, runOptions),
+      getDeferralReason: () => this.resolveReconciliationDeferralReason(),
       clearSeenPaths: (runOptions) => this.clearReconciliationSeenPaths(runOptions),
-      scanDirectory: (rootPath, currentExcludePathsSet, runOptions) =>
-        this.scanDirectoryBatchesWithWorker(rootPath, currentExcludePathsSet, runOptions?.signal),
+      scanDirectory: (rootPath, currentExcludePathsSet, runOptions, onStats) =>
+        this.scanDirectoryBatchesWithWorker(
+          rootPath,
+          currentExcludePathsSet,
+          runOptions?.signal,
+          onStats
+        ),
       reconcile: (diskFiles, dbFiles, paths) =>
         this.reconciliationDiffService.reconcile(diskFiles, dbFiles, paths),
       deleteRecords: (records, runOptions) =>
@@ -866,7 +922,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       },
       now: () => performance.now(),
       formatDuration,
-      logDebug: (message, meta) => this.logDebug(message, meta)
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
     this.indexSchedulerService = new FileProviderIndexSchedulerService({
       getDatabaseFilePath: () => this.databaseFilePath,
@@ -990,6 +1047,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public async prepareForSearchIndexShutdown(): Promise<void> {
     this.shuttingDown = true
+    if (this.pathNormalizationTimer) {
+      clearTimeout(this.pathNormalizationTimer)
+      this.pathNormalizationTimer = null
+      // The pass will not run this boot, so reconciliation must not stay
+      // parked waiting for it.
+      this.pathNormalizationAttempted = true
+    }
     try {
       const producerDrains: Promise<void>[] = []
       if (this.isInitializing) {
@@ -1178,14 +1242,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
+  /**
+   * Queued side job (never the search hot path): a candidate id with no row is
+   * only evidence of a dead index entry once the filesystem agrees the file is
+   * gone. Anything that is merely unreadable — permission error, offline
+   * volume, transient IO — keeps its entry; only ENOENT removes.
+   */
   private cleanupStaleSearchCandidates(itemIds: string[]): void {
     if (itemIds.length === 0) return
 
     void (async () => {
+      const missingIds: string[] = []
+      for (const itemId of itemIds) {
+        if (await this.isPathMissing(itemId)) missingIds.push(itemId)
+      }
+      if (missingIds.length === 0) return
       if (!(await this.ensureSearchIndexWorkerReady('search.remove-stale-candidates'))) return
       const persistence = this.requireFilePersistencePort()
-      for (const itemId of itemIds) await persistence.removeFile(itemId)
-      await this.removeSearchIndexItems(itemIds, 'search.remove-stale-candidates')
+      for (const itemId of missingIds) await persistence.removeFile(itemId)
+      await this.removeSearchIndexItems(missingIds, 'search.remove-stale-candidates')
+      this.logDebug('Removed stale search candidates confirmed missing on disk', {
+        candidates: itemIds.length,
+        removed: missingIds.length
+      })
     })().catch((error) => {
       if (isSqliteBusyError(error)) {
         this.logDebug('Stale search candidate cleanup deferred (db busy)', {
@@ -1197,10 +1276,33 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
+  /** True only when the filesystem positively reports the path as absent. */
+  private async isPathMissing(filePath: string): Promise<boolean> {
+    try {
+      await fs.stat(filePath)
+      return false
+    } catch (error) {
+      return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
+    }
+  }
+
+  /**
+   * The only caller is the search result normalizer, and the "file is gone"
+   * signal it acts on is `fs.existsSync` — which is false for a revoked-TCC
+   * directory or an offline volume just as much as for a deleted file. Same
+   * rule as cleanupStaleSearchCandidates: only ENOENT may remove a row.
+   */
   private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
-    void this.ensureSearchIndexWorkerReady(`file-index.${reason}.cleanup`)
-      .then(async (ready) => {
-        if (!ready) {
+    void this.isPathMissing(file.path)
+      .then(async (missing) => {
+        if (!missing) {
+          this.logDebug('Stale file result cleanup skipped: path is not missing on disk', {
+            path: file.path,
+            reason
+          })
+          return
+        }
+        if (!(await this.ensureSearchIndexWorkerReady(`file-index.${reason}.cleanup`))) {
           this.logDebug('Stale file result cleanup skipped: persistence port not ready', {
             path: file.path,
             reason
@@ -1411,6 +1513,154 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       // progress" style failures here mean the normal path took over.
       this.logWarn('Search index bootstrap reindex failed', error)
     }
+  }
+
+  /**
+   * Boot-time maintenance writer (database-write-contracts §7): the one-time
+   * NFC path repair only starts after the DB startup degrade window, so its
+   * writes never join the startup write storm. The pass itself is idempotent
+   * and self-gated on a config version, so a re-schedule is harmless.
+   */
+  private schedulePathNormalizationMigration(): void {
+    if (this.shuttingDown || this.pathNormalizationScheduled) return
+    if (!shouldRunPathNormalizationOnPlatform(process.platform)) {
+      // Byte-exact filesystem: the two unicode forms are two different files,
+      // so there is nothing to merge and no id to rewrite.
+      this.logDebug('File path normalization migration not applicable on this platform', {
+        platform: process.platform
+      })
+      return
+    }
+    this.pathNormalizationScheduled = true
+    const delayMs = Math.max(
+      FILE_PATH_NORMALIZATION_INITIAL_DELAY_MS,
+      getStartupDegradeWindowRemainingMs()
+    )
+    this.logInfo('Scheduling file path normalization migration', {
+      deferredMs: Math.round(delayMs)
+    })
+    this.pathNormalizationTimer = setTimeout(() => {
+      this.pathNormalizationTimer = null
+      if (this.shuttingDown) {
+        // Nothing will attempt the pass this boot; release reconciliation.
+        this.pathNormalizationAttempted = true
+        return
+      }
+      void this.pathNormalizationService
+        .run()
+        .then((result) => {
+          if (result.status === 'skipped') {
+            this.logDebug('File path normalization migration skipped', { reason: result.reason })
+          }
+        })
+        .catch((error) => {
+          this.logWarn('File path normalization migration failed', error)
+        })
+        .finally(() => {
+          // Attempted, not necessarily successful: reconciliation resumes
+          // either way (see shouldDeferReconciliationForPathNormalization).
+          this.pathNormalizationAttempted = true
+        })
+    }, delayMs)
+  }
+
+  private resolveReconciliationDeferralReason(): string | null {
+    return shouldDeferReconciliationForPathNormalization({
+      scheduled: this.pathNormalizationScheduled,
+      attempted: this.pathNormalizationAttempted
+    })
+      ? 'path-normalization-pending'
+      : null
+  }
+
+  private async loadPathNormalizationRowsPage(
+    afterId: number,
+    limit: number
+  ): Promise<FilePathNormalizationRow[]> {
+    if (!this.dbUtils) return []
+    // Split-aware home: the rewrite/delete this feeds targets the file the
+    // worker owns, so the ids must come from that same home (2d.3).
+    return await this.dbUtils
+      .getFileIndexReadDb()
+      .select({
+        id: filesSchema.id,
+        path: filesSchema.path,
+        lastIndexedAt: filesSchema.lastIndexedAt
+      })
+      .from(filesSchema)
+      .where(gt(filesSchema.id, afterId))
+      .orderBy(filesSchema.id)
+      .limit(limit)
+  }
+
+  private async loadPathNormalizationRowsByPaths(
+    paths: string[]
+  ): Promise<FilePathNormalizationRow[]> {
+    if (!this.dbUtils || paths.length === 0) return []
+    return await this.dbUtils
+      .getFileIndexReadDb()
+      .select({
+        id: filesSchema.id,
+        path: filesSchema.path,
+        lastIndexedAt: filesSchema.lastIndexedAt
+      })
+      .from(filesSchema)
+      .where(inArray(filesSchema.path, paths))
+  }
+
+  /**
+   * `UPDATE files SET path` on whichever home owns the table: forwarded to the
+   * search-index worker under the split (sole writer of that file), otherwise
+   * queued on the primary lane. Never both.
+   */
+  private async rewriteFilePathToNormalizedForm(
+    rewrite: FilePathNormalizationRewrite
+  ): Promise<void> {
+    if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+    const statement = this.dbUtils
+      .getFileIndexReadDb()
+      .update(filesSchema)
+      .set({ path: rewrite.toPath })
+      .where(eq(filesSchema.id, rewrite.id))
+      .toSQL()
+    if (this.isSearchSplitEnabledNow()) {
+      await searchIndexWriter.execWrite([{ sql: statement.sql, args: statement.params }], 'single')
+      return
+    }
+    const db = this.dbUtils.getDb()
+    await scheduleDbWrite('file-index.path-normalization.rewrite', async () => {
+      await db
+        .update(filesSchema)
+        .set({ path: rewrite.toPath })
+        .where(eq(filesSchema.id, rewrite.id))
+    })
+  }
+
+  private async getPathNormalizationAppliedVersion(): Promise<number | null> {
+    if (!this.dbUtils) return null
+    const rows = await this.dbUtils
+      .getDb()
+      .select({ value: configSchema.value })
+      .from(configSchema)
+      .where(eq(configSchema.key, FILE_PATH_NORMALIZATION_CONFIG_KEY))
+    const raw = rows[0]?.value
+    if (!raw) return null
+    const parsed = Number.parseInt(raw, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  private async setPathNormalizationAppliedVersion(version: number): Promise<void> {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+    await scheduleDbWrite('file-index.path-normalization.version', async () => {
+      await db
+        .insert(configSchema)
+        .values({ key: FILE_PATH_NORMALIZATION_CONFIG_KEY, value: String(version) })
+        .onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value: String(version) }
+        })
+    })
   }
 
   private async upsertSearchIndexFiles(
@@ -1627,6 +1877,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           // failure must never reject the startup chain (V1 lesson: an
           // uncontained worker-init rejection killed search for the session).
           void this.maybeRunBootstrapReindex()
+          this.schedulePathNormalizationMigration()
         } else {
           const error = new Error('Search index worker initialization failed')
           this.backgroundStartupError = error
@@ -2519,7 +2770,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return { success: false, status: 'invalid', reason: 'path-empty' }
     }
 
-    const resolved = path.resolve(trimmed)
+    // Manual-add ingress: normalize before the path becomes a watch root or an
+    // index id (see normalizeFsPath).
+    const resolved = normalizeFsPath(path.resolve(trimmed))
     let stats: Awaited<ReturnType<typeof fs.stat>>
     try {
       stats = await fs.stat(resolved)
@@ -2706,7 +2959,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async *scanDirectoryBatchesWithWorker(
     dirPath: string,
     excludePathsSet?: Set<string>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStats?: (stats: FileScanRunStats) => void
   ): AsyncIterable<ScannedFileInfo[]> {
     await appTaskGate.waitForIdle()
     let yielded = false
@@ -2715,7 +2969,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         [dirPath],
         excludePathsSet,
         500,
-        signal
+        signal,
+        onStats
       )) {
         yielded = true
         yield batch
@@ -2726,14 +2981,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logWarn('File scan worker failed before its first batch; using direct scan', error, {
         path: dirPath
       })
-      yield* this.scanDirectoryBatchesDirectStream(dirPath, excludePathsSet, signal)
+      yield* this.scanDirectoryBatchesDirectStream(dirPath, excludePathsSet, signal, onStats)
     }
   }
 
   private async *scanDirectoryBatchesDirectStream(
     dirPath: string,
     excludePathsSet?: Set<string>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStats?: (stats: FileScanRunStats) => void
   ): AsyncIterable<ScannedFileInfo[]> {
     const controller = new AbortController()
     const abort = (): void => controller.abort(signal?.reason)
@@ -2744,6 +3000,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     let consumerWake: (() => void) | null = null
     let producerDone = false
     let producerError: unknown = null
+    let producerStats: FileScanRunStats | null = null
     const wakeAll = () => {
       for (const wake of producerWaiters) wake()
       producerWaiters.clear()
@@ -2765,6 +3022,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       controller.signal,
       500
     )
+      .then((stats) => {
+        producerStats = stats
+      })
       .catch((error) => {
         producerError = error
       })
@@ -2784,6 +3044,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
         if (producerDone) {
           if (producerError) throw producerError
+          if (producerStats) onStats?.(producerStats)
           return
         }
         await new Promise<void>((resolve) => {
@@ -2885,6 +3146,45 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     `)
   }
 
+  /**
+   * Row census for the reconciliation deletion guard: how many rows the index
+   * holds under this root, and how many of them this round would delete. Reads
+   * the same connection as getMissingReconciliationDbFiles — the seen-paths
+   * TEMP table is connection-local, so `missing` here is exactly the set that
+   * paged deletion would walk.
+   */
+  private async countReconciliationRootRows(
+    rootPath: string,
+    options?: FileIndexRunOptions
+  ): Promise<{ total: number; missing: number }> {
+    options?.signal?.throwIfAborted()
+    if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+    const queryRoot = path.normalize(rootPath)
+    const descendantPrefix = queryRoot.endsWith(path.sep) ? queryRoot : `${queryRoot}${path.sep}`
+    const escapedPrefix = descendantPrefix
+      .replace(/!/g, '!!')
+      .replace(/%/g, '!%')
+      .replace(/_/g, '!_')
+    const rows = await this.dbUtils.getFileIndexReadDb().all<{
+      total: number
+      missing: number
+    }>(sql`
+        SELECT
+          COUNT(*) AS total,
+          SUM(
+            CASE WHEN NOT EXISTS (
+              SELECT 1
+              FROM file_reconciliation_seen_paths AS seen
+              WHERE seen.path = f.path
+            ) THEN 1 ELSE 0 END
+          ) AS missing
+        FROM files AS f
+        WHERE f.type = 'file'
+          AND (f.path = ${queryRoot} OR f.path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
+      `)
+    return { total: Number(rows[0]?.total ?? 0), missing: Number(rows[0]?.missing ?? 0) }
+  }
+
   private async clearReconciliationSeenPaths(_options?: FileIndexRunOptions): Promise<void> {
     if (!this.dbUtils) return
     const db = this.dbUtils.getFileIndexReadDb()
@@ -2912,7 +3212,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private normalizePath(p: string): string {
-    return normalizeWatchPath(p, this.isCaseInsensitiveFs)
+    // NFC first: comparison keys have to agree with the NFC-normalized paths
+    // that scan/watch ingress writes into the index.
+    return normalizeWatchPath(normalizeFsPath(p), this.isCaseInsensitiveFs)
   }
 
   private isWithinWatchRoots(rawPath: string): boolean {
@@ -2924,13 +3226,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
+  /**
+   * Single ingress for every non-scan path that reaches the index: watcher
+   * events and manual adds both land here, and macOS hands them over
+   * decomposed (NFD). Normalizing once here is what lets DB lookups compare
+   * like with like — see normalizeFsPath.
+   */
   private enqueueIncrementalUpdate(
     rawPath: string,
     action: FileProviderIncrementalAction,
     options?: { manual?: boolean }
   ): void {
     if (this.shuttingDown) return
-    this.incrementalQueueService.enqueue(rawPath, action, options)
+    this.incrementalQueueService.enqueue(normalizeFsPath(rawPath), action, options)
   }
 
   private async prepareIncrementalFlush(): Promise<boolean> {

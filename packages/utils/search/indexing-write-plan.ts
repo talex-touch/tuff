@@ -464,6 +464,21 @@ export function mapIndexedWriteReconciliationDbPayload<
   }));
 }
 
+/**
+ * 把毫秒时间戳向下取整到整秒。
+ *
+ * `files.mtime` 是秒精度的 SQLite timestamp 列，读回来的毫秒值永远是整秒；
+ * 磁盘 mtime 却带毫秒。直接比较会让「同一个未改动的文件」在每一轮 reconcile
+ * 都被判定为已变更（同一棵树的重复 update 风暴）。比较前两侧都量化到整秒，
+ * 代价是同一秒内的修改检测不到（已接受的取舍）。
+ */
+export function quantizeIndexedWriteTimestampToSeconds(timestamp: number): number {
+  if (!Number.isFinite(timestamp)) {
+    return timestamp;
+  }
+  return Math.floor(timestamp / 1000) * 1000;
+}
+
 export function resolveIndexedWriteReconciliationDiff<
   TDisk extends IndexedWriteReconciliationDiskPayload,
   TDb extends IndexedWriteReconciliationDbPayload,
@@ -490,7 +505,10 @@ export function resolveIndexedWriteReconciliationDiff<
     const dbFile = dbMap.get(diskFile.path);
     if (!dbFile) {
       filesToAdd.push(diskFile);
-    } else if (diskFile.mtime > dbFile.mtime) {
+    } else if (
+      quantizeIndexedWriteTimestampToSeconds(diskFile.mtime) >
+      quantizeIndexedWriteTimestampToSeconds(dbFile.mtime)
+    ) {
       filesToUpdate.push({ ...diskFile, id: dbFile.id });
     }
     dbMap.delete(diskFile.path);

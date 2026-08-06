@@ -16,6 +16,17 @@ interface PendingScan {
   error: Error | null
   wake: (() => void) | null
   startedAt: number
+  stats: FileScanRunStats | null
+}
+
+/**
+ * Per-run scan outcome. `errorCount > 0` means the scan could not see the whole
+ * tree (revoked permission, unplugged volume, renamed root) — consumers that
+ * delete rows for unseen paths MUST treat such a run as untrustworthy.
+ */
+export interface FileScanRunStats {
+  entryCount: number
+  errorCount: number
 }
 
 interface PendingMetrics {
@@ -25,7 +36,7 @@ interface PendingMetrics {
 
 type WorkerMessage =
   | { type: 'batch'; taskId: string; sequence: number; batch: ScannedFileInfo[] }
-  | { type: 'done'; taskId: string; scannedCount: number }
+  | { type: 'done'; taskId: string; scannedCount: number; errorCount?: number }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
 
@@ -59,11 +70,17 @@ export class FileScanWorkerClient {
     return results
   }
 
+  /**
+   * @param onStats Invoked once when the worker reports a completed run. It is
+   *   NOT called when the run aborts or fails — an absent callback means "this
+   *   scan produced no trustworthy stats".
+   */
   async *scanBatches(
     paths: string[],
     excludePaths?: Set<string>,
     batchSize?: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStats?: (stats: FileScanRunStats) => void
   ): AsyncIterable<ScannedFileInfo[]> {
     const taskId = `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const worker = this.ensureWorker()
@@ -72,7 +89,8 @@ export class FileScanWorkerClient {
       done: false,
       error: null,
       wake: null,
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      stats: null
     }
     const abort = () => {
       const reason = signal?.reason
@@ -102,7 +120,10 @@ export class FileScanWorkerClient {
           continue
         }
         if (pending.error) throw pending.error
-        if (pending.done) return
+        if (pending.done) {
+          if (pending.stats) onStats?.(pending.stats)
+          return
+        }
         await new Promise<void>((resolve) => {
           pending.wake = resolve
         })
@@ -187,6 +208,10 @@ export class FileScanWorkerClient {
 
     if (message.type === 'done') {
       pending.done = true
+      pending.stats = {
+        entryCount: message.scannedCount,
+        errorCount: message.errorCount ?? 0
+      }
       pending.wake?.()
       this.lastTask = {
         id: message.taskId,

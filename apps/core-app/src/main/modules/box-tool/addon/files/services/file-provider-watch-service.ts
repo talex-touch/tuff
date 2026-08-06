@@ -4,6 +4,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import path from 'node:path'
 import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
 import { StorageList } from '@talex-touch/utils'
+import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { appTaskGate } from '../../../../../service/app-task-gate'
 import {
   AppUsageActivityTracker,
@@ -191,7 +192,9 @@ export class FileProviderWatchService {
     for (const rawPath of rawExtraPaths) {
       const trimmed = rawPath.trim()
       if (!trimmed) continue
-      const resolved = path.resolve(trimmed)
+      // Configured-path ingress: an extra path persisted in NFD would produce
+      // NFD scan roots and NFD index ids (see normalizeFsPath).
+      const resolved = normalizeFsPath(path.resolve(trimmed))
       const normalized = this.normalizePath(resolved)
       if (extraPathSet.has(normalized)) {
         continue
