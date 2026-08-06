@@ -598,7 +598,14 @@ watch(
                     <div class="HomePage-UserBubble">
                       {{ message.content }}
                     </div>
-                    <p v-if="message.attachments?.length" class="HomePage-AttachHint">
+                    <!-- Only for what stayed local: a non-image attachment, or an image whose
+                         bytes were already gone by the time the turn was sent. -->
+                    <p
+                      v-if="
+                        (message.attachments?.length ?? 0) > (message.modelAttachments?.length ?? 0)
+                      "
+                      class="HomePage-AttachHint"
+                    >
                       {{ t('home.attachmentNotSent') }}
                     </p>
                     <TxMessageActions
