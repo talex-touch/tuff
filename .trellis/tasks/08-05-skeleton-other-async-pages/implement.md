@@ -29,16 +29,16 @@
 
 两者均未逐项核对骨架与真实版式是否贴合——**收敛无回归 ≠ 版式达标**，仍需按 AC2 复核。
 
-### C. 适用，未做（7）
+### C. 适用（6，全部完成）
 
 | 页面 | 加载态形态 | 备注 |
 |---|---|---|
 | `views/storage/PrivacyDataSection.vue` | `initialLoading = ref(true)` | 已是标准首屏哨兵，接入成本最低；1556 行 |
 | `views/storage/Storagable.vue` | `summaryLoading` + `pluginsLoading` | 双区域，需区域级骨架；1113 行 |
 | `views/omni-panel/OmniPanel.vue` | `loading = ref(false)` + 模板分支 | 需加 `hasLoaded` 哨兵（首帧问题）；797 行 |
-| `views/base/LingPan.vue` | `v-if="loading"` | 2011 行，建议单独拆 |
 | `views/base/intelligence/IntelligenceWorkflowPage.vue` | `v-if="!loading && workflows.length === 0"` | 1445 行 |
-| `views/storage/PrivacyDataSection.vue` 的其余 4 个 band | — | 见下方「已勘察」 |
+| `views/base/store/StorePublisher.vue` | `timelineLoading` | 仅 timeline 区；`previewLoading` 属操作级 |
+| `components/intelligence/agents/AgentsList.vue` | 父页传入 | 见 A 组 |
 
 ### 已完成（第二批）
 
@@ -46,18 +46,18 @@
 |---|---|
 | `views/base/store/StorePublisher.vue` | **仅 timeline 区**接入骨架，用页面自有的 `.publisher-timeline` / `.publisher-timeline-item` 类搭（继承真实卡片的边框、内边距与行间距）。直接绑 `timelineLoading` 而非 `hasLoaded` 哨兵——`refreshTimeline` 只在打开详情面板时调用，每次都是该插件时间线的首次加载，不存在需要保留的已渲染内容。`previewLoading` **不接骨架**：它是用户上传 .tpex 后的预览等待，属操作级 pending，按规范应保留原有文案。 |
 
-### 已勘察但未做：`views/storage/PrivacyDataSection.vue`
+### PrivacyDataSection 的两个前置约束（实施时均已满足）
 
 条件很好——`initialLoading = ref(true)` 是标准首屏标志，且 summary 网格遍历的是常量 `PRIVACY_SETTINGS_DATA_CATEGORIES`（条数编译期已知，骨架可精确匹配）。但有两点须先处理：
 
 1. **测试契约**：`PrivacyDataSection.test.ts` 断言 `[data-testid="privacy-initial-loading"]` 的 `role="status"`。改造须**保留**该元素与其 role，把骨架放进去，而不是替换掉它。
 2. **无障碍写法**：正确形态是容器保留 `role="status"` + 视觉隐藏的加载文案（供屏幕阅读器），骨架条 `aria-hidden`（`TxSkeleton` 自带）。需先确认仓库是否已有 visually-hidden 约定类。
 
-该页 1556 行、5 个 band，建议单独排期而非顺带做。
+两点均已按此处理：`role="status"` 元素保留、加载文案改用仓库已有的全局 `.sr-only`。
 
-### D. 不适用（12，含 1 例改判）
+### D. 不适用（12，含 2 例改判）
 
-> `views/base/home/HomeModelMenu.vue` 初判为「适用」，复核后**改判不适用**：它是下拉菜单（`role="listbox"`、`v-if="props.open"`）而非页面，且模型条目数完全取决于用户配置了几个 provider（0 到任意）。按规范「条数不定 → 用空态或 pending 文案而非骨架」，保留原有的一行提示。因此适用组由 7 降为 6。
+> `views/base/home/HomeModelMenu.vue` 初判为「适用」，复核后**改判不适用**：它是下拉菜单（`role="listbox"`、`v-if="props.open"`）而非页面，且模型条目数完全取决于用户配置了几个 provider（0 到任意）。按规范「条数不定 → 用空态或 pending 文案而非骨架」，保留原有的一行提示。`views/base/LingPan.vue` 同样改判。因此适用组由 7 降为 6。
 
 | 页面 | 理由 |
 |---|---|
@@ -72,12 +72,14 @@
 | `views/base/begin/internal/Forbidden.vue` | 引导流程，无加载分支 |
 | `views/base/begin/internal/AccountDo.vue` | 同上 |
 | `views/base/begin/internal/SetupPermissions.vue` | 同上 |
+| `views/base/home/HomeModelMenu.vue` | 改判：下拉菜单而非页面，条目数取决于用户配了几个 provider |
+| `views/base/LingPan.vue` | 改判：`v-if="loading"` 的 `loading-dot` 位于 REFRESH 按钮内，属按钮状态而非内容替换 |
 
 ### E. 另有归属（3）
 
 `views/test/ClerkTest.vue`、`views/test/LoginTest.vue`、`views/test/MemoryLeakTest.vue` —— 测试页，非用户可达的产品界面。
 
-**合计 1 + 2 + 7 + 11 + 3 = 24**，无遗漏。
+**合计 1 + 2 + 6 + 12 + 3 = 24**，无遗漏。
 
 ## 一条被撤回的「既有缺陷」结论
 
@@ -98,3 +100,24 @@
 2. `useDeferredLoading(() => !hasLoaded.value)` 防闪烁。
 3. 判断该替换整页还是某个区域——已在首帧可渲染的头部/静态行不要替换。
 4. 优先复用原语 + 令牌微调；**注意 scoped 样式边界**：不要在 A 组件里使用 B 组件 scoped 定义的类。
+
+
+## 完成情况（终态）
+
+| 页面 | 处理 |
+|---|---|
+| `views/omni-panel/OmniPanel.vue` | 骨架落在 `OmniPanelActionList`（它拥有三列网格）。tile 的 `aspect-ratio: 1/1` 是关键——正方形使占位与真实卡片占据完全相同的空间 |
+| `views/base/intelligence/IntelligenceWorkflowPage.vue` | 复用 `.workflow-list-item`。条件用 `loading && workflows.length === 0` 派生而非首屏标志，因为 `loading` 属于 `useWorkflowEditor` 组合式函数——空列表是唯一「没有内容可保留」的时刻，刷新因此天然不会被替换 |
+| `views/storage/PrivacyDataSection.vue` | **保留** `role="status"` 区域（`PrivacyDataSection.test.ts` 有断言），加载文案改用全局 `.sr-only` 移出视觉、骨架条 `aria-hidden`。该页的骨架是**精确匹配**而非近似：行数来自常量 `PRIVACY_SETTINGS_DATA_CATEGORIES` |
+| `views/storage/Storagable.vue` | summary 区复用 `.summary` / `.card` / `.label` / `.value` / `.sub`（后三者带 `margin-top: 6px`，必须复用才对得齐）。原有的 `!report &&` 门控本就正确，保留 |
+| `views/base/store/StorePublisher.vue` | 见上文「已完成（第二批）」 |
+| `components/intelligence/agents/AgentsList.vue` | 见上文 A 组 |
+
+### AC4 复核结果（已有骨架的两处）
+
+- `IntelligenceCapabilitiesPage` → `CapabilitySkeleton`：**发现并修复真实不贴合**。真实项 `.capability-card` 固定 `height: 4.5rem`，容器 `gap: 0.625rem`；而 `TxCardSkeleton` 自带 `margin-bottom: 0.5rem`，叠加后骨架列表整体偏高。已置零 margin 并锁定高度。
+- `StoreDetailOverlay` → `StoreDetailSkeleton`：整面板骨架，替换的是整个详情区，结构性差异不构成列表级跳变，未发现需要修改的问题。
+
+## 上报：`ProviderSkeleton.vue` 是死代码
+
+`components/intelligence/skeleton/ProviderSkeleton.vue` **全仓零引用**（早于本次工作即如此，是子任务 B 收敛的三个手搓骨架之一）。按范围纪律未删除，在此登记，建议单独确认后清理。

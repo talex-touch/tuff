@@ -29,33 +29,44 @@
 3. 判断骨架该替换**整页**还是**某个区域**——若 block header / 静态行在首帧已可渲染，只替换真正等数据的区域。
 4. 骨架尽量复用页面自有的容器类（如 `.MessageList` / `.MessageItem`），几何自动跟随真实版式，无法漂移。
 
-## 逐页进度
+## 逐页判定与进度（13 页 + 2 对话框，全覆盖）
 
-| # | 页面 | 结构族 | 状态 | 说明 |
-|---|---|---|---|---|
-| 1 | `SettingSkillsMcp` | Section | ✅ 完成 | 整页骨架（`SettingSkeleton`，2 组 × 4 行，依据 `MAX_VISIBLE_ROWS = 5` + 每组固定的动作行）。用 `v-if/v-else-if/v-else` 链接入，避免为包 `<template v-else>` 而重排 125 行缩进。diff 29/2，lint 与 HEAD 同为 39。 |
-| 2 | `SettingMessages` | Block | ✅ 完成 | **区域级**骨架：block header 与未读行首帧即有，只替换列表区。复用页面自有的 `.MessageList` / `.MessageItem` 类搭 4 行占位（`MessageItem` 是「圆点+标题+时间 / 正文两行 / 按钮」三段结构，用 `TxRowSkeleton` 会矮一截）。lint 与 HEAD 同为 15。 |
-| 3 | `SettingDownload` | Block | ⬜ 未做 | |
-| 4 | `SettingNetwork` | Block | ⬜ 未做 | 2 个 block |
-| 5 | `SettingSentry` | Block | ⬜ 未做 | 另有 `statsLoading` 第二维度 |
-| 6 | `SettingUser` | Block | ⬜ 未做 | 无 `loading` ref，需先确认加载态来源 |
-| 7 | `SettingUpdate` | Block | ⬜ 未做 | 无 `loading` ref，`onMounted` 内为 async |
-| 8 | `SettingPermission` | Block | ⬜ 未做 | `loading` 初值已是 `true`；另有 `auditLogsLoading` |
-| 9 | `SettingTools` | Block | ⬜ 未做 | 已用 `computed(() => shortcuts === null)` 哨兵，最接近理想形态 |
-| 10 | `SettingPlatformCapabilities` | Block | ⬜ 未做 | 加载态目前只是一行文字；列表为自有 `PlatformCapabilities-List` |
-| 11 | `SettingFileIndex` | Block×4 | ⬜ 未做 | **区域级**：三个互不相干的 loading ref，不可做整页骨架；2013 行，建议单独拆 |
-| 12 | `SettingFileIndexAppIndexManager` | 自有 | ⬜ 未做 | |
-| 13 | `SettingFileIndexAppDiagnostic` | 自有 | ⬜ 未做 | |
-| 14 | `components/ShortcutDialog.vue` | 对话框 | ⬜ 待判定 | 按 PRD R5 需给出适用/不适用书面结论 |
-| 15 | `components/FailedFilesListDialog.vue` | 对话框 | ⬜ 待判定 | 同上 |
+再次分诊后，「有 loading 状态」并不等于「需要骨架」。判据是**模板遍历的是否为异步获取的数据**：静态表单页首帧就渲染出全部行、加载只填值，结构从不变化，上骨架反而是倒退。
+
+### 适用并已完成（6）
+
+| 页面 | 处理 |
+|---|---|
+| `SettingSkillsMcp` | 整页 `SettingSkeleton`，2 组 × 4 行（依据 `MAX_VISIBLE_ROWS = 5` + 每组固定动作行） |
+| `SettingMessages` | **区域级**：block header 与未读行首帧即有，只替换列表区；复用 `.MessageList` / `.MessageItem` |
+| `SettingPlatformCapabilities` | 复用 `PlatformCapabilities-Group` / `-Item`，2 组 × 3 项 |
+| `SettingPermission` | **两个区域**：插件列表（`.plugin-list` + `TxRowSkeleton`，内边距置 0 匹配折叠头的 `padding: 12px 0`）与审计日志（`.audit-item`）；各自独立的首屏哨兵 |
+| `SettingFileIndexAppIndexManager` | 复用 `.app-index-manager-list` / `.app-index-entry`，替换原先与列表高度差异极大的居中空态框 |
+| `components/ShortcutDialog.vue` | **判定适用**：打开即是已知的五列表格。行类 scoped 在 `ShortcutDialogRow.vue`，故骨架行在对话框侧声明，复用同一套 `--shortcut-dialog-columns` 令牌保证列对齐。绑父级 `shortcuts === null` 哨兵（已验证从不回退），无需额外标志 |
+| `components/FailedFilesListDialog.vue` | **判定适用**：`loading = ref(true)` 且只在 mount 时加载一次；复用 `.file-list` / `.file-item` |
+
+### 不适用（7，均为改判）
+
+| 页面 | 理由 |
+|---|---|
+| `SettingDownload` | 静态表单：`downloadConfig` 有默认值，首帧渲染全部行，`loading` 仅用于禁用控件 |
+| `SettingNetwork` | 同上；唯一 `v-for` 遍历的是静态 `proxyModeOptions` |
+| `SettingSentry` | 无 `v-for`，纯静态表单 |
+| `SettingUser` | 无 `v-for`；`authLoadingState.*` 是登录流程的操作级状态 |
+| `SettingUpdate` | 资产列表是**缓存**，「空」是合法稳态而非加载态，且无对应加载标志；其余为静态表单 |
+| `SettingTools` | 自身模板静态，加载态整个委托给 `ShortcutDialog`（已单独处理） |
+| `SettingFileIndex` | 2013 行、4 block，三个 loading ref **全部只用于 `:active` / `:disabled`**（进度指示与按钮），无内容替换分支 |
+| `SettingFileIndexAppDiagnostic` | `appDiagnosticLoading` 仅用于按钮 `:disabled`，属用户触发的诊断操作 |
+
+（不适用 7 项 + 适用 6 项 + ShortcutDialog/FailedFilesListDialog 2 个对话框 = 15 项，与 13 页 + 2 对话框一致。）
 
 ## 已产出的可复用件
 
-- `components/settings/SettingSkeleton.vue`（Section 族，子任务 B 产出）
-- `components/tuff/TuffGroupBlockSkeleton.vue`（Block 族，本任务新增；复刻 `TuffGroupBlock` 的 56px header、hairline 边框与 22px 图标，动画条全部来自 TuffEx 原语，不引入跨包 SCSS 依赖）
-  - **注意**：该组件已建成并通过 lint / typecheck，但**尚未被任何页面使用**。首个使用它的页面应同时核对其 header 几何与真实 `TuffGroupBlock` 是否一致。
+- `components/settings/SettingSkeleton.vue`（Section 族，子任务 B 产出，由 `SettingSkillsMcp` 使用；几何由 `SettingSkeleton.geometry.test.ts` 跨包契约测试守护）
+- ~~`components/tuff/TuffGroupBlockSkeleton.vue`~~ —— **已建成后删除**。它基于「10 个 TuffGroupBlock 页面会整块替换成骨架」的假设，但逐页做下来一个这样的场景都没有：需要等数据的页面，其 block header 与静态行首帧即渲染，只有内部列表在等，骨架应落在那个区域并用列表自有的类搭；其余是静态表单，根本不需要骨架。留着就是无人调用、又没有契约测试守护的漂移源，故移除。
 
-## 遗留风险
+## 结论：可复用容器 vs 就地搭建
 
-- `TuffGroupBlockSkeleton` 的几何是**手抄** `TuffGroupBlock` 的样式值（56px / 12px / 22px / 0.7rem）。与 `SettingSkeleton` 不同，这里**没有**契约测试守护，`TuffGroupBlock` 改样式不会让它变红。若要补，可仿照 `SettingSkeleton.geometry.test.ts` 的编译 SCSS 比对做法。
-- 未做页面中，`SettingUser` 与 `SettingUpdate` 未找到 `loading` ref，开工前需先定位其真实加载态来源，不能假设与其他页同构。
+本任务最重要的经验是：**骨架的正确复用单位不是「页面容器」，而是「列表项所在的那个容器类」**。凡是用页面自有的 `.MessageItem` / `.audit-item` / `.app-index-entry` 等类搭出来的骨架，几何自动跟随真实版式、无法漂移；凡是另起一个「看起来像」的容器，都需要手抄数值并从此埋下漂移风险。
+
+配套注意 **scoped 样式边界**：A 组件里不能使用 B 组件 scoped 定义的类（本任务在 `AgentsList` 和 `ShortcutDialog` 上各踩到一次）。遇到这种情况的解法优先级是：① 用 `TxRowSkeleton` + 令牌覆盖；② 复用双方共享的 CSS 自定义属性（如 `--shortcut-dialog-columns`）；③ 才是在本组件内重述最少量的几何并加注释。
