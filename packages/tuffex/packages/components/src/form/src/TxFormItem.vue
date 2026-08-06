@@ -36,6 +36,18 @@ const resolvedRules = computed<FormRule[]>(() => {
   return Array.isArray(merged) ? merged : [merged]
 })
 
+/**
+ * `required` is honoured inside runRule, but runRule is only reachable from the
+ * rule loop — so an item declaring `required` with no rules had nothing to
+ * iterate and validated as passing while still rendering the required marker.
+ */
+const effectiveRules = computed<FormRule[]>(() => {
+  const rules = resolvedRules.value
+  if (rules.length === 0 && props.required)
+    return [{ required: true }]
+  return rules
+})
+
 const isRequired = computed(() => {
   if (props.required)
     return true
@@ -82,7 +94,7 @@ async function runRule(rule: FormRule): Promise<string | null> {
 }
 
 async function validate(): Promise<boolean> {
-  for (const rule of resolvedRules.value) {
+  for (const rule of effectiveRules.value) {
     const message = await runRule(rule)
     if (message) {
       errorMessage.value = message
