@@ -931,10 +931,25 @@
   "home": {
     "greeting": "What shall we do today?",
     "placeholder": "Ask Tuff to do anything",
-    "autoContext": "Auto Context",
-    "autoContextHint": "Lets the model pull web, file, clipboard and related context on demand",
-    "agentTools": "Tools",
-    "agentToolsHint": "Let the assistant search, read and open files — every call asks first",
+    "permission": "Permissions",
+    "permissionMenu": "Tool permissions",
+    "permissionMode": {
+      "off": "Off",
+      "review": "Review each call",
+      "full": "Allow all"
+    },
+    "permissionHint": {
+      "off": "The assistant cannot run any tool",
+      "review": "The assistant may search, read and open files — every call asks you first",
+      "full": "Tools run without asking you — destructive MCP tools included"
+    },
+    "permissionFullConfirmTitle": "Switch to allow all?",
+    "permissionFullConfirmDesc": "From here on every tool call runs immediately without asking — writing files, running commands and destructive MCP tools included. You can switch back to reviewing each call at any time.",
+    "permissionFullConfirmCancel": "Cancel",
+    "permissionFullConfirmApply": "Allow all",
+    "permissionResetApprovals": "Reset remembered approvals",
+    "permissionResetDone": "Remembered approvals cleared",
+    "permissionResetFailed": "Could not reset remembered approvals",
     "chainOfThought": "Chain of thought",
     "chartFailed": "The chart could not be rendered.",
     "toolAllow": "Allow",
