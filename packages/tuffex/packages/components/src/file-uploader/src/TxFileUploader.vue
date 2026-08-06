@@ -45,20 +45,69 @@ function sync(next: FileUploaderFile[]): void {
   emit('change', next)
 }
 
-function addFiles(files: File[]) {
-  if (!files.length)
-    return
-  const remain = Math.max(0, (props.max ?? 10) - value.value.length)
-  const take = remain > 0 ? files.slice(0, remain) : []
-  if (!take.length)
-    return
-  const added = take.map(file => ({
+/**
+ * `accept` only reaches the native picker through the input attribute, so the
+ * drop path has to apply the same contract itself. Mirrors the browser's own
+ * matching: `*` / `*&#47;*` wildcards, `type/*` groups, exact MIME types and
+ * `.ext` suffixes, comma separated.
+ */
+function matchesAccept(file: File): boolean {
+  const patterns = (props.accept ?? '')
+    .split(',')
+    .map(pattern => pattern.trim().toLowerCase())
+    .filter(Boolean)
+  if (!patterns.length)
+    return true
+
+  const type = (file.type || '').toLowerCase()
+  const name = file.name.toLowerCase()
+
+  return patterns.some((pattern) => {
+    if (pattern === '*' || pattern === '*/*')
+      return true
+    if (pattern.startsWith('.'))
+      return name.endsWith(pattern)
+    if (pattern.endsWith('/*'))
+      return type.startsWith(pattern.slice(0, -1))
+    return type === pattern
+  })
+}
+
+function toItem(file: File): FileUploaderFile {
+  return {
     id: uid(),
     name: file.name,
     size: file.size,
     type: file.type,
     file,
-  }))
+  }
+}
+
+function addFiles(files: File[]) {
+  if (!files.length)
+    return
+
+  const acceptable = files.filter(matchesAccept)
+  if (!acceptable.length)
+    return
+
+  // A single-file uploader owns one slot: a new pick replaces the previous file
+  // rather than accumulating toward `max`.
+  if (!props.multiple) {
+    const file = acceptable[0]
+    if (!file)
+      return
+    const added = [toItem(file)]
+    emit('add', added)
+    sync(added)
+    return
+  }
+
+  const remain = Math.max(0, (props.max ?? 10) - value.value.length)
+  const take = remain > 0 ? acceptable.slice(0, remain) : []
+  if (!take.length)
+    return
+  const added = take.map(toItem)
   const next = [...value.value, ...added]
   emit('add', added)
   sync(next)
