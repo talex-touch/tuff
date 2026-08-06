@@ -53,10 +53,10 @@
    - test(xxx): message
    - build(xxx): message
    - docs(xxx): message
-   - add(xxx): message
-   - upd(xxx): message (诸如更新dependencies的版本也可)
+   - feat(xxx): message
+   - update(xxx): message (诸如更新 dependencies 的版本也可)
    - change(xxx): message (应当留作备选)
-   - 更多请参考 `commitlint.config.js`
+   - 更多请参考 `commitlint.config.cts`
 4. XXX 是你更新了什么，或者是一个抽象范围、模块:
    - 抽象范围 像是 PluginModule
    - 具体文件 像是 touch-core.ts

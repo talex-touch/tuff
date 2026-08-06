@@ -54,10 +54,10 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
    - test(xxx): message
    - build(xxx): message
    - docs(xxx): message
-   - add(xxx): message
-   - upd(xxx): message (Update dependencies versions)
+   - feat(xxx): message
+   - update(xxx): message (e.g. update dependency versions)
    - change(xxx): message (The last one to choose) [Fallback]
-   - More see `commitlint.config.js`
+   - More see `commitlint.config.cts`
 4. The xxx is what you update and a area or a module:
    - Abstract range like PluginModule
    - Specific single file like touch-core.ts
