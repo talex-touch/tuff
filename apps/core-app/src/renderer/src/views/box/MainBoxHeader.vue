@@ -3,6 +3,7 @@ import type { IProviderActivate, ITuffIcon } from '@talex-touch/utils'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
@@ -31,6 +32,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const transport = useTuffTransport()
+const { t } = useI18n()
 
 const boxInputRef = ref()
 defineExpose({ boxInputRef })
@@ -90,7 +92,7 @@ function handlePaste(): void {
     <TagSection v-if="!isUIMode" :box-options="boxOptions" :clipboard-options="clipboardOptions" />
 
     <div class="CoreBox-Configure">
-      <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+      <TuffIcon :icon="pinIcon" :alt="t('corebox.pin', '固定 CoreBox')" @click="handleTogglePin" />
     </div>
   </div>
 </template>

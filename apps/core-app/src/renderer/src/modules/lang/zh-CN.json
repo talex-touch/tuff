@@ -5147,6 +5147,7 @@
     "confirmAndSend": "授权并发送"
   },
   "corebox": {
+    "pin": "固定 CoreBox",
     "pinned": "已固定",
     "unpinned": "已取消固定",
     "pinFailed": "固定失败",
