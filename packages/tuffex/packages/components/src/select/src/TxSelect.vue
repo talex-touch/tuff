@@ -241,6 +241,14 @@ function isSelectValueEqual(
     (typeof optionValue === 'string' || typeof optionValue === 'number')
     && (typeof currentValue === 'string' || typeof currentValue === 'number')
   ) {
+    // `Number('')` and `Number('  ')` are 0, so a blank string — which is this
+    // component's own unselected default — would otherwise compare equal to an
+    // option whose value is 0.
+    if (typeof optionValue === 'string' && optionValue.trim() === '')
+      return false
+    if (typeof currentValue === 'string' && currentValue.trim() === '')
+      return false
+
     const optionNumber = Number(optionValue)
     const currentNumber = Number(currentValue)
     if (Number.isFinite(optionNumber) && Number.isFinite(currentNumber)) {
