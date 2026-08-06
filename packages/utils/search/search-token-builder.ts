@@ -95,6 +95,19 @@ function resolveDisplayWordParts(
   })
 }
 
+// Dedup keys per token list; a list mutated by direct push after its first
+// addSearchToken call would bypass dedup, so all producers must funnel through here.
+const tokenDedupKeys = new WeakMap<SearchTokenList, Set<string>>()
+
+function tokenDedupKey(token: FeatureSearchToken): string {
+  return JSON.stringify({
+    value: token.value,
+    source: token.source,
+    display: token.display,
+    segments: token.segments
+  })
+}
+
 export function addSearchToken(tokens: SearchTokenList, token: FeatureSearchToken): void {
   const value = token.value.trim().toLowerCase()
   if (!value) return
@@ -104,27 +117,17 @@ export function addSearchToken(tokens: SearchTokenList, token: FeatureSearchToke
     value,
     display: token.display?.trim() || undefined
   }
-  const key = JSON.stringify({
-    value: normalizedToken.value,
-    source: normalizedToken.source,
-    display: normalizedToken.display,
-    segments: normalizedToken.segments
-  })
 
-  if (
-    tokens.some((item) => {
-      const itemKey = JSON.stringify({
-        value: item.value,
-        source: item.source,
-        display: item.display,
-        segments: item.segments
-      })
-      return itemKey === key
-    })
-  ) {
-    return
+  let seenKeys = tokenDedupKeys.get(tokens)
+  if (!seenKeys) {
+    seenKeys = new Set(tokens.map(tokenDedupKey))
+    tokenDedupKeys.set(tokens, seenKeys)
   }
 
+  const key = tokenDedupKey(normalizedToken)
+  if (seenKeys.has(key)) return
+
+  seenKeys.add(key)
   tokens.push(normalizedToken)
 }
 

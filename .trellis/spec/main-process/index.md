@@ -8,6 +8,10 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   topology, `scheduleDbWrite`/`scheduleAuxWrite` call-site convention, scheduler
   busy-retry semantics (never sleep holding the queue), live home resolution,
   search-split parity rules, boot-time maintenance write gating.
+- [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
+  path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
+  derivation memoized with a content key that must cover every input field, cached
+  arrays are shared read-only references.
 
 ## Quality Check
 

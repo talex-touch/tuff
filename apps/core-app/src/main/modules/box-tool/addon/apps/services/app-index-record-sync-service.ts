@@ -23,9 +23,12 @@ export class AppIndexedSourceRecordMapper {
   public async map(appInfo: ScannedAppInfo): Promise<AppIndexedSourceSearchRecord> {
     const app = { ...appInfo, displayName: resolveDisplayName(appInfo.displayName, appInfo.name) }
     const itemId = resolveAppItemId(app)
-    const aliases = this.buildAliases(app)
+    const aliasValues = this.options.getAliases(app)
+    const aliases = this.buildAliases(app, aliasValues)
     const keywords = await this.options.generateKeywords(app)
     const toolSourceIds = this.options.resolveToolSourceIds(app)
+    const aliasKeywordSet = new Set(aliasValues)
+    const acronymSet = this.buildAcronymSet(app)
 
     return {
       itemId,
@@ -33,7 +36,7 @@ export class AppIndexedSourceRecordMapper {
         aliases: aliases.map((value) => ({ value, priority: 1.5 })),
         keywords: Array.from(keywords).map((value) => ({
           value,
-          priority: this.isAcronym(value, app) || this.isAlias(value, app) ? 1.5 : 1.1
+          priority: acronymSet.has(value) || aliasKeywordSet.has(value) ? 1.5 : 1.1
         })),
         legacyItemIds: normalizeStringList([...resolveAppItemIds(app), app.launchTarget]).filter(
           (legacyItemId) => legacyItemId !== itemId
@@ -51,9 +54,9 @@ export class AppIndexedSourceRecordMapper {
     }
   }
 
-  private buildAliases(app: ScannedAppInfo): string[] {
+  private buildAliases(app: ScannedAppInfo, aliasValues: string[]): string[] {
     return normalizeStringList([
-      ...this.options.getAliases(app),
+      ...aliasValues,
       app.displayName,
       app.name,
       app.fileName,
@@ -69,23 +72,24 @@ export class AppIndexedSourceRecordMapper {
     ])
   }
 
-  private isAcronym(keyword: string, appInfo: ScannedAppInfo): boolean {
-    return [appInfo.name, appInfo.displayName, appInfo.fileName, ...(appInfo.alternateNames ?? [])]
-      .filter(Boolean)
-      .some((name) => {
-        if (!name || !name.includes(' ')) return false
-        return (
-          name
-            .split(' ')
-            .filter(Boolean)
-            .map((word) => word.charAt(0))
-            .join('')
-            .toLowerCase() === keyword
-        )
-      })
-  }
-
-  private isAlias(keyword: string, appInfo: ScannedAppInfo): boolean {
-    return this.options.getAliases(appInfo).includes(keyword)
+  private buildAcronymSet(appInfo: ScannedAppInfo): Set<string> {
+    const acronyms = new Set<string>()
+    for (const name of [
+      appInfo.name,
+      appInfo.displayName,
+      appInfo.fileName,
+      ...(appInfo.alternateNames ?? [])
+    ]) {
+      if (!name || !name.includes(' ')) continue
+      acronyms.add(
+        name
+          .split(' ')
+          .filter(Boolean)
+          .map((word) => word.charAt(0))
+          .join('')
+          .toLowerCase()
+      )
+    }
+    return acronyms
   }
 }
