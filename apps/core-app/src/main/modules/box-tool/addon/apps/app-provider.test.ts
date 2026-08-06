@@ -4,6 +4,8 @@ import path from 'node:path'
 import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
 import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { APP_SEMANTIC_ALIAS_CATALOG_VERSION } from './app-semantic-catalog'
+import { APP_TOOL_SOURCE_CATALOG_VERSION } from './app-tool-source-catalog'
 import {
   addWatchPathMock,
   appRuntimeApplyDeltaMock,
@@ -1156,7 +1158,7 @@ describe('appProvider rebuild maintenance', () => {
           status: 'ready',
           itemCount: 6,
           metadata: expect.objectContaining({
-            catalogVersion: 1,
+            catalogVersion: APP_TOOL_SOURCE_CATALOG_VERSION,
             sources: expect.arrayContaining([
               expect.objectContaining({ id: 'dev', appCount: 2 }),
               expect.objectContaining({ id: 'im', appCount: 3 }),
@@ -2213,7 +2215,9 @@ describe('appProvider rebuild maintenance', () => {
     await privateProvider._syncSemanticAliasCatalogIfNeeded()
 
     expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
-    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe('3')
+    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe(
+      String(APP_SEMANTIC_ALIAS_CATALOG_VERSION)
+    )
   })
 
   it('rejects managed launcher entries that collide with scanned apps', async () => {
