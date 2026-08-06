@@ -4,10 +4,10 @@
 
   <h1>Tuff</h1>
 
-  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
-  [![GitHub release](https://img.shields.io/badge/dev-2.1.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
+  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
+  [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![Dev version](https://img.shields.io/github/package-json/v/talex-touch/tuff?style=flat-square&label=dev&color=64391A)](https://github.com/talex-touch/tuff/discussions/35)
 
   English | [简体中文](./CONTRIBUTING_zh.md)
 </div>
@@ -73,10 +73,10 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
    Tuff tree helper:
  > tuff:
    ├── apps: (Main applications)
-   ├──── core: (Electron application)
-   ├──── docs: (Document application)
+   ├──── core-app: (Electron application)
+   ├──── nexus: (Docs & ecosystem site)
    ├── packages: (Assistant packages)
-   ├──── components: (Tuff components)
+   ├──── tuffex: (Tuff UI components)
    ├──── utils: (Assistant Utils)
    ├── plugins: (Official plugins)
 ```
