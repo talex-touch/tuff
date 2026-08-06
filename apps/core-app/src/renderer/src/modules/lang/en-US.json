@@ -4263,6 +4263,11 @@
       "later": "Later",
       "dontRemindAgain": "Don't remind me again"
     },
+    "previewHistory": {
+      "recentTitle": "Recent",
+      "countSummary": "{count} total",
+      "noRecords": "No records yet"
+    },
   "common": {
     "loadMore": "Load more",
     "copy": "Copy",

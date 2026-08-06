@@ -2,6 +2,9 @@
 import type { CalculationHistoryEntry } from '~/modules/box/adapter/hooks/usePreviewHistory'
 import dayjs from 'dayjs'
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -52,13 +55,15 @@ watch(
     <div class="panel">
       <header>
         <div class="title-row">
-          <span class="title">最近处理</span>
-          <span class="count">共 {{ items.length }} 条</span>
+          <span class="title">{{ t('previewHistory.recentTitle', '最近处理') }}</span>
+          <span class="count">{{ t('previewHistory.countSummary', { count: items.length }) }}</span>
         </div>
       </header>
       <div class="panel-body">
-        <div v-if="loading" class="state">加载中...</div>
-        <div v-else-if="!items.length" class="state">暂无记录</div>
+        <div v-if="loading" class="state">{{ t('common.loading', '加载中...') }}</div>
+        <div v-else-if="!items.length" class="state">
+          {{ t('previewHistory.noRecords', '暂无记录') }}
+        </div>
         <ul v-else ref="listRef" class="history-list">
           <li
             v-for="(item, index) in formattedItems"
