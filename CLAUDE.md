@@ -25,9 +25,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run db:generate` - Generate Drizzle ORM migrations
 - `npm run db:migrate` - Run database migrations
 
-### Documentation
-- `pnpm docs:dev` - Start documentation development server
-- `pnpm docs:build` - Build documentation
+### Documentation (Nexus site)
+- `pnpm nexus:dev` - Start the docs / ecosystem site dev server
+- `pnpm nexus:build` - Build the docs / ecosystem site
 
 ### Code Quality
 - `pnpm lint` - Run ESLint on all code
@@ -40,7 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Monorepo Structure
-This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, extracted plugins in `plugins/` (7 independent plugin packages), and documentation in `apps/docs/`.
+This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, plugins in `plugins/` (24 plugin packages), and the documentation & ecosystem site in `apps/nexus/`.
 
 ### Technology Stack
 - **Electron**: 41.10.1+ with Node.js 24.15.0+
@@ -114,7 +114,7 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
 - `touch-window-presets` - Window presets
 - `touch-workspace-scripts` - Workspace scripts (split from dev toolbox)
 - `touch-system-actions` - System actions
-- `touch-intelligence-actions` - AI intelligence actions
+- `touch-intelligence` - AI intelligence actions
 
 **Plugin Three-Layer Architecture**:
 
@@ -371,7 +371,7 @@ await accountSDK.hasPrioritySupport()     // Priority support
 
 ## Development Notes
 
-- Node.js version: 22.16.0+ (enforced by pnpm preinstall hook and Volta)
+- Node.js version: 24.15.0+ (enforced by the `engines` field and Volta; the `preinstall` hook only enforces pnpm as the package manager, not the Node version)
 - Uses Electron 40.0.0+ with Vue 3.5.27+
 - Development uses hot-reloading with process cleanup via DevProcessManager
 - Plugin development supports live reloading when Manifest (`manifest.json`) or Prelude (`index.js`) files change
