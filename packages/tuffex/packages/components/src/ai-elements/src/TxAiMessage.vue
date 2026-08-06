@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { AiElementMessage, AiMessagePart } from './types'
+import type { AiElementMessage, AiMessagePart, AiSourceItem } from './types'
 import { computed } from 'vue'
 import TxAttachmentTray from '../../attachment-tray/src/TxAttachmentTray.vue'
 import TxMarkdownView from '../../markdown-view/src/TxMarkdownView.vue'
 import TxReasoningDisclosure from '../../reasoning-disclosure/src/TxReasoningDisclosure.vue'
+import TxSources from '../../sources/src/TxSources.vue'
 import TxToolCallCard from '../../tool-call-card/src/TxToolCallCard.vue'
 
 const props = withDefaults(
@@ -25,6 +26,10 @@ const props = withDefaults(
 defineOptions({
   name: 'TxAiMessage',
 })
+
+defineEmits<{
+  'open-source': [source: AiSourceItem]
+}>()
 
 /** Parts mode replaces the content-string rendering; absent parts = legacy path, untouched. */
 const parts = computed<AiMessagePart[]>(() => props.message.parts ?? [])
@@ -158,6 +163,16 @@ const statusLabel = computed(() => {
                 class="tx-ai-message__part tx-ai-message__part--attachments"
               >
                 <TxAttachmentTray :attachments="part.attachments" />
+              </div>
+
+              <div
+                v-else-if="part.type === 'sources'"
+                class="tx-ai-message__part tx-ai-message__part--sources"
+              >
+                <TxSources
+                  :sources="part.sources"
+                  @open="(source) => $emit('open-source', source)"
+                />
               </div>
             </template>
           </div>

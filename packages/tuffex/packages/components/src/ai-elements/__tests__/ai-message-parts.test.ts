@@ -93,6 +93,25 @@ describe('txAiMessage parts rendering', () => {
     expect(wrapper.find('.widget-surface').text()).toBe('t9')
   })
 
+  it('dispatches a sources part to TxSources and re-emits open', async () => {
+    const wrapper = mount(TxAiMessage, {
+      props: {
+        markdown: false,
+        message: partsMessage([
+          { type: 'text', text: 'answer' },
+          { type: 'sources', sources: [{ id: 'src1', url: 'https://example.com', title: 'Ref' }] },
+        ]),
+      },
+    })
+
+    const sourcesPart = wrapper.find('.tx-ai-message__part--sources')
+    expect(sourcesPart.exists()).toBe(true)
+
+    await sourcesPart.find('.tx-sources__header').trigger('click')
+    await sourcesPart.find('.tx-sources__link').trigger('click')
+    expect(wrapper.emitted('open-source')).toHaveLength(1)
+  })
+
   it('keeps the legacy content path when parts are absent', () => {
     const wrapper = mount(TxAiMessage, {
       props: {
