@@ -15,6 +15,7 @@ import type {
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
@@ -370,78 +371,85 @@ async function handleCapabilityTest(
 </script>
 
 <template>
-  <TuffAsideTemplate
-    v-model="searchQuery"
-    class="capability-shell flex-1"
-    search-id="capability-search"
-    :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
-    :clear-label="t('common.close')"
-    :main-edge-blur="false"
+  <SettingsPage
+    :title="t('settingsIntelligenceHub.capabilities')"
+    back-to="/setting/intelligence"
+    :back-label="t('settingsIntelligenceHub.back')"
+    fill
   >
-    <template #default>
-      <!-- Loading skeleton -->
-      <div v-if="loading" class="capability-cards">
-        <CapabilitySkeleton v-for="i in 8" :key="i" />
-      </div>
-
-      <!-- Capability list -->
-      <div v-else class="capability-cards">
-        <TuffItemTemplate
-          v-for="capability in filteredCapabilities"
-          :key="capability.id"
-          class="capability-card"
-          :title="capability.label || capability.id"
-          :icon="getCapabilityIcon(capability)"
-          :selected="selectedCapabilityId === capability.id"
-          :top-badge="getCapabilityBadge(capability)"
-          :status-dot="getCapabilityStatusDot(capability)"
-          size="sm"
-          :aria-label="capability.label || capability.id"
-          @click="handleSelectCapability(capability.id)"
-        />
-        <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">
-          <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
+    <TuffAsideTemplate
+      v-model="searchQuery"
+      class="capability-shell flex-1"
+      search-id="capability-search"
+      :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
+      :clear-label="t('common.close')"
+      :main-edge-blur="false"
+    >
+      <template #default>
+        <!-- Loading skeleton -->
+        <div v-if="loading" class="capability-cards">
+          <CapabilitySkeleton v-for="i in 8" :key="i" />
         </div>
-      </div>
-    </template>
 
-    <template #footer>
-      <span class="w-full text-xs text-center op-50 block">
-        {{ t('settings.intelligence.capabilitySummary', { count: capabilityList.length }) }}
-      </span>
-    </template>
+        <!-- Capability list -->
+        <div v-else class="capability-cards">
+          <TuffItemTemplate
+            v-for="capability in filteredCapabilities"
+            :key="capability.id"
+            class="capability-card"
+            :title="capability.label || capability.id"
+            :icon="getCapabilityIcon(capability)"
+            :selected="selectedCapabilityId === capability.id"
+            :top-badge="getCapabilityBadge(capability)"
+            :status-dot="getCapabilityStatusDot(capability)"
+            size="sm"
+            :aria-label="capability.label || capability.id"
+            @click="handleSelectCapability(capability.id)"
+          />
+          <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">
+            <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
+          </div>
+        </div>
+      </template>
 
-    <template #main>
-      <div :key="selectedCapabilityId ?? 'empty'" class="h-full overflow-hidden">
-        <IntelligenceCapabilityInfo
-          v-if="selectedCapability"
-          :capability="selectedCapability"
-          :providers="providers"
-          :bindings="activeBindings(selectedCapability.id)"
-          :is-testing="!!capabilityTesting[selectedCapability.id]"
-          :test-result="capabilityTests[selectedCapability.id]"
-          :has-pending-changes="hasPendingCapabilityChanges"
-          :is-saving="saving"
-          :save-state="saveState"
-          :save-error-detail="saveErrorDetail"
-          @toggle-provider="onToggleProvider"
-          @update-models="onUpdateModels"
-          @update-prompt="onUpdatePrompt"
-          @reorder-providers="onReorderProviders"
-          @save="handleSaveCapabilities"
-          @test="
-            (params?: {
-              providerId?: string
-              userInput?: string
-              model?: string
-              promptTemplate?: string
-              promptVariables?: Record<string, unknown>
-            }) => handleCapabilityTest(selectedCapability!.id, params)
-          "
-        />
-      </div>
-    </template>
-  </TuffAsideTemplate>
+      <template #footer>
+        <span class="w-full text-xs text-center op-50 block">
+          {{ t('settings.intelligence.capabilitySummary', { count: capabilityList.length }) }}
+        </span>
+      </template>
+
+      <template #main>
+        <div :key="selectedCapabilityId ?? 'empty'" class="h-full overflow-hidden">
+          <IntelligenceCapabilityInfo
+            v-if="selectedCapability"
+            :capability="selectedCapability"
+            :providers="providers"
+            :bindings="activeBindings(selectedCapability.id)"
+            :is-testing="!!capabilityTesting[selectedCapability.id]"
+            :test-result="capabilityTests[selectedCapability.id]"
+            :has-pending-changes="hasPendingCapabilityChanges"
+            :is-saving="saving"
+            :save-state="saveState"
+            :save-error-detail="saveErrorDetail"
+            @toggle-provider="onToggleProvider"
+            @update-models="onUpdateModels"
+            @update-prompt="onUpdatePrompt"
+            @reorder-providers="onReorderProviders"
+            @save="handleSaveCapabilities"
+            @test="
+              (params?: {
+                providerId?: string
+                userInput?: string
+                model?: string
+                promptTemplate?: string
+                promptVariables?: Record<string, unknown>
+              }) => handleCapabilityTest(selectedCapability!.id, params)
+            "
+          />
+        </div>
+      </template>
+    </TuffAsideTemplate>
+  </SettingsPage>
 </template>
 
 <style lang="scss" scoped>

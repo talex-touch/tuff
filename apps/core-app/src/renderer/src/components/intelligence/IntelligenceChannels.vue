@@ -19,7 +19,7 @@ const auditVisible = ref(false)
 const auditSource = ref<HTMLElement | null>(null)
 
 function handleChannelsClick() {
-  router.push('/intelligence/channels')
+  router.push('/setting/intelligence/channels')
 }
 
 function handleAudit(event: MouseEvent) {

@@ -45,6 +45,13 @@ const lastUpdated = ref<Date | null>(null)
 const scopeOrder: PlatformCapabilityScope[] = ['system', 'plugin', 'ai']
 const statusOrder: PlatformCapabilityStatus[] = ['stable', 'beta', 'alpha']
 
+/**
+ * The placeholder borrows the first scopes' real labels rather than drawing grey bars for them:
+ * a group label lives outside its card, where a skeleton would have to guess a width, and every
+ * scan so far has returned these scopes.
+ */
+const skeletonScopes = computed(() => scopeOrder.slice(0, SKELETON_GROUPS))
+
 const scopeIconMap: Record<PlatformCapabilityScope, string> = {
   system: 'i-carbon-settings',
   plugin: 'i-carbon-plug',
@@ -148,12 +155,26 @@ onMounted(() => {
 </script>
 
 <template>
-  <TuffGroupBlock
-    :name="t('settings.settingPlatformCapabilities.groupTitle')"
-    :description="t('settings.settingPlatformCapabilities.groupDesc')"
-    memory-name="platform-capabilities"
-  >
-    <div class="PlatformCapabilities-Toolbar">
+  <!--
+    One card per scope rather than one card holding scope sub-headings: with the v2 label sitting
+    outside its card, a heading drawn inside one reads as a second, competing group.
+  -->
+  <div class="PlatformCapabilities">
+    <TuffGroupBlock
+      :name="t('settings.settingPlatformCapabilities.groupTitle')"
+      :description="t('settings.settingPlatformCapabilities.groupDesc')"
+    >
+      <template #header-extra>
+        <TxButton variant="flat" :disabled="loading" @click="loadCapabilities">
+          <div class="i-carbon-renew" />
+          {{
+            loading
+              ? t('settings.settingPlatformCapabilities.loading')
+              : t('settings.settingPlatformCapabilities.refresh')
+          }}
+        </TxButton>
+      </template>
+
       <div class="PlatformCapabilities-Overview">
         <div class="PlatformCapabilities-Meta">
           <span>{{
@@ -173,33 +194,24 @@ onMounted(() => {
           />
         </div>
       </div>
-      <TxButton
-        class="PlatformCapabilities-Refresh"
-        variant="flat"
-        :disabled="loading"
-        @click="loadCapabilities"
-      >
-        <div class="i-carbon-renew" />
-        {{
-          loading
-            ? t('settings.settingPlatformCapabilities.loading')
-            : t('settings.settingPlatformCapabilities.refresh')
-        }}
-      </TxButton>
-    </div>
+    </TuffGroupBlock>
 
     <!--
-      Built from the list's own classes so the placeholder inherits the group and
-      item geometry; a line of centred text stood in for a stack of bordered
-      cards before, so the panel jumped every time the scan returned.
+      Built from the loaded list's own classes so the placeholder inherits the card and item
+      geometry; a line of centred text stood in for a stack of cards before, so the panel jumped
+      every time the scan returned.
     -->
-    <div v-if="showSkeleton" class="PlatformCapabilities-List" aria-hidden="true">
-      <div v-for="group in SKELETON_GROUPS" :key="group" class="PlatformCapabilities-Group">
-        <div class="PlatformCapabilities-GroupHeader">
-          <TxSkeleton :width="96" :height="12" :radius="4" />
+    <template v-if="showSkeleton">
+      <TuffGroupBlock v-for="scope in skeletonScopes" :key="scope" :name="scopeLabel(scope)">
+        <template #header-extra>
           <TxSkeleton :width="20" :height="12" :radius="4" />
-        </div>
-        <article v-for="i in SKELETON_ITEMS_PER_GROUP" :key="i" class="PlatformCapabilities-Item">
+        </template>
+        <article
+          v-for="i in SKELETON_ITEMS_PER_GROUP"
+          :key="i"
+          class="PlatformCapabilities-Item"
+          aria-hidden="true"
+        >
           <div class="PlatformCapabilities-ItemMain">
             <span class="PlatformCapabilities-Icon">
               <TxSkeleton variant="rect" :width="18" :height="18" :radius="5" />
@@ -221,25 +233,25 @@ onMounted(() => {
             </div>
           </div>
         </article>
-      </div>
-    </div>
+      </TuffGroupBlock>
+    </template>
 
-    <div v-else-if="loading" class="PlatformCapabilities-State">
-      {{ t('settings.settingPlatformCapabilities.loading') }}
-    </div>
-    <div v-else-if="groupedCapabilities.length === 0" class="PlatformCapabilities-State">
-      {{ t('settings.settingPlatformCapabilities.empty') }}
-    </div>
-    <div v-else class="PlatformCapabilities-List">
-      <div
-        v-for="group in groupedCapabilities"
-        :key="group.scope"
-        class="PlatformCapabilities-Group"
-      >
-        <div class="PlatformCapabilities-GroupHeader">
-          <span>{{ group.label }}</span>
+    <TuffGroupBlock v-else-if="loading || groupedCapabilities.length === 0">
+      <div class="PlatformCapabilities-State">
+        {{
+          loading
+            ? t('settings.settingPlatformCapabilities.loading')
+            : t('settings.settingPlatformCapabilities.empty')
+        }}
+      </div>
+    </TuffGroupBlock>
+
+    <template v-else>
+      <TuffGroupBlock v-for="group in groupedCapabilities" :key="group.scope" :name="group.label">
+        <template #header-extra>
           <span class="PlatformCapabilities-GroupCount">{{ group.items.length }}</span>
-        </div>
+        </template>
+
         <article v-for="item in group.items" :key="item.id" class="PlatformCapabilities-Item">
           <div class="PlatformCapabilities-ItemMain">
             <span class="PlatformCapabilities-Icon">
@@ -305,43 +317,31 @@ onMounted(() => {
             </div>
           </div>
         </article>
-      </div>
-    </div>
-  </TuffGroupBlock>
+      </TuffGroupBlock>
+    </template>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-:deep(.TGroupBlock-Container) {
-  overflow: visible;
-}
-
-:deep(.TGroupBlock-Main) {
-  overflow: visible !important;
-}
-
-.PlatformCapabilities-Toolbar {
+.PlatformCapabilities {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
+  flex-direction: column;
+  width: 100%;
 }
 
 .PlatformCapabilities-Overview {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1 1 auto;
+  padding: 12px 16px;
 }
 
 .PlatformCapabilities-Meta {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
+  font-size: var(--shell-fs-sm);
+  color: var(--shell-text-secondary);
 }
 
 .PlatformCapabilities-Stats {
@@ -350,44 +350,15 @@ onMounted(() => {
   gap: 8px;
 }
 
-.PlatformCapabilities-Refresh {
-  flex: 0 0 auto;
-}
-
 .PlatformCapabilities-State {
-  margin: 12px 16px 16px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
-}
-
-.PlatformCapabilities-List {
-  padding: 0 0 8px;
-}
-
-.PlatformCapabilities-Group {
-  margin-top: 14px;
-}
-
-.PlatformCapabilities-GroupHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 18px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tx-text-color-secondary);
+  padding: 12px 16px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
 }
 
 .PlatformCapabilities-GroupCount {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--tx-fill-color-light);
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
 }
 
 .PlatformCapabilities-Item {
@@ -396,14 +367,12 @@ onMounted(() => {
   gap: 20px;
   align-items: flex-start;
   min-height: 72px;
-  padding: 14px 18px;
-  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter) 72%, transparent);
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease;
+  padding: 12px 16px;
+  /* `background-color`, not the shorthand: it would drop the card-drawn row hairline. */
+  transition: background-color 0.18s ease;
 
   &:hover {
-    background: color-mix(in srgb, var(--tx-fill-color-light) 52%, transparent);
+    background-color: var(--shell-surface);
   }
 }
 
@@ -423,8 +392,8 @@ onMounted(() => {
   height: 34px;
   margin-top: 1px;
   border-radius: 10px;
-  color: var(--tx-text-color-primary);
-  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
+  color: var(--shell-text-primary);
+  background-color: var(--shell-surface-2);
 }
 
 .PlatformCapabilities-Text {
@@ -432,9 +401,9 @@ onMounted(() => {
 
   p {
     margin: 5px 0 0;
-    font-size: 12px;
+    font-size: var(--shell-fs-sm);
     line-height: 1.45;
-    color: var(--tx-text-color-secondary);
+    color: var(--shell-text-secondary);
   }
 }
 
@@ -448,10 +417,10 @@ onMounted(() => {
   h4 {
     margin: 0;
     min-width: 0;
-    font-size: 14px;
+    font-size: var(--shell-fs-md);
     line-height: 1.35;
     font-weight: 600;
-    color: var(--tx-text-color-primary);
+    color: var(--shell-text-primary);
   }
 }
 
@@ -475,11 +444,11 @@ onMounted(() => {
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--tx-border-color);
-  background: var(--tx-fill-color-light);
+  border: 1px solid var(--shell-border);
+  background-color: var(--shell-surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
+  font-size: var(--shell-fs-caption);
+  color: var(--shell-text-secondary);
   max-width: min(100%, 320px);
   line-height: 1.35;
   word-break: break-all;
@@ -498,8 +467,8 @@ onMounted(() => {
   align-items: baseline;
   gap: 6px;
   max-width: 100%;
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
+  font-size: var(--shell-fs-caption);
+  color: var(--shell-text-secondary);
 }
 
 .PlatformCapabilities-LimitationsLabel {
@@ -534,9 +503,9 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
-  .PlatformCapabilities-Toolbar,
+  .PlatformCapabilities-Overview,
   .PlatformCapabilities-Item,
-  .PlatformCapabilities-GroupHeader {
+  .PlatformCapabilities-State {
     padding-left: 14px;
     padding-right: 14px;
   }

@@ -17,7 +17,7 @@ const router = useRouter()
 
 function handleViewFullAudit(close: () => void) {
   close()
-  router.push('/intelligence/audit')
+  router.push('/setting/intelligence/audit')
 }
 </script>
 

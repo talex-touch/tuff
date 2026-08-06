@@ -24,11 +24,7 @@ function handleClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div
-    class="TBlockLine-Container fake-background index-fix"
-    :class="{ link: props.link }"
-    @click="handleClick"
-  >
+  <div class="TBlockLine-Container" :class="{ link: props.link }" @click="handleClick">
     <span class="TBlockLine-Title">
       {{ title }}
     </span>
@@ -48,38 +44,35 @@ function handleClick(event: MouseEvent) {
   display: flex;
   gap: 12px;
   align-items: center;
-  padding: 2px 18px 2px 50px;
+  /*
+   * Left inset was 50px to clear the group's icon column. There is no icon column in v2, so the
+   * title now starts on the same 16px as every other row in the card.
+   */
+  padding: 8px 16px;
   min-height: 28px;
-  border-radius: 0;
-  transition:
-    background-color 0.2s ease,
-    transform 0.15s ease;
-
-  --fake-color: var(--tx-fill-color);
-  --fake-opacity: 0.45;
-  --fake-radius: 0;
+  transition: background-color 0.15s ease;
 
   .TBlockLine-Title {
     width: 120px;
     flex-shrink: 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--tx-text-color-secondary);
+    font-size: var(--shell-fs-body);
+    font-weight: 500;
+    color: var(--shell-text-secondary);
     transition: color 0.2s ease;
   }
 
   .TBlockLine-Description {
     flex: 1;
-    color: var(--tx-text-color-secondary);
-    font-size: 13px;
-    line-height: 1.4;
+    color: var(--shell-text-secondary);
+    font-size: var(--shell-fs-body);
+    line-height: 1.5;
     white-space: pre-line;
   }
 
   .TBlockLine-LinkSlot {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--tx-color-primary);
+    font-size: var(--shell-fs-body);
+    font-weight: 500;
+    color: var(--shell-primary);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -88,35 +81,22 @@ function handleClick(event: MouseEvent) {
 
   &.link {
     cursor: pointer;
-    padding-top: 2px;
-    padding-bottom: 2px;
-    --fake-color: var(--tx-fill-color);
-    --fake-opacity: 0.4;
 
     .TBlockLine-Title {
       width: auto;
-      opacity: 0.7;
       min-width: 120px;
-      color: var(--tx-text-color);
-      text-decoration-color: var(--tx-text-color);
+      color: var(--shell-text-primary);
+      text-decoration-color: var(--shell-text-primary);
     }
 
     .TBlockLine-LinkSlot {
-      color: var(--tx-color-primary);
-      text-decoration-color: var(--tx-color-primary);
+      text-decoration-color: var(--shell-primary);
     }
 
+    /* `background-color`, not the shorthand: it would drop the card-drawn row hairline. */
     &:hover {
       text-decoration: underline;
-      --fake-inner-opacity: 0.75;
-
-      .TBlockLine-LinkSlot {
-        color: var(--tx-color-primary-dark-2);
-      }
-    }
-
-    &:active {
-      transform: scale(0.99);
+      background-color: var(--shell-surface);
     }
   }
 }

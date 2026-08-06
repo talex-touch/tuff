@@ -24,6 +24,12 @@ const props = withDefaults(
     spec: FormSpec
     /** Locks the card as already answered, for a conversation re-rendered from history. */
     submitted?: boolean
+    /**
+     * A previously typed draft, laid over the spec defaults at mount. The host
+     * keeps drafts because a virtualized transcript unmounts this card — and
+     * its half-typed state — the moment it scrolls far enough away.
+     */
+    initialValues?: Record<string, FormFieldValue>
     /** Fallback when the spec carries no `submitLabel`. */
     submitLabel?: string
     resetLabel?: string
@@ -33,6 +39,7 @@ const props = withDefaults(
   }>(),
   {
     submitted: false,
+    initialValues: undefined,
     submitLabel: 'Submit',
     resetLabel: 'Reset',
     requiredHint: 'This field is required',
@@ -43,16 +50,18 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   submit: [values: Record<string, FormFieldValue>]
+  /** Fires on every edit so the host's draft never trails what is on screen. */
+  change: [values: Record<string, FormFieldValue>]
 }>()
 
-const values = ref<Record<string, FormFieldValue>>(initialValues())
+const values = ref<Record<string, FormFieldValue>>(seedValues())
 const missingKeys = ref<string[]>([])
 const sent = ref(false)
 
 const isSubmitted = computed(() => props.submitted || sent.value)
 const submitText = computed(() => props.spec.submitLabel?.trim() || props.submitLabel)
 
-function initialValues(): Record<string, FormFieldValue> {
+function defaultValues(): Record<string, FormFieldValue> {
   const initial: Record<string, FormFieldValue> = {}
   for (const field of props.spec.fields) {
     if (field.type === 'checkbox') initial[field.key] = field.default === true
@@ -61,15 +70,36 @@ function initialValues(): Record<string, FormFieldValue> {
   return initial
 }
 
+/** Defaults overlaid with the host's draft — but only keys the spec knows. */
+function seedValues(): Record<string, FormFieldValue> {
+  const seed = defaultValues()
+  for (const field of props.spec.fields) {
+    const draft = props.initialValues?.[field.key]
+    if (draft === undefined) continue
+    if (field.type === 'checkbox') {
+      if (typeof draft === 'boolean') seed[field.key] = draft
+    } else if (typeof draft !== 'boolean') {
+      seed[field.key] = draft
+    }
+  }
+  return seed
+}
+
+function publish(): void {
+  emit('change', { ...values.value })
+}
+
 // Keyed by content rather than identity: the host recomputes the spec object
 // while parsing the tool result, and resetting on every parent render would
-// wipe what the user is halfway through typing.
+// wipe what the user is halfway through typing. A real spec change invalidates
+// any draft, so the reset is published too.
 watch(
   () => JSON.stringify(props.spec),
   () => {
-    values.value = initialValues()
+    values.value = defaultValues()
     missingKeys.value = []
     sent.value = false
+    publish()
   }
 )
 
@@ -105,6 +135,7 @@ function setValue(field: FormField, value: FormFieldValue | TxSelectModelValue):
   // Only the multi-select mode emits an array, and no field asks for it.
   values.value[field.key] = Array.isArray(value) ? (value[0] ?? '') : value
   missingKeys.value = missingKeys.value.filter((key) => key !== field.key)
+  publish()
 }
 
 function isBlank(field: FormField): boolean {
@@ -143,8 +174,10 @@ function submit(): void {
 
 function reset(): void {
   if (isSubmitted.value) return
-  values.value = initialValues()
+  // Back to spec defaults, not to the seed: reset is "discard my draft".
+  values.value = defaultValues()
   missingKeys.value = []
+  publish()
 }
 </script>
 

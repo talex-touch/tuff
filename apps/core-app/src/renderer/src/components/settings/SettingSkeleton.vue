@@ -1,6 +1,6 @@
 <script lang="ts" name="SettingSkeleton" setup>
 import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
-import SettingSection from './SettingSection.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 /** One card's worth of placeholder rows. */
 export interface SettingSkeletonGroup {
@@ -31,12 +31,12 @@ withDefaults(
 
 <template>
   <!--
-    Deliberately built from the same `SettingSection` the loaded page uses, so the
+    Deliberately built from the same `TuffGroupBlock` the loaded page uses, so the
     label placement, card chrome and hairlines are identical by construction
     rather than by a second set of styles kept in sync by hand.
   -->
   <div class="SettingSkeleton">
-    <SettingSection v-for="(group, index) in groups" :key="index" :label="group.label">
+    <TuffGroupBlock v-for="(group, index) in groups" :key="index" :name="group.label">
       <TxRowSkeleton
         :rows="group.rows"
         :leading="group.leading"
@@ -44,7 +44,7 @@ withDefaults(
         :trailing="group.trailing"
         :separated="dividers"
       />
-    </SettingSection>
+    </TuffGroupBlock>
   </div>
 </template>
 
@@ -52,7 +52,9 @@ withDefaults(
 .SettingSkeleton {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  // Matches `SettingsPage-Column`'s own gap, so groups sit where the loaded ones will: the
+  // skeleton is one child of that column, while the real groups are its direct children.
+  gap: 20px;
   width: 100%;
 
   /*
@@ -62,5 +64,12 @@ withDefaults(
    */
   --tx-skeleton-base-color: var(--shell-surface-2);
   --tx-skeleton-row-separator-color: var(--shell-border);
+
+  // Same reason as in `SettingsPage`: the gap above is the whole rhythm, and the block's own
+  // bottom margin would add to it. The real sections have theirs dropped by the column, so
+  // keeping it here would put the placeholders ~11px apart from where the content lands.
+  > :deep(.TGroupBlock-Container) {
+    margin-bottom: 0;
+  }
 }
 </style>

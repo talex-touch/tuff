@@ -23,7 +23,7 @@ const auditVisible = ref(false)
 const auditSource = ref<HTMLElement | null>(null)
 
 function handleCapabilitiesClick() {
-  router.push('/intelligence/capabilities')
+  router.push('/setting/intelligence/capabilities')
 }
 
 function handleAudit(event: MouseEvent) {

@@ -157,6 +157,11 @@ const placeholder = computed(() => {
   opacity: 0.75;
 }
 
+input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 input {
   position: absolute;
 

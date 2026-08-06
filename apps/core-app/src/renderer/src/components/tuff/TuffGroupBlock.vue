@@ -1,23 +1,37 @@
 <script lang="ts" name="TuffGroupBlock" setup>
 // Legacy CoreApp business wrapper: keep the existing API while delegating primitives to TuffEx.
-import gsap from 'gsap'
-import { computed, onMounted, ref, watch } from 'vue'
-import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
-import { useUiPreference } from '~/modules/storage/ui-preference-storage'
-import { type IconValue, toIcon } from './tuff-icon-utils'
-const props = withDefaults(
+import type { IconValue } from './tuff-icon-utils'
+
+/**
+ * Artboard `iqbKR` reshapes the group: the label moved out above the card, the card became a
+ * single hairline-bordered container of rows, and the header — icon, chevron, collapse — is gone.
+ *
+ * The collapse and icon props stay declared so the ~40 existing call sites keep compiling, but
+ * they no longer do anything: the block is always expanded and never draws an icon.
+ */
+withDefaults(
   defineProps<{
-    name: string
+    /** Group label, rendered above the card. */
+    name?: string
+    /** Second, smaller line under the label. Also outside the card. */
     description?: string
+    /** No-op since v2: groups carry no icon. */
     defaultIcon?: IconValue
+    /** No-op since v2. */
     activeIcon?: IconValue
+    /** No-op since v2. */
     iconSize?: number
+    /** No-op since v2: groups no longer collapse. */
     collapsible?: boolean
+    /** No-op since v2. */
     collapsed?: boolean
+    /** No-op since v2. */
     defaultExpand?: boolean
+    /** No-op since v2: there is no expand state left to remember. */
     memoryName?: string
   }>(),
   {
+    name: '',
     description: '',
     iconSize: 22,
     collapsible: true,
@@ -25,295 +39,84 @@ const props = withDefaults(
     defaultExpand: true
   }
 )
-
-const emits = defineEmits<{
-  (e: 'toggle', expanded: boolean): void
-}>()
-
-const STORAGE_PREFIX = 'tuff-block-storage-'
-const uiPreference = useUiPreference()
-
-function resolveDefaultExpand(): boolean {
-  if (typeof props.defaultExpand === 'boolean') return props.defaultExpand
-  return !props.collapsed
-}
-
-const defaultIcon = computed(() => toIcon(props.defaultIcon))
-const activeIcon = computed(() => toIcon(props.activeIcon))
-
-function readStoredExpand(): boolean | null {
-  if (!props.memoryName) return null
-  const parsed = uiPreference.getJson<{ expand?: boolean }>(`${STORAGE_PREFIX}${props.memoryName}`)
-  if (typeof parsed?.expand === 'boolean') return parsed.expand
-  return null
-}
-
-const storedExpand = ref<boolean | null>(readStoredExpand())
-const expanded = ref(storedExpand.value ?? resolveDefaultExpand())
-const hasUserInteracted = ref(false)
-const contentRef = ref<HTMLElement | null>(null)
-const isMounted = ref(false)
-
-const headerIcon = computed(() => {
-  if (expanded.value) {
-    return activeIcon.value ?? defaultIcon.value
-  }
-  return defaultIcon.value ?? activeIcon.value
-})
-
-function persistState(state: boolean) {
-  if (!props.memoryName) return
-  uiPreference.setJson(`${STORAGE_PREFIX}${props.memoryName}`, { expand: state })
-  storedExpand.value = state
-}
-
-function applyImmediate(state: boolean) {
-  const el = contentRef.value
-  if (!el) return
-  gsap.killTweensOf(el)
-  if (state) {
-    el.style.display = 'block'
-    el.style.height = 'auto'
-    el.style.opacity = '1'
-  } else {
-    el.style.display = 'none'
-    el.style.height = '0px'
-    el.style.opacity = '0'
-  }
-}
-
-function animateContent(state: boolean) {
-  const el = contentRef.value
-  if (!el) return
-
-  gsap.killTweensOf(el)
-
-  if (state) {
-    el.style.display = 'block'
-    el.style.overflow = 'hidden'
-    const target = el.scrollHeight || 0
-    gsap.fromTo(
-      el,
-      { height: 0, opacity: 0.2 },
-      {
-        height: target,
-        opacity: 1,
-        duration: 0.45,
-        ease: 'power3.out',
-        onComplete: () => {
-          el.style.height = 'auto'
-          el.style.overflow = ''
-        }
-      }
-    )
-  } else {
-    const current = el.scrollHeight || el.offsetHeight || 0
-    el.style.overflow = 'hidden'
-    gsap.fromTo(
-      el,
-      { height: current, opacity: 1 },
-      {
-        height: 0,
-        opacity: 0,
-        duration: 0.35,
-        ease: 'power2.inOut',
-        onComplete: () => {
-          el.style.display = 'none'
-          el.style.overflow = ''
-        }
-      }
-    )
-  }
-}
-
-function toggle() {
-  if (!props.collapsible) return
-  expanded.value = !expanded.value
-  hasUserInteracted.value = true
-  persistState(expanded.value)
-  emits('toggle', expanded.value)
-}
-
-watch(
-  () => props.collapsed,
-  (value) => {
-    if (storedExpand.value !== null || hasUserInteracted.value) return
-    expanded.value = !value
-  }
-)
-
-watch(
-  () => props.defaultExpand,
-  (value) => {
-    if (storedExpand.value !== null || hasUserInteracted.value) return
-    if (typeof value === 'boolean') {
-      expanded.value = value
-    }
-  }
-)
-
-watch(
-  expanded,
-  (value) => {
-    if (!isMounted.value) return
-    animateContent(value)
-  },
-  { flush: 'post' }
-)
-
-onMounted(() => {
-  applyImmediate(expanded.value)
-  isMounted.value = true
-})
 </script>
 
 <template>
-  <div class="TGroupBlock-Container" :class="{ expand: expanded }">
-    <div
-      class="TGroupBlock-Header fake-background index-fix"
-      :class="{ 'is-static': !collapsible }"
-      @click="toggle"
-    >
-      <div class="TGroupBlock-Content">
-        <slot name="icon" :active="expanded">
-          <TuffIcon v-if="headerIcon" :icon="headerIcon" :size="iconSize" />
-        </slot>
-        <div class="TGroupBlock-Label">
-          <h3>{{ name }}</h3>
-          <p>{{ description }}</p>
-        </div>
+  <div class="TGroupBlock-Container">
+    <div v-if="name || description || $slots['header-extra']" class="TGroupBlock-Header">
+      <div class="TGroupBlock-Label">
+        <span v-if="name" class="TGroupBlock-Name">{{ name }}</span>
+        <span v-if="description" class="TGroupBlock-Desc">{{ description }}</span>
       </div>
-      <slot name="header-extra" :active="expanded" />
-      <div
-        v-if="collapsible"
-        class="TGroupBlock-Mode i-carbon-chevron-down"
-        :class="{ 'is-expanded': expanded }"
-      />
+      <!-- `active` is always true now, so `#header-extra="{ active }"` still destructures. -->
+      <slot name="header-extra" :active="true" />
     </div>
-    <div ref="contentRef" class="TGroupBlock-Main">
+    <div class="TGroupBlock-Main">
       <slot />
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.TGroupBlock-Header {
-  .TGroupBlock-Content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: 100%;
-
-    > * {
-      margin-right: 12px;
-      font-size: 24px;
-    }
-
-    > .TGroupBlock-Label {
-      flex: 1;
-
-      > h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 500;
-      }
-
-      > p {
-        margin: 0;
-        font-size: 12px;
-        font-weight: 400;
-        opacity: 0.5;
-      }
-    }
-  }
-  .TGroupBlock-Mode {
-    position: relative;
-    font-size: 18px;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-    &.is-expanded {
-      transform: rotate(180deg);
-    }
-  }
-  padding: 4px 22px 4px 12px;
+.TGroupBlock-Container {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
-  height: 56px;
-  cursor: pointer;
-  user-select: none;
-  box-sizing: border-box;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-  --fake-color: var(--tx-fill-color-dark);
-  --fake-inner-opacity: 0.5;
-  --fake-radius: 12px 12px 0 0;
-  transition:
-    background-color 0.25s ease,
-    border-color 0.25s ease;
-
-  &.is-static {
-    cursor: default;
-
-    &:hover {
-      --fake-color: var(--tx-fill-color-dark);
-    }
-  }
-
-  &:not(.is-static):hover {
-    --fake-color: var(--tx-fill-color);
-  }
-
-  &:not(.is-static):active {
-    --fake-color: var(--tx-fill-color-dark);
-  }
+  /*
+   * Unchanged from v1. Plenty of pages stack blocks in a parent with no `gap` of its own and
+   * rely on this; the settings shell adds its 20px column gap on top, exactly as it already did.
+   */
+  margin-bottom: 0.7rem;
 }
 
-.touch-blur .TGroupBlock-Header {
-  --fake-color: var(--tx-fill-color);
-  &:not(.is-static):hover {
-    --fake-color: var(--tx-fill-color-light);
-  }
+.TGroupBlock-Header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 2px;
+}
+
+.TGroupBlock-Label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.TGroupBlock-Name {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+  letter-spacing: 0.2px;
+}
+
+.TGroupBlock-Desc {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.5;
 }
 
 .TGroupBlock-Main {
-  padding: 0;
-  overflow: visible;
-}
-
-.TGroupBlock-Main :deep(.TBlockSelection) {
-  margin: 0;
-  border-radius: 0 !important;
-  --fake-radius: 0 !important;
-  --fake-inner-opacity: 0.5;
-
-  .TBlockSelection-Content > * {
-    font-size: 20px;
-  }
-
-  .TBlockSelection-Func {
-    margin-right: 32px;
-  }
-
-  .touch-blur & {
-    &:hover {
-      --fake-color: var(--tx-fill-color-light) !important;
-    }
-  }
-}
-
-.TGroupBlock-Container {
-  position: relative;
-  margin-bottom: 0.7rem;
-  width: 100%;
-  border-radius: 12px;
   overflow: hidden;
-  --fake-radius: 0 !important;
-  border: 1px solid var(--tx-border-color-lighter);
-  transition: border-color 0.25s ease;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-lg);
+  background: var(--shell-bg);
+}
 
-  &.expand {
-    overflow: visible;
-  }
+/**
+ * Row hairlines, drawn by the card instead of by each child, so any content can be dropped in
+ * a group without also having to know the separator rule.
+ *
+ * Painted as a background image rather than a border or a pseudo-element: a border cannot be
+ * inset the 16px the artboard asks for, and `::before` is already spoken for by
+ * `.fake-background` on much of the slotted content. A child that sets its own `background`
+ * shorthand simply loses its hairline, which is a missing line rather than a broken row.
+ */
+.TGroupBlock-Main > :deep(* + *) {
+  background-image: linear-gradient(var(--shell-border), var(--shell-border));
+  background-repeat: no-repeat;
+  background-position: 16px 0;
+  background-size: calc(100% - 16px) 1px;
 }
 </style>

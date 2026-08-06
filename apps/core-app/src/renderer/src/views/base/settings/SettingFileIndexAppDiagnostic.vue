@@ -12,7 +12,9 @@ import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import SettingChip from '~/components/settings/SettingChip.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
@@ -84,9 +86,12 @@ function getAppDiagnosticStage(
   return result?.query?.stages[key]
 }
 
-function getAppDiagnosticStageTone(stage: AppIndexDiagnosticStage | undefined) {
-  if (!stage || !stage.ran) return 'skipped'
-  return stage.targetHit ? 'hit' : 'miss'
+/** The three chip tones the shell spends colour on: a run that hit, one that missed, unknown. */
+function getAppDiagnosticStageTone(
+  stage: AppIndexDiagnosticStage | undefined
+): 'neutral' | 'success' | 'danger' {
+  if (!stage || !stage.ran) return 'neutral'
+  return stage.targetHit ? 'success' : 'danger'
 }
 
 function getAppDiagnosticStageStatus(stage: AppIndexDiagnosticStage | undefined) {
@@ -361,63 +366,70 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
         </TxButton>
       </div>
 
-      <div v-if="appDiagnosticResult" class="app-diagnostic-result">
+      <template v-if="appDiagnosticResult">
         <template
           v-if="appDiagnosticResult.success && appDiagnosticResult.app && appDiagnosticResult.index"
         >
-          <div class="app-diagnostic-header">
-            <div>
-              <strong>
-                {{
-                  appDiagnosticResult.app.displayName ||
-                  appDiagnosticResult.app.name ||
-                  appDiagnosticResult.app.fileName
-                }}
-              </strong>
-              <span>{{ appDiagnosticResult.app.path }}</span>
+          <!-- One card of rows rather than a bordered box holding three more of them. -->
+          <TuffGroupBlock class="app-diagnostic-block">
+            <div class="app-diagnostic-row app-diagnostic-header">
+              <div class="app-diagnostic-header-text">
+                <strong>
+                  {{
+                    appDiagnosticResult.app.displayName ||
+                    appDiagnosticResult.app.name ||
+                    appDiagnosticResult.app.fileName
+                  }}
+                </strong>
+                <span>{{ appDiagnosticResult.app.path }}</span>
+              </div>
+              <SettingChip tone="success">
+                {{ t('settings.settingFileIndex.appDiagnosticFound') }}
+              </SettingChip>
             </div>
-            <span class="app-diagnostic-status">
-              {{ t('settings.settingFileIndex.appDiagnosticFound') }}
-            </span>
-          </div>
 
-          <div class="app-diagnostic-grid">
-            <div>
-              <span>{{ t('settings.settingFileIndex.appDiagnosticDisplayName') }}</span>
-              <strong>{{
-                appDiagnosticResult.app.displayName || appDiagnosticResult.app.name
-              }}</strong>
+            <div class="app-diagnostic-row app-diagnostic-grid">
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticDisplayName') }}</span>
+                <strong>{{
+                  appDiagnosticResult.app.displayName || appDiagnosticResult.app.name
+                }}</strong>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticBundleId') }}</span>
+                <strong>
+                  {{
+                    appDiagnosticResult.app.bundleId ||
+                    appDiagnosticResult.app.appIdentity ||
+                    t('settings.settingFileIndex.appDiagnosticEmpty')
+                  }}
+                </strong>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticAlternateNames') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.app.alternateNames, 10) }}</p>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticItemIds') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.itemIds, 4) }}</p>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticGeneratedKeywords') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.generatedKeywords) }}</p>
+              </div>
+              <div>
+                <span>{{ t('settings.settingFileIndex.appDiagnosticStoredKeywords') }}</span>
+                <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.storedKeywords) }}</p>
+              </div>
             </div>
-            <div>
-              <span>{{ t('settings.settingFileIndex.appDiagnosticBundleId') }}</span>
-              <strong>
-                {{
-                  appDiagnosticResult.app.bundleId ||
-                  appDiagnosticResult.app.appIdentity ||
-                  t('settings.settingFileIndex.appDiagnosticEmpty')
-                }}
-              </strong>
-            </div>
-            <div>
-              <span>{{ t('settings.settingFileIndex.appDiagnosticAlternateNames') }}</span>
-              <p>{{ formatAppDiagnosticList(appDiagnosticResult.app.alternateNames, 10) }}</p>
-            </div>
-            <div>
-              <span>{{ t('settings.settingFileIndex.appDiagnosticItemIds') }}</span>
-              <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.itemIds, 4) }}</p>
-            </div>
-            <div>
-              <span>{{ t('settings.settingFileIndex.appDiagnosticGeneratedKeywords') }}</span>
-              <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.generatedKeywords) }}</p>
-            </div>
-            <div>
-              <span>{{ t('settings.settingFileIndex.appDiagnosticStoredKeywords') }}</span>
-              <p>{{ formatAppDiagnosticList(appDiagnosticResult.index.storedKeywords) }}</p>
-            </div>
-          </div>
+          </TuffGroupBlock>
 
-          <div v-if="appDiagnosticResult.query" class="app-diagnostic-stages">
-            <div class="app-diagnostic-query">
+          <!--
+            The stages were a grid of tinted tiles; as rows they carry the same three states in a
+            chip, and the selected one takes the accent tint the shell reserves for selection.
+          -->
+          <TuffGroupBlock v-if="appDiagnosticResult.query" class="app-diagnostic-block">
+            <div class="app-diagnostic-row app-diagnostic-query">
               {{
                 t('settings.settingFileIndex.appDiagnosticQueryMeta', {
                   query: appDiagnosticResult.query.normalized,
@@ -425,26 +437,18 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
                 })
               }}
             </div>
-            <div class="app-diagnostic-stage-list">
-              <button
-                v-for="stageKey in APP_INDEX_DIAGNOSTIC_STAGE_KEYS"
-                :key="stageKey"
-                type="button"
-                class="app-diagnostic-stage"
-                :class="[
-                  `is-${getAppDiagnosticStageTone(getAppDiagnosticStage(appDiagnosticResult, stageKey))}`,
-                  { 'is-selected': selectedAppDiagnosticStage === stageKey }
-                ]"
-                @click="selectAppDiagnosticStage(stageKey)"
-              >
+
+            <button
+              v-for="stageKey in APP_INDEX_DIAGNOSTIC_STAGE_KEYS"
+              :key="stageKey"
+              type="button"
+              class="app-diagnostic-row app-diagnostic-stage"
+              :class="{ 'is-selected': selectedAppDiagnosticStage === stageKey }"
+              :aria-pressed="selectedAppDiagnosticStage === stageKey"
+              @click="selectAppDiagnosticStage(stageKey)"
+            >
+              <span class="app-diagnostic-stage-text">
                 <strong>{{ getAppDiagnosticStageLabel(stageKey) }}</strong>
-                <span>
-                  {{
-                    getAppDiagnosticStageStatus(
-                      getAppDiagnosticStage(appDiagnosticResult, stageKey)
-                    )
-                  }}
-                </span>
                 <small>
                   {{
                     getAppDiagnosticStageDetail(
@@ -452,11 +456,20 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
                     )
                   }}
                 </small>
-              </button>
-            </div>
+              </span>
+              <SettingChip
+                :tone="
+                  getAppDiagnosticStageTone(getAppDiagnosticStage(appDiagnosticResult, stageKey))
+                "
+              >
+                {{
+                  getAppDiagnosticStageStatus(getAppDiagnosticStage(appDiagnosticResult, stageKey))
+                }}
+              </SettingChip>
+            </button>
 
-            <div v-if="selectedAppDiagnosticStageData" class="app-diagnostic-stage-detail">
-              <div class="app-diagnostic-stage-detail-header">
+            <template v-if="selectedAppDiagnosticStageData">
+              <div class="app-diagnostic-row app-diagnostic-stage-detail-header">
                 <strong>
                   {{
                     t('settings.settingFileIndex.appDiagnosticStageDetailTitle', {
@@ -474,7 +487,7 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
               </div>
               <div
                 v-if="selectedAppDiagnosticStageData.stage?.matches.length"
-                class="app-diagnostic-stage-match-list"
+                class="app-diagnostic-row app-diagnostic-stage-match-list"
               >
                 <div
                   v-for="(match, matchIndex) in selectedAppDiagnosticStageData.stage.matches"
@@ -485,14 +498,14 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
                   <span>{{ formatAppDiagnosticStageMatch(match) }}</span>
                 </div>
               </div>
-              <div v-else class="app-diagnostic-stage-empty">
+              <div v-else class="app-diagnostic-row app-diagnostic-stage-empty">
                 {{
                   selectedAppDiagnosticStageData.stage?.reason ||
                   t('settings.settingFileIndex.appDiagnosticEmpty')
                 }}
               </div>
-            </div>
-          </div>
+            </template>
+          </TuffGroupBlock>
         </template>
 
         <div v-else class="app-diagnostic-error">
@@ -503,7 +516,7 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
             })
           }}
         </div>
-      </div>
+      </template>
     </div>
   </TModal>
 </template>
@@ -521,9 +534,25 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
 
 .app-diagnostic-desc {
   margin: 0;
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
   line-height: 1.5;
+}
+
+/*
+ * The dialog already spaces its children; the block's own bottom margin exists for the pages
+ * that stack blocks without a gap of their own. Written as a compound with the block's own class
+ * so it outranks that margin on specificity rather than on which scoped sheet comes last.
+ */
+.app-diagnostic-block.TGroupBlock-Container {
+  margin-bottom: 0;
+}
+
+/* Row metrics from artboard `iqbKR`'s C2/Row, so the card reads like a settings section. */
+.app-diagnostic-row {
+  width: 100%;
+  padding: 12px 16px;
+  box-sizing: border-box;
 }
 
 .app-diagnostic-form {
@@ -542,16 +571,6 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
   gap: 8px;
 }
 
-.app-diagnostic-result {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--tx-border-color-light);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--tx-fill-color-light) 68%, transparent);
-}
-
 .app-diagnostic-header {
   display: flex;
   align-items: flex-start;
@@ -559,7 +578,7 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
   gap: 12px;
 }
 
-.app-diagnostic-header > div {
+.app-diagnostic-header-text {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -568,25 +587,15 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
 
 .app-diagnostic-header strong,
 .app-diagnostic-grid strong {
-  color: var(--tx-text-color-primary);
-  font-size: 12px;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-sm);
   word-break: break-word;
 }
 
 .app-diagnostic-header span {
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
   word-break: break-all;
-}
-
-.app-diagnostic-status {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 8px;
-  color: #34c759;
-  background: rgba(52, 199, 89, 0.12);
-  font-size: 11px;
-  font-weight: 600;
 }
 
 .app-diagnostic-grid {
@@ -602,95 +611,58 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
 .app-diagnostic-grid span,
 .app-diagnostic-query {
   display: block;
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
 }
 
 .app-diagnostic-grid p {
   margin: 3px 0 0;
-  color: var(--tx-text-color-primary);
-  font-size: 12px;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-sm);
   line-height: 1.5;
   word-break: break-word;
 }
 
-.app-diagnostic-stages {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.app-diagnostic-stage-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
 .app-diagnostic-stage {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: none;
+  /* `background-color`, not the shorthand: it would drop the card-drawn row hairline. */
+  background-color: transparent;
   text-align: left;
-  gap: 2px;
-  min-width: 0;
-  padding: 7px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--stage-color);
-  background: color-mix(in srgb, var(--stage-color) 10%, transparent);
   cursor: pointer;
   font: inherit;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
-.app-diagnostic-stage:hover,
-.app-diagnostic-stage.is-selected {
-  background: color-mix(in srgb, var(--stage-color) 18%, transparent);
+.app-diagnostic-stage:hover {
+  background-color: var(--shell-surface);
 }
 
 .app-diagnostic-stage.is-selected {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-color) 22%, transparent);
+  background-color: var(--shell-primary-soft);
 }
 
-.app-diagnostic-stage.is-hit {
-  --stage-color: rgba(52, 199, 89, 0.5);
-}
-
-.app-diagnostic-stage.is-miss {
-  --stage-color: rgba(255, 59, 48, 0.46);
-}
-
-.app-diagnostic-stage.is-skipped {
-  --stage-color: rgba(142, 142, 147, 0.35);
+.app-diagnostic-stage-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .app-diagnostic-stage strong {
-  color: var(--tx-text-color-primary);
-  font-size: 12px;
-}
-
-.app-diagnostic-stage span {
-  color: var(--tx-text-color-primary);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--shell-text-primary);
+  font-size: 13.5px;
+  font-weight: normal;
 }
 
 .app-diagnostic-stage small {
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.5;
   word-break: break-word;
-}
-
-.app-diagnostic-stage-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid var(--tx-border-color-light);
-  background: color-mix(in srgb, var(--tx-fill-color) 70%, transparent);
 }
 
 .app-diagnostic-stage-detail-header {
@@ -701,14 +673,14 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
 }
 
 .app-diagnostic-stage-detail-header strong {
-  color: var(--tx-text-color-primary);
-  font-size: 12px;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-sm);
 }
 
 .app-diagnostic-stage-detail-header span,
 .app-diagnostic-stage-empty {
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
 }
 
 .app-diagnostic-stage-match-list {
@@ -725,31 +697,30 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
   gap: 2px;
   min-width: 0;
   padding: 7px 8px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--tx-fill-color-light) 70%, transparent);
+  border-radius: var(--shell-radius-sm);
+  background-color: var(--shell-surface-2);
 }
 
 .app-diagnostic-stage-match strong {
-  color: var(--tx-text-color-primary);
-  font-size: 11px;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-caption);
   word-break: break-all;
 }
 
 .app-diagnostic-stage-match span {
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
   word-break: break-word;
 }
 
 .app-diagnostic-error {
-  color: #ff3b30;
-  font-size: 12px;
+  color: var(--shell-danger);
+  font-size: var(--shell-fs-sm);
   word-break: break-word;
 }
 
 @media (max-width: 720px) {
-  .app-diagnostic-grid,
-  .app-diagnostic-stage-list {
+  .app-diagnostic-grid {
     grid-template-columns: 1fr;
   }
 }

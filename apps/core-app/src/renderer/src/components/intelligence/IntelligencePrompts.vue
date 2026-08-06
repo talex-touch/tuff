@@ -31,7 +31,7 @@ const totalWords = computed(() => {
 })
 
 function handlePromptsClick() {
-  router.push('/intelligence/prompts')
+  router.push('/setting/intelligence/prompts')
 }
 
 async function handleOpenFolder() {
@@ -44,7 +44,7 @@ async function handleOpenFolder() {
 }
 
 function handleCreatePrompt() {
-  router.push('/intelligence/prompts')
+  router.push('/setting/intelligence/prompts')
 }
 </script>
 
