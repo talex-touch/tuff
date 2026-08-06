@@ -9,7 +9,10 @@
 
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
-import type { AgentToolConfirmRequest } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type {
+  AgentToolConfirmRequest,
+  AgentToolPermissionMode
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ConfirmationDecision, ToolGatewayHandle } from './gateway-server'
 import { randomUUID } from 'node:crypto'
@@ -53,6 +56,12 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
   private disposers: Array<() => void> = []
   private handle: ToolGatewayHandle | null = null
   private enabled = false
+  /**
+   * How the gate answers while tools are on. `full` is a standing grant the
+   * user gave deliberately; it defaults to `review` so an enable message from
+   * a sender that knows nothing about modes never widens permissions.
+   */
+  private mode: AgentToolPermissionMode = 'review'
   private pending = new Map<string, (decision: ConfirmationDecision) => void>()
   /**
    * MCP servers run in this process, under the registry the orchestrator
@@ -128,6 +137,16 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
       tools: createToolRegistry(this.registryOptions()),
       onLog: (message) => toolLog.info(message),
       confirm: async (request) => {
+        // Read per call, so a mode change lands on the next call only: requests
+        // already waiting in `this.pending` still need the user's answer rather
+        // than being settled retroactively by the switch.
+        if (this.mode === 'full') {
+          toolLog.info(`Auto-approved (full-allow): ${request.tool} — ${request.summary}`)
+          // Never remembered: the standing grant lives in the mode, so switching
+          // back to review restores the prompt for every tool.
+          return { approved: true, remember: false }
+        }
+
         const requestId = randomUUID()
         const payload: AgentToolConfirmRequest = {
           requestId,
@@ -166,11 +185,14 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
 
     this.disposers.push(
       transport.on(AgentToolEvents.setEnabled, (async (
-        payload: { enabled: boolean },
+        payload: { enabled: boolean; mode?: AgentToolPermissionMode },
         context: HandlerContext
       ) => {
         assertHostOwned(context)
         this.enabled = payload.enabled === true
+        // Anything but an explicit `full` means review — an omitted or unknown
+        // value must not be read as the wider grant.
+        this.mode = payload.mode === 'full' ? 'full' : 'review'
         if (this.enabled) await this.ensureGateway(transport)
         const config = this.getRuntimeConfig()
         return { enabled: this.enabled, tools: config?.tools ?? [] }

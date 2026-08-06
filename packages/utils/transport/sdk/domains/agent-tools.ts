@@ -4,6 +4,13 @@ import { defineEvent } from '../../event/builder'
 export type AgentToolRisk = 'read' | 'write' | 'execute'
 
 /**
+ * Gate behaviour while tools are enabled: `review` confirms every call with
+ * the user, `full` auto-approves at the gate. "Off" is not a mode — it is
+ * `setEnabled(false)`, so a stale sender can never accidentally re-enable.
+ */
+export type AgentToolPermissionMode = 'review' | 'full'
+
+/**
  * Marks a tool result as a renderable chart rather than text. Lives here
  * because both sides read it: the main-process tool writes it, the renderer
  * detects it.
@@ -72,11 +79,19 @@ export const AgentToolEvents = {
     .module('api')
     .event('confirm-decision')
     .define<AgentToolConfirmDecision, { accepted: boolean }>(),
-  /** Renderer → main: whether the agent may use tools at all, and which. */
+  /**
+   * Renderer → main: whether the agent may use tools at all, and which.
+   * `mode` rides along so enabling and picking a gate behaviour stay one
+   * message; omitted means `review` — the conservative reading for senders
+   * built before the field existed.
+   */
   setEnabled: defineEvent('agent-tools')
     .module('api')
     .event('set-enabled')
-    .define<{ enabled: boolean }, { enabled: boolean, tools: string[] }>(),
+    .define<
+    { enabled: boolean, mode?: AgentToolPermissionMode },
+    { enabled: boolean, tools: string[] }
+  >(),
   /** Renderer → main: forget this session's remembered approvals. */
   resetApprovals: defineEvent('agent-tools')
     .module('api')
@@ -88,6 +103,7 @@ export interface AgentToolsSdk {
   decide: (decision: AgentToolConfirmDecision) => Promise<{ accepted: boolean }>
   setEnabled: (
     enabled: boolean,
+    mode?: AgentToolPermissionMode,
   ) => Promise<{ enabled: boolean, tools: string[] }>
   resetApprovals: () => Promise<{ reset: boolean }>
 }
@@ -98,8 +114,8 @@ export function createAgentToolsSdk(
   return {
     decide: decision =>
       transport.send(AgentToolEvents.confirmDecision, decision),
-    setEnabled: enabled =>
-      transport.send(AgentToolEvents.setEnabled, { enabled }),
+    setEnabled: (enabled, mode) =>
+      transport.send(AgentToolEvents.setEnabled, { enabled, mode }),
     resetApprovals: () =>
       transport.send(AgentToolEvents.resetApprovals, undefined),
   }

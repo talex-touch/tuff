@@ -43,9 +43,18 @@ interface ToolCallPlan { risk: ToolRisk; summary: string; rememberKey: string }
 
 ## 4. Contracts
 
-- **Confirmation gate**: every call passes the gate. `read` decisions may be
+- **Confirmation gate**: every call reaches the gate. `read` decisions may be
   remembered for the session under `plan.rememberKey`; `write`/`execute`
   re-ask every time regardless of the checkbox.
+- **Permission mode widens the gate, never bypasses it** (task
+  08-06-composer-permission-selector): `AgentToolEvents.setEnabled` carries
+  `{ enabled, mode?: 'review' | 'full' }`. Under `full` the module's confirm
+  callback auto-approves at entry — audit log line, `remember: false`, no
+  renderer broadcast. Omitted or unknown mode reads as `review` (a stale
+  sender must not inherit the wider grant). Mode is read per call: requests
+  already pending are never settled retroactively by a switch. Only the host
+  may drive `setEnabled` (`assertHostOwned`), so a plugin can never widen the
+  gate.
 - **Proxy tools narrow their remember scope**: `tuff_mcp_call` keys remembering
   by `tuff_mcp_call:<server>/<tool>` via `classify`, so a remembered yes for one
   read-only tool never waves through a different one. A proxy that cannot reach
@@ -104,6 +113,10 @@ interface ToolCallPlan { risk: ToolRisk; summary: string; rememberKey: string }
 ## 7. Tests Required
 
 - Contract test pinning the pi executor arg order (`pi-extension-tuff`).
+- Permission-mode suite (`tool-gateway/index.test.ts`): full auto-approves
+  without broadcast and logs the `⚠ ` marker; back-to-review resumes asking;
+  a pending request survives a mode switch unanswered; omitted mode = review;
+  a plugin cannot widen the gate.
 - Risk-mapping table test (`tool-registry.mcp.test.ts`).
 - One-server-down-doesn't-hide-the-rest test for list.
 - contentRef-only rejection test for skill read.
