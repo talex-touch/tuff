@@ -1073,23 +1073,47 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
+/**
+ * Two columns with the runtime rail underneath, rather than three across.
+ *
+ * This was a full-width route; it now renders inside the settings content column, which caps at
+ * 940px and leaves 860px inside its padding. Three fixed tracks (320 + 360 + gaps) left the
+ * editor 148px. The author's own 1440px breakpoint already moved this rail below the other two —
+ * it just measured the viewport, which no longer tells you how wide the column is. Making that
+ * the default gives the editor ~590px at every window size the shell supports, and a fractional
+ * library rail shrinks with the column instead of holding 320px out of it.
+ */
 .workflow-page {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(200px, 0.9fr) minmax(320px, 2.1fr);
+  grid-template-areas:
+    'library editor'
+    'runtime runtime';
   gap: 16px;
-  min-height: calc(100vh - 120px);
+  color: var(--shell-text-primary);
+}
+
+.workflow-sidebar {
+  grid-area: library;
+}
+
+.workflow-main {
+  grid-area: editor;
+}
+
+.workflow-right {
+  grid-area: runtime;
 }
 
 .card-panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(18, 24, 33, 0.96), rgba(13, 18, 27, 0.92));
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-lg);
+  background: var(--shell-bg);
 }
 
 .workflow-sidebar,
 .workflow-right {
-  padding: 18px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1103,21 +1127,23 @@ onMounted(async () => {
 }
 
 .workflow-toolbar {
-  padding: 18px 20px;
+  padding: 16px;
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
 }
 
+// One editor panel per row: the column tops out at 860px, so a side-by-side pair was never going
+// to give either of them a workable width, no matter how the rails around them are sized.
 .workflow-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
 .editor-panel {
-  padding: 18px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -1157,7 +1183,7 @@ onMounted(async () => {
 .runtime-kv span,
 .approval-reason,
 .empty-state {
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--shell-text-secondary);
   font-size: 12px;
 }
 
@@ -1171,64 +1197,68 @@ onMounted(async () => {
 .workflow-list-item,
 .history-item {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 14px;
+  border: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+  border-radius: var(--shell-radius-md);
   padding: 12px;
+  color: inherit;
   text-align: left;
   transition:
     border-color 0.2s ease,
-    background 0.2s ease,
+    background-color 0.2s ease,
     transform 0.2s ease;
 }
 
 .workflow-list-item:hover,
 .history-item:hover {
-  border-color: rgba(106, 201, 255, 0.32);
+  border-color: var(--shell-border-strong);
   transform: translateY(-1px);
 }
 
 .workflow-list-item--active {
-  border-color: rgba(106, 201, 255, 0.45);
-  background: rgba(106, 201, 255, 0.08);
+  border-color: var(--shell-primary-border);
+  background: var(--shell-primary-soft);
 }
 
 .mini-badge,
 .status-pill {
-  border-radius: 999px;
+  border-radius: var(--shell-radius-full);
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--shell-text-secondary);
+  background: var(--shell-surface-2);
 }
 
 .mini-badge--ghost {
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--shell-text-muted);
+  background: var(--shell-surface);
 }
 
 .status-pill--success {
-  background: rgba(42, 184, 92, 0.18);
-  color: #97f3b6;
+  background: var(--shell-success-soft);
+  color: var(--shell-success);
 }
 
 .status-pill--error {
-  background: rgba(255, 87, 87, 0.18);
-  color: #ffb5b5;
+  background: var(--shell-danger-soft);
+  color: var(--shell-danger);
 }
 
 .status-pill--warning {
-  background: rgba(255, 183, 77, 0.18);
-  color: #ffd59c;
+  background: var(--shell-warning-soft);
+  color: var(--shell-warning);
 }
 
+// The one place the page spends the accent: a run in flight is the state the reader is waiting on.
 .status-pill--running {
-  background: rgba(106, 201, 255, 0.18);
-  color: #9fe3ff;
+  background: var(--shell-primary-soft);
+  color: var(--shell-primary);
 }
 
 .status-pill--muted {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.78);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
 }
 
 .form-grid,
@@ -1254,28 +1284,29 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-surface);
+  color: var(--shell-text-secondary);
   padding: 6px 10px;
+  font-family: inherit;
   font-size: 12px;
   cursor: pointer;
   transition:
     border-color 0.2s ease,
-    background 0.2s ease,
+    background-color 0.2s ease,
     color 0.2s ease;
 }
 
 .review-filter-chip:hover,
 .review-filter-chip--active {
-  border-color: rgba(106, 201, 255, 0.38);
-  background: rgba(106, 201, 255, 0.1);
-  color: #dff6ff;
+  border-color: var(--shell-primary-border);
+  background: var(--shell-primary-soft);
+  color: var(--shell-primary);
 }
 
 .review-filter-chip strong {
-  color: #fff;
+  color: var(--shell-text-primary);
 }
 
 .review-meta-grid {
@@ -1290,19 +1321,19 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-full);
   padding: 4px 8px;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--shell-text-secondary);
+  background: var(--shell-surface);
   font-size: 11px;
   line-height: 1.2;
 }
 
 .review-meta-chip--warning {
-  border-color: rgba(255, 149, 0, 0.28);
-  color: #ffe1b8;
-  background: rgba(255, 149, 0, 0.08);
+  border-color: var(--shell-warning-border);
+  color: var(--shell-warning);
+  background: var(--shell-warning-soft);
 }
 
 .review-summary-card {
@@ -1311,32 +1342,32 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface);
+  color: var(--shell-text-secondary);
   font-size: 12px;
 }
 
 .review-summary-card strong {
-  color: #fff;
+  color: var(--shell-text-primary);
   font-size: 16px;
 }
 
 .review-summary-card--pending {
-  border-color: rgba(255, 183, 77, 0.22);
+  border-color: var(--shell-warning-border);
 }
 
 .review-summary-card--copied {
-  border-color: rgba(106, 201, 255, 0.22);
+  border-color: var(--shell-primary-border);
 }
 
 .review-summary-card--replaced {
-  border-color: rgba(42, 184, 92, 0.22);
+  border-color: var(--shell-success-border);
 }
 
 .review-summary-card--failed {
-  border-color: rgba(255, 87, 87, 0.22);
+  border-color: var(--shell-danger-border);
 }
 
 .field {
@@ -1355,7 +1386,7 @@ onMounted(async () => {
 .field-label,
 .step-card__index {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--shell-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1364,11 +1395,15 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: rgba(5, 9, 14, 0.5);
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--shell-border-strong);
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  color: var(--shell-text-primary);
   padding: 10px 12px;
+  // Native controls otherwise fall back to the platform UI font, which was easy to miss against
+  // the old dark panels and is not against a white card.
+  font-family: inherit;
+  font-size: var(--shell-fs-body);
 }
 
 textarea {
@@ -1385,9 +1420,9 @@ textarea {
 
 .small-card,
 .step-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1395,8 +1430,8 @@ textarea {
 }
 
 .small-card--failed {
-  border-color: rgba(255, 87, 87, 0.24);
-  background: rgba(255, 87, 87, 0.045);
+  border-color: var(--shell-danger-border);
+  background: var(--shell-danger-soft);
 }
 
 .step-card__title {
@@ -1405,37 +1440,38 @@ textarea {
 }
 
 .runtime-error {
-  color: #ffb5b5;
+  color: var(--shell-danger);
   font-size: 12px;
   white-space: pre-wrap;
 }
 
 .review-action-hint {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-sm);
   padding: 8px 10px;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--shell-text-secondary);
+  background: var(--shell-surface);
   font-size: 12px;
 }
 
 .review-action-hint--success {
-  border-color: rgba(52, 199, 89, 0.26);
-  color: #c8ffd4;
-  background: rgba(52, 199, 89, 0.08);
+  border-color: var(--shell-success-border);
+  color: var(--shell-success);
+  background: var(--shell-success-soft);
 }
 
 .review-action-hint--warning {
-  border-color: rgba(255, 149, 0, 0.28);
-  color: #ffe1b8;
-  background: rgba(255, 149, 0, 0.08);
+  border-color: var(--shell-warning-border);
+  color: var(--shell-warning);
+  background: var(--shell-warning-soft);
 }
 
 .result-pre {
   margin: 0;
   padding: 10px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.24);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 12px;
@@ -1444,23 +1480,21 @@ textarea {
 .model-summary {
   justify-content: flex-start;
   flex-wrap: wrap;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--shell-text-secondary);
   font-size: 12px;
 }
 
-@media (max-width: 1440px) {
-  .workflow-page {
-    grid-template-columns: 280px minmax(0, 1fr);
-  }
-
-  .workflow-right {
-    grid-column: span 2;
-  }
-}
-
+// Only reachable when the shell's own chrome has been shrunk far past the column's usual width —
+// the two-row layout above already holds down to a 536px column on its own.
 @media (max-width: 980px) {
-  .workflow-page,
-  .workflow-grid,
+  .workflow-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'library'
+      'editor'
+      'runtime';
+  }
+
   .form-grid,
   .mini-grid {
     grid-template-columns: 1fr;

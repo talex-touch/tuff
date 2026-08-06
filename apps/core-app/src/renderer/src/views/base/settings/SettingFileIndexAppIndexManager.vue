@@ -129,13 +129,32 @@ function getEntryOriginLabel(entry: AppIndexManagedEntry): string {
 }
 
 /**
- * The display helpers speak in four tones; the shell chip has three, and spends colour only on a
- * state the reader can act on. `warning` is that state here, so it takes the one colour the shell
- * keeps for it, and the purely descriptive tones stay neutral.
+ * Scanning is how nearly every entry gets here, so it stays the quiet default and the hand-added
+ * ones take `info` — the same rule the source chip below follows.
  */
-function chipTone(tone: string): 'neutral' | 'success' | 'danger' {
-  if (tone === 'success') return 'success'
-  return tone === 'warning' ? 'danger' : 'neutral'
+function getEntryOriginTone(entry: AppIndexManagedEntry): 'neutral' | 'info' {
+  return entry.source === 'scanned' ? 'neutral' : 'info'
+}
+
+/**
+ * Maps the display helpers' vocabulary onto the chip's.
+ *
+ * `success` and `warning` are diagnostic outcomes and keep their own hue — an entry the index
+ * cannot resolve is something to look at, not a failure, so it stays amber rather than red.
+ * Of the two source kinds only `system` gets colour: those are launch identities the OS owns
+ * (UWP, protocol handlers), which no amount of re-pointing a path here will repair.
+ */
+function chipTone(tone: string): 'neutral' | 'info' | 'success' | 'warning' {
+  switch (tone) {
+    case 'success':
+      return 'success'
+    case 'warning':
+      return 'warning'
+    case 'system':
+      return 'info'
+    default:
+      return 'neutral'
+  }
 }
 
 function setEntryDiagnostic(path: string, result: AppIndexDiagnoseResult): void {
@@ -443,7 +462,11 @@ onMounted(() => {
         </div>
       </template>
 
-      <div v-else-if="!hasEntries" class="app-index-manager-empty">
+      <div
+        v-else-if="!hasEntries"
+        class="app-index-manager-empty"
+        :class="emptyState ? `tone-${emptyState.tone}` : undefined"
+      >
         <template v-if="loading">
           <span>{{ t('common.loading') }}</span>
         </template>
@@ -462,7 +485,11 @@ onMounted(() => {
         </template>
       </div>
 
-      <div v-else-if="!hasVisibleEntries && emptyState" class="app-index-manager-empty">
+      <div
+        v-else-if="!hasVisibleEntries && emptyState"
+        class="app-index-manager-empty"
+        :class="`tone-${emptyState.tone}`"
+      >
         <strong>{{ emptyState.title }}</strong>
         <span>{{ emptyState.detail }}</span>
         <TxButton
@@ -490,7 +517,9 @@ onMounted(() => {
               <SettingChip :tone="chipTone(getEntrySource(entry).tone)">
                 {{ getEntrySource(entry).label }}
               </SettingChip>
-              <SettingChip>{{ getEntryOriginLabel(entry) }}</SettingChip>
+              <SettingChip :tone="getEntryOriginTone(entry)">
+                {{ getEntryOriginLabel(entry) }}
+              </SettingChip>
             </div>
             <div class="app-index-entry-path">{{ entry.path }}</div>
             <div class="app-index-entry-diagnostic-summary">
@@ -648,6 +677,20 @@ onMounted(() => {
   line-height: 1.5;
 }
 
+/*
+ * Why the list is empty, as a tint across the row — the strip idiom the shell uses elsewhere,
+ * since these stopped being bordered boxes of their own. "Nothing needs attention" is the one
+ * that is good news, a filter hiding everything is an aside, and a first run stays plain. The
+ * titles say all of this in words; the tint only gets there first.
+ */
+.app-index-manager-empty.tone-attention {
+  background-color: var(--shell-success-soft);
+}
+
+.app-index-manager-empty.tone-filtered {
+  background-color: var(--shell-info-soft);
+}
+
 .app-index-manager-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -673,15 +716,15 @@ onMounted(() => {
 }
 
 /*
- * The two counts worth colour: one the reader has to act on, one confirming a clean scan. The
- * shell palette carries no success ramp — `SettingChip` borrows the `--tx-*` one the same way.
+ * The two counts worth colour: one the reader has to act on, one confirming a clean scan. Amber
+ * rather than red for the first — entries the index cannot resolve are a to-do list, not a fault.
  */
 .app-index-manager-summary-item.is-attention strong {
-  color: var(--shell-danger);
+  color: var(--shell-warning);
 }
 
 .app-index-manager-summary-item.is-found strong {
-  color: var(--tx-color-success);
+  color: var(--shell-success);
 }
 
 .app-index-manager-filters {

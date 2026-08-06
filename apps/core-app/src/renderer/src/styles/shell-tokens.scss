@@ -29,9 +29,33 @@
   --shell-primary-border: #2b7fd93d;
   --shell-on-primary: #ffffff;
 
+  /**
+   * Semantic hues, from the board's `success` / `warning` / `info` ramps — with one deviation.
+   *
+   * The board drew these as fills; the shell also reads them as 11px chip ink, where the light
+   * values it specifies (`#2C8C5A`, `#B57A18`) land at 3.82:1 and 3.35:1 on their own `-soft`
+   * surface, under AA's 4.5:1 for normal text. `--shell-danger` (`#C4342B`, 4.81:1 on `-soft`)
+   * already sets the intended bar, so success and warning are darkened onto its luminance —
+   * same hue, one step deeper — reaching 4.80:1 and 4.73:1. `info` clears the bar unchanged at
+   * 4.61:1, as does every dark-mode value (4.54:1 at worst), so those stay exactly as drawn.
+   */
+  --shell-success: #26794e;
+  --shell-success-soft: #26794e14;
+  --shell-success-border: #26794e3d;
+
+  --shell-warning: #946210;
+  --shell-warning-soft: #94621014;
+  --shell-warning-border: #9462103d;
+
   --shell-danger: #c4342b;
   --shell-danger-soft: #c4342b14;
   --shell-danger-border: #c4342b3d;
+
+  // Deliberately in the neutral ramp: `info` marks a fact the reader cannot act on, so giving it
+  // a hue of its own would make it compete with the three states that can be acted upon.
+  --shell-info: #6e6e73;
+  --shell-info-soft: #6e6e7314;
+  --shell-info-border: #6e6e733d;
 
   --shell-shadow: #0000000f;
 
@@ -118,9 +142,21 @@
    */
   --shell-on-primary: #0a2540;
 
+  --shell-success: #46b57c;
+  --shell-success-soft: #46b57c26;
+  --shell-success-border: #46b57c4d;
+
+  --shell-warning: #d9a441;
+  --shell-warning-soft: #d9a44126;
+  --shell-warning-border: #d9a4414d;
+
   --shell-danger: #e0655c;
   --shell-danger-soft: #e0655c26;
   --shell-danger-border: #e0655c4d;
+
+  --shell-info: #98989d;
+  --shell-info-soft: #98989d26;
+  --shell-info-border: #98989d4d;
 
   --shell-shadow: #00000047;
 }
@@ -140,10 +176,23 @@ html.contrast {
   // design-palette blue after `--shell-primary` has already re-pointed to the contrast ramp.
   --shell-primary-border: var(--tx-color-primary);
 
+  --shell-success: var(--tx-color-success);
+  --shell-success-soft: var(--tx-color-success-light-9);
+  --shell-success-border: var(--tx-color-success);
+
+  --shell-warning: var(--tx-color-warning);
+  --shell-warning-soft: var(--tx-color-warning-light-9);
+  --shell-warning-border: var(--tx-color-warning);
+
   --shell-danger: var(--tx-color-danger);
   --shell-danger-soft: var(--tx-color-danger-light-9);
   // A 24%-alpha hairline disappears at high contrast; the failure surface needs a real edge.
+  // The other three semantic borders above and below follow for the same reason.
   --shell-danger-border: var(--tx-color-danger);
+
+  --shell-info: var(--tx-color-info);
+  --shell-info-soft: var(--tx-color-info-light-9);
+  --shell-info-border: var(--tx-color-info);
 }
 
 html.dark.contrast {
@@ -161,7 +210,21 @@ html.dark.contrast {
   // `--shell-on-primary` deliberately falls through from `.dark`: the contrast ramp's
   // `#7cc4ff` is lighter still, so the same dark ink reads at 8.28:1 here.
 
+  // The dark contrast ramp mixes its `-light-9` steps with black rather than white, so these
+  // stay the dark tints the soft surfaces need.
+  --shell-success: var(--tx-color-success);
+  --shell-success-soft: var(--tx-color-success-light-9);
+  --shell-success-border: var(--tx-color-success);
+
+  --shell-warning: var(--tx-color-warning);
+  --shell-warning-soft: var(--tx-color-warning-light-9);
+  --shell-warning-border: var(--tx-color-warning);
+
   --shell-danger: var(--tx-color-danger);
   --shell-danger-soft: var(--tx-color-danger-light-9);
   --shell-danger-border: var(--tx-color-danger);
+
+  --shell-info: var(--tx-color-info);
+  --shell-info-soft: var(--tx-color-info-light-9);
+  --shell-info-border: var(--tx-color-info);
 }
