@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-06-settings-v25-closeout/research/settings-groupblock-audit.md", "reason": "逐文件手写卡片清单、外观页现状结构、智能路由接线与 9 处链接改指点,全部实施定位依据在此"}
+{"file": ".trellis/tasks/08-03-app-shell-ai-redesign/design.md", "reason": "§1 --shell-* token 契约与 §4.2 行式实测规格(SettingRow padding/字号/发丝线),TuffGroupBlock v2 与行族对齐必须逐数值照此落地"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Hard Frontend Rules:骨架屏默认、semantic controls、i18n 走 catalog、不写死颜色;改 Vue SFC 前过 Component Guidelines"}
+{"file": "docs/design/corebox/v2.5.0.pen", "reason": "画板基准:E0C1Zz(外观)/iqbKR(总览);用 pencil MCP 导出核对,禁 Read/Grep 直读 .pen"}

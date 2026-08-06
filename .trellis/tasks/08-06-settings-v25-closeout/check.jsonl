@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-06-settings-v25-closeout/prd.md", "reason": "验收清单逐项核对:外观三段对齐、TuffGroupBlock 全覆盖、智能六子页可达+重定向、行为不变、lint/typecheck"}
+{"file": ".trellis/tasks/08-06-settings-v25-closeout/research/settings-groupblock-audit.md", "reason": "校验清单内文件无手写分组残留;链接改指以 implement.md Step 5 记录为准:8 处已改+HomePage,CoreBox action 发射点是插件白名单契约故意保持原值(design §4.2),不得当缺陷报"}
+{"file": ".trellis/tasks/08-06-settings-v25-closeout/design.md", "reason": "偏差已订正入档:组标签 12px、发丝线左缩进右齐边、行级 #icon 插槽保留、SettingsPage 中和子块 margin;按订正后契约校验,不按初稿"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "校验骨架屏镜像新版式、无新增 div@click、i18n zh/en 同步、颜色全走 --shell-*"}

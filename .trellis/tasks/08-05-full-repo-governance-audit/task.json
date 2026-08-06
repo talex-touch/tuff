@@ -1,0 +1,33 @@
+{
+  "id": "full-repo-governance-audit",
+  "name": "full-repo-governance-audit",
+  "title": "Full-repo governance audit → GitHub issues",
+  "description": "Parent task for a whole-repository governance audit (structure, code, framework, architecture, compatibility, Rust/native, docs & docs site, best practices, potential defects). Owns the verified findings as requirement source; each verified finding is filed as an individual GitHub issue labeled 'audit'. Verification bar: real problems only, no padding; report the true filed count.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "research/audit-summary.md",
+    "research/findings.jsonl",
+    "research/filed.jsonl",
+    "research/filing-notes.md",
+    "scripts/audit-file-issues.mjs",
+    "scripts/consolidate.mjs"
+  ],
+  "notes": "Filed 454 verified findings as individual GitHub issues (+#838 exploit-chain tracking) under the `audit` label; range #484-#958; 20 near-dups closed. 10 low-confidence flagged `question`. See research/audit-summary.md. No product code changed.",
+  "meta": {}
+}

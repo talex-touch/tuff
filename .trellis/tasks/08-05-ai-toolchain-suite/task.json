@@ -21,7 +21,11 @@
   "children": [
     "08-05-tuffex-ai-elements-port",
     "08-05-home-tool-loop",
-    "08-05-skills-mcp-config"
+    "08-05-skills-mcp-config",
+    "08-05-attachments-to-model",
+    "08-06-message-read-aloud",
+    "08-06-skills-local-dirs",
+    "08-06-interactive-form-tool"
   ],
   "parent": null,
   "relatedFiles": [],
