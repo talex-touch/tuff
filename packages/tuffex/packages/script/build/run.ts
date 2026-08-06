@@ -49,7 +49,7 @@ const spawnSafe = (
 }
 
 export default async (command: any, path: string) => {
-  const [cmd, ...args] = String(command ?? "").trim().split(" ")
+  const [cmd = "", ...args] = String(command ?? "").trim().split(" ")
   const displayCommand = [cmd, ...args].join(" ")
   console.log(`[build-run] ${displayCommand} (cwd: ${path})`)
   return new Promise((resolve, _reject) => {
