@@ -1,6 +1,7 @@
 import type { CommandPaletteItem } from '../src/types'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import TxCommandPalette from '../src/TxCommandPalette.vue'
 
 describe('txCommandPalette', () => {
@@ -148,10 +149,12 @@ describe('txCommandPalette', () => {
     })
 
     const options = wrapper.findAll('.tx-command-palette__item')
-    // The disabled option is out of the tab order and announced as disabled.
     expect(options[1].attributes('aria-disabled')).toBe('true')
+    // Every option is out of the tab order: the ARIA combobox contract drives
+    // them through aria-activedescendant from the input, so making enabled
+    // options tab stops put DOM focus somewhere the pattern never expects.
+    expect(options[0].attributes('tabindex')).toBe('-1')
     expect(options[1].attributes('tabindex')).toBe('-1')
-    expect(options[0].attributes('tabindex')).toBe('0')
 
     const input = wrapper.find('input')
     // ArrowDown from the first row skips the disabled second row onto the third.
@@ -241,5 +244,34 @@ describe('txCommandPalette', () => {
 
     expect(wrapper.text()).toContain('Close File')
     expect(wrapper.emitted('update:query')?.at(-1)).toEqual(['close'])
+  })
+
+  it('traps Tab inside the dialog it declares modal', async () => {
+    const wrapper = mount(TxCommandPalette, {
+      attachTo: document.body,
+      props: {
+        modelValue: true,
+        commands: [{ id: 'open', title: 'Open File' }],
+      },
+      slots: { footer: '<button type="button" class="footer-action">Docs</button>' },
+      global: { stubs: { Teleport: true } },
+    })
+    await nextTick()
+
+    const overlay = wrapper.find('[role="dialog"]')
+    const input = wrapper.find('input').element
+    const footerButton = wrapper.find('.footer-action').element as HTMLElement
+
+    // Tab from the last tabbable element must wrap to the first rather than
+    // escaping to the page behind, which aria-modal="true" declares inert.
+    footerButton.focus()
+    await overlay.trigger('keydown', { key: 'Tab' })
+    expect(document.activeElement).toBe(input)
+
+    // ...and Shift+Tab from the first wraps back to the last.
+    await overlay.trigger('keydown', { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(footerButton)
+
+    wrapper.unmount()
   })
 })
