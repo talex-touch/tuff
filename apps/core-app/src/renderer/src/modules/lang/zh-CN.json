@@ -1027,6 +1027,7 @@
     "storeDesc": "浏览、安装与管理插件。"
   },
   "store": {
+    "updatedAt": "更新于 {time}",
     "title": "插件市场",
     "subtitle": "发现适合您工作流程的优秀插件",
     "searchPlaceholder": "搜索插件...",
