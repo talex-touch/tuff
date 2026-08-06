@@ -1721,3 +1721,13 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - 两个大坑:①包目录内 pnpm add 会剪掉 lockfile 的具名 catalogs 段(①时已提交出去的回归,本轮根目录全量 install 修复),且残留 vite@terser 孤儿实例破坏 typecheck:node——已写进 memory;②lang json 用 json.dump 往返引入全文件格式噪声,用 HEAD 紧凑形态逐点收敛,顺带去掉 home 对象的重复键。
 - 纠缠文件(HomePage/useHomeConversation/lang)如实并入一个双任务提交(fe581a6be),pi-cli 层(cf8b4ac5c)与 lockfile 修复(5ba253976)独立成提交。
 - 全量门:tuffex 1016 + core-app conversation 31 + typecheck node/web + lint 全绿。唯一留白:core:dev 目验 review 门(①②③④合并清单)交用户。
+
+## 2026-08-05 · home-chat-tuffex-ai-fusion · CDP 代验 review 门 + 4 个真机 bug
+
+- 验法:dev 实例带 --remote-debugging-port,自写 cdp.mjs(eval/shot/files/mediashot/watch)驱动+截图,我直接读图核验;清单 1-5 全过,截图存 /tmp/tuff-verify/。
+- **bug#1 持久化全挂**(useConversationHistory):reactive meta 过不了 structuredClone,每次 save 静默失败——toRaw+spread 修;修后 URL 变 /home/c/:id、reload 恢复实证。
+- **bug#2 scoped 样式失配**(HomePage):`.HomePage .tx-*` 覆写在 scoped 块里永不匹配子组件内部——:deep() 修;顺带 composer 测高 contentRect→borderBoxSize(浮钮偏移差 40px 的根源)。
+- **bug#3 跟流缴械竞态**(tuffex stick):scrollToBottom 同步 measure 即释放 guard,而 scroll 事件异步到达时内容又长高→误判用户滚动→following 永久 false。改按**位置**判到达(programmaticTarget),内容中途增长不再缴械;补回归单测。
+- **bug#4 follow 打在过期 scrollHeight**(tuffex stream):RO 回调里 spacer 高度还没经 Vue 重渲染落 DOM,scrollTo 目标过期且 spacer 落地无 RO 事件——follow 挪 nextTick(post-flush);viewport 迟到收缩同样补 grew 触发。
+- 发送即回底补齐(旧手写行为):submit 后显式 scrollToBottom。
+- 遗留:pi provider 首发偶发空响应(retry 即恢复,08-04 侧待查);Chromium 会恢复 reload 前滚动位置(与落底逻辑共存,可接受)。
