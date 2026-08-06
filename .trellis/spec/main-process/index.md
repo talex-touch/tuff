@@ -4,6 +4,12 @@ Electron main-process (apps/core-app/src/main) coding contracts.
 
 ## Documents
 
+- [agent-tool-gateway-contracts.md](agent-tool-gateway-contracts.md) — how
+  model-callable tools reach `pi`: loopback gateway topology, executor arg
+  order, confirmation/remember semantics (proxy tools narrow rememberKey via
+  `classify`), MCP risk mapping, home skills-injection surface marker,
+  degrade-not-abort rules, opt-in live smoke.
+
 - [database-write-contracts.md](database-write-contracts.md) — single-writer-per-file
   topology, `scheduleDbWrite`/`scheduleAuxWrite` call-site convention, scheduler
   busy-retry semantics (never sleep holding the queue), live home resolution,
