@@ -286,6 +286,29 @@ describe('chart spec validation', () => {
     expect((spec as { series: Array<{ values: number[] }> }).series[0]!.values).toEqual([1, 0])
   })
 
+  it('accepts the extended chart family and passes presentation options through', () => {
+    for (const type of ['area', 'doughnut', 'radar', 'funnel', 'gauge', 'heatmap']) {
+      const spec = parseChartSpec({ type, labels: ['a'], series: [{ values: [1] }] })
+      expect(typeof spec, `${type} should validate`).not.toBe('string')
+    }
+
+    const spec = parseChartSpec({
+      type: 'bar',
+      labels: ['q1', 'q2'],
+      series: [{ name: 's', values: [1, 2] }],
+      xLabel: 'Quarter',
+      yLabel: 'Sales',
+      stacked: true,
+      showValues: true
+    })
+    expect(spec).toMatchObject({
+      xLabel: 'Quarter',
+      yLabel: 'Sales',
+      stacked: true,
+      showValues: true
+    })
+  })
+
   it('never needs a confirmation beyond read risk', () => {
     // It only draws data the model already holds; nothing on the machine is touched.
     expect(chart.risk).toBe('read')

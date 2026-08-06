@@ -84,7 +84,23 @@ function looksBinary(path: string): boolean {
   return dot >= 0 && BINARY_EXTENSIONS.has(path.slice(dot).toLowerCase())
 }
 
-const CHART_TYPES = new Set(['bar', 'line', 'pie', 'scatter'])
+/**
+ * Chart types the renderer can draw from a declarative spec. Everything here
+ * maps onto ECharts with the same labels/series shape — a type that needed a
+ * different data model would need its own validation, not a new set member.
+ */
+const CHART_TYPES = new Set([
+  'bar',
+  'line',
+  'area',
+  'pie',
+  'doughnut',
+  'scatter',
+  'radar',
+  'funnel',
+  'gauge',
+  'heatmap'
+])
 /** Enough for a readable chart; beyond this a table serves the user better. */
 const MAX_CHART_POINTS = 200
 
@@ -93,6 +109,13 @@ export interface ChartSpec {
   title?: string
   labels: string[]
   series: Array<{ name?: string; values: number[] }>
+  /** Axis captions; ignored by types that have no axes. */
+  xLabel?: string
+  yLabel?: string
+  /** Stacks bar/area series instead of drawing them side by side. */
+  stacked?: boolean
+  /** Renders values on the marks themselves. */
+  showValues?: boolean
 }
 
 /**
@@ -137,6 +160,10 @@ export function parseChartSpec(args: Record<string, unknown>): ChartSpec | strin
   return {
     type,
     ...(typeof args.title === 'string' ? { title: args.title } : {}),
+    ...(typeof args.xLabel === 'string' ? { xLabel: args.xLabel } : {}),
+    ...(typeof args.yLabel === 'string' ? { yLabel: args.yLabel } : {}),
+    ...(args.stacked === true ? { stacked: true } : {}),
+    ...(args.showValues === true ? { showValues: true } : {}),
     labels,
     series
   }

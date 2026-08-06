@@ -124,13 +124,21 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
     parameters: {
       type: 'object',
       properties: {
-        type: { type: 'string', description: 'bar | line | pie | scatter' },
+        type: {
+          type: 'string',
+          description:
+            'bar | line | area | pie | doughnut | scatter | radar | funnel | gauge | heatmap',
+        },
         title: { type: 'string', description: 'Chart title' },
         labels: {
           type: 'array',
           items: { type: 'string' },
           description: 'Category labels, one per data point',
         },
+        xLabel: { type: 'string', description: 'X axis caption' },
+        yLabel: { type: 'string', description: 'Y axis caption' },
+        stacked: { type: 'boolean', description: 'Stack bar/area series instead of grouping them' },
+        showValues: { type: 'boolean', description: 'Print values on the marks' },
         series: {
           type: 'array',
           description: 'One entry per series; each values array matches labels in length',
