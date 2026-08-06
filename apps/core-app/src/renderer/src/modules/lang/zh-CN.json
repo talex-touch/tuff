@@ -4215,6 +4215,11 @@
       "later": "稍后处理",
       "dontRemindAgain": "不再提醒"
     },
+    "previewHistory": {
+      "recentTitle": "最近处理",
+      "countSummary": "共 {count} 条",
+      "noRecords": "暂无记录"
+    },
   "common": {
     "loadMore": "加载更多",
     "copy": "复制",
