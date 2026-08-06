@@ -283,9 +283,55 @@ function retryLoad(): void {
   void triggerLoad()
 }
 
+/**
+ * The sentinel lives inside the `v-else` of `v-if="items.length === 0"`, so a
+ * stream that mounts with an empty list has no sentinel at mount time. Attaching
+ * only in onMounted left history loading permanently dead for that case, so the
+ * observer is (re)built whenever the sentinel or the gating state changes.
+ */
+function setupHistoryObserver(): void {
+  intersectionObserver?.disconnect()
+  intersectionObserver = null
+
+  const scroller = scrollerRef.value
+  const sentinel = sentinelRef.value
+  if (typeof IntersectionObserver === 'undefined')
+    return
+  if (!props.loadOlder || !hasMore.value || !sentinel || !scroller)
+    return
+
+  intersectionObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some(entry => entry.isIntersecting))
+        void triggerLoad()
+    },
+    { root: scroller, rootMargin: '200px 0px 0px 0px' },
+  )
+  intersectionObserver.observe(sentinel)
+}
+
+watch(sentinelRef, () => {
+  setupHistoryObserver()
+})
+
+// hasMoreInitial was read once at setup and never re-synced, so re-supplying
+// `true` for a different conversation could not revive history loading.
+watch(
+  () => props.hasMoreInitial,
+  (next) => {
+    if (next === undefined)
+      return
+    hasMore.value = next
+  },
+)
+
 watch(hasMore, (value) => {
-  if (!value)
+  if (!value) {
     intersectionObserver?.disconnect()
+    intersectionObserver = null
+    return
+  }
+  setupHistoryObserver()
 })
 
 // ---------------------------------------------------------------------------
@@ -346,16 +392,7 @@ onMounted(() => {
   if (scroller)
     viewportHeight.value = scroller.clientHeight
 
-  if (typeof IntersectionObserver !== 'undefined' && props.loadOlder && sentinelRef.value && scroller) {
-    intersectionObserver = new IntersectionObserver(
-      (entries) => {
-        if (entries.some(entry => entry.isIntersecting))
-          void triggerLoad()
-      },
-      { root: scroller, rootMargin: '200px 0px 0px 0px' },
-    )
-    intersectionObserver.observe(sentinelRef.value)
-  }
+  setupHistoryObserver()
 
   // A conversation opens at its latest message.
   void nextTick(() => scrollToBottom())
