@@ -129,7 +129,12 @@ async function submit(): Promise<void> {
   // Allocated here rather than at setup so an untouched home screen never claims an id.
   conversationId ??= createConversationId()
 
-  await conversation.send(text, attachments)
+  const turn = conversation.send(text, attachments)
+  // Sending from a scrolled-up position still lands you on your own message —
+  // the stream only auto-follows readers already at the bottom.
+  await nextTick()
+  streamRef.value?.scrollToBottom()
+  await turn
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -265,7 +270,10 @@ onMounted(() => {
   const element = composerRef.value
   if (!element || typeof ResizeObserver === 'undefined') return
   composerObserver = new ResizeObserver(([entry]) => {
-    if (entry) composerHeight.value = entry.contentRect.height
+    // Border-box, not contentRect: the clearance and the back-to-bottom pill
+    // offset need the composer's *visual* height, padding and border included.
+    if (entry)
+      composerHeight.value = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height
   })
   composerObserver.observe(element)
 })
@@ -735,21 +743,22 @@ watch(
   flex: 1;
   width: 100%;
   min-height: 0;
-}
 
-/**
- * The tail clears the floating composer instead of ending underneath it, and the
- * back-to-bottom pill has to hover above that composer, not under it. Both are
- * driven by the measured composer height for the same reason the padding always
- * was: the textarea grows to 200px.
- */
-.HomePage .tx-conversation-stream__scroller {
-  padding: 28px 0 calc(var(--home-composer-height, 112px) + 28px);
-  box-sizing: border-box;
-}
+  /**
+   * The tail clears the floating composer instead of ending underneath it, and the
+   * back-to-bottom pill has to hover above that composer, not under it. Both are
+   * driven by the measured composer height for the same reason the padding always
+   * was: the textarea grows to 200px. `:deep` because these live inside the stream
+   * component and scoped selectors would never reach them otherwise.
+   */
+  :deep(.tx-conversation-stream__scroller) {
+    padding: 28px 0 calc(var(--home-composer-height, 112px) + 28px);
+    box-sizing: border-box;
+  }
 
-.HomePage .tx-conversation-stream__pill {
-  bottom: calc(var(--home-composer-height, 112px) + 32px);
+  :deep(.tx-conversation-stream__pill) {
+    bottom: calc(var(--home-composer-height, 112px) + 32px);
+  }
 }
 
 /** Per-row column: same 720px lane as the composer, one row per virtualized item. */
