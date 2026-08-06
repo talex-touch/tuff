@@ -343,6 +343,23 @@ const destroyTestCore = async (): Promise<void> => {
   await destroyPromise
 }
 
+/**
+ * Watcher events are routed on the trailing edge of a coalescing window, so a microtask flush is
+ * no longer enough to observe the route. Polls for the expected routes instead of sleeping for the
+ * window: it returns as soon as they land, and the grace on top of the router's own constants
+ * keeps a loaded CI box from turning this into a race.
+ */
+const settleWatchCoalescingWindows = async (isRouted: () => boolean): Promise<void> => {
+  const { APP_WATCH_COALESCE_WINDOW_MS, FILE_WATCH_COALESCE_WINDOW_MS } =
+    await import('./indexed-source-event-router')
+  const windowMs = Math.max(APP_WATCH_COALESCE_WINDOW_MS, FILE_WATCH_COALESCE_WINDOW_MS)
+  const deadline = Date.now() + windowMs + 1500
+  while (Date.now() < deadline && !isRouted()) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 25))
+  }
+  await new Promise<void>((resolve) => setImmediate(resolve))
+}
+
 describe('search-core search-trace', () => {
   beforeEach(async () => {
     vi.resetModules()
@@ -442,7 +459,8 @@ describe('search-core search-trace', () => {
         filePath: '/tmp/a.md'
       } as unknown as Parameters<typeof changedHandler>[0])
     }
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    // One route per source: the file queue and the app queue each close their own window.
+    await settleWatchCoalescingWindows(() => routeWatchEventWithResult.mock.calls.length >= 2)
 
     expect(routeWatchEventWithResult).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -493,7 +511,9 @@ describe('search-core search-trace', () => {
       TalexEvents.FILE_WATCH_ROOT_RECOVERED,
       expect.any(Function)
     )
-  })
+    // Full core init plus two coalescing windows does not reliably fit the 5s default on a loaded
+    // machine, and a timeout here reads as a routing bug rather than as scheduling noise.
+  }, 20_000)
 
   it('结构化日志不输出 query 明文并包含争用快照字段', () => {
     const query: TuffQuery = {
