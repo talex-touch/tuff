@@ -40,7 +40,11 @@ vi.mock('./intelligence-workflow-service', () => ({
 vi.mock('./ai-cli-orchestrator', () => ({
   aiCliOrchestrator: orchestratorMocks
 }))
-vi.mock('@talex-touch/utils/transport/events/types', () => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  // Real constants and guards (they're pure data), with only the error-code
+  // check stubbed — a hand-listed mock goes stale every time the module
+  // grows an export, which is exactly how this suite broke.
+  ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
 

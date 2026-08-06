@@ -70,8 +70,32 @@ const ext = attachment.name?.split('.').pop()
 const ext = MIME_TO_EXT[mime]
 ```
 
-## 6. Stream consumption (pending)
+## 6. Stream consumption: commit/rollback (landed, cd018f946)
 
-The delta/commit/rollback semantics for pi's auto-retry (research:
-`08-05-home-tool-loop/research/pi-duplicate-reply-diagnosis.md` §八) land
-here once implemented.
+**Deltas are preview; an assistant `message_end` with an explicitly healthy
+`stopReason` is a commit point; `auto_retry_start` rolls back to the last
+commit.** pi replays failed attempts into the same stdout — treat the NDJSON
+stream as a session log, never as one monotonic text buffer.
+
+- Part events (dual-mirrored): `{ kind: 'message-commit' }`,
+  `{ kind: 'text-reset' }`.
+- Commit requires an explicit non-error/aborted `stopReason` on
+  `message_end` — absence is not success (message_start's pending state and
+  zero-usage message_end keep their existing null contract).
+- Every accumulating layer keeps a high-water mark and rolls back to it:
+  provider (`streamedLength`/`committedLength`), router (`accumulated`),
+  renderer parts assembly (`committed = {contentLength, partsLength,
+  textLength}` — textLength exists because deltas merge into the tail text
+  part, so partsLength alone can't rewind it).
+- Final user-visible text = committed + un-rolled-back tail preview; the
+  **error decision** uses committed-only: EOF with nothing committed and a
+  failed final state throws pi's `auto_retry_end.finalError`. Exit codes are
+  meaningless (`--mode json` exits 0 even when every attempt failed).
+- Spawn env pins `PI_RETRY_STALL_TIMEOUT_MS: '0'` — the pi-retry extension's
+  90s stall watchdog only amplifies replays in a headless host.
+- Retries log `attempt/maxAttempts/delayMs` (evidence trail for retry-count
+  anomalies).
+
+Guard tests: tool-turn rollback (text₁ commit → tool cards → text₂ reset →
+text₂′ commit ⇒ text₁+text₂′ with cards intact); 4-attempt NDJSON fixture
+accumulates one copy; all-failed run throws `finalError`.
