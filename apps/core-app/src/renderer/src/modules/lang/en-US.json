@@ -5195,6 +5195,7 @@
     "confirmAndSend": "Authorize and send"
   },
   "corebox": {
+    "actionUnsupported": "This action isn't supported yet",
     "opacity": "Opacity",
     "debug": "Debug",
     "alwaysOnTop": "Always on top",
