@@ -8,6 +8,7 @@ import type { StorePlugin } from '@talex-touch/utils/store'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -38,6 +39,16 @@ const detailVisible = ref(false)
 const detailSource = ref<HTMLElement | null>(null)
 const timeline = ref<UserPluginTimelineEvent[]>([])
 const timelineLoading = ref(false)
+
+/** Placeholder entries while a plugin's timeline is in flight. */
+const TIMELINE_SKELETON_ROWS = 4
+
+/**
+ * Bound straight to `timelineLoading`, without the first-load flag the settings
+ * pages use: `refreshTimeline` only runs when the detail panel opens, so there
+ * is never a rendered timeline for this plugin to preserve.
+ */
+const showTimelineSkeleton = useDeferredLoading(timelineLoading)
 const actionError = ref<string | null>(null)
 const formVisible = ref(false)
 const formMode = ref<'create' | 'edit' | 'version' | 'reedit'>('create')
@@ -460,7 +471,21 @@ onMounted(() => {
 
           <section>
             <h4>{{ t('store.publisher.timeline') }}</h4>
-            <p v-if="timelineLoading" class="publisher-muted">{{ t('store.loading') }}</p>
+            <!--
+              Built from `.publisher-timeline` / `.publisher-timeline-item` so the
+              placeholder carries the real card's border, padding and row gaps.
+              Four entries is a typical history length; the list is short enough
+              that over- or undershooting it moves the panel very little.
+            -->
+            <div v-if="showTimelineSkeleton" class="publisher-timeline" aria-hidden="true">
+              <div v-for="i in TIMELINE_SKELETON_ROWS" :key="i" class="publisher-timeline-item">
+                <TxSkeleton :width="112" :height="13" :radius="4" />
+                <TxSkeleton :width="76" :height="11" :radius="4" />
+                <TxSkeleton :width="148" :height="11" :radius="4" />
+                <TxSkeleton :width="92" :height="10" :radius="4" />
+              </div>
+            </div>
+
             <div v-else class="publisher-timeline">
               <div v-for="item in timeline" :key="item.id" class="publisher-timeline-item">
                 <strong>{{ item.eventType }}</strong>
