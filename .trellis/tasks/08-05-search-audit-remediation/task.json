@@ -22,7 +22,14 @@
     "08-05-semantic-catalog-token-boundary",
     "08-05-search-sort-reaches-ui",
     "08-05-file-index-data-safety",
-    "08-05-keyword-charset-unification"
+    "08-05-keyword-charset-unification",
+    "08-05-reco-ranking-stats-fix",
+    "08-05-reco-wire-existing-signals",
+    "08-05-reco-signal-substrate",
+    "08-05-reco-system-state-signals",
+    "08-05-reco-file-activity-signals",
+    "08-05-reco-calendar-signal",
+    "08-05-reco-behavior-learning"
   ],
   "parent": null,
   "relatedFiles": [],
