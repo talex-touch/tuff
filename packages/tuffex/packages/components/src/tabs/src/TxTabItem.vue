@@ -34,6 +34,7 @@ function handleClick() {
     :aria-selected="active"
     :class="{ 'is-active': active, 'is-disabled': disabled }"
     :disabled="disabled"
+    :tabindex="active ? 0 : -1"
     @click="handleClick"
   >
     <span v-if="iconClass || $slots.icon" class="tx-tab-item__icon">
