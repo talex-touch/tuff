@@ -216,6 +216,42 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
       required: ['server', 'tool'],
     },
   },
+  {
+    name: 'tuff_list_features',
+    label: 'Tuff: list plugin features',
+    description:
+      'List the features the user\'s installed Tuff plugins expose, as tab-separated '
+      + 'plugin / feature / title / opens_ui / description rows. Call this before '
+      + 'tuff_invoke_feature: the catalogue changes whenever the user installs, enables or '
+      + 'reloads a plugin, so never assume a feature exists.',
+    promptSnippet: 'Discover the user\'s plugin features before invoking one',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'tuff_invoke_feature',
+    label: 'Tuff: invoke plugin feature',
+    description:
+      'Trigger one feature of one installed plugin, exactly as the user would by typing it into '
+      + 'the launcher. Use the exact plugin and feature values from tuff_list_features. This runs '
+      + 'the plugin\'s own code and asks the user every single time; a feature with opens_ui=yes '
+      + 'shows its result in its own window rather than returning it to you.',
+    promptSnippet: 'Invoke a plugin feature discovered through tuff_list_features',
+    parameters: {
+      type: 'object',
+      properties: {
+        plugin: { type: 'string', description: 'Plugin id from tuff_list_features' },
+        feature: { type: 'string', description: 'Feature id from tuff_list_features' },
+        text: {
+          type: 'string',
+          description: 'Text to hand the feature, as the user would have typed after the keyword',
+        },
+      },
+      required: ['plugin', 'feature'],
+    },
+  },
 ]
 
 export default function tuffTools(pi: ExtensionApi): void {

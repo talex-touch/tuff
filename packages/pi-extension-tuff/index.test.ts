@@ -92,3 +92,28 @@ describe('skills and MCP tools', () => {
     expect(skill.description).toContain('not a file reader')
   })
 })
+
+describe('plugin feature tools', () => {
+  it('pairs feature discovery with invocation', async () => {
+    const tools = await loadTools()
+    const list = tools.find(tool => tool.name === 'tuff_list_features')!
+    const invoke = tools.find(tool => tool.name === 'tuff_invoke_feature')!
+
+    // Same deferred shape as the MCP pair: the catalogue moves with the user's
+    // installed plugins, so a model that skips discovery invents feature ids.
+    expect(list.description).toContain('before tuff_invoke_feature')
+    expect(list.description).toContain('never assume a feature exists')
+    expect(invoke.description).toContain('tuff_list_features')
+    expect(invoke.parameters.required).toEqual(['plugin', 'feature'])
+    expect(Object.keys(invoke.parameters.properties ?? {})).toEqual(['plugin', 'feature', 'text'])
+  })
+
+  it('warns that invocation is neither silent nor free', async () => {
+    const invoke = (await loadTools()).find(tool => tool.name === 'tuff_invoke_feature')!
+
+    // Two things the model cannot infer from the schema: the call runs a third
+    // party's code behind a prompt, and a UI feature answers on screen only.
+    expect(invoke.description).toContain('asks the user every single time')
+    expect(invoke.description).toContain('opens_ui=yes')
+  })
+})

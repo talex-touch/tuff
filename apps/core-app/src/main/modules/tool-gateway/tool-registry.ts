@@ -1,4 +1,5 @@
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
+import type { PluginFeatureSource } from './plugin-feature-source'
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
@@ -211,6 +212,11 @@ function truncateForModel(text: string): string {
     : text
 }
 
+/** Table rows are split on the separators, so no field may carry one. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
 function stringifyMcpResult(value: unknown): string {
   if (typeof value === 'string') return value
   if (value === null || value === undefined) return ''
@@ -227,6 +233,8 @@ export interface ToolRegistryOptions {
   openPath: (path: string) => Promise<string>
   /** The user's imported skills and MCP servers. */
   agentContext: AgentContextSource
+  /** The features the user's installed plugins expose. */
+  pluginFeatures: PluginFeatureSource
 }
 
 export function createToolRegistry(options: ToolRegistryOptions): Map<string, ToolDefinition> {
@@ -397,6 +405,86 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
           return { output: truncateForModel(stringifyMcpResult(result)), isError: false }
         } catch (error) {
           return { output: `MCP call failed: ${(error as Error).message}`, isError: true }
+        }
+      }
+    },
+    {
+      name: 'tuff_list_features',
+      risk: 'read',
+      summarize: () => 'List the features the installed plugins expose',
+      execute: async () => {
+        const entries = options.pluginFeatures.listFeatures()
+        if (entries.length === 0) {
+          // Same reading as an empty MCP catalogue: nothing failed, the user
+          // simply has no plugin offering a feature right now.
+          return {
+            output:
+              'No plugin features are available. The user can install or enable plugins in Settings, Plugins & Tools.',
+            isError: false
+          }
+        }
+
+        const lines = ['plugin\tfeature\ttitle\topens_ui\tdescription']
+        for (const entry of entries) {
+          lines.push(
+            [
+              entry.pluginName,
+              entry.featureId,
+              oneLine(`${entry.pluginLabel} / ${entry.featureName}`),
+              entry.opensUi ? 'yes' : 'no',
+              oneLine(entry.description)
+            ].join('\t')
+          )
+        }
+        return { output: truncateForModel(lines.join('\n')), isError: false }
+      }
+    },
+    {
+      name: 'tuff_invoke_feature',
+      // Runs a third party's code on the user's machine, so it re-asks every
+      // time however harmless the feature's own description reads.
+      risk: 'execute',
+      summarize: (args) => {
+        const pluginName = readStringArg(args, 'plugin').trim()
+        const featureId = readStringArg(args, 'feature').trim()
+        const entry = options.pluginFeatures.findFeature(pluginName, featureId)
+        // Falls back to the raw ids when the pair no longer resolves: the card
+        // still names what was asked for, and `execute` reports the miss.
+        return entry
+          ? `${entry.pluginLabel} / ${entry.featureName}`
+          : `${pluginName} / ${featureId}`
+      },
+      execute: async (args) => {
+        const pluginName = readStringArg(args, 'plugin').trim()
+        const featureId = readStringArg(args, 'feature').trim()
+        if (!pluginName || !featureId) {
+          return { output: 'plugin and feature are required', isError: true }
+        }
+
+        const entry = options.pluginFeatures.findFeature(pluginName, featureId)
+        if (!entry) {
+          return {
+            output: `No enabled plugin feature "${pluginName}" / "${featureId}". Call tuff_list_features for the current catalogue.`,
+            isError: true
+          }
+        }
+
+        const title = `${entry.pluginLabel} / ${entry.featureName}`
+        try {
+          const { handled } = await options.pluginFeatures.invokeFeature(
+            pluginName,
+            featureId,
+            readStringArg(args, 'text')
+          )
+          if (!handled) return { output: `${title} declined the request.`, isError: true }
+          return {
+            output: entry.opensUi
+              ? `Triggered ${title}. It opened its own window, so its result is on the user's screen rather than here.`
+              : `Triggered ${title}.`,
+            isError: false
+          }
+        } catch (error) {
+          return { output: `Feature invocation failed: ${(error as Error).message}`, isError: true }
         }
       }
     }
