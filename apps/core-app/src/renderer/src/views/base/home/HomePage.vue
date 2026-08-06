@@ -2,7 +2,7 @@
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
-import type { FormSpec } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { FormFieldValue, FormSpec } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
@@ -41,6 +41,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import HomeModelMenu from './HomeModelMenu.vue'
+import HomePermissionMenu from './HomePermissionMenu.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeTopBar from './HomeTopBar.vue'
 
@@ -108,13 +109,6 @@ const autoContext = computed(() => appSetting.tools?.autoContext !== false)
 
 const agentTools = useAgentTools()
 
-/** The three permission modes in menu order; the icon doubles as the pill's. */
-const PERMISSION_MODES = [
-  { mode: 'off', icon: 'i-ri-shield-line' },
-  { mode: 'review', icon: 'i-ri-shield-check-line' },
-  { mode: 'full', icon: 'i-ri-shield-flash-line' }
-] as const
-
 /**
  * How far the assistant may go with tools: no tools at all, tools that ask before every
  * call, or tools that run unasked.
@@ -136,14 +130,8 @@ const agentToolsMode = computed<AgentToolsMode>({
   }
 })
 
-const permissionIcon = computed(
-  () =>
-    PERMISSION_MODES.find((option) => option.mode === agentToolsMode.value)?.icon ??
-    'i-ri-shield-line'
-)
-
 /**
- * Mirrors the mode into main — a watcher rather than the setter above, because the gateway
+ * Mirrors the mode into main — a watcher rather than the menu component, because the gateway
  * starts disabled on every launch: a user who left tools on last session would otherwise get
  * none until they happened to touch the pill.
  */
@@ -157,82 +145,8 @@ watch(
   { immediate: true }
 )
 
-const permissionOpen = ref(false)
-/** True while the 「完全允许」 consequence step has replaced the mode list. */
-const permissionConfirming = ref(false)
-const permissionPillRef = ref<HTMLButtonElement | null>(null)
-const permissionMenuRef = ref<HTMLElement | null>(null)
-const permissionCancelRef = ref<HTMLButtonElement | null>(null)
-
-/** Queried rather than collected through refs: moving focus is a DOM concern either way. */
-function permissionOptionButtons(): HTMLButtonElement[] {
-  return Array.from(
-    permissionMenuRef.value?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []
-  )
-}
-
-function focusCheckedOption(): void {
-  const index = PERMISSION_MODES.findIndex((option) => option.mode === agentToolsMode.value)
-  permissionOptionButtons()[Math.max(index, 0)]?.focus()
-}
-
-function togglePermissionMenu(): void {
-  if (permissionOpen.value) {
-    closePermissionMenu()
-    return
-  }
-  permissionOpen.value = true
-  permissionConfirming.value = false
-  void nextTick(focusCheckedOption)
-}
-
-function closePermissionMenu(restoreFocus = false): void {
-  if (!permissionOpen.value) return
-  permissionOpen.value = false
-  // Reopening always starts at the list: an abandoned consequence step is not a pending choice.
-  permissionConfirming.value = false
-  if (restoreFocus) permissionPillRef.value?.focus()
-}
-
-/**
- * Arrows move focus without selecting. The list holds a mode that grants every tool call at
- * once, and arrowing past it must not be what turns it on — only Enter/Space picks a mode.
- * The checked option is the group's single tab stop, as a radiogroup expects.
- */
-function onPermissionOptionKeydown(event: KeyboardEvent, index: number): void {
-  const forward = event.key === 'ArrowDown' || event.key === 'ArrowRight'
-  const backward = event.key === 'ArrowUp' || event.key === 'ArrowLeft'
-  if (!forward && !backward) return
-  event.preventDefault()
-  const buttons = permissionOptionButtons()
-  if (buttons.length === 0) return
-  buttons[(index + (forward ? 1 : -1) + buttons.length) % buttons.length]?.focus()
-}
-
-function choosePermissionMode(mode: AgentToolsMode): void {
-  if (mode === 'full' && agentToolsMode.value !== 'full') {
-    // Never one click away: 「完全允许」 is a standing grant over every tool the model can
-    // reach, so it costs an explicit second step that states what it means.
-    permissionConfirming.value = true
-    void nextTick(() => permissionCancelRef.value?.focus())
-    return
-  }
-  agentToolsMode.value = mode
-  closePermissionMenu(true)
-}
-
-function confirmFullPermission(): void {
-  agentToolsMode.value = 'full'
-  closePermissionMenu(true)
-}
-
-function cancelFullPermission(): void {
-  permissionConfirming.value = false
-  void nextTick(focusCheckedOption)
-}
-
+/** Stays here rather than in the menu: this component owns the agent-tools transport instance. */
 async function resetRememberedApprovals(): Promise<void> {
-  closePermissionMenu(true)
   try {
     await agentTools.resetApprovals()
     toast.success(t('home.permissionResetDone'))
@@ -242,36 +156,83 @@ async function resetRememberedApprovals(): Promise<void> {
   }
 }
 
-function onPermissionPointerDown(event: PointerEvent): void {
-  if (!permissionOpen.value) return
-  const menu = permissionMenuRef.value
-  if (menu?.contains(event.target as Node)) return
-  // The pill sits outside the menu, so a plain outside-click check would close on the very
-  // click that is about to toggle it back open — same marker trick as the model menu.
-  if ((event.target as HTMLElement)?.closest?.('[data-permission-pill]')) return
-  closePermissionMenu()
-}
-
-function onPermissionKeydown(event: KeyboardEvent): void {
-  // Escape out of the consequence step leaves the mode untouched, exactly like cancelling it.
-  if (event.key === 'Escape') closePermissionMenu(true)
-}
-
-onMounted(() => {
-  document.addEventListener('pointerdown', onPermissionPointerDown, true)
-  document.addEventListener('keydown', onPermissionKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onPermissionPointerDown, true)
-  document.removeEventListener('keydown', onPermissionKeydown)
-})
+// ============================================================================
+// Arrival physics — the iMessage collision, done as one system: every new
+// message flies in on a damped spring and, at the moment it lands, knocks the
+// thread above it upward in a decaying wave. Both curves are sampled offline
+// because WAAPI has no spring primitive.
+// ============================================================================
 
 /**
- * Ids of messages that should play the pop-in. Filled only while a turn is
- * streaming — a send or retry — so restoring a stored thread never replays
- * entrances; ids leave the set on animationend, so a virtualized remount
- * (scrolling back up) stays still.
+ * Step response of a ζ=0.66 spring (one ~6% overshoot, then a settle): `x` is
+ * the eased position 0→1 and `v` the normalized velocity, which drives the
+ * jelly stretch — a bubble is longest while it moves fastest, and the brief
+ * negative tail squashes it as the overshoot springs back.
+ */
+const SPRING = [
+  { o: 0, x: 0, v: 0 },
+  { o: 0.036, x: 0.046, v: 0.555 },
+  { o: 0.071, x: 0.156, v: 0.869 },
+  { o: 0.107, x: 0.3, v: 1 },
+  { o: 0.143, x: 0.453, v: 1 },
+  { o: 0.179, x: 0.6, v: 0.915 },
+  { o: 0.214, x: 0.729, v: 0.782 },
+  { o: 0.25, x: 0.836, v: 0.629 },
+  { o: 0.286, x: 0.92, v: 0.476 },
+  { o: 0.321, x: 0.981, v: 0.336 },
+  { o: 0.357, x: 1.023, v: 0.216 },
+  { o: 0.393, x: 1.048, v: 0.119 },
+  { o: 0.429, x: 1.06, v: 0.046 },
+  { o: 0.464, x: 1.063, v: -0.005 },
+  { o: 0.5, x: 1.06, v: -0.038 },
+  { o: 0.571, x: 1.043, v: -0.064 },
+  { o: 0.643, x: 1.024, v: -0.057 },
+  { o: 0.714, x: 1.01, v: -0.039 },
+  { o: 0.786, x: 1.001, v: -0.02 },
+  { o: 0.857, x: 0.997, v: -0.007 },
+  { o: 0.929, x: 0.996, v: 0.001 },
+  { o: 1, x: 1, v: 0 }
+] as const
+
+const SPRING_MS = 560
+/** Where `x` first crosses its target — the impact that launches the wave. */
+const SPRING_IMPACT_MS = 200
+
+/**
+ * Impulse response of a ζ=0.5 spring: how a resting row rings after being
+ * hit from below — up fast, back through neutral, one small counter-swing.
+ */
+const IMPULSE = [
+  { o: 0, y: 0 },
+  { o: 0.042, y: 0.707 },
+  { o: 0.083, y: 1 },
+  { o: 0.125, y: 0.985 },
+  { o: 0.167, y: 0.786 },
+  { o: 0.208, y: 0.514 },
+  { o: 0.25, y: 0.25 },
+  { o: 0.292, y: 0.042 },
+  { o: 0.333, y: -0.093 },
+  { o: 0.375, y: -0.156 },
+  { o: 0.417, y: -0.165 },
+  { o: 0.458, y: -0.138 },
+  { o: 0.5, y: -0.095 },
+  { o: 0.542, y: -0.051 },
+  { o: 0.583, y: -0.014 },
+  { o: 0.625, y: 0.011 },
+  { o: 0.708, y: 0.027 },
+  { o: 0.792, y: 0.017 },
+  { o: 0.875, y: 0.004 },
+  { o: 1, y: 0 }
+] as const
+
+const IMPULSE_MS = 480
+
+/**
+ * Ids of messages whose entrance has not finished. The template renders them
+ * at `opacity: 0` so the fresh row never flashes at rest before its WAAPI
+ * spring takes over; ids leave the set when the animation settles, so a
+ * virtualized remount (scrolling back up) stays still. Filled only while a
+ * turn is streaming — restoring a stored thread never replays entrances.
  */
 const enteringMessages = reactive(new Set<string>())
 
@@ -279,12 +240,78 @@ watch(
   () => messages.value.length,
   (length, previous) => {
     if (!isStreaming.value || prefersReducedMotion()) return
-    for (const message of messages.value.slice(previous ?? 0, length)) {
-      // The user's own message gets the send flight instead of the pop.
-      if (message.role !== 'user') enteringMessages.add(message.id)
-    }
+    const appended = messages.value.slice(previous ?? 0, length)
+    for (const message of appended) enteringMessages.add(message.id)
+    void nextTick(() => {
+      for (const message of appended) {
+        // The user's own message is animated by the send flight instead.
+        if (message.role !== 'user') runEntrance(message.id)
+      }
+    })
   }
 )
+
+function messageElement(id: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`)
+}
+
+/** Spring keyframes for a bubble rising `rise`px into place, jelly included. */
+function arrivalKeyframes(rise: number, jelly: number): Record<string, string | number>[] {
+  return SPRING.map(({ o, x, v }) => ({
+    offset: o,
+    transform:
+      `translateY(${((1 - x) * rise).toFixed(2)}px) ` +
+      `scale(${(1 - jelly * 0.5 * v).toFixed(4)}, ${(1 + jelly * v).toFixed(4)})`,
+    opacity: Math.min(1, o / 0.18)
+  }))
+}
+
+/** A reply surfaces from just below its resting place and nudges the thread. */
+function runEntrance(id: string): void {
+  const el = messageElement(id)
+  if (!el) {
+    enteringMessages.delete(id)
+    return
+  }
+  const entrance = animateRaw(el, arrivalKeyframes(22, 0.04), {
+    duration: SPRING_MS,
+    easing: 'linear',
+    fill: 'both'
+  })
+  entrance.finished.catch(() => {}).finally(() => enteringMessages.delete(id))
+  window.setTimeout(() => knockRows(el, 0.6), SPRING_IMPACT_MS)
+}
+
+/**
+ * The collision itself: rows above the landing bubble ring like a chain of
+ * sprung masses — nearer rows harder and sooner, each with a touch of squash
+ * (origin at their bottom edge, where the hit lands). Amplitudes decay fast
+ * enough that the wave dies inside four rows.
+ */
+function knockRows(origin: HTMLElement, strength: number): void {
+  if (prefersReducedMotion()) return
+  const rows = Array.from(origin.ownerDocument.querySelectorAll<HTMLElement>('[data-message-id]'))
+  const index = rows.indexOf(origin)
+  if (index <= 0) return
+
+  const amplitudes = [9, 5.5, 3, 1.5]
+  amplitudes.forEach((amplitude, order) => {
+    const row = rows[index - 1 - order]
+    const lift = amplitude * strength
+    if (!row || lift < 0.75) return
+    const squash = 0.032 * (lift / (amplitudes[0] ?? 9))
+    animateRaw(
+      row,
+      IMPULSE.map(({ o, y }) => ({
+        offset: o,
+        transform:
+          `translateY(${(-lift * y).toFixed(2)}px) ` +
+          `scaleY(${(1 - squash * Math.max(0, y)).toFixed(4)})`
+      })),
+      { duration: IMPULSE_MS, delay: order * 42, easing: 'linear' }
+    )
+  })
+}
 
 // ============================================================================
 // Read aloud
@@ -371,11 +398,20 @@ function formSpecOf(tool: AiToolCallPart): FormSpec | null {
 const submittedForms = reactive(new Set<string>())
 
 /**
+ * Half-typed form input, keyed by tool call id. The stream virtualizes rows
+ * out of the DOM once they scroll far enough away, and a card component's own
+ * state unmounts with it — this is what hands the draft back on remount.
+ * Plain Map on purpose: it is only read when a card mounts.
+ */
+const formDrafts = new Map<string, Record<string, FormFieldValue>>()
+
+/**
  * A form submission continues the conversation as a plain user message: the
  * model reads it like any other turn, so the loop needs no second channel.
  */
 function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void {
   submittedForms.add(tool.id)
+  formDrafts.delete(tool.id)
   const lines = Object.entries(values).map(([key, value]) => `${key}: ${String(value)}`)
   draft.value = ''
   void conversation.send(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`)
@@ -462,32 +498,41 @@ async function submit(): Promise<void> {
 /**
  * The send flight: the fresh user bubble lifts off from the composer's
  * *visual* position (mid-FLIP transforms included via getBoundingClientRect),
- * sharpening out of a blur as it detaches, then knocks the thread above it
- * upward on arrival — the iMessage collision, sourced from the box that
- * launched it.
+ * sharpening out of a blur as it detaches, riding the same spring as every
+ * other arrival — and the wave fires at the spring's impact moment, not at
+ * animation end, so the thread above recoils exactly when the bubble lands.
  */
 function animateSendFlight(composerEl: HTMLElement | null): void {
-  if (!composerEl || prefersReducedMotion()) return
   const sent = [...messages.value].reverse().find((message) => message.role === 'user')
-  const bubble = sent
-    ? composerEl.ownerDocument.querySelector<HTMLElement>(
-        `[data-message-id="${CSS.escape(sent.id)}"]`
-      )
-    : null
-  if (!bubble) return
+  if (!composerEl || prefersReducedMotion()) {
+    if (sent) enteringMessages.delete(sent.id)
+    return
+  }
+  const bubble = sent ? messageElement(sent.id) : null
+  if (!sent || !bubble) {
+    if (sent) enteringMessages.delete(sent.id)
+    return
+  }
 
   const deltaY = composerEl.getBoundingClientRect().top - bubble.getBoundingClientRect().top
-  if (deltaY < 4) return
+  if (deltaY < 4) {
+    enteringMessages.delete(sent.id)
+    return
+  }
 
   const flight = animateRaw(
     bubble,
-    [
-      { transform: `translateY(${deltaY}px) scale(0.92)`, filter: 'blur(7px)', opacity: 0.5 },
-      { filter: 'blur(0px)', opacity: 1, offset: 0.7 },
-      { transform: 'translateY(0) scale(1)', filter: 'blur(0px)' }
-    ],
-    { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' }
+    SPRING.map(({ o, x, v }) => ({
+      offset: o,
+      transform:
+        `translateY(${((1 - x) * deltaY).toFixed(1)}px) ` +
+        `scale(${(1 - 0.05 * v).toFixed(4)}, ${(1 + 0.1 * v).toFixed(4)})`,
+      filter: `blur(${(6 * Math.max(0, 1 - o / 0.3)).toFixed(1)}px)`,
+      opacity: Math.min(1, 0.5 + o / 0.4)
+    })),
+    { duration: SPRING_MS, easing: 'linear', fill: 'both' }
   )
+  flight.finished.catch(() => {}).finally(() => enteringMessages.delete(sent.id))
 
   // Launch recoil; composited additively so it stacks on the first-send FLIP
   // instead of replacing it.
@@ -501,23 +546,8 @@ function animateSendFlight(composerEl: HTMLElement | null): void {
     { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', composite: 'add' }
   )
 
-  flight.onfinish = () => {
-    const rows = Array.from(
-      composerEl.ownerDocument.querySelectorAll<HTMLElement>('[data-message-id]')
-    )
-    const index = rows.indexOf(bubble)
-    // The two messages above take the hit, the nearer one harder.
-    ;[rows[index - 1], rows[index - 2]].forEach((row, order) => {
-      row?.animate(
-        [
-          { transform: 'translateY(0)' },
-          { transform: `translateY(${order === 0 ? -7 : -3}px)` },
-          { transform: 'translateY(0)' }
-        ],
-        { duration: 360, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', delay: order * 45 }
-      )
-    })
-  }
+  // A full-strength hit: the bubble arrives carrying the send's momentum.
+  window.setTimeout(() => knockRows(bubble, 1), SPRING_IMPACT_MS)
 }
 
 /**
@@ -800,7 +830,6 @@ watch(
                   ]"
                   :data-message-id="message.id"
                   :aria-busy="message.status === 'streaming'"
-                  @animationend="enteringMessages.delete(message.id)"
                 >
                   <template v-if="message.role === 'user'">
                     <TxAttachmentTray
@@ -857,12 +886,14 @@ watch(
                         <ToolFormCard
                           :spec="formSpecOf(tool)!"
                           :submitted="submittedForms.has(tool.id)"
+                          :initial-values="formDrafts.get(tool.id)"
                           :submit-label="t('home.formSubmit')"
                           :reset-label="t('home.formReset')"
                           :required-hint="t('home.formRequired')"
                           :submitted-label="t('home.formDone')"
                           :select-placeholder="t('home.formSelect')"
                           @submit="submitForm(tool, $event)"
+                          @change="formDrafts.set(tool.id, $event)"
                         />
                       </template>
                     </TxToolCallCard>
@@ -1003,119 +1034,10 @@ watch(
                   >
                     <span class="i-ri-add-line" />
                   </button>
-                  <div class="HomePage-PermissionSlot">
-                    <button
-                      ref="permissionPillRef"
-                      class="HomePage-PillBtn"
-                      :class="{
-                        active: agentToolsMode === 'review',
-                        'is-full': agentToolsMode === 'full'
-                      }"
-                      type="button"
-                      data-permission-pill
-                      aria-controls="home-permission-menu"
-                      :aria-expanded="permissionOpen"
-                      :title="t(`home.permissionHint.${agentToolsMode}`)"
-                      @click="togglePermissionMenu"
-                    >
-                      <span :class="permissionIcon" />
-                      <span>
-                        {{ t('home.permission') }} ·
-                        {{ t(`home.permissionMode.${agentToolsMode}`) }}
-                      </span>
-                    </button>
-
-                    <div
-                      v-if="permissionOpen"
-                      id="home-permission-menu"
-                      ref="permissionMenuRef"
-                      class="HomePage-PermissionMenu"
-                    >
-                      <template v-if="!permissionConfirming">
-                        <div
-                          class="HomePage-PermissionOptions"
-                          role="radiogroup"
-                          :aria-label="t('home.permissionMenu')"
-                        >
-                          <button
-                            v-for="(option, index) in PERMISSION_MODES"
-                            :key="option.mode"
-                            class="HomePage-PermissionOption"
-                            type="button"
-                            role="radio"
-                            :data-mode="option.mode"
-                            :aria-checked="agentToolsMode === option.mode"
-                            :tabindex="agentToolsMode === option.mode ? 0 : -1"
-                            @click="choosePermissionMode(option.mode)"
-                            @keydown="onPermissionOptionKeydown($event, index)"
-                          >
-                            <span :class="option.icon" class="HomePage-PermissionIcon" />
-                            <span class="HomePage-PermissionLabel">
-                              <span>{{ t(`home.permissionMode.${option.mode}`) }}</span>
-                              <span class="HomePage-PermissionHint">
-                                {{ t(`home.permissionHint.${option.mode}`) }}
-                              </span>
-                            </span>
-                            <span
-                              v-if="agentToolsMode === option.mode"
-                              class="i-ri-check-line HomePage-PermissionCheck"
-                            />
-                          </button>
-                        </div>
-
-                        <!-- Only under 「自动审阅」: with no confirmations to remember, the
-                             other two modes have nothing to reset. -->
-                        <template v-if="agentToolsMode === 'review'">
-                          <div class="HomePage-PermissionDivider" />
-                          <button
-                            class="HomePage-PermissionReset"
-                            type="button"
-                            @click="resetRememberedApprovals"
-                          >
-                            <span class="i-ri-eraser-line" />
-                            <span>{{ t('home.permissionResetApprovals') }}</span>
-                          </button>
-                        </template>
-                      </template>
-
-                      <!-- `group` rather than `alertdialog`: focus moves here but is not
-                           trapped, and claiming modality we do not implement would mislead. -->
-                      <div
-                        v-else
-                        class="HomePage-PermissionConfirm"
-                        role="group"
-                        aria-labelledby="home-permission-confirm-title"
-                        aria-describedby="home-permission-confirm-desc"
-                      >
-                        <p
-                          id="home-permission-confirm-title"
-                          class="HomePage-PermissionConfirmTitle"
-                        >
-                          {{ t('home.permissionFullConfirmTitle') }}
-                        </p>
-                        <p id="home-permission-confirm-desc" class="HomePage-PermissionConfirmDesc">
-                          {{ t('home.permissionFullConfirmDesc') }}
-                        </p>
-                        <div class="HomePage-PermissionConfirmActions">
-                          <button
-                            ref="permissionCancelRef"
-                            class="HomePage-PermissionCancel"
-                            type="button"
-                            @click="cancelFullPermission"
-                          >
-                            {{ t('home.permissionFullConfirmCancel') }}
-                          </button>
-                          <button
-                            class="HomePage-PermissionApply"
-                            type="button"
-                            @click="confirmFullPermission"
-                          >
-                            {{ t('home.permissionFullConfirmApply') }}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <HomePermissionMenu
+                    v-model:mode="agentToolsMode"
+                    @reset="resetRememberedApprovals"
+                  />
                 </div>
 
                 <div class="HomePage-ToolRight">
@@ -1361,19 +1283,14 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* All arrival physics deform from the bottom edge — where hits land and
+     where bubbles rise from. The motion itself runs on WAAPI springs. */
+  transform-origin: 50% 100%;
 
-  /* iMessage-style entrance: rise from the composer with a slight overshoot.
-     Users pop from the send button's corner, replies from the left. */
+  /* Holds a freshly appended row invisible for the frame between render and
+     its spring taking over; the animation's own opacity replaces this. */
   &.HomePage-Message--enter {
-    animation: home-msg-pop 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-
-  &.user.HomePage-Message--enter {
-    transform-origin: 85% 100%;
-  }
-
-  &.assistant.HomePage-Message--enter {
-    transform-origin: 12% 100%;
+    opacity: 0;
   }
 
   &.user {
@@ -1555,9 +1472,11 @@ watch(
     0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
     0 8px 24px var(--shell-shadow);
   box-sizing: border-box;
+  --home-glow-on: 0;
   transition:
     border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    --home-glow-on 0.6s ease;
 
   &:focus-within {
     border-color: var(--shell-primary);
@@ -1567,26 +1486,28 @@ watch(
       0 0 0 3px color-mix(in srgb, var(--shell-primary) 10%, transparent);
   }
 
-  /* While a response runs, the box wears the TuffIntelligence gradient as a
-     living ring: a hairline rim plus a wide, washed halo, masked to the frame.
-     The layers drift in opposite directions on co-prime periods while their
-     hues slide round the wheel and the halo breathes — no two moments align,
-     so it reads as weather, not as a spinner. Everything stays low-amplitude
-     on purpose: the ring should sit at the edge of attention, not compete
-     with the reply. */
-  &.is-live::before,
-  &.is-live::after {
+  /* While a response runs, the box wears the TuffIntelligence gradient as
+     living light: a hairline rim in the frame edge plus a wide halo bleeding
+     well past the box, both cut from one conic wheel (oklch keeps the colour
+     travel luminous instead of muddying between stops). The layers spin in
+     opposite directions and breathe on co-prime periods, so no two moments
+     align — weather, not a spinner. The layers are always present and gated
+     by `--home-glow-on`, which is what lets the light fade in and out instead
+     of snapping with the class. */
+  &::before,
+  &::after {
     content: '';
     position: absolute;
     inset: -1px;
     border-radius: inherit;
     padding: 1.5px;
-    background: linear-gradient(
-      var(--home-glow-angle),
-      #0894ff 0%,
-      #c959dd 34%,
-      #ff2e54 68%,
-      #ff9004 100%
+    background: conic-gradient(
+      from var(--home-glow-angle) in oklch,
+      #0894ff,
+      #c959dd 27%,
+      #ff2e54 52%,
+      #ff9004 74%,
+      #0894ff
     );
     pointer-events: none;
     -webkit-mask:
@@ -1599,26 +1520,32 @@ watch(
     mask-composite: exclude;
   }
 
-  &.is-live::before {
-    inset: -5px;
-    padding: 8px;
-    filter: blur(var(--home-glow-blur)) saturate(0.9) hue-rotate(var(--home-glow-hue));
-    opacity: 0.3;
+  /* The halo: a ring as thick as its blur is wide, so the smear keeps a bright
+     core at the frame and falls away over ~40px instead of reading as a dirty
+     border. `::before` paints under the box's children — the inward bleed lands
+     beneath the glass, never over the text. */
+  &::before {
+    inset: -22px;
+    padding: 22px;
+    filter: blur(18px) saturate(0.85);
+    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.24);
     animation:
-      home-glow-spin 11s linear infinite reverse,
-      home-glow-hue 9s linear infinite,
-      home-glow-breathe 8.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      home-glow-spin 17s linear infinite reverse,
+      home-glow-breathe 7.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
-  &.is-live::after {
+  &::after {
     /* The half-pixel blur melts the hairline into the frame edge — without it
        the ring reads as a sticker laid on top rather than light in the rim. */
-    filter: blur(0.5px) saturate(0.8) hue-rotate(var(--home-glow-hue));
-    opacity: 0.44;
+    filter: blur(0.5px);
+    opacity: calc(var(--home-glow-on) * var(--home-glow-alpha) * 0.55);
     animation:
-      home-glow-spin 8s linear infinite,
-      home-glow-hue 13s linear infinite reverse,
-      home-glow-rim 7.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      home-glow-spin 11s linear infinite,
+      home-glow-rim 5.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  &.is-live {
+    --home-glow-on: 1;
   }
 
   /**
@@ -1683,7 +1610,6 @@ textarea.HomePage-Input:focus-visible {
 }
 
 .HomePage-RoundBtn,
-.HomePage-PillBtn,
 .HomePage-SendBtn {
   display: inline-flex;
   align-items: center;
@@ -1712,199 +1638,9 @@ textarea.HomePage-Input:focus-visible {
   }
 }
 
-.HomePage-PillBtn {
-  gap: 6px;
-  padding: 0 12px;
-  font-size: 12.5px;
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-
-  /* Tools on and asking first: an ordinary enabled state, so it carries the accent. */
-  &.active {
-    border-color: var(--shell-primary-border);
-    background: var(--shell-primary-soft);
-    color: var(--shell-primary);
-    font-weight: 500;
-  }
-
-  /* 「完全允许」 has to stay visible as a state, not just as a label the eye skips:
-     every tool call runs unasked while it is on. The shell has no warning ramp, and
-     the alarm one is the honest read here — it also re-points under `html.contrast`,
-     which a hand-picked amber would not. */
-  &.is-full {
-    border-color: var(--shell-danger-border);
-    background: var(--shell-danger-soft);
-    color: var(--shell-danger);
-    font-weight: 500;
-  }
-}
-
-/** Anchors the permission popover, which opens upward like the model menu on the same row. */
-.HomePage-PermissionSlot {
-  position: relative;
-}
-
-.HomePage-PermissionMenu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  width: 304px;
-  padding: 6px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-md);
-  background: var(--shell-bg);
-  box-shadow: 0 8px 28px var(--shell-shadow);
-}
-
-.HomePage-PermissionOptions {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.HomePage-PermissionOption {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 8px 9px;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-primary);
-  text-align: left;
-  font-family: inherit;
-  font-size: var(--shell-fs-body);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-
-  /* The risky option is marked in the list too, so the choice reads before it is made. */
-  &[data-mode='full'] .HomePage-PermissionIcon {
-    color: var(--shell-danger);
-  }
-}
-
-.HomePage-PermissionIcon {
-  flex: none;
-  margin-top: 2px;
-  color: var(--shell-text-secondary);
-}
-
-.HomePage-PermissionLabel {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.HomePage-PermissionHint {
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-  line-height: 1.45;
-}
-
-.HomePage-PermissionCheck {
-  flex: none;
-  margin-top: 2px;
-  color: var(--shell-primary);
-}
-
-.HomePage-PermissionDivider {
-  margin: 4px 2px;
-  border-top: 1px solid var(--shell-border);
-}
-
-.HomePage-PermissionReset {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 9px;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-regular);
-  text-align: left;
-  font-family: inherit;
-  font-size: var(--shell-fs-sm);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-}
-
-.HomePage-PermissionConfirm {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 9px 8px;
-}
-
-.HomePage-PermissionConfirmTitle {
-  margin: 0;
-  color: var(--shell-danger);
-  font-size: var(--shell-fs-body);
-  font-weight: 600;
-}
-
-.HomePage-PermissionConfirmDesc {
-  margin: 0;
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.55;
-}
-
-.HomePage-PermissionConfirmActions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.HomePage-PermissionCancel,
-.HomePage-PermissionApply {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: var(--shell-radius-full);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Cancel keeps the ordinary weight and the confirm stays an outline: the grant is the
-   consequential click, so it must not be the one the eye lands on first. */
-.HomePage-PermissionCancel {
-  border: 1px solid var(--shell-border-strong);
-  background: transparent;
-  color: var(--shell-text-regular);
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-}
-
-.HomePage-PermissionApply {
-  border: 1px solid var(--shell-danger-border);
-  background: var(--shell-danger-soft);
-  color: var(--shell-danger);
-
-  &:hover {
-    background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
-  }
-}
-
-/** Anchors the composer's model menu, which opens upward so it never runs off the window bottom. */
+/** Keeps the composer's model pill from stretching in the tool row. */
 .HomePage-ModelSlot {
-  position: relative;
+  flex: none;
 }
 
 /**
@@ -1997,16 +1733,20 @@ textarea.HomePage-Input:focus-visible {
   initial-value: 0deg;
 }
 
-@property --home-glow-hue {
-  syntax: '<angle>';
+/* The breathing amplitude. Kept apart from `opacity` itself so the keyframes
+   compose with the on/off gate instead of fighting it for the property. */
+@property --home-glow-alpha {
+  syntax: '<number>';
   inherits: false;
-  initial-value: 0deg;
+  initial-value: 1;
 }
 
-@property --home-glow-blur {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 14px;
+/* The gate: set on the composer, read by both pseudo layers, and — because it
+   is a registered number — transitionable, which is the whole fade. */
+@property --home-glow-on {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
 }
 
 @keyframes home-glow-spin {
@@ -2015,35 +1755,25 @@ textarea.HomePage-Input:focus-visible {
   }
 }
 
-@keyframes home-glow-hue {
-  to {
-    --home-glow-hue: 360deg;
-  }
-}
-
 @keyframes home-glow-breathe {
   0%,
   100% {
-    --home-glow-blur: 14px;
-
-    opacity: 0.24;
+    --home-glow-alpha: 0.62;
   }
 
   50% {
-    --home-glow-blur: 17px;
-
-    opacity: 0.34;
+    --home-glow-alpha: 1;
   }
 }
 
 @keyframes home-glow-rim {
   0%,
   100% {
-    opacity: 0.38;
+    --home-glow-alpha: 0.72;
   }
 
   50% {
-    opacity: 0.5;
+    --home-glow-alpha: 1;
   }
 }
 
@@ -2059,17 +1789,19 @@ textarea.HomePage-Input:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The watcher never marks rows under reduced motion; this guards a marked
+     row against ever being stranded invisible if it does slip through. */
   .HomePage-Message.HomePage-Message--enter {
-    animation: none;
+    opacity: 1;
   }
 
   .home-head-leave-active {
     transition: none;
   }
 
-  /* The ring holds still but stays on — the running state must survive. */
-  .HomePage-Composer.is-live::before,
-  .HomePage-Composer.is-live::after {
+  /* The light holds still but stays on — the running state must survive. */
+  .HomePage-Composer::before,
+  .HomePage-Composer::after {
     animation: none;
   }
 }
