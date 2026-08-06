@@ -228,4 +228,23 @@ describe('txStreamMarkdown', () => {
     // Open fence: the skeleton is up and mermaid itself was never imported.
     expect(mermaidBlock.find('.tx-mermaid-block__skeleton').exists()).toBe(true)
   })
+
+  it('tracks auto theme when dark mode is toggled on <body>', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'hello', theme: 'auto' },
+    })
+    await flushSanitizer()
+
+    expect(wrapper.attributes('data-theme')).toBe('light')
+
+    // detect() reads <body> too, so the observer has to watch it as well.
+    document.body.classList.add('dark')
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await nextTick()
+
+    expect(wrapper.attributes('data-theme')).toBe('dark')
+
+    document.body.classList.remove('dark')
+  })
 })
