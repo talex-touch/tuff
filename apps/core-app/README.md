@@ -70,4 +70,4 @@ the preload boundary, and use the smallest relevant package checks.
 
 ## License
 
-CoreApp is distributed under the repository [MIT License](../../LICENSE).
+CoreApp is distributed under the repository [Mozilla Public License 2.0 (MPL-2.0)](../../LICENSE).
