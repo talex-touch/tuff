@@ -18,6 +18,10 @@ defineOptions({
 </template>
 
 <style lang="scss" scoped>
+@use '../../../style/mixins.scss' as *;
+
+@include skeleton-keyframes;
+
 .tx-card-skeleton {
   display: flex;
   align-items: flex-start;
@@ -68,33 +72,15 @@ defineOptions({
 }
 
 .tx-card-skeleton__icon,
-.tx-card-skeleton__title,
-.tx-card-skeleton__badge,
-.tx-card-skeleton__desc {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent) 0%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 95%, transparent) 50%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent) 100%
-  );
-  background-size: 200% 100%;
-  animation: tx-card-skeleton-shimmer 1.2s ease-in-out infinite;
+.tx-card-skeleton__title {
+  @include skeleton-surface;
 }
 
 .tx-card-skeleton__badge {
-  animation-delay: 0.1s;
+  @include skeleton-surface(0.1s);
 }
 
 .tx-card-skeleton__desc {
-  animation-delay: 0.2s;
-}
-
-@keyframes tx-card-skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  @include skeleton-surface(0.2s);
 }
 </style>

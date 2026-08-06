@@ -16,6 +16,10 @@ defineOptions({
 </template>
 
 <style lang="scss" scoped>
+@use '../../../style/mixins.scss' as *;
+
+@include skeleton-keyframes;
+
 .tx-list-item-skeleton {
   display: flex;
   align-items: center;
@@ -58,38 +62,19 @@ defineOptions({
   border-radius: 0.375rem;
 }
 
-.tx-list-item-skeleton__icon,
-.tx-list-item-skeleton__name,
-.tx-list-item-skeleton__meta,
-.tx-list-item-skeleton__badge {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent) 0%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 95%, transparent) 50%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent) 100%
-  );
-  background-size: 200% 100%;
-  animation: tx-list-item-skeleton-shimmer 1.2s ease-in-out infinite;
+.tx-list-item-skeleton__icon {
+  @include skeleton-surface;
 }
 
 .tx-list-item-skeleton__name {
-  animation-delay: 0.1s;
+  @include skeleton-surface(0.1s);
 }
 
 .tx-list-item-skeleton__meta {
-  animation-delay: 0.2s;
+  @include skeleton-surface(0.2s);
 }
 
 .tx-list-item-skeleton__badge {
-  animation-delay: 0.3s;
-}
-
-@keyframes tx-list-item-skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  @include skeleton-surface(0.3s);
 }
 </style>
