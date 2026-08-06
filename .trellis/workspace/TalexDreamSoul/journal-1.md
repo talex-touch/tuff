@@ -1731,3 +1731,11 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - **bug#4 follow 打在过期 scrollHeight**(tuffex stream):RO 回调里 spacer 高度还没经 Vue 重渲染落 DOM,scrollTo 目标过期且 spacer 落地无 RO 事件——follow 挪 nextTick(post-flush);viewport 迟到收缩同样补 grew 触发。
 - 发送即回底补齐(旧手写行为):submit 后显式 scrollToBottom。
 - 遗留:pi provider 首发偶发空响应(retry 即恢复,08-04 侧待查);Chromium 会恢复 reload 前滚动位置(与落底逻辑共存,可接受)。
+
+## 2026-08-05 · search-hotpath-quadratic-fix · 搜索热路径去 O(n²)
+
+- 三线并行审查(app/file/engine 代理,70+ 发现)后按用户指令只修搜索级二次方:addSearchToken 去重 O(n²)→WeakMap+Set O(1)(JSON key 等语义保留);processSearchResults 的语义目录×2+拼音+token 构建按内容指纹 LRU(512)记忆化(键含 user aliases);索引期 record-sync 的 isAlias/isAcronym 每关键词全目录重扫 hoist 为一次预计算。
+- bench(临时文件已删):去重 150 app×200→400 token 时旧 4.33×/新 1.82×(1388ms→34ms,40 倍);150 候选冷 21.6ms→热 2.9ms(换查询同样命中,匹配集 75/75/75 全等)。
+- 门:utils 979 + core-app addon/apps 161 + typecheck:node 全绿;packages/test 61 失败为既有(插件 prelude 回归,不 import 搜索模块);lint 净增 +3 同类 style(文件整体与根配置风格不合,新代码贴文件局部风格)。
+- spec 固化 main-process/search-hotpath-contracts.md:去重必须走 addSearchToken 漏斗、记忆化键必须覆盖全部派生输入(漏字段=陈旧缓存 bug 类)、缓存数组共享引用只读。
+- 遗留(审查报告在案未动):排序结果到不了 UI 的结构断层、关键词白名单正则、对账丢数据三件、SQL 前缀全扫——待后续任务。
