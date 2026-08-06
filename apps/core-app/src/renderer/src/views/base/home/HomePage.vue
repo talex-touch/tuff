@@ -11,7 +11,7 @@ import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
@@ -28,6 +28,7 @@ import {
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { hasWindow } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import HomeModelMenu from './HomeModelMenu.vue'
@@ -120,6 +121,24 @@ const agentToolsEnabled = computed({
   }
 })
 
+/**
+ * Ids of messages that should play the pop-in. Filled only while a turn is
+ * streaming — a send or retry — so restoring a stored thread never replays
+ * entrances; ids leave the set on animationend, so a virtualized remount
+ * (scrolling back up) stays still.
+ */
+const enteringMessages = reactive(new Set<string>())
+
+watch(
+  () => messages.value.length,
+  (length, previous) => {
+    if (!isStreaming.value || prefersReducedMotion()) return
+    for (const message of messages.value.slice(previous ?? 0, length)) {
+      enteringMessages.add(message.id)
+    }
+  }
+)
+
 function chainStepsOf(message: ConversationMessage) {
   return toChainSteps(message.parts, message.status === 'streaming')
 }
@@ -185,12 +204,33 @@ async function submit(): Promise<void> {
   // Allocated here rather than at setup so an untouched home screen never claims an id.
   conversationId ??= createConversationId()
 
+  // FLIP: the composer travels from centre stage to the bottom dock. Measured
+  // around the reactive flip so the same node glides instead of teleporting.
+  const composerEl = composerRef.value
+  const first = composerEl?.getBoundingClientRect()
+
   const turn = conversation.send(text, attachments)
   // Sending from a scrolled-up position still lands you on your own message —
   // the stream only auto-follows readers already at the bottom.
   await nextTick()
+
+  if (composerEl && first && !prefersReducedMotion()) {
+    const last = composerEl.getBoundingClientRect()
+    const deltaY = first.top - last.top
+    if (Math.abs(deltaY) > 8) {
+      composerEl.animate(
+        [{ transform: `translateY(${deltaY}px)` }, { transform: 'translateY(0)' }],
+        { duration: 480, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+      )
+    }
+  }
+
   streamRef.value?.scrollToBottom()
   await turn
+}
+
+function prefersReducedMotion(): boolean {
+  return hasWindow() && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -431,15 +471,17 @@ watch(
     <div class="HomePage-Split">
       <div class="HomePage-Body">
         <div class="HomePage-Center">
-          <div v-if="isEmpty" class="HomePage-Head">
-            <AppLogo class="HomePage-Mark" />
-            <h1 class="HomePage-Greeting">
-              {{ t('home.greeting') }}
-            </h1>
-          </div>
+          <Transition name="home-head">
+            <div v-if="isEmpty" class="HomePage-Head">
+              <AppLogo class="HomePage-Mark" />
+              <h1 class="HomePage-Greeting">
+                {{ t('home.greeting') }}
+              </h1>
+            </div>
+          </Transition>
 
           <TxConversationStream
-            v-else
+            v-if="!isEmpty"
             ref="streamRef"
             class="HomePage-Stream"
             role="log"
@@ -451,8 +493,12 @@ watch(
               <div class="HomePage-StreamRow">
                 <div
                   class="HomePage-Message"
-                  :class="message.role"
+                  :class="[
+                    message.role,
+                    { 'HomePage-Message--enter': enteringMessages.has(message.id) }
+                  ]"
                   :aria-busy="message.status === 'streaming'"
+                  @animationend="enteringMessages.delete(message.id)"
                 >
                   <template v-if="message.role === 'user'">
                     <TxAttachmentTray
@@ -882,6 +928,20 @@ watch(
   flex-direction: column;
   gap: 10px;
 
+  /* iMessage-style entrance: rise from the composer with a slight overshoot.
+     Users pop from the send button's corner, replies from the left. */
+  &.HomePage-Message--enter {
+    animation: home-msg-pop 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  &.user.HomePage-Message--enter {
+    transform-origin: 85% 100%;
+  }
+
+  &.assistant.HomePage-Message--enter {
+    transform-origin: 12% 100%;
+  }
+
   &.user {
     align-items: flex-end;
   }
@@ -902,6 +962,7 @@ watch(
  */
 .HomePage-ConfirmSlot {
   position: absolute;
+  animation: home-msg-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   right: 0;
   bottom: calc(var(--home-composer-height, 112px) + 28px);
   left: 0;
@@ -1004,7 +1065,7 @@ watch(
   font-family: inherit;
   font-size: 12.5px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
   // The block itself is already `danger-soft`, so the hover has to go a step deeper to register.
   &:hover {
@@ -1044,12 +1105,22 @@ watch(
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-2xl);
   background: var(--shell-bg);
-  box-shadow: 0 2px 14px var(--shell-shadow);
+  /* Layered: a tight contact shadow plus a soft ambient one reads as lift
+     without the smudge a single big blur gives. */
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
+    0 8px 24px var(--shell-shadow);
   box-sizing: border-box;
-  transition: border-color 0.15s ease;
+  transition:
+    border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:focus-within {
     border-color: var(--shell-primary);
+    box-shadow:
+      0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
+      0 10px 30px var(--shell-shadow),
+      0 0 0 3px color-mix(in srgb, var(--shell-primary) 10%, transparent);
   }
 
   /**
@@ -1127,8 +1198,8 @@ textarea.HomePage-Input:focus-visible {
   font-family: inherit;
   cursor: pointer;
   transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .HomePage-RoundBtn {
@@ -1182,7 +1253,7 @@ textarea.HomePage-Input:focus-visible {
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
     border-color: var(--shell-border-strong);
@@ -1207,9 +1278,18 @@ textarea.HomePage-Input:focus-visible {
   border-color: transparent;
   background: var(--shell-primary);
   color: var(--shell-on-primary);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    opacity: 0.92;
+    transform: scale(1.06);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.94);
   }
 
   // Artboard `AHQQk`: an empty composer carries a neutral key, not a faded primary one — a
@@ -1228,6 +1308,39 @@ textarea.HomePage-Input:focus-visible {
   justify-content: center;
 }
 
+/* The greeting bows out as the first message lands; it never re-enters mid-session. */
+.home-head-leave-active {
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-head-leave-to {
+  opacity: 0;
+  transform: translateY(-14px) scale(0.98);
+}
+
+@keyframes home-msg-pop {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .HomePage-Message.HomePage-Message--enter {
+    animation: none;
+  }
+
+  .home-head-leave-active {
+    transition: none;
+  }
+}
+
 .HomePage-QuickPill {
   display: inline-flex;
   gap: 7px;
@@ -1240,10 +1353,19 @@ textarea.HomePage-Input:focus-visible {
   font-family: inherit;
   font-size: 12.5px;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition:
+    border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
     border-color: var(--shell-border-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px var(--shell-shadow);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 }
 </style>

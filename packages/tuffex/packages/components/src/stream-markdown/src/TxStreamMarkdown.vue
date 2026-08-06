@@ -188,7 +188,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
   // Blocks animate once, on insertion: settled blocks never remount, so they
   // never replay this; the growing tail patches in place, so it doesn't either.
   &.is-streaming .tx-stream-md__block {
-    animation: tx-stream-md-reveal 0.26s ease-out both;
+    animation: tx-stream-md-reveal 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   // The ChatGPT-style line reveal: while streaming, the tail block's bottom
