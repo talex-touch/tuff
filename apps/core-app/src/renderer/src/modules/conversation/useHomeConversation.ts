@@ -6,6 +6,7 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceMessage,
+  IntelligenceMessageAttachment,
   IntelligencePartEvent,
   IntelligenceStreamOptions,
   IntelligenceUsageInfo
@@ -14,7 +15,8 @@ import type { ComputedRef } from 'vue'
 import type { ConversationError } from './conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
-import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
+import { toModelAttachments } from './attachment-payload'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   resolveConversationError
@@ -51,11 +53,18 @@ export interface ConversationMessage {
   error?: ConversationError
   meta?: ConversationTurnMeta
   /**
-   * UI-only for now: providers take a plain string (`IntelligenceMessage.content`), so
-   * `toProviderMessages` never reads this, and `toSaveRequest`'s explicit field mapping never
-   * stores it — the degrade the PRD asks for holds by construction, not by filtering.
+   * What the bubble renders: display URLs owned by the composer, never stored (`toSaveRequest`
+   * maps fields explicitly) and never sent as-is — an object URL means nothing outside this window.
    */
   attachments?: AiAttachment[]
+  /**
+   * The subset of {@link attachments} that reached the model, resolved to bytes at send time.
+   *
+   * Kept on the message rather than recomputed per turn because a retry has to carry the same
+   * images the first attempt did, and by then the composer has long since let go of them. Its
+   * absence is also what the view reads as "this stayed local".
+   */
+  modelAttachments?: IntelligenceMessageAttachment[]
   /**
    * Heterogeneous content assembled from stream part events (reasoning spans,
    * tool calls) interleaved with text. `content` stays the plain-text
@@ -158,9 +167,19 @@ export function useHomeConversation(
    * replies.
    */
   function toProviderMessages(): IntelligenceMessage[] {
-    return messages.value
-      .filter((message) => message.status === 'complete')
-      .map((message) => ({ role: message.role, content: message.content }))
+    const settled = messages.value.filter((message) => message.status === 'complete')
+    return settled.map((message, index) => {
+      const base: IntelligenceMessage = { role: message.role, content: message.content }
+      // Only the turn being answered carries its images. Re-sending the ones from earlier turns
+      // would spill and re-upload them on every message that follows, for a model that has already
+      // said what it saw. On a retry the failed placeholder is filtered out above, so the user
+      // message being retried is again the last entry — its attachments ride along untouched.
+      //
+      // `toRaw`: read off a reactive message this is a Proxy, and the transport's structuredClone
+      // rejects proxies — every turn carrying an image would fail at the IPC boundary.
+      const attachments = index === settled.length - 1 ? toRaw(message.modelAttachments) : undefined
+      return attachments?.length ? { ...base, attachments } : base
+    })
   }
 
   function dropMessage(target: ConversationMessage): void {
@@ -435,10 +454,23 @@ export function useHomeConversation(
     messages.value.push(user)
     messages.value.push(createMessage('assistant', '', 'streaming'))
 
-    // Mutating the pushed object directly would bypass the array's reactive proxy, so the streaming
-    // deltas would never reach the view. Read the placeholder back to get the tracked instance.
+    // Mutating the pushed objects directly would bypass the array's reactive proxy, so the
+    // streaming deltas would never reach the view. Read them back to get the tracked instances.
+    const sent = messages.value[messages.value.length - 2]
     const assistant = messages.value[messages.value.length - 1]
     if (!assistant) return
+
+    // Claimed before the attachment read rather than inside `runTurn`: reading bytes back out of an
+    // object URL is asynchronous, and a second Enter in that window would otherwise open a parallel
+    // turn against the same thread.
+    streaming.value = true
+
+    // Resolved after the bubbles are on screen so the composer's send animation still finds the
+    // user message on the next tick. Whatever cannot be carried is simply left out.
+    if (sent && attachments?.length) {
+      const carried = await toModelAttachments(attachments)
+      if (carried.length > 0) sent.modelAttachments = carried
+    }
 
     await runTurn(assistant)
   }

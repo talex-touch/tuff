@@ -14,6 +14,7 @@ import { delimiter, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProvider } from '../runtime/base-provider'
+import { collectMessageAttachments, spillAttachments } from './attachment-spill'
 import {
   buildPiArgs,
   buildPiPrompt,
@@ -69,7 +70,8 @@ export class PiCliProvider extends IntelligenceProvider {
 
   private async spawnPi(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
+    options: IntelligenceInvokeOptions,
+    attachmentPaths: string[]
   ): Promise<ChildProcessByStdio<null, Readable, Readable>> {
     const executable = await resolvePiExecutable()
     if (!executable) {
@@ -82,7 +84,8 @@ export class PiCliProvider extends IntelligenceProvider {
     const args = buildPiArgs(
       buildPiPrompt(payload.messages),
       this.resolveModel(options),
-      toolRuntime ? { tools: toolRuntime.tools } : undefined
+      toolRuntime ? { tools: toolRuntime.tools } : undefined,
+      attachmentPaths
     )
 
     return spawn(executable, args, {
@@ -109,7 +112,19 @@ export class PiCliProvider extends IntelligenceProvider {
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
-    const child = await this.spawnPi(payload, options)
+    // Written before the spawn and removed in the `finally` below: the files exist only for the
+    // length of this run, which is the whole window in which `pi` can read them.
+    const attachments = await spillAttachments(collectMessageAttachments(payload.messages))
+
+    let child: ChildProcessByStdio<null, Readable, Readable>
+    try {
+      child = await this.spawnPi(payload, options, attachments.paths)
+    } catch (error) {
+      // A missing CLI throws here, before the run's own cleanup path exists.
+      await attachments.cleanup()
+      throw error
+    }
+
     const state: PiRunState = {}
     let emittedDelta = false
     let stderrTail = ''
@@ -179,6 +194,9 @@ export class PiCliProvider extends IntelligenceProvider {
         child.kill('SIGTERM')
       }
       child.stdout.destroy()
+      // After the kill, so a cancelled run never has its images pulled out from under a `pi` that
+      // is still reading them.
+      await attachments.cleanup()
     }
   }
 

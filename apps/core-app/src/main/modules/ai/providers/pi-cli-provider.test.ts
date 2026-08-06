@@ -2,6 +2,7 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceStreamChunk
 } from '@talex-touch/tuff-intelligence'
+import { existsSync, readdirSync } from 'node:fs'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -167,6 +168,108 @@ describe('PiCliProvider.chatStream', () => {
     await new Promise((resolve) => setTimeout(resolve, 150))
     // `kill(pid, 0)` throws ESRCH once the process is gone; a live process returns cleanly.
     expect(() => process.kill(childPid, 0)).toThrow()
+  })
+})
+
+describe('PiCliProvider attachments', () => {
+  const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const TEMP_ENV_KEYS = ['TMPDIR', 'TMP', 'TEMP'] as const
+  let savedTempEnv: Array<string | undefined> = []
+
+  beforeEach(() => {
+    // Points `os.tmpdir()` at the per-test workspace, so "did the spill clean up after itself?" is
+    // answered by listing a directory this test owns rather than the shared system one.
+    savedTempEnv = TEMP_ENV_KEYS.map((key) => process.env[key])
+    for (const key of TEMP_ENV_KEYS) process.env[key] = workDir
+  })
+
+  afterEach(() => {
+    TEMP_ENV_KEYS.forEach((key, index) => {
+      const previous = savedTempEnv[index]
+      if (previous === undefined) delete process.env[key]
+      else process.env[key] = previous
+    })
+  })
+
+  function imageTurn(content = 'what is this') {
+    return {
+      messages: [
+        {
+          role: 'user' as const,
+          content,
+          attachments: [
+            {
+              type: 'image' as const,
+              dataUrl: `data:image/png;base64,${PNG_BYTES.toString('base64')}`,
+              name: 'shot.png'
+            }
+          ]
+        }
+      ]
+    }
+  }
+
+  /** Echoes back every `@file` argument together with the bytes found at that path. */
+  const ECHO_ATTACHMENTS = `
+    const fs = require('node:fs')
+    const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+    const files = process.argv.slice(2).filter((arg) => arg.startsWith('@')).map((arg) => arg.slice(1))
+    const seen = files.map((path) => path + '|' + fs.readFileSync(path).toString('hex'))
+    emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: seen.join(';') } })
+    emit({ type: 'agent_settled' })
+  `
+
+  it('hands pi a readable file and takes it away once the turn ends', async () => {
+    await writeStub(ECHO_ATTACHMENTS)
+
+    let text = ''
+    for await (const chunk of provider().chatStream(imageTurn(), {})) text += chunk.delta
+
+    const [path = '', hex = ''] = text.split('|')
+    expect(path).toMatch(/tuff-attach-[\w-]+\.png$/)
+    expect(hex).toBe(PNG_BYTES.toString('hex'))
+    // The bytes only exist for the length of the run; a settled turn must not leave them behind.
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('passes no @file argument for a text-only turn', async () => {
+    await writeStub(ECHO_ATTACHMENTS)
+
+    let text = ''
+    for await (const chunk of provider().chatStream(userTurn(), {})) text += chunk.delta
+
+    expect(text).toBe('')
+  })
+
+  it('removes the file even when the consumer abandons the turn', async () => {
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      const file = process.argv.slice(2).find((arg) => arg.startsWith('@')).slice(1)
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: file } })
+      setInterval(() => {}, 1000)
+    `)
+
+    let path = ''
+    for await (const chunk of provider().chatStream(imageTurn(), {})) {
+      if (chunk.delta) {
+        path = chunk.delta
+        break
+      }
+    }
+
+    expect(path).toMatch(/tuff-attach-/)
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('does not strand the file when the CLI is missing', async () => {
+    resetPiExecutableCache()
+    process.env.TUFF_PI_CLI_PATH = join(workDir, 'definitely-missing')
+
+    await expect(async () => {
+      for await (const _chunk of provider().chatStream(imageTurn(), {})) void _chunk
+    }).rejects.toThrow(/PI_CLI_NOT_FOUND/)
+
+    expect(readdirSync(workDir).filter((name) => name.startsWith('tuff-attach-'))).toEqual([])
   })
 })
 
