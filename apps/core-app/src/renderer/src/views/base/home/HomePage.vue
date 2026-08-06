@@ -1,10 +1,14 @@
 <script lang="ts" name="HomePage" setup>
-import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
+import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
+import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
+import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
 import { TxTypingIndicator } from '@talex-touch/tuffex/chat'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
+import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
+import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -13,6 +17,8 @@ import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 } from '~/modules/conversation/conversation-error-display'
+import { toChainSteps } from '~/modules/conversation/chain-steps'
+import { useAgentTools } from '~/modules/conversation/useAgentTools'
 import {
   createConversationId,
   useConversationHistory
@@ -91,6 +97,39 @@ const autoContext = computed({
     if (appSetting.tools) appSetting.tools.autoContext = value
   }
 })
+
+// ============================================================================
+// Agent tools
+// ============================================================================
+
+const agentTools = useAgentTools()
+
+/**
+ * Whether the assistant may run tools. Persisted in `appSetting` like Auto
+ * Context, and mirrored to main on change — the gateway only opens, and the
+ * allowlist only reaches `pi`, once this is on.
+ */
+const agentToolsEnabled = computed({
+  get: () => appSetting.tools?.agentTools === true,
+  set: (value: boolean) => {
+    if (appSetting.tools) appSetting.tools.agentTools = value
+    void agentTools.setEnabled(value)
+  }
+})
+
+function chainStepsOf(message: ConversationMessage) {
+  return toChainSteps(message.parts, message.status === 'streaming')
+}
+
+/** A lone tool call renders as its own card; two or more become the timeline. */
+function soloToolOf(message: ConversationMessage): AiToolCallPart[] {
+  const steps = chainStepsOf(message)
+  if (steps.length !== 1) return []
+  const tools = (message.parts ?? []).filter(
+    (part): part is AiToolCallPart => part.type === 'tool-call'
+  )
+  return tools.length === 1 ? tools : []
+}
 
 const quickPills = [
   { icon: 'i-ri-file-search-line', key: 'searchFiles' },
@@ -414,6 +453,25 @@ watch(
                   </template>
 
                   <template v-else>
+                    <!-- The trail of reasoning and tool calls, above the answer
+                         it produced. Rendered from parts; a single step reads
+                         better as the plain card the tool card already is. -->
+                    <TxChainOfThought
+                      v-if="chainStepsOf(message).length > 1"
+                      class="HomePage-Chain"
+                      :steps="chainStepsOf(message)"
+                      :streaming="message.status === 'streaming'"
+                      :default-open="false"
+                      :label="t('home.chainOfThought')"
+                    />
+                    <TxToolCallCard
+                      v-for="tool in soloToolOf(message)"
+                      :key="tool.id"
+                      class="HomePage-Tool"
+                      :tool-call="tool"
+                      :retry-label="t('home.retry')"
+                    />
+
                     <TxStreamMarkdown
                       v-if="message.content"
                       class="HomePage-Reply"
@@ -422,7 +480,7 @@ watch(
                     />
 
                     <TxTypingIndicator
-                      v-else-if="message.status === 'streaming'"
+                      v-else-if="message.status === 'streaming' && !chainStepsOf(message).length"
                       class="HomePage-Thinking"
                       variant="dots"
                       :show-text="false"
@@ -463,6 +521,23 @@ watch(
               </div>
             </template>
           </TxConversationStream>
+
+          <!-- Sits above the composer rather than inside the stream: the agent
+               is blocked until this is answered, so it must stay in view even
+               when the reader has scrolled away from the tail. -->
+          <div v-if="agentTools.pending.value" class="HomePage-ConfirmSlot">
+            <TxToolConfirmation
+              :tool-name="agentTools.pending.value.tool"
+              :summary="agentTools.pending.value.summary"
+              :input="agentTools.pending.value.input"
+              :risk="agentTools.pending.value.risk"
+              :allow-label="t('home.toolAllow')"
+              :deny-label="t('home.toolDeny')"
+              :remember-label="t('home.toolRemember')"
+              @approve="agentTools.approve($event.remember)"
+              @deny="agentTools.deny($event.remember)"
+            />
+          </div>
 
           <div class="HomePage-ComposerGroup">
             <div
@@ -525,6 +600,17 @@ watch(
                   >
                     <span class="i-ri-radar-line" />
                     <span>{{ t('home.autoContext') }}</span>
+                  </button>
+                  <button
+                    class="HomePage-PillBtn"
+                    :class="{ active: agentToolsEnabled }"
+                    type="button"
+                    :aria-pressed="agentToolsEnabled"
+                    :title="t('home.agentToolsHint')"
+                    @click="agentToolsEnabled = !agentToolsEnabled"
+                  >
+                    <span class="i-ri-tools-line" />
+                    <span>{{ t('home.agentTools') }}</span>
                   </button>
                 </div>
 
@@ -786,6 +872,27 @@ watch(
 
 .HomePage-MsgAttachments {
   max-width: 78%;
+}
+
+/**
+ * The pending-tool card floats with the composer rather than scrolling with the
+ * transcript: the agent is blocked until it is answered, so it has to stay
+ * reachable even when the reader has scrolled away.
+ */
+.HomePage-ConfirmSlot {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--home-composer-height, 112px) + 28px);
+  left: 0;
+  z-index: 2;
+  width: 720px;
+  max-width: calc(100vw - var(--shell-sidebar-width) - 64px);
+  margin: 0 auto;
+}
+
+.HomePage-Chain,
+.HomePage-Tool {
+  width: 100%;
 }
 
 .HomePage-AttachHint {

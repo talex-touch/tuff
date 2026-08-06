@@ -240,6 +240,9 @@ function ensureClipboardPollingSettings(): void {
   if (!appSetting.tools || typeof appSetting.tools !== 'object') {
     appSetting.tools = {
       autoContext: true,
+      // Off by default: a tool call reaches out and touches the user's machine,
+      // so it stays something they turned on deliberately.
+      agentTools: false,
       autoPaste: {
         enable: true,
         time: 5

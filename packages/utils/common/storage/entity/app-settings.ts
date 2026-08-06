@@ -214,6 +214,14 @@ const _appSettingOriginData = {
      * have nothing for 「设置 · 插件与工具」 to manage.
      */
     autoContext: true,
+    /**
+     * Whether the assistant may run tools (search, read, open) at all.
+     *
+     * Off by default and deliberately separate from `autoContext`: pulling
+     * context in is passive, whereas a tool call reaches out and touches the
+     * user's machine — that has to be something they turned on.
+     */
+    agentTools: false,
     autoPaste: {
       enable: true,
       time: 5,
