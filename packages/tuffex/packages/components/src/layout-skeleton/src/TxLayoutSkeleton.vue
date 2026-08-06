@@ -126,4 +126,11 @@ const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%
   background: var(--tx-fill-color, #f0f2f5);
   animation: tx-skeleton-pulse 1.5s ease-in-out infinite;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-layout-skeleton__block,
+  .tx-layout-skeleton__line {
+    animation: none;
+  }
+}
 </style>

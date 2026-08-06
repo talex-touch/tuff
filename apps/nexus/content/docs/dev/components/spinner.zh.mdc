@@ -100,6 +100,7 @@ code: |
 | `strokeWidth` | `number` | `2` | 环形线宽与 SVG fallback 线宽；写入 `--tx-spinner-stroke`。 |
 | `fallback` | `boolean` | `false` | 使用 SVG fallback 旋转图形，而不是默认的 ball/ring 动效。 |
 | `visible` | `boolean` | `true` | 通过内置 `tx-spinner-visibility` 过渡控制显示或隐藏。 |
+| `label` | `string` | `'Loading'` | 状态区域的可访问名称，读屏在 spinner 出现时播报；本地化时覆盖此值。 |
 
 ### Events
 

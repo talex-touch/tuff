@@ -78,7 +78,7 @@ code: |
 - 每个渲染子节点会被 clone，并在保留原有 style 的同时追加 `--tx-stagger-index: <index>`。
 - timing props 会写到根节点：`--tx-stagger-duration`、`--tx-stagger-delay-step`、`--tx-stagger-delay-base`、`--tx-stagger-easing`。
 - 内置 CSS 使用 opacity 与 `translateY(6px)` 做 enter/leave 过渡。
-- `name` 与 `appear` 会在 mount 后才传给 TransitionGroup，避免初始渲染时 transition props 泄漏为根属性。
+- `name` 与 `appear` 首帧即传给 TransitionGroup —— TransitionGroup 只在初次挂载时运行 appear 过渡，并把两者当 props（而非 fallthrough 属性）消费，延迟传入会永久跳过 appear。
 - 子节点必须有稳定 Vue key，才能得到正确的 `TransitionGroup` move/enter/leave 行为。
 - 追加 stagger index style 时会保留子节点已有 inline style。
 
@@ -89,8 +89,8 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `tag` | `string` | `'div'` | 传给 `TransitionGroup` 的根标签。 |
-| `appear` | `boolean` | `true` | mount 后启用 appear transition。 |
-| `name` | `string` | `'tx-stagger'` | mount 后使用的 TransitionGroup class name 前缀。 |
+| `appear` | `boolean` | `true` | 是否启用 appear 过渡；首帧即传给 TransitionGroup。 |
+| `name` | `string` | `'tx-stagger'` | TransitionGroup 的 class 名前缀；首帧即生效。 |
 | `duration` | `number` | `180` | enter 和 leave 过渡时长，单位 ms。 |
 | `delayStep` | `number` | `24` | 每个渲染子节点 index 增加的额外延迟，单位 ms。 |
 | `delayBase` | `number` | `0` | index 延迟前的基础延迟，单位 ms。 |
@@ -131,7 +131,7 @@ code: |
 
 - 已核对 `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`、`types.ts` 与 `stagger.test.ts`。
 - 现有测试覆盖根标签透传、插槽渲染、timing CSS 变量、transition prop 泄漏防护、注释节点过滤与子节点 stagger index 赋值。
-- 渲染说明：`name` 与 `appear` 仅在 mount 后应用，因此 SSR/client hydration 不应依赖初始渲染期间的 transition 属性。
+- 渲染说明：`name` 与 `appear` 从首帧起就作为 TransitionGroup 的 props 传入，因此初次挂载的 appear 过渡会正常运行。
 - 可访问性说明：`TxStagger` 不添加语义 role。先选择能保留列表、网格或 feed 语义的 `tag` 与子元素，再处理过渡样式。
 
 ## Source

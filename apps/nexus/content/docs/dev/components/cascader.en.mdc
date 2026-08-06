@@ -145,7 +145,7 @@ code: |
 | `options` | `CascaderNode[]` | `[]` | Root option tree rendered by the cascader columns. |
 | `multiple` | `boolean` | `false` | Enables selecting multiple leaf paths and renders selected paths as tags. |
 | `disabled` | `boolean` | `false` | Disables the trigger, clear button, node selection, and keyboard open behavior. |
-| `placeholder` | `string` | `'请选择'` | Placeholder text shown when no path is selected. |
+| `placeholder` | `string` | `'Please select'` | Placeholder text shown when no path is selected. |
 | `searchable` | `boolean` | `true` | Shows a local search input that filters loaded leaf paths by formatted label. |
 | `clearable` | `boolean` | `true` | Shows the clear button when a value is selected and the component is enabled. |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | Placement forwarded to the underlying `TxPopover`. |

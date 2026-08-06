@@ -100,6 +100,7 @@ code: |
 | `strokeWidth` | `number` | `2` | Stroke width used by the ring and SVG fallback; written to `--tx-spinner-stroke`. |
 | `fallback` | `boolean` | `false` | Renders the SVG fallback spinner instead of the default animated ball/ring shape. |
 | `visible` | `boolean` | `true` | Shows or hides the spinner with the built-in `tx-spinner-visibility` transition. |
+| `label` | `string` | `'Loading'` | Accessible name for the status region, announced when the spinner appears; override it to localize. |
 
 ### Events
 

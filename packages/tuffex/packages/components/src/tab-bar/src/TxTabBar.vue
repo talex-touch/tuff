@@ -5,7 +5,7 @@ import { computed } from 'vue'
 defineOptions({ name: 'TxTabBar' })
 
 const props = withDefaults(defineProps<TabBarProps>(), {
-  modelValue: '' as any,
+  modelValue: '',
   items: () => [],
   fixed: true,
   safeAreaBottom: true,
