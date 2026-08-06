@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/main-process/agent-tool-gateway-contracts.md", "reason": "本任务修改确认语义(full-allow 短路),必须先读 §4 confirmation gate 与 §5 home injection 契约,收尾还要回写 §4/§7"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "权限胶囊/弹层要遵守 Hard Frontend Rules:TuffEx primitives 优先、semantic controls 键盘可达、文案走 i18n catalog"}

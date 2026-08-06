@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/main-process/agent-tool-gateway-contracts.md", "reason": "校验 full-allow 实现不破坏 gate 拓扑(host-only、assertHostOwned、remember 语义),并确认 spec §4 已随实现修订"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "校验胶囊/弹层的可达性、TuffEx 使用与 i18n 键集 zh/en 同步(含删除的四个旧键)"}

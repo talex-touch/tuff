@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/08-06-model-menu-sources/research/pi-model-catalog.md", "reason": "对照研究结论校验:auth.json 未被读、apiKey 不出主进程、降级路径与缓存语义符合记录"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "校验新模块是否遵守 main-process 约定,以及是否需要回写 provider 相关 spec"}
