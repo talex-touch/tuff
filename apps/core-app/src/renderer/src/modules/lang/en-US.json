@@ -3487,6 +3487,9 @@
       "evidenceSaved": "Everything diagnostic evidence saved"
     },
     "intelligence": {
+      "testLatency": "Latency",
+      "testTokenSpeed": "Token speed",
+      "testStabilityAnalysis": "Stability analysis",
       "userMessageLabel": "User message",
       "userMessagePlaceholder": "Hello, can you summarize this...",
       "promptVariablesLabel": "Prompt variables (JSON)",

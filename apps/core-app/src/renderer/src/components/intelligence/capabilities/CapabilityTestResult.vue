@@ -62,7 +62,7 @@ const stabilityClass = computed(() => {
           <span class="test-result__meta-value">{{ result.model }}</span>
         </div>
         <div v-if="result.latency" class="test-result__meta-item">
-          <span class="test-result__meta-label">耗时</span>
+          <span class="test-result__meta-label">{{ t('settings.intelligence.testLatency') }}</span>
           <span class="test-result__meta-value">{{ result.latency }}ms</span>
         </div>
         <div v-if="result.usage" class="test-result__meta-item">
@@ -78,14 +78,18 @@ const stabilityClass = computed(() => {
           <span class="test-result__meta-value">{{ result.usage.totalTokens }}</span>
         </div>
         <div v-if="result.tokensPerSecond" class="test-result__meta-item">
-          <span class="test-result__meta-label">Token 速度</span>
+          <span class="test-result__meta-label">{{
+            t('settings.intelligence.testTokenSpeed')
+          }}</span>
           <span class="test-result__meta-value">{{ result.tokensPerSecond }}/s</span>
         </div>
       </div>
     </div>
 
     <div v-if="result.stability" class="test-result__section">
-      <div class="test-result__preview-label">稳定性分析</div>
+      <div class="test-result__preview-label">
+        {{ t('settings.intelligence.testStabilityAnalysis') }}
+      </div>
       <div class="test-result__stability" :class="stabilityClass">
         <div class="test-result__stability-head">
           <span class="test-result__stability-status">{{ result.stability.status }}</span>
