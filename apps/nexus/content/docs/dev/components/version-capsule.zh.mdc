@@ -214,8 +214,8 @@ code: |
 | 成员 | 类型 | 说明 |
 |------|------|------|
 | `close` | `() => void` | 关闭已打开的面板，并把焦点交还给打开它的分段。同时会传入两个面板插槽。 |
-| `downloadRef` | `Ref<HTMLButtonElement>` | 左侧（下载）分段按钮元素。 |
-| `historyRef` | `Ref<HTMLButtonElement>` | 右侧（历史）分段按钮元素。 |
+| `downloadRef` | `Ref<HTMLButtonElement \| null>` | 左侧（下载）分段按钮元素。 |
+| `historyRef` | `Ref<HTMLButtonElement \| null>` | 右侧（历史）分段按钮元素。 |
 
 ## 交互契约
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { PropType } from 'vue'
 import { Comment, Fragment, computed, defineComponent, h, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import type { TabsAnimation, TabsProps } from './types'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
@@ -62,7 +63,7 @@ export default defineComponent({
   props: {
     modelValue: String,
     defaultValue: String,
-    placement: { type: String, default: 'left' },
+    placement: { type: String as PropType<TabsProps['placement']>, default: 'left' },
     offset: { type: Number, default: 0 },
     navMinWidth: { type: Number, default: 220 },
     navMaxWidth: { type: Number, default: 320 },
@@ -72,12 +73,12 @@ export default defineComponent({
     autoHeight: { type: Boolean, default: false },
     autoWidth: { type: Boolean, default: false },
     showIndicator: { type: Boolean, default: true },
-    indicatorVariant: { type: String, default: 'line' },
-    indicatorMotion: { type: String, default: 'stretch' },
+    indicatorVariant: { type: String as PropType<TabsProps['indicatorVariant']>, default: 'line' },
+    indicatorMotion: { type: String as PropType<TabsProps['indicatorMotion']>, default: 'stretch' },
     indicatorMotionStrength: { type: Number, default: 1 },
     autoHeightDurationMs: { type: Number, default: 250 },
     autoHeightEasing: { type: String, default: 'ease' },
-    animation: { type: Object as PropType<any>, default: undefined },
+    animation: { type: Object as PropType<TabsAnimation>, default: undefined },
   },
   emits: ['update:modelValue', 'change'],
   setup(props, { slots, emit, expose }) {

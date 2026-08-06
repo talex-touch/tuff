@@ -12,7 +12,7 @@ verified: true
 
 `TxStatCard` displays a primary metric with optional icon decoration, insight comparison, or progress ring. Use the default variant for simple metrics, `insight` for trend deltas, and `variant="progress"` or `progress` for bounded percentage summaries.
 
-Progress values are clamped to 0-100 for the ring. `insight` renders only when both `from` and `to` are finite numbers; otherwise the card falls back to the plain metric layout.
+Progress values are clamped to 0-100 for the ring. `insight` renders only when both `from` and `to` are finite numbers; otherwise the card falls back to the plain metric layout. When the progress ring is active (`progress` or `variant="progress"`), `insight` is not rendered — the trend block is silently dropped.
 
 ## Basic Usage
 

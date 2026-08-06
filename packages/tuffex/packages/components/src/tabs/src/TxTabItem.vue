@@ -6,7 +6,7 @@ defineOptions({
   name: 'TxTabItem',
 })
 
-const props = withDefaults(defineProps<TabItemProps & { active?: boolean }>(), {
+const props = withDefaults(defineProps<TabItemProps>(), {
   iconClass: '',
   disabled: false,
   activation: false,
