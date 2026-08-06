@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
+import TxThinkingOrb from '../../thinking-orb/src/TxThinkingOrb.vue'
 
 defineOptions({ name: 'TxReasoningDisclosure' })
 
@@ -72,7 +73,9 @@ watch(
       @click="toggle"
     >
       <span class="tx-reasoning-disclosure__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- A live thought gets a thinking orb (random per thought); settled ones keep the bulb. -->
+        <TxThinkingOrb v-if="streaming" :size="20" :display-size="14" />
+        <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 3a6 6 0 0 1 6 6c0 2.2-1.2 3.6-2.4 4.8-.7.7-1.1 1.4-1.3 2.2h-4.6c-.2-.8-.6-1.5-1.3-2.2C7.2 12.6 6 11.2 6 9a6 6 0 0 1 6-6Z" />
           <path d="M9.5 19.5h5M10.5 22h3" />
         </svg>
