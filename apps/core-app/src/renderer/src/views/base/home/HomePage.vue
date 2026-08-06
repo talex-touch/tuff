@@ -22,6 +22,8 @@ import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 } from '~/modules/conversation/conversation-error-display'
+import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { toast } from 'vue-sonner'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
 import {
   createConversationId,
@@ -142,6 +144,59 @@ watch(
     }
   }
 )
+
+// ============================================================================
+// Read aloud
+// ============================================================================
+
+const intelligenceSdk = useIntelligenceSdk()
+
+/** At most one message reads at a time; starting another stops the current. */
+const speaking = ref<{ id: string; state: 'loading' | 'speaking' } | null>(null)
+let speakAudio: HTMLAudioElement | null = null
+let speakToken = 0
+
+function stopSpeaking(): void {
+  speakToken += 1
+  speakAudio?.pause()
+  speakAudio = null
+  speaking.value = null
+}
+
+async function toggleSpeak(message: ConversationMessage): Promise<void> {
+  if (speaking.value?.id === message.id) {
+    stopSpeaking()
+    return
+  }
+  stopSpeaking()
+  if (!message.content) return
+
+  const token = ++speakToken
+  speaking.value = { id: message.id, state: 'loading' }
+  try {
+    const result = await intelligenceSdk.ttsSpeak({ text: message.content })
+    // The user may have toggled away while synthesis ran.
+    if (token !== speakToken) return
+    const audio = new Audio(result.audio)
+    speakAudio = audio
+    audio.onended = () => {
+      if (token === speakToken) stopSpeaking()
+    }
+    await audio.play()
+    if (token === speakToken) speaking.value = { id: message.id, state: 'speaking' }
+  } catch (error) {
+    if (token !== speakToken) return
+    homeLog.warn('Read aloud failed', String(error))
+    toast.error(t('home.speakFailed'))
+    stopSpeaking()
+  }
+}
+
+onBeforeUnmount(stopSpeaking)
+
+function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speaking' {
+  return speaking.value?.id === message.id ? speaking.value.state : 'idle'
+}
 
 function chainStepsOf(message: ConversationMessage) {
   return toChainSteps(message.parts, message.status === 'streaming')
@@ -693,10 +748,15 @@ watch(
                       :class="{ 'is-resting': index !== messages.length - 1 }"
                       :copy-text="message.content"
                       :regenerable="index === messages.length - 1 && !isStreaming"
+                      :speakable="!!message.content"
+                      :speak-state="speakStateOf(message)"
                       :copy-label="t('home.copy')"
                       :copied-label="t('home.copied')"
                       :regenerate-label="t('home.regenerate')"
+                      :speak-label="t('home.speak')"
+                      :stop-speak-label="t('home.speakStop')"
                       @regenerate="conversation.retry()"
+                      @speak="toggleSpeak(message)"
                     />
                   </template>
                 </div>
