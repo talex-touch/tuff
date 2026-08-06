@@ -1,3 +1,13 @@
+<script lang="ts">
+/**
+ * Monotonic ids: mermaid.render mounts a temp element per call and ids must not
+ * collide. This lives in a plain `<script>` block on purpose — a `<script setup>`
+ * body compiles into `setup()`, which would make the counter per-instance and
+ * hand every block the same id.
+ */
+let mermaidIdSeq = 0
+</script>
+
 <script setup lang="ts">
 import { hasDocument } from '@talex-touch/utils/env'
 import { onBeforeUnmount, ref, watch } from 'vue'
@@ -22,9 +32,6 @@ const props = withDefaults(
     theme: 'light',
   },
 )
-
-/** Monotonic ids: mermaid.render mounts a temp element per call and ids must not collide. */
-let mermaidIdSeq = 0
 
 const svg = ref<string | null>(null)
 const failed = ref(false)

@@ -102,4 +102,21 @@ describe('txMermaidBlock', () => {
     await flushPromises()
     expect(document.body.querySelector('.tx-mermaid-block__overlay')).toBeNull()
   })
+
+  it('gives every diagram a distinct render id across instances', async () => {
+    const a = mount(TxMermaidBlock, { props: { code: 'graph TD; A-->B', closed: true } })
+    await flushPromises()
+    const b = mount(TxMermaidBlock, { props: { code: 'graph TD; C-->D', closed: true } })
+    await flushPromises()
+
+    const ids = renderMock.mock.calls.map(call => call[0])
+    expect(ids).toHaveLength(2)
+    // The counter must be module-scoped: a `<script setup>` local would restart at 0
+    // per instance and hand both blocks 'tx-mermaid-1', colliding every SVG id
+    // mermaid derives from it.
+    expect(new Set(ids).size).toBe(2)
+
+    a.unmount()
+    b.unmount()
+  })
 })
