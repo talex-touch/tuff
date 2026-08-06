@@ -3486,6 +3486,10 @@
       "evidenceSaved": "Everything diagnostic evidence saved"
     },
     "intelligence": {
+      "userMessageLabel": "User message",
+      "userMessagePlaceholder": "Hello, can you summarize this...",
+      "promptVariablesLabel": "Prompt variables (JSON)",
+      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}",
       "pageTitle": "TaTa Intelligence",
       "pageDesc": "With TaTa Intelligence, command every channel and tailor capabilities—all from one refined interface.",
       "channelsSection": "Channels",
@@ -4243,6 +4247,8 @@
     }
   },
   "common": {
+    "copy": "Copy",
+    "copied": "Copied",
     "yes": "Yes",
     "no": "No",
     "retry": "Retry",
