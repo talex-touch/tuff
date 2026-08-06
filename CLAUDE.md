@@ -401,12 +401,12 @@ await accountSDK.hasPrioritySupport()     // Priority support
 ## Key File Locations
 
 - Main entry: [apps/core-app/src/main/index.ts](apps/core-app/src/main/index.ts)
-- Core app logic: [apps/core-app/src/main/core/touch-core.ts](apps/core-app/src/main/core/touch-core.ts)
+- Core app logic: [apps/core-app/src/main/core/touch-app.ts](apps/core-app/src/main/core/touch-app.ts)
 - Module manager: [apps/core-app/src/main/core/module-manager.ts](apps/core-app/src/main/core/module-manager.ts)
-- Plugin system: [apps/core-app/src/main/modules/plugin/plugin-provider.ts](apps/core-app/src/main/modules/plugin/plugin-provider.ts)
-- CoreBox launcher: [apps/core-app/src/main/modules/box-tool/core-box.ts](apps/core-app/src/main/modules/box-tool/core-box.ts)
+- Plugin system: [apps/core-app/src/main/modules/plugin/index.ts](apps/core-app/src/main/modules/plugin/index.ts)
+- CoreBox launcher: [apps/core-app/src/main/modules/box-tool/core-box/index.ts](apps/core-app/src/main/modules/box-tool/core-box/index.ts)
 - Channel system: [apps/core-app/src/main/core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)
-- Storage module: [apps/core-app/src/main/modules/storage/storage-provider.ts](apps/core-app/src/main/modules/storage/storage-provider.ts)
+- Storage module: [apps/core-app/src/main/modules/storage/index.ts](apps/core-app/src/main/modules/storage/index.ts)
 - Permission module: [apps/core-app/src/main/modules/permission/](apps/core-app/src/main/modules/permission/)
 - Transport SDKs: [packages/utils/transport/](packages/utils/transport/)
 - Extracted plugins: [plugins/](plugins/)
