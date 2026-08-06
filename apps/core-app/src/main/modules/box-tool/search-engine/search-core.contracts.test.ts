@@ -813,6 +813,17 @@ describe('SearchEngineCore facade contracts', () => {
     expect(search).toHaveBeenCalledTimes(2)
   })
 
+  it('invalidates the recommendation ranking on an app index commit but not a file one', () => {
+    // A newly installed app has to be recommendable before the 30-minute
+    // ranking cache expires; file commits fire throughout indexing and never
+    // change the recommendation grid, which excludes files.
+    searchIndexCommitHub.markCommitted(['file-provider'])
+    expect(state.invalidateRecommendationCache).not.toHaveBeenCalled()
+
+    searchIndexCommitHub.markCommitted(['app-provider'])
+    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+  })
+
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
     core.registerProvider({

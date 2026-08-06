@@ -224,6 +224,89 @@ describe('ItemRebuilder', () => {
     })
   })
 
+  it('labels newly installed and cold-start items with their own badge', async () => {
+    const dbUtils = {
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Demo.app',
+          name: 'Demo',
+          displayName: 'Demo',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: '/Applications/Demo.app',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Demo' } },
+        actions: [],
+        meta: {}
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const rebuild = async (source: ScoredItem['source']) => {
+      const [item] = await rebuilder.rebuildItems([
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Demo.app',
+          sourceType: 'app',
+          usageStats,
+          source,
+          score: 1
+        }
+      ])
+      return (item?.meta as Record<string, unknown>).recommendation
+    }
+
+    expect(await rebuild('newly-installed')).toMatchObject({
+      reason: 'Just Installed',
+      badge: { text: '新安装', icon: 'i-ri-download-2-line', variant: 'newly-installed' }
+    })
+    expect(await rebuild('cold-start')).toMatchObject({
+      reason: 'Suggested',
+      badge: { text: '推荐', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
+    })
+  })
+
+  it('drops an app candidate whose catalog row is gone (uninstalled)', async () => {
+    const dbUtils = {
+      // Uninstall cascades the files row away; the usage stats row survives.
+      getFilesByPaths: vi.fn(async () => []),
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const result = await rebuilder.rebuildItems([
+      {
+        sourceId: 'app-provider',
+        itemId: '/Applications/Removed.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 5_000
+      }
+    ])
+
+    expect(result).toEqual([])
+    expect(mapAppsToRecommendationItemsMock).not.toHaveBeenCalled()
+  })
+
   it('uses class icons for plugin recommendation fallbacks', async () => {
     const rebuilder = new ItemRebuilder({} as never)
     const scoredItems: ScoredItem[] = [

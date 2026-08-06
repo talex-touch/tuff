@@ -557,9 +557,11 @@ export type AppProviderPrivate = {
       identityKind?: string
       displayNameSource?: string
       displayNameQuality?: string
+      createdAt?: Date
     },
     writer?: unknown,
-    existingExtensions?: Readonly<Record<string, string | null>>
+    existingExtensions?: Readonly<Record<string, string | null>>,
+    options?: { discovery?: 'watch' | 'scan'; insertedRow?: boolean }
   ) => Promise<void>
   persistScannedAppAdditions: (
     label: string,
@@ -570,6 +572,7 @@ export type AppProviderPrivate = {
       launchKind: string
       launchTarget: string
       lastModified: Date
+      createdAt?: Date
     }>,
     signal?: AbortSignal
   ) => Promise<void>
@@ -628,7 +631,11 @@ export type AppProviderPrivate = {
   sweepAppResolutionDeadLetters: () => Promise<void>
   processAppPath: (
     path: string,
-    options?: { managedEntry?: boolean; scheduleRetry?: boolean }
+    options?: {
+      managedEntry?: boolean
+      scheduleRetry?: boolean
+      discovery?: 'watch' | 'scan'
+    }
   ) => Promise<{
     success: boolean
     status: string

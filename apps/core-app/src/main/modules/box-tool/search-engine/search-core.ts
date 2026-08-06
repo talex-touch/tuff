@@ -429,6 +429,13 @@ export class SearchEngineCore
 
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
     this.searchCache.clear()
+    // The recommendation ranking is cached for 30 minutes, so an app installed
+    // or removed just now would otherwise stay invisible (or keep showing) for
+    // that long. Only app commits matter: file commits fire continuously while
+    // the index builds, and the recommendation grid never contains files.
+    if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
+      this.recommendationEngine?.invalidateCache()
+    }
     for (const context of this.indexCommitStreams) {
       if (context.isCancelled()) {
         this.indexCommitStreams.delete(context)

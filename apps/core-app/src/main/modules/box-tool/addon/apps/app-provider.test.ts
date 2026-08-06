@@ -265,7 +265,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
@@ -347,7 +348,9 @@ describe('appProvider rebuild maintenance', () => {
         occurredAt: 1700000000000
       })
 
-      expect(privateProvider.processAppPath).toHaveBeenCalledWith(shortcutPath)
+      expect(privateProvider.processAppPath).toHaveBeenCalledWith(shortcutPath, {
+        discovery: 'watch'
+      })
       expect(watchDeltas).toEqual([
         {
           sourceId: 'app-provider',
@@ -395,7 +398,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
@@ -459,7 +463,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
       const waitForItemStable = vi.fn(async () => true)
 
@@ -608,7 +613,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
       const insertMock = vi.fn(() => ({
         values: valuesMock
@@ -2313,7 +2319,10 @@ describe('appProvider rebuild maintenance', () => {
                   mtime: appInfo.lastModified,
                   ctime: appInfo.lastModified
                 }
-              ])
+              ]),
+              // A watch-discovered insert also stamps the install time, which is the one extension
+              // write that must not overwrite what is already stored.
+              onConflictDoNothing: vi.fn(async () => undefined)
             }))
           })),
           delete: vi.fn(() => ({

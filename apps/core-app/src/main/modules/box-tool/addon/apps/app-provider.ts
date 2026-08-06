@@ -397,6 +397,22 @@ const APP_PROVIDER_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000
 const APP_ADDITION_COMMIT_CHUNK_SIZE = 50
 const EMPTY_APP_EXTENSION_MAP: Readonly<Record<string, string | null>> = {}
 
+/**
+ * Epoch milliseconds of when this machine first got the app, as an integer string.
+ *
+ * Written once and never refreshed, so recommendation ranking can tell a fresh install from an
+ * in-place update. Deliberately absent from `APP_SCANNED_OPTIONAL_EXTENSION_KEYS`: that list drives
+ * the stale-key sweep, and a scan that cannot re-derive the value must not delete it.
+ */
+export const APP_INSTALLED_AT_EXTENSION_KEY = 'installedAt'
+
+/**
+ * How an app path reached the index. `watch` means a filesystem event surfaced it while Touch was
+ * running, which is itself evidence of an install; `scan` covers full syncs and backfills, where a
+ * row can be years old.
+ */
+export type AppDiscoveryKind = 'watch' | 'scan'
+
 interface PendingDeletionEntry {
   id: number
   path: string
@@ -416,6 +432,12 @@ interface AppResolutionDeadLetterEntry {
   managedEntry: boolean
   sweeps: number
   lastError: string
+}
+
+interface AppExtensionSyncOptions {
+  discovery?: AppDiscoveryKind
+  /** True only when the caller knows this pass created the `files` row. */
+  insertedRow?: boolean
 }
 
 interface ScannedAppMetadataUpdate {
@@ -593,6 +615,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               .returning()
 
             if (insertedFile) {
+              // The upsert above turns into an UPDATE for a path already indexed, so neither the
+              // row nor this empty map says whether the app is new here. The install time therefore
+              // relies on the write refusing to overwrite (see `insertMissingAppExtensions`), and
+              // this path never falls back to "now".
               await this.syncScannedAppExtensions(
                 insertedFile.id,
                 appInfo,
@@ -1161,7 +1187,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return []
     }
 
-    const result = await this.processAppPath(appPath)
+    const result = await this.processAppPath(appPath, { discovery: 'watch' })
     if (!result.success || !result.appInfo) {
       return []
     }
@@ -1423,6 +1449,50 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
   }
 
+  /**
+   * Inserts extension rows that must never clobber what is already stored.
+   *
+   * `upsertAppExtensions` overwrites on conflict, which is right for metadata a scan re-derives
+   * every pass. The install time is the opposite: the first value is the true one, and the callers
+   * cannot tell an insert from an update anyway — `persistScannedAppAdditions` upserts on
+   * `files.path` and hands every row `EMPTY_APP_EXTENSION_MAP`, so the write itself has to be the
+   * thing that refuses to overwrite.
+   */
+  private async insertMissingAppExtensions(
+    writer: AppFileWriteDb | undefined,
+    extensions: Array<{ fileId: number; key: string; value: string }>
+  ): Promise<void> {
+    if (extensions.length === 0) return
+    const insertWriter = writer ?? this.dbUtils!.getDb()
+    await insertWriter
+      .insert(fileExtensions)
+      .values(extensions)
+      .onConflictDoNothing({ target: [fileExtensions.fileId, fileExtensions.key] })
+  }
+
+  /**
+   * Resolves the install time to record for a scanned app, or null when nothing trustworthy is
+   * available. Scanners only report a birth time their filesystem actually vouches for, so an
+   * absent one on a watch-discovered row means "the event is the best evidence we have".
+   */
+  private resolveScannedInstalledAt(
+    app: Pick<ScannedAppInfo, 'createdAt'>,
+    options?: AppExtensionSyncOptions
+  ): number | null {
+    const createdAtMs = app.createdAt?.getTime()
+    if (typeof createdAtMs === 'number' && Number.isFinite(createdAtMs) && createdAtMs > 0) {
+      return createdAtMs
+    }
+
+    // Only for a row this pass created: a `change` event on an app that has been installed for
+    // months must not restart its freshness window.
+    if (options?.discovery === 'watch' && options.insertedRow === true) {
+      return Date.now()
+    }
+
+    return null
+  }
+
   private async syncScannedAppExtensions(
     fileId: number,
     app: Pick<
@@ -1441,12 +1511,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       | 'identityKind'
       | 'displayNameSource'
       | 'displayNameQuality'
+      | 'createdAt'
     >,
     writer?: AppFileWriteDb,
-    existingExtensions?: Readonly<Record<string, string | null>>
+    existingExtensions?: Readonly<Record<string, string | null>>,
+    options?: AppExtensionSyncOptions
   ): Promise<void> {
     const extensions = buildAppExtensions(fileId, app)
     await this.upsertAppExtensions(writer, extensions)
+
+    // A known-stored install time short-circuits the write; an empty map only means the caller
+    // could not tell, which the conflict clause below settles.
+    if (!existingExtensions?.[APP_INSTALLED_AT_EXTENSION_KEY]) {
+      const installedAt = this.resolveScannedInstalledAt(app, options)
+      if (installedAt !== null) {
+        await this.insertMissingAppExtensions(writer, [
+          { fileId, key: APP_INSTALLED_AT_EXTENSION_KEY, value: String(installedAt) }
+        ])
+      }
+    }
 
     const missingExtensionKeys = resolveMissingScannedExtensionKeys(
       extensions,
@@ -2983,7 +3066,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async upsertAppInfo(
     appInfo: ScannedAppInfo,
-    options: { managedEntry?: boolean } = {}
+    options: { managedEntry?: boolean; discovery?: AppDiscoveryKind } = {}
   ): Promise<'added' | 'updated'> {
     const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
     const db = this.dbUtils!.getDb()
@@ -3027,7 +3110,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
                 existingFile.id,
                 appInfo,
                 extensionWriter,
-                existingExtensions
+                existingExtensions,
+                { discovery: options.discovery, insertedRow: false }
               )
             }
           })
@@ -3069,7 +3153,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
                 inserted.id,
                 appInfo,
                 extensionWriter,
-                EMPTY_APP_EXTENSION_MAP
+                EMPTY_APP_EXTENSION_MAP,
+                { discovery: options.discovery, insertedRow: true }
               )
             }
           }
@@ -3088,7 +3173,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async processAppPath(
     appPath: string,
-    options: { managedEntry?: boolean; scheduleRetry?: boolean } = {}
+    options: {
+      managedEntry?: boolean
+      scheduleRetry?: boolean
+      /** Defaults to `scan`; the retry ladder and dead-letter sweep inherit that default. */
+      discovery?: AppDiscoveryKind
+    } = {}
   ): Promise<AppIndexProcessPathResult> {
     if (this.processingPaths.has(appPath)) {
       return { success: false, status: 'invalid', reason: 'processing' }
@@ -3124,7 +3214,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
 
       const appInfo = resolution.appInfo
-      const status = await this.upsertAppInfo(appInfo, options)
+      const status = await this.upsertAppInfo(appInfo, {
+        managedEntry: options.managedEntry,
+        discovery: options.discovery ?? 'scan'
+      })
       this.scheduleAppIconHydration([appInfo])
       this.forgetAppResolutionFailure(appPath)
       return { success: true, status, path: appInfo.path, appInfo }

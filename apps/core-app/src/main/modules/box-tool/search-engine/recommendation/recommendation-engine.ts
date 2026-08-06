@@ -68,6 +68,28 @@ const PLUGIN_PRIORITY_WEIGHT = 1e5
 const SELECTION_CONTEXT_WEIGHT = 0.6
 /** Cold-start items rank below anything with real usage but above nothing at all. */
 const COLD_START_BASE_SCORE = 1e3
+/**
+ * Novelty channel for freshly installed apps. Frecency scores a brand-new item
+ * at exactly zero, so without an explicit exploration channel an app the user
+ * just installed can never outrank their habits. 1e7 clears the frequency term
+ * (`executeCount * 1e4`) until ~1000 executes, and stays under the volatile
+ * context match (~1e8) on purpose: an explicit clipboard intent outranks news.
+ */
+const NOVELTY_WEIGHT = 1e7
+/** Full-strength window after install. */
+const NOVELTY_FULL_WINDOW_MS = 48 * 60 * 60 * 1000
+/** Novelty is gone past this age, and freshness gating uses the same horizon. */
+const NOVELTY_MAX_AGE_MS = 7 * DAY_MS
+/** Candidate slots reserved for the freshness dimension. */
+const NEWLY_INSTALLED_CANDIDATE_LIMIT = 10
+/**
+ * `file_extensions` key holding the app's filesystem creation time, written
+ * once by the app provider and never refreshed (a self-update rebuilds the
+ * bundle and would otherwise read as a fresh install).
+ */
+const INSTALLED_AT_EXTENSION_KEY = 'installedAt'
+/** Exposure slice tag for measuring the novelty channel separately. */
+const NEWLY_INSTALLED_EXPOSURE_TAG = 'newly-installed'
 const SEMANTIC_LOCAL_WEIGHT = 6e5
 const SEMANTIC_USAGE_PREFERENCE_WEIGHT = 3.5e5
 const SEMANTIC_USAGE_AVOIDANCE_WEIGHT = 5e5
@@ -244,9 +266,47 @@ function isAppSourceType(sourceType: string): boolean {
   return sourceType === 'app' || sourceType === 'application'
 }
 
-/** Newest-first ordering for the cold-start catalog: creation time, mtime as backup. */
-function resolveInstallTime(app: { ctime?: Date | null; mtime?: Date | null }): number {
-  return app.ctime?.getTime() ?? app.mtime?.getTime() ?? 0
+/**
+ * Newest-first ordering for the cold-start catalog. The app provider's
+ * `installedAt` stamp is the real install moment; `ctime` (first indexed) and
+ * `mtime` only approximate it — on a first full scan every row shares one
+ * ctime batch, which made the cold-start order close to random.
+ */
+function resolveInstallTime(
+  app: { ctime?: Date | null; mtime?: Date | null },
+  installedAt?: number
+): number {
+  return installedAt ?? app.ctime?.getTime() ?? app.mtime?.getTime() ?? 0
+}
+
+/** Parse an `installedAt` extension value; anything unusable reads as absent. */
+function parseInstalledAt(value: string | null | undefined): number | null {
+  if (!value) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+/**
+ * Full strength for the first 48h, then a linear fade to zero at 7 days.
+ * Negative ages (clock skew) count as brand new rather than wrapping around.
+ */
+export function calculateNoveltyFactor(ageMs: number): number {
+  if (ageMs <= NOVELTY_FULL_WINDOW_MS) return 1
+  if (ageMs >= NOVELTY_MAX_AGE_MS) return 0
+  return 1 - (ageMs - NOVELTY_FULL_WINDOW_MS) / (NOVELTY_MAX_AGE_MS - NOVELTY_FULL_WINDOW_MS)
+}
+
+/**
+ * Exposure identity, mirroring what the renderer reports
+ * (`_originalSourceId:_originalItemId`, falling back to the rendered ids) so a
+ * tagged key matches the key the exposure service receives.
+ */
+function toExposureKey(item: TuffItem): string {
+  const meta = item.meta as Record<string, unknown> | undefined
+  const sourceId =
+    typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source?.id
+  const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
+  return `${sourceId}:${itemId}`
 }
 
 const JETBRAINS_MATCH_RULES: Record<string, AppMatchRule> = {
@@ -273,6 +333,11 @@ export class RecommendationEngine {
     context: ContextSignal
     cacheKey: string
   } | null = null
+
+  /** Bumped by `invalidateCache`; in-flight `recommend()` calls compare against it. */
+  private cacheGeneration = 0
+  /** Persisted rows older than this were invalidated and must not be read back. */
+  private cacheInvalidatedAt = 0
 
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
@@ -1020,9 +1085,32 @@ export class RecommendationEngine {
     }
   }
 
-  /** Invalidate in-memory recommendation cache */
+  /**
+   * Drop every cached ranking, both layers.
+   *
+   * Clearing only the in-memory copy is not enough: `recommend()` falls through
+   * to `recommendation_cache`, whose rows live for 30 minutes, so the next call
+   * would read back the very list we just invalidated. The generation counter
+   * covers the other half of the race — a `recommend()` that started before
+   * this call must not write its now-stale result into either layer.
+   */
   public invalidateCache(): void {
     this.recommendationCache = null
+    this.cacheGeneration += 1
+    this.cacheInvalidatedAt = Date.now()
+
+    // Cleanup only — the read guard above is what makes invalidation immediate.
+    // This write is best-effort and droppable, and exists so invalidated rows
+    // do not outlive the process that invalidated them.
+    void scheduleAuxWrite(
+      'recommendation.cache.invalidate',
+      (db) => db.delete(schema.recommendationCache),
+      { priority: 'best_effort', dropPolicy: 'drop' }
+    ).catch((error) => {
+      recommendationLog.debug('Failed to clear persisted recommendation cache', {
+        meta: toErrorMeta(error)
+      })
+    })
   }
 
   /** Generate recommendation list */
@@ -1033,6 +1121,9 @@ export class RecommendationEngine {
     }
 
     const startTime = performance.now()
+    // Snapshot taken before any read: an invalidation landing while this call
+    // computes means the result is already stale and must not be cached.
+    const cacheGeneration = this.cacheGeneration
     this.scheduleTrendBackfill()
 
     const contextStartedAt = performance.now()
@@ -1074,13 +1165,7 @@ export class RecommendationEngine {
           pinnedMs: Math.round(pinnedDuration),
           itemsCount: items.length
         })
-        return {
-          items,
-          context,
-          duration: performance.now() - startTime,
-          fromCache: true,
-          containerLayout: this.buildContainerLayout(options, items)
-        }
+        return this.finalizeResult(options, items, context, startTime, true)
       }
     }
 
@@ -1102,13 +1187,7 @@ export class RecommendationEngine {
         pinnedMs: Math.round(pinnedDuration),
         itemsCount: items.length
       })
-      return {
-        items,
-        context,
-        duration: performance.now() - startTime,
-        fromCache: true,
-        containerLayout: this.buildContainerLayout(options, items)
-      }
+      return this.finalizeResult(options, items, context, startTime, true)
     }
 
     let pinnedTuffItems = await this.itemRebuilder.rebuildItems(
@@ -1141,12 +1220,7 @@ export class RecommendationEngine {
         options.limit || 10
       )
 
-      this.recommendationCache = {
-        items: cachedItems,
-        timestamp: Date.now(),
-        context,
-        cacheKey: contextCacheKey
-      }
+      this.storeMemoryCache(cacheGeneration, cachedItems, context, contextCacheKey)
 
       const finalItems = await this.applyVolatileContextRerank(
         cachedItems,
@@ -1169,13 +1243,7 @@ export class RecommendationEngine {
         trendingReady: candidatePerf.trendingReady
       })
 
-      return {
-        items: finalItems,
-        context,
-        duration: performance.now() - startTime,
-        fromCache: false,
-        containerLayout: this.buildContainerLayout(options, finalItems)
-      }
+      return this.finalizeResult(options, finalItems, context, startTime, false)
     }
 
     const scored = await this.scoreAndRank(candidates, context, semanticSettings)
@@ -1195,12 +1263,7 @@ export class RecommendationEngine {
         limit
       )
 
-      this.recommendationCache = {
-        items: cachedItems,
-        timestamp: Date.now(),
-        context,
-        cacheKey: contextCacheKey
-      }
+      this.storeMemoryCache(cacheGeneration, cachedItems, context, contextCacheKey)
 
       const finalItems = await this.applyVolatileContextRerank(cachedItems, context, limit)
 
@@ -1219,13 +1282,7 @@ export class RecommendationEngine {
         trendingReady: candidatePerf.trendingReady
       })
 
-      return {
-        items: finalItems,
-        context,
-        duration: performance.now() - startTime,
-        fromCache: false,
-        containerLayout: this.buildContainerLayout(options, finalItems)
-      }
+      return this.finalizeResult(options, finalItems, context, startTime, false)
     }
 
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
@@ -1255,12 +1312,13 @@ export class RecommendationEngine {
     // Both caches hold the STABLE ranking; the volatile stage runs on the way
     // out here exactly as it does on a cache hit, so a warm and a cold request
     // under the same context return the same order.
-    await this.cacheRecommendations(context, semanticSettings, pinnedCacheSignature, combinedItems)
-    this.recommendationCache = {
-      items: combinedItems,
-      timestamp: Date.now(),
-      context,
-      cacheKey: contextCacheKey
+    if (this.storeMemoryCache(cacheGeneration, combinedItems, context, contextCacheKey)) {
+      await this.cacheRecommendations(
+        context,
+        semanticSettings,
+        pinnedCacheSignature,
+        combinedItems
+      )
     }
 
     const finalItems = await this.applyVolatileContextRerank(combinedItems, context, limit)
@@ -1284,15 +1342,73 @@ export class RecommendationEngine {
       trendingReady: candidatePerf.trendingReady
     })
 
-    const containerLayout = this.buildContainerLayout(options, finalItems)
+    return this.finalizeResult(options, finalItems, context, startTime, false)
+  }
+
+  /**
+   * The single exit of `recommend()`: publishes the novelty exposure slice and
+   * wraps the result. Cached and freshly computed lists leave through here
+   * alike, so the slice is measured on every render, not only on cache misses.
+   */
+  private finalizeResult(
+    options: RecommendationOptions,
+    items: TuffItem[],
+    context: ContextSignal,
+    startTime: number,
+    fromCache: boolean
+  ): RecommendationResult {
+    this.publishNoveltyExposureTags(items)
 
     return {
-      items: finalItems,
+      items,
       context,
-      duration,
-      fromCache: false,
-      containerLayout
+      duration: performance.now() - startTime,
+      fromCache,
+      containerLayout: this.buildContainerLayout(options, items)
     }
+  }
+
+  /**
+   * Flag the newly-installed ids in this result so exposures and clicks on them
+   * also land in a `<surface>:newly-installed` counter row. Keys stay in memory;
+   * only counts are persisted.
+   */
+  private publishNoveltyExposureTags(items: TuffItem[]): void {
+    const keys = items
+      .filter((item) => {
+        const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation
+        return (recommendation as { source?: string } | undefined)?.source === 'newly-installed'
+      })
+      .map((item) => toExposureKey(item))
+
+    recommendationExposureService.setTaggedKeys(NEWLY_INSTALLED_EXPOSURE_TAG, keys)
+  }
+
+  /**
+   * Publish a stable ranking to the memory cache, unless an invalidation landed
+   * while it was being computed. Returns whether the write happened, so the DB
+   * layer can skip the same stale result.
+   */
+  private storeMemoryCache(
+    generation: number,
+    items: TuffItem[],
+    context: ContextSignal,
+    cacheKey: string
+  ): boolean {
+    if (generation !== this.cacheGeneration) {
+      recommendationLog.debug('Discarded recommendation result invalidated mid-flight', {
+        meta: { itemCount: items.length }
+      })
+      return false
+    }
+
+    this.recommendationCache = {
+      items,
+      timestamp: Date.now(),
+      context,
+      cacheKey
+    }
+    return true
   }
 
   /** Build container layout: Recommend on top, Pinned at bottom (if exists) */
@@ -1474,8 +1590,13 @@ export class RecommendationEngine {
         return []
       }
 
+      const installedAtByFileId = await this.loadInstalledAtByFileId(apps)
       const ranked = [...apps]
-        .sort((left, right) => resolveInstallTime(right) - resolveInstallTime(left))
+        .sort(
+          (left, right) =>
+            resolveInstallTime(right, installedAtByFileId.get(right.id)) -
+            resolveInstallTime(left, installedAtByFileId.get(left.id))
+        )
         .slice(0, limit * 2)
 
       const items = await this.itemRebuilder.rebuildItems(
@@ -1484,23 +1605,96 @@ export class RecommendationEngine {
           itemId: app.path,
           sourceType: 'application',
           usageStats: EMPTY_USAGE_STATS,
-          source: 'frequent' as const,
+          source: 'cold-start' as const,
           score: COLD_START_BASE_SCORE - index
         }))
       )
 
-      for (const item of items) {
-        if (!item.meta) item.meta = {}
-        const meta = item.meta as Record<string, unknown>
-        meta.recommendation = {
-          ...((meta.recommendation as Record<string, unknown> | undefined) ?? {}),
-          source: 'cold-start'
-        }
-      }
-
       return items.slice(0, limit)
     } catch (error) {
       recommendationLog.warn('Cold start recommendation failed', { meta: toErrorMeta(error) })
+      return []
+    }
+  }
+
+  /**
+   * `installedAt` stamps for the given catalog rows, keyed by file id. The
+   * stamp is an optional refinement over `ctime`, so a failed read degrades to
+   * "no stamps" rather than failing the caller.
+   */
+  private async loadInstalledAtByFileId(apps: Array<{ id: number }>): Promise<Map<number, number>> {
+    const installedAt = new Map<number, number>()
+    if (apps.length === 0) return installedAt
+
+    try {
+      const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(
+        apps.map((app) => app.id),
+        [INSTALLED_AT_EXTENSION_KEY]
+      )
+      for (const extension of extensions) {
+        const parsed = parseInstalledAt(extension.value)
+        if (parsed !== null) installedAt.set(extension.fileId, parsed)
+      }
+    } catch (error) {
+      recommendationLog.debug('Failed to read app install stamps', { meta: toErrorMeta(error) })
+    }
+    return installedAt
+  }
+
+  /**
+   * Apps installed inside the novelty window (S1.1).
+   *
+   * Freshness is a DOUBLE gate — `installedAt` (filesystem creation time of the
+   * bundle) AND `ctime` (when this row first entered the index) must both be
+   * recent. Either one alone produces false positives that would flood the grid:
+   * an app that self-updated has a new bundle but an old row, and a first full
+   * scan on an old machine writes new rows for ancient apps.
+   */
+  private async getNewlyInstalledItems(limit: number): Promise<CandidateItem[]> {
+    try {
+      const now = Date.now()
+      const apps = await this.appCatalogDbUtils.getFilesByType('app')
+      // Gate 1 first: it is a plain field read and normally leaves nothing, so
+      // the extension query below is skipped entirely on a steady-state install.
+      const recentlyIndexed = apps.filter((app) => {
+        const indexedAt = app.ctime?.getTime()
+        return typeof indexedAt === 'number' && now - indexedAt <= NOVELTY_MAX_AGE_MS
+      })
+      if (recentlyIndexed.length === 0) return []
+
+      const installedAtByFileId = await this.loadInstalledAtByFileId(recentlyIndexed)
+      const fresh = recentlyIndexed
+        .flatMap((app) => {
+          const installedAt = installedAtByFileId.get(app.id)
+          if (installedAt === undefined) return []
+          // Gate 2. A future-dated stamp (clock skew) still counts as fresh.
+          if (now - installedAt > NOVELTY_MAX_AGE_MS) return []
+          return [{ app, installedAt }]
+        })
+        .sort((left, right) => right.installedAt - left.installedAt)
+        .slice(0, limit)
+      if (fresh.length === 0) return []
+
+      const usageStatsMap = new Map(
+        (
+          await this.dbUtils.getUsageStatsBatch(
+            fresh.map(({ app }) => ({ sourceId: 'app-provider', itemId: app.path }))
+          )
+        ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
+      )
+
+      return fresh.map(({ app, installedAt }) => ({
+        sourceId: 'app-provider',
+        itemId: app.path,
+        sourceType: 'application',
+        usageStats: usageStatsMap.get(`app-provider:${app.path}`) ?? EMPTY_USAGE_STATS,
+        source: 'newly-installed' as const,
+        installedAt
+      }))
+    } catch (error) {
+      recommendationLog.warn('Failed to collect newly installed candidates', {
+        meta: toErrorMeta(error)
+      })
       return []
     }
   }
@@ -1573,6 +1767,14 @@ export class RecommendationEngine {
       meta: { count: pluginCandidates.length }
     })
     candidates.push(...pluginCandidates)
+
+    // 维度 6: 新安装的应用 (Top 10) —— 上面五个维度全部依赖使用历史，新装应用在其中
+    // 恒为零分，只有这条通道能让它被看见。
+    const newlyInstalled = await this.getNewlyInstalledItems(NEWLY_INSTALLED_CANDIDATE_LIMIT)
+    recommendationLog.debug('Loaded newly installed candidates', {
+      meta: { count: newlyInstalled.length }
+    })
+    candidates.push(...newlyInstalled)
 
     // 内置剪贴板 URL 推荐不在这里注入：候选池的产物会进缓存，而缓存键已不含剪贴板
     // (见 buildRecommendationCacheKey)，一旦入缓存，剪贴板换了之后旧的 URL 动作仍会
@@ -2008,6 +2210,14 @@ export class RecommendationEngine {
     // 最近使用加成
     const recencyBoost = this.calculateRecencyBoost(candidate.usageStats.lastExecuted)
     score += recencyBoost * 1e3
+
+    // Novelty: the exploration channel for freshly installed apps. It hands the
+    // item back to frecency the moment there is a real execute to rank on —
+    // the item stays in the pool through the frequent/recent dimensions, it
+    // just stops being news.
+    if (candidate.installedAt !== undefined && candidate.usageStats.executeCount === 0) {
+      score += calculateNoveltyFactor(Date.now() - candidate.installedAt) * NOVELTY_WEIGHT
+    }
 
     if (semanticSettings.localVectorEnabled && semanticProfile) {
       const candidateProfile = buildCandidateSemanticProfile(
@@ -2761,6 +2971,16 @@ export class RecommendationEngine {
       if (candidate.source === 'time-based') {
         existing.source = 'time-based'
       }
+      // A new app can also own a zero-execute usage row (it was searched but
+      // never launched), which puts it in an earlier dimension first. Keep the
+      // install stamp so the novelty boost still fires, and label it as the
+      // reason it actually ranks — but only while that boost is live.
+      if (existing.installedAt === undefined && candidate.installedAt !== undefined) {
+        existing.installedAt = candidate.installedAt
+        if (existing.usageStats.executeCount === 0) {
+          existing.source = 'newly-installed'
+        }
+      }
     }
 
     return result
@@ -2825,6 +3045,11 @@ export class RecommendationEngine {
 
     // 检查是否过期
     if (cached.expiresAt.getTime() < Date.now()) return null
+
+    // Written before the last invalidation: the row predates whatever changed
+    // (a newly installed app, an unpinned item) and would resurrect the exact
+    // list that was just dropped from memory.
+    if (cached.createdAt.getTime() < this.cacheInvalidatedAt) return null
 
     try {
       const items = JSON.parse(cached.recommendedItems)
@@ -2928,6 +3153,8 @@ interface ItemCandidate {
   timeStats?: ParsedItemTimeStats
   /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
   pluginCandidate?: PluginRecommendCandidate
+  /** Epoch ms the app was installed on this machine; drives the novelty boost. */
+  installedAt?: number
 }
 
 /**
@@ -2943,7 +3170,16 @@ interface VolatileCandidate {
 
 /** 候选项(带来源标记) */
 interface CandidateItem extends ItemCandidate {
-  source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'context' | 'pinned' | 'plugin'
+  source:
+    | 'frequent'
+    | 'recent'
+    | 'time-based'
+    | 'trending'
+    | 'context'
+    | 'pinned'
+    | 'plugin'
+    | 'newly-installed'
+    | 'cold-start'
 }
 
 /**

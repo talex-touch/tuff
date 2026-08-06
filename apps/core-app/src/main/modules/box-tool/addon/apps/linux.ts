@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import type { ScannedAppInfo } from './app-types'
+import { resolveScannedAppCreatedAt } from './app-types'
 
 type AppInfo = ScannedAppInfo
 
@@ -90,7 +91,8 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
       launchKind: 'path',
       launchTarget: execPath,
       displayPath: desktopFilePath,
-      lastModified: stats.mtime
+      lastModified: stats.mtime,
+      createdAt: resolveScannedAppCreatedAt(stats)
     }
   } catch {
     return null

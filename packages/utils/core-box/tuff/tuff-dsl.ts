@@ -1164,7 +1164,15 @@ export interface TuffMeta {
 
   /** 推荐来源标记 */
   recommendation?: {
-    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context' | 'cold-start'
+    source:
+      | 'frequent'
+      | 'recent'
+      | 'time-based'
+      | 'trending'
+      | 'pinned'
+      | 'context'
+      | 'cold-start'
+      | 'newly-installed'
     score?: number
     /**
      * Ranking split: `stableScore` is the cacheable half (time/frequency/

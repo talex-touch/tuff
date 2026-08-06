@@ -35,6 +35,17 @@ interface ExposedEntry {
   rank: number
   surface: string
   exposedAt: number
+  /** Slice this id belonged to when it was rendered, if any. */
+  tag?: string
+}
+
+/**
+ * Slice rows are stored as `<surface>:<tag>`; base surfaces (`core-box`,
+ * `division-box`) never contain a colon.
+ */
+function readSliceTag(surface: string): string | null {
+  const separator = surface.indexOf(':')
+  return separator < 0 ? null : surface.slice(separator + 1)
 }
 
 /**
@@ -46,6 +57,23 @@ interface ExposedEntry {
  */
 export class RecommendationExposureService {
   private exposed = new Map<string, ExposedEntry>()
+  private taggedKeys = new Map<string, string>()
+
+  /**
+   * Mark the ids the engine wants measured as their own slice (e.g. the newly
+   * installed apps in the current ranking), replacing the previous set for that
+   * tag. Tagged ids get a parallel `<surface>:<tag>` counter row on top of the
+   * overall one, so a channel's hit-rate can be read without a schema change —
+   * and, like the base counters, only counts are persisted.
+   */
+  setTaggedKeys(tag: string, keys: Iterable<string>): void {
+    for (const [key, existing] of this.taggedKeys) {
+      if (existing === tag) this.taggedKeys.delete(key)
+    }
+    for (const key of keys) {
+      if (typeof key === 'string' && key.length > 0) this.taggedKeys.set(key, tag)
+    }
+  }
 
   /** Renderer reported a rendered recommendation list. */
   recordExposure(report: ExposureReport): void {
@@ -56,8 +84,13 @@ export class RecommendationExposureService {
     const now = Date.now()
     this.pruneExposed(now)
 
+    const bestTaggedRank = new Map<string, number>()
     itemKeys.forEach((key, rank) => {
-      this.exposed.set(key, { rank, surface, exposedAt: now })
+      const tag = this.taggedKeys.get(key)
+      this.exposed.set(key, { rank, surface, exposedAt: now, tag })
+      if (tag !== undefined && rank < (bestTaggedRank.get(tag) ?? Number.MAX_SAFE_INTEGER)) {
+        bestTaggedRank.set(tag, rank)
+      }
     })
 
     const day = toDayBucket(now)
@@ -67,6 +100,15 @@ export class RecommendationExposureService {
       // 10". Narrowing the denominator instead would let clicks outnumber
       // impressions and push hit-rate@k above 1.
       void this.bumpCounters(day, surface, k, { impressions: 1, clicks: 0 })
+    }
+
+    // A slice only gets an impression at k where it actually had an item to
+    // click: "@3" for the slice means "a tagged item was in the top 3".
+    for (const [tag, rank] of bestTaggedRank) {
+      for (const k of EXPOSURE_K_BUCKETS) {
+        if (rank >= k) continue
+        void this.bumpCounters(day, `${surface}:${tag}`, k, { impressions: 1, clicks: 0 })
+      }
     }
   }
 
@@ -90,11 +132,23 @@ export class RecommendationExposureService {
     for (const k of EXPOSURE_K_BUCKETS) {
       if (entry.rank >= k) continue
       void this.bumpCounters(day, entry.surface, k, { impressions: 0, clicks: 1 })
+      // The tag captured at render time, not the current one: the ranking may
+      // have moved on between the render and the click.
+      if (entry.tag !== undefined) {
+        void this.bumpCounters(day, `${entry.surface}:${entry.tag}`, k, {
+          impressions: 0,
+          clicks: 1
+        })
+      }
     }
   }
 
-  /** Hit-rate@k over the last `days` days, newest day first within each bucket. */
-  async getHitRate(days = 7): Promise<ExposureHitRateBucket[]> {
+  /**
+   * Hit-rate@k over the last `days` days. Slice rows (`<surface>:<tag>`) are a
+   * parallel accounting of items already counted on their base surface, so they
+   * stay out of the overall numbers — pass `tag` to read one slice instead.
+   */
+  async getHitRate(days = 7, tag?: string): Promise<ExposureHitRateBucket[]> {
     try {
       const db = resolveCurrentAuxDb()?.db
       if (!db) return []
@@ -102,6 +156,7 @@ export class RecommendationExposureService {
       const since = toDayBucket(Date.now() - Math.max(0, days - 1) * DAY_MS)
       const rows = await db
         .select({
+          surface: schema.recommendationExposureDaily.surface,
           k: schema.recommendationExposureDaily.k,
           impressions: schema.recommendationExposureDaily.impressions,
           clicks: schema.recommendationExposureDaily.clicks
@@ -112,6 +167,7 @@ export class RecommendationExposureService {
 
       const totals = new Map<number, { impressions: number; clicks: number }>()
       for (const row of rows) {
+        if (readSliceTag(row.surface) !== (tag ?? null)) continue
         const bucket = totals.get(row.k) ?? { impressions: 0, clicks: 0 }
         bucket.impressions += row.impressions
         bucket.clicks += row.clicks
@@ -136,6 +192,7 @@ export class RecommendationExposureService {
   /** Test seam: drop the session-scoped exposure set. */
   reset(): void {
     this.exposed.clear()
+    this.taggedKeys.clear()
   }
 
   private pruneExposed(now: number): void {
