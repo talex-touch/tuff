@@ -975,6 +975,9 @@
     "copy": "复制",
     "copied": "已复制",
     "regenerate": "重新生成",
+    "speak": "朗读",
+    "speakStop": "停止朗读",
+    "speakFailed": "朗读失败，请检查 AI 提供商的语音能力",
     "error": {
       "noProvider": "还没有可用的 AI 提供商，去「设置 · AI」配置一个再试",
       "empty": "模型没有返回任何内容",

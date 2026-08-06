@@ -975,6 +975,9 @@
     "copy": "Copy",
     "copied": "Copied",
     "regenerate": "Regenerate",
+    "speak": "Read aloud",
+    "speakStop": "Stop reading",
+    "speakFailed": "Read aloud failed — check your provider's speech capability",
     "error": {
       "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
       "empty": "The model returned nothing",

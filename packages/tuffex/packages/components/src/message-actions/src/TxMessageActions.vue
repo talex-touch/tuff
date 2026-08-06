@@ -9,24 +9,36 @@ const props = withDefaults(
     copyText?: string
     /** Shows the regenerate button. */
     regenerable?: boolean
+    /** Shows the read-aloud button; playback lives in the host. */
+    speakable?: boolean
+    /** Host-owned playback state for the read-aloud button. */
+    speakState?: 'idle' | 'loading' | 'speaking'
     /** Play the slow blur-fade entrance on mount. @default true */
     appear?: boolean
     copyLabel?: string
     copiedLabel?: string
     regenerateLabel?: string
+    speakLabel?: string
+    stopSpeakLabel?: string
   }>(),
   {
     regenerable: false,
+    speakable: false,
+    speakState: 'idle',
     appear: true,
     copyLabel: 'Copy',
     copiedLabel: 'Copied',
     regenerateLabel: 'Regenerate',
+    speakLabel: 'Read aloud',
+    stopSpeakLabel: 'Stop reading',
   },
 )
 
 const emit = defineEmits<{
   copy: [text: string]
   regenerate: []
+  /** Toggle semantics: the host starts playback, or stops the current one. */
+  speak: []
 }>()
 
 const copied = ref(false)
@@ -69,6 +81,28 @@ async function copy(): Promise<void> {
       <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="9" y="9" width="11" height="11" rx="2" />
         <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+      </svg>
+    </button>
+
+    <button
+      v-if="speakable"
+      type="button"
+      class="tx-message-actions__btn"
+      :class="{ 'is-speaking': speakState === 'speaking' }"
+      :title="speakState === 'speaking' ? stopSpeakLabel : speakLabel"
+      :aria-label="speakState === 'speaking' ? stopSpeakLabel : speakLabel"
+      :aria-pressed="speakState === 'speaking'"
+      @click="emit('speak')"
+    >
+      <svg v-if="speakState === 'loading'" class="tx-message-actions__spin" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12a9 9 0 1 1-9-9" />
+      </svg>
+      <svg v-else-if="speakState === 'speaking'" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none">
+        <rect x="7" y="7" width="10" height="10" rx="1.5" />
+      </svg>
+      <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 5 6.5 8.5H3v7h3.5L11 19V5Z" />
+        <path d="M15.5 8.7a5 5 0 0 1 0 6.6M18.4 6a9 9 0 0 1 0 12" />
       </svg>
     </button>
 
@@ -125,6 +159,20 @@ async function copy(): Promise<void> {
     &.is-copied {
       color: var(--tx-color-success, #67c23a);
     }
+
+    &.is-speaking {
+      color: var(--tx-color-primary, #409eff);
+    }
+  }
+
+  .tx-message-actions__spin {
+    animation: tx-message-actions-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes tx-message-actions-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -144,6 +192,10 @@ async function copy(): Promise<void> {
 
 @media (prefers-reduced-motion: reduce) {
   .tx-message-actions.has-appear {
+    animation: none;
+  }
+
+  .tx-message-actions .tx-message-actions__spin {
     animation: none;
   }
 }

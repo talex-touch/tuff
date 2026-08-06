@@ -50,6 +50,25 @@ describe('txMessageActions', () => {
     expect(wrapper.emitted('regenerate')).toHaveLength(1)
   })
 
+  it('reads aloud with toggle semantics across its three states', async () => {
+    const wrapper = mount(TxMessageActions, {
+      props: { speakable: true, speakState: 'idle' },
+    })
+    const btn = wrapper.find('button')
+    expect(btn.attributes('aria-label')).toBe('Read aloud')
+
+    await btn.trigger('click')
+    expect(wrapper.emitted('speak')).toHaveLength(1)
+
+    await wrapper.setProps({ speakState: 'loading' })
+    expect(wrapper.find('.tx-message-actions__spin').exists()).toBe(true)
+
+    await wrapper.setProps({ speakState: 'speaking' })
+    expect(wrapper.find('button').attributes('aria-label')).toBe('Stop reading')
+    expect(wrapper.find('button').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('button').classes()).toContain('is-speaking')
+  })
+
   it('drops the entrance animation when appear is off', () => {
     const wrapper = mount(TxMessageActions, { props: { appear: false } })
     expect(wrapper.classes()).not.toContain('has-appear')
