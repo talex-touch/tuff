@@ -1765,3 +1765,12 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - 坑:Transition 包裹 v-if 会拆断兄弟 v-else 链(改显式 !isEmpty);scoped keyframes 会被 hash 改名,探针要按前缀匹配。
 - 全量门:tuffex 1045/build、core-app typecheck×2、lint 全绿;HMR 已在用户实例生效。
 - 决策记录:MCP 路线定为主进程自建 client(--mcp-config 属第三方扩展且绕确认门,弃);C 任务下轮从 design 起步。
+
+## 2026-08-05 · search-audit-remediation · A2/R1 收口 + 批次 R 全量规划
+
+- A2 字符集统一(7dac5286c,三轮实现+复核):共享 search-charset(\p{L}\p{N} 清洗/折叠孪生含假名浊点例外/Script=Han/FTS5 引号/schema 版本)替换全部本地正则含第 4 处;三态查询变体经共享 search-keyword-lookup 双侧对称;复核真 FTS5 注入 24 条实测+CJK 码位差集穷举=0+红绿 14 条;复核抓到 R5 file 源不成立→版本键门控分页 DB 内回填(拒用会读磁盘的 scheduleIndexing,走纯映射链,幂等以 AUTOINCREMENT id 快照为证),与 path-normalization 串行互斥。
+- R1 推荐三修复(856f89b85,实现+复核):rebuild 按评分序返回+写 scoring.final、pinned 截断在排序后;usage 口径统一 source.id+门控迁移(先改写后合并为负控测试锁死的契约,'system' 字面行透传,映射键与真实 provider id 证明不相交);CoreBox 抢焦点前前台快照(TTL 15s,自见即弃)。复核顺手修 timer 逃逸等 3 处。
+- spec 固化 main-process/search-charset-and-identity-contracts.md:charset 单源、版本 bump 语义(app 自动/file 走绑定回填/禁走读盘 worker)、门控分页迁移模式四要素、usage 身份契约。
+- 批次 R 全量批准并规划(reco-signal-program.md):R2(接现成信号+hit-rate@k 指标)→R3a 采集基座→R3b 系统状态/R3c 文件活动→R3d 日历→R3e 行为学习;真地理位置停放。R4 扩展信号 14 条已入册。
+- 新账:E-NEW5 backfillTrendDay 违写契约(既有)、E-NEW6 迁移读窗竞态(自愈可接受)、E-NEW7 折叠孪生使 E-M2 更早触顶(批次 B 计入)。
+- 门(收口时):box-tool 1132 全绿、utils 1008+1skip、typecheck:node 己方文件零错;并发会话(ai/tool-gateway/conversation)文件全程未触碰。
