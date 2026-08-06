@@ -2,9 +2,10 @@ import type { ToolGatewayHandle } from './gateway-server'
 import type { ToolDefinition } from './tool-registry'
 import { Buffer } from 'node:buffer'
 import { request as httpRequest } from 'node:http'
+import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startToolGateway } from './gateway-server'
-import { createToolRegistry, resolveUserPath } from './tool-registry'
+import { createToolRegistry, parseChartSpec, resolveUserPath } from './tool-registry'
 
 let handle: ToolGatewayHandle | null = null
 
@@ -231,5 +232,62 @@ describe('tool registry', () => {
   it('summarises calls for the confirmation card', () => {
     expect(registry.get('tuff_search_files')!.summarize({ query: 'report' })).toContain('report')
     expect(registry.get('tuff_open_path')!.summarize({ path: '/tmp/x' })).toContain('/tmp/x')
+  })
+})
+
+describe('chart spec validation', () => {
+  const registry = createToolRegistry({
+    searchFiles: async () => [],
+    openPath: async () => ''
+  })
+  const chart = registry.get('tuff_render_chart')!
+
+  it('accepts a well-formed spec and marks the result for the renderer', async () => {
+    const result = await chart.execute({
+      type: 'bar',
+      title: 'Downloads',
+      labels: ['Mon', 'Tue'],
+      series: [{ name: 'count', values: [3, 5] }]
+    })
+
+    expect(result.isError).toBe(false)
+    expect(result.output.startsWith(CHART_RESULT_PREFIX)).toBe(true)
+    expect(JSON.parse(result.output.slice(CHART_RESULT_PREFIX.length))).toMatchObject({
+      type: 'bar',
+      title: 'Downloads',
+      labels: ['Mon', 'Tue'],
+      series: [{ name: 'count', values: [3, 5] }]
+    })
+  })
+
+  it('rejects unknown chart types and empty data', () => {
+    expect(parseChartSpec({ type: 'sankey', labels: ['a'], series: [{ values: [1] }] })).toContain(
+      'type must be one of'
+    )
+    expect(parseChartSpec({ type: 'bar', labels: [], series: [{ values: [] }] })).toContain(
+      'labels must be'
+    )
+    expect(parseChartSpec({ type: 'bar', labels: ['a'], series: [] })).toContain('series must be')
+  })
+
+  it('requires one value per label so a chart cannot render misaligned', () => {
+    expect(
+      parseChartSpec({ type: 'line', labels: ['a', 'b'], series: [{ values: [1] }] })
+    ).toContain('one value per label')
+  })
+
+  it('coerces non-numeric values to zero rather than failing the whole chart', () => {
+    const spec = parseChartSpec({
+      type: 'line',
+      labels: ['a', 'b'],
+      series: [{ values: [1, 'oops'] }]
+    })
+    expect(typeof spec).not.toBe('string')
+    expect((spec as { series: Array<{ values: number[] }> }).series[0]!.values).toEqual([1, 0])
+  })
+
+  it('never needs a confirmation beyond read risk', () => {
+    // It only draws data the model already holds; nothing on the machine is touched.
+    expect(chart.risk).toBe('read')
   })
 })

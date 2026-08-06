@@ -19,6 +19,7 @@ import { shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { setPiToolRuntimeResolver } from '../ai/providers/pi-cli-provider'
+import { coreBoxManager } from '../box-tool/core-box/manager'
 import { startToolGateway } from './gateway-server'
 import { createToolRegistry } from './tool-registry'
 
@@ -62,12 +63,23 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
   private registryOptions() {
     return {
       searchFiles: async (query: string, limit: number) => {
-        // Search lives behind CoreBox's provider stack; wired in S6 once the
-        // feature-invocation surface lands. Until then the tool answers
-        // honestly rather than pretending to have searched.
-        void query
-        void limit
-        return [] as Array<{ name: string; path: string }>
+        // Reuses CoreBox's own search rather than walking the disk: the agent
+        // then sees exactly what the launcher would, index and ranking included.
+        const result = await coreBoxManager.search({ text: query })
+        const items = Array.isArray(result?.items) ? result.items : []
+        return items
+          .map((item) => {
+            const entry = item as unknown as {
+              render?: { basic?: { title?: string; subtitle?: string } }
+              meta?: { extension?: { path?: string } }
+            }
+            return {
+              name: entry.render?.basic?.title ?? '',
+              path: entry.meta?.extension?.path ?? entry.render?.basic?.subtitle ?? ''
+            }
+          })
+          .filter((entry) => entry.name || entry.path)
+          .slice(0, limit)
       },
       openPath: async (path: string) => shell.openPath(path)
     }

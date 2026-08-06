@@ -936,6 +936,7 @@
     "agentTools": "Tools",
     "agentToolsHint": "Let the assistant search, read and open files — every call asks first",
     "chainOfThought": "Chain of thought",
+    "chartFailed": "The chart could not be rendered.",
     "toolAllow": "Allow",
     "toolDeny": "Deny",
     "toolRemember": "Remember for this session",

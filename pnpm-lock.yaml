@@ -46,6 +46,9 @@ catalogs:
     '@sentry/nuxt':
       specifier: ^10.64.0
       version: 10.65.0
+    echarts:
+      specifier: ^6.1.0
+      version: 6.1.0
     fighting-design:
       specifier: 0.25.1
       version: 0.25.1
@@ -341,6 +344,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1)
+      echarts:
+        specifier: 'catalog:'
+        version: 6.1.0
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
@@ -719,6 +725,8 @@ importers:
       vue-tsc:
         specifier: catalog:dev
         version: 3.3.7(typescript@5.9.3)
+
+  packages/pi-extension-tuff: {}
 
   packages/test:
     dependencies:

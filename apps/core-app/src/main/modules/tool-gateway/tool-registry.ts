@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
+import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 
 /**
  * How much damage a tool can do, which decides whether a session-level
@@ -83,6 +84,64 @@ function looksBinary(path: string): boolean {
   return dot >= 0 && BINARY_EXTENSIONS.has(path.slice(dot).toLowerCase())
 }
 
+const CHART_TYPES = new Set(['bar', 'line', 'pie', 'scatter'])
+/** Enough for a readable chart; beyond this a table serves the user better. */
+const MAX_CHART_POINTS = 200
+
+export interface ChartSpec {
+  type: string
+  title?: string
+  labels: string[]
+  series: Array<{ name?: string; values: number[] }>
+}
+
+/**
+ * Validates a model-proposed chart into a fixed shape.
+ *
+ * Deliberately not "run the code the model wrote": a declarative spec the
+ * renderer maps onto ECharts options gives the same reports without handing
+ * the model an execution surface.
+ */
+export function parseChartSpec(args: Record<string, unknown>): ChartSpec | string {
+  const type = String(args.type ?? '')
+    .trim()
+    .toLowerCase()
+  if (!CHART_TYPES.has(type)) {
+    return `type must be one of ${[...CHART_TYPES].join(', ')}`
+  }
+
+  const labels = Array.isArray(args.labels) ? args.labels.map((label) => String(label)) : []
+  if (labels.length === 0) return 'labels must be a non-empty array'
+  if (labels.length > MAX_CHART_POINTS) return `labels is limited to ${MAX_CHART_POINTS} entries`
+
+  const rawSeries = Array.isArray(args.series) ? args.series : []
+  if (rawSeries.length === 0) return 'series must be a non-empty array'
+
+  const series: ChartSpec['series'] = []
+  for (const entry of rawSeries) {
+    const record = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null
+    const values = Array.isArray(record?.values) ? record.values : null
+    if (!values) return 'each series needs a numeric values array'
+    const numbers = values.map((value) =>
+      typeof value === 'number' && Number.isFinite(value) ? value : 0
+    )
+    if (numbers.length !== labels.length) {
+      return 'each series must have exactly one value per label'
+    }
+    series.push({
+      ...(typeof record?.name === 'string' ? { name: record.name } : {}),
+      values: numbers
+    })
+  }
+
+  return {
+    type,
+    ...(typeof args.title === 'string' ? { title: args.title } : {}),
+    labels,
+    series
+  }
+}
+
 export interface ToolRegistryOptions {
   /** Injected so the gateway can be tested without the search subsystem. */
   searchFiles: (query: string, limit: number) => Promise<Array<{ name: string; path: string }>>
@@ -144,6 +203,20 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         return failure
           ? { output: `Could not open: ${failure}`, isError: true }
           : { output: `Opened ${path}`, isError: false }
+      }
+    },
+    {
+      name: 'tuff_render_chart',
+      // No confirmation worth asking for: this only draws data the model
+      // already has in the conversation, and touches nothing on the machine.
+      risk: 'read',
+      summarize: (args) => `Render a ${String(args.type ?? 'chart')} chart`,
+      execute: async (args) => {
+        const spec = parseChartSpec(args)
+        if (typeof spec === 'string') return { output: `Invalid chart: ${spec}`, isError: true }
+        // The payload rides the normal tool-result channel with a marker the
+        // renderer recognises, so no second transport is needed for widgets.
+        return { output: `${CHART_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
     }
   ]
