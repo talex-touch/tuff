@@ -33,26 +33,30 @@ const intelligenceSdkMocks = vi.hoisted(() => ({
   updateConfig: vi.fn()
 }))
 const intelligenceEventMocks = vi.hoisted(() => {
-  const event = (name: string) => ({ toEventName: () => name })
+  // Any member the module registers resolves to a stub with an internally
+  // consistent name. The previous hand-kept lists went stale every time the
+  // domain grew an event — which is exactly how this suite kept breaking.
+  const events = (group: string) => {
+    const cache: Record<string, { toEventName: () => string }> = {}
+    return new Proxy(cache, {
+      get: (_target, key: string) => (cache[key] ??= { toEventName: () => `${group}:${key}` })
+    })
+  }
   return {
-    intelligenceApiEvents: {
-      invoke: event('intelligence:api:invoke'),
-      stream: event('intelligence:api:stream'),
-      ttsSpeak: event('intelligence:api:tts-speak'),
-      chatLangChain: event('intelligence:api:chat-langchain')
-    },
-    intelligenceContextEvents: {
-      execute: event('intelligence:context:execute'),
-      stream: event('intelligence:context:stream')
-    }
+    intelligenceApiEvents: events('intelligence:api'),
+    intelligenceContextEvents: events('intelligence:context'),
+    intelligenceKnowledgeEvents: events('intelligence:knowledge')
   }
 })
 
 vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
-  ...intelligenceEventMocks,
-  intelligenceKnowledgeEvents: {}
+  ...intelligenceEventMocks
 }))
-vi.mock('@talex-touch/utils/transport/events/types', () => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  // Real constants and guards (they're pure data), with only the error-code
+  // check stubbed — a hand-listed mock goes stale every time the module
+  // grows an export, which is exactly how this suite broke.
+  ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
 

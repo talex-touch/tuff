@@ -49,30 +49,30 @@ const discoveryMocks = vi.hoisted(() => ({
   ])
 }))
 const intelligenceEventMocks = vi.hoisted(() => {
-  const event = (name: string) => ({ toEventName: () => name })
+  // Any member the module registers resolves to a stub with an internally
+  // consistent name. The previous hand-kept lists went stale every time the
+  // domain grew an event — which is exactly how this suite kept breaking.
+  const events = (group: string) => {
+    const cache: Record<string, { toEventName: () => string }> = {}
+    return new Proxy(cache, {
+      get: (_target, key: string) => (cache[key] ??= { toEventName: () => `${group}:${key}` })
+    })
+  }
   return {
-    intelligenceApiEvents: {
-      testProvider: event('intelligence:api:test-provider'),
-      getCapabilityTestMeta: event('intelligence:api:get-capability-test-meta'),
-      getCapabilityStatus: event('intelligence:api:get-capability-status'),
-      getProviderModelOptions: event('intelligence:api:get-provider-model-options'),
-      testCapability: event('intelligence:api:test-capability'),
-      fetchModels: event('intelligence:api:fetch-models'),
-      getAuditLogs: event('intelligence:api:get-audit-logs'),
-      getTodayStats: event('intelligence:api:get-today-stats'),
-      getMonthStats: event('intelligence:api:get-month-stats'),
-      getUsageStats: event('intelligence:api:get-usage-stats'),
-      getLocalEnvironment: event('intelligence:api:get-local-environment')
-    },
-    intelligenceContextEvents: {}
+    intelligenceApiEvents: events('intelligence:api'),
+    intelligenceContextEvents: events('intelligence:context'),
+    intelligenceKnowledgeEvents: events('intelligence:knowledge')
   }
 })
 
 vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
-  ...intelligenceEventMocks,
-  intelligenceKnowledgeEvents: {}
+  ...intelligenceEventMocks
 }))
-vi.mock('@talex-touch/utils/transport/events/types', () => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  // Real constants and guards (they're pure data), with only the error-code
+  // check stubbed — a hand-listed mock goes stale every time the module
+  // grows an export, which is exactly how this suite broke.
+  ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
 vi.mock('./intelligence-sdk', () => ({
