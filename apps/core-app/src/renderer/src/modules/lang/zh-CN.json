@@ -4206,6 +4206,15 @@
       "missingRendererId": "缺少 rendererId",
       "renderFailed": "Widget 渲染失败"
     },
+    "fileIndex": {
+      "failTitle": "文件索引初始化失败",
+      "failMessage": "文件索引初始化失败，可能导致搜索功能无法正常使用。",
+      "viewErrorDetails": "查看错误详情",
+      "rebuilding": "重建中...",
+      "rebuildIndex": "重新建立索引",
+      "later": "稍后处理",
+      "dontRemindAgain": "不再提醒"
+    },
   "common": {
     "loadMore": "加载更多",
     "copy": "复制",
