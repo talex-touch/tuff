@@ -2278,6 +2278,16 @@
     "modifiedAt": "修改时间"
   },
   "download": {
+    "migration": {
+      "title": "正在迁移数据",
+      "subtitle": "迁移完成前请保持应用开启。",
+      "tasks": "任务",
+      "history": "历史记录",
+      "config": "配置",
+      "duration": "耗时",
+      "errors": "错误",
+      "pleaseWait": "请稍候…"
+    },
     "error_logs": "错误日志",
     "no_logs": "暂无日志",
     "load_logs_failed": "加载日志失败",
@@ -4189,6 +4199,9 @@
     }
   },
   "common": {
+    "yes": "是",
+    "no": "否",
+    "retry": "重试",
     "cancel": "取消",
     "save": "保存",
     "confirm": "确认",

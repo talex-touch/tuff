@@ -2302,6 +2302,16 @@
     "modifiedAt": "Modified At"
   },
   "download": {
+    "migration": {
+      "title": "Migrating data",
+      "subtitle": "Please keep the app open until the migration finishes.",
+      "tasks": "Tasks",
+      "history": "History",
+      "config": "Config",
+      "duration": "Duration",
+      "errors": "Errors",
+      "pleaseWait": "Please wait…"
+    },
     "error_logs": "Error Logs",
     "no_logs": "No logs yet",
     "load_logs_failed": "Failed to load logs",
@@ -4233,6 +4243,9 @@
     }
   },
   "common": {
+    "yes": "Yes",
+    "no": "No",
+    "retry": "Retry",
     "cancel": "Cancel",
     "save": "Save",
     "confirm": "Confirm",
