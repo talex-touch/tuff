@@ -34,6 +34,14 @@ export interface IndexingWatchDeltaQueueServiceDeps<
     meta?: Record<string, unknown>,
   ) => void;
   coalesce?: (input: IndexingWatchDeltaCoalesceInput<TPayload>) => TPayload;
+  /**
+   * Trailing-edge window that merges the burst of watcher events a single filesystem change
+   * produces (an app install emits ~16) into one flush. Omit or set to 0 to keep the historic
+   * behaviour, where the queue only serializes and coalesces whatever arrives while a flush is
+   * already in flight. At most one timer exists at a time and it is released when the window
+   * closes, so an idle queue holds none.
+   */
+  debounceMs?: number;
 }
 
 export function coalesceIndexingWatchDelta<
@@ -66,6 +74,7 @@ export class IndexingWatchDeltaQueueService<
 > {
   private taskChain: Promise<void> = Promise.resolve();
   private readonly pending = new Map<string, TPayload>();
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly deps: IndexingWatchDeltaQueueServiceDeps<TPayload>,
@@ -73,6 +82,15 @@ export class IndexingWatchDeltaQueueService<
 
   getPendingSize(): number {
     return this.pending.size;
+  }
+
+  hasPendingWindow(): boolean {
+    return this.debounceTimer !== null;
+  }
+
+  /** Drops any open coalescing window; pending entries stay queued for the next flush. */
+  dispose(): void {
+    this.clearDebounceWindow();
   }
 
   enqueue(
@@ -102,11 +120,39 @@ export class IndexingWatchDeltaQueueService<
     this.schedule();
   }
 
+  /** Bypasses the coalescing window — callers use this to drain on demand. */
   flushSoon(): void {
-    this.schedule();
+    this.clearDebounceWindow();
+    this.chainFlush();
   }
 
   private schedule(): void {
+    if (this.pending.size === 0) {
+      return;
+    }
+
+    const debounceMs = this.deps.debounceMs ?? 0;
+    if (debounceMs <= 0) {
+      this.chainFlush();
+      return;
+    }
+
+    // Trailing edge: the first event of a burst opens the window and every later event lands in
+    // the same pending map, so the whole burst costs one timer and one flush.
+    if (this.debounceTimer !== null) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (this.debounceTimer === timer) {
+        this.debounceTimer = null;
+      }
+      this.chainFlush();
+    }, debounceMs);
+    timer.unref?.();
+    this.debounceTimer = timer;
+  }
+
+  private chainFlush(): void {
     if (this.pending.size === 0) {
       return;
     }
@@ -116,6 +162,14 @@ export class IndexingWatchDeltaQueueService<
       .catch((error) => {
         this.deps.logError("Failed to process watch delta updates.", error);
       });
+  }
+
+  private clearDebounceWindow(): void {
+    if (this.debounceTimer === null) {
+      return;
+    }
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = null;
   }
 
   private async flush(): Promise<void> {

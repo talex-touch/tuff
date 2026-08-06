@@ -13,6 +13,12 @@ type HarnessLogger = {
   debug: Mock
 }
 
+/** Mirrors AppScanner's `AppScanResolution` without pinning the app-info shape tests build. */
+export type AppScanResolutionMockResult =
+  | { ok: true; appInfo: unknown }
+  | { ok: false; outcome: 'not-app' }
+  | { ok: false; outcome: 'failed'; error: unknown }
+
 const appProviderMocks = vi.hoisted(() => {
   // Loggers are memoized per namespace so a test can assert on the very instance the subject
   // captured at import time, which the `vi.resetModules()` reload between tests would otherwise
@@ -31,12 +37,23 @@ const appProviderMocks = vi.hoisted(() => {
     return created
   }
 
+  const getAppInfoByPathMock = vi.fn()
+  // Most tests only care whether a path resolves, so the classified variant defaults to the plain
+  // lookup and reports the terminal outcome for a miss. Failure-class tests override it directly.
+  const resolveAppInfoByPathMock = vi.fn<
+    (filePath: string) => Promise<AppScanResolutionMockResult>
+  >(async (filePath) => {
+    const appInfo = await getAppInfoByPathMock(filePath)
+    return appInfo ? { ok: true, appInfo } : { ok: false, outcome: 'not-app' }
+  })
+
   return {
     resolveLogger,
     addWatchPathMock: vi.fn(),
     getAppsMock: vi.fn(),
     getAppsBySourceMock: vi.fn(),
-    getAppInfoByPathMock: vi.fn(),
+    getAppInfoByPathMock,
+    resolveAppInfoByPathMock,
     ensureAppIconMock: vi.fn<() => Promise<string | null>>(async () => null),
     getLoggerMock: vi.fn((namespace: string) => resolveLogger(namespace)),
     getMainConfigMock: vi.fn(),
@@ -83,6 +100,7 @@ export const addWatchPathMock = appProviderMocks.addWatchPathMock
 export const getAppsMock = appProviderMocks.getAppsMock
 export const getAppsBySourceMock = appProviderMocks.getAppsBySourceMock
 export const getAppInfoByPathMock = appProviderMocks.getAppInfoByPathMock
+export const resolveAppInfoByPathMock = appProviderMocks.resolveAppInfoByPathMock
 export const ensureAppIconMock = appProviderMocks.ensureAppIconMock
 export const getLoggerMock = appProviderMocks.getLoggerMock
 export const getMainConfigMock = appProviderMocks.getMainConfigMock
@@ -295,6 +313,9 @@ vi.mock('./app-scanner', () => ({
     getApps: getAppsMock,
     getAppsBySource: getAppsBySourceMock,
     getAppInfoByPath: getAppInfoByPathMock,
+    // Defaults to the plain lookup so a test only has to drive `getAppInfoByPathMock`; reach for
+    // `resolveAppInfoByPathMock.mockResolvedValueOnce` when the failure class is the point.
+    resolveAppInfoByPath: resolveAppInfoByPathMock,
     getWatchPaths: getWatchPathsMock,
     runMdlsUpdateScan: runMdlsUpdateScanMock
   }
@@ -595,10 +616,24 @@ export type AppProviderPrivate = {
   _syncSemanticAliasCatalogIfNeeded: () => Promise<void>
   _waitForItemStable: (path: string) => Promise<boolean>
   publishAppRuntimeUpsert: (appInfo: { path: string }, reason: string) => Promise<void>
-  processAppPath: (path: string) => Promise<{
+  appResolutionRetries: Map<
+    string,
+    { attempt: number; managedEntry: boolean; timer: NodeJS.Timeout | null }
+  >
+  appResolutionDeadLetters: Map<
+    string,
+    { managedEntry: boolean; sweeps: number; lastError: string }
+  >
+  appResolutionSweepTimer: NodeJS.Timeout | null
+  sweepAppResolutionDeadLetters: () => Promise<void>
+  processAppPath: (
+    path: string,
+    options?: { managedEntry?: boolean; scheduleRetry?: boolean }
+  ) => Promise<{
     success: boolean
     status: string
     path?: string
+    reason?: string
     appInfo?: {
       name: string
       displayName?: string
@@ -690,10 +725,13 @@ export type AppProviderPrivate = {
   _ensureStartupIndexHealth: () => Promise<void>
   _runFullSyncIfDue: () => Promise<void>
   _shouldRunStartupBackfill: () => Promise<{ allowed: boolean; reason?: string }>
-  getAppSearchIndexHealth: () => Promise<{
+  _scheduleMdlsUpdateScan: () => void
+  isAppIndexWarming: () => Promise<boolean>
+  getAppSearchIndexHealth: (options?: { probeFilesystem?: boolean }) => Promise<{
     healthy: boolean
     appCount: number
     indexedItemCount: number
+    unindexedOnDisk?: number
   }>
   waitForAppIndexPipelineIdle: () => Promise<void>
   waitForStartupProducerDelay: (delayMs: number) => Promise<void>
@@ -715,6 +753,7 @@ export type AppProviderPrivate = {
   }> &
     Record<string, unknown>
   _getLastFullSyncTime: () => Promise<number | null>
+  _getLastScanTime: () => Promise<number | null>
   setIndexedSourceRuntimeDelegate: (
     delegate: {
       scan: (reason: string) => Promise<unknown>

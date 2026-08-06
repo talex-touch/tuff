@@ -13,6 +13,20 @@ import type { WindowsAppSourceScanResult } from './win'
 
 export type AppScannerSourceScanResult = WindowsAppSourceScanResult
 
+/**
+ * Outcome of resolving one path into app metadata.
+ *
+ * `not-app` is terminal: the path is not (or is no longer) a launchable bundle, so retrying it
+ * would only repeat the same answer. `failed` means the resolution itself broke — a chunk that
+ * failed to load, an mdls throttle, a bundle still being copied in — and the same path may well
+ * resolve on the next attempt. Collapsing the two, as the historic `null` return did, is what let
+ * transient failures disappear silently.
+ */
+export type AppScanResolution =
+  | { ok: true; appInfo: ScannedAppInfo }
+  | { ok: false; outcome: 'not-app' }
+  | { ok: false; outcome: 'failed'; error: unknown }
+
 const appScannerLog = createLogger('AppScanner')
 const WINDOWS_START_MENU_PATHS = [
   path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'),
@@ -173,6 +187,18 @@ export class AppScanner {
    * @returns {Promise<ScannedAppInfo | null>} A promise that resolves to the application's information.
    */
   async getAppInfoByPath(filePath: string): Promise<ScannedAppInfo | null> {
+    const resolution = await this.resolveAppInfoByPath(filePath)
+    return resolution.ok ? resolution.appInfo : null
+  }
+
+  /**
+   * Resolves one path into app metadata, keeping "not an app" and "resolution failed" apart so the
+   * caller can retry only what is worth retrying.
+   *
+   * @param {string} filePath - The path to the application file.
+   * @returns {Promise<AppScanResolution>} The resolved app info, or a classified failure.
+   */
+  async resolveAppInfoByPath(filePath: string): Promise<AppScanResolution> {
     try {
       appScannerLog.info(
         formatLog('AppScanner', `Getting app info for: ${chalk.cyan(filePath)}`, LogStyle.info)
@@ -194,7 +220,25 @@ export class AppScanner {
         }
       })
 
-      return appInfo || null
+      if (appInfo) {
+        return { ok: true, appInfo }
+      }
+
+      // The platform adapters answer `null` both for "this is not an app" and for errors they
+      // handled internally, so ask the filesystem which one it was: a bundle that is still on disk
+      // and still carries a manifest should have resolved, and its failure to do so is transient.
+      if (await this.isResolvableAppCandidate(filePath)) {
+        appScannerLog.warn(
+          formatLog(
+            'AppScanner',
+            `App info unresolved for an existing bundle, will retry: ${chalk.yellow(filePath)}`,
+            LogStyle.warning
+          )
+        )
+        return { ok: false, outcome: 'failed', error: new Error('APP_INFO_UNRESOLVED') }
+      }
+
+      return { ok: false, outcome: 'not-app' }
     } catch (error) {
       appScannerLog.error(
         formatLog(
@@ -205,7 +249,26 @@ export class AppScanner {
           LogStyle.error
         )
       )
-      return null
+      return { ok: false, outcome: 'failed', error }
+    }
+  }
+
+  /**
+   * Cheap existence probe used only on the failure path: does this path still look like something
+   * that should have resolved? macOS needs the bundle manifest specifically, because a `.app`
+   * directory without one is exactly the case the darwin adapter reports as terminal.
+   */
+  private async isResolvableAppCandidate(filePath: string): Promise<boolean> {
+    if (!filePath) return false
+    try {
+      if (process.platform === 'darwin') {
+        await fs.access(path.join(filePath, 'Contents', 'Info.plist'))
+        return true
+      }
+      await fs.access(filePath)
+      return true
+    } catch {
+      return false
     }
   }
 
