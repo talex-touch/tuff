@@ -4254,6 +4254,15 @@
       "missingRendererId": "Missing rendererId",
       "renderFailed": "Widget failed to render"
     },
+    "fileIndex": {
+      "failTitle": "File index initialization failed",
+      "failMessage": "The file index failed to initialize, so search may not work correctly.",
+      "viewErrorDetails": "View error details",
+      "rebuilding": "Rebuilding…",
+      "rebuildIndex": "Rebuild index",
+      "later": "Later",
+      "dontRemindAgain": "Don't remind me again"
+    },
   "common": {
     "loadMore": "Load more",
     "copy": "Copy",
