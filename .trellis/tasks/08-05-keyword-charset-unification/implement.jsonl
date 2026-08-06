@@ -1,1 +1,2 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/08-05-search-audit-remediation/research/audit-findings-digest.md", "reason": "本任务的需求来源：E-H6/A-H5/F-H3/F-H4/A-M4/A-L1/E-L1 条目原文（含 E-L1 的确切指控范围）"}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "§2『新输入字段必须进 resolveAppSearchDerived 缓存键』契约——改 app 关键词生成常量前必读"}

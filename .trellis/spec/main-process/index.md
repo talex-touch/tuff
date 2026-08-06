@@ -12,6 +12,10 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached
   arrays are shared read-only references.
+- [search-charset-and-identity-contracts.md](search-charset-and-identity-contracts.md)
+  — charset rules import from search-charset only; SEARCH_KEYWORD_SCHEMA_VERSION
+  bump semantics (app auto / file via bound backfill, never through the disk-reading
+  worker); gated paged migration pattern; usage identity = source.id everywhere.
 
 ## Quality Check
 

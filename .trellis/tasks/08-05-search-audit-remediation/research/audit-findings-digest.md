@@ -94,6 +94,17 @@ TalexDreamSoul/app-shell-v2 @ a1431ca42); verify before use.
 - E-NEW4 · 低 · 速度 · query-completion-service.ts:111 (A1 check) — completion prefix
   LIKE has no index on query_completions and now runs pre-publish; if firstResultMs
   regresses, add the prefix index → fold into batch B index-sql-recall-fixes.
+- E-NEW5 · 中 · 契约 · recommendation-engine.ts:718 (R1 check) — pre-existing:
+  `backfillTrendDay` upserts usage_trend_daily WITHOUT scheduleDbWrite (violates
+  database-write-contracts); same table the R1 migration writes correctly. Fold into
+  R2 or batch B cleanup.
+- E-NEW7 · 低 · 说明 · lookupByKeywords growth (A2 check) — folded twins + full-title/
+  spaced keywords increase rows per item, so E-M2/F-H5 (global LIMIT, no ORDER BY)
+  saturates earlier; batch B index-sql-recall-fixes must size limits with this in.
+- E-NEW6 · 低 · 说明 · usage-source-identity-migration (R1 check) — migration reads
+  (loadTrendRowsByKeys) are outside the scheduled write; a concurrent trend increment
+  in the read→apply window can lose one count once, self-corrected by the next
+  aggregator rebuild. Accepted; root fix = read+plan+apply in one scheduled txn.
 - Sorter notes: matchScore×20000 makes tiers unbridgeable (frecency needs e10 count);
   APP_EXACT_TOKEN_INTENT_BONUS=6.2e6 balances app-vs-feature at a 1.0% margin; no
   cross-provider dedup (app id and file id are both absolute path on macOS — extraPaths
@@ -234,6 +245,18 @@ TalexDreamSoul/app-shell-v2 @ a1431ca42); verify before use.
   A2 keyword-charset-unification (E-H6/A-H5/F-H3/F-H4, A-M4, A-L1, E-L1).
 - Batch B (to create later): index-sql-recall-fixes (E-M2/M3/M9, F-H5/H6/H7, A-H4);
   ngram-cjk-infix (F-M1, F-M6); hotpath-misc (A-M5, E-M13/M14, E-L5-usage-cache).
+- Batch R FULL PROGRAM approved 2026-08-06 ("都做，本地数据处理") — task tree and
+  signal→task mapping in research/reco-signal-program.md: R1 (in flight) → R2 (+
+  hit-rate@k metrics R9) → R3a substrate → R3b system-state / R3c file-activity
+  (parallel) → R3d calendar → R3e behavior learning. Geolocation parked.
+- Batch R (recommendation, to create later — see research/reco-signals-audit.md):
+  R1 fix-reco-ranking-and-stats — FIXED 2026-08-05 (08-05-reco-ranking-stats-fix):
+  P0-1 rebuild order loss + scoring.final writeback + pinned truncation after sort;
+  P0-2 sourceId口径断链 + trend double-key P1-3 (write site + gated idempotent
+  migration); P1-4 pre-open foreground snapshot. R2 wire-existing-signals (hourDistribution,
+  cache-key cardinality, cold start, incremental aggregation, selection-capture,
+  timezone-change); R3 new-signals (prev_app co-occurrence, wifi place buckets,
+  geolocation last + default off).
 - Batch C (to create later): ipc-lifecycle-fixes (E-H5/H9, E-M4/M5/M7/M10/M15/M16);
   macos-app-discovery-robustness (A-H6, A-M6/M7/M8); pinyin-consolidation (A-L2,
   4 duplicated pinyin sites, getSyllables contract, index schema version);

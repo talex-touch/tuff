@@ -29,7 +29,7 @@
 
 - [ ] 设置页完成 skills 与 MCP 两组管理面（增删改/启停/健康态），风格沿 CoreBox v2.5 设置页版式
 - [ ] 自动导入：本机存在候选时列出并可一键导入，二次扫描去重
-- [ ] 产出的 mcp-config 文件被 pi 接受（`--mcp-config` 冒烟：server 工具在 pi 会话可见）
+- [ ] MCP 工具在首页会话可用（决策改道：主进程 registry 经 tool-gateway 代理，弃 `--mcp-config`；冒烟=真 server 手动配置→探测 ok→会话内 list+call 过确认门回流）
 - [ ] skills 注入：增删一个 skill 后，下一轮会话 system prompt 注入随之变化（单测 + 日志证据）；自动选择开关可关
 - [ ] 主进程服务层单测；typecheck/lint 全绿
 

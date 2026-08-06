@@ -1,8 +1,8 @@
 {
-  "id": "keyword-charset-unification",
-  "name": "keyword-charset-unification",
-  "title": "Keyword charset unification",
-  "description": "Replace the [a-z0-9 CJK-basic] whole-word veto regex with shared Unicode-property cleaning across index and query sides; restores accented Latin, kana/hangul/Cyrillic, multi-word aliases, extension and full-title keywords (audit app-H5/M4, file high-3/4, engine H6/L1).",
+  "id": "reco-ranking-stats-fix",
+  "name": "reco-ranking-stats-fix",
+  "title": "Fix recommendation ranking and stats identity",
+  "description": "R1: rebuild preserves scoreAndRank order + scoring.final writeback + pinned truncation after sort (P0-1); unify usage sourceId identity across logs/stats/time-stats/trend with idempotent migration (P0-2, P1-3); pre-open foreground app snapshot (P1-4). Source: parent research/reco-signals-audit.md",
   "status": "in_progress",
   "dev_type": null,
   "scope": null,

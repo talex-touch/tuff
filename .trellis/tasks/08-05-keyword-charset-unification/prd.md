@@ -23,10 +23,19 @@ Replace the [a-z0-9 CJK-basic] whole-word veto regex with shared Unicode-propert
   keyword so spaced aliases are reachable.
 - R5: A keyword schema version is folded into the per-item keyword hash so existing
   items regenerate their keyword mappings on the next reconcile/scan pass without a
-  manual rebuild.
+  manual rebuild. This carries the app source (every scan re-emits the whole
+  catalog) but not the file source, whose steady-state reconcile only re-emits
+  files whose mtime changed — see R8.
 - R6: Existing CN/EN behavior is regression-free (pinyin generation trigger widens
   from CJK-basic to Script=Han only; all current keywords remain producible).
-- R7: E-L1 fix: single-character acronym keywords are no longer written.
+- R7: E-L1 fix: a multi-word title no longer also emits a single-character keyword —
+  its multi-letter acronym already covers that. Single-word titles keep their
+  first-letter keyword, which is what that branch exists for.
+- R8: File rows indexed under the old charset are repaired by a one-time,
+  version-key-gated, paginated in-DB backfill: it re-emits already-indexed rows
+  through the normal indexed-source write path (no disk rescan), runs after the
+  startup degrade window and behind the path-normalization pass, and leaves the
+  version unrecorded when any page fails so the next boot retries.
 
 ## Acceptance Criteria
 
@@ -36,6 +45,10 @@ Replace the [a-z0-9 CJK-basic] whole-word veto regex with shared Unicode-propert
       safe against FTS5 syntax injection ("a OR b", quotes).
 - [ ] search-index-service integration tests: index → lookupByKeywords round trip for
       café (via `cafe` and `café`), `vs code` via full-query exact path.
+- [ ] Backfill tests: version gate (never run / older / current / write path
+      unavailable), id-cursor paging, a failed page leaves the version unrecorded,
+      and a real-libsql end-to-end where an old-charset row becomes reachable by
+      `café` / the full title and a retry rewrites no keyword row.
 - [ ] Existing search-engine + addon/apps + addon/files suites green; typecheck:node
       green for touched files.
 
