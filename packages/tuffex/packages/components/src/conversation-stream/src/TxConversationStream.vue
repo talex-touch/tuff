@@ -116,13 +116,17 @@ function entryHeight(entry: ResizeObserverEntry): number {
 function handleResizeEntries(entries: ResizeObserverEntry[]): void {
   const scroller = scrollerRef.value
   let compensation = 0
-  let liveGrew = false
+  let grew = false
 
   for (const entry of entries) {
     const target = entry.target
 
     if (target === scroller) {
       viewportHeight.value = entryHeight(entry)
+      // Late layout constraints shrink the viewport after items were already
+      // measured (no item deltas left to fire) — a following reader must be
+      // re-pinned or they strand at the top with `following` still true.
+      grew = true
       continue
     }
 
@@ -142,7 +146,7 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
       // message arrives this item joins the cache pre-measured.
       if (liveKey.value != null)
         cache.setHeight(liveKey.value, entryHeight(entry))
-      liveGrew = true
+      grew = true
       continue
     }
 
@@ -153,6 +157,10 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
     if (delta === 0)
       continue
     layoutVersion.value += 1
+    // Settled items can still grow after mount (async images, diagrams). A
+    // following reader stays pinned through that; a detached one gets the
+    // same-callback compensation below instead.
+    grew = true
     // Corrections above the viewport shift everything below them; compensate
     // in the same callback (post-layout, pre-paint) so the view holds still.
     const index = virtualKeys.value.indexOf(key)
@@ -165,8 +173,12 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
     scrollTop.value = scroller.scrollTop
   }
 
-  if (liveGrew)
-    stick.followIfSticking()
+  // After the reactive flush, not in the RO callback: item deltas change the
+  // spacer height through a Vue re-render, so scrolling now would target a
+  // stale scrollHeight — and the spacer applying later fires no resize of its
+  // own to correct it.
+  if (grew)
+    void nextTick(() => stick.followIfSticking())
 }
 
 function trackItem(el: unknown, key: ConversationStreamKey): void {
