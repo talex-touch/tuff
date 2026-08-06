@@ -14,6 +14,12 @@ export interface DialogConfig extends DialogLifecycleCallbacks {
   cleanup?: () => void
 }
 
+const PRIORITY_WEIGHT: Record<DialogPriority, number> = {
+  low: 0,
+  normal: 1,
+  high: 2,
+}
+
 export class DialogManager {
   private stack: DialogConfig[] = []
 
@@ -23,13 +29,29 @@ export class DialogManager {
       this.unregister(config.id)
     }
 
-    const currentVisible = this.getVisibleDialog()
-    if (currentVisible) {
-      this.hideDialog(currentVisible)
+    // Insert above every dialog of equal or lower priority: a high-priority
+    // dialog jumps ahead of queued lower-priority ones, while dialogs of the
+    // same priority keep plain LIFO order. Callers that pass no priority are
+    // all 'normal', so they land on top exactly as before.
+    const weight = weightOf(config)
+    let index = this.stack.length
+    while (index > 0 && weightOf(this.stack[index - 1]!) > weight) {
+      index--
     }
 
-    this.stack.push(config)
-    this.showDialog(config)
+    const previousVisible = this.getVisibleDialog()
+    this.stack.splice(index, 0, config)
+    const nextVisible = this.getVisibleDialog()
+
+    if (previousVisible === nextVisible)
+      return
+
+    if (previousVisible) {
+      this.hideDialog(previousVisible)
+    }
+    if (nextVisible) {
+      this.showDialog(nextVisible)
+    }
   }
 
   unregister(id: string): void {
@@ -43,6 +65,9 @@ export class DialogManager {
     const wasVisible = index === this.stack.length
 
     dialog.onDestroy?.()
+    // clearAll() runs both hooks; unregister() used to skip cleanup, so a
+    // dialog torn down individually leaked whatever cleanup released.
+    dialog.cleanup?.()
 
     if (wasVisible && this.stack.length > 0) {
       const nextVisible = this.getVisibleDialog()
@@ -95,6 +120,10 @@ export class DialogManager {
 
     dialog.onHide?.()
   }
+}
+
+function weightOf(dialog: DialogConfig): number {
+  return PRIORITY_WEIGHT[dialog.priority ?? 'normal']
 }
 
 let singleton: DialogManager | null = null
