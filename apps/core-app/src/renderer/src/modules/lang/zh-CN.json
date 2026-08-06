@@ -4198,6 +4198,14 @@
       "unofficial": "当前版本未通过官方构建验证，可能不安全"
     }
   },
+    "widgetFrame": {
+      "compileFailed": "Widget 编译失败",
+      "loading": "Widget 加载中",
+      "rendererMissing": "Widget renderer 缺失",
+      "rendererUnregistered": "Widget renderer 未注册",
+      "missingRendererId": "缺少 rendererId",
+      "renderFailed": "Widget 渲染失败"
+    },
   "common": {
     "loadMore": "加载更多",
     "copy": "复制",

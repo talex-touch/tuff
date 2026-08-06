@@ -4246,6 +4246,14 @@
       "unofficial": "Current version has not passed official build verification, may be unsafe"
     }
   },
+    "widgetFrame": {
+      "compileFailed": "Widget compile failed",
+      "loading": "Loading widget",
+      "rendererMissing": "Widget renderer missing",
+      "rendererUnregistered": "Widget renderer not registered",
+      "missingRendererId": "Missing rendererId",
+      "renderFailed": "Widget failed to render"
+    },
   "common": {
     "loadMore": "Load more",
     "copy": "Copy",
