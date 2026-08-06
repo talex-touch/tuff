@@ -79,6 +79,16 @@ See `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`.
 - Prefer `@talex-touch/tuffex/base.css` plus component subpath styles in plugin UI; do not add a full `@talex-touch/tuffex/style.css` import unless working in an existing legacy full-style surface.
 - Avoid changing visual class contracts while fixing semantics.
 
+### Shell colour tokens
+
+The app shell has one palette, `--shell-*` in `apps/core-app/src/renderer/src/styles/shell-tokens.scss`, defined across four blocks: `:root`, `.dark`, `html.contrast`, `html.dark.contrast`. Shell surfaces read tokens only — a hex literal or `rgba()` in a renderer component is a bug, because it survives the theme swap and the high-contrast accessibility mode.
+
+- Four semantic hues exist — `primary`, `success`, `warning`, `danger`, `info` — each with a base ink, a `-soft` fill and a `-border`. A status chip is `-soft` fill plus same-hue base ink; that is the whole shape.
+- Both contrast blocks re-point every hue to the tuffex contrast ramp (`--tx-color-*` and its `-light-9`) and replace the alpha `-border` with the solid base: a 24 %-alpha hairline disappears at high contrast.
+- **Chip ink is measured against its own `-soft` fill, not against the page background** — that composite is the real reading surface and is what must clear AA 4.5:1. Two of the artboard's light-mode values missed it, so the palette carries darkened values with the measurement recorded in the file. Reproduce that check before adding or changing a hue, and record the number.
+- Colour is additive to a text label, never the sole carrier of state.
+- Reserve accent colour for primary buttons, switch-on, progress fill and selected state. An expected outcome does not get an error colour — a probe that runs and finds nothing is amber at most, because red on a routine result only teaches people to ignore red.
+
 ---
 
 ## Loading States

@@ -79,9 +79,12 @@
 - 未做(不属本轮):Workflow 页 `input { width: 100% }` 连 checkbox 一并拉宽 —— 既有问题非本轮回归,未动;`IntelligenceLocalSkills.vue:735` 仍留一个 `--tx-color-warning`,属 Step 5 已登记的智能落地页孤儿组件,归 settings-rewrite 清理
 - 边界:若用户把侧栏拖得极宽,设置列可能跌破 536px 而 `@media 980` 尚未触发 → 该场景横向溢出。改前更差(旧布局需 712px+),属严格改善,记录备查
 
-## Step 6 · 收口
+## Step 6 · 收口 — ✅ 完成(2026-08-06)
 
-- [ ] `pnpm lint`(注意 CoreApp 包内配置与根配置尾逗号规则相反,判 delta 不判零、不整文件 --fix)
-- [ ] `apps/core-app` `npm run typecheck`
-- [ ] light/dark 全设置域走查;验收清单(prd.md)逐项核对
-- [ ] 更新 `08-04-settings-rewrite` 范围注记(智能分类由本任务接手);spec 更新(3.3)、提交(3.4)
+- [x] **lint delta = 0**:本任务改动且仍存活的 42 个 `.vue`/`.ts` 逐个跑包内 eslint,**零输出**(0 错 0 警)。全仓 `pnpm lint` 的 63 条 warning 全在 7 个 `src/main/` 文件、blame 归属其他提交,本轮为纯 renderer 改动,delta 判定为 0(依既定纪律判 delta 不判零、不整文件 `--fix`)
+- [x] **`npm run typecheck` 双腿 exit 0**(node + web,合并所有并发改动后复跑)
+- [x] **测试** 34 文件 199 用例全绿(settings / components·settings / intelligence ×2 / modules·settings / lang / styles / useActionPanel)
+- [x] **实机走查**:dev 实例 HMR 后经 orca computer 截图核验 —— 经典卡内组头(标题+描述+折叠箭头)已回归;语义色生效(文件索引「正常」绿 chip、「已跳过 2607」琥珀);外观页结构 = 窗口效果三瓦片 / CoreBox 行(Beta 中性 chip + 编辑按钮)/ 个性化四行(色彩风格·主页壁纸·窗口模糊 20px·窗口透明度 100%,含画板描述文案)
+- [x] **深色可信度以证据替代目检**(自定义 TxSelect 弹层不入无障碍树,合成点击无法切主题):① 本任务 38 个 `.vue` 全量扫描**零 hex / 零 rgba**,颜色全部经 token;② `.dark` 块三色相九值已核对写入;③ 深色墨色实测最低 4.54:1 全部过 AA;④ 深浅仅换 CSS 变量、DOM 与几何同构,故布局溢出不可能只在深色出现。**剩余风险仅为主观观感,建议用户在设置·外观切「深色」扫一眼**
+- [x] 更新 `08-04-settings-rewrite` 范围注记(智能 + 文件索引由本任务接手、TuffGroupBlock 终局口径、死件清单移交)
+- [x] spec 更新:`plugin-runtime-security.md` §8 固定 widget 路径为逐字节校验契约;`component-guidelines.md` 新增「Shell colour tokens」(四色相形状、对比块重指向、**chip 墨色对自身 soft 底测 AA**、颜色不作状态唯一载体、预期结果不用错误色)
