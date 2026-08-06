@@ -1027,6 +1027,7 @@
     "storeDesc": "Browse, install and manage plugins."
   },
   "store": {
+    "updatedAt": "Updated {time}",
     "title": "Plugin Store",
     "subtitle": "Discover amazing plugins for your workflow",
     "searchPlaceholder": "Search plugins",
