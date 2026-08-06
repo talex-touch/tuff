@@ -1287,6 +1287,8 @@
     }
   },
   "plugin": {
+    "perfTrend": "Performance trend",
+    "perf": "Performance",
     "add": "Add Plugin",
     "running": "Running",
     "all": "All",

@@ -1287,6 +1287,8 @@
     }
   },
   "plugin": {
+    "perfTrend": "性能趋势",
+    "perf": "性能",
     "add": "添加插件",
     "running": "运行中",
     "all": "全部",

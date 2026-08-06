@@ -2,8 +2,11 @@
 import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
 import { usePluginRuntimeStats } from '~/composables/usePluginRuntimeStats'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   pluginName: string
@@ -133,7 +136,7 @@ const health = computed(() => {
     <div class="left">
       <i class="i-ri-pulse-line" />
       <div class="left-title">
-        <span class="title">性能</span>
+        <span class="title">{{ t('plugin.perf', '性能') }}</span>
         <span v-if="error" class="error-text">· {{ error }}</span>
         <span v-else class="hint">Updated {{ lastUpdatedAgeLabel }} ago</span>
       </div>

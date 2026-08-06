@@ -1,6 +1,7 @@
 <script lang="ts" setup name="PluginPerfCharts">
 import { TxCard } from '@talex-touch/tuffex/card'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   formatBytesShort,
   formatCompactNumber,
@@ -14,6 +15,7 @@ const props = defineProps<{
   layout?: 'card' | 'bar'
 }>()
 
+const { t } = useI18n()
 const layoutMode = computed(() => props.layout ?? 'card')
 
 const { stats, history, lastUpdatedAt, error } = usePluginRuntimeStats(
@@ -68,7 +70,7 @@ const lastUpdatedAgeLabel = computed(() => {
         <div class="header">
           <div class="title">
             <i class="i-ri-pulse-line" />
-            <span class="text">性能趋势</span>
+            <span class="text">{{ t('plugin.perfTrend', '性能趋势') }}</span>
             <span class="hint">Up {{ uptimeLabel }}</span>
           </div>
           <div class="meta">
