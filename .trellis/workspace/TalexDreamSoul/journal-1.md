@@ -1757,3 +1757,11 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - 新发现入 digest:E-NEW1 语义召回在 complete 后必丢;E-NEW3 ai search-agent 语义分被绝对分饱和到 1(阈值失效,待 ai/ 并发会话稳定后专项修);F-NEW1 全空根永不被 reconcile 删(既定保守);用户需求「展示主窗口类命令靠前」入 C4。
 - 门:A1 引擎 499+渲染 89;A3 files 294+utils 986;typecheck node/web 对己方文件零错。packages/test 61 失败与 ai/tuffex 报错均为并发/既有,未触碰。
 - 待办:A2 字符集统一(工件已备,依赖 A3 已落地→可派发);reco-audit 推荐系统评估在飞;批次 A 收口后做合并 spec 更新。
+
+## 2026-08-05 · home-tool-loop · 渲染批+动效批(用户中途追加)
+
+- **渲染批**(3db7b2b64):开围栏 120ms 合并定时器实时高亮(流式中就是彩色的,弃「闭合才高亮」);html/svg/xml 定稿围栏 Preview 切换(空 sandbox srcdoc iframe——不执行脚本不同源);图表家族扩到 10 型(area/doughnut/radar/funnel/gauge/heatmap+轴标/堆叠/数值标签),仍是声明式 spec。
+- **动效批**(2045c628d):composer 首发 FLIP 居中→落底(WAAPI,测量夹在响应式翻转两侧);新消息 iMessage 弹入(overshoot bezier,只在 isStreaming 时标记 id——restore 与虚拟化重挂载不重放,animationend 出集合);问候语退场 Transition;composer 双层阴影(contact+ambient)+focus 柔环;缓动词汇表三档制(out-quint 入场/overshoot 弹入/standard 状态)扫平 HomePage 与 tuffex 折叠族的裸 ease。
+- 坑:Transition 包裹 v-if 会拆断兄弟 v-else 链(改显式 !isEmpty);scoped keyframes 会被 hash 改名,探针要按前缀匹配。
+- 全量门:tuffex 1045/build、core-app typecheck×2、lint 全绿;HMR 已在用户实例生效。
+- 决策记录:MCP 路线定为主进程自建 client(--mcp-config 属第三方扩展且绕确认门,弃);C 任务下轮从 design 起步。
