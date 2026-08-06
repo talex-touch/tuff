@@ -98,6 +98,12 @@ TalexDreamSoul/app-shell-v2 @ a1431ca42); verify before use.
   `backfillTrendDay` upserts usage_trend_daily WITHOUT scheduleDbWrite (violates
   database-write-contracts); same table the R1 migration writes correctly. Fold into
   R2 or batch B cleanup.
+- E-NEW8 · 低 · 文档/工具链 (R2 impl 2026-08-05) — `npm run db:generate` is a dead
+  command: drizzle-kit is not declared in any package.json; migrations 0015+ (22 of
+  37) are hand-written; meta snapshots stop at 0014 (2025-12-10). CLAUDE.md still
+  documents db:generate/db:migrate. Correct gate = migration-chain-on-fresh-db +
+  aux DDL parity tests (recommendation-exposure-schema.test.ts precedent). Fix
+  CLAUDE.md wording when convenient.
 - E-NEW7 · 低 · 说明 · lookupByKeywords growth (A2 check) — folded twins + full-title/
   spaced keywords increase rows per item, so E-M2/F-H5 (global LIMIT, no ORDER BY)
   saturates earlier; batch B index-sql-recall-fixes must size limits with this in.
@@ -145,8 +151,18 @@ TalexDreamSoul/app-shell-v2 @ a1431ca42); verify before use.
   catalog tests assert production but nothing asserts retrievability.
 - A-M5 · 中 · 速度 · search-processing-service.ts:118 — 1-6 sync fs.existsSync per
   result per keystroke (icon resolution) on main thread.
-- A-M6 · 中 · bug · app-scanner.ts:76 — forceRefresh swallowed by in-flight normal
-  scan (scanPromise check precedes forceRefresh branch).
+- A-M6 · 中→低 (downgraded by realtime-diag 2026-08-05) · bug · app-scanner.ts:76 —
+  forceRefresh swallowed by in-flight scan. NOT on the realtime install path (which
+  goes through getAppInfoByPath, no scanPromise); only affects backfill/full-sync
+  collisions.
+- REALTIME (2026-08-05, research/realtime-chain-diagnosis.md): Doubao incident root
+  cause = environment accident (out/main emptied under the running dev instance;
+  lazy import('./darwin') failed 93×). Exposed 4 HEAD defects F1-F6 → task
+  08-05-realtime-index-freshness (F1 retry/dead-letter — A-M7 same class; F2
+  coalescing; F3 sleep trims; F4 fs-aware health; F5 lastIndexedAt; F6 dev mdls
+  gate). Also: index-time filter (darwin isNonUserFacingCoreServiceApp) vs
+  search-time noise filter are two independent mechanisms with different scopes —
+  merge/unify later (confusing during forensics; mdfind 330 vs DB 228 is by design).
 - A-M7 · 中 · bug · darwin.ts:301 — mdfind is the only discovery path, no FS fallback
   (Spotlight off ⇒ zero apps); roots miss /Users/Shared/Applications, Cryptexes/App,
   homebrew/nix .apps, external volumes.

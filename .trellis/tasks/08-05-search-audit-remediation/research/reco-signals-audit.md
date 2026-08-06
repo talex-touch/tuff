@@ -64,6 +64,38 @@ CoreBox show() 抢焦点前记前台 app 快照（TTL 15s），ContextProvider �
 - P2-10 getUsageStatsBatch 交叉积取数（结果正确，过度取数）。
 - P3-11 死代码：upsertItemTimeStats；蓝牙采集。
 
+## R2 已落地（2026-08-06，08-05-reco-wire-existing-signals）
+
+对应上表/质量问题清单的实际改动，行号以落地后代码为准：
+
+- **hourDistribution 进评分**（P2 时间信号缺口）：`calculateTimeRelevanceScore`
+  改为 `0.5×slot/dayOfWeek + 0.5×hour affinity`（affinity = dist[当前小时]/峰值），
+  无小时数据的历史行原样返回旧分（不打折）。recommendation-utils.ts。
+- **P1-5 缓存键降基数**：`generateCacheKey` 只留 {timeSlot, workday/weekend, isOnline}
+  （7 个工作日桶塌成 2）；剪贴板/选区/前台/电量/电源/DND/网络 id 全部移出键，改由
+  `applyVolatileContextRerank` 每次请求在缓存列表上重算 contextMatch 后重排；
+  剪贴板 URL 候选属易变候选，命中缓存时现场重建注入。稳定分存
+  `meta.recommendation.stableScore`，重复 re-rank 幂等。
+- **P2-6 冷启动**：无任何使用历史时从 app catalog 取（新装优先）标 `source='cold-start'`。
+  **偏离设计**：不含 recent files——推荐列表全链路都过滤文件，只在冷启动破例会不一致。
+- **P2-7 聚合改增量**：执行事件在 usage-stats-queue 落盘时按小时/星期/时段桶累加
+  （与 item_usage_stats 同事务同 lane）；24h 全表绝对重写退为 `force`/
+  `TUFF_RECO_TIME_STATS_REBUILD=1` 的修复路径，默认关。**清日志不再抹掉历史分布**（有测试）。
+  顺带 backfillTrendDay 的裸 upsert 挪到 scheduleDbWrite。
+- **接 selection-capture**：capture 成功写入内存快照（selection-snapshot-store.ts，
+  与 Electron 采集代码分文件以免读侧被拖进依赖图），ContextProvider 与剪贴板同档
+  哈希后进 context；剪贴板/选区新鲜窗口 5s→30s；设置项 selection（默认开）。
+- **时区切换**：last-seen 时区持久化在 `recommendation-runtime` 配置，48h 内 `timezoneChanged=true`
+  + 语义 token `travel`；首次运行不误报。
+- **清理**：蓝牙信号+设置开关+类型字段全删（含语义 token）；`upsertItemTimeStats` 删；
+  bundleId 判定改走 app-identity-match（path 形态取 basename 比 app 名）。
+- **顺带修**（与 P0-2 同类的身份口径 bug，审查未列）：contextMatch 全部 `sourceType === 'app'`
+  判定对真实数据恒假——usage 统计存的是 `item.source.type`='application'。改为
+  `isAppSourceType()` 同时接受 'app'/'application'，否则 D2 的易变重排在生产上是空转。
+- **R9 评估地基**：渲染端 `applyRecommendationResult` 上报已展示 id（去 pinned、用原始 id），
+  main 侧会话内曝光集 + 每日 {impressions@k, clicks@k}（k=1/3/5/10）写 aux 新表
+  `recommendation_exposure_daily`；点击 = recordExecute 命中曝光集。全本地、只存计数。
+
 ## 五类目标信号差距
 
 | 信号 | 已有 | 需建 | 成本/隐私 |
