@@ -191,6 +191,31 @@ describe('txStreamMarkdown', () => {
     expect(wrapper.findAll('.tx-stream-md__block').length).toBeGreaterThanOrEqual(24)
   })
 
+  it('suppresses bare empty fences but keeps labelled or filled ones', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'Intro\n\n```\n```\n\n```js\nconst a = 1\n```' },
+    })
+
+    await flushSanitizer()
+
+    // The empty bare fence renders nothing; the js fence still shows.
+    const fences = wrapper.findAll('.tx-stream-md__fence')
+    expect(fences).toHaveLength(1)
+    expect(fences[0]!.text()).toContain('const a = 1')
+  })
+
+  it('marks the last rendered block for the streaming reveal mask', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'First\n\nSecond grows', streaming: true },
+    })
+
+    await flushSanitizer()
+
+    const marked = wrapper.findAll('.tx-stream-md__block--last')
+    expect(marked).toHaveLength(1)
+    expect(marked[0]!.text()).toContain('Second grows')
+  })
+
   it('dispatches mermaid fences to the built-in TxMermaidBlock', async () => {
     const wrapper = mount(TxStreamMarkdown, {
       props: { content: '```mermaid\ngraph TD', streaming: true },

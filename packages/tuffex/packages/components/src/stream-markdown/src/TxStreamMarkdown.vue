@@ -128,6 +128,15 @@ const inlineCursor = computed(() => {
 const showBlockCursor = computed(
   () => props.streaming && blocks.value.length > 0 && !inlineCursor.value,
 )
+
+/**
+ * A bare fence with nothing in it renders as an empty framed box — all chrome,
+ * no content. Models emit these mid-stream (a ``` just arrived) and in
+ * fence-about-fences answers; both look broken, neither carries information.
+ */
+function isSuppressedFence(block: StreamBlock): boolean {
+  return !block.lang && !block.code.trim()
+}
 </script>
 
 <template>
@@ -138,20 +147,26 @@ const showBlockCursor = computed(
   >
     <div class="markdown-body">
       <template v-for="(block, index) in blocks" :key="block.id">
-        <component
-          :is="resolveRenderer(block.lang)"
-          v-if="block.type === 'code'"
-          class="tx-stream-md__block tx-stream-md__fence"
-          :lang="block.lang"
-          :code="block.code"
-          :closed="isBlockClosed(block, index)"
-          :streaming="streaming"
-          :theme="resolvedTheme"
-        />
+        <template v-if="block.type === 'code'">
+          <component
+            :is="resolveRenderer(block.lang)"
+            v-if="!isSuppressedFence(block)"
+            class="tx-stream-md__block tx-stream-md__fence"
+            :class="{ 'tx-stream-md__block--last': index === blocks.length - 1 }"
+            :lang="block.lang"
+            :code="block.code"
+            :closed="isBlockClosed(block, index)"
+            :streaming="streaming"
+            :theme="resolvedTheme"
+          />
+        </template>
         <div
           v-else
           class="tx-stream-md__block tx-stream-md__markup"
-          :class="{ 'tx-stream-md__markup--tail': streaming && inlineCursor && index === blocks.length - 1 }"
+          :class="{
+            'tx-stream-md__markup--tail': streaming && inlineCursor && index === blocks.length - 1,
+            'tx-stream-md__block--last': index === blocks.length - 1,
+          }"
           v-html="block.html"
         />
       </template>
@@ -174,6 +189,15 @@ const showBlockCursor = computed(
   // never replay this; the growing tail patches in place, so it doesn't either.
   &.is-streaming .tx-stream-md__block {
     animation: tx-stream-md-reveal 0.26s ease-out both;
+  }
+
+  // The ChatGPT-style line reveal: while streaming, the tail block's bottom
+  // edge fades out, so each new line materialises half-transparent and
+  // brightens as the next one pushes it up. Opacity-only — active under
+  // reduced motion too.
+  &.is-streaming .tx-stream-md__block--last {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2em), rgb(0 0 0 / 25%) 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2em), rgb(0 0 0 / 25%) 100%);
   }
 
   .tx-stream-md__markup--tail > p:last-child::after,
@@ -201,19 +225,34 @@ const showBlockCursor = computed(
     }
   }
 
-  // Typography — kept in lockstep with TxMarkdownView ----------------------
-
+  // Typography — modelled on ChatGPT web's reading rhythm: roomy line-height,
+  // one-em paragraph beats, quiet borders, no filled panels on prose.
   .markdown-body {
-    h1, h2, h3, h4, h5, h6 {
-      font-weight: 600;
-      line-height: 1.4;
-      margin-top: 1.5em;
-      margin-bottom: 0.5em;
+    line-height: 1.75;
+    word-break: break-word;
+
+    > :first-child {
+      margin-top: 0 !important;
     }
 
-    h1 { font-size: 1.75em; }
-    h2 { font-size: 1.5em; }
-    h3 { font-size: 1.25em; }
+    > :last-child {
+      margin-bottom: 0 !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      margin: 1.6em 0 0.7em;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    h1 { font-size: 1.6em; }
+    h2 { font-size: 1.35em; }
+    h3 { font-size: 1.15em; }
+    h4, h5, h6 { font-size: 1em; }
+
+    p {
+      margin: 0 0 1em;
+    }
 
     a {
       color: var(--tx-color-primary, #409eff);
@@ -224,83 +263,93 @@ const showBlockCursor = computed(
       }
     }
 
+    strong {
+      font-weight: 600;
+    }
+
+    ul, ol {
+      margin: 0 0 1em;
+      padding-left: 1.6em;
+
+      li {
+        margin: 0.35em 0;
+
+        &::marker {
+          color: var(--tx-text-color-secondary, #6b7280);
+        }
+      }
+
+      // Nested lists sit inside a li's rhythm, not the block rhythm.
+      ul, ol {
+        margin: 0.35em 0 0;
+      }
+    }
+
     pre {
-      border-radius: 8px;
-      padding: 16px;
+      margin: 0 0 1em;
+      padding: 14px 16px;
       overflow-x: auto;
-      background-color: var(--tx-fill-color-darker, #f6f8fa);
       border: 1px solid var(--tx-border-color-light, #e4e7ed);
+      border-radius: 10px;
+      background-color: var(--tx-fill-color-darker, #f6f8fa);
 
       code {
-        background: transparent;
+        display: block;
         padding: 0;
         border-radius: 0;
-        font-size: 13px;
-        line-height: 1.6;
+        background: transparent;
+        font-size: 0.85em;
+        line-height: 1.65;
+        white-space: pre;
       }
     }
 
     code {
+      padding: 0.15em 0.4em;
+      border-radius: 5px;
       background-color: var(--tx-fill-color, #f0f2f5);
-      border-radius: 4px;
-      padding: 2px 6px;
-      font-size: 0.9em;
+      font-size: 0.875em;
     }
 
     blockquote {
-      border-left: 4px solid var(--tx-color-primary-light-5, #a0cfff);
-      background-color: var(--tx-fill-color-lighter, #fafcff);
-      padding: 12px 16px;
-      margin: 16px 0;
+      margin: 0 0 1em;
+      padding: 0.1em 0 0.1em 1em;
+      border-left: 2px solid var(--tx-border-color, #dcdfe6);
       color: var(--tx-text-color-secondary, #606266);
 
-      p {
-        margin: 0;
+      p:last-child {
+        margin-bottom: 0;
       }
     }
 
     table {
-      border-collapse: collapse;
       width: 100%;
-      margin: 16px 0;
+      margin: 0 0 1em;
+      border-collapse: collapse;
+      font-size: 0.95em;
 
       th, td {
+        padding: 8px 12px;
         border: 1px solid var(--tx-border-color-light, #e4e7ed);
-        padding: 10px 14px;
         text-align: left;
+        vertical-align: top;
       }
 
       th {
         background-color: var(--tx-fill-color-light, #fafafa);
         font-weight: 600;
       }
-
-      tr:nth-child(2n) {
-        background-color: var(--tx-fill-color-lighter, #fafcff);
-      }
-    }
-
-    ul, ol {
-      padding-left: 1.5em;
-
-      li {
-        margin-bottom: 4px;
-      }
-    }
-
-    p {
-      margin: 8px 0;
     }
 
     hr {
+      margin: 1.8em 0;
       border: none;
       border-top: 1px solid var(--tx-border-color-light, #e4e7ed);
-      margin: 24px 0;
     }
 
     img {
       max-width: 100%;
-      border-radius: 8px;
+      border-radius: 10px;
     }
   }
 
@@ -315,17 +364,12 @@ const showBlockCursor = computed(
     }
 
     blockquote {
-      background-color: var(--tx-fill-color, #1e1e1e);
-      border-left-color: var(--tx-color-primary-light-3, #79bbff);
+      border-left-color: var(--tx-border-color, #414243);
     }
 
     table {
       th {
         background-color: var(--tx-fill-color, #2a2a2a);
-      }
-
-      tr:nth-child(2n) {
-        background-color: var(--tx-fill-color-lighter, #1e1e1e);
       }
 
       th, td {
