@@ -44,7 +44,11 @@ import {
   IndexedSourceGroupedEvidenceService,
   IndexedSourceResetReasons,
   IndexedSourceRootEvidenceService,
-  IndexedSourceScanReasons
+  IndexedSourceScanReasons,
+  buildSearchKeywordLookupTerms,
+  collectSearchKeywordMatches,
+  hasHanCharacter,
+  normalizeSearchText
 } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -2552,8 +2556,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           .map((value) => value.trim())
       )
     )
-    const CHINESE_REGEX = /[\u4E00-\u9FA5]/
-    const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]/i
 
     for (const name of names) {
       const lowerCaseName = name.toLowerCase()
@@ -2567,7 +2569,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const acronym = this._generateAcronym(name)
       if (acronym) generatedKeywords.add(acronym)
 
-      if (CHINESE_REGEX.test(name)) {
+      if (hasHanCharacter(name)) {
         try {
           const { pinyin } = await import('pinyin-pro')
           const pinyinFull = pinyin(name, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
@@ -2585,10 +2587,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const aliasList = this.resolveAliasesForApp(appInfo)
     aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
 
+    // Keywords are cleaned rather than vetoed, so multi-word aliases
+    // ("vs code") and non-Latin names survive instead of being dropped whole.
     const finalKeywords = new Set<string>()
     for (const keyword of generatedKeywords) {
-      if (keyword.length > 1 && !INVALID_KEYWORD_REGEX.test(keyword)) {
-        finalKeywords.add(keyword)
+      const normalized = normalizeSearchText(keyword)
+      if (normalized.length > 1) {
+        finalKeywords.add(normalized)
       }
     }
 
@@ -3155,15 +3160,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const db = this.dbUtils.getDb()
-    const normalizedQuery = rawText.toLowerCase()
+    const normalizedQuery = rawText.normalize('NFC').toLowerCase()
     const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
     const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
+    // Keywords are stored in cleaned form (and, for accented text, in a folded
+    // twin), so every term is looked up as typed, cleaned and folded. The whole
+    // cleaned query is looked up as a single keyword too, which is what reaches
+    // spaced aliases like "vs code" and full titles.
+    const cleanedQuery = normalizeSearchText(rawText)
 
     let preciseMatchedItemIds: Set<string> | null = null
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
-    const preciseLookupTerms = shouldCheckPhrase
-      ? Array.from(new Set([...terms, normalizedQuery]))
-      : terms
+    const preciseLookupTerms = buildSearchKeywordLookupTerms([
+      ...terms,
+      normalizedQuery,
+      cleanedQuery
+    ])
     const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
     const preciseStart = startTiming()
     logApp(`Executing precise query: ${chalk.cyan(terms.join(', '))}`, LogStyle.info)
@@ -3176,7 +3188,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
       this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit),
       shouldLookupPrefix
-        ? this.searchIndex.lookupByKeywordPrefix(this.id, normalizedQuery, 200)
+        ? this.searchIndex.lookupByKeywordPrefix(this.id, cleanedQuery || normalizedQuery, 200)
         : Promise.resolve([]),
       ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
     ])
@@ -3185,9 +3197,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return new TuffSearchResultBuilder(query).build()
     }
 
-    const termMatches = terms.map(
-      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
-    )
+    const termMatches = terms.map((term) => collectSearchKeywordMatches(preciseResultMap, term))
     if (termMatches.length > 0) {
       preciseMatchedItemIds = termMatches.reduce<Set<string> | null>((accumulator, current) => {
         if (!accumulator) return current
@@ -3209,10 +3219,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (shouldCheckPhrase) {
       const phraseStart = startTiming()
-      const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
+      const phraseSet = collectSearchKeywordMatches(preciseResultMap, normalizedQuery)
 
-      if (phraseMatches.length > 0) {
-        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
+      if (phraseSet.size > 0) {
         preciseMatchedItemIds = preciseMatchedItemIds
           ? new Set([...preciseMatchedItemIds, ...phraseSet])
           : phraseSet
@@ -3458,10 +3467,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return new TuffSearchResultBuilder(query).setItems(sortedItems).build()
   }
 
+  /**
+   * Build the FTS query string. Terms are cleaned with the shared charset rules
+   * (non-Latin scripts survive instead of being deleted); the tokens are quoted
+   * when SearchIndexService turns this string into an FTS5 MATCH expression.
+   */
   private buildFtsQuery(terms: string[]): string {
     const tokens: string[] = []
     for (const term of terms) {
-      const cleaned = term.replace(/[^a-z0-9\u4E00-\u9FA5]+/gi, ' ').trim()
+      const cleaned = normalizeSearchText(term)
       if (!cleaned) continue
       tokens.push(...cleaned.split(/\s+/))
     }

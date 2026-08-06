@@ -1,7 +1,8 @@
 import type { FeatureSearchToken, FeatureSearchTokenSource } from './feature-matcher'
+import { HAN_CHAR_PATTERN } from './search-charset'
 
-const CHINESE_RUN_REGEX = /[\u4E00-\u9FFF]+/gu
-const WORD_REGEX = /[a-z0-9\u4E00-\u9FFF]+/gi
+const CHINESE_RUN_REGEX = new RegExp(`${HAN_CHAR_PATTERN}+`, 'gu')
+const WORD_REGEX = new RegExp(`[a-z0-9${HAN_CHAR_PATTERN}]+`, 'giu')
 
 export type SearchTokenList = FeatureSearchToken[]
 

@@ -232,6 +232,8 @@ interface MutableFileProvider {
   pathNormalizationScheduled: boolean
   pathNormalizationAttempted: boolean
   pathNormalizationTimer: NodeJS.Timeout | null
+  keywordBackfillScheduled: boolean
+  keywordBackfillTimer: NodeJS.Timeout | null
 }
 
 interface FileProviderShutdownTestApi extends MutableFileProvider {
@@ -554,6 +556,10 @@ function resetProviderState(provider: MutableFileProvider): void {
   provider.pathNormalizationScheduled = false
   // Also the reconciliation-deferral half of the same once-per-boot state.
   provider.pathNormalizationAttempted = false
+  // The keyword backfill is once-per-boot for the same reason.
+  if (provider.keywordBackfillTimer) clearTimeout(provider.keywordBackfillTimer)
+  provider.keywordBackfillTimer = null
+  provider.keywordBackfillScheduled = false
 }
 
 beforeEach(() => {
@@ -2056,5 +2062,21 @@ describe('path normalization migration scheduling', () => {
     expect(provider.backgroundStartupReady).toBe(true)
     expect(provider.pathNormalizationScheduled).toBe(armsMigration)
     expect(provider.pathNormalizationTimer === null).toBe(!armsMigration)
+  })
+
+  it('queues the keyword backfill behind the path repair, off the same live path', async () => {
+    // Both passes walk the whole files table and the repair rewrites the very
+    // ids the backfill re-emits under, so they never run together: on darwin
+    // the backfill is armed by the repair's completion, and where the repair
+    // does not apply it is armed directly from the same startup path.
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    resetProviderState(provider)
+    const armsMigration = process.platform === 'darwin'
+
+    await provider.onLoad(createContext())
+    await provider.backgroundStartupPromise
+
+    expect(provider.keywordBackfillScheduled).toBe(!armsMigration)
+    expect(provider.keywordBackfillTimer === null).toBe(armsMigration)
   })
 })
