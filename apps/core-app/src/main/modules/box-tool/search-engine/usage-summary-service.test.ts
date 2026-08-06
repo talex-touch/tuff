@@ -94,7 +94,7 @@ async function readUsageStats(client: Client): Promise<UsageStatsSnapshot[]> {
 }
 
 describe('UsageSummaryService', () => {
-  it('rebuilds time distributions without changing provider-keyed usage statistics', async () => {
+  it('leaves both usage statistics and time distributions alone during maintenance', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'tuff-usage-summary-service-'))
     let client: Client | undefined
 
@@ -153,46 +153,18 @@ describe('UsageSummaryService', () => {
       service.updateConfig({ autoCleanup: true })
       expect(service.getConfig().autoCleanup).toBe(false)
       const usageStatsBeforeMaintenance = await readUsageStats(client)
-      const storedExecution = await db
-        .select({ timestamp: schema.usageLogs.timestamp })
-        .from(schema.usageLogs)
-        .get()
-      const executedHour = storedExecution!.timestamp.getHours()
-      const executedDay = storedExecution!.timestamp.getDay()
-      const hourDistribution = Array.from({ length: 24 }, (_, hour) =>
-        hour === executedHour ? 1 : 0
-      )
-      const dayOfWeekDistribution = Array.from({ length: 7 }, (_, day) =>
-        day === executedDay ? 1 : 0
-      )
-      const timeSlotDistribution = {
-        morning: executedHour >= 6 && executedHour < 12 ? 1 : 0,
-        afternoon: executedHour >= 12 && executedHour < 18 ? 1 : 0,
-        evening: executedHour >= 18 && executedHour < 22 ? 1 : 0,
-        night: executedHour < 6 || executedHour >= 22 ? 1 : 0
-      }
 
       await service.runSummary()
 
       expect(await readUsageStats(client)).toEqual(usageStatsBeforeMaintenance)
-      const timeStats = await client.execute(`
-        SELECT
-          source_id AS sourceId,
-          item_id AS itemId,
-          hour_distribution AS hourDistribution,
-          day_of_week_distribution AS dayOfWeekDistribution,
-          time_slot_distribution AS timeSlotDistribution
-        FROM item_time_stats
-      `)
-      expect(timeStats.rows).toEqual([
-        {
-          sourceId: 'application',
-          itemId: 'app-item',
-          hourDistribution: JSON.stringify(hourDistribution),
-          dayOfWeekDistribution: JSON.stringify(dayOfWeekDistribution),
-          timeSlotDistribution: JSON.stringify(timeSlotDistribution)
-        }
-      ])
+
+      // `item_time_stats` is accumulated by the usage drain now. Scheduled
+      // maintenance must NOT re-derive it from `usage_logs`: that rewrite wrote
+      // absolute values, so a retention pass that pruned the logs silently
+      // erased the accumulated history with it. The rebuild survives only as
+      // the explicitly forced repair path.
+      const timeStats = await client.execute('SELECT * FROM item_time_stats')
+      expect(timeStats.rows).toEqual([])
     } finally {
       client?.close()
       await rm(directory, { recursive: true, force: true })

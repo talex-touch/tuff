@@ -1164,8 +1164,15 @@ export interface TuffMeta {
 
   /** 推荐来源标记 */
   recommendation?: {
-    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
+    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context' | 'cold-start'
     score?: number
+    /**
+     * Ranking split: `stableScore` is the cacheable half (time/frequency/
+     * recency/semantic), `volatileScore` the per-request context half. Kept on
+     * the item so re-ranking a cached list stays idempotent.
+     */
+    stableScore?: number
+    volatileScore?: number
   }
 
   /**

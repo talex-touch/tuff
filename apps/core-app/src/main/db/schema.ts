@@ -613,6 +613,31 @@ export const recommendationCache = sqliteTable(
   })
 )
 
+/**
+ * 推荐曝光指标表 (aux-homed)
+ *
+ * Local-only evaluation groundwork: per-day impressions and clicks per top-k
+ * bucket, so recommendation changes can be judged by hit-rate@k instead of
+ * intuition. Counts only — no item ids, no content, never leaves the device.
+ */
+export const recommendationExposureDaily = sqliteTable(
+  'recommendation_exposure_daily',
+  {
+    day: integer('day').notNull(), // 天桶 (epoch days)
+    surface: text('surface').notNull(), // 'core-box' | 'division-box' | ...
+    k: integer('k').notNull(), // top-k 位置桶
+    impressions: integer('impressions').notNull().default(0),
+    clicks: integer('clicks').notNull().default(0),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.day, table.surface, table.k] }),
+    dayIdx: index('idx_recommendation_exposure_daily_day').on(table.day)
+  })
+)
+
 // =============================================================================
 // 9. 固定项目 (Pinned Items)
 // =============================================================================

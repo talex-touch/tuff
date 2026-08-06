@@ -111,8 +111,8 @@ const settingState = vi.hoisted(() => {
           time: true,
           foregroundApp: true,
           clipboard: true,
+          selection: true,
           network: true,
-          bluetooth: true,
           focus: true,
           power: true,
           location: true

@@ -80,8 +80,8 @@ const DEFAULT_RECOMMENDATION_CONTEXT_SOURCES = {
   time: true,
   foregroundApp: true,
   clipboard: true,
+  selection: true,
   network: true,
-  bluetooth: true,
   focus: true,
   power: true,
   location: true
@@ -122,18 +122,18 @@ const recommendationContextSourceItems: Array<{
     activeIcon: 'i-carbon-clipboard'
   },
   {
+    key: 'selection',
+    titleKey: 'settingTools.recommendationContextSelection',
+    descriptionKey: 'settingTools.recommendationContextSelectionDesc',
+    defaultIcon: 'i-carbon-text-selection',
+    activeIcon: 'i-carbon-text-selection'
+  },
+  {
     key: 'network',
     titleKey: 'settingTools.recommendationContextNetwork',
     descriptionKey: 'settingTools.recommendationContextNetworkDesc',
     defaultIcon: 'i-carbon-wifi',
     activeIcon: 'i-carbon-wifi'
-  },
-  {
-    key: 'bluetooth',
-    titleKey: 'settingTools.recommendationContextBluetooth',
-    descriptionKey: 'settingTools.recommendationContextBluetoothDesc',
-    defaultIcon: 'i-carbon-bluetooth',
-    activeIcon: 'i-carbon-bluetooth'
   },
   {
     key: 'focus',

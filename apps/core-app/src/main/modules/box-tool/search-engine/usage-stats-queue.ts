@@ -1,13 +1,27 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../db/schema'
 import type { ScheduleOptions } from '../../../db/db-write-scheduler'
-import { sql } from 'drizzle-orm'
+import type { TimeBuckets } from './item-time-stats-buckets'
+import { and, eq, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { scheduleDbWrite } from '../../../db/db-write'
-import { itemUsageStats } from '../../../db/schema'
+import { itemTimeStats, itemUsageStats } from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
+import {
+  addExecutionToBuckets,
+  cloneTimeBuckets,
+  createEmptyTimeBuckets,
+  isEmptyTimeBuckets,
+  mergeTimeBuckets,
+  parseStoredTimeBuckets,
+  serializeTimeBuckets
+} from './item-time-stats-buckets'
 
 const usageStatsQueueLog = createLogger('UsageStatsQueue')
+
+type UsageStatsTransaction = Parameters<
+  Parameters<LibSQLDatabase<typeof schema>['transaction']>[0]
+>[0]
 
 interface IncrementOperation {
   sourceId: string
@@ -27,6 +41,12 @@ interface AggregatedUsageRecord {
   lastSearched: Date | null
   lastExecuted: Date | null
   lastCancelled: Date | null
+  /**
+   * Hour/weekday/slot buckets for the executions in this batch, folded into
+   * `item_time_stats` additively on flush. Only executions contribute — the
+   * distributions describe when an item is actually used.
+   */
+  timeBuckets: TimeBuckets
 }
 
 export interface UsageStatsQueueOptions {
@@ -122,7 +142,8 @@ export class UsageStatsQueue {
       cancelCount: 0,
       lastSearched: null,
       lastExecuted: null,
-      lastCancelled: null
+      lastCancelled: null,
+      timeBuckets: createEmptyTimeBuckets()
     }
 
     switch (operation.type) {
@@ -140,6 +161,7 @@ export class UsageStatsQueue {
           !aggregate.lastExecuted || operation.timestamp > aggregate.lastExecuted
             ? operation.timestamp
             : aggregate.lastExecuted
+        addExecutionToBuckets(aggregate.timeBuckets, operation.timestamp)
         this.pendingActionEvents += 1
         break
       case 'cancel':
@@ -238,7 +260,8 @@ export class UsageStatsQueue {
       ...record,
       lastSearched: record.lastSearched ? new Date(record.lastSearched) : null,
       lastExecuted: record.lastExecuted ? new Date(record.lastExecuted) : null,
-      lastCancelled: record.lastCancelled ? new Date(record.lastCancelled) : null
+      lastCancelled: record.lastCancelled ? new Date(record.lastCancelled) : null,
+      timeBuckets: cloneTimeBuckets(record.timeBuckets)
     }
   }
 
@@ -255,6 +278,7 @@ export class UsageStatsQueue {
       existing.searchCount += record.searchCount
       existing.executeCount += record.executeCount
       existing.cancelCount += record.cancelCount
+      mergeTimeBuckets(existing.timeBuckets, record.timeBuckets)
       if (
         record.lastSearched &&
         (!existing.lastSearched || record.lastSearched > existing.lastSearched)
@@ -340,10 +364,57 @@ export class UsageStatsQueue {
                   updatedAt: now
                 }
               })
+
+            await this.persistTimeBuckets(tx, record, now)
           }
         }),
       options
     )
+  }
+
+  /**
+   * Folds this batch's execution buckets into `item_time_stats`.
+   *
+   * Read-modify-write rather than SQL-side arithmetic: the distributions are
+   * JSON arrays, and the batch is small (one row per distinct item per flush).
+   * It runs inside the caller's transaction so a failure rolls back with the
+   * usage counts and the merged-back queue replays both together.
+   */
+  private async persistTimeBuckets(
+    tx: UsageStatsTransaction,
+    record: AggregatedUsageRecord,
+    now: Date
+  ): Promise<void> {
+    if (isEmptyTimeBuckets(record.timeBuckets)) return
+
+    const existing = await tx
+      .select({
+        hourDistribution: itemTimeStats.hourDistribution,
+        dayOfWeekDistribution: itemTimeStats.dayOfWeekDistribution,
+        timeSlotDistribution: itemTimeStats.timeSlotDistribution
+      })
+      .from(itemTimeStats)
+      .where(
+        and(eq(itemTimeStats.sourceId, record.sourceId), eq(itemTimeStats.itemId, record.itemId))
+      )
+      .get()
+
+    const merged = existing ? parseStoredTimeBuckets(existing) : createEmptyTimeBuckets()
+    mergeTimeBuckets(merged, record.timeBuckets)
+    const serialized = serializeTimeBuckets(merged)
+
+    await tx
+      .insert(itemTimeStats)
+      .values({
+        sourceId: record.sourceId,
+        itemId: record.itemId,
+        ...serialized,
+        lastUpdated: now
+      })
+      .onConflictDoUpdate({
+        target: [itemTimeStats.sourceId, itemTimeStats.itemId],
+        set: { ...serialized, lastUpdated: now }
+      })
   }
 
   async flushSearchQueue(): Promise<void> {

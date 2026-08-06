@@ -4,20 +4,46 @@ import * as schema from '../../../db/schema'
 import { scheduleDbWrite } from '../../../db/db-write'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
+import { resolveTimeSlot } from './item-time-stats-buckets'
 
 const log = createLogger('TimeStatsAggregator')
 
 /**
+ * Opt-in switch for the destructive full rebuild below. Off by default: the
+ * rebuild writes ABSOLUTE values derived from `usage_logs`, so once retention
+ * prunes the logs it also erases the distributions accumulated before them.
+ */
+const TIME_STATS_REBUILD_ENABLED = process.env.TUFF_RECO_TIME_STATS_REBUILD === '1'
+
+export interface AggregateTimeStatsOptions {
+  /**
+   * Run the rebuild even with the flag off. Reserved for the explicit,
+   * user-triggered repair action — never for scheduled maintenance.
+   */
+  force?: boolean
+}
+
+/**
  * 时间维度使用统计汇总器
- * 负责从 usage_logs 中提取时间维度的使用模式并更新到 item_time_stats
+ *
+ * @remarks
+ * Steady-state accumulation lives on the usage-stats drain path
+ * (usage-stats-queue → item_time_stats, additive). This class is now the
+ * REPAIR path only: a full recompute from `usage_logs` that overwrites the
+ * accumulated buckets with whatever the surviving logs imply.
  */
 export class TimeStatsAggregator {
   constructor(private dbUtils: DbUtils) {}
 
   /**
-   * 从 usage_logs 汇总时间统计到 item_time_stats
+   * 从 usage_logs 重建时间统计（修复用途，默认关闭）
    */
-  async aggregateTimeStats(): Promise<void> {
+  async aggregateTimeStats(options: AggregateTimeStatsOptions = {}): Promise<void> {
+    if (!options.force && !TIME_STATS_REBUILD_ENABLED) {
+      log.debug('Skipping time stats rebuild (incremental accumulation owns this table)')
+      return
+    }
+
     const dispose = enterPerfContext('TimeStatsAggregator.aggregate')
 
     try {
@@ -51,7 +77,7 @@ export class TimeStatsAggregator {
         const date = new Date(entry.timestamp)
         const hour = date.getHours()
         const dayOfWeek = date.getDay()
-        const timeSlot = this.getTimeSlot(hour)
+        const timeSlot = resolveTimeSlot(hour)
 
         if (!statsMap.has(key)) {
           statsMap.set(key, {
@@ -127,16 +153,6 @@ export class TimeStatsAggregator {
     } finally {
       dispose()
     }
-  }
-
-  /**
-   * 获取指定时刻的时间段
-   */
-  private getTimeSlot(hour: number): 'morning' | 'afternoon' | 'evening' | 'night' {
-    if (hour >= 6 && hour < 12) return 'morning'
-    if (hour >= 12 && hour < 18) return 'afternoon'
-    if (hour >= 18 && hour < 22) return 'evening'
-    return 'night'
   }
 
   /**
