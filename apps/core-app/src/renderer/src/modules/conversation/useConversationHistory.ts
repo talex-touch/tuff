@@ -79,10 +79,16 @@ function toSaveRequest(
   }
 }
 
+/**
+ * Module-scoped on purpose: HomePage persists while ShellConversationList
+ * renders, and both must read the same list — per-call refs would leave the
+ * sidebar stale after every send, since `persist` refreshes only its own copy.
+ */
+const conversations = ref<ConversationRecord[]>([])
+const loading = ref(false)
+
 export function useConversationHistory(): UseConversationHistoryReturn {
   const sdk = createConversationSdk(useTuffTransport())
-  const conversations = ref<ConversationRecord[]>([])
-  const loading = ref(false)
 
   async function refresh(): Promise<void> {
     loading.value = true
