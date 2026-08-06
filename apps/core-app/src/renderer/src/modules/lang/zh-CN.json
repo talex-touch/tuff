@@ -1287,6 +1287,11 @@
     }
   },
   "plugin": {
+    "devServerDisconnected": "Dev Server 已断开连接",
+    "customPreviewSize": "自定义 {width}×{height}",
+    "widgetPreview": "Widget 预览",
+    "widgetReloadFailed": "Widget 重新加载失败",
+    "widgetReloadAllTriggered": "已触发全部 Widget 重新加载",
     "perfTrend": "性能趋势",
     "perf": "性能",
     "add": "添加插件",

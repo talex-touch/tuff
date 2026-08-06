@@ -1287,6 +1287,11 @@
     }
   },
   "plugin": {
+    "devServerDisconnected": "Dev Server disconnected",
+    "customPreviewSize": "Custom {width}×{height}",
+    "widgetPreview": "Widget preview",
+    "widgetReloadFailed": "Widget reload failed",
+    "widgetReloadAllTriggered": "Reload triggered for all widgets",
     "perfTrend": "Performance trend",
     "perf": "Performance",
     "add": "Add Plugin",
