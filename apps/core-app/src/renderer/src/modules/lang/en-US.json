@@ -4080,7 +4080,9 @@
       "startMinimized": "Start minimized to tray",
       "startMinimizedDesc": "Launch application minimized to system tray",
       "autoStart": "Auto Start on Boot",
-      "autoStartDesc": "Automatically launch app when system starts"
+      "autoStartDesc": "Automatically launch app when system starts",
+      "startSilent": "Start silently",
+      "startSilentDesc": "Launch in the background without showing the main window"
     },
     "setup": {
       "groupTitle": "General Settings",

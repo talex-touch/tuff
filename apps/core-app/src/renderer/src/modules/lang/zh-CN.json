@@ -4036,7 +4036,9 @@
       "startMinimized": "启动时最小化到托盘",
       "startMinimizedDesc": "应用启动时直接最小化到系统托盘",
       "autoStart": "开机自动启动",
-      "autoStartDesc": "系统启动时自动运行应用"
+      "autoStartDesc": "系统启动时自动运行应用",
+      "startSilent": "静默启动",
+      "startSilentDesc": "在后台启动，不显示主窗口"
     },
     "setup": {
       "groupTitle": "通用配置",
