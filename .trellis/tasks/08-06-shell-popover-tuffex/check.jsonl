@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/08-06-shell-popover-tuffex/research/tuffex-primitive-fit.md", "reason": "对照缺口清单校验:选择器扩展最小性、焦点还原补偿、记录不做项未被偷偷实现"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "校验迁移后无手搓监听残留、a11y 语义完整、文案未流入 tuffex"}
