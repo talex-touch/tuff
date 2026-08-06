@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolveAppSemanticAliases } from './app-semantic-catalog'
+import {
+  APP_SEMANTIC_ALIAS_CATALOG_VERSION,
+  expandEnglishPlural,
+  resolveAppSemanticAliases
+} from './app-semantic-catalog'
 import { getAppToolSourceCatalogSummary, resolveAppToolSourceIds } from './app-tool-source-catalog'
 
 describe('app semantic alias catalog', () => {
@@ -163,6 +167,98 @@ describe('app semantic alias catalog', () => {
     expect(resolveAppSemanticAliases({ name: 'UTM', path: '/Applications/UTM.app' })).toEqual(
       expect.arrayContaining(['vm', 'virtual', 'utm'])
     )
+  })
+
+  it('derives English plurals with the naive rules', () => {
+    expect(expandEnglishPlural('browser')).toEqual(['browser', 'browsers'])
+    expect(expandEnglishPlural('inbox')).toEqual(['inbox', 'inboxes'])
+    expect(expandEnglishPlural('repository')).toEqual(['repository', 'repositories'])
+    expect(expandEnglishPlural('proxy')).toEqual(['proxy', 'proxies'])
+    expect(expandEnglishPlural('todo')).toEqual(['todo', 'todos'])
+  })
+
+  it('skips aliases that have no natural plural', () => {
+    expect(expandEnglishPlural('notes')).toEqual(['notes'])
+    expect(expandEnglishPlural('db')).toEqual(['db'])
+    expect(expandEnglishPlural('sql')).toEqual(['sql'])
+    expect(expandEnglishPlural('security')).toEqual(['security'])
+    expect(expandEnglishPlural('edit video')).toEqual(['edit video'])
+    expect(expandEnglishPlural('2fa')).toEqual(['2fa'])
+    expect(expandEnglishPlural('浏览器')).toEqual(['浏览器'])
+  })
+
+  it('resolves plural category aliases next to the singular forms', () => {
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Google Chrome',
+        bundleId: 'com.google.Chrome',
+        path: '/Applications/Google Chrome.app'
+      })
+    ).toEqual(expect.arrayContaining(['browser', 'browsers', '浏览器', '上网']))
+
+    expect(resolveAppSemanticAliases({ name: 'iTerm', path: '/Applications/iTerm.app' })).toEqual(
+      expect.arrayContaining(['terminal', 'terminals', 'shell', 'shells', 'command line'])
+    )
+
+    expect(resolveAppSemanticAliases({ name: 'TablePlus' })).toEqual(
+      expect.arrayContaining(['database', 'databases'])
+    )
+  })
+
+  it('merges derived plurals with the handwritten ones exactly once', () => {
+    const wechat = resolveAppSemanticAliases({ name: 'WeChat', bundleId: 'com.tencent.xin' })
+    expect(wechat.filter((alias) => alias === 'messages')).toHaveLength(1)
+    expect(wechat.filter((alias) => alias === 'chats')).toHaveLength(1)
+
+    const obsidian = resolveAppSemanticAliases({ name: 'Obsidian' })
+    expect(obsidian.filter((alias) => alias === 'notes')).toHaveLength(1)
+  })
+
+  it('resolves email app aliases without attaching to unrelated names', () => {
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Mail',
+        bundleId: 'com.apple.mail',
+        path: '/Applications/Mail.app'
+      })
+    ).toEqual(
+      expect.arrayContaining(['email', 'emails', 'mail', 'inbox', 'inboxes', '邮件', 'apple mail'])
+    )
+
+    expect(
+      resolveAppSemanticAliases({ name: 'Microsoft Outlook', bundleId: 'com.microsoft.Outlook' })
+    ).toEqual(expect.arrayContaining(['email', 'mail', '邮箱', 'outlook']))
+
+    const thunderbird = resolveAppSemanticAliases({
+      name: 'Thunderbird',
+      bundleId: 'org.mozilla.thunderbird'
+    })
+    expect(thunderbird).toEqual(expect.arrayContaining(['email', 'thunderbird']))
+    expect(thunderbird).not.toContain('download')
+
+    expect(resolveAppSemanticAliases({ name: '网易邮箱大师' })).toEqual(
+      expect.arrayContaining(['email', '邮件', 'mailmaster'])
+    )
+
+    expect(resolveAppSemanticAliases({ name: 'Spark AR Studio' })).not.toContain('email')
+  })
+
+  it('resolves download app aliases', () => {
+    expect(resolveAppSemanticAliases({ name: 'Motrix', path: '/Applications/Motrix.app' })).toEqual(
+      expect.arrayContaining(['download', 'downloads', 'downloader', '下载', 'motrix'])
+    )
+
+    expect(resolveAppSemanticAliases({ name: '迅雷', bundleId: 'com.xunlei.download' })).toEqual(
+      expect.arrayContaining(['download', '下载', 'thunder', '迅雷'])
+    )
+
+    expect(resolveAppSemanticAliases({ name: 'Free Download Manager' })).toEqual(
+      expect.arrayContaining(['download', 'downloader', 'free download manager'])
+    )
+  })
+
+  it('pins the catalog version so stored keywords refresh on the next scan', () => {
+    expect(APP_SEMANTIC_ALIAS_CATALOG_VERSION).toBe(5)
   })
 
   it('keeps ambiguous Illustrator away from the AI alias', () => {
