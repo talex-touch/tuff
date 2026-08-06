@@ -330,4 +330,63 @@ describe('txContextMenu', () => {
     await wrapper.findComponent(TxContextMenuItem).trigger('click')
     expect(close).toHaveBeenCalledTimes(1)
   })
+
+  it('opens from the keyboard with the ContextMenu key and Shift+F10', async () => {
+    const wrapper = mountMenu({ trigger: 'contextmenu' })
+    await nextTick()
+
+    const el = wrapper.find('.tx-context-menu__trigger')
+    // The panel implements the full menu pattern, but the trigger had no
+    // keyboard entry point at all — it was pointer-only.
+    expect(el.attributes('tabindex')).toBe('0')
+    expect(el.attributes('aria-haspopup')).toBe('menu')
+    expect(el.attributes('aria-expanded')).toBe('false')
+
+    await el.trigger('keydown', { key: 'ContextMenu' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+
+    await wrapper.setProps({ modelValue: false })
+    await el.trigger('keydown', { key: 'F10', shiftKey: true })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+
+    wrapper.unmount()
+  })
+
+  it('opens a click-triggered menu with Enter and Space', async () => {
+    const wrapper = mountMenu({ trigger: 'click' })
+    await nextTick()
+
+    const el = wrapper.find('.tx-context-menu__trigger')
+    await el.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+
+    await wrapper.setProps({ modelValue: false })
+    await el.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+
+    wrapper.unmount()
+  })
+
+  it('ignores trigger keys that do not match the configured mode', async () => {
+    const wrapper = mountMenu({ trigger: 'contextmenu' })
+    await nextTick()
+
+    // Enter is the click gesture; a contextmenu-only trigger must not react.
+    await wrapper.find('.tx-context-menu__trigger').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('leaves a manual trigger out of the tab order', async () => {
+    const wrapper = mountMenu({ trigger: 'manual' })
+    await nextTick()
+
+    const el = wrapper.find('.tx-context-menu__trigger')
+    // A manual menu is opened programmatically; its wrapper is not a control.
+    expect(el.attributes('tabindex')).toBeUndefined()
+    expect(el.attributes('aria-haspopup')).toBeUndefined()
+
+    wrapper.unmount()
+  })
 })
