@@ -1,10 +1,12 @@
 import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   IntelligenceChatPayload,
+  IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceStreamOptions
 } from '@talex-touch/utils/types/intelligence'
 import type { ConversationIntelligenceSdk } from './useHomeConversation'
+import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it, vi } from 'vitest'
 import { useHomeConversation } from './useHomeConversation'
 
@@ -382,7 +384,8 @@ describe('routing', () => {
 
     expect(double.invokeOptions[0]).toEqual({
       preferredProviderId: 'pi-cli-default',
-      modelPreference: ['gpt-5.6-terra']
+      modelPreference: ['gpt-5.6-terra'],
+      metadata: { surface: INTELLIGENCE_HOME_SURFACE, autoContext: true }
     })
   })
 
@@ -395,7 +398,36 @@ describe('routing', () => {
     double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
     await turn
 
-    expect(double.invokeOptions[0]).toBeUndefined()
+    // The surface marker still goes out — it is what separates a user turn from a capability test.
+    expect(double.invokeOptions[0]).toEqual({
+      metadata: { surface: INTELLIGENCE_HOME_SURFACE, autoContext: true }
+    })
+  })
+})
+
+describe('auto context', () => {
+  it('reports the switch as it stands at send time, so a mid-conversation flip applies next turn', async () => {
+    const double = createSdkDouble()
+    let enabled = true
+    const conversation = useHomeConversation({ sdk: double.sdk, autoContext: () => enabled })
+
+    const first = conversation.send('hi')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await first
+
+    enabled = false
+    const second = conversation.send('again')
+    await flush()
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await second
+
+    expect(
+      double.invokeOptions.map((options) => (options as IntelligenceInvokeOptions).metadata)
+    ).toEqual([
+      { surface: INTELLIGENCE_HOME_SURFACE, autoContext: true },
+      { surface: INTELLIGENCE_HOME_SURFACE, autoContext: false }
+    ])
   })
 })
 

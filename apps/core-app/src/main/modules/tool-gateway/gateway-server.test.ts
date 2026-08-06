@@ -1,3 +1,4 @@
+import type { AgentContextSource } from './agent-context-source'
 import type { ToolGatewayHandle } from './gateway-server'
 import type { ToolDefinition } from './tool-registry'
 import { Buffer } from 'node:buffer'
@@ -8,6 +9,14 @@ import { startToolGateway } from './gateway-server'
 import { createToolRegistry, parseChartSpec, resolveUserPath } from './tool-registry'
 
 let handle: ToolGatewayHandle | null = null
+
+/** The skill and MCP tools have their own suite; here they just need to exist. */
+const emptyAgentContext: AgentContextSource = {
+  readSkill: async () => '',
+  listMcpServers: async () => [],
+  listMcpTools: async () => [],
+  callMcpTool: async () => ''
+}
 
 afterEach(async () => {
   await handle?.close()
@@ -132,6 +141,65 @@ describe('tool gateway', () => {
     expect(confirm).toHaveBeenCalledTimes(3)
   })
 
+  it('confirms a forwarding tool under the per-call risk it reports', async () => {
+    const confirm = vi.fn(async () => ({ approved: true, remember: false }))
+    handle = await startToolGateway({
+      tools: new Map([
+        [
+          'proxy',
+          echoTool({
+            name: 'proxy',
+            risk: 'execute',
+            classify: async (args) => ({
+              risk: args.value === 'safe' ? 'read' : 'execute',
+              summary: `proxying ${String(args.value)}`,
+              rememberKey: `proxy:${String(args.value)}`
+            })
+          })
+        ]
+      ]),
+      confirm
+    })
+
+    await invoke(handle, { tool: 'proxy', args: { value: 'safe' } })
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ risk: 'read', summary: 'proxying safe' })
+    )
+  })
+
+  it('scopes a remembered approval to the call it was given for', async () => {
+    const confirm = vi.fn(async () => ({ approved: true, remember: true }))
+    handle = await startToolGateway({
+      tools: new Map([
+        [
+          'proxy',
+          echoTool({
+            name: 'proxy',
+            risk: 'execute',
+            classify: async (args) => ({
+              risk: args.value === 'danger' ? 'execute' : 'read',
+              summary: String(args.value),
+              rememberKey: `proxy:${String(args.value)}`
+            })
+          })
+        ]
+      ]),
+      confirm
+    })
+
+    await invoke(handle, { tool: 'proxy', args: { value: 'safe' } })
+    await invoke(handle, { tool: 'proxy', args: { value: 'safe' } })
+    expect(confirm).toHaveBeenCalledTimes(1)
+
+    // A yes to one proxied target is not a yes to the whole forwarder.
+    await invoke(handle, { tool: 'proxy', args: { value: 'other' } })
+    expect(confirm).toHaveBeenCalledTimes(2)
+
+    await invoke(handle, { tool: 'proxy', args: { value: 'danger' } })
+    await invoke(handle, { tool: 'proxy', args: { value: 'danger' } })
+    expect(confirm).toHaveBeenCalledTimes(4)
+  })
+
   it('drops remembered approvals on reset', async () => {
     const confirm = vi.fn(async () => ({ approved: true, remember: true }))
     handle = await startToolGateway({ tools: new Map([['echo', echoTool()]]), confirm })
@@ -197,7 +265,8 @@ describe('tool gateway', () => {
 describe('tool registry', () => {
   const registry = createToolRegistry({
     searchFiles: async () => [{ name: 'a.txt', path: '/tmp/a.txt' }],
-    openPath: async () => ''
+    openPath: async () => '',
+    agentContext: emptyAgentContext
   })
 
   it('classifies risk so only reads are rememberable', () => {
@@ -238,7 +307,8 @@ describe('tool registry', () => {
 describe('chart spec validation', () => {
   const registry = createToolRegistry({
     searchFiles: async () => [],
-    openPath: async () => ''
+    openPath: async () => '',
+    agentContext: emptyAgentContext
   })
   const chart = registry.get('tuff_render_chart')!
 

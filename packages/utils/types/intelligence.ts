@@ -421,6 +421,28 @@ export interface IntelligenceInvokeOptions {
 }
 
 /**
+ * Marks an invocation as originating from the home conversation.
+ *
+ * Home chat runs on `text.chat`, the same capability that capability tests and plugins invoke, so
+ * the surface has to be named explicitly — otherwise main cannot tell a user conversation apart
+ * from a provider smoke test and would inject the user's skills into both.
+ */
+export const INTELLIGENCE_HOME_SURFACE = "home-conversation" as const;
+
+/** `IntelligenceInvokeOptions.metadata` shape the home conversation sends. */
+export interface IntelligenceHomeSurfaceMetadata {
+  surface: typeof INTELLIGENCE_HOME_SURFACE;
+  /**
+   * Live value of `appSetting.tools.autoContext`, read at send time.
+   *
+   * Carried on the request rather than mirrored to main through its own channel: the surface
+   * marker already has to travel with every turn, and a value read from the same reactive setting
+   * the composer toggle writes cannot go stale between the toggle and the send.
+   */
+  autoContext: boolean;
+}
+
+/**
  * Context information for an invocation.
  */
 export interface IntelligenceInvokeContext {

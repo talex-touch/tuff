@@ -1,5 +1,5 @@
 import type { IncomingMessage, Server } from 'node:http'
-import type { ToolDefinition, ToolResult } from './tool-registry'
+import type { ToolCallPlan, ToolDefinition, ToolResult } from './tool-registry'
 import { Buffer } from 'node:buffer'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -109,14 +109,18 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
         }
 
         const args = body.args && typeof body.args === 'object' ? body.args : {}
-        const summary = tool.summarize(args)
+        // A forwarding tool decides its own risk per call; the rest are what
+        // they declare, remembered under their own name.
+        const plan: ToolCallPlan = tool.classify
+          ? await tool.classify(args)
+          : { risk: tool.risk, summary: tool.summarize(args), rememberKey: tool.name }
 
-        if (!remembered.has(tool.name)) {
+        if (!remembered.has(plan.rememberKey)) {
           const decision = await options.confirm({
             callId: body.callId ?? '',
             tool: tool.name,
-            risk: tool.risk,
-            summary,
+            risk: plan.risk,
+            summary: plan.summary,
             input: JSON.stringify(args, null, 2)
           })
 
@@ -127,7 +131,7 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
           }
           // Write/execute tools re-ask every time no matter what the user
           // ticked — a single yes must not become a standing grant.
-          if (decision.remember && isRememberable(tool.risk)) remembered.add(tool.name)
+          if (decision.remember && isRememberable(plan.risk)) remembered.add(plan.rememberKey)
         }
 
         const result: ToolResult = await tool.execute(args)

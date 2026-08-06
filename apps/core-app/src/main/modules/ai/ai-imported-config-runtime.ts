@@ -83,6 +83,44 @@ function agentProfileId(item: AiImportedConfigItem): string | undefined {
     : undefined
 }
 
+/**
+ * Collects prompt sections under a shared character ceiling, truncating the section that crosses it
+ * and dropping the rest. The `+ 2` accounts for the separator {@link SectionBudget.join} adds.
+ */
+interface SectionBudget {
+  push: (section: string) => void
+  exhausted: () => boolean
+  join: () => string
+}
+
+function createSectionBudget(limit: number): SectionBudget {
+  const sections: string[] = []
+  let remaining = limit
+  return {
+    push: (section) => {
+      if (remaining <= 0) return
+      const value = section.slice(0, remaining)
+      sections.push(value)
+      remaining -= value.length + 2
+    },
+    exhausted: () => remaining <= 0,
+    join: () => sections.join('\n\n')
+  }
+}
+
+/**
+ * Whether a rule holds without a file context.
+ *
+ * The home surface has no objective paths to match globs against, so a glob-scoped rule can never
+ * be shown to apply there. The importer already defaults an unscoped rule to `alwaysApply`, but the
+ * glob check is repeated here so a hand-written item without that default is still read correctly.
+ */
+function ruleAppliesEverywhere(item: AiImportedConfigItem): boolean {
+  if (item.normalizedProjection?.alwaysApply === true) return true
+  const globs = item.normalizedProjection?.globs
+  return !Array.isArray(globs) || globs.length === 0
+}
+
 export class AiImportedConfigRuntime {
   private readonly knownMcpProfileIds = new Set<string>()
   private readonly knownAgentProfileIds = new Set<string>()
@@ -222,31 +260,24 @@ export class AiImportedConfigRuntime {
       .filter((item) => item.kind === 'mcp')
       .flatMap((item) => mcpProfilesFromItem(item))
       .map((profile) => ({ id: profile.id, name: profile.name }))
-    const sections: string[] = []
-    let remainingChars = MAX_IMPORTED_CONTEXT_CHARS
-    const pushSection = (section: string): void => {
-      if (remainingChars <= 0) return
-      const value = section.slice(0, remainingChars)
-      sections.push(value)
-      remainingChars -= value.length + 2
-    }
+    const sections = createSectionBudget(MAX_IMPORTED_CONTEXT_CHARS)
     if (skills.length > 0) {
-      pushSection(
+      sections.push(
         `Available imported skills (metadata only; call skill.read with an id before using one):\n${JSON.stringify(skills)}`
       )
     }
     if (commands.length > 0) {
-      pushSection(
+      sections.push(
         `Available explicit commands (use only when the user names one):\n${JSON.stringify(commands)}`
       )
     }
     if (mcpProfiles.length > 0)
-      pushSection(
+      sections.push(
         `Available imported MCP profiles (call mcp.listTools before mcp.call):\n${JSON.stringify(mcpProfiles)}`
       )
 
     for (const item of effectiveItems) {
-      if (remainingChars <= 0) break
+      if (sections.exhausted()) break
       const args =
         item.kind === 'command' ? commandArguments(objective, item.alias || item.name) : undefined
       const shouldInject =
@@ -256,9 +287,56 @@ export class AiImportedConfigRuntime {
       if (!shouldInject || !item.contentRef) continue
       const content = await aiImportContentStore.read(item.contentRef)
       const expanded = item.kind === 'command' ? expandCommand(content, args ?? '') : content
-      pushSection(`${item.kind.toUpperCase()} ${item.alias || item.name}:\n${expanded}`)
+      sections.push(`${item.kind.toUpperCase()} ${item.alias || item.name}:\n${expanded}`)
     }
-    return sections.join('\n\n')
+    return sections.join()
+  }
+
+  /**
+   * System prompt block for the home conversation, or `null` when the user has nothing active.
+   *
+   * Deliberately narrower than {@link buildSystemPrompt}: home chat has no workspace and no
+   * objective, so scope visibility and glob matching have nothing to evaluate against, and
+   * commands (`/name`) have no invocation syntax to trigger them yet. Scope precedence still runs
+   * so a workspace copy of a skill shadows the global one of the same name, as it does elsewhere.
+   *
+   * Skills stay metadata-only — the model asks for a body through `tuff_skill_read` when it decides
+   * one is relevant, which keeps a large skill library off every prompt. That gateway tool resolves
+   * an id against the same active-and-managed-content set listed here and deliberately applies no
+   * workspace clause, so narrowing this list by workspace would advertise ids it cannot read.
+   */
+  async buildHomeInjection(): Promise<string | null> {
+    const items = applyScopePrecedence(
+      (await aiOrchestratorStore.listImportedItems()).filter(
+        (item) => item.active && item.state === 'active'
+      )
+    )
+    const skills = items
+      // A skill with no managed content has nothing `tuff_skill_read` could return, so listing it
+      // only buys the model a failed tool call.
+      .filter((item) => item.kind === 'skill' && item.contentRef)
+      .map((item) => ({
+        id: item.id,
+        name: item.alias || item.name,
+        description: item.normalizedProjection?.description || ''
+      }))
+
+    const sections = createSectionBudget(MAX_IMPORTED_CONTEXT_CHARS)
+    if (skills.length > 0) {
+      sections.push(
+        `Available imported skills (metadata only; call tuff_skill_read with an id before using one):\n${JSON.stringify(skills)}`
+      )
+    }
+
+    for (const item of items) {
+      if (sections.exhausted()) break
+      if (item.kind !== 'rule' || !item.contentRef || !ruleAppliesEverywhere(item)) continue
+      const content = (await aiImportContentStore.read(item.contentRef)).trim()
+      if (content) sections.push(`RULE ${item.alias || item.name}:\n${content}`)
+    }
+
+    const injection = sections.join()
+    return injection.trim() ? injection : null
   }
 
   async readSkill(itemId: string, cwd: string): Promise<string> {

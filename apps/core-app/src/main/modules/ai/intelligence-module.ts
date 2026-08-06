@@ -61,6 +61,7 @@ import {
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
 import { contextHygieneService } from './intelligence-context-hygiene'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
+import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
@@ -1257,10 +1258,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         if (capabilityId === 'agent.run' || capabilityId === 'workflow.execute') {
           await this.waitForAgentRuntime()
         }
+        // Also applied here, not only on the streaming path: the home conversation falls back to a
+        // plain invoke whenever the stream fails to start, and a fallback turn that silently loses
+        // the user's skills would answer differently from the turn it replaced.
+        const invokePayload = await applyHomeConversationInjection(
+          payload,
+          scopedOptions,
+          Boolean(context.plugin)
+        )
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
         let result: IntelligenceInvokeResult<unknown>
         try {
-          result = await tuffIntelligence.invoke(capabilityId, payload, scopedOptions)
+          result = await tuffIntelligence.invoke(capabilityId, invokePayload, scopedOptions)
         } catch (error) {
           throw normalizeCapabilityInvokeError(capabilityId, error)
         }
@@ -1284,9 +1293,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         const scopedOptions = bindPluginInvokeCaller(options, streamContext)
         await assertAutonomousIntelligencePermission(capabilityId, data, streamContext)
         ensureIntelligenceConfigLoaded()
+        const streamPayload = await applyHomeConversationInjection(
+          payload,
+          scopedOptions,
+          Boolean(streamContext.plugin)
+        )
         intelligenceLog.info(`Streaming capability: ${capabilityId}`)
         try {
-          for await (const event of tuffIntelligence.stream(capabilityId, payload, scopedOptions)) {
+          for await (const event of tuffIntelligence.stream(
+            capabilityId,
+            streamPayload,
+            scopedOptions
+          )) {
             if (streamContext.isCancelled()) break
             streamContext.emit(event)
           }
