@@ -5147,6 +5147,7 @@
     "confirmAndSend": "授权并发送"
   },
   "corebox": {
+    "actionUnsupported": "暂不支持该操作",
     "opacity": "透明度",
     "debug": "调试",
     "alwaysOnTop": "置顶",
