@@ -15,7 +15,7 @@
 
 ## 📌 发布与平台状态
 
-仓库当前稳定基线为 `2.4.13`，由一致的[根目录 package manifest](./package.json)与 [CoreApp package manifest](./apps/core-app/package.json)确定。已发布制品以 [GitHub Releases](https://github.com/talex-touch/tuff/releases) 为准。
+仓库最新稳定发布为 `2.4.13`（详见 [GitHub Releases](https://github.com/talex-touch/tuff/releases)）；[根目录 package manifest](./package.json)与 [CoreApp package manifest](./apps/core-app/package.json)中声明的开发版本为 `2.4.14-beta.2`。
 
 当前提供 macOS、Windows 和 Linux 预发布构建。稳定源码版本不代表三端能力成熟度一致，也不代表 OTA 验收已经完成；不支持或降级路径必须明确说明并保持 fail-closed。详情见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。
 

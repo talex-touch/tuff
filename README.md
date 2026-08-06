@@ -16,7 +16,7 @@ Tuff (formerly TalexTouch) is a local-first, AI-native, extensible desktop comma
 
 ## Release and platform status
 
-The repository's stable baseline is `2.4.13`, resolved from the matching [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json). Consult [GitHub Releases](https://github.com/talex-touch/tuff/releases) for published artifacts.
+The repository's latest stable release is `2.4.13` (see [GitHub Releases](https://github.com/talex-touch/tuff/releases)); the in-development version declared in the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) is `2.4.14-beta.2`.
 
 Preview artifacts are produced for macOS, Windows, and Linux. A stable source version does not imply identical capability maturity or complete OTA acceptance across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
 
