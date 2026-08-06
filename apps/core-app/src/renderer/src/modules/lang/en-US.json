@@ -881,6 +881,7 @@
     "description": "Select the window effect that feels comfortable to you."
   },
   "base": {
+    "details": "Details",
     "last_step": "Last Step",
     "step": "Next",
     "touchCaptcha": {
