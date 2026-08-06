@@ -77,6 +77,7 @@ const precisionDigits = computed(() => {
 
 const hoverValue = ref<number>(props.modelValue)
 const animatedStar = ref<number | null>(null)
+const starsRef = ref<HTMLElement | null>(null)
 
 // Sync the hover-preview baseline with external value changes so a programmatic
 // modelValue update — or a committed half-star click — renders immediately in
@@ -185,6 +186,51 @@ function handleClick(star: number) {
   emit('change', newValue)
 }
 
+/**
+ * ARIA radiogroup: the group is a single tab stop, and arrow keys move between
+ * options. Without this every star was its own tab stop and the keyboard could
+ * not change the rating at all.
+ */
+const tabbableStar = computed(() => {
+  const checked = Math.ceil(rating.value)
+  if (checked >= 1 && checked <= props.maxStars)
+    return checked
+  return 1
+})
+
+function focusStar(star: number) {
+  const clamped = Math.min(Math.max(star, 1), props.maxStars)
+  const stars = starsRef.value?.querySelectorAll<HTMLButtonElement>('.tx-rating__star')
+  stars?.[clamped - 1]?.focus()
+  return clamped
+}
+
+function handleKeydown(event: KeyboardEvent, star: number) {
+  if (!isInteractive.value)
+    return
+
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'ArrowUp':
+      event.preventDefault()
+      handleClick(focusStar(star + 1))
+      break
+    case 'ArrowLeft':
+    case 'ArrowDown':
+      event.preventDefault()
+      handleClick(focusStar(star - 1))
+      break
+    case 'Home':
+      event.preventDefault()
+      handleClick(focusStar(1))
+      break
+    case 'End':
+      event.preventDefault()
+      handleClick(focusStar(props.maxStars))
+      break
+  }
+}
+
 function handleMouseEnter(star: number) {
   if (!isInteractive.value)
     return
@@ -206,10 +252,10 @@ function handleMouseLeave() {
     :aria-disabled="disabled || undefined"
     :aria-readonly="readonly || undefined"
   >
-    <div class="tx-rating__stars" role="radiogroup">
+    <div ref="starsRef" class="tx-rating__stars" role="radiogroup">
       <button
         v-for="star in maxStars"
-        :key="`${star}-${animatedStar === star ? 'pop' : 'idle'}`"
+        :key="star"
         type="button"
         class="tx-rating__star"
         :class="{
@@ -222,6 +268,8 @@ function handleMouseLeave() {
         :aria-checked="getStarAriaChecked(star)"
         :disabled="disabled || readonly"
         :aria-label="getStarLabel(star)"
+        :tabindex="star === tabbableStar ? 0 : -1"
+        @keydown="handleKeydown($event, star)"
         @click="handleClick(star)"
         @mouseenter="handleMouseEnter(star)"
         @mouseleave="handleMouseLeave"
