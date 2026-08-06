@@ -3,6 +3,7 @@ import type { ShortcutRowBase, ShortcutRowView } from './shortcut-dialog.types'
 
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -24,6 +25,16 @@ const emit = defineEmits<{
   (event: 'update-accelerator', id: string, value: string): void
   (event: 'update-enabled', id: string, value: boolean): void
 }>()
+
+/** Placeholder rows while the shortcut table is still being read. */
+const SKELETON_ROWS = 6
+
+/**
+ * Bound straight to `loading`, without a separate first-load flag: the parent
+ * derives it from `shortcuts === null`, which only holds until the first read
+ * lands and never returns, so a reload cannot blank the rendered table.
+ */
+const showSkeleton = useDeferredLoading(() => props.loading)
 
 const visible = computed({
   get: () => props.modelValue,
@@ -90,7 +101,29 @@ watch(visible, (value) => {
               {{ t('settingTools.shortcutsDialog.columns.enabled') }}
             </div>
           </div>
-          <div v-if="loading" class="ShortcutDialog-Empty">
+          <!--
+            The rows live in a child component whose styles are scoped to it, so
+            the placeholder row is declared here instead. It reuses the same grid
+            custom properties as the header and the real rows, which is what
+            keeps the five columns lined up; only the padding and hairline are
+            restated. Applies: the dialog opens onto a known five-column table.
+          -->
+          <div v-if="showSkeleton" class="ShortcutDialog-Rows" aria-hidden="true">
+            <div v-for="i in SKELETON_ROWS" :key="i" class="ShortcutDialog-SkeletonRow">
+              <div class="ShortcutDialog-SkeletonName">
+                <TxSkeleton width="72%" :height="13" :radius="4" />
+                <TxSkeleton width="94%" :height="11" :radius="4" />
+              </div>
+              <TxSkeleton width="80%" :height="12" :radius="4" />
+              <TxSkeleton width="64%" :height="12" :radius="4" />
+              <TxSkeleton width="56%" :height="12" :radius="4" />
+              <div class="ShortcutDialog-EnabledCell">
+                <TxSkeleton variant="rect" :width="36" :height="20" :radius="10" />
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="loading" class="ShortcutDialog-Empty">
             {{ t('settingTools.shortcutsDialog.loading') }}
           </div>
           <div v-else-if="rows.length === 0" class="ShortcutDialog-Empty">
@@ -199,6 +232,30 @@ watch(visible, (value) => {
   display: flex;
   flex-direction: column;
   width: 100%;
+}
+
+/* Mirrors `.ShortcutDialog-Row` in ShortcutDialogRow.vue, which is scoped there
+   and so cannot be reused from here. The columns and gutter come from the same
+   custom properties, so only the padding and hairline are restated. */
+.ShortcutDialog-SkeletonRow {
+  display: grid;
+  grid-template-columns: var(--shortcut-dialog-columns);
+  gap: var(--shortcut-dialog-gap);
+  align-items: center;
+  width: 100%;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+}
+
+.ShortcutDialog-SkeletonRow:last-child {
+  border-bottom: none;
+}
+
+.ShortcutDialog-SkeletonName {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .ShortcutDialog-EnabledCell {

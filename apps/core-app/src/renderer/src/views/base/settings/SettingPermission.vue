@@ -13,6 +13,7 @@ import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCollapse, TxCollapseItem } from '@talex-touch/tuffex/collapse'
 import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TxRowSkeleton, TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxTag } from '@talex-touch/tuffex/tag'
@@ -94,6 +95,20 @@ const auditLogs = ref<PermissionAuditLog[]>([])
 const auditLogsTotal = ref(0)
 const auditLogsLoading = ref(false)
 const auditLogFilter = ref<'all' | PermissionAuditLog['action']>('all')
+
+/** Placeholder rows for each of the two lists while their first fetch is out. */
+const PLUGIN_SKELETON_ROWS = 5
+const AUDIT_SKELETON_ROWS = 6
+
+/**
+ * First-load flags rather than the raw `loading` refs: both lists reload on
+ * demand -- the audit log behind its own button -- and a reload must not swap
+ * rendered rows back out for placeholders.
+ */
+const pluginsLoaded = ref(false)
+const auditLogsLoaded = ref(false)
+const showPluginSkeleton = useDeferredLoading(() => !pluginsLoaded.value)
+const showAuditSkeleton = useDeferredLoading(() => showAuditLogs.value && !auditLogsLoaded.value)
 
 // Filtered plugins
 const filteredPlugins = computed(() => {
@@ -190,6 +205,7 @@ async function loadData() {
     settingPermissionLog.error('Failed to load permission data', e)
   } finally {
     loading.value = false
+    pluginsLoaded.value = true
   }
 }
 
@@ -325,6 +341,7 @@ async function loadAuditLogs() {
     settingPermissionLog.error('Failed to load audit logs', e)
   } finally {
     auditLogsLoading.value = false
+    auditLogsLoaded.value = true
   }
 }
 
@@ -481,7 +498,16 @@ onMounted(() => {
       </div>
 
       <!-- Plugin List -->
-      <div v-if="loading" class="loading-state">{{ t('common.loading') }}</div>
+      <!--
+        Collapsed rows: a `TxCollapseItem` header is a status icon, a name and a
+        tag or two, which is the shape `TxRowSkeleton` models. Its inline padding
+        is zeroed to match `.plugin-list`'s own `padding: 12px 0`.
+      -->
+      <div v-if="showPluginSkeleton" class="plugin-list is-skeleton" aria-hidden="true">
+        <TxRowSkeleton :rows="PLUGIN_SKELETON_ROWS" leading trailing separated />
+      </div>
+
+      <div v-else-if="loading" class="loading-state">{{ t('common.loading') }}</div>
 
       <TxEmpty
         v-else-if="filteredPlugins.length === 0"
@@ -622,7 +648,20 @@ onMounted(() => {
       </div>
 
       <div v-if="showAuditLogs" class="audit-content">
-        <div v-if="auditLogsLoading" class="loading-state">{{ t('common.loading') }}</div>
+        <!--
+          Built from `.audit-item` so the placeholder keeps the row's filled
+          background, radius and 8px gutters.
+        -->
+        <div v-if="showAuditSkeleton" class="audit-list" aria-hidden="true">
+          <div v-for="i in AUDIT_SKELETON_ROWS" :key="i" class="audit-item">
+            <TxSkeleton :width="104" :height="11" :radius="4" />
+            <TxSkeleton variant="rect" :width="52" :height="18" :radius="9" />
+            <TxSkeleton :width="88" :height="11" :radius="4" />
+            <TxSkeleton :width="120" :height="11" :radius="4" />
+          </div>
+        </div>
+
+        <div v-else-if="auditLogsLoading" class="loading-state">{{ t('common.loading') }}</div>
 
         <TxEmpty
           v-else-if="auditLogs.length === 0"
@@ -729,6 +768,11 @@ onMounted(() => {
   text-align: center;
   padding: 40px;
   color: var(--tx-text-color-secondary);
+}
+
+/* Matches `.tx-collapse-item__header`'s own `padding: 12px 0` below. */
+.plugin-list.is-skeleton {
+  --tx-skeleton-row-padding-inline: 0;
 }
 
 .plugin-list {
