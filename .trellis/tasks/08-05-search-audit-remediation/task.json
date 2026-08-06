@@ -29,7 +29,8 @@
     "08-05-reco-system-state-signals",
     "08-05-reco-file-activity-signals",
     "08-05-reco-calendar-signal",
-    "08-05-reco-behavior-learning"
+    "08-05-reco-behavior-learning",
+    "08-05-realtime-index-freshness"
   ],
   "parent": null,
   "relatedFiles": [],
