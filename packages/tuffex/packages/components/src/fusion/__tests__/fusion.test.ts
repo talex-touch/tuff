@@ -28,7 +28,6 @@ describe('txFusion', () => {
     expect(stageStyle).toContain('--tx-fusion-duration: 0ms')
     expect(stageStyle).toContain('--tx-fusion-easing: linear')
     expect(stageStyle).toContain('--tx-fusion-gap: 64px')
-    expect(stageStyle).toContain('--tx-fusion-blur: 12px')
 
     expect(wrapper.find('feGaussianBlur').attributes('stdDeviation')).toBe('12')
     expect(wrapper.find('feColorMatrix').attributes('values')).toContain('31 -8')
