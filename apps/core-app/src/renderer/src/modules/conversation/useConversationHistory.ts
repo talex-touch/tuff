@@ -5,7 +5,7 @@ import type {
 } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createConversationSdk } from '@talex-touch/utils/transport/sdk/domains/conversation'
-import { ref, type Ref } from 'vue'
+import { ref, toRaw, type Ref } from 'vue'
 
 export interface UseConversationHistoryReturn {
   conversations: Ref<ConversationRecord[]>
@@ -39,7 +39,10 @@ function toSaveRequest(
       role: message.role,
       content: message.content,
       status: message.status === 'streaming' ? 'failed' : message.status,
-      meta: message.meta as Record<string, unknown> | undefined
+      // `toRaw`: reading `meta` off a reactive message returns a Proxy, and the transport's
+      // structuredClone rejects proxies — every save would fail. The spread keeps the stored
+      // object detached from the live one.
+      meta: message.meta ? ({ ...toRaw(message.meta) } as Record<string, unknown>) : undefined
     }))
   }
 }
