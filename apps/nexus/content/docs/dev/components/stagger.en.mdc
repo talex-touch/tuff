@@ -78,7 +78,7 @@ code: |
 - Each rendered child is cloned with its existing style plus `--tx-stagger-index: <index>`.
 - Timing props are written on the root as `--tx-stagger-duration`, `--tx-stagger-delay-step`, `--tx-stagger-delay-base`, and `--tx-stagger-easing`.
 - Built-in CSS uses opacity and `translateY(6px)` for enter/leave transitions.
-- `name` and `appear` are intentionally withheld until after mount, so transition props do not leak as root attributes during initial render.
+- `name` and `appear` are passed to TransitionGroup on the first render — TransitionGroup only runs its appear transition on initial mount and consumes both as props (not fallthrough attrs), so deferring them would permanently skip appear.
 - Child nodes must have stable Vue keys for `TransitionGroup` move/enter/leave behavior.
 - Existing child inline styles are preserved when the stagger index style is added.
 
@@ -89,8 +89,8 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `tag` | `string` | `'div'` | Root tag passed to `TransitionGroup`. |
-| `appear` | `boolean` | `true` | Enables appear transition after mount. |
-| `name` | `string` | `'tx-stagger'` | TransitionGroup class name prefix after mount. |
+| `appear` | `boolean` | `true` | Whether the appear transition runs; passed to TransitionGroup from the first render. |
+| `name` | `string` | `'tx-stagger'` | TransitionGroup class-name prefix; effective from the first render. |
 | `duration` | `number` | `180` | Enter and leave transition duration in milliseconds. |
 | `delayStep` | `number` | `24` | Extra delay per rendered child index, in milliseconds. |
 | `delayBase` | `number` | `0` | Base delay before index-based delay, in milliseconds. |
@@ -131,7 +131,7 @@ code: |
 
 - Reviewed against `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`, `types.ts`, and `stagger.test.ts`.
 - Existing tests cover root tag passthrough, slot rendering, timing CSS variables, transition prop leakage prevention, comment filtering, and child stagger index assignment.
-- Rendering note: `name` and `appear` are only applied after mount, so SSR/client hydration should not depend on transition attributes during the initial render.
+- Rendering note: `name` and `appear` are supplied as TransitionGroup props from the first render, so the initial-mount appear transition runs as expected.
 - Accessibility note: `TxStagger` adds no semantic role. Choose `tag` and child elements that preserve list, grid, or feed semantics before styling transitions.
 
 ## Source

@@ -79,7 +79,7 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 - `click` 只会在非当前、非禁用且没有 `href` 的条目上发出。
 - `icon` 会在条目文本前渲染一个 `TxIcon`。
 - 分隔符只渲染在条目之间，并且是 `aria-hidden`。
-- 默认分隔图标名是 `chevron-right`。
+- 默认分隔图标名是 `i-carbon-chevron-right`（TxIcon 需要 `i-` 前缀，缺前缀会解析为 `null`）。
 
 ## API
 
@@ -88,7 +88,7 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `items` | `BreadcrumbItem[]` | 必填 | 有序面包屑条目。最后一项会被视为当前页。 |
-| `separatorIcon` | `string` | `'chevron-right'` | 条目之间渲染的图标名。 |
+| `separatorIcon` | `string` | `'i-carbon-chevron-right'` | 条目之间渲染的图标名。 |
 
 ### BreadcrumbItem
 

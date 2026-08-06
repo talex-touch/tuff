@@ -16,7 +16,7 @@ const props = withDefaults(
   defineProps<TxSelectProps>(),
   {
     modelValue: '',
-    placeholder: '请选择',
+    placeholder: 'Please select',
     disabled: false,
     multiple: false,
     status: 'default',

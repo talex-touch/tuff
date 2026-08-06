@@ -79,7 +79,7 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 - `click` is emitted only for non-current, non-disabled items that do not have `href`.
 - `icon` renders a leading `TxIcon` inside the item label.
 - Separators render between items only and are `aria-hidden`.
-- The default separator icon name is `chevron-right`.
+- The default separator icon name is `i-carbon-chevron-right` (TxIcon requires the `i-` prefix; without it the name resolves to `null`).
 
 ## API
 
@@ -88,7 +88,7 @@ function openVirtualCrumb(item: { label: string }, index: number) {
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `items` | `BreadcrumbItem[]` | required | Ordered breadcrumb entries. The last item is treated as current. |
-| `separatorIcon` | `string` | `'chevron-right'` | Icon name rendered between entries. |
+| `separatorIcon` | `string` | `'i-carbon-chevron-right'` | Icon name rendered between entries. |
 
 ### BreadcrumbItem
 

@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   options: () => [],
   multiple: false,
   disabled: false,
-  placeholder: '请选择',
+  placeholder: 'Please select',
   searchable: true,
   clearable: true,
   placement: 'bottom-start',

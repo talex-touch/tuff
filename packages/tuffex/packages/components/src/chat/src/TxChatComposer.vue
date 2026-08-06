@@ -62,7 +62,6 @@ const canSend = computed(() => {
 })
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-void textareaRef.value
 
 // ---------------------------------------------------------------------------
 // Attachment intake: paste and drag-and-drop both funnel into `attachmentAdd`.

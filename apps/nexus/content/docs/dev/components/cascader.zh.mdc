@@ -145,7 +145,7 @@ code: |
 | `options` | `CascaderNode[]` | `[]` | 根级选项树，用于渲染级联列。 |
 | `multiple` | `boolean` | `false` | 启用多选叶子路径，并把选中的路径渲染为标签。 |
 | `disabled` | `boolean` | `false` | 禁用触发器、清空按钮、节点选择和键盘打开行为。 |
-| `placeholder` | `string` | `'请选择'` | 未选择路径时显示的占位文本。 |
+| `placeholder` | `string` | `'Please select'` | 未选择路径时显示的占位文本。 |
 | `searchable` | `boolean` | `true` | 显示本地搜索输入框，按已加载叶子路径的格式化标签过滤。 |
 | `clearable` | `boolean` | `true` | 组件启用且已有值时显示清空按钮。 |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 转发给底层 `TxPopover` 的浮层位置。 |
