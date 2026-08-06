@@ -10,8 +10,8 @@ import type {
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
+import { delimiter, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
-import { dirname, delimiter } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import {
@@ -24,6 +24,27 @@ import {
 
 /** Enough stderr to identify a failure without letting a chatty run grow unbounded in memory. */
 const STDERR_TAIL_LIMIT = 4_000
+
+export interface PiToolRuntimeConfig {
+  url: string
+  token: string
+  tools: string[]
+}
+
+/**
+ * Reads the live tool grant at spawn time.
+ *
+ * A getter rather than a value: the user can flip tools on mid-conversation,
+ * and the provider is constructed once at registration. Left unset, every run
+ * is tool-free — the safe default survives a wiring mistake.
+ */
+let resolveToolRuntime: (() => PiToolRuntimeConfig | null) | null = null
+
+export function setPiToolRuntimeResolver(
+  resolver: (() => PiToolRuntimeConfig | null) | null
+): void {
+  resolveToolRuntime = resolver
+}
 
 interface PiRunState {
   provider?: string
@@ -57,7 +78,12 @@ export class PiCliProvider extends IntelligenceProvider {
       )
     }
 
-    const args = buildPiArgs(buildPiPrompt(payload.messages), this.resolveModel(options))
+    const toolRuntime = resolveToolRuntime?.() ?? null
+    const args = buildPiArgs(
+      buildPiPrompt(payload.messages),
+      this.resolveModel(options),
+      toolRuntime ? { tools: toolRuntime.tools } : undefined
+    )
 
     return spawn(executable, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -66,7 +92,15 @@ export class PiCliProvider extends IntelligenceProvider {
         // `pi` is a `#!/usr/bin/env node` script and version managers keep `node` beside it. A GUI
         // launch inherits a PATH that contains neither, so without this the shebang fails to resolve
         // even though the binary itself was found by absolute path.
-        PATH: [dirname(executable), process.env.PATH].filter(Boolean).join(delimiter)
+        PATH: [dirname(executable), process.env.PATH].filter(Boolean).join(delimiter),
+        // The extension reads these to reach back into the app. Absent them it
+        // registers nothing, so a stale `--tools` list can't grant anything.
+        ...(toolRuntime
+          ? {
+              TUFF_TOOL_GATEWAY_URL: toolRuntime.url,
+              TUFF_TOOL_GATEWAY_TOKEN: toolRuntime.token
+            }
+          : {})
       }
     })
   }

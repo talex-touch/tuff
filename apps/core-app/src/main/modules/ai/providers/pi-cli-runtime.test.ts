@@ -258,4 +258,21 @@ describe('buildPiArgs tool allowlist', () => {
   it('drops blank entries rather than emitting an empty allowlist', () => {
     expect(buildPiArgs(prompt, undefined, { tools: [' ', ''] })).toContain('--no-tools')
   })
+
+  it('loads extensions only when tools are granted', () => {
+    // Tuff's tools ship as a pi extension, so --no-extensions would silently
+    // cancel the allowlist we just handed over.
+    expect(buildPiArgs(prompt)).toContain('--no-extensions')
+    expect(buildPiArgs(prompt, undefined, { tools: ['tuff_read_file'] })).not.toContain(
+      '--no-extensions'
+    )
+  })
+
+  it('never loads skills, sessions or context files either way', () => {
+    for (const args of [buildPiArgs(prompt), buildPiArgs(prompt, undefined, { tools: ['read'] })]) {
+      expect(args).toContain('--no-session')
+      expect(args).toContain('--no-skills')
+      expect(args).toContain('--no-context-files')
+    }
+  })
 })
