@@ -5,7 +5,7 @@ import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
-import { TxTypingIndicator } from '@talex-touch/tuffex/chat'
+import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
@@ -61,7 +61,9 @@ const { selection: modelSelection, selectedModel } = useModelOptions()
 
 const conversation = useHomeConversation({
   // A getter, not a snapshot: switching model mid-conversation must apply to the next send.
-  routing: () => modelSelection.value
+  routing: () => modelSelection.value,
+  // Likewise for the Auto Context toggle declared below — each send reads its current value.
+  autoContext: () => autoContext.value
 })
 const { isEmpty, isStreaming, lastTurn, messages } = conversation
 
@@ -546,14 +548,13 @@ watch(
                       :streaming="message.status === 'streaming'"
                     />
 
-                    <TxTypingIndicator
+                    <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. -->
+                    <TxThinkingOrb
                       v-else-if="message.status === 'streaming' && !chainStepsOf(message).length"
                       class="HomePage-Thinking"
-                      variant="dots"
-                      :show-text="false"
-                      :size="6"
-                      :gap="5"
-                      :aria-label="t('home.thinking')"
+                      :size="64"
+                      :display-size="28"
+                      :label="t('home.thinking')"
                     />
 
                     <div v-if="message.status === 'failed'" class="HomePage-Error" role="alert">
@@ -1007,14 +1008,8 @@ watch(
   word-break: break-word;
 }
 
-/**
- * The shell runs its own token layer, so the indicator is recoloured through the one hook TuffEx
- * exposes for exactly that case rather than by restyling its internals.
- */
 .HomePage-Thinking {
-  --tx-typing-indicator-color: var(--shell-text-muted);
-
-  height: 22px;
+  margin: 2px 0;
 }
 
 .HomePage-Error {
