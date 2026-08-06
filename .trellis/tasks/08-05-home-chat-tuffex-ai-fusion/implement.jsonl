@@ -1,1 +1,3 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "core-app 组件与 tuffex 组合惯例"}
+{"file": ".trellis/tasks/08-05-tuffex-ai-suite/prd.md", "reason": "父任务跨子任务约束与集成验收"}
+{"file": ".trellis/tasks/08-04-home-conversation/prd.md", "reason": "行为不回退清单的来源（R1/R1.5/R2）"}
