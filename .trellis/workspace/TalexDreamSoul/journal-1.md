@@ -1712,3 +1712,12 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 ### Next Steps
 
 - None - task complete
+
+## 2026-08-05 · home-chat-tuffex-ai-fusion · ④落地(首页接入 tuffex ai 全栈)
+
+- 基线是 08-04 未提交的 R2(整会话粒度 transport)——设计随之定型:无 loadOlder(打开即全量+虚拟化兜底)、TxAiMessage 不上首页(卡片语言与 shell v2 平铺冲突,item 插槽承载原版式)、composer 不换件(保焦点/IME,paste/drop 本地实现)。
+- 交接表:手写 stick-to-bottom 全删移交 TxConversationStream;composer 测高改喂 scroller padding+浮钮偏移;keep-alive 切会话后显式 scrollToBottom(整体替换不触发 prepend 锚定)。
+- 附件内存态:ConversationMessage.attachments 挂 user 消息,provider payload 与持久化由构造双双不含;objectURL 卸载统一 revoke;降级提示行 i18n 四 key。
+- 两个大坑:①包目录内 pnpm add 会剪掉 lockfile 的具名 catalogs 段(①时已提交出去的回归,本轮根目录全量 install 修复),且残留 vite@terser 孤儿实例破坏 typecheck:node——已写进 memory;②lang json 用 json.dump 往返引入全文件格式噪声,用 HEAD 紧凑形态逐点收敛,顺带去掉 home 对象的重复键。
+- 纠缠文件(HomePage/useHomeConversation/lang)如实并入一个双任务提交(fe581a6be),pi-cli 层(cf8b4ac5c)与 lockfile 修复(5ba253976)独立成提交。
+- 全量门:tuffex 1016 + core-app conversation 31 + typecheck node/web + lint 全绿。唯一留白:core:dev 目验 review 门(①②③④合并清单)交用户。
