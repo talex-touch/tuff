@@ -1,5 +1,6 @@
 <script lang="ts" name="HomeTopBar" setup>
 import { useI18n } from 'vue-i18n'
+import HomeModelMenu from './HomeModelMenu.vue'
 
 /**
  * The conversation top bar, from artboards `JVvAr` / `lbZ9a` (untitled) and `LI40e` / `zdhVu`
@@ -12,11 +13,9 @@ const props = defineProps<{
   modelName: string
   /** Whether the right panel is open, so the toggle can describe what it will do. */
   panelOpen?: boolean
-  menuOpen?: boolean
 }>()
 
 defineEmits<{
-  (event: 'select-model'): void
   (event: 'toggle-panel'): void
   (event: 'open-menu'): void
 }>()
@@ -36,19 +35,20 @@ const { t } = useI18n()
       </h1>
 
       <div class="HomeTopBar-ModeSlot">
-        <button
-          class="HomeTopBar-ModePill"
-          :class="{ 'is-secondary': Boolean(props.title) }"
-          type="button"
-          data-model-pill
-          :aria-label="t('home.model')"
-          :aria-expanded="Boolean(props.menuOpen)"
-          @click="$emit('select-model')"
-        >
-          <span class="HomeTopBar-ModeLabel">{{ props.modelName }}</span>
-          <span class="i-ri-arrow-down-s-line HomeTopBar-ModeChevron" />
-        </button>
-        <slot name="menu" />
+        <HomeModelMenu placement="bottom-start">
+          <template #trigger="{ open }">
+            <button
+              class="HomeTopBar-ModePill"
+              :class="{ 'is-secondary': Boolean(props.title) }"
+              type="button"
+              :aria-label="t('home.model')"
+              :aria-expanded="open"
+            >
+              <span class="HomeTopBar-ModeLabel">{{ props.modelName }}</span>
+              <span class="i-ri-arrow-down-s-line HomeTopBar-ModeChevron" />
+            </button>
+          </template>
+        </HomeModelMenu>
       </div>
     </div>
 
@@ -110,9 +110,8 @@ const { t } = useI18n()
   font-weight: 500;
 }
 
-/** Anchors the model menu to the pill; the bar itself is a drag region and cannot host it. */
+/** The bar is a drag region; the pill (and the menu it opens) must stay clickable. */
 .HomeTopBar-ModeSlot {
-  position: relative;
   flex: none;
   -webkit-app-region: no-drag;
 }
