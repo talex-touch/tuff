@@ -128,4 +128,50 @@ describe('txMarkdownEditor', () => {
     expect(wrapper.find('.tx-markdown-editor__surface').attributes('aria-label')).toBe('Notes editor')
     expect(wrapper.find('textarea').attributes('aria-label')).toBe('Notes editor')
   })
+
+  it('escapes markdown punctuation typed as literal text', async () => {
+    const wrapper = mount(TxMarkdownEditor, {
+      props: { modelValue: '', sanitize: false },
+      attachTo: document.body,
+    })
+    await flushMarkdown()
+
+    const surface = wrapper.find('.tx-markdown-editor__surface')
+    surface.element.innerHTML = '<table><tr><td>a | b</td><td>other</td></tr></table>'
+    await surface.trigger('input')
+
+    const table = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as string
+    // A literal pipe used to re-emit as a column break, so the row no longer
+    // matched its own separator and the table stopped rendering as a table.
+    expect(table).toContain('a \\| b')
+
+    surface.element.innerHTML = '<p>use *stars* and _underscores_ and `ticks`</p>'
+    await surface.trigger('input')
+
+    const inline = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as string
+    expect(inline).toContain('\\*stars\\*')
+    expect(inline).toContain('\\_underscores\\_')
+    expect(inline).toContain('\\`ticks\\`')
+
+    wrapper.unmount()
+  })
+
+  it('leaves code and pre content verbatim', async () => {
+    const wrapper = mount(TxMarkdownEditor, {
+      props: { modelValue: '', sanitize: false },
+      attachTo: document.body,
+    })
+    await flushMarkdown()
+
+    const surface = wrapper.find('.tx-markdown-editor__surface')
+    surface.element.innerHTML = '<pre><code>a | b *not emphasis*</code></pre>'
+    await surface.trigger('input')
+
+    const emitted = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as string
+    // Escaping must not leak into verbatim spans.
+    expect(emitted).toContain('a | b *not emphasis*')
+    expect(emitted).not.toContain('\\|')
+
+    wrapper.unmount()
+  })
 })
