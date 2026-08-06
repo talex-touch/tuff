@@ -164,6 +164,13 @@ watch(
     overflow: hidden;
   }
 
+  // While the thought streams, its tail dims like the answer's does — one
+  // shared reveal language across prose and reasoning.
+  &.is-streaming .tx-reasoning-disclosure__text {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2em), rgb(0 0 0 / 40%) 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2em), rgb(0 0 0 / 40%) 100%);
+  }
+
   .tx-reasoning-disclosure__text {
     max-height: 200px;
     margin-top: 4px;
