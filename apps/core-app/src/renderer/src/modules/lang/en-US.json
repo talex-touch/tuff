@@ -4270,6 +4270,8 @@
       "dontRemindAgain": "Don't remind me again"
     },
     "previewHistory": {
+      "copyResult": "Copy result",
+      "resultLabel": "Result",
       "recentTitle": "Recent",
       "countSummary": "{count} total",
       "noRecords": "No records yet"

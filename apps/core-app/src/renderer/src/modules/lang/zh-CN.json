@@ -4222,6 +4222,8 @@
       "dontRemindAgain": "不再提醒"
     },
     "previewHistory": {
+      "copyResult": "复制结果",
+      "resultLabel": "结果",
       "recentTitle": "最近处理",
       "countSummary": "共 {count} 条",
       "noRecords": "暂无记录"
