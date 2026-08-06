@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SettingMessages">
 import type { AnalyticsMessage } from '@talex-touch/utils/analytics'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
@@ -18,6 +19,17 @@ const settingMessagesLog = createRendererLogger('SettingMessages')
 const messages = ref<AnalyticsMessage[]>([])
 const loading = ref(false)
 
+/** Placeholder rows while the first page of messages is in flight. */
+const SKELETON_ROWS = 4
+
+/**
+ * Only the first fetch gets a skeleton. `loading` also turns true on the Refresh
+ * button, and swapping already-read messages out for placeholders on a manual
+ * refresh loses the reader's place.
+ */
+const hasLoaded = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
+
 const unreadCount = computed(() => messages.value.filter((item) => item.status === 'unread').length)
 const limitedMessages = computed(() => messages.value.slice(0, 12))
 
@@ -33,6 +45,7 @@ async function loadMessages() {
     messages.value = []
   } finally {
     loading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -125,7 +138,30 @@ onMounted(() => {
       </TxButton>
     </section>
 
-    <div v-if="loading" class="MessageState">
+    <!--
+      Built from `.MessageList` / `.MessageItem` themselves rather than a
+      lookalike, so the placeholder inherits the real item's height, padding and
+      spacing and cannot drift away from it.
+    -->
+    <ul v-if="showSkeleton" class="MessageList" aria-hidden="true">
+      <li v-for="i in SKELETON_ROWS" :key="i" class="MessageItem">
+        <div class="MessageHeader">
+          <div class="MessageTitle">
+            <TxSkeleton variant="circle" :width="8" :height="8" />
+            <TxSkeleton :width="168" :height="13" :radius="4" />
+          </div>
+          <TxSkeleton :width="64" :height="11" :radius="4" />
+        </div>
+        <p class="MessageBody">
+          <TxSkeleton :lines="2" :height="11" :radius="4" :gap="6" />
+        </p>
+        <div class="MessageFooter">
+          <TxSkeleton :width="88" :height="24" :radius="8" />
+        </div>
+      </li>
+    </ul>
+
+    <div v-else-if="loading" class="MessageState">
       <span class="i-carbon-circle-dash animate-spin" />
       <span>{{ t('settingMessages.loading', 'Loading...') }}</span>
     </div>

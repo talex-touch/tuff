@@ -11,6 +11,7 @@ import type { AiImportedConfigItem } from '@talex-touch/tuff-intelligence'
 import type { McpManualServerInput } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxModal } from '@talex-touch/tuffex/modal'
+import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useIntelligenceSdk, useMcpServersSdk } from '@talex-touch/utils/renderer'
@@ -23,6 +24,7 @@ import SettingChip from '~/components/settings/SettingChip.vue'
 import SettingDivider from '~/components/settings/SettingDivider.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingSection from '~/components/settings/SettingSection.vue'
+import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   isManualMcpServer,
@@ -145,6 +147,24 @@ const hiddenMcpCount = computed(() => Math.max(mcpServers.value.length - MAX_VIS
 const hiddenSkillCount = computed(() => Math.max(skills.value.length - MAX_VISIBLE_ROWS, 0))
 const showStateRow = computed(() => loading.value && items.value.length === 0)
 
+/**
+ * Only the first load draws a skeleton. Binding to `loading` would also fire on
+ * every retry, swapping already-rendered rows back out for placeholders; this
+ * flag never returns to false once the first snapshot has landed.
+ */
+const hasLoaded = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
+
+/**
+ * Mirrors the two sections the loaded page draws. Both lists are capped at
+ * `MAX_VISIBLE_ROWS` and each section always ends with an action row, so a count
+ * inside that range is as close as a skeleton can get before the real one lands.
+ */
+const skeletonGroups = computed(() => [
+  { label: t('settings.skillsMcp.mcp.label'), rows: 4, description: true, trailing: true },
+  { label: t('settings.skillsMcp.skills.label'), rows: 4, description: true, trailing: true }
+])
+
 const addServerDescription = computed(() =>
   mcpServers.value.length === 0 && !loading.value && !loadError.value
     ? t('settings.skillsMcp.mcp.addDescEmpty')
@@ -187,6 +207,7 @@ async function loadItems(): Promise<void> {
     loadError.value = errorMessage(error, t('settings.skillsMcp.loadFailedDesc'))
   } finally {
     loading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -309,7 +330,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <SettingSection v-if="loadError" :label="t('settings.skillsMcp.mcp.label')">
+  <!--
+    Stands in for both sections on first load. The dialog further down stays
+    outside the branch: the user opens it, not the initial fetch.
+  -->
+  <SettingSkeleton v-if="showSkeleton" :groups="skeletonGroups" />
+
+  <SettingSection v-else-if="loadError" :label="t('settings.skillsMcp.mcp.label')">
     <SettingRow :title="t('settings.skillsMcp.loadFailed')" :description="loadError">
       <template #trailing>
         <SettingButton variant="secondary" @click="loadItems">
@@ -385,7 +412,7 @@ onMounted(() => {
     </SettingRow>
   </SettingSection>
 
-  <SettingSection :label="t('settings.skillsMcp.skills.label')">
+  <SettingSection v-if="!showSkeleton" :label="t('settings.skillsMcp.skills.label')">
     <SettingRow v-if="showStateRow" :title="t('settings.skillsMcp.loading')" />
 
     <template v-for="(row, index) in skillRows" :key="row.item.id">

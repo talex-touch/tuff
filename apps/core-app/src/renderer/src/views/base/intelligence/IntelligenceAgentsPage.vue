@@ -1,5 +1,6 @@
 <script lang="ts" name="IntelligenceAgentsPage" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
+import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { useAgentsSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,6 +17,14 @@ const agents = ref<AgentDescriptor[]>([])
 const selectedAgentId = ref<string | null>(null)
 const loading = ref(true)
 const searchQuery = ref('')
+
+/**
+ * Drives the list's placeholder. Bound to a first-load flag rather than to
+ * `loading` so a later refresh leaves the rendered agents in place, and routed
+ * through `useDeferredLoading` so a fast reply never flashes a skeleton.
+ */
+const hasLoaded = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 
 const selectedAgent = computed(
   () => agents.value.find((a) => a.id === selectedAgentId.value) || null
@@ -41,6 +50,7 @@ async function loadAgents() {
     toast.error(t('intelligence.audit.loadAgentsFailed'))
   } finally {
     loading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -65,7 +75,7 @@ onMounted(() => {
         <AgentsList
           :agents="filteredAgents"
           :selected-id="selectedAgentId"
-          :loading="loading"
+          :loading="showSkeleton"
           @select="handleSelectAgent"
         />
       </div>
