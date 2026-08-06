@@ -1550,6 +1550,8 @@ export function createIntelligenceSdk(
               options.onUsage?.(typedEvent.usage, typedEvent);
             } else if (typedEvent.type === "metadata" && typedEvent.metadata) {
               options.onMetadata?.(typedEvent.metadata, typedEvent);
+            } else if (typedEvent.type === "part" && typedEvent.partEvent) {
+              options.onPartEvent?.(typedEvent.partEvent, typedEvent);
             } else if (typedEvent.type === "end") {
               emitEnd(typedEvent);
             }

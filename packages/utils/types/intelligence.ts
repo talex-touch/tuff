@@ -472,6 +472,26 @@ export interface IntelligenceInvokeResult<T = any> {
 /**
  * Streaming response chunk.
  */
+/**
+ * A structured event inside a streamed turn — reasoning spans and tool calls.
+ * Providers that run an agent loop (pi CLI first; cloud tool-use later) emit
+ * these alongside text deltas; surfaces assemble them into message parts.
+ */
+export type IntelligencePartEvent =
+  | { kind: "reasoning-start" }
+  | { kind: "reasoning-delta"; delta: string }
+  | { kind: "reasoning-end"; durationMs?: number }
+  | { kind: "tool-start"; callId: string; name: string }
+  | { kind: "tool-input-delta"; callId: string; delta: string }
+  | { kind: "tool-input-end"; callId: string; input: unknown }
+  | {
+      kind: "tool-result";
+      callId: string;
+      name: string;
+      output: string;
+      isError: boolean;
+    };
+
 export interface IntelligenceStreamChunk {
   /** Content delta. */
   delta: string;
@@ -479,6 +499,8 @@ export interface IntelligenceStreamChunk {
   done: boolean;
   /** Final usage info (when done). */
   usage?: IntelligenceUsageInfo;
+  /** Structured part event riding this chunk (no text delta implied). */
+  partEvent?: IntelligencePartEvent;
   /** Provider trace identifier when known. */
   traceId?: string;
   /** Effective provider selected by a routed backend. */
@@ -495,6 +517,7 @@ export type IntelligenceStreamEventType =
   | "message"
   | "usage"
   | "metadata"
+  | "part"
   | "end";
 
 export interface IntelligenceStreamEvent<T = unknown> {
@@ -510,6 +533,8 @@ export interface IntelligenceStreamEvent<T = unknown> {
   result?: T;
   usage?: IntelligenceUsageInfo;
   metadata?: Record<string, unknown>;
+  /** Present when `type` is "part". */
+  partEvent?: IntelligencePartEvent;
 }
 
 export interface IntelligenceStreamOptions<T = unknown> {
@@ -525,6 +550,11 @@ export interface IntelligenceStreamOptions<T = unknown> {
   ) => void;
   onMetadata?: (
     metadata: Record<string, unknown>,
+    event: IntelligenceStreamEvent<T>,
+  ) => void;
+  /** Structured reasoning/tool events from agent-loop providers. */
+  onPartEvent?: (
+    partEvent: IntelligencePartEvent,
     event: IntelligenceStreamEvent<T>,
   ) => void;
   onEnd?: (event: IntelligenceStreamEvent<T>) => void;

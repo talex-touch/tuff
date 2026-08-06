@@ -101,6 +101,16 @@ export class PiCliProvider extends IntelligenceProvider {
         if (event.model) state.model = event.model
         if (event.usage) state.usage = event.usage
 
+        if (event.partEvent) {
+          yield {
+            delta: '',
+            done: false,
+            partEvent: event.partEvent,
+            provider: state.provider,
+            model: state.model
+          }
+        }
+
         if (event.delta) {
           emittedDelta = true
           yield {
