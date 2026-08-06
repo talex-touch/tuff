@@ -37,10 +37,15 @@ export function useAutoTheme(theme: () => 'light' | 'dark' | 'auto') {
     observer = new MutationObserver(() => {
       autoTheme.value = detect()
     })
-    observer.observe(document.documentElement, {
+    const observerInit: MutationObserverInit = {
       attributes: true,
       attributeFilter: ['class', 'data-theme'],
-    })
+    }
+    observer.observe(document.documentElement, observerInit)
+    // detect() also reads theme signals off <body>, so a body-driven dark-mode toggle
+    // has to be observed too — the read surface and the watched surface must match.
+    if (document.body)
+      observer.observe(document.body, observerInit)
   }
 
   function disconnect(): void {
