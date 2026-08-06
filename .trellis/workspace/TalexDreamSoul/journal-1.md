@@ -1748,3 +1748,12 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - **S6**:tuff_search_files 改接 coreBoxManager.search(与启动器同索引同排序);tuff_render_chart 收**声明式 spec**(校验 type/labels/series 对齐)→ ToolChartCard 按需 import echarts 渲染——「数据→报表」不给模型任意执行面。
 - **S7 端到端**:自写 gateway-smoke.mjs 起真网关 + 真 pi 跑通全链。**抓出真 bug**:pi 的 executor 签名是 `(toolCallId, params, …)` 而非 `(args)`,我按后者写 → 网关收到的 args 是 callId 字符串,真实场景下每次调用都会参数校验失败。单测抓不到(没人拥有 pi 的签名),只有端到端能抓;已修 + 加契约回归测试锁死。
 - 全量门:137 测试 / typecheck node+web 双绿。遗留:tuff_list_features / tuff_invoke_feature 未做(插件 feature 调用面);MCP 挂载等 C 任务。
+
+## 2026-08-05 · search-audit-remediation · 批次 A：A4/A1/A3 落地
+
+- 任务树:父任务持久化 70+ 审查发现 digest(E/A/F 编号+B/C 批次映射),批次 A 四子任务。A4 语义目录 token 边界匹配(3a8e40cd3):共享 matcher 只认身份字段,Postgres≠Telegram/家目录不再污染,双 catalog 版本升触发重扫。
+- A1 排序送达 UI(d880b6b22,implement+check 双代理):排序分/pinned 回写浅拷贝(防跨查询泄漏)、主路径单次 full 富化发布(IPC 减半)、渲染端合并→重排→每源保底 6→截 80、完成时缓存累计集、选中按 id 跟随。check 抓到渲染端 80 预截断抵消后端 200 放宽的高危并修复(红绿验证)。
+- A3 文件索引数据安全(7f9e806e3,implement+check+收尾三轮):扫描错误计数+按根删除守卫(空扫/超半删除拦截)、搜索路两条清理全改 ENOENT 闸门、NFC darwin 门控单一入口+幂等迁移(单写者合规,reconcile 让路一轮且不可能永久停摆)、mtime 秒级量化(含 check 抓出的 worker 拷贝路径)。
+- 新发现入 digest:E-NEW1 语义召回在 complete 后必丢;E-NEW3 ai search-agent 语义分被绝对分饱和到 1(阈值失效,待 ai/ 并发会话稳定后专项修);F-NEW1 全空根永不被 reconcile 删(既定保守);用户需求「展示主窗口类命令靠前」入 C4。
+- 门:A1 引擎 499+渲染 89;A3 files 294+utils 986;typecheck node/web 对己方文件零错。packages/test 61 失败与 ai/tuffex 报错均为并发/既有,未触碰。
+- 待办:A2 字符集统一(工件已备,依赖 A3 已落地→可派发);reco-audit 推荐系统评估在飞;批次 A 收口后做合并 spec 更新。
