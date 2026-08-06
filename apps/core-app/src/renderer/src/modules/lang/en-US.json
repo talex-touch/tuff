@@ -2603,6 +2603,26 @@
         "viewAllTitle": "View all skills",
         "viewAllDesc": "More skills and import management on the Intelligence page"
       },
+      "localDirs": {
+        "label": "Local skill directories",
+        "linked": "Linked",
+        "noDescription": "(no description)",
+        "dirDesc": "{count} skills found · removing unlinks it, nothing is deleted",
+        "remove": "Remove",
+        "rescan": "Rescan",
+        "addTitle": "Link a local directory",
+        "addAction": "Choose directory",
+        "addDesc": "Scans SKILL.md under the directory; edits apply on the next turn",
+        "addDescEmpty": "No local directories yet — pick one holding SKILL.md, linked in place, never copied",
+        "pickTitle": "Choose a skill directory",
+        "pickConfirm": "Link",
+        "showAllTitle": "Show every skill",
+        "showAllDesc": "{count} more local skills",
+        "loadFailed": "Failed to read the local skill directories",
+        "addFailed": "Failed to link the directory",
+        "removeFailed": "Failed to remove the directory",
+        "toggleFailed": "Failed to toggle the local skill"
+      },
       "dialog": {
         "createTitle": "Add MCP server",
         "editTitle": "Edit MCP server",

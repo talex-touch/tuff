@@ -2579,6 +2579,26 @@
         "viewAllTitle": "查看全部技能",
         "viewAllDesc": "更多技能与导入管理在智能页"
       },
+      "localDirs": {
+        "label": "本地技能目录",
+        "linked": "链接",
+        "noDescription": "（无描述）",
+        "dirDesc": "扫描到 {count} 个技能 · 移除只解除链接，不删除文件",
+        "remove": "移除",
+        "rescan": "重新扫描",
+        "addTitle": "链接本地目录",
+        "addAction": "选择目录",
+        "addDesc": "扫描目录下的 SKILL.md，改动下一轮生效",
+        "addDescEmpty": "还没有本地目录——选一个含 SKILL.md 的目录，原地引用不拷贝",
+        "pickTitle": "选择技能目录",
+        "pickConfirm": "链接",
+        "showAllTitle": "展开全部技能",
+        "showAllDesc": "还有 {count} 个本地技能",
+        "loadFailed": "读取本地技能目录失败",
+        "addFailed": "链接目录失败",
+        "removeFailed": "移除目录失败",
+        "toggleFailed": "切换本地技能失败"
+      },
       "dialog": {
         "createTitle": "添加 MCP 服务器",
         "editTitle": "编辑 MCP 服务器",

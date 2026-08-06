@@ -18,6 +18,7 @@ export enum StorageList {
   STARTUP_ANALYTICS = 'startup-analytics.json',
   STARTUP_ANALYTICS_REPORT_QUEUE = 'startup-analytics-report-queue.json',
   TELEMETRY_CLIENT = 'telemetry-client.json',
+  SKILL_LOCAL_SOURCES = 'skill-local-sources.json',
 }
 
 /**

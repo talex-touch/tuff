@@ -60,13 +60,23 @@ interface ToolCallPlan { risk: ToolRisk; summary: string; rememberKey: string }
   `tuff_mcp_list_tools` lists an unreachable server as `unavailable: <reason>`
   and keeps the rest of the catalogue; zero enabled servers returns a friendly
   prompt, `isError: false`.
-- **Skill reads accept only store-managed content**: `tuff_skill_read` resolves
+- **Skill reads accept only an id**: `tuff_skill_read` resolves an imported skill
   through the item's `contentRef`; caller-supplied paths are rejected. Home has
   no workspace, so the orchestrator's workspace-escape clause is replaced by
   this stricter invariant — availability is "the user activated the item".
+- **A `local:` id reads a linked file instead** (`skill-local-sources`): the id
+  is `local:<12 hex of sha1(realpath)>`, so it resolves only against directories
+  the user registered, and the manifest is re-`realpath`ed to prove it stays
+  inside the entry — a symlinked entry is followed once and its target becomes
+  the boundary. Still id-only: no path the model invents is addressable, and a
+  switched-off skill is unreadable, not merely unlisted. Nothing is copied into
+  the content store, so an edit on disk lands on the next read.
 
 ## 5. Home injection contract
 
+- `buildHomeInjection` lists imported skills and enabled linked local skills in
+  one `Available skills` catalogue — the model sees one list and one tool, and
+  `local:` ids simply route elsewhere on read.
 - `applyHomeConversationInjection(payload, options, isPluginCaller)` prepends
   one system message (active skills metadata + rules) when and only when
   `options.metadata.surface === INTELLIGENCE_HOME_SURFACE` **and**
@@ -88,6 +98,7 @@ interface ToolCallPlan { risk: ToolRisk; summary: string; rememberKey: string }
 | User denies confirmation | `isError` text result to the model (not a transport error) |
 | MCP server unreachable in `classify` | fallback plan: `execute` risk, re-ask |
 | Skill id not active / no contentRef | `isError` message |
+| `local:` id outside the registry, switched off, or escaping its directory | `isError` message; the file is never opened |
 | Result over 64 KiB | truncated with notice |
 
 ## 7. Tests Required
@@ -96,6 +107,8 @@ interface ToolCallPlan { risk: ToolRisk; summary: string; rememberKey: string }
 - Risk-mapping table test (`tool-registry.mcp.test.ts`).
 - One-server-down-doesn't-hide-the-rest test for list.
 - contentRef-only rejection test for skill read.
+- Local-directory scan tests against real directories and real symlinks
+  (`skill-local-sources.test.ts`): a stubbed fs would only test the stub.
 - Live-transport smoke: `TUFF_MCP_SMOKE=1 npx vitest run
   src/main/modules/ai/intelligence-mcp-registry.smoke.test.ts` (real npx
   server; opt-in because it spawns processes and may touch the network).

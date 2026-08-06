@@ -1,5 +1,8 @@
 import type { AiAgentProfile, AiImportedConfigItem } from '@talex-touch/utils/types/ai-orchestrator'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const importedConfigMocks = vi.hoisted(() => {
   const items: AiImportedConfigItem[] = []
@@ -46,6 +49,22 @@ vi.mock('./intelligence-mcp-registry', () => ({
 }))
 
 import { AiImportedConfigRuntime } from './ai-imported-config-runtime'
+import { setLocalSkillConfigReader } from './skill-local-sources'
+
+/** A real directory, because the merge is only meaningful against a real scan. */
+let localSkillRoot = ''
+
+async function linkLocalSkill(name: string, description: string): Promise<void> {
+  localSkillRoot = await realpath(await mkdtemp(join(tmpdir(), 'tuff-injection-skills-')))
+  const dir = join(localSkillRoot, name)
+  await mkdir(dir, { recursive: true })
+  await writeFile(
+    join(dir, 'SKILL.md'),
+    `---\nname: ${name}\ndescription: ${description}\n---\nLINKED SKILL BODY\n`,
+    'utf8'
+  )
+  setLocalSkillConfigReader(() => ({ dirs: [localSkillRoot], disabledIds: [] }))
+}
 
 function importedItem(overrides: Partial<AiImportedConfigItem>): AiImportedConfigItem {
   return {
@@ -96,6 +115,13 @@ describe('AiImportedConfigRuntime scoped imports', () => {
     importedConfigMocks.content.clear()
     importedConfigMocks.agentProfiles.clear()
     importedConfigMocks.registeredMcpProfiles.clear()
+    setLocalSkillConfigReader(null)
+  })
+
+  afterEach(async () => {
+    setLocalSkillConfigReader(null)
+    if (localSkillRoot) await rm(localSkillRoot, { recursive: true, force: true })
+    localSkillRoot = ''
   })
 
   it('exposes skill metadata by default without reading or injecting its instruction body', async () => {
@@ -419,7 +445,7 @@ describe('AiImportedConfigRuntime scoped imports', () => {
     const injection = await new AiImportedConfigRuntime().buildHomeInjection()
 
     expect(injection).toContain(
-      'Available imported skills (metadata only; call tuff_skill_read with an id before using one)'
+      'Available skills (metadata only; call tuff_skill_read with an id before using one)'
     )
     expect(injection).toContain('"id":"skill-release"')
     expect(injection).toContain('Review release readiness.')
@@ -459,6 +485,35 @@ describe('AiImportedConfigRuntime scoped imports', () => {
     expect(injection.indexOf('skill-release')).toBeLessThan(injection.indexOf('RULE format'))
     // Workspace items sort ahead of global ones, the same precedence `buildSystemPrompt` applies.
     expect(injection.indexOf('RULE format')).toBeLessThan(injection.indexOf('RULE tone'))
+  })
+
+  it('lists a linked local skill beside the imported ones, metadata only', async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'skill-release',
+        contentRef: 'skill-release-content',
+        normalizedProjection: { description: 'Review release readiness.' }
+      })
+    )
+    importedConfigMocks.content.set('skill-release-content', 'INTERNAL SKILL BODY')
+    await linkLocalSkill('triage', 'Sort the inbox.')
+
+    const injection = (await new AiImportedConfigRuntime().buildHomeInjection()) ?? ''
+
+    expect(injection).toContain('"id":"skill-release"')
+    expect(injection).toMatch(/"id":"local:[0-9a-f]{12}"/)
+    expect(injection).toContain('Sort the inbox.')
+    // Both halves stay metadata: the body arrives only through `tuff_skill_read`.
+    expect(injection).not.toContain('LINKED SKILL BODY')
+  })
+
+  it('carries a linked skill on its own, with no imported item at all', async () => {
+    await linkLocalSkill('triage', 'Sort the inbox.')
+
+    const injection = (await new AiImportedConfigRuntime().buildHomeInjection()) ?? ''
+
+    expect(injection).toContain('Available skills (metadata only')
+    expect(injection).toContain('Sort the inbox.')
   })
 
   it('returns no home injection when nothing is active', async () => {

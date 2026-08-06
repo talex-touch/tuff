@@ -5,6 +5,10 @@
   model itself. Both are imported-config items in the orchestrator store, so listing, enabling and
   deleting ride the channels the Intelligence surface already uses; only liveness probing and
   hand-entering a server are new.
+
+  Local skill directories are the third list, and a different thing: nothing is imported, the file
+  on disk stays the skill, and main owns the registry — so this page only sends the directory the
+  user picked and renders the snapshot it gets back.
 -->
 <script lang="ts" name="SettingSkillsMcp" setup>
 import type { AiImportedConfigItem } from '@talex-touch/tuff-intelligence'
@@ -15,6 +19,8 @@ import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useIntelligenceSdk, useMcpServersSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -56,18 +62,56 @@ interface ManualDraft {
   headers: string
 }
 
+/** Mirrored from `skill-local-runtime.ts`; edit both copies or neither. */
+interface LocalSkillView {
+  id: string
+  name: string
+  description: string
+  path: string
+  sourceDir: string
+  enabled: boolean
+}
+
+interface LocalSkillSnapshotView {
+  dirs: string[]
+  skills: LocalSkillView[]
+}
+
+const skillLocalListEvent = defineRawEvent<void, LocalSkillSnapshotView>('ai:skill-local:list')
+const skillLocalAddDirEvent = defineRawEvent<{ path: string }, LocalSkillSnapshotView>(
+  'ai:skill-local:add-dir'
+)
+const skillLocalRemoveDirEvent = defineRawEvent<{ path: string }, LocalSkillSnapshotView>(
+  'ai:skill-local:remove-dir'
+)
+const skillLocalSetEnabledEvent = defineRawEvent<
+  { id: string; enabled: boolean },
+  LocalSkillSnapshotView
+>('ai:skill-local:set-enabled')
+
+const openFileEvent = defineRawEvent<
+  { title?: string; buttonLabel?: string; properties?: string[] },
+  { filePaths?: string[] }
+>('dialog:open-file')
+
 const IDLE_PROBE: ProbeState = { status: 'idle' }
 
 const { t } = useI18n()
 const router = useRouter()
 const aiClient = useIntelligenceSdk()
 const mcpSdk = useMcpServersSdk()
+const tuffTransport = useTuffTransport()
 const skillsMcpLog = createRendererLogger('SettingSkillsMcp')
 
 const items = ref<AiImportedConfigItem[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const probeStates = reactive(new Map<string, ProbeState>())
+
+const localDirs = ref<string[]>([])
+const localSkills = ref<LocalSkillView[]>([])
+const localBusy = ref(false)
+const showAllLocalSkills = ref(false)
 
 const dialogVisible = ref(false)
 const dialogSaving = ref(false)
@@ -147,6 +191,24 @@ const hiddenMcpCount = computed(() => Math.max(mcpServers.value.length - MAX_VIS
 const hiddenSkillCount = computed(() => Math.max(skills.value.length - MAX_VISIBLE_ROWS, 0))
 const showStateRow = computed(() => loading.value && items.value.length === 0)
 
+const localDirRows = computed(() =>
+  localDirs.value.map((path) => ({
+    path,
+    count: localSkills.value.filter((skill) => skill.sourceDir === path).length
+  }))
+)
+
+/**
+ * Capped like the other lists, but expandable rather than deferred elsewhere:
+ * these switches exist nowhere else, so a long library must stay reachable.
+ */
+const localSkillRows = computed(() =>
+  showAllLocalSkills.value ? localSkills.value : localSkills.value.slice(0, MAX_VISIBLE_ROWS)
+)
+const hiddenLocalSkillCount = computed(() =>
+  Math.max(localSkills.value.length - localSkillRows.value.length, 0)
+)
+
 /**
  * Only the first load draws a skeleton. Binding to `loading` would also fire on
  * every retry, swapping already-rendered rows back out for placeholders; this
@@ -156,13 +218,14 @@ const hasLoaded = ref(false)
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 
 /**
- * Mirrors the two sections the loaded page draws. Both lists are capped at
+ * Mirrors the three sections the loaded page draws. Every list is capped at
  * `MAX_VISIBLE_ROWS` and each section always ends with an action row, so a count
  * inside that range is as close as a skeleton can get before the real one lands.
  */
 const skeletonGroups = computed(() => [
   { label: t('settings.skillsMcp.mcp.label'), rows: 4, description: true, trailing: true },
-  { label: t('settings.skillsMcp.skills.label'), rows: 4, description: true, trailing: true }
+  { label: t('settings.skillsMcp.skills.label'), rows: 4, description: true, trailing: true },
+  { label: t('settings.skillsMcp.localDirs.label'), rows: 2, description: true, trailing: true }
 ])
 
 const addServerDescription = computed(() =>
@@ -221,6 +284,73 @@ async function setItemActive(item: AiImportedConfigItem, active: boolean): Promi
     skillsMcpLog.error('Failed to change the imported item state', error)
     toast.error(errorMessage(error, t('settings.skillsMcp.toggleFailed')))
   }
+}
+
+function applyLocalSnapshot(snapshot: LocalSkillSnapshotView | undefined): void {
+  localDirs.value = snapshot?.dirs ?? []
+  localSkills.value = snapshot?.skills ?? []
+}
+
+/**
+ * Every local mutation answers with the rescanned snapshot, so the page never
+ * builds its own idea of what the directories hold — a skill added or renamed on
+ * disk shows up on the same round trip.
+ */
+async function runLocalAction(
+  action: () => Promise<LocalSkillSnapshotView | undefined>,
+  failureKey: string
+): Promise<void> {
+  if (localBusy.value) return
+  localBusy.value = true
+  try {
+    applyLocalSnapshot(await action())
+  } catch (error) {
+    skillsMcpLog.error('Local skill directory action failed', error)
+    toast.error(errorMessage(error, t(failureKey)))
+  } finally {
+    localBusy.value = false
+  }
+}
+
+async function loadLocalSkills(): Promise<void> {
+  await runLocalAction(
+    () => tuffTransport.send(skillLocalListEvent),
+    'settings.skillsMcp.localDirs.loadFailed'
+  )
+}
+
+async function addLocalDir(): Promise<void> {
+  const result = await tuffTransport
+    .send(openFileEvent, {
+      title: t('settings.skillsMcp.localDirs.pickTitle'),
+      buttonLabel: t('settings.skillsMcp.localDirs.pickConfirm'),
+      properties: ['openDirectory']
+    })
+    .catch((error: unknown) => {
+      skillsMcpLog.error('Failed to open the directory picker', error)
+      return undefined
+    })
+  const path = result?.filePaths?.[0]
+  if (!path) return
+
+  await runLocalAction(
+    () => tuffTransport.send(skillLocalAddDirEvent, { path }),
+    'settings.skillsMcp.localDirs.addFailed'
+  )
+}
+
+async function removeLocalDir(path: string): Promise<void> {
+  await runLocalAction(
+    () => tuffTransport.send(skillLocalRemoveDirEvent, { path }),
+    'settings.skillsMcp.localDirs.removeFailed'
+  )
+}
+
+async function setLocalSkillEnabled(skill: LocalSkillView, enabled: boolean): Promise<void> {
+  await runLocalAction(
+    () => tuffTransport.send(skillLocalSetEnabledEvent, { id: skill.id, enabled }),
+    'settings.skillsMcp.localDirs.toggleFailed'
+  )
 }
 
 async function probeServer(item: AiImportedConfigItem): Promise<void> {
@@ -326,6 +456,7 @@ function openIntelligence(): void {
 
 onMounted(() => {
   void loadItems()
+  void loadLocalSkills()
 })
 </script>
 
@@ -452,6 +583,83 @@ onMounted(() => {
       :title="t('settings.skillsMcp.skills.injectionTitle')"
       :description="t('settings.skillsMcp.skills.injectionDesc')"
     />
+  </SettingSection>
+
+  <!--
+    Linked, not imported: these rows describe files that stay where the user put
+    them, so removing a directory unlinks it and never deletes anything.
+  -->
+  <SettingSection v-if="!showSkeleton" :label="t('settings.skillsMcp.localDirs.label')">
+    <template v-for="(row, index) in localDirRows" :key="row.path">
+      <SettingDivider v-if="index > 0" />
+      <SettingRow
+        :title="row.path"
+        :description="t('settings.skillsMcp.localDirs.dirDesc', { count: row.count })"
+      >
+        <template #trailing>
+          <SettingButton
+            variant="secondary"
+            :disabled="localBusy"
+            @click="removeLocalDir(row.path)"
+          >
+            {{ t('settings.skillsMcp.localDirs.remove') }}
+          </SettingButton>
+        </template>
+      </SettingRow>
+    </template>
+
+    <template v-for="skill in localSkillRows" :key="skill.id">
+      <SettingDivider />
+      <SettingRow
+        :title="skill.name"
+        :description="skill.description || t('settings.skillsMcp.localDirs.noDescription')"
+      >
+        <template #trailing>
+          <SettingChip>{{ t('settings.skillsMcp.localDirs.linked') }}</SettingChip>
+          <TxSwitch
+            :model-value="skill.enabled"
+            :disabled="localBusy"
+            @update:model-value="(value) => setLocalSkillEnabled(skill, Boolean(value))"
+          />
+        </template>
+      </SettingRow>
+    </template>
+
+    <template v-if="hiddenLocalSkillCount > 0">
+      <SettingDivider />
+      <SettingRow
+        :title="t('settings.skillsMcp.localDirs.showAllTitle')"
+        :description="
+          t('settings.skillsMcp.localDirs.showAllDesc', { count: hiddenLocalSkillCount })
+        "
+        navigable
+        @activate="showAllLocalSkills = true"
+      />
+    </template>
+
+    <SettingDivider v-if="localDirRows.length > 0" />
+    <SettingRow
+      :title="t('settings.skillsMcp.localDirs.addTitle')"
+      :description="
+        localDirs.length === 0
+          ? t('settings.skillsMcp.localDirs.addDescEmpty')
+          : t('settings.skillsMcp.localDirs.addDesc')
+      "
+    >
+      <template #trailing>
+        <SettingButton
+          v-if="localDirs.length > 0"
+          variant="secondary"
+          :disabled="localBusy"
+          @click="loadLocalSkills"
+        >
+          {{ t('settings.skillsMcp.localDirs.rescan') }}
+        </SettingButton>
+        <SettingButton :disabled="localBusy" @click="addLocalDir">
+          {{ t('settings.skillsMcp.localDirs.addAction') }}
+        </SettingButton>
+      </template>
+    </SettingRow>
   </SettingSection>
 
   <TxModal
