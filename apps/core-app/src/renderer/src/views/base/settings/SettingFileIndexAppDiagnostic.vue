@@ -86,12 +86,19 @@ function getAppDiagnosticStage(
   return result?.query?.stages[key]
 }
 
-/** The three chip tones the shell spends colour on: a run that hit, one that missed, unknown. */
+/**
+ * The three outcomes a recall stage can report.
+ *
+ * A miss is amber, not red: a stage that ran and did not match the target is a normal result on
+ * the way to explaining why recall failed — several of them always miss — so it must not read as
+ * loudly as an error. A stage that never ran is `info` rather than plain neutral, to separate
+ * "we skipped this" from a chip that carries no state at all.
+ */
 function getAppDiagnosticStageTone(
   stage: AppIndexDiagnosticStage | undefined
-): 'neutral' | 'success' | 'danger' {
-  if (!stage || !stage.ran) return 'neutral'
-  return stage.targetHit ? 'success' : 'danger'
+): 'info' | 'success' | 'warning' {
+  if (!stage || !stage.ran) return 'info'
+  return stage.targetHit ? 'success' : 'warning'
 }
 
 function getAppDiagnosticStageStatus(stage: AppIndexDiagnosticStage | undefined) {

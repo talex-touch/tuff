@@ -41,14 +41,6 @@
 - **待定 token 决策**:shell 调色板无 success/warning/info(仅 danger),三组颜色语义被压平为中性 chip(条目 system/managed、来源 scanned/manual、空态 attention/filtered),文案仍承载语义;补 token 后可恢复,建议独立小任务
 - 备忘:SettingDivider 现零消费者,按 design §1.3 作为行级原语保留;E/F 两组件虽在对话框内但系审计 P1 点名对象,已做,可独立 revert
 
-## Step 4 · 手写卡片清理 P1/P2
-
-- [ ] `SettingFileIndexAppIndexManager.vue`(`:566-736`):手写头/摘要卡/过滤条/条目卡 → TuffGroupBlock + 行式
-- [ ] `SettingFileIndexAppDiagnostic.vue`(`:545-692`):结果/阶段卡 → 行式
-- [ ] `SettingPlatformCapabilities.vue`(`:197-241,370`):卡内二级手写组收敛
-- [ ] `SettingUpdate.vue` `.lifecycle-panel`(`:776,1028`)收敛为行式/子分区
-- [ ] 不动:对话框内部(SettingEverything §A、SettingFileIndex §B)、CanvasGridEditor、死件(AppSettings/SettingHeader/SettingMessages/SettingPermission/SettingWindow/SettingSentry)、死面 ThemePreference —— 完成报告列出
-
 ## Step 5 · 智能并入设置 — ✅ 完成(2026-08-06)
 
 - [x] 七条平级路由删除;子页经 `categories.ts` `children` 表注册为兄弟路由(分类页无 router-view,子页整页替换;`ShellNavItem` path 前缀选中天然生效);重定向由 children 表生成
@@ -70,16 +62,22 @@
 - [x] 随经典恢复而复活:组/行图标、折叠+展开记忆(含 4 处默认折叠点恢复折叠)、`toggle` 事件
 - [x] 验证:vue-tsc 0 错;vitest 30 文件 160 用例全绿;包内 eslint 0 错(1 条 prettier 空行手工修复)
 
-## Step 8 · 遗留决策落地(2026-08-06 用户令:「2+3 参考最佳实践优化」)
+## Step 8 · 遗留决策落地(2026-08-06 用户令:「2+3 参考最佳实践优化」)— ✅ 完成
 
-- [ ] **shell 语义色 token**:`--shell-success/warning/info` 各带 `-soft`/`-border`,值取自设计稿变量(success `#2C8C5A`/`#46B57C`、warning `#B57A18`/`#D9A441`、info `#6E6E73`/`#98989D`,soft=14/26 alpha、border=3D/4D);与既有 `--shell-danger` 核对一致性;高对比模式循既有模式处理
-- [ ] **恢复被压平的语义色**:文件索引管理器(system/managed、scanned/manual、attention/filtered)与诊断阶段 chip(hit/miss/skipped)接新 token;SettingChip 语气扩展;TuffStatusBadge 从 `--tx-color-*` 迁 shell token(soft 底+同色实心前景)
-- [ ] **Workflow 子页**:硬编码深色调色板 → shell token 随主题;320/1fr/360 固定三栏改为适配 940 列的响应式布局,行为零改动
+- [x] **shell 语义色 token**:三色相 ×(基色/`-soft`/`-border`)写入四个块。高对比两块经核查 tuffex `variables.scss` 两个 mixin,success/warning/danger/info **基色与 `-light-9` 全部存在,无缺失、无兜底**;border 一律重指向实色(沿用 danger 那条「24% alpha 发丝线在高对比下消失」的理由,已在注释里点明其余三个同理)。深色对比的 `-light-9` 是 mix black,方向正好是 soft 面所需,已注释
+- [x] **浅色 success/warning 偏离画板(唯一偏离)**:实测 11px chip 墨色落在自身 `-soft` 底上,画板 `#2C8C5A`=3.82:1、`#B57A18`=3.35:1,双双低于 AA 4.5:1;而现网 `--shell-danger` `#C4342B` 是 4.81:1 —— **继续用画板值才是那个不一致的选项**。故压深到 danger 同亮度:`#26794E`(4.80:1)、`#946210`(4.73:1),同色相深一档。info `#6E6E73` 原样过线(4.61:1),深色三色全部原样(最低 4.54:1)。未拆「文字专用」第二墨色:拆了每个消费方都得自己选,迟早选错。数字与理由已入文件注释,格式跟随既有 `--shell-on-primary` 先例
+- [x] **恢复被压平的语义色**:`app-index-manager-display.ts` **未改也无需改** —— Step 4 压平的是组件里 `chipTone()` 塌到三档那一步,helper 语汇一直是全的,故其 9 个测试用例原样通过。来源 system→info / managed→neutral、origin manual→info / scanned→neutral(一条规则:只给「非默认的那一个」上色);诊断 needs-attention→warning、found→success;摘要计数 attention→warning、found→success(**查史证实改造前本就是 `#ff9500` 橙 + `#34c759` 绿,红色是 Step 4 的替代品,改回是还原**);空态 attention→success-soft 整行淡底、filtered→info-soft(原为描边小方块,行已无框故改 strip 语汇,正文实测 4.6:1)。SettingChip tone 扩为 5 档、TuffStatusBadge 全量迁 shell token,既有调用点零影响
+- [x] **Workflow 子页**:style 块内 `rgba()`/裸 hex/深色渐变全清零(grep 验证);三栏→**作者自己那条 `@media 1440` 的排布转正**(它量视口,页面搬进设置列后永不触发):`minmax(200px,.9fr) minmax(320px,2.1fr)` + 具名 area,runtime 跨列到下一行,`.workflow-grid` 两栏→单栏。headless Chrome 复现 940 列(内容 860px)实测:**中栏 148→591px、编辑面板 66→591px**;两栏布局精确撑到 536px 列宽,而保留的 `@media 980` 单栏兜底在列宽仍有 ~640px 时即触发,两者无空档
+- [x] 验证:vue-tsc 0 错;vitest 22 文件 128 用例全绿(含另一路 lang 套件,交叉验证两股改动可共存);包内 eslint 5 个 .vue 0 findings。**未改任何测试断言**(helper 语汇未变,阶段 tone 函数是组件内私有,测试够不到)
 - [x] **i18n 修复(根因是错命名空间,非缺文案)**:9 个「缺失键」中 8 个在 `settings.intelligence.*` 下**本就中英齐全**,是 `IntelligencePromptSelector.vue` 误写为 `intelligence.*`(同文件混用两个命名空间)。子代理受「不动 .vue」约束先加了别名;主会话查明根因后**改组件 path 为 `settings.intelligence.*` 并删除全部别名**,消除同一文案两处漂移。真正新增的只有 `intelligence.search.clear`(en 取 `TuffAsideSearchBar` prop 默认值,zh 对齐兄弟键语域)
 - [x] **单语键**:4 个 zh-only(`settings.intelligence.{userMessage,promptVariables}{Label,Placeholder}`)补 en——同样是既有字符串挂错父节点(`settings.settingAISDK.*`),照抄到正确节点;12 个 en-only 全路径 grep 确认零引用(排除 Nexus catalog 与 JS 变量名假阳性),按纪律**只报不删**
 - [x] **顺带修无障碍误标**:`IntelligenceCapabilitiesPage:385` 与 `IntelligencePromptsPage:493` 把 `common.close` 当 clear-label,读屏播报「关闭」而非「清除搜索」;三个智能页搜索栏现统一用 `intelligence.search.clear`
 - [x] 验证:两 catalog parse OK、重复键 0、别名 0 残留;vue-tsc 0 错;intelligence+lang 5 文件 42 用例绿;包内 eslint 0 错(1 条因 key path 变长触发的 prettier 折行手工修复)
 - [x] **动效组 Beta 标**:维持移除(HEAD 起即死代码,恢复=新增视觉噪音,违背「不新增可见 UI」;如未来确需标注,挂 `#tags` 并按中性 chip 约定)
+- [x] **诊断阶段 miss 红→琥珀:主会话裁决采纳**(2026-08-06)。代理如实指出本轮简报在这一项上前提有偏差(miss 改造前本就是红 `#ff3b30`,并非被压平),但其改动仍是对的:这些阶段是召回探针,「several of them always miss」是正常路径,总体成败由上方 Found chip 单独承担;用错误色表达预期状态会造成告警疲劳,训练用户忽略红色。判据已写入 `getAppDiagnosticStageTone` 上方注释
+- 偏离:Workflow 页删了 `min-height: calc(100vh - 120px)`(runtime 独占一行后会把两行都撑成半空卡片)与 `0 18px 40px` 重投影(深色应用的浮起感,放进浅色列过重);原生控件补 `font-family: inherit`(否则掉回系统 UI 字体,深底上不明显、白卡上很明显)
+- 未做(不属本轮):Workflow 页 `input { width: 100% }` 连 checkbox 一并拉宽 —— 既有问题非本轮回归,未动;`IntelligenceLocalSkills.vue:735` 仍留一个 `--tx-color-warning`,属 Step 5 已登记的智能落地页孤儿组件,归 settings-rewrite 清理
+- 边界:若用户把侧栏拖得极宽,设置列可能跌破 536px 而 `@media 980` 尚未触发 → 该场景横向溢出。改前更差(旧布局需 712px+),属严格改善,记录备查
 
 ## Step 6 · 收口
 
