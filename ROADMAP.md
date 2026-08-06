@@ -3,11 +3,11 @@
 > 更新时间：2026-07-31（经全条目事实校准，校准记录见 `.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/research/`）
 > 定位：项目全貌一览。实时任务优先级见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)，任务状态见 [`.trellis/tasks/`](.trellis/tasks/README.md)。本文不复制易漂移细节，只保留稳定入口与高层状态。
 
-## 🎯 当前版本：v2.4.13
+## 🎯 当前版本：v2.4.14-beta.2
 
 | 维度 | 状态 |
 |------|------|
-| CoreApp 版本 | `2.4.13`（`apps/core-app/package.json`） |
+| CoreApp 版本 | `2.4.14-beta.2`（`apps/core-app/package.json`） |
 | Node.js | `>=24.15.0` |
 | pnpm | `10.34.4` |
 | Electron | `^41.10.1`（根 `package.json`） |
