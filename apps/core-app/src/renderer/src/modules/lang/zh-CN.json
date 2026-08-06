@@ -926,7 +926,16 @@
     "minimizeWindow": "最小化",
     "maximizeWindow": "最大化",
     "restoreWindow": "还原",
-    "closeWindow": "关闭"
+    "closeWindow": "关闭",
+    "history": {
+      "label": "对话记录",
+      "today": "今天",
+      "yesterday": "昨天",
+      "week": "近 7 天",
+      "earlier": "更早",
+      "untitled": "新对话",
+      "delete": "删除对话"
+    }
   },
   "home": {
     "greeting": "今天想做点什么？",

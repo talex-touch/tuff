@@ -926,7 +926,16 @@
     "minimizeWindow": "Minimize",
     "maximizeWindow": "Maximize",
     "restoreWindow": "Restore",
-    "closeWindow": "Close"
+    "closeWindow": "Close",
+    "history": {
+      "label": "Conversations",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Previous 7 days",
+      "earlier": "Earlier",
+      "untitled": "New chat",
+      "delete": "Delete conversation"
+    }
   },
   "home": {
     "greeting": "What shall we do today?",

@@ -126,6 +126,19 @@ describe('refresh', () => {
   })
 })
 
+describe('shared list', () => {
+  it('shares one list across instances so the sidebar sees a persist made elsewhere', async () => {
+    // HomePage owns persist, ShellConversationList owns rendering; a per-call
+    // ref would leave the sidebar stale after every send.
+    const rows = [{ id: 'c1', title: 'T', createdAt: 1, updatedAt: 2 }]
+    send.mockResolvedValue(rows)
+    const sidebar = useConversationHistory()
+    const home = useConversationHistory()
+    await home.refresh()
+    expect(sidebar.conversations.value).toEqual(rows)
+  })
+})
+
 describe('createConversationId', () => {
   it('is unique per call', () => {
     expect(createConversationId()).not.toBe(createConversationId())
