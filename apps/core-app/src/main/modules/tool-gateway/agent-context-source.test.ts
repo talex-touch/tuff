@@ -66,6 +66,7 @@ function deps(overrides: Partial<AgentContextDeps> = {}): AgentContextDeps {
   return {
     listImportedItems: async () => [],
     readContent: async () => 'content',
+    readLocalSkill: async () => 'local content',
     registerMcpProfile: () => undefined,
     listStructuredTools: async () => [],
     callMcpTool: async () => 'ok',
@@ -115,6 +116,34 @@ describe('imported skill reads', () => {
     await expect(source.readSkill('a-rule')).rejects.toThrow('not an active imported skill')
     await expect(source.readSkill('no-content')).rejects.toThrow('no managed content')
     await expect(source.readSkill('missing')).rejects.toThrow('not an active imported skill')
+  })
+})
+
+describe('linked local skill reads', () => {
+  it('routes a local id to the directory registry, not the imported store', async () => {
+    const readContent = vi.fn(async () => 'imported')
+    const readLocalSkill = vi.fn(async () => '# Linked skill\nLive from disk')
+    const source = createAgentContextSource(
+      deps({ listImportedItems: async () => [item()], readContent, readLocalSkill })
+    )
+
+    expect(await source.readSkill(' local:abc123def456 ')).toContain('Live from disk')
+    // Trimmed on the way in, so a stray space in the model's argument does not
+    // become a different id.
+    expect(readLocalSkill).toHaveBeenCalledWith('local:abc123def456')
+    expect(readContent).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the registry refusal rather than falling back to the imported path', async () => {
+    const source = createAgentContextSource(
+      deps({
+        readLocalSkill: async () => {
+          throw new Error('Local skill "local:abc" is not in a registered directory')
+        }
+      })
+    )
+
+    await expect(source.readSkill('local:abc')).rejects.toThrow('not in a registered directory')
   })
 })
 

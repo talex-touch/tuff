@@ -22,6 +22,7 @@ import { aiImportContentStore } from '../ai/ai-import-content-store'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { intelligenceMcpRegistry } from '../ai/intelligence-mcp-registry'
 import { setPiToolRuntimeResolver } from '../ai/providers/pi-cli-provider'
+import { readEnabledLocalSkill } from '../ai/skill-local-sources'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 import { pluginModule } from '../plugin/plugin-module'
 import { createAgentContextSource } from './agent-context-source'
@@ -61,6 +62,7 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
   private readonly agentContext = createAgentContextSource({
     listImportedItems: () => aiOrchestratorStore.listImportedItems(),
     readContent: (contentRef) => aiImportContentStore.read(contentRef),
+    readLocalSkill: (skillId) => readEnabledLocalSkill(skillId),
     registerMcpProfile: (profile) => intelligenceMcpRegistry.registerProfile(profile),
     listStructuredTools: (profileIds) => intelligenceMcpRegistry.listStructuredTools(profileIds),
     callMcpTool: (profileId, toolName, input) =>

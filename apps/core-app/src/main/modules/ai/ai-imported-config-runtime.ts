@@ -3,6 +3,7 @@ import { isAbsolute, matchesGlob, relative, resolve } from 'node:path'
 import { aiImportContentStore } from './ai-import-content-store'
 import { intelligenceMcpRegistry, type IntelligenceMcpProfile } from './intelligence-mcp-registry'
 import { aiOrchestratorStore } from './ai-orchestrator-store'
+import { listEnabledLocalSkills } from './skill-local-sources'
 
 const MAX_IMPORTED_CONTEXT_CHARS = 64 * 1024
 
@@ -304,6 +305,9 @@ export class AiImportedConfigRuntime {
    * one is relevant, which keeps a large skill library off every prompt. That gateway tool resolves
    * an id against the same active-and-managed-content set listed here and deliberately applies no
    * workspace clause, so narrowing this list by workspace would advertise ids it cannot read.
+   *
+   * Skills linked from a local directory join the same list under `local:` ids. They read from disk
+   * rather than the content store, but the model sees one catalogue and one tool.
    */
   async buildHomeInjection(): Promise<string | null> {
     const items = applyScopePrecedence(
@@ -320,11 +324,13 @@ export class AiImportedConfigRuntime {
         name: item.alias || item.name,
         description: item.normalizedProjection?.description || ''
       }))
+    for (const skill of await listEnabledLocalSkills())
+      skills.push({ id: skill.id, name: skill.name, description: skill.description })
 
     const sections = createSectionBudget(MAX_IMPORTED_CONTEXT_CHARS)
     if (skills.length > 0) {
       sections.push(
-        `Available imported skills (metadata only; call tuff_skill_read with an id before using one):\n${JSON.stringify(skills)}`
+        `Available skills (metadata only; call tuff_skill_read with an id before using one):\n${JSON.stringify(skills)}`
       )
     }
 

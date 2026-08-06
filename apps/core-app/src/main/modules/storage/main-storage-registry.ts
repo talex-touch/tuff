@@ -5,6 +5,7 @@ import type { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/s
 import type { StoreSourcesPayload } from '@talex-touch/utils/store'
 import type { NotificationInboxEntry } from '@talex-touch/utils/transport/events'
 import type { DeviceIdleSettings } from '../../service/device-idle-service'
+import type { LocalSkillConfig } from '../ai/skill-local-sources'
 import type { FileReportQueueItem } from '../analytics/startup-analytics'
 import type { StartupHistory } from '../analytics/types'
 import type { AppIndexSettings } from '../box-tool/addon/apps/app-provider'
@@ -18,6 +19,7 @@ import { openersOriginData } from '@talex-touch/utils/common/storage/entity/open
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 import { redactProviderConfigDocument } from '../ai/provider-credential-service'
+import { normalizeLocalSkillConfig } from '../ai/skill-local-sources'
 
 export const AUTH_REAUTHENTICATION_REQUIRED_FIELD = 'requiresReauthenticationOnNextStartup'
 export const LEGACY_AUTH_PROTECTION_FIELDS = [
@@ -288,6 +290,11 @@ export const mainStorageRegistry = {
     key: StorageList.TELEMETRY_CLIENT,
     defaultValue: { clientId: '' },
     normalize: normalizeTelemetryClient
+  }),
+  [StorageList.SKILL_LOCAL_SOURCES]: defineEntry<LocalSkillConfig>({
+    key: StorageList.SKILL_LOCAL_SOURCES,
+    defaultValue: () => ({ dirs: [], disabledIds: [] }),
+    normalize: normalizeLocalSkillConfig
   })
 } as const
 
