@@ -1790,3 +1790,42 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - **lang json 多会话并发的提交法**:git show HEAD 取基线→只应用自己的块→hash-object -w→update-index --cacheinfo。工作区他人未提交行原样保留。两次实战(c3cb09839 三键、787e2c554 68 行块)。
 - **S6 冒烟**:9223 竟是用户在用的实例(我的启动因 5173 被占而失败,dev log 才暴露)——已误导航两次,即刻恢复 #/home。教训:**驱动 CDP 前先验证实例归属(检查 dev log 有没有 Port already in use)**。冒烟改离 app:真 registry+真 npx server 集成测试 15.2s 绿(TUFF_MCP_SMOKE=1 opt-in 守卫)。
 - 遗留观察:用户实例导航到 /setting/intelligence 白屏(组件动态 import 正常,疑设置 shell 上下文问题),待用户从设置入口自然点击核实;pi 回复重复 5 遍的旧毛病再现(08-04 挂账)。
+
+
+## Session 50: C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs
+
+**Date**: 2026-08-05
+**Task**: C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+MCP client 已存在的翻案把 C 收窄为三桥一面：注入桥（surface 防伪+autoContext 门）、网关三工具（classify 逐调用风险+rememberKey 收窄）、设置管理面（probe/手动 upsert/i18n 60 键）、真 server 冒烟 15.2s 绿（opt-in）。代理撞限主会话接力收尾。动效侧：thinking orbs vendor+三落点、发送飞行+撞击、光环互质周期天气化、出字渐显试错后回撤、消息操作栏（pilot 移植）、滚动守卫改实时底部释放。多会话纪律两法沉淀：index-object 提交法、CDP 实例归属预检。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4594c3200` | (see git log) |
+| `c7b935831` | (see git log) |
+| `787e2c554` | (see git log) |
+| `d05aa8c08` | (see git log) |
+| `fe0ae08b1` | (see git log) |
+| `c3cb09839` | (see git log) |
+| `2045c628d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
