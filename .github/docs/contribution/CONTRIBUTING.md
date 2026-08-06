@@ -5,7 +5,7 @@
   <h1>Tuff</h1>
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/master/LICENSE)
   [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/releases)
   [![Dev version](https://img.shields.io/github/package-json/v/talex-touch/tuff?style=flat-square&label=dev&color=64391A)](https://github.com/talex-touch/tuff/discussions/35)
 

@@ -7,7 +7,7 @@
   > 指令中心，为创造者们而重塑。
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/master/LICENSE)
   [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?include_prereleases&style=flat-square)](https://github.com/talex-touch/tuff/releases)
   <br>
   [English](./README.md) | 简体中文
