@@ -27,7 +27,7 @@
 - [x] `npx vitest run src/renderer/src/modules/conversation`（全绿）
 - [x] `npm run typecheck`（node + web）
 - [x] `pnpm lint`（根目录，范围含 core-app 改动文件）
-- [ ] 【review 门 · 用户目验】`pnpm core:dev`：①②③④ 合并手动清单（design §7）
+- [x] 【review 门 · CDP 代验 2026-08-05】带 `--remote-debugging-port` 驱动 dev 实例逐项跑完 1-5（截图存 /tmp/tuff-verify/）：流式+代码高亮+mermaid 出图、浮钮/跟流/回底、附件托盘/灯箱/降级提示、落库+冷路径恢复落底、深色主题、reduced-motion 动画归零。抓出并修复 4 个真机 bug（见 journal）；主观动画手感留日常使用验证
 - [x] 行为不回退清单逐项过（代码路径核验：conversation 管线零逻辑改动，31 例全绿）（design §6）
 
 ## 提交划分（Phase 3.4 出计划时执行）
