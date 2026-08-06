@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import TxIcon from '../src/TxIcon.vue'
 import TxStatusIcon from '../src/TxStatusIcon.vue'
 import { TX_ICON_CONFIG_KEY } from '../src/types'
@@ -193,5 +194,43 @@ describe('txIcon', () => {
     expect(wrapper.find('.tx-status-icon__indicator').classes()).toContain('is-success')
     expect(wrapper.attributes('style')).toContain('--tx-status-icon-size: 24px')
     expect(wrapper.attributes('style')).toContain('--tx-status-indicator-size: 8px')
+  })
+
+  it('ignores a slow in-flight svg fetch once the url changes', async () => {
+    const resolvers: Array<(svg: string) => void> = []
+    const svgFetcher = vi.fn(
+      (_url: string) => new Promise<string>((resolve) => {
+        resolvers.push(resolve)
+      }),
+    )
+
+    const wrapper = mount(TxIcon, {
+      props: {
+        icon: { type: 'url', value: '/first.svg' },
+        svgFetcher,
+      },
+    })
+    await nextTick()
+
+    await wrapper.setProps({ icon: { type: 'url', value: '/second.svg' } })
+    await nextTick()
+
+    expect(resolvers).toHaveLength(2)
+
+    // Settle the newer request first, then let the superseded one land late.
+    // The svg reaches the DOM percent-encoded inside the mask url, so these
+    // alphanumeric markers survive verbatim.
+    resolvers[1]!('<svg viewBox="0 0 1 1"><title>SECONDMARK</title></svg>')
+    await vi.waitFor(() => {
+      expect(wrapper.find('.tuff-icon__svg-mask').exists()).toBe(true)
+    })
+
+    resolvers[0]!('<svg viewBox="0 0 1 1"><title>FIRSTMARK</title></svg>')
+    await nextTick()
+    await nextTick()
+
+    const style = wrapper.find('.tuff-icon__svg-mask').attributes('style') ?? ''
+    expect(style).toContain('SECONDMARK')
+    expect(style).not.toContain('FIRSTMARK')
   })
 })

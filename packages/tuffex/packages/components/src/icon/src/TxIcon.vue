@@ -179,7 +179,16 @@ function decodeSvgDataUrl(url: string): string | null {
   }
 }
 
+/**
+ * Guards against a stale fetch winning the race: when the url changes while a
+ * request is in flight, only the newest one may assign. Same pattern as
+ * TxCodeBlock and TxMermaidBlock.
+ */
+let fetchToken = 0
+
 async function fetchSvg(url: string) {
+  const token = ++fetchToken
+
   const dataSvg = decodeSvgDataUrl(url)
   if (dataSvg !== null) {
     svgContent.value = dataSvg
@@ -192,10 +201,13 @@ async function fetchSvg(url: string) {
   }
 
   try {
-    svgContent.value = await svgFetcher.value(url)
+    const content = await svgFetcher.value(url)
+    if (token === fetchToken)
+      svgContent.value = content
   }
   catch {
-    svgContent.value = ''
+    if (token === fetchToken)
+      svgContent.value = ''
   }
 }
 
