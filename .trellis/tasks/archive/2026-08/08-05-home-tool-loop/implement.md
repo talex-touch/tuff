@@ -32,7 +32,7 @@
 
 ### S6 图表卡 + feature 调用（V2 段）
 - [x] tuff_render_chart（spec 校验）+ ToolChartCard（按需 import）
-- [x] tuff_list_features / tuff_invoke_feature（**未做**：插件 feature 调用面留待后续，搜索已改接 CoreBox 真实索引）
+- [x] tuff_list_features / tuff_invoke_feature（9022c763e 交付：plugin-feature-source 投影 + 目录/调用两工具 + 21 例单测；搜索另接 CoreBox 真实索引）
 - 验证：单测 + 冒烟
 
 ### S7 端到端验收（真 pi）
