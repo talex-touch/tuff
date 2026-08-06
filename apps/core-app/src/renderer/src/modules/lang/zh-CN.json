@@ -881,6 +881,7 @@
     "description": "选择你喜欢的窗口效果。"
   },
   "base": {
+    "details": "详情",
     "last_step": "上一步",
     "step": "下一步",
     "touchCaptcha": {
