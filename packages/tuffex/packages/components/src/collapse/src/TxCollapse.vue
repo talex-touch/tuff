@@ -30,7 +30,9 @@ if (props.modelValue) {
 
 watch(() => props.modelValue, (newValue) => {
   if (newValue !== undefined) {
-    activeNames.value = Array.isArray(newValue) ? newValue : [newValue]
+    activeNames.value = Array.isArray(newValue)
+      ? newValue
+      : (newValue === '' ? [] : [newValue])
   }
 }, { immediate: true })
 
@@ -38,8 +40,11 @@ function setActiveNames(names: string[]) {
   activeNames.value = names
 
   const first = names[0]
+  // Accordion mode's model is a single name, so collapsing the open panel must
+  // emit an empty string — emitting [] would flip the v-model's runtime type
+  // from string to array.
   const emitValue: string | string[] = props.accordion
-    ? (first !== undefined ? first : [])
+    ? (first ?? '')
     : names
 
   emit('update:modelValue', emitValue)
