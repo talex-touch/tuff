@@ -23,6 +23,11 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   delivery modes: notification events must use `broadcastToWindow` (sendTo hangs a
   60s pending timer whose WARN `.catch()` cannot suppress), delivery-target identity,
   port allowlist, stable-mock test contract.
+- [app-semantic-catalog-contracts.md](app-semantic-catalog-contracts.md) — category
+  vocabulary: locale-structured alias groups (new language = locale key + rule),
+  automatic English pluralization + skip-table discipline, match-needle token
+  semantics (bare generic tokens leak), version bump ≠ instant refresh, lift-to-utils
+  constraints.
 - [recommendation-freshness-contracts.md](recommendation-freshness-contracts.md) —
   `installedAt` extension (write-once via conflict-do-nothing, watch-now fallback),
   double-gate freshness predicate, novelty→frecency handoff, the THREE
