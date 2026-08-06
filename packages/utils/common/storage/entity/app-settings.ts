@@ -220,8 +220,20 @@ const _appSettingOriginData = {
      * Off by default and deliberately separate from `autoContext`: pulling
      * context in is passive, whereas a tool call reaches out and touches the
      * user's machine — that has to be something they turned on.
+     *
+     * Kept in step with `agentToolsMode` (`agentTools = mode !== 'off'`) so a
+     * build that predates modes still reads the user's intent.
      */
     agentTools: false,
+    /**
+     * How the composer's permission pill answers tool calls: `off` closes the
+     * gateway, `review` confirms every call, `full` auto-approves at the gate.
+     *
+     * Settings stored before this field exists hydrate without it (top-level
+     * `Object.assign` replaces `tools` wholesale), so readers must treat
+     * `undefined` + `agentTools: true` as `review` — the migration path.
+     */
+    agentToolsMode: 'off' as 'off' | 'review' | 'full',
     autoPaste: {
       enable: true,
       time: 5,

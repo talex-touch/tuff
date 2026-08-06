@@ -3,6 +3,7 @@ import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elemen
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type { FormSpec } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
@@ -70,7 +71,7 @@ const { selection: modelSelection, selectedModel } = useModelOptions()
 const conversation = useHomeConversation({
   // A getter, not a snapshot: switching model mid-conversation must apply to the next send.
   routing: () => modelSelection.value,
-  // Likewise for the Auto Context toggle declared below — each send reads its current value.
+  // Likewise for Auto Context, which the settings page owns — each send reads its current value.
   autoContext: () => autoContext.value
 })
 const { isEmpty, isStreaming, lastTurn, messages } = conversation
@@ -98,19 +99,14 @@ const conversationTitle = computed(
 )
 
 /**
- * Artboards `QiI0C` / `AHQQk` replaced the old 「工具」 button with two distinct affordances: a
- * standalone Auto Context toggle on the left, and a model + reasoning-effort pill next to send.
- * Enabling individual tools moved to 「设置 · 插件与工具」, so nothing here opens a tool list.
+ * Auto Context has no composer control any more: it and the old tools pill read as the same
+ * switch to users, so 「设置 · 插件与工具」 owns the toggle and the composer keeps a single
+ * permission pill. Still read here because every send asks for its current value.
  *
  * Backed by `appSetting` rather than a local ref: this is the same preference the settings page
- * manages, and a local one would reset on every navigation. The model menu still has no picker.
+ * manages, and a local one would reset on every navigation.
  */
-const autoContext = computed({
-  get: () => appSetting.tools?.autoContext !== false,
-  set: (value: boolean) => {
-    if (appSetting.tools) appSetting.tools.autoContext = value
-  }
-})
+const autoContext = computed(() => appSetting.tools?.autoContext !== false)
 
 // ============================================================================
 // Agent tools
@@ -118,17 +114,163 @@ const autoContext = computed({
 
 const agentTools = useAgentTools()
 
+/** The three permission modes in menu order; the icon doubles as the pill's. */
+const PERMISSION_MODES = [
+  { mode: 'off', icon: 'i-ri-shield-line' },
+  { mode: 'review', icon: 'i-ri-shield-check-line' },
+  { mode: 'full', icon: 'i-ri-shield-flash-line' }
+] as const
+
 /**
- * Whether the assistant may run tools. Persisted in `appSetting` like Auto
- * Context, and mirrored to main on change — the gateway only opens, and the
- * allowlist only reaches `pi`, once this is on.
+ * How far the assistant may go with tools: no tools at all, tools that ask before every
+ * call, or tools that run unasked.
+ *
+ * Reading falls back to the pre-mode boolean so an upgrade lands on 「自动审阅」 instead of
+ * silently losing tools; writing keeps that boolean in step, so rolling back to a build that
+ * only knows it still finds the same intent.
  */
-const agentToolsEnabled = computed({
-  get: () => appSetting.tools?.agentTools === true,
-  set: (value: boolean) => {
-    if (appSetting.tools) appSetting.tools.agentTools = value
-    void agentTools.setEnabled(value)
+const agentToolsMode = computed<AgentToolsMode>({
+  get: () => {
+    const tools = appSetting.tools
+    return tools?.agentToolsMode ?? (tools?.agentTools === true ? 'review' : 'off')
+  },
+  set: (mode) => {
+    const tools = appSetting.tools
+    if (!tools) return
+    tools.agentToolsMode = mode
+    tools.agentTools = mode !== 'off'
   }
+})
+
+const permissionIcon = computed(
+  () =>
+    PERMISSION_MODES.find((option) => option.mode === agentToolsMode.value)?.icon ??
+    'i-ri-shield-line'
+)
+
+/**
+ * Mirrors the mode into main — a watcher rather than the setter above, because the gateway
+ * starts disabled on every launch: a user who left tools on last session would otherwise get
+ * none until they happened to touch the pill.
+ */
+watch(
+  agentToolsMode,
+  (mode, previous) => {
+    // Main is already closed at startup, so the first read only has to push a mode that opens it.
+    if (mode === 'off' && previous === undefined) return
+    void agentTools.setMode(mode)
+  },
+  { immediate: true }
+)
+
+const permissionOpen = ref(false)
+/** True while the 「完全允许」 consequence step has replaced the mode list. */
+const permissionConfirming = ref(false)
+const permissionPillRef = ref<HTMLButtonElement | null>(null)
+const permissionMenuRef = ref<HTMLElement | null>(null)
+const permissionCancelRef = ref<HTMLButtonElement | null>(null)
+
+/** Queried rather than collected through refs: moving focus is a DOM concern either way. */
+function permissionOptionButtons(): HTMLButtonElement[] {
+  return Array.from(
+    permissionMenuRef.value?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []
+  )
+}
+
+function focusCheckedOption(): void {
+  const index = PERMISSION_MODES.findIndex((option) => option.mode === agentToolsMode.value)
+  permissionOptionButtons()[Math.max(index, 0)]?.focus()
+}
+
+function togglePermissionMenu(): void {
+  if (permissionOpen.value) {
+    closePermissionMenu()
+    return
+  }
+  permissionOpen.value = true
+  permissionConfirming.value = false
+  void nextTick(focusCheckedOption)
+}
+
+function closePermissionMenu(restoreFocus = false): void {
+  if (!permissionOpen.value) return
+  permissionOpen.value = false
+  // Reopening always starts at the list: an abandoned consequence step is not a pending choice.
+  permissionConfirming.value = false
+  if (restoreFocus) permissionPillRef.value?.focus()
+}
+
+/**
+ * Arrows move focus without selecting. The list holds a mode that grants every tool call at
+ * once, and arrowing past it must not be what turns it on — only Enter/Space picks a mode.
+ * The checked option is the group's single tab stop, as a radiogroup expects.
+ */
+function onPermissionOptionKeydown(event: KeyboardEvent, index: number): void {
+  const forward = event.key === 'ArrowDown' || event.key === 'ArrowRight'
+  const backward = event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+  if (!forward && !backward) return
+  event.preventDefault()
+  const buttons = permissionOptionButtons()
+  if (buttons.length === 0) return
+  buttons[(index + (forward ? 1 : -1) + buttons.length) % buttons.length]?.focus()
+}
+
+function choosePermissionMode(mode: AgentToolsMode): void {
+  if (mode === 'full' && agentToolsMode.value !== 'full') {
+    // Never one click away: 「完全允许」 is a standing grant over every tool the model can
+    // reach, so it costs an explicit second step that states what it means.
+    permissionConfirming.value = true
+    void nextTick(() => permissionCancelRef.value?.focus())
+    return
+  }
+  agentToolsMode.value = mode
+  closePermissionMenu(true)
+}
+
+function confirmFullPermission(): void {
+  agentToolsMode.value = 'full'
+  closePermissionMenu(true)
+}
+
+function cancelFullPermission(): void {
+  permissionConfirming.value = false
+  void nextTick(focusCheckedOption)
+}
+
+async function resetRememberedApprovals(): Promise<void> {
+  closePermissionMenu(true)
+  try {
+    await agentTools.resetApprovals()
+    toast.success(t('home.permissionResetDone'))
+  } catch (error) {
+    homeLog.warn('Failed to reset remembered approvals', String(error))
+    toast.error(t('home.permissionResetFailed'))
+  }
+}
+
+function onPermissionPointerDown(event: PointerEvent): void {
+  if (!permissionOpen.value) return
+  const menu = permissionMenuRef.value
+  if (menu?.contains(event.target as Node)) return
+  // The pill sits outside the menu, so a plain outside-click check would close on the very
+  // click that is about to toggle it back open — same marker trick as the model menu.
+  if ((event.target as HTMLElement)?.closest?.('[data-permission-pill]')) return
+  closePermissionMenu()
+}
+
+function onPermissionKeydown(event: KeyboardEvent): void {
+  // Escape out of the consequence step leaves the mode untouched, exactly like cancelling it.
+  if (event.key === 'Escape') closePermissionMenu(true)
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onPermissionPointerDown, true)
+  document.addEventListener('keydown', onPermissionKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onPermissionPointerDown, true)
+  document.removeEventListener('keydown', onPermissionKeydown)
 })
 
 /**
@@ -528,8 +670,8 @@ function onDrop(event: DragEvent): void {
  * Feeds the floating composer's measured height to the stream's bottom padding.
  *
  * Observed rather than computed from the textarea's `scrollHeight`: the composer also carries the
- * tool row and its own padding, and a wrapped Auto Context row changes the total without the
- * textarea changing at all.
+ * tool row and its own padding, and a wrapped tool row changes the total without the textarea
+ * changing at all.
  */
 let composerObserver: ResizeObserver | null = null
 
@@ -873,28 +1015,119 @@ watch(
                   >
                     <span class="i-ri-add-line" />
                   </button>
-                  <button
-                    class="HomePage-PillBtn"
-                    :class="{ active: autoContext }"
-                    type="button"
-                    :aria-pressed="autoContext"
-                    :title="t('home.autoContextHint')"
-                    @click="autoContext = !autoContext"
-                  >
-                    <span class="i-ri-radar-line" />
-                    <span>{{ t('home.autoContext') }}</span>
-                  </button>
-                  <button
-                    class="HomePage-PillBtn"
-                    :class="{ active: agentToolsEnabled }"
-                    type="button"
-                    :aria-pressed="agentToolsEnabled"
-                    :title="t('home.agentToolsHint')"
-                    @click="agentToolsEnabled = !agentToolsEnabled"
-                  >
-                    <span class="i-ri-tools-line" />
-                    <span>{{ t('home.agentTools') }}</span>
-                  </button>
+                  <div class="HomePage-PermissionSlot">
+                    <button
+                      ref="permissionPillRef"
+                      class="HomePage-PillBtn"
+                      :class="{
+                        active: agentToolsMode === 'review',
+                        'is-full': agentToolsMode === 'full'
+                      }"
+                      type="button"
+                      data-permission-pill
+                      aria-controls="home-permission-menu"
+                      :aria-expanded="permissionOpen"
+                      :title="t(`home.permissionHint.${agentToolsMode}`)"
+                      @click="togglePermissionMenu"
+                    >
+                      <span :class="permissionIcon" />
+                      <span>
+                        {{ t('home.permission') }} ·
+                        {{ t(`home.permissionMode.${agentToolsMode}`) }}
+                      </span>
+                    </button>
+
+                    <div
+                      v-if="permissionOpen"
+                      id="home-permission-menu"
+                      ref="permissionMenuRef"
+                      class="HomePage-PermissionMenu"
+                    >
+                      <template v-if="!permissionConfirming">
+                        <div
+                          class="HomePage-PermissionOptions"
+                          role="radiogroup"
+                          :aria-label="t('home.permissionMenu')"
+                        >
+                          <button
+                            v-for="(option, index) in PERMISSION_MODES"
+                            :key="option.mode"
+                            class="HomePage-PermissionOption"
+                            type="button"
+                            role="radio"
+                            :data-mode="option.mode"
+                            :aria-checked="agentToolsMode === option.mode"
+                            :tabindex="agentToolsMode === option.mode ? 0 : -1"
+                            @click="choosePermissionMode(option.mode)"
+                            @keydown="onPermissionOptionKeydown($event, index)"
+                          >
+                            <span :class="option.icon" class="HomePage-PermissionIcon" />
+                            <span class="HomePage-PermissionLabel">
+                              <span>{{ t(`home.permissionMode.${option.mode}`) }}</span>
+                              <span class="HomePage-PermissionHint">
+                                {{ t(`home.permissionHint.${option.mode}`) }}
+                              </span>
+                            </span>
+                            <span
+                              v-if="agentToolsMode === option.mode"
+                              class="i-ri-check-line HomePage-PermissionCheck"
+                            />
+                          </button>
+                        </div>
+
+                        <!-- Only under 「自动审阅」: with no confirmations to remember, the
+                             other two modes have nothing to reset. -->
+                        <template v-if="agentToolsMode === 'review'">
+                          <div class="HomePage-PermissionDivider" />
+                          <button
+                            class="HomePage-PermissionReset"
+                            type="button"
+                            @click="resetRememberedApprovals"
+                          >
+                            <span class="i-ri-eraser-line" />
+                            <span>{{ t('home.permissionResetApprovals') }}</span>
+                          </button>
+                        </template>
+                      </template>
+
+                      <!-- `group` rather than `alertdialog`: focus moves here but is not
+                           trapped, and claiming modality we do not implement would mislead. -->
+                      <div
+                        v-else
+                        class="HomePage-PermissionConfirm"
+                        role="group"
+                        aria-labelledby="home-permission-confirm-title"
+                        aria-describedby="home-permission-confirm-desc"
+                      >
+                        <p
+                          id="home-permission-confirm-title"
+                          class="HomePage-PermissionConfirmTitle"
+                        >
+                          {{ t('home.permissionFullConfirmTitle') }}
+                        </p>
+                        <p id="home-permission-confirm-desc" class="HomePage-PermissionConfirmDesc">
+                          {{ t('home.permissionFullConfirmDesc') }}
+                        </p>
+                        <div class="HomePage-PermissionConfirmActions">
+                          <button
+                            ref="permissionCancelRef"
+                            class="HomePage-PermissionCancel"
+                            type="button"
+                            @click="cancelFullPermission"
+                          >
+                            {{ t('home.permissionFullConfirmCancel') }}
+                          </button>
+                          <button
+                            class="HomePage-PermissionApply"
+                            type="button"
+                            @click="confirmFullPermission"
+                          >
+                            {{ t('home.permissionFullConfirmApply') }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="HomePage-ToolRight">
@@ -1499,12 +1732,184 @@ textarea.HomePage-Input:focus-visible {
     background: var(--shell-surface);
   }
 
-  /* Auto Context reads as on by default, so the enabled state carries the accent. */
+  /* Tools on and asking first: an ordinary enabled state, so it carries the accent. */
   &.active {
     border-color: var(--shell-primary-border);
     background: var(--shell-primary-soft);
     color: var(--shell-primary);
     font-weight: 500;
+  }
+
+  /* 「完全允许」 has to stay visible as a state, not just as a label the eye skips:
+     every tool call runs unasked while it is on. The shell has no warning ramp, and
+     the alarm one is the honest read here — it also re-points under `html.contrast`,
+     which a hand-picked amber would not. */
+  &.is-full {
+    border-color: var(--shell-danger-border);
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
+    font-weight: 500;
+  }
+}
+
+/** Anchors the permission popover, which opens upward like the model menu on the same row. */
+.HomePage-PermissionSlot {
+  position: relative;
+}
+
+.HomePage-PermissionMenu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 304px;
+  padding: 6px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-bg);
+  box-shadow: 0 8px 28px var(--shell-shadow);
+}
+
+.HomePage-PermissionOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.HomePage-PermissionOption {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 9px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--shell-fs-body);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+
+  /* The risky option is marked in the list too, so the choice reads before it is made. */
+  &[data-mode='full'] .HomePage-PermissionIcon {
+    color: var(--shell-danger);
+  }
+}
+
+.HomePage-PermissionIcon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--shell-text-secondary);
+}
+
+.HomePage-PermissionLabel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.HomePage-PermissionHint {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.45;
+}
+
+.HomePage-PermissionCheck {
+  flex: none;
+  margin-top: 2px;
+  color: var(--shell-primary);
+}
+
+.HomePage-PermissionDivider {
+  margin: 4px 2px;
+  border-top: 1px solid var(--shell-border);
+}
+
+.HomePage-PermissionReset {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--shell-fs-sm);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+}
+
+.HomePage-PermissionConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 9px 8px;
+}
+
+.HomePage-PermissionConfirmTitle {
+  margin: 0;
+  color: var(--shell-danger);
+  font-size: var(--shell-fs-body);
+  font-weight: 600;
+}
+
+.HomePage-PermissionConfirmDesc {
+  margin: 0;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.55;
+}
+
+.HomePage-PermissionConfirmActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.HomePage-PermissionCancel,
+.HomePage-PermissionApply {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--shell-radius-full);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Cancel keeps the ordinary weight and the confirm stays an outline: the grant is the
+   consequential click, so it must not be the one the eye lands on first. */
+.HomePage-PermissionCancel {
+  border: 1px solid var(--shell-border-strong);
+  background: transparent;
+  color: var(--shell-text-regular);
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+}
+
+.HomePage-PermissionApply {
+  border: 1px solid var(--shell-danger-border);
+  background: var(--shell-danger-soft);
+  color: var(--shell-danger);
+
+  &:hover {
+    background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
   }
 }
 

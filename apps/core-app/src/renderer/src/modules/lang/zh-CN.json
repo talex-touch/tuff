@@ -413,7 +413,7 @@
   "settingTools": {
     "autoContextGroupTitle": "上下文",
     "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
-    "autoContext": "Auto Context",
+    "autoContext": "自动上下文",
     "autoContextDesc": "开启后模型按需自动取用联网、文件检索、剪贴板与关联数据，无需逐条挑选工具；关闭后每次都要手动指定。",
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
@@ -931,10 +931,25 @@
   "home": {
     "greeting": "今天想做点什么？",
     "placeholder": "塔芙来帮你做任何事",
-    "autoContext": "Auto Context",
-    "autoContextHint": "开启后模型会按需自动取用联网、文件、剪贴板与关联数据",
-    "agentTools": "工具",
-    "agentToolsHint": "允许助手搜索、读取和打开文件——每次调用都会先征求同意",
+    "permission": "权限",
+    "permissionMenu": "工具权限",
+    "permissionMode": {
+      "off": "禁用",
+      "review": "自动审阅",
+      "full": "完全允许"
+    },
+    "permissionHint": {
+      "off": "助手不能调用任何工具",
+      "review": "允许助手搜索、读取和打开文件，每次调用前先征求你的同意",
+      "full": "允许助手调用工具且不再征求同意——包括破坏性的 MCP 工具"
+    },
+    "permissionFullConfirmTitle": "切换到完全允许？",
+    "permissionFullConfirmDesc": "此后助手的每一次工具调用都会直接执行，不再询问你——写入文件、执行命令与破坏性的 MCP 工具都包含在内。随时可以切回自动审阅。",
+    "permissionFullConfirmCancel": "取消",
+    "permissionFullConfirmApply": "启用完全允许",
+    "permissionResetApprovals": "重置已记住的授权",
+    "permissionResetDone": "已清除本会话记住的授权",
+    "permissionResetFailed": "无法清除已记住的授权",
     "chainOfThought": "思考过程",
     "chartFailed": "图表渲染失败。",
     "toolAllow": "允许",
@@ -2572,7 +2587,7 @@
         "label": "技能",
         "noDescription": "（无描述）",
         "injectionTitle": "会话注入",
-        "injectionDesc": "启用的技能与规则会随 Auto Context 注入首页会话",
+        "injectionDesc": "启用的技能与规则会随自动上下文注入首页会话",
         "importTitle": "导入技能",
         "importDesc": "从本机 AI CLI 配置扫描导入",
         "importDescEmpty": "还没有技能——从本机 AI CLI 配置导入",
