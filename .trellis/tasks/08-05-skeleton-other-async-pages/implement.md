@@ -35,13 +35,29 @@
 |---|---|---|
 | `views/storage/PrivacyDataSection.vue` | `initialLoading = ref(true)` | 已是标准首屏哨兵，接入成本最低；1556 行 |
 | `views/storage/Storagable.vue` | `summaryLoading` + `pluginsLoading` | 双区域，需区域级骨架；1113 行 |
-| `views/base/store/StorePublisher.vue` | `timelineLoading` + `previewLoading` | 双区域；686 行 |
 | `views/omni-panel/OmniPanel.vue` | `loading = ref(false)` + 模板分支 | 需加 `hasLoaded` 哨兵（首帧问题）；797 行 |
 | `views/base/LingPan.vue` | `v-if="loading"` | 2011 行，建议单独拆 |
 | `views/base/intelligence/IntelligenceWorkflowPage.vue` | `v-if="!loading && workflows.length === 0"` | 1445 行 |
-| `views/base/home/HomeModelMenu.vue` | `v-if="loading"` | 183 行，最小，建议下一个做 |
+| `views/storage/PrivacyDataSection.vue` 的其余 4 个 band | — | 见下方「已勘察」 |
 
-### D. 不适用（11）
+### 已完成（第二批）
+
+| 页面 | 处理 |
+|---|---|
+| `views/base/store/StorePublisher.vue` | **仅 timeline 区**接入骨架，用页面自有的 `.publisher-timeline` / `.publisher-timeline-item` 类搭（继承真实卡片的边框、内边距与行间距）。直接绑 `timelineLoading` 而非 `hasLoaded` 哨兵——`refreshTimeline` 只在打开详情面板时调用，每次都是该插件时间线的首次加载，不存在需要保留的已渲染内容。`previewLoading` **不接骨架**：它是用户上传 .tpex 后的预览等待，属操作级 pending，按规范应保留原有文案。 |
+
+### 已勘察但未做：`views/storage/PrivacyDataSection.vue`
+
+条件很好——`initialLoading = ref(true)` 是标准首屏标志，且 summary 网格遍历的是常量 `PRIVACY_SETTINGS_DATA_CATEGORIES`（条数编译期已知，骨架可精确匹配）。但有两点须先处理：
+
+1. **测试契约**：`PrivacyDataSection.test.ts` 断言 `[data-testid="privacy-initial-loading"]` 的 `role="status"`。改造须**保留**该元素与其 role，把骨架放进去，而不是替换掉它。
+2. **无障碍写法**：正确形态是容器保留 `role="status"` + 视觉隐藏的加载文案（供屏幕阅读器），骨架条 `aria-hidden`（`TxSkeleton` 自带）。需先确认仓库是否已有 visually-hidden 约定类。
+
+该页 1556 行、5 个 band，建议单独排期而非顺带做。
+
+### D. 不适用（12，含 1 例改判）
+
+> `views/base/home/HomeModelMenu.vue` 初判为「适用」，复核后**改判不适用**：它是下拉菜单（`role="listbox"`、`v-if="props.open"`）而非页面，且模型条目数完全取决于用户配置了几个 provider（0 到任意）。按规范「条数不定 → 用空态或 pending 文案而非骨架」，保留原有的一行提示。因此适用组由 7 降为 6。
 
 | 页面 | 理由 |
 |---|---|
