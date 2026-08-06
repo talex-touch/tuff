@@ -48,7 +48,6 @@ async function callGateway(
   const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS)
 
   try {
-    // eslint-disable-next-line no-restricted-syntax -- this file runs inside the
     // pi agent process, not the app: the network SDK it would otherwise use is
     // not loadable there, and the only reachable endpoint is our own loopback.
     const response = await fetch(GATEWAY_URL, {
@@ -104,6 +103,39 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
         path: { type: 'string', description: 'Absolute path, or one starting with ~' },
       },
       required: ['path'],
+    },
+  },
+  {
+    name: 'tuff_render_chart',
+    label: 'Tuff: render chart',
+    description:
+      'Draw a chart in the conversation from data you already have. Use this instead of describing '
+      + 'a chart in text when the user asks for a report, breakdown or visualisation.',
+    promptSnippet: 'Render a chart from data',
+    parameters: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'bar | line | pie | scatter' },
+        title: { type: 'string', description: 'Chart title' },
+        labels: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Category labels, one per data point',
+        },
+        series: {
+          type: 'array',
+          description: 'One entry per series; each values array matches labels in length',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              values: { type: 'array', items: { type: 'number' } },
+            },
+            required: ['values'],
+          },
+        },
+      },
+      required: ['type', 'labels', 'series'],
     },
   },
   {

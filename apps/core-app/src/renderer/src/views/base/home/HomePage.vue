@@ -1,6 +1,7 @@
 <script lang="ts" name="HomePage" setup>
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
+import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
@@ -9,15 +10,17 @@ import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
+import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
+import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
+import { toChainSteps } from '~/modules/conversation/chain-steps'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 } from '~/modules/conversation/conversation-error-display'
-import { toChainSteps } from '~/modules/conversation/chain-steps'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
 import {
   createConversationId,
@@ -119,6 +122,20 @@ const agentToolsEnabled = computed({
 
 function chainStepsOf(message: ConversationMessage) {
   return toChainSteps(message.parts, message.status === 'streaming')
+}
+
+/**
+ * Tool results carrying a chart spec render as a chart in the card's result
+ * slot; everything else falls through to the card's own text rendering.
+ */
+function chartSpecOf(tool: AiToolCallPart): ToolChartSpec | null {
+  const output = tool.output
+  if (tool.status !== 'done' || !output?.startsWith(CHART_RESULT_PREFIX)) return null
+  try {
+    return JSON.parse(output.slice(CHART_RESULT_PREFIX.length)) as ToolChartSpec
+  } catch {
+    return null
+  }
 }
 
 /** A lone tool call renders as its own card; two or more become the timeline. */
@@ -470,7 +487,11 @@ watch(
                       class="HomePage-Tool"
                       :tool-call="tool"
                       :retry-label="t('home.retry')"
-                    />
+                    >
+                      <template v-if="chartSpecOf(tool)" #result>
+                        <ToolChartCard :spec="chartSpecOf(tool)!" />
+                      </template>
+                    </TxToolCallCard>
 
                     <TxStreamMarkdown
                       v-if="message.content"

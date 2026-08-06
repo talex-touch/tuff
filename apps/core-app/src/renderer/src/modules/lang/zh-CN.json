@@ -936,6 +936,7 @@
     "agentTools": "工具",
     "agentToolsHint": "允许助手搜索、读取和打开文件——每次调用都会先征求同意",
     "chainOfThought": "思考过程",
+    "chartFailed": "图表渲染失败。",
     "toolAllow": "允许",
     "toolDeny": "拒绝",
     "toolRemember": "本会话记住",

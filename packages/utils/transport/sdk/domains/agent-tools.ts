@@ -3,6 +3,13 @@ import { defineEvent } from '../../event/builder'
 
 export type AgentToolRisk = 'read' | 'write' | 'execute'
 
+/**
+ * Marks a tool result as a renderable chart rather than text. Lives here
+ * because both sides read it: the main-process tool writes it, the renderer
+ * detects it.
+ */
+export const CHART_RESULT_PREFIX = 'tuff:chart:'
+
 export interface AgentToolConfirmRequest {
   requestId: string
   tool: string
