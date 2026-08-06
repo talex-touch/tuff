@@ -673,6 +673,103 @@ describe('SearchEngineCore facade contracts', () => {
     expect(snapshots.map((result) => result.sessionId)).toEqual([first.sessionId, second.sessionId])
   })
 
+  it('caches what the session ended with so a repeat query keeps the deferred batch', async () => {
+    const fastSearch = vi.fn(
+      async () => ({ items: [buildItem('fast-item', 'fast-provider', 'accumulated')] }) as never
+    )
+    const deferredSearch = vi.fn(
+      async () =>
+        ({ items: [buildItem('deferred-item', 'deferred-provider', 'accumulated file')] }) as never
+    )
+    const query = { inputs: [], text: 'accumulated cache contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('fast-provider', fastSearch) as never)
+    core.registerProvider({
+      ...buildProvider('deferred-provider', deferredSearch),
+      priority: 'deferred',
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'fast-provider' },
+      { id: 'deferred-provider' }
+    ] as IProviderActivate[])
+
+    const first = core.startSearch(query, { caller: { kind: 'core-box', id: 'accumulated-first' } })
+    await first.result
+    await first.completed
+
+    const snapshots: TuffSearchResult[] = []
+    const second = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'accumulated-second' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        }
+      }
+    })
+    await second.result
+    await second.completed
+
+    expect(deferredSearch).toHaveBeenCalledTimes(1)
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0].items.map((item) => item.id).sort()).toEqual(['deferred-item', 'fast-item'])
+  })
+
+  it('publishes each gather batch once with its enrichment already applied', async () => {
+    const fastSearch = vi.fn(
+      async () => ({ items: [buildItem('single-fast', 'fast-provider', 'single push')] }) as never
+    )
+    const deferredSearch = vi.fn(
+      async () =>
+        ({
+          items: [buildItem('single-deferred', 'deferred-provider', 'single push file')]
+        }) as never
+    )
+    const query = { inputs: [], text: 'single publish contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('fast-provider', fastSearch) as never)
+    core.registerProvider({
+      ...buildProvider('deferred-provider', deferredSearch),
+      priority: 'deferred',
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'fast-provider' },
+      { id: 'deferred-provider' }
+    ] as IProviderActivate[])
+    state.getAllPinnedItems.mockResolvedValue([
+      {
+        itemId: 'single-deferred',
+        order: 0,
+        pinnedAt: new Date(),
+        sourceId: 'deferred-provider',
+        sourceType: 'file'
+      }
+    ])
+
+    const snapshots: TuffSearchResult[] = []
+    const updates: TuffItem[][] = []
+    const execution = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'single-publish' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        },
+        update: (payload) => {
+          updates.push(payload.items)
+        }
+      }
+    })
+    await execution.result
+    await execution.completed
+
+    expect(snapshots).toHaveLength(1)
+    expect(updates).toHaveLength(1)
+    expect(updates[0].map((item) => item.id)).toEqual(['single-deferred'])
+    expect(updates[0][0].scoring).toMatchObject({ pinned: true, final: expect.any(Number) })
+    expect(snapshots[0].items[0].scoring?.final).toEqual(expect.any(Number))
+  })
+
   it('does not cache a result that completed after its search revision was superseded', () => {
     const harness = core as unknown as {
       cacheSearchResult: (cacheKey: string, result: TuffSearchResult, revision: number) => void

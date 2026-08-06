@@ -104,6 +104,11 @@ interface SearchCacheEntry {
 const SEARCH_CACHE_TTL_MS = 5_000
 const SEARCH_CACHE_MAX_SIZE = 100
 const SEARCH_FRONTEND_ITEM_LIMIT = 80
+// Later batches (deferred file layer) are re-ranked against the earlier ones by
+// the renderer, so cutting them to the visible 80 here would drop items before
+// they can compete. This is a safety cap, not a display cap.
+const SEARCH_UPDATE_ITEM_LIMIT = 200
+const SEARCH_CACHE_ITEM_LIMIT = 200
 // Deferred semantic recall: only runs for text queries whose primary results are
 // sparse enough that surfacing semantically-related files adds value.
 const DEFERRED_SEMANTIC_MIN_QUERY_LENGTH = 3
@@ -222,11 +227,38 @@ export class SearchEngineCore
     })
   }
 
-  private limitFrontendItems(items: TuffItem[]): TuffItem[] {
+  private limitFrontendItems(items: TuffItem[], limit = SEARCH_FRONTEND_ITEM_LIMIT): TuffItem[] {
     const visibleItems = fileFilterService.filterSearchItems(items)
-    return visibleItems.length > SEARCH_FRONTEND_ITEM_LIMIT
-      ? visibleItems.slice(0, SEARCH_FRONTEND_ITEM_LIMIT)
-      : visibleItems
+    return visibleItems.length > limit ? visibleItems.slice(0, limit) : visibleItems
+  }
+
+  /**
+   * Cache what the session actually ended with, not what its first batch looked
+   * like: a repeat query inside the TTL has to return the deferred (file) layer
+   * too, otherwise re-typing the same text within 5s silently loses results.
+   */
+  private cacheAccumulatedSearchResult(params: {
+    cacheKey: string
+    query: TuffQuery
+    items: TuffItem[]
+    signal: AbortSignal
+    duration: number
+    sources: TuffSearchResult['sources']
+    activate?: IProviderActivate[]
+    revision: number
+  }): void {
+    // An aborted session never reaches a trustworthy final state; a genuinely
+    // empty one still does, and caching it keeps repeat misses cheap.
+    if (params.signal.aborted) return
+
+    const { sortedItems } = this.sorter.sort(params.items, params.query, params.signal)
+    const result = new TuffSearchResultBuilder(params.query)
+      .setItems(sortedItems.slice(0, SEARCH_CACHE_ITEM_LIMIT))
+      .setDuration(params.duration)
+      .setSources(params.sources ?? [])
+      .build()
+    result.activate = params.activate
+    this.cacheSearchResult(params.cacheKey, result, params.revision)
   }
 
   private getSearchProviderConfigSignature(): string {
@@ -699,39 +731,6 @@ export class SearchEngineCore
     }
   }
 
-  private enrichAndPushSearchItems(
-    sessionId: string,
-    query: TuffQuery,
-    items: TuffItem[],
-    signal: AbortSignal,
-    sendUpdateToFrontend: (itemsToSend: TuffItem[]) => void
-  ): void {
-    if (items.length === 0 || signal.aborted) {
-      return
-    }
-
-    void this.mergeAndRankItems({
-      sessionId,
-      query,
-      items,
-      signal,
-      includeCompletion: true,
-      enrichmentMode: 'full'
-    })
-      .then(({ sortedItems }) => {
-        if (signal.aborted) {
-          return
-        }
-        sendUpdateToFrontend(sortedItems)
-      })
-      .catch((error) => {
-        searchEngineLog.debug('Search enrichment skipped', {
-          error,
-          meta: { sessionId, itemCount: items.length }
-        })
-      })
-  }
-
   /**
    * After first results render, asynchronously surface files that are
    * semantically related to the query but were missed by the keyword/FTS pass,
@@ -1068,6 +1067,12 @@ export class SearchEngineCore
       let didResolveInitial = false
       let providersToSearch = this.getActiveProviders(session.activationMap)
       let gatherController: IGatherController | null = null
+      // Everything this session published, keyed by id, so completion can cache
+      // the accumulated set instead of the first batch alone.
+      const publishedItems = new Map<string, TuffItem>()
+      const trackPublishedItems = (items: TuffItem[]): void => {
+        for (const item of items) publishedItems.set(item.id, item)
+      }
 
       const finalizeWithError = (error: unknown): void => {
         searchEngineLog.error('Search gather pipeline failed', {
@@ -1127,7 +1132,8 @@ export class SearchEngineCore
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         if (gatherController?.signal.aborted || session.signal.aborted) return
 
-        const frontendItems = this.limitFrontendItems(itemsToSend)
+        const frontendItems = this.limitFrontendItems(itemsToSend, SEARCH_UPDATE_ITEM_LIMIT)
+        trackPublishedItems(frontendItems)
         session.publishUpdate(frontendItems)
       }
 
@@ -1205,8 +1211,8 @@ export class SearchEngineCore
                   query,
                   items: initialItems,
                   signal: gatherController!.signal,
-                  includeCompletion: false,
-                  enrichmentMode: 'base'
+                  includeCompletion: true,
+                  enrichmentMode: 'full'
                 })
                 pipelineDurations.mergeRankDuration = mergeRankDuration
                 const sortedItems = this.appendCompatibilityNotice(
@@ -1226,6 +1232,7 @@ export class SearchEngineCore
                   .build()
                 initialResult.sessionId = sessionId
                 initialResult.activate = session.getActivationState() ?? undefined
+                trackPublishedItems(frontendItems)
 
                 this.searchFirstResultMetrics.set(sessionId, {
                   firstResultMs: totalDuration,
@@ -1239,13 +1246,6 @@ export class SearchEngineCore
                 this._recordSearchResults(sessionId, sortedItems).catch((error) => {
                   searchEngineLog.error('Failed to record search results', { error })
                 })
-                this.enrichAndPushSearchItems(
-                  sessionId,
-                  query,
-                  sortedItems,
-                  gatherController!.signal,
-                  sendUpdateToFrontend
-                )
                 this.scheduleDeferredSemanticRecall(
                   sessionId,
                   query,
@@ -1269,7 +1269,6 @@ export class SearchEngineCore
                   providerFilter
                 })
 
-                this.cacheSearchResult(cacheKey, initialResult, searchRevision)
                 resolve(initialResult)
               } else {
                 const totalDuration = Date.now() - startTime
@@ -1326,6 +1325,16 @@ export class SearchEngineCore
             })
             session.mergeActivations(update.newResults)
             const finalActivationState = session.getActivationState() ?? undefined
+            this.cacheAccumulatedSearchResult({
+              cacheKey,
+              query,
+              items: [...publishedItems.values()],
+              signal: gatherController!.signal,
+              duration: totalDuration,
+              sources: update.sourceStats ?? [],
+              activate: finalActivationState,
+              revision: searchRevision
+            })
             session.complete({
               activate: finalActivationState,
               sources: update.sourceStats
@@ -1352,8 +1361,8 @@ export class SearchEngineCore
               query,
               items: initialItems,
               signal: gatherController!.signal,
-              includeCompletion: false,
-              enrichmentMode: 'base'
+              includeCompletion: true,
+              enrichmentMode: 'full'
             })
             if (gatherController!.signal.aborted || session.signal.aborted) return
             pipelineDurations.mergeRankDuration = mergeRankDuration
@@ -1374,6 +1383,7 @@ export class SearchEngineCore
               .build()
             initialResult.sessionId = sessionId
             initialResult.activate = session.getActivationState() ?? undefined
+            trackPublishedItems(frontendItems)
 
             this.searchFirstResultMetrics.set(sessionId, {
               firstResultMs: totalDuration,
@@ -1388,13 +1398,6 @@ export class SearchEngineCore
             this._recordSearchResults(sessionId, sortedItems).catch((error) => {
               searchEngineLog.error('Failed to record search results', { error })
             })
-            this.enrichAndPushSearchItems(
-              sessionId,
-              query,
-              sortedItems,
-              gatherController!.signal,
-              sendUpdateToFrontend
-            )
             this.logSearchTrace({
               event: 'first.result',
               sessionId,
@@ -1410,7 +1413,6 @@ export class SearchEngineCore
               providerFilter
             })
 
-            this.cacheSearchResult(cacheKey, initialResult, searchRevision)
             resolve(initialResult)
             didResolveInitial = true
           } else if (update.newResults.length > 0) {
@@ -1422,19 +1424,12 @@ export class SearchEngineCore
               query,
               items: subsequentItems,
               signal: gatherController!.signal,
-              includeCompletion: false,
-              enrichmentMode: 'base'
+              includeCompletion: true,
+              enrichmentMode: 'full'
             })
             if (gatherController!.signal.aborted || session.signal.aborted) return
             session.mergeActivations(update.newResults)
             sendUpdateToFrontend(sortedItems)
-            this.enrichAndPushSearchItems(
-              sessionId,
-              query,
-              sortedItems,
-              gatherController!.signal,
-              sendUpdateToFrontend
-            )
           }
         } catch (error) {
           finalizeWithError(error)

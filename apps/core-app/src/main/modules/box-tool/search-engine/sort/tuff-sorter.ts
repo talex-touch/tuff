@@ -344,7 +344,17 @@ export const tuffSorter: ISortMiddleware = {
       return b.score - a.score
     })
 
-    // Undecorate: Extract the sorted items.
-    return decoratedItems.map((decorated) => decorated.item)
+    // Undecorate: publish the rank score and the pin partition on the item so a
+    // later batch can be ranked against this one by whoever holds both (renderer
+    // merge, completion cache). Items are shallow-copied because providers reuse
+    // the objects they hand in across queries.
+    return decoratedItems.map((decorated) => ({
+      ...decorated.item,
+      scoring: {
+        ...decorated.item.scoring,
+        final: decorated.score,
+        pinned: decorated.pinned
+      }
+    }))
   }
 }
