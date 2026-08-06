@@ -139,6 +139,8 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
   "id": "com.example.plugin",
   "name": "plugin-name",
   "version": "1.0.0",
+  "sdkapi": 260713,
+  "category": "utilities",
   "features": [
     {
       "id": "feature-id",
@@ -300,8 +302,8 @@ Modules subscribe to events: `touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, (
 - Update broadcast system for reactive UI updates across windows
 
 **Channel Integration:**
-- Main process: `storage:get`, `storage:save`, `storage:delete`
-- Plugin process: `plugin:storage:get-item`, `plugin:storage:set-item`
+- Main process: `storage:sqlite:query`, `storage:plugin:file`, `storage:plugin:secret`
+- Plugin process: `plugin:storage:get-file`, `plugin:storage:set-file`, `plugin:storage:get-secret`, `plugin:storage:set-secret`
 
 ### Shared Utilities Package
 
