@@ -60,10 +60,10 @@ function serializeTable(element: HTMLElement): string {
   if (!rows.length)
     return ''
 
-  const header = rows[0]
+  const header = rows[0] ?? []
   const separator = header.map(() => '---')
   const body = rows.slice(1)
-  const lines = [header, separator, ...body].map(row => `| ${row.join(' | ')} |`)
+  const lines = [header, separator, ...body].map(row => `| ${(row ?? []).join(' | ')} |`)
 
   return `${lines.join('\n')}\n\n`
 }
