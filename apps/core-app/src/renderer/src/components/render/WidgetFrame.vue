@@ -13,6 +13,7 @@ import {
   type Component,
   type VNode
 } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
 import { useWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
 import {
@@ -45,6 +46,7 @@ const emits = defineEmits<{
   (e: 'render-error', error: Error): void
 }>()
 
+const { t } = useI18n()
 const renderError = ref<Error | null>(null)
 const widgetFrameLog = createRendererLogger('WidgetFrame')
 const rendererState = ref<'loading' | 'ready' | 'missing'>('loading')
@@ -109,14 +111,14 @@ const emptyStateLabel = computed(() => {
   return 'Widget renderer unavailable'
 })
 const emptyStateText = computed(() => {
-  if (widgetFailure.value) return 'Widget 编译失败'
-  if (rendererState.value === 'loading') return 'Widget 加载中'
-  if (!props.rendererId) return 'Widget renderer 缺失'
-  return 'Widget renderer 未注册'
+  if (widgetFailure.value) return t('widgetFrame.compileFailed', 'Widget 编译失败')
+  if (rendererState.value === 'loading') return t('widgetFrame.loading', 'Widget 加载中')
+  if (!props.rendererId) return t('widgetFrame.rendererMissing', 'Widget renderer 缺失')
+  return t('widgetFrame.rendererUnregistered', 'Widget renderer 未注册')
 })
 const emptyStateMessage = computed(() => {
   if (widgetFailure.value) return widgetFailure.value.message
-  if (!props.rendererId) return '缺少 rendererId'
+  if (!props.rendererId) return t('widgetFrame.missingRendererId', '缺少 rendererId')
   if (rendererState.value === 'loading') return ''
   return props.rendererId
 })
@@ -410,7 +412,9 @@ onBeforeUnmount(() => {
     @submit.capture="handleWidgetNavigationEvent"
   >
     <div v-if="renderError" class="WidgetFrame-Error text-xs text-[var(--tx-color-danger)]">
-      <div class="WidgetFrame-ErrorTitle">Widget 渲染失败</div>
+      <div class="WidgetFrame-ErrorTitle">
+        {{ t('widgetFrame.renderFailed', 'Widget 渲染失败') }}
+      </div>
       <div class="WidgetFrame-ErrorMessage">{{ renderError.message }}</div>
     </div>
     <div v-else-if="canRenderShadow" ref="shadowHost" class="WidgetFrame-ShadowHost" />
