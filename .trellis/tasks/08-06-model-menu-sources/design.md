@@ -32,9 +32,9 @@ export function resetPiModelCatalogCache(): void  // 测试缝
 
 ## 接入点:`intelligence-provider-model-options.ts`
 
-- 组装 option 时:`isPiCliProviderConfig(provider)` → `models = (await listPiCliModels()).map(m => m.pattern)`;`available` 沿用现有逻辑外,再要求 `await probePiCliAvailability()` 为真(pi 不在 → 该 provider 整行消失,而不是 available:false 占位)。
+- `resolveDeclaredModels` 内分支:`isPiCliProviderConfig(provider)` → `getResolvedPiExecutable() === null ? [] : listPiCliModels()`(models 为空 → 既有 `.filter(models.length > 0)` 自动剔除整行;capabilityBindings 手动钉的模型优先级保持不变,因为分支只在声明模型缺省时走)。
 - 其余 provider 走现状(`provider.models` + defaultModel)。
-- 函数因此转 async 读盘:调用点在 IPC handler(intelligence-module.ts:1654),已是 async,无涟漪。
+- **实现偏差(2026-08-06,实现时定):保持同步,不转 async。**原计划转 async,但插件宿主以同步签名依赖注入了 `getProviderModelOptions`(`plugin-intelligence-host-service.ts:43`,冻结 dependencies + `exactRecord` + 边界测试钉住),转 async 波及插件面;两个小本地 JSON 用 `readFileSync` + statSync/mtime 缓存,menu-open 冷路径成本可忽略。可用性判定同理用同步的 `getResolvedPiExecutable()`(`null`=探测过不存在才剔除,`undefined`=未探测视为存在,与 config assembly 的既有立场一致;启动时 intelligence-module 已调 `probePiCliAvailability` 落定缓存)。`listPiCliModels` 直接返回 `pattern: string[]`,不带 label(options schema 只载 `models: string[]`,label 无处展示)。
 
 ## 空态分层(renderer 唯一小改)
 
