@@ -12,6 +12,10 @@ export interface ToolChartSpec {
   title?: string
   labels: string[]
   series: Array<{ name?: string; values: number[] }>
+  xLabel?: string
+  yLabel?: string
+  stacked?: boolean
+  showValues?: boolean
 }
 
 const props = defineProps<{ spec: ToolChartSpec; dark?: boolean }>()
@@ -28,40 +32,116 @@ const failed = ref(false)
 let observer: ResizeObserver | null = null
 
 function buildOption(spec: ToolChartSpec): Record<string, unknown> {
+  const label = spec.showValues ? { label: { show: true, fontSize: 10 } } : {}
+  const legend =
+    spec.series.length > 1 ? { legend: { bottom: 0, textStyle: { fontSize: 11 } } } : {}
   const common = {
     ...(spec.title
       ? { title: { text: spec.title, left: 'center', textStyle: { fontSize: 13 } } }
       : {}),
-    tooltip: { trigger: spec.type === 'pie' ? 'item' : 'axis' },
-    grid: { left: 40, right: 16, top: spec.title ? 44 : 20, bottom: 28 }
+    tooltip: {},
+    ...legend
   }
 
-  if (spec.type === 'pie') {
-    // A pie has one ring: later series would silently stack on top of each other.
+  // Radial and single-value families each need their own coordinate system, so
+  // they are built whole rather than layered onto the cartesian defaults.
+  if (spec.type === 'pie' || spec.type === 'doughnut') {
+    // One ring only: later series would silently stack on top of each other.
     const values = spec.series[0]?.values ?? []
     return {
       ...common,
-      grid: undefined,
+      tooltip: { trigger: 'item' },
       series: [
         {
           type: 'pie',
-          radius: ['38%', '68%'],
-          data: spec.labels.map((label, index) => ({ name: label, value: values[index] ?? 0 }))
+          radius: spec.type === 'doughnut' ? ['42%', '68%'] : '62%',
+          data: spec.labels.map((name, index) => ({ name, value: values[index] ?? 0 })),
+          ...label
         }
       ]
     }
   }
 
+  if (spec.type === 'radar') {
+    const max = Math.max(...spec.series.flatMap((entry) => entry.values), 0) || 1
+    return {
+      ...common,
+      radar: { indicator: spec.labels.map((name) => ({ name, max })) },
+      series: [
+        {
+          type: 'radar',
+          data: spec.series.map((entry) => ({ name: entry.name, value: entry.values }))
+        }
+      ]
+    }
+  }
+
+  if (spec.type === 'funnel') {
+    const values = spec.series[0]?.values ?? []
+    return {
+      ...common,
+      tooltip: { trigger: 'item' },
+      series: [
+        {
+          type: 'funnel',
+          data: spec.labels.map((name, index) => ({ name, value: values[index] ?? 0 })),
+          ...label
+        }
+      ]
+    }
+  }
+
+  if (spec.type === 'gauge') {
+    // A gauge shows one reading; the first value is it.
+    const value = spec.series[0]?.values[0] ?? 0
+    return {
+      ...common,
+      legend: undefined,
+      series: [
+        {
+          type: 'gauge',
+          detail: { fontSize: 16, valueAnimation: true },
+          data: [{ value, name: spec.series[0]?.name ?? spec.labels[0] ?? '' }]
+        }
+      ]
+    }
+  }
+
+  if (spec.type === 'heatmap') {
+    const rows = spec.series.map((entry) => entry.name ?? '')
+    const data = spec.series.flatMap((entry, y) => entry.values.map((value, x) => [x, y, value]))
+    const max = Math.max(...spec.series.flatMap((entry) => entry.values), 0) || 1
+    return {
+      ...common,
+      legend: undefined,
+      grid: { left: 60, right: 16, top: spec.title ? 48 : 24, bottom: 56 },
+      xAxis: { type: 'category', data: spec.labels },
+      yAxis: { type: 'category', data: rows },
+      visualMap: { min: 0, max, calculable: true, orient: 'horizontal', left: 'center', bottom: 0 },
+      series: [{ type: 'heatmap', data, ...label }]
+    }
+  }
+
+  // Cartesian family: bar, line, area (a filled line) and scatter.
   return {
     ...common,
-    xAxis: { type: 'category', data: spec.labels },
-    yAxis: { type: 'value' },
-    ...(spec.series.length > 1 ? { legend: { bottom: 0, textStyle: { fontSize: 11 } } } : {}),
+    tooltip: { trigger: 'axis' },
+    grid: {
+      left: 48,
+      right: 16,
+      top: spec.title ? 48 : 24,
+      bottom: spec.series.length > 1 ? 44 : 28
+    },
+    xAxis: { type: 'category', data: spec.labels, ...(spec.xLabel ? { name: spec.xLabel } : {}) },
+    yAxis: { type: 'value', ...(spec.yLabel ? { name: spec.yLabel } : {}) },
     series: spec.series.map((entry) => ({
-      type: spec.type === 'scatter' ? 'scatter' : spec.type,
+      type: spec.type === 'area' ? 'line' : spec.type,
       ...(entry.name ? { name: entry.name } : {}),
       data: entry.values,
-      ...(spec.type === 'line' ? { smooth: true } : {})
+      ...(spec.type === 'line' || spec.type === 'area' ? { smooth: true } : {}),
+      ...(spec.type === 'area' ? { areaStyle: {} } : {}),
+      ...(spec.stacked && spec.type !== 'scatter' ? { stack: 'total' } : {}),
+      ...label
     }))
   }
 }
