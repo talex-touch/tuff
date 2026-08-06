@@ -1774,3 +1774,12 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - 批次 R 全量批准并规划(reco-signal-program.md):R2(接现成信号+hit-rate@k 指标)→R3a 采集基座→R3b 系统状态/R3c 文件活动→R3d 日历→R3e 行为学习;真地理位置停放。R4 扩展信号 14 条已入册。
 - 新账:E-NEW5 backfillTrendDay 违写契约(既有)、E-NEW6 迁移读窗竞态(自愈可接受)、E-NEW7 折叠孪生使 E-M2 更早触顶(批次 B 计入)。
 - 门(收口时):box-tool 1132 全绿、utils 1008+1skip、typecheck:node 己方文件零错;并发会话(ai/tool-gateway/conversation)文件全程未触碰。
+
+## 2026-08-06 · skills-mcp-config S1-S3 + 动效反馈轮 + thinking orbs
+
+- **关键翻案**:「主进程自建 MCP client」已存在——intelligence-mcp-registry 本就是全功能 client(双传输/懒连/代际/闲置回收/annotations→风险)。C 收窄为三桥一面;--mcp-config 路线弃(server 会落 agent 进程侧、绕确认门),PRD 验收第 3 条已改道。
+- **S1-S3 双代理并行**(4594c3200):S1 注入(surface 防伪标记 host-only+invoke/stream 双路径+autoContext 门)、S2+S3 网关三工具+扩展 spec;代理间自行对齐 skill_read 的 contentRef 契约;classify 逐调用风险+rememberKey 按被代理工具收窄是代理的超预期设计,采纳。设计漏算:skill_read 也要扩展 spec(共 3 个不是 2 个)。
+- **动效反馈轮**(c7b935831):发送飞行(视觉位起飞+模糊剥离+撞击上方 ±7/3px 交错回弹+加法后座力,WAAPI 类型库旧→animateRaw 窄转换);光环自然化(互质周期 8/11/9/13/6.4/7.6s 反向+色相巡游+呼吸);出字渐显(v-html 尾块每 delta 重建子节点→:last-child 动画天然重放,45%→100%)。
+- **thinking orbs**(fe0ae08b1):vendor 引擎(MIT v0.2.0)+TxThinkingOrb(随机每挂载);三落点(等待首token 28px/推理头/思维链头)。
+- 归属纪律:lang jsons+SettingTools+box-tool/reco+db/utils 是另一会话(reco-wire-existing-signals)在飞件,已避开;typecheck:node 的 9 错全在其范围。
+- 附件诊断存档:UI-only 是任务④有意留白(attachmentNotSent 提示在案);pi 支持 @files 位置参数,打通=临时落盘+@path+消息类型加字段,待立项。
