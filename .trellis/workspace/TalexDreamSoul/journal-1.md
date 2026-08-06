@@ -1739,3 +1739,12 @@ Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to fou
 - 门:utils 979 + core-app addon/apps 161 + typecheck:node 全绿;packages/test 61 失败为既有(插件 prelude 回归,不 import 搜索模块);lint 净增 +3 同类 style(文件整体与根配置风格不合,新代码贴文件局部风格)。
 - spec 固化 main-process/search-hotpath-contracts.md:去重必须走 addSearchToken 漏斗、记忆化键必须覆盖全部派生输入(漏字段=陈旧缓存 bug 类)、缓存数组共享引用只读。
 - 遗留(审查报告在案未动):排序结果到不了 UI 的结构断层、关键词白名单正则、对账丢数据三件、SQL 前缀全扫——待后续任务。
+
+## 2026-08-05 · home-tool-loop · S3-S7 落地(工具网关→extension→UI→图表)
+
+- **S3 网关**:主进程 loopback HTTP(127.0.0.1 随机端口 + 每会话 bearer token,timingSafeEqual 校验),工具在主进程执行、agent 进程只转发——确认门因此无法被绕过;deny/异常/未知工具一律以 tool error 回给模型让循环继续;read 类可「本会话记住」,write/execute 每次必问;19 例单测。
+- **S4 extension**:packages/pi-extension-tuff(pi 扩展包,`pi install <path> -l` 开发装),三工具薄壳;provider 注入 env + `--tools` 白名单,且**工具开时必须撤 `--no-extensions`**(否则白名单形同虚设)。
+- **S5 UI**:parts→ChainOfThought 时间线(单步退化为 ToolCallCard)、确认卡浮在 composer 上方(agent 被阻塞时滚走也能答)、Tools 开关默认关(翻开关才开网关+发白名单)。
+- **S6**:tuff_search_files 改接 coreBoxManager.search(与启动器同索引同排序);tuff_render_chart 收**声明式 spec**(校验 type/labels/series 对齐)→ ToolChartCard 按需 import echarts 渲染——「数据→报表」不给模型任意执行面。
+- **S7 端到端**:自写 gateway-smoke.mjs 起真网关 + 真 pi 跑通全链。**抓出真 bug**:pi 的 executor 签名是 `(toolCallId, params, …)` 而非 `(args)`,我按后者写 → 网关收到的 args 是 callId 字符串,真实场景下每次调用都会参数校验失败。单测抓不到(没人拥有 pi 的签名),只有端到端能抓;已修 + 加契约回归测试锁死。
+- 全量门:137 测试 / typecheck node+web 双绿。遗留:tuff_list_features / tuff_invoke_feature 未做(插件 feature 调用面);MCP 挂载等 C 任务。
