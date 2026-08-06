@@ -107,3 +107,52 @@ R1 的代码先于画板落地，以下三处需要对齐：
 - 不改 `router.ts`、不改主进程、不加数据库迁移 —— R1 的全部改动落在 renderer 的两个新文件 + `HomePage.vue` + 两份 i18n
 - R2 接手时，`useHomeConversation` 的 `messages` 由内存数组换成 transport 拉取，`send()` 内部多两次持久化调用，视图层不动
 - 若 `intelligence.basic` 权限在某些环境下被拒，表现为 `send()` 的错误态，与 provider 未配置同一条路径，无需额外分支
+
+## 6. R1.5 · 本机 `pi` CLI provider
+
+### 6.1 为什么挂在 `LOCAL` 类型下
+
+| 事实 | 出处 | 后果 |
+|---|---|---|
+| `hasUsableRuntimeCredential` 对 `LOCAL` 无条件返回 `true` | `intelligence-sdk.ts:170` | 无凭据也能通过可用性筛选，不必为 CLI provider 开特例 |
+| `destinationFor` 对 `type === 'local'` 且无 `baseUrl` 判为 `'local'` | `privacy/provider-disclosure.ts` | 隐私披露自动归为本地，不误报外发 |
+| `ALL_PROVIDERS` 已含 `LOCAL`，`text.chat` 支持该类型 | `intelligence-module.ts:795` | 能力注册表不用改 |
+
+新增 provider **类型枚举**要动 `@talex-touch/tuff-intelligence` 外部包，代价明显更大。因此复用 `LOCAL`，在工厂里按 `metadata.origin` 分派：
+
+```ts
+// provider-factory.ts —— 与既有 createCustomProvider 分派 Nexus/Custom 同构
+export function createLocalProvider(config) {
+  return isPiCliProviderConfig(config) ? new PiCliProvider(config) : new LocalProvider(config)
+}
+```
+
+### 6.2 子进程契约（实测，非推测）
+
+拉起形态：`pi -p --mode json --no-tools --no-session -ne -ns -nc <prompt>`
+
+各开关的理由：`-p` 非交互一次性退出；`--mode json` 输出 NDJSON；`--no-tools` 首页对话不授予任何工具；`--no-session` 不落 pi 自己的会话文件（状态以应用侧为准）；`-ne/-ns/-nc` 关掉扩展、skill、`AGENTS.md`/`CLAUDE.md` 发现，避免把用户仓库上下文带进闲聊。
+
+stdout 为一行一个 JSON 对象，本轮只取三类：
+
+| 行 | 取值 | 映射到 |
+|---|---|---|
+| `{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"…"}}` | `delta` | `IntelligenceStreamChunk.delta` |
+| `{"type":"message_start","message":{"provider":"codex","model":"gpt-5.6-terra"}}` | `provider` / `model` | chunk 的 `provider` / `model` |
+| `{"type":"message_end","message":{"usage":{"input","output","totalTokens"}}}` | usage | `IntelligenceUsageInfo`（`input→promptTokens`、`output→completionTokens`） |
+
+`agent_settled` 是最后一行。进程非零退出且未产出任何 delta 时，把 stderr 尾部作为错误 message 抛出。
+
+### 6.3 取消
+
+渲染层 `StreamController.cancel()` → 主进程 `streamContext.isCancelled()` 为真 → `for await` 循环 `break` → 异步生成器被 `.return()` → provider 的 `finally` 执行。因此**杀子进程放在 `chatStream` 的 `finally`**，不需要额外的 signal 管线。这是本轮唯一可靠的取消点。
+
+### 6.4 多轮上下文
+
+实测 `pi` 的位置参数是**多条 user 消息**，不是 role 交替，无法用它注入 assistant 历史。本轮采用无状态拼接：历史按 role 前缀渲染进单条 prompt，system 指令走 `--system-prompt`（覆盖 pi 默认的编码助手提示词）。
+
+不采用 `--session-id` 复用 pi 会话，理由是它会与 R2 的落库形成两份历史，且停止/重试后两边必然发散。
+
+### 6.5 可执行文件探测
+
+`intelligence-local-environment.ts` 的 `findExecutable` 只扫 `process.env.PATH`。Electron 从 Finder 启动时 PATH 通常只有 `/usr/bin:/bin:/usr/sbin:/sbin`，mise / volta / npm 全局目录都不在其中，仅靠它必然探测失败。因此探测需要在 PATH 之外补候选根（mise installs、`~/.local/bin`、`/opt/homebrew/bin`、npm 全局 bin）。
