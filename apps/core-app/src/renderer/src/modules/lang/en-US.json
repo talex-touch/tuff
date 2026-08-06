@@ -4268,6 +4268,12 @@
       "countSummary": "{count} total",
       "noRecords": "No records yet"
     },
+    "boxTag": {
+      "image": "Image",
+      "imageCount": "{count} images",
+      "charCount": "{count} chars total",
+      "preparingFiles": "Preparing files…"
+    },
   "common": {
     "loadMore": "Load more",
     "copy": "Copy",
