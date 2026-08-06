@@ -136,7 +136,8 @@ watch(
   (length, previous) => {
     if (!isStreaming.value || prefersReducedMotion()) return
     for (const message of messages.value.slice(previous ?? 0, length)) {
-      enteringMessages.add(message.id)
+      // The user's own message gets the send flight instead of the pop.
+      if (message.role !== 'user') enteringMessages.add(message.id)
     }
   }
 )
@@ -228,7 +229,85 @@ async function submit(): Promise<void> {
   }
 
   streamRef.value?.scrollToBottom()
+  animateSendFlight(composerEl)
   await turn
+}
+
+/**
+ * The send flight: the fresh user bubble lifts off from the composer's
+ * *visual* position (mid-FLIP transforms included via getBoundingClientRect),
+ * sharpening out of a blur as it detaches, then knocks the thread above it
+ * upward on arrival — the iMessage collision, sourced from the box that
+ * launched it.
+ */
+function animateSendFlight(composerEl: HTMLElement | null): void {
+  if (!composerEl || prefersReducedMotion()) return
+  const sent = [...messages.value].reverse().find((message) => message.role === 'user')
+  const bubble = sent
+    ? composerEl.ownerDocument.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(sent.id)}"]`
+      )
+    : null
+  if (!bubble) return
+
+  const deltaY = composerEl.getBoundingClientRect().top - bubble.getBoundingClientRect().top
+  if (deltaY < 4) return
+
+  const flight = animateRaw(
+    bubble,
+    [
+      { transform: `translateY(${deltaY}px) scale(0.92)`, filter: 'blur(7px)', opacity: 0.5 },
+      { filter: 'blur(0px)', opacity: 1, offset: 0.7 },
+      { transform: 'translateY(0) scale(1)', filter: 'blur(0px)' }
+    ],
+    { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' }
+  )
+
+  // Launch recoil; composited additively so it stacks on the first-send FLIP
+  // instead of replacing it.
+  animateRaw(
+    composerEl,
+    [
+      { transform: 'scale(1)' },
+      { transform: 'scale(0.988)', offset: 0.35 },
+      { transform: 'scale(1)' }
+    ],
+    { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', composite: 'add' }
+  )
+
+  flight.onfinish = () => {
+    const rows = Array.from(
+      composerEl.ownerDocument.querySelectorAll<HTMLElement>('[data-message-id]')
+    )
+    const index = rows.indexOf(bubble)
+    // The two messages above take the hit, the nearer one harder.
+    ;[rows[index - 1], rows[index - 2]].forEach((row, order) => {
+      row?.animate(
+        [
+          { transform: 'translateY(0)' },
+          { transform: `translateY(${order === 0 ? -7 : -3}px)` },
+          { transform: 'translateY(0)' }
+        ],
+        { duration: 360, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', delay: order * 45 }
+      )
+    })
+  }
+}
+
+/**
+ * WAAPI through lib-agnostic parameter types: the DOM lib pinned by the
+ * toolchain predates `filter` keyframes and additive `composite`, both of
+ * which the runtime (Chromium 130+) supports.
+ */
+function animateRaw(
+  el: HTMLElement,
+  frames: Record<string, string | number>[],
+  options: Record<string, string | number>
+): Animation {
+  return el.animate(
+    frames as unknown as Parameters<HTMLElement['animate']>[0],
+    options as unknown as Parameters<HTMLElement['animate']>[1]
+  )
 }
 
 function prefersReducedMotion(): boolean {
@@ -499,6 +578,7 @@ watch(
                     message.role,
                     { 'HomePage-Message--enter': enteringMessages.has(message.id) }
                   ]"
+                  :data-message-id="message.id"
                   :aria-busy="message.status === 'streaming'"
                   @animationend="enteringMessages.delete(message.id)"
                 >
@@ -611,7 +691,7 @@ watch(
             <div
               ref="composerRef"
               class="HomePage-Composer"
-              :class="{ 'is-dragover': isDragover }"
+              :class="{ 'is-dragover': isDragover, 'is-live': isStreaming }"
               @dragenter="onDragEnter"
               @dragover="onDragOver"
               @dragleave="onDragLeave"
@@ -1091,6 +1171,7 @@ watch(
 }
 
 .HomePage-Composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1116,6 +1197,56 @@ watch(
       0 1px 2px color-mix(in srgb, var(--shell-shadow) 70%, transparent),
       0 10px 30px var(--shell-shadow),
       0 0 0 3px color-mix(in srgb, var(--shell-primary) 10%, transparent);
+  }
+
+  /* While a response runs, the box wears the TuffIntelligence gradient as a
+     living ring: a crisp rim plus a blurred halo, masked to the frame. The
+     layers drift in opposite directions on co-prime periods while their hues
+     slide round the wheel and the halo breathes — no two moments align, so it
+     reads as weather, not as a spinner. */
+  &.is-live::before,
+  &.is-live::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(
+      var(--home-glow-angle),
+      #0894ff 0%,
+      #c959dd 34%,
+      #ff2e54 68%,
+      #ff9004 100%
+    );
+    pointer-events: none;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  &.is-live::before {
+    inset: -3px;
+    padding: 6px;
+    filter: blur(var(--home-glow-blur)) hue-rotate(var(--home-glow-hue));
+    opacity: 0.5;
+    animation:
+      home-glow-spin 11s linear infinite reverse,
+      home-glow-hue 9s linear infinite,
+      home-glow-breathe 6.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  &.is-live::after {
+    filter: hue-rotate(var(--home-glow-hue));
+    opacity: 0.85;
+    animation:
+      home-glow-spin 8s linear infinite,
+      home-glow-hue 13s linear infinite reverse,
+      home-glow-rim 7.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
   /**
@@ -1315,6 +1446,63 @@ textarea.HomePage-Input:focus-visible {
   transform: translateY(-14px) scale(0.98);
 }
 
+/* @property is what lets these interpolate — same trick as IntelligenceHeader. */
+@property --home-glow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@property --home-glow-hue {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@property --home-glow-blur {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 9px;
+}
+
+@keyframes home-glow-spin {
+  to {
+    --home-glow-angle: 360deg;
+  }
+}
+
+@keyframes home-glow-hue {
+  to {
+    --home-glow-hue: 360deg;
+  }
+}
+
+@keyframes home-glow-breathe {
+  0%,
+  100% {
+    --home-glow-blur: 8px;
+
+    opacity: 0.38;
+  }
+
+  50% {
+    --home-glow-blur: 12px;
+
+    opacity: 0.6;
+  }
+}
+
+@keyframes home-glow-rim {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+
+  50% {
+    opacity: 0.92;
+  }
+}
+
 @keyframes home-msg-pop {
   from {
     opacity: 0;
@@ -1333,6 +1521,12 @@ textarea.HomePage-Input:focus-visible {
 
   .home-head-leave-active {
     transition: none;
+  }
+
+  /* The ring holds still but stays on — the running state must survive. */
+  .HomePage-Composer.is-live::before,
+  .HomePage-Composer.is-live::after {
+    animation: none;
   }
 }
 
