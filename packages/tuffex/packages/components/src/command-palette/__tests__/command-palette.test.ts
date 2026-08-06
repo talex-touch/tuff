@@ -198,4 +198,48 @@ describe('txCommandPalette', () => {
     // The combobox points at the highlighted option while focus stays in the input.
     expect(input.attributes('aria-activedescendant')).toBe(options[0].attributes('id'))
   })
+
+  it('accepts an inbound query prop, completing the v-model:query pair', async () => {
+    const wrapper = mount(TxCommandPalette, {
+      props: {
+        modelValue: true,
+        query: 'open',
+        commands: [
+          { id: 'open', title: 'Open File' },
+          { id: 'close', title: 'Close File' },
+        ],
+      },
+      global: { stubs: { Teleport: true } },
+    })
+
+    // update:query was emitted with no matching prop, so a parent could push
+    // changes out but never feed one in.
+    expect(wrapper.find('input').element.value).toBe('open')
+    expect(wrapper.text()).toContain('Open File')
+    expect(wrapper.text()).not.toContain('Close File')
+
+    await wrapper.setProps({ query: 'close' })
+
+    expect(wrapper.find('input').element.value).toBe('close')
+    expect(wrapper.text()).toContain('Close File')
+    expect(wrapper.text()).not.toContain('Open File')
+  })
+
+  it('stays uncontrolled when no query prop is supplied', async () => {
+    const wrapper = mount(TxCommandPalette, {
+      props: {
+        modelValue: true,
+        commands: [
+          { id: 'open', title: 'Open File' },
+          { id: 'close', title: 'Close File' },
+        ],
+      },
+      global: { stubs: { Teleport: true } },
+    })
+
+    await wrapper.find('input').setValue('close')
+
+    expect(wrapper.text()).toContain('Close File')
+    expect(wrapper.emitted('update:query')?.at(-1)).toEqual(['close'])
+  })
 })
