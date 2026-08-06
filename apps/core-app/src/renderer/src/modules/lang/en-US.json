@@ -3636,6 +3636,10 @@
       "capabilityPromptSectionDesc": "System prompt appended when the capability is invoked.",
       "testCapability": "Run test",
       "selectProvider": "Select channel",
+      "userMessageLabel": "User message",
+      "userMessagePlaceholder": "Hello, can you summarize this...",
+      "promptVariablesLabel": "Prompt variables (JSON)",
+      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}",
       "manageModels": "Manage models",
       "editPrompt": "Edit prompt",
       "latestTestResult": "Latest test result",
@@ -4684,7 +4688,8 @@
     "customCompatible": "Custom (OpenAI Compatible)",
     "compatible": "Compatible",
     "search": {
-      "placeholder": "Search providers..."
+      "placeholder": "Search providers...",
+      "clear": "Clear search"
     },
     "list": {
       "enabled": "Enabled Providers",

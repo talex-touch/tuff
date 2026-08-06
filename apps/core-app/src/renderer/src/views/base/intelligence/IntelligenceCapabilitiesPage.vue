@@ -382,7 +382,7 @@ async function handleCapabilityTest(
       class="capability-shell flex-1"
       search-id="capability-search"
       :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
-      :clear-label="t('common.close')"
+      :clear-label="t('intelligence.search.clear')"
       :main-edge-blur="false"
     >
       <template #default>

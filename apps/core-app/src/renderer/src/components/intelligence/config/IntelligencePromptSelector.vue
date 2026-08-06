@@ -106,11 +106,11 @@ function handleManagePrompts() {
         size="sm"
         type="text"
         class="manage-prompts-btn"
-        :aria-label="t('intelligence.managePrompts')"
+        :aria-label="t('settings.intelligence.managePrompts')"
         @click="handleManagePrompts"
       >
         <i class="i-carbon-settings" aria-hidden="true" />
-        <span>{{ t('intelligence.managePrompts') }}</span>
+        <span>{{ t('settings.intelligence.managePrompts') }}</span>
       </TxButton>
     </div>
 
@@ -118,7 +118,7 @@ function handleManagePrompts() {
     <div class="prompt-quick-select mb-3">
       <TuffSelect
         :model-value="selectedPromptId"
-        :placeholder="t('intelligence.selectPrompt')"
+        :placeholder="t('settings.intelligence.selectPrompt')"
         searchable
         class="w-full"
         @update:model-value="handlePromptSelect"
@@ -130,11 +130,11 @@ function handleManagePrompts() {
         <TuffSelectItem
           v-if="builtinPrompts.length > 0"
           value="__group_builtin__"
-          :label="t('intelligence.builtinPrompts')"
+          :label="t('settings.intelligence.builtinPrompts')"
           disabled
         >
           <div class="prompt-group-label">
-            {{ t('intelligence.builtinPrompts') }}
+            {{ t('settings.intelligence.builtinPrompts') }}
           </div>
         </TuffSelectItem>
         <TuffSelectItem
@@ -146,7 +146,7 @@ function handleManagePrompts() {
           <div class="flex items-center justify-between w-full">
             <span>{{ prompt.name }}</span>
             <TxTag size="sm" type="info">
-              {{ t('intelligence.builtin') }}
+              {{ t('settings.intelligence.builtin') }}
             </TxTag>
           </div>
         </TuffSelectItem>
@@ -155,11 +155,11 @@ function handleManagePrompts() {
         <TuffSelectItem
           v-if="customPrompts.length > 0"
           value="__group_custom__"
-          :label="t('intelligence.customPrompts')"
+          :label="t('settings.intelligence.customPrompts')"
           disabled
         >
           <div class="prompt-group-label">
-            {{ t('intelligence.customPrompts') }}
+            {{ t('settings.intelligence.customPrompts') }}
           </div>
         </TuffSelectItem>
         <TuffSelectItem
@@ -171,16 +171,16 @@ function handleManagePrompts() {
           <div class="flex items-center justify-between w-full">
             <span>{{ prompt.name }}</span>
             <TxTag size="sm" type="success">
-              {{ t('intelligence.custom') }}
+              {{ t('settings.intelligence.custom') }}
             </TxTag>
           </div>
         </TuffSelectItem>
 
         <!-- Add New Prompt Option -->
-        <TuffSelectItem value="__create_new__" :label="t('intelligence.createNewPrompt')">
+        <TuffSelectItem value="__create_new__" :label="t('settings.intelligence.createNewPrompt')">
           <div class="flex items-center gap-2 text-[var(--tx-color-primary)]">
             <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('intelligence.createNewPrompt') }}</span>
+            <span>{{ t('settings.intelligence.createNewPrompt') }}</span>
           </div>
         </TuffSelectItem>
       </TuffSelect>
@@ -201,7 +201,7 @@ function handleManagePrompts() {
         v-if="selectedPromptId && selectedPromptId !== '__create_new__'"
         class="mt-2 text-xs text-[var(--tx-text-color-secondary)]"
       >
-        {{ t('intelligence.promptSelectedHint') }}
+        {{ t('settings.intelligence.promptSelectedHint') }}
       </div>
     </div>
 
@@ -216,7 +216,11 @@ function handleManagePrompts() {
           {{ selectedPrompt.name }}
         </span>
         <TxTag size="sm" :type="selectedPrompt.builtin ? 'info' : 'success'">
-          {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
+          {{
+            selectedPrompt.builtin
+              ? t('settings.intelligence.builtin')
+              : t('settings.intelligence.custom')
+          }}
         </TxTag>
       </div>
       <div class="text-sm text-[var(--tx-text-color-regular)] whitespace-pre-wrap">

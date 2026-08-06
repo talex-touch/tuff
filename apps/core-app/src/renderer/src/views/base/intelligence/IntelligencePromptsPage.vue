@@ -490,7 +490,7 @@ onBeforeUnmount(() => {
         class="prompt-shell flex-1"
         search-id="prompt-search"
         :search-placeholder="t('settings.intelligence.promptSearchPlaceholder')"
-        :clear-label="t('common.close')"
+        :clear-label="t('intelligence.search.clear')"
         :main-edge-blur="false"
       >
         <template #default>
