@@ -5195,6 +5195,7 @@
     "confirmAndSend": "Authorize and send"
   },
   "corebox": {
+    "pin": "Pin CoreBox",
     "pinned": "Pinned",
     "unpinned": "Unpinned",
     "pinFailed": "Pin failed",

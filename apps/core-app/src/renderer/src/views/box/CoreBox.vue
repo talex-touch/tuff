@@ -871,7 +871,12 @@ const customCss = computed(() => {
           >
             <TuffIcon :icon="{ type: 'class', value: 'i-ri-send-plane-2-fill' }" />
           </button>
-          <TuffIcon v-else :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+          <TuffIcon
+            v-else
+            :icon="pinIcon"
+            :alt="t('corebox.pin', '固定 CoreBox')"
+            @click="handleTogglePin"
+          />
         </div>
       </template>
     </div>
