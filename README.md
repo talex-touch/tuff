@@ -74,7 +74,7 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 
 ## 🤝 License
 
-This project is open-sourced under the **MIT License**.
+This project is open-sourced under the **Mozilla Public License 2.0 (MPL-2.0)** — see [`LICENSE`](./LICENSE).
 
 ## ⁉️ Issue
 
