@@ -69,6 +69,24 @@ describe('txStreamMarkdown', () => {
     expect(wrapper.find('strong').text()).toBe('bold')
   })
 
+  it('re-renders when sanitize flips off on settled content', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: '<script>alert(1)</script>ok', sanitize: true },
+    })
+    await flushSanitizer()
+
+    // The mocked sanitizer strips <script>, so its presence is the discriminator
+    // between HTML produced under sanitize=true and sanitize=false.
+    expect(wrapper.find('.markdown-body').html()).not.toContain('<script>')
+
+    await wrapper.setProps({ sanitize: false })
+    await flushSanitizer()
+
+    // Content and canRender are both unchanged by the flip, so sanitize itself
+    // has to drive the re-render or the stale sanitized HTML stays on screen.
+    expect(wrapper.find('.markdown-body').html()).toContain('<script>')
+  })
+
   it('keeps settled block DOM nodes across streaming updates', async () => {
     const wrapper = mount(TxStreamMarkdown, {
       props: { content: 'First paragraph\n\nTail', streaming: true },
