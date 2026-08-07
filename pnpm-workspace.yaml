@@ -37,8 +37,8 @@ catalog:
   '@iconify-json/logos': ^1.2.11
   '@langchain/anthropic': ^0.3.34
   '@langchain/core': ^0.3.80
-  '@langchain/langgraph': ^0.2.74
-  '@langchain/openai': ^0.3.17
+  '@langchain/langgraph': ^0.4.9
+  '@langchain/openai': ^0.4.9
   '@sentry/nuxt': ^10.64.0
   '@sidebase/nuxt-auth': ^0.9.4
   ai-elements-vue: ^1.5.0
@@ -102,7 +102,3 @@ catalogs:
     '@iconify-json/twemoji': ^1.2.5
   conflicts_next-auth_t4_24_15:
     next-auth: ~4.24.15
-  conflicts_@langchain/langgraph_h0_4_9:
-    '@langchain/langgraph': ^0.4.9
-  conflicts_@langchain/openai_h0_4_9:
-    '@langchain/openai': ^0.4.9
