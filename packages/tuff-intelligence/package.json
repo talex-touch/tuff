@@ -11,9 +11,6 @@
     "tuff",
     "intelligence"
   ],
-  "main": "src/index.ts",
-  "module": "src/index.ts",
-  "types": "src/index.ts",
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -22,8 +19,8 @@
     },
     "./client": {
       "types": "./src/client.ts",
-      "require": "./dist/client.cjs",
       "import": "./src/client.ts",
+      "require": "./dist/client.cjs",
       "default": "./src/client.ts"
     },
     "./light": {
@@ -37,6 +34,9 @@
       "default": "./src/types/intelligence.ts"
     }
   },
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
   "files": [
     "dist",
     "src"
@@ -51,14 +51,14 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "clean": "rimraf dist"
   },
+  "peerDependencies": {
+    "zod": "^3.25.32"
+  },
   "dependencies": {
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "^0.4.9",
     "@talex-touch/utils": "workspace:*",
     "zod": "3.25.76"
-  },
-  "peerDependencies": {
-    "zod": "^3.25.32"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
