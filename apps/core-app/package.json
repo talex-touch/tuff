@@ -172,6 +172,7 @@
     "electron-vite": "^4.0.1",
     "lottie-web": "^5.13.0",
     "openai": "^6.26.0",
+    "typescript": "^5.9.3",
     "unocss": "catalog:build",
     "unplugin-auto-import": "^20.3.0",
     "unplugin-vue-components": "^30.0.0",
@@ -179,6 +180,7 @@
     "vite": "^7.3.6",
     "vite-plugin-vue-setup-extend": "^0.4.0",
     "vitest": "^3.2.7",
-    "vue-draggable-plus": "^0.6.1"
+    "vue-draggable-plus": "^0.6.1",
+    "vue-tsc": "^3.3.6"
   }
 }
