@@ -11,6 +11,7 @@ import {
 } from './retention-test-utils'
 
 const MIGRATIONS_URL = new URL('../../../../resources/db/migrations/', import.meta.url)
+const RETENTION_INDEXES_MIGRATION = '0034_privacy_retention_indexes.sql'
 const MIGRATIONS_FOLDER = fileURLToPath(MIGRATIONS_URL)
 
 interface MigrationJournal {
@@ -62,8 +63,13 @@ describe('privacy retention indexes migration', () => {
   it('extends the real migration chain without deleting existing rows', async () => {
     const { client } = await createPrivacyTestClient('migration')
     const migrations = await getPrivacyMigrationNames()
-    expect(migrations.at(-1)).toBe('0034_privacy_retention_indexes.sql')
-    await applyPrivacyMigrations(client, migrations.slice(0, -1))
+    // Target the retention-indexes migration by name rather than assuming it is
+    // last. Pinning it to the tail meant that once a later migration landed this
+    // suite would keep passing while exercising a different one entirely --
+    // worse than failing, which is what it did when 0035 and 0036 arrived.
+    const target = migrations.indexOf(RETENTION_INDEXES_MIGRATION)
+    expect(target, `${RETENTION_INDEXES_MIGRATION} is missing from the chain`).toBeGreaterThanOrEqual(0)
+    await applyPrivacyMigrations(client, migrations.slice(0, target))
 
     await client.execute(
       `INSERT INTO clipboard_history (type, content, timestamp, is_favorite)
@@ -75,7 +81,7 @@ describe('privacy retention indexes migration', () => {
        VALUES ('CANARY_CONTEXT_ROW', 'assistant', 'archived', 1, 1)`
     )
 
-    await applyPrivacyMigrations(client, migrations.slice(-1))
+    await applyPrivacyMigrations(client, [migrations[target]!])
 
     const indexes = await client.execute(
       `SELECT name FROM sqlite_master
@@ -224,7 +230,9 @@ describe('privacy retention indexes migration', () => {
     await migrate(drizzle(client), { migrationsFolder: MIGRATIONS_FOLDER })
 
     const journalRows = await client.execute('SELECT COUNT(*) AS count FROM __drizzle_migrations')
-    expect(Number(journalRows.rows[0]?.count)).toBe(35)
+    // Derived from the journal: a hardcoded count fails on every new migration
+    // while proving nothing about whether they all applied.
+    expect(Number(journalRows.rows[0]?.count)).toBe((await getPrivacyMigrationNames()).length)
     const clipboardColumns = await client.execute(`PRAGMA table_info('clipboard_history')`)
     expect(clipboardColumns.rows.some((row) => row.name === 'retention_protected')).toBe(true)
     const contextColumns = await client.execute(
@@ -262,7 +270,9 @@ describe('privacy retention indexes migration', () => {
     )
     expect(context.rows[0]?.is_pinned).toBe(0)
     const journalRows = await client.execute('SELECT COUNT(*) AS count FROM __drizzle_migrations')
-    expect(Number(journalRows.rows[0]?.count)).toBe(35)
+    // Derived from the journal: a hardcoded count fails on every new migration
+    // while proving nothing about whether they all applied.
+    expect(Number(journalRows.rows[0]?.count)).toBe((await getPrivacyMigrationNames()).length)
   })
 
   it('rolls back schema and journal state when 0034 fails mid-migration', async () => {
