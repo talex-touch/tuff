@@ -117,11 +117,16 @@ export function collectProblems(sources) {
   }
 
   // --- homepage --------------------------------------------------------------
-  const homepages = new Set(
-    [rootManifest.homepage, coreAppManifest.homepage].filter(Boolean).map(value => value.replace(/\/$/, '')),
-  )
-  if (homepages.size > 1) {
-    problems.push(`Manifests disagree on homepage: ${[...homepages].join(' vs ')}. See #306 for the canonical value.`)
+  // The root manifest is the source of truth: sync-core-package.mjs copies homepage down into
+  // CoreApp, and it skips fields the root leaves undefined. A missing root homepage therefore
+  // does not break the sync — it silently makes CoreApp's value unowned, which is how the two
+  // drifted apart in the first place (#306).
+  const stripSlash = value => String(value).replace(/\/$/, '')
+  if (!rootManifest.homepage) {
+    problems.push('Root package.json declares no homepage, so nothing owns the canonical value that sync-core-package.mjs propagates.')
+  }
+  else if (coreAppManifest.homepage && stripSlash(rootManifest.homepage) !== stripSlash(coreAppManifest.homepage)) {
+    problems.push(`Manifests disagree on homepage: ${stripSlash(rootManifest.homepage)} (root) vs ${stripSlash(coreAppManifest.homepage)} (apps/core-app). Run sync-core-package.mjs.`)
   }
 
   // --- links -----------------------------------------------------------------
@@ -186,6 +191,15 @@ function selfTest() {
         rootManifest: { ...sources.rootManifest, homepage: 'https://example.invalid' },
       }),
       expect: /disagree on homepage/,
+    },
+    {
+      name: 'no root homepage to own the canonical value',
+      mutate: (sources) => {
+        const rootManifest = { ...sources.rootManifest }
+        delete rootManifest.homepage
+        return { ...sources, rootManifest }
+      },
+      expect: /declares no homepage/,
     },
     {
       name: 'engines and .node-version disagreeing',
