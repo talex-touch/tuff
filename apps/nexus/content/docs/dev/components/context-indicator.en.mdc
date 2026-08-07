@@ -1,0 +1,66 @@
+---
+title: Context Indicator
+description: A compact ring that shows how much of the conversation context is used.
+category: Status
+status: beta
+since: 2.5.0
+tags: [ai, context, token]
+syncStatus: reviewed
+verified: true
+---
+# Context Indicator
+
+`TxContextIndicator` shows how much of the context window is consumed as a small ring plus a line of text, and shifts colour as it approaches the limit. It suits a composer toolbar or the edge of a conversation header.
+
+Manually verified against `packages/tuffex/packages/components/src/context-indicator/src/TxContextIndicator.vue`.
+
+## Basic Usage
+
+### Context Indicator
+::::TuffDemoWrapper{demo="ContextIndicatorContextIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxContextIndicator :used-tokens="12300" :max-tokens="200000" />
+    <TxContextIndicator :used-tokens="172000" :max-tokens="200000" />
+    <TxContextIndicator :used-tokens="196000" :max-tokens="200000" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The ratio is `usedTokens / maxTokens`, clamped to `0`–`1`, so an over-count never draws past a full ring.
+- A `maxTokens` of `0` or less is treated as a ratio of `0` — no divide-by-zero and no thrown error.
+- Three colour levels are derived from the ratio and exposed on `data-level`: `ok` (≤ 80%), `warning` (> 80%) and `danger` (> 95%). Style overrides can key off that attribute.
+- The default label uses compact counts: `1.2M` at a million or more, `12.3K` at a thousand or more, otherwise a rounded integer. A `formatter` replaces that text entirely.
+- `title` is always "text (percentage)", so the percentage stays visible on hover even with a custom `formatter`.
+- The root is `role="meter"` with `aria-valuemin` / `aria-valuemax` / `aria-valuenow` kept in sync. The SVG is `aria-hidden`, and the accessible name comes from `label`.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `usedTokens` | `number` | — | Tokens consumed so far. Required. |
+| `maxTokens` | `number` | — | Size of the context window. Required; a value of 0 or less is treated as a ratio of 0. |
+| `label` | `string` | `'Context usage'` | Accessible name, written to `aria-label`. |
+| `formatter` | `(used: number, max: number) => string` | — | Replaces the text beside the ring. Falls back to the built-in compact count when unset. |
+
+### Events
+
+`TxContextIndicator` emits no component events.
+
+## Slots
+
+| Name | Scope | Description |
+|------|-------|-------------|
+| `detail` | `{ ratio: number, used: number, max: number }` | Appended after the text — a place for a percentage, a remaining count, or a "clear context" affordance. |
+
+## Best Practices
+
+- Pass the model's real window size rather than a hardcoded constant, so the indicator does not lie after a model switch.
+- Use `formatter` for localized number formatting instead of wrapping the component in your own text, or the percentage in `title` will disagree with what is displayed.
+- Only prompt the user near the limit — from `warning` upward. Below that this is background information and should not compete for attention.
+- If you place it inside a clickable region, give that region its own accessible name: `role="meter"` conveys nothing about being actionable.
