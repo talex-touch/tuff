@@ -51,6 +51,7 @@ export class FileScanWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private closed = false
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
     shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
@@ -137,8 +138,15 @@ export class FileScanWorkerClient {
     }
   }
 
+  /**
+   * Observational: it never creates a worker and never extends worker liveness.
+   *
+   * Cancelling the idle timer here used to restart the whole window on every call, so a
+   * diagnostics panel polling faster than FILE_WORKER_IDLE_SHUTDOWN_MS kept the worker
+   * alive forever. An in-flight metrics request still defers shutdown, but through
+   * shouldShutdown() reading metricsPending — not by moving the deadline.
+   */
   async getStatus(): Promise<WorkerStatusSnapshot> {
-    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
@@ -156,11 +164,20 @@ export class FileScanWorkerClient {
   }
 
   shutdown(): void {
+    this.closed = true
     this.failPendingScans(new Error('FILE_SCAN_WORKER_CLOSED'))
+    // Metrics requests own a 300ms timer and an unsettled promise each. Terminating without
+    // them leaves getStatus() awaiting a worker that is already gone, and the timers fire
+    // afterwards to re-arm an idle deadline for nothing.
+    this.settlePendingMetrics()
     this.terminateWorker()
   }
 
   private ensureWorker(): Worker {
+    // A scan arriving during application teardown must not resurrect the worker.
+    if (this.closed) {
+      throw new Error('FILE_SCAN_WORKER_CLOSED')
+    }
     this.idleShutdown.cancel()
     if (this.worker) {
       return this.worker
@@ -257,6 +274,14 @@ export class FileScanWorkerClient {
       pending.done = true
       pending.wake?.()
     }
+  }
+
+  private settlePendingMetrics(): void {
+    for (const pending of this.metricsPending.values()) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+    }
+    this.metricsPending.clear()
   }
 
   private async requestMetrics(): Promise<WorkerMetricsPayload | null> {
