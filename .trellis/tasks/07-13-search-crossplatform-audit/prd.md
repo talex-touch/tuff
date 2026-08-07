@@ -93,15 +93,17 @@
   - 包合同：`@talex-touch/tuff-native.files` 显式包含 macOS/AX/stream/xcap production backend 源码与 `build/Release/tuff_native_screenshot.node`，继续排除 fixture、contract test backend 和 Cargo target。
   - 证据：本地 ordinary/deterministic 双构建、普通 addon strict macOS integration、31/31 Node contracts 和 `pnpm pack --dry-run` 通过；tarball 包含 addon 与全部 production backend，未包含 `test_backend.rs`/contract fixtures/target。
   - 边界：Windows/Linux authoritative native build 由新增 CI matrix 执行；signed Electron packaged runtime evidence 仍由 `07-29-screenshot-packaged-evidence` 独立承接。
+  - ⚠️ **同型风险仍在 audio addon 上**（2026-08-07 复验）：`packages/tuff-native/native-audio/` 存在且有 `build:audio` 脚本，但 `.github/workflows/` 里**没有任何 workflow 构建或加载它**（`native-protocol.yml` 对 audio 零提及）。也就是说截图模块修掉的那个「手工 Cargo 构建、CI 无验证」缺口，在 audio 上原样存在。跟踪：[#322](https://github.com/talex-touch/tuff/issues/322)。
 
 - [ ] **R2 — macOS 发行架构范围未决**
   - 位置：`electron-builder.yml:100-119` 当前仅产出 darwin/arm64；下载与 OTA 选择必须与该架构策略一致。
   - 风险：未明确支持范围会让 Intel 用户收到不兼容资产，或迫使发行链临时引入未经签名、公证和真机验证的 x64/Universal 变体。**需产品决策**：保持 arm64-only 并显式告知，或新增完整 x64/Universal 发布矩阵。
   - 2026-07-21 进展：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；OTA 已移除 `electron-updater` 双路径。R2 仍保持 open：架构策略、发布清单、下载选择和真机证据尚未收敛。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
+  - 2026-08-07 复验：`electron-updater` 已不在任何 `package.json` 中声明，双路径确已移除——本条**只剩 Intel/Universal 范围这个产品决策**，不再含 artifact 冲突成分。#311 仍 open。
 
-- [ ] **R3 — 大目录扫描/对账内存峰值**
-  - 位置：`addon/files/workers/file-scan-worker.ts:82`（scanDirectory 全物化）、`file-scan-worker-client.ts:132`（client 再累积）、`addon/files/services/file-provider-reconciliation-run-service.ts:122`（磁盘全集 + DB 全集 `LIKE` 无 LIMIT）
-  - 风险：同一文件列表约 3 份同存，无分块流式落库；百万级根目录（整个 home）OOM。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
+- [ ] **R3 — 大目录扫描/对账内存峰值** ⚠️ 结构问题已消除，**只剩实测未做**（2026-08-07 复验）
+  - 原描述的三层物化**均已不成立**：worker 逐批 post 并等 `batchAckWaiters` 背压；client 的累积版 `scan()` 已删除（[#1091](https://github.com/talex-touch/tuff/pull/1091)），流水线只用 `scanBatches()`；reconciliation 改为消费 `AsyncIterable`、`reconcile()` 逐批调用、`getDbFilesByPaths(diskPaths)` 按批限定路径，行数统计改为 `countRootRows` 普查而非物化集合。
+  - 仍开的部分：百万级 fixture 的峰值内存实测，以及「上界由 batch size 而非目录基数决定」的证明。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
 
 ### 🟡 中危架构债
 
@@ -115,8 +117,9 @@
 - [ ] **R6 — 平台分支散落、`withOSAdapter` 采用不足**
   - 位置：main 目录 141 处 `process.platform`（`touch-window.ts:83`、`update-system.ts:1445`、`capability-adapter.ts` 通篇内联三分支…），`withOSAdapter` 几乎只有 startup-guard 用。**注意**：审计 OS-04/OS-05 已判定并非全部是 bypass，迁移需逐项复核。
 
-- [ ] **R7 — `getStatus` 轮询架空 worker 空闲关闭**
-  - 位置：`addon/files/workers/file-scan-worker-client.ts:70`（getStatus 开头 cancel、结尾重排 60s 窗口）；任何 <60s 轮询 worker 状态的面板都会让空闲 worker 永不自杀，架空 `idle-worker-shutdown` 的内存回收。另：退出无 `will-quit` 优雅 drain，在途 FTS 写可能丢。
+- [x] **R7 — `getStatus` 轮询架空 worker 空闲关闭** ✅ 已修（[#345](https://github.com/talex-touch/tuff/issues/345) / [PR #1089](https://github.com/talex-touch/tuff/pull/1089)，2026-08-07）
+  - 根因比原描述窄：`IdleWorkerShutdownController.schedule()` 本就幂等，真正让截止时间可移动的**只有 `getStatus()` 开头那一次 `cancel()`**。移除后状态读取变为纯观察——不创建 worker、不移动截止时间；metrics 在途仍会推迟终止，但走 `shouldShutdown()` 读 `metricsPending`，而不是重置时钟。fake-timer 测试覆盖高频轮询/活跃任务/已终止客户端/shutdown 四类。
+  - **未做**：退出时的有界 drain。`shutdown()` 仍是取消而非排空（provider 在更上层已 `drainIndexedSourceMutations('shutdown')`），若要改成有界排空需单开。
 
 - [ ] **R8 — Linux 全面二等公民**
   - 应用扫描 139 行 / 图标暴力 360 次 stat 无缓存（`addon/apps/linux.ts:15`）/ 无 OCR / 更新只 openPath / Everything 无对等 / 无验收框架（仅 windows-acceptance-\*）。
@@ -133,10 +136,13 @@
 
 ### 🟢 低危清理
 
-- [ ] **C1 — 死依赖**：`tesseract.js`(~29MB)/`mathjs`(~13MB) 仍在 `apps/core-app/package.json`，靠打包排除（`electron-builder.yml:48-57` 注释已承认未使用）。
-- [ ] **C2 — `expectedDuration` 死配置**：9 处 provider 声明，DSL 文档称按它排序，但 `search-gather.ts` 的 fast/deferred 层从不排序。
-- [ ] **C3 — `searchCache` 收益存疑**：`search-core.ts:145`，5s TTL/100 LRU，cacheKey 依赖激活态易失效，命中率天然低。
-- [ ] **C4 — 死代码**：`file-provider-watch-service.ts:79` 的 `handleFsAddedOrChanged/Unlinked` 从未订阅（真实增量走 `file-indexed-source.ts`）。
+- [x] **C1 — 死依赖** ✅ 已修（2026-08-07）：`mathjs` 已从两处 manifest、Vite externalize 例外与 electron-builder 排除项一并移除（[#338](https://github.com/talex-touch/tuff/issues/338) / [PR #1088](https://github.com/talex-touch/tuff/pull/1088)）；`tesseract.js` 在依赖树里已不存在，其残留的 build-allowlist 条目随 [#347](https://github.com/talex-touch/tuff/issues/347) / [PR #1084](https://github.com/talex-touch/tuff/pull/1084) 一并清除。
+  - **顺带纠正原判断**：`electron-builder.yml` 那段注释称「只把约 2MB 的 mathjs/number 子集打进 bundle」——实测**从未发生**。移除前后 `out/main/index.js` 只差 **21 字节**（就是被内联 package.json 里的那串依赖声明），bundle 内 `createBigNumberClass` / `decimal.js` / `typed-function` 命中数全为 0。
+- [x] **C2 — `expectedDuration` 死配置** ✅ 已修（[#333](https://github.com/talex-touch/tuff/issues/333) / [PR #1085](https://github.com/talex-touch/tuff/pull/1085)，2026-08-07）：10 处声明（9 provider + 1 插件适配器）、`ISearchProvider` 字段及其文档、设计文档引用全部移除。兄弟字段 `priority` 确有消费者（`search-gather.ts:364` 按 `p.priority === 'fast'` 分层），未动。
+- [ ] **C3 — `searchCache` 收益存疑**（2026-08-07 复验，行号更新 + 部分前提修正）：定义在 `search-core.ts:186`，常量在 `:105-112`（TTL 5s / MAX 100 / ITEM 200），唯一读取点 `:887`。
+  - **原判断「命中率天然低」未获证实**：渲染层只发 `{ text, inputs }`（`useSearch.ts:83`），不含时间戳或请求 id，相同查询**能**产生相同键。正确性面也比预想好——命中走 `materializeCachedSearchResult(entry, sessionId)` 用**新** sessionId，且按 `searchIndexCommitHub` 的 revision 失效。
+  - **真正的问题**：`buildSearchCacheKey`（`search-core-utils.ts:133`）把 `TuffQuery` 上除 `text`/`inputs` 外的**所有**字段收进 `extras`，而**没有任何测试断言「相同查询 → 相同键」**（现有三条只断言不同输入键不同）。将来任何人往 `TuffQuery` 加一个每请求都变的字段，命中率会**静默归零**而套件全绿。跟踪：[#346](https://github.com/talex-touch/tuff/issues/346)（保留/移除阈值仍待拍板）。
+- [x] **C4 — 死代码** ✅ 已修（[#342](https://github.com/talex-touch/tuff/issues/342) / [PR #1083](https://github.com/talex-touch/tuff/pull/1083)，2026-08-07）：两个 handler 连同只为它们存在的 `enqueueIncrementalUpdate` 依赖（声明/字段/构造赋值/上游传入的闭包）与三个类型 import 一并删除。确认路径：`file-provider.ts:2442` 传的是 `subscribeToFileSystemEvents: () => undefined`，真实增量在 `indexed-source-event-router.ts:93` 绑的是另一套命名的 `handleFileAddedOrChanged`。
 - [ ] **C5 — Windows OCR COM apartment**：`winrt_ocr.cpp:157` 每次 init 不 uninit → 线程复用下 `RPC_E_CHANGED_MODE` 风险。
 - [ ] **C6 — Windows 全链路重依赖 PowerShell**：应用扫描 4 源 + Everything 装 PATH 全经 `powershell -Command`，ExecutionPolicy 受限时大面积降级且扫描侧无降级 UI。
 
