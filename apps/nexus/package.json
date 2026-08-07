@@ -41,7 +41,6 @@
     "typecheck:raw": "nuxt typecheck"
   },
   "dependencies": {
-    "@auth/core": "^0.34.3",
     "@floating-ui/vue": "catalog:",
     "@iconify-json/cib": "catalog:",
     "@langchain/anthropic": "^0.3.34",
@@ -87,7 +86,7 @@
     "better-sqlite3": "^12.11.1",
     "eslint": "catalog:dev",
     "eslint-plugin-format": "catalog:dev",
-    "next-auth": "~4.24.14",
+    "next-auth": "~4.24.15",
     "nitro-cloudflare-dev": "catalog:dev",
     "nuxt": "catalog:build",
     "openapi-typescript": "^7.13.0",
