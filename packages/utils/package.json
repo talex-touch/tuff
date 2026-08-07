@@ -1,6 +1,9 @@
 {
   "name": "@talex-touch/utils",
   "version": "1.0.50",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "private": false,
   "description": "Tuff series utils",
   "author": "TalexDreamSoul",
