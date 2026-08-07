@@ -11,7 +11,7 @@
     "node": ">=24.15.0"
   },
   "scripts": {
-    "prepare": "husky install",
+    "prepare": "husky",
     "preinstall": "npx only-allow pnpm",
     "postinstall": "node scripts/sync-core-package.mjs && node scripts/patch-nuxt-content-serialize.mjs",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
