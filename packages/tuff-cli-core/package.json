@@ -45,7 +45,7 @@
     "@types/cli-progress": "^3.11.6",
     "@types/fs-extra": "^11.0.4",
     "@types/glob": "^8.1.0",
-    "@types/node": "^18.19.130",
+    "@types/node": "catalog:dev",
     "eslint": "^9.39.4",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
