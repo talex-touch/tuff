@@ -76,6 +76,7 @@
     "@antfu/eslint-config": "^5.4.1",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
+    "@panva/hkdf": "1.2.1",
     "@typescript-eslint/parser": "^8.64.0",
     "@typescript-eslint/types": "^8.64.0",
     "bumpp": "^11.1.0",
