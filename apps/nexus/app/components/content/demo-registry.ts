@@ -223,6 +223,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   RatingBasicDemo: () => import('./demos/RatingBasicDemo.vue'),
   RatingIconDemo: () => import('./demos/RatingIconDemo.vue'),
   RatingStyleDemo: () => import('./demos/RatingStyleDemo.vue'),
+  ReasoningDisclosureReasoningDisclosureDemo: () => import('./demos/ReasoningDisclosureReasoningDisclosureDemo.vue'),
   ResizeBoxResizeBoxDemo: () => import('./demos/ResizeBoxResizeBoxDemo.vue'),
   ScrollScrollBounceAlwaysShowScrollbarDemo: () => import('./demos/ScrollScrollBounceAlwaysShowScrollbarDemo.vue'),
   ScrollScrollDemo: () => import('./demos/ScrollScrollDemo.vue'),

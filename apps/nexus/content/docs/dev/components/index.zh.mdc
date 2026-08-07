@@ -131,6 +131,7 @@ code: |
 - [AI Elements AI 对话元素](./ai-elements.zh.mdc)
 - [SuggestionChips 建议胶囊](./suggestion-chips.zh.mdc)
 - [ContextIndicator 上下文用量](./context-indicator.zh.mdc)
+- [ReasoningDisclosure 推理过程](./reasoning-disclosure.zh.mdc)
 - [ChatComposer 消息输入](./chat-composer.zh.mdc)
 - [MarkdownView Markdown 渲染](./markdown-view.zh.mdc)
 - [ImageGallery 图片预览](./image-gallery.zh.mdc)

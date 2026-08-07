@@ -131,6 +131,7 @@ code: |
 - [AI Elements](./ai-elements.en.mdc)
 - [SuggestionChips](./suggestion-chips.en.mdc)
 - [ContextIndicator](./context-indicator.en.mdc)
+- [ReasoningDisclosure](./reasoning-disclosure.en.mdc)
 - [ChatComposer](./chat-composer.en.mdc)
 - [MarkdownView](./markdown-view.en.mdc)
 - [ImageGallery](./image-gallery.en.mdc)
