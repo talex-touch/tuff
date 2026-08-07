@@ -16,6 +16,13 @@ import { defineConfig } from 'vitest/config'
  */
 export default defineConfig({
   test: {
+    // Several of these shell out to `pnpm pack` against real workspace packages, which is
+    // comfortably under a second locally and around six on a CI runner — past vitest's 5s
+    // default. A timeout there reads as a broken test rather than a slow one, so it gets a
+    // ceiling that reflects what the work costs instead of what a pure unit test costs.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
+
     include: [
       'scripts/**/*.test.mjs',
       'scripts/**/*.test.ts',
