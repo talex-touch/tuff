@@ -198,12 +198,12 @@ function createSafePluginClipboardApi(
   copyAndPaste: PluginClipboardApi['copyAndPaste']
 ): PluginClipboardApi {
   return {
-    readText: (...args) => clipboard.readText(...args),
-    writeText: (...args) => clipboard.writeText(...args),
-    readImage: (...args) => clipboard.readImage(...args),
-    writeImage: (...args) => clipboard.writeImage(...args),
-    clear: (...args) => clipboard.clear(...args),
-    has: (...args) => clipboard.has(...args),
+    readText: (...args: Parameters<typeof clipboard.readText>) => clipboard.readText(...args),
+    writeText: (...args: Parameters<typeof clipboard.writeText>) => clipboard.writeText(...args),
+    readImage: (...args: Parameters<typeof clipboard.readImage>) => clipboard.readImage(...args),
+    writeImage: (...args: Parameters<typeof clipboard.writeImage>) => clipboard.writeImage(...args),
+    clear: (...args: Parameters<typeof clipboard.clear>) => clipboard.clear(...args),
+    has: (...args: Parameters<typeof clipboard.has>) => clipboard.has(...args),
     copyAndPaste
   }
 }
