@@ -574,9 +574,15 @@ importers:
       '@langchain/openai':
         specifier: ^0.4.9
         version: 0.4.9(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.4.3))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(encoding@0.1.13)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      '@number-flow/vue':
+        specifier: ^0.5.1
+        version: 0.5.1(vue@3.5.39(typescript@5.9.3))
+      '@nuxtjs/mdc':
+        specifier: ^0.22.1
+        version: 0.22.1(magicast@0.5.3)
       '@sentry/nuxt':
         specifier: 'catalog:'
-        version: 10.65.0(@cloudflare/workers-types@4.20260702.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)(magicast@0.5.3)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.39(typescript@5.9.3))(webpack@5.108.4(postcss@8.5.23))
+        version: 10.65.0(@cloudflare/workers-types@4.20260702.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)(magicast@0.5.3)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.39(typescript@5.9.3))(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
       '@sidebase/nuxt-auth':
         specifier: ^0.9.4
         version: 0.9.4(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(magicast@0.5.3)(next-auth@4.24.15)(oxc-parser@0.133.0)
@@ -613,6 +619,9 @@ importers:
       mermaid:
         specifier: 'catalog:'
         version: 11.16.0
+      nitropack:
+        specifier: 2.13.4
+        version: 2.13.4(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(oxc-parser@0.133.0)
       ogl:
         specifier: 'catalog:'
         version: 1.0.11
@@ -625,6 +634,9 @@ importers:
       typeit:
         specifier: 'catalog:'
         version: 8.8.7
+      uncrypto:
+        specifier: ^0.1.3
+        version: 0.1.3
       vue-router:
         specifier: ^5.1.0
         version: 5.1.0(@vue/compiler-sfc@3.5.39)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3))
@@ -667,7 +679,7 @@ importers:
         version: 66.7.5(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       '@unocss/nuxt':
         specifier: catalog:build
-        version: 66.7.5(magicast@0.5.3)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(webpack@5.108.4(postcss@8.5.23))
+        version: 66.7.5(magicast@0.5.3)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
       '@unocss/preset-typography':
         specifier: catalog:build
         version: 66.7.5
@@ -683,6 +695,12 @@ importers:
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
+      dotenv:
+        specifier: ^16.6.1
+        version: 16.6.1
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       eslint:
         specifier: catalog:dev
         version: 9.39.4(jiti@2.7.0)
@@ -712,7 +730,7 @@ importers:
         version: 5.9.3
       unocss:
         specifier: catalog:build
-        version: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(postcss@8.5.23)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+        version: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
       vitepress:
         specifier: 'catalog:'
         version: 2.0.0-alpha.18(@types/node@24.13.2)(axios@1.18.1)(change-case@5.4.4)(fuse.js@7.5.0)(jiti@2.7.0)(postcss@8.5.23)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
@@ -724,7 +742,7 @@ importers:
         version: 3.3.7(typescript@5.9.3)
       webpack:
         specifier: catalog:dev
-        version: 5.108.4(postcss@8.5.23)
+        version: 5.108.4(esbuild@0.28.1)(postcss@8.5.23)
       wrangler:
         specifier: catalog:dev
         version: 4.107.1(@cloudflare/workers-types@4.20260702.1)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -18428,7 +18446,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@sentry/bundler-plugins@10.65.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))':
+  '@sentry/bundler-plugins@10.65.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))':
     dependencies:
       '@babel/core': 7.29.6
       '@sentry/cli': 2.58.6(encoding@0.1.13)
@@ -18439,7 +18457,7 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       rollup: 2.80.0
-      webpack: 5.108.4(postcss@8.5.23)
+      webpack: 5.108.4(esbuild@0.28.1)(postcss@8.5.23)
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -18549,7 +18567,7 @@ snapshots:
       - '@opentelemetry/exporter-trace-otlp-http'
       - supports-color
 
-  '@sentry/nuxt@10.65.0(@cloudflare/workers-types@4.20260702.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)(magicast@0.5.3)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.39(typescript@5.9.3))(webpack@5.108.4(postcss@8.5.23))':
+  '@sentry/nuxt@10.65.0(@cloudflare/workers-types@4.20260702.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)(magicast@0.5.3)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.39(typescript@5.9.3))(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))':
     dependencies:
       '@nuxt/kit': 4.4.8(magicast@0.5.3)
       '@sentry/browser': 10.65.0
@@ -18557,8 +18575,8 @@ snapshots:
       '@sentry/core': 10.65.0
       '@sentry/node': 10.65.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))
       '@sentry/node-core': 10.65.0(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))
-      '@sentry/rollup-plugin': 5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))
-      '@sentry/vite-plugin': 5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))
+      '@sentry/rollup-plugin': 5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
+      '@sentry/vite-plugin': 5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
       '@sentry/vue': 10.65.0(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
       local-pkg: 1.2.1
       nuxt: 4.4.8(bc90f1595c7cc9bc6b08337d210bd65b)
@@ -18596,9 +18614,9 @@ snapshots:
       '@sentry/browser-utils': 10.65.0
       '@sentry/core': 10.65.0
 
-  '@sentry/rollup-plugin@5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))':
+  '@sentry/rollup-plugin@5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))':
     dependencies:
-      '@sentry/bundler-plugins': 10.65.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))
+      '@sentry/bundler-plugins': 10.65.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
     optionalDependencies:
       rollup: 2.80.0
     transitivePeerDependencies:
@@ -18625,9 +18643,9 @@ snapshots:
       - encoding
       - supports-color
 
-  '@sentry/vite-plugin@5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))':
+  '@sentry/vite-plugin@5.4.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))':
     dependencies:
-      '@sentry/bundler-plugins': 10.65.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(postcss@8.5.23))
+      '@sentry/bundler-plugins': 10.65.0(encoding@0.1.13)(rollup@2.80.0)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
     transitivePeerDependencies:
       - encoding
       - rollup
@@ -19389,7 +19407,7 @@ snapshots:
       gzip-size: 6.0.0
       sirv: 3.0.2
 
-  '@unocss/nuxt@66.7.5(magicast@0.5.3)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(webpack@5.108.4(postcss@8.5.23))':
+  '@unocss/nuxt@66.7.5(magicast@0.5.3)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))':
     dependencies:
       '@nuxt/kit': 4.4.8(magicast@0.5.3)
       '@unocss/config': 66.7.5
@@ -19403,8 +19421,8 @@ snapshots:
       '@unocss/preset-wind4': 66.7.5
       '@unocss/reset': 66.7.5
       '@unocss/vite': 66.7.5(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
-      '@unocss/webpack': 66.7.5(webpack@5.108.4(postcss@8.5.23))
-      unocss: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(postcss@8.5.23)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+      '@unocss/webpack': 66.7.5(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
+      unocss: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@unocss/astro'
       - '@unocss/postcss'
@@ -19504,6 +19522,20 @@ snapshots:
       unplugin-utils: 0.3.1
       vite: 7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
 
+  '@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))':
+    dependencies:
+      '@jridgewell/remapping': 2.3.5
+      '@unocss/config': 66.7.5
+      '@unocss/core': 66.7.5
+      chokidar: 5.0.0
+      magic-string: 0.30.21
+      pathe: 2.0.3
+      tinyglobby: 0.2.17
+      unplugin: 2.3.11
+      unplugin-utils: 0.3.1
+      webpack: 5.108.4(esbuild@0.28.1)(postcss@8.5.23)
+      webpack-sources: 3.5.1
+
   '@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1))':
     dependencies:
       '@jridgewell/remapping': 2.3.5
@@ -19518,20 +19550,6 @@ snapshots:
       webpack: 5.108.4(esbuild@0.28.1)
       webpack-sources: 3.5.1
     optional: true
-
-  '@unocss/webpack@66.7.5(webpack@5.108.4(postcss@8.5.23))':
-    dependencies:
-      '@jridgewell/remapping': 2.3.5
-      '@unocss/config': 66.7.5
-      '@unocss/core': 66.7.5
-      chokidar: 5.0.0
-      magic-string: 0.30.21
-      pathe: 2.0.3
-      tinyglobby: 0.2.17
-      unplugin: 2.3.11
-      unplugin-utils: 0.3.1
-      webpack: 5.108.4(postcss@8.5.23)
-      webpack-sources: 3.5.1
 
   '@unocss/webpack@66.7.5(webpack@5.108.4)':
     dependencies:
@@ -24881,6 +24899,17 @@ snapshots:
     dependencies:
       minimist: 1.2.8
 
+  minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(postcss@8.5.23)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23)):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      jest-worker: 27.5.1
+      schema-utils: 4.3.3
+      terser: 5.46.2
+      webpack: 5.108.4(esbuild@0.28.1)(postcss@8.5.23)
+    optionalDependencies:
+      esbuild: 0.28.1
+      postcss: 8.5.23
+
   minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(webpack@5.108.4(esbuild@0.28.1)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -24891,16 +24920,6 @@ snapshots:
     optionalDependencies:
       esbuild: 0.28.1
     optional: true
-
-  minimizer-webpack-plugin@5.6.1(postcss@8.5.23)(webpack@5.108.4(postcss@8.5.23)):
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
-      jest-worker: 27.5.1
-      schema-utils: 4.3.3
-      terser: 5.46.2
-      webpack: 5.108.4(postcss@8.5.23)
-    optionalDependencies:
-      postcss: 8.5.23
 
   minimizer-webpack-plugin@5.6.1(webpack@5.108.4):
     dependencies:
@@ -28062,6 +28081,30 @@ snapshots:
 
   universalify@2.0.1: {}
 
+  unocss@66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)):
+    dependencies:
+      '@unocss/cli': 66.7.5
+      '@unocss/core': 66.7.5
+      '@unocss/preset-attributify': 66.7.5
+      '@unocss/preset-icons': 66.7.5
+      '@unocss/preset-mini': 66.7.5
+      '@unocss/preset-tagify': 66.7.5
+      '@unocss/preset-typography': 66.7.5
+      '@unocss/preset-uno': 66.7.5
+      '@unocss/preset-web-fonts': 66.7.5
+      '@unocss/preset-wind': 66.7.5
+      '@unocss/preset-wind3': 66.7.5
+      '@unocss/preset-wind4': 66.7.5
+      '@unocss/transformer-attributify-jsx': 66.7.5
+      '@unocss/transformer-compile-class': 66.7.5
+      '@unocss/transformer-directives': 66.7.5
+      '@unocss/transformer-variant-group': 66.7.5
+      '@unocss/vite': 66.7.5(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+    optionalDependencies:
+      '@unocss/webpack': 66.7.5(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
+    transitivePeerDependencies:
+      - vite
+
   unocss@66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
       '@unocss/cli': 66.7.5
@@ -28083,30 +28126,6 @@ snapshots:
       '@unocss/vite': 66.7.5(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
     optionalDependencies:
       '@unocss/webpack': 66.7.5(webpack@5.108.4(esbuild@0.28.1))
-    transitivePeerDependencies:
-      - vite
-
-  unocss@66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(postcss@8.5.23)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)):
-    dependencies:
-      '@unocss/cli': 66.7.5
-      '@unocss/core': 66.7.5
-      '@unocss/preset-attributify': 66.7.5
-      '@unocss/preset-icons': 66.7.5
-      '@unocss/preset-mini': 66.7.5
-      '@unocss/preset-tagify': 66.7.5
-      '@unocss/preset-typography': 66.7.5
-      '@unocss/preset-uno': 66.7.5
-      '@unocss/preset-web-fonts': 66.7.5
-      '@unocss/preset-wind': 66.7.5
-      '@unocss/preset-wind3': 66.7.5
-      '@unocss/preset-wind4': 66.7.5
-      '@unocss/transformer-attributify-jsx': 66.7.5
-      '@unocss/transformer-compile-class': 66.7.5
-      '@unocss/transformer-directives': 66.7.5
-      '@unocss/transformer-variant-group': 66.7.5
-      '@unocss/vite': 66.7.5(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
-    optionalDependencies:
-      '@unocss/webpack': 66.7.5(webpack@5.108.4(postcss@8.5.23))
     transitivePeerDependencies:
       - vite
 
@@ -29015,7 +29034,7 @@ snapshots:
       - uglify-js
     optional: true
 
-  webpack@5.108.4(postcss@8.5.23):
+  webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -29033,7 +29052,7 @@ snapshots:
       graceful-fs: 4.2.11
       loader-runner: 4.3.2
       mime-db: 1.54.0
-      minimizer-webpack-plugin: 5.6.1(postcss@8.5.23)(webpack@5.108.4(postcss@8.5.23))
+      minimizer-webpack-plugin: 5.6.1(esbuild@0.28.1)(postcss@8.5.23)(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
