@@ -399,4 +399,36 @@ describe('txTabs', () => {
     await nextTick()
     expect(wrapper.findAll('.tx-tab-item')[1].attributes('aria-selected')).toBe('true')
   })
+
+  it('moves focus without depending on the CSS global', async () => {
+    // jsdom (and SSR) has no `CSS`, so building a `#id` selector via CSS.escape
+    // rejected inside the nextTick callback. Every assertion still passed, so the
+    // only symptom was vitest exiting non-zero on an unhandled rejection — assert
+    // on the rejection itself, not on the visible outcome.
+    const originalCss = (globalThis as any).CSS
+    delete (globalThis as any).CSS
+
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown) => rejections.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+
+    try {
+      const wrapper = mountTabs({ placement: 'top' })
+      await nextTick()
+
+      const tablist = wrapper.find('[role="tablist"]')
+      await tablist.trigger('keydown', { key: 'ArrowRight' })
+      await nextTick()
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(rejections).toEqual([])
+      expect(wrapper.findAll('.tx-tab-item')[1].attributes('aria-selected')).toBe('true')
+    }
+    finally {
+      process.off('unhandledRejection', onUnhandled)
+      if (originalCss !== undefined)
+        (globalThis as any).CSS = originalCss
+    }
+  })
 })
