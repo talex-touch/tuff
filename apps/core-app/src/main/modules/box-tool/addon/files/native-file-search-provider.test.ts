@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { execFileMock, getMainConfigMock, getPathMock, iconCacheEnsureMock, statMock } = vi.hoisted(
   () => ({
@@ -73,6 +73,20 @@ interface SearchableSpotlightProvider {
     signal: AbortSignal
   ) => Promise<Array<{ path: string; name: string; extension: string; isDir: boolean }>>
 }
+
+// The Spotlight path is macOS-only: the provider gates on
+// `process.platform !== this.capabilities.platform`, so on a Linux runner it
+// reports unavailable and warms no icons, and the failure reads as a broken
+// icon cache. Pinned so the macOS behaviour is asserted explicitly.
+const originalPlatform = process.platform
+
+beforeAll(() => {
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+})
+
+afterAll(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+})
 
 describe('native-file-search-provider', () => {
   beforeEach(() => {
