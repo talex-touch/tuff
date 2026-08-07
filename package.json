@@ -1,5 +1,6 @@
 {
   "name": "@talex-touch/tuff",
+  "homepage": "https://tuff.tagzxia.com",
   "type": "module",
   "version": "2.4.14-beta.2",
   "packageManager": "pnpm@10.34.4",
