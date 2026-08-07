@@ -184,3 +184,6 @@ apps/quota-gpt-view/
 apps/quota-gpt-ends/
 apps/g-wggu5114-thisai-thisai-ends-/
 apps/g-wggu5114-thisai-thisai-view-/
+
+# Vitest JUnit reports written by the App suites CI job
+test-reports/
