@@ -433,7 +433,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   readonly type = 'application' as const
   readonly supportedInputTypes = [TuffInputType.Text]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 50
 
   private dbUtils: DbUtils | null = null
   private context: ProviderContext | null = null
