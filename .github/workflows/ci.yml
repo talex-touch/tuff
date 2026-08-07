@@ -83,6 +83,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Needs a completed install: it reads the resolved tree to tell a stale allowlist
+      # entry apart from a live one.
+      - name: Verify build-script allowlist
+        run: pnpm check:build-allowlist
+
       - name: Run PR quality gate
         run: pnpm quality:pr
 
