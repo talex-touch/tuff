@@ -26,8 +26,13 @@ describe('/api/app-auth/sign-in-token', () => {
     const result = await handler({ headers: {} })
 
     expect(result).toEqual({ appToken: 'app-token' })
+    // The grant type and TTL are asserted, not just the device: issueAppSignInToken
+    // mints a long-term token via LONG_TERM_APP_TOKEN_OPTIONS, and a change to
+    // either is a change to how long a desktop token stays valid.
     expect(authMocks.createAppToken).toHaveBeenCalledWith(expect.anything(), 'user-1', {
       deviceId: 'device-1',
+      grantType: 'long',
+      ttlSeconds: 60 * 60 * 24 * 30,
     })
   })
 

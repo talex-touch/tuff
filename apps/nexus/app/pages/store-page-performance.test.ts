@@ -31,7 +31,13 @@ describe('store page remote search performance boundaries', () => {
     expect(storePage).toContain('const STORE_PLUGIN_PAGE_SIZE = 50')
     expect(storePage).toMatch(/function resolveStoreSearchQuery\(offset = 0\) \{[\s\S]*compact: 1,[\s\S]*q: activeSearch\.value \|\| undefined,[\s\S]*category: activeCategory\.value === 'all' \? undefined : activeCategory\.value,[\s\S]*limit: STORE_PLUGIN_PAGE_SIZE,[\s\S]*offset,[\s\S]*\}/)
     expect(storePage).toContain('const storeSearchQuery = computed(() => resolveStoreSearchQuery(0))')
-    expect(storePage).toMatch(/await useAsyncData\('store-plugins', \(\) =>\s*requestJson<StorePluginSearchResponse>\('\/api\/store\/search', \{\s*query: storeSearchQuery\.value,\s*\}\),\s*\{\s*watch: \[storeSearchQuery\],\s*\}\)/)
+    // Asserted as separate properties rather than one exact multi-line shape:
+    // the previous regex pinned the whole call including brace placement, so
+    // adding `lazy: true` / `server: false` and a comment broke it while the
+    // request boundary it defends was unchanged.
+    expect(storePage).toContain("useAsyncData('store-plugins'")
+    expect(storePage).toMatch(/requestJson<StorePluginSearchResponse>\(\s*'\/api\/store\/search',\s*\{\s*query: storeSearchQuery\.value,/)
+    expect(storePage).toMatch(/watch:\s*\[storeSearchQuery\]/)
     expect(storePage).not.toMatch(/await useAsyncData\('store-plugins',[\s\S]*requestJson<[^>]*>\('\/api\/store\/plugins'/)
   })
 
@@ -75,7 +81,10 @@ describe('store page remote search performance boundaries', () => {
 
   it('keeps plugin detail overlay code out of the initial store page imports', () => {
     expect(storePage).toContain("const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))")
-    expect(storePage).toContain("const LazyPluginMetaHeader = defineAsyncComponent(() => import('~/components/dashboard/PluginMetaHeader.vue'))")
+    // Path-agnostic: what keeps this component out of the initial bundle is
+    // defineAsyncComponent around a dynamic import, not where the file lives.
+    // It moved from ~/components/dashboard/ to ~/components/plugin/.
+    expect(storePage).toMatch(/const LazyPluginMetaHeader = defineAsyncComponent\(\(\) => import\('[^']*\/PluginMetaHeader\.vue'\)\)/)
     expect(storePage).toContain("const LazyTxTabs = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabs))")
     expect(storePage).toContain('v-if="selectedSlug || detailPending"')
     expect(storePage).toContain('<LazyFlipDialog')

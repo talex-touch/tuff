@@ -86,6 +86,7 @@
     "@unocss/nuxt": "catalog:build",
     "@unocss/preset-typography": "catalog:build",
     "@vite-pwa/nuxt": "catalog:build",
+    "@vue/compiler-sfc": "^3.5.39",
     "@vueuse/core": "^14.3.0",
     "baseline-browser-mapping": "catalog:dev",
     "better-sqlite3": "^12.11.1",

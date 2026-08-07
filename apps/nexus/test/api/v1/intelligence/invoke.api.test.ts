@@ -109,12 +109,19 @@ describe('/api/v1/intelligence/invoke', () => {
       }),
     )
 
+    // The route no longer passes the provider's error through verbatim: it
+    // normalizes data through the intelligence error contract, so the raw
+    // CREDITS_EXCEEDED becomes the canonical QUOTA_EXHAUSTED with a reason and
+    // a recovery hint. statusCode and statusMessage still carry the original,
+    // so a caller keying on either is unaffected.
     await expect(invokeHandler(makeEvent())).rejects.toMatchObject({
       statusCode: 402,
       statusMessage: 'CREDITS_EXCEEDED',
       data: {
-        code: 'CREDITS_EXCEEDED',
-        reason: 'User credits exceeded.',
+        code: 'QUOTA_EXHAUSTED',
+        message: 'CREDITS_EXCEEDED',
+        reason: 'The caller has exhausted its request, token, or cost quota.',
+        recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.',
       },
     })
   })
