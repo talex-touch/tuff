@@ -47,6 +47,9 @@ vi.mock('../sentry/sentry-service', () => {
 
 import { IntelligenceModule } from './intelligence-module'
 
+// Mirrors SAFE_HANDLER_PUBLIC_ERROR in src/main/utils/safe-handler.ts.
+const SAFE_PUBLIC_ERROR = 'The operation failed. Please retry.'
+
 type EventDefinition = { toEventName: () => string }
 type ApiResponse = { ok: boolean; result?: unknown; error?: string }
 type ApiHandler = (payload: unknown, context: HandlerContext) => Promise<ApiResponse>
@@ -148,10 +151,13 @@ describe('intelligenceModule agent session host boundary', () => {
     async ({ eventName, payload, operation }) => {
       const handler = getHandler(captureOrchestrationHandlers(), eventName)
 
-      await expect(handler(payload, pluginContext())).resolves.toEqual({
-        ok: false,
-        error: 'INTELLIGENCE_HOST_ONLY_CAPABILITY'
-      })
+      // safeApiHandler redacts every thrown error to one public string, so the
+      // internal INTELLIGENCE_HOST_ONLY_CAPABILITY code deliberately does not
+      // cross the boundary. Asserting the redaction, and that the code does not
+      // leak, is the contract -- the security half is the untouched service below.
+      const response = await handler(payload, pluginContext())
+      expect(response).toEqual({ ok: false, error: SAFE_PUBLIC_ERROR })
+      expect(JSON.stringify(response)).not.toContain('INTELLIGENCE_HOST_ONLY_CAPABILITY')
       expect(operation).not.toHaveBeenCalled()
     }
   )
