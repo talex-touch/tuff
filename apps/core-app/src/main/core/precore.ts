@@ -206,8 +206,11 @@ if (parseBooleanEnv(process.env.TUFF_V8_JITLESS)) {
 
 app.commandLine.appendSwitch('js-flags', v8JsFlags.join(' '))
 
-// Disable GPU Acceleration for Windows 7
-if (release().startsWith('6.1')) app.disableHardwareAcceleration()
+// Disable GPU Acceleration for Windows 7 (NT 6.1).
+// The platform guard is load-bearing: os.release() returns the kernel version on
+// Linux, and 6.1 is an LTS line (Debian 12), so without it every such machine
+// silently loses hardware acceleration on the strength of a Windows check.
+if (process.platform === 'win32' && release().startsWith('6.1')) app.disableHardwareAcceleration()
 
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
