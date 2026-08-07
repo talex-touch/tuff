@@ -295,9 +295,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Baseline from this exact command on a clean origin tree, as the JUnit reporter counts
-      # it: tests=242 failures=63. Flip continue-on-error off when that reaches zero; until
-      # then the artifact below is the only way a jump is noticeable, because a
+      # Baseline measured on this runner, which is the number a future run must be compared
+      # against: 11 of 27 files and 72 of 240 tests failing. A local darwin run reports
+      # 63 of 242 instead — the suite is platform-sensitive, so the local figure would make
+      # the first CI run look like a regression. Flip continue-on-error off when this reaches
+      # zero; until then the artifact below is the only way a jump is noticeable, because a
       # continue-on-error job reports success either way.
       - name: Run integration suite
         continue-on-error: true
