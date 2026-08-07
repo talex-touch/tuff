@@ -1019,12 +1019,18 @@ importers:
       '@floating-ui/vue':
         specifier: ^1.1.11
         version: 1.1.11(vue@3.5.39(typescript@5.9.3))
+      '@lezer/highlight':
+        specifier: ^1.2.3
+        version: 1.2.3
       '@number-flow/vue':
         specifier: ^0.5.1
         version: 0.5.1(vue@3.5.39(typescript@5.9.3))
       '@shikijs/engine-javascript':
         specifier: ^4.4.2
         version: 4.4.2
+      '@talex-touch/utils':
+        specifier: workspace:^
+        version: link:../utils
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.39(typescript@5.9.3))

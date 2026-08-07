@@ -30,7 +30,10 @@ export default defineConfig({
     emptyOutDir: false,
     minify: false,
     rollupOptions: {
-      external: externalDeps,
+      // Match subpaths too: sources import '@talex-touch/utils/env', and an
+      // exact-string external list silently misses that, vendoring the
+      // dependency's source into dist under a node_modules/.pnpm/... path.
+      external: id => externalDeps.some(dep => id === dep || id.startsWith(`${dep}/`)),
       input: {
         index: './src/index.ts',
         'utils/index': './src/utils/index.ts',
