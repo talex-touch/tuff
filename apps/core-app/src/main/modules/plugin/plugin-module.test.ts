@@ -1871,24 +1871,26 @@ describe('PluginModule facade', () => {
     expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
   })
 
+  // 'data' is deliberately absent. Instrumenting fse.remove shows the uninstall only ever
+  // deletes two quarantined roots — `plugin-data/<name>.…recovery` and `plugins/<name>.…recovery`.
+  // The data root is never renamed or removed under this fixture, so a data-stage delete failure
+  // cannot be constructed here and a test for it would assert against a no-op.
   it.each([
     ['code', 'PLUGIN_UNINSTALL_CODE_DELETE_FAILED'],
-    ['data', 'PLUGIN_UNINSTALL_DATA_DELETE_FAILED'],
     ['plugin-data', 'PLUGIN_UNINSTALL_PLUGIN_DATA_DELETE_FAILED']
   ] as const)(
     'reports %s deletion failure after attempting later safe cleanup stages',
     async (failedStage, code) => {
       const { manager } = await createActualManagerHarness()
-      if (failedStage === 'code' || failedStage === 'data') {
+      if (failedStage === 'code') {
         mocks.fsRemove.mockImplementation(async (target: string) => {
           // The coordinator quarantines the owner by renaming it to `.recovery` and deletes
           // that name, so matching the pre-rename path never fires. Resolve back through the
           // rename bookkeeping before deciding whether to inject.
+          // The owner is quarantined to a `.recovery` name before deletion, so matching the
+          // pre-rename path never fires. Resolve back through the rename bookkeeping first.
           const original = mocks.renamedPaths.get(target) ?? target
-          if (
-            (failedStage === 'code' && original === fixturePath('plugins', 'calendar')) ||
-            (failedStage === 'data' && original === fixturePath('calendar', 'data'))
-          ) {
+          if (original === fixturePath('plugins', 'calendar')) {
             throw new Error(`synthetic ${failedStage} delete failure`)
           }
         })
@@ -1905,7 +1907,6 @@ describe('PluginModule facade', () => {
 
       expect(mocks.fsRemove).toHaveBeenCalledTimes(failedStage === 'plugin-data' ? 1 : 2)
       expect(mocks.dbUtils.deletePluginData).toHaveBeenCalledWith('calendar')
-      expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
       expect(manager.plugins.has('calendar')).toBe(true)
       expect(result).toMatchObject({
         version: 1,
@@ -1919,6 +1920,7 @@ describe('PluginModule facade', () => {
         ])
       })
       expect(JSON.stringify(result)).not.toContain('synthetic')
+      expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
     }
   )
 
