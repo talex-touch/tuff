@@ -546,8 +546,17 @@ export default defineComponent({
       setActive(target)
       void nextTick(() => {
         const name = getNodeName(target)
-        const el = navInnerElRef.value?.querySelector<HTMLElement>(`#${CSS.escape(tabDomId(name))}`)
-        el?.focus()
+        const id = tabDomId(name)
+        // Match on the id property rather than building a `#id` selector: tab
+        // names are author-supplied, and `CSS.escape` is undefined outside a
+        // browser (jsdom, SSR), where it threw an unhandled rejection here.
+        const tabs = navInnerElRef.value?.querySelectorAll<HTMLElement>('[role="tab"]')
+        for (const el of tabs ?? []) {
+          if (el.id === id) {
+            el.focus()
+            break
+          }
+        }
       })
     }
 
