@@ -200,8 +200,8 @@ importers:
         specifier: ^4.9.1
         version: 4.9.1(encoding@0.1.13)
       electron:
-        specifier: ^41.10.1
-        version: 41.10.2
+        specifier: ^43.2.0
+        version: 43.2.0
       vite-plugin-electron:
         specifier: ^0.29.1
         version: 0.29.1
@@ -280,10 +280,10 @@ importers:
         version: 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.1.0)(utf-8-validate@6.0.6)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@41.10.2)
+        version: 3.0.2(electron@43.2.0)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@41.10.2)
+        version: 4.0.0(electron@43.2.0)
       '@fingerprintjs/fingerprintjs':
         specifier: ^4.6.2
         version: 4.6.2
@@ -2623,8 +2623,8 @@ packages:
     resolution: {integrity: sha512-F+nKc0xW+kVbBRhFzaMgPy3KwmuNTYX1fx6+FxxoSnNgwYX6LD7AKBTWkU0MQ6IBoe7dz069CNkR673sPAgkCQ==}
     engines: {node: '>=14'}
 
-  '@electron/get@5.0.0':
-    resolution: {integrity: sha512-pjoBpru1KdEtcExBnuHAP1cAc/5faoedw0hzJkL3o4/IJp7HNF1+fbrdxT3gMYRX2oJfvnA/WXeCTVQpYYxyJA==}
+  '@electron/get@5.1.0':
+    resolution: {integrity: sha512-3kSBtG8ObcTVfXanm5vVJ6UnBLEVmVsRk1M+vGqCuMBV+XLCbJYuWQful+yIy0GQDsSlK0kHEriEHn7SPk4EnA==}
     engines: {node: '>=22.12.0'}
 
   '@electron/notarize@2.5.0':
@@ -8298,8 +8298,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@41.10.2:
-    resolution: {integrity: sha512-vzSetbn05LPfg0gW0p9txpqmkkFyTXzdSHvKIXbtmsK362hkgUQJu+x19GSSS9v/VXeFi5UJI5TYJ1a+Os3CpA==}
+  electron@43.2.0:
+    resolution: {integrity: sha512-80zvrgG7ZRXD+tD0IyLvrnN9n+veSxadMRsMaC9wKKP3iUbtC7rGM8+dVuCmOb0Rrwwv8ESW4awnUZh9Hbp1fA==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -16010,17 +16010,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron-toolkit/preload@3.0.2(electron@41.10.2)':
+  '@electron-toolkit/preload@3.0.2(electron@43.2.0)':
     dependencies:
-      electron: 41.10.2
+      electron: 43.2.0
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@24.13.2)':
     dependencies:
       '@types/node': 24.13.2
 
-  '@electron-toolkit/utils@4.0.0(electron@41.10.2)':
+  '@electron-toolkit/utils@4.0.0(electron@43.2.0)':
     dependencies:
-      electron: 41.10.2
+      electron: 43.2.0
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -16048,7 +16048,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron/get@5.0.0':
+  '@electron/get@5.1.0':
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
       env-paths: 3.0.0
@@ -22581,10 +22581,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@41.10.2:
+  electron@43.2.0:
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
-      '@electron/get': 5.0.0
+      '@electron/get': 5.1.0
       '@types/node': 24.13.2
     transitivePeerDependencies:
       - supports-color
