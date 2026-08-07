@@ -32,7 +32,7 @@ const fileLength = computed(() => props?.paths.length || 0)
 
 <template>
   <div class="FileTag">
-    <img :src="image" alt="">
+    <img :src="image" alt="" />
     <span class="name">{{ firstFileName }}</span>
     <span v-if="fileLength - 1" class="badge" v-text="fileLength" />
   </div>
