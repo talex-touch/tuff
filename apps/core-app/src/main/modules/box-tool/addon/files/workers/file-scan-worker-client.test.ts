@@ -51,6 +51,7 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
   })
 }))
 
+import type { ScannedFileInfo } from '../types'
 import { FileScanWorkerClient } from './file-scan-worker-client'
 
 function taskIdOf(message: unknown): string {
@@ -67,9 +68,20 @@ function messageTypeOf(message: unknown): string {
   return String((message as { type: unknown }).type)
 }
 
+/**
+ * Drains scanBatches for tests that only care about the final list. The client deliberately
+ * exposes no accumulating scan(): materialising a whole root is the OOM shape #480 is about,
+ * so the convenience stays here, bounded to a fixture, instead of in production code.
+ */
+async function drainScan(client: FileScanWorkerClient, paths: string[]) {
+  const files: ScannedFileInfo[] = []
+  for await (const batch of client.scanBatches(paths)) files.push(...batch)
+  return files
+}
+
 /** Runs one scan to completion so the client is idle with its shutdown window armed. */
 async function scanOnceAndSettle(client: FileScanWorkerClient) {
-  const scan = client.scan(['/tmp'])
+  const scan = drainScan(client, ['/tmp'])
   const worker = workerMock.workers.at(-1)!
   worker.emit('message', {
     type: 'done',
@@ -92,7 +104,7 @@ describe('FileScanWorkerClient idle shutdown', () => {
   it('terminates the idle worker after scan completion and restarts on next scan', async () => {
     vi.useFakeTimers()
     const client = new FileScanWorkerClient()
-    const firstScan = client.scan(['/tmp'])
+    const firstScan = drainScan(client, ['/tmp'])
     const firstWorker = workerMock.workers.at(-1)!
 
     expect(firstWorker.messages[0]).toMatchObject({
@@ -110,7 +122,7 @@ describe('FileScanWorkerClient idle shutdown', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(firstWorker.terminateCalls).toBe(1)
 
-    const secondScan = client.scan(['/var'])
+    const secondScan = drainScan(client, ['/var'])
     const secondWorker = workerMock.workers.at(-1)!
 
     expect(workerMock.workers).toHaveLength(2)
@@ -197,7 +209,7 @@ describe('FileScanWorkerClient idle shutdown', () => {
   it('holds the worker while a scan is active and only then starts the idle window', async () => {
     vi.useFakeTimers()
     const client = new FileScanWorkerClient()
-    const scan = client.scan(['/tmp'])
+    const scan = drainScan(client, ['/tmp'])
     const worker = workerMock.workers.at(-1)!
 
     await vi.advanceTimersByTimeAsync(600_000)
@@ -231,7 +243,7 @@ describe('FileScanWorkerClient idle shutdown', () => {
     await expect(statusPromise).resolves.toMatchObject({ metrics: null })
     expect(worker.terminateCalls).toBe(1)
 
-    await expect(client.scan(['/var'])).rejects.toThrow('FILE_SCAN_WORKER_CLOSED')
+    await expect(drainScan(client, ['/var'])).rejects.toThrow('FILE_SCAN_WORKER_CLOSED')
     expect(workerMock.workers).toHaveLength(1)
 
     // Repeated shutdown is a no-op rather than a second terminate or a throw.
@@ -246,7 +258,7 @@ describe('FileScanWorkerClient idle shutdown', () => {
   it('fails in-flight scans on shutdown', async () => {
     vi.useFakeTimers()
     const client = new FileScanWorkerClient()
-    const scan = client.scan(['/tmp'])
+    const scan = drainScan(client, ['/tmp'])
     const worker = workerMock.workers.at(-1)!
     await vi.waitFor(() => expect(worker.messages).toHaveLength(1))
 
