@@ -58,19 +58,6 @@ export class FileScanWorkerClient {
     shutdown: () => this.terminateWorker()
   })
 
-  async scan(
-    paths: string[],
-    excludePaths?: Set<string>,
-    batchSize?: number,
-    signal?: AbortSignal
-  ): Promise<ScannedFileInfo[]> {
-    const results: ScannedFileInfo[] = []
-    for await (const batch of this.scanBatches(paths, excludePaths, batchSize, signal)) {
-      results.push(...batch)
-    }
-    return results
-  }
-
   /**
    * @param onStats Invoked once when the worker reports a completed run. It is
    *   NOT called when the run aborts or fails — an absent callback means "this
