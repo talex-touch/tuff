@@ -265,3 +265,55 @@ jobs:
           path: test-reports/${{ matrix.app }}.junit.xml
           retention-days: 7
           if-no-files-found: warn
+
+  # packages/test is the cross-package integration suite and had no workflow at all — the
+  # only match for it under .github/workflows was native-protocol.yml, for a different path.
+  # #325 wants it as a release gate; it cannot be one yet, so it gets the same treatment #924
+  # gave core-app and nexus: run it, do not block on it, and publish the count so a regression
+  # against that baseline is visible.
+  #
+  # Separate job rather than a third matrix entry: the matrix keys on `apps/${{ matrix.app }}`
+  # and renaming it to carry a directory would rename the existing checks, which is not this
+  # change's business.
+  job_integration_tests:
+    name: Integration suite (packages/test)
+    runs-on: ubuntu-latest
+    needs: job1
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Baseline measured on this runner, which is the number a future run must be compared
+      # against: 11 of 27 files and 72 of 240 tests failing. A local darwin run reports
+      # 63 of 242 instead — the suite is platform-sensitive, so the local figure would make
+      # the first CI run look like a regression. Flip continue-on-error off when this reaches
+      # zero; until then the artifact below is the only way a jump is noticeable, because a
+      # continue-on-error job reports success either way.
+      - name: Run integration suite
+        continue-on-error: true
+        run: >-
+          pnpm -C "packages/test" exec vitest run
+          --reporter=default
+          --reporter=junit
+          --outputFile.junit=../../test-reports/integration.junit.xml
+
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-integration
+          path: test-reports/integration.junit.xml
+          retention-days: 7
+          if-no-files-found: warn
