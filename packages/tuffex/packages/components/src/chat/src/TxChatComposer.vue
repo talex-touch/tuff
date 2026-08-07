@@ -62,6 +62,11 @@ const canSend = computed(() => {
 })
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+// Bound from the template as `ref="textareaRef"`, which consumers compiling with
+// `noUnusedLocals` (apps/core-app) do not count as a read — so this keeps their
+// typecheck green. It looks like dead code and is not; removing it broke
+// `pnpm -C apps/core-app typecheck` once already.
+void textareaRef.value
 
 // ---------------------------------------------------------------------------
 // Attachment intake: paste and drag-and-drop both funnel into `attachmentAdd`.
