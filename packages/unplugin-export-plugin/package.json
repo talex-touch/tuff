@@ -2,9 +2,6 @@
   "name": "@talex-touch/unplugin-export-plugin",
   "type": "module",
   "version": "1.2.16",
-  "engines": {
-    "node": ">=24.0.0"
-  },
   "description": "Export unplugin for talex-touch",
   "license": "MIT",
   "homepage": "https://github.com/talex-touch/unplugin-export-plugin#readme",
@@ -58,6 +55,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
