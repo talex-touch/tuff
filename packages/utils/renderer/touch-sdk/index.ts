@@ -1,6 +1,6 @@
-import type { ITuffTransport, TuffEvent } from '@talex-touch/utils/transport'
-import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type { ITuffTransport, TuffEvent } from '../../transport/index'
+import { AppEvents, PluginEvents } from '../../transport/events/index'
+import { defineRawEvent } from '../../transport/event/builder'
 
 export interface TouchClientChannelLike {
   regChannel: (eventName: string, callback: (data: any) => void) => () => void
