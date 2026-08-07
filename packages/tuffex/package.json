@@ -45,7 +45,7 @@
     }
   },
   "scripts": {
-    "build": "node --loader ts-node/esm ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
+    "build": "node --import ./scripts/register-ts-node.mjs ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
     "build:vite": "vite build",
     "dev": "vite build --watch",
     "lint": "pnpm exec eslint --cache .",
