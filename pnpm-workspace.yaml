@@ -32,7 +32,6 @@ packages:
   - '!apps/core-app/tuff/modules/plugins/**'
 
 catalog:
-  '@auth/core': ^0.34.3
   '@floating-ui/vue': ^1.1.11
   '@iconify-json/cib': ^1.2.3
   '@iconify-json/logos': ^1.2.11
@@ -52,7 +51,7 @@ catalog:
   markdown-it: ^14.3.0
   marked: ^17.0.6
   mermaid: ^11.16.0
-  next-auth: ~4.21.1
+  next-auth: ~4.24.15
   nodemailer: ^9.0.3
   ogl: ^1.0.11
   openapi-typescript: ^7.13.0
@@ -101,8 +100,8 @@ catalogs:
   icons:
     '@iconify-json/carbon': ^1.2.24
     '@iconify-json/twemoji': ^1.2.5
-  conflicts_next-auth_t4_24_14:
-    next-auth: ~4.24.14
+  conflicts_next-auth_t4_24_15:
+    next-auth: ~4.24.15
   conflicts_@langchain/langgraph_h0_4_9:
     '@langchain/langgraph': ^0.4.9
   conflicts_@langchain/openai_h0_4_9:
