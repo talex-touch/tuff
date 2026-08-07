@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 
@@ -109,17 +109,33 @@ function mapCodeRow(row: D1ActivationCodeRow): ActivationCode {
   }
 }
 
-function generateActivationCode(plan: SubscriptionPlan): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let random = ''
-  for (let i = 0; i < 8; i++) {
-    random += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  let check = ''
-  for (let i = 0; i < 4; i++) {
-    check += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return `TUFF-${plan}-${random}-${check}`
+/**
+ * Crockford-style alphabet: no I, O, 0 or 1, so a code read aloud or off a screen cannot be
+ * mistyped between visually similar characters.
+ */
+const ACTIVATION_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+/**
+ * These grant paid plans, so they have to be unguessable.
+ *
+ * This used Math.random, which is V8's xorshift128+ — not a CSPRNG and not meant to be one.
+ * Its internal state is recoverable from a handful of consecutive outputs, so an attacker
+ * holding two codes minted in the same isolate could reconstruct every other code that
+ * isolate produced and redeem them against /api/subscription/activate (#918).
+ *
+ * randomInt is rejection-sampled and unbiased. The alphabet is 32 characters, a power of
+ * two, so a mask over randomBytes would also have been unbiased — randomInt is used because
+ * it stays correct if the alphabet ever changes length.
+ */
+function randomCodeSegment(length: number): string {
+  let out = ''
+  for (let i = 0; i < length; i++)
+    out += ACTIVATION_CODE_ALPHABET.charAt(randomInt(ACTIVATION_CODE_ALPHABET.length))
+  return out
+}
+
+export function generateActivationCode(plan: SubscriptionPlan): string {
+  return `TUFF-${plan}-${randomCodeSegment(8)}-${randomCodeSegment(4)}`
 }
 
 export async function createActivationCode(
