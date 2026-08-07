@@ -10,8 +10,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
   push:
+    # `master` is this repository's default branch; there is no `main`. Every other workflow
+    # that guards a branch lists both names, so this trigger was the only one that never fired.
     branches:
-      - main
+      - master
     paths:
       - '.github/workflows/native-protocol.yml'
       - 'apps/core-app/src/main/modules/native-capabilities/**'
