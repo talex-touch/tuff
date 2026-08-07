@@ -35,10 +35,16 @@ export default defineConfig({
       // and immediately ignored. Remove this line when #1137 lands.
       'scripts/check-release-gates/local-checks.test.mjs',
 
-      // Assert evidence from a darwin/arm64 host, so they cannot pass on ubuntu-latest
-      // (#1139). Found by wiring this gate up: they had only ever been run on a Mac.
-      // Excluded rather than `skipIf`-ed — a test that reports itself green while never
-      // executing is the exact state this whole change exists to end.
+      // Exercise a contract that is macOS-only *by design*, so they cannot pass on
+      // ubuntu-latest — and the fixtures are right to hardcode darwin/arm64:
+      //
+      //   scripts/lib/update-downgrade-evidence.mjs:122
+      //   if (pair !== 'darwin/arm64' && executionMode !== 'static-only')
+      //     issues.push(`${label}.${pair} must be static-only on this release acceptance host`)
+      //
+      // The release acceptance host is an Apple-silicon Mac; every other pair must be
+      // static-only. A Linux runner cannot produce a valid `runtime` claim at all. The fix
+      // is a macOS runner, not a fixture change — #1139.
       'scripts/validate-update-downgrade-evidence.test.mjs',
       'scripts/generate-release-test-summary.test.mjs',
     ],
