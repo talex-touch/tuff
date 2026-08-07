@@ -51,6 +51,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "audit:exports": "node ./scripts/audit-package-exports.mjs",
     "audit:types": "node ./scripts/audit-package-types.mjs",
+    "audit:readme": "node ./scripts/audit-readme-inventory.mjs",
     "audit:size": "node ./scripts/audit-package-size.mjs"
   },
   "files": [

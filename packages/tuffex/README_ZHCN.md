@@ -67,14 +67,14 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**102**。
+当前源码导出模块总数：**126**。
 
-- `基础与导航 (19)`: `alert`, `avatar`, `badge`, `base-anchor`, `base-surface`, `breadcrumb`, `button`, `corner-overlay`, `icon`, `nav-bar`, `outline-border`, `status-badge`, `tab-bar`, `tabs`, `tag`, `tooltip`, `popover`, `dropdown-menu`, `context-menu`
-- `表单与输入 (22)`: `cascader`, `checkbox`, `code-editor`, `date-picker`, `flat-button`, `flat-input`, `flat-radio`, `flat-select`, `form`, `input`, `picker`, `radio`, `rating`, `search-input`, `search-select`, `segmented-slider`, `select`, `slider`, `switch`, `tag-input`, `tree-select`, `transfer`
-- `布局与结构 (12)`: `agents`, `auto-sizer`, `card-item`, `container`, `flex`, `grid`, `grid-layout`, `group-block`, `scroll`, `splitter`, `stack`, `virtual-list`
-- `数据与状态 (21)`: `blank-slate`, `card`, `collapse`, `data-table`, `empty`, `empty-state`, `error-state`, `guide-state`, `layout-skeleton`, `loading-state`, `markdown-view`, `no-data`, `no-selection`, `offline-state`, `pagination`, `permission-state`, `search-empty`, `stat-card`, `steps`, `timeline`, `tree`
+- `基础与导航 (25)`: `alert`, `avatar`, `badge`, `base-anchor`, `base-surface`, `breadcrumb`, `button`, `copy-button`, `corner-overlay`, `divider`, `icon`, `icon-button`, `kbd`, `nav-bar`, `os-icon`, `outline-border`, `status-badge`, `tab-bar`, `tabs`, `tag`, `tooltip`, `popover`, `dropdown-menu`, `context-menu`, `version-capsule`
+- `表单与输入 (26)`: `cascader`, `checkbox`, `code-editor`, `date-picker`, `flat-button`, `flat-dropdown`, `flat-input`, `flat-radio`, `flat-select`, `form`, `input`, `markdown-editor`, `number-input`, `picker`, `radio`, `rating`, `search-input`, `search-select`, `segmented-slider`, `select`, `slider`, `switch`, `textarea`, `tag-input`, `tree-select`, `transfer`
+- `布局与结构 (13)`: `agents`, `auto-sizer`, `card-item`, `container`, `flex`, `grid`, `grid-layout`, `group-block`, `resize-box`, `scroll`, `splitter`, `stack`, `virtual-list`
+- `数据与状态 (22)`: `blank-slate`, `card`, `collapse`, `context-indicator`, `data-table`, `empty`, `empty-state`, `error-state`, `guide-state`, `layout-skeleton`, `loading-state`, `markdown-view`, `no-data`, `no-selection`, `offline-state`, `pagination`, `permission-state`, `search-empty`, `stat-card`, `steps`, `timeline`, `tree`
 - `反馈与浮层 (12)`: `command-palette`, `dialog`, `drawer`, `flip-overlay`, `floating`, `loading-overlay`, `modal`, `progress`, `progress-bar`, `skeleton`, `spinner`, `toast`
-- `AI 与内容 (4)`: `chat`, `file-uploader`, `image-gallery`, `image-uploader`
+- `AI 与内容 (16)`: `ai-elements`, `attachment-tray`, `chain-of-thought`, `chat`, `conversation-stream`, `file-uploader`, `image-gallery`, `image-uploader`, `message-actions`, `reasoning-disclosure`, `sources`, `stream-markdown`, `suggestion-chips`, `thinking-orb`, `tool-call-card`, `tool-confirmation`
 - `动效与视觉 (12)`: `edge-fade-mask`, `fusion`, `glass-surface`, `glow-text`, `gradient-border`, `gradual-blur`, `keyframe-stroke-text`, `sortable-list`, `stagger`, `text-transformer`, `transition`, `tuff-logo-stroke`
 
 参考来源：
@@ -105,3 +105,17 @@ pnpm -C "packages/tuffex" run audit:size
 pnpm -C "packages/tuffex" run audit:exports
 pnpm -C "packages/tuffex" run audit:types
 ```
+
+## 与 Tuff 的关系
+
+TuffEx 是 [Tuff](https://tuff.tagzxia.com) 桌面应用的 UI 基础库。核心应用与外部插件开发者通过这个独立发布的库共享同一套组件。
+
+## 参与贡献
+
+- [提交 Issue](https://github.com/talex-touch/tuff/issues)
+- [功能建议](https://github.com/talex-touch/tuff/discussions)
+- [提交 PR](https://github.com/talex-touch/tuff/pulls)
+
+## 许可证
+
+[MIT License](LICENSE) &copy; 2025 TalexDreamSoul
