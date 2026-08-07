@@ -1,12 +1,12 @@
 import type { H3Event } from 'h3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createDocToken, verifyDocToken } from '../docAnalyticsStore'
 
 // useRuntimeConfig is a Nuxt auto-import, so it is a global here rather than a module.
 // Stubbing it as a module left it undefined, and the fail-closed cases then "passed" on a
 // ReferenceError instead of on the credential policy — a false green worth not repeating.
 vi.stubGlobal('useRuntimeConfig', () => ({}))
 
-const { createDocToken, verifyDocToken } = await import('../docAnalyticsStore')
 
 /** A Pages-shaped event: secrets arrive as bindings, never through process.env. */
 function eventWithBindings(env: Record<string, unknown>): H3Event {
