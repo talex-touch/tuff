@@ -3,17 +3,27 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
-let contentPkg
+let moduleEntry
 try {
-  contentPkg = require.resolve('@nuxt/content/package.json')
+  // Resolves the `.` export, which lands on dist/module.cjs — beside the file this rewrites.
+  //
+  // This used to resolve '@nuxt/content/package.json'. That subpath is not in the package's
+  // exports map (3.15.0 exposes only `.`, ./preview, ./utils, ./runtime, ./server, ./nitro),
+  // so it always threw ERR_PACKAGE_PATH_NOT_EXPORTED, the catch below exited 0, and the patch
+  // had never once been applied (#538). The exit-0-on-anything catch is what made that
+  // silent: it is meant to skip cleanly when @nuxt/content is not installed, and it happily
+  // swallowed a permanent resolution bug as well.
+  moduleEntry = require.resolve('@nuxt/content')
 }
 catch {
   process.exit(0)
 }
 
-const modulePath = join(dirname(contentPkg), 'dist/module.mjs')
-if (!existsSync(modulePath))
+const modulePath = join(dirname(moduleEntry), 'module.mjs')
+if (!existsSync(modulePath)) {
+  process.stdout.write(`[patch-nuxt-content] no module.mjs beside ${moduleEntry}; skip\n`)
   process.exit(0)
+}
 
 let text = readFileSync(modulePath, 'utf8')
 if (text.includes('Serialize content parsing/cache writes')) {
