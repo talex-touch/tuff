@@ -1855,3 +1855,39 @@ MCP client 已存在的翻案把 C 收窄为三桥一面：注入桥（surface �
 - **D 边界漂移**(已归档):b6c7d8886 错误脱敏为引入提交,断言对齐且拦截语义由 untouched-service 承载;超时=测试体内动态 import 冷转换。
 - 多代理插曲:复活的初代 feature 代理停手取证零改动(模范),抓出我批量勾选的自相矛盾行;B 代理曾系统性外派自己子任务清单,纠偏令止血;两代理同分钟死于 529(服务端过载),接力优于重派。
 - 未归档挂账:A/B/C 三任务等用户重启后的真机项(朗读出声/本地技能编辑即生效/表单端到端),验完批量归档。
+
+
+## Session 51: Home chat pipeline fixes: virtual-list stability, chain visibility, pi date/compaction/budget, send motion
+
+**Date**: 2026-08-07
+**Task**: Home chat pipeline fixes: virtual-list stability, chain visibility, pi date/compaction/budget, send motion
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+Diagnosed and fixed the home chat pile-up (non-unique message ids poisoning the stream height cache; uuid ids + cache pruning + per-thread stream instance + legacy dup repair on load), chain-of-thought vanishing on completion (showChain rule, body truncation, durationMs), pi context gaps (date line at system-prompt tail, chunk-quantized cache-stable transcript budget after a user-flagged KV-cache regression, compaction events end-to-end), and reworked the send motion (overlay-clone flight, spring follower, animation-clock beats, no blur). web-search-tool child remains open pending backend selection; motion feel pass pending user. Tuffex 1111 tests green; typechecks clean; 3 pre-existing main AI test failures proven unrelated via HEAD-swap.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e5d8532a` | (see git log) |
+| `873ee51f2` | (see git log) |
+| `4b3c11bbb` | (see git log) |
+| `65911e1d9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

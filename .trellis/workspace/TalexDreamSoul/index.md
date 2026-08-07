@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 50
-- **Last Active**: 2026-08-05
+- **Total Sessions**: 51
+- **Last Active**: 2026-08-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1831 | Active |
+| `journal-1.md` | ~1893 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 51 | 2026-08-07 | Home chat pipeline fixes: virtual-list stability, chain visibility, pi date/compaction/budget, send motion | `4e5d8532a`, `873ee51f2`, `4b3c11bbb`, `65911e1d9` | `TalexDreamSoul/app-shell-v2` |
 | 50 | 2026-08-05 | C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs | `4594c3200`, `c7b935831`, `787e2c554`, `d05aa8c08`, `fe0ae08b1`, `c3cb09839`, `2045c628d` | `TalexDreamSoul/app-shell-v2` |
 | 49 | 2026-08-05 | Database single-writer root fix: land search split, de-amplify write queue | `90aa26b17`, `3c62566fb`, `052d1d506`, `08b64b650`, `95d7fb3c3`, `d12af493e`, `571af84ed`, `cd39bdbf6`, `c2350bc6c`, `ab904670a`, `e91a4b085` | `TalexDreamSoul/app-shell-v2` |
 | 48 | 2026-08-05 | 下载空闲超时、死开关甄别与深色对比度核对 | `5f3edaabb`, `c5fbf1485` | `TalexDreamSoul/app-shell-v2` |
