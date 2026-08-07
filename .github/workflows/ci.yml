@@ -110,6 +110,12 @@ jobs:
       - name: Validate plugin manifests and package policy
         run: pnpm plugins:validate
 
+      # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
+      # list, and touch-dictation was in neither (#562). The list is the kind that drifts
+      # silently, so this asserts the two paths between them still cover every directory.
+      - name: Verify plugin lint coverage
+        run: pnpm check:plugin-lint-coverage && pnpm check:plugin-lint-coverage:self-test
+
       - name: Run PR quality gate
         run: pnpm quality:pr
 
