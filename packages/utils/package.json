@@ -64,7 +64,7 @@
   "dependencies": {
     "@vueuse/core": "^14.3.0",
     "dayjs": "^1.11.21",
-    "marked": "^17.0.6",
+    "marked": "catalog:",
     "mathjs": "^15.2.0",
     "path-browserify": "^1.0.1",
     "vue": "^3.5.39"
