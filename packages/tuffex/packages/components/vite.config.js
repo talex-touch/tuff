@@ -66,7 +66,9 @@ export default defineConfig({
     lib: {
       entry: 'src/index.ts',
       name: 'vuecomp',
-      formats: ['es', 'cjs', 'umd'],
+      // No `formats`: `rollupOptions.output` above is already an array and owns
+      // the es/cjs outputs, so Vite ignores this key and warns. Listing 'umd'
+      // here was doubly misleading — the umd output block is commented out.
     },
   },
   plugins: [
