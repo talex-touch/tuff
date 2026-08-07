@@ -85,15 +85,31 @@ function getDiffArgs() {
   return ['diff', '--name-only', '--diff-filter=ACMRTUXB', `${remoteBaseRef}...HEAD`]
 }
 
-function getChangedFiles() {
-  const result = spawnSync(
-    'git',
-    getDiffArgs(),
-    {
-      cwd: workspaceRoot,
-      encoding: 'utf8',
-    },
-  )
+export function parseFileList(stdout) {
+  return stdout
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map(file => file.replaceAll(path.sep, '/'))
+}
+
+/**
+ * Union of every list, keeping only lintable extensions and dropping duplicates. A file can
+ * legitimately appear in more than one list — `git status` reports a path as untracked right
+ * up until it is staged, and the two probes are taken separately.
+ */
+export function selectLintableFiles(...lists) {
+  const selected = new Set()
+  for (const list of lists) {
+    for (const file of list) {
+      if (lintExtensions.has(path.extname(file)))
+        selected.add(file)
+    }
+  }
+  return [...selected]
+}
+
+function gitLines(args) {
+  const result = spawnSync('git', args, { cwd: workspaceRoot, encoding: 'utf8' })
 
   if (result.status !== 0) {
     if (result.stderr)
@@ -101,11 +117,20 @@ function getChangedFiles() {
     process.exit(result.status ?? 1)
   }
 
-  return result.stdout
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map(file => file.replaceAll(path.sep, '/'))
-    .filter(file => lintExtensions.has(path.extname(file)))
+  return parseFileList(result.stdout)
+}
+
+function getChangedFiles() {
+  // `git diff HEAD` reports tracked paths only, so a file that has never been `git add`ed is
+  // invisible to it. Inside CI that costs nothing — the three-dot diff against the base ref
+  // sees the file because the PR already committed it — but a developer running
+  // `pnpm lint:changed` before their first commit got "no changed files" and a green exit
+  // while the new file went entirely unlinted. #547.
+  const insideCi = Boolean(process.env.GITHUB_BASE_REF)
+  const tracked = gitLines(getDiffArgs())
+  const untracked = insideCi ? [] : gitLines(['ls-files', '--others', '--exclude-standard'])
+
+  return selectLintableFiles(tracked, untracked)
 }
 
 export function groupByWorkspace(files, workspaces = collectWorkspaceDirectories()) {
