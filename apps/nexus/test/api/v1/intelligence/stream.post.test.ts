@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import streamIntelligenceHandler from './stream.post'
+import streamIntelligenceHandler from '../../../../server/api/v1/intelligence/stream.post'
 
 const routeGlobals = vi.hoisted(() => {
   const originalDefineEventHandler = globalThis.defineEventHandler
@@ -27,8 +27,8 @@ vi.mock('h3', async () => {
     readBody: h3Mocks.readBody,
   }
 })
-vi.mock('../../../utils/auth', () => authMocks)
-vi.mock('../../../utils/tuffIntelligenceLabService', () => intelligenceMocks)
+vi.mock('../../../../server/utils/auth', () => authMocks)
+vi.mock('../../../../server/utils/tuffIntelligenceLabService', () => intelligenceMocks)
 
 const quotaError = {
   code: 'CREDITS_EXCEEDED',

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import streamIntelligenceAgentHandler from './stream.post'
+import streamIntelligenceAgentHandler from '../../../../../server/api/admin/intelligence-agent/session/stream.post'
 
 const routeGlobals = vi.hoisted(() => {
   const globals = globalThis as typeof globalThis & { readBody?: unknown }
@@ -28,10 +28,10 @@ const sessionMocks = vi.hoisted(() => ({
   pauseIntelligenceLabSession: vi.fn(),
 }))
 
-vi.mock('../../../../utils/auth', () => authMocks)
-vi.mock('../../../../utils/intelligenceAgentGraphRunner', () => graphMocks)
-vi.mock('../../../../utils/tuffIntelligenceRuntimeStore', () => runtimeMocks)
-vi.mock('../../../../utils/tuffIntelligenceLabService', () => sessionMocks)
+vi.mock('../../../../../server/utils/auth', () => authMocks)
+vi.mock('../../../../../server/utils/intelligenceAgentGraphRunner', () => graphMocks)
+vi.mock('../../../../../server/utils/tuffIntelligenceRuntimeStore', () => runtimeMocks)
+vi.mock('../../../../../server/utils/tuffIntelligenceLabService', () => sessionMocks)
 
 function deferred() {
   let resolve!: () => void
