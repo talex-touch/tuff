@@ -44,6 +44,15 @@ vi.mock('@talex-touch/utils/electron/env-tool', () => ({
   withOSAdapter: withOSAdapterMock
 }))
 
+// resolveActiveWindowLinux probes for xdotool before doing anything else, so
+// without this the Linux case depends on the runner having it installed and
+// returns null on CI. Spread the real module so only the probe is stubbed.
+vi.mock('./linux-desktop-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./linux-desktop-tools')>()),
+  ensureXdotoolAvailable: vi.fn(async () => {}),
+  isXdotoolAvailable: vi.fn(async () => true)
+}))
+
 vi.mock('electron', () => ({
   app: {
     getFileIcon: getFileIconMock
