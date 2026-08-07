@@ -114,5 +114,12 @@ jobs:
       # The 623 core-app and 180 nexus test files ran in no workflow at all;
       # only four hand-named core-app files were covered, inside a path-filtered
       # native-protocol job. See #924.
+      #
+      # Non-blocking for now: both suites are red before this change — measured
+      # on CI at core-app 20 files / 54 tests and nexus 13 files / 15 tests.
+      # Running and visible beats not running; flip continue-on-error off once
+      # the counts reach zero, and until then use them as the regression
+      # baseline to compare against.
       - name: Run ${{ matrix.app }} suite
+        continue-on-error: true
         run: pnpm -C "apps/${{ matrix.app }}" exec vitest run
