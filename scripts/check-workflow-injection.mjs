@@ -33,8 +33,16 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WORKFLOWS = path.join(ROOT, '.github', 'workflows')
 
-/** Contexts a caller can put arbitrary text into. */
+/**
+ * Contexts whose value must not become script text.
+ *
+ * `secrets.` is here for a different reason from the rest: it is not caller-controlled, but
+ * a secret containing a quote or `$(…)` is either a syntax error that fails every build or a
+ * command substitution bash executes — and log masking cannot help, because the value is
+ * evaluated rather than printed (#540).
+ */
 const UNSAFE = [
+  'secrets.',
   'github.event.inputs.',
   'inputs.',
   'github.event.issue.',
@@ -99,6 +107,16 @@ function selfTest() {
     {
       name: 'the same value in env: is allowed',
       text: '      env:\n        X: ${{ github.event.inputs.tag }}\n      run: |\n        echo "$X"\n',
+      expect: 0,
+    },
+    {
+      name: 'a secret inside run: is caught',
+      text: '      run: |\n        if [ -n "${{ secrets.API_KEY }}" ]; then :; fi\n',
+      expect: 1,
+    },
+    {
+      name: 'a secret in env: is allowed',
+      text: '      env:\n        API_KEY: ${{ secrets.API_KEY }}\n      run: |\n        echo "$API_KEY"\n',
       expect: 0,
     },
     {
