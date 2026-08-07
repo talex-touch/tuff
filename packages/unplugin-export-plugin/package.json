@@ -85,5 +85,12 @@
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "debug": "^4.4.3",
+    "esbuild": "^0.28.1",
+    "fs-extra": "^11.3.6",
+    "pathe": "^1.1.2",
+    "unplugin": "catalog:build"
   }
 }

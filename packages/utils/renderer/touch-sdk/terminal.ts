@@ -1,5 +1,5 @@
-import type { ITuffTransport } from "@talex-touch/utils/transport";
-import { TerminalEvents } from "@talex-touch/utils/transport/events";
+import type { ITuffTransport } from "../../transport/index";
+import { TerminalEvents } from "../../transport/events/index";
 
 type DataCallback = (data: string) => void;
 type ExitCallback = (exitCode: number | null) => void;

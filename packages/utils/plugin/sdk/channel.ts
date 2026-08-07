@@ -1,8 +1,8 @@
-import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { ITuffTransport } from '../../transport/index'
 import type { PluginChannelClient, PluginStandardChannelData } from './channel-client'
 import type { IPluginRendererChannel, PluginChannelHandler } from './types'
-import { hasWindow } from '@talex-touch/utils/env'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { hasWindow } from '../../env/index'
+import { defineRawEvent } from '../../transport/event/builder'
 import { genChannel } from '../channel'
 
 const PLUGIN_CHANNEL_TYPE = 'plugin' as const

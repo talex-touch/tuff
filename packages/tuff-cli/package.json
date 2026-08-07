@@ -29,6 +29,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@talex-touch/utils": "workspace:^",
     "@vue/compiler-sfc": "3.5.39",
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
