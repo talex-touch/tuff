@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
@@ -12,9 +12,14 @@ const externalDeps = Array.from(
     ...Object.keys(pkg.peerDependencies ?? {})
   ])
 )
+// Every directory under src/ was treated as a component and required to have an
+// index.ts, so adding any non-component directory (a shared __tests__ folder,
+// for example) broke the whole build with an unresolved-entry error. Only take
+// directories that actually expose an entry.
 const componentEntries = Object.fromEntries(
   readdirSync(new URL('./src', import.meta.url), { withFileTypes: true })
     .filter(dirent => dirent.isDirectory() && dirent.name !== 'utils')
+    .filter(dirent => existsSync(new URL(`./src/${dirent.name}/index.ts`, import.meta.url)))
     .map(dirent => [`${dirent.name}/index`, `./src/${dirent.name}/index.ts`])
 )
 
