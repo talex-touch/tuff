@@ -143,9 +143,7 @@ vi.mock('./services/file-provider-watch-service', () => ({
     ensureFileSystemWatchers: watchServiceEnsure,
     recordUserActivity: vi.fn(),
     shouldRunAutoIndexing: vi.fn(async () => ({ allowed: false, reason: 'test' })),
-    applyWatchPaths: vi.fn(),
-    handleFsAddedOrChanged: vi.fn(),
-    handleFsUnlinked: vi.fn()
+    applyWatchPaths: vi.fn()
   }))
 }))
 

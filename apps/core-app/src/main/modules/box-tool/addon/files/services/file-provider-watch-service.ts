@@ -1,5 +1,3 @@
-import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../../core/eventbus/touch-event'
-import type { ITouchEvent } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import path from 'node:path'
 import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
@@ -46,11 +44,6 @@ export interface FileProviderWatchServiceDeps {
   getDbUtils: () => DbUtils | null
   getWatchDepthForPath: (watchPath: string) => number
   normalizePath: (rawPath: string) => string
-  enqueueIncrementalUpdate: (
-    rawPath: string,
-    action: 'add' | 'change' | 'delete',
-    manual?: boolean
-  ) => void
   runAutoIndexing: () => Promise<void>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
@@ -69,7 +62,6 @@ export class FileProviderWatchService {
   private readonly getDbUtils: FileProviderWatchServiceDeps['getDbUtils']
   private readonly getWatchDepthForPath: FileProviderWatchServiceDeps['getWatchDepthForPath']
   private readonly normalizePath: FileProviderWatchServiceDeps['normalizePath']
-  private readonly enqueueIncrementalUpdate: FileProviderWatchServiceDeps['enqueueIncrementalUpdate']
   private readonly runAutoIndexing: FileProviderWatchServiceDeps['runAutoIndexing']
   private readonly logDebug: FileProviderWatchServiceDeps['logDebug']
   private readonly logWarn: FileProviderWatchServiceDeps['logWarn']
@@ -89,24 +81,11 @@ export class FileProviderWatchService {
   private watchPathsRegistered = false
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
 
-  readonly handleFsAddedOrChanged = (event: ITouchEvent) => {
-    const fileEvent = event as FileChangedEvent & { filePath?: string }
-    if (!fileEvent?.filePath) return
-    this.enqueueIncrementalUpdate(fileEvent.filePath, 'change')
-  }
-
-  readonly handleFsUnlinked = (event: ITouchEvent) => {
-    const fileEvent = event as FileUnlinkedEvent & { filePath?: string }
-    if (!fileEvent?.filePath) return
-    this.enqueueIncrementalUpdate(fileEvent.filePath, 'delete')
-  }
-
   constructor(deps: FileProviderWatchServiceDeps) {
     this.baseWatchPaths = [...deps.baseWatchPaths]
     this.getDbUtils = deps.getDbUtils
     this.getWatchDepthForPath = deps.getWatchDepthForPath
     this.normalizePath = deps.normalizePath
-    this.enqueueIncrementalUpdate = deps.enqueueIncrementalUpdate
     this.runAutoIndexing = deps.runAutoIndexing
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
