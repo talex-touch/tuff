@@ -2,9 +2,6 @@ name: Tuffex Package CI
 
 on:
   pull_request:
-    branches:
-      - master
-      - main
     paths:
       - "packages/tuffex/**"
       - "pnpm-lock.yaml"
