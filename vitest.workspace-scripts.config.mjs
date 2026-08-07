@@ -34,6 +34,13 @@ export default defineConfig({
       // this gate can go green on the tests it *is* about, rather than being wired in red
       // and immediately ignored. Remove this line when #1137 lands.
       'scripts/check-release-gates/local-checks.test.mjs',
+
+      // Assert evidence from a darwin/arm64 host, so they cannot pass on ubuntu-latest
+      // (#1139). Found by wiring this gate up: they had only ever been run on a Mac.
+      // Excluded rather than `skipIf`-ed — a test that reports itself green while never
+      // executing is the exact state this whole change exists to end.
+      'scripts/validate-update-downgrade-evidence.test.mjs',
+      'scripts/generate-release-test-summary.test.mjs',
     ],
   },
 })

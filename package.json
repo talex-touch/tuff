@@ -91,7 +91,8 @@
     "typescript": "^5.9.3",
     "unified": "11.0.5",
     "vite": "^7.3.6",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.0"
   },
   "volta": {
     "node": "24.18.0"

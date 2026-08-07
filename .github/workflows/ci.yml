@@ -117,8 +117,9 @@ jobs:
         run: pnpm check:plugin-lint-coverage && pnpm check:plugin-lint-coverage:self-test
 
       # 17 test files under scripts/ — the release machinery — that no workflow ran (#1135).
-      # Two are excluded with reasons in the config: one needs a prior build, one fails on a
-      # real defect (#1137). The other 15 run here.
+      # Four are excluded, each with its reason named in the config: one needs a prior build,
+      # one fails on a real defect (#1137), and two assert a darwin/arm64 host so they cannot
+      # pass on this runner (#1139). The other 13 run here.
       - name: Run repo-root tooling tests
         run: pnpm test:scripts
 
