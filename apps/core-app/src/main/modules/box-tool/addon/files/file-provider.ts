@@ -634,8 +634,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       getWatchDepthForPath: (watchPath) => this.getWatchDepthForPath(watchPath),
       normalizePath: (rawPath) => this.normalizePath(rawPath),
-      enqueueIncrementalUpdate: (rawPath, action, manual) =>
-        this.enqueueIncrementalUpdate(rawPath, action, { manual }),
       runAutoIndexing: () => this.runAutoIndexing(),
       logDebug: (message, meta) => this.logDebug(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta),
