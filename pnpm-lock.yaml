@@ -1125,6 +1125,9 @@ importers:
       sucrase:
         specifier: ^3.35.1
         version: 3.35.1
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@24.13.2)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
