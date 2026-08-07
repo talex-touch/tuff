@@ -69,12 +69,12 @@
     "fs-extra": "^11.3.6",
     "gsap": "catalog:",
     "marked": "catalog:",
-    "path-browserify": "^1.0.1",
-    "vue": "^3.5.39"
+    "path-browserify": "^1.0.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@vitest/coverage-v8": "^3.2.7",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "vue": "^3.5.39"
   }
 }
