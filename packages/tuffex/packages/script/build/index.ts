@@ -76,6 +76,24 @@ export const buildStyleEntry = async () => {
   await writeFile(resolve(distPath, 'style.css'), '@import "./es/components.css";\n')
 }
 
+/**
+ * The package declares `"type": "module"`, so Node parses every `.js` under it as
+ * ESM — including `dist/lib`, which the component build emits as CommonJS. Any
+ * consumer resolving the `require` condition therefore died on load with
+ * "exports is not defined in ES module scope".
+ *
+ * Scoping the subtree with its own manifest is the fix that does not touch the
+ * emitted code: renaming to `.cjs` would also mean rewriting every internal
+ * `require('./x.js')` specifier the build produces.
+ */
+export const writeCjsScopeManifest = async () => {
+  await mkdir(resolve(distPath, 'lib'), { recursive: true })
+  await writeFile(
+    resolve(distPath, 'lib/package.json'),
+    `${JSON.stringify({ type: 'commonjs' }, null, 2)}\n`,
+  )
+}
+
 const build: TaskFunction = series(
   async () => removeDist(),
   parallel(
@@ -86,6 +104,7 @@ const build: TaskFunction = series(
   async () => fixComponentDeclarations(),
   async () => buildComponentStyles(),
   async () => buildStyleEntry(),
+  async () => writeCjsScopeManifest(),
 )
 
 export default build
