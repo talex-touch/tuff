@@ -3,7 +3,7 @@
   "name": "audit-plugin-privileged-security",
   "title": "审计插件高权限能力与隐私安全",
   "description": "",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-27",
-  "completedAt": null,
+  "completedAt": "2026-08-07",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Audit the listed plugin capability, SQLite, privacy, transport, and host-trust boundaries and record reproducible evidence for each finding.",
-    "blocker": "No blocker is recorded; planning requires the evidence inventory before implementation tasks can be scoped.",
-    "evidence": "prd.md, research/*.md, and check.jsonl define the audit scope and required evidence."
+    "nextAction": "None. The audit shipped as issues #296-#302; remediation and verification live there.",
+    "blocker": "",
+    "evidence": "Every finding this audit was scoped to produce was published and closed: #296 permission-revocation invalidation, #297 out-of-process isolation, #298 secure view defaults, #299 SQLite isolation/fail-close, #300 transport caller verification, #301 sensitive-data retention, and parent #302 with the superseding 460/460 capability matrix. All seven verified CLOSED on 2026-08-07. The unchecked capability/data-flow/SQLite/transport items in check.jsonl are the audit intake list, not an outstanding acceptance gap — they were superseded by #302 rather than left undone. Do not reopen these as current vulnerabilities; they are historical fixed findings."
   }
 }
