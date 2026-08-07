@@ -380,27 +380,15 @@ describe('Nexus deploy asset budget', () => {
   })
 
   it('keeps public pricing and password-reset locale contracts complete', () => {
-    const pricingKeys = [
-      'freeTitle',
-      'freePrice',
-      'freeDesc',
-      'freeFeature1',
-      'freeFeature2',
-      'freeFeature3',
-      'plusTitle',
-      'plusPrice',
-      'plusDesc',
-      'plusFeature1',
-      'plusFeature2',
-      'plusFeature3',
-      'teamTitle',
-      'teamPrice',
-      'teamDesc',
-      'teamFeature1',
-      'teamFeature2',
-      'teamFeature3',
-      'cta',
-    ] as const
+    // The plan list is read off the locale rather than hardcoded, so a new plan
+    // is covered the moment it is added. The previous version named free/plus/
+    // team with flat `freeTitle`-style keys, which stopped matching the locale
+    // once plans moved under `pricing.plans.*` -- and it never covered `pro`.
+    const planKeys = Object.keys(enLocale.pricing.plans)
+    expect(planKeys.length).toBeGreaterThan(0)
+    expect(Object.keys(zhLocale.pricing.plans)).toEqual(planKeys)
+
+    const shellKeys = ['eyebrow', 'title', 'subtitle', 'ctaFree', 'ctaWaitlist', 'perMonth'] as const
     const authKeys = [
       'forgotTitle',
       'forgotSubtitle',
@@ -409,10 +397,28 @@ describe('Nexus deploy asset budget', () => {
       'resetEmailSent',
     ] as const
 
-    for (const key of pricingKeys) {
-      expect(enLocale.pricing[key]).toBeTruthy()
-      expect(enLocale.pricing[key]).not.toMatch(/\p{Script=Han}/u)
-      expect(zhLocale.pricing[key]).toBeTruthy()
+    for (const plan of planKeys) {
+      const en = enLocale.pricing.plans[plan]
+      const zh = zhLocale.pricing.plans[plan]
+
+      // Only the free plan quotes a price; the rest are gated behind
+      // `comingSoonHint`, so requiring `price` everywhere would be wrong.
+      for (const key of ['name', 'desc', 'feature1', 'feature2', 'feature3'] as const) {
+        expect(en[key], `en pricing.plans.${plan}.${key}`).toBeTruthy()
+        expect(en[key], `en pricing.plans.${plan}.${key} must not be Chinese`).not.toMatch(/\p{Script=Han}/u)
+        expect(zh[key], `zh pricing.plans.${plan}.${key}`).toBeTruthy()
+      }
+      // Both locales must describe the same plan, not merely be non-empty.
+      expect(Object.keys(zh), `pricing.plans.${plan} key parity`).toEqual(Object.keys(en))
+    }
+
+    expect(enLocale.pricing.plans.free.price).toBeTruthy()
+    expect(zhLocale.pricing.plans.free.price).toBeTruthy()
+
+    for (const key of shellKeys) {
+      expect(enLocale.pricing[key], `en pricing.${key}`).toBeTruthy()
+      expect(enLocale.pricing[key], `en pricing.${key} must not be Chinese`).not.toMatch(/\p{Script=Han}/u)
+      expect(zhLocale.pricing[key], `zh pricing.${key}`).toBeTruthy()
     }
     for (const key of authKeys) {
       expect(enLocale.auth[key]).toBeTruthy()
