@@ -51,7 +51,10 @@ describe('dashboard notification inbox UI contract', () => {
     expect(page).toContain('urlBase64ToArrayBuffer(browserPushPublicKey.value)')
     expect(page).toContain('runtimeConfig.public?.notificationWebPush?.publicKey')
     expect(page).toContain('browserPushStatusLabel')
-    expect(page).toContain('browserNotificationActionDisabled')
+    // Assert the guard condition, not the identifier that used to hold it:
+    // `browserNotificationActionDisabled` was a computed and is now inlined on
+    // the button, so grepping the name failed while the behaviour was intact.
+    expect(page).toMatch(/:disabled="browserNotificationBusy[^"]*browserNotificationPermission === 'denied'[^"]*browserNotificationPermission === 'unsupported'"/)
     expect(page).toContain('browserNotificationPermissionLabel')
     expect(page).toContain('dashboard.notifications.browser.testSent')
     expect(page).toContain('dashboard.notifications.browser.webPushSubscribed')
