@@ -114,6 +114,39 @@ describe('load', () => {
     expect(restored?.map((entry) => entry.content)).toEqual(['hi', 'yo'])
     expect(restored?.[1]?.meta).toEqual({ model: 'm' })
   })
+
+  it('repairs duplicate ids stored by the old per-conversation counters', async () => {
+    // Threads persisted while ids were `user-N` counters can carry real
+    // duplicates; loaded as-is they corrupt the stream's keyed diff and
+    // height cache (the message pile-up bug).
+    send.mockResolvedValueOnce({
+      id: 'c1',
+      title: 'Title',
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [
+        { id: 'user-5', role: 'user', content: 'one', status: 'complete', seq: 0, createdAt: 1 },
+        {
+          id: 'assistant-6',
+          role: 'assistant',
+          content: 'two',
+          status: 'complete',
+          seq: 1,
+          createdAt: 2
+        },
+        { id: 'user-5', role: 'user', content: 'three', status: 'complete', seq: 2, createdAt: 3 }
+      ]
+    })
+
+    const restored = await useConversationHistory().load('c1')
+
+    const ids = restored?.map((entry) => entry.id) ?? []
+    expect(new Set(ids).size).toBe(ids.length)
+    // Order and content untouched; only the collision got a suffix.
+    expect(restored?.map((entry) => entry.content)).toEqual(['one', 'two', 'three'])
+    expect(ids[0]).toBe('user-5')
+    expect(ids[2]).not.toBe('user-5')
+  })
 })
 
 describe('refresh', () => {

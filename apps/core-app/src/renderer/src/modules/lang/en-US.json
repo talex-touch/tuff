@@ -985,6 +985,7 @@
       "model": "Model",
       "tokens": "Tokens",
       "latency": "Latency",
+      "compactions": "Context compactions",
       "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here.",
       "workLog": "Work log",
       "workLogEmpty": "No tool calls or artifacts this turn. Tool calling and artifacts are not implemented yet; they will be recorded here once they are."
@@ -1001,9 +1002,18 @@
     "stop": "Stop generating",
     "retry": "Retry",
     "thinking": "Thinking",
+    "compacting": "Compacting context…",
     "copy": "Copy",
     "copied": "Copied",
     "regenerate": "Regenerate",
+    "chartEdit": "Edit data",
+    "chartDone": "Done",
+    "chartAdd": "Add",
+    "chartRemove": "Remove row",
+    "chartLabel": "Label",
+    "chartAddPlaceholder": "New point label",
+    "chartView": {"line": "Line", "bar": "Bar", "area": "Area"},
+    "toolPayload": "Payload",
     "formSubmit": "Submit",
     "formReset": "Reset",
     "formRequired": "This field is required",
@@ -1048,9 +1058,7 @@
     }
   },
   "settingsOverview": {
-    "tagline": "The command bar, reimagined for makers",
-    "account": "Account",
-    "general": "General"
+    "tagline": "The command bar, reimagined for makers"
   },
   "settingsIntelligenceHub": {
     "label": "Intelligence Center",
@@ -1073,7 +1081,6 @@
     "downloadCenter": "Download Center",
     "downloadCenterDesc": "Track download tasks and history.",
     "open": "Open",
-    "intelligenceDesc": "Model channels, capabilities, prompts and audit.",
     "application": "Applications",
     "applicationDesc": "Browse and manage installed applications.",
     "store": "Plugin Store",

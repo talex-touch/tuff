@@ -570,14 +570,30 @@ describe('reset and restore', () => {
     const double = createSdkDouble()
     const conversation = useHomeConversation({ sdk: double.sdk })
 
+    // The two-cancel shape that broke the old counter: dropped assistants
+    // leave seq gaps, so `seq = restored.length` re-minted `user-5`.
     conversation.restore([
-      { id: 'user-1', role: 'user', content: 'stored', status: 'complete' },
-      { id: 'assistant-2', role: 'assistant', content: 'reply', status: 'complete' }
+      { id: 'user-1', role: 'user', content: 'one', status: 'complete' },
+      { id: 'assistant-2', role: 'assistant', content: 'reply', status: 'complete' },
+      { id: 'user-3', role: 'user', content: 'two', status: 'complete' },
+      { id: 'user-5', role: 'user', content: 'three', status: 'complete' }
     ])
     void conversation.send('next')
     await flush()
 
     const ids = conversation.messages.value.map((message) => message.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('mints distinct ids across composable instances', () => {
+    // Ids key the shared stream's height cache; two threads minting the same
+    // id would inherit each other's measured heights.
+    const a = useHomeConversation({ sdk: createSdkDouble().sdk })
+    const b = useHomeConversation({ sdk: createSdkDouble().sdk })
+    void a.send('hello')
+    void b.send('hello')
+
+    const ids = [...a.messages.value, ...b.messages.value].map((message) => message.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
 

@@ -105,12 +105,21 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   async function load(id: string): Promise<ConversationMessage[] | null> {
     const detail = await sdk.get(id)
     if (!detail) return null
+    // Threads stored while ids were per-conversation counters can carry
+    // duplicates (a dropped turn plus the restore-time reseed re-minted an
+    // id). Ids key the stream's `v-for` and its height cache, where a
+    // duplicate corrupts the keyed diff — suffix survivors once on the way
+    // in; the next persist then stores the repaired ids.
+    const seen = new Set<string>()
     return detail.messages.map((message) => {
+      let messageId = message.id
+      while (seen.has(messageId)) messageId = `${messageId}-r`
+      seen.add(messageId)
       // Parts ride inside meta for storage; pull them back out so the meta the
       // side panel reads stays the plain turn metadata it always was.
       const { parts, ...meta } = (message.meta ?? {}) as Record<string, unknown>
       return {
-        id: message.id,
+        id: messageId,
         role: message.role,
         content: message.content,
         status: message.status,

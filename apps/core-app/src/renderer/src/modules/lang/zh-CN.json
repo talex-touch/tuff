@@ -985,6 +985,7 @@
       "model": "模型",
       "tokens": "Token",
       "latency": "耗时",
+      "compactions": "上下文压缩",
       "noTurn": "还没有产生回复，发一条消息后这里会显示本轮用到的提供方、模型与用量。",
       "workLog": "工作过程",
       "workLogEmpty": "本轮没有工具调用或工件产出。工具调用与工件能力尚未实现，实现后会记录在这里。"
@@ -1001,9 +1002,18 @@
     "stop": "停止生成",
     "retry": "重试",
     "thinking": "正在思考",
+    "compacting": "正在压缩上下文…",
     "copy": "复制",
     "copied": "已复制",
     "regenerate": "重新生成",
+    "chartEdit": "编辑数据",
+    "chartDone": "完成",
+    "chartAdd": "添加",
+    "chartRemove": "删除此行",
+    "chartLabel": "标签",
+    "chartAddPlaceholder": "新数据点标签",
+    "chartView": {"line": "线", "bar": "柱", "area": "面"},
+    "toolPayload": "参数",
     "formSubmit": "提交",
     "formReset": "重置",
     "formRequired": "该字段必填",
@@ -1048,9 +1058,7 @@
     }
   },
   "settingsOverview": {
-    "tagline": "为创造者们重新构想的命令栏",
-    "account": "账户",
-    "general": "常规"
+    "tagline": "为创造者们重新构想的命令栏"
   },
   "settingsIntelligenceHub": {
     "label": "智能中心",
@@ -1073,7 +1081,6 @@
     "downloadCenter": "下载中心",
     "downloadCenterDesc": "查看下载任务与历史记录。",
     "open": "打开",
-    "intelligenceDesc": "模型通道、能力、提示词与审计。",
     "application": "应用",
     "applicationDesc": "查看与管理已安装的应用。",
     "store": "插件市场",
