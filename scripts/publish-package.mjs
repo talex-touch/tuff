@@ -158,18 +158,43 @@ function packPackage(packageInfo, tempRoot) {
   return packedFiles[0]
 }
 
-function verifyRegistryManifest(packageInfo, version) {
-  const fields = ['dependencies', 'peerDependencies', 'optionalDependencies']
-  for (const field of fields) {
+export const REGISTRY_MANIFEST_FIELDS = [
+  'dependencies',
+  'peerDependencies',
+  'optionalDependencies',
+]
+
+function readRegistryField(packageName, version, field) {
+  return runOutput(`npm view "${packageName}@${version}" ${field} --json`)
+}
+
+/**
+ * Post-publish check that the registry copy carries no catalog:/workspace:/file:/link: spec.
+ *
+ * The throw used to live inside a try whose catch rethrew only its own message, so any
+ * failure of `npm view` itself — rate limit, auth, proxy, a registry hiccup — was swallowed
+ * and the check reported success (#560). That is the worst possible default for this
+ * particular check: it is the last line between a forbidden protocol and consumers, and the
+ * conditions that break `npm view` are exactly the ones around a release.
+ *
+ * `readField` is injectable so the failure path can be tested without a registry.
+ */
+export function verifyRegistryManifest(packageInfo, version, readField = readRegistryField) {
+  for (const field of REGISTRY_MANIFEST_FIELDS) {
+    let value
     try {
-      const value = runOutput(`npm view "${packageInfo.name}@${version}" ${field} --json`)
-      if (/"(?:catalog|workspace|file|link):/.test(value)) {
-        throw new Error(`Registry manifest still contains forbidden protocol in ${field}: ${value}`)
-      }
+      value = readField(packageInfo.name, version, field)
     }
     catch (error) {
-      if (String(error?.message || error).includes('Registry manifest still contains'))
-        throw error
+      throw new Error(
+        `Could not read the published manifest for ${packageInfo.name}@${version} (${field}): `
+        + `${String(error?.message || error)}. Refusing to treat an unreadable manifest as `
+        + `clean — this check is what stops a forbidden protocol reaching consumers.`,
+      )
+    }
+
+    if (/"(?:catalog|workspace|file|link):/.test(value)) {
+      throw new Error(`Registry manifest still contains forbidden protocol in ${field}: ${value}`)
     }
   }
 }
@@ -220,10 +245,13 @@ function main() {
   }
 }
 
-try {
-  main()
-}
-catch (error) {
-  console.error('[publish-package] Failed:', error instanceof Error ? error.message : String(error))
-  process.exit(1)
+// Guarded so the tests can import verifyRegistryManifest without running a publish.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    main()
+  }
+  catch (error) {
+    console.error('[publish-package] Failed:', error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
 }
