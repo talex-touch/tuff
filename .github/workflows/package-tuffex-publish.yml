@@ -14,6 +14,14 @@ on:
       - "scripts/publish-package.mjs"
       - ".github/workflows/package-tuffex-publish.yml"
 
+concurrency:
+  # npm publish is not resumable, so an in-flight run must never be cancelled — queue
+  # behind it instead. Without this, two pushes seconds apart both pass the `npm view`
+  # existence check, both build, and the loser falls back to the duplicate-publish
+  # grep further down this file. Keyed per workflow so the package publishes stay
+  # independent of each other.
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   publish:
     name: Publish - tuffex
