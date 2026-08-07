@@ -1065,6 +1065,15 @@ jobs:
           TAG: ${{ steps.release-info.outputs.tag }}
           RELEASE_TYPE: ${{ steps.release-info.outputs.type }}
           RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          # Passed as environment variables rather than interpolated into the script below.
+          # GitHub substitutes ${{ }} into the run: text before bash ever parses it, so a
+          # workflow_dispatch input containing $(…) executed as a command — in this step,
+          # which decodes RELEASE_SIGNING_PRIVATE_KEY to disk a few lines earlier (#539).
+          CHANNEL: ${{ steps.rollback.outputs.channel }}
+          ROLLBACK_FROM_VERSION: ${{ steps.rollback.outputs.from_version }}
+          ROLLBACK_COMPATIBLE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_compatible || 'false' }}
+          ROLLBACK_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence || '' }}
+          ROLLBACK_EVIDENCE_SIGNATURE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence_signature || '' }}
         run: |
           set -euo pipefail
 
@@ -1113,9 +1122,6 @@ jobs:
             OUTPUT_PATHS+=("$target")
           done
 
-          CHANNEL="${{ steps.rollback.outputs.channel }}"
-          ROLLBACK_FROM_VERSION="${{ steps.rollback.outputs.from_version }}"
-
           if [ -z "${RELEASE_SIGNING_PRIVATE_KEY}" ]; then
             echo "RELEASE_SIGNING_PRIVATE_KEY is required for official release assets."
             exit 1
@@ -1130,9 +1136,6 @@ jobs:
             printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" | base64 --decode > "${signing_key_path}"
           fi
 
-          ROLLBACK_COMPATIBLE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_compatible || 'false' }}"
-          ROLLBACK_EVIDENCE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence || '' }}"
-          ROLLBACK_EVIDENCE_SIGNATURE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence_signature || '' }}"
           case "${ROLLBACK_COMPATIBLE}" in
             true)
               if [ -z "${ROLLBACK_EVIDENCE}" ] || [ -z "${ROLLBACK_EVIDENCE_SIGNATURE}" ]; then

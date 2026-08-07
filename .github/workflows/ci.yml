@@ -134,6 +134,14 @@ jobs:
       - name: Verify action pins
         run: pnpm check:action-pins && pnpm check:action-pins:self-test
 
+      # ${{ }} is substituted into a run: body before bash parses it, so a workflow_dispatch
+      # input containing $(…) executes — in the step that had also just written
+      # RELEASE_SIGNING_PRIVATE_KEY to disk (#539). Only caller-controlled contexts are
+      # policed; steps.*.outputs.* and github.sha are not, or the check would flag dozens of
+      # benign lines and get switched off.
+      - name: Verify no workflow script injection
+        run: pnpm check:workflow-injection && pnpm check:workflow-injection:self-test
+
       # 17 test files under scripts/ — the release machinery — that no workflow ran (#1135).
       # Three are excluded, each with its reason named in the config: one needs a prior build, and
       # two exercise a macOS-only release-acceptance contract a Linux runner cannot satisfy, so
