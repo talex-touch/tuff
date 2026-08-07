@@ -1,10 +1,11 @@
 import { series, dest, src, parallel } from 'gulp'
 import type { TaskFunction } from 'gulp'
-import gulpSass from 'gulp-sass'
 import autoPrefixer from 'gulp-autoprefixer'
 import * as sassLang from 'sass'
+import { Buffer } from 'node:buffer'
+import { Transform } from 'node:stream'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { resolve, dirname } from 'path'
+import { basename, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { delPath } from './del.ts'
 import run from './run.ts'
@@ -23,7 +24,36 @@ export const removeDist = () => {
   return delPath(distPath);
 }
 
-const sass = gulpSass(sassLang)
+/**
+ * gulp-sass 5.x only speaks Dart Sass's legacy render/renderSync API, which is
+ * deprecated and slated for removal in Sass 2.0 — bumping the sass catalog entry
+ * past that would break the build outright with "renderSync is not a function".
+ * This is the same pipeline stage on the modern compile() API, as a plain stream
+ * so no replacement gulp plugin is needed.
+ */
+function sass() {
+  return new Transform({
+    objectMode: true,
+    transform(file: any, _encoding, done) {
+      // Partials are only ever @use'd by an entry file; compiling one directly
+      // would emit a stray stylesheet, which gulp-sass also skipped.
+      if (file.isNull() || basename(file.path).startsWith('_')) {
+        done(null, undefined)
+        return
+      }
+
+      try {
+        const result = sassLang.compile(file.path, { loadPaths: [dirname(file.path)] })
+        file.contents = Buffer.from(result.css)
+        file.path = file.path.replace(/\.s[ac]ss$/, '.css')
+        done(null, file)
+      }
+      catch (error) {
+        done(error as Error)
+      }
+    },
+  })
+}
 
 export const buildStyle = () => {
 return src(`${componentPath}/src/**/src/style/**/*.scss`)
