@@ -85,3 +85,34 @@ jobs:
 
       - name: Run PR quality gate
         run: pnpm quality:pr
+
+
+  job_app_tests:
+    name: App suites (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    needs: job1
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [core-app, nexus]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The 623 core-app and 180 nexus test files ran in no workflow at all;
+      # only four hand-named core-app files were covered, inside a path-filtered
+      # native-protocol job. See #924.
+      - name: Run ${{ matrix.app }} suite
+        run: pnpm -C "apps/${{ matrix.app }}" exec vitest run
