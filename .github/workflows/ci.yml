@@ -100,13 +100,15 @@ jobs:
       # The script existed but no workflow ran it (#555). ~1s: re-derives the sensitive-data
       # inventory's 28 evidence anchors from the TypeScript AST, so it needs the root
       # `typescript` dependency and nothing else.
-      #
-      # `pnpm plugins:validate` (#554) belongs here too and is deliberately absent: it shells
-      # out to `tsx`, which no package.json in this workspace declares. It resolved only
-      # through `shamefully-hoist=true`, removed in #1099, so the script is currently broken
-      # on this branch. Wiring it before `tsx` is declared would just turn this job red.
       - name: Verify sensitive-data inventory
         run: pnpm privacy:inventory:verify
+
+      # Ran nowhere until now (#554). It also doubles as the resolution check for `tsx`: the
+      # binary was undeclared workspace-wide and survived only on `shamefully-hoist=true`
+      # until #1099 removed it (#1128). If the declaration this commit adds is wrong, this
+      # step is where it shows up rather than in whichever release script runs next.
+      - name: Validate plugin manifests and package policy
+        run: pnpm plugins:validate
 
       - name: Run PR quality gate
         run: pnpm quality:pr
