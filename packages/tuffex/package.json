@@ -96,6 +96,7 @@
     "@types/gulp-autoprefixer": "^0.0.37",
     "@types/node": "catalog:dev",
     "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
     "chalk": "^5.6.2",
     "dotenv": "^16.6.1",
     "esno": "^4.8.0",
@@ -106,6 +107,7 @@
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
     "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.2.7",
     "vue": "^3.5.39",
     "vue-tsc": "^3.3.6"
   }
