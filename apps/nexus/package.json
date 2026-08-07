@@ -102,6 +102,7 @@
     "typescript": "catalog:dev",
     "unocss": "catalog:build",
     "vitepress": "catalog:",
+    "vitest": "^3.2.7",
     "vue": "^3.5.39",
     "vue-tsc": "catalog:dev",
     "webpack": "catalog:dev",

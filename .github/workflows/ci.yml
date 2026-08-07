@@ -155,10 +155,15 @@ jobs:
       # native-protocol job. See #924.
       #
       # Non-blocking for now: both suites are red before this change — measured
-      # on CI at core-app 20 files / 54 tests and nexus 13 files / 15 tests.
+      # on CI at core-app 28 files / 68 tests and nexus 12 files / 15 tests.
       # Running and visible beats not running; flip continue-on-error off once
       # the counts reach zero, and until then use them as the regression
       # baseline to compare against.
+      #
+      # The counts above are the whole reason for the JUnit report below: a
+      # continue-on-error job reports success, so a jump like 20 -> 28 files is
+      # invisible unless the numbers are an artifact rather than something you
+      # have to scrape out of a 6000-line log.
       # apps/nexus imports @talex-touch/tuffex/utils, whose exports map resolves
       # only into dist/ — without a build those tests fail on module resolution
       # rather than on anything they actually assert.
@@ -168,4 +173,19 @@ jobs:
 
       - name: Run ${{ matrix.app }} suite
         continue-on-error: true
-        run: pnpm -C "apps/${{ matrix.app }}" exec vitest run
+        run: >-
+          pnpm -C "apps/${{ matrix.app }}" exec vitest run
+          --reporter=default
+          --reporter=junit
+          --outputFile.junit=../../test-reports/${{ matrix.app }}.junit.xml
+
+      # if: always() — the report is only interesting when the suite failed, and
+      # the step above is continue-on-error, so it must not be gated on success.
+      - name: Upload ${{ matrix.app }} test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-${{ matrix.app }}
+          path: test-reports/${{ matrix.app }}.junit.xml
+          retention-days: 7
+          if-no-files-found: warn
