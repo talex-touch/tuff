@@ -84,6 +84,7 @@ catalogs:
   dev:
     '@antfu/eslint-config': ^5.4.1
     '@cloudflare/workers-types': ^4.20260702.1
+    '@types/node': ^24.13.2
     baseline-browser-mapping: ^2.10.43
     eslint: ^9.39.4
     eslint-plugin-format: ^1.5.0

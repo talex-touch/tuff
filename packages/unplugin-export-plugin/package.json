@@ -75,7 +75,7 @@
     "@antfu/eslint-config": "^5.4.1",
     "@types/debug": "^4.1.13",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^18.19.130",
+    "@types/node": "catalog:dev",
     "bumpp": "^11.1.0",
     "eslint": "^9.39.4",
     "tsup": "^8.5.1",
