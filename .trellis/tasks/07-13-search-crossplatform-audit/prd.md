@@ -88,11 +88,12 @@
 
 ### 🟠 高危工程风险
 
-- [x] **R1 — Rust 截图模块已接入 CI/安装构建链** ✅ 已修（`07-29-macos-screenshot-capture-core`，原跟踪 #321 已关闭）
+- [ ] **R1 — Rust 截图模块已接入 CI/安装构建链** ⚠️ **契约测试已接入，发布路径未接入**（2026-08-07 复验，原判「已修 / #321 已关闭」不成立——[#321](https://github.com/talex-touch/tuff/issues/321) 仍 open）
   - 修复：`native-protocol.yml` 在 macOS/Windows/Linux 安装 xcap 所需 Linux build deps，构建 ordinary screenshot addon，执行真实 dlopen/export contracts；随后构建 deterministic addon 跑 `.node -> NapiCarrier -> NativeTransport` integration，并在结束前恢复 ordinary addon。
   - 包合同：`@talex-touch/tuff-native.files` 显式包含 macOS/AX/stream/xcap production backend 源码与 `build/Release/tuff_native_screenshot.node`，继续排除 fixture、contract test backend 和 Cargo target。
   - 证据：本地 ordinary/deterministic 双构建、普通 addon strict macOS integration、31/31 Node contracts 和 `pnpm pack --dry-run` 通过；tarball 包含 addon 与全部 production backend，未包含 `test_backend.rs`/contract fixtures/target。
   - 边界：Windows/Linux authoritative native build 由新增 CI matrix 执行；signed Electron packaged runtime evidence 仍由 `07-29-screenshot-packaged-evidence` 独立承接。
+  - ⚠️ **发布路径未接入**（2026-08-07 复验）：`build:screenshot` 的 3 处调用全在 `native-protocol.yml`——那是**契约测试**工作流，不产出发布物。真正的 `build-and-release.yml` 对 `screenshot` / `audio` / `cargo` / `rust` **零命中**（正对照：`packages/tuff-native` 命中 2 次），它在该包里只做 Windows 限定的 Everything 自检与 `pnpm run rebuild`（node-gyp）。且 `apps/core-app/scripts/` 里查不到 `tuff_native_screenshot`，preflight/afterPack 都不要求它。发布产物大概率不含该 addon。跟踪：[#321](https://github.com/talex-touch/tuff/issues/321)。
   - ⚠️ **同型风险仍在 audio addon 上**（2026-08-07 复验）：`packages/tuff-native/native-audio/` 存在且有 `build:audio` 脚本，但 `.github/workflows/` 里**没有任何 workflow 构建或加载它**（`native-protocol.yml` 对 audio 零提及）。也就是说截图模块修掉的那个「手工 Cargo 构建、CI 无验证」缺口，在 audio 上原样存在。跟踪：[#322](https://github.com/talex-touch/tuff/issues/322)。
 
 - [ ] **R2 — macOS 发行架构范围未决**
