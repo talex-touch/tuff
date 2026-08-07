@@ -28,21 +28,25 @@ const EXEMPT_OWNERS = {
   actions: 'GitHub\'s own namespace, served by the same platform that runs the workflow.',
 }
 
-const USES = /^\s*(?:-\s*)?uses:\s*([A-Za-z0-9._-]+)\/([A-Za-z0-9._/-]+)@(\S+)/
+const USES = /^\s*(?:-\s*)?uses:\s*([\w.-]+)\/([\w./-]+)@(\S+)/
 const FULL_SHA = /^[0-9a-f]{40}$/
 
 export function findUnpinned(files, readFile, exempt = EXEMPT_OWNERS) {
   const problems = []
   for (const file of files) {
     const text = readFile(file)
-    if (!text) continue
+    if (!text)
+      continue
     text.split('\n').forEach((line, index) => {
       const match = USES.exec(line)
-      if (!match) return
+      if (!match)
+        return
       const [, owner, repo, ref] = match
-      if (owner in exempt) return
+      if (owner in exempt)
+        return
       // A local composite action (./.github/workflows/x.yml) never matches USES.
-      if (FULL_SHA.test(ref)) return
+      if (FULL_SHA.test(ref))
+        return
       problems.push({ file, line: index + 1, action: `${owner}/${repo}`, ref })
     })
   }
