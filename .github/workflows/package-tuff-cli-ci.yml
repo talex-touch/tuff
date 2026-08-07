@@ -2,9 +2,6 @@ name: Tuff CLI Package CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - master
     paths:
       - "packages/tuff-cli/**"
       - "packages/tuff-cli-core/**"
