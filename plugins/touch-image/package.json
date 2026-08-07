@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@iconify-json/ri": "^1.2.10",
-    "@talex-touch/unplugin-export-plugin": "^0.2.13",
+    "@talex-touch/unplugin-export-plugin": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@unocss/preset-icons": "^66.7.5",
     "@unocss/preset-uno": "^66.7.5",
