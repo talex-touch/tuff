@@ -119,6 +119,9 @@
 
 - [ ] **R6 — 平台分支散落、`withOSAdapter` 采用不足**
   - 位置：main 目录 141 处 `process.platform`（`touch-window.ts:83`、`update-system.ts:1445`、`capability-adapter.ts` 通篇内联三分支…），`withOSAdapter` 几乎只有 startup-guard 用。**注意**：审计 OS-04/OS-05 已判定并非全部是 bypass，迁移需逐项复核。
+  - 2026-08-07 **已完成归类**（[#349](https://github.com/talex-touch/tuff/issues/349)，清单见 `docs/engineering/platform-branch-inventory.md`）：现为 **296 处**，但**只有 209 处比较 + 2 个 switch 是真分支**；53 处是 `platform: process.platform` 数据传递、32 处是模板/日志。**把 296 当迁移目标会高估 41%**；11 个文件的全部出现都属数据传递（`screenshot-service.ts` 独占 8 处），`plugin-module.ts` 的 14 处**全部**如此——它出现在「平台分支」排行第六是误读。
+  - 归类：A 原生/后端边界（保持显式，如 Windows 独有的 `everything-provider.ts`）· B 策略/能力三路判定（`platform-permission-service.ts` 25 处为首选候选）· C adapter 层自身（`capability-adapter.ts`，位置正确）· D 偶发重复（同一决策写多遍，如 `everything-provider.ts:325-330` 六行各自重算 `=== 'win32'`）· E 数据传递（非分支）。
+  - ⚠️ **`withOSAdapter` 目前不是合格的迁移目标**：它返回 `T | undefined`（`packages/utils/electron/env-tool.ts:79`），**没有类型化的 supported/degraded/unsupported，也没有 reason/recovery 码**，而 #349 验收条 4 正要求这些。先补契约再迁移，否则要迁两次。`withOSAdapter` 现有 5 个采用点。
 
 - [x] **R7 — `getStatus` 轮询架空 worker 空闲关闭** ✅ 已修（[#345](https://github.com/talex-touch/tuff/issues/345) / [PR #1089](https://github.com/talex-touch/tuff/pull/1089)，2026-08-07）
   - 根因比原描述窄：`IdleWorkerShutdownController.schedule()` 本就幂等，真正让截止时间可移动的**只有 `getStatus()` 开头那一次 `cancel()`**。移除后状态读取变为纯观察——不创建 worker、不移动截止时间；metrics 在途仍会推迟终止，但走 `shouldShutdown()` 读 `metricsPending`，而不是重置时钟。fake-timer 测试覆盖高频轮询/活跃任务/已终止客户端/shutdown 四类。
