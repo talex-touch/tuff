@@ -826,6 +826,9 @@ importers:
 
   packages/tuff-cli:
     dependencies:
+      '@talex-touch/utils':
+        specifier: workspace:^
+        version: link:../utils
       '@vue/compiler-sfc':
         specifier: 3.5.39
         version: 3.5.39
