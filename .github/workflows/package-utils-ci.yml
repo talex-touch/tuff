@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - TalexDreamSoul/app-shell-v2
     paths:
       - "packages/utils/**"
       - ".github/workflows/package-utils-ci.yml"

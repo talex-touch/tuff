@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - TalexDreamSoul/app-shell-v2
 
 permissions:
   contents: read

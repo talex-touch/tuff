@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - TalexDreamSoul/app-shell-v2
     paths:
       - "packages/tuffex/**"
       - "pnpm-lock.yaml"
