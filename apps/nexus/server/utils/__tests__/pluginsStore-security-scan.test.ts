@@ -1,9 +1,15 @@
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
-import { createHash } from 'node:crypto'
+import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardPluginVersion } from '../pluginsStore'
 
+import {
+  PLUGIN_SIGNING_ALGORITHM,
+  PLUGIN_SIGNING_CONTRACT,
+  serializePluginFileMap,
+  serializePluginSigningPayload,
+} from '@talex-touch/utils/plugin'
 import { extractTpexMetadata } from '../tpex'
 import {
   createPlugin,
@@ -137,6 +143,55 @@ function packageFile(archive: Buffer): File {
   } as File
 }
 
+const publisherKeys = generateKeyPairSync('ed25519')
+const publisherPublicKeyPem = publisherKeys.publicKey.export({ format: 'pem', type: 'spki' }).toString()
+const PUBLISHER_KEY_ID = 'scan-demo-publisher-key'
+
+/**
+ * publishPluginVersion and reeditPluginVersion verify a publisher signature
+ * unconditionally (pluginsStore.ts:2564 and :2966) -- publishing is fail-closed
+ * on signing -- so a real Ed25519 envelope is built here rather than the
+ * validator being loosened.
+ *
+ * Every field the verifier compares is derived from the same archive the test
+ * publishes, so the fixture cannot drift away from the package it signs:
+ * artifact digest and size from the buffer, plugin name and file map from the
+ * extracted manifest, and the policy version from the package policy.
+ */
+async function publisherSigningInput(archive: Buffer) {
+  const metadata = await extractTpexMetadata(archive, { pluginId: PLUGIN_ID, version: VERSION })
+  const manifest = metadata.manifest as Record<string, unknown>
+  const fileMap = manifest._files as Record<string, string>
+  const issuedAt = new Date().toISOString()
+
+  const payload = {
+    contract: PLUGIN_SIGNING_CONTRACT,
+    policyVersion: metadata.packagePolicy.policyVersion,
+    pluginId: PLUGIN_ID,
+    pluginName: String(manifest.name),
+    version: VERSION,
+    channel: 'RELEASE' as const,
+    artifactSha256: createHash('sha256').update(archive).digest('hex'),
+    artifactSize: archive.length,
+    fileMapSha256: createHash('sha256').update(serializePluginFileMap(fileMap)).digest('hex'),
+    issuedAt,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  }
+  const bytes = Buffer.from(serializePluginSigningPayload(payload), 'utf8')
+
+  return {
+    publisherSignature: {
+      algorithm: PLUGIN_SIGNING_ALGORITHM,
+      keyId: PUBLISHER_KEY_ID,
+      payload,
+      payloadSha256: createHash('sha256').update(bytes).digest('hex'),
+      signature: sign(null, bytes, publisherKeys.privateKey).toString('base64'),
+    },
+    publisherPublicKey: publisherPublicKeyPem,
+    publisherKeyValidFrom: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  }
+}
+
 async function createPublishablePlugin() {
   return createPlugin(event, {
     userId: OWNER_ID,
@@ -190,6 +245,7 @@ describe('pluginsStore Security Scan publish and re-edit admission', () => {
       version: VERSION,
       changelog: 'Initial release.',
       packageFile: packageFile(archive),
+      ...(await publisherSigningInput(archive)),
       createdBy: OWNER_ID,
     })
 
@@ -231,7 +287,27 @@ describe('pluginsStore Security Scan publish and re-edit admission', () => {
           failureCode: null,
         },
       }),
+      // Publishing verifies the publisher signature, so its governance trail is
+      // part of the contract this test guards rather than noise to filter out.
+      expect.objectContaining({
+        scope: 'plugin-signing',
+        action: 'publisher-key.registered',
+        resourceType: 'plugin-publisher-key',
+        resourceId: PUBLISHER_KEY_ID,
+      }),
+      expect.objectContaining({
+        scope: 'plugin-signing',
+        action: 'publisher-signature.verified',
+        actorId: OWNER_ID,
+        resourceType: 'plugin-package',
+        resourceId: expected.report.artifactSha256,
+        metadata: expect.objectContaining({ keyId: PUBLISHER_KEY_ID }),
+      }),
     ])
+    // The signing trail must not carry key material either.
+    const signingPayload = JSON.stringify(state.governanceEvents.filter(e => e.scope === 'plugin-signing'))
+    expect(signingPayload).not.toContain('PRIVATE KEY')
+    expect(signingPayload).not.toContain(publisherPublicKeyPem)
   })
 
   it('blocks a secret finding before package upload or version persistence and keeps governance metadata redacted', async () => {
@@ -247,6 +323,7 @@ describe('pluginsStore Security Scan publish and re-edit admission', () => {
       version: VERSION,
       changelog: 'Initial release.',
       packageFile: packageFile(archive),
+      ...(await publisherSigningInput(archive)),
       createdBy: OWNER_ID,
     })).rejects.toMatchObject({
       statusCode: 400,
@@ -314,6 +391,7 @@ describe('pluginsStore Security Scan publish and re-edit admission', () => {
       pluginId: plugin.id,
       versionId: rejected.id,
       packageFile: packageFile(archive),
+      ...(await publisherSigningInput(archive)),
       changelog: 'Replaced rejected package with a clean artifact.',
       updatedBy: OWNER_ID,
     })
