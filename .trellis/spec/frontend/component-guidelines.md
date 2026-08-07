@@ -154,6 +154,23 @@ Current examples:
 
 ---
 
+## Virtual List Keys and Height Caches
+
+`TxConversationStream` (and any future dynamic-height virtual list) positions rows by a
+prefix-sum of measured heights keyed by `item-key`. Two contracts follow:
+
+- Item ids fed to a virtual list must be **globally unique across datasets**, not per-collection
+  counters. A keep-alive'd instance switching threads with `user-1`-style ids inherited another
+  thread's measured heights and stacked rows on top of each other (fixed 2026-08: uuid message
+  ids + `PositionCache.syncKeys` pruning + per-conversation `:key` on the stream).
+- Hosts that pad or prepend content above the transcript rely on the component's measured spacer
+  origin — never reintroduce "scrollTop is spacer-relative" assumptions.
+
+Regression guards live in `packages/tuffex/.../conversation-stream/__tests__/` (observe-coverage,
+prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after restore + drops).
+
+---
+
 ## Common Mistakes
 
 - Replacing a native control with `div @click` to preserve styling.
