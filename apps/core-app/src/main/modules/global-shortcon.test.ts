@@ -3,7 +3,21 @@ import {
   ShortcutTriggerKind,
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+
+// global-shortcon.ts computes `isMacPlatform` at module scope, so the Option/Alt
+// spelling is fixed the moment it is imported -- a beforeAll pin would be too
+// late. Hoisted so it runs before the import graph; the suite covers migration
+// of a persisted default, and only the token spelling is platform-specific.
+const originalPlatform = vi.hoisted(() => {
+  const previous = process.platform
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  return previous
+})
+
+afterAll(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+})
 
 const electronMocks = vi.hoisted(() => ({
   register: vi.fn(() => true),
