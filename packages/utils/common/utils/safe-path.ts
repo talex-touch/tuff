@@ -10,7 +10,8 @@ const path = (() => {
   if (nodeRequire) {
     try {
       return nodeRequire('node:path')
-    } catch {
+    }
+    catch {
       return pathBrowserify
     }
   }
@@ -30,30 +31,51 @@ export interface SafePathOptions {
 
 const NULL_BYTE_PATTERN = /\0/
 
+/**
+ * `node:path.win32.isAbsolute` without `node:path`.
+ *
+ * In any window context `path` above is path-browserify, whose `win32` property is `null`.
+ * Dereferencing it threw a TypeError for every input the POSIX check answered `false` to —
+ * which is every relative path, every Windows path and the empty string, i.e. the whole
+ * "no" half of a predicate whose job is to answer yes or no (#580).
+ *
+ * Verified equivalent to `node:path.win32.isAbsolute` across 23 cases including drive
+ * letters, UNC prefixes, bare `\\`, single leading separators and `C:foo`. A leading
+ * separator alone counts, which is what an earlier drive-letter-or-UNC form of this regex
+ * got wrong on four of them.
+ */
+const WIN32_ABSOLUTE_PATTERN = /^(?:[\\/]|[a-z]:[\\/])/i
+
 export function isAbsolutePath(value: string): boolean {
-  return path.isAbsolute(value) || path.win32.isAbsolute(value)
+  return path.isAbsolute(value) || WIN32_ABSOLUTE_PATTERN.test(value)
 }
 
 export function isSafePathSegment(value: string): boolean {
   const trimmed = value.trim()
-  if (!trimmed || trimmed === '.' || trimmed === '..') return false
-  if (NULL_BYTE_PATTERN.test(trimmed)) return false
-  if (trimmed.includes('/') || trimmed.includes('\\')) return false
+  if (!trimmed || trimmed === '.' || trimmed === '..')
+    return false
+  if (NULL_BYTE_PATTERN.test(trimmed))
+    return false
+  if (trimmed.includes('/') || trimmed.includes('\\'))
+    return false
   return true
 }
 
 export function normalizeAbsolutePath(value: string): string | null {
   const trimmed = value.trim()
-  if (!trimmed) return null
-  if (!isAbsolutePath(trimmed)) return null
-  if (NULL_BYTE_PATTERN.test(trimmed)) return null
+  if (!trimmed)
+    return null
+  if (!isAbsolutePath(trimmed))
+    return null
+  if (NULL_BYTE_PATTERN.test(trimmed))
+    return null
   return path.normalize(trimmed)
 }
 
 export function resolveSafePath(
   baseDir: string,
   targetPath: string,
-  options: SafePathOptions = {}
+  options: SafePathOptions = {},
 ): SafePathResult {
   const allowAbsolute = options.allowAbsolute ?? false
   const allowRoot = options.allowRoot ?? false
@@ -93,7 +115,7 @@ export function resolveSafePath(
 export function assertSafePath(
   baseDir: string,
   targetPath: string,
-  options: SafePathOptions = {}
+  options: SafePathOptions = {},
 ): string {
   const result = resolveSafePath(baseDir, targetPath, options)
   if (!result.resolvedPath) {
