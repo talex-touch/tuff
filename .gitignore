@@ -32,6 +32,7 @@ pids/
 # Dependencies (all package managers)
 # ========================
 node_modules/
+node_modules
 jspm_packages/
 bower_components/
 web_modules/
