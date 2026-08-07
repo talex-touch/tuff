@@ -1,0 +1,87 @@
+---
+title: Tool Call Card
+description: A tool call's status card, with logs that follow their tail and a result surface the host can own.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, tool, status]
+syncStatus: reviewed
+verified: true
+---
+# Tool Call Card
+
+`TxToolCallCard` shows a tool call end to end: name, status and a one-line summary when collapsed; input, streaming logs and the result when expanded, with a retry affordance on failure.
+
+Manually verified against `packages/tuffex/packages/components/src/tool-call-card/src/TxToolCallCard.vue`.
+
+## Basic Usage
+
+### Tool Call Card
+::::TuffDemoWrapper{demo="ToolCallCardToolCallCardDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const toolCall = {
+    type: 'tool-call',
+    id: 'call-1',
+    name: 'read_file',
+    status: 'done',
+    summary: 'Read src/main.ts',
+    input: '{ "path": "src/main.ts" }',
+    output: 'export function main() {}',
+  }
+  </script>
+
+  <template>
+    <TxToolCallCard :tool-call="toolCall" @retry="onRetry" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Expanded state is owned by the component and seeded from `defaultExpanded`. It is uncontrolled — changing the prop later has no effect.
+- Clicking the header toggles it and emits `toggle` with the state **after** the change.
+- `status` has four values — `pending`, `running`, `done`, `error` — mirrored onto `data-status` for styling. Their labels come from `pendingLabel` / `runningLabel` / `doneLabel` / `errorLabel`, all English by default.
+- The status label resolves through a `default` branch: `pending`, `running` and `error` match explicitly, and **anything else falls through to `doneLabel`**.
+- Every change to `toolCall.logs` scrolls the log region to the bottom, so a running call follows its own tail like a terminal.
+- `retry` carries `toolCall.id` rather than the whole object — a retry usually needs only the identifier.
+- The result area falls back in three stages: the `result` slot when a host mounts one, otherwise `output`, and `error` when `status` is `error`.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `toolCall` | `AiToolCallPart` | — | The call to render: `{ type, id, name, status, summary?, input?, output?, error?, logs? }`. Required. |
+| `defaultExpanded` | `boolean` | `false` | Initial expanded state. Read once, on mount. |
+| `retryLabel` | `string` | `'Retry'` | Label for the retry button. |
+| `pendingLabel` | `string` | `'Queued'` | Label for the `pending` status. |
+| `runningLabel` | `string` | `'Running'` | Label for the `running` status. |
+| `doneLabel` | `string` | `'Done'` | Label for `done`, and for any unmatched status. |
+| `errorLabel` | `string` | `'Failed'` | Label for the `error` status. |
+| `inputLabel` | `string` | `'Input'` | Heading for the input section. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `retry` | `(id: string)` | Emitted when retry is clicked, carrying `toolCall.id`. |
+| `toggle` | `(expanded: boolean)` | Emitted when the header is clicked, carrying the resulting state. |
+
+## Slots
+
+| Name | Scope | Description |
+|------|-------|-------------|
+| `summary` | `{ toolCall }` | Replaces the summary text in the collapsed header. |
+| `result` | `{ toolCall }` | The result surface, for a host to mount its own rendering (a widget, for instance). `output` is not rendered directly once this is provided. |
+| `icon` | `{ status }` | Replaces the status icon. |
+
+## Best Practices
+
+- Use the `result` slot for structured output — a table, a chart, a widget — and leave `output` as the plain-text fallback for when no widget is mounted.
+- Only offer retry while `status` is `error`, and move the status back to `running` once `retry` arrives, or users will click it repeatedly.
+- Append to logs line by line rather than replacing the whole block, so the tail-following stays smooth.
+- Override all six label props together on non-English surfaces; a partial override produces a mixed-language card.
+- Write `summary` as what the call *did* rather than repeating the tool name — the collapsed row is the only thing users scan.
