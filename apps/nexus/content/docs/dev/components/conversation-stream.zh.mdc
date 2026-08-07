@@ -1,0 +1,108 @@
+---
+title: Conversation Stream
+description: 虚拟滚动的会话流，自动吸底并向上翻取历史。
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, conversation, virtual-scroll]
+syncStatus: reviewed
+verified: true
+---
+# Conversation Stream
+
+`TxConversationStream` 是会话消息的滚动容器：虚拟化长列表、流式输出时吸在底部、滚到顶部时向上加载更早的消息。它只管布局与滚动，消息本身由 `item` 插槽渲染。
+
+已人工核对 `packages/tuffex/packages/components/src/conversation-stream/src/TxConversationStream.vue`。
+
+## 基础用法
+
+### Conversation Stream
+::::TuffDemoWrapper{demo="ConversationStreamConversationStreamDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const items = ref([{ id: '1', text: '你好' }])
+
+  async function loadOlder() {
+    const older = await fetchOlder()
+    items.value = [...older, ...items.value]
+    return { hasMore: older.length > 0 }
+  }
+  </script>
+
+  <template>
+    <TxConversationStream
+      :items="items"
+      :item-key="item => item.id"
+      :load-older="loadOlder"
+      streaming
+    >
+      <template #item="{ item }">
+        <div>{{ item.text }}</div>
+      </template>
+    </TxConversationStream>
+  </template>
+---
+::::
+
+## 交互契约
+
+- 组件是泛型的（`<T>`）：`items` 的元素类型会一路传到 `item` 插槽的作用域参数上，无需另行断言。
+- `itemKey` 必填。虚拟化依赖稳定的 key 做位置缓存，用数组下标会在插入消息时错位。
+- `estimatedItemHeight` 只是首次布局的估值；元素真实高度测出来后会自动校正。
+- 吸底是有条件的：用户停在底部时新消息会跟随；一旦向上滚动就不再强行拉回，改为显示「回到底部」提示。
+- `streaming` 只影响这个提示的「有新内容」状态，不影响是否吸底。
+- `loadOlder` 在接近顶部时被调用，约定是**消费方自己把数据前插进 `items`**，然后 resolve `{ hasMore }`。组件不持有消息数组。
+- 前插历史后会保持视口锚点，不会把用户弹到别处。
+- `hasMoreInitial` 的默认值是显式的 `undefined` 而非 `false`：这是为了绕开 Vue 对缺省 Boolean prop 的 `false` 转换，让「还没问过」与「确实没有更早的了」保持可区分。若你确定没有历史，请显式传 `false`。
+- `loadOlder` 抛错时派发 `load-error`，并渲染 `top-error` 插槽，其作用域参数带 `retry`。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `items` | `T[]` | — | 消息数组。必填。 |
+| `itemKey` | `ConversationStreamItemKey<T>` | — | 取稳定 key 的函数。必填。 |
+| `estimatedItemHeight` | `number` | `96` | 未测量元素的假定高度。 |
+| `overscan` | `number` | `4` | 可视区上下各多渲染的条数。 |
+| `loadOlder` | `() => Promise<ConversationStreamLoadResult>` | — | 接近顶部时调用；前插数据后 resolve `{ hasMore }`。 |
+| `hasMoreInitial` | `boolean` | `undefined` | 首次 `loadOlder` 返回前是否可能存在历史。 |
+| `streaming` | `boolean` | `false` | 驱动「回到底部」提示的新内容状态。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `at-bottom-change` | `(atBottom: boolean)` | 吸底状态变化时派发。 |
+| `load-error` | `(error: unknown)` | `loadOlder` 抛错时派发。 |
+
+### Exposed
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `scrollToBottom` | `() => void` | 滚动到底部。 |
+| `scrollToIndex` | `(index: number) => void` | 滚动到指定索引。 |
+| `atBottom` | `ComputedRef<boolean>` | 当前是否处于底部，只读。 |
+
+## Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `item` | `{ item: T, index: number }` | 渲染单条消息。 |
+| `empty` | — | `items` 为空时的占位。 |
+| `top-loading` | — | 正在加载更早消息。 |
+| `top-error` | `{ retry: () => void }` | 加载失败，带重试回调。 |
+| `top-done` | — | 已无更早消息。 |
+| `scroll-to-bottom` | `{ streaming: boolean }` | 自定义「回到底部」提示。 |
+
+## 最佳实践
+
+- `itemKey` 用消息自身的 id，不要用下标——这是虚拟化正确性的前提，不是优化项。
+- `loadOlder` 里要自己前插数据；只 resolve 不改 `items` 会让组件一直以为还有历史可加载。
+- 确认没有更早消息时显式传 `hasMoreInitial: false`，不要依赖默认值——默认的 `undefined` 表示「未知」。
+- `estimatedItemHeight` 尽量贴近真实平均高度，差得太远时首屏滚动条会明显跳动。
+- 需要程序化跳转时用暴露的 `scrollToBottom` / `scrollToIndex`，不要自己去操作滚动容器，否则会与吸底逻辑打架。
