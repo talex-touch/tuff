@@ -220,11 +220,32 @@
     "apps/tuff-analyse/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"apps/tuff-analyse\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
+    "packages/intelligence-uikit/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/intelligence-uikit\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/pi-extension-tuff/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/pi-extension-tuff\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
     "packages/test/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/test\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/tuff-intelligence/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuff-intelligence\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-business/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-business\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-cli/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-cli\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-cli-core/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-cli-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-core/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-native/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-native\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/tuffex/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
