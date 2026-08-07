@@ -61,7 +61,12 @@ describe('aI PR review CI security contract', () => {
       'cancel-in-progress': true,
     })
     assert.equal(checkoutSteps.length, 1)
-    assert.equal(checkoutSteps[0].uses, 'actions/checkout@v6')
+    // Asserts the shape, not the number. This used to pin `actions/checkout@v6`; Dependabot
+    // moved the workflow to v7 and this test went red unnoticed, because nothing runs it
+    // (#1135). The security-relevant properties are the ones below — which revision is
+    // checked out and whether credentials survive — plus the fact that this is the real
+    // `actions/checkout` at a fixed major rather than a fork or a moving branch ref.
+    assert.match(checkoutSteps[0].uses, /^actions\/checkout@v\d+$/)
     assert.equal(
       checkoutSteps[0].with.ref,
       `\${{ github.event.pull_request.base.sha }}`,
