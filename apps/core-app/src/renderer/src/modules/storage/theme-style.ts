@@ -177,7 +177,7 @@ export async function triggerThemeTransition(
 
     // Apply animation
     const keyframes: Keyframe[] = [{ clipPath: animationPath[0] }, { clipPath: animationPath[1] }]
-    const animationOptions: AnimationEffectTiming = {
+    const animationOptions: KeyframeAnimationOptions = {
       duration: 300,
       easing: 'ease-in'
     }

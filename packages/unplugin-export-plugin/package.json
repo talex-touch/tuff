@@ -80,17 +80,15 @@
     "@types/fs-extra": "^11.0.4",
     "@types/node": "catalog:dev",
     "bumpp": "^11.1.0",
-    "eslint": "^9.39.4",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.6",
-    "vitest": "^3.2.7"
-  },
-  "dependencies": {
     "debug": "^4.4.3",
     "esbuild": "^0.28.1",
+    "eslint": "^9.39.4",
     "fs-extra": "^11.3.6",
     "pathe": "^1.1.2",
-    "unplugin": "catalog:build"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "unplugin": "catalog:build",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
   }
 }
