@@ -45,7 +45,8 @@ if (!carrierLoad.carrier) {
 }
 
 function loadCarrier(): NapiCarrierInstance {
-  if (!carrierLoad.carrier) throw new Error(`Screenshot test carrier unavailable: ${carrierLoad.reason}`)
+  if (!carrierLoad.carrier)
+    throw new Error(`Screenshot test carrier unavailable: ${carrierLoad.reason}`)
   return carrierLoad.carrier
 }
 
