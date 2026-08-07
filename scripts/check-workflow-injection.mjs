@@ -19,6 +19,12 @@
  * Read-only. `--self-test` proves the detector fires.
  */
 
+// The fixtures and the remediation hint below contain literal GitHub Actions `${{ … }}`
+// syntax inside ordinary strings. no-template-curly-in-string reads that as a mistyped
+// template literal; here it is the exact text this checker exists to reason about, and
+// obscuring it with concatenation would make the fixtures unreadable.
+/* eslint-disable no-template-curly-in-string */
+
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
