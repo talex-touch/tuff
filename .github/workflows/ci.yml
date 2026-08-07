@@ -120,6 +120,13 @@ jobs:
       # Running and visible beats not running; flip continue-on-error off once
       # the counts reach zero, and until then use them as the regression
       # baseline to compare against.
+      # apps/nexus imports @talex-touch/tuffex/utils, whose exports map resolves
+      # only into dist/ — without a build those tests fail on module resolution
+      # rather than on anything they actually assert.
+      - name: Build tuffex
+        if: ${{ matrix.app == 'nexus' }}
+        run: pnpm -C packages/tuffex build
+
       - name: Run ${{ matrix.app }} suite
         continue-on-error: true
         run: pnpm -C "apps/${{ matrix.app }}" exec vitest run
