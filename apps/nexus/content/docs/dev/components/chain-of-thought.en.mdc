@@ -1,0 +1,75 @@
+---
+title: Chain of Thought
+description: A timeline of reasoning and tool steps whose active entry follows its own output.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, reasoning, timeline]
+syncStatus: reviewed
+verified: true
+---
+# Chain of Thought
+
+`TxChainOfThought` threads the thinking and tool calls behind one answer into a collapsible timeline, each step carrying its own status and optional body.
+
+Manually verified against `packages/tuffex/packages/components/src/chain-of-thought/src/TxChainOfThought.vue`.
+
+## Basic Usage
+
+### Chain of Thought
+::::TuffDemoWrapper{demo="ChainOfThoughtChainOfThoughtDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const steps = [
+    { id: '1', kind: 'thinking', title: 'Break the request down', body: 'Confirm the input bounds first.', status: 'done' },
+    { id: '2', kind: 'tool', title: 'read_file(src/main.ts)', status: 'done' },
+    { id: '3', kind: 'thinking', title: 'Work out the implementation', body: 'Sorting dominates…', status: 'active' },
+  ]
+  </script>
+
+  <template>
+    <TxChainOfThought :steps="steps" streaming />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Open state is owned by the component and seeded from `defaultOpen`, which **defaults to `true`** — the opposite of `TxReasoningDisclosure`. It is uncontrolled either way: changing the prop later has no effect.
+- Clicking the header toggles it and emits `toggle` with the state **after** the change.
+- The header icon becomes a thinking orb only when `streaming` is true **and** some step has `status === 'active'`. Setting `streaming` alone, with no active step, produces no animation.
+- The header count is `steps.length` verbatim, regardless of status.
+- Each step renders by `status`: `active` (spinning indicator), `done`, or `error`. `kind` distinguishes `thinking` from `tool` for the icon and layout.
+- A change in **any** step's `body` length scrolls the active step's body to the bottom — the watcher is keyed on the joined body lengths, so appended stream text keeps following.
+- `body` is optional; a step without one shows just its title, which suits a pure tool call.
+- The header is a real `<button>` with `aria-expanded` and `aria-controls`. Steps are an `<ol>`, numbered by render order.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `steps` | `AiChainStep[]` | — | The steps to render, where `AiChainStep` is `{ id, kind: 'thinking' \| 'tool', title, body?, status: 'active' \| 'done' \| 'error' }`. Required. |
+| `streaming` | `boolean` | `false` | Whether output is still arriving; needs an active step as well before the orb appears. |
+| `defaultOpen` | `boolean` | `true` | Initial open state. Read once, on mount. |
+| `label` | `string` | `'Chain of thought'` | Header label. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `toggle` | `(open: boolean)` | Emitted when the header is clicked, carrying the resulting open state. |
+
+## Slots
+
+`TxChainOfThought` exposes no slots. Step presentation follows `kind` and `status`; compose `TxReasoningDisclosure` and `TxToolCallCard` yourself for custom rendering.
+
+## Best Practices
+
+- Key steps by a stable `id` rather than an array index, or appending a step rebuilds the list and loses the scroll position.
+- Keep at most one `active` step at a time. Several active steps are visually indistinguishable in order, and the auto-scroll can only follow one.
+- Move a step from `active` to `done` or `error` when it finishes, or the spinner stays on screen after streaming has stopped.
+- Write tool titles as readable call signatures (`read_file(src/main.ts)`) rather than bare tool names.
+- Override `label` for non-English surfaces.

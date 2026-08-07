@@ -1,0 +1,79 @@
+---
+title: Tool Confirmation
+description: 工具调用前的授权卡片，带风险等级与「本次会话记住」。
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [ai, tool, permission]
+syncStatus: reviewed
+verified: true
+---
+# Tool Confirmation
+
+`TxToolConfirmation` 在模型执行工具前请求用户授权：展示工具名、风险等级、可选的摘要与入参预览，并给出允许 / 拒绝两个动作。
+
+已人工核对 `packages/tuffex/packages/components/src/tool-confirmation/src/TxToolConfirmation.vue`。
+
+## 基础用法
+
+### Tool Confirmation
+::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxToolConfirmation
+      tool-name="write_file"
+      risk="write"
+      summary="将改写 src/main.ts"
+      :input="JSON.stringify({ path: 'src/main.ts' }, null, 2)"
+      @approve="onApprove"
+      @deny="onDeny"
+    />
+  </template>
+---
+::::
+
+## 交互契约
+
+- 组件不执行任何工具，也不记忆任何授权，只负责派发决定。执行与持久化都由宿主完成。
+- `approve` 与 `deny` 都携带 `{ remember: boolean }`——**拒绝也会带**，因此「本次会话都拒绝」同样可以实现。
+- `remember` 是组件内部状态，初值为 `false`，且在派发后不会重置：这个卡片被设计为一次性使用，决定后应由宿主卸载。
+- `risk` 分三档并写在 `data-risk` 上：`read`（默认）、`write`、`execute`。`read` 以外都被视为危险操作，用于强化视觉。
+- 风险文案默认是 `Read-only` / `Writes data` / `Executes`，可通过 `riskLabels` 按档覆盖，且支持只覆盖其中一档。
+- `summary` 与 `input` 都是可选的；未传时对应区域整块不渲染。
+- `input` 用 `<pre>` 原样渲染，**不做转义以外的处理**，请在传入前自行截断过长内容。
+- 根节点是 `role="group"`，可访问名称固定为 `${toolName} confirmation`。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `toolName` | `string` | — | 工具名，同时参与构造可访问名称。必填。 |
+| `summary` | `string` | — | 一句话说明工具将做什么；未传则不渲染。 |
+| `input` | `string` | — | 序列化后的入参预览，按 `<pre>` 原样展示。 |
+| `risk` | `'read' \| 'write' \| 'execute'` | `'read'` | 风险等级，写入 `data-risk`。 |
+| `allowLabel` | `string` | `'Allow'` | 允许按钮文案。 |
+| `denyLabel` | `string` | `'Deny'` | 拒绝按钮文案。 |
+| `rememberLabel` | `string` | `'Remember for this session'` | 记住选项的文案。 |
+| `riskLabels` | `Partial<Record<'read' \| 'write' \| 'execute', string>>` | — | 覆盖风险文案，可只覆盖部分档位。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `approve` | `({ remember: boolean })` | 点击允许时派发。 |
+| `deny` | `({ remember: boolean })` | 点击拒绝时派发，同样携带 `remember`。 |
+
+## Slots
+
+`TxToolConfirmation` 不暴露插槽。需要展示更复杂的入参时，请自行序列化后传入 `input`。
+
+## 最佳实践
+
+- 收到事件后立即卸载这张卡片，不要复用：`remember` 不会自动复位。
+- `risk` 要如实标注。把写操作标成 `read` 会同时削弱视觉强调与用户的判断依据。
+- `input` 只放决策所需的字段，并预先截断；这里是用户唯一能看清「到底要做什么」的地方，但塞进整个请求体反而会让人跳过。
+- 非英文界面需同时覆盖 `allowLabel`、`denyLabel`、`rememberLabel` 与 `riskLabels`。
+- `remember` 为真时，请把授权限定在当前会话内，不要静默升级为永久授权——文案承诺的是「本次会话」。
