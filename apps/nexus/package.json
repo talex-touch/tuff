@@ -33,11 +33,12 @@
     "start:generate": "npx serve .output/public",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "node build/check-typecheck-plugin-resolution.mjs",
     "test": "vitest run",
     "visual:smoke:tuffex": "node scripts/tuffex-visual-smoke.mjs",
     "openapi:sync": "openapi-typescript ./openapi/nexus-sync.yaml -o ./types/sync-api.d.ts",
-    "dev:host": "nuxt dev --port 3200 --host 0.0.0.0"
+    "dev:host": "nuxt dev --port 3200 --host 0.0.0.0",
+    "typecheck:raw": "nuxt typecheck"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",
@@ -62,7 +63,8 @@
     "ogl": "catalog:",
     "simplex-noise": "catalog:",
     "theme-colors": "^0.1.0",
-    "typeit": "catalog:"
+    "typeit": "catalog:",
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
