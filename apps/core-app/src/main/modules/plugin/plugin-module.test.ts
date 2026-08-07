@@ -1,6 +1,6 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import path from 'node:path'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PluginStatus, type IPluginManager, type ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { PluginApiUninstallRequest } from '@talex-touch/utils/transport/events/types'
@@ -1839,7 +1839,20 @@ describe('PluginModule facade', () => {
 
   it('refuses a symlinked plugin code owner and never follows it during uninstall', async () => {
     const { manager } = await createActualManagerHarness()
-    mocks.symbolicPaths.add(fixturePath('plugins', 'calendar'))
+    // A real symlink, not a mock flag: captureDirectoryIdentity stats the disk, so a flag the
+    // lstat mock knows about is invisible to it. Refusal therefore happens at the admission
+    // barrier rather than at the code stage — stricter than the old expectation, and the
+    // property the test name claims ("never follows it") holds more strongly.
+    const owner = fixturePath('plugins', 'calendar')
+    const decoy = fixturePath('plugins', 'calendar-decoy')
+    rmSync(owner, { recursive: true, force: true })
+    mkdirSync(decoy, { recursive: true })
+    symlinkSync(decoy, owner)
+    onTestFinished(() => {
+      rmSync(owner, { recursive: true, force: true })
+      rmSync(decoy, { recursive: true, force: true })
+      mkdirSync(owner, { recursive: true })
+    })
 
     const result = await uninstallWithDisposition(manager, {
       ordinaryExport: { enabled: false },
@@ -1848,14 +1861,10 @@ describe('PluginModule facade', () => {
 
     expect(result).toMatchObject({
       success: false,
-      code: 'PLUGIN_UNINSTALL_CLEANUP_FAILED',
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
       installed: true,
       stages: expect.arrayContaining([
-        expect.objectContaining({
-          stage: 'code',
-          status: 'failed',
-          code: 'PLUGIN_UNINSTALL_CODE_DELETE_FAILED'
-        })
+        expect.objectContaining({ stage: 'admission', status: 'failed' })
       ])
     })
     expect(mocks.fsRemove).not.toHaveBeenCalledWith(fixturePath('plugins', 'calendar'))
@@ -1872,9 +1881,13 @@ describe('PluginModule facade', () => {
       const { manager } = await createActualManagerHarness()
       if (failedStage === 'code' || failedStage === 'data') {
         mocks.fsRemove.mockImplementation(async (target: string) => {
+          // The coordinator quarantines the owner by renaming it to `.recovery` and deletes
+          // that name, so matching the pre-rename path never fires. Resolve back through the
+          // rename bookkeeping before deciding whether to inject.
+          const original = mocks.renamedPaths.get(target) ?? target
           if (
-            (failedStage === 'code' && target === fixturePath('plugins', 'calendar')) ||
-            (failedStage === 'data' && target === fixturePath('plugin-data', 'calendar', 'config'))
+            (failedStage === 'code' && original === fixturePath('plugins', 'calendar')) ||
+            (failedStage === 'data' && original === fixturePath('calendar', 'data'))
           ) {
             throw new Error(`synthetic ${failedStage} delete failure`)
           }
@@ -1890,7 +1903,7 @@ describe('PluginModule facade', () => {
         portableSecretBackup: { enabled: false }
       })
 
-      expect(mocks.fsRemove).toHaveBeenCalledTimes(failedStage === 'code' ? 5 : 4)
+      expect(mocks.fsRemove).toHaveBeenCalledTimes(failedStage === 'plugin-data' ? 1 : 2)
       expect(mocks.dbUtils.deletePluginData).toHaveBeenCalledWith('calendar')
       expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
       expect(manager.plugins.has('calendar')).toBe(true)
@@ -1977,9 +1990,15 @@ describe('PluginModule facade', () => {
       fixturePath('plugins', 'calendar'),
       fixturePath('plugin-data', 'calendar')
     ])
-    mocks.fsPathExists.mockImplementation(async (target: string) => existing.has(target))
+    // Owners are quarantined to a `.recovery` name before deletion, so both the existence
+    // probe and the delete arrive under the renamed path. Resolve back, or the set looks
+    // untouched and the test reads as "nothing was deleted".
+    const resolveOwner = (target: string) => mocks.renamedPaths.get(target) ?? target
+    mocks.fsPathExists.mockImplementation(async (target: string) =>
+      existing.has(resolveOwner(target))
+    )
     mocks.fsRemove.mockImplementation(async (target: string) => {
-      existing.delete(target)
+      existing.delete(resolveOwner(target))
     })
     const pending = (
       manager as IPluginManager & {
