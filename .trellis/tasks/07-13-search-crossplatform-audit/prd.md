@@ -104,7 +104,9 @@
 
 - [ ] **R3 — 大目录扫描/对账内存峰值** ⚠️ 结构问题已消除，**只剩实测未做**（2026-08-07 复验）
   - 原描述的三层物化**均已不成立**：worker 逐批 post 并等 `batchAckWaiters` 背压；client 的累积版 `scan()` 已删除（[#1091](https://github.com/talex-touch/tuff/pull/1091)），流水线只用 `scanBatches()`；reconciliation 改为消费 `AsyncIterable`、`reconcile()` 逐批调用、`getDbFilesByPaths(diskPaths)` 按批限定路径，行数统计改为 `countRootRows` 普查而非物化集合。
-  - 仍开的部分：百万级 fixture 的峰值内存实测，以及「上界由 batch size 而非目录基数决定」的证明。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
+  - 2026-08-07 **已实测**（`apps/core-app/scripts/file-scan-memory-benchmark.mjs`，合成树 25k/100k/400k × batch 100/500/2000）：`retained` 全部 ≈ 0，无累积；**40 万文件在 `--max-old-space-size=64` 下完整跑完**，峰值堆 33.5 MiB、retained −0.8 MiB。取消在 10 批后立即生效（112ms 返回）。worker 侧在发下一批前 `await acknowledged`，在途未确认批次恒为 1。
+  - ⚠️ **一处需要写清楚的观测**：无堆压力时峰值堆随文件数增长（batch=500 下 13.9 → 33.4 → 58.7 MiB），且**三种批大小在同一文件数下几乎相同**——所以「峰值由 batch size 决定」这句话按字面不成立。真实机制是 V8 有余量时惰性扩堆；施压后同一工作量只用三分之一空间即可完成，说明**上界是真的、只是不由 batch size 表达**。
+  - 仍开的部分：reconciliation 分页与持久化落库的同类实测（本基准只覆盖 traversal）。跟踪：[#318](https://github.com/talex-touch/tuff/issues/318) / [#480](https://github.com/talex-touch/tuff/issues/480)。
 
 ### 🟡 中危架构债
 
