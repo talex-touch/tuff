@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Every registration is kept, mirroring TuffMainTransport's Set of handlers. A Map holding one
+// handler per event would let a second registration overwrite the first, which is how the
+// duplicate registrations in #477 stayed invisible.
 const mocks = vi.hoisted(() => ({
   handlers: new Map<
     string,
-    (payload?: unknown, context?: { sender?: { id: number } }) => unknown
+    Array<(payload?: unknown, context?: { sender?: { id: number } }) => unknown>
   >(),
   streamHandlers: new Map<string, (payload: unknown, context: unknown) => unknown>(),
   on: vi.fn(
@@ -12,9 +15,14 @@ const mocks = vi.hoisted(() => ({
       handler: (payload?: unknown, context?: { sender?: { id: number } }) => unknown
     ) => {
       const eventName = typeof event === 'string' ? event : event.toEventName?.() || String(event)
-      mocks.handlers.set(eventName, handler)
+      const registered = mocks.handlers.get(eventName)
+      if (registered) registered.push(handler)
+      else mocks.handlers.set(eventName, [handler])
       return () => {
-        mocks.handlers.delete(eventName)
+        const current = mocks.handlers.get(eventName)
+        if (!current) return
+        const index = current.indexOf(handler)
+        if (index >= 0) current.splice(index, 1)
       }
     }
   ),
@@ -192,6 +200,21 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { OnboardingGateError } from '../../storage'
 import { ipcManager } from './ipc'
 
+/**
+ * Reads the single handler registered for an event, failing if the count is anything but one.
+ * Every existing assertion doubles as a cardinality check this way, so a duplicate registration
+ * breaks many tests loudly instead of hiding behind a last-write-wins lookup.
+ */
+function soleHandler(event: {
+  toEventName: () => string
+}): ((payload?: unknown, context?: { sender?: { id: number } }) => unknown) | undefined {
+  const eventName = event.toEventName()
+  const registered = mocks.handlers.get(eventName)
+  if (!registered) return undefined
+  expect(registered, `expected exactly one handler for ${eventName}`).toHaveLength(1)
+  return registered[0]
+}
+
 describe('CoreBox IPC hide transport', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -218,13 +241,31 @@ describe('CoreBox IPC hide transport', () => {
     expect(mocks.searchEngineCore.registerIndexCommitStream).toHaveBeenCalledWith(context)
   })
 
+  it('registers every canonical event exactly once', () => {
+    const counts = new Map<string, number>()
+    for (const [event] of mocks.on.mock.calls) {
+      const eventName =
+        typeof event === 'string'
+          ? event
+          : ((event as { toEventName?: () => string }).toEventName?.() ?? String(event))
+      counts.set(eventName, (counts.get(eventName) ?? 0) + 1)
+    }
+
+    const duplicated = [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([eventName, count]) => `${eventName} ×${count}`)
+
+    expect(counts.size).toBeGreaterThan(0)
+    expect(duplicated).toEqual([])
+  })
+
   it('allows only the owning CoreBox renderer to detach the main-owned plugin view', async () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
       webContents: { id: 71 }
     }
-    const handler = mocks.handlers.get(CoreBoxEvents.uiMode.detach.toEventName())
+    const handler = soleHandler(CoreBoxEvents.uiMode.detach)
     const detachRegistrations = mocks.on.mock.calls.filter(([event]) => {
       const eventName =
         typeof event === 'string'
@@ -246,7 +287,7 @@ describe('CoreBox IPC hide transport', () => {
       isVisible: () => true,
       webContents: { id: 71 }
     }
-    const handler = mocks.handlers.get(CoreBoxEvents.uiMode.detach.toEventName())
+    const handler = soleHandler(CoreBoxEvents.uiMode.detach)
 
     const response = await handler?.(undefined, { sender: { id: 99 } })
 
@@ -393,7 +434,7 @@ describe('CoreBox IPC hide transport', () => {
       expect.objectContaining({ type: 'complete', sessionId: 'session-22' })
     ])
     expect(firstContext.end).toHaveBeenCalledTimes(1)
-    const queryHandler = mocks.handlers.get(CoreBoxEvents.search.query.toEventName()) as unknown as
+    const queryHandler = soleHandler(CoreBoxEvents.search.query) as unknown as
       | ((payload: unknown, context: { sender: { id: number } }) => Promise<unknown>)
       | undefined
     mocks.search.mockImplementation(
@@ -450,7 +491,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.searchEngineCore.cancelSearchFromSender.mockImplementation(
       (sessionId: string, senderId: number) => sessionId === 'session-11' && senderId === 11
     )
-    const cancelHandler = mocks.handlers.get(CoreBoxEvents.search.cancel.toEventName()) as
+    const cancelHandler = soleHandler(CoreBoxEvents.search.cancel) as
       | ((
           payload: { searchId: string },
           context: { sender: { id: number } }
@@ -494,13 +535,13 @@ describe('CoreBox IPC hide transport', () => {
     ]
   ])('answers native visibility from the current %s', (_case, currentWindow, expected) => {
     mocks.currentWindow = currentWindow
-    const handler = mocks.handlers.get(CoreBoxEvents.ui.getVisibility.toEventName())
+    const handler = soleHandler(CoreBoxEvents.ui.getVisibility)
 
     expect(handler?.()).toEqual(expected)
   })
 
   it('maps canonical hide payload into an immediate manager trigger', () => {
-    const handler = mocks.handlers.get(CoreBoxEvents.ui.hide.toEventName())
+    const handler = soleHandler(CoreBoxEvents.ui.hide)
 
     expect(handler).toBeTypeOf('function')
     handler?.({ immediate: true, reason: 'execute' })
@@ -510,7 +551,7 @@ describe('CoreBox IPC hide transport', () => {
 
   it('applies canonical window pin requests through the window manager', () => {
     mocks.isPinned.mockReturnValue(true)
-    const handler = mocks.handlers.get(CoreBoxEvents.ui.setPinned.toEventName())
+    const handler = soleHandler(CoreBoxEvents.ui.setPinned)
 
     expect(handler).toBeTypeOf('function')
     const response = handler?.({ pinned: true })
@@ -520,7 +561,7 @@ describe('CoreBox IPC hide transport', () => {
   })
 
   it('uses the CoreBox header height as the layout minimum', () => {
-    const handler = mocks.handlers.get(CoreBoxEvents.layout.setHeight.toEventName())
+    const handler = soleHandler(CoreBoxEvents.layout.setHeight)
 
     expect(handler).toBeTypeOf('function')
     expect(() => handler?.({ height: 55 })).toThrow('Invalid height (must be 56-650)')
@@ -541,7 +582,7 @@ describe('CoreBox IPC hide transport', () => {
       isVisible: () => true,
       webContents: { id: 41 }
     }
-    const handler = mocks.handlers.get(CoreBoxEvents.ui.expand.toEventName())
+    const handler = soleHandler(CoreBoxEvents.ui.expand)
 
     expect(handler).toBeTypeOf('function')
     handler?.({ forceMax: true })
