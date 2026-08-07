@@ -51,9 +51,6 @@ files:
   - '!**/*.rmeta'
   # Keep js-tiktoken ESM runtime files: @langchain/core imports js-tiktoken/lite via ESM,
   # which resolves to dist/lite.js from the package exports map in packaged builds.
-  # mathjs is bundled into out/main/index.js (not externalized) to enable tree-shaking.
-  # Only mathjs/number subset (~2MB) gets bundled; the full ~13MB mathjs package in node_modules is unused.
-  - '!**/node_modules/mathjs/**'
 extraFiles: []
 extraResources:
   - from: resources/icon.png
