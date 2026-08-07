@@ -1,4 +1,5 @@
 export {
+  canonicalDocsPageIdentity,
   DOCS_SUPPORTED_LOCALES,
   isDocsLocale,
   isDocsPath,
