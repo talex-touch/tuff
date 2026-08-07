@@ -16,8 +16,7 @@
       "@talex-touch/tuff-native/*": ["packages/tuff-native/*"],
       "@talex-touch/tuff-intelligence": ["packages/tuff-intelligence/src/index.ts"],
       "@talex-touch/tuff-intelligence/*": ["packages/tuff-intelligence/src/*"],
-      "@/common/*": ["packages/utils/common/*"],
-      "@/typings/*": ["packages/typings/*"]
+      "@/common/*": ["packages/utils/common/*"]
     },
     "resolveJsonModule": true,
     "types": ["electron-vite/node"],
