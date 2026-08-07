@@ -194,6 +194,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   MarkdownViewLightDarkDemo: () => import('./demos/MarkdownViewLightDarkDemo.vue'),
   MarkdownViewMarkdownDemo: () => import('./demos/MarkdownViewMarkdownDemo.vue'),
   MarkdownViewMarkdownViewDemo: () => import('./demos/MarkdownViewMarkdownViewDemo.vue'),
+  MessageActionsMessageActionsDemo: () => import('./demos/MessageActionsMessageActionsDemo.vue'),
   ModalBasicDemo: () => import('./demos/ModalBasicDemo.vue'),
   NavBarNavBarDemo: () => import('./demos/NavBarNavBarDemo.vue'),
   NoDataNoDataDemo: () => import('./demos/NoDataNoDataDemo.vue'),

@@ -1,0 +1,78 @@
+---
+title: Message Actions
+description: A message toolbar with built-in copy and regenerate, navigated with arrow keys.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, message, toolbar]
+syncStatus: reviewed
+verified: true
+---
+# Message Actions
+
+`TxMessageActions` is the row of controls under a message bubble. It ships copy and regenerate, and follows the ARIA toolbar pattern: one tab stop for the bar, arrow keys between the controls.
+
+Manually verified against `packages/tuffex/packages/components/src/message-actions/src/TxMessageActions.vue`.
+
+## Basic Usage
+
+### Message Actions
+::::TuffDemoWrapper{demo="MessageActionsMessageActionsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMessageActions
+      copy-text="The answer body to copy"
+      regenerable
+      @copy="onCopy"
+      @regenerate="onRegenerate"
+    >
+      <button type="button">Share</button>
+    </TxMessageActions>
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The copy button renders whenever `copyText` is **defined** — an empty string still renders it, though clicking does nothing. Omit the prop entirely to hide it.
+- Copying writes through `navigator.clipboard`. The `copy` event is emitted even when that write is denied by permissions policy, so the host can route the copy through its own channel.
+- After a copy the button shows its copied state for 1200 ms and ignores repeat clicks during that window.
+- The bar is `role="toolbar"`: a single tab stop, with ← → ↑ ↓ moving between controls and Home / End jumping to the ends.
+- The roving order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so **focusable elements in the default slot join the same order** with no extra wiring.
+- Disabled buttons are excluded from the roving order.
+- With `appear` set, a slow blur-fade entrance plays once on mount. Turn it off explicitly where an entrance is unwanted.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `copyText` | `string` | — | The text the copy button writes. The button is not rendered when this is omitted. |
+| `regenerable` | `boolean` | `false` | Whether to show the regenerate button. |
+| `appear` | `boolean` | `true` | Whether to play the blur-fade entrance on mount. |
+| `copyLabel` | `string` | `'Copy'` | Accessible name for the copy button. |
+| `copiedLabel` | `string` | `'Copied'` | Accessible name while in the copied state. |
+| `regenerateLabel` | `string` | `'Regenerate'` | Accessible name for the regenerate button. |
+| `label` | `string` | `'Message actions'` | Accessible name for the toolbar itself. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `copy` | `(text: string)` | Emitted after a copy click with `copyText`, including when the clipboard write failed. |
+| `regenerate` | — | Emitted when regenerate is clicked. |
+
+## Slots
+
+| Name | Description |
+|------|-------------|
+| `default` | Appended after the built-in buttons. Focusable elements placed here join the arrow-key roving order automatically. |
+
+## Best Practices
+
+- Use native `<button>` elements for custom actions. The roving order is found by tag and `tabindex`, so a wrapping `<div>` is skipped.
+- Do not re-implement the copy as a fallback for clipboard failures — listen to `copy`, which the component already emits in both cases.
+- Override `copyLabel`, `copiedLabel`, `regenerateLabel` and `label` together when localizing; all four affect accessible names only, not the visuals.
+- Hold the toolbar back until a message finishes streaming, or users will copy a half-written answer.
