@@ -12,8 +12,11 @@ import {
   useId,
 
 } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { TxButton } from '../../button'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxPopperDialog',
@@ -34,7 +37,7 @@ const contentId = useId()
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 let previouslyFocusedElement: HTMLElement | null = null
 
 function sleep(ms: number): Promise<void> {
@@ -42,7 +45,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 onMounted(() => {
-  zIndex.value = nextZIndex()
+  zIndex.value = zIndexAllocator.next()
   previouslyFocusedElement = document.activeElement as HTMLElement
 
   if (props.render) {

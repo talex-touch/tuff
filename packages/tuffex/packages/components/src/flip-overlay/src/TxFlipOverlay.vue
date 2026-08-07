@@ -6,7 +6,7 @@ import TxButton from '../../button/src/button.vue'
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { hasWindow } from '../../../../utils/env'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import {
   lockFlipOverlayBodyScroll,
   unlockFlipOverlayBodyScroll,
@@ -27,6 +27,9 @@ import {
   type FlipOverlayStackEntry,
 } from './flip-overlay-stack'
 import { useFlipOverlayMotion } from './flip-overlay-motion'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxFlipOverlay',
@@ -75,7 +78,7 @@ const cardRef = ref<HTMLElement | null>(null)
 const visible = ref(Boolean(props.modelValue))
 const expanded = ref(typeof props.expanded === 'boolean' ? props.expanded : false)
 const animating = ref(typeof props.animating === 'boolean' ? props.animating : false)
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 const sourceRect = ref<DOMRect | null>(null)
 const sourceRadius = ref<string | null>(null)
 const tilt = ref({ x: 0, y: 0 })
@@ -458,7 +461,7 @@ const {
 })
 
 function requestOpen(): void {
-  zIndex.value = nextZIndex()
+  zIndex.value = zIndexAllocator.next()
   openSequence.value = nextOverlayOpenSequence()
   if (!hasWindow()) {
     visible.value = true

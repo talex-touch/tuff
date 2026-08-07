@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { TouchTipButton, TouchTipProps } from './types'
 import { onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { TxButton } from '../../button'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxTouchTip',
@@ -24,7 +27,7 @@ interface ButtonState {
 
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const wholeDom = ref<HTMLElement | null>(null)
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const messageId = useId()
 let previouslyFocusedElement: HTMLElement | null = null
@@ -98,7 +101,7 @@ async function forClose(): Promise<void> {
 }
 
 onMounted(() => {
-  zIndex.value = nextZIndex()
+  zIndex.value = zIndexAllocator.next()
   previouslyFocusedElement = document.activeElement as HTMLElement
 
   if (wholeDom.value) {

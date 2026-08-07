@@ -33,6 +33,8 @@ describe('global install', () => {
         return fakeApp
       },
       component: () => undefined,
+      // install() also provides the per-app z-index allocator (#956).
+      provide: () => fakeApp,
     }
 
     install(fakeApp as never)
