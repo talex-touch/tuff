@@ -74,4 +74,38 @@ describe('createPositionCache', () => {
     cache.setHeight('a', 80)
     expect(cache.offsetOf(99)).toBe(80)
   })
+
+  it('prunes measurements whose keys left the list', () => {
+    // Reused instance switching datasets: "user-1" exists in both threads and
+    // must not inherit the other thread's measurement.
+    const cache = cacheWith(['user-1', 'assistant-2'])
+    cache.setHeight('user-1', 500)
+    cache.setHeight('assistant-2', 700)
+
+    cache.syncKeys(['user-1', 'assistant-4'])
+
+    // Same key, still present: measurement survives.
+    expect(cache.heightOf('user-1')).toBe(500)
+    // Departed key: back to the estimate, not the ghost of thread A.
+    expect(cache.heightOf('assistant-2')).toBe(EST)
+    expect(cache.totalHeight()).toBe(500 + EST)
+  })
+
+  it('retains the live key across prunes until it joins the list', () => {
+    const cache = cacheWith(['a'])
+    // The live row is measured before its key ever appears in the ordered
+    // list; pruning it would send the migrating row back to the estimate.
+    cache.setHeight('live', 320)
+
+    cache.syncKeys(['a', 'b'], 'live')
+    expect(cache.heightOf('live')).toBe(320)
+
+    // Migration: the live key joins the list with its measurement intact.
+    cache.syncKeys(['a', 'b', 'live'], 'next-live')
+    expect(cache.offsetOf(3)).toBe(2 * EST + 320)
+
+    // Without retention it is pruned like anything else.
+    cache.syncKeys(['a'])
+    expect(cache.heightOf('live')).toBe(EST)
+  })
 })
