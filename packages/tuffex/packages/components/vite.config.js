@@ -66,7 +66,10 @@ export default defineConfig({
     lib: {
       entry: 'src/index.ts',
       name: 'vuecomp',
-      formats: ['es', 'cjs', 'umd'],
+      // No `formats` here on purpose: rollupOptions.output above is an array, so
+      // it already owns the output shape and Vite ignores this field entirely —
+      // declaring both only produced a warning and a second, untrue source of
+      // truth (it listed umd, which nothing emits).
     },
   },
   plugins: [
