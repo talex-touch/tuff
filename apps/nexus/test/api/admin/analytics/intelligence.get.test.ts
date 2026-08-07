@@ -1,4 +1,4 @@
-import type { IntelligenceAuditRecord } from '../../../utils/intelligenceStore'
+import type { IntelligenceAuditRecord } from '../../../../server/utils/intelligenceStore'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const authMocks = vi.hoisted(() => ({
@@ -9,8 +9,8 @@ const intelligenceStoreMocks = vi.hoisted(() => ({
   listRuntimeAudits: vi.fn(),
 }))
 
-vi.mock('../../../utils/auth', () => authMocks)
-vi.mock('../../../utils/intelligenceStore', () => intelligenceStoreMocks)
+vi.mock('../../../../server/utils/auth', () => authMocks)
+vi.mock('../../../../server/utils/intelligenceStore', () => intelligenceStoreMocks)
 
 let handler: (event: unknown) => Promise<unknown>
 let getQueryMock: ReturnType<typeof vi.fn>
@@ -50,7 +50,7 @@ beforeAll(async () => {
   ;(globalThis as typeof globalThis & { defineEventHandler?: unknown }).defineEventHandler = handler => handler
   getQueryMock = vi.fn()
   ;(globalThis as typeof globalThis & { getQuery?: unknown }).getQuery = getQueryMock
-  handler = (await import('./intelligence.get')).default as (event: unknown) => Promise<unknown>
+  handler = (await import('../../../../server/api/admin/analytics/intelligence.get')).default as (event: unknown) => Promise<unknown>
 })
 
 beforeEach(() => {
