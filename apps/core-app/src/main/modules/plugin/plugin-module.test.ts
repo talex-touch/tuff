@@ -969,6 +969,13 @@ describe('PluginModule facade', () => {
   })
 
   it('parents destructive confirmation only to the configured live CoreApp window', async () => {
+    // restart/shutdown are supported on darwin and win32 only, so on a Linux
+    // runner the capability short-circuits to 'platform-unsupported' and the
+    // confirmation path this test covers is never reached. Pinned narrowly --
+    // process.platform is read per call here, so the scope is this test alone.
+    const previousPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
     mocks.plugin.declaredPermissions = { required: ['system.shell'], optional: [] }
@@ -1040,6 +1047,9 @@ describe('PluginModule facade', () => {
       })
     )
     await module.onDestroy()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previousPlatform, configurable: true })
+    }
   })
 
   it('shows the configured main window for the current system-actions activation without shell permission', async () => {
