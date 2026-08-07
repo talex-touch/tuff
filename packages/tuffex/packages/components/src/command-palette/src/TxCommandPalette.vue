@@ -2,8 +2,11 @@
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { TxIcon } from '../../icon'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({ name: 'TxCommandPalette' })
 
@@ -34,7 +37,7 @@ watch(
   },
 )
 const activeIndex = ref(0)
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 const composing = ref(false)
 
 const visible = computed({
@@ -93,7 +96,7 @@ watch(
   () => props.modelValue,
   async (v, oldValue) => {
     if (v) {
-      zIndex.value = nextZIndex()
+      zIndex.value = zIndexAllocator.next()
       emit('open')
       activeIndex.value = firstEnabledIndex()
       await nextTick()

@@ -1,3 +1,5 @@
+import type { App, InjectionKey } from 'vue'
+import { getCurrentInstance, inject } from 'vue'
 import { hasDocument, hasWindow } from './env'
 
 export interface TxZIndexContext {
@@ -41,28 +43,21 @@ interface ZIndexState {
   listeners: Set<ZIndexListener>
 }
 
-const state: ZIndexState = {
-  seed: DEFAULT_Z_INDEX_SEED,
-  current: DEFAULT_Z_INDEX_SEED,
-  overrides: null,
-  seedSource: null,
-  seedSourceUnsubscribe: null,
-  listeners: new Set(),
+export interface TxZIndexAllocator {
+  configure: (options: {
+    seed?: number
+    overrides?: TxZIndexOverrides
+    seedSource?: TxZIndexSeedSource | null
+  }) => void
+  onEvent: (listener: ZIndexListener) => () => void
+  get: () => number
+  next: () => number
+  refresh: (seed?: number, reason?: string) => number
+  reset: (seed?: number, reason?: string) => number
 }
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v)
-}
-
-function emitEvent(e: TxZIndexEvent) {
-  state.listeners.forEach((listener) => {
-    try {
-      listener(e)
-    }
-    catch {
-      // ignore listener errors
-    }
-  })
 }
 
 function parseCssZIndex(value: string): number | null {
@@ -88,15 +83,167 @@ function resolveSeedFromCssVar(): number | null {
   return Math.max(DEFAULT_Z_INDEX_SEED, n)
 }
 
-function resolveSeed(inputSeed?: number): number {
-  if (isFiniteNumber(inputSeed))
-    return inputSeed
+/**
+ * Builds an allocator with its own counter.
+ *
+ * The state used to live at module scope. In a Node SSR process that module is
+ * instantiated once and shared by every request, so one request's overlay
+ * allocation shifted the z-index every later request rendered, and the value a
+ * cold client computed never matched (#956).
+ */
+export function createZIndexAllocator(): TxZIndexAllocator {
+  const state: ZIndexState = {
+    seed: DEFAULT_Z_INDEX_SEED,
+    current: DEFAULT_Z_INDEX_SEED,
+    overrides: null,
+    seedSource: null,
+    seedSourceUnsubscribe: null,
+    listeners: new Set(),
+  }
 
-  const fromSource = state.seedSource?.getSeed?.()
-  if (isFiniteNumber(fromSource))
-    return fromSource
+  function emitEvent(e: TxZIndexEvent): void {
+    state.listeners.forEach((listener) => {
+      try {
+        listener(e)
+      }
+      catch {
+        // ignore listener errors
+      }
+    })
+  }
 
-  return resolveSeedFromCssVar() ?? DEFAULT_Z_INDEX_SEED
+  function resolveSeed(inputSeed?: number): number {
+    if (isFiniteNumber(inputSeed))
+      return inputSeed
+
+    const fromSource = state.seedSource?.getSeed?.()
+    if (isFiniteNumber(fromSource))
+      return fromSource
+
+    return resolveSeedFromCssVar() ?? DEFAULT_Z_INDEX_SEED
+  }
+
+  function refresh(seed?: number, reason?: string): number {
+    const prev = state.current
+    const resolvedSeed = resolveSeed(seed)
+
+    state.seed = resolvedSeed
+    state.current = Math.max(state.current, resolvedSeed)
+
+    emitEvent({ type: 'refresh', seed: state.seed, current: state.current, prev, reason })
+    return state.current
+  }
+
+  function reset(seed?: number, reason?: string): number {
+    const prev = state.current
+    const resolvedSeed = resolveSeed(seed)
+
+    state.seed = resolvedSeed
+    state.current = resolvedSeed
+
+    emitEvent({ type: 'reset', seed: state.seed, current: state.current, prev, reason })
+    return state.current
+  }
+
+  function configure(options: {
+    seed?: number
+    overrides?: TxZIndexOverrides
+    seedSource?: TxZIndexSeedSource | null
+  }): void {
+    const prev = state.current
+
+    const hasOverrides = Object.prototype.hasOwnProperty.call(options, 'overrides')
+    const hasSeedSource = Object.prototype.hasOwnProperty.call(options, 'seedSource')
+    const hasSeed = Object.prototype.hasOwnProperty.call(options, 'seed')
+
+    if (hasOverrides) {
+      state.overrides = options.overrides ?? null
+    }
+
+    if (hasSeedSource) {
+      state.seedSourceUnsubscribe?.()
+      state.seedSourceUnsubscribe = null
+      state.seedSource = options.seedSource ?? null
+
+      const src = state.seedSource
+      if (src?.subscribe) {
+        state.seedSourceUnsubscribe = src.subscribe(() => {
+          refresh(undefined, 'seedSource')
+        })
+      }
+    }
+
+    if (hasSeed) {
+      refresh(options.seed, 'configure')
+    }
+    else if (hasSeedSource && state.seedSource) {
+      refresh(undefined, 'configure')
+    }
+
+    emitEvent({ type: 'configure', seed: state.seed, current: state.current, prev })
+  }
+
+  function onEvent(listener: ZIndexListener): () => void {
+    state.listeners.add(listener)
+    return () => state.listeners.delete(listener)
+  }
+
+  function get(): number {
+    const ctx: TxZIndexContext = { seed: state.seed, current: state.current }
+    const overridden = state.overrides?.get?.(ctx)
+    if (isFiniteNumber(overridden))
+      return overridden
+    return state.current
+  }
+
+  function next(): number {
+    const prev = state.current
+    const ctx: TxZIndexContext = { seed: state.seed, current: state.current }
+    const overridden = state.overrides?.next?.(ctx)
+
+    const value = isFiniteNumber(overridden) ? overridden : state.current + 1
+    state.current = value
+
+    emitEvent({ type: 'next', seed: state.seed, current: state.current, prev })
+    return state.current
+  }
+
+  return { configure, onEvent, get, next, refresh, reset }
+}
+
+export const TX_Z_INDEX_ALLOCATOR_KEY: InjectionKey<TxZIndexAllocator>
+  = Symbol('tx-z-index-allocator')
+
+/**
+ * Allocator for callers with no Vue app in scope: the module-level functions
+ * below, tests, and external consumers of the published API.
+ */
+const fallbackAllocator = createZIndexAllocator()
+
+/**
+ * Gives one app its own allocator. Vue SSR builds an app per request, so this
+ * is what makes the counter request-scoped on the server.
+ */
+export function provideZIndexAllocator(
+  app: App,
+  allocator: TxZIndexAllocator = createZIndexAllocator(),
+): TxZIndexAllocator {
+  app.provide(TX_Z_INDEX_ALLOCATOR_KEY, allocator)
+  return allocator
+}
+
+/**
+ * Resolves the app-scoped allocator, falling back to the module-level one when
+ * no app provided it — so a component still works when mounted outside
+ * `app.use(Tuffex)`.
+ *
+ * Call this in `setup` and keep the result: `inject` is only valid there, while
+ * allocation typically happens later from a watcher or event handler.
+ */
+export function useZIndexAllocator(): TxZIndexAllocator {
+  if (!getCurrentInstance())
+    return fallbackAllocator
+  return inject(TX_Z_INDEX_ALLOCATOR_KEY, fallbackAllocator)
 }
 
 export function configureZIndex(options: {
@@ -104,83 +251,25 @@ export function configureZIndex(options: {
   overrides?: TxZIndexOverrides
   seedSource?: TxZIndexSeedSource | null
 }): void {
-  const prev = state.current
-
-  const hasOverrides = Object.prototype.hasOwnProperty.call(options, 'overrides')
-  const hasSeedSource = Object.prototype.hasOwnProperty.call(options, 'seedSource')
-  const hasSeed = Object.prototype.hasOwnProperty.call(options, 'seed')
-
-  if (hasOverrides) {
-    state.overrides = options.overrides ?? null
-  }
-
-  if (hasSeedSource) {
-    state.seedSourceUnsubscribe?.()
-    state.seedSourceUnsubscribe = null
-    state.seedSource = options.seedSource ?? null
-
-    const src = state.seedSource
-    if (src?.subscribe) {
-      state.seedSourceUnsubscribe = src.subscribe(() => {
-        refreshZIndex(undefined, 'seedSource')
-      })
-    }
-  }
-
-  if (hasSeed) {
-    refreshZIndex(options.seed, 'configure')
-  }
-  else if (hasSeedSource && state.seedSource) {
-    refreshZIndex(undefined, 'configure')
-  }
-
-  emitEvent({ type: 'configure', seed: state.seed, current: state.current, prev })
+  fallbackAllocator.configure(options)
 }
 
-export function onZIndexEvent(listener: (e: TxZIndexEvent) => void): () => void {
-  state.listeners.add(listener)
-  return () => state.listeners.delete(listener)
+export function onZIndexEvent(listener: ZIndexListener): () => void {
+  return fallbackAllocator.onEvent(listener)
 }
 
 export function getZIndex(): number {
-  const ctx: TxZIndexContext = { seed: state.seed, current: state.current }
-  const overridden = state.overrides?.get?.(ctx)
-  if (isFiniteNumber(overridden))
-    return overridden
-  return state.current
+  return fallbackAllocator.get()
 }
 
 export function nextZIndex(): number {
-  const prev = state.current
-  const ctx: TxZIndexContext = { seed: state.seed, current: state.current }
-  const overridden = state.overrides?.next?.(ctx)
-
-  const next = isFiniteNumber(overridden) ? overridden : state.current + 1
-  state.current = next
-
-  emitEvent({ type: 'next', seed: state.seed, current: state.current, prev })
-  return state.current
+  return fallbackAllocator.next()
 }
 
 export function refreshZIndex(seed?: number, reason?: string): number {
-  const prev = state.current
-  const resolvedSeed = resolveSeed(seed)
-
-  state.seed = resolvedSeed
-  state.current = Math.max(state.current, resolvedSeed)
-
-  emitEvent({ type: 'refresh', seed: state.seed, current: state.current, prev, reason })
-  return state.current
+  return fallbackAllocator.refresh(seed, reason)
 }
 
 export function resetZIndex(seed?: number, reason?: string): number {
-  const prev = state.current
-  const resolvedSeed = resolveSeed(seed)
-
-  state.seed = resolvedSeed
-  state.current = resolvedSeed
-
-  emitEvent({ type: 'reset', seed: state.seed, current: state.current, prev, reason })
-  return state.current
+  return fallbackAllocator.reset(seed, reason)
 }
-
