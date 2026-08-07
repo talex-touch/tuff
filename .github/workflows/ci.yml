@@ -14,6 +14,8 @@ jobs:
   job1:
     name: Check Not Allowed File Changes
     runs-on: ubuntu-latest
+    outputs:
+      release_acceptance: ${{ steps.filter_not_allowed.outputs.release_acceptance }}
     steps:
       - name: Check Not Allowed File Changes
         uses: dorny/paths-filter@v4
@@ -24,6 +26,10 @@ jobs:
             change:
               - 'package-lock.json'
               - 'yarn.lock'
+            release_acceptance:
+              - 'scripts/**'
+              - 'vitest.release-acceptance.config.mjs'
+              - '.github/workflows/ci.yml'
 
       - name: Fail on foreign lockfile changes
         if: ${{ steps.filter_not_allowed.outputs.change == 'true' }}
@@ -151,6 +157,50 @@ jobs:
       # of the workspaces that declare a typecheck script; see #553.
       - name: Run workspace typecheck
         run: pnpm typecheck:all
+
+  # The release-acceptance contract only holds on an Apple-silicon Mac: update-downgrade
+  # evidence may claim `executionMode: runtime` for darwin/arm64 and nothing else
+  # (scripts/lib/update-downgrade-evidence.mjs:122). Those two files are therefore excluded
+  # from the Linux script-test gate, which left the contract untested anywhere (#1139).
+  #
+  # Gated on job1's path filter so unrelated pull requests spend no macOS minutes — the
+  # runner costs ~10x a Linux one, and these tests only matter when scripts/ moves.
+  job_release_acceptance:
+    name: Release acceptance (macOS)
+    runs-on: macos-latest
+    needs: job1
+    if: ${{ needs.job1.outputs.release_acceptance == 'true' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails loudly rather than passing vacuously if GitHub ever moves macos-latest back to
+      # Intel: the tests would then be skipped by the very rule they exist to enforce.
+      - name: Confirm the runner is the acceptance host
+        run: |
+          node -e "
+            const { platform, arch } = process
+            if (platform !== 'darwin' || arch !== 'arm64') {
+              console.error('release acceptance expects darwin/arm64, got ' + platform + '/' + arch)
+              process.exit(1)
+            }
+            console.log('acceptance host: ' + platform + '/' + arch)
+          "
+
+      - name: Run release-acceptance tests
+        run: pnpm test:release-acceptance
 
   job_app_tests:
     name: App suites (${{ matrix.app }})
