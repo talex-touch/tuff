@@ -2,18 +2,35 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
-const require = createRequire(import.meta.url)
-let contentPkg
+// Resolution starts from apps/nexus, which is the only workspace that declares
+// @nuxt/content. This script runs as a *root* postinstall, and since #1099 removed
+// shamefully-hoist the package is not in the root node_modules at all.
+const require = createRequire(new URL('../apps/nexus/package.json', import.meta.url))
+
+let moduleEntry
 try {
-  contentPkg = require.resolve('@nuxt/content/package.json')
+  // The `.` export, which lands on dist/module.cjs — beside the file this rewrites.
+  //
+  // This used to resolve '@nuxt/content/package.json'. That subpath is not in the package's
+  // exports map (3.15.0 exposes only `.`, ./preview, ./utils, ./runtime, ./server, ./nitro),
+  // so it threw ERR_PACKAGE_PATH_NOT_EXPORTED. Combined with the root-resolution problem
+  // above, the patch had never once been applied (#538).
+  moduleEntry = require.resolve('@nuxt/content')
 }
-catch {
+catch (error) {
+  // Skipping is legitimate — a partial install may not have apps/nexus. Saying so is not
+  // optional: exiting 0 in silence is exactly what hid this for as long as it was hidden.
+  process.stdout.write(
+    `[patch-nuxt-content] @nuxt/content not resolvable from apps/nexus (${error?.code ?? 'unknown'}); skip\n`,
+  )
   process.exit(0)
 }
 
-const modulePath = join(dirname(contentPkg), 'dist/module.mjs')
-if (!existsSync(modulePath))
+const modulePath = join(dirname(moduleEntry), 'module.mjs')
+if (!existsSync(modulePath)) {
+  process.stdout.write(`[patch-nuxt-content] no module.mjs beside ${moduleEntry}; skip\n`)
   process.exit(0)
+}
 
 let text = readFileSync(modulePath, 'utf8')
 if (text.includes('Serialize content parsing/cache writes')) {
