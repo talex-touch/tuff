@@ -1,14 +1,10 @@
 <script name="UnifiedFileTag" setup lang="ts">
-import path from 'path-browserify'
+import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
+import { displayBasename, displayExtension } from '@talex-touch/utils/common/utils/safe-path'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
-
-const { t } = useI18n()
-const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp', 'ico'])
-const unifiedFileTagLog = createRendererLogger('UnifiedFileTag')
 
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
@@ -22,6 +18,9 @@ const props = defineProps<{
   /** Clipboard data object (clipboard files) */
   clipboardData?: IClipboardItem | null
 }>()
+const { t } = useI18n()
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp', 'ico'])
+const unifiedFileTagLog = createRendererLogger('UnifiedFileTag')
 
 /**
  * Validate if a string is a valid file path
@@ -66,7 +65,7 @@ const firstFilePath = computed(() => (filePaths.value.length > 0 ? filePaths.val
 
 function getFileExtension(value: string | null): string {
   if (!value) return ''
-  return path.extname(value).replace(/^\./, '').toLowerCase()
+  return displayExtension(value)
 }
 
 function isImagePath(value: string | null): boolean {
@@ -85,7 +84,7 @@ const fileCount = computed(() => filePaths.value.length)
  */
 const firstFileName = computed(() => {
   if (filePaths.value.length === 0) return t('boxTag.preparingFiles', '文件准备中...')
-  return path.basename(filePaths.value[0])
+  return displayBasename(filePaths.value[0])
 })
 
 /**

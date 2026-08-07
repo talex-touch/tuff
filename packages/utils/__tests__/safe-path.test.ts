@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isAbsolutePath, isSafePathSegment, normalizeAbsolutePath } from '../common/utils/safe-path'
+import { displayBasename, displayExtension, displayParentName, isAbsolutePath, isSafePathSegment, normalizeAbsolutePath } from '../common/utils/safe-path'
 
 /**
  * These run under vitest, where `window` is undefined, so `safe-path` picks `node:path`.
@@ -89,5 +89,42 @@ describe('isSafePathSegment', () => {
 
   it('accepts an ordinary name', () => {
     expect(isSafePathSegment('plugin-name')).toBe(true)
+  })
+})
+
+describe('display helpers', () => {
+  it('reads a windows path the renderer would otherwise print whole', () => {
+    // path-browserify's sep is '/', so basename returned the entire string and dirname
+    // returned '.' — a file chip showed the full path where it meant the file name (#581).
+    const win = 'C:\\Users\\me\\Documents\\report.PDF'
+    expect(displayBasename(win)).toBe('report.PDF')
+    expect(displayParentName(win)).toBe('Documents')
+    expect(displayExtension(win)).toBe('pdf')
+  })
+
+  it('reads a posix path the same way', () => {
+    const posix = '/home/me/docs/report.pdf'
+    expect(displayBasename(posix)).toBe('report.pdf')
+    expect(displayParentName(posix)).toBe('docs')
+    expect(displayExtension(posix)).toBe('pdf')
+  })
+
+  it('handles a UNC path', () => {
+    expect(displayBasename('\\\\srv\\share\\a.txt')).toBe('a.txt')
+    expect(displayParentName('\\\\srv\\share\\a.txt')).toBe('share')
+  })
+
+  it('treats a leading dot as a hidden file, not an extension', () => {
+    expect(displayBasename('.gitignore')).toBe('.gitignore')
+    expect(displayExtension('.gitignore')).toBe('')
+  })
+
+  it('returns empty strings rather than throwing at the edges', () => {
+    for (const value of ['', '/', 'C:\\', 'report.pdf']) {
+      expect(() => displayBasename(value)).not.toThrow()
+      expect(typeof displayParentName(value)).toBe('string')
+    }
+    expect(displayParentName('report.pdf')).toBe('')
+    expect(displayBasename('')).toBe('')
   })
 })
