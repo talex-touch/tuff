@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import traceIntelligenceAgentHandler from './trace.get'
+import traceIntelligenceAgentHandler from '../../../../../server/api/admin/intelligence-agent/session/trace.get'
 
 const routeGlobals = vi.hoisted(() => {
   const globals = globalThis as typeof globalThis & { getQuery?: unknown }
@@ -20,8 +20,8 @@ const runtimeMocks = vi.hoisted(() => ({
   listRuntimeTraceEvents: vi.fn(),
 }))
 
-vi.mock('../../../../utils/auth', () => authMocks)
-vi.mock('../../../../utils/tuffIntelligenceRuntimeStore', () => runtimeMocks)
+vi.mock('../../../../../server/utils/auth', () => authMocks)
+vi.mock('../../../../../server/utils/tuffIntelligenceRuntimeStore', () => runtimeMocks)
 
 describe('/api/admin/intelligence-agent/session/trace', () => {
   beforeEach(() => {
