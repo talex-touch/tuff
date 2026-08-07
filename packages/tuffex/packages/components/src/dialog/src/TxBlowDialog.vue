@@ -29,8 +29,11 @@ import {
   useId,
 
 } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { TxButton } from '../../button'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxBlowDialog',
@@ -48,7 +51,7 @@ const props = withDefaults(defineProps<BlowDialogProps>(), {
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 // Instance-scoped ids (mirroring Bottom/TouchTip) so the dialog announces both its
 // title and its message, and stacked dialogs never collide on a hard-coded id.
 const titleId = useId()
@@ -65,7 +68,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 onMounted(() => {
-  zIndex.value = nextZIndex()
+  zIndex.value = zIndexAllocator.next()
   previouslyFocusedElement = document.activeElement as HTMLElement
 
   if (props.render) {
