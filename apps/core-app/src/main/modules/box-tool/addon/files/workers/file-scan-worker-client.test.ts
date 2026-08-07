@@ -67,6 +67,19 @@ function messageTypeOf(message: unknown): string {
   return String((message as { type: unknown }).type)
 }
 
+/** Runs one scan to completion so the client is idle with its shutdown window armed. */
+async function scanOnceAndSettle(client: FileScanWorkerClient) {
+  const scan = client.scan(['/tmp'])
+  const worker = workerMock.workers.at(-1)!
+  worker.emit('message', {
+    type: 'done',
+    taskId: taskIdOf(worker.messages[0]),
+    scannedCount: 0
+  })
+  await expect(scan).resolves.toEqual([])
+  return worker
+}
+
 describe('FileScanWorkerClient idle shutdown', () => {
   beforeEach(() => {
     workerMock.workers.length = 0
@@ -118,8 +131,77 @@ describe('FileScanWorkerClient idle shutdown', () => {
   it('keeps the worker alive while status metrics are pending', async () => {
     vi.useFakeTimers()
     const client = new FileScanWorkerClient()
+    const worker = await scanOnceAndSettle(client)
+
+    // Poll late enough that the metrics request is still in flight when the idle deadline
+    // arrives, which is the only moment the deferral actually matters.
+    await vi.advanceTimersByTimeAsync(59_900)
+    const statusPromise = client.getStatus()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(worker.messages).toHaveLength(2)
+    expect(messageTypeOf(worker.messages[1])).toBe('metrics')
+
+    // The deadline lands here, with metrics still outstanding.
+    await vi.advanceTimersByTimeAsync(100)
+    expect(worker.terminateCalls).toBe(0)
+
+    // Metrics time out at +300ms from the request, which re-arms the window.
+    await vi.advanceTimersByTimeAsync(200)
+    await expect(statusPromise).resolves.toMatchObject({
+      name: 'file-scan',
+      state: 'idle',
+      metrics: null
+    })
+    expect(worker.terminateCalls).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('does not extend worker liveness when polled faster than the idle timeout', async () => {
+    vi.useFakeTimers()
+    const client = new FileScanWorkerClient()
+    const worker = await scanOnceAndSettle(client)
+
+    // A diagnostics panel refreshing every 5s used to reset the whole 60s window on each
+    // call, so the worker never died no matter how long it sat unused. Poll well past the
+    // deadline; the worker must still go.
+    for (let elapsed = 0; elapsed < 75_000; elapsed += 5_000) {
+      const status = client.getStatus()
+      await vi.advanceTimersByTimeAsync(300)
+      await status
+      await vi.advanceTimersByTimeAsync(4_700)
+    }
+
+    expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('reports a cached offline status without spawning a worker', async () => {
+    vi.useFakeTimers()
+    const client = new FileScanWorkerClient()
+    const worker = await scanOnceAndSettle(client)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(worker.terminateCalls).toBe(1)
+    expect(workerMock.workers).toHaveLength(1)
+
+    await expect(client.getStatus()).resolves.toMatchObject({
+      state: 'offline',
+      threadId: null,
+      uptimeMs: null,
+      metrics: null
+    })
+    expect(workerMock.workers).toHaveLength(1)
+  })
+
+  it('holds the worker while a scan is active and only then starts the idle window', async () => {
+    vi.useFakeTimers()
+    const client = new FileScanWorkerClient()
     const scan = client.scan(['/tmp'])
     const worker = workerMock.workers.at(-1)!
+
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(worker.terminateCalls).toBe(0)
 
     worker.emit('message', {
       type: 'done',
@@ -128,19 +210,49 @@ describe('FileScanWorkerClient idle shutdown', () => {
     })
     await expect(scan).resolves.toEqual([])
 
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(worker.terminateCalls).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('settles an in-flight status request on shutdown and refuses to respawn', async () => {
+    vi.useFakeTimers()
+    const client = new FileScanWorkerClient()
+    const worker = await scanOnceAndSettle(client)
+
     const statusPromise = client.getStatus()
     await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-    expect(messageTypeOf(worker.messages[1])).toBe('metrics')
 
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(worker.terminateCalls).toBe(0)
-    await expect(statusPromise).resolves.toMatchObject({
-      name: 'file-scan',
-      state: 'idle',
-      metrics: null
-    })
+    client.shutdown()
 
-    await vi.advanceTimersByTimeAsync(300)
+    // Without settling metricsPending this would stay unresolved until the 300ms timer,
+    // which fires against a worker that no longer exists.
+    await expect(statusPromise).resolves.toMatchObject({ metrics: null })
+    expect(worker.terminateCalls).toBe(1)
+
+    await expect(client.scan(['/var'])).rejects.toThrow('FILE_SCAN_WORKER_CLOSED')
+    expect(workerMock.workers).toHaveLength(1)
+
+    // Repeated shutdown is a no-op rather than a second terminate or a throw.
+    client.shutdown()
+    client.shutdown()
+    expect(worker.terminateCalls).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('fails in-flight scans on shutdown', async () => {
+    vi.useFakeTimers()
+    const client = new FileScanWorkerClient()
+    const scan = client.scan(['/tmp'])
+    const worker = workerMock.workers.at(-1)!
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(1))
+
+    client.shutdown()
+
+    await expect(scan).rejects.toThrow('FILE_SCAN_WORKER_CLOSED')
     expect(worker.terminateCalls).toBe(1)
   })
 })
