@@ -912,8 +912,8 @@ importers:
         specifier: ^3.12.0
         version: 3.12.0
       compressing:
-        specifier: ^1.10.5
-        version: 1.10.5
+        specifier: ^2.1.1
+        version: 2.1.1
       debug:
         specifier: ^4.4.3
         version: 4.4.3(supports-color@10.2.2)
@@ -973,8 +973,8 @@ importers:
         specifier: ^3.12.0
         version: 3.12.0
       compressing:
-        specifier: ^1.10.5
-        version: 1.10.5
+        specifier: ^2.1.1
+        version: 2.1.1
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
@@ -7571,10 +7571,6 @@ packages:
   compress-commons@6.0.2:
     resolution: {integrity: sha512-6FqVXeETqWPoGcfzrXb37E50NP0LXT8kAMu5ooZayhWWdgEY4lBEEcbQNXtkuKQsGduxiIcI4gOTsxTmuq/bSg==}
     engines: {node: '>= 14'}
-
-  compressing@1.10.5:
-    resolution: {integrity: sha512-kmVGoqpCTZLy36T8XeYexmyJ8YhZhgjGzkPr2iCGHdfZg7IkelF5DEf5Xyzeo7hwSSEW6ifZuv0IeRAkee5NcA==}
-    engines: {node: '>= 4.0.0'}
 
   compressing@2.1.1:
     resolution: {integrity: sha512-B/sIxBNB1SOY9GPo9nKk/R0K0q+27KdM3x3/LK/kV858UUWGbl9j0lqUvqQvaQrSJY9jSors4b3pbYc3dz+w4w==}
@@ -21287,18 +21283,6 @@ snapshots:
       is-stream: 2.0.1
       normalize-path: 3.0.0
       readable-stream: 4.7.0
-
-  compressing@1.10.5:
-    dependencies:
-      '@eggjs/yauzl': 2.11.0
-      flushwritable: 1.0.0
-      get-ready: 1.0.0
-      iconv-lite: 0.5.2
-      mkdirp: 0.5.6
-      pump: 3.0.3
-      streamifier: 0.1.1
-      tar-stream: 1.6.2
-      yazl: 2.5.1
 
   compressing@2.1.1:
     dependencies:
