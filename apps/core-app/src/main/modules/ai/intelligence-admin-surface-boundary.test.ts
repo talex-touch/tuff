@@ -72,7 +72,10 @@ vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
   ...intelligenceEventMocks,
   intelligenceKnowledgeEvents: {}
 }))
-vi.mock('@talex-touch/utils/transport/events/types', () => ({
+// Spread the real module: a full replacement drops every export the
+// module later gains, which is how PRIVACY_DATA_CATEGORIES broke this.
+vi.mock('@talex-touch/utils/transport/events/types', async importOriginal => ({
+  ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
 vi.mock('./intelligence-sdk', () => ({
