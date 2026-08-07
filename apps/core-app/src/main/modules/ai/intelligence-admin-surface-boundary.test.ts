@@ -72,9 +72,8 @@ const intelligenceEventMocks = vi.hoisted(() => {
 // from them called `undefined.toEventName()`. Only the api events are
 // overridden, which is all this suite looks up.
 vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import('@talex-touch/utils/transport/sdk/domains/intelligence')
-  >()
+  const actual =
+    await importOriginal<typeof import('@talex-touch/utils/transport/sdk/domains/intelligence')>()
   return {
     ...actual,
     // Merged, not replaced. The hand-written list covers the events this suite
