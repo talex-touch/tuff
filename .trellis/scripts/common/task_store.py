@@ -134,7 +134,9 @@ _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
 _SEED_EXAMPLE = (
     "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. "
     "Put spec/research files only — no code paths. "
-    "Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. "
+    "List candidates with `find .trellis/spec -name '*.md'` — note that "
+    "`get_context.py --mode packages` reports layers only and omits spec/guides, "
+    "which real manifests do cite. "
     "Delete this line once real entries are added."
 )
 
