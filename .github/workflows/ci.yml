@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_acceptance: ${{ steps.filter_not_allowed.outputs.release_acceptance }}
+      nexus: ${{ steps.filter_not_allowed.outputs.nexus }}
     steps:
       - name: Check Not Allowed File Changes
         uses: dorny/paths-filter@v4
@@ -29,6 +30,10 @@ jobs:
             release_acceptance:
               - 'scripts/**'
               - 'vitest.release-acceptance.config.mjs'
+              - '.github/workflows/ci.yml'
+            nexus:
+              - 'apps/nexus/**'
+              - 'packages/tuffex/**'
               - '.github/workflows/ci.yml'
 
       - name: Fail on foreign lockfile changes
@@ -201,6 +206,61 @@ jobs:
 
       - name: Run release-acceptance tests
         run: pnpm test:release-acceptance
+
+  # apps/nexus is the production Cloudflare deployment, and its build and check:* gates ran
+  # nowhere (#552). Its `test` and `typecheck` are covered now — by job_app_tests since #924
+  # and by typecheck:all since #553 — but a PR could break the Nuxt build or the API route
+  # tree and nothing would notice.
+  #
+  # Path-filtered because the build is the expensive part: it builds tuffex first and asks for
+  # an 8GB heap, so it should not sit on every unrelated pull request.
+  #
+  # Two of the four check:* scripts are deliberately absent, because they are deployment-time
+  # checks rather than PR gates and both fail without their inputs:
+  #   check:preview-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN
+  #   check:runtime-evidence → exit 1, wants an output/playwright directory from a prior run
+  # They belong in the deploy pipeline, next to the secrets and artifacts they read.
+  job_nexus:
+    name: Nexus (build + checks)
+    runs-on: ubuntu-latest
+    needs: job1
+    if: ${{ needs.job1.outputs.nexus == 'true' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Both verified passing on a clean tree before being wired: the route-tree check exits 0
+      # with "server/api route tree verified", the fence check exits 0 silently.
+      - name: Verify server API route tree
+        run: pnpm -C apps/nexus check:api-routes
+
+      - name: Verify MDC fences
+        run: pnpm -C apps/nexus check:mdc-fences
+
+      # Currently fails, and wiring it up is what found that (#1151): nitro cannot resolve
+      # @panva/hkdf from next-auth. The path it wants is under the root node_modules, which
+      # only existed while shamefully-hoist was on — #1099 fallout, same shape as tsx (#1128),
+      # yaml (#1138) and the nuxt-content patch (#538).
+      #
+      # Non-blocking rather than omitted: the two checks above are real gates and should not
+      # be held hostage to a pre-existing break, and a build that runs and is visibly red
+      # beats one that runs nowhere — which is how a production deployment target got to be
+      # unbuildable unnoticed in the first place. Flip this to blocking when #1151 lands.
+      - name: Build
+        continue-on-error: true
+        run: pnpm -C apps/nexus build
 
   job_app_tests:
     name: App suites (${{ matrix.app }})
