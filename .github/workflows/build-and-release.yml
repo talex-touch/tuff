@@ -88,6 +88,13 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
 
+      # A tag and the manifest are two different sources for "which release is this", and
+      # nothing reconciled them (#550). Runs before the platform builds so a mismatch costs
+      # seconds instead of three builds, and skips cleanly on a branch ref, which is what a
+      # workflow_dispatch build without a sync_tag has.
+      - name: Verify the tag matches the built version
+        run: node scripts/check-release-tag-version.mjs --tag "${GITHUB_REF_NAME}"
+
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
