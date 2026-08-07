@@ -34,6 +34,14 @@
 
 其余“仅某个 workspace 使用”的配置，优先放到对应 workspace 内（例如 `apps/core-app/.prettierrc.yaml`）。
 
+### 包元数据的唯一来源
+
+`version` / `description` / `author` / `homepage` / `license` 以**根 `package.json` 为准**，由 `scripts/sync-core-package.mjs`（`postinstall` 触发）向下同步到 `apps/core-app/package.json`。
+
+规范主页是 `https://tuff.tagzxia.com`——与 `packages/tuff-cli` 的 `OFFICIAL_SITE_URL`、`packages/tuff-intelligence` 的 `NEXUS_BASE_URL` 以及发布脚本的默认 base URL 一致。
+
+注意同步脚本对根未定义的字段是**跳过**而非清空（`if (typeof rootPkg[field] === 'undefined') continue`），所以根上缺字段不会删掉下游的值——它只是让那个值**无人拥有**、从而悄悄漂移。`pnpm check:doc-metadata` 会在根缺少 `homepage`、或根与 CoreApp 不一致时失败。
+
 ## 代码质量与提交流程（标准化）
 
 ### ESLint
