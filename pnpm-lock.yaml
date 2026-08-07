@@ -338,6 +338,9 @@ importers:
       '@vueuse/core':
         specifier: catalog:frontend
         version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
@@ -404,6 +407,9 @@ importers:
       pinyin-pro:
         specifier: ^3.28.1
         version: 3.28.1
+      plist:
+        specifier: ^3.1.0
+        version: 3.1.0
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
@@ -413,6 +419,9 @@ importers:
       talex-mica-electron:
         specifier: ^1.0.2
         version: 1.0.2
+      v-wave:
+        specifier: ^3.1.1
+        version: 3.1.1(magicast@0.5.3)(vue@3.5.39(typescript@5.9.3))
       vue:
         specifier: catalog:frontend
         version: 3.5.39(typescript@5.9.3)
@@ -444,6 +453,9 @@ importers:
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.13.2)
+      '@electron/asar':
+        specifier: ^3.4.1
+        version: 3.4.1
       '@milkdown/core':
         specifier: ^7.21.3
         version: 7.21.3
@@ -462,6 +474,12 @@ importers:
       '@milkdown/utils':
         specifier: ^7.21.3
         version: 7.21.3
+      '@vue/test-utils':
+        specifier: ^2.4.11
+        version: 2.4.11(@vue/compiler-dom@3.5.39)(@vue/server-renderer@3.5.39(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
+      electron:
+        specifier: ^41.10.1
+        version: 41.10.2
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
@@ -480,6 +498,9 @@ importers:
       vite-plugin-vue-setup-extend:
         specifier: ^0.4.0
         version: 0.4.0(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
       vue-draggable-plus:
         specifier: ^0.6.1
         version: 0.6.1
