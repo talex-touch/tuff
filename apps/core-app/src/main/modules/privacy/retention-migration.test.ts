@@ -68,7 +68,10 @@ describe('privacy retention indexes migration', () => {
     // suite would keep passing while exercising a different one entirely --
     // worse than failing, which is what it did when 0035 and 0036 arrived.
     const target = migrations.indexOf(RETENTION_INDEXES_MIGRATION)
-    expect(target, `${RETENTION_INDEXES_MIGRATION} is missing from the chain`).toBeGreaterThanOrEqual(0)
+    expect(
+      target,
+      `${RETENTION_INDEXES_MIGRATION} is missing from the chain`
+    ).toBeGreaterThanOrEqual(0)
     await applyPrivacyMigrations(client, migrations.slice(0, target))
 
     await client.execute(
@@ -244,7 +247,15 @@ describe('privacy retention indexes migration', () => {
   it('upgrades a journaled 0033 database while preserving existing rows', async () => {
     const { client, directory } = await createPrivacyTestClient('migration-upgrade')
     const stagedFolder = join(directory, 'migrations')
-    await stageMigrationChain(stagedFolder, 34)
+    // Both counts are derived from the chain: this test upgrades a database
+    // journaled at the migration before the retention indexes, up to and
+    // including them. Literal 34/35 silently drift as the chain grows.
+    const migrationNames = await getPrivacyMigrationNames()
+    const retentionIndex = migrationNames.indexOf(RETENTION_INDEXES_MIGRATION)
+    expect(retentionIndex).toBeGreaterThan(0)
+    const beforeRetention = retentionIndex
+    const throughRetention = retentionIndex + 1
+    await stageMigrationChain(stagedFolder, beforeRetention)
     await migrate(drizzle(client), { migrationsFolder: stagedFolder })
     await client.execute(
       `INSERT INTO clipboard_history (type, content, timestamp, is_favorite)
@@ -255,7 +266,7 @@ describe('privacy retention indexes migration', () => {
        VALUES ('journal-upgrade', 'assistant', 'archived', 1, 1)`
     )
 
-    await stageMigrationChain(stagedFolder, 35)
+    await stageMigrationChain(stagedFolder, throughRetention)
     await migrate(drizzle(client), { migrationsFolder: stagedFolder })
 
     const clipboard = await client.execute(
@@ -270,9 +281,9 @@ describe('privacy retention indexes migration', () => {
     )
     expect(context.rows[0]?.is_pinned).toBe(0)
     const journalRows = await client.execute('SELECT COUNT(*) AS count FROM __drizzle_migrations')
-    // Derived from the journal: a hardcoded count fails on every new migration
-    // while proving nothing about whether they all applied.
-    expect(Number(journalRows.rows[0]?.count)).toBe((await getPrivacyMigrationNames()).length)
+    // The staged folder holds only the chain through the retention indexes, so
+    // the journal reflects that subset rather than every migration on disk.
+    expect(Number(journalRows.rows[0]?.count)).toBe(throughRetention)
   })
 
   it('rolls back schema and journal state when 0034 fails mid-migration', async () => {
