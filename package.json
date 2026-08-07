@@ -65,7 +65,9 @@
     "check:doc-metadata": "node scripts/check-doc-metadata.mjs",
     "check:doc-metadata:self-test": "node scripts/check-doc-metadata.mjs --self-test",
     "check:plugin-lint-coverage": "node scripts/check-plugin-lint-coverage.mjs",
-    "check:plugin-lint-coverage:self-test": "node scripts/check-plugin-lint-coverage.mjs --self-test"
+    "check:plugin-lint-coverage:self-test": "node scripts/check-plugin-lint-coverage.mjs --self-test",
+    "check:action-pins": "node scripts/check-action-pins.mjs",
+    "check:action-pins:self-test": "node scripts/check-action-pins.mjs --self-test"
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.9.1",
