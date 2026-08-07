@@ -50,6 +50,7 @@ catalog:
   jsqr: ^1.4.0
   jszip: ^3.10.1
   markdown-it: ^14.3.0
+  marked: ^17.0.6
   mermaid: ^11.16.0
   next-auth: ~4.21.1
   nodemailer: ^9.0.3
