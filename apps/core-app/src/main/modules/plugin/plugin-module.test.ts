@@ -969,77 +969,87 @@ describe('PluginModule facade', () => {
   })
 
   it('parents destructive confirmation only to the configured live CoreApp window', async () => {
-    const module = new PluginModule()
-    mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
-    mocks.plugin.declaredPermissions = { required: ['system.shell'], optional: [] }
-    mocks.permissionHasPermission.mockReturnValue(true)
-    await initializeModule(module)
-    const activation = Object.freeze({
-      name: 'touch-quick-actions',
-      pluginInstanceId: 'quick-actions-instance',
-      activationGeneration: 1,
-      key: 'quick-actions-key'
-    })
-    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
-    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
-    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
-      | ((input: typeof activation) => {
-          definitions: ReadonlyArray<{
-            invoke(
-              context: ReturnType<typeof issuePluginSecurityContext>,
-              request: unknown,
-              signal: AbortSignal,
-              resources: unknown
-            ): Promise<unknown>
-          }>
-        })
-      | undefined
-    expect(factory).toEqual(expect.any(Function))
-    const definition = factory?.(activation).definitions[0]
-    const context = issuePluginSecurityContext(activation, 'plugin-host', {
-      hostGeneration: 7
-    })
-
-    mocks.browserWindowFromId.mockReturnValueOnce(null)
-    await expect(
-      definition?.invoke(
-        context,
-        { operation: 'run-action', actionId: 'restart' },
-        new AbortController().signal,
-        { register: vi.fn() }
-      )
-    ).resolves.toEqual({
-      actionId: 'restart',
-      status: 'blocked',
-      reason: 'confirmation-denied'
-    })
-    expect(mocks.dialogShowMessageBox).not.toHaveBeenCalled()
-
-    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
-    mocks.dialogShowMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
-    await expect(
-      definition?.invoke(
-        context,
-        { operation: 'run-action', actionId: 'shutdown' },
-        new AbortController().signal,
-        { register: vi.fn() }
-      )
-    ).resolves.toEqual({
-      actionId: 'shutdown',
-      status: 'blocked',
-      reason: 'confirmation-denied'
-    })
-    expect(mocks.browserWindowFromId).toHaveBeenLastCalledWith(42)
-    expect(mocks.dialogShowMessageBox).toHaveBeenCalledWith(
-      mocks.mainBrowserWindow,
-      expect.objectContaining({
-        title: '确认关机',
-        defaultId: 0,
-        cancelId: 0,
-        signal: expect.any(AbortSignal)
+    // restart/shutdown are supported on darwin and win32 only, so on a Linux
+    // runner the capability short-circuits to 'platform-unsupported' and the
+    // confirmation path this test covers is never reached. Pinned narrowly --
+    // process.platform is read per call here, so the scope is this test alone.
+    const previousPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      const module = new PluginModule()
+      mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
+      mocks.plugin.declaredPermissions = { required: ['system.shell'], optional: [] }
+      mocks.permissionHasPermission.mockReturnValue(true)
+      await initializeModule(module)
+      const activation = Object.freeze({
+        name: 'touch-quick-actions',
+        pluginInstanceId: 'quick-actions-instance',
+        activationGeneration: 1,
+        key: 'quick-actions-key'
       })
-    )
-    await module.onDestroy()
+      mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+      mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
+      const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+        | ((input: typeof activation) => {
+            definitions: ReadonlyArray<{
+              invoke(
+                context: ReturnType<typeof issuePluginSecurityContext>,
+                request: unknown,
+                signal: AbortSignal,
+                resources: unknown
+              ): Promise<unknown>
+            }>
+          })
+        | undefined
+      expect(factory).toEqual(expect.any(Function))
+      const definition = factory?.(activation).definitions[0]
+      const context = issuePluginSecurityContext(activation, 'plugin-host', {
+        hostGeneration: 7
+      })
+
+      mocks.browserWindowFromId.mockReturnValueOnce(null)
+      await expect(
+        definition?.invoke(
+          context,
+          { operation: 'run-action', actionId: 'restart' },
+          new AbortController().signal,
+          { register: vi.fn() }
+        )
+      ).resolves.toEqual({
+        actionId: 'restart',
+        status: 'blocked',
+        reason: 'confirmation-denied'
+      })
+      expect(mocks.dialogShowMessageBox).not.toHaveBeenCalled()
+
+      mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
+      mocks.dialogShowMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
+      await expect(
+        definition?.invoke(
+          context,
+          { operation: 'run-action', actionId: 'shutdown' },
+          new AbortController().signal,
+          { register: vi.fn() }
+        )
+      ).resolves.toEqual({
+        actionId: 'shutdown',
+        status: 'blocked',
+        reason: 'confirmation-denied'
+      })
+      expect(mocks.browserWindowFromId).toHaveBeenLastCalledWith(42)
+      expect(mocks.dialogShowMessageBox).toHaveBeenCalledWith(
+        mocks.mainBrowserWindow,
+        expect.objectContaining({
+          title: '确认关机',
+          defaultId: 0,
+          cancelId: 0,
+          signal: expect.any(AbortSignal)
+        })
+      )
+      await module.onDestroy()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previousPlatform, configurable: true })
+    }
   })
 
   it('shows the configured main window for the current system-actions activation without shell permission', async () => {
