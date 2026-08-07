@@ -31,8 +31,8 @@ jobs:
     with:
       package-name: tuffex
       package-path: packages/tuffex
-      run-typecheck: false # Add if typecheck script exists
-      run-lint: false # Add if lint script exists
-      run-test: false # Add if test script exists
+      run-typecheck: true
+      run-lint: true
+      run-test: true
       run-build: true
       build-command: pnpm build
