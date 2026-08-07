@@ -1,0 +1,77 @@
+---
+title: Stream Markdown
+description: A Markdown renderer built for streaming output, with a tail cursor and per-language fenced-block renderers.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, markdown, streaming]
+syncStatus: reviewed
+verified: true
+---
+# Stream Markdown
+
+`TxStreamMarkdown` renders Markdown that is still being generated: it splits the document into blocks so appended text does not reflow the whole page, shows a cursor at the tail, and lets fenced code blocks be handed to custom components by language.
+
+Manually verified against `packages/tuffex/packages/components/src/stream-markdown/src/TxStreamMarkdown.vue`.
+
+## Basic Usage
+
+### Stream Markdown
+::::TuffDemoWrapper{demo="StreamMarkdownStreamMarkdownDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import TxMermaidBlock from '@talex-touch/tuffex/stream-markdown'
+
+  const content = ref('# Heading\n\nGenerating…')
+  </script>
+
+  <template>
+    <TxStreamMarkdown
+      :content="content"
+      streaming
+      :renderers="{ mermaid: TxMermaidBlock }"
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The document is split into blocks and rendered per block, so appending text does not reflow the whole page — the property that makes this usable while streaming.
+- While `streaming` is true a tail cursor is shown, and **an unclosed tail fence has its rendering deferred**: a half-written code block does not flash in a wrong form first, it waits for the closing fence.
+- `fenceClosed` is `false` only for the still-growing tail fence of a streaming document. Indented code has no fence and also reports `false`; any non-tail block is treated as complete.
+- `sanitize` is on by default and loads dompurify through a dynamic `import()`. **Keep it on** — the content is model output.
+- If dompurify fails to load, the sanitizer is left null and the component keeps working. Sanitization is therefore best-effort and is not a substitute for a server-side trust boundary.
+- Each instance owns its own `Marked` (with `gfm` and `breaks`) rather than mutating the global singleton, which would reconfigure every other consumer in the app.
+- `renderers` are matched by fence language — the first word, lowercased. Unregistered languages fall back to the default code block.
+- A registered renderer receives `StreamMarkdownBlockContext` as props, including `fenceClosed`, so it can show a placeholder until the block completes.
+- `theme` accepts `light`, `dark` or `auto`, with `auto` following the environment.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `content` | `string` | — | The Markdown source. Required. |
+| `streaming` | `boolean` | `false` | Whether output is still arriving; drives the tail cursor and deferred tail-fence rendering. |
+| `sanitize` | `boolean` | `true` | Whether to sanitize rendered HTML through dompurify. |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Colour theme. |
+| `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | Per-language fenced-block renderers, e.g. `{ mermaid: TxMermaidBlock }`. |
+
+### Events
+
+`TxStreamMarkdown` emits no component events.
+
+## Slots
+
+`TxStreamMarkdown` exposes no slots. Register a component through `renderers` to take over a particular kind of block.
+
+## Best Practices
+
+- Do not turn `sanitize` off. Model output is untrusted content and this is where it becomes DOM.
+- Keep `streaming` true for the duration and set it false when generation ends, or the cursor stays at the tail forever.
+- Handle `fenceClosed === false` in custom renderers with a loading state rather than parsing a partial block.
+- Key `renderers` by the lowercase language that opens the fence (` ```mermaid ` → `mermaid`).
+- Use `TxMarkdownView` for static Markdown; it does not need the block-splitting and cursor machinery.

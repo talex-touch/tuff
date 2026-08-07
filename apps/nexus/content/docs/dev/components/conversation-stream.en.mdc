@@ -1,0 +1,108 @@
+---
+title: Conversation Stream
+description: A virtualized conversation scroller that sticks to the bottom and pages older messages in at the top.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, conversation, virtual-scroll]
+syncStatus: reviewed
+verified: true
+---
+# Conversation Stream
+
+`TxConversationStream` is the scroll container for a conversation: it virtualizes a long list, sticks to the bottom while output streams, and loads older messages when the user reaches the top. It owns layout and scrolling only — the messages themselves come from the `item` slot.
+
+Manually verified against `packages/tuffex/packages/components/src/conversation-stream/src/TxConversationStream.vue`.
+
+## Basic Usage
+
+### Conversation Stream
+::::TuffDemoWrapper{demo="ConversationStreamConversationStreamDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const items = ref([{ id: '1', text: 'Hello' }])
+
+  async function loadOlder() {
+    const older = await fetchOlder()
+    items.value = [...older, ...items.value]
+    return { hasMore: older.length > 0 }
+  }
+  </script>
+
+  <template>
+    <TxConversationStream
+      :items="items"
+      :item-key="item => item.id"
+      :load-older="loadOlder"
+      streaming
+    >
+      <template #item="{ item }">
+        <div>{{ item.text }}</div>
+      </template>
+    </TxConversationStream>
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The component is generic over `T`, so the element type of `items` flows through to the `item` slot's scope with no casting on your side.
+- `itemKey` is required. Virtualization caches positions by key, and an array index shifts every position when a message is prepended.
+- `estimatedItemHeight` seeds the first layout only; real heights are measured and corrected afterwards.
+- Sticking to the bottom is conditional. New content follows while the user is at the bottom; once they scroll up it stops yanking them back and shows a scroll-to-bottom affordance instead.
+- `streaming` only drives that affordance's "new content" state — it does not decide whether the view sticks.
+- `loadOlder` is called near the top, and the contract is that **the consumer prepends into `items`** and then resolves `{ hasMore }`. The component never owns the array.
+- The viewport anchor is preserved across a prepend, so users are not thrown to a different position.
+- `hasMoreInitial` defaults to an explicit `undefined` rather than `false`. That opts out of Vue's absent-Boolean-prop coercion so "not asked yet" stays distinguishable from "there is no history". Pass `false` explicitly when you know there is none.
+- A throwing `loadOlder` emits `load-error` and renders the `top-error` slot, whose scope carries `retry`.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `T[]` | — | The messages. Required. |
+| `itemKey` | `ConversationStreamItemKey<T>` | — | Function returning a stable key. Required. |
+| `estimatedItemHeight` | `number` | `96` | Height assumed for unmeasured items. |
+| `overscan` | `number` | `4` | Extra items rendered on each side of the viewport. |
+| `loadOlder` | `() => Promise<ConversationStreamLoadResult>` | — | Called near the top; prepend into `items`, then resolve `{ hasMore }`. |
+| `hasMoreInitial` | `boolean` | `undefined` | Whether history may exist before the first `loadOlder` answers. |
+| `streaming` | `boolean` | `false` | Drives the scroll-to-bottom affordance's new-content state. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `at-bottom-change` | `(atBottom: boolean)` | Emitted when the at-bottom state changes. |
+| `load-error` | `(error: unknown)` | Emitted when `loadOlder` throws. |
+
+### Exposed
+
+| Name | Type | Description |
+|------|------|-------------|
+| `scrollToBottom` | `() => void` | Scrolls to the bottom. |
+| `scrollToIndex` | `(index: number) => void` | Scrolls to an index. |
+| `atBottom` | `ComputedRef<boolean>` | Whether the view is at the bottom. Read-only. |
+
+## Slots
+
+| Name | Scope | Description |
+|------|-------|-------------|
+| `item` | `{ item: T, index: number }` | Renders one message. |
+| `empty` | — | Shown when `items` is empty. |
+| `top-loading` | — | Shown while older messages load. |
+| `top-error` | `{ retry: () => void }` | Shown when loading failed, with a retry callback. |
+| `top-done` | — | Shown when there is no more history. |
+| `scroll-to-bottom` | `{ streaming: boolean }` | Replaces the scroll-to-bottom affordance. |
+
+## Best Practices
+
+- Key by the message's own id, never by index. This is a correctness requirement for virtualization, not an optimization.
+- Prepend inside `loadOlder`. Resolving without touching `items` leaves the component believing history is still pending.
+- Pass `hasMoreInitial: false` explicitly when you know there is no history — the default `undefined` means "unknown", not "none".
+- Keep `estimatedItemHeight` close to the real average; a large mismatch makes the scrollbar jump noticeably on first paint.
+- Use the exposed `scrollToBottom` / `scrollToIndex` for programmatic movement instead of driving the scroll container yourself, which fights the stick-to-bottom logic.
