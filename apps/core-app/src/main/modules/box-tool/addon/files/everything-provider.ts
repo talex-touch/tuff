@@ -164,7 +164,6 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   readonly type = 'file' as const
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 50
 
   private esPath: string | null = null
   private configuredCliPath: string | null = null

@@ -116,7 +116,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   ]
 
   public readonly priority = 'fast' as const
-  public readonly expectedDuration = 30
 
   public async handleActiveFeatureInput(payload: CoreBoxInputChangeRequest): Promise<boolean> {
     const query = payload.query
