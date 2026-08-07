@@ -1,0 +1,75 @@
+---
+title: Suggestion Chips
+description: 横向排列的提问建议胶囊，供用户一键发起后续对话。
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, suggestion, chips]
+syncStatus: reviewed
+verified: true
+---
+# Suggestion Chips
+
+`TxSuggestionChips` 把一组建议渲染成可横向滚动的胶囊按钮，点击后抛出对应建议。常用于对话结束后的追问引导。
+
+已人工核对 `packages/tuffex/packages/components/src/suggestion-chips/src/TxSuggestionChips.vue`。
+
+## 基础用法
+
+### Suggestion Chips
+::::TuffDemoWrapper{demo="SuggestionChipsSuggestionChipsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const suggestions = ref([
+    { id: 'explain', text: '解释这段代码' },
+    { id: 'test', text: '补充单元测试' },
+    { id: 'perf', text: '还有优化空间吗？' },
+  ])
+
+  function handleSelect(suggestion: { id: string, text: string }) {
+    console.log(suggestion.id)
+  }
+  </script>
+
+  <template>
+    <TxSuggestionChips :suggestions="suggestions" @select="handleSelect" />
+  </template>
+---
+::::
+
+## 交互契约
+
+- `suggestions` 为空数组时整个组件不渲染，无需在外层再包一层 `v-if`。
+- 每个胶囊以 `suggestion.id` 作为 `key`，请保证同一组内 `id` 唯一。
+- 点击派发 `select`，参数是被点中的完整建议对象，而不是索引或 id。
+- 组件不维护选中态，也不会在点击后移除建议；是否清空由消费方决定。
+- 容器溢出时可横向滚动，滚动条被隐藏，两侧用渐变遮罩提示可滚动。
+- 容器为 `role="list"`，胶囊为 `role="listitem"`：这会覆盖 `<button>` 的隐式语义，屏幕阅读器将其读作列表项而非按钮。若需要按钮语义，请在外层补充说明文本。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `suggestions` | `AiSuggestion[]` | — | 建议列表；`AiSuggestion` 为 `{ id: string, text: string }`。必填。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `(suggestion: AiSuggestion)` | 点击某个胶囊时派发，携带该建议对象。 |
+
+## Slots
+
+`TxSuggestionChips` 不暴露插槽。胶囊文案取自 `suggestion.text`，需要富文本时请改用自定义实现。
+
+## 最佳实践
+
+- 一次给出 3~5 条建议；超出屏宽虽可滚动，但被折叠的选项实际很少被点到。
+- 文案写成用户会说的话（「补充单元测试」），而不是功能名（「测试生成」）。
+- 点击后通常应清空或替换建议列表，避免用户重复发送同一条。
+- `id` 用稳定标识而非文案本身，便于埋点统计与后续去重。

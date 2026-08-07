@@ -1,0 +1,75 @@
+---
+title: Suggestion Chips
+description: A horizontal row of follow-up prompts users can send in one tap.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, suggestion, chips]
+syncStatus: reviewed
+verified: true
+---
+# Suggestion Chips
+
+`TxSuggestionChips` renders a set of suggestions as horizontally scrollable pill buttons and emits the one that was tapped. It is typically shown after an assistant turn to offer follow-up questions.
+
+Manually verified against `packages/tuffex/packages/components/src/suggestion-chips/src/TxSuggestionChips.vue`.
+
+## Basic Usage
+
+### Suggestion Chips
+::::TuffDemoWrapper{demo="SuggestionChipsSuggestionChipsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const suggestions = ref([
+    { id: 'explain', text: 'Explain this code' },
+    { id: 'test', text: 'Add unit tests' },
+    { id: 'perf', text: 'Any room to optimise?' },
+  ])
+
+  function handleSelect(suggestion: { id: string, text: string }) {
+    console.log(suggestion.id)
+  }
+  </script>
+
+  <template>
+    <TxSuggestionChips :suggestions="suggestions" @select="handleSelect" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Nothing renders when `suggestions` is empty, so there is no need to wrap the component in your own `v-if`.
+- Each chip is keyed by `suggestion.id`; keep ids unique within a set.
+- Clicking emits `select` with the whole suggestion object, not an index or an id.
+- The component holds no selection state and does not remove a suggestion after it is tapped — clearing the list is the consumer's call.
+- The row scrolls horizontally when it overflows. The scrollbar is hidden and both edges are masked so the overflow reads as scrollable rather than clipped.
+- The container is `role="list"` and each chip is `role="listitem"`. That overrides the implicit `<button>` semantics, so screen readers announce a list item rather than a button. Supply surrounding text if button semantics matter for your surface.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `suggestions` | `AiSuggestion[]` | — | The suggestions to render, where `AiSuggestion` is `{ id: string, text: string }`. Required. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `select` | `(suggestion: AiSuggestion)` | Emitted when a chip is clicked, carrying that suggestion. |
+
+## Slots
+
+`TxSuggestionChips` exposes no slots. Chip labels come from `suggestion.text`; use a custom implementation if you need rich content.
+
+## Best Practices
+
+- Offer three to five suggestions. The row scrolls beyond that, but options past the fold are rarely tapped.
+- Word them the way a user would speak ("Add unit tests"), not as feature names ("Test generation").
+- Clear or replace the list after a tap so the same prompt cannot be sent twice.
+- Use stable ids rather than the label text, so analytics and de-duplication survive copy changes.
