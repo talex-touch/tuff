@@ -1,9 +1,6 @@
 {
   "name": "@talex-touch/utils",
   "version": "1.0.50",
-  "engines": {
-    "node": ">=24.0.0"
-  },
   "private": false,
   "description": "Tuff series utils",
   "author": "TalexDreamSoul",
@@ -48,6 +45,9 @@
     "transport",
     "types"
   ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "benchmark:preview": "vitest run \"__tests__/core-box/preview-sdk.benchmark.test.ts\" --reporter verbose",
     "lint": "pnpm exec eslint --cache .",
