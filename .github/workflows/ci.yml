@@ -88,6 +88,10 @@ jobs:
       - name: Verify build-script allowlist
         run: pnpm check:build-allowlist
 
+      # Reads LICENSE and the manifests only, so it does not need the install above.
+      - name: Verify entry documentation metadata
+        run: pnpm check:doc-metadata && pnpm check:doc-metadata:self-test
+
       - name: Run PR quality gate
         run: pnpm quality:pr
 

@@ -58,7 +58,9 @@
     "lint:fix": "pnpm -r --no-bail --filter \"./apps/core-app\" --filter \"./apps/nexus\" --filter \"./apps/tuff-analyse\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"workers/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"plugins/{touch-window-manager,touch-window-presets,touch-dev-toolbox,touch-batch-rename,touch-browser-bookmarks,touch-browser-open,touch-system-actions,touch-text-snippets,touch-snipaste,touch-quick-actions,touch-code-snippets}/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
     "lint:changed": "node scripts/run-eslint-changed.mjs",
     "lint:staged": "lint-staged",
-    "check:build-allowlist": "node scripts/check-build-allowlist.mjs"
+    "check:build-allowlist": "node scripts/check-build-allowlist.mjs",
+    "check:doc-metadata": "node scripts/check-doc-metadata.mjs",
+    "check:doc-metadata:self-test": "node scripts/check-doc-metadata.mjs --self-test"
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.9.1",
