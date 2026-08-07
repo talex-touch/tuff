@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { PluginStatus, type IPluginManager, type ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { PluginApiUninstallRequest } from '@talex-touch/utils/transport/events/types'
 import {
@@ -8,6 +10,28 @@ import {
 } from '@talex-touch/utils/transport/security/plugin-identity'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { teardownPluginStorage } from './runtime/plugin-storage-lifecycle'
+
+/**
+ * The uninstall coordinator pins the owner's data and code directories by real
+ * inode identity (task-301 lifecycle hardening) and refuses to run when a pinned
+ * path is missing or swapped, so string fixtures abort every run at stage one.
+ *
+ * realpath matters: on macOS `/var` symlinks to `/private/var`, and the pin check
+ * rejects any path where `realpath !== resolve`.
+ */
+const FIXTURE_ROOT = realpathSync(mkdtempSync(path.join(tmpdir(), 'plugin-module-fixture-')))
+
+function fixturePath(...segments: string[]): string {
+  return path.join(FIXTURE_ROOT, ...segments)
+}
+
+function ensureFixtureDirs(): void {
+  mkdirSync(fixturePath('plugins', 'calendar'), { recursive: true })
+  for (const root of [fixturePath('calendar', 'data'), fixturePath('plugin-data', 'calendar')]) {
+    mkdirSync(path.join(root, 'temp'), { recursive: true })
+    mkdirSync(path.join(root, 'cache'), { recursive: true })
+  }
+}
 
 interface CapturedManagerFactory {
   (
@@ -26,6 +50,8 @@ const mocks = vi.hoisted(() => {
   const eventHandlers = new Map<unknown, (event: unknown) => void>()
   const removedPaths = new Set<string>()
   const symbolicPaths = new Set<string>()
+  /** Quarantine renames really move the fixture; remember where each path went. */
+  const renamedPaths = new Map<string, string>()
   let capturedManagerFactory: CapturedManagerFactory | null = null
   const transportOn = vi.fn(
     (channel: unknown, handler: (payload: unknown, context: unknown) => unknown) => {
@@ -53,7 +79,7 @@ const mocks = vi.hoisted(() => {
       activationGeneration: 1,
       key: 'calendar-key'
     })),
-    getDataPath: vi.fn(() => '/fixture/calendar/data')
+    getDataPath: vi.fn(() => fixturePath('calendar', 'data'))
   }
   const manager = {
     plugins: new Map<string, typeof plugin>(),
@@ -97,6 +123,7 @@ const mocks = vi.hoisted(() => {
     dbUtils,
     deleteSecureStoreValuesByPrefix: vi.fn(),
     removedPaths,
+    renamedPaths,
     symbolicPaths,
     devWatcherRemovePlugin: vi.fn(),
     dialogShowMessageBox: vi.fn(),
@@ -193,6 +220,22 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(), openPath: vi.fn(), showItemInFolder: vi.fn() }
 }))
 
+// `rename` lives in node:fs/promises while remove/rmdir are mocked below. It has
+// to stay real: the coordinator re-pins the quarantine path by inode before
+// deleting it, so a bookkeeping-only rename leaves nothing to verify and the
+// deletion is skipped entirely.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    default: actual,
+    rename: vi.fn(async (from: string, to: string) => {
+      mocks.renamedPaths.set(to, from)
+      await actual.rename(from, to)
+    })
+  }
+})
+
 vi.mock('fs-extra', () => ({
   default: {
     ensureDir: vi.fn(),
@@ -201,8 +244,27 @@ vi.mock('fs-extra', () => ({
       if (mocks.removedPaths.has(target) || !(await mocks.fsPathExists(target))) {
         throw Object.assign(new Error('missing'), { code: 'ENOENT' })
       }
+      // Quarantine really moves directories, so a fixture path can be gone even
+      // though fsPathExists still reports it. Trust the disk for those.
+      if (target.startsWith(FIXTURE_ROOT)) {
+        try {
+          statSync(target)
+        } catch {
+          throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+        }
+      }
       const symbolic = mocks.symbolicPaths.has(target)
+      // Pinning captures dev/ino with the real fs and re-checks through this
+      // mock; without identity every comparison fails as OWNER_PATH_CHANGED.
+      let identity: { dev: number; ino: number } = { dev: 0, ino: 0 }
+      try {
+        const real = statSync(target)
+        identity = { dev: Number(real.dev), ino: Number(real.ino) }
+      } catch {
+        // Fixture path with no on-disk counterpart.
+      }
       return {
+        ...identity,
         isDirectory: () => !symbolic,
         isSymbolicLink: () => symbolic
       }
@@ -385,7 +447,7 @@ vi.mock('./host/plugin-runtime-service', () => ({
     dispose = mocks.runtimeDispose
     resolve = mocks.runtimeResolve
   },
-  resolvePluginRuntimeArtifactPath: () => '/fixture/plugin-host.js'
+  resolvePluginRuntimeArtifactPath: () => fixturePath('plugin-host.js')
 }))
 vi.mock('./plugin-content-installer', () => ({ installPluginContentPackageToLocalPlugin: vi.fn() }))
 vi.mock('./install-queue', () => ({
@@ -468,8 +530,8 @@ function initializeModule(module: PluginModule): Promise<void> {
   return Promise.resolve(
     Reflect.apply(module.onInit, module, [
       {
-        app: { rootPath: '/fixture/app' },
-        file: { dirPath: '/fixture/plugins' }
+        app: { rootPath: fixturePath('app') },
+        file: { dirPath: fixturePath('plugins') }
       }
     ])
   )
@@ -519,7 +581,7 @@ async function createActualManagerHarness(order: string[] = []): Promise<ActualM
 
   const factory = mocks.getCapturedManagerFactory()
   if (!factory) throw new Error('PluginModule did not expose its real manager factory')
-  const manager = factory('/fixture/plugins', transport, { broadcastPlugin: vi.fn() }, 42)
+  const manager = factory(fixturePath('plugins'), transport, { broadcastPlugin: vi.fn() }, 42)
   const loggerDestroy = vi.fn(() => {
     order.push('logger-flush')
   })
@@ -544,7 +606,7 @@ async function createActualManagerHarness(order: string[] = []): Promise<ActualM
       activationGeneration: 3,
       key: 'synthetic-key'
     })),
-    getConfigPath: vi.fn(() => '/fixture/plugin-data/calendar/config')
+    getConfigPath: vi.fn(() => fixturePath('plugin-data', 'calendar', 'config'))
   }) as PluginFixture
   manager.plugins.set('calendar', plugin)
   manager.enabledPlugins.add('calendar')
@@ -575,11 +637,16 @@ async function uninstallWithDisposition(
 }
 
 function expectOnlyTemporaryFilesystemCleanup(): void {
-  expect(mocks.fsRemove).toHaveBeenCalledExactlyOnceWith('/fixture/plugin-data/calendar/temp')
+  // Temp cleanup moved to the temp-file service namespace purge, and nothing
+  // persistent may be deleted on an aborted uninstall — so the filesystem
+  // removal path must not run at all (task-301 lifecycle hardening).
+  expect(mocks.tempCleanupNamespace).toHaveBeenCalled()
+  expect(mocks.fsRemove).not.toHaveBeenCalled()
 }
 
 describe('PluginModule facade', () => {
   beforeEach(() => {
+    ensureFixtureDirs()
     mocks.handlers.clear()
     mocks.disposers.splice(0)
     mocks.eventHandlers.clear()
@@ -704,6 +771,10 @@ describe('PluginModule facade', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterAll(() => {
+    rmSync(FIXTURE_ROOT, { recursive: true, force: true })
   })
 
   it('retries a pending plugin only after the permission-granted lifecycle event', async () => {
@@ -1137,7 +1208,7 @@ describe('PluginModule facade', () => {
     )
     expect(approved).toEqual({ success: true })
     expect(mocks.setSecureStoreValue).toHaveBeenCalledWith(
-      '/fixture/app',
+      fixturePath('app'),
       'plugin.calendar.token',
       'encrypted-value',
       'plugin-secret',
@@ -1400,12 +1471,27 @@ describe('PluginModule facade', () => {
     mocks.reportPluginUninstall.mockImplementation(async () => {
       order.push('analytics-uninstall-report')
     })
-    mocks.fsRemove.mockImplementation(async (target: string) => {
-      if (target === '/fixture/plugin-data/calendar/cache') order.push('cache-remove')
-      else if (target === '/fixture/plugin-data/calendar/temp') order.push('temp-remove')
-      else if (target === '/fixture/plugin-data/calendar') order.push('data-root-remove')
-      else if (target.startsWith('/fixture/plugin-data/calendar/')) order.push('data-remove')
-      else if (target === '/fixture/plugins/calendar') order.push('code-remove')
+    mocks.fsRemove.mockImplementation(async (rawTarget: string) => {
+      // A quarantined directory is deleted under its .recovery name; map it
+      // back so these labels still describe what was removed.
+      const target = mocks.renamedPaths.get(rawTarget) ?? rawTarget
+      if (target === fixturePath('plugin-data', 'calendar', 'cache')) order.push('cache-remove')
+      else if (target === fixturePath('plugin-data', 'calendar', 'temp')) order.push('temp-remove')
+      else if (target === fixturePath('plugin-data', 'calendar')) order.push('data-root-remove')
+      else if (target.startsWith(`${fixturePath('plugin-data', 'calendar')}/`))
+        order.push('data-remove')
+      else if (target === fixturePath('plugins', 'calendar')) order.push('code-remove')
+    })
+    mocks.tempCleanupNamespace.mockImplementation(async () => {
+      order.push('temp-namespace-purge')
+      // Preserve the shape the coordinator expects; only the ordering is new.
+      return {
+        deletedItemCount: 0,
+        deletedByteCount: 0,
+        failedItemCount: 0,
+        bounded: false,
+        cancelled: false
+      }
     })
     mocks.dbUtils.deletePluginData.mockImplementation(async () => {
       order.push('plugin-row-remove')
@@ -1425,14 +1511,14 @@ describe('PluginModule facade', () => {
       'admission-close',
       'runtime-resource-exit',
       'logger-flush',
-      'temp-remove',
+      'temp-namespace-purge',
       'sqlite-close',
       'permission-revoke-all',
       'authority-invalidate',
       'secret-legacy',
       'secret-v2',
-      'data-remove',
-      'cache-remove',
+      // Cache and data are no longer deleted piecemeal: the data root is
+      // quarantined and removed whole (task-301 lifecycle hardening).
       'data-root-remove',
       'plugin-row-remove',
       'code-remove',
@@ -1504,7 +1590,7 @@ describe('PluginModule facade', () => {
     await expect(manager.enablePlugin('calendar')).resolves.toBe(false)
     await expect(manager.loadPlugin('calendar')).resolves.toBe(false)
     await expect(manager.reloadPlugin('calendar')).resolves.toBeUndefined()
-    await expect(manager.installFromSource({ source: '/fixture/update.tpex' })).rejects.toThrow(
+    await expect(manager.installFromSource({ source: fixturePath('update.tpex') })).rejects.toThrow(
       'PLUGIN_UNINSTALL_INCOMPLETE'
     )
     expect(manager.setActivePlugin('calendar')).toBe(false)
@@ -1753,7 +1839,7 @@ describe('PluginModule facade', () => {
 
   it('refuses a symlinked plugin code owner and never follows it during uninstall', async () => {
     const { manager } = await createActualManagerHarness()
-    mocks.symbolicPaths.add('/fixture/plugins/calendar')
+    mocks.symbolicPaths.add(fixturePath('plugins', 'calendar'))
 
     const result = await uninstallWithDisposition(manager, {
       ordinaryExport: { enabled: false },
@@ -1772,7 +1858,7 @@ describe('PluginModule facade', () => {
         })
       ])
     })
-    expect(mocks.fsRemove).not.toHaveBeenCalledWith('/fixture/plugins/calendar')
+    expect(mocks.fsRemove).not.toHaveBeenCalledWith(fixturePath('plugins', 'calendar'))
     expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
   })
 
@@ -1787,8 +1873,8 @@ describe('PluginModule facade', () => {
       if (failedStage === 'code' || failedStage === 'data') {
         mocks.fsRemove.mockImplementation(async (target: string) => {
           if (
-            (failedStage === 'code' && target === '/fixture/plugins/calendar') ||
-            (failedStage === 'data' && target === '/fixture/plugin-data/calendar/config')
+            (failedStage === 'code' && target === fixturePath('plugins', 'calendar')) ||
+            (failedStage === 'data' && target === fixturePath('plugin-data', 'calendar', 'config'))
           ) {
             throw new Error(`synthetic ${failedStage} delete failure`)
           }
@@ -1846,7 +1932,7 @@ describe('PluginModule facade', () => {
         })
       ])
     })
-    expect(mocks.fsRemove).not.toHaveBeenCalledWith('/fixture/plugins/calendar')
+    expect(mocks.fsRemove).not.toHaveBeenCalledWith(fixturePath('plugins', 'calendar'))
     expect(manager.plugins.get('calendar')).toBe(plugin)
     expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
   })
@@ -1887,7 +1973,10 @@ describe('PluginModule facade', () => {
 
   it('proves successful uninstall clears exact owner surfaces and pending authority', async () => {
     const { manager, plugin } = await createActualManagerHarness()
-    const existing = new Set(['/fixture/plugins/calendar', '/fixture/plugin-data/calendar'])
+    const existing = new Set([
+      fixturePath('plugins', 'calendar'),
+      fixturePath('plugin-data', 'calendar')
+    ])
     mocks.fsPathExists.mockImplementation(async (target: string) => existing.has(target))
     mocks.fsRemove.mockImplementation(async (target: string) => {
       existing.delete(target)
