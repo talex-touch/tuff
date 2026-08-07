@@ -50,6 +50,42 @@ export function isAbsolutePath(value: string): boolean {
   return path.isAbsolute(value) || WIN32_ABSOLUTE_PATTERN.test(value)
 }
 
+/** Matches either separator, so these work on paths from either platform. */
+const ANY_SEPARATOR_PATTERN = /[\\/]/
+
+/**
+ * Display helpers for paths whose separator is not known at the call site.
+ *
+ * The renderer imports path-browserify, whose `sep` is `/`. Given a Windows path from the
+ * main process, `basename` returns the whole string and `dirname` returns `"."` — so a file
+ * chip showed `C:\Users\me\Documents\report.pdf` where it meant `report.pdf` (#581).
+ * These split on either separator instead of choosing a platform.
+ */
+function segments(value: string): string[] {
+  return String(value ?? '')
+    .split(ANY_SEPARATOR_PATTERN)
+    .filter(Boolean)
+}
+
+/** The final path segment. `''` when there is none. */
+export function displayBasename(value: string): string {
+  return segments(value).at(-1) ?? ''
+}
+
+/** The immediate parent directory's *name*, not the full parent path. `''` at the root. */
+export function displayParentName(value: string): string {
+  const parts = segments(value)
+  return parts.length >= 2 ? parts.at(-2)! : ''
+}
+
+/** Lowercased extension without the leading dot. `''` when there is none. */
+export function displayExtension(value: string): string {
+  const base = displayBasename(value)
+  const dot = base.lastIndexOf('.')
+  // A leading dot is a hidden file, not an extension: `.gitignore` has none.
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : ''
+}
+
 export function isSafePathSegment(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed || trimmed === '.' || trimmed === '..')
