@@ -40,6 +40,23 @@ class MockD1Database {
     return new MockStatement(this, sql)
   }
 
+  /**
+   * mergeLegacySyncItemsForUsers builds its statements up front and hands the
+   * whole list to db.batch(), because D1 has no interactive transaction.
+   *
+   * D1 runs a batch sequentially and atomically, and the merge depends on that
+   * ordering — the DELETE that drops superseded source rows has to see the
+   * effect of the statements before it. So this awaits them in array order
+   * rather than with Promise.all, and returns one result per statement the way
+   * D1 does.
+   */
+  async batch(statements: MockStatement[]) {
+    const results: unknown[] = []
+    for (const statement of statements)
+      results.push(await statement.run())
+    return results
+  }
+
   first(sql: string, args: any[]) {
     if (sql.includes('SELECT name FROM sqlite_master')) {
       const tableName = args[0]
