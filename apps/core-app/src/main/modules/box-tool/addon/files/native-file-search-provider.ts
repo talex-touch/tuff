@@ -243,7 +243,6 @@ abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider 
   readonly type = 'file' as const
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 75
   private readonly iconCache = new EverythingIconCache()
   protected available = false
   protected lastError: string | null = null

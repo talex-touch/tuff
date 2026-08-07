@@ -28,7 +28,7 @@
 ## CoreBox 现有能力依据（仓库内）
 
 - CoreBox 输入类型与查询结构：`packages/utils/core-box/tuff/tuff-dsl.ts`  
-- Provider 优先级 fast/deferred 与 expectedDuration：`packages/utils/core-box/tuff/tuff-dsl.ts`  
+- Provider 优先级 fast/deferred：`packages/utils/core-box/tuff/tuff-dsl.ts`（分层由 `search-gather.ts` 消费；不存在按预估耗时排序的机制）  
 - Windows Everything 集成与“fast”搜索层：`docs/everything-integration.md`  
 - CoreBox/DivisionBox 规划项与未实现功能：`docs/plan-prd/05-archive/codebase_analysis.md.resolved`  
 - 剪贴板输入与 CoreBox 交互说明：`docs/clipboard-mechanism-analysis.md`  

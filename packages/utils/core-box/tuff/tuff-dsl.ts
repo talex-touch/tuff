@@ -1603,14 +1603,6 @@ export interface ISearchProvider<C> {
   readonly priority?: 'fast' | 'deferred'
 
   /**
-   * Expected search duration in milliseconds
-   * @description Used for sorting providers within the same layer and timeout estimation.
-   * Providers with lower expected duration run first within their layer.
-   * @default 1000
-   */
-  readonly expectedDuration?: number
-
-  /**
    * Core search method (PULL mode).
    * The engine calls this method to get results from the provider.
    *

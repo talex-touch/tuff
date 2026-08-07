@@ -110,7 +110,6 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
   readonly name = 'Main Window'
   readonly supportedInputTypes = [TuffInputType.Text]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 20
 
   private context: ProviderContext | null = null
 
