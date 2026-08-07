@@ -53,6 +53,7 @@
     "evidence:transport-legacy-alias": "tsx scripts/transport-legacy-alias-evidence.ts",
     "privacy:inventory:verify": "node scripts/verify-sensitive-data-inventory.mjs",
     "test:targeted": "corepack pnpm -C \"packages/utils\" exec vitest run \"__tests__/plugin-sdk-lifecycle.test.ts\" \"__tests__/transport-domain-sdks.test.ts\" \"__tests__/transport/port-policy.test.ts\" && corepack pnpm -C \"apps/core-app\" exec vitest run \"src/renderer/src/modules/auth/sync-preferences.test.ts\" \"src/main/modules/plugin/plugin-loaders.test.ts\" \"src/main/channel/common.test.ts\" && corepack pnpm -C \"apps/nexus\" exec vitest run \"test/api/sync/sync-routes-410.test.ts\"",
+    "test:scripts": "vitest run --config vitest.workspace-scripts.config.mjs",
     "quality:pr": "corepack pnpm release:notes:verify && corepack pnpm lint:changed && corepack pnpm test:targeted && corepack pnpm -C \"apps/core-app\" run typecheck",
     "quality:release": "pnpm lint && pnpm typecheck:all && pnpm test:targeted && pnpm -C apps/core-app exec electron-builder --version && pnpm -F @talex-touch/core-app run build",
     "lint": "pnpm -r --no-bail --filter \"./apps/core-app\" --filter \"./apps/nexus\" --filter \"./apps/tuff-analyse\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"workers/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"plugins/{touch-window-manager,touch-window-presets,touch-dev-toolbox,touch-batch-rename,touch-browser-bookmarks,touch-browser-open,touch-system-actions,touch-text-snippets,touch-snipaste,touch-quick-actions,touch-code-snippets,touch-dictation}/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
@@ -90,7 +91,8 @@
     "typescript": "^5.9.3",
     "unified": "11.0.5",
     "vite": "^7.3.6",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.0"
   },
   "volta": {
     "node": "24.18.0"
