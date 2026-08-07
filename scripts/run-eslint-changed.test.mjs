@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { buildRootArgs, buildWorkspaceArgs, groupByWorkspace } from './run-eslint-changed.mjs'
+import {
+  buildRootArgs,
+  buildWorkspaceArgs,
+  groupByWorkspace,
+  parseFileList,
+  selectLintableFiles,
+} from './run-eslint-changed.mjs'
 
 // Mirrors collectWorkspaceDirectories()'s contract: longest prefix first.
 const WORKSPACES = [
@@ -58,6 +64,37 @@ describe('groupByWorkspace', () => {
 
     assert.deepEqual(groups.get('apps/nexus'), ['app/a.vue', 'app/b.ts'])
     assert.deepEqual(groups.get('apps/core-app'), ['src/c.ts'])
+  })
+})
+
+describe('file collection', () => {
+  it('keeps an untracked file that the tracked diff never reported', () => {
+    // The bug: `git diff HEAD` lists tracked changes only, so a new file that has not been
+    // `git add`ed yields an empty list and the gate exits green having linted nothing.
+    const tracked = parseFileList('')
+    const untracked = parseFileList('scripts/brand-new.mjs\n')
+
+    assert.deepEqual(selectLintableFiles(tracked, untracked), ['scripts/brand-new.mjs'])
+  })
+
+  it('does not lint a file twice when both probes report it', () => {
+    const files = selectLintableFiles(
+      ['apps/nexus/app/a.ts'],
+      ['apps/nexus/app/a.ts'],
+    )
+
+    assert.deepEqual(files, ['apps/nexus/app/a.ts'])
+  })
+
+  it('applies the extension filter to untracked files as well', () => {
+    const files = selectLintableFiles([], ['docs/notes.md', 'assets/logo.svg', 'scripts/a.mjs'])
+
+    assert.deepEqual(files, ['scripts/a.mjs'])
+  })
+
+  it('drops blank lines and normalises separators', () => {
+    assert.deepEqual(parseFileList('a.ts\n\nb.vue\n'), ['a.ts', 'b.vue'])
+    assert.deepEqual(parseFileList(''), [])
   })
 })
 
