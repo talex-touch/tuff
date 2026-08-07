@@ -22,14 +22,22 @@ function makeMessages(from: number, count: number): Message[] {
 
 let resizeCallbacks: ResizeObserverCallback[] = []
 let intersectionCallbacks: IntersectionObserverCallback[] = []
+/** Every element handed to RO.observe — lets tests prove rows are measured at all. */
+let observedTargets: Set<Element> = new Set()
 
 class ResizeObserverStub {
   constructor(private callback: ResizeObserverCallback) {
     resizeCallbacks.push(callback)
   }
 
-  observe(): void {}
-  unobserve(): void {}
+  observe(target: Element): void {
+    observedTargets.add(target)
+  }
+
+  unobserve(target: Element): void {
+    observedTargets.delete(target)
+  }
+
   disconnect(): void {}
 }
 
@@ -46,6 +54,7 @@ class IntersectionObserverStub {
 beforeEach(() => {
   resizeCallbacks = []
   intersectionCallbacks = []
+  observedTargets = new Set()
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
   vi.stubGlobal('IntersectionObserver', IntersectionObserverStub)
 })
@@ -292,5 +301,41 @@ describe('txConversationStream', () => {
     wrapper.vm.scrollToBottom()
     expect((control.element as any).scrollTop).toBe(500 * 96)
     expect(wrapper.vm.atBottom).toBe(true)
+  })
+
+  it('hands every rendered window item to the ResizeObserver', async () => {
+    // Regression guard for the estimate-forever failure mode: a rendered row
+    // that is never observed keeps its 96px estimate and overlaps its taller
+    // neighbours. Mount with items already present (the restored-thread
+    // shape), then require observation coverage of the whole window.
+    const wrapper = mountStream({ items: makeMessages(0, 40) })
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 40 * 96 })
+    fireResize(control.element, 600)
+    await nextTick()
+    await nextTick()
+
+    const rendered = wrapper.findAll('.tx-conversation-stream__item')
+    expect(rendered.length).toBeGreaterThan(0)
+    for (const item of rendered)
+      expect(observedTargets.has(item.element)).toBe(true)
+  })
+
+  it('offsets range and scrollToIndex by the measured spacer origin', async () => {
+    // Hosts pad the scroller (HomePage: 28px); the transcript's coordinate
+    // space starts below that padding, not at the scroller's content top.
+    const wrapper = mountStream()
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 500 * 96 + 28 })
+
+    const spacer = wrapper.find('.tx-conversation-stream__spacer').element as HTMLElement
+    control.element.getBoundingClientRect = () => ({ top: 0 } as DOMRect)
+    // Layout-faithful: the spacer's viewport position slides up as the host scrolls.
+    spacer.getBoundingClientRect = () =>
+      ({ top: 28 - (control.element as any).scrollTop } as DOMRect)
+
+    fireResize(control.element, 600)
+    await nextTick()
+
+    wrapper.vm.scrollToIndex(10)
+    expect((control.element as any).scrollTop).toBe(28 + 10 * 96)
   })
 })

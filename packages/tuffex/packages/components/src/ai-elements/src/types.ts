@@ -32,6 +32,12 @@ export interface AiToolCallPart {
   error?: string
   /** Streaming log region while running. */
   logs?: string
+  /**
+   * Set once an interactive result (a rendered form) has been answered.
+   * Lives on the part rather than in host session state so it persists with
+   * the conversation — a reloaded thread must not re-offer a spent form.
+   */
+  submitted?: boolean
 }
 
 export interface AiAttachmentImage {
@@ -94,6 +100,8 @@ export interface AiChainStep {
   title: string
   body?: string
   status: 'active' | 'done' | 'error'
+  /** Wall time the step took; settled thinking steps render it as a quiet suffix. */
+  durationMs?: number
 }
 
 export interface AiElementMessage {

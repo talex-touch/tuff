@@ -32,11 +32,32 @@ defineSlots<{
 const scrollerRef = ref<HTMLElement | null>(null)
 const topZoneRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
+const spacerRef = ref<HTMLElement | null>(null)
 const liveRef = ref<HTMLElement | null>(null)
 
 const scrollTop = ref(0)
 const viewportHeight = ref(0)
 const topZoneHeight = ref(0)
+
+/**
+ * Where the spacer's content actually starts inside the scroller — top zone
+ * plus whatever padding or extra content the host put above the transcript.
+ * Assuming "top zone only" made every range and anchor computation wrong by
+ * exactly the host's padding.
+ */
+const spacerTop = ref(0)
+
+function measureSpacerTop(): void {
+  const scroller = scrollerRef.value
+  const spacer = spacerRef.value
+  if (!scroller || !spacer)
+    return
+  spacerTop.value
+    = spacer.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+}
+
+// The spacer mounts and unmounts with the item count crossing zero.
+watch(spacerRef, () => measureSpacerTop())
 
 /** Bumped on every cache mutation so layout computeds re-evaluate. */
 const layoutVersion = ref(0)
@@ -73,7 +94,7 @@ const liveKey = computed(() =>
 
 const range = computed(() => {
   void layoutVersion.value
-  const top = Math.max(0, scrollTop.value - topZoneHeight.value)
+  const top = Math.max(0, scrollTop.value - spacerTop.value)
   return cache.visibleRange(top, viewportHeight.value, props.overscan)
 })
 
@@ -123,6 +144,7 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
 
     if (target === scroller) {
       viewportHeight.value = entryHeight(entry)
+      measureSpacerTop()
       // Late layout constraints shrink the viewport after items were already
       // measured (no item deltas left to fire) — a following reader must be
       // re-pinned or they strand at the top with `following` still true.
@@ -134,6 +156,7 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
       const next = entryHeight(entry)
       const delta = next - topZoneHeight.value
       topZoneHeight.value = next
+      measureSpacerTop()
       // The top zone collapsing (hasMore → false) must not slide the
       // transcript up under the reader.
       if (delta !== 0 && scrollTop.value > 0 && !stick.atBottom.value)
@@ -164,7 +187,7 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
     // Corrections above the viewport shift everything below them; compensate
     // in the same callback (post-layout, pre-paint) so the view holds still.
     const index = virtualKeys.value.indexOf(key)
-    if (index >= 0 && cache.offsetOf(index) + topZoneHeight.value < scrollTop.value && !stick.atBottom.value)
+    if (index >= 0 && cache.offsetOf(index) + spacerTop.value < scrollTop.value && !stick.atBottom.value)
       compensation += delta
   }
 
@@ -176,9 +199,10 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
   // After the reactive flush, not in the RO callback: item deltas change the
   // spacer height through a Vue re-render, so scrolling now would target a
   // stale scrollHeight — and the spacer applying later fires no resize of its
-  // own to correct it.
+  // own to correct it. While a response streams, the follow glides instead of
+  // snapping — per-token growth reads as one continuous slide.
   if (grew)
-    void nextTick(() => stick.followIfSticking())
+    void nextTick(() => stick.followIfSticking(props.streaming ? 220 : 0))
 }
 
 function trackItem(el: unknown, key: ConversationStreamKey): void {
@@ -213,7 +237,10 @@ function trackItem(el: unknown, key: ConversationStreamKey): void {
 watch(
   virtualKeys,
   (nextKeys, previousKeys) => {
-    cache.syncKeys(nextKeys)
+    // The live key rides along un-listed: its height is recorded while it
+    // streams, and pruning it here would send the row that is about to
+    // migrate back to the estimate.
+    cache.syncKeys(nextKeys, liveKey.value)
     layoutVersion.value += 1
 
     if (!previousKeys || previousKeys.length === 0)
@@ -314,6 +341,20 @@ function scrollToBottom(behavior: ScrollBehavior = 'auto'): void {
     scrollTop.value = scroller.scrollTop
 }
 
+/**
+ * The "make room" beat: glides to the bottom over a fixed duration, keeping
+ * the virtual window in step each frame, and resolves once the glide landed
+ * (`false` when the user or a newer scroll interrupted it). Callers time
+ * follow-up motion — an entrance animation, say — off that settlement.
+ */
+async function tweenToBottom(duration?: number): Promise<boolean> {
+  const landed = await stick.tweenToBottom(duration)
+  const scroller = scrollerRef.value
+  if (scroller)
+    scrollTop.value = scroller.scrollTop
+  return landed
+}
+
 function scrollToIndex(index: number): void {
   const scroller = scrollerRef.value
   if (!scroller)
@@ -322,7 +363,7 @@ function scrollToIndex(index: number): void {
     scrollToBottom()
     return
   }
-  scroller.scrollTop = topZoneHeight.value + cache.offsetOf(Math.max(0, index))
+  scroller.scrollTop = spacerTop.value + cache.offsetOf(Math.max(0, index))
   scrollTop.value = scroller.scrollTop
 }
 
@@ -345,6 +386,7 @@ onMounted(() => {
 
   if (scroller)
     viewportHeight.value = scroller.clientHeight
+  measureSpacerTop()
 
   if (typeof IntersectionObserver !== 'undefined' && props.loadOlder && sentinelRef.value && scroller) {
     intersectionObserver = new IntersectionObserver(
@@ -382,6 +424,7 @@ onBeforeUnmount(() => {
 defineExpose({
   scrollToBottom,
   scrollToIndex,
+  tweenToBottom,
   // A ComputedRef rather than `readonly(ref)`: read-only to consumers either
   // way, but the flat named type keeps the drift contract's structural
   // comparison stable where DeepReadonly's conditionals are not.
@@ -426,7 +469,11 @@ defineExpose({
           <slot v-else name="top-done" />
         </div>
 
-        <div class="tx-conversation-stream__spacer" :style="{ height: `${spacerHeight}px` }">
+        <div
+          ref="spacerRef"
+          class="tx-conversation-stream__spacer"
+          :style="{ height: `${spacerHeight}px` }"
+        >
           <div
             v-for="entry in windowItems"
             :key="entry.key"

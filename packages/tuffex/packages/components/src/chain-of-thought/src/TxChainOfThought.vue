@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { AiChainStep } from '../../ai-elements/src/types'
+import DOMPurify from 'dompurify'
+import { Marked } from 'marked'
 import { computed, ref, useId, watch } from 'vue'
 import TxThinkingOrb from '../../thinking-orb/src/TxThinkingOrb.vue'
 
@@ -11,11 +13,21 @@ const props = withDefaults(
     streaming?: boolean
     defaultOpen?: boolean
     label?: string
+    /**
+     * The host-held user override. Streaming hosts re-render this component's
+     * surroundings on every delta, and a branch realignment can recreate the
+     * instance — an override kept only in instance state dies with it, which
+     * reads as "clicking does nothing". Hosts that own it (feed `toggle` back
+     * in here) make the reader's choice survive any remount; `undefined`
+     * falls back to the internal override for standalone use.
+     */
+    userOpen?: boolean
   }>(),
   {
     streaming: false,
     defaultOpen: true,
     label: 'Chain of thought',
+    userOpen: undefined,
   },
 )
 
@@ -23,18 +35,57 @@ const emit = defineEmits<{
   toggle: [open: boolean]
 }>()
 
-const open = ref(props.defaultOpen)
 const bodyId = useId()
-
-function toggle(): void {
-  open.value = !open.value
-  emit('toggle', open.value)
-}
 
 const hasActive = computed(() => props.steps.some(step => step.status === 'active'))
 
+/**
+ * Open follows the thinking: while a step is live the trail holds itself
+ * open, and once the last live step settles it folds away on its own. A
+ * click overrides the automation from then on — the reader's choice wins.
+ */
+const userOverride = ref<boolean | null>(null)
+
+const open = computed(
+  () =>
+    props.userOpen
+    ?? userOverride.value
+    ?? (props.streaming ? hasActive.value : props.defaultOpen),
+)
+
+function toggle(): void {
+  const next = !open.value
+  userOverride.value = next
+  emit('toggle', next)
+}
+
+// Per-component parser, mirroring TxStreamMarkdown's reasoning: a shared
+// mutable `marked` singleton would leak configuration across consumers.
+const thinkingMarked = new Marked({ gfm: true, breaks: true })
+
+/** Reasoning text is model output — sanitized like any other markdown. */
+function renderThinking(body: string): string {
+  // `async: false` guarantees a string; marked's overloads just don't narrow.
+  return DOMPurify.sanitize(thinkingMarked.parse(body, { async: false }) as string)
+}
+
+/** `12.3s` under ten seconds, whole seconds above — locale-neutral units. */
+function formatStepDuration(ms: number): string {
+  const seconds = ms / 1000
+  return seconds >= 10 ? `${Math.round(seconds)}s` : `${Math.max(0.1, seconds).toFixed(1)}s`
+}
+
 // The active step's body follows its own tail while text streams in.
 const activeBodyRef = ref<HTMLElement | null>(null)
+
+/**
+ * Unconditional function ref — `:ref="cond ? fn : undefined"` let the
+ * compiler treat the vnode as hoistable ("Missing ref owner context"), and a
+ * hoisted subtree stops re-rendering: the whole trail froze after mount.
+ */
+function trackActiveBody(el: unknown, active: boolean): void {
+  if (active && el instanceof HTMLElement) activeBodyRef.value = el
+}
 
 watch(
   () => props.steps.map(step => step.body?.length ?? 0).join(','),
@@ -97,13 +148,34 @@ watch(
             </svg>
           </span>
           <div class="tx-chain-of-thought__content">
-            <span class="tx-chain-of-thought__title">{{ step.title }}</span>
+            <span class="tx-chain-of-thought__title">
+              {{ step.title
+              }}<span
+                v-if="step.status === 'done' && step.durationMs"
+                class="tx-chain-of-thought__duration"
+              >· {{ formatStepDuration(step.durationMs) }}</span>
+            </span>
             <div
               v-if="step.body"
-              :ref="step.status === 'active' ? (el) => { activeBodyRef = el as HTMLElement } : undefined"
+              :ref="(el) => trackActiveBody(el, step.status === 'active')"
               class="tx-chain-of-thought__body"
+              :class="{ 'is-plain': step.kind !== 'thinking' }"
             >
-              {{ step.body }}
+              <!-- Reasoning is markdown (models head their thoughts with bold
+                   runs); tool output stays verbatim — rendering a JSON blob
+                   or a log through markdown would mangle it. Rendered by a
+                   local marked+DOMPurify pass rather than TxStreamMarkdown:
+                   embedding the full streaming component here froze the
+                   trail's own update reactivity (bisected), and a trail body
+                   needs typography, not a markdown pipeline. -->
+              <div
+                v-if="step.kind === 'thinking'"
+                class="tx-chain-of-thought__md"
+                v-html="renderThinking(step.body)"
+              />
+              <span v-if="step.kind !== 'thinking'" class="tx-chain-of-thought__raw">{{
+                step.body
+              }}</span>
             </div>
           </div>
         </li>
@@ -245,6 +317,13 @@ watch(
     color: var(--tx-text-color-primary, #111827);
   }
 
+  .tx-chain-of-thought__duration {
+    margin-left: 5px;
+    color: var(--tx-text-color-secondary, #6b7280);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
   // The live step's tail dims like streaming prose — same reveal language.
   &.is-thinking .tx-chain-of-thought__step[data-status='active'] .tx-chain-of-thought__body {
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), rgb(0 0 0 / 40%) 100%);
@@ -258,8 +337,43 @@ watch(
     color: var(--tx-text-color-secondary, #6b7280);
     font-size: 12px;
     line-height: 1.6;
-    white-space: pre-wrap;
     word-break: break-word;
+
+    // Verbatim tool output keeps its own line breaks; markdown owns its own.
+    &.is-plain {
+      white-space: pre-wrap;
+    }
+  }
+
+  // Rendered reasoning adopts the trail's quiet voice, not body-copy rhythm.
+  .tx-chain-of-thought__md {
+    p,
+    ul,
+    ol {
+      margin: 0 0 0.5em;
+      padding-left: 0;
+    }
+
+    ul,
+    ol {
+      padding-left: 1.3em;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+
+    strong {
+      color: var(--tx-text-color-primary, #111827);
+      font-weight: 600;
+    }
+
+    code {
+      padding: 0.1em 0.3em;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 10%, transparent);
+      font-size: 0.9em;
+    }
   }
 }
 

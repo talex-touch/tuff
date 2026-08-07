@@ -55,11 +55,72 @@ describe('txChainOfThought', () => {
     expect(wrapper.emitted('toggle')).toEqual([[false]])
   })
 
+  it('honours a host-held override over its own automation', async () => {
+    // Streaming hosts re-render around this component on every delta and a
+    // branch realignment can recreate the instance — instance-held state dies
+    // with it, which read as "clicking does nothing". The host feeds `toggle`
+    // back in through `user-open`, so the choice survives any remount.
+    const active = [
+      { id: 'a', kind: 'thinking' as const, title: 'T', status: 'active' as const },
+      { id: 'b', kind: 'tool' as const, title: 'X', status: 'done' as const },
+    ]
+    const wrapper = mount(TxChainOfThought, {
+      props: { steps: active, streaming: true, userOpen: false },
+    })
+    // Auto would open (live step); the reader's collapse wins.
+    expect(wrapper.find('.tx-chain-of-thought__collapse').classes()).not.toContain('is-open')
+
+    // Withdrawing the override (a fresh message) hands control back to auto.
+    await wrapper.setProps({ userOpen: undefined })
+    expect(wrapper.find('.tx-chain-of-thought__collapse').classes()).toContain('is-open')
+  })
+
+  it('renders thinking bodies as sanitized markdown', () => {
+    const wrapper = mount(TxChainOfThought, {
+      props: {
+        steps: [
+          {
+            id: 'a',
+            kind: 'thinking' as const,
+            title: 'T',
+            body: '**加粗** <img src=x onerror=alert(1)>',
+            status: 'done' as const,
+          },
+        ],
+      },
+    })
+
+    const md = wrapper.find('.tx-chain-of-thought__md')
+    expect(md.find('strong').text()).toBe('加粗')
+    expect(md.html()).not.toContain('onerror')
+  })
+
   it('marks error steps', () => {
     const wrapper = mount(TxChainOfThought, {
       props: { steps: steps([{}, { status: 'error' }, {}]) },
     })
 
     expect(wrapper.findAll('.tx-chain-of-thought__step')[1]!.attributes('data-status')).toBe('error')
+  })
+
+  it('renders a duration suffix only on settled steps that carry one', () => {
+    const wrapper = mount(TxChainOfThought, {
+      props: {
+        steps: steps([
+          { durationMs: 3210 },
+          {},
+          // Active step: even with a duration, nothing renders until it settles.
+          { durationMs: 900 },
+        ]),
+        streaming: true,
+      },
+    })
+
+    const durations = wrapper.findAll('.tx-chain-of-thought__duration')
+    expect(durations).toHaveLength(1)
+    expect(durations[0]!.text()).toBe('· 3.2s')
+
+    const items = wrapper.findAll('.tx-chain-of-thought__step')
+    expect(items[2]!.find('.tx-chain-of-thought__duration').exists()).toBe(false)
   })
 })

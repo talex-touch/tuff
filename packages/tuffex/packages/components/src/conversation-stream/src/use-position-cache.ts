@@ -1,8 +1,15 @@
 import type { ConversationStreamKey } from './types'
 
 export interface PositionCache {
-  /** Replaces the ordered key list; measured heights survive by key. */
-  syncKeys: (keys: ConversationStreamKey[]) => void
+  /**
+   * Replaces the ordered key list; measured heights survive by key, but only
+   * for keys still present (plus `retain`). Pruning here is what keeps a
+   * reused instance honest when the host swaps datasets: ids that repeat
+   * across datasets ("user-1" in every thread) must not inherit another
+   * dataset's measurements. `retain` shields the live row, which is measured
+   * before its key ever appears in this list.
+   */
+  syncKeys: (keys: ConversationStreamKey[], retain?: ConversationStreamKey | null) => void
   /**
    * Records a measured height and returns the delta against what the layout
    * previously assumed — the caller compensates scrollTop with it when the
@@ -47,8 +54,17 @@ export function createPositionCache(estimatedItemHeight: number): PositionCache 
     dirty = false
   }
 
-  function syncKeys(next: ConversationStreamKey[]): void {
+  function syncKeys(next: ConversationStreamKey[], retain?: ConversationStreamKey | null): void {
     keys = next.slice()
+    if (heights.size > 0) {
+      const alive = new Set<ConversationStreamKey>(keys)
+      if (retain != null)
+        alive.add(retain)
+      for (const key of heights.keys()) {
+        if (!alive.has(key))
+          heights.delete(key)
+      }
+    }
     dirty = true
   }
 
