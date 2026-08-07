@@ -42,7 +42,10 @@ storage read error.
 ## Acceptance Criteria
 
 - [ ] Pending storage cannot start indexing/providers or open CoreBox search.
-- [ ] Ready storage with incomplete onboarding remains blocked.
+- [x] Ready storage with incomplete onboarding remains blocked. — 2026-08-07：
+  `storage/index.ts:1130` 返回类型化的 `{ state: 'blocked', reason: 'onboarding-incomplete',
+  recoverable: true }`，`core-box/ipc.ts:348` 在搜索路径上捕获 `OnboardingGateError`；
+  `ipc.test.ts` "surfaces the onboarding wizard instead of failing the search stream" 覆盖。
 - [ ] Ready storage with completed onboarding starts services once.
 - [ ] Recoverable failure exposes degraded state and retry; successful retry
   re-evaluates onboarding without duplicate services.
