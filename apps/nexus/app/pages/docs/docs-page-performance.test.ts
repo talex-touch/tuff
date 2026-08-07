@@ -720,7 +720,9 @@ describe('docs page performance boundaries', () => {
     expect.soft(docsPageClientCache).toContain('export function readCachedDocsFullBody(cacheKey: string)')
     expect.soft(docsPageClientCache).toContain('export function hasCachedDocsFullBody(cacheKey: string)')
     expect.soft(docsPageClientCache).toContain('export function cacheDocsFullBody(value: DocsPageRecord)')
-    expect.soft(docsPageClientCache).toMatch(/return `doc-full:\$\{normalizeDocsPagePath\(path\)\}:\$\{locale\}`/)
+    // canonicalDocsPageIdentity, not the raw path: a directory route and its index document
+    // must land on one cache entry, or the same body is fetched and stored twice.
+    expect.soft(docsPageClientCache).toMatch(/return `doc-full:\$\{canonicalDocsPageIdentity\(path\)\}:\$\{locale\}`/)
     expect.soft(docsPageClientCache).toContain('while (docsFullBodyCache.size > DOCS_FULL_BODY_CACHE_LIMIT)')
     expect.soft(page).toMatch(/const fullDocCacheKey = computed\(\(\) => resolveDocsFullBodyCacheKey\(docPath\.value, docsLocale\.value\)\)/)
     // The page owns its document locally: Nuxt seeds a newly keyed asyncData entry

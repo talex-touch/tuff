@@ -6,6 +6,9 @@ const DOCS_SUPPORTED_LOCALE_SET = new Set<string>(DOCS_SUPPORTED_LOCALES)
 const CONTENT_EXTENSION_PATTERN = /\.(md|mdc)$/i
 const LOCALE_SUFFIX_PATTERN = /\.(en|zh)$/i
 const DOCS_PATH_PATTERN = /^\/docs(?=\/|$)/
+// `/docs/dev` and `/docs/dev/index` name the same document. Keeping them apart made SSR
+// reject the record the API had correctly resolved and answer 404 for every directory route.
+const INDEX_SEGMENT_PATTERN = /\/index$/i
 
 export function isDocsLocale(value: unknown): value is DocsLocale {
   return typeof value === 'string' && DOCS_SUPPORTED_LOCALE_SET.has(value)
@@ -46,6 +49,19 @@ export function stripDocsContentExtension(path: string) {
 
 export function stripDocsLocaleSuffix(path: string) {
   return path.replace(LOCALE_SUFFIX_PATTERN, '')
+}
+
+/**
+ * Collapses a trailing `/index` so a directory route and its index document share one identity.
+ *
+ * Deliberately NOT folded into normalizeDocsPagePath: the prerender route generator uses that
+ * function and needs `/docs/dev/index` to stay a distinct renderable input, which the post-build
+ * alias materializer then copies to `/docs/dev`. This is for matching and caching only.
+ */
+export function canonicalDocsPageIdentity(path: string | null | undefined) {
+  const normalized = normalizeDocsPagePath(path)
+  const collapsed = normalized.replace(INDEX_SEGMENT_PATTERN, '')
+  return collapsed || '/docs'
 }
 
 export function normalizeDocsPagePath(path: string | null | undefined) {
