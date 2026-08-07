@@ -3,7 +3,8 @@ import {
   buildPiArgs,
   buildPiPrompt,
   parsePiCliLine,
-  PI_CLI_DEFAULT_SYSTEM_PROMPT
+  PI_CLI_DEFAULT_SYSTEM_PROMPT,
+  PI_CLI_TRANSCRIPT_CHAR_BUDGET
 } from './pi-cli-runtime'
 
 /**
@@ -79,7 +80,44 @@ describe('buildPiPrompt', () => {
   it('sends a lone user turn as bare text, with no transcript framing', () => {
     const prompt = buildPiPrompt([{ role: 'user', content: 'hi' }])
     expect(prompt.prompt).toBe('hi')
-    expect(prompt.systemPrompt).toBe(PI_CLI_DEFAULT_SYSTEM_PROMPT)
+    expect(prompt.systemPrompt.startsWith(PI_CLI_DEFAULT_SYSTEM_PROMPT)).toBe(true)
+  })
+
+  it('anchors every spawn to the wall-clock date', () => {
+    // The regression that shipped: no layer named the date, so "今天是几月几日"
+    // was answered from the training prior ("2025-02-14").
+    const prompt = buildPiPrompt([{ role: 'user', content: 'hi' }], {
+      now: new Date(2026, 7, 7)
+    })
+    expect(prompt.systemPrompt).toContain('Current date: Friday 2026-08-07')
+    expect(prompt.systemPrompt).toContain('timezone')
+  })
+
+  it('keeps the volatile date line at the very tail of the system prompt', () => {
+    // Prompt caching is a prefix match: the only line that ever changes must
+    // come after everything that does not, or a day flip evicts it all.
+    const prompt = buildPiPrompt(
+      [
+        { role: 'system', content: 'Be terse.' },
+        { role: 'user', content: 'hi' }
+      ],
+      { now: new Date(2026, 7, 7) }
+    )
+    expect(prompt.systemPrompt.indexOf('Be terse.')).toBeLessThan(
+      prompt.systemPrompt.indexOf('Current date:')
+    )
+    expect(prompt.systemPrompt.trimEnd().endsWith('about the date.')).toBe(true)
+  })
+
+  it('never claims tool-lessness on a spawn that granted tools', () => {
+    // The exact regression that shipped: tools registered and allowlisted,
+    // while the system prompt still said "you have no tools" — so the model
+    // politely wrote text substitutes instead of ever calling one.
+    const prompt = buildPiPrompt([{ role: 'user', content: 'hi' }], { toolsGranted: true })
+    expect(prompt.systemPrompt).not.toContain('no tools')
+    expect(prompt.systemPrompt).toContain('tuff_render_')
+    // The announce-then-render contract the widget UX depends on.
+    expect(prompt.systemPrompt).toContain('Announce')
   })
 
   it('renders prior turns with role labels because pi cannot take assistant turns as arguments', () => {
@@ -111,6 +149,61 @@ describe('buildPiPrompt', () => {
       { role: 'user', content: 'second' }
     ])
     expect(prompt.prompt).not.toContain('Assistant:')
+  })
+
+  it('drops the oldest turns past the budget and says so', () => {
+    // 300 turns of 1k chars ≈ 3× the budget: the newest survive contiguously,
+    // and the model is told the thread did not start where the excerpt does.
+    const turns = Array.from({ length: 300 }, (_, index) => ({
+      role: (index % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `turn-${index} ${'x'.repeat(1000)}`
+    }))
+    const prompt = buildPiPrompt(turns)
+
+    expect(prompt.prompt).toContain('[Earlier context omitted')
+    expect(prompt.prompt).toContain('turn-298')
+    expect(prompt.prompt).not.toContain('turn-0 ')
+    expect(prompt.prompt.length).toBeLessThan(PI_CLI_TRANSCRIPT_CHAR_BUDGET + 2000)
+  })
+
+  it('holds the over-budget cut point still across sends — prompt-cache stability', () => {
+    // The provider's prompt cache is a byte-exact prefix match. A cut that
+    // slid one turn per send (or a marker with a live count) rewrote the
+    // transcript head every turn and evicted the whole cache. The quantized
+    // cut must keep the previous prompt's pre-`---` head as a byte-identical
+    // prefix of the next send's prompt.
+    const turns = Array.from({ length: 300 }, (_, index) => ({
+      role: (index % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `turn-${index} ${'x'.repeat(1000)}`
+    }))
+    const before = buildPiPrompt(turns)
+    const after = buildPiPrompt([
+      ...turns,
+      { role: 'assistant', content: 'a'.repeat(500) },
+      { role: 'user', content: 'next question' }
+    ])
+
+    const head = before.prompt.slice(0, before.prompt.indexOf('\n\n---\n\n'))
+    expect(after.prompt.startsWith(head)).toBe(true)
+  })
+
+  it('keeps a short thread whole with no omission marker', () => {
+    const prompt = buildPiPrompt([
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'answer' },
+      { role: 'user', content: 'second' }
+    ])
+    expect(prompt.prompt).not.toContain('omitted')
+  })
+
+  it('never drops the latest turn, even alone over budget', () => {
+    const giant = 'y'.repeat(PI_CLI_TRANSCRIPT_CHAR_BUDGET + 5000)
+    const prompt = buildPiPrompt([
+      { role: 'user', content: 'old' },
+      { role: 'assistant', content: 'reply' },
+      { role: 'user', content: giant }
+    ])
+    expect(prompt.prompt).toContain(giant)
   })
 })
 
@@ -161,6 +254,33 @@ describe('buildPiArgs', () => {
     expect(buildPiArgs(prompt, undefined, undefined, [])).toEqual(buildPiArgs(prompt))
     expect(buildPiArgs(prompt).some((arg) => arg.startsWith('@'))).toBe(false)
   })
+
+  it('grants tools through the allowlist plus the explicitly loaded forwarder', () => {
+    const args = buildPiArgs(prompt, undefined, {
+      tools: ['tuff_render_form', 'tuff_render_chart'],
+      extensionPath: '/repo/packages/pi-extension-tuff/index.ts'
+    })
+
+    expect(args.slice(args.indexOf('--tools'), args.indexOf('--tools') + 2)).toEqual([
+      '--tools',
+      'tuff_render_form,tuff_render_chart'
+    ])
+    // Isolation stays unconditional — the user's own extension park never
+    // rides along; only the app's forwarder is loaded, by explicit path.
+    expect(args).toContain('--no-extensions')
+    expect(args.slice(args.indexOf('-e'), args.indexOf('-e') + 2)).toEqual([
+      '-e',
+      '/repo/packages/pi-extension-tuff/index.ts'
+    ])
+    expect(args).not.toContain('--no-tools')
+  })
+
+  it('stays tool-free when the allowlist exists but the forwarder is missing', () => {
+    const args = buildPiArgs(prompt, undefined, { tools: ['tuff_render_form'] })
+    expect(args).toContain('--tools')
+    expect(args).toContain('--no-extensions')
+    expect(args).not.toContain('-e')
+  })
 })
 
 describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {
@@ -168,7 +288,19 @@ describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {
     return JSON.stringify({ type: 'message_update', assistantMessageEvent: inner })
   }
 
-  const toolPiece = { type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: '/tmp/x' } }
+  it('maps session-level compaction events onto compaction part events', () => {
+    // Auto-compaction is on by default in pi; these arrive on the same stdout
+    // stream as message updates and were previously discarded wholesale.
+    expect(parsePiCliLine('{"type":"compaction_start","reason":"threshold"}')).toEqual({
+      partEvent: { kind: 'compaction-start', reason: 'threshold' }
+    })
+    expect(parsePiCliLine('{"type":"compaction_start"}')).toEqual({
+      partEvent: { kind: 'compaction-start' }
+    })
+    expect(parsePiCliLine('{"type":"compaction_end"}')).toEqual({
+      partEvent: { kind: 'compaction-end' }
+    })
+  })
 
   it('maps thinking events onto reasoning part events', () => {
     expect(parsePiCliLine(update({ type: 'thinking_start', contentIndex: 0 }))).toEqual({
@@ -184,19 +316,31 @@ describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {
     })
   })
 
-  it('maps the tool call lifecycle with ids from the partial content piece', () => {
-    const partial = { content: [{ type: 'text', text: '' }, toolPiece] }
-
-    expect(parsePiCliLine(update({ type: 'toolcall_start', contentIndex: 1, partial }))).toEqual({
-      partEvent: { kind: 'tool-start', callId: 'call_1', name: 'read' }
-    })
+  it('opens the tool lifecycle at toolcall_end, from its top-level toolCall', () => {
+    // The wire strips `partial` from every message_update (pi's json-event
+    // layer), so `toolcall_start`/`_delta` arrive as bare content indexes —
+    // unusable. `toolcall_end` is the first line that names the call, and it
+    // must yield start + settled input together or no tool part ever exists.
+    // (The previous partial-based reader returned null on all three events;
+    // that regression is what shipped as "widgets never render".)
+    expect(parsePiCliLine(update({ type: 'toolcall_start', contentIndex: 1 }))).toBeNull()
+    expect(
+      parsePiCliLine(update({ type: 'toolcall_delta', contentIndex: 1, delta: '{"path' }))
+    ).toBeNull()
 
     expect(
-      parsePiCliLine(update({ type: 'toolcall_delta', contentIndex: 1, delta: '{"path', partial }))
-    ).toEqual({ partEvent: { kind: 'tool-input-delta', callId: 'call_1', delta: '{"path' } })
-
-    expect(parsePiCliLine(update({ type: 'toolcall_end', contentIndex: 1, partial }))).toEqual({
-      partEvent: { kind: 'tool-input-end', callId: 'call_1', input: { path: '/tmp/x' } }
+      parsePiCliLine(
+        update({
+          type: 'toolcall_end',
+          contentIndex: 1,
+          toolCall: { type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: '/tmp/x' } }
+        })
+      )
+    ).toEqual({
+      partEvents: [
+        { kind: 'tool-start', callId: 'call_1', name: 'read' },
+        { kind: 'tool-input-end', callId: 'call_1', input: { path: '/tmp/x' } }
+      ]
     })
   })
 
@@ -243,13 +387,13 @@ describe('parsePiCliLine part events (shapes from a live pi 0.83 run)', () => {
     })
   })
 
-  it('ignores malformed tool updates without an id', () => {
+  it('ignores a toolcall_end whose toolCall carries no id', () => {
     expect(
       parsePiCliLine(
         update({
-          type: 'toolcall_start',
+          type: 'toolcall_end',
           contentIndex: 0,
-          partial: { content: [{ type: 'text' }] }
+          toolCall: { type: 'toolCall', name: 'read' }
         })
       )
     ).toBeNull()
@@ -385,11 +529,13 @@ describe('buildPiArgs tool allowlist', () => {
     expect(buildPiArgs(prompt, undefined, { tools: [' ', ''] })).toContain('--no-tools')
   })
 
-  it('loads extensions only when tools are granted', () => {
-    // Tuff's tools ship as a pi extension, so --no-extensions would silently
-    // cancel the allowlist we just handed over.
+  it('keeps extension discovery off in every mode — the forwarder loads by path', () => {
+    // Discovery-on used to be how the tool forwarder loaded, which also pulled
+    // the user's entire globally installed extension park into headless runs.
+    // The forwarder now rides in through an explicit `-e`, which pi honours
+    // even under `--no-extensions`, so isolation is unconditional.
     expect(buildPiArgs(prompt)).toContain('--no-extensions')
-    expect(buildPiArgs(prompt, undefined, { tools: ['tuff_read_file'] })).not.toContain(
+    expect(buildPiArgs(prompt, undefined, { tools: ['tuff_read_file'] })).toContain(
       '--no-extensions'
     )
   })

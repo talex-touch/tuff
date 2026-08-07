@@ -115,6 +115,26 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
     },
   },
   {
+    name: 'tuff_write_file',
+    label: 'Tuff: write file',
+    description:
+      'Create a new UTF-8 text file on the user\'s machine (e.g. a Markdown note on the Desktop). '
+      + 'Never overwrites: an existing path is refused, so pick a fresh name. The parent directory '
+      + 'must already exist. Content is capped at 1MB.',
+    promptSnippet: 'Create a text file through Tuff',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Absolute path, or one starting with ~ (e.g. ~/Desktop/note.md)',
+        },
+        content: { type: 'string', description: 'UTF-8 text content to write' },
+      },
+      required: ['path', 'content'],
+    },
+  },
+  {
     name: 'tuff_render_chart',
     label: 'Tuff: render chart',
     description:

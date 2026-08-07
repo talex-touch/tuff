@@ -10,9 +10,11 @@ import type {
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
-import { delimiter, dirname } from 'node:path'
+import { existsSync } from 'node:fs'
+import { delimiter, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments, spillAttachments } from './attachment-spill'
@@ -49,6 +51,29 @@ export function setPiToolRuntimeResolver(
   resolver: (() => PiToolRuntimeConfig | null) | null
 ): void {
   resolveToolRuntime = resolver
+}
+
+/**
+ * Tuff's tool forwarder, handed to `pi` per spawn via `-e`. Nothing is ever
+ * installed into the user's own pi setup — the file rides along from the
+ * repo in development and from `extraResources` in a packaged build. `null`
+ * (cached) when neither exists: the run then degrades to tool-free, which the
+ * model can at least say out loud, instead of silently mangling the spawn.
+ */
+let tuffExtensionPath: string | null | undefined
+
+function resolveTuffExtensionPath(): string | null {
+  if (tuffExtensionPath !== undefined) return tuffExtensionPath
+  const candidates = app.isPackaged
+    ? [join(process.resourcesPath, 'pi-extension-tuff', 'index.ts')]
+    : [join(app.getAppPath(), '..', '..', 'packages', 'pi-extension-tuff', 'index.ts')]
+  tuffExtensionPath = candidates.find((candidate) => existsSync(candidate)) ?? null
+  if (!tuffExtensionPath) {
+    piLog.warn(
+      `Tuff pi extension not found (looked at: ${candidates.join(', ')}) — runs stay tool-free`
+    )
+  }
+  return tuffExtensionPath
 }
 
 interface PiRunState {
@@ -89,10 +114,13 @@ export class PiCliProvider extends IntelligenceProvider {
     }
 
     const toolRuntime = resolveToolRuntime?.() ?? null
+    const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
     const args = buildPiArgs(
-      buildPiPrompt(payload.messages),
+      buildPiPrompt(payload.messages, { toolsGranted }),
       this.resolveModel(options),
-      toolRuntime ? { tools: toolRuntime.tools } : undefined,
+      toolRuntime
+        ? { tools: toolRuntime.tools, extensionPath: resolveTuffExtensionPath() ?? undefined }
+        : undefined,
       attachmentPaths
     )
 
@@ -182,14 +210,15 @@ export class PiCliProvider extends IntelligenceProvider {
           })
         }
 
-        if (event.partEvent) {
-          if (event.partEvent.kind === 'message-commit') committedLength = streamedLength
-          else if (event.partEvent.kind === 'text-reset') streamedLength = committedLength
+        const partEvents = event.partEvents ?? (event.partEvent ? [event.partEvent] : [])
+        for (const partEvent of partEvents) {
+          if (partEvent.kind === 'message-commit') committedLength = streamedLength
+          else if (partEvent.kind === 'text-reset') streamedLength = committedLength
 
           yield {
             delta: '',
             done: false,
-            partEvent: event.partEvent,
+            partEvent,
             provider: state.provider,
             model: state.model
           }
