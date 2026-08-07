@@ -301,13 +301,15 @@ jobs:
       # only four hand-named core-app files were covered, inside a path-filtered
       # native-protocol job. See #924.
       #
-      # Non-blocking for now: both suites are red before this change — measured
-      # on CI at core-app 28 files / 68 tests and nexus 12 files / 15 tests.
-      # Running and visible beats not running; flip continue-on-error off once
-      # the counts reach zero, and until then use them as the regression
-      # baseline to compare against.
+      # nexus is now BLOCKING: 180 files / 963 tests, zero failures (#327 closed).
+      # core-app stays non-blocking at 2 failing files, down from 20 (#323). Both
+      # remaining failures there are product-side rather than test-side -- the
+      # packaged runtime closure shipping openai@6 against @langchain/openai's
+      # ^4.87.3, and plugins/touch-quickops having lost its contract tests -- so
+      # they need decisions, not an assertion edit, and blocking on them would
+      # stop every unrelated PR.
       #
-      # The counts above are the whole reason for the JUnit report below: a
+      # The counts are the whole reason for the JUnit report below: a
       # continue-on-error job reports success, so a jump like 20 -> 28 files is
       # invisible unless the numbers are an artifact rather than something you
       # have to scrape out of a 6000-line log.
@@ -319,7 +321,7 @@ jobs:
         run: pnpm -C packages/tuffex build
 
       - name: Run ${{ matrix.app }} suite
-        continue-on-error: true
+        continue-on-error: ${{ matrix.app != 'nexus' }}
         run: >-
           pnpm -C "apps/${{ matrix.app }}" exec vitest run
           --reporter=default
