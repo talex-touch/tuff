@@ -178,6 +178,7 @@
     "eslint-plugin-vue": "^10.9.2",
     "lottie-web": "^5.13.0",
     "openai": "^6.26.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "unocss": "catalog:build",
     "unplugin-auto-import": "^20.3.0",
