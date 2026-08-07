@@ -42,6 +42,14 @@ const rows = computed(() => {
       value: `${(turn.latencyMs / 1000).toFixed(1)}s`
     })
   }
+  // Only when it happened: a zero row would make every turn look degraded.
+  if (turn?.compactions) {
+    entries.push({
+      key: 'compactions',
+      label: t('home.panel.compactions'),
+      value: `×${turn.compactions}`
+    })
+  }
 
   return entries
 })

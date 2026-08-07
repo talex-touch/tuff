@@ -43,6 +43,8 @@ export interface ConversationTurnMeta {
   completionTokens?: number
   totalTokens?: number
   latencyMs?: number
+  /** How many times the provider compacted its context while producing this turn. */
+  compactions?: number
 }
 
 export interface ConversationMessage {
@@ -115,6 +117,8 @@ export interface UseHomeConversationReturn {
   messages: ComputedRef<ConversationMessage[]>
   isStreaming: ComputedRef<boolean>
   isEmpty: ComputedRef<boolean>
+  /** True while the provider reports an in-flight context compaction. */
+  isCompacting: ComputedRef<boolean>
   /** Metadata of the most recent settled assistant turn, for the side panel. */
   lastTurn: ComputedRef<ConversationTurnMeta | undefined>
   send: (text: string, attachments?: AiAttachment[]) => Promise<void>
@@ -132,6 +136,8 @@ export function useHomeConversation(
   const sdk = options.sdk ?? useIntelligenceSdk()
   const messages = ref<ConversationMessage[]>([])
   const streaming = ref(false)
+  /** Transient by design: never persisted — a reloaded thread is not "compacting". */
+  const compacting = ref(false)
 
   function resolveInvokeOptions(): IntelligenceInvokeOptions {
     const routing = options.routing?.()
@@ -150,15 +156,20 @@ export function useHomeConversation(
 
   let activeController: StreamController | null = null
   let activeTurn: { cancel: () => void } | null = null
-  let messageSeq = 0
 
+  /**
+   * Globally unique, not a counter. Ids double as virtual-list keys and as
+   * height-cache keys in the stream, and they persist with the thread — a
+   * per-thread counter gave every conversation the same `user-1`, and a
+   * restore could re-mint an id a dropped turn had already used. The role
+   * prefix is for humans reading storage dumps.
+   */
   function createMessage(
     role: ConversationRole,
     content: string,
     status: ConversationMessageStatus
   ): ConversationMessage {
-    messageSeq += 1
-    return { id: `${role}-${messageSeq}`, role, content, status }
+    return { id: `${role}-${crypto.randomUUID()}`, role, content, status }
   }
 
   /**
@@ -320,6 +331,17 @@ export function useHomeConversation(
         rollbackParts()
         return
       }
+      // Compaction is provider bookkeeping, not content: a badge while it
+      // runs, a count on the turn's meta for the side panel.
+      if (event.kind === 'compaction-start') {
+        compacting.value = true
+        recordMeta({ compactions: (assistant.meta?.compactions ?? 0) + 1 })
+        return
+      }
+      if (event.kind === 'compaction-end') {
+        compacting.value = false
+        return
+      }
 
       const parts = ensureParts()
       switch (event.kind) {
@@ -398,6 +420,8 @@ export function useHomeConversation(
       activeController = null
       activeTurn = null
       streaming.value = false
+      // A `compaction_end` lost to a dying process must not strand the badge.
+      compacting.value = false
       settle?.()
     }
 
@@ -458,9 +482,15 @@ export function useHomeConversation(
       onPartEvent: (partEvent) => {
         if (settled) return
         // Bookkeeping, not content: seeding a text part off a commit would put every turn into
-        // parts mode, and a rollback that arrives before anything survived must leave the turn
-        // eligible for the non-streaming fallback below.
-        if (partEvent.kind === 'message-commit' || partEvent.kind === 'text-reset') {
+        // parts mode, a rollback that arrives before anything survived must leave the turn
+        // eligible for the non-streaming fallback below, and a compaction says nothing about
+        // whether this turn produced output.
+        if (
+          partEvent.kind === 'message-commit' ||
+          partEvent.kind === 'text-reset' ||
+          partEvent.kind === 'compaction-start' ||
+          partEvent.kind === 'compaction-end'
+        ) {
           handlePartEvent(partEvent)
           return
         }
@@ -582,8 +612,6 @@ export function useHomeConversation(
   function restore(restored: ConversationMessage[]): void {
     discardActiveTurn()
     messages.value = restored.map((message) => ({ ...message }))
-    // Ids come back from storage, so the counter has to clear them or a new turn would collide.
-    messageSeq = restored.length
   }
 
   if (getCurrentScope()) {
@@ -598,6 +626,7 @@ export function useHomeConversation(
     messages: computed(() => messages.value),
     isStreaming: computed(() => streaming.value),
     isEmpty: computed(() => messages.value.length === 0),
+    isCompacting: computed(() => compacting.value),
     lastTurn: computed(() => {
       for (let index = messages.value.length - 1; index >= 0; index -= 1) {
         const message = messages.value[index]

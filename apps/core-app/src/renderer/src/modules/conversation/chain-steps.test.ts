@@ -59,6 +59,22 @@ describe('toChainSteps', () => {
     expect(steps[0]!.title.endsWith('…')).toBe(true)
   })
 
+  it('keeps the full text as body when the title had to truncate', () => {
+    // A truncated title is a preview; without this the tail of the first
+    // line rendered nowhere at all.
+    const text = `${'x'.repeat(200)}\nsecond line`
+    const steps = toChainSteps([{ type: 'reasoning', text, done: true }], false)
+    expect(steps[0]?.body).toBe(text)
+  })
+
+  it('forwards reasoning duration onto the step', () => {
+    const steps = toChainSteps(
+      [{ type: 'reasoning', text: 'quick check', done: true, durationMs: 3200 }],
+      false
+    )
+    expect(steps[0]?.durationMs).toBe(3200)
+  })
+
   it('returns nothing for a plain text answer', () => {
     expect(toChainSteps([{ type: 'text', text: 'hi' }], false)).toEqual([])
     expect(toChainSteps(undefined, false)).toEqual([])

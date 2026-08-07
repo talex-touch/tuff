@@ -9,6 +9,30 @@ function firstLine(text: string): string {
 }
 
 /**
+ * Step titles render as plain text in the trail header, so the emphasis
+ * markers models like to head their thoughts with (`**Planning …**`) would
+ * show as literal asterisks.
+ */
+function plainTitle(text: string): string {
+  return firstLine(text)
+    .replace(/[*_`#]+/g, '')
+    .trim()
+}
+
+/**
+ * The title line already heads the step — the body picks up after it. Except
+ * when the title had to truncate: then it is only a preview, and the body
+ * must carry the full text or the tail of that first line renders nowhere.
+ */
+function bodyFor(text: string): string | undefined {
+  const index = text.indexOf('\n')
+  const first = (index === -1 ? text : text.slice(0, index)).trim()
+  if (first.length > TITLE_LIMIT) return text.trim() || undefined
+  const rest = index === -1 ? '' : text.slice(index + 1).trim()
+  return rest || undefined
+}
+
+/**
  * Derives the chain-of-thought timeline from a message's parts.
  *
  * Text parts are excluded on purpose: they are the answer, rendered in the
@@ -27,11 +51,14 @@ export function toChainSteps(
       steps.push({
         id: `reasoning-${index}`,
         kind: 'thinking',
-        title: firstLine(part.text) || 'Thinking',
-        body: part.text,
+        title: plainTitle(part.text) || 'Thinking',
+        // Without the title line — repeating it as the body's first row read
+        // as a rendering bug. The rest is markdown; the trail renders it so.
+        body: bodyFor(part.text),
         // A reasoning span with no `done` on a settled turn was interrupted,
         // not still running — `streaming` decides which reading applies.
-        status: part.done || !streaming ? 'done' : 'active'
+        status: part.done || !streaming ? 'done' : 'active',
+        durationMs: part.durationMs
       })
       continue
     }

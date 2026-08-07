@@ -8,9 +8,10 @@ import type { ConversationMessage } from '~/modules/conversation/useHomeConversa
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
-import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
+import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import {
@@ -62,6 +63,16 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
 const composerRef = ref<HTMLElement | null>(null)
+/** The FLIP animates this — composer *and* quick pills travel as one body. */
+const composerGroupRef = ref<HTMLElement | null>(null)
+/** Measured before a send so the leaving greeting can be pinned in place. */
+const headRef = ref<HTMLElement | null>(null)
+/**
+ * Host for the send-flight clone. The page root, not `document.body`: the
+ * clone must sit under the shell/tuffex CSS-variable scope or it renders in
+ * fallback colours mid-air.
+ */
+const pageRef = ref<HTMLElement | null>(null)
 const composerHeight = ref(0)
 
 const router = useRouter()
@@ -75,7 +86,7 @@ const conversation = useHomeConversation({
   // Likewise for Auto Context, which the settings page owns — each send reads its current value.
   autoContext: () => autoContext.value
 })
-const { isEmpty, isStreaming, lastTurn, messages } = conversation
+const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
 
@@ -164,68 +175,117 @@ async function resetRememberedApprovals(): Promise<void> {
 // ============================================================================
 
 /**
- * Step response of a ζ=0.66 spring (one ~6% overshoot, then a settle): `x` is
+ * Step response of a ζ=0.62 spring (one ~8% overshoot, then a settle): `x` is
  * the eased position 0→1 and `v` the normalized velocity, which drives the
  * jelly stretch — a bubble is longest while it moves fastest, and the brief
  * negative tail squashes it as the overshoot springs back.
  */
 const SPRING = [
   { o: 0, x: 0, v: 0 },
-  { o: 0.036, x: 0.046, v: 0.555 },
-  { o: 0.071, x: 0.156, v: 0.869 },
-  { o: 0.107, x: 0.3, v: 1 },
-  { o: 0.143, x: 0.453, v: 1 },
-  { o: 0.179, x: 0.6, v: 0.915 },
-  { o: 0.214, x: 0.729, v: 0.782 },
-  { o: 0.25, x: 0.836, v: 0.629 },
-  { o: 0.286, x: 0.92, v: 0.476 },
-  { o: 0.321, x: 0.981, v: 0.336 },
-  { o: 0.357, x: 1.023, v: 0.216 },
-  { o: 0.393, x: 1.048, v: 0.119 },
-  { o: 0.429, x: 1.06, v: 0.046 },
-  { o: 0.464, x: 1.063, v: -0.005 },
-  { o: 0.5, x: 1.06, v: -0.038 },
-  { o: 0.571, x: 1.043, v: -0.064 },
-  { o: 0.643, x: 1.024, v: -0.057 },
-  { o: 0.714, x: 1.01, v: -0.039 },
-  { o: 0.786, x: 1.001, v: -0.02 },
-  { o: 0.857, x: 0.997, v: -0.007 },
-  { o: 0.929, x: 0.996, v: 0.001 },
+  { o: 0.036, x: 0.041, v: 0.538 },
+  { o: 0.071, x: 0.139, v: 0.847 },
+  { o: 0.107, x: 0.269, v: 0.985 },
+  { o: 0.143, x: 0.409, v: 1 },
+  { o: 0.179, x: 0.544, v: 0.934 },
+  { o: 0.214, x: 0.667, v: 0.821 },
+  { o: 0.25, x: 0.772, v: 0.685 },
+  { o: 0.286, x: 0.858, v: 0.544 },
+  { o: 0.321, x: 0.925, v: 0.412 },
+  { o: 0.357, x: 0.974, v: 0.294 },
+  { o: 0.393, x: 1.008, v: 0.195 },
+  { o: 0.429, x: 1.029, v: 0.116 },
+  { o: 0.5, x: 1.046, v: 0.012 },
+  { o: 0.571, x: 1.041, v: -0.035 },
+  { o: 0.643, x: 1.03, v: -0.046 },
+  { o: 0.714, x: 1.017, v: -0.04 },
+  { o: 0.821, x: 1.004, v: -0.021 },
+  { o: 0.929, x: 0.999, v: -0.007 },
   { o: 1, x: 1, v: 0 }
 ] as const
 
-const SPRING_MS = 560
+const SPRING_MS = 410
 /** Where `x` first crosses its target — the impact that launches the wave. */
-const SPRING_IMPACT_MS = 200
+const SPRING_IMPACT_MS = 161
 
 /**
- * Impulse response of a ζ=0.5 spring: how a resting row rings after being
- * hit from below — up fast, back through neutral, one small counter-swing.
+ * How a resting row rings after being hit from below. Not a raw spring
+ * impulse: the onset is mass-shaped (quadratic-ish — a row accelerates, it
+ * doesn't twitch), the crown at ~16% is round, sampling is dense through the
+ * rise and peak so the linear-interpolated keyframes carry no corners, and
+ * the counter-swing is a gentle −7% rather than a wobble.
  */
 const IMPULSE = [
   { o: 0, y: 0 },
-  { o: 0.042, y: 0.707 },
-  { o: 0.083, y: 1 },
-  { o: 0.125, y: 0.985 },
-  { o: 0.167, y: 0.786 },
-  { o: 0.208, y: 0.514 },
-  { o: 0.25, y: 0.25 },
-  { o: 0.292, y: 0.042 },
-  { o: 0.333, y: -0.093 },
-  { o: 0.375, y: -0.156 },
-  { o: 0.417, y: -0.165 },
-  { o: 0.458, y: -0.138 },
-  { o: 0.5, y: -0.095 },
-  { o: 0.542, y: -0.051 },
-  { o: 0.583, y: -0.014 },
-  { o: 0.625, y: 0.011 },
-  { o: 0.708, y: 0.027 },
-  { o: 0.792, y: 0.017 },
-  { o: 0.875, y: 0.004 },
+  { o: 0.05, y: 0.084 },
+  { o: 0.1, y: 0.547 },
+  { o: 0.14, y: 0.927 },
+  { o: 0.18, y: 0.991 },
+  { o: 0.22, y: 0.995 },
+  { o: 0.27, y: 0.939 },
+  { o: 0.32, y: 0.836 },
+  { o: 0.38, y: 0.681 },
+  { o: 0.45, y: 0.49 },
+  { o: 0.52, y: 0.314 },
+  { o: 0.6, y: 0.151 },
+  { o: 0.68, y: 0.035 },
+  { o: 0.76, y: -0.036 },
+  { o: 0.84, y: -0.05 },
+  { o: 0.92, y: -0.02 },
   { o: 1, y: 0 }
 ] as const
 
-const IMPULSE_MS = 480
+const IMPULSE_MS = 560
+
+/**
+ * The wave fires well *before* the arrival spring's first crossing: the
+ * knocked rows' mass-shaped onset takes ~0.2×IMPULSE_MS to build, and the
+ * lead is what makes their crest coincide with the landing — the rows read
+ * as giving way under the approach, not as being slapped after it.
+ */
+const KNOCK_LEAD_MS = 110
+
+/**
+ * The send flight's own curve — a drop of liquid leaving the composer. Three
+ * regimes, position- and velocity-continuous: a lazy jerk ramp (half the time
+ * covers barely two fifths of the distance), a compressed rush where velocity
+ * peaks just past the split (o≈0.58), and a soft capture — ~3% overshoot
+ * gliding home slowly, so the landing reads as absorbed rather than slammed.
+ * Baked offline like SPRING; `v` is normalized to its peak.
+ */
+const FLIGHT = [
+  { o: 0, x: 0, v: 0 },
+  { o: 0.1, x: 0.003, v: 0.023 },
+  { o: 0.2, x: 0.025, v: 0.09 },
+  { o: 0.28, x: 0.069, v: 0.177 },
+  { o: 0.35, x: 0.134, v: 0.276 },
+  { o: 0.41, x: 0.215, v: 0.379 },
+  { o: 0.46, x: 0.304, v: 0.477 },
+  { o: 0.5, x: 0.391, v: 0.563 },
+  { o: 0.54, x: 0.492, v: 0.657 },
+  { o: 0.58, x: 0.629, v: 0.982 },
+  { o: 0.62, x: 0.791, v: 0.905 },
+  { o: 0.66, x: 0.918, v: 0.612 },
+  { o: 0.7, x: 0.994, v: 0.315 },
+  { o: 0.74, x: 1.027, v: 0.102 },
+  { o: 0.79, x: 1.032, v: -0.032 },
+  { o: 0.85, x: 1.018, v: -0.063 },
+  { o: 0.92, x: 1.004, v: -0.034 },
+  { o: 1, x: 1, v: 0 }
+] as const
+
+const FLIGHT_MS = 460
+/** The split — velocity peaks, the composer lets go, its recoil fires here. */
+const FLIGHT_SPLIT_MS = 253
+/** First crossing of the resting place — the strike lands here. */
+const FLIGHT_IMPACT_MS = 324
+/** How deep the bubble starts sunk into the composer while fused with it. */
+const FLIGHT_SINK_PX = 8
+
+/** The "make room" glide before the strike — fixed, however far away the reader was. */
+const SCROLL_TWEEN_MS = 280
+
+/** Stamps each send's choreography; a newer send silences the older one's pending beats. */
+let sendSeq = 0
 
 /**
  * Ids of messages whose entrance has not finished. The template renders them
@@ -236,16 +296,28 @@ const IMPULSE_MS = 480
  */
 const enteringMessages = reactive(new Set<string>())
 
+/**
+ * Set by `submit` just before it sends: an explicit hand-off, not an
+ * inference. A user message can also arrive programmatically — a form
+ * submission calls `conversation.send` directly — and guessing "user message
+ * ⇒ the composer will choreograph it" left those permanently hidden.
+ */
+let choreographedSend = false
+
 watch(
   () => messages.value.length,
   (length, previous) => {
     if (!isStreaming.value || prefersReducedMotion()) return
     const appended = messages.value.slice(previous ?? 0, length)
     for (const message of appended) enteringMessages.add(message.id)
+    const claimed = choreographedSend
+    choreographedSend = false
+    // The composer's own send runs the full glide-flight-placeholder score;
+    // everything else (retry placeholders, form submissions) enters here.
+    if (claimed && appended.some((message) => message.role === 'user')) return
     void nextTick(() => {
       for (const message of appended) {
-        // The user's own message is animated by the send flight instead.
-        if (message.role !== 'user') runEntrance(message.id)
+        runEntrance(message.id, message.role === 'user' ? 0.8 : 0.6)
       }
     })
   }
@@ -267,7 +339,7 @@ function arrivalKeyframes(rise: number, jelly: number): Record<string, string | 
 }
 
 /** A reply surfaces from just below its resting place and nudges the thread. */
-function runEntrance(id: string): void {
+function runEntrance(id: string, strength = 0.6): void {
   const el = messageElement(id)
   if (!el) {
     enteringMessages.delete(id)
@@ -278,22 +350,23 @@ function runEntrance(id: string): void {
   // forward fill means a finished entrance holds no composited state. The
   // hide class leaves at impact, while the animation still owns opacity —
   // never at the finish edge, where removal could flash.
-  animateRaw(el, arrivalKeyframes(22, 0.04), {
+  animateRaw(el, arrivalKeyframes(26, 0.07), {
     duration: SPRING_MS,
     easing: 'linear',
     fill: 'backwards'
   })
-  window.setTimeout(() => {
-    enteringMessages.delete(id)
-    knockRows(el, 0.6)
-  }, SPRING_IMPACT_MS)
+  if (strength > 0) {
+    window.setTimeout(() => knockRows(el, strength), SPRING_IMPACT_MS - KNOCK_LEAD_MS)
+  }
+  window.setTimeout(() => enteringMessages.delete(id), SPRING_IMPACT_MS)
 }
 
 /**
  * The collision itself: rows above the landing bubble ring like a chain of
- * sprung masses — nearer rows harder and sooner, each with a touch of squash
- * (origin at their bottom edge, where the hit lands). Amplitudes decay fast
- * enough that the wave dies inside four rows.
+ * sprung masses — nearer rows harder and sooner, farther rows later, slower
+ * and duller, the way a real chain disperses. Pure translation: deformation
+ * belongs to the incoming bubble; a neighbour that squashes while it lifts
+ * reads as two motions fighting. Amplitudes die inside four rows.
  */
 function knockRows(origin: HTMLElement, strength: number): void {
   if (prefersReducedMotion()) return
@@ -301,22 +374,27 @@ function knockRows(origin: HTMLElement, strength: number): void {
   const index = rows.indexOf(origin)
   if (index <= 0) return
 
-  const amplitudes = [9, 5.5, 3, 1.5]
+  const amplitudes = [18, 12, 7, 3.5]
   amplitudes.forEach((amplitude, order) => {
     const row = rows[index - 1 - order]
     const lift = amplitude * strength
     if (!row || lift < 0.75) return
-    const squash = 0.032 * (lift / (amplitudes[0] ?? 9))
-    animateRaw(
+    // Promoted for the ring, released after: four rows composited at once is
+    // fine, four rows promoted forever is memory.
+    row.style.willChange = 'transform'
+    const clear = (): void => {
+      row.style.willChange = ''
+    }
+    const wave = animateRaw(
       row,
       IMPULSE.map(({ o, y }) => ({
         offset: o,
-        transform:
-          `translateY(${(-lift * y).toFixed(2)}px) ` +
-          `scaleY(${(1 - squash * Math.max(0, y)).toFixed(4)})`
+        transform: `translateY(${(-lift * y).toFixed(2)}px)`
       })),
-      { duration: IMPULSE_MS, delay: order * 42, easing: 'linear' }
+      // Dispersion: each hop through the chain loses pace as well as height.
+      { duration: Math.round(IMPULSE_MS * (1 + 0.15 * order)), delay: order * 42, easing: 'linear' }
     )
+    void wave.finished.then(clear).catch(clear)
   })
 }
 
@@ -418,6 +496,9 @@ const formDrafts = new Map<string, Record<string, FormFieldValue>>()
  */
 function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void {
   submittedForms.add(tool.id)
+  // On the part itself so it persists with the thread: a reloaded
+  // conversation must not re-offer a form that was already answered.
+  tool.submitted = true
   formDrafts.delete(tool.id)
   const lines = Object.entries(values).map(([key, value]) => `${key}: ${String(value)}`)
   draft.value = ''
@@ -432,6 +513,64 @@ function soloToolOf(message: ConversationMessage): AiToolCallPart[] {
     (part): part is AiToolCallPart => part.type === 'tool-call'
   )
   return tools.length === 1 ? tools : []
+}
+
+/**
+ * The raw payload affordance is for builders: dev builds only, and even
+ * there just a whisper of a toggle per widget. It opens a dialog with the
+ * call rendered as highlighted JSON — the code block brings its own copy
+ * button, so inspection and grabbing the payload are one gesture each.
+ */
+const showToolPayload = import.meta.env.DEV
+const payloadFor = ref<AiToolCallPart | null>(null)
+
+const payloadJson = computed(() => {
+  const input = payloadFor.value?.input
+  if (!input) return ''
+  try {
+    // Normalized pretty-print; the accumulator may hand over compact JSON.
+    return JSON.stringify(JSON.parse(input), null, 2)
+  } catch {
+    return input
+  }
+})
+
+/**
+ * The cards a message renders in its body. A lone tool call shows whatever it
+ * is; on a multi-step turn the trail carries the log, but calls that produced
+ * a *widget* — a form, a chart — must still surface as the real thing: the
+ * form the model believes is on screen cannot live only as a JSON line inside
+ * a collapsed timeline.
+ */
+function toolCardsOf(message: ConversationMessage): AiToolCallPart[] {
+  const solo = soloToolOf(message)
+  if (solo.length > 0) return solo
+  return (message.parts ?? []).filter(
+    (part): part is AiToolCallPart =>
+      part.type === 'tool-call' && (formSpecOf(part) !== null || chartSpecOf(part) !== null)
+  )
+}
+
+/**
+ * The reader's manual open/collapse per message. Held here rather than in the
+ * chain component because streaming re-renders can recreate that instance —
+ * state kept there dies mid-turn, which read as "clicking does nothing".
+ */
+const chainOpen = reactive(new Map<string, boolean>())
+
+/**
+ * A real trail (2+ steps) always shows. A lone step depends on what it is: a
+ * thinking step is the turn's only record of its reasoning, so it stays after
+ * the turn settles (collapsed — the reader chooses to look); a lone tool call
+ * already renders as its own card, so a trail would say everything twice.
+ * While streaming, a lone step of any kind shows so a turn whose only
+ * activity is one live span never reads as a hang.
+ */
+function showChain(message: ConversationMessage): boolean {
+  const steps = chainStepsOf(message)
+  if (steps.length > 1) return true
+  if (steps.length !== 1 || soloToolOf(message).length > 0) return false
+  return steps[0]?.kind === 'thinking' || message.status === 'streaming'
 }
 
 const quickPills = [
@@ -469,96 +608,238 @@ async function submit(): Promise<void> {
   autoGrow()
 
   // Allocated here rather than at setup so an untouched home screen never claims an id.
-  conversationId ??= createConversationId()
+  conversationId.value ??= createConversationId()
+
+  // Claim the incoming batch before it exists: the length watcher fires
+  // during `send`'s flush, so the flag must already be up.
+  choreographedSend = true
 
   // FLIP: the composer travels from centre stage to the bottom dock. Measured
   // around the reactive flip so the same node glides instead of teleporting.
   const composerEl = composerRef.value
   const first = composerEl?.getBoundingClientRect()
+  const headEl = headRef.value
+  const headRect = headEl?.getBoundingClientRect()
 
   const turn = conversation.send(text, attachments)
   // Sending from a scrolled-up position still lands you on your own message —
   // the stream only auto-follows readers already at the bottom.
   await nextTick()
 
-  if (composerEl && first && !prefersReducedMotion()) {
-    const last = composerEl.getBoundingClientRect()
-    const deltaY = first.top - last.top
-    if (Math.abs(deltaY) > 8) {
-      composerEl.animate(
-        [{ transform: `translateY(${deltaY}px)` }, { transform: 'translateY(0)' }],
-        { duration: 480, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
-      )
+  // The leaving greeting must neither ride the new layout (it would teleport
+  // to the column top) nor keep occupying it (it would shove the stream down,
+  // then snap it up when the fade ends): pin it where it stood, out of flow.
+  if (headEl?.isConnected && headRect && !prefersReducedMotion()) {
+    const host = headEl.parentElement?.getBoundingClientRect()
+    if (host) {
+      headEl.style.position = 'absolute'
+      headEl.style.top = `${Math.round(headRect.top - host.top)}px`
+      headEl.style.left = `${Math.round(headRect.left - host.left)}px`
+      headEl.style.zIndex = '0'
     }
   }
 
-  streamRef.value?.scrollToBottom()
-  // One frame later: the virtualized spacers have settled, so the flight
-  // measures true rects and the re-assert lands on the real bottom.
-  requestAnimationFrame(() => {
+  if (composerEl && first && !prefersReducedMotion()) {
+    const deltaY = first.top - composerEl.getBoundingClientRect().top
+    if (Math.abs(deltaY) > 8) flipComposer(deltaY)
+  }
+
+  // The send choreography: space and strike as ONE gesture. The freshly
+  // appended rows are already in the layout (hidden by `--enter`), so the
+  // flight's landing point is computable up front — the glide opens the room
+  // while the clone is already in the air, iMessage's zero-latency press.
+  const seq = ++sendSeq
+  const placeholderId =
+    messages.value.at(-1)?.role === 'assistant' ? messages.value.at(-1)?.id : undefined
+
+  if (prefersReducedMotion()) {
     streamRef.value?.scrollToBottom()
-    animateSendFlight(composerEl)
-  })
+    await turn
+    return
+  }
+
+  void streamRef.value?.tweenToBottom(SCROLL_TWEEN_MS)
+  const flight = animateSendFlight(composerEl)
+  if (placeholderId) {
+    // No knock of its own: the thread was just struck, and a second hit this
+    // close would read as stutter rather than physics.
+    const reveal = (): void => {
+      if (seq === sendSeq) runEntrance(placeholderId, 0)
+    }
+    if (flight) {
+      void flight.impact.then(() => window.setTimeout(reveal, 80))
+    } else {
+      window.setTimeout(reveal, FLIGHT_IMPACT_MS + 80)
+    }
+  }
   await turn
 }
 
 /**
- * The send flight: the fresh user bubble lifts off from the composer's
- * *visual* position (mid-FLIP transforms included via getBoundingClientRect),
- * sharpening out of a blur as it detaches, riding the same spring as every
- * other arrival — and the wave fires at the spring's impact moment, not at
- * animation end, so the thread above recoils exactly when the bubble lands.
+ * The send flight, iMessage's own trick: a fixed-position CLONE of the bubble
+ * flies from the composer to the bubble's *final* resting place — computed
+ * against the make-room glide's own target — while the real bubble stays
+ * hidden and the thread slides independently underneath. Decoupling flight
+ * from scroll is what lets the drop leave the composer on press, with no
+ * queueing behind the glide.
+ *
+ * No blur: per-frame `blur()` radius changes force a re-raster of the bubble
+ * texture every frame, which is exactly the stutter this replaces. The jelly
+ * stretch carries the speed instead — fast things deform, crisp.
+ *
+ * Beats fire off the animation's own clock (split → recoil, impact → knock,
+ * finish → swap clone for the real row), read by one rAF watcher — wall-clock
+ * timers drifted a frame or two under load and landed the knock after the eye
+ * had already seen the touch-down.
  */
-function animateSendFlight(composerEl: HTMLElement | null): void {
+function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<void> } | null {
   const sent = [...messages.value].reverse().find((message) => message.role === 'user')
-  if (!composerEl || prefersReducedMotion()) {
+  const bail = (): null => {
     if (sent) enteringMessages.delete(sent.id)
-    return
+    return null
   }
+  if (!composerEl || prefersReducedMotion()) return bail()
   const bubble = sent ? messageElement(sent.id) : null
-  if (!sent || !bubble) {
-    if (sent) enteringMessages.delete(sent.id)
-    return
-  }
+  if (!sent || !bubble) return bail()
 
-  const deltaY = composerEl.getBoundingClientRect().top - bubble.getBoundingClientRect().top
-  if (deltaY < 4) {
-    enteringMessages.delete(sent.id)
-    return
-  }
+  const host = pageRef.value
+  if (!host) return bail()
+  const scroller = host.querySelector<HTMLElement>('.tx-conversation-stream__scroller')
+  const bubbleRect = bubble.getBoundingClientRect()
+  // Where the bubble will sit once the glide lands: its current rect shifted
+  // by the scroll still owed. The rows are already in their final layout
+  // (hidden by `--enter`), so the scroll is the only motion left to account.
+  const owed = scroller
+    ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
+    : 0
+  const finalTop = bubbleRect.top - owed
+  const deltaY = composerEl.getBoundingClientRect().top - finalTop
+  if (deltaY < 4) return bail()
+  const launchY = deltaY + FLIGHT_SINK_PX
 
-  // Same fill discipline as `runEntrance`: backwards to cover the launch
-  // frame, no forward fill left behind, hide class released at impact.
-  animateRaw(
-    bubble,
-    SPRING.map(({ o, x, v }) => ({
-      offset: o,
-      transform:
-        `translateY(${((1 - x) * deltaY).toFixed(1)}px) ` +
-        `scale(${(1 - 0.05 * v).toFixed(4)}, ${(1 + 0.1 * v).toFixed(4)})`,
-      filter: `blur(${(6 * Math.max(0, 1 - o / 0.3)).toFixed(1)}px)`,
-      opacity: Math.min(1, 0.5 + o / 0.4)
-    })),
-    { duration: SPRING_MS, easing: 'linear', fill: 'backwards' }
+  const clone = bubble.cloneNode(true) as HTMLElement
+  clone.removeAttribute('data-message-id') // the knock query must not hit the stand-in
+  clone.setAttribute('aria-hidden', 'true')
+  clone.classList.remove('HomePage-Message--enter')
+  Object.assign(clone.style, {
+    position: 'fixed',
+    top: `${finalTop}px`,
+    left: `${bubbleRect.left}px`,
+    width: `${bubbleRect.width}px`,
+    margin: '0',
+    pointerEvents: 'none',
+    zIndex: '30',
+    willChange: 'transform'
+  } satisfies Partial<CSSStyleDeclaration>)
+  host.appendChild(clone)
+
+  const animation = animateRaw(
+    clone,
+    FLIGHT.map(({ o, x, v }) => {
+      // The bubble emerges slightly small, as if still part of the box, and
+      // the jelly stretch rides the velocity on top of that.
+      const emerge = 0.94 + 0.06 * Math.min(1, o / 0.45)
+      return {
+        offset: o,
+        transform:
+          `translateY(${((1 - x) * launchY).toFixed(1)}px) ` +
+          `scale(${(emerge * (1 - 0.05 * v)).toFixed(4)}, ${(emerge * (1 + 0.14 * v)).toFixed(4)})`,
+        opacity: Math.min(1, 0.4 + o * 1.35)
+      }
+    }),
+    // `both`: the clone owns the launch frame before the first tick and holds
+    // the landing pose until the swap removes it.
+    { duration: FLIGHT_MS, easing: 'linear', fill: 'both' }
   )
 
-  // Launch recoil; composited additively so it stacks on the first-send FLIP
-  // instead of replacing it.
-  animateRaw(
-    composerEl,
-    [
-      { transform: 'scale(1)' },
-      { transform: 'scale(0.988)', offset: 0.35 },
-      { transform: 'scale(1)' }
-    ],
-    { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', composite: 'add' }
-  )
+  let impactResolve: () => void = () => {}
+  const impact = new Promise<void>((resolve) => {
+    impactResolve = resolve
+  })
+  const seq = sendSeq
+  let recoiled = false
+  let knocked = false
+  let landed = false
+  let done = false
 
-  // A full-strength hit: the bubble arrives carrying the send's momentum.
-  window.setTimeout(() => {
+  // The swap: the clone's landing pose is exactly the real row's rest, so
+  // revealing one while removing the other is invisible.
+  const finish = (): void => {
+    if (done) return
+    done = true
     enteringMessages.delete(sent.id)
-    knockRows(bubble, 1)
-  }, SPRING_IMPACT_MS)
+    clone.remove()
+    impactResolve()
+  }
+
+  const watch = (): void => {
+    if (done) return
+    // A newer send owns the stage now; this flight ends where it stands.
+    if (seq !== sendSeq) {
+      animation.cancel()
+      finish()
+      return
+    }
+    const elapsed = Number(animation.currentTime ?? 0)
+    if (!recoiled && elapsed >= FLIGHT_SPLIT_MS) {
+      recoiled = true
+      // Recoil at the split — the box springs back the moment the drop snaps
+      // free. Composited additively so it stacks on the first-send FLIP.
+      animateRaw(
+        composerEl,
+        [
+          { transform: 'scale(1)' },
+          { transform: 'scale(0.985)', offset: 0.35 },
+          { transform: 'scale(1)' }
+        ],
+        { duration: 300, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', composite: 'add' }
+      )
+    }
+    if (!knocked && elapsed >= FLIGHT_IMPACT_MS - KNOCK_LEAD_MS) {
+      knocked = true
+      // A full-strength hit: the bubble arrives carrying the send's momentum.
+      knockRows(bubble, 1)
+    }
+    if (!landed && elapsed >= FLIGHT_IMPACT_MS) {
+      landed = true
+      impactResolve()
+    }
+    requestAnimationFrame(watch)
+  }
+  requestAnimationFrame(watch)
+  void animation.finished.then(finish).catch(finish)
+
+  return { impact }
+}
+
+/**
+ * The composer's dock/undock journey rides the same spring as the messages —
+ * a slight overshoot past its destination and a whisper of jelly, so landing
+ * reads as a soft impact rather than an ease-out stop. Sign-agnostic: the
+ * first-send drop and the new-conversation rise share it. The *group* is what
+ * travels, so the quick pills dissolve in place on the composer's back
+ * instead of detaching the moment the dock class flips the layout.
+ */
+function flipComposer(deltaY: number): void {
+  const el = composerGroupRef.value ?? composerRef.value
+  if (!el) return
+  animateRaw(
+    el,
+    SPRING.map(({ o, x, v }) => {
+      // The messages' full 8% rebound scaled to a box this big reads as a
+      // wobble, not a landing — compress the overshoot to ~3% and let the
+      // jelly carry the impact instead. Vertical only: an X squeeze on a
+      // 720px-wide box is a visible ±8px breathing of its edges.
+      const xc = x > 1 ? 1 + (x - 1) * 0.35 : x
+      return {
+        offset: o,
+        transform:
+          `translateY(${((1 - xc) * deltaY).toFixed(1)}px) ` +
+          `scaleY(${(1 + 0.022 * v).toFixed(4)})`
+      }
+    }),
+    { duration: 520, easing: 'linear' }
+  )
 }
 
 /**
@@ -740,8 +1021,15 @@ const composerClearance = computed(() =>
 const homeLog = createRendererLogger('HomeConversation')
 const history = useConversationHistory()
 
-/** Allocated on the first send, so an untouched home screen never writes an empty row. */
-let conversationId: string | null = null
+/**
+ * Allocated on the first send, so an untouched home screen never writes an
+ * empty row. Reactive because it also keys the stream instance: old stored
+ * threads share counter-style message ids, and one keep-alive'd stream
+ * carrying its height cache across them laid thread B out with thread A's
+ * measurements. Draft → first persist does not change it (the id is minted
+ * at send time), so the key flips only on real thread switches.
+ */
+const conversationId = ref<string | null>(null)
 
 /**
  * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
@@ -754,20 +1042,41 @@ watch(
   async (id) => {
     const target = typeof id === 'string' ? id : null
     if (!target) {
-      conversationId = null
+      conversationId.value = null
+      // Any half-played send choreography dies with the thread it animated.
+      sendSeq += 1
+      // The reverse FLIP: leaving a conversation undocks the composer, and the
+      // same node must glide from the bottom dock back to centre stage — the
+      // mirror of the first-send journey, same duration, same easing.
+      const composerEl = composerRef.value
+      const first = composerEl?.getBoundingClientRect()
       conversation.reset()
+      await nextTick()
+      if (composerEl && first && !prefersReducedMotion()) {
+        const dy = first.top - composerEl.getBoundingClientRect().top
+        if (Math.abs(dy) > 8) flipComposer(dy)
+      }
       return
     }
-    if (target === conversationId) return
+    if (target === conversationId.value) return
 
     const restored = await history.load(target)
     if (!restored) return
-    conversationId = target
+    conversationId.value = target
+    // Opening a thread from the blank home docks the composer — the same
+    // journey as a first send, so it gets the same measured spring instead
+    // of teleporting. Thread-to-thread hops measure ~0 and stay still.
+    const composerEl = composerRef.value
+    const first = composerEl?.getBoundingClientRect()
     conversation.restore(restored)
     // Wholesale replacement doesn't trip the stream's prepend anchoring, and keep-alive
     // reuses this instance — landing at the latest message needs an explicit call.
     await nextTick()
     streamRef.value?.scrollToBottom()
+    if (composerEl && first && !prefersReducedMotion()) {
+      const dy = first.top - composerEl.getBoundingClientRect().top
+      if (Math.abs(dy) > 8) flipComposer(dy)
+    }
   },
   { immediate: true }
 )
@@ -781,12 +1090,12 @@ watch(
 watch(
   () => isStreaming.value,
   async (streaming, wasStreaming) => {
-    if (streaming || !wasStreaming || !conversationId) return
+    if (streaming || !wasStreaming || !conversationId.value) return
     try {
-      await history.persist(conversationId, conversationTitle.value ?? '', messages.value)
+      await history.persist(conversationId.value, conversationTitle.value ?? '', messages.value)
       // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
-      if (route.params.id !== conversationId) {
-        await router.replace(`/home/c/${conversationId}`)
+      if (route.params.id !== conversationId.value) {
+        await router.replace(`/home/c/${conversationId.value}`)
       }
     } catch (error) {
       // A watcher rejection is an unhandled promise nobody sees, and losing a thread silently is
@@ -799,6 +1108,7 @@ watch(
 
 <template>
   <div
+    ref="pageRef"
     class="HomePage"
     :class="{ conversing: !isEmpty }"
     :style="{ '--home-composer-height': composerClearance }"
@@ -814,7 +1124,7 @@ watch(
       <div class="HomePage-Body">
         <div class="HomePage-Center">
           <Transition name="home-head">
-            <div v-if="isEmpty" class="HomePage-Head">
+            <div v-if="isEmpty" ref="headRef" class="HomePage-Head">
               <AppLogo class="HomePage-Mark" />
               <h1 class="HomePage-Greeting">
                 {{ t('home.greeting') }}
@@ -822,160 +1132,206 @@ watch(
             </div>
           </Transition>
 
-          <TxConversationStream
-            v-if="!isEmpty"
-            ref="streamRef"
-            class="HomePage-Stream"
-            role="log"
-            :items="messages"
-            item-key="id"
-            :streaming="isStreaming"
-          >
-            <template #item="{ item: message, index }">
-              <div class="HomePage-StreamRow">
-                <div
-                  class="HomePage-Message"
-                  :class="[
-                    message.role,
-                    { 'HomePage-Message--enter': enteringMessages.has(message.id) }
-                  ]"
-                  :data-message-id="message.id"
-                  :aria-busy="message.status === 'streaming'"
-                >
-                  <template v-if="message.role === 'user'">
-                    <TxAttachmentTray
-                      v-if="message.attachments?.length"
-                      class="HomePage-MsgAttachments"
-                      :attachments="message.attachments"
-                      :preview-title="t('home.attachPreview')"
-                    />
-                    <div class="HomePage-UserBubble">
-                      {{ message.content }}
-                    </div>
-                    <!-- Only for what stayed local: a non-image attachment, or an image whose
-                         bytes were already gone by the time the turn was sent. -->
-                    <p
-                      v-if="
-                        (message.attachments?.length ?? 0) > (message.modelAttachments?.length ?? 0)
-                      "
-                      class="HomePage-AttachHint"
-                    >
-                      {{ t('home.attachmentNotSent') }}
-                    </p>
-                    <TxMessageActions
-                      class="HomePage-MsgActions is-resting"
-                      :appear="false"
-                      :copy-text="message.content"
-                      :copy-label="t('home.copy')"
-                      :copied-label="t('home.copied')"
-                    />
-                  </template>
+          <!-- Leave: the thread dissolves in place (absolute, out of layout)
+               while the composer springs back to centre through it. -->
+          <Transition name="home-stream">
+            <TxConversationStream
+              v-if="!isEmpty"
+              ref="streamRef"
+              :key="conversationId ?? 'draft'"
+              class="HomePage-Stream"
+              role="log"
+              :items="messages"
+              item-key="id"
+              :streaming="isStreaming"
+            >
+              <template #item="{ item: message, index }">
+                <div class="HomePage-StreamRow">
+                  <div
+                    class="HomePage-Message"
+                    :class="[
+                      message.role,
+                      { 'HomePage-Message--enter': enteringMessages.has(message.id) }
+                    ]"
+                    :data-message-id="message.id"
+                    :aria-busy="message.status === 'streaming'"
+                  >
+                    <template v-if="message.role === 'user'">
+                      <TxAttachmentTray
+                        v-if="message.attachments?.length"
+                        class="HomePage-MsgAttachments"
+                        :attachments="message.attachments"
+                        :preview-title="t('home.attachPreview')"
+                      />
+                      <div class="HomePage-UserBubble">
+                        {{ message.content }}
+                      </div>
+                      <!-- Only for what stayed local: a non-image attachment, or an image whose
+                           bytes were already gone by the time the turn was sent. -->
+                      <p
+                        v-if="
+                          (message.attachments?.length ?? 0) >
+                          (message.modelAttachments?.length ?? 0)
+                        "
+                        class="HomePage-AttachHint"
+                      >
+                        {{ t('home.attachmentNotSent') }}
+                      </p>
+                      <TxMessageActions
+                        class="HomePage-MsgActions is-resting"
+                        :appear="false"
+                        :copy-text="message.content"
+                        :copy-label="t('home.copy')"
+                        :copied-label="t('home.copied')"
+                      />
+                    </template>
 
-                  <template v-else>
-                    <!-- The trail of reasoning and tool calls, above the answer
-                         it produced. Rendered from parts; a single step reads
-                         better as the plain card the tool card already is. -->
-                    <TxChainOfThought
-                      v-if="chainStepsOf(message).length > 1"
-                      class="HomePage-Chain"
-                      :steps="chainStepsOf(message)"
-                      :streaming="message.status === 'streaming'"
-                      :default-open="false"
-                      :label="t('home.chainOfThought')"
-                    />
-                    <TxToolCallCard
-                      v-for="tool in soloToolOf(message)"
-                      :key="tool.id"
-                      class="HomePage-Tool"
-                      :tool-call="tool"
-                      :retry-label="t('home.retry')"
-                    >
-                      <template v-if="chartSpecOf(tool)" #result>
-                        <ToolChartCard :spec="chartSpecOf(tool)!" />
-                      </template>
-                      <template v-else-if="formSpecOf(tool)" #result>
-                        <ToolFormCard
-                          :spec="formSpecOf(tool)!"
-                          :submitted="submittedForms.has(tool.id)"
-                          :initial-values="formDrafts.get(tool.id)"
-                          :submit-label="t('home.formSubmit')"
-                          :reset-label="t('home.formReset')"
-                          :required-hint="t('home.formRequired')"
-                          :submitted-label="t('home.formDone')"
-                          :select-placeholder="t('home.formSelect')"
-                          @submit="submitForm(tool, $event)"
-                          @change="formDrafts.set(tool.id, $event)"
+                    <template v-else>
+                      <!-- The trail of reasoning and tool calls, above the answer
+                           it produced. Rendered from parts; a single step reads
+                           better as the plain card the tool card already is. -->
+                      <!-- Keyed: the surrounding v-if/v-for branches churn on
+                           every streaming delta, and unkeyed alignment can
+                           recreate this component mid-turn — taking the
+                           user's open/collapse choice with it. -->
+                      <TxChainOfThought
+                        v-if="showChain(message)"
+                        key="chain"
+                        class="HomePage-Chain"
+                        :steps="chainStepsOf(message)"
+                        :streaming="message.status === 'streaming'"
+                        :default-open="false"
+                        :user-open="chainOpen.get(message.id)"
+                        :label="t('home.chainOfThought')"
+                        @toggle="chainOpen.set(message.id, $event)"
+                      />
+                      <template v-for="tool in toolCardsOf(message)" :key="tool.id">
+                        <!-- Widgets embed as themselves — a form is a form, not
+                             a tool log with a form inside. The machinery card
+                             stays for tools without a face, and for the
+                             running window before a widget's spec exists. -->
+                        <div
+                          v-if="formSpecOf(tool) || chartSpecOf(tool)"
+                          class="HomePage-WidgetBlock"
+                        >
+                          <ToolFormCard
+                            v-if="formSpecOf(tool)"
+                            :spec="formSpecOf(tool)!"
+                            :submitted="submittedForms.has(tool.id) || tool.submitted === true"
+                            :initial-values="formDrafts.get(tool.id)"
+                            :submit-label="t('home.formSubmit')"
+                            :reset-label="t('home.formReset')"
+                            :required-hint="t('home.formRequired')"
+                            :submitted-label="t('home.formDone')"
+                            :select-placeholder="t('home.formSelect')"
+                            @submit="submitForm(tool, $event)"
+                            @change="formDrafts.set(tool.id, $event)"
+                          />
+                          <ToolChartCard
+                            v-else
+                            :spec="chartSpecOf(tool)!"
+                            :animate="message.status === 'streaming'"
+                          />
+
+                          <!-- The raw call, for builders only: a whisper of a
+                               toggle, and none at all outside dev builds. -->
+                          <button
+                            v-if="showToolPayload"
+                            class="HomePage-PayloadBtn"
+                            type="button"
+                            @click="payloadFor = tool"
+                          >
+                            <span class="i-ri-braces-line" />
+                            <span>{{ t('home.toolPayload') }}</span>
+                          </button>
+                        </div>
+                        <TxToolCallCard
+                          v-else
+                          class="HomePage-Tool"
+                          :tool-call="tool"
+                          :retry-label="t('home.retry')"
                         />
                       </template>
-                    </TxToolCallCard>
 
-                    <TxStreamMarkdown
-                      v-if="message.content"
-                      class="HomePage-Reply"
-                      :content="message.content"
-                      :streaming="message.status === 'streaming'"
-                    />
+                      <TxStreamMarkdown
+                        v-if="message.content"
+                        class="HomePage-Reply"
+                        :content="message.content"
+                        :streaming="message.status === 'streaming'"
+                      />
 
-                    <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. -->
-                    <TxThinkingOrb
-                      v-else-if="message.status === 'streaming' && !chainStepsOf(message).length"
-                      class="HomePage-Thinking"
-                      :size="64"
-                      :display-size="28"
-                      :label="t('home.thinking')"
-                    />
+                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. -->
+                      <TxThinkingOrb
+                        v-else-if="message.status === 'streaming' && !chainStepsOf(message).length"
+                        class="HomePage-Thinking"
+                        :size="64"
+                        :display-size="28"
+                        :label="t('home.thinking')"
+                      />
 
-                    <div v-if="message.status === 'failed'" class="HomePage-Error" role="alert">
-                      <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
-                      <div class="HomePage-ErrorBody">
-                        <p class="HomePage-ErrorTitle">
-                          {{ resolveErrorTitle(message.error?.code) }}
-                        </p>
-                        <p v-if="message.error?.detail" class="HomePage-ErrorDetail">
-                          {{ message.error.detail }}
-                        </p>
+                      <!-- The provider is squeezing its context mid-turn; a
+                           silent pause here read as a hang. -->
+                      <p
+                        v-if="message.status === 'streaming' && isCompacting"
+                        class="HomePage-Compacting"
+                        role="status"
+                      >
+                        <span class="i-ri-archive-2-line" aria-hidden="true" />
+                        <span>{{ t('home.compacting') }}</span>
+                      </p>
+
+                      <div v-if="message.status === 'failed'" class="HomePage-Error" role="alert">
+                        <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
+                        <div class="HomePage-ErrorBody">
+                          <p class="HomePage-ErrorTitle">
+                            {{ resolveErrorTitle(message.error?.code) }}
+                          </p>
+                          <p v-if="message.error?.detail" class="HomePage-ErrorDetail">
+                            {{ message.error.detail }}
+                          </p>
+                        </div>
+                        <button
+                          v-if="isProviderUnavailable(message.error?.code)"
+                          class="HomePage-RetryBtn"
+                          type="button"
+                          @click="openProviderSettings"
+                        >
+                          {{ t('home.configureProvider') }}
+                        </button>
+                        <button
+                          v-else-if="index === messages.length - 1"
+                          class="HomePage-RetryBtn"
+                          type="button"
+                          @click="conversation.retry()"
+                        >
+                          {{ t('home.retry') }}
+                        </button>
                       </div>
-                      <button
-                        v-if="isProviderUnavailable(message.error?.code)"
-                        class="HomePage-RetryBtn"
-                        type="button"
-                        @click="openProviderSettings"
-                      >
-                        {{ t('home.configureProvider') }}
-                      </button>
-                      <button
-                        v-else-if="index === messages.length - 1"
-                        class="HomePage-RetryBtn"
-                        type="button"
-                        @click="conversation.retry()"
-                      >
-                        {{ t('home.retry') }}
-                      </button>
-                    </div>
 
-                    <!-- Surfaces out of a blur once the answer settles; the last
-                         reply keeps it on show, older ones reveal on hover. -->
-                    <TxMessageActions
-                      v-if="message.status === 'complete'"
-                      class="HomePage-MsgActions"
-                      :class="{ 'is-resting': index !== messages.length - 1 }"
-                      :copy-text="message.content"
-                      :regenerable="index === messages.length - 1 && !isStreaming"
-                      :speakable="!!message.content"
-                      :speak-state="speakStateOf(message)"
-                      :copy-label="t('home.copy')"
-                      :copied-label="t('home.copied')"
-                      :regenerate-label="t('home.regenerate')"
-                      :speak-label="t('home.speak')"
-                      :stop-speak-label="t('home.speakStop')"
-                      @regenerate="conversation.retry()"
-                      @speak="toggleSpeak(message)"
-                    />
-                  </template>
+                      <!-- Surfaces out of a blur once the answer settles; the last
+                           reply keeps it on show, older ones reveal on hover. -->
+                      <TxMessageActions
+                        v-if="message.status === 'complete'"
+                        class="HomePage-MsgActions"
+                        :class="{ 'is-resting': index !== messages.length - 1 }"
+                        :copy-text="message.content"
+                        :regenerable="index === messages.length - 1 && !isStreaming"
+                        :speakable="!!message.content"
+                        :speak-state="speakStateOf(message)"
+                        :copy-label="t('home.copy')"
+                        :copied-label="t('home.copied')"
+                        :regenerate-label="t('home.regenerate')"
+                        :speak-label="t('home.speak')"
+                        :stop-speak-label="t('home.speakStop')"
+                        @regenerate="conversation.retry()"
+                        @speak="toggleSpeak(message)"
+                      />
+                    </template>
+                  </div>
                 </div>
-              </div>
-            </template>
-          </TxConversationStream>
+              </template>
+            </TxConversationStream>
+          </Transition>
 
           <!-- Sits above the composer rather than inside the stream: the agent
                is blocked until this is answered, so it must stay in view even
@@ -994,7 +1350,23 @@ watch(
             />
           </div>
 
-          <div class="HomePage-ComposerGroup">
+          <!-- The dev payload inspector: one dialog for whichever widget's
+               toggle was clicked, highlighted JSON with its own copy button. -->
+          <TxModal
+            :model-value="payloadFor !== null"
+            :title="`${payloadFor?.name ?? ''} · ${t('home.toolPayload')}`"
+            width="640px"
+            @update:model-value="payloadFor = null"
+          >
+            <TxCodeBlock
+              class="HomePage-PayloadCode"
+              lang="json"
+              :code="payloadJson"
+              :closed="true"
+            />
+          </TxModal>
+
+          <div ref="composerGroupRef" class="HomePage-ComposerGroup">
             <div
               ref="composerRef"
               class="HomePage-Composer"
@@ -1098,18 +1470,22 @@ watch(
               </div>
             </div>
 
-            <div v-if="isEmpty" class="HomePage-Pills">
-              <button
-                v-for="pill in quickPills"
-                :key="pill.key"
-                class="HomePage-QuickPill"
-                type="button"
-                @click="applyPill(pill.key)"
-              >
-                <span :class="pill.icon" />
-                <span>{{ t(`home.pill.${pill.key}`) }}</span>
-              </button>
-            </div>
+            <!-- Explicit duration: the pills stagger via child animations, so
+                 the root has no transition of its own for Vue to time against. -->
+            <Transition name="home-pills" appear :duration="{ enter: 1150, leave: 240 }">
+              <div v-if="isEmpty" class="HomePage-Pills">
+                <button
+                  v-for="pill in quickPills"
+                  :key="pill.key"
+                  class="HomePage-QuickPill"
+                  type="button"
+                  @click="applyPill(pill.key)"
+                >
+                  <span :class="pill.icon" />
+                  <span>{{ t(`home.pill.${pill.key}`) }}</span>
+                </button>
+              </div>
+            </Transition>
           </div>
         </div>
       </div>
@@ -1227,6 +1603,10 @@ watch(
   // Artboard lifts the block above true centre rather than bottom-weighting it like Codex.
   padding-bottom: 52px;
   box-sizing: border-box;
+  // Anchors the floating composer in conversation, and the dissolving stream
+  // while it leaves — the anchor must not vanish with the `conversing` class
+  // mid-dissolve, so it lives here unconditionally.
+  position: relative;
 
   .HomePage.conversing & {
     gap: 16px;
@@ -1234,9 +1614,35 @@ watch(
     height: 100%;
     min-height: 0;
     padding-bottom: 0;
-    // Anchors the floating composer below.
-    position: relative;
   }
+}
+
+/**
+ * Leaving a conversation: the thread drops out of layout instantly (so the
+ * empty-state layout — and the composer FLIP measured against it — is final
+ * from the first frame) and dissolves in place under the returning composer.
+ */
+.home-stream-leave-active {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  transition:
+    opacity 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-stream-leave-to {
+  opacity: 0;
+  filter: blur(8px);
+}
+
+/* Opening a thread: the transcript breathes in while the composer docks. */
+.home-stream-enter-active {
+  transition: opacity 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-stream-enter-from {
+  opacity: 0;
 }
 
 .HomePage-Head {
@@ -1339,6 +1745,44 @@ watch(
   width: 100%;
 }
 
+/** A widget stands on its own: one quiet frame, no tool-log chrome around it. */
+.HomePage-WidgetBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-lg);
+  background: var(--shell-surface);
+  box-sizing: border-box;
+}
+
+.HomePage-PayloadBtn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  align-self: flex-start;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-family: inherit;
+  font-size: var(--shell-fs-caption);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-secondary);
+  }
+}
+
+.HomePage-PayloadCode {
+  max-height: 420px;
+  overflow: auto;
+}
+
 .HomePage-AttachHint {
   margin: 0;
   color: var(--shell-text-muted);
@@ -1371,6 +1815,27 @@ watch(
 
 .HomePage-Thinking {
   margin: 2px 0;
+}
+
+.HomePage-Compacting {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin: 2px 0 0;
+  color: var(--shell-text-muted);
+  font-size: 12px;
+  animation: home-compacting-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes home-compacting-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .HomePage-MsgActions {
@@ -1449,6 +1914,9 @@ watch(
   flex-direction: column;
   gap: 18px;
   align-items: center;
+  // Above the dissolving stream while a conversation is being left.
+  position: relative;
+  z-index: 1;
 
   /**
    * Floats over the stream rather than sitting below it, so the transcript runs the full height of
@@ -1477,6 +1945,10 @@ watch(
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-2xl);
   background: var(--shell-bg);
+  /* Always on, even while the background above it is opaque and hides it:
+     gaining a backdrop layer mid-dock forces a compositor re-build that can
+     flash for a frame — cheaper to keep the layer and fade the paint. */
+  backdrop-filter: blur(20px) saturate(180%);
   /* Layered: a tight contact shadow plus a soft ambient one reads as lift
      without the smudge a single big blur gives. */
   box-shadow:
@@ -1486,6 +1958,7 @@ watch(
   --home-glow-on: 0;
   transition:
     border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     --home-glow-on 0.6s ease;
 
@@ -1563,13 +2036,14 @@ watch(
   }
 
   /**
-   * Floating form. The fill drops to translucent so the blur has something to do — an opaque
-   * `--shell-bg` would render the backdrop filter invisible — and the shadow deepens because the
-   * box now has live content sliding underneath it rather than a flat page.
+   * Floating form. The fill drops to translucent so the always-on backdrop
+   * blur has something to show — the swap rides the background transition,
+   * so the material change is a fade, not a cut. The shadow deepens because
+   * the box now has live content sliding underneath it rather than a flat
+   * page.
    */
   .HomePage.conversing & {
     background: color-mix(in srgb, var(--shell-bg) 72%, transparent);
-    backdrop-filter: blur(20px) saturate(180%);
     box-shadow: 0 6px 24px var(--shell-shadow);
     pointer-events: auto;
   }
@@ -1728,7 +2202,10 @@ textarea.HomePage-Input:focus-visible {
   justify-content: center;
 }
 
-/* The greeting bows out as the first message lands; it never re-enters mid-session. */
+/* The greeting bows out as the first message lands, and — once the composer
+   has sprung back to centre — materialises again out of a blur when a new
+   conversation resets the stage. The enter delays are the sequencing: the box
+   lands first (~0.42s in), then the logo resolves, then the pills beneath. */
 .home-head-leave-active {
   transition:
     opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1738,6 +2215,76 @@ textarea.HomePage-Input:focus-visible {
 .home-head-leave-to {
   opacity: 0;
   transform: translateY(-14px) scale(0.98);
+}
+
+.home-head-enter-active {
+  transition:
+    opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.42s,
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.42s,
+    filter 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.42s;
+}
+
+.home-head-enter-from {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  filter: blur(8px);
+}
+
+/* The quick pills dissolve on the composer's back as it docks, and return one
+   by one — each pops in on its own beat rather than the row fading as a slab.
+   The stagger lives on the children (the root wrapper has nothing to animate),
+   which is why the Transition above carries an explicit duration. A fresh
+   page starts almost immediately; the return after 「新建对话」 waits for the
+   composer to land first. */
+/* Out of flow the moment the leave starts: the group is bottom-anchored, and
+   pills that kept their flow height would hold the composer ~50px high, then
+   drop it in one visible snap when they unmount mid-glide. Pinned to their
+   old spot below the box instead, dissolving on its back. */
+.home-pills-leave-active {
+  position: absolute;
+  top: calc(100% + 18px);
+  left: 50%;
+  width: max-content;
+  transform: translateX(-50%);
+  transition:
+    opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-pills-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  filter: blur(6px);
+}
+
+.home-pills-enter-active .HomePage-QuickPill,
+.home-pills-appear-active .HomePage-QuickPill {
+  animation: home-pill-in 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@for $i from 1 through 4 {
+  .home-pills-enter-active .HomePage-QuickPill:nth-child(#{$i}) {
+    animation-delay: #{0.45 + $i * 0.07}s;
+  }
+
+  .home-pills-appear-active .HomePage-QuickPill:nth-child(#{$i}) {
+    animation-delay: #{0.05 + $i * 0.07}s;
+  }
+}
+
+@keyframes home-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+    filter: blur(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
 }
 
 /* @property is what lets these interpolate — same trick as IntelligenceHeader. */
@@ -1809,13 +2356,27 @@ textarea.HomePage-Input:focus-visible {
     opacity: 1;
   }
 
-  .home-head-leave-active {
+  .home-head-leave-active,
+  .home-head-enter-active,
+  .home-pills-leave-active,
+  .home-pills-enter-active,
+  .home-stream-leave-active,
+  .home-stream-enter-active {
     transition: none;
+  }
+
+  .home-pills-enter-active .HomePage-QuickPill,
+  .home-pills-appear-active .HomePage-QuickPill {
+    animation: none;
   }
 
   /* The light holds still but stays on — the running state must survive. */
   .HomePage-Composer::before,
   .HomePage-Composer::after {
+    animation: none;
+  }
+
+  .HomePage-Compacting {
     animation: none;
   }
 }
