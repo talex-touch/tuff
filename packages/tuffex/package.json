@@ -45,7 +45,7 @@
     }
   },
   "scripts": {
-    "build": "node --import ./scripts/register-ts-node.mjs ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
+    "build": "node ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
     "build:vite": "vite build",
     "dev": "vite build --watch",
     "lint": "pnpm exec eslint --cache .",
@@ -103,7 +103,6 @@
     "gulp-autoprefixer": "^9.0.0",
     "sass": "^1.101.0",
     "sucrase": "^3.35.1",
-    "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
     "vite-plugin-dts": "^4.5.4",
