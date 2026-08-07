@@ -1,4 +1,3 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
 {"file": ".trellis/spec/frontend/index.md", "reason": "前端规范索引，落地 shell 组件前的总入口"}
 {"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "新增 ShellChromeBar / ShellWindowControls 需遵循的组件约定"}
 {"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useShellSidebar / useHistoryNavigation 两个 composable 的写法约束"}

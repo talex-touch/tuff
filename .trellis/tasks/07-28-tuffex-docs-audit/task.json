@@ -3,7 +3,7 @@
   "name": "tuffex-docs-audit",
   "title": "tuffex 组件文档与源码一致性审计",
   "description": "",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-28",
-  "completedAt": null,
+  "completedAt": "2026-08-07",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "None. Every published issue is closed; nothing remains gated on this task.",
+    "blocker": "",
+    "evidence": "Disposition verified against GitHub on 2026-08-07: aggregate #362 CLOSED, and all 112 per-component issues #363-#474 CLOSED (112 closed / 0 open). Labels `tuffex` and `docs-audit` both have zero open issues. Breakdown of the 112: 5 refuted as false positives (closed not-planned with a recorded refutedReason), 45 already fixed before the sweep, 33 verified fixed against current source, 29 remediated during the sweep via PRs #998 / #1003 / #1005. A further 26 governance issues #932-#958 closed in the same rounds. #362 additionally carried the deletion decision for 144 dead duplicate demos, resolved by deleting 135 (444 -> 309 demos). Remediation ownership: the audit produced findings only; every code change went through a per-issue branch -> PR -> merge-verified -> close loop, so no remediation is owned by this task. Round-by-round ledger: issue-loop-log.md in this directory."
+  }
 }
