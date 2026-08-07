@@ -52,7 +52,6 @@ catalog:
   marked: ^17.0.6
   mermaid: ^11.16.0
   next-auth: ~4.24.15
-  nodemailer: ^9.0.3
   ogl: ^1.0.11
   openapi-typescript: ^7.13.0
   qrcode: ^1.5.4
