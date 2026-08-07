@@ -1270,8 +1270,13 @@ jobs:
     env:
       NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
       NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+      # The client ID is an identifier, so a variable is a reasonable place for it.
+      # The client secret is not: repository and organization variables are plaintext
+      # configuration, readable in the settings UI and the API, and never masked in Actions
+      # logs — so a `curl -v` printing the CF-Access-Client-Secret header would put standing
+      # access to the Nexus admin API into a public release log (#541). Secrets only.
       NEXUS_CF_ACCESS_CLIENT_ID: ${{ vars.ADMIN_CF_ACCESS_CLIENT_ID || secrets.ADMIN_CF_ACCESS_CLIENT_ID }}
-      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ vars.ADMIN_CF_ACCESS_CLIENT_SECRET || secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
+      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
       TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag || github.ref_name }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -1279,6 +1284,23 @@ jobs:
         run: |
           if [ -z "${NEXUS_API_KEY}" ]; then
             echo "NEXUS_API_KEY is required for release sync."
+            exit 1
+          fi
+
+          # Cloudflare Access is optional — both empty means it is not in front of Nexus.
+          # Half-configured is not, and it is the state a setup that kept the client secret
+          # in a *variable* lands in, because this job now reads it from secrets only (#541).
+          # Saying so here beats an opaque 403 several steps later.
+          if [ -n "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -z "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            echo "NEXUS_CF_ACCESS_CLIENT_ID is set but NEXUS_CF_ACCESS_CLIENT_SECRET is empty."
+            echo "The client secret is read from secrets.ADMIN_CF_ACCESS_CLIENT_SECRET only."
+            echo "If it is currently stored as a repository or organization *variable*, move it"
+            echo "to a secret — variables are plaintext and are never masked in workflow logs."
+            exit 1
+          fi
+
+          if [ -z "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -n "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            echo "NEXUS_CF_ACCESS_CLIENT_SECRET is set but NEXUS_CF_ACCESS_CLIENT_ID is empty."
             exit 1
           fi
 
