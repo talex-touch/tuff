@@ -29,12 +29,6 @@ export default defineConfig({
       // Not broken; wrong job. Run it after `pnpm -F @talex-touch/tuff-cli-core build`.
       'scripts/plugin-source-package-audit.test.ts',
 
-      // Fails on a real defect rather than a stale expectation: `pnpm publish:check` rejects
-      // the source manifests because `catalog:` specifiers reach them (#1137). Excluded so
-      // this gate can go green on the tests it *is* about, rather than being wired in red
-      // and immediately ignored. Remove this line when #1137 lands.
-      'scripts/check-release-gates/local-checks.test.mjs',
-
       // Exercise a contract that is macOS-only *by design*, so they cannot pass on
       // ubuntu-latest — and the fixtures are right to hardcode darwin/arm64:
       //
