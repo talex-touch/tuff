@@ -102,44 +102,16 @@ jobs:
             exit 1
           fi
 
+      # Was a bare `npm publish` in packages/utils. npm does not understand pnpm's `catalog:`
+      # protocol, so it packed the specifier verbatim — `npm pack` here produces
+      # `"gsap": "catalog:"` and `"marked": "catalog:"`, which no consumer can resolve
+      # (#1137). publish-package.mjs packs with pnpm, which rewrites the protocol, then hands
+      # the finished tarball to `npm publish`; it also runs validate-publish-manifests --pack
+      # against that tarball, which every other package already got and this one did not
+      # (#551). Dist-tag selection is identical (`next` for prereleases) and the
+      # already-published check is built in.
       - name: Publish to npm
         if: steps.version_check.outputs.should_publish == 'true'
-        working-directory: packages/utils
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          version="${{ steps.version_check.outputs.current_version }}"
-          dist_tag="latest"
-          if [[ "${version}" == *"-"* ]]; then
-            dist_tag="next"
-          fi
-
-          if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
-            echo "@talex-touch/utils@${version} already published. Skipping."
-            exit 0
-          fi
-
-          publish_log="$(mktemp)"
-          trap 'rm -f "${publish_log}"' EXIT
-
-          set +e
-          npm publish --access public --tag "${dist_tag}" >"${publish_log}" 2>&1
-          publish_status=$?
-          set -e
-
-          cat "${publish_log}"
-
-          if [ "${publish_status}" -eq 0 ]; then
-            exit 0
-          fi
-
-          if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
-            if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
-              echo "@talex-touch/utils@${version} became available during publish. Treating duplicate publish as success."
-              exit 0
-            fi
-          fi
-
-          exit "${publish_status}"
+        run: node scripts/publish-package.mjs --filter "@talex-touch/utils" --skip-git-check --skip-tests

@@ -16,6 +16,13 @@ import { defineConfig } from 'vitest/config'
  */
 export default defineConfig({
   test: {
+    // Several of these shell out to `pnpm pack` against real workspace packages, which is
+    // comfortably under a second locally and around six on a CI runner — past vitest's 5s
+    // default. A timeout there reads as a broken test rather than a slow one, so it gets a
+    // ceiling that reflects what the work costs instead of what a pure unit test costs.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
+
     include: [
       'scripts/**/*.test.mjs',
       'scripts/**/*.test.ts',
@@ -28,12 +35,6 @@ export default defineConfig({
       // source. It therefore needs a build first, which the PR Quality job does not do.
       // Not broken; wrong job. Run it after `pnpm -F @talex-touch/tuff-cli-core build`.
       'scripts/plugin-source-package-audit.test.ts',
-
-      // Fails on a real defect rather than a stale expectation: `pnpm publish:check` rejects
-      // the source manifests because `catalog:` specifiers reach them (#1137). Excluded so
-      // this gate can go green on the tests it *is* about, rather than being wired in red
-      // and immediately ignored. Remove this line when #1137 lands.
-      'scripts/check-release-gates/local-checks.test.mjs',
 
       // Exercise a contract that is macOS-only *by design*, so they cannot pass on
       // ubuntu-latest — and the fixtures are right to hardcode darwin/arm64:

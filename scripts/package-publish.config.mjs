@@ -67,8 +67,18 @@ export const dependencyFieldPaths = [
   'pnpm.overrides',
 ]
 
+/**
+ * `workspace:` was always allowed here and `catalog:` was not, which was never a difference
+ * in the protocols — pnpm rewrites both when it packs. The asymmetry was a guard against the
+ * one package that did not pack with pnpm: `packages/utils` published with a bare
+ * `npm publish`, and npm passes `catalog:` through verbatim (#1137, #551).
+ *
+ * That publish path now goes through publish-package.mjs like every other package, so the
+ * guard has nothing left to protect and was rejecting the supported way to use a catalog.
+ * `packedForbiddenProtocols` below still forbids `catalog:`, checked against the real
+ * tarball — a strictly stronger assertion than reading the source manifest.
+ */
 export const sourceForbiddenProtocols = [
-  'catalog:',
   'file:',
   'link:',
 ]
