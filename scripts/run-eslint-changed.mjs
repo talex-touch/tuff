@@ -108,10 +108,9 @@ function getChangedFiles() {
     .filter(file => lintExtensions.has(path.extname(file)))
 }
 
-function groupByWorkspace(files) {
+export function groupByWorkspace(files, workspaces = collectWorkspaceDirectories()) {
   const groups = new Map()
   const rootFiles = []
-  const workspaces = collectWorkspaceDirectories()
 
   for (const file of files) {
     const workspace = workspaces.find(prefix => file === prefix || file.startsWith(`${prefix}/`))
@@ -130,25 +129,36 @@ function groupByWorkspace(files) {
   return { groups, rootFiles }
 }
 
-function lintWorkspace(workspace, files) {
-  const args = [
+/**
+ * `--max-warnings=0` mirrors the root `lint` script. Without it this PR gate
+ * accepted warning-level violations that the release gate then rejected.
+ */
+export function buildWorkspaceArgs(workspace, files) {
+  return [
     'pnpm',
     '-C',
     workspace,
     'exec',
     'eslint',
     '--cache',
+    '--max-warnings=0',
     '--no-warn-ignored',
     ...files,
   ]
+}
+
+export function buildRootArgs(files) {
+  return ['pnpm', 'exec', 'eslint', '--cache', '--max-warnings=0', '--no-warn-ignored', ...files]
+}
+
+function lintWorkspace(workspace, files) {
   console.log(`[lint:changed] ${workspace}: ${files.length} file(s)`)
-  return run('corepack', args)
+  return run('corepack', buildWorkspaceArgs(workspace, files))
 }
 
 function lintRoot(files) {
-  const args = ['pnpm', 'exec', 'eslint', '--cache', '--no-warn-ignored', ...files]
   console.log(`[lint:changed] root: ${files.length} file(s)`)
-  return run('corepack', args)
+  return run('corepack', buildRootArgs(files))
 }
 
 function main() {
@@ -180,4 +190,7 @@ function main() {
   console.log('[lint:changed] OK')
 }
 
-main()
+// Guarded so the tests can import the pure helpers without running the gate.
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  main()
+}
