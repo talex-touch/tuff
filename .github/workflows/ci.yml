@@ -249,17 +249,13 @@ jobs:
       - name: Verify MDC fences
         run: pnpm -C apps/nexus check:mdc-fences
 
-      # Currently fails, and wiring it up is what found that (#1151): nitro cannot resolve
-      # @panva/hkdf from next-auth. The path it wants is under the root node_modules, which
-      # only existed while shamefully-hoist was on — #1099 fallout, same shape as tsx (#1128),
-      # yaml (#1138) and the nuxt-content patch (#538).
-      #
-      # Non-blocking rather than omitted: the two checks above are real gates and should not
-      # be held hostage to a pre-existing break, and a build that runs and is visibly red
-      # beats one that runs nowhere — which is how a production deployment target got to be
-      # unbuildable unnoticed in the first place. Flip this to blocking when #1151 lands.
+      # Blocking. It was briefly continue-on-error because wiring it up is what discovered
+      # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
+      # root node_modules path that only existed under shamefully-hoist (#1151, #1099
+      # fallout). That is fixed by declaring the package, so this goes back to being a gate:
+      # apps/nexus is the production Cloudflare deployment and a PR must not be able to
+      # break its build silently, which is the state #552 found it in.
       - name: Build
-        continue-on-error: true
         run: pnpm -C apps/nexus build
 
   job_app_tests:

@@ -224,6 +224,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19.8.1
         version: 19.8.1
+      '@panva/hkdf':
+        specifier: 1.2.1
+        version: 1.2.1
       '@typescript-eslint/parser':
         specifier: ^8.64.0
         version: 8.64.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
@@ -598,6 +601,9 @@ importers:
       '@nuxtjs/mdc':
         specifier: ^0.22.1
         version: 0.22.1(magicast@0.5.3)
+      '@panva/hkdf':
+        specifier: 1.2.1
+        version: 1.2.1
       '@sentry/nuxt':
         specifier: 'catalog:'
         version: 10.65.0(@cloudflare/workers-types@4.20260702.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)(magicast@0.5.3)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.39(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.39(typescript@5.9.3))(webpack@5.108.4(esbuild@0.28.1)(postcss@8.5.23))
