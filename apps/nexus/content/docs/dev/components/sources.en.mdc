@@ -1,0 +1,76 @@
+---
+title: Sources
+description: A collapsible citation list whose links never navigate on their own.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, sources, citation]
+syncStatus: reviewed
+verified: true
+---
+# Sources
+
+`TxSources` collapses the references behind an answer into a summary count, and expands into an ordered list with favicons and domains.
+
+Manually verified against `packages/tuffex/packages/components/src/sources/src/TxSources.vue`.
+
+## Basic Usage
+
+### Sources
+::::TuffDemoWrapper{demo="SourcesSourcesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const sources = [
+    { id: 's1', url: 'https://vuejs.org/guide/introduction.html', title: 'Introduction', favicon: 'https://vuejs.org/logo.svg' },
+    { id: 's2', url: 'https://developer.mozilla.org/en-US/docs/Web/API/Clipboard' },
+  ]
+
+  function openSource(source: { url: string }) {
+    window.open(source.url, '_blank', 'noopener')
+  }
+  </script>
+
+  <template>
+    <TxSources :sources="sources" @open="openSource" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- **Links never navigate on their own.** A click calls `preventDefault()` and emits `open`; whether and where to open it is the host's decision. That is deliberate for sandboxed surfaces such as an Electron renderer.
+- The `href` is still present on the `<a>`, so the browser's own "open in new tab" and "copy link address" affordances keep working.
+- Open state is owned by the component and seeded from `defaultOpen`. It is uncontrolled — changing `defaultOpen` later has no effect.
+- The collapsed header defaults to `Used N source(s)` and pluralizes itself. `labelFormatter` replaces it entirely.
+- Titles fall back to the domain: an empty `title` shows the URL's hostname with a leading `www.` stripped, and a URL that `URL` cannot parse is shown verbatim.
+- A favicon that fails to load is recorded permanently for that source, so a broken image is not re-requested.
+- Favicons carry `alt=""` and `aria-hidden`; the accessible name comes from the title and domain text.
+- The list is an `<ol>` and the ordinals come from render order rather than a data field, so reordering `sources` renumbers them.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `sources` | `AiSourceItem[]` | — | The citations to render, where `AiSourceItem` is `{ id, url, title?, favicon? }`. Required. |
+| `labelFormatter` | `(count: number) => string` | — | Replaces the collapsed header text. Falls back to `Used N source(s)`. |
+| `defaultOpen` | `boolean` | `false` | Initial open state. Read once, on mount. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `open` | `(source: AiSourceItem)` | Emitted when a citation is clicked. The default navigation is already prevented, so the host must perform it. |
+
+## Slots
+
+`TxSources` exposes no slots. Each row is a fixed composition of ordinal, favicon, title and domain.
+
+## Best Practices
+
+- Handle `open` — without a listener, clicking a citation does nothing at all.
+- On desktop, open in the external browser and pass `noopener` rather than navigating the app window away.
+- Use stable ids: the failed-favicon record is keyed by `id`, so a changing id makes broken images retry.
+- Override `labelFormatter` for non-English surfaces; the default carries English pluralization.
