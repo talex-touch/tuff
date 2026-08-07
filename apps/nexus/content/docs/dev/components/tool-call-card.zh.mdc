@@ -1,0 +1,87 @@
+---
+title: Tool Call Card
+description: 工具调用的状态卡片，运行日志自动跟随尾部，结果区可由宿主接管。
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, tool, status]
+syncStatus: reviewed
+verified: true
+---
+# Tool Call Card
+
+`TxToolCallCard` 展示一次工具调用的全过程：折叠时显示名称、状态与一句话摘要，展开后是入参、运行日志与结果，失败时可重试。
+
+已人工核对 `packages/tuffex/packages/components/src/tool-call-card/src/TxToolCallCard.vue`。
+
+## 基础用法
+
+### Tool Call Card
+::::TuffDemoWrapper{demo="ToolCallCardToolCallCardDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const toolCall = {
+    type: 'tool-call',
+    id: 'call-1',
+    name: 'read_file',
+    status: 'done',
+    summary: '读取 src/main.ts',
+    input: '{ "path": "src/main.ts" }',
+    output: 'export function main() {}',
+  }
+  </script>
+
+  <template>
+    <TxToolCallCard :tool-call="toolCall" @retry="onRetry" />
+  </template>
+---
+::::
+
+## 交互契约
+
+- 展开态由组件自己持有，初值取 `defaultExpanded`；非受控，之后改这个 prop 不生效。
+- 点击头部切换并派发 `toggle`，参数是切换**之后**的状态。
+- `status` 有四档：`pending`、`running`、`done`、`error`，同时写在 `data-status` 上供外部定制样式。四档文案分别由 `pendingLabel` / `runningLabel` / `doneLabel` / `errorLabel` 控制，默认是英文。
+- 状态文案的分支是 `default` 兜底的：`pending`、`running`、`error` 各自匹配，**其余一律显示 `doneLabel`**。
+- `toolCall.logs` 每次变化都会把日志区滚到底部，像终端一样跟随尾部输出。
+- `retry` 携带的是 `toolCall.id`，不是整个对象——重试通常只需要标识。
+- 结果区有三层回退：宿主挂 `result` 插槽时用插槽；否则渲染 `output`；`status` 为 `error` 时渲染 `error`。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `toolCall` | `AiToolCallPart` | — | 工具调用数据：`{ type, id, name, status, summary?, input?, output?, error?, logs? }`。必填。 |
+| `defaultExpanded` | `boolean` | `false` | 初始是否展开。仅在挂载时读取一次。 |
+| `retryLabel` | `string` | `'Retry'` | 重试按钮文案。 |
+| `pendingLabel` | `string` | `'Queued'` | `pending` 状态文案。 |
+| `runningLabel` | `string` | `'Running'` | `running` 状态文案。 |
+| `doneLabel` | `string` | `'Done'` | `done`（及未匹配状态）文案。 |
+| `errorLabel` | `string` | `'Failed'` | `error` 状态文案。 |
+| `inputLabel` | `string` | `'Input'` | 入参区标题。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `retry` | `(id: string)` | 点击重试时派发，携带 `toolCall.id`。 |
+| `toggle` | `(expanded: boolean)` | 头部被点击时派发，携带切换后的展开状态。 |
+
+## Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `summary` | `{ toolCall }` | 覆盖折叠头部的摘要文本。 |
+| `result` | `{ toolCall }` | 结果区的挂载点，供宿主渲染自己的组件（例如 widget）。设置后 `output` 不再直接渲染。 |
+| `icon` | `{ status }` | 覆盖状态图标。 |
+
+## 最佳实践
+
+- 用 `result` 插槽承载结构化结果（表格、图表、widget），把 `output` 留作没有挂载 widget 时的纯文本回退。
+- 只在 `status` 为 `error` 时提供重试入口，并在收到 `retry` 后把状态改回 `running`，否则用户会连点。
+- 日志按行追加而不是整段替换，跟随尾部的效果才连贯。
+- 非英文界面要把六个文案 prop 一起覆盖，只改其中几个会出现中英混排。
+- `summary` 写清「做了什么」而不是重复工具名——折叠态是用户唯一能扫读的信息。

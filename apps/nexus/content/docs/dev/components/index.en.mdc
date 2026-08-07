@@ -136,6 +136,8 @@ code: |
 - [Sources](./sources.en.mdc)
 - [ToolConfirmation](./tool-confirmation.en.mdc)
 - [ChainOfThought](./chain-of-thought.en.mdc)
+- [ThinkingOrb](./thinking-orb.en.mdc)
+- [ToolCallCard](./tool-call-card.en.mdc)
 - [ChatComposer](./chat-composer.en.mdc)
 - [MarkdownView](./markdown-view.en.mdc)
 - [ImageGallery](./image-gallery.en.mdc)

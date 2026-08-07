@@ -136,6 +136,8 @@ code: |
 - [Sources 引用来源](./sources.zh.mdc)
 - [ToolConfirmation 工具授权](./tool-confirmation.zh.mdc)
 - [ChainOfThought 推理时间线](./chain-of-thought.zh.mdc)
+- [ThinkingOrb 思考指示球](./thinking-orb.zh.mdc)
+- [ToolCallCard 工具调用卡片](./tool-call-card.zh.mdc)
 - [ChatComposer 消息输入](./chat-composer.zh.mdc)
 - [MarkdownView Markdown 渲染](./markdown-view.zh.mdc)
 - [ImageGallery 图片预览](./image-gallery.zh.mdc)
