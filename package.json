@@ -84,6 +84,7 @@
     "marked": "catalog:",
     "remark-mdc": "3.11.1",
     "remark-parse": "11.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "unified": "11.0.5",
     "vite": "^7.3.6",
