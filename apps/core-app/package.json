@@ -85,7 +85,9 @@
     "quickops:flow-ai:audit": "pnpm exec tsx \"scripts/quickops-flow-ai-adapter-audit.ts\"",
     "quickops:evidence:template": "pnpm exec tsx \"scripts/quickops-evidence-template.ts\"",
     "quickops:evidence:verify": "pnpm exec tsx \"scripts/quickops-evidence-verify.ts\"",
-    "context:entrypoint:evidence:verify": "pnpm exec tsx \"scripts/context-entrypoint-evidence.ts\""
+    "context:entrypoint:evidence:verify": "pnpm exec tsx \"scripts/context-entrypoint-evidence.ts\"",
+    "check:search-index-writers": "node scripts/check-search-index-writers.mjs",
+    "check:search-index-writers:self-test": "node scripts/check-search-index-writers.mjs --self-test"
   },
   "dependencies": {
     "@arrow-js/core": "1.0.6",
