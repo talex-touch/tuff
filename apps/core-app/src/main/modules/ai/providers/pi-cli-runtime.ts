@@ -155,18 +155,71 @@ export async function probePiCliAvailability(): Promise<boolean> {
 
 /**
  * `pi` defaults to a coding-assistant system prompt aimed at editing a repository. The home surface
- * is general chat with no tools granted, so that default would describe capabilities this provider
- * deliberately does not have.
+ * replaces it either way; which variant applies depends on whether this spawn granted tools —
+ * telling a model "you have no tools" while the allowlist hands it ten is how it politely writes
+ * text substitutes instead of ever calling one.
  */
-export const PI_CLI_DEFAULT_SYSTEM_PROMPT =
+const PI_CLI_BASE_SYSTEM_PROMPT =
   'You are a helpful assistant embedded in the Talex Touch desktop app. ' +
-  'Answer concisely and directly. You have no tools available in this conversation.'
+  'Answer concisely and directly.'
+
+export const PI_CLI_DEFAULT_SYSTEM_PROMPT = `${PI_CLI_BASE_SYSTEM_PROMPT} You have no tools available in this conversation.`
+
+export const PI_CLI_TOOLS_SYSTEM_PROMPT =
+  `${PI_CLI_BASE_SYSTEM_PROMPT} ` +
+  'You have Tuff desktop tools available in this conversation. ' +
+  'When the user asks for an interactive widget — a form to fill in, a chart — invoke the ' +
+  'matching tuff_render_* tool instead of writing a text substitute. ' +
+  'Announce it first: before invoking a render tool, write one short sentence in the ' +
+  "user's language saying what you are about to generate, then call the tool. " +
+  'After a render tool succeeds the widget is already on screen — do not repeat its ' +
+  'contents as text; at most add one short follow-up sentence.'
 
 const ROLE_LABELS: Record<IntelligenceMessage['role'], string> = {
   system: 'System',
   user: 'User',
   assistant: 'Assistant'
 }
+
+/**
+ * The model has no way to know the wall clock, and an unanchored guess ("today
+ * is 2025-02-14") reads as a broken product. Lives on the base system prompt —
+ * not in the Auto Context injection, which the user can switch off.
+ */
+function currentDateLine(now: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now)
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const offsetMinutes = -now.getTimezoneOffset()
+  const sign = offsetMinutes >= 0 ? '+' : '-'
+  const abs = Math.abs(offsetMinutes)
+  return (
+    `Current date: ${weekday} ${date}, timezone ${timeZone} ` +
+    `(UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}). ` +
+    'Trust this over any internal assumption about the date.'
+  )
+}
+
+/**
+ * Cap on replayed transcript characters (≈24k tokens at the 4-chars/token
+ * heuristic). The app owns history — every spawn is `--no-session` — so
+ * nothing else bounds a long thread: pi's own compaction lives and dies
+ * inside a single spawn. Oldest turns drop wholesale; the newest always
+ * survives, even alone over budget.
+ */
+export const PI_CLI_TRANSCRIPT_CHAR_BUDGET = 96_000
+
+/**
+ * Once over budget, the cut advances in fixed chunks rather than per turn.
+ * A cut anchored to the newest edge slides one turn forward on every send,
+ * rewriting the transcript's head each time — and the provider's prompt
+ * cache is a byte-exact prefix match, so that costs the whole cache on
+ * every turn of a long thread. Quantizing the cut freezes the kept window
+ * until ~a chunk of new turns has accumulated: one cache miss per chunk
+ * instead of one per send.
+ */
+export const PI_CLI_TRANSCRIPT_DROP_CHUNK = 24_000
 
 export interface PiCliPrompt {
   systemPrompt: string
@@ -181,7 +234,10 @@ export interface PiCliPrompt {
  * (`--session-id`) would carry them, at the cost of a second history that diverges from the app's
  * the moment a turn is stopped or retried.
  */
-export function buildPiPrompt(messages: IntelligenceMessage[]): PiCliPrompt {
+export function buildPiPrompt(
+  messages: IntelligenceMessage[],
+  options?: { toolsGranted?: boolean; now?: Date }
+): PiCliPrompt {
   const systemParts: string[] = []
   const turns: IntelligenceMessage[] = []
 
@@ -195,9 +251,12 @@ export function buildPiPrompt(messages: IntelligenceMessage[]): PiCliPrompt {
     turns.push({ ...message, content })
   }
 
-  const systemPrompt = systemParts.length
-    ? `${PI_CLI_DEFAULT_SYSTEM_PROMPT}\n\n${systemParts.join('\n\n')}`
-    : PI_CLI_DEFAULT_SYSTEM_PROMPT
+  const base = options?.toolsGranted ? PI_CLI_TOOLS_SYSTEM_PROMPT : PI_CLI_DEFAULT_SYSTEM_PROMPT
+  const stable = systemParts.length ? `${base}\n\n${systemParts.join('\n\n')}` : base
+  // The one line that ever changes rides LAST: the provider's prompt cache is
+  // a prefix match, so a day flip then invalidates only the system prompt's
+  // tail — never the base prompt and imported rules the whole install shares.
+  const systemPrompt = `${stable}\n\n${currentDateLine(options?.now ?? new Date())}`
 
   const latest = turns[turns.length - 1]
   // A single user turn needs no transcript framing; sending the bare text keeps the common case
@@ -206,14 +265,35 @@ export function buildPiPrompt(messages: IntelligenceMessage[]): PiCliPrompt {
     return { systemPrompt, prompt: latest?.content ?? '' }
   }
 
-  const history = turns
-    .slice(0, -1)
-    .map((message) => `${ROLE_LABELS[message.role]}: ${message.content}`)
-    .join('\n\n')
+  // Chunk-quantized cut (see PI_CLI_TRANSCRIPT_DROP_CHUNK): the dropped
+  // prefix is a pure function of turn sizes and the quantized excess, so it
+  // is byte-identical across sends until the next chunk boundary. The guard
+  // on `turns.length - 1` keeps the latest turn even alone over budget.
+  const totalChars = turns.reduce((sum, turn) => sum + turn.content.length, 0)
+  let dropped = 0
+  if (totalChars > PI_CLI_TRANSCRIPT_CHAR_BUDGET) {
+    const excess = totalChars - PI_CLI_TRANSCRIPT_CHAR_BUDGET
+    const cutChars = Math.ceil(excess / PI_CLI_TRANSCRIPT_DROP_CHUNK) * PI_CLI_TRANSCRIPT_DROP_CHUNK
+    let cut = 0
+    while (dropped < turns.length - 1 && cut < cutChars) {
+      cut += turns[dropped]!.content.length
+      dropped += 1
+    }
+  }
+
+  const kept = turns.slice(dropped, -1)
+  const lines = kept.map((message) => `${ROLE_LABELS[message.role]}: ${message.content}`)
+  if (dropped > 0) {
+    // The model must know the thread is longer than what it sees — silence
+    // here reads as "the conversation started at this point". No live count:
+    // a number that ticked up per send would rewrite this line — and with it
+    // the cached prefix of everything below.
+    lines.unshift('[Earlier context omitted to fit the context window.]')
+  }
 
   return {
     systemPrompt,
-    prompt: `Conversation so far:\n\n${history}\n\n---\n\nUser: ${latest?.content ?? ''}`
+    prompt: `Conversation so far:\n\n${lines.join('\n\n')}\n\n---\n\nUser: ${latest?.content ?? ''}`
   }
 }
 
@@ -224,6 +304,14 @@ export interface PiCliToolOptions {
    * missing list keeps the historical `--no-tools` behaviour.
    */
   tools?: string[]
+  /**
+   * Path to Tuff's own pi extension, loaded per spawn via `-e`. Explicit
+   * loading is what lets `--no-extensions` stay unconditional: the user's
+   * globally installed extensions never ride into the app's headless runs,
+   * while the app's forwarder still registers (verified: `-e` loads even
+   * under `--no-extensions` on pi 0.84).
+   */
+  extensionPath?: string
 }
 
 /**
@@ -251,9 +339,13 @@ export function buildPiArgs(
     // History is owned by the app; letting `pi` persist its own would create a second source of
     // truth that survives beyond the conversation the user can see.
     '--no-session',
-    // Tuff's own tools ship as a pi extension, so extensions must load once an
-    // allowlist exists — `--tools` still decides what any of them may expose.
-    ...(allowedTools.length > 0 ? [] : ['--no-extensions']),
+    // Unconditional: the user's globally installed extensions must never ride
+    // into the app's headless runs. Tuff's own tool forwarder is loaded
+    // explicitly below — `-e` still honours the path under `--no-extensions`.
+    '--no-extensions',
+    ...(allowedTools.length > 0 && toolOptions?.extensionPath
+      ? ['-e', toolOptions.extensionPath]
+      : []),
     '--no-skills',
     // Without this, `pi` pulls AGENTS.md / CLAUDE.md from the working directory into a chat that has
     // nothing to do with the repository the app happens to be launched from.
@@ -284,6 +376,8 @@ export interface PiCliEvent {
   done?: boolean
   /** Structured reasoning/tool event extracted from the agent loop. */
   partEvent?: IntelligencePartEvent
+  /** One wire line can settle a whole tool call — start and input together. */
+  partEvents?: IntelligencePartEvent[]
   /** How the assistant message that just ended settled: `stop`, `error`, `aborted`, … */
   stopReason?: string
   /** Why the run failed, in `pi`'s own words. Set by a failed message or a spent retry budget. */
@@ -302,20 +396,24 @@ export function isFailedStopReason(stopReason: string | undefined): boolean {
 }
 
 /**
- * Digs the toolCall content piece a `toolcall_*` update refers to out of the
- * partial assistant message, so callId/name/arguments come from the source of
- * truth rather than from accumulating deltas ourselves.
+ * The settled tool call a `toolcall_end` update carries at its top level.
+ *
+ * This is the ONLY place on the JSON wire that names a tool call before its
+ * result: the stdout protocol strips `partial` from every `message_update`
+ * (`WithoutPartial` in pi's json-event layer), so `toolcall_start`/`_delta`
+ * arrive as bare content indexes — an earlier reader that dug through
+ * `partial.content[contentIndex]` returned null on every event and silently
+ * dropped the whole tool lifecycle.
  */
-function readToolCallPiece(
+function readToolCallEnd(
   record: PiJsonRecord
-): { id?: string; name?: string; args?: unknown } | null {
-  const index = typeof record.contentIndex === 'number' ? record.contentIndex : -1
-  const partial = asRecord(record.partial)
-  const content = Array.isArray(partial?.content) ? partial.content : null
-  if (!content || index < 0) return null
-  const piece = asRecord(content[index])
-  if (!piece || readString(piece.type) !== 'toolCall') return null
-  return { id: readString(piece.id), name: readString(piece.name), args: piece.arguments }
+): { id: string; name: string; args?: unknown } | null {
+  const toolCall = asRecord(record.toolCall)
+  if (!toolCall) return null
+  const id = readString(toolCall.id)
+  const name = readString(toolCall.name)
+  if (!id || !name) return null
+  return { id, name, args: toolCall.arguments }
 }
 
 function asRecord(value: unknown): PiJsonRecord | null {
@@ -393,24 +491,33 @@ export function parsePiCliLine(line: string): PiCliEvent | null {
     }
     if (eventType === 'thinking_end') return { partEvent: { kind: 'reasoning-end' } }
 
-    if (eventType === 'toolcall_start') {
-      const piece = readToolCallPiece(event)
-      if (!piece?.id || !piece.name) return null
-      return { partEvent: { kind: 'tool-start', callId: piece.id, name: piece.name } }
-    }
-    if (eventType === 'toolcall_delta') {
-      const piece = readToolCallPiece(event)
-      const delta = readString(event.delta)
-      if (!piece?.id || !delta) return null
-      return { partEvent: { kind: 'tool-input-delta', callId: piece.id, delta } }
-    }
+    // `toolcall_start`/`toolcall_delta` carry only a content index on the
+    // wire — nothing identifies the call until `toolcall_end` names it, so
+    // the lifecycle begins there: the card appears with its input settled and
+    // spends the execution window (end → toolResult) in its running state.
     if (eventType === 'toolcall_end') {
-      const piece = readToolCallPiece(event)
-      if (!piece?.id) return null
-      return { partEvent: { kind: 'tool-input-end', callId: piece.id, input: piece.args } }
+      const piece = readToolCallEnd(event)
+      if (!piece) return null
+      return {
+        partEvents: [
+          { kind: 'tool-start', callId: piece.id, name: piece.name },
+          { kind: 'tool-input-end', callId: piece.id, input: piece.args }
+        ]
+      }
     }
 
     return null
+  }
+
+  // Session-level events ride the same stdout stream as message updates.
+  // Auto-compaction is on by default in pi; dropping these left the user
+  // blind to their context being squeezed mid-turn.
+  if (type === 'compaction_start') {
+    const reason = readString(record.reason)
+    return { partEvent: { kind: 'compaction-start', ...(reason ? { reason } : {}) } }
+  }
+  if (type === 'compaction_end') {
+    return { partEvent: { kind: 'compaction-end' } }
   }
 
   // Tool results arrive as their own message role; checked before the

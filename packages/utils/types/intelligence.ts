@@ -531,6 +531,10 @@ export type IntelligencePartEvent =
   | { kind: "reasoning-start" }
   | { kind: "reasoning-delta"; delta: string }
   | { kind: "reasoning-end"; durationMs?: number }
+  // The provider squeezed its context mid-turn (pi auto-compaction et al.) —
+  // bookkeeping for the surface, never message content.
+  | { kind: "compaction-start"; reason?: string }
+  | { kind: "compaction-end" }
   | { kind: "tool-start"; callId: string; name: string }
   | { kind: "tool-input-delta"; callId: string; delta: string }
   | { kind: "tool-input-end"; callId: string; input: unknown }
