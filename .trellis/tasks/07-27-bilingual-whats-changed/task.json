@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "Implementation complete across gateway, workflow, Nexus, typed transport, SQLite/main service, startup modal, and Update history UI. Automated verification passes; actionlint and isolated Electron visual screenshots remain external acceptance gaps.",
   "meta": {
-    "nextAction": "Run actionlint on build-and-release.yml, then repeat desktop/narrow CDP screenshots when no release build is running.",
-    "blocker": "actionlint is unavailable locally; Electron dev visual launch is blocked by the active release-build startup guard.",
-    "evidence": "107 focused tests passed; package ESLint, CoreApp node/web typechecks, Nexus typecheck, pnpm quality:pr, workflow YAML parse, CoreApp build, release:notes:verify, and git diff --check passed."
+    "nextAction": "Capture desktop and narrow-window CoreApp screenshots of the release-notes modal and the Update history route, once no release build holds the startup guard.",
+    "blocker": "Visual runtime evidence only. Electron dev launch is still gated by the release-build startup guard; the coreapp-visible-* probe family needs a running app, so no screenshot can be produced from this environment.",
+    "evidence": "Evidence is recorded in three separate kinds, which must not substitute for one another.\n1. Workflow syntax — RESOLVED 2026-08-07. actionlint 1.7.12 (installed by mise on darwin/arm64, built with go1.26.1) reports zero findings for .github/workflows/build-and-release.yml, and zero across all 18 workflow files when run with no path argument. Commands: `mise x actionlint@1.7.12 -- actionlint .github/workflows/build-and-release.yml` and `mise x actionlint@1.7.12 -- actionlint`; both exit 0 with empty output. This supersedes the earlier \"workflow YAML parse\" check, which only proved the file was well-formed YAML, not that its Actions expressions and job graph were valid.\n2. Automation — 107 focused tests passed; package ESLint, CoreApp node/web typechecks, Nexus typecheck, pnpm quality:pr, CoreApp build, release:notes:verify and git diff --check all passed.\n3. Visual runtime — STILL OPEN. No screenshot has been taken. Nothing above is a substitute for it."
   }
 }
