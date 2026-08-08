@@ -339,6 +339,8 @@ interface SearchCoreOrderingHarness {
   }
   cancelSearch: (searchId: string, caller: { kind: 'core-box'; id: string }) => boolean
   destroy: () => Promise<void>
+  destroying: boolean
+  sessionRegistry: unknown
   orchestrateSearchQuery: () => Promise<{
     providerFilter?: string
     cacheKey: string
@@ -379,6 +381,15 @@ describe('search-core gather completion ordering', () => {
 
   beforeEach(async () => {
     await core.destroy()
+    // destroy() is terminal in production: `destroying` is set once and never
+    // cleared, and the singleton is never replaced. This suite uses it purely to
+    // reset shared state between cases, so it has to rewind the flag explicitly —
+    // otherwise every case after the first searches a core that has declared
+    // itself shut down (#678).
+    core.destroying = false
+    // Same for the registry's own latch, which the core holds as a readonly field
+    // and so cannot be swapped out for a fresh one here.
+    ;(core.sessionRegistry as unknown as { destroyed: boolean }).destroyed = false
     gatherAggregatorMock.mockReset()
     sentEvents.length = 0
     mergeSettled = false
