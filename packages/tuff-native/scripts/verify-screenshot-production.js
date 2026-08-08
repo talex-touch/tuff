@@ -35,7 +35,13 @@ try {
     else {
       assert.equal(capability.state, 'degraded')
       assert.equal(capability.reason, 'basic-backend-only')
-      assert.deepEqual(capability.features, ['display', 'region'])
+      // ScreenshotCapability::features() appends frozen-compose to whatever the
+      // backend reports, unconditionally (native-screenshot/src/capability.rs:35-39),
+      // so this list could never be just the backend's two. The Rust contract test
+      // already expects all three (backend_contract_tests.rs:377); this assertion was
+      // the outlier, and it made the Windows leg of native-protocol.yml red on every
+      // branch. macOS never noticed because its branch does not assert features.
+      assert.deepEqual(capability.features, ['display', 'region', 'frozen-compose'])
     }
   }
 }
