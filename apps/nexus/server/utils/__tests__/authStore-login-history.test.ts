@@ -37,7 +37,11 @@ class MockD1Database {
     success: 1,
     reason: 'password',
     client_type: 'web',
-    created_at: '2026-06-21T10:00:00.000Z',
+    // Relative to now. listLoginHistory prunes rows older than its 90-day window
+    // before listing (authStore.ts:2804-2808), so a pinned created_at is a dated time
+    // bomb: this row was written 2026-06-21 and would have started failing on
+    // 2026-09-19, looking like a login-history regression rather than fixture rot.
+    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     country_code: 'US',
     region_code: 'CA',
     region_name: 'California',
