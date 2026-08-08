@@ -18,7 +18,11 @@ const LOCKFILE = path.resolve(__dirname, '../../../pnpm-lock.yaml')
 
 /** Flagged entries that are tracked elsewhere. This list must shrink, never grow. */
 const KNOWN = [
-  // glob 7/10/11 — tracked in #586 (tuff-cli / tuff-cli-core depend on the old line)
+  // glob 7/10/11, all transitive and none of them ours to bump directly (#586 removed the only
+  // first-party requirement). 10.5.0 arrives via @sentry/bundler-plugin-core, archiver-utils,
+  // cacache, js-beautify, rimraf@5 and test-exclude; 11.1.0 via workbox-build; 7.2.3 via
+  // @electron/asar and rimraf@2. Clearing these means moving those dependents, not editing a
+  // manifest here.
   'glob@10.5.0',
   'glob@11.1.0',
   'glob@7.2.3'

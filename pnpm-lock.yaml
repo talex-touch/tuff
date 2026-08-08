@@ -927,9 +927,6 @@ importers:
       fs-extra:
         specifier: ^11.3.6
         version: 11.3.6
-      glob:
-        specifier: ^10.5.0
-        version: 10.5.0
       pathe:
         specifier: ^1.1.2
         version: 1.1.2
@@ -986,8 +983,8 @@ importers:
         specifier: ^11.3.6
         version: 11.3.6
       glob:
-        specifier: ^10.5.0
-        version: 10.5.0
+        specifier: ^13.0.6
+        version: 13.0.6
       pathe:
         specifier: ^1.1.2
         version: 1.1.2
@@ -1001,9 +998,6 @@ importers:
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
-      '@types/glob':
-        specifier: ^8.1.0
-        version: 8.1.0
       '@types/node':
         specifier: 24.13.2
         version: 24.13.2
@@ -5909,9 +5903,6 @@ packages:
   '@types/glob-stream@8.0.3':
     resolution: {integrity: sha512-vctgrT9AH/GK3TRaIbRUU0TZn12GBU4kzelZdPyJp1Sc8L/6Wrq21UrtN4+x4saqTg6COUIUtFV6JSYcVln/EQ==}
 
-  '@types/glob@8.1.0':
-    resolution: {integrity: sha512-IO+MJPVhoqz+28h1qLAcBEH2+xHMK6MTyHJc7MTnnYb6wsoLR29POVGJ7LycmVXIqyy/4/2ShP5sUwTXuOwb/w==}
-
   '@types/gulp-autoprefixer@0.0.37':
     resolution: {integrity: sha512-GLPDrYHQ7+7i9cHEGIkV4eB/iYF5I9YylpLxsFbHTsR+rbZ17nlZrwWfzolSvpHfjk3u0HIO9FrJdCr182SgeQ==}
 
@@ -5959,9 +5950,6 @@ packages:
 
   '@types/mdurl@2.0.0':
     resolution: {integrity: sha512-RGdgjQUZba5p6QEFAVx2OGb8rQDL/cPRG7GiedRzMcJ1tYnUANBncjbSB1NRGwbvjcPeikRABz2nshyPk1bhWg==}
-
-  '@types/minimatch@5.1.2':
-    resolution: {integrity: sha512-K0VQKziLUWkVKiRVrx4a40iPaxTUefQmjtkQofBkYRcoaaL/8rhwDWww9qWbrgicNOgnpIsMxyNIUM4+n6dUIA==}
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -19108,11 +19096,6 @@ snapshots:
       '@types/picomatch': 4.0.2
       '@types/streamx': 2.9.5
 
-  '@types/glob@8.1.0':
-    dependencies:
-      '@types/minimatch': 5.1.2
-      '@types/node': 24.13.2
-
   '@types/gulp-autoprefixer@0.0.37':
     dependencies:
       '@types/node': 24.13.2
@@ -19164,8 +19147,6 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/mdurl@2.0.0': {}
-
-  '@types/minimatch@5.1.2': {}
 
   '@types/ms@2.1.0': {}
 
