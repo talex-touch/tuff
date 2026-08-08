@@ -40,6 +40,13 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const requestUrl = useRequestURL()
+// Canonical/og/hreflang are absolute production URLs by definition — they should
+// not vary with how the page was fetched, and at prerender time there is no
+// request host at all. The configured site URL wins; the request origin stays as
+// a fallback for deployments that leave NUXT_PUBLIC_SITE_URL unset (#679).
+const seoOrigin = computed(
+  () => (useRuntimeConfig().public.siteUrl as string | undefined) || requestUrl.origin,
+)
 const { t, setLocale } = useI18n()
 const activeRoutePath = ref(route.path)
 if (import.meta.client) {
@@ -1047,7 +1054,7 @@ const docSeoHead = computed(() =>
   buildDocsSeoHead({
     appName,
     description: docSeoDescription.value,
-    origin: requestUrl.origin,
+    origin: seoOrigin.value,
     canonicalPath: docCanonicalPath.value,
     locale: docsLocale.value,
     title: docSeoTitleText.value || docDisplayTitle.value,
