@@ -103,7 +103,13 @@ describe('widget-registry runtime hosts', () => {
       handleWidgetFailed,
       handleWidgetRegister
     } = await import('./widget-registry'))
-  }, 10000)
+    // 30s, not 10s. This import pulls a large graph and takes ~4.5s on its own, but the
+    // hook runs while the rest of the 636-file suite is being transformed concurrently,
+    // and under that contention it exceeded 10s. A timed-out beforeAll fails the whole
+    // file with *zero* failed tests, so these 20 disappeared from the run rather than
+    // reporting anything -- the failure mode is silence, which is why the headroom is
+    // worth more than the tightness here.
+  }, 30000)
 
   beforeEach(() => {
     transportState.handlers.clear()
