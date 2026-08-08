@@ -3,6 +3,7 @@ import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
 import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
+import { PluginChannelKeyRegistry } from './plugin-channel-key-registry'
 import { performance } from 'node:perf_hooks'
 import { structuredStrictStringify } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -135,9 +136,11 @@ class TouchChannel {
 
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
 
-  keyToNameMap: Map<string, string> = new Map()
-  nameToKeyMap: Map<string, string> = new Map()
-  keyToIdentityMap: Map<string, PluginActivationIdentity> = new Map()
+  /**
+   * Extracted so the key lifecycle can be tested without standing up Electron (#929).
+   * TouchChannel keeps the public methods below as thin delegates.
+   */
+  private readonly keyRegistry = new PluginChannelKeyRegistry()
 
   app: TalexTouch.TouchApp
 
@@ -160,64 +163,27 @@ class TouchChannel {
     name: string,
     activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>
   ): string {
-    const existingKey = this.nameToKeyMap.get(name)
-    if (existingKey) {
-      const existingIdentity = this.keyToIdentityMap.get(existingKey)
-      const sameActivation =
-        existingIdentity &&
-        (!activation ||
-          (existingIdentity.pluginInstanceId === activation.pluginInstanceId &&
-            existingIdentity.activationGeneration === activation.activationGeneration))
-      if (sameActivation) {
-        return existingKey
-      }
-      this.keyToNameMap.delete(existingKey)
-      this.keyToIdentityMap.delete(existingKey)
-      this.nameToKeyMap.delete(name)
-    }
-
-    const key = randomBytes(16).toString('hex')
-    const identity: PluginActivationIdentity = {
-      name,
-      pluginInstanceId: activation?.pluginInstanceId ?? `legacy:${name}`,
-      activationGeneration: activation?.activationGeneration ?? 1,
-      key
-    }
-    this.keyToNameMap.set(key, name)
-    this.nameToKeyMap.set(name, key)
-    this.keyToIdentityMap.set(key, identity)
-
-    return key
+    return this.keyRegistry.requestKey(name, activation)
   }
 
   revokeKey(key: string): boolean {
-    const name = this.keyToNameMap.get(key)
-    if (!name) {
-      return false
-    }
-
-    this.keyToNameMap.delete(key)
-    this.nameToKeyMap.delete(name)
-    this.keyToIdentityMap.delete(key)
-
-    return true
+    return this.keyRegistry.revokeKey(key)
   }
 
   resolveKey(key: string): string | undefined {
-    return this.keyToNameMap.get(key)
+    return this.keyRegistry.resolveKey(key)
   }
 
   isValidKey(key: string): boolean {
-    return this.keyToIdentityMap.has(key)
+    return this.keyRegistry.isValidKey(key)
   }
 
   resolveIdentity(key: string): PluginActivationIdentity | undefined {
-    return this.keyToIdentityMap.get(key)
+    return this.keyRegistry.resolveIdentity(key)
   }
 
   resolveCurrentIdentity(name: string): PluginActivationIdentity | undefined {
-    const key = this.nameToKeyMap.get(name)
-    return key ? this.keyToIdentityMap.get(key) : undefined
+    return this.keyRegistry.resolveCurrentIdentity(name)
   }
 
   resolveSenderIdentity(sender: Electron.WebContents): PluginActivationIdentity | undefined {
@@ -790,7 +756,7 @@ class TouchChannel {
       return Promise.resolve()
     }
 
-    const key = this.nameToKeyMap.get(pluginName)
+    const key = this.keyRegistry.keyForName(pluginName)
 
     const payload = { ...toRecord(arg), plugin: pluginName }
 
@@ -889,7 +855,7 @@ class TouchChannel {
     const uiView = WindowManager.getInstance().getUIView()
     if (!uiView) return
 
-    const key = this.nameToKeyMap.get(pluginName)
+    const key = this.keyRegistry.keyForName(pluginName)
     const webContents = getWebContents(uiView)
     if (!webContents || webContents.isDestroyed()) return
 
