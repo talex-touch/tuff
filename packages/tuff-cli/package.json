@@ -23,6 +23,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepublishOnly": "pnpm run build",
     "dev": "tsup --watch",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
