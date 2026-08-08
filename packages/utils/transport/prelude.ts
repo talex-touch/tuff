@@ -35,10 +35,18 @@ export function getPluginChannelPreludeCode(
       if (arg) {
         const { name, header, code, plugin, data, sync } = arg;
         if (header) {
+          // A missing key is a rejection, not a warning.
+          //
+          // This used to warn and then dispatch the message anyway, so the key check that is
+          // the plugin channel's isolation boundary was bypassed by simply not supplying a
+          // key — anything able to emit on the shared @plugin-process-message channel reached
+          // this plugin's handlers (#875).
           const { uniqueKey: thisUniqueKey } = header;
           if (!thisUniqueKey) {
-            console.warn('[Plugin] uniqueKey missing in header:', arg);
-          } else if (thisUniqueKey !== uniqueKey) {
+            console.error('[Plugin] uniqueKey missing in header:', arg);
+            return null;
+          }
+          if (thisUniqueKey !== uniqueKey) {
             console.error('[Plugin] uniqueKey mismatch:', thisUniqueKey, uniqueKey);
             return null;
           }
