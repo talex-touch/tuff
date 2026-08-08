@@ -3,6 +3,7 @@ import type * as schema from '../../db/schema'
 import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import type { AuxDbResolver, MainDatabase } from '../../db/db-write'
 import type { LogOptions } from '../../utils/logger'
+import { and, eq, inArray } from 'drizzle-orm'
 import { scheduleAuxWrite } from '../../db/db-write'
 import { clipboardHistoryMeta } from '../../db/schema'
 
@@ -78,9 +79,26 @@ export class ClipboardMetaPersistence {
 
     if (values.length === 0) return
 
+    // Replace rather than append. There is no unique constraint on (clipboard_id, key), so a
+    // plain insert leaves one row per update: the hydrate read folds rows into a map with no
+    // ordering, and the key/value filters further down this module match on *any* row — so a
+    // clipboard item keeps matching a category it no longer has (#646).
+    const keys = [...new Set(values.map((entry) => entry.key))]
+
     await this.withDbWrite(
       'clipboard.meta',
-      (db) => db.insert(clipboardHistoryMeta).values(values),
+      (db) =>
+        db.transaction(async (tx) => {
+          await tx
+            .delete(clipboardHistoryMeta)
+            .where(
+              and(
+                eq(clipboardHistoryMeta.clipboardId, clipboardId),
+                inArray(clipboardHistoryMeta.key, keys)
+              )
+            )
+          await tx.insert(clipboardHistoryMeta).values(values)
+        }),
       options
     )
   }
