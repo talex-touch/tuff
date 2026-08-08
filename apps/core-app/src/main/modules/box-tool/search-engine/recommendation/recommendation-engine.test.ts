@@ -1787,4 +1787,102 @@ describe('RecommendationEngine', () => {
     // is promoted because the foreground app is an IDE.
     expect(result.items[0]?.id).toBe('/Applications/Terminal.app')
   })
+
+  it('polls plugin recommendation providers concurrently, not one after another', async () => {
+    // Awaiting each provider in a for-of made PLUGIN_PROVIDER_TIMEOUT_MS a
+    // per-provider budget: six slow plugins meant 1.2s of empty grid on every
+    // uncached open of the CoreBox empty-query path (#674).
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const DELAY = 60
+    const PROVIDERS = 4
+
+    let live = 0
+    let peakConcurrent = 0
+
+    for (let i = 0; i < PROVIDERS; i++) {
+      engine.registerPluginProvider('demo-plugin', {
+        id: `provider-${i}`,
+        canProvide: () => true,
+        getCandidates: async () => {
+          live += 1
+          peakConcurrent = Math.max(peakConcurrent, live)
+          await new Promise((resolve) => setTimeout(resolve, DELAY))
+          live -= 1
+          return [{ id: `candidate-${i}`, title: `Candidate ${i}`, action: 'open' }]
+        }
+      } as never)
+    }
+
+    const startedAt = Date.now()
+    const candidates = await (
+      engine as unknown as {
+        getPluginCandidates: (context: unknown) => Promise<unknown[]>
+      }
+    ).getPluginCandidates(morningContext)
+    const elapsed = Date.now() - startedAt
+
+    expect(candidates).toHaveLength(PROVIDERS)
+    // All four in flight at once rather than a queue of one.
+    expect(peakConcurrent).toBe(PROVIDERS)
+    // Sequential would be >= 4 * 60ms; concurrent stays near one delay.
+    expect(elapsed).toBeLessThan(DELAY * PROVIDERS)
+  })
+
+  it('clears the timeout timer when a provider answers in time', async () => {
+    // The race armed a 200ms setTimeout per provider and never cleared it on the
+    // winning path, leaving a pending timer per call keeping the loop awake (#674).
+    vi.useFakeTimers()
+    try {
+      const engine = new RecommendationEngine(createDbUtils() as never)
+
+      for (let i = 0; i < 3; i++) {
+        engine.registerPluginProvider('demo-plugin', {
+          id: `prompt-${i}`,
+          canProvide: () => true,
+          getCandidates: async () => [{ id: `c-${i}`, title: `C ${i}`, action: 'open' }]
+        } as never)
+      }
+
+      const before = vi.getTimerCount()
+      await (
+        engine as unknown as {
+          getPluginCandidates: (context: unknown) => Promise<unknown[]>
+        }
+      ).getPluginCandidates(morningContext)
+
+      expect(vi.getTimerCount()).toBe(before)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves provider registration order in the candidate list', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    // Deliberately inverted delays: if order followed completion rather than
+    // registration, this would come back reversed.
+    for (const [index, delay] of [90, 60, 30, 0].entries()) {
+      engine.registerPluginProvider('demo-plugin', {
+        id: `ordered-${index}`,
+        canProvide: () => true,
+        getCandidates: async () => {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          return [{ id: `candidate-${index}`, title: `Candidate ${index}`, action: 'open' }]
+        }
+      } as never)
+    }
+
+    const candidates = (await (
+      engine as unknown as {
+        getPluginCandidates: (context: unknown) => Promise<Array<{ itemId: string }>>
+      }
+    ).getPluginCandidates(morningContext)) as Array<{ itemId: string }>
+
+    expect(candidates.map((c) => c.itemId)).toEqual([
+      'candidate-0',
+      'candidate-1',
+      'candidate-2',
+      'candidate-3'
+    ])
+  })
 })
