@@ -30,7 +30,12 @@ try {
     ])
     if (process.platform === 'linux' && unavailableLinuxReasons.has(capability.reason)) {
       assert.equal(capability.state, 'unavailable')
-      assert.deepEqual(capability.features, [])
+      // Same unconditional append as below: even with no backend features, the
+      // capability layer still adds frozen-compose, so [] cannot occur here either.
+      // This is the branch a headless CI runner takes -- no display server, so the
+      // reason is display-server-unavailable -- which is why the Linux leg kept failing
+      // after the degraded-branch fix.
+      assert.deepEqual(capability.features, ['frozen-compose'])
     }
     else {
       assert.equal(capability.state, 'degraded')
