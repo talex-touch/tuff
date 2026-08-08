@@ -1,6 +1,5 @@
 import type { LoadingEvent, LoadingMode, StartupContext } from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
-import { electronAPI } from '@electron-toolkit/preload'
 import { hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import { isCoreBox, isMainWindow } from '@talex-touch/utils/renderer/hooks/arg-mapper'
@@ -9,6 +8,7 @@ import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents, installTransportPortHandoff } from '@talex-touch/utils/transport'
 import appLogoSvgRaw from '../../public/logo.svg?raw'
 import { contextBridge, ipcRenderer } from 'electron'
+import { RAW_MAIN_PROCESS_CHANNEL, RAW_PLUGIN_PROCESS_CHANNEL } from '../shared/ipc/raw-channel'
 
 interface StartupHandshakePayload {
   rendererStartTime: number
@@ -134,16 +134,68 @@ const api: CoreAppPreloadAPI = {
   }
 } satisfies CoreAppPreloadAPI
 
+/**
+ * The only IPC channels the renderer world is allowed to touch.
+ *
+ * Both are the raw transport envelopes; everything the app does travels inside them and is
+ * routed by the channel system, which is where authorisation belongs.
+ */
+const BRIDGED_IPC_CHANNELS = new Set<string>([RAW_MAIN_PROCESS_CHANNEL, RAW_PLUGIN_PROCESS_CHANNEL])
+
+function assertBridgedChannel(channel: string): void {
+  if (!BRIDGED_IPC_CHANNELS.has(channel))
+    throw new Error(`Channel "${channel}" is not exposed to the renderer.`)
+}
+
+/**
+ * A narrow replacement for @electron-toolkit/preload's electronAPI.
+ *
+ * That helper bridges send/on/once/invoke/sendSync/removeAllListeners for *any* channel name,
+ * so contextIsolation stayed on while the thing behind it was the whole IPC primitive — any
+ * script in the renderer world could address any handler by name, and preload had nowhere to
+ * enforce an allowlist (#693).
+ *
+ * Only `send` and `on` are here because only those are used: channel-core.ts is the single
+ * consumer, and it talks to one channel. `invoke` and `sendSync` are deliberately absent
+ * rather than allowlisted — nothing calls them, and adding them back should be a decision
+ * rather than an inheritance.
+ *
+ * The shape matches the toolkit's, including `on` returning its own remover, so the renderer
+ * needs no change.
+ */
+const bridgedElectronAPI = {
+  ipcRenderer: {
+    send(channel: string, ...args: unknown[]): void {
+      assertBridgedChannel(channel)
+      ipcRenderer.send(channel, ...args)
+    },
+    on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): () => void {
+      assertBridgedChannel(channel)
+      const wrapped = (event: unknown, ...args: unknown[]): void => listener(event, ...args)
+      ipcRenderer.on(channel, wrapped as never)
+      return () => ipcRenderer.removeListener(channel, wrapped as never)
+    },
+    removeListener(channel: string, listener: (...args: unknown[]) => void): void {
+      assertBridgedChannel(channel)
+      ipcRenderer.removeListener(channel, listener as never)
+    }
+  },
+  process: {
+    versions: { ...process.versions },
+    platform: process.platform
+  }
+}
+
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('electron', bridgedElectronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)
   }
 } else {
   // @ts-ignore (define in dts)
-  window.electron = electronAPI
+  window.electron = bridgedElectronAPI
   // @ts-ignore (define in dts)
   window.api = api
 }
