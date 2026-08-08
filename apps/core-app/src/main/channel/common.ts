@@ -1221,6 +1221,27 @@ export class CommonChannelModule extends BaseModule {
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
   }
 
+  /**
+   * Refuses a handler call that arrived from a plugin.
+   *
+   * Every transport handler is registered on the plugin channel as well as the main one, and
+   * inspecting context.plugin is voluntary per handler — so these were reachable from a
+   * plugin view. window.close ends the application, hide and minimize deny service to the
+   * user, and getCwd/getPath/getPackage hand over the filesystem layout that makes a path
+   * traversal or a shell sink easy to aim (#807).
+   *
+   * This is the per-handler form of the audience mechanism proposed in #688. That change
+   * would make host-only the default for every handler; until then, the handlers that can
+   * end the app or disclose its layout should not depend on it.
+   */
+  private assertHostOnly(context: HandlerContext | undefined, eventName: string): void {
+    if (!context?.plugin) return
+    log.warn('Blocked a host-only handler invoked from a plugin', {
+      meta: { eventName, plugin: context.plugin.name }
+    })
+    throw new Error('HOST_ONLY_HANDLER')
+  }
+
   private resolvePluginTempNamespace(context?: HandlerContext): string {
     const pluginName = context?.plugin?.name
     if (!pluginName) throw new Error('PLUGIN_CONTEXT_REQUIRED')
@@ -1435,9 +1456,18 @@ export class CommonChannelModule extends BaseModule {
         const query = normalizeCapabilityQuery(payload)
         return await listPlatformCapabilities(query)
       }),
-      transport.on(AppEvents.window.close, () => closeApp(touchApp)),
-      transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
-      transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
+      transport.on(AppEvents.window.close, (_payload, context) => {
+        this.assertHostOnly(context, 'window.close')
+        return closeApp(touchApp)
+      }),
+      transport.on(AppEvents.window.hide, (_payload, context) => {
+        this.assertHostOnly(context, 'window.hide')
+        touchApp.window.window.hide()
+      }),
+      transport.on(AppEvents.window.minimize, (_payload, context) => {
+        this.assertHostOnly(context, 'window.minimize')
+        touchApp.window.minimize()
+      }),
       transport.on(AppEvents.window.maximize, () => touchApp.window.maximize()),
       transport.on(AppEvents.window.unmaximize, () => touchApp.window.unmaximize()),
       transport.on(AppEvents.window.toggleMaximize, () => touchApp.window.toggleMaximize()),
@@ -1459,9 +1489,15 @@ export class CommonChannelModule extends BaseModule {
           payload && typeof payload === 'object' ? (payload as OpenDevToolsOptions) : undefined
         touchApp.window.openDevTools(options)
       }),
-      transport.on(AppEvents.system.getCwd, () => process.cwd()),
+      transport.on(AppEvents.system.getCwd, (_payload, context) => {
+        this.assertHostOnly(context, 'system.getCwd')
+        return process.cwd()
+      }),
       transport.on(AppEvents.system.getOS, () => getOSInformation()),
-      transport.on(AppEvents.system.getPackage, () => packageJson),
+      transport.on(AppEvents.system.getPackage, (_payload, context) => {
+        this.assertHostOnly(context, 'system.getPackage')
+        return packageJson
+      }),
       transport.on<void, AutoStartGetResponse>(AppEvents.system.autoStartGet, () =>
         this.getAutoStartStatus()
       ),
@@ -1476,7 +1512,8 @@ export class CommonChannelModule extends BaseModule {
         AppEvents.system.traySettingsUpdate,
         (payload) => this.updateTraySettings(payload, touchApp)
       ),
-      transport.on(AppEvents.system.getPath, (payload) => {
+      transport.on(AppEvents.system.getPath, (payload, context) => {
+        this.assertHostOnly(context, 'system.getPath')
         const name = typeof payload?.name === 'string' ? payload.name : ''
         if (!name) {
           return null
