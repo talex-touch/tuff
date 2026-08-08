@@ -32,3 +32,57 @@ describe('markdown-sanitizer', () => {
     expect(html).toContain('href="#top"')
   })
 })
+
+/**
+ * The `/` attribute-name separator (#907).
+ *
+ * The handler and style strippers already used `[\s/]+`, because `<img/onerror=...>` is
+ * valid HTML.
+ * The href/src protocol allowlist still used `\s+`, so `<a/href="javascript:...">` was never
+ * inspected and came out of the sanitiser unchanged — while the ordinary `<a href=...>` form
+ * was correctly reduced to `<a>`. Release-note bodies and plugin READMEs reach v-html in the
+ * privileged renderer, so that anchor was one user click from ipcRenderer.
+ */
+describe('attribute separators before href/src', () => {
+  const dangerous = 'javascript:alert(1)'
+
+  it('strips a javascript: href introduced with a slash separator', () => {
+    expect(sanitizeMarkdownHtml(`<a/href="${dangerous}">x</a>`)).not.toContain('javascript:')
+  })
+
+  it('strips it with repeated slashes', () => {
+    expect(sanitizeMarkdownHtml(`<a//href="${dangerous}">x</a>`)).not.toContain('javascript:')
+  })
+
+  it('strips it with a slash after whitespace and vice versa', () => {
+    expect(sanitizeMarkdownHtml(`<a /href="${dangerous}">x</a>`)).not.toContain('javascript:')
+    expect(sanitizeMarkdownHtml(`<a/ href="${dangerous}">x</a>`)).not.toContain('javascript:')
+  })
+
+  it('strips the unquoted form too', () => {
+    // The second of the two regexes had the same defect and is easy to forget.
+    expect(sanitizeMarkdownHtml(`<a/href=${dangerous}>x</a>`)).not.toContain('javascript:')
+  })
+
+  it('strips a slash-separated src, not just href', () => {
+    expect(sanitizeMarkdownHtml(`<img/src="${dangerous}">`)).not.toContain('javascript:')
+  })
+
+  it('strips data: and vbscript: behind the same separator', () => {
+    expect(sanitizeMarkdownHtml('<a/href="data:text/html,<script>1</script>">x</a>')).not.toContain('data:')
+    expect(sanitizeMarkdownHtml('<a/href="vbscript:msgbox">x</a>')).not.toContain('vbscript:')
+  })
+
+  it('keeps a legitimate link written with a slash separator', () => {
+    // Positive control: the fix must inspect these attributes, not delete them wholesale.
+    const output = sanitizeMarkdownHtml('<a/href="https://example.test/docs">x</a>')
+    expect(output).toContain('href="https://example.test/docs"')
+    expect(output).not.toContain('/href')
+  })
+
+  it('still keeps an ordinary link untouched', () => {
+    expect(sanitizeMarkdownHtml('<a href="https://example.test">x</a>')).toContain(
+      'href="https://example.test"'
+    )
+  })
+})

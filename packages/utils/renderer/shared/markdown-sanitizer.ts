@@ -68,12 +68,16 @@ export function sanitizeMarkdownHtml(html: string): string {
     // URL-bearing attributes beyond href/src that can execute or navigate.
     .replace(/[\s/]+(?:formaction|xlink:href|action|srcdoc|background|ping)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     // href/src with quotes — protocol-checked.
-    .replace(/\s+(href|src)\s*=\s*(["'])([\s\S]*?)\2/gi, (_match, name: string, quote: string, value: string) => {
+    //
+    // `[\s/]+`, not `\s+`, for the same reason the handlers above use it: `/` is a valid
+    // attribute-name separator, so `<a/href="javascript:...">` never reached the protocol
+    // allowlist and survived verbatim while the plain `<a href=...>` form was stripped (#907).
+    .replace(/[\s/]+(href|src)\s*=\s*(["'])([\s\S]*?)\2/gi, (_match, name: string, quote: string, value: string) => {
       if (!isAllowedUrl(value)) return ''
       return ` ${name.toLowerCase()}=${quote}${sanitizeAttributeValue(value.trim())}${quote}`
     })
     // href/src without quotes.
-    .replace(/\s+(href|src)\s*=\s*([^\s>"']+)/gi, (_match, name: string, value: string) => {
+    .replace(/[\s/]+(href|src)\s*=\s*([^\s>"']+)/gi, (_match, name: string, value: string) => {
       if (!isAllowedUrl(value)) return ''
       return ` ${name.toLowerCase()}="${sanitizeAttributeValue(value.trim())}"`
     })
