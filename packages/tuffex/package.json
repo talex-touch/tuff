@@ -2,7 +2,7 @@
   "name": "@talex-touch/tuffex",
   "version": "0.3.9",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.15.0"
   },
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
   "description": "TuffEx - Vue 3 UI source package for the Tuff ecosystem.",
