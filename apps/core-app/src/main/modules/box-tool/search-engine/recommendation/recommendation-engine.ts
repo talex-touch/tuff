@@ -13,7 +13,7 @@ import { scheduleAuxWrite, scheduleDbWrite } from '../../../../db/db-write'
 import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import * as schema from '../../../../db/schema'
 import { getSentryService } from '../../../sentry'
-import { ContextProvider } from './context-provider'
+import { ContextProvider, hashContextContent } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { recommendationExposureService } from './recommendation-exposure-service'
@@ -1774,10 +1774,19 @@ export class RecommendationEngine {
   /**
    * 内置剪贴板 URL 推荐候选
    */
-  private getClipboardUrlCandidates(context: ContextSignal): CandidateItem[] {
+  private async getClipboardUrlCandidates(context: ContextSignal): Promise<CandidateItem[]> {
     if (!context.clipboard?.meta?.isUrl || !context.clipboard.content) return []
 
-    const url = context.clipboard.content
+    // context.clipboard.content is a privacy digest, not the URL — ContextProvider hashes every
+    // content field on purpose. Building the card from it produced a '打开 URL' entry whose
+    // subtitle, item id and open-url payload were all the hash (#648).
+    //
+    // Re-read rather than adding a raw field to the signal: the point of the digest is that raw
+    // content does not travel through the recommendation pipeline. The hash is then what proves
+    // the clipboard still holds the item this context was built from — if it has changed, the
+    // recommendation is stale and no card is better than the wrong one.
+    const url = await this.readClipboardUrlMatching(context.clipboard.content)
+    if (!url) return []
 
     return [
       {
@@ -1797,6 +1806,25 @@ export class RecommendationEngine {
         }
       }
     ]
+  }
+
+  /**
+   * Reads the current clipboard text, but only returns it if it still hashes to `expectedDigest`.
+   *
+   * Returning null on a mismatch is the point: between the context snapshot and this call the user
+   * may have copied something else, and opening that instead would be worse than showing nothing.
+   */
+  private async readClipboardUrlMatching(expectedDigest: string): Promise<string | null> {
+    try {
+      const { clipboardModule } = await import('../../../clipboard')
+      const latest = clipboardModule.getLatestItem()
+      const content = latest?.content
+
+      if (!content) return null
+      return hashContextContent(content) === expectedDigest ? content : null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -2340,7 +2368,7 @@ export class RecommendationEngine {
     context: ContextSignal,
     existingItems: TuffItem[]
   ): Promise<TuffItem[]> {
-    const candidates = this.getClipboardUrlCandidates(context)
+    const candidates = await this.getClipboardUrlCandidates(context)
     if (candidates.length === 0) return []
 
     const existingKeys = new Set(existingItems.map((item) => this.getItemIdentity(item)))

@@ -56,6 +56,17 @@ const NEUTRAL_TIME_CONTEXT: TimePattern = {
  * Uses dynamic imports to avoid circular dependencies with clipboard and activeApp modules.
  * This is intentional - see plan.prd for future refactoring.
  */
+/**
+ * The privacy digest used for every content field on a ContextSignal.
+ *
+ * Exported so a consumer can check whether raw content it holds is the same content the signal
+ * was built from, without the signal ever carrying that content. Duplicating the algorithm at a
+ * call site would work until one side changed.
+ */
+export function hashContextContent(content: string): string {
+  return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
+}
+
 export class ContextProvider {
   /**
    * Retrieves complete current context signal.
@@ -321,7 +332,7 @@ export class ContextProvider {
    * Generates privacy-safe hash of content.
    */
   private hashContent(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
+    return hashContextContent(content)
   }
 
   private async getContextSources(): Promise<RecommendationContextSources> {
