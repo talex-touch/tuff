@@ -50,6 +50,7 @@ jobs:
           libclang-dev
           libdbus-1-dev
           libegl-dev
+          libgbm-dev
           libpipewire-0.3-dev
           libwayland-dev
           libxcb1-dev
@@ -134,4 +135,11 @@ jobs:
           src/main/modules/native-capabilities/native-transport-napi.integration.test.ts
 
       - name: Type-check Electron main process
+        # The type graph genuinely needs about 2.8 GB: 4,660 files, 2,793 of them
+        # dependency declarations, led by @sentry, typebox, drizzle-orm and openai.
+        # skipLibCheck is already on, so there is no configuration lever left -- the
+        # macOS runner's default heap is simply below what this check costs, and it
+        # died with FatalProcessOutOfMemory rather than reporting a type error.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm -C apps/core-app run typecheck:node
