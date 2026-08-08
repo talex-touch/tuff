@@ -1606,19 +1606,28 @@ export async function recoverKeyrings(
   const rows = result.results ?? []
   const candidates = rows.filter(row => typeof row.recovery_code_hash === 'string' && row.recovery_code_hash.length > 0)
 
-  let verified = false
+  let matchedDeviceId: string | null = null
   for (const row of candidates) {
     if (await verifyRecoveryCode(payload.recoveryCode, row.recovery_code_hash!)) {
-      verified = true
+      matchedDeviceId = row.device_id
       break
     }
   }
 
-  if (!verified) {
+  if (!matchedDeviceId) {
     throw createSyncError('DEVICE_NOT_AUTHORIZED', 403, 'Invalid recovery code')
   }
 
-  return rows.map(row => ({
+  // Only the device whose code matched. This used to map over every row for the user, so
+  // knowing one device's recovery code — written down, screenshotted, or leaked from an old
+  // machine — handed back the encrypted key material of the entire fleet, including devices
+  // with a different recovery code or none at all (#904).
+  //
+  // Every key_type of the matched device is returned, because the code is stored per keyring
+  // row and a device's keyring is only useful complete.
+  return rows
+    .filter(row => row.device_id === matchedDeviceId)
+    .map(row => ({
     keyring_id: `${userId}:${row.device_id}:${row.key_type}`,
     device_id: row.device_id,
     key_type: row.key_type,
