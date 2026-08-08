@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -14,6 +14,12 @@ const rootImportBudgets = [
     label: 'Core App renderer',
     root: coreRendererRoot,
     limit: 0,
+    // The plugin sandbox hands whole modules to untrusted plugin code, so it has to hold
+    // the namespace: resolveTalexTouchModule serves '@talex-touch/tuffex' and every
+    // '@talex-touch/tuffex/*' request from it. There is nothing to tree-shake in a
+    // registry whose keys are decided at runtime, and raising the limit to 1 instead
+    // would let the next accidental root import in unnoticed.
+    allow: ['modules/plugin/widget-registry.ts'],
   },
   {
     label: 'Nexus app',
@@ -293,14 +299,17 @@ async function auditRootImports(errors) {
     await Promise.all(
       sourceFiles.map(async (filePath) => {
         const source = await readFile(filePath, 'utf-8')
-        if (tuffexRootImportPatterns.some(pattern => pattern.test(source)))
-          rootImportFiles.push(filePath)
+        if (!tuffexRootImportPatterns.some(pattern => pattern.test(source))) return
+        const relativePath = relative(budget.root, filePath)
+        if ((budget.allow ?? []).some(allowed => relativePath === allowed)) return
+        rootImportFiles.push(filePath)
       }),
     )
 
     if (rootImportFiles.length > budget.limit) {
       errors.push(
-        `${budget.label} TuffEx root imports grew to ${rootImportFiles.length}; limit is ${budget.limit}`,
+        `${budget.label} TuffEx root imports grew to ${rootImportFiles.length}; limit is ${budget.limit}`
+        + ` (${rootImportFiles.map(filePath => relative(budget.root, filePath)).join(', ')})`,
       )
     }
 
