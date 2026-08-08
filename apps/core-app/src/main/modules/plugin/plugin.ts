@@ -479,99 +479,76 @@ const INTELLIGENCE_RUNTIME_CAPABILITIES = Object.freeze([
 /**
  * Plugin implementation
  */
+/**
+ * Everything plugin-module installs on TouchPlugin for the lifetime of one module generation.
+ *
+ * Held in a single slot so install and teardown are one call each. Transport keeps its own
+ * slot: it is installed earlier in the module lifecycle than these are, and tests set it on
+ * its own in about twenty places.
+ */
+export interface TouchPluginRuntimeCapabilities {
+  runtimeService: PluginRuntimeService | null
+  snipasteProcess:
+    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
+    | null
+  systemAction: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
+  browserOpen: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
+  browserData: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
+  translation: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
+  intelligenceContext:
+    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
+    | null
+  windowManager: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
+  windowPreset: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
+  workspaceScript:
+    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
+    | null
+}
+/**
+ * A capability set with nothing installed.
+ *
+ * A base for callers that only need a subset — chiefly tests. The return type is the full
+ * interface, so an added capability is a compile error here rather than a silently missing key.
+ */
+export function emptyTouchPluginRuntimeCapabilities(): TouchPluginRuntimeCapabilities {
+  return {
+    runtimeService: null,
+    snipasteProcess: null,
+    systemAction: null,
+    browserOpen: null,
+    browserData: null,
+    translation: null,
+    intelligenceContext: null,
+    windowManager: null,
+    windowPreset: null,
+    workspaceScript: null
+  }
+}
+
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
-  private static _runtimeService: PluginRuntimeService | null = null
-  private static _snipasteProcessCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
-    | null = null
-  private static _systemActionCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities)
-    | null = null
-  private static _browserOpenCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities)
-    | null = null
-  private static _browserDataCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities)
-    | null = null
-  private static _translationCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities)
-    | null = null
-  private static _intelligenceContextCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
-    | null = null
-  private static _windowManagerCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities)
-    | null = null
-  private static _windowPresetCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities)
-    | null = null
-  private static _workspaceScriptCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
-    | null = null
+  private static _capabilities: TouchPluginRuntimeCapabilities | null = null
 
   static setTransport(transport: ITuffTransportMain | null): void {
     TouchPlugin._transport = transport
   }
 
-  static setRuntimeService(runtimeService: PluginRuntimeService | null): void {
-    TouchPlugin._runtimeService = runtimeService
+  /**
+   * Install, or clear, everything plugin-module owns on this class for one module generation.
+   *
+   * One slot rather than ten, so init and destroy cannot fall out of step: every field is
+   * required, so adding an eleventh capability fails to compile at the install site until it is
+   * supplied, and teardown is `setCapabilities(null)` regardless of how many there are (#530).
+   */
+  static setCapabilities(capabilities: TouchPluginRuntimeCapabilities | null): void {
+    TouchPlugin._capabilities = capabilities
   }
 
-  static setSnipasteProcessCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability) | null
-  ): void {
-    TouchPlugin._snipasteProcessCapabilityFactory = factory
-  }
-
-  static setSystemActionCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
-  ): void {
-    TouchPlugin._systemActionCapabilityFactory = factory
-  }
-
-  static setBrowserOpenCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
-  ): void {
-    TouchPlugin._browserOpenCapabilityFactory = factory
-  }
-
-  static setBrowserDataCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
-  ): void {
-    TouchPlugin._browserDataCapabilityFactory = factory
-  }
-
-  static setTranslationCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
-  ): void {
-    TouchPlugin._translationCapabilityFactory = factory
-  }
-
-  static setIntelligenceContextCapabilityFactory(
-    factory:
-      | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
-      | null
-  ): void {
-    TouchPlugin._intelligenceContextCapabilityFactory = factory
-  }
-
-  static setWindowManagerCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
-  ): void {
-    TouchPlugin._windowManagerCapabilityFactory = factory
-  }
-
-  static setWindowPresetCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
-  ): void {
-    TouchPlugin._windowPresetCapabilityFactory = factory
-  }
-
-  static setWorkspaceScriptCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities) | null
-  ): void {
-    TouchPlugin._workspaceScriptCapabilityFactory = factory
+  /** Read one installed capability, or null when no module generation is active. */
+  private static capability<K extends keyof TouchPluginRuntimeCapabilities>(
+    key: K
+  ): TouchPluginRuntimeCapabilities[K] | null {
+    return TouchPlugin._capabilities?.[key] ?? null
   }
 
   private get transport(): ITuffTransportMain | null {
@@ -1427,7 +1404,8 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private resolveRuntimeService(): PluginRuntimeService {
-    if (TouchPlugin._runtimeService) return TouchPlugin._runtimeService
+    const runtimeService = TouchPlugin.capability('runtimeService')
+    if (runtimeService) return runtimeService
     throw Object.assign(new Error('PLUGIN_RUNTIME_SERVICE_CLOSED'), {
       code: 'PLUGIN_RUNTIME_SERVICE_CLOSED'
     })
@@ -2082,7 +2060,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginSnipasteProcessCapability | null {
     if (this.name !== 'touch-snipaste') return null
-    const factory = TouchPlugin._snipasteProcessCapabilityFactory
+    const factory = TouchPlugin.capability('snipasteProcess')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'
@@ -2095,7 +2073,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginSystemActionCapabilities | null {
     if (this.name !== 'touch-quick-actions' && this.name !== 'touch-system-actions') return null
-    const factory = TouchPlugin._systemActionCapabilityFactory
+    const factory = TouchPlugin.capability('systemAction')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'
@@ -2108,7 +2086,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginBrowserOpenCapabilities | null {
     if (this.name !== 'touch-browser-open') return null
-    const factory = TouchPlugin._browserOpenCapabilityFactory
+    const factory = TouchPlugin.capability('browserOpen')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'
@@ -2121,7 +2099,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginBrowserDataCapabilities | null {
     if (this.name !== 'touch-browser-data') return null
-    const factory = TouchPlugin._browserDataCapabilityFactory
+    const factory = TouchPlugin.capability('browserData')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'
@@ -2134,7 +2112,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginIntelligenceCapabilities | null {
     if (this.name !== 'touch-translation') return null
-    const factory = TouchPlugin._translationCapabilityFactory
+    const factory = TouchPlugin.capability('translation')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'
@@ -2147,7 +2125,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginIntelligenceContextCapabilities | null {
     if (this.name !== 'touch-intelligence') return null
-    const factory = TouchPlugin._intelligenceContextCapabilityFactory
+    const factory = TouchPlugin.capability('intelligenceContext')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'
@@ -2160,7 +2138,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginWindowManagerCapabilities | null {
     if (this.name !== 'touch-window-manager') return null
-    const factory = TouchPlugin._windowManagerCapabilityFactory
+    const factory = TouchPlugin.capability('windowManager')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'
@@ -2173,7 +2151,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginWindowPresetCapabilities | null {
     if (this.name !== 'touch-window-presets') return null
-    const factory = TouchPlugin._windowPresetCapabilityFactory
+    const factory = TouchPlugin.capability('windowPreset')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'
@@ -2186,7 +2164,7 @@ export class TouchPlugin implements ITouchPlugin {
     activation: PluginActivationIdentity
   ): PluginWorkspaceScriptCapabilities | null {
     if (this.name !== 'touch-workspace-scripts') return null
-    const factory = TouchPlugin._workspaceScriptCapabilityFactory
+    const factory = TouchPlugin.capability('workspaceScript')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'
@@ -2483,7 +2461,9 @@ export class TouchPlugin implements ITouchPlugin {
     if (activation.key) {
       this.revokeActivationAuthority(activation)
       try {
-        await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
+        await TouchPlugin.capability('runtimeService')?.stopActivation(activation, {
+          runDestroy: true
+        })
       } catch {
         teardownFailed = true
         teardownIssueRecorded = true

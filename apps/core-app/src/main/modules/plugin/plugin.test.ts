@@ -21,7 +21,8 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
 import { PluginRuntimeHostError } from './host/plugin-runtime-host'
-import { TouchPlugin } from './plugin'
+import type { TouchPluginRuntimeCapabilities } from './plugin'
+import { emptyTouchPluginRuntimeCapabilities, TouchPlugin } from './plugin'
 import { widgetManager } from './widget/widget-manager'
 
 const permissionModuleMock = vi.hoisted(() => ({
@@ -235,6 +236,19 @@ function clearBoxItemMocks(): void {
   coreBoxManagerMock.exitUIMode.mockClear()
   coreBoxManagerMock.getCurrentFeature.mockReset()
   appSettingsMock.value = {}
+}
+
+let installedCapabilities = emptyTouchPluginRuntimeCapabilities()
+
+/**
+ * Install one capability, leaving the rest as they were.
+ *
+ * Production installs the whole set in a single call (#530); only tests build it up a piece at a
+ * time, so the accumulation lives here rather than widening the production API back out.
+ */
+function installCapability(partial: Partial<TouchPluginRuntimeCapabilities>): void {
+  installedCapabilities = { ...installedCapabilities, ...partial }
+  TouchPlugin.setCapabilities(installedCapabilities)
 }
 
 describe('touchPlugin.triggerFeature', () => {
@@ -2158,16 +2172,8 @@ describe('touchPlugin.setRuntime', () => {
 describe('touchPlugin.enable', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
-    TouchPlugin.setRuntimeService(null)
-    TouchPlugin.setSnipasteProcessCapabilityFactory(null)
-    TouchPlugin.setSystemActionCapabilityFactory(null)
-    TouchPlugin.setBrowserOpenCapabilityFactory(null)
-    TouchPlugin.setBrowserDataCapabilityFactory(null)
-    TouchPlugin.setTranslationCapabilityFactory(null)
-    TouchPlugin.setIntelligenceContextCapabilityFactory(null)
-    TouchPlugin.setWindowManagerCapabilityFactory(null)
-    TouchPlugin.setWindowPresetCapabilityFactory(null)
-    TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
+    installedCapabilities = emptyTouchPluginRuntimeCapabilities()
+    TouchPlugin.setCapabilities(null)
     clearBoxItemMocks()
     vi.restoreAllMocks()
   })
@@ -2196,7 +2202,7 @@ describe('touchPlugin.enable', () => {
       keyManager: { requestKey, revokeKey: vi.fn(() => true) },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
-    TouchPlugin.setRuntimeService(runtime as never)
+    installCapability({ runtimeService: runtime as never })
     const plugin = new TouchPlugin(
       'empty-plugin',
       { type: 'class', value: 'i-ri-test-tube-line' },
@@ -2263,7 +2269,7 @@ describe('touchPlugin.enable', () => {
         },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const plugin = new TouchPlugin(
         'touch-batch-rename',
         { type: 'class', value: 'i-ri-file-edit-line' },
@@ -2325,13 +2331,13 @@ describe('touchPlugin.enable', () => {
         },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
         definitions: Object.freeze([
           { id: 'intelligence.invoke', permission: 'intelligence.basic' }
         ])
       }))
-      TouchPlugin.setTranslationCapabilityFactory(factory as never)
+      installCapability({ translation: factory as never })
 
       const translation = new TouchPlugin(
         'touch-translation',
@@ -2362,7 +2368,7 @@ describe('touchPlugin.enable', () => {
       )
 
       const otherRuntime = createRuntimeServiceMock()
-      TouchPlugin.setRuntimeService(otherRuntime as never)
+      installCapability({ runtimeService: otherRuntime as never })
       const other = new TouchPlugin(
         'other-plugin',
         { type: 'class', value: 'i-ri-plug-line' },
@@ -2399,7 +2405,7 @@ describe('touchPlugin.enable', () => {
         },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
         definitions: Object.freeze([
           {
@@ -2414,7 +2420,7 @@ describe('touchPlugin.enable', () => {
           }
         ])
       }))
-      TouchPlugin.setIntelligenceContextCapabilityFactory(factory as never)
+      installCapability({ intelligenceContext: factory as never })
 
       const intelligence = new TouchPlugin(
         'touch-intelligence',
@@ -2454,7 +2460,7 @@ describe('touchPlugin.enable', () => {
       expect(factory).toHaveBeenCalledOnce()
 
       const otherRuntime = createRuntimeServiceMock()
-      TouchPlugin.setRuntimeService(otherRuntime as never)
+      installCapability({ runtimeService: otherRuntime as never })
       const other = new TouchPlugin(
         'other-plugin',
         { type: 'class', value: 'i-ri-plug-line' },
@@ -2494,11 +2500,11 @@ describe('touchPlugin.enable', () => {
           keyManager: { requestKey, revokeKey: vi.fn(() => true) },
           sendToPlugin: vi.fn().mockResolvedValue(undefined)
         } as unknown as ITuffTransportMain)
-        TouchPlugin.setRuntimeService(runtime as never)
+        installCapability({ runtimeService: runtime as never })
         const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
           definitions: Object.freeze([{ id: 'system.invoke' }])
         }))
-        TouchPlugin.setSystemActionCapabilityFactory(factory as never)
+        installCapability({ systemAction: factory as never })
         const plugin = new TouchPlugin(
           pluginName,
           { type: 'class', value: 'i-ri-settings-3-line' },
@@ -2558,7 +2564,7 @@ describe('touchPlugin.enable', () => {
         keyManager: { requestKey, revokeKey: vi.fn(() => true) },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const closes: Array<ReturnType<typeof vi.fn>> = []
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
         const close = vi.fn(async () => undefined)
@@ -2568,7 +2574,7 @@ describe('touchPlugin.enable', () => {
           close
         }
       })
-      TouchPlugin.setWindowManagerCapabilityFactory(factory as never)
+      installCapability({ windowManager: factory as never })
       const plugin = new TouchPlugin(
         'touch-window-manager',
         { type: 'class', value: 'i-ri-window-line' },
@@ -2628,17 +2634,17 @@ describe('touchPlugin.enable', () => {
         },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const close = vi
         .fn<() => Promise<void>>()
         .mockRejectedValueOnce(new Error('/private/plugin/close-detail'))
         .mockResolvedValue(undefined)
-      TouchPlugin.setWindowManagerCapabilityFactory(
-        vi.fn(() => ({
+      installCapability({
+        windowManager: vi.fn(() => ({
           definitions: Object.freeze([{ id: 'system.window-manager', permission: 'system.shell' }]),
           close
         })) as never
-      )
+      })
       const plugin = new TouchPlugin(
         'touch-window-manager',
         { type: 'class', value: 'i-ri-window-line' },
@@ -2679,7 +2685,7 @@ describe('touchPlugin.enable', () => {
         keyManager: { requestKey, revokeKey: vi.fn(() => true) },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const closes: Array<ReturnType<typeof vi.fn>> = []
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
         const close = vi.fn(async () => undefined)
@@ -2689,7 +2695,7 @@ describe('touchPlugin.enable', () => {
           close
         }
       })
-      TouchPlugin.setWindowPresetCapabilityFactory(factory as never)
+      installCapability({ windowPreset: factory as never })
       const plugin = new TouchPlugin(
         'touch-window-presets',
         { type: 'class', value: 'i-ri-layout-column-line' },
@@ -2748,7 +2754,7 @@ describe('touchPlugin.enable', () => {
         keyManager: { requestKey, revokeKey: vi.fn(() => true) },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const closes: Array<ReturnType<typeof vi.fn>> = []
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
         const close = vi.fn(async () => undefined)
@@ -2758,7 +2764,7 @@ describe('touchPlugin.enable', () => {
           close
         }
       })
-      TouchPlugin.setBrowserOpenCapabilityFactory(factory as never)
+      installCapability({ browserOpen: factory as never })
       const plugin = new TouchPlugin(
         'touch-browser-open',
         { type: 'class', value: 'i-ri-global-line' },
@@ -2817,7 +2823,7 @@ describe('touchPlugin.enable', () => {
         keyManager: { requestKey, revokeKey: vi.fn(() => true) },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const closes: Array<ReturnType<typeof vi.fn>> = []
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
         const close = vi.fn(async () => undefined)
@@ -2827,7 +2833,7 @@ describe('touchPlugin.enable', () => {
           close
         }
       })
-      TouchPlugin.setBrowserDataCapabilityFactory(factory as never)
+      installCapability({ browserData: factory as never })
       const plugin = new TouchPlugin(
         'touch-browser-data',
         { type: 'emoji', value: 'browser' },
@@ -2882,7 +2888,7 @@ describe('touchPlugin.enable', () => {
         keyManager: { requestKey, revokeKey: vi.fn(() => true) },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const closes: Array<ReturnType<typeof vi.fn>> = []
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
         const close = vi.fn(async () => undefined)
@@ -2892,7 +2898,7 @@ describe('touchPlugin.enable', () => {
           close
         }
       })
-      TouchPlugin.setWorkspaceScriptCapabilityFactory(factory as never)
+      installCapability({ workspaceScript: factory as never })
       const plugin = new TouchPlugin(
         'touch-workspace-scripts',
         { type: 'class', value: 'i-ri-terminal-box-line' },
@@ -2951,7 +2957,7 @@ describe('touchPlugin.enable', () => {
         keyManager: { requestKey, revokeKey: vi.fn(() => true) },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const closes: Array<ReturnType<typeof vi.fn>> = []
       const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
         const close = vi.fn(async () => undefined)
@@ -2961,7 +2967,7 @@ describe('touchPlugin.enable', () => {
           close
         }
       })
-      TouchPlugin.setSnipasteProcessCapabilityFactory(factory as never)
+      installCapability({ snipasteProcess: factory as never })
       const plugin = new TouchPlugin(
         'touch-snipaste',
         { type: 'class', value: 'i-ri-screenshot-line' },
@@ -3023,7 +3029,7 @@ describe('touchPlugin.enable', () => {
         },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const plugin = new TouchPlugin(
         'clipboard-history',
         { type: 'class', value: 'i-ri-test-tube-line' },
@@ -3065,7 +3071,7 @@ describe('touchPlugin.enable', () => {
         },
         sendToPlugin: vi.fn().mockResolvedValue(undefined)
       } as unknown as ITuffTransportMain)
-      TouchPlugin.setRuntimeService(runtime as never)
+      installCapability({ runtimeService: runtime as never })
       const plugin = new TouchPlugin(
         'clipboard-history',
         { type: 'class', value: 'i-ri-test-tube-line' },
@@ -3118,7 +3124,7 @@ describe('touchPlugin.enable', () => {
       keyManager: { requestKey: vi.fn(() => 'activation-key-1'), revokeKey: vi.fn(() => true) },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
-    TouchPlugin.setRuntimeService(runtime as never)
+    installCapability({ runtimeService: runtime as never })
     const plugin = new TouchPlugin(
       'owner-plugin',
       { type: 'file', value: '/private/owner-plugin/icon.png' },
@@ -3275,7 +3281,7 @@ describe('touchPlugin.enable', () => {
       keyManager: { requestKey: vi.fn(() => 'secret-key'), revokeKey },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
-    TouchPlugin.setRuntimeService(runtime as never)
+    installCapability({ runtimeService: runtime as never })
     const plugin = new TouchPlugin(
       'failed-plugin',
       { type: 'class', value: 'i-ri-test-tube-line' },
@@ -3323,7 +3329,7 @@ describe('touchPlugin.enable', () => {
       },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
-    TouchPlugin.setRuntimeService(runtime as never)
+    installCapability({ runtimeService: runtime as never })
     const plugin = new TouchPlugin(
       'barrier-plugin',
       { type: 'class', value: 'i-ri-test-tube-line' },
@@ -3371,7 +3377,7 @@ describe('touchPlugin.enable', () => {
       },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
-    TouchPlugin.setRuntimeService(runtime as never)
+    installCapability({ runtimeService: runtime as never })
     const plugin = new TouchPlugin(
       'cleanup-failure-plugin',
       { type: 'class', value: 'i-ri-test-tube-line' },
@@ -3411,7 +3417,7 @@ describe('touchPlugin.enable', () => {
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
     TouchPlugin.setTransport(transport)
-    TouchPlugin.setRuntimeService(createRuntimeServiceMock() as never)
+    installCapability({ runtimeService: createRuntimeServiceMock() as never })
 
     const plugin = new TouchPlugin(
       'rotating-plugin',
@@ -3481,7 +3487,7 @@ describe('touchPlugin.enable', () => {
       },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
-    TouchPlugin.setRuntimeService(runtime as never)
+    installCapability({ runtimeService: runtime as never })
     const plugin = new TouchPlugin(
       'resource-plugin',
       { type: 'class', value: 'i-ri-test-tube-line' },
