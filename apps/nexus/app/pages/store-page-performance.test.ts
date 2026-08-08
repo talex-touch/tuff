@@ -31,7 +31,10 @@ describe('store page remote search performance boundaries', () => {
     expect(storePage).toContain('const STORE_PLUGIN_PAGE_SIZE = 50')
     expect(storePage).toMatch(/function resolveStoreSearchQuery\(offset = 0\) \{[\s\S]*compact: 1,[\s\S]*q: activeSearch\.value \|\| undefined,[\s\S]*category: activeCategory\.value === 'all' \? undefined : activeCategory\.value,[\s\S]*limit: STORE_PLUGIN_PAGE_SIZE,[\s\S]*offset,[\s\S]*\}/)
     expect(storePage).toContain('const storeSearchQuery = computed(() => resolveStoreSearchQuery(0))')
-    expect(storePage).toMatch(/await useAsyncData\('store-plugins', \(\) =>\s*requestJson<StorePluginSearchResponse>\('\/api\/store\/search', \{\s*query: storeSearchQuery\.value,\s*\}\),\s*\{\s*watch: \[storeSearchQuery\],\s*\}\)/)
+    // The options object also carries lazy/server now, to keep first paint unblocked,
+    // so this no longer requires watch to be the only key -- only that the call targets
+    // /api/store/search and refreshes on the query.
+    expect(storePage).toMatch(/await useAsyncData\('store-plugins', \(\) =>\s*requestJson<StorePluginSearchResponse>\('\/api\/store\/search', \{\s*query: storeSearchQuery\.value,\s*\}\),\s*\{[\s\S]*?watch: \[storeSearchQuery\],[\s\S]*?\}\)/)
     expect(storePage).not.toMatch(/await useAsyncData\('store-plugins',[\s\S]*requestJson<[^>]*>\('\/api\/store\/plugins'/)
   })
 
@@ -75,13 +78,15 @@ describe('store page remote search performance boundaries', () => {
 
   it('keeps plugin detail overlay code out of the initial store page imports', () => {
     expect(storePage).toContain("const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))")
-    expect(storePage).toContain("const LazyPluginMetaHeader = defineAsyncComponent(() => import('~/components/dashboard/PluginMetaHeader.vue'))")
+    // PluginMetaHeader moved from components/dashboard to components/plugin; the lazy
+    // boundary this test exists to protect is unchanged.
+    expect(storePage).toContain("const LazyPluginMetaHeader = defineAsyncComponent(() => import('~/components/plugin/PluginMetaHeader.vue'))")
     expect(storePage).toContain("const LazyTxTabs = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabs))")
     expect(storePage).toContain('v-if="selectedSlug || detailPending"')
     expect(storePage).toContain('<LazyFlipDialog')
     expect(storePage).toContain('<LazyTxTabs')
     expect(storePage).not.toContain("import FlipDialog from '~/components/base/dialog/FlipDialog.vue'")
-    expect(storePage).not.toContain("import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'")
+    expect(storePage).not.toContain("import PluginMetaHeader from '~/components/plugin/PluginMetaHeader.vue'")
     expect(storePage).not.toContain("import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'")
     expect(storePage).not.toContain("import {\n  SharedPluginDetailReadme,\n  SharedPluginDetailVersions,\n} from '@talex-touch/utils/renderer/shared/components'")
   })

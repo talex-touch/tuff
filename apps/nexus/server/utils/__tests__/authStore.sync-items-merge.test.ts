@@ -40,6 +40,20 @@ class MockD1Database {
     return new MockStatement(this, sql)
   }
 
+  // mergeLegacySyncItemsForUsers moved its writes into a single db.batch() so they
+  // commit together or not at all (authStore.ts:2207, and the comment above it). This
+  // double only had prepare/first/run, so the merge threw "db.batch is not a function"
+  // before touching a row -- the test was failing on the shape of the call, not the
+  // merge. Runs the statements in order, which is the ordering guarantee the merge
+  // relies on; it does not simulate rollback, so a test that needs failure atomicity
+  // will need more than this.
+  async batch(statements: MockStatement[]) {
+    const results = []
+    for (const statement of statements)
+      results.push(await statement.run())
+    return results
+  }
+
   first(sql: string, args: any[]) {
     if (sql.includes('SELECT name FROM sqlite_master')) {
       const tableName = args[0]

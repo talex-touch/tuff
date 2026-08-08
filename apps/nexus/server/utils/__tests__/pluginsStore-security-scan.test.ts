@@ -63,6 +63,31 @@ vi.mock('../platformGovernanceStore', () => ({
   }),
 }))
 
+// Publisher signing is a separate admission gate from the security scan this file
+// covers, and it has its own suite in ../pluginSigning.test.ts. Without this the publish
+// path rejects the fixture with PLUGIN_SIGNING_ENVELOPE_INVALID before any scan runs --
+// the fixture predates the signing envelope and carries only a legacy md5 _signature.
+// Mocked here for the same reason the seven collaborators around it are.
+vi.mock('../pluginSigning', () => ({
+  verifyPluginPublisherSignature: vi.fn(async (_event: unknown, input: any) => ({
+    envelope: {
+      algorithm: 'ed25519',
+      keyId: input?.publicKey?.keyId ?? 'test-key',
+      payload: {
+        pluginId: input?.pluginId,
+        pluginName: input?.pluginName,
+        version: input?.version,
+        channel: input?.channel,
+      },
+      payloadSha256: 'sha256-test',
+      signature: 'test-signature',
+    },
+    key: input?.publicKey ?? { keyId: 'test-key' },
+    verifiedAt: '2026-01-01T00:00:00.000Z',
+  })),
+  createPluginAdmissionAttestation: vi.fn(async () => null),
+}))
+
 vi.mock('../uploadGovernance', () => ({
   completeUploadGovernance: state.completeUploadGovernance,
   failUploadGovernance: state.failUploadGovernance,

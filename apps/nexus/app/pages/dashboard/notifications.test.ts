@@ -51,7 +51,11 @@ describe('dashboard notification inbox UI contract', () => {
     expect(page).toContain('urlBase64ToArrayBuffer(browserPushPublicKey.value)')
     expect(page).toContain('runtimeConfig.public?.notificationWebPush?.publicKey')
     expect(page).toContain('browserPushStatusLabel')
-    expect(page).toContain('browserNotificationActionDisabled')
+    // The named browserNotificationActionDisabled computed was inlined into the
+    // template, so assert the condition itself rather than the identifier: the test
+    // cares that the action is gated on busy / denied / unsupported, not on where that
+    // expression lives.
+    expect(page).toMatch(/browserNotificationBusy \|\| browserNotificationPermission === .denied. \|\| browserNotificationPermission === .unsupported./)
     expect(page).toContain('browserNotificationPermissionLabel')
     expect(page).toContain('dashboard.notifications.browser.testSent')
     expect(page).toContain('dashboard.notifications.browser.webPushSubscribed')

@@ -16,7 +16,10 @@ describe('auth email notification channel contract', () => {
     for (const handler of handlers)
       expect(handler).toContain('}, event)')
 
-    expect(readAuthHandler('[...].ts')).toContain('}, tryCreateAuthEvent())')
+    // The magic-link call was reformatted across lines. What this test is protecting is
+    // that the auth event is still passed as sendEmail's second argument -- that is what
+    // notification channel routing reads -- not that it fits on one line.
+    expect(readAuthHandler('[...].ts')).toMatch(/\},\s*tryCreateAuthEvent\(\),?\s*\)/)
   })
 
   it('tags auth email actions for notification channel routing', () => {
