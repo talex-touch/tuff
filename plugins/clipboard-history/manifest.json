@@ -11,7 +11,7 @@
   },
   "description": "一款全平台剪贴板历史记录插件，从 Tuff 核心提取剪贴板历史。",
   "dev": {
-    "enable": true,
+    "enable": false,
     "address": "http://127.0.0.1:3488",
     "source": true,
     "autoStart": true
