@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@vueuse/core": "^14.3.0",
+    "chalk": "^5.6.2",
     "dayjs": "^1.11.21",
     "marked": "^17.0.6",
     "mathjs": "^15.2.0",
