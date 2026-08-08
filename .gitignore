@@ -104,6 +104,12 @@ tmp/
 # ========================
 # ignore all .env.*.local
 .env*.local
+# .env itself, not just the *.local variants. apps/nexus/.env was tracked and shipped a
+# working AUTH_SECRET (#890); *.local alone never covered the plain name.
+.env
+.env.*
+!.env.example
+!.env.*.example
 .env.sentry-build-plugin
 *.local.json
 
