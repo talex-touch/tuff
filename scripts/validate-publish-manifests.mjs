@@ -161,17 +161,49 @@ function assertPublishConfig(packages) {
   return issues
 }
 
+/**
+ * A published package whose runtime entry is a raw .ts file cannot be loaded by Node: it strips
+ * the types, treats the file as ESM, then fails on the extensionless directory specifiers these
+ * entries use -- ERR_UNSUPPORTED_DIR_IMPORT (#566).
+ *
+ * `types` pointing at a .d.ts is correct and deliberately not flagged; this is only about
+ * main/module, which are runtime entries.
+ */
+function findRawTypeScriptEntryIssues({ manifest, manifestPath, packageInfo }) {
+  const offending = ['main', 'module'].filter((field) => {
+    const value = manifest[field]
+    return typeof value === 'string' && value.endsWith('.ts') && !value.endsWith('.d.ts')
+  })
+
+  if (offending.length === 0)
+    return []
+
+  return [{
+    package: packageInfo.name,
+    manifestPath: toPosixPath(path.relative(repoRoot, manifestPath)),
+    phase: 'source',
+    field: offending.join(', '),
+    spec: offending.map(field => manifest[field]).join(', '),
+    reason:
+      'published runtime entry points at a raw TypeScript file, which Node cannot load; build '
+      + 'the package and point main/module at the build output',
+  }]
+}
+
 function getSourceIssues(packages) {
   return packages.flatMap((packageInfo) => {
     const manifestPath = path.join(repoRoot, packageInfo.path, 'package.json')
     const manifest = readJson(manifestPath)
-    return findForbiddenSpecIssues({
-      manifest,
-      manifestPath,
-      packageInfo,
-      forbiddenProtocols: sourceForbiddenProtocols,
-      phase: 'source',
-    })
+    return [
+      ...findForbiddenSpecIssues({
+        manifest,
+        manifestPath,
+        packageInfo,
+        forbiddenProtocols: sourceForbiddenProtocols,
+        phase: 'source',
+      }),
+      ...findRawTypeScriptEntryIssues({ manifest, manifestPath, packageInfo }),
+    ]
   })
 }
 
