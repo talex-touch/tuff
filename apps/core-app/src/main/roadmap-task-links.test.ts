@@ -52,7 +52,7 @@ describe('ROADMAP active-task table', () => {
   })
 
   it('agrees with the count in its own heading', () => {
-    const declared = /活跃 Trellis 任务全景（(\d+) 个）/.exec(ROADMAP)?.[1]
+    const declared = /活跃 Trellis 任务（部分，本表 (\d+) 个）/.exec(ROADMAP)?.[1]
 
     expect(Number(declared)).toBe(activeTable.length)
   })
