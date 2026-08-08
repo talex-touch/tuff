@@ -10,7 +10,7 @@ import { ModuleLogger } from './module-logger'
 import {
 
   LogLevel,
-  logLevelToString,
+  logLevelToLowerString,
 
   stringToLogLevel,
 } from './types'
@@ -151,7 +151,7 @@ export class LoggerManager {
    * Set global log level
    */
   setGlobalLevel(level: LogLevel): void {
-    this.config.globalLevel = logLevelToString(level)
+    this.config.globalLevel = logLevelToLowerString(level)
     for (const logger of this.loggers.values()) {
       if (logger.getLevel() < level) {
         logger.setLevel(level)
@@ -165,7 +165,7 @@ export class LoggerManager {
   setModuleConfig(module: string, enabled: boolean, level: LogLevel): void {
     this.config.modules[module] = {
       enabled,
-      level: logLevelToString(level),
+      level: logLevelToLowerString(level),
     }
 
     const logger = this.loggers.get(module)
