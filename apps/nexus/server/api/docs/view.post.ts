@@ -116,7 +116,7 @@ export default defineEventHandler(async (event) => {
     ttlMs: SESSION_TTL_MS,
   })
 
-  const token = createDocToken({
+  const token = createDocToken(event, {
     sid: session.sessionId,
     path: session.path,
     cid: session.clientId,

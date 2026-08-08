@@ -1,6 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { readCloudflareBindings } from './cloudflare'
+import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
 
 const DOC_VIEWS_TABLE = 'doc_views'
 const DOC_VIEWS_DAILY_TABLE = 'doc_views_daily'
@@ -26,7 +29,6 @@ const CLEANUP_INTERVAL_MS = 6 * 60 * 60_000
 
 let analyticsSchemaInitialized = false
 let analyticsCleanupAt = 0
-let tokenSecretCache: string | null = null
 
 export type DocEngagementSourceType = 'docs_page' | 'doc_comments_admin'
 
@@ -210,30 +212,43 @@ function base64UrlDecode(value: string): string {
   return Buffer.from(normalized, 'base64').toString('utf8')
 }
 
-function getDocTokenSecret(): string {
-  if (tokenSecretCache)
-    return tokenSecretCache
+/** Only reachable when isLocalDevelopmentRuntime() is true; never on a deployed runtime. */
+const DEV_FALLBACK_DOC_TOKEN_SECRET = 'nexus-doc-analytics-local-development-secret'
 
+/**
+ * Resolves the doc-token signing secret the way every other credential here is resolved.
+ *
+ * This used to read only useRuntimeConfig() and process.env, and fell back to a hardcoded
+ * constant when neither produced 16 characters. On Cloudflare Pages secrets arrive as
+ * bindings on event.context.cloudflare.env, and selectRuntimeCredential deliberately ignores
+ * the process.env fallbacks once bindings exist (runtimeCredentialPolicy.ts:57) — so a
+ * deployed Pages runtime signed every doc token with a constant published in this repo,
+ * and anyone could mint one (#920).
+ *
+ * Fails closed off local development rather than substituting a constant: a signing secret
+ * that silently degrades to a known value is worse than an endpoint that stops working,
+ * because nothing observable distinguishes it from a working one.
+ */
+function getDocTokenSecret(event: H3Event): string {
+  const bindings = readCloudflareBindings(event)
   const config = useRuntimeConfig()
-  const candidates = [
-    config.appAuthJwtSecret,
-    config.auth?.secret,
-    process.env.NUXT_DOC_TOKEN_SECRET,
-    process.env.AUTH_SECRET,
-  ]
+  const configured = selectRuntimeCredential(
+    bindings,
+    bindings?.NUXT_DOC_TOKEN_SECRET ?? bindings?.AUTH_SECRET,
+    [config.appAuthJwtSecret, config.auth?.secret, process.env.NUXT_DOC_TOKEN_SECRET, process.env.AUTH_SECRET],
+  )
+  const localDevelopment = isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings)
 
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.length >= 16) {
-      tokenSecretCache = candidate
-      return tokenSecretCache
-    }
-  }
+  if (configured !== undefined && configured !== null)
+    return assertRuntimeCredential('NUXT_DOC_TOKEN_SECRET', configured, { localDevelopment })
 
-  tokenSecretCache = 'nexus-doc-analytics-fallback-secret-v1'
-  return tokenSecretCache
+  if (!localDevelopment)
+    return assertRuntimeCredential('NUXT_DOC_TOKEN_SECRET', configured, { localDevelopment: false })
+
+  return DEV_FALLBACK_DOC_TOKEN_SECRET
 }
 
-export function createDocToken(payload: Omit<DocTokenPayload, 'iat' | 'exp' | 'typ'>, now = Date.now()): string {
+export function createDocToken(event: H3Event, payload: Omit<DocTokenPayload, 'iat' | 'exp' | 'typ'>, now = Date.now()): string {
   const issuedAt = Math.floor(now / 1000)
   const exp = issuedAt + TOKEN_TTL_SECONDS
   const tokenPayload: DocTokenPayload = {
@@ -249,14 +264,14 @@ export function createDocToken(payload: Omit<DocTokenPayload, 'iat' | 'exp' | 't
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body = base64UrlEncode(JSON.stringify(tokenPayload))
   const signingInput = `${header}.${body}`
-  const signature = createHash('sha256').update(`${signingInput}.${getDocTokenSecret()}`).digest('base64')
+  const signature = createHash('sha256').update(`${signingInput}.${getDocTokenSecret(event)}`).digest('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '')
   return `${signingInput}.${signature}`
 }
 
-export function verifyDocToken(token: string): DocTokenPayload | null {
+export function verifyDocToken(event: H3Event, token: string): DocTokenPayload | null {
   if (!token)
     return null
   const parts = token.split('.')
@@ -268,7 +283,7 @@ export function verifyDocToken(token: string): DocTokenPayload | null {
 
   try {
     const signingInput = `${headerPart}.${payloadPart}`
-    const expectedSignature = createHash('sha256').update(`${signingInput}.${getDocTokenSecret()}`).digest('base64')
+    const expectedSignature = createHash('sha256').update(`${signingInput}.${getDocTokenSecret(event)}`).digest('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/g, '')
