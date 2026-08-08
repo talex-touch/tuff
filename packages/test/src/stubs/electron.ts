@@ -12,51 +12,94 @@
  * environment for what is really a resolution mismatch.
  *
  * Aliasing gives both sides one identity, which is the thing `vi.mock` needs to
- * bind. Every export here throws: this file is a resolution target, not a
+ * bind. Every export here throws on use: this file is a resolution target, not a
  * substitute implementation. A test that reaches one of these has forgotten to
- * mock the surface it actually uses, and should be told so directly rather than
+ * mock the surface it actually uses, and should be told which one rather than
  * silently receiving an empty object.
+ *
+ * The export list mirrors what `apps/core-app/src/main` imports from 'electron'.
+ * A missing name is not a soft failure: an ES module namespace has no fallback,
+ * so an unlisted export makes the whole importing suite fail to collect -- which
+ * shows up as a failed *file* with zero failed *tests*, invisible in a summary
+ * that counts tests. Keep this list complete.
  */
 
 function unmocked(name: string): never {
   throw new Error(
     `electron.${name} was used without being mocked. packages/test aliases 'electron' to a stub; `
-    + `provide the surface you need via vi.mock('electron', () => ({ ${name}: ... })).`,
+    + `provide the surface you need via vi.mock('electron', () => ({ ... })).`,
   )
 }
 
-export const app = new Proxy({}, { get: (_t, key) => unmocked(`app.${String(key)}`) })
-export const shell = new Proxy({}, { get: (_t, key) => unmocked(`shell.${String(key)}`) })
-export const ipcMain = new Proxy({}, { get: (_t, key) => unmocked(`ipcMain.${String(key)}`) })
-export const ipcRenderer = new Proxy({}, { get: (_t, key) => unmocked(`ipcRenderer.${String(key)}`) })
-export const clipboard = new Proxy({}, { get: (_t, key) => unmocked(`clipboard.${String(key)}`) })
-export const nativeImage = new Proxy({}, { get: (_t, key) => unmocked(`nativeImage.${String(key)}`) })
-export const screen = new Proxy({}, { get: (_t, key) => unmocked(`screen.${String(key)}`) })
-export const dialog = new Proxy({}, { get: (_t, key) => unmocked(`dialog.${String(key)}`) })
-export const globalShortcut = new Proxy({}, { get: (_t, key) => unmocked(`globalShortcut.${String(key)}`) })
+function namespace(name: string): any {
+  return new Proxy({}, { get: (_target, key) => unmocked(`${name}.${String(key)}`) })
+}
 
-export class BrowserWindow {
-  constructor() {
-    unmocked('BrowserWindow')
+function constructible(name: string): any {
+  return class {
+    constructor() {
+      unmocked(`new ${name}()`)
+    }
+
+    static [Symbol.hasInstance](): boolean {
+      return false
+    }
   }
 }
 
-export class Notification {
-  constructor() {
-    unmocked('Notification')
-  }
-}
+export const app = namespace('app')
+export const clipboard = namespace('clipboard')
+export const crashReporter = namespace('crashReporter')
+export const dialog = namespace('dialog')
+export const globalShortcut = namespace('globalShortcut')
+export const ipcMain = namespace('ipcMain')
+export const ipcRenderer = namespace('ipcRenderer')
+export const nativeImage = namespace('nativeImage')
+export const nativeTheme = namespace('nativeTheme')
+export const net = namespace('net')
+export const powerMonitor = namespace('powerMonitor')
+export const powerSaveBlocker = namespace('powerSaveBlocker')
+export const protocol = namespace('protocol')
+export const screen = namespace('screen')
+export const session = namespace('session')
+export const shell = namespace('shell')
+export const systemPreferences = namespace('systemPreferences')
+export const utilityProcess = namespace('utilityProcess')
+export const webContents = namespace('webContents')
 
-export class Tray {
-  constructor() {
-    unmocked('Tray')
-  }
-}
+export const BrowserWindow = constructible('BrowserWindow')
+export const Menu = constructible('Menu')
+export const MessageChannelMain = constructible('MessageChannelMain')
+export const MessagePortMain = constructible('MessagePortMain')
+export const Notification = constructible('Notification')
+export const Tray = constructible('Tray')
+export const WebContentsView = constructible('WebContentsView')
 
-export class Menu {
-  constructor() {
-    unmocked('Menu')
-  }
+export default {
+  app,
+  clipboard,
+  crashReporter,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  ipcRenderer,
+  nativeImage,
+  nativeTheme,
+  net,
+  powerMonitor,
+  powerSaveBlocker,
+  protocol,
+  screen,
+  session,
+  shell,
+  systemPreferences,
+  utilityProcess,
+  webContents,
+  BrowserWindow,
+  Menu,
+  MessageChannelMain,
+  MessagePortMain,
+  Notification,
+  Tray,
+  WebContentsView,
 }
-
-export default { app, shell, ipcMain, ipcRenderer, clipboard, nativeImage, screen, dialog, globalShortcut, BrowserWindow, Notification, Tray, Menu }
