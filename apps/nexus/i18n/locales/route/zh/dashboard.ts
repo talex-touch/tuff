@@ -774,6 +774,7 @@ export default {
         },
       },
       menu: {
+        risk: '风控控制面',
         title: '工作区导航',
         workspaceTitle: '工作台',
         accountTitle: '账户',
@@ -1417,6 +1418,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
       },
       team: {
         title: '团队管理',
+        currentTeam: '当前团队',
         currentPlan: '当前套餐',
         activate: '激活',
         activationButton: '激活',
