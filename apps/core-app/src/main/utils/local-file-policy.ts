@@ -1,4 +1,5 @@
 import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'
 import { normalizeAbsolutePath, resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
@@ -13,6 +14,39 @@ function appPathSafe(name: AppPathName): string {
   }
 }
 
+/**
+ * The directories under the user's home that local-file access legitimately needs.
+ *
+ * This list used to be `app.getPath('home')` — the whole home directory. The tfile: protocol
+ * is registered on the default session and whitelisted in the renderer CSP, so any renderer
+ * script could read ~/.ssh/id_rsa, ~/.aws/credentials or a browser cookie database through it
+ * and exfiltrate the result (#914).
+ *
+ * Everything here is a scan root the app already uses to find installed applications and
+ * their icons, taken from app-scanner's WATCH_PATHS and the Steam provider. Nothing else
+ * under home was ever needed: userData and temp are separate roots below, and they stay.
+ */
+function getAllowedHomeSubRoots(): string[] {
+  const home = appPathSafe('home')
+  if (!home) {
+    return []
+  }
+
+  if (process.platform === 'darwin') {
+    return [path.join(home, 'Applications')]
+  }
+
+  if (process.platform === 'win32') {
+    return [
+      path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+      path.join(home, 'AppData', 'Local', 'Programs'),
+      path.join(home, 'AppData', 'Local', 'Steam')
+    ]
+  }
+
+  return [path.join(home, '.local', 'share', 'applications')]
+}
+
 export function getAllowedLocalFileRoots(options: { includeCwd?: boolean } = {}): string[] {
   const winRoots =
     process.platform === 'win32'
@@ -24,7 +58,7 @@ export function getAllowedLocalFileRoots(options: { includeCwd?: boolean } = {})
 
   const candidates = [
     options.includeCwd ? process.cwd() : null,
-    appPathSafe('home'),
+    ...getAllowedHomeSubRoots(),
     appPathSafe('userData'),
     appPathSafe('temp'),
     os.tmpdir(),
