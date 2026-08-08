@@ -1048,9 +1048,6 @@ importers:
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../utils
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260702.1
@@ -1070,6 +1067,9 @@ importers:
       vitest:
         specifier: ^3.2.7
         version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
 
   packages/tuff-native:
     dependencies:

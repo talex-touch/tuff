@@ -57,8 +57,7 @@
   "dependencies": {
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "catalog:",
-    "@talex-touch/utils": "workspace:*",
-    "zod": "3.25.76"
+    "@talex-touch/utils": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
@@ -66,7 +65,8 @@
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "zod": "3.25.76"
   },
   "publishConfig": {
     "access": "public"
