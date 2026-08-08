@@ -50,6 +50,7 @@ jobs:
           libclang-dev
           libdbus-1-dev
           libegl-dev
+          libgbm-dev
           libpipewire-0.3-dev
           libwayland-dev
           libxcb1-dev
