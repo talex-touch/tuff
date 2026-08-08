@@ -70,8 +70,33 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **OCR** ([modules/ocr/](apps/core-app/src/main/modules/ocr/)): Native OCR via @talex-touch/tuff-native (Apple Vision / Windows OCR) with AI-provider fallback
 - **Clipboard** ([modules/clipboard/](apps/core-app/src/main/modules/clipboard/)): System clipboard operations
 
-**Module Loading Order** (sequential after Electron ready):
-1. DatabaseModule → 2. StorageModule → 3. ShortcutModule → 4. ExtensionLoaderModule → 5. CommonChannelModule → 6. PluginModule → 7. PluginLogModule → 8. CoreBoxModule → 9. TrayHolderModule → 10. AddonOpenerModule → 11. ClipboardModule → 12. TuffDashboardModule → 13. FileSystemWatcher → 14. FileProtocolModule → 15. TerminalModule
+**Module Loading Order:** startup is not one flat sequence. `main/index.ts` loads three groups
+through `loadStartupModules` (`main/core/startup-module-loader.ts`):
+
+- **Foreground** (`foregroundModulesToLoad`, `index.ts:171`) — 38 modules loaded in array order
+  before the renderer is released. The order encodes real dependencies, and two of them carry a
+  comment saying so: `permissionModule` must precede `pluginModule`, and `flowBusModule` must
+  follow it.
+
+  databaseModule → conversationModule → toolGatewayModule → storageModule → fileProtocolModule →
+  shortcutModule → commonChannelModule → trayManagerModule → nativeCapabilitiesModule →
+  networkModule → catalogModule → analyticsModule → platformPermissionModule → permissionModule →
+  screenshotSessionModule → notificationModule → quickOpsModule → sentryModule →
+  buildVerificationModule → updateServiceModule → systemUpdateModule → intelligenceModule →
+  voiceModule → pluginModule → pluginLogModule → authModule → syncModule → flowBusModule →
+  divisionBoxModule → coreBoxModule → omniPanelModule → assistantModule → addonOpenerModule →
+  clipboardModule → privacyLifecycleModule → tuffDashboardModule → terminalModule →
+  downloadCenterModule
+
+- **Deferred** (`deferredModulesToLoad`, `index.ts:212`) — loaded after the window is up:
+  `extensionLoaderModule`, `FileSystemWatcher`.
+
+- **Optional** (`optionalModulesToLoad`, `index.ts:215`) — `trayManagerModule`. It is also in the
+  foreground list; membership here means a load failure is logged and startup continues rather
+  than aborting.
+
+Read the arrays rather than this list when the order matters — it is the kind of thing that
+drifts silently.
 
 **Renderer Process (src/renderer/):**
 - Vue 3 application with TypeScript
