@@ -678,8 +678,12 @@ const pluginLifecycle = {
       await plugin.feature.pushItems(items)
       return true
     }
-    catch {
-      logger?.error?.('[touch-browser-bookmarks] Failed to handle feature')
+    catch (error) {
+      // Carry the error. This catch turns any fault in the feature handler into a
+      // generic '浏览器收藏加载失败' item, so a message-only log leaves the user with
+      // a failure and nobody with a cause -- including whoever is looking at a test
+      // run, where every distinct fault in here presents as the same fallback item.
+      logger?.error?.('[touch-browser-bookmarks] Failed to handle feature', error)
       try {
         await plugin.feature.clearItems()
         await plugin.feature.pushItems([
