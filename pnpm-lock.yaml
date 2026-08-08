@@ -1458,12 +1458,6 @@ importers:
       wavesurfer.js:
         specifier: ^7.12.10
         version: 7.12.10
-      xterm:
-        specifier: ^5.3.0
-        version: 5.3.0
-      xterm-addon-fit:
-        specifier: ^0.8.0
-        version: 0.8.0(xterm@5.3.0)
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.7
