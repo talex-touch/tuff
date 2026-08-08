@@ -20,6 +20,16 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn()
 }))
 
+// plugin-log.service imports `shell` at module scope. Without this the suite loads the real
+// electron entry point, which throws outside a packaged Electron install and reports as
+// "Tests: no tests" rather than a failure — a guard that cannot run.
+vi.mock('electron', () => ({ shell: { openPath: vi.fn(), showItemInFolder: vi.fn() } }))
+
+// plugin-log.service imports `shell` at module scope. Without this the suite loads the real
+// electron entry point, which throws outside a packaged Electron install and reports as
+// "Tests: no tests" rather than a failure — a guard that cannot run.
+vi.mock('electron', () => ({ shell: { openPath: vi.fn(), showItemInFolder: vi.fn() } }))
+
 vi.mock('../modules/plugin/plugin-module', () => ({
   pluginModule: { registerUninstallAuthorityInvalidator: vi.fn(() => vi.fn()) }
 }))
