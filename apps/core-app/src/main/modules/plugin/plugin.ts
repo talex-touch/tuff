@@ -1989,7 +1989,21 @@ export class TouchPlugin implements ITouchPlugin {
 
   private async loadPreludeScript(): Promise<string> {
     const shouldBundlePrelude = this.dev.enable
-    if (this.dev.enable && this.dev.source && this.dev.address) {
+    // A packaged build never fetches its Prelude over the network, whatever the manifest says.
+    //
+    // Three shipped manifests carried dev.enable/source with a localhost address, so an
+    // installed app issued GET http://127.0.0.1:<port>/index.js and executed whatever came
+    // back as the plugin's Prelude — normally nothing is listening and the plugin simply
+    // fails to load, but any unrelated local process on that port owns the plugin (#809,
+    // #810, #811). The manifests are fixed too; this is the guard that makes the next one
+    // harmless, since nothing else on this path consulted isPackaged.
+    if (app.isPackaged && this.dev.enable && this.dev.source && this.dev.address) {
+      this.logger.warn(
+        'Ignoring dev.source in a packaged build; loading the bundled Prelude instead.',
+        { meta: { address: this.dev.address } }
+      )
+    }
+    if (!app.isPackaged && this.dev.enable && this.dev.source && this.dev.address) {
       const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
       this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
       const response = await getNetworkService().request<string>({
