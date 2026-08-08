@@ -261,6 +261,26 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       name: 'tuff_read_file',
       risk: 'read',
       summarize: (args) => `Read ${readStringArg(args, 'path')}`,
+      // Keyed by the resolved path, not by the tool name. Without this the gateway falls back to
+      // `tool.name`, so one approval with 'remember' ticked granted blanket session-wide reads of
+      // anything the user can open -- ssh keys, browser profiles, other people's documents (#643).
+      // Same reasoning as tuff_mcp_call below: a remembered yes should mean yes to the thing that
+      // was shown, not to the tool that showed it.
+      classify: async (args) => {
+        const requested = readStringArg(args, 'path')
+        const resolved = resolveUserPath(requested)
+        return {
+          risk: 'read',
+          summary: `Read ${requested}`,
+          // Unresolvable paths keep the raw input in the key rather than sharing one bucket.
+          // resolveUserPath returns '' (not null) for these, so `??` would not have caught it and
+          // every empty-ish path would have collapsed onto `tuff_read_file:` -- one remembered
+          // yes covering all of them.
+          rememberKey: resolved
+            ? `tuff_read_file:${resolved}`
+            : `tuff_read_file:unresolved:${requested}`
+        }
+      },
       execute: async (args) => {
         const path = resolveUserPath(readStringArg(args, 'path'))
         if (!path) return { output: 'path is required', isError: true }
