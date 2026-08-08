@@ -549,7 +549,7 @@ abstract class BasePluginLoader {
         source: 'manifest.json',
         code: issue.code,
         suggestion:
-          'Declare a searchProvider carrying each push feature\'s featureId, or drop push from the features that should not reach root results.',
+          "Declare a searchProvider carrying each push feature's featureId, or drop push from the features that should not reach root results.",
         meta: { featureIds: issue.featureIds ?? [] },
         timestamp: Date.now()
       })
