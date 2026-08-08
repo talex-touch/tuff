@@ -183,7 +183,11 @@ async function collectDistComponentDirs() {
     dirents
       .filter(dirent => dirent.isDirectory())
       .map(dirent => dirent.name)
-      .filter(name => !['_virtual', 'node_modules', 'packages'].includes(name)),
+      // 'utils' is shared code, not a component -- audit-package-exports.mjs excludes it
+      // from its own component enumeration for the same reason. Counting it here made
+      // every on-demand entry report "reaches unexpected component dirs: utils", which
+      // is true of all of them by design and told nobody anything.
+      .filter(name => !['_virtual', 'node_modules', 'packages', 'utils'].includes(name)),
   )
 }
 
