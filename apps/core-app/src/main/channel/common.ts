@@ -1501,6 +1501,7 @@ export class CommonChannelModule extends BaseModule {
       }),
       ...registerSystemShellHandlers(transport, {
         configRootPath: () => storageModule.filePath,
+        appRootPath: () => touchApp.rootPath,
         logger: log,
         registerSafeHandler
       }),
