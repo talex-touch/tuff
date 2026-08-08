@@ -150,3 +150,96 @@ describe('terminal handler registration', () => {
     expect(permissionIds).toEqual(['system.shell', 'system.shell', 'system.shell'])
   })
 })
+
+/**
+ * A renderer that can actually be torn down (#639).
+ *
+ * The ownership tests above use a plain `{ id, isDestroyed }` stub, which has no emitter API — so
+ * they exercise the tolerant branch of watchSenderTeardown and prove the watcher does not require
+ * one. These need the real shape.
+ */
+function asLiveWindow(id: number) {
+  const listeners = new Map<string, Array<() => void>>()
+  const sender = {
+    id,
+    isDestroyed: () => false,
+    once(event: string, handler: () => void) {
+      listeners.set(event, [...(listeners.get(event) ?? []), handler])
+    },
+    off(event: string, handler: () => void) {
+      listeners.set(
+        event,
+        (listeners.get(event) ?? []).filter((entry) => entry !== handler)
+      )
+    }
+  }
+  return {
+    context: { sender, eventName: 'x' },
+    destroy: () => listeners.get('destroyed')?.forEach((handler) => handler()),
+    listenerCount: () => (listeners.get('destroyed') ?? []).length
+  }
+}
+
+describe('terminal session renderer teardown', () => {
+  let proc: ReturnType<typeof fakeProcess>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    terminal.processes.clear()
+    proc = fakeProcess()
+    spawnSafeMock.mockReturnValue(proc)
+  })
+
+  it('kills the child when the renderer that started it goes away', () => {
+    const window = asLiveWindow(7)
+    const { id } = terminal.create({ command: 'tail' }, window.context as never)
+
+    // Positive control: nothing has killed it yet, so the assertion below is about the teardown
+    // rather than about a process that was already gone.
+    expect(terminal.processes.has(id)).toBe(true)
+    expect(proc.kill).not.toHaveBeenCalled()
+
+    window.destroy()
+
+    expect(proc.kill).toHaveBeenCalledTimes(1)
+    expect(terminal.processes.has(id)).toBe(false)
+  })
+
+  it('detaches the watcher when the process exits on its own', () => {
+    const window = asLiveWindow(7)
+    terminal.create({ command: 'ls' }, window.context as never)
+    expect(window.listenerCount()).toBe(1)
+
+    // The process closing first is the ordinary case; leaving the listener attached would put one
+    // per session on a renderer that stays open all day. fakeProcess records handlers rather than
+    // emitting, so the registered one is invoked directly.
+    const closeHandler = proc.on.mock.calls.find(([event]) => event === 'close')?.[1] as
+      | ((code: number) => void)
+      | undefined
+    expect(closeHandler).toBeTypeOf('function')
+    closeHandler?.(0)
+
+    expect(window.listenerCount()).toBe(0)
+  })
+
+  it('does not kill a session the renderer already replaced', () => {
+    const window = asLiveWindow(7)
+    const { id } = terminal.create({ command: 'ls' }, window.context as never)
+
+    terminal.kill({ id }, window.context as never)
+    expect(proc.kill).toHaveBeenCalledTimes(1)
+
+    // Teardown after an explicit kill must not kill twice, nor touch whatever now owns that id.
+    window.destroy()
+
+    expect(proc.kill).toHaveBeenCalledTimes(1)
+  })
+
+  it('tolerates a sender without the emitter API', () => {
+    // The permission tests drive create() with a bare stub; module-level onDestroy is the backstop
+    // there. This pins that create() does not throw on it.
+    const { id } = terminal.create({ command: 'ls' }, asWindow(9) as never)
+
+    expect(terminal.processes.has(id)).toBe(true)
+  })
+})
