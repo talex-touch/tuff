@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -44,8 +45,28 @@ const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/uti
 const tuffexDistUtilsEntry = useWorkspaceSource
   ? tuffexUtilsEntry
   : resolve(tuffexDistRoot, 'utils/index.js')
-const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
-const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
+const requireFromConfig = createRequire(import.meta.url)
+
+/**
+ * Both aliases deliberately reach past a package's own resolution, and must keep doing so:
+ *
+ * - @panva/hkdf's exports map sends `worker`/`workerd` to dist/web/index.js. The Cloudflare build
+ *   needs the node/cjs build instead (44c406d2a), so resolving the bare specifier here would undo
+ *   that fix rather than tidy it up.
+ * - next-auth v4 does not export ./core at all — the alias exists precisely to reach an internal.
+ *
+ * What they must not do is assume `shamefully-hoist=true` has placed the package at a literal
+ * path. Locating the package through the resolver and joining the subpath keeps the intent while
+ * working under a strict pnpm layout too (#597).
+ */
+const hkdfCompatEntry = resolve(
+  dirname(requireFromConfig.resolve('@panva/hkdf/package.json')),
+  'dist/node/cjs/index.js',
+)
+const nextAuthCoreEntry = resolve(
+  dirname(requireFromConfig.resolve('next-auth')),
+  'core/index.js',
+)
 const vueDevtoolsApiNoopEntry = resolve(currentDir, 'app/utils/vue-devtools-api-noop.ts')
 const isProd = process.env.NODE_ENV === 'production'
 const useVueDevtoolsApiNoop = isDev && process.env.NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP !== 'true'

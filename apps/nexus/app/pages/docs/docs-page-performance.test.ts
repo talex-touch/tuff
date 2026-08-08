@@ -184,7 +184,13 @@ describe('docs page performance boundaries', () => {
     expect.soft(nuxtConfig).toContain("'@sidebase/nuxt-auth'")
     expect.soft(nuxtConfig).toContain("baseURL: '/api/auth'")
     expect.soft(nuxtConfig).toContain("type: 'authjs'")
-    expect.soft(nuxtConfig).toContain("const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')")
+    // Matched by shape rather than by the exact line: what this guards is that the alias still
+    // targets next-auth's internal core/index.js, not how the path is derived. It used to pin the
+    // literal `resolve(currentDir, 'node_modules/...')`, which made #597 — locating the package
+    // through the resolver instead of assuming shamefully-hoist — read as a regression.
+    expect.soft(nuxtConfig).toMatch(
+      /const nextAuthCoreEntry = resolve\([\s\S]*?next-auth[\s\S]*?core\/index\.js/,
+    )
     expect.soft(nuxtConfig).toMatch(/alias: \{[\s\S]*'next-auth\/core': nextAuthCoreEntry/)
     expect.soft(packageJson).toContain('"#auth": "./node_modules/@sidebase/nuxt-auth/dist/runtime/server/services/index.js"')
     expect.soft(authApi).toContain('const createRequestAuthEvent = () => createAuthEvent()')
