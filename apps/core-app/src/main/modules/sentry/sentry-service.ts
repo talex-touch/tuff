@@ -194,6 +194,8 @@ export class SentryServiceModule extends BaseModule {
   private unresponsiveAt = new Map<number, number>()
   private unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
   private windowPerfListenersReady = false
+  /** Undo for everything ensureWindowPerformanceListeners attaches; drained with the latch. */
+  private windowPerfDisposers: Array<() => void> = []
   private readonly pollingService = PollingService.getInstance()
 
   private preInitAttempted = false
@@ -619,8 +621,34 @@ export class SentryServiceModule extends BaseModule {
       }
       this.eventLoopDelay = undefined
     }
+    this.detachWindowPerformanceListeners()
     this.unresponsiveAt.clear()
     this.unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
+  }
+
+  /**
+   * Remove the window listeners and clear the latch together.
+   *
+   * The two used to drift: teardown left both in place, so a re-init early-returned out of
+   * ensureWindowPerformanceListeners and never re-ran its `getAllWindows()` loop. Windows that
+   * already existed stopped being watched while the leaked app-level listener kept attaching
+   * three more handlers to every new one (#534).
+   *
+   * Lives here rather than in onDestroy because startPerformanceMonitors is what attaches, and
+   * this is its partner — which also covers disabling telemetry through config, where the
+   * listeners previously stayed attached for the rest of the process.
+   */
+  private detachWindowPerformanceListeners(): void {
+    for (const dispose of this.windowPerfDisposers.splice(0)) {
+      try {
+        dispose()
+      } catch {
+        sentryLog.debug('Failed to detach a window performance listener', {
+          meta: { code: 'SENTRY_PERF_LISTENER_DETACH_FAILED' }
+        })
+      }
+    }
+    this.windowPerfListenersReady = false
   }
 
   private ensureWindowPerformanceListeners(): void {
@@ -630,11 +658,11 @@ export class SentryServiceModule extends BaseModule {
     const attach = (win: BrowserWindow) => {
       const wcId = win.webContents.id
 
-      win.on('unresponsive', () => {
+      const onUnresponsive = (): void => {
         this.unresponsiveAt.set(wcId, Date.now())
-      })
+      }
 
-      win.on('responsive', () => {
+      const onResponsive = (): void => {
         const startedAt = this.unresponsiveAt.get(wcId)
         if (!startedAt) return
         this.unresponsiveAt.delete(wcId)
@@ -642,16 +670,31 @@ export class SentryServiceModule extends BaseModule {
         this.unresponsiveStats.count += 1
         this.unresponsiveStats.totalMs += durationMs
         this.unresponsiveStats.maxMs = Math.max(this.unresponsiveStats.maxMs, durationMs)
-      })
+      }
 
-      win.on('closed', () => {
+      const onClosed = (): void => {
         this.unresponsiveAt.delete(wcId)
+      }
+
+      win.on('unresponsive', onUnresponsive)
+      win.on('responsive', onResponsive)
+      win.on('closed', onClosed)
+
+      this.windowPerfDisposers.push(() => {
+        // A window that has already closed is destroyed, and removing listeners from it throws.
+        if (win.isDestroyed?.()) return
+        win.off('unresponsive', onUnresponsive)
+        win.off('responsive', onResponsive)
+        win.off('closed', onClosed)
       })
     }
 
-    app.on('browser-window-created', (_event, win) => {
+    const onWindowCreated = (_event: unknown, win: BrowserWindow): void => {
       attach(win)
-    })
+    }
+
+    app.on('browser-window-created', onWindowCreated)
+    this.windowPerfDisposers.push(() => app.off('browser-window-created', onWindowCreated))
 
     for (const win of BrowserWindow.getAllWindows()) {
       attach(win)
