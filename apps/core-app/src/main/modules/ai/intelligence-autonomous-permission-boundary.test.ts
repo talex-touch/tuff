@@ -42,7 +42,7 @@ vi.mock('./ai-cli-orchestrator', () => ({
 }))
 // Spread the real module: a full replacement drops every export the module later
 // gains, which is how PRIVACY_DATA_CATEGORIES broke this suite.
-vi.mock('@talex-touch/utils/transport/events/types', async importOriginal => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))

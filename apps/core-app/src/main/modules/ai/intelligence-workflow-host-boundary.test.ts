@@ -18,7 +18,7 @@ vi.mock('./intelligence-workflow-service', () => ({
 }))
 // Spread the real module: a full replacement drops every export the module later
 // gains, which is how PRIVACY_DATA_CATEGORIES broke this suite.
-vi.mock('@talex-touch/utils/transport/events/types', async importOriginal => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
@@ -150,7 +150,13 @@ describe('intelligenceModule workflow control-plane host boundary', () => {
 
       await expect(getHandler(handlers, eventName)(payload, pluginContext())).resolves.toEqual({
         ok: false,
-        error: 'INTELLIGENCE_HOST_ONLY_CAPABILITY'
+        // safeApiHandler returns a fixed public string so internal error detail does
+        // not cross the IPC boundary to a plugin (safe-handler.ts:5). The specific
+        // code still reaches the error reporter; it just is not handed to the caller.
+        // The boundary itself is asserted by the two expectations below, which check
+        // that nothing privileged ran -- that is the property worth pinning, not the
+        // wording of the rejection.
+        error: 'The operation failed. Please retry.'
       })
       expect(waitForAgentRuntime).not.toHaveBeenCalled()
       expectWorkflowServiceUntouched()

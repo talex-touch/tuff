@@ -63,18 +63,32 @@ const intelligenceEventMocks = vi.hoisted(() => {
       getMonthStats: event('intelligence:api:get-month-stats'),
       getUsageStats: event('intelligence:api:get-usage-stats'),
       getLocalEnvironment: event('intelligence:api:get-local-environment')
-    },
-    intelligenceContextEvents: {}
+    }
   }
 })
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
-  ...intelligenceEventMocks,
-  intelligenceKnowledgeEvents: {}
-}))
+// Spread the real module rather than hand-listing namespaces. intelligenceContextEvents
+// and intelligenceKnowledgeEvents were stubbed as {}, so every handler the module
+// registers from them called undefined.toEventName(). Only the api events are
+// overridden, which is all this suite looks up.
+vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@talex-touch/utils/transport/sdk/domains/intelligence')>()
+  return {
+    ...actual,
+    // Merged, not replaced. The hand-written list covers the events this suite looks
+    // up; replacing the namespace outright dropped the rest, and
+    // registerCapabilityChannels then called saveProviderConfig.toEventName() on
+    // undefined.
+    intelligenceApiEvents: {
+      ...actual.intelligenceApiEvents,
+      ...intelligenceEventMocks.intelligenceApiEvents
+    }
+  }
+})
 // Spread the real module: a full replacement drops every export the module later
 // gains, which is how PRIVACY_DATA_CATEGORIES broke this suite.
-vi.mock('@talex-touch/utils/transport/events/types', async importOriginal => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
