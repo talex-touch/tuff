@@ -2817,6 +2817,79 @@ export async function setDeviceTrusted(event: H3Event, userId: string, deviceId:
   return getDevice(event, userId, deviceId)
 }
 
+/** Failed password attempts tolerated per account, then per IP, inside the window. */
+const PASSWORD_SIGNIN_WINDOW_MS = 15 * 60 * 1000
+const PASSWORD_SIGNIN_MAX_BY_USER = 10
+const PASSWORD_SIGNIN_MAX_BY_IP = 30
+
+export interface PasswordSignInRateLimitDecision {
+  allowed: boolean
+  scope?: 'user' | 'ip'
+  retryAfterMs?: number
+}
+
+async function countRecentLoginFailures(
+  db: D1Database,
+  whereSql: string,
+  params: Array<string | number | null>,
+): Promise<number> {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM ${LOGIN_HISTORY_TABLE}
+    WHERE success = 0 AND ${whereSql}
+  `).bind(...params).first<{ total?: number | string }>()
+  return toSafeInteger(row?.total)
+}
+
+/**
+ * Bounds password guessing.
+ *
+ * Every failure was already written to the login history and never read back, so the attempt
+ * budget was unbounded: a loop against the credentials callback with one victim email and a
+ * password list ran until it succeeded (#897). PBKDF2 at 210k iterations raises the cost of
+ * each guess; it does not limit how many there are.
+ *
+ * Counted per account and per IP because neither alone is enough. A userId is only known when
+ * the email matches an active account, so per-user counting misses guessing against addresses
+ * that do not exist — and per-IP counting alone would let a distributed attempt through while
+ * one shared NAT locked out innocent users. Only failures count, so signing in successfully
+ * never spends anyone's budget.
+ */
+export async function evaluatePasswordSignInRateLimit(event: H3Event, payload: {
+  userId?: string | null
+}): Promise<PasswordSignInRateLimitDecision> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const since = new Date(Date.now() - PASSWORD_SIGNIN_WINDOW_MS).toISOString()
+  const ip = getRequestIp(event)
+
+  const checks: Array<{ scope: 'user' | 'ip', limit: number, whereSql: string, params: Array<string | number | null> }> = []
+  if (payload.userId) {
+    checks.push({
+      scope: 'user',
+      limit: PASSWORD_SIGNIN_MAX_BY_USER,
+      whereSql: 'user_id = ? AND created_at >= ?',
+      params: [payload.userId, since],
+    })
+  }
+  if (ip) {
+    checks.push({
+      scope: 'ip',
+      limit: PASSWORD_SIGNIN_MAX_BY_IP,
+      whereSql: 'ip = ? AND created_at >= ?',
+      params: [ip, since],
+    })
+  }
+
+  for (const check of checks) {
+    const count = await countRecentLoginFailures(db, check.whereSql, check.params)
+    if (count >= check.limit)
+      return { allowed: false, scope: check.scope, retryAfterMs: PASSWORD_SIGNIN_WINDOW_MS }
+  }
+
+  return { allowed: true }
+}
+
 export async function logLoginAttempt(event: H3Event, payload: {
   userId?: string | null
   deviceId?: string | null
