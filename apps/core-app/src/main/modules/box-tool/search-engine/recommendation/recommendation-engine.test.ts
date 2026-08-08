@@ -1,4 +1,4 @@
-import { ContextProvider, type ContextSignal } from './context-provider'
+import { ContextProvider, type ContextSignal, hashContextContent } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const intelligenceSdkMock = vi.hoisted(() => ({
@@ -68,6 +68,16 @@ vi.mock('../../../ai/intelligence-sdk', () => ({
     rag: {
       rerank: intelligenceSdkMock.ragRerank
     }
+  }
+}))
+
+// The engine re-reads the clipboard when building the URL candidate, and only trusts it if the
+// content still hashes to the digest carried on the context (#648).
+const clipboardLatest = vi.hoisted(() => ({ current: null as { content: string } | null }))
+
+vi.mock('../../../clipboard', () => ({
+  clipboardModule: {
+    getLatestItem: () => clipboardLatest.current
   }
 }))
 
@@ -1327,17 +1337,21 @@ describe('RecommendationEngine', () => {
   it('never serves a clipboard URL action from the cache after the clipboard changed', async () => {
     const dbUtils = createDbUtils()
     const engine = new RecommendationEngine(dbUtils as never)
-    const clipboardContext = (marker: string): ContextSignal => ({
+    // `content` carries the privacy digest, not the URL — that is what #648 was about. The engine
+    // re-reads the clipboard and matches on this digest, so the fixture has to hash too.
+    const clipboardContext = (url: string): ContextSignal => ({
       ...morningContext,
       clipboard: {
         type: 'text',
-        content: marker,
+        content: hashContextContent(url),
         timestamp: Date.now(),
         contentType: 'url',
         meta: { isUrl: true }
       }
     })
-    const contexts = [clipboardContext('first-url'), clipboardContext('second-url')]
+    const first = 'https://example.com/first'
+    const second = 'https://example.com/second'
+    const contexts = [clipboardContext(first), clipboardContext(second)]
 
     Object.assign(engine as unknown as Record<string, unknown>, {
       contextProvider: {
@@ -1365,12 +1379,76 @@ describe('RecommendationEngine', () => {
       getPluginCandidates: vi.fn(async () => [])
     })
 
+    clipboardLatest.current = { content: first }
     await engine.recommend({ limit: 5 })
+
+    clipboardLatest.current = { content: second }
     const cached = await engine.recommend({ limit: 5 })
 
     expect(cached.fromCache).toBe(true)
     const urlActions = cached.items.filter((item) => item.id.startsWith('clipboard-url-open:'))
-    expect(urlActions.map((item) => item.id)).toEqual(['clipboard-url-open:second-url'])
+    expect(urlActions.map((item) => item.id)).toEqual([`clipboard-url-open:${second}`])
+  })
+
+  it('carries the real URL, not the privacy digest, into the open-url card', async () => {
+    // #648: ContextSignal.clipboard.content is a sha256 prefix. Building the card from it gave a
+    // '打开 URL' entry whose subtitle, id and open-url payload were all '9f2c1a4b8e7d3f01'.
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const url = 'https://github.com/talex-touch/talex-touch'
+    const digest = hashContextContent(url)
+
+    expect(digest).not.toBe(url)
+
+    clipboardLatest.current = { content: url }
+
+    const candidates = await (
+      engine as unknown as {
+        getClipboardUrlCandidates: (
+          context: ContextSignal
+        ) => Promise<Array<{ pluginCandidate?: { data?: { url?: string }; subtitle?: string } }>>
+      }
+    ).getClipboardUrlCandidates({
+      ...morningContext,
+      clipboard: {
+        type: 'text',
+        content: digest,
+        timestamp: Date.now(),
+        contentType: 'url',
+        meta: { isUrl: true }
+      }
+    })
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]?.pluginCandidate?.data?.url).toBe(url)
+    expect(candidates[0]?.pluginCandidate?.subtitle).toContain('github.com')
+    expect(JSON.stringify(candidates[0])).not.toContain(digest)
+  })
+
+  it('produces no card when the clipboard no longer matches the context', async () => {
+    // The race the digest check exists for: between the snapshot and the rebuild the user copied
+    // something else. Opening that instead would be worse than showing nothing.
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    clipboardLatest.current = { content: 'https://example.com/something-else' }
+
+    const candidates = await (
+      engine as unknown as {
+        getClipboardUrlCandidates: (context: ContextSignal) => Promise<unknown[]>
+      }
+    ).getClipboardUrlCandidates({
+      ...morningContext,
+      clipboard: {
+        type: 'text',
+        content: hashContextContent('https://example.com/original'),
+        timestamp: Date.now(),
+        contentType: 'url',
+        meta: { isUrl: true }
+      }
+    })
+
+    expect(candidates).toEqual([])
   })
 
   it('recommends catalog apps on a cold start with no usage history', async () => {
