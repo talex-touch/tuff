@@ -19,6 +19,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { and, desc, eq, inArray, lt } from 'drizzle-orm'
 import { app, shell } from 'electron'
+import { evaluateDownloadTarget } from '../../utils/download-target-policy'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -309,7 +310,23 @@ export class DownloadCenterModule extends BaseModule {
     const taskId = request.id || randomUUID()
     const now = new Date()
     // Callers that do not care where the file lands get the configured download folder.
-    const destination = request.destination || this.config.storage.defaultDestination
+    const requestedDestination = request.destination || this.config.storage.defaultDestination
+    const requestedFilename = request.filename || path.basename(request.url)
+
+    // Both fields arrive over IPC, and transport.on registers on the plugin channel, so
+    // without this a plugin could write an attacker's HTTP response into
+    // ~/Library/LaunchAgents or the Windows Startup folder — arbitrary file write dressed up
+    // as a download (#905). Checked together because a `../../..` filename defeats a fixed
+    // destination just as effectively as a hostile destination does.
+    const target = evaluateDownloadTarget(requestedDestination, requestedFilename)
+    if (!target.allowed) {
+      downloadCenterLog.warn('Rejected download task target', {
+        meta: { reason: target.reason, module: request.module }
+      })
+      throw new Error(`Download target rejected: ${target.reason}`)
+    }
+
+    const destination = target.destination
 
     // 计算优先级
     const priority = this.priorityCalculator.calculatePriority(request)
@@ -319,7 +336,7 @@ export class DownloadCenterModule extends BaseModule {
       id: taskId,
       url: request.url,
       destination,
-      filename: request.filename || path.basename(request.url),
+      filename: target.filename,
       priority,
       module: request.module,
       status: DownloadStatus.PENDING,
