@@ -241,20 +241,30 @@ The application uses a custom channel system abstracting Electron IPC:
 - `ChannelType.MAIN`: Main process ↔ renderer communication
 - `ChannelType.PLUGIN`: Plugin-specific isolated communication
 
-**Key APIs:**
+**Key APIs** (`main/core/channel-core.ts`, class `TouchChannel`):
 ```typescript
 // Register handlers
-regChannel(type: ChannelType, eventName: string, callback): () => void
+regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void
 
-// Send messages
-send(eventName: string, arg?: any): Promise<any>
-sendTo(window: BrowserWindow, eventName: string, arg?: any): Promise<any>
-sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+// Send messages -- note every one of these takes ChannelType, including sendTo
+send(type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
+sendTo(win: BrowserWindow, type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
+sendPlugin(pluginName: string, eventName: string, arg?: unknown): Promise<unknown>
 
 // Key management (encryption for plugin isolation)
-requestKey(name: string): string
+requestKey(name: string, activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>): string
 revokeKey(key: string): boolean
 ```
+
+> **This is the legacy surface.** New main-process code uses the TuffTransport SDK
+> (`@talex-touch/utils/transport`), not `TouchChannel`. Outside `channel-core.ts` and its tests,
+> `regChannel` and `sendPlugin` have no call sites at all, and `requestKey` is only reached
+> through `plugin-channel-key-registry`. What main-process modules actually call is
+> `transport.sendTo(webContents, event, payload)` -- a different method on a different object,
+> taking a typed event rather than a `ChannelType` plus a string.
+>
+> The signatures above drifted from the code precisely because nothing calls them; check
+> `channel-core.ts` before relying on this block.
 
 **Implementation Notes:**
 - Uses IPC listeners on `@main-process-message` and `@plugin-process-message`
