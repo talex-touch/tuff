@@ -122,7 +122,7 @@ import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
 import { TalexTouch } from '../types'
-import { setLocale } from '../utils/i18n-helper'
+import { setLocale, t } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
@@ -1071,7 +1071,6 @@ export class CommonChannelModule extends BaseModule {
       const protocol = parsed.protocol.replace(':', '')
 
       if (shouldSkipPromptProtocols.has(protocol)) return 'skip'
-      if (protocol === 'file') return 'open'
 
       if ((protocol === 'http' || protocol === 'https') && isLocalhostUrl(url)) {
         if (isFrontendLocalUrl(parsed)) {
@@ -1083,11 +1082,55 @@ export class CommonChannelModule extends BaseModule {
       return 'confirm'
     }
 
+    /**
+     * Asks before handing a URL to the OS.
+     *
+     * `will-navigate` on every TouchWindow forwards each blocked navigation here, so this
+     * receives renderer-controlled input. `shell.openExternal` on such a URL launches whatever
+     * the OS has registered for it — for `file:` that is an arbitrary local file, executable
+     * included. The 'confirm' decision existed for this and then opened anyway (#910).
+     *
+     * Defaults to cancel, and a dialog that fails to show is treated as a refusal.
+     */
+    const confirmOpen = async (url: string): Promise<boolean> => {
+      const parent = BrowserWindow.getFocusedWindow()
+      // Long URLs are truncated so the dialog cannot be pushed off screen, and the raw string
+      // goes to `detail` rather than `message` so it is never mistaken for app-authored text.
+      const shown = url.length > 320 ? `${url.slice(0, 320)}…` : url
+      const options = {
+        type: 'question' as const,
+        buttons: [t('common.cancel'), t('common.open')],
+        defaultId: 0,
+        cancelId: 0,
+        message: t('common.openExternalConfirm'),
+        detail: shown,
+        noLink: true
+      }
+      try {
+        // Two calls rather than passing `undefined`: the parented overload does not accept it,
+        // and a modal with no owner window is the correct shape when nothing is focused.
+        const { response } = parent
+          ? await dialog.showMessageBox(parent, options)
+          : await dialog.showMessageBox(options)
+        return response === 1
+      } catch (error) {
+        log.warn('open url confirmation failed, refusing', {
+          meta: { url, error: error instanceof Error ? error.message : String(error) }
+        })
+        return false
+      }
+    }
+
     return async (url: string) => {
       const decision = getOpenUrlDecision(url)
       if (decision === 'skip') return
       if (decision === 'open') {
         shell.openExternal(url)
+        return
+      }
+
+      if (!(await confirmOpen(url))) {
+        log.debug('open url refused', { meta: { url, decision } })
         return
       }
 
