@@ -164,6 +164,38 @@ export interface TuffNexusBaseUrlOptions {
   env?: EnvLike
 }
 
+/**
+ * The `dev` settings slice this policy migrates. `authServer` is the retired name for what is
+ * now `runtimeServer`; both may be present on settings written by older builds.
+ */
+export interface TuffNexusRuntimeServerSettings {
+  authServer?: TuffNexusRuntimeServer
+  runtimeServer?: TuffNexusRuntimeServer
+  [key: string]: unknown
+}
+
+/** Anything that is not the string `local` is production -- unknown values must not disable TLS. */
+export function normalizeTuffNexusRuntimeServer(value: unknown): TuffNexusRuntimeServer {
+  return value === 'local' ? 'local' : 'production'
+}
+
+/**
+ * Migrates a `dev` settings object in place and returns the resolved runtime server.
+ *
+ * The main and renderer processes each read and persist these settings differently, but the
+ * policy itself -- prefer runtimeServer, fall back to the retired authServer, default to
+ * production, then drop authServer -- was duplicated in both and had already drifted (#522).
+ * Only the storage plumbing belongs to each process; this does not.
+ */
+export function applyTuffNexusRuntimeServerMigration(
+  dev: TuffNexusRuntimeServerSettings
+): TuffNexusRuntimeServer {
+  const next = dev.runtimeServer ?? dev.authServer ?? 'production'
+  dev.runtimeServer = normalizeTuffNexusRuntimeServer(next)
+  delete dev.authServer
+  return dev.runtimeServer
+}
+
 export function resolveTuffNexusBaseUrl(options: TuffNexusBaseUrlOptions = {}): string {
   const explicit = readEnvValue(options.env, TUFF_NEXUS_BASE_URL_ENV)?.trim()
   if (explicit)

@@ -1,29 +1,24 @@
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils'
 import {
+  applyTuffNexusRuntimeServerMigration,
   NEXUS_BASE_URL,
   type TuffNexusRuntimeServer,
+  type TuffNexusRuntimeServerSettings,
   resolveTuffNexusBaseUrl
 } from '@talex-touch/utils/env'
 import { getMainConfig, saveMainConfig } from '../storage'
 
-type LegacyDevSettings = AppSetting['dev'] & {
-  authServer?: TuffNexusRuntimeServer
-  runtimeServer?: TuffNexusRuntimeServer
-}
-
-function normalizeRuntimeServer(value: unknown): TuffNexusRuntimeServer {
-  return value === 'local' ? 'local' : 'production'
-}
-
+/**
+ * Only the storage plumbing lives here. The migration policy itself is shared with the renderer
+ * copy of this module via @talex-touch/utils/env -- the two had drifted while claiming to decide
+ * the same thing (#522).
+ */
 export function ensureRuntimeServerSettings(appSettings: AppSetting): TuffNexusRuntimeServer {
-  const dev = (appSettings.dev ?? {}) as LegacyDevSettings
-  const current = dev.runtimeServer
-  const next = current ?? dev.authServer ?? 'production'
-  dev.runtimeServer = normalizeRuntimeServer(next)
-  delete dev.authServer
+  const dev = (appSettings.dev ?? {}) as AppSetting['dev'] & TuffNexusRuntimeServerSettings
+  const runtimeServer = applyTuffNexusRuntimeServerMigration(dev)
   appSettings.dev = dev
-  return dev.runtimeServer
+  return runtimeServer
 }
 
 export function getRuntimeServerMode(): TuffNexusRuntimeServer {
