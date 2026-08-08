@@ -554,10 +554,14 @@ export class ItemRebuilder {
 
     for (const item of items) {
       const originalItemId = getMetaString(item, '_originalItemId')
+      // Source-qualified keys are tried before bare ones. scoreMap holds both
+      // spellings, and item_usage_stats still carries two source ids for apps
+      // ('application' and 'app-provider'), so two candidates can share an
+      // itemId; a bare-key hit returns whichever was registered last (#667).
       const scored =
         (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
-        scoreMap.get(item.id) ||
         scoreMap.get(`${item.source.id}:${item.id}`) ||
+        scoreMap.get(item.id) ||
         this.findScoredByPartialMatch(item, scoredItems)
       if (!scored) continue
 

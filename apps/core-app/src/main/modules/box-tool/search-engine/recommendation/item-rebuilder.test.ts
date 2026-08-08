@@ -284,6 +284,73 @@ describe('ItemRebuilder', () => {
     expect(chrome?.scoring?.final).toBe(321)
   })
 
+  it('prefers the candidate whose source matches the item over a bare id collision', async () => {
+    // item_usage_stats still carries both spellings of the app source, so two
+    // candidates can share an itemId and both survive deduplicateCandidates,
+    // which keys on sourceId:itemId. Querying the bare key first returned
+    // whichever happened to be registered last (#667).
+    const dbUtils = {
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Demo.app',
+          name: 'Demo',
+          displayName: 'Demo',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: '/Applications/Demo.app',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Demo' } },
+        actions: [],
+        meta: {}
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    // Same itemId under both source spellings; the 'application' one is
+    // registered last, so it wins the bare key.
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'app-provider',
+        itemId: '/Applications/Demo.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 500
+      },
+      {
+        sourceId: 'application',
+        itemId: '/Applications/Demo.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 42
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+    const demo = result.find((item) => item.id === '/Applications/Demo.app')
+
+    // The rebuilt item's source is 'app-provider', so it must take that score.
+    expect(demo?.scoring?.final).toBe(500)
+  })
+
   it('preserves plugin recommendation icon metadata and class badge icons', async () => {
     const rebuilder = new ItemRebuilder({} as never)
     const scoredItems: ScoredItem[] = [
