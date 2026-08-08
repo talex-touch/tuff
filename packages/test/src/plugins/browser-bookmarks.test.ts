@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const browserBookmarksUrl = new URL('../../../../plugins/touch-browser-bookmarks/index.js', import.meta.url)
-const browserBookmarksPlugin = loadPluginModule(browserBookmarksUrl)
-const { __test: browserBookmarksTest } = browserBookmarksPlugin
 
 class FakeBuilder {
   item: Record<string, unknown>
@@ -64,7 +62,6 @@ describe('browser bookmarks plugin', () => {
   it.todo('collapses duplicate bookmarks by url')
   it.todo('drops expired and duplicate recent entries')
   it.todo('excludes bookmarked urls from the recent display')
-
 
   it('shows network permission diagnostics without prompting', async () => {
     const items: Array<{ title?: string, meta?: Record<string, any>, subtitle?: string }> = []
@@ -196,7 +193,6 @@ describe('browser bookmarks plugin', () => {
     expect(openUrl).not.toHaveBeenCalled()
     expect(result).toBeUndefined()
   })
-
 
   it('renders manual, pinned, recent, and direct quicklinks with compatible source payloads', async () => {
     const items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }> = []
