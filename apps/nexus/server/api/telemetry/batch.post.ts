@@ -1,5 +1,6 @@
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 import { recordTelemetryEvent } from '../../utils/telemetryStore'
+import { resolveTelemetryUserId } from '../../utils/telemetryIdentity'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -10,7 +11,6 @@ export default defineEventHandler(async (event) => {
 
   const events = body.events as Array<{
     eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
-    userId?: string
     clientId?: string
     deviceFingerprint?: string
     platform?: string
@@ -31,6 +31,12 @@ export default defineEventHandler(async (event) => {
 
   await guardTelemetryIp(event, { weight: eventsToProcess.length, action: 'telemetry.batch' })
 
+  // Resolved once for the request, not per event: the credentials belong to the connection,
+  // so a batch cannot attribute different events to different people. A body userId is
+  // ignored here for the same reason as in record.post.ts — this route is unauthenticated,
+  // and at up to 100 events per request it was the cheaper way to fabricate history (#901).
+  const resolvedUserId = await resolveTelemetryUserId(event)
+
   // Process all events (fire and forget for performance)
   const promises = eventsToProcess.map(async (e) => {
     if (!e.eventType || !['search', 'visit', 'error', 'feature_use', 'performance'].includes(e.eventType)) {
@@ -40,7 +46,7 @@ export default defineEventHandler(async (event) => {
     try {
       await recordTelemetryEvent(event, {
         eventType: e.eventType,
-        userId: e.userId || undefined,
+        userId: resolvedUserId || undefined,
         clientId: e.clientId || undefined,
         deviceFingerprint: e.deviceFingerprint || undefined,
         platform: e.platform || undefined,
@@ -52,7 +58,7 @@ export default defineEventHandler(async (event) => {
         providerTimings: e.providerTimings || undefined,
         inputTypes: Array.isArray(e.inputTypes) ? e.inputTypes : undefined,
         metadata: e.metadata || undefined,
-        isAnonymous: e.isAnonymous !== false,
+        isAnonymous: resolvedUserId ? e.isAnonymous !== false : true,
       })
     }
     catch {
