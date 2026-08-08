@@ -1,3 +1,6 @@
+import os from 'node:os'
+import path from 'node:path'
+import process from 'node:process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { registerSystemShellHandlers } from './system-shell-handlers'
@@ -374,5 +377,52 @@ describe('executeCommand path restriction', () => {
 
   it('still rejects an empty command', async () => {
     await expect(executeCommandHandler()({ command: '' })).rejects.toThrow('No command provided')
+  })
+})
+
+/**
+ * The openApp handler's side of the installed-application check (#908).
+ *
+ * evaluateInstalledAppPath is unit-tested next to itself; these two assert the handler
+ * consults it at all, which is the part a refactor can silently drop.
+ */
+describe('openApp target validation', () => {
+  function openAppHandler(): (payload: { appName?: string; path?: string }) => unknown {
+    const { transport, handlers } = createTransport()
+    registerSystemShellHandlers(transport as never, {
+      configRootPath: () => '/tmp/tuff/config',
+      appRootPath: () => '/tmp/tuff',
+      logger: { warn: vi.fn() },
+      registerSafeHandler: (() => vi.fn()) as never
+    })
+    const handler = handlers.get(AppEvents.system.openApp.toEventName())
+    if (!handler) throw new Error('openApp handler was not registered')
+    return handler as (payload: { appName?: string; path?: string }) => unknown
+  }
+
+  beforeEach(() => {
+    shellOpenPathMock.mockClear()
+  })
+
+  it('does not open a file the caller dropped outside the application roots', () => {
+    openAppHandler()({ path: `${os.homedir()}/Library/Caches/payload.command` })
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not open a bare application name', () => {
+    openAppHandler()({ appName: 'Safari' })
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens an installed application', () => {
+    // Platform-specific so the positive control is meaningful wherever CI runs.
+    const app =
+      process.platform === 'darwin'
+        ? '/Applications/Example.app'
+        : process.platform === 'win32'
+          ? path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'x.exe')
+          : '/usr/share/applications/example.desktop'
+    openAppHandler()({ path: app })
+    expect(shellOpenPathMock).toHaveBeenCalledWith(app)
   })
 })

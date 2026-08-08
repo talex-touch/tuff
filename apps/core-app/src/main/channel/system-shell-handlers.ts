@@ -5,6 +5,7 @@ import { shell } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { validateExternalUrl } from '../utils/external-url-policy'
+import { evaluateInstalledAppPath } from '../utils/installed-app-policy'
 import type { LogOptions } from '../utils/logger'
 
 export interface SystemShellCapabilities {
@@ -94,10 +95,18 @@ export function registerSystemShellHandlers(
       shell.showItemInFolder(target)
     }),
     transport.on(AppEvents.system.openApp, (payload) => {
+      // shell.openPath launches by OS association, so this handler was a way for any caller —
+      // transport.on registers on the plugin channel too — to execute a file it had dropped
+      // elsewhere, e.g. through the download handler (#908). The target must now be an
+      // application this machine actually has installed.
       const target = payload?.appName || payload?.path
-      if (target) {
-        void shell.openPath(target)
+      const decision = evaluateInstalledAppPath(target)
+      if (!decision.allowed) {
+        options.logger.warn('Blocked openApp request', { meta: { reason: decision.reason } })
+        return undefined
       }
+
+      void shell.openPath(target as string)
       return undefined
     }),
     transport.on(AppEvents.system.openPromptsFolder, async () => {
