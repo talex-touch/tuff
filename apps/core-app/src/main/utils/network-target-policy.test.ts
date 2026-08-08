@@ -74,7 +74,7 @@ describe('classifyNetworkTarget', () => {
 describe('network module wiring', () => {
   const source = readFileSync(
     fileURLToPath(new URL('../modules/network/network-module.ts', import.meta.url)),
-    'utf8',
+    'utf8'
   )
 
   it('guards request, readText and readBinary', () => {
@@ -94,7 +94,11 @@ describe('network module wiring', () => {
     // The shape they had before: `transport.on(NetworkEvents.api.request, async (request) =>
     // await service.request(request))`.
     expect(source).not.toMatch(/NetworkEvents\.api\.request,\s*async \(request\) =>/)
-    expect(source).not.toMatch(/NetworkEvents\.api\.readText,\s*async \(payload\) => \{\s*return await service/)
-    expect(source).not.toMatch(/NetworkEvents\.api\.readBinary,\s*async \(payload\) => \{\s*return await service/)
+    expect(source).not.toMatch(
+      /NetworkEvents\.api\.readText,\s*async \(payload\) => \{\s*return await service/
+    )
+    expect(source).not.toMatch(
+      /NetworkEvents\.api\.readBinary,\s*async \(payload\) => \{\s*return await service/
+    )
   })
 })
