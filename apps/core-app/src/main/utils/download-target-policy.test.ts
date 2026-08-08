@@ -24,6 +24,17 @@ const ROOTS = [ROOT, DOWNLOADS]
 const check = (destination: string | undefined, filename: string) =>
   evaluateDownloadTarget(destination, filename, ROOTS)
 
+/**
+ * The rejection reason, or undefined when the target was allowed.
+ *
+ * DownloadTargetDecision is a discriminated union, so `reason` only exists on the refusing
+ * branch; narrowing here keeps every assertion below a single readable line.
+ */
+function rejection(destination: string | undefined, filename: string): string | undefined {
+  const decision = check(destination, filename)
+  return decision.allowed ? undefined : decision.reason
+}
+
 describe('evaluateDownloadTarget', () => {
   it('allows a download into an allowed root', () => {
     // Positive control: every rejection below would also pass if this returned false for
@@ -42,51 +53,51 @@ describe('evaluateDownloadTarget', () => {
   })
 
   it('rejects a destination outside every root', () => {
-    expect(check('/Users/victim/Library/LaunchAgents', 'com.evil.plist').reason).toBe(
+    expect(rejection('/Users/victim/Library/LaunchAgents', 'com.evil.plist')).toBe(
       'destination-outside-roots'
     )
   })
 
   it('rejects a traversal that climbs out of a root', () => {
-    expect(check(path.join(ROOT, '..', '..', 'etc'), 'passwd').reason).toBe(
+    expect(rejection(path.join(ROOT, '..', '..', 'etc'), 'passwd')).toBe(
       'destination-outside-roots'
     )
   })
 
   it('rejects a sibling directory sharing a root prefix', () => {
-    expect(check(`${ROOT}-evil`, 'file.zip').reason).toBe('destination-outside-roots')
+    expect(rejection(`${ROOT}-evil`, 'file.zip')).toBe('destination-outside-roots')
   })
 
   it('rejects a relative destination', () => {
-    expect(check('relative/dir', 'file.zip').reason).toBe('destination-not-absolute')
-    expect(check('', 'file.zip').reason).toBe('destination-not-absolute')
-    expect(check(undefined, 'file.zip').reason).toBe('destination-not-absolute')
+    expect(rejection('relative/dir', 'file.zip')).toBe('destination-not-absolute')
+    expect(rejection('', 'file.zip')).toBe('destination-not-absolute')
+    expect(rejection(undefined, 'file.zip')).toBe('destination-not-absolute')
   })
 
   it('rejects a filename that traverses, even into an allowed destination', () => {
     // The half that a destination allowlist alone does not cover.
     for (const filename of ['../evil.sh', '../../Library/LaunchAgents/x.plist', '..'])
-      expect(check(DOWNLOADS, filename).reason, filename).toBe('unsafe-filename')
+      expect(rejection(DOWNLOADS, filename), filename).toBe('unsafe-filename')
   })
 
   it('rejects a filename containing a separator', () => {
     for (const filename of ['sub/evil.sh', 'sub\\evil.sh'])
-      expect(check(DOWNLOADS, filename).reason, filename).toBe('unsafe-filename')
+      expect(rejection(DOWNLOADS, filename), filename).toBe('unsafe-filename')
   })
 
   it('rejects an absolute filename', () => {
-    expect(check(DOWNLOADS, '/etc/passwd').reason).toBe('unsafe-filename')
+    expect(rejection(DOWNLOADS, '/etc/passwd')).toBe('unsafe-filename')
   })
 
   it('rejects an empty or dot filename and one with a null byte', () => {
     for (const filename of ['', '.', 'a\0b'])
-      expect(check(DOWNLOADS, filename).reason, JSON.stringify(filename)).toBe('unsafe-filename')
+      expect(rejection(DOWNLOADS, filename), JSON.stringify(filename)).toBe('unsafe-filename')
   })
 
   it('checks the filename before the destination', () => {
     // Both are hostile here. The filename reason is the more specific one to report, and
     // pinning the order keeps the message stable for whoever reads the log.
-    expect(check('/nowhere', '../evil.sh').reason).toBe('unsafe-filename')
+    expect(rejection('/nowhere', '../evil.sh')).toBe('unsafe-filename')
   })
 })
 
