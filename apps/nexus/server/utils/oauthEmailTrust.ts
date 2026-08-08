@@ -26,3 +26,29 @@ export function oauthEmailProvesMailboxControl(provider: string, profile?: Profi
   // the string "true", 1 and "1" are all shapes an issuer can emit for an unverified state.
   return (profile as { email_verified?: unknown } | undefined)?.email_verified === true
 }
+
+/**
+ * Picks the address to use from GitHub's /user/emails, preferring the verified primary.
+ *
+ * Only entries GitHub reports as `verified: true` are eligible. The selection used to fall
+ * back to any address when no verified one matched, which defeated the point: GitHub returns
+ * addresses a user has merely *added*, so the fallback could yield one the signer never
+ * proved they own (#917). Returning undefined is the correct answer when nothing is
+ * verified — the caller leaves profile.email unset, and a sign-in with no email cannot
+ * resolve to a pre-existing account.
+ */
+export function selectVerifiedGitHubEmail(emails: unknown): string | undefined {
+  if (!Array.isArray(emails)) return undefined
+
+  const usable = (item: unknown): item is { email: string; verified: true; primary?: unknown } => {
+    if (!item || typeof item !== 'object') return false
+    const record = item as { email?: unknown; verified?: unknown }
+    return typeof record.email === 'string' && record.email.length > 0 && record.verified === true
+  }
+
+  const found =
+    emails.find(item => usable(item) && (item as { primary?: unknown }).primary === true) ??
+    emails.find(usable)
+
+  return usable(found) ? found.email : undefined
+}
