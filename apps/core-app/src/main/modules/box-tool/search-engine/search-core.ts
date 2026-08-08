@@ -329,6 +329,7 @@ export class SearchEngineCore
     }
     this.registerProvider(fileProvider)
 
+    PluginFeaturesAdapter.attach(this)
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(previewProvider)
   }
