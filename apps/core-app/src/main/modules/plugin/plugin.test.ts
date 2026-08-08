@@ -134,13 +134,6 @@ vi.mock('@sentry/electron/main', () => {
   }
 })
 
-vi.mock('../../core', () => ({
-  genTouchApp: () => ({
-    channel: {},
-    window: { window: { id: 1 } }
-  })
-}))
-
 const coreBoxManagerMock = vi.hoisted(() => ({
   exitUIMode: vi.fn(),
   getCurrentFeature: vi.fn()
