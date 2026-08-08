@@ -380,27 +380,25 @@ describe('Nexus deploy asset budget', () => {
   })
 
   it('keeps public pricing and password-reset locale contracts complete', () => {
-    const pricingKeys = [
-      'freeTitle',
-      'freePrice',
-      'freeDesc',
-      'freeFeature1',
-      'freeFeature2',
-      'freeFeature3',
-      'plusTitle',
-      'plusPrice',
-      'plusDesc',
-      'plusFeature1',
-      'plusFeature2',
-      'plusFeature3',
-      'teamTitle',
-      'teamPrice',
-      'teamDesc',
-      'teamFeature1',
-      'teamFeature2',
-      'teamFeature3',
-      'cta',
+    // The pricing block was restructured from flat keys (freeTitle / freePrice /
+    // freeFeature1 …) into pricing.plans.<plan>.{name,desc,featureN}, and gained a
+    // fourth plan plus a set of top-level strings. The old flat list matched nothing,
+    // so this asserted an empty contract rather than a complete one. Walking the real
+    // shape also means a new plan cannot be added to one locale and not the other
+    // without failing here.
+    const pricingTopLevelKeys = [
+      'eyebrow',
+      'title',
+      'subtitle',
+      'popular',
+      'comingSoon',
+      'comingSoonHint',
+      'freeHint',
+      'perMonth',
+      'ctaFree',
+      'ctaWaitlist',
     ] as const
+    const pricingPlanKeys = ['name', 'desc', 'feature1', 'feature2', 'feature3', 'feature4'] as const
     const authKeys = [
       'forgotTitle',
       'forgotSubtitle',
@@ -409,11 +407,27 @@ describe('Nexus deploy asset budget', () => {
       'resetEmailSent',
     ] as const
 
-    for (const key of pricingKeys) {
+    for (const key of pricingTopLevelKeys) {
       expect(enLocale.pricing[key]).toBeTruthy()
       expect(enLocale.pricing[key]).not.toMatch(/\p{Script=Han}/u)
       expect(zhLocale.pricing[key]).toBeTruthy()
     }
+
+    expect(Object.keys(zhLocale.pricing.plans)).toEqual(Object.keys(enLocale.pricing.plans))
+
+    for (const plan of Object.keys(enLocale.pricing.plans) as Array<keyof typeof enLocale.pricing.plans>) {
+      for (const key of pricingPlanKeys) {
+        expect(enLocale.pricing.plans[plan][key], `en pricing.plans.${String(plan)}.${key}`).toBeTruthy()
+        expect(enLocale.pricing.plans[plan][key]).not.toMatch(/\p{Script=Han}/u)
+        expect(zhLocale.pricing.plans[plan][key], `zh pricing.plans.${String(plan)}.${key}`).toBeTruthy()
+      }
+    }
+
+    // Only the free plan carries a literal price; the rest are resolved at runtime or
+    // shown as coming soon.
+    expect(enLocale.pricing.plans.free.price).toBeTruthy()
+    expect(zhLocale.pricing.plans.free.price).toBeTruthy()
+
     for (const key of authKeys) {
       expect(enLocale.auth[key]).toBeTruthy()
       expect(enLocale.auth[key]).not.toMatch(/\p{Script=Han}/u)

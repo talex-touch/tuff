@@ -94,8 +94,11 @@ describe('TPEX authoritative security scan admission', () => {
       ruleId: 'PLUGIN_SCAN_DYNAMIC_EXECUTION',
       owner: 'nexus-security',
       reason: 'Approved compatibility exception',
-      createdAt: '2026-07-17T12:00:00.000Z',
-      expiresAt: '2026-07-19T12:00:00.000Z',
+      // Relative to now: pinned to 2026-07-17..19 this waiver expired on 2026-07-19 and
+      // the scan then blocked the package -- correctly. The expiry check working is
+      // what broke the test, so the fixture is the thing to fix, not the check.
+      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }])
 
     expect(metadata.securityScan).toMatchObject({

@@ -109,12 +109,19 @@ describe('/api/v1/intelligence/invoke', () => {
       }),
     )
 
+    // 7faea27bf canonicalised the error codes: intelligenceErrorContract maps the
+    // provider-level CREDITS_EXCEEDED onto QUOTA_EXHAUSTED, together with the two
+    // INTELLIGENCE_PROVIDER_*_QUOTA_EXCEEDED codes, so callers see one code for one
+    // condition instead of three. The provider still raises CREDITS_EXCEEDED -- that is
+    // what is thrown above -- and the boundary translates it.
+    //
+    // 402 is deliberately asserted unchanged: the canonicalisation moved the code, not
+    // the status, so anything switching on the HTTP status is unaffected.
     await expect(invokeHandler(makeEvent())).rejects.toMatchObject({
       statusCode: 402,
-      statusMessage: 'CREDITS_EXCEEDED',
       data: {
-        code: 'CREDITS_EXCEEDED',
-        reason: 'User credits exceeded.',
+        code: 'QUOTA_EXHAUSTED',
+        reason: 'The caller has exhausted its request, token, or cost quota.',
       },
     })
   })

@@ -2630,17 +2630,33 @@ describe('platformGovernanceStore', () => {
     expect(serializedHealth).not.toContain(marker)
   })
 
+  // The analytics window is measured from Date.now() (platformGovernanceStore.ts:3309),
+  // so fixtures pinned to absolute dates silently fall out of it as the calendar moves.
+  // The two retention/queue tests below were pinned to 2026-05-20..22 and began failing
+  // once that was more than 30 days ago -- nothing about the code changed. Anchored to
+  // recent days instead so they stay inside any window they ask for.
+  function recentDay(daysAgo: number) {
+    const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10)
+    return { date, at: (time: string) => `${date}T${time}` }
+  }
+
+  const GOVERNANCE_DAY_1 = recentDay(5)
+  const GOVERNANCE_DAY_2 = recentDay(4)
+  const GOVERNANCE_DAY_3 = recentDay(3)
+
   it('builds anonymized private plugin retention analytics', async () => {
     const marker = crypto.randomUUID()
     const h3Event = event(`plugin-retention-${marker}`)
     const pluginId = `plugin_retention_${marker}`
 
     const records = [
-      ['retention-returning@example.com', 'download', 1, '2026-05-20T09:00:00.000Z'],
-      ['retention-returning@example.com', 'invoke', 2, '2026-05-21T09:00:00.000Z'],
-      ['retention-repeat@example.com', 'invoke', 1, '2026-05-20T10:00:00.000Z'],
-      ['retention-repeat@example.com', 'invoke', 1, '2026-05-22T10:00:00.000Z'],
-      ['retention-new@example.com', 'install', 1, '2026-05-22T11:00:00.000Z'],
+      ['retention-returning@example.com', 'download', 1, GOVERNANCE_DAY_1.at('09:00:00.000Z')],
+      ['retention-returning@example.com', 'invoke', 2, GOVERNANCE_DAY_2.at('09:00:00.000Z')],
+      ['retention-repeat@example.com', 'invoke', 1, GOVERNANCE_DAY_1.at('10:00:00.000Z')],
+      ['retention-repeat@example.com', 'invoke', 1, GOVERNANCE_DAY_3.at('10:00:00.000Z')],
+      ['retention-new@example.com', 'install', 1, GOVERNANCE_DAY_3.at('11:00:00.000Z')],
     ] as const
 
     for (const [actorId, action, quantity, occurredAt] of records) {
@@ -2678,7 +2694,7 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.retention.trend).toEqual([
       expect.objectContaining({
-        date: '2026-05-20',
+        date: GOVERNANCE_DAY_1.date,
         newActors: 2,
         returningActors: 0,
         activeActors: 2,
@@ -2687,7 +2703,7 @@ describe('platformGovernanceStore', () => {
         retentionRate: 0,
       }),
       expect.objectContaining({
-        date: '2026-05-21',
+        date: GOVERNANCE_DAY_2.date,
         newActors: 0,
         returningActors: 1,
         activeActors: 1,
@@ -2696,7 +2712,7 @@ describe('platformGovernanceStore', () => {
         retentionRate: 100,
       }),
       expect.objectContaining({
-        date: '2026-05-22',
+        date: GOVERNANCE_DAY_3.date,
         newActors: 1,
         returningActors: 1,
         activeActors: 2,
@@ -2716,12 +2732,12 @@ describe('platformGovernanceStore', () => {
     const pluginId = `plugin_owner_action_${marker}`
 
     const records = [
-      [`owner-download-${marker}@example.com`, 'download', 80, '2026-05-20T09:00:00.000Z'],
-      [`owner-install-1-${marker}@example.com`, 'install', 1, '2026-05-21T09:00:00.000Z'],
-      [`owner-install-2-${marker}@example.com`, 'install', 1, '2026-05-21T10:00:00.000Z'],
-      [`owner-install-3-${marker}@example.com`, 'install', 1, '2026-05-21T11:00:00.000Z'],
-      [`owner-install-4-${marker}@example.com`, 'install', 1, '2026-05-21T12:00:00.000Z'],
-      [`owner-invoke-${marker}@example.com`, 'invoke', 5, '2026-05-22T09:00:00.000Z'],
+      [`owner-download-${marker}@example.com`, 'download', 80, GOVERNANCE_DAY_1.at('09:00:00.000Z')],
+      [`owner-install-1-${marker}@example.com`, 'install', 1, GOVERNANCE_DAY_2.at('09:00:00.000Z')],
+      [`owner-install-2-${marker}@example.com`, 'install', 1, GOVERNANCE_DAY_2.at('10:00:00.000Z')],
+      [`owner-install-3-${marker}@example.com`, 'install', 1, GOVERNANCE_DAY_2.at('11:00:00.000Z')],
+      [`owner-install-4-${marker}@example.com`, 'install', 1, GOVERNANCE_DAY_2.at('12:00:00.000Z')],
+      [`owner-invoke-${marker}@example.com`, 'invoke', 5, GOVERNANCE_DAY_3.at('09:00:00.000Z')],
     ] as const
 
     for (const [actorId, action, quantity, occurredAt] of records) {
@@ -2762,7 +2778,7 @@ describe('platformGovernanceStore', () => {
         retentionRate: 0,
         topCountryKey: 'us',
         topCountryShare: 100,
-        latestDate: '2026-05-22',
+        latestDate: GOVERNANCE_DAY_3.date,
       }),
       expect.objectContaining({
         key: 'low-install-conversion',

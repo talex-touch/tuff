@@ -26,8 +26,15 @@ describe('/api/app-auth/sign-in-token', () => {
     const result = await handler({ headers: {} })
 
     expect(result).toEqual({ appToken: 'app-token' })
+    // App tokens are now issued long-lived with an explicit grant type
+    // (LONG_TERM_APP_TOKEN_OPTIONS, appAuthToken.ts:5-8). Asserting the whole options
+    // object rather than just deviceId: grantType is the field the sibling test below
+    // relies on to refuse refreshing a short-term token, so silently issuing something
+    // other than 'long' here would defeat that check without failing anything.
     expect(authMocks.createAppToken).toHaveBeenCalledWith(expect.anything(), 'user-1', {
       deviceId: 'device-1',
+      grantType: 'long',
+      ttlSeconds: 30 * 24 * 60 * 60,
     })
   })
 
