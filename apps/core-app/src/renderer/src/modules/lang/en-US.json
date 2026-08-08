@@ -4694,6 +4694,14 @@
     "providerName": "Provider Name",
     "providerNamePlaceholder": "Enter provider name",
     "customCompatible": "Custom (OpenAI Compatible)",
+    "managePrompts": "Manage prompts",
+    "selectPrompt": "Select a prompt",
+    "builtinPrompts": "Built-in prompts",
+    "builtin": "Built-in",
+    "customPrompts": "Custom prompts",
+    "custom": "Custom",
+    "createNewPrompt": "Create new prompt",
+    "promptSelectedHint": "This prompt will be used for the current capability.",
     "compatible": "Compatible",
     "search": {
       "placeholder": "Search providers..."

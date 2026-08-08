@@ -4646,6 +4646,14 @@
     "providerName": "提供商名称",
     "providerNamePlaceholder": "输入提供商名称",
     "customCompatible": "自定义（OpenAI 兼容）",
+    "managePrompts": "管理提示词",
+    "selectPrompt": "选择提示词",
+    "builtinPrompts": "内置提示词",
+    "builtin": "内置",
+    "customPrompts": "自定义提示词",
+    "custom": "自定义",
+    "createNewPrompt": "新建提示词",
+    "promptSelectedHint": "当前能力将使用该提示词。",
     "compatible": "兼容",
     "search": {
       "placeholder": "搜索提供商..."
