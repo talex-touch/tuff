@@ -628,6 +628,36 @@ export default {
     },
     notifications: {
       unreadBadgeLabel: '{count} 条未读通知',
+      title: '通知中心',
+      description: '查看浏览器通知与平台投递记录。',
+      scopeHint: '仅显示当前登录用户的通知。',
+      refresh: '刷新',
+      markAllRead: '全部已读',
+      markRead: '标记已读',
+      unread: '未读',
+      emptyUnread: '暂无未读通知',
+      emptyAll: '暂无通知',
+      markedRead: '通知已标记为已读',
+      markReadFailed: '标记已读失败',
+      allMarkedRead: '所有通知已标记为已读',
+      resourceSystem: 'System',
+      // relativeTime() 会把这些拼在数字后面，所以是后缀并保留前导空格：`${5}${' 分钟前'}`。
+      justNow: '刚刚',
+      minutesAgo: ' 分钟前',
+      hoursAgo: ' 小时前',
+      daysAgo: ' 天前',
+      filters: {
+        unread: '未读',
+        all: '全部',
+      },
+      errors: {
+        unknown: '通知加载失败',
+      },
+      actions: {
+        pluginApproved: '插件审核通过',
+        pluginRejected: '插件审核未通过',
+        pluginPending: '插件审核待处理',
+      },
       browser: {
         permissionGranted: '已允许',
         permissionDenied: '已阻止',
