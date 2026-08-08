@@ -11,7 +11,7 @@ import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -450,7 +450,7 @@ onBeforeUnmount(() => {
     />
   </FlipDialog>
 
-  <TuffDrawer
+  <TxDrawer
     v-model:visible="showPromptDrawer"
     :title="t('settings.intelligence.capabilityPromptSectionTitle')"
   >
@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
       </p>
       <FlatMarkdown v-model="promptValue" :readonly="false" />
     </div>
-  </TuffDrawer>
+  </TxDrawer>
 
   <CapabilityTestDialog
     v-model="showTestDialog"
