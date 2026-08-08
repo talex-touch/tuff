@@ -168,18 +168,9 @@ const mocks = vi.hoisted(() => {
     runtimeDispose: vi.fn(async () => undefined),
     runtimeOptions: null as Record<string, unknown> | null,
     runtimeResolve: vi.fn(),
-    setBrowserDataCapabilityFactory: vi.fn(),
-    setBrowserOpenCapabilityFactory: vi.fn(),
-    setIntelligenceContextCapabilityFactory: vi.fn(),
-    setRuntimeService: vi.fn(),
+    setCapabilities: vi.fn(),
     setSecureStoreValue: vi.fn(),
-    setSnipasteProcessCapabilityFactory: vi.fn(),
-    setSystemActionCapabilityFactory: vi.fn(),
-    setTranslationCapabilityFactory: vi.fn(),
     setTransport: vi.fn(),
-    setWindowManagerCapabilityFactory: vi.fn(),
-    setWindowPresetCapabilityFactory: vi.fn(),
-    setWorkspaceScriptCapabilityFactory: vi.fn(),
     startUpdateScheduler: vi.fn(),
     stopUpdateScheduler: vi.fn(),
     transportOn
@@ -459,16 +450,7 @@ vi.mock('./install-queue', () => ({
 vi.mock('./plugin', () => ({
   TouchPlugin: class {
     static setTransport = mocks.setTransport
-    static setRuntimeService = mocks.setRuntimeService
-    static setSnipasteProcessCapabilityFactory = mocks.setSnipasteProcessCapabilityFactory
-    static setSystemActionCapabilityFactory = mocks.setSystemActionCapabilityFactory
-    static setBrowserOpenCapabilityFactory = mocks.setBrowserOpenCapabilityFactory
-    static setBrowserDataCapabilityFactory = mocks.setBrowserDataCapabilityFactory
-    static setTranslationCapabilityFactory = mocks.setTranslationCapabilityFactory
-    static setIntelligenceContextCapabilityFactory = mocks.setIntelligenceContextCapabilityFactory
-    static setWindowManagerCapabilityFactory = mocks.setWindowManagerCapabilityFactory
-    static setWindowPresetCapabilityFactory = mocks.setWindowPresetCapabilityFactory
-    static setWorkspaceScriptCapabilityFactory = mocks.setWorkspaceScriptCapabilityFactory
+    static setCapabilities = mocks.setCapabilities
   }
 }))
 vi.mock('./plugin-installer', () => ({ PluginInstaller: class {} }))
@@ -746,16 +728,7 @@ describe('PluginModule facade', () => {
     mocks.mainBrowserWindow.restore.mockReset()
     mocks.mainBrowserWindow.show.mockReset()
     mocks.mainBrowserWindow.focus.mockReset()
-    mocks.setRuntimeService.mockReset()
-    mocks.setSnipasteProcessCapabilityFactory.mockReset()
-    mocks.setSystemActionCapabilityFactory.mockReset()
-    mocks.setBrowserOpenCapabilityFactory.mockReset()
-    mocks.setBrowserDataCapabilityFactory.mockReset()
-    mocks.setTranslationCapabilityFactory.mockReset()
-    mocks.setIntelligenceContextCapabilityFactory.mockReset()
-    mocks.setWindowManagerCapabilityFactory.mockReset()
-    mocks.setWindowPresetCapabilityFactory.mockReset()
-    mocks.setWorkspaceScriptCapabilityFactory.mockReset()
+    mocks.setCapabilities.mockReset()
     mocks.setTransport.mockReset()
     mocks.startUpdateScheduler.mockReset()
     mocks.stopUpdateScheduler.mockReset()
@@ -898,28 +871,24 @@ describe('PluginModule facade', () => {
     )
     expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
-    expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
-    expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(expect.any(Object))
-    expect(mocks.setWindowPresetCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setBrowserOpenCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setBrowserDataCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setTranslationCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setIntelligenceContextCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setWindowManagerCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setWorkspaceScriptCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setTranslationCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setIntelligenceContextCapabilityFactory).toHaveBeenLastCalledWith(
-      expect.any(Function)
-    )
-    expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    // One call each way, so this covers what nine separate assertions used to. Compared
+    // exhaustively rather than field by field: an eleventh capability that the install block
+    // forgets fails here as an unexpected shape, not just at the type level.
+    expect(mocks.setCapabilities.mock.calls[0]).toEqual([null])
+    expect(mocks.setCapabilities).toHaveBeenLastCalledWith({
+      snipasteProcess: expect.any(Function),
+      systemAction: expect.any(Function),
+      browserOpen: expect.any(Function),
+      browserData: expect.any(Function),
+      translation: expect.any(Function),
+      intelligenceContext: expect.any(Function),
+      windowManager: expect.any(Function),
+      windowPreset: expect.any(Function),
+      workspaceScript: expect.any(Function),
+      runtimeService: expect.any(Object)
+    })
 
-    const contextFactory = mocks.setIntelligenceContextCapabilityFactory.mock.calls.at(-1)?.[0] as
+    const contextFactory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.intelligenceContext as
       | ((activation: {
           name: string
           pluginInstanceId: string
@@ -989,7 +958,7 @@ describe('PluginModule facade', () => {
       })
       mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
       mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
-      const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+      const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
         | ((input: typeof activation) => {
             definitions: ReadonlyArray<{
               invoke(
@@ -1071,7 +1040,7 @@ describe('PluginModule facade', () => {
     mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 9 } })
     mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
     mocks.mainBrowserWindow.isMinimized.mockReturnValue(true)
-    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+    const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
       | ((input: typeof activation) => {
           definitions: ReadonlyArray<{
             invoke(
@@ -1127,7 +1096,7 @@ describe('PluginModule facade', () => {
     mocks.mainBrowserWindow.restore.mockImplementationOnce(() => {
       mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 10 } })
     })
-    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+    const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
       | ((input: typeof activation) => {
           definitions: ReadonlyArray<{
             invoke(
@@ -1282,16 +1251,9 @@ describe('PluginModule facade', () => {
     expect(mocks.runtimeDispose).toHaveBeenCalledOnce()
     expect(closeBusiness).toHaveBeenCalledOnce()
     expect(closeSqlite).toHaveBeenCalledOnce()
-    expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(null)
-    expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setTranslationCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setIntelligenceContextCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(null)
+    // Teardown is one call now, so nine assertions collapse into the one that actually matters:
+    // whatever was installed is cleared, whether that is ten capabilities or eleven.
+    expect(mocks.setCapabilities).toHaveBeenLastCalledWith(null)
     expect(mocks.setTransport).toHaveBeenLastCalledWith(null)
     expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
