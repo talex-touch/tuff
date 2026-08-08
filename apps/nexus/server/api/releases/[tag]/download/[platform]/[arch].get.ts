@@ -39,7 +39,19 @@ export default defineEventHandler(async (event) => {
       arch,
       signature: signedQuery,
     })
-    if (!verification.valid && !allowUnsignedFallback) {
+    // A signature the server can actually evaluate is always enforced. allowUnsignedFallback
+    // governs whether a request may arrive *without* a signature — it is not permission to
+    // present a broken one. Treating the two the same made an expired or forged sig
+    // indistinguishable from no sig at all, so under the default config (fallback on, which
+    // is what every deployment runs) the signed-URL control rejected nothing at all (#919).
+    // Clients that cannot sign still have the documented unsigned path: attachSignatureUrls
+    // returns fallbackDownloadUrl alongside the signed downloadUrl.
+    //
+    // 'missing-secret' is excluded deliberately: that is the server saying it cannot judge
+    // the signature, not that the signature is bad. Failing those closed would 403 a stale
+    // signed bookmark on a deployment that has no signing secret configured, which is a
+    // misconfiguration to report, not an attack to block.
+    if (!verification.valid && verification.reason !== 'missing-secret') {
       throw createError({ statusCode: 403, statusMessage: 'Download signature is invalid or expired.' })
     }
   } else if (!allowUnsignedFallback) {
