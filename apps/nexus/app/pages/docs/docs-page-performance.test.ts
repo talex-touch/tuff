@@ -192,7 +192,13 @@ describe('docs page performance boundaries', () => {
       /const nextAuthCoreEntry = resolve\([\s\S]*?next-auth[\s\S]*?core\/index\.js/,
     )
     expect.soft(nuxtConfig).toMatch(/alias: \{[\s\S]*'next-auth\/core': nextAuthCoreEntry/)
-    expect.soft(packageJson).toContain('"#auth": "./node_modules/@sidebase/nuxt-auth/dist/runtime/server/services/index.js"')
+    // The #auth alias comes from @sidebase/nuxt-auth itself — its module.mjs sets
+    // nitroConfig.alias['#auth'] — so package.json no longer duplicates it through a hard-coded
+    // node_modules path (#598). Two things still have to hold, and both are stronger than the
+    // literal this replaces: the server route reaches auth through the alias, and no local
+    // imports map re-pins the package's dist internals.
+    expect.soft(authApi).toContain("from '#auth'")
+    expect.soft(packageJson).not.toContain('@sidebase/nuxt-auth/dist/runtime')
     expect.soft(authApi).toContain('const createRequestAuthEvent = () => createAuthEvent()')
     expect.soft(authApi).toContain('let cachedAuthHandler')
     expect.soft(authApi).toContain('function getCachedAuthHandler(event: H3Event)')
