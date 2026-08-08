@@ -629,6 +629,37 @@ export default {
     },
     notifications: {
       unreadBadgeLabel: '{count} unread notifications',
+      title: 'Notification center',
+      description: 'Review browser notifications and platform delivery records.',
+      scopeHint: 'Only notifications for the signed-in account are shown.',
+      refresh: 'Refresh',
+      markAllRead: 'Mark all read',
+      markRead: 'Mark read',
+      unread: 'Unread',
+      emptyUnread: 'No unread notifications',
+      emptyAll: 'No notifications',
+      markedRead: 'Notification marked as read',
+      markReadFailed: 'Could not mark the notification as read',
+      allMarkedRead: 'All notifications marked as read',
+      resourceSystem: 'System',
+      // Concatenated after a number by relativeTime(), so these are suffixes and
+      // keep their leading space: `${5}${' minutes ago'}`.
+      justNow: 'Just now',
+      minutesAgo: ' minutes ago',
+      hoursAgo: ' hours ago',
+      daysAgo: ' days ago',
+      filters: {
+        unread: 'Unread',
+        all: 'All',
+      },
+      errors: {
+        unknown: 'Could not load notifications',
+      },
+      actions: {
+        pluginApproved: 'Plugin approved',
+        pluginRejected: 'Plugin rejected',
+        pluginPending: 'Plugin review pending',
+      },
       browser: {
         permissionGranted: 'Allowed',
         permissionDenied: 'Blocked',
