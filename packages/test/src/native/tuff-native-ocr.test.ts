@@ -67,7 +67,15 @@ describe('tuff-native ocr smoke & contract', () => {
       return
     }
 
-    const fixturePath = fileURLToPath(new URL('../../../../shots/LogoBanner.png', import.meta.url))
+    // shots/LogoBanner.png was deleted in bd4a98bf1 (media migration) and not replaced,
+    // so this asserted its own fixture into existence and failed on the first line --
+    // on CI as well, since shots/ is not gitignored.
+    //
+    // Replaced with a fixture that lives next to the test: 3.6KB of generated block
+    // letters rather than a 7.8MB marketing asset that a docs cleanup can remove.
+    // Apple Vision reads it as exactly "TUFF". Regenerate with
+    // scripts/make-ocr-fixture.cjs if it ever needs to change.
+    const fixturePath = fileURLToPath(new URL('./fixtures/tuff-ocr-fixture.png', import.meta.url))
     expect(existsSync(fixturePath)).toBe(true)
 
     const image = readFileSync(fixturePath)
