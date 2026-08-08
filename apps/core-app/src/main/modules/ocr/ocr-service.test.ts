@@ -95,10 +95,6 @@ vi.mock('@sentry/electron/main', () => ({
   captureException: vi.fn()
 }))
 
-vi.mock('../../core', () => ({
-  genTouchApp: () => ({ channel: null })
-}))
-
 vi.mock('../box-tool/core-box/window', () => ({
   windowManager: {
     getAttachedPlugin: vi.fn(() => null)

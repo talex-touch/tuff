@@ -79,34 +79,6 @@ vi.mock('../../../../utils/logger', () => {
   }
 })
 
-vi.mock('./abilities/currency-ability', () => ({
-  CurrencyPreviewAbility: class CurrencyPreviewAbility {
-    readonly id = 'preview.currency'
-    readonly label = 'Currency'
-    readonly priority = 40
-    readonly safety = {
-      input: {
-        maxLength: 120,
-        syntax: 'currency amount conversion, e.g. 10 USD to CNY',
-        notes: 'CoreApp realtime currency adapter test double.'
-      },
-      dependencies: ['parser', 'network', 'cache'],
-      usesDynamicExecution: false,
-      usesNetwork: true,
-      usesCache: true,
-      replacementPlan: 'CoreApp realtime adapter retained for Nexus/cache-backed rates.'
-    }
-
-    canHandle(): boolean {
-      return false
-    }
-
-    async execute(): Promise<null> {
-      return null
-    }
-  }
-}))
-
 import {
   listPreviewAbilityInventory,
   listPreviewDynamicExecutionInventory

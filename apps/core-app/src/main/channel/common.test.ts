@@ -432,20 +432,6 @@ vi.mock('../service/device-idle-service', () => ({
   }
 }))
 
-vi.mock('../service/storage-maintenance', () => ({
-  cleanupAnalytics: vi.fn(),
-  cleanupClipboard: vi.fn(),
-  cleanupConfig: vi.fn(),
-  cleanupDownloads: vi.fn(),
-  cleanupFileIndex: vi.fn(),
-  cleanupIntelligence: vi.fn(),
-  cleanupLogs: vi.fn(),
-  cleanupOcr: vi.fn(),
-  cleanupTemp: vi.fn(),
-  cleanupUpdates: vi.fn(),
-  cleanupUsage: vi.fn()
-}))
-
 vi.mock('../service/temp-file.service', () => ({
   tempFileService: {
     registerNamespace: tempFileRegisterNamespaceMock,

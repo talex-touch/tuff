@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from 'vitest'
 // runtime that reconciles imported servers accepts what we wrote. Its module
 // pulls in Electron and the database, neither of which this suite needs.
 vi.mock('./ai-orchestrator-store', () => ({ aiOrchestratorStore: {} }))
-vi.mock('./ai-import-content-store', () => ({ aiImportContentStore: {} }))
 vi.mock('./intelligence-mcp-registry', () => ({ intelligenceMcpRegistry: {} }))
 
 import { mcpProfilesFromItem } from './ai-imported-config-runtime'
