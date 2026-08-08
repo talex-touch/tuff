@@ -6,13 +6,56 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import process from 'node:process'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolvePluginSqliteDatabasePath } from './plugin-sqlite-resource-owner'
 import { PluginSqliteWorkerClient } from './plugin-sqlite-worker-client'
 
-const workerPath = path.resolve('out/main/plugin-sqlite-worker.js')
-const describeBuiltWorker = existsSync(workerPath) ? describe : describe.skip
+/**
+ * Resolved from this file, not from process.cwd().
+ *
+ * `path.resolve('out/main/...')` is CWD-relative, so running vitest from the repository root
+ * rather than from apps/core-app pointed at a path that does not exist — and the suite then
+ * skipped itself rather than saying so (#926).
+ */
+const workerPath = fileURLToPath(
+  new URL('../../../../../out/main/plugin-sqlite-worker.js', import.meta.url)
+)
+
+/**
+ * Skipping is now opt-in rather than automatic.
+ *
+ * These are the plugin SQLite sandbox checks, including the symlink-escape assertions. When
+ * the worker artifact was missing the whole describe block became `describe.skip`, so a
+ * regression in resolvePluginSqliteDatabasePath shipped as a green run. A suite that converts
+ * itself to a no-op is indistinguishable from a suite that passed.
+ *
+ * Set TUFF_SKIP_SQLITE_WORKER_TESTS=1 to skip deliberately; otherwise a missing artifact is a
+ * failure that names the build command.
+ */
+const SKIP_ENV_VAR = 'TUFF_SKIP_SQLITE_WORKER_TESTS'
+const skipRequested = process.env[SKIP_ENV_VAR] === '1'
+const workerBuilt = existsSync(workerPath)
+
+describe('plugin sqlite worker artifact', () => {
+  it('is built, or skipping was asked for explicitly', () => {
+    if (skipRequested || workerBuilt) {
+      expect(true).toBe(true)
+      return
+    }
+
+    throw new Error(
+      `Missing ${workerPath}.\n` +
+        'These are the plugin SQLite sandbox tests; without the worker they cannot run.\n' +
+        'Build it with `pnpm -C apps/core-app exec electron-vite build`, or set ' +
+        `${SKIP_ENV_VAR}=1 to skip deliberately.`
+    )
+  })
+})
+
+const describeBuiltWorker = workerBuilt ? describe : describe.skip
 
 function createWorker(databasePath: string): Worker {
   return new Worker(workerPath, {
