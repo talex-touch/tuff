@@ -10,8 +10,9 @@
   "scripts": {
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
-    "test": "vitest",
-    "test:coverage": "vitest --coverage",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:vitest:watch": "vitest",
     "test:watch": "nodemon"
   },
   "dependencies": {

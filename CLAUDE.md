@@ -32,7 +32,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Code Quality
 - `pnpm lint` - Run ESLint on all code
 - `pnpm lint:fix` - Run ESLint with auto-fix
-- `pnpm utils:test` - Run tests for utility packages
+- `pnpm utils:test` - Run the `packages/test` integration suite once and exit (despite the name, this is not `packages/utils`)
 
 ### Publishing
 - `pnpm utils:publish` - Publish @talex-touch/utils package to npm
