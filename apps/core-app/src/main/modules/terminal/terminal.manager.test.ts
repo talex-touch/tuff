@@ -25,8 +25,17 @@ vi.mock('../permission/channel-guard', () => ({
   )
 }))
 
+// A stable object: the module resolves the transport once in onInit, so a factory returning a
+// fresh one per call would leave every assertion on an instance the code under test never held.
+const transportMock = vi.hoisted(() => ({
+  on: vi.fn(),
+  // Typed variadic on purpose: inferred as zero-arg, `mock.calls` becomes a tuple of length 0 and
+  // indexing the payload is a compile error rather than a runtime one.
+  sendTo: vi.fn(async (..._args: unknown[]) => {})
+}))
+
 vi.mock('@talex-touch/utils/transport/main', () => ({
-  getTuffTransportMain: vi.fn(() => ({ on: vi.fn(), sendTo: vi.fn(async () => {}) }))
+  getTuffTransportMain: vi.fn(() => transportMock)
 }))
 
 vi.mock('../../core/runtime-accessor', () => ({
@@ -49,11 +58,23 @@ type Testable = {
 
 const terminal = terminalModule as unknown as Testable
 
+/** A stream that records handlers and can replay them, so chunk boundaries can be driven. */
+function fakeStream() {
+  const handlers = new Map<string, Array<(chunk: unknown) => void>>()
+  return {
+    on: vi.fn((event: string, handler: (chunk: unknown) => void) => {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler])
+    }),
+    emit: (event: string, chunk?: unknown) =>
+      handlers.get(event)?.forEach((handler) => handler(chunk))
+  }
+}
+
 function fakeProcess() {
   return {
     stdin: { write: vi.fn() },
-    stdout: { on: vi.fn() },
-    stderr: { on: vi.fn() },
+    stdout: fakeStream(),
+    stderr: fakeStream(),
     on: vi.fn(),
     kill: vi.fn()
   }
@@ -241,5 +262,76 @@ describe('terminal session renderer teardown', () => {
     const { id } = terminal.create({ command: 'ls' }, asWindow(9) as never)
 
     expect(terminal.processes.has(id)).toBe(true)
+  })
+})
+
+describe('terminal output decoding', () => {
+  let proc: ReturnType<typeof fakeProcess>
+
+  /** The text of every chunk sent to the renderer, in order. */
+  const sentText = (): string[] =>
+    transportMock.sendTo.mock.calls
+      .map((call) => (call[2] as { data?: string } | undefined)?.data)
+      .filter((data): data is string => typeof data === 'string')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    terminal.processes.clear()
+    proc = fakeProcess()
+    spawnSafeMock.mockReturnValue(proc)
+    terminal.onInit({})
+  })
+
+  it('joins a multi-byte character split across two chunks', () => {
+    // #640: '世' is three bytes. Split between reads, each half used to decode to U+FFFD, and
+    // unrecoverably — both halves were already strings before being sent.
+    const bytes = Buffer.from('世界', 'utf8')
+    const { id } = terminal.create({ command: 'cat' }, asWindow(7) as never)
+    expect(id).toBeTruthy()
+
+    proc.stdout.emit('data', bytes.subarray(0, 2))
+    proc.stdout.emit('data', bytes.subarray(2))
+
+    expect(sentText().join('')).toBe('世界')
+    expect(sentText().join('')).not.toContain('\uFFFD')
+  })
+
+  it('does not send an empty chunk while holding a partial character', () => {
+    const bytes = Buffer.from('世', 'utf8')
+    terminal.create({ command: 'cat' }, asWindow(7) as never)
+
+    proc.stdout.emit('data', bytes.subarray(0, 2))
+
+    // The first half decodes to '' — worth holding, not worth a round trip.
+    expect(sentText()).toEqual([])
+
+    proc.stdout.emit('data', bytes.subarray(2))
+    expect(sentText()).toEqual(['世'])
+  })
+
+  it('keeps stdout and stderr decoders separate', () => {
+    // One shared decoder would let a partial sequence on one stream absorb the next chunk from
+    // the other, producing text that never appeared on either.
+    const out = Buffer.from('世', 'utf8')
+    terminal.create({ command: 'cat' }, asWindow(7) as never)
+
+    proc.stdout.emit('data', out.subarray(0, 2))
+    proc.stderr.emit('data', Buffer.from('E', 'utf8'))
+    proc.stdout.emit('data', out.subarray(2))
+
+    expect(sentText()).toEqual(['E', '世'])
+  })
+
+  it('flushes a truncated sequence on end', () => {
+    // Output that really was cut short should surface one replacement character rather than
+    // disappearing into the decoder.
+    terminal.create({ command: 'cat' }, asWindow(7) as never)
+
+    proc.stdout.emit('data', Buffer.from('世', 'utf8').subarray(0, 2))
+    proc.stdout.emit('end')
+
+    // One replacement character for the incomplete sequence, not one per orphaned byte — written
+    // from observed StringDecoder behaviour rather than from what seemed likely.
+    expect(sentText().join('')).toBe('\uFFFD')
   })
 })

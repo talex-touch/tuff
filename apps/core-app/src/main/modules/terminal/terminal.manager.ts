@@ -3,6 +3,8 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { TerminalCreateRequest } from '@talex-touch/utils/transport/events/terminal'
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
+import type { Readable } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { TerminalEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -117,6 +119,33 @@ class TerminalModule extends BaseModule {
   }
 
   /**
+   * Forwards a child stream to the renderer, decoded across chunk boundaries.
+   *
+   * `end` is flushed so a trailing incomplete sequence is reported once, rather than being held
+   * forever — output that really was truncated should show one replacement character, not vanish.
+   */
+  private pipeDecodedOutput(
+    stream: Readable | null | undefined,
+    sender: WebContents | undefined,
+    id: string
+  ): void {
+    if (!stream) return
+
+    const decoder = new StringDecoder('utf8')
+
+    stream.on('data', (chunk: Buffer | string) => {
+      const text = typeof chunk === 'string' ? chunk : decoder.write(chunk)
+      // A chunk that ends mid-character decodes to '', which is not worth a round trip.
+      if (text) this.sendToSender(sender, { id, data: text })
+    })
+
+    stream.on('end', () => {
+      const rest = decoder.end()
+      if (rest) this.sendToSender(sender, { id, data: rest })
+    })
+  }
+
+  /**
    * Kills the session's child when the renderer that asked for it goes away.
    *
    * Returns an unsubscribe so a long-lived renderer does not accumulate one listener per session.
@@ -189,15 +218,12 @@ class TerminalModule extends BaseModule {
 
     this.processes.set(id, { proc, owner, releaseSenderWatch })
 
-    // Listen for data from stdout and stderr
-    proc.stdout?.on('data', (data) => {
-      this.sendToSender(sender, { id, data: data.toString() })
-    })
-
-    proc.stderr?.on('data', (data) => {
-      // Send stderr data as well, perhaps with a flag if needed by the frontend
-      this.sendToSender(sender, { id, data: data.toString() })
-    })
+    // Pipe reads split on byte boundaries, not character ones, so a multi-byte character
+    // straddling a chunk edge decodes to U+FFFD on both sides — and unrecoverably, since both
+    // halves are already strings by the time they are sent (#640). One decoder per stream holds
+    // the trailing partial sequence until its continuation arrives.
+    this.pipeDecodedOutput(proc.stdout, sender, id)
+    this.pipeDecodedOutput(proc.stderr, sender, id)
 
     // Listen for the process to close
     proc.on('close', (code) => {
