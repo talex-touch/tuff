@@ -63,6 +63,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger,
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -84,6 +85,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -102,6 +104,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -121,6 +124,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -140,6 +144,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -158,6 +163,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -174,6 +180,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -193,6 +200,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -212,6 +220,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff/config',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -230,6 +239,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff/config',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: vi.fn(() => vi.fn()) as never
     })
@@ -245,6 +255,7 @@ describe('registerSystemShellHandlers', () => {
 
     registerSystemShellHandlers(transport as never, {
       configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
       logger: { warn: vi.fn() },
       registerSafeHandler: registerSafeHandler as never
     })
@@ -253,5 +264,115 @@ describe('registerSystemShellHandlers', () => {
       AppEvents.system.executeCommand,
       expect.any(Function)
     )
+  })
+})
+
+/**
+ * What executeCommand is allowed to open (#909).
+ *
+ * shell.openPath does not run a command — it hands the path to the OS association, so a
+ * .command, .bat or .app is executed. The handler accepted any caller-supplied string, which
+ * meant a plugin could write a script through the download handler and then ask the main
+ * process to launch it.
+ *
+ * The only caller in the app is Settings > About opening the application folder, so the
+ * surface it needs is a directory inside the app's own root.
+ */
+describe('executeCommand path restriction', () => {
+  const APP_ROOT = '/tmp/tuff'
+
+  function executeCommandHandler(): (payload: { command?: string }) => Promise<void> {
+    const { transport } = createTransport()
+    let captured: ((payload: { command?: string }) => Promise<void>) | null = null
+    registerSystemShellHandlers(transport as never, {
+      configRootPath: () => '/tmp/tuff/config',
+      appRootPath: () => APP_ROOT,
+      logger: { warn: vi.fn() },
+      registerSafeHandler: ((event: { toEventName: () => string }, handler: unknown) => {
+        if (event.toEventName() === AppEvents.system.executeCommand.toEventName()) {
+          captured = handler as (payload: { command?: string }) => Promise<void>
+        }
+        return vi.fn()
+      }) as never
+    })
+    if (!captured) throw new Error('executeCommand handler was not registered')
+    return captured
+  }
+
+  beforeEach(() => {
+    fsStatMock.mockReset()
+    shellOpenPathMock.mockReset()
+    shellOpenPathMock.mockResolvedValue('')
+  })
+
+  function asDirectory(): void {
+    fsStatMock.mockResolvedValue({ isDirectory: () => true } as never)
+  }
+
+  function asFile(): void {
+    fsStatMock.mockResolvedValue({ isDirectory: () => false } as never)
+  }
+
+  it('opens the application folder, which is the one real caller', async () => {
+    // Positive control: Settings > About sends touchApp.rootPath verbatim.
+    asDirectory()
+    await executeCommandHandler()({ command: APP_ROOT })
+    expect(shellOpenPathMock).toHaveBeenCalledWith(APP_ROOT)
+  })
+
+  it('opens a directory beneath the app root', async () => {
+    asDirectory()
+    await executeCommandHandler()({ command: `${APP_ROOT}/plugins` })
+    expect(shellOpenPathMock).toHaveBeenCalledWith(`${APP_ROOT}/plugins`)
+  })
+
+  it('refuses a path outside the app root', async () => {
+    asDirectory()
+    await expect(executeCommandHandler()({ command: '/tmp/evil' })).rejects.toThrow(
+      'SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT'
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a sibling directory that merely shares the root prefix', async () => {
+    asDirectory()
+    await expect(executeCommandHandler()({ command: `${APP_ROOT}-backup/x` })).rejects.toThrow(
+      'SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT'
+    )
+  })
+
+  it('refuses a traversal that climbs out of the root', async () => {
+    asDirectory()
+    await expect(
+      executeCommandHandler()({ command: `${APP_ROOT}/../../etc/passwd` })
+    ).rejects.toThrow('SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT')
+  })
+
+  it('refuses a script file even inside the app root', async () => {
+    // The download handler can write into app storage, so "inside the root" alone is not safe.
+    asFile()
+    await expect(
+      executeCommandHandler()({ command: `${APP_ROOT}/payload.command` })
+    ).rejects.toThrow('SYSTEM_SHELL_PATH_NOT_A_DIRECTORY')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a .app bundle inside the app root, which is a directory that executes', async () => {
+    asDirectory()
+    await expect(executeCommandHandler()({ command: `${APP_ROOT}/Evil.app` })).rejects.toThrow(
+      'SYSTEM_SHELL_PATH_NOT_A_DIRECTORY'
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a path that does not exist', async () => {
+    fsStatMock.mockRejectedValue(new Error('ENOENT'))
+    await expect(executeCommandHandler()({ command: `${APP_ROOT}/missing` })).rejects.toThrow(
+      'SYSTEM_SHELL_PATH_UNAVAILABLE'
+    )
+  })
+
+  it('still rejects an empty command', async () => {
+    await expect(executeCommandHandler()({ command: '' })).rejects.toThrow('No command provided')
   })
 })
