@@ -152,6 +152,8 @@ vi.mock('../../database', () => ({
 
 vi.mock('../../plugin/adapters/plugin-features-adapter', () => ({
   default: {
+    // search-core calls this as it registers the provider (#523).
+    attach: vi.fn(),
     id: 'plugin-features',
     type: 'plugin',
     supportedInputTypes: [TuffInputType.Text],
