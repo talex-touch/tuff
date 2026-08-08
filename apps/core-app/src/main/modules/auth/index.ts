@@ -1628,10 +1628,35 @@ function getStepUpToken(): string | null {
   return stepUpToken
 }
 
+/**
+ * Entry point for the `tuff://auth/callback` deep link.
+ *
+ * Only honoured while a browser login this app started is still in flight.
+ * Without that check any page could navigate the user's browser to
+ * `tuff://auth/callback?token=…` and silently swap the session to the
+ * attacker's account — everything written afterwards lands in their account
+ * (#695).
+ *
+ * `activeDeviceAuthCode` is the signal: openLoginPage sets it, and it is
+ * cleared on cancel, on a completed poll and on poll failure, so the window is
+ * bounded by a login the user actually initiated.
+ *
+ * This is not full state binding. It does not tie the callback to *which*
+ * login is in flight, so an attacker who lands one while the user has a
+ * genuine login open still wins. Closing that needs a nonce carried through
+ * the browser round-trip, which means changing the nexus callback URL too —
+ * tracked on the issue rather than half-done here.
+ */
 export async function applyExternalAuthCallback(
   token: string,
   appToken?: string
 ): Promise<boolean> {
+  if (!activeDeviceAuthCode) {
+    authLog.warn('Rejected auth callback with no login in flight', {
+      meta: { hasToken: Boolean(token), hasAppToken: Boolean(appToken) }
+    })
+    return false
+  }
   return handleExternalAuthCallback(token, appToken)
 }
 
@@ -1676,6 +1701,10 @@ function setAuthModuleTestState(nextState: AuthModuleTestState): void {
 export const __test__ = {
   loadAuthToken,
   setAuthToken,
+  /** Lets a test put a browser login "in flight" without running the device flow. */
+  setActiveDeviceAuthCode: (code: string | null): void => {
+    activeDeviceAuthCode = code
+  },
   clearAuthToken,
   initializeAuthState,
   getCachedAuthUser,
