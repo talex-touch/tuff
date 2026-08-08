@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { app, BrowserWindow } from 'electron'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
 
@@ -6,10 +7,11 @@ vi.mock('electron', () => ({
   app: {
     isPackaged: false,
     on: vi.fn(),
+    off: vi.fn(),
     commandLine: { appendSwitch: vi.fn() }
   },
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [])
+    getAllWindows: vi.fn(() => [] as unknown[])
   },
   ipcMain: {
     handle: vi.fn(),
@@ -68,6 +70,11 @@ vi.mock('../network', () => ({
 }))
 
 import { SentryServiceModule } from './sentry-service'
+
+type TestableWindowPerf = {
+  ensureWindowPerformanceListeners: () => void
+  stopPerformanceMonitors: () => void
+}
 
 type TestableSentryService = {
   getTelemetryStatsStore: () => {
@@ -294,5 +301,97 @@ describe('SentryServiceModule telemetry stats hydration', () => {
         lastFailureMessage: 'runtime failure'
       })
     )
+  })
+})
+
+describe('SentryServiceModule window performance listeners', () => {
+  function fakeWindow(id: number) {
+    return {
+      webContents: { id },
+      on: vi.fn(),
+      off: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    }
+  }
+
+  beforeEach(() => {
+    vi.mocked(app.on).mockClear()
+    vi.mocked(app.off).mockClear()
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([])
+  })
+
+  it('re-attaches to windows that already existed after a stop/start cycle', () => {
+    // The defect in #534: teardown left `windowPerfListenersReady` set, so a later start
+    // early-returned and never re-ran the getAllWindows loop. Windows open at that moment stopped
+    // being watched for 'unresponsive', and nothing logged the gap.
+    const existing = fakeWindow(1)
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([existing] as never)
+
+    const service = new SentryServiceModule() as unknown as TestableWindowPerf
+
+    service.ensureWindowPerformanceListeners()
+    // Positive control: without this the assertions below would hold over a window that was
+    // never attached in the first place.
+    expect(existing.on).toHaveBeenCalledTimes(3)
+
+    service.stopPerformanceMonitors()
+    existing.on.mockClear()
+
+    service.ensureWindowPerformanceListeners()
+    expect(existing.on).toHaveBeenCalledTimes(3)
+  })
+
+  it('removes what it attached', () => {
+    const existing = fakeWindow(2)
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([existing] as never)
+
+    const service = new SentryServiceModule() as unknown as TestableWindowPerf
+    service.ensureWindowPerformanceListeners()
+
+    // Widened before comparing: app.on is overloaded, so TS narrows the tuple to the first
+    // signature's event name and calls the comparison unreachable.
+    const calls = vi.mocked(app.on).mock.calls as unknown as Array<
+      [string, (...args: unknown[]) => void]
+    >
+    const registered = calls.find(([event]) => event === 'browser-window-created')
+    expect(registered).toBeDefined()
+
+    service.stopPerformanceMonitors()
+
+    // The app-level listener is the one that leaked for the lifetime of the process, attaching
+    // three more handlers to every window created afterwards.
+    expect(vi.mocked(app.off)).toHaveBeenCalledWith('browser-window-created', registered![1])
+    expect(existing.off).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not stack handlers when start is called twice without a stop', () => {
+    const existing = fakeWindow(3)
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([existing] as never)
+
+    const service = new SentryServiceModule() as unknown as TestableWindowPerf
+    service.ensureWindowPerformanceListeners()
+    service.ensureWindowPerformanceListeners()
+
+    // The latch still does its original job — this is what would break if the fix simply
+    // cleared it everywhere.
+    expect(existing.on).toHaveBeenCalledTimes(3)
+  })
+
+  it('skips a window that has already been destroyed', () => {
+    // win.off on a destroyed BrowserWindow throws; teardown has to survive the common case of a
+    // window closing before the module stops.
+    const closed = fakeWindow(4)
+    closed.isDestroyed.mockReturnValue(true)
+    const live = fakeWindow(5)
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([closed, live] as never)
+
+    const service = new SentryServiceModule() as unknown as TestableWindowPerf
+    service.ensureWindowPerformanceListeners()
+
+    expect(() => service.stopPerformanceMonitors()).not.toThrow()
+    expect(closed.off).not.toHaveBeenCalled()
+    // The live window in the same batch proves the skip is selective. Without it, teardown that
+    // bailed out entirely on the first destroyed window would pass this test.
+    expect(live.off).toHaveBeenCalledTimes(3)
   })
 })
