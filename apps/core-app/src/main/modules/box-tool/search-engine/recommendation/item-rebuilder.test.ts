@@ -173,6 +173,117 @@ describe('ItemRebuilder', () => {
     expect(result.map((item) => item.scoring?.final)).toEqual([9_000, 120])
   })
 
+  it("does not let one app inherit a longer-named sibling's score", async () => {
+    // 'com.google.Chrome' is a substring of 'com.google.Chrome.canary'. The old
+    // two-way `includes` therefore matched Chrome against Canary's scored entry,
+    // handing Chrome the wrong score and, via _originalItemId, the wrong pin and
+    // dedupe identity (#666).
+    const dbUtils = {
+      getFilesByPaths: vi.fn(async () => []),
+      getFilesByBundleIds: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Google Chrome.app',
+          name: 'Google Chrome',
+          displayName: 'Google Chrome',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: 'com.google.Chrome',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Google Chrome' } },
+        actions: [],
+        meta: { app: { path: '/Applications/Google Chrome.app', bundleId: 'com.google.Chrome' } }
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'app-provider',
+        itemId: 'com.google.Chrome.canary',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 9_999
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+    const chrome = result.find((item) => item.id === 'com.google.Chrome')
+
+    expect(chrome?.scoring?.final ?? 0).not.toBe(9_999)
+  })
+
+  it('still matches an app recorded under a different identity form', async () => {
+    // The fallback exists because the rebuilt id (appIdentity) and the scored
+    // entry (path) can be different forms of the same app. Equality across the
+    // identity set has to keep that working, or the fix trades one bug for another.
+    const dbUtils = {
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Google Chrome.app',
+          name: 'Google Chrome',
+          displayName: 'Google Chrome',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: 'com.google.Chrome',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Google Chrome' } },
+        actions: [],
+        meta: { app: { path: '/Applications/Google Chrome.app', bundleId: 'com.google.Chrome' } }
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'app-provider',
+        itemId: '/Applications/Google Chrome.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 321
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+    const chrome = result.find((item) => item.id === 'com.google.Chrome')
+
+    expect(chrome?.scoring?.final).toBe(321)
+  })
+
   it('preserves plugin recommendation icon metadata and class badge icons', async () => {
     const rebuilder = new ItemRebuilder({} as never)
     const scoredItems: ScoredItem[] = [
