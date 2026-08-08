@@ -301,6 +301,12 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 vi.mock('electron', () => ({
   app: {
     getLocale: vi.fn(() => 'en-US'),
+    // The indexed-source runtime resolves its storage location through app.getPath;
+    // without it the whole trace suite failed with "app.getPath is not a function"
+    // before reaching anything it means to assert.
+    getPath: vi.fn((name: string) => `/tmp/tuff-test/${name}`),
+    getName: vi.fn(() => 'tuff-test'),
+    getVersion: vi.fn(() => '0.0.0-test'),
     commandLine: {
       appendSwitch: vi.fn()
     }
