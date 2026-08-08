@@ -11,6 +11,7 @@ import GitHub from 'next-auth/providers/github'
 import { createD1Adapter } from '../../utils/authAdapter'
 import {
   consumeLoginToken,
+  evaluatePasswordSignInRateLimit,
   getUserByAccount,
   getUserByEmail,
   logLoginAttempt,
@@ -485,11 +486,30 @@ function getAuthOptions(authSecret: string): AuthOptions {
           return null
         }
 
+        // Failures were written to the login history and never read back, so the guess budget
+        // was unbounded (#897). Resolved before verifying rather than after, so a locked-out
+        // account costs an attacker a lookup instead of a PBKDF2 verification — and so the
+        // refusal does not depend on the password happening to be wrong.
+        const knownUser = await getUserByEmail(authEvent, email)
+        const activeKnownUserId = knownUser?.status === 'active' ? knownUser.id : null
+        const rateLimit = await evaluatePasswordSignInRateLimit(authEvent, {
+          userId: activeKnownUserId,
+        })
+        if (!rateLimit.allowed) {
+          await logLoginAttempt(authEvent, {
+            userId: activeKnownUserId,
+            deviceId: null,
+            success: false,
+            reason: 'rate_limited',
+            clientType: 'web',
+          })
+          return null
+        }
+
         const user = await verifyUserPassword(authEvent, email, password)
         if (!user) {
-          const attemptedUser = await getUserByEmail(authEvent, email)
           await logLoginAttempt(authEvent, {
-            userId: attemptedUser?.status === 'active' ? attemptedUser.id : null,
+            userId: activeKnownUserId,
             deviceId: null,
             success: false,
             reason: 'invalid_password',
