@@ -13,6 +13,27 @@ import {
 
 const execFileAsync = promisify(execFile)
 
+/**
+ * Makes a query safe to pass as an argv element to es.exe.
+ *
+ * es.exe treats any argument starting with `-` as an option, and the query sat in argv[0]
+ * unmodified, so `-export-csv C:\\Users\\Public\\out.csv` was consumed as the export switch
+ * and wrote index contents to a chosen path instead of searching. `-r`, `-path` and the rest
+ * of the option surface were reachable the same way (#903).
+ *
+ * This is argument injection, not shell injection — exec resolves to execFile with an args
+ * array, so no shell metacharacters are interpreted.
+ *
+ * A `--` end-of-options separator would be the conventional fix, but es.exe is a Windows
+ * binary this repo cannot exercise on other platforms, and it is not documented to honour
+ * `--`. Guessing wrong would turn every search on Windows into an unknown-option error, so
+ * the leading dashes are removed instead: strictly fewer assumptions, and a filename search
+ * beginning with `-` is the only thing it changes.
+ */
+export function sanitizeEverythingCliQuery(query: string): string {
+  return query.replace(/^[\s-]+/, '')
+}
+
 export interface EverythingSdkAddon {
   search?: (query: string, options?: { maxResults?: number }) => unknown
   query?: (query: string, options?: { maxResults?: number }) => unknown
@@ -105,7 +126,7 @@ export class EverythingBackendService {
     const { stdout } = await this.exec(
       esPath,
       [
-        query,
+        sanitizeEverythingCliQuery(query),
         '-n',
         String(maxResults),
         '-sort',
