@@ -56,9 +56,99 @@ function stripDangerousElements(html: string): string {
     .replace(new RegExp(`<\\/?(?:${DANGEROUS_ELEMENTS})\\b[^>]*>`, 'gi'), '')
 }
 
-export function sanitizeMarkdownHtml(html: string): string {
-  if (!html) return ''
+const DANGEROUS_ELEMENT_SET = new Set(DANGEROUS_ELEMENTS.split('|'))
+const URL_ATTRIBUTES = new Set(['href', 'src'])
+const BANNED_ATTRIBUTES = new Set([
+  'style',
+  'formaction',
+  'xlink:href',
+  'action',
+  'srcdoc',
+  'background',
+  'ping',
+])
 
+/**
+ * Parses the HTML, filters it as a tree, and serialises the result.
+ *
+ * The regex chain below applies its passes in sequence over each other's output, so deleting
+ * an attribute can splice the surrounding text into something new. Executing it proves the
+ * point: `<img src="/nope.png" on style="y"error=alert(1)>` came out as
+ * `<img src="/nope.png" onerror=alert(1)>`, and `<i onerror="x"frame src="//evil">` became a
+ * real iframe (#900). No amount of pass ordering fixes that shape — the passes are the
+ * problem.
+ *
+ * A tree has no such seams: an attribute is removed from a node, not from a string, so
+ * nothing can be spliced together by its removal. The policy applied here is the same one the
+ * regexes expressed, so this is a change of mechanism rather than of what counts as safe.
+ *
+ * Returns null when there is no DOM to parse with, which is the caller's signal to fall back.
+ */
+function sanitizeByParsing(html: string): string | null {
+  if (typeof DOMParser === 'undefined')
+    return null
+
+  let doc: Document
+  try {
+    doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+  }
+  catch {
+    return null
+  }
+  if (!doc?.body)
+    return null
+
+  // Comments can hide payload content and are not needed in rendered markdown.
+  const walker = doc.createTreeWalker(doc.body, 128 /* NodeFilter.SHOW_COMMENT */)
+  const comments: ChildNode[] = []
+  while (walker.nextNode()) comments.push(walker.currentNode as ChildNode)
+  for (const comment of comments) comment.remove()
+
+  for (const element of Array.from(doc.body.querySelectorAll('*'))) {
+    if (DANGEROUS_ELEMENT_SET.has(element.tagName.toLowerCase())) {
+      element.remove()
+      continue
+    }
+
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase()
+
+      if (name.startsWith('on') || BANNED_ATTRIBUTES.has(name)) {
+        element.removeAttribute(attribute.name)
+        continue
+      }
+
+      if (URL_ATTRIBUTES.has(name) && !isAllowedUrl(attribute.value)) {
+        element.removeAttribute(attribute.name)
+      }
+    }
+  }
+
+  return doc.body.innerHTML
+}
+
+/**
+ * The fallback for contexts with no DOM — server-side rendering, and unit tests that have not
+ * asked for one.
+ *
+ * Still the sequential regex chain, so still subject in principle to the splice class in
+ * #900, but applied repeatedly until the output stops changing. A splice produces text that
+ * the next round strips, so the fixed point is reached with the handler gone. The iteration
+ * cap is a guard against a pathological input, not an expected path: two rounds settle
+ * everything observed.
+ */
+function sanitizeByStrippingUntilStable(html: string): string {
+  let current = html
+  for (let round = 0; round < 8; round += 1) {
+    const next = stripOnce(current)
+    if (next === current)
+      return current
+    current = next
+  }
+  return current
+}
+
+function stripOnce(html: string): string {
   return stripDangerousElements(html)
     // Event-handler attributes. Allow `/` as a separator too, since
     // `<img/onerror=...>` is valid HTML that the previous `\s+on` pattern missed.
@@ -81,6 +171,16 @@ export function sanitizeMarkdownHtml(html: string): string {
       if (!isAllowedUrl(value)) return ''
       return ` ${name.toLowerCase()}="${sanitizeAttributeValue(value.trim())}"`
     })
+}
+
+export function sanitizeMarkdownHtml(html: string): string {
+  if (!html) return ''
+
+  const parsed = sanitizeByParsing(html)
+  if (parsed !== null)
+    return parsed
+
+  return sanitizeByStrippingUntilStable(html)
 }
 
 export function renderMarkdownToSafeHtml(markdown: string): string {
