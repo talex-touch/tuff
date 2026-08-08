@@ -103,7 +103,7 @@
     "@langchain/openai": "catalog:",
     "@libsql/client": "^0.17.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@sentry/electron": "^7.15.0",
+    "@sentry/electron": "^7.16.0",
     "@talex-touch/tuff-business": "workspace:^",
     "@talex-touch/tuff-intelligence": "workspace:^",
     "@talex-touch/tuff-native": "workspace:^",
