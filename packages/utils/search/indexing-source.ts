@@ -353,10 +353,13 @@ export interface SearchProviderManifestCoverage {
   hasPushFeatures: boolean;
   hasExplicitProviders: boolean;
   needsExplicitProviderMigration: boolean;
+  /** Push features with no declared provider carrying their featureId. */
+  uncoveredPushFeatureIds: string[];
 }
 
 export type SearchProviderManifestResolutionIssueCode =
   | "SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE"
+  | "SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE"
   | "SEARCH_PROVIDER_INVALID"
   | "SEARCH_PROVIDER_POLICY_BLOCKED"
   | "SEARCH_PROVIDER_PERMISSION_MISSING";
@@ -504,6 +507,12 @@ export function getSearchProviderManifestCoverage(
     .filter((feature) => feature?.push === true)
     .map((feature) => feature.id || feature.name || "<unknown>");
 
+  const coveredFeatureIds = new Set(
+    (Array.isArray(manifestProviders) ? manifestProviders : [])
+      .map((provider) => (provider as { featureId?: string })?.featureId)
+      .filter((featureId): featureId is string => typeof featureId === "string"),
+  );
+
   return {
     pushFeatureIds,
     pushFeatureCount: pushFeatureIds.length,
@@ -516,6 +525,19 @@ export function getSearchProviderManifestCoverage(
     needsExplicitProviderMigration:
       pushFeatureIds.length > 0 &&
       (!Array.isArray(manifestProviders) || manifestProviders.length === 0),
+    // Push features with no provider of their own. needsExplicitProviderMigration only
+    // fires when there are *no* declared providers, so one declaration used to silence
+    // the check for every other push feature in the manifest. Matched by featureId
+    // rather than by count: the counts can coincide while the ids do not.
+    //
+    // Only meaningful once some provider names a feature. A manifest whose providers
+    // carry no featureId at all is using an implicit mapping -- touch-browser-bookmarks
+    // pairs one unnamed provider with one push feature -- and there is nothing to
+    // conclude from that, so it reports nothing rather than everything.
+    uncoveredPushFeatureIds:
+      coveredFeatureIds.size === 0
+        ? []
+        : pushFeatureIds.filter((featureId) => !coveredFeatureIds.has(featureId)),
   };
 }
 
@@ -597,6 +619,19 @@ export function resolveSearchProviderManifestDescriptors(
   const providers = coverage.hasExplicitProviders
     ? explicitProviders
     : deriveSearchProvidersFromPushFeatures(features, input.defaults);
+
+  if (
+    coverage.hasExplicitProviders &&
+    coverage.uncoveredPushFeatureIds.length > 0
+  ) {
+    issues.push({
+      type: "warning",
+      code: "SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE",
+      message:
+        'Manifest declares "searchProviders" but some push features have no provider of their own; they reach root results without a declared admission policy.',
+      featureIds: coverage.uncoveredPushFeatureIds,
+    });
+  }
 
   if (derivedFromPushFeatures) {
     issues.push({
