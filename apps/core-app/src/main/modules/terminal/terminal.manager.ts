@@ -232,6 +232,16 @@ class TerminalModule extends BaseModule {
       this.processes.delete(id)
     })
 
+    // The child-level 'error' below covers spawn failures, not stream failures. proc.stdin is a
+    // separate EventEmitter and ships with zero 'error' listeners (verified on node v24), so an
+    // EPIPE there would have nowhere to go (#641).
+    proc.stdin?.on?.('error', (err: NodeJS.ErrnoException) => {
+      terminalLog.warn('Terminal stdin error', {
+        meta: { id, code: err.code },
+        error: err
+      })
+    })
+
     proc.on('error', (err) => {
       terminalLog.error('Failed to start terminal process', {
         meta: {
@@ -260,9 +270,16 @@ class TerminalModule extends BaseModule {
     }
 
     if (session.proc.stdin) {
-      session.proc.stdin.write(data)
-      // Optionally, end the input stream if it's a one-off command
-      // proc.stdin.end();
+      // Guarded as well as listened for: write() can also throw synchronously once the stream is
+      // destroyed, which the 'error' listener above would never see.
+      try {
+        session.proc.stdin.write(data)
+      } catch (error) {
+        terminalLog.warn('Terminal write failed', {
+          meta: { id, code: (error as NodeJS.ErrnoException).code },
+          error
+        })
+      }
     } else {
       terminalLog.warn('Attempted to write to non-writable process', { meta: { id } })
     }
