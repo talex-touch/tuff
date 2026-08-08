@@ -1,20 +1,26 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { IProviderActivate } from '@talex-touch/utils'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginFeaturesAdapter } from './plugin-features-adapter'
-import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
 
-vi.mock('../../box-tool/search-engine/search-core', () => ({
-  default: {
-    getActivationState: vi.fn(() => null),
-    activateProviders: vi.fn(),
-    deactivateProvider: vi.fn()
-  }
-}))
+const searchEngineHost = {
+  getActivationState: vi.fn<() => IProviderActivate[] | null>(() => null),
+  activateProviders: vi.fn(),
+  deactivateProvider: vi.fn()
+}
+
+/** Every adapter under test is attached, mirroring what search-core does at registration. */
+function createAdapter(): PluginFeaturesAdapter {
+  const adapter = new PluginFeaturesAdapter()
+  adapter.attach(searchEngineHost)
+  return adapter
+}
 
 vi.mock('../plugin-module', () => ({
   pluginModule: {
@@ -64,7 +70,7 @@ function createFeature(): IPluginFeature {
 
 describe('plugin-features-adapter', () => {
   it('preserves feature match source metadata for cross-provider sorting', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const item = adapter.createTuffItem(
       createPlugin(),
       createFeature(),
@@ -77,7 +83,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('preserves matched alias metadata for visible token highlighting', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const item = adapter.createTuffItem(createPlugin(), createFeature(), [], 'token', {
       text: 'Clipboard',
       matchRanges: [{ start: 0, end: 'Clipboard'.length }]
@@ -90,7 +96,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('includes feature id in generated search tokens for alias/id matching', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const feature = {
       ...createFeature(),
       id: 'clipboard-history',
@@ -107,7 +113,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('generates typed pinyin evidence for compound Chinese feature names', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const feature = {
       ...createFeature(),
       id: 'wechat-message',
@@ -134,14 +140,14 @@ describe('plugin-features-adapter', () => {
   })
 
   it('does not force footer hints hidden for plugin feature items by default', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const item = adapter.createTuffItem(createPlugin(), createFeature())
 
     expect(item.meta?.footerHints).toBeUndefined()
   })
 
   it('preserves explicit color and colorful feature icons for CoreBox rendering', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const item = adapter.createTuffItem(createPlugin(), {
       ...createFeature(),
       icon: { type: 'file', value: 'assets/logo.svg', color: '#22c55e', colorful: true }
@@ -156,7 +162,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('keeps class feature icons in the themed icon branch', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const item = adapter.createTuffItem(createPlugin(), {
       ...createFeature(),
       icon: { type: 'class', value: 'i-ri-clipboard-line' }
@@ -169,7 +175,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('normalizes legacy remixicon values to UnoCSS icon classes', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const dashItem = adapter.createTuffItem(createPlugin(), {
       ...createFeature(),
       icon: { type: 'remixicon' as never, value: 'ri-clipboard-line' }
@@ -190,7 +196,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('honors explicit plugin feature footer hint declarations', () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const item = adapter.createTuffItem(createPlugin(), {
       ...createFeature(),
       footerHints: {
@@ -216,7 +222,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('does not repopulate feature items for active push features with empty query', async () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const pushFeature = { ...createFeature(), push: true }
     const plugin = {
       ...createPlugin(),
@@ -225,7 +231,7 @@ describe('plugin-features-adapter', () => {
       getFeatures: vi.fn(() => [pushFeature])
     } as unknown as ITouchPlugin
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
-    vi.mocked(searchEngineCore.getActivationState).mockReturnValue([
+    searchEngineHost.getActivationState.mockReturnValue([
       {
         id: 'plugin-features',
         meta: {
@@ -241,11 +247,11 @@ describe('plugin-features-adapter', () => {
     expect(result.activate).toHaveLength(1)
     expect(plugin.getFeatures).not.toHaveBeenCalled()
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
-    vi.mocked(searchEngineCore.getActivationState).mockReturnValue(null)
+    searchEngineHost.getActivationState.mockReturnValue(null)
   })
 
   it('forwards empty input to active push features', async () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const pushFeature = { ...createFeature(), push: true }
     const triggerFeature = vi.fn(async () => true)
     const triggerInputChanged = vi.fn()
@@ -257,7 +263,7 @@ describe('plugin-features-adapter', () => {
       triggerInputChanged
     } as unknown as ITouchPlugin
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
-    vi.mocked(searchEngineCore.getActivationState).mockReturnValue([
+    searchEngineHost.getActivationState.mockReturnValue([
       {
         id: 'plugin-features',
         meta: {
@@ -278,11 +284,11 @@ describe('plugin-features-adapter', () => {
     expect(triggerFeature).toHaveBeenCalledWith(pushFeature, query)
     expect(triggerInputChanged).toHaveBeenCalledWith(pushFeature, query)
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
-    vi.mocked(searchEngineCore.getActivationState).mockReturnValue(null)
+    searchEngineHost.getActivationState.mockReturnValue(null)
   })
 
   it('routes pushed item actionId when defaultAction is omitted', async () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const activation = { id: 'plugin-features', meta: { pluginName: 'test-plugin' } }
     const onItemAction = vi.fn(async () => ({
       externalAction: true,
@@ -329,7 +335,7 @@ describe('plugin-features-adapter', () => {
   })
 
   it('honors explicit hidden input for webcontent features with accepted inputs', async () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const feature = {
       ...createFeature(),
       acceptedInputTypes: ['text'],
@@ -368,14 +374,14 @@ describe('plugin-features-adapter', () => {
 
     expect(activation?.showInput).toBe(false)
     expect(activation?.forceMax).toBe(true)
-    expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
+    expect(searchEngineHost.activateProviders).toHaveBeenCalledWith([
       expect.objectContaining({ showInput: false, forceMax: true })
     ])
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 
   it('keeps push widget feature activations at normal height by default', async () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const feature = {
       ...createFeature(),
       push: true,
@@ -412,14 +418,14 @@ describe('plugin-features-adapter', () => {
     } as never)
 
     expect(activation?.forceMax).toBe(false)
-    expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
+    expect(searchEngineHost.activateProviders).toHaveBeenCalledWith([
       expect.objectContaining({ forceMax: false, hideResults: false, showInput: true })
     ])
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 
   it('propagates forceMax for push widget feature activations', async () => {
-    const adapter = new PluginFeaturesAdapter()
+    const adapter = createAdapter()
     const feature = {
       ...createFeature(),
       push: true,
@@ -457,9 +463,58 @@ describe('plugin-features-adapter', () => {
     } as never)
 
     expect(activation?.forceMax).toBe(true)
-    expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
+    expect(searchEngineHost.activateProviders).toHaveBeenCalledWith([
       expect.objectContaining({ forceMax: true, hideResults: false, showInput: true })
     ])
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+})
+
+describe('search engine coupling (#523)', () => {
+  const SOURCE = readFileSync(path.join(__dirname, 'plugin-features-adapter.ts'), 'utf8')
+
+  it('does not import the search engine', () => {
+    // Positive control: the read must have produced the real file, or the absence check below
+    // would pass over an empty string.
+    expect(SOURCE).toContain('export class PluginFeaturesAdapter')
+    expect(SOURCE.length).toBeGreaterThan(1000)
+
+    // search-core imports this module to register it, so importing back closes the cycle that
+    // makes whichever module evaluates second see a half-built binding.
+    const imports = SOURCE.split('\n').filter(
+      (line) => /^\s*import\b/.test(line) && !/^\s*import\s+type\b/.test(line)
+    )
+
+    // Second control, on the filter rather than the read: it has to actually extract value
+    // imports, or the assertion below is checking an empty list.
+    expect(imports.some((line) => line.includes('@talex-touch/utils'))).toBe(true)
+
+    expect(imports.filter((line) => line.includes('search-engine/search-core'))).toEqual([])
+  })
+
+  it('refuses to run before the engine attaches', async () => {
+    // The point of throwing rather than no-oping. Under the old cycle a half-initialized import
+    // would have registered undefined and plugin features would have quietly stopped appearing
+    // in CoreBox with nothing logged; this makes that state impossible to reach silently.
+    const detached = new PluginFeaturesAdapter()
+
+    await expect(
+      detached.handleActiveFeatureInput({
+        query: { text: '' }
+      } as unknown as CoreBoxInputChangeRequest)
+    ).rejects.toThrow(/attach\(\) must run/)
+  })
+
+  it('is satisfied by the shape search-core passes it', () => {
+    // Guards the structural interface from drifting into something the real engine does not
+    // implement. attach() is typed, so this is really a compile-time check made visible.
+    const adapter = new PluginFeaturesAdapter()
+    const host = {
+      getActivationState: () => null,
+      activateProviders: () => {},
+      deactivateProvider: () => {}
+    }
+
+    expect(() => adapter.attach(host)).not.toThrow()
   })
 })

@@ -21,7 +21,6 @@ import { PluginStatus } from '@talex-touch/utils/plugin'
 import { matchFeature } from '@talex-touch/utils/search'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
-import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { resolveClipboardInputs } from '../../box-tool/search-engine/utils/resolve-clipboard-inputs'
 
 import { pluginModule } from '../plugin-module'
@@ -104,6 +103,19 @@ function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints | u
   return feature.footerHints
 }
 
+/**
+ * The slice of the search engine this adapter drives.
+ *
+ * Declared structurally rather than imported, so the adapter stays off search-core's import graph
+ * (#523). search-core's `attach(this)` call is what type-checks that the real engine still
+ * satisfies this shape, so the two cannot drift apart silently.
+ */
+export interface SearchEngineActivationHost {
+  getActivationState: () => IProviderActivate[] | null
+  activateProviders: (activations: IProviderActivate[] | null) => void
+  deactivateProvider: (uniqueKey: string) => void
+}
+
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
@@ -117,9 +129,27 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
   public readonly priority = 'fast' as const
 
+  private host: SearchEngineActivationHost | null = null
+
+  /** Called by the search engine as it registers this provider. */
+  public attach(host: SearchEngineActivationHost): void {
+    this.host = host
+  }
+
+  /**
+   * Throws rather than no-oping: registering activations against a missing engine would leave
+   * plugin features absent from CoreBox results with nothing in the logs to explain it, which is
+   * the failure mode #523 describes.
+   */
+  private get engine(): SearchEngineActivationHost {
+    if (!this.host)
+      throw new Error('[PluginFeaturesAdapter] attach() must run before the adapter is used')
+    return this.host
+  }
+
   public async handleActiveFeatureInput(payload: CoreBoxInputChangeRequest): Promise<boolean> {
     const query = payload.query
-    const activationState = searchEngineCore.getActivationState()
+    const activationState = this.engine.getActivationState()
 
     const activeFeatureActivation = activationState?.find((a) => a.id === this.id)
     if (!activeFeatureActivation?.meta?.pluginName) {
@@ -298,13 +328,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         showInput: shouldShowInput,
         forceMax: feature.interaction?.forceMax === true
       }
-      searchEngineCore.activateProviders([activation])
+      this.engine.activateProviders([activation])
 
       try {
         await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
       } catch (error) {
         pluginFeaturesLog.error('[PluginFeaturesAdapter] webcontent feature execute failed:', error)
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
@@ -314,7 +344,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         )
       ) {
         // Deactivate if view loading failed
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
@@ -356,7 +386,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         showInput: shouldShowInput, // show input if feature accepts input types or has allowInput
         forceMax: feature.interaction?.forceMax === true
       }
-      searchEngineCore.activateProviders([activation])
+      this.engine.activateProviders([activation])
 
       logExecuteBreadcrumb('push-trigger-start')
       let shouldActivate: boolean | void
@@ -368,13 +398,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           durationMs: Date.now() - executeStart,
           errorCode: getErrorCode(error)
         })
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
       if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
         // Deactivate if feature explicitly returns false
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
@@ -506,7 +536,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   }
 
   public async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
-    const activationState = searchEngineCore.getActivationState()
+    const activationState = this.engine.getActivationState()
 
     if (activationState) {
       const activeFeatureActivation = activationState.find((a) => a.id === this.id)
