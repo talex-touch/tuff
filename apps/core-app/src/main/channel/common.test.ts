@@ -82,14 +82,19 @@ vi.mock('@talex-touch/utils', async (importOriginal) => {
   }
 })
 
+// A stable object, because the thing being mocked is a singleton: common.ts resolves it once at
+// module scope, so a factory returning a fresh object per call makes every assertion land on an
+// instance the code under test never held.
+const pollingInstanceMock = vi.hoisted(() => ({
+  isRegistered: vi.fn(() => false),
+  register: vi.fn(),
+  start: vi.fn(),
+  unregister: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
-    getInstance: vi.fn(() => ({
-      isRegistered: vi.fn(() => false),
-      register: vi.fn(),
-      start: vi.fn(),
-      unregister: vi.fn()
-    }))
+    getInstance: vi.fn(() => pollingInstanceMock)
   }
 }))
 
@@ -160,7 +165,8 @@ vi.mock('electron', () => ({
     }))
   },
   powerMonitor: {
-    on: vi.fn()
+    on: vi.fn(),
+    off: vi.fn()
   },
   shell: {
     openExternal: vi.fn(),
@@ -492,7 +498,7 @@ vi.mock('../utils/storage-usage', () => ({
   getStorageUsageReport: vi.fn(async () => ({}))
 }))
 
-import { dialog, shell } from 'electron'
+import { dialog, powerMonitor, shell } from 'electron'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { CommonChannelModule } from './common'
 
@@ -2172,5 +2178,55 @@ describe('createOpenUrlHandler', () => {
     await handler()('#/settings')
     expect(showMessageBox).not.toHaveBeenCalled()
     expect(openExternal).not.toHaveBeenCalled()
+  })
+})
+
+describe('CommonChannelModule battery broadcaster lifecycle', () => {
+  it('releases the powerMonitor listeners and the battery poll on destroy', async () => {
+    // #532: the handlers were registered with no disposer, so after teardown an 'on-battery'
+    // event still ran startPolling() and re-registered a task on the PollingService singleton —
+    // a destroyed module keeping a global timer alive, with nothing to show for it.
+    vi.mocked(powerMonitor.on).mockClear()
+    vi.mocked(powerMonitor.off).mockClear()
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    // Widened before comparing: powerMonitor.on is overloaded, so TS narrows the tuple to the
+    // first signature's event name and calls these comparisons unreachable.
+    const calls = vi.mocked(powerMonitor.on).mock.calls as unknown as Array<
+      [string, (...args: unknown[]) => void]
+    >
+    const registered = calls.filter(([event]) => event === 'on-ac' || event === 'on-battery')
+
+    // Positive control: without this the loop below would assert nothing on a module that never
+    // registered anything.
+    expect(registered.map(([event]) => event).sort()).toEqual(['on-ac', 'on-battery'])
+
+    await module.onDestroy()
+
+    for (const [event, handler] of registered)
+      expect(vi.mocked(powerMonitor.off)).toHaveBeenCalledWith(event, handler)
+  })
+
+  it('unregisters the battery poll task from the shared PollingService', async () => {
+    pollingInstanceMock.unregister.mockClear()
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    await module.onDestroy()
+
+    expect(pollingInstanceMock.unregister).toHaveBeenCalled()
   })
 })

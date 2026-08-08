@@ -841,6 +841,14 @@ export class CommonChannelModule extends BaseModule {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
+  /**
+   * Undo for the powerMonitor listeners and the polling registration they arm.
+   *
+   * Kept apart from transportDisposers because these outlive a transport: they attach to the
+   * process-wide powerMonitor and to the PollingService singleton, so leaving them behind means a
+   * destroyed module can still re-register a global task (#532).
+   */
+  private batteryDisposers: Array<() => void> = []
   private touchApp: TalexTouch.TouchApp | null = null
 
   constructor() {
@@ -911,15 +919,26 @@ export class CommonChannelModule extends BaseModule {
         startPolling()
       }
 
-      powerMonitor.on('on-ac', () => {
+      const handleOnAc = (): void => {
         stopPolling()
         void broadcastBatteryStatus()
-      })
+      }
 
-      powerMonitor.on('on-battery', () => {
+      const handleOnBattery = (): void => {
         startPolling()
         void broadcastBatteryStatus()
-      })
+      }
+
+      powerMonitor.on('on-ac', handleOnAc)
+      powerMonitor.on('on-battery', handleOnBattery)
+
+      // Listeners first, then the poll task: dropping the listeners before unregistering means
+      // an 'on-battery' arriving mid-teardown cannot re-arm what was just released.
+      this.batteryDisposers.push(
+        () => powerMonitor.off('on-ac', handleOnAc),
+        () => powerMonitor.off('on-battery', handleOnBattery),
+        () => stopPolling()
+      )
     } catch (error) {
       log.warn('Failed to initialize battery status broadcaster:', { error })
     }
@@ -2062,6 +2081,14 @@ export class CommonChannelModule extends BaseModule {
     if (this.batteryPollTimer) {
       clearInterval(this.batteryPollTimer)
       this.batteryPollTimer = undefined
+    }
+
+    for (const dispose of this.batteryDisposers.splice(0)) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
     }
 
     for (const dispose of this.transportDisposers) {
