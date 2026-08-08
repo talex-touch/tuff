@@ -661,7 +661,9 @@
       "authError": "认证失败，请重试。",
       "unknownError": "发生未知认证错误，请重试。"
     },
-    "runtimeApiServer": "运行时 API 服务器"
+    "runtimeApiServer": "运行时 API 服务器",
+    "stepUp": "二次验证",
+    "syncSecurity": "同步安全"
   },
   "creditsSummary": {
     "title": "AI 积分",
@@ -741,7 +743,10 @@
     "teamRole": "角色",
     "manageTeam": "管理团队",
     "upgradeTeam": "升级到 Team",
-    "personalTeam": "个人团队"
+    "personalTeam": "个人团队",
+    "overview": "概览",
+    "security": "安全与登录",
+    "securityActions": "登录与安全选项"
   },
   "layout": {
     "back": "返回"

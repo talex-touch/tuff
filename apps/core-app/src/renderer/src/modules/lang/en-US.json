@@ -661,7 +661,9 @@
       "authError": "Authentication failed. Please try again.",
       "unknownError": "Unknown authentication error. Please try again."
     },
-    "runtimeApiServer": "Runtime API server"
+    "runtimeApiServer": "Runtime API server",
+    "stepUp": "Two-step verification",
+    "syncSecurity": "Sync security"
   },
   "creditsSummary": {
     "title": "AI Credits",
@@ -741,7 +743,10 @@
     "teamRole": "Role",
     "manageTeam": "Manage Team",
     "upgradeTeam": "Upgrade to Team",
-    "personalTeam": "Personal Team"
+    "personalTeam": "Personal Team",
+    "overview": "Overview",
+    "security": "Security & sign-in",
+    "securityActions": "Sign-in and security options"
   },
   "layout": {
     "back": "Back"
