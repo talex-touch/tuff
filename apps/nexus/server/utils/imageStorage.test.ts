@@ -25,9 +25,13 @@ describe('imageStorage', () => {
 
     const result = await uploadImageFromBuffer(
       h3Event,
-      Buffer.from('<svg />'),
-      'private customer icon.svg',
-      'image/svg+xml',
+      // A raster fixture: svg is no longer an accepted icon format (#896). This test is
+      // about upload lifecycle analytics, not about which formats are allowed.
+      // Seven bytes, matching the size assertions below. The contents do not need to be a
+      // real PNG — this test is about upload lifecycle analytics.
+      Buffer.from('fakepng'),
+      'private customer icon.png',
+      'image/png',
       {
         actorId: 'publisher@example.com',
         resourceType: 'plugin-icon',
@@ -52,17 +56,17 @@ describe('imageStorage', () => {
 
     expect(result.storageChannel).toBe('memory')
     expect(JSON.stringify(rows)).not.toContain('publisher@example.com')
-    expect(JSON.stringify(rows)).not.toContain('private customer icon.svg')
+    expect(JSON.stringify(rows)).not.toContain('private customer icon.png')
     expect(rows.every(row => row.resourceId === resourceId)).toBe(true)
     expect(rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
         action: 'resource.started',
         resourceId,
-        channel: 'image/svg+xml',
+        channel: 'image/png',
         unit: 'file',
         quantity: 1,
         metadata: expect.objectContaining({
-          extension: 'svg',
+          extension: 'png',
           pluginId: marker,
           size: 7,
           source: 'plugin-version-publish',
@@ -72,11 +76,11 @@ describe('imageStorage', () => {
       expect.objectContaining({
         action: 'resource.completed',
         resourceId,
-        channel: 'image/svg+xml',
+        channel: 'image/png',
         unit: 'byte',
         quantity: 7,
         metadata: expect.objectContaining({
-          extension: 'svg',
+          extension: 'png',
           pluginId: marker,
           storageChannel: 'memory',
           storageProvider: 'memory',

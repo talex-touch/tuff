@@ -44,13 +44,16 @@ const ATTACHMENT_TYPES = [
   'text/markdown',
 ]
 
+// No 'svg'. An SVG is an active document: it can carry <script>, and /api/images/[key]
+// echoes the stored content type, so one uploaded through the non-admin plugin:publish scope
+// ran same-origin against any visitor who opened it (#896). Raster formats have no such
+// execution surface.
 const IMAGE_ALLOWED_EXTENSIONS = [
   'jpg',
   'jpeg',
   'png',
   'gif',
   'webp',
-  'svg',
   'ico',
   'bmp',
   'avif',
@@ -81,7 +84,6 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
-  'image/svg+xml': 'svg',
   'application/pdf': 'pdf',
   'application/zip': 'zip',
   'application/x-zip-compressed': 'zip',
@@ -397,7 +399,8 @@ export async function uploadImageFromBuffer(
 
   try {
     // Get extension from filename
-    const ext = fileName.split('.').pop()?.toLowerCase() ?? 'svg'
+    // Empty rather than a guessed default, so a name with no extension reports what it is.
+    const ext = fileName.includes('.') ? (fileName.split('.').pop()?.toLowerCase() ?? '') : ''
 
     // Validate extension
     if (!IMAGE_ALLOWED_EXTENSIONS.includes(ext)) {
