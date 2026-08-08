@@ -2153,6 +2153,30 @@ describe('createOpenUrlHandler', () => {
     expect(openExternal).toHaveBeenCalledWith('https://example.test/docs')
   })
 
+  it('refuses a scheme the external-url policy does not allow', async () => {
+    // #910 made the confirm branch actually confirm, but every remaining protocol
+    // still reached shell.openExternal once the user clicked through — and a dialog
+    // is a poor place to judge whether an unknown handler scheme is safe (#691).
+    answer(true)
+    await handler()('smb://attacker.example.com/share/payload.exe')
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('still prompts for file:, which is confirm-gated on purpose', async () => {
+    // Control. file: is absent from the allowlist, but #910 routed it to the prompt
+    // deliberately; the allowlist must not quietly turn that into a hard refusal.
+    answer(false)
+    await handler()('file:///etc/passwd')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+  })
+
+  it('still prompts for an ordinary https URL', async () => {
+    answer(false)
+    await handler()('https://example.com/docs')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+  })
+
   it('refuses when the confirmation dialog itself fails', async () => {
     // Fail closed: a dialog that cannot be shown must not be read as approval.
     showMessageBox.mockRejectedValue(new Error('no window'))
