@@ -2,6 +2,7 @@ import type { DbUtils } from '../../../db/utils'
 import { desc, eq } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { scheduleDbWrite } from '../../../db/db-write'
+import { parseStoredTimeBuckets } from './item-time-stats-buckets'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { resolveTimeSlot } from './item-time-stats-buckets'
@@ -188,14 +189,33 @@ export class TimeStatsAggregator {
    * 解析存储的JSON字符串为对象
    */
   private parseTimeStats(raw: typeof schema.itemTimeStats.$inferSelect): ParsedItemTimeStats {
-    return {
-      sourceId: raw.sourceId,
-      itemId: raw.itemId,
-      hourDistribution: JSON.parse(raw.hourDistribution),
-      dayOfWeekDistribution: JSON.parse(raw.dayOfWeekDistribution),
-      timeSlotDistribution: JSON.parse(raw.timeSlotDistribution),
-      lastUpdated: raw.lastUpdated
-    }
+    return toParsedItemTimeStats(raw)
+  }
+}
+
+/**
+ * Builds a ParsedItemTimeStats from a stored row, tolerating malformed columns.
+ *
+ * These three columns are plain TEXT holding JSON. A raw JSON.parse on them threw out of the
+ * public getItemTimeStats / getItemTimeStatsBatch API, so a single corrupt row — a partial write,
+ * a truncated migration — took down every caller rather than costing that one item its history
+ * (#655).
+ *
+ * parseStoredTimeBuckets already handles this per column, zeroing only what it cannot read.
+ * Exported so the recommendation engine can share it instead of repeating the mapping (#649).
+ */
+export function toParsedItemTimeStats(
+  raw: typeof schema.itemTimeStats.$inferSelect
+): ParsedItemTimeStats {
+  const buckets = parseStoredTimeBuckets(raw)
+
+  return {
+    sourceId: raw.sourceId,
+    itemId: raw.itemId,
+    hourDistribution: buckets.hour,
+    dayOfWeekDistribution: buckets.dayOfWeek,
+    timeSlotDistribution: buckets.timeSlot,
+    lastUpdated: raw.lastUpdated
   }
 }
 
