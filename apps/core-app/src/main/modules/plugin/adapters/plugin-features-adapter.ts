@@ -36,7 +36,8 @@ function getErrorCode(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined
 }
 
-function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
+/** Exported for direct branch coverage; the search path reaches it via matchesCommand. */
+export function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
     return true
   }
@@ -58,10 +59,43 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
       }
       return queryText.includes(command.value as string)
     case 'regex':
-      return (command.value as RegExp).test(queryText)
+      // A manifest can only carry the pattern as a string, so the old `as RegExp` cast threw
+      // `command.value.test is not a function` on every real declaration (#885). Compile here.
+      if (Array.isArray(command.value)) {
+        return command.value.some((value) => testRegexCommand(value, queryText))
+      }
+      return testRegexCommand(command.value as string, queryText)
+    case 'function':
+      // Declared in the public type but unreachable: a matcher function cannot survive
+      // manifest JSON or IPC. It used to fall through to `false`, so a plugin declaring it saw
+      // its feature silently never match with nothing to explain why.
+      pluginFeaturesLog.warn(
+        'command type "function" cannot be declared in manifest.json - a matcher function does not survive JSON or IPC. Use "regex" or "match".'
+      )
+      return false
     default:
       return false
   }
+}
+
+const regexCommandCache = new Map<string, RegExp | null>()
+
+/** Compiles once per pattern; an invalid pattern must not match rather than throw. */
+function testRegexCommand(pattern: string, queryText: string): boolean {
+  if (typeof pattern !== 'string') return false
+
+  let compiled = regexCommandCache.get(pattern)
+  if (compiled === undefined) {
+    try {
+      compiled = new RegExp(pattern)
+    } catch {
+      pluginFeaturesLog.warn(`ignoring invalid regex command pattern: ${pattern}`)
+      compiled = null
+    }
+    regexCommandCache.set(pattern, compiled)
+  }
+
+  return compiled ? compiled.test(queryText) : false
 }
 
 function normalizeClassIconValue(value: string): string {
