@@ -261,6 +261,12 @@
     "packages/utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/utils\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
+    "plugins/clipboard-history/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/clipboard-history\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "plugins/touch-dev-utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/touch-dev-utils\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
     "plugins/touch-image/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"plugins/touch-image\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
