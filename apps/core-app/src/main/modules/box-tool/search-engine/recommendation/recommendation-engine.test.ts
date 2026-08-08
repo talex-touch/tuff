@@ -348,6 +348,65 @@ describe('RecommendationEngine', () => {
     expect(getCandidates).toHaveBeenCalledTimes(2)
   })
 
+  it('does not read the recommendation cache it is about to discard', async () => {
+    // recommend() awaited getCachedRecommendations and only then checked
+    // forceRefresh, so the 15-minute background refresh and every user-triggered
+    // refresh paid for a SELECT plus a JSON.parse of up to 10 rendered TuffItems
+    // and threw the result away (#675).
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const getCandidates = vi.fn(async () => ({
+      items: [
+        {
+          sourceId: 'app-provider',
+          itemId: 'fresh-app',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('fresh-app', { executeCount: 2 })
+        }
+      ],
+      perf: candidatePerf(1)
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates
+    })
+
+    const forced = await engine.recommend({ limit: 1, forceRefresh: true })
+
+    expect(dbUtils.getRecommendationCache).not.toHaveBeenCalled()
+    expect(forced.items[0]?.id).toBe('fresh-app')
+    expect(getCandidates).toHaveBeenCalledTimes(1)
+  })
+
+  it('still reads the cache on a normal recommend', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(1) }))
+    })
+
+    await engine.recommend({ limit: 1 })
+
+    // The skip must be conditional on forceRefresh, not a blanket removal.
+    expect(dbUtils.getRecommendationCache).toHaveBeenCalled()
+  })
+
   it('does not reuse persisted recommendation cache across time slots', async () => {
     const dbUtils = createDbUtils()
     dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
