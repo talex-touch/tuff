@@ -13,14 +13,15 @@
  * reproducible anywhere Node runs.
  */
 
-const zlib = require('node:zlib')
+const { Buffer } = require('node:buffer')
 const fs = require('node:fs')
 const path = require('node:path')
+const zlib = require('node:zlib')
 
 const GLYPHS = {
   T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
   U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000']
+  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
 }
 
 const WORD = 'TUFF'
@@ -35,7 +36,8 @@ const height = PADDING * 2 + 7 * SCALE
 const pixels = Buffer.alloc(width * height * 3, 255)
 
 function paint(x, y) {
-  if (x < 0 || y < 0 || x >= width || y >= height) return
+  if (x < 0 || y < 0 || x >= width || y >= height)
+    return
   const offset = (y * width + x) * 3
   pixels[offset] = 0
   pixels[offset + 1] = 0
@@ -47,7 +49,8 @@ WORD.split('').forEach((character, index) => {
   const originX = PADDING + index * glyphWidth
   glyph.forEach((row, rowIndex) => {
     row.split('').forEach((cell, columnIndex) => {
-      if (cell !== '1') return
+      if (cell !== '1')
+        return
       for (let dy = 0; dy < SCALE; dy += 1) {
         for (let dx = 0; dx < SCALE; dx += 1) {
           paint(originX + columnIndex * SCALE + dx, PADDING + rowIndex * SCALE + dy)
@@ -67,14 +70,14 @@ for (let y = 0; y < height; y += 1) {
 const CRC_TABLE = []
 for (let n = 0; n < 256; n += 1) {
   let c = n
-  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
   CRC_TABLE[n] = c >>> 0
 }
 
 function crc32(buffer) {
-  let c = 0xffffffff
+  let c = 0xFFFFFFFF
   for (const byte of buffer) c = CRC_TABLE[(c ^ byte) & 255] ^ (c >>> 8)
-  return (c ^ 0xffffffff) >>> 0
+  return (c ^ 0xFFFFFFFF) >>> 0
 }
 
 function chunk(type, data) {
@@ -96,7 +99,7 @@ const png = Buffer.concat([
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
   chunk('IHDR', ihdr),
   chunk('IDAT', zlib.deflateSync(raw)),
-  chunk('IEND', Buffer.alloc(0))
+  chunk('IEND', Buffer.alloc(0)),
 ])
 
 const outPath = path.join(__dirname, '..', 'src', 'native', 'fixtures', 'tuff-ocr-fixture.png')
