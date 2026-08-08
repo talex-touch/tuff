@@ -928,10 +928,15 @@ class OcrService {
   private async processQueue(): Promise<void> {
     if (this.processing) return
     if (!this.db) return
-    if (await this.isQueueDisabled()) return
 
+    // Claimed before the first await. isQueueDisabled() reads config, so two callers arriving
+    // during it both used to pass the check above and both enter the loop, dispatching the same
+    // pending jobs twice (#644). The check and the claim have to be in the same synchronous
+    // step; the disabled check moves inside the try so the finally still releases the guard.
     this.processing = true
     try {
+      if (await this.isQueueDisabled()) return
+
       while (this.activeJobs.size < WORKER_CONCURRENCY) {
         if (await this.isQueueDisabled()) {
           break
