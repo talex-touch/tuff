@@ -542,6 +542,20 @@ abstract class BasePluginLoader {
       return
     }
 
+    if (issue.code === 'SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE') {
+      this.touchPlugin.issues.push({
+        type: 'warning',
+        message: issue.message,
+        source: 'manifest.json',
+        code: issue.code,
+        suggestion:
+          'Declare a searchProvider carrying each push feature\'s featureId, or drop push from the features that should not reach root results.',
+        meta: { featureIds: issue.featureIds ?? [] },
+        timestamp: Date.now()
+      })
+      return
+    }
+
     if (issue.code === 'SEARCH_PROVIDER_PERMISSION_MISSING') {
       this.touchPlugin.issues.push({
         type: 'error',

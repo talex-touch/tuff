@@ -60,6 +60,7 @@ type DestroyableSearchProvider = ISearchProvider<ProviderContext> & {
 
 const SEARCH_PROVIDER_ISSUE_CODES: Record<SearchProviderRegistryIssue['code'], true> = {
   SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE: true,
+  SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE: true,
   SEARCH_PROVIDER_INVALID: true,
   SEARCH_PROVIDER_POLICY_BLOCKED: true,
   SEARCH_PROVIDER_PERMISSION_MISSING: true,
