@@ -74,7 +74,24 @@ export default defineEventHandler(async (event) => {
   }
 
   await logLoginAttempt(event, { userId: user.id, deviceId: null, success: true, reason: 'passkey', clientType: 'app' })
-  const loginToken = await createLoginToken(event, user.id, 'passkey', 1000 * 60 * 10)
 
-  return { token: loginToken }
+  // The assertion's UV flag decides what the resulting token is allowed to prove (#923).
+  //
+  // Options are requested with userVerification: 'preferred', so an authenticator with no PIN
+  // or biometric enrolled answers with the UV flag clear — a single touch. That is fine for
+  // signing in, which is what possession of the key has always meant, but it is not a second
+  // factor, and requireAdminStepUp / requireAdminSessionChannel were treating the token as
+  // exactly that. Someone holding an admin's PIN-less key could clear 'Passkey step-up
+  // required' on emergency admin actions with one touch.
+  //
+  // Encoding the difference in the token's reason means no schema change and no new check at
+  // the call sites: every consumer that matches on 'passkey' is a step-up path, while the
+  // ordinary sign-in in api/auth/[...].ts consumes without a reason and keeps working. A
+  // presence-only key therefore still logs in and simply cannot elevate.
+  const reason = result.userVerified ? 'passkey' : 'passkey-presence'
+  const loginToken = await createLoginToken(event, user.id, reason, 1000 * 60 * 10)
+
+  // Surfaced so a client can explain why an elevation prompt will not accept this key,
+  // rather than letting it fail later as an opaque rejection.
+  return { token: loginToken, userVerified: result.userVerified }
 })
