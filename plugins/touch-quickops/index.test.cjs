@@ -218,3 +218,52 @@ test('onItemAction fails closed when the Flow facade is absent', async () => {
     reason: 'flow-sdk-unavailable',
   })
 })
+
+test('high-risk requests publish a blocked notice and nothing dispatchable', async () => {
+  const { plugin, state } = loadPlugin({
+    flow: {
+      async dispatch(payload, options) {
+        state.flowCalls.push({ payload, options })
+        return { sessionId: 'flow-1', state: 'ACKED' }
+      },
+    },
+  })
+
+  await plugin.onFeatureTriggered('quickops', { text: 'kill port 3000' })
+
+  // "kill port 3000" is the high-risk pattern the plugin refuses to carry out itself.
+  assert.equal(state.items.length, 1)
+  const [blocked] = state.items
+  assert.equal(blocked.id, 'quickops-high-risk-blocked-kill-port')
+  assert.equal(blocked.render.basic.title, '高风险端口释放已阻断')
+
+  // The point of the path: nothing the host could act on comes back. No flow item, no
+  // actions, no payload. A blocked action that still ships its payload is one careless
+  // dispatch away from running.
+  assert.equal(state.items.some(item => item.meta.defaultAction === 'quickops-flow-action'), false)
+  assert.equal(blocked.actions, undefined)
+  assert.equal(blocked.meta.defaultAction, undefined)
+  assert.equal(blocked.meta.payload, undefined)
+
+  // And acting on it anyway reaches no facade.
+  await plugin.onItemAction(blocked)
+  assert.deepEqual(state.flowCalls, [])
+})
+
+test('projectItemsForHost publishes only whitelisted meta, so request detail cannot leak', async () => {
+  const { plugin, state } = loadPlugin()
+
+  await plugin.onFeatureTriggered('quickops', { text: 'stop timer secret-token-abc123' })
+
+  // Every published item is projected down to a fixed meta shape before it leaves the
+  // plugin. This is what keeps request text and internal reasoning out of the host, and
+  // it is asserted here rather than assumed because it is invisible from the outside.
+  for (const item of state.items) {
+    assert.deepEqual(
+      Object.keys(item.meta).sort().filter(key => !['defaultAction', 'priority'].includes(key)),
+      ['featureId', 'pluginName'],
+    )
+  }
+
+  assert.doesNotMatch(JSON.stringify(state.items), /secret-token-abc123/)
+})
