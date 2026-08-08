@@ -25,6 +25,16 @@ const DEFAULT_CONFIG: LoggingConfig = {
 }
 
 /**
+ * `setModuleConfig` writes into `this.config.modules`, and a shallow `{ ...DEFAULT_CONFIG }`
+ * aliases the one shared `modules` object — so every per-module override leaked into the
+ * defaults and `reset()` restored the polluted copy, leaving no way back to a clean state
+ * (#881). Every config built from the defaults gets its own `modules` object.
+ */
+function createDefaultConfig(): LoggingConfig {
+  return { ...DEFAULT_CONFIG, modules: {} }
+}
+
+/**
  * Predefined module defaults
  */
 const MODULE_DEFAULTS: Record<string, { enabled: boolean, level: LogLevel, color: string }> = {
@@ -59,7 +69,7 @@ const MODULE_DEFAULTS: Record<string, { enabled: boolean, level: LogLevel, color
 export class LoggerManager {
   private static instance: LoggerManager | null = null
   private loggers: Map<string, ModuleLogger> = new Map()
-  private config: LoggingConfig = { ...DEFAULT_CONFIG }
+  private config: LoggingConfig = createDefaultConfig()
   private configLoader: (() => Promise<LoggingConfig | null>) | null = null
   private configSaver: ((config: LoggingConfig) => Promise<void>) | null = null
 
@@ -101,9 +111,16 @@ export class LoggerManager {
       // Determine log level
       let level = stringToLogLevel(this.config.globalLevel)
       if (moduleConfig?.level) {
-        level = Math.max(level, stringToLogLevel(moduleConfig.level))
+        // An explicit per-module level is an override, not a floor. LogLevel is ordered
+        // DEBUG=0..ERROR=3, so Math.max always picked the more restrictive of the two and made
+        // it impossible to turn one module up while the global level stayed quiet --
+        // setModuleConfig applied the level directly, then the next applyConfig() silently
+        // undid it (#882).
+        level = stringToLogLevel(moduleConfig.level)
       }
       else if (defaults?.level !== undefined) {
+        // MODULE_DEFAULTS are defaults rather than stated intent, so they stay bounded by the
+        // global level.
         level = Math.max(level, defaults.level)
       }
       if (options?.level !== undefined) {
@@ -226,7 +243,9 @@ export class LoggerManager {
     try {
       const loaded = await this.configLoader()
       if (loaded) {
-        this.config = { ...DEFAULT_CONFIG, ...loaded }
+        // `loaded.modules` may be absent, which would alias the shared object again; and
+        // when present it belongs to the caller, so it is copied rather than adopted.
+        this.config = { ...createDefaultConfig(), ...loaded, modules: { ...loaded.modules } }
         this.applyConfig()
       }
     }
@@ -270,9 +289,16 @@ export class LoggerManager {
       // Determine log level
       let level = stringToLogLevel(this.config.globalLevel)
       if (moduleConfig?.level) {
-        level = Math.max(level, stringToLogLevel(moduleConfig.level))
+        // An explicit per-module level is an override, not a floor. LogLevel is ordered
+        // DEBUG=0..ERROR=3, so Math.max always picked the more restrictive of the two and made
+        // it impossible to turn one module up while the global level stayed quiet --
+        // setModuleConfig applied the level directly, then the next applyConfig() silently
+        // undid it (#882).
+        level = stringToLogLevel(moduleConfig.level)
       }
       else if (defaults?.level !== undefined) {
+        // MODULE_DEFAULTS are defaults rather than stated intent, so they stay bounded by the
+        // global level.
         level = Math.max(level, defaults.level)
       }
 
@@ -285,7 +311,7 @@ export class LoggerManager {
    * Reset to default configuration
    */
   reset(): void {
-    this.config = { ...DEFAULT_CONFIG }
+    this.config = createDefaultConfig()
     this.applyConfig()
   }
 }
