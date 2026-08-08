@@ -86,3 +86,37 @@ describe('attribute separators before href/src', () => {
     )
   })
 })
+
+/**
+ * The no-DOM fallback (#900).
+ *
+ * This file runs under the repo default environment, node, where DOMParser does not exist —
+ * so these exercise the regex path, which server-side rendering also takes. It is still a
+ * sequential chain, but it is applied until the output stops changing: a splice produces text
+ * the next round strips.
+ */
+describe('sanitizeMarkdownHtml without a DOM', () => {
+  it('confirms there is no DOM here, so these are the fallback', () => {
+    // Without this the file would quietly become a duplicate of the jsdom suite if the
+    // default environment ever changed.
+    expect(typeof globalThis.DOMParser).toBe('undefined')
+  })
+
+  it('does not leave a handler spliced back together', () => {
+    // Pre-fix this returned <img src="/nope.png" onerror=alert(document.domain)>.
+    const output = sanitizeMarkdownHtml('<img src="/nope.png" on style="y"error=alert(document.domain)>')
+    expect(output).not.toMatch(/\son[a-z]+\s*=/i)
+  })
+
+  it('does not leave a dangerous element spliced back together', () => {
+    for (const input of ['<i onerror="x"frame src="//evil.example">', '<obje onerror="x"ct data="//evil.example">'])
+      expect(sanitizeMarkdownHtml(input), input).not.toMatch(/<(iframe|object)\b/i)
+  })
+
+  it('still passes ordinary content through', () => {
+    // Positive control: iterating to a fixed point must not erode valid markup.
+    const output = sanitizeMarkdownHtml('<p>Hello <strong>world</strong> <a href="https://example.test">l</a></p>')
+    expect(output).toContain('<strong>world</strong>')
+    expect(output).toContain('href="https://example.test"')
+  })
+})
