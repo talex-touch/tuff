@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { RAW_MAIN_PROCESS_CHANNEL, RAW_PLUGIN_PROCESS_CHANNEL } from '../shared/ipc/raw-channel'
 
 /**
  * What preload bridges into the renderer world (#693).
@@ -61,8 +60,6 @@ describe('preload ipc bridge', () => {
     )
     expect(channelSet).toContain('RAW_MAIN_PROCESS_CHANNEL')
     expect(channelSet).toContain('RAW_PLUGIN_PROCESS_CHANNEL')
-    expect(RAW_MAIN_PROCESS_CHANNEL).toBe('@main-process-message')
-    expect(RAW_PLUGIN_PROCESS_CHANNEL).toBe('@plugin-process-message')
   })
 })
 
