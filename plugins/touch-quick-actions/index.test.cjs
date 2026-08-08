@@ -164,10 +164,48 @@ test('main-owned blocked status is preserved without local execution fallback', 
     reason: 'confirmation-denied',
   }
 
-  const result = await pluginModule.onFeatureTriggered('quick-action-shutdown', { text: '' })
+  // Routed through the item now: a dynamic feature publishes and onItemAction runs (#817).
+  // What this test is about — a blocked status from main is preserved rather than falling
+  // back to local execution — is unchanged.
+  await pluginModule.onFeatureTriggered('quick-action-shutdown', { text: '' })
+  const item = state.items.find(entry => entry.actions?.[0]?.payload?.actionId === 'shutdown')
+  assert.ok(item)
+
+  const result = await pluginModule.onItemAction(item, { actionId: 'run-action' })
 
   assert.deepEqual(state.systemCalls, ['shutdown'])
   assert.equal(result.status, 'blocked')
   assert.equal(result.reason, 'confirmation-denied')
   assert.equal(result.success, false)
+})
+
+test('a dynamic feature publishes an item instead of running the action', async () => {
+  // The defect: onFeatureTriggered is re-entered on every input change, so running here fired
+  // the action on each keystroke — locking the screen repeatedly, or re-raising the shutdown
+  // confirmation.
+  const result = await pluginModule.onFeatureTriggered('quick-action-lock-screen', { text: '' })
+
+  assert.deepEqual(state.systemCalls, [])
+  assert.equal(result, true)
+  assert.equal(state.items.length, 1)
+  assert.equal(state.items[0].actions[0].payload.actionId, 'lock-screen')
+})
+
+test('repeated triggers of a dynamic feature never execute', async () => {
+  // The shape of the bug was repetition, so repetition is what the test exercises.
+  for (const text of ['', 'l', 'lo', 'loc'])
+    await pluginModule.onFeatureTriggered('quick-action-lock-screen', { text })
+
+  assert.deepEqual(state.systemCalls, [])
+})
+
+test('the published item still runs the action when selected', async () => {
+  // Positive control: publishing instead of executing must not make the action unreachable.
+  await pluginModule.onFeatureTriggered('quick-action-lock-screen', { text: '' })
+  const item = state.items[0]
+
+  const result = await pluginModule.onItemAction(item, { actionId: 'run-action' })
+
+  assert.deepEqual(state.systemCalls, ['lock-screen'])
+  assert.equal(result.success, true)
 })
