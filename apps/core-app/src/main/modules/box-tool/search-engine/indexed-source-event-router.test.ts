@@ -174,7 +174,14 @@ describe('IndexedSourceEventRouter watch coalescing', () => {
     expect(fileRoutes.map((event) => event.path).sort()).toEqual(['/tmp/a.md', '/tmp/b.md'])
   })
 
-  it('opens no window while idle and drops open windows on unsubscribe', async () => {
+  it('opens no window while idle and flushes an open window on unsubscribe', async () => {
+    // This used to assert routeWatchEventWithResult was NOT called — it recorded
+    // the behaviour rather than requiring it. Dropping the window closes the timer
+    // but also throws the coalesced delta away, and since unsubscribe detaches the
+    // producers first, the "next flush" the queue's own doc promises can never
+    // arrive. An app dropped in during the 400ms window vanished from the index
+    // with no reconcile marker (#676). The timer-leak half of the assertion is
+    // still here; only the data-loss half changed.
     const { router, emit, routeWatchEventWithResult, appWindowMs } = await createRouter()
 
     expect(vi.getTimerCount()).toBe(0)
@@ -182,10 +189,12 @@ describe('IndexedSourceEventRouter watch coalescing', () => {
     emit('DIRECTORY_ADDED', '/Applications/Probe.app')
     expect(vi.getTimerCount()).toBe(1)
 
-    router.unsubscribe()
+    await router.unsubscribe()
     expect(vi.getTimerCount()).toBe(0)
 
     await settleWindows(appWindowMs)
-    expect(routeWatchEventWithResult).not.toHaveBeenCalled()
+    expect(routeWatchEventWithResult).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/Applications/Probe.app' })
+    )
   })
 })

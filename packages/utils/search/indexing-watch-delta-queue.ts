@@ -126,6 +126,20 @@ export class IndexingWatchDeltaQueueService<
     this.chainFlush();
   }
 
+  /**
+   * Like `flushSoon`, but resolves once the flush has actually run.
+   *
+   * `flushSoon` only puts the work on the task chain, so a caller tearing down
+   * cannot tell whether the pending deltas landed. Teardown paths need that
+   * guarantee: `dispose` drops the coalescing window and, once the producers are
+   * detached, nothing will ever enqueue again to trigger "the next flush".
+   */
+  async drain(): Promise<void> {
+    this.clearDebounceWindow();
+    this.chainFlush();
+    await this.taskChain;
+  }
+
   private schedule(): void {
     if (this.pending.size === 0) {
       return;
