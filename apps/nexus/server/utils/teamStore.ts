@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import type { SubscriptionPlan } from './subscriptionStore'
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 
@@ -157,12 +157,28 @@ function mapInviteRow(row: D1InviteRow): TeamInvite {
   }
 }
 
+const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+/**
+ * An invite code is a bearer credential, so it has to be unguessable.
+ *
+ * This used Math.random, which is V8's xorshift128+ — not a CSPRNG and not meant to be one.
+ * Its state is recoverable from a handful of consecutive outputs, so anyone able to harvest
+ * codes from the same isolate could reconstruct the ones minted for other organisations
+ * (#892). Same defect and same fix as the activation codes in subscriptionStore.
+ *
+ * randomInt is rejection-sampled and unbiased. The alphabet is 32 characters, a power of two,
+ * so a mask over randomBytes would also have been unbiased — randomInt is used because it
+ * stays correct if the alphabet ever changes length.
+ *
+ * Length is unchanged at 8. The two routes that consumed these codes are retired (410), so
+ * lengthening would alter a stored format for a flow nothing can currently exercise; that is
+ * a decision for whoever revives it, together with the rate limiting the issue asks for.
+ */
 function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
+  for (let i = 0; i < 8; i++)
+    code += INVITE_CODE_ALPHABET.charAt(randomInt(INVITE_CODE_ALPHABET.length))
   return code
 }
 
