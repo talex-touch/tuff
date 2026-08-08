@@ -19,6 +19,8 @@ interface TerminalSession {
   proc: ChildProcess
   /** Who may write to and kill this session. See ownerKeyOf. */
   owner: string
+  /** Detaches the renderer-teardown watcher. Called once the process is gone. */
+  releaseSenderWatch: () => void
 }
 
 /**
@@ -115,6 +117,37 @@ class TerminalModule extends BaseModule {
   }
 
   /**
+   * Kills the session's child when the renderer that asked for it goes away.
+   *
+   * Returns an unsubscribe so a long-lived renderer does not accumulate one listener per session.
+   * Tolerates a sender without the emitter API — the permission tests drive create() with a plain
+   * `{ id, isDestroyed }` stub — in which case there is nothing to watch and the module-level
+   * onDestroy remains the backstop.
+   */
+  private watchSenderTeardown(sender: WebContents | undefined, id: string): () => void {
+    if (!sender || typeof sender.once !== 'function' || typeof sender.off !== 'function') {
+      return () => {}
+    }
+
+    const onSenderDestroyed = (): void => {
+      const session = this.processes.get(id)
+      if (!session) return
+      this.processes.delete(id)
+      try {
+        session.proc.kill()
+      } catch (error) {
+        terminalLog.warn('Failed to kill terminal process after renderer teardown', {
+          meta: { id },
+          error
+        })
+      }
+    }
+
+    sender.once('destroyed', onSenderDestroyed)
+    return () => sender.off('destroyed', onSenderDestroyed)
+  }
+
+  /**
    * Creates a new child process to execute a command.
    * Expects data to contain { command: string, args: string[] }.
    * Sends back { id: string } on success.
@@ -149,7 +182,12 @@ class TerminalModule extends BaseModule {
       throw new Error('Terminal session requires an identifiable caller')
     }
 
-    this.processes.set(id, { proc, owner })
+    // Nothing else notices a renderer going away: sendToSender short-circuits on isDestroyed, so
+    // output is silently dropped while the child keeps running and holding its pipes, and the id
+    // needed to kill it left with the renderer (#639).
+    const releaseSenderWatch = this.watchSenderTeardown(sender, id)
+
+    this.processes.set(id, { proc, owner, releaseSenderWatch })
 
     // Listen for data from stdout and stderr
     proc.stdout?.on('data', (data) => {
@@ -164,6 +202,7 @@ class TerminalModule extends BaseModule {
     // Listen for the process to close
     proc.on('close', (code) => {
       this.sendToSender(sender, { id, exitCode: code ?? null })
+      releaseSenderWatch()
       this.processes.delete(id)
     })
 
@@ -177,6 +216,7 @@ class TerminalModule extends BaseModule {
       })
       this.sendToSender(sender, { id, data: `Error: ${err.message}\n` })
       this.sendToSender(sender, { id, exitCode: -1 })
+      releaseSenderWatch()
       this.processes.delete(id)
     })
 
