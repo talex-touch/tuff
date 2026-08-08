@@ -105,7 +105,7 @@ function normalizeCacheOptions(options?: SendOptions): CacheConfig | null {
   }
 }
 
-function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string): string {
+function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string): string | null {
   if (overrideKey) {
     return overrideKey
   }
@@ -118,7 +118,13 @@ function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string
     return `${eventName}:${JSON.stringify(payload)}`
   }
   catch {
-    return `${eventName}:${Object.prototype.toString.call(payload)}`
+    // A payload JSON.stringify refuses (circular, BigInt, a throwing toJSON) has no
+    // distinguishing key. The previous fallback was Object.prototype.toString.call(payload),
+    // a constant for every plain object -- so two sends on one event with different circular
+    // payloads shared the entry and the second returned the first's response without ever
+    // reaching the main process. Refusing to key it makes the caller skip the cache: an
+    // uncached round-trip is slower, a wrong cached answer is a bug.
+    return null
   }
 }
 
@@ -170,14 +176,18 @@ export class TuffPluginTransport implements ITuffTransport {
 
     const eventName = (event as any).toEventName() as string
     const cacheConfig = normalizeCacheOptions(options)
-    const cacheKey = cacheConfig ? buildCacheKey(eventName, payload, cacheConfig.key) : ''
+    // null when the payload cannot be serialized into a distinguishing key; such a send is
+    // uncacheable in both directions rather than sharing an entry with every other one.
+    const cacheKey = cacheConfig ? buildCacheKey(eventName, payload, cacheConfig.key) : null
     if (cacheConfig) {
-      const entry = this.cache.get(cacheKey)
-      if (entry) {
-        if (entry.expiresAt === undefined || entry.expiresAt > Date.now()) {
-          return entry.value as TRes
+      if (cacheKey !== null) {
+        const entry = this.cache.get(cacheKey)
+        if (entry) {
+          if (entry.expiresAt === undefined || entry.expiresAt > Date.now()) {
+            return entry.value as TRes
+          }
+          this.cache.delete(cacheKey)
         }
-        this.cache.delete(cacheKey)
       }
       if (cacheConfig.mode === 'only') {
         throw new Error(`[TuffTransport] Cache miss for \"${eventName}\"`)
@@ -196,7 +206,7 @@ export class TuffPluginTransport implements ITuffTransport {
 
     const shouldPassPayload = payload !== undefined
     const result = await sender(eventName, shouldPassPayload ? payload : undefined)
-    if (cacheConfig) {
+    if (cacheConfig && cacheKey !== null) {
       const expiresAt = typeof cacheConfig.ttlMs === 'number' && Number.isFinite(cacheConfig.ttlMs)
         ? Date.now() + Math.max(0, cacheConfig.ttlMs)
         : undefined
