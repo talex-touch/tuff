@@ -20,6 +20,7 @@ import {
 import { readCloudflareBindings } from '../../utils/cloudflare'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
+import { oauthEmailProvesMailboxControl } from '../../utils/oauthEmailTrust'
 import {
   assertRuntimeCredential,
   isLocalDevelopmentRuntime,
@@ -614,9 +615,14 @@ function getAuthOptions(authSecret: string): AuthOptions {
       type: 'oauth',
       clientId: linuxdoClientId,
       clientSecret: linuxdoClientSecret,
-      // Keep LinuxDO behavior consistent with GitHub: when OAuth email matches an existing
-      // local account, allow linking instead of returning without creating provider linkage.
-      allowDangerousEmailAccountLinking: true,
+      // GitHub resolves its email through /user/emails and keeps only entries the issuer
+      // marks `verified === true`, so an email from GitHub is proof of mailbox control.
+      // LinuxDO's /api/user carries no equivalent claim: the address is whatever the account
+      // has set. Auto-linking on it let anyone who set a victim's address at the issuer sign
+      // straight into the victim's Nexus account, admin included (#916). Linking to a
+      // pre-existing local account is therefore off here, and the signIn callback below
+      // refuses to adopt one unless the profile carries an explicit `email_verified` claim.
+      allowDangerousEmailAccountLinking: false,
       authorization: {
         url: `${linuxdoIssuer}/oauth2/authorize`,
         params: { scope: 'profile email' },
@@ -699,6 +705,11 @@ function getAuthOptions(authSecret: string): AuthOptions {
           if (!email) return true
           const existing = await getUserByEmail(authEvent, email)
           if (!existing) return true
+          // Checked before restoreForInteractiveSignIn, not after: that call un-deletes an
+          // account inside its pending-deletion window, so letting an untrusted email reach
+          // it would let a stranger resurrect someone else's account even when the sign-in
+          // that follows is refused.
+          if (!oauthEmailProvesMailboxControl(account.provider, profile)) return false
           return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         if (account.provider === 'email') {
