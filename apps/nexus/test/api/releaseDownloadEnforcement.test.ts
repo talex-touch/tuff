@@ -20,13 +20,13 @@ const isUnsignedFallbackAllowed = vi.fn()
 const verifyReleaseDownloadSignature = vi.fn()
 const incrementDownloadCount = vi.fn(async () => {})
 
-vi.mock('../../utils/releaseDownloadSignature', () => ({
+vi.mock('../../server/utils/releaseDownloadSignature', () => ({
   parseReleaseDownloadQuerySignature,
   isUnsignedFallbackAllowed,
   verifyReleaseDownloadSignature,
 }))
 
-vi.mock('../../utils/releasesStore', () => ({
+vi.mock('../../server/utils/releasesStore', () => ({
   getReleaseByTag: vi.fn(async () => ({
     tag: 'v2.5.0',
     status: 'published',
@@ -45,7 +45,7 @@ vi.mock('../../utils/releasesStore', () => ({
   incrementDownloadCount,
 }))
 
-vi.mock('../../utils/releaseAssetStorage', () => ({
+vi.mock('../../server/utils/releaseAssetStorage', () => ({
   requireReleaseAsset: vi.fn(),
 }))
 
@@ -68,7 +68,7 @@ vi.stubGlobal('defineEventHandler', (fn: unknown) => fn)
 type Handler = (event: unknown) => Promise<unknown>
 
 async function loadHandler(): Promise<Handler> {
-  const mod = await import('./[tag]/download/[platform]/[arch].get')
+  const mod = await import('../../server/api/releases/[tag]/download/[platform]/[arch].get')
   return mod.default as unknown as Handler
 }
 
