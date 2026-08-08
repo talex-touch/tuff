@@ -4249,6 +4249,7 @@
     "no": "否",
     "retry": "重试",
     "cancel": "取消",
+    "openExternalConfirm": "在 Tuff 之外打开此链接？",
     "save": "保存",
     "confirm": "确认",
     "delete": "删除",
