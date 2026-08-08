@@ -1,5 +1,4 @@
-import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -23,24 +22,39 @@ const REPO_ROOT = path.resolve(__dirname, '../../..')
 /** Where the names may be declared. Everywhere else must import them. */
 const DECLARING_FILE = 'packages/utils/intelligence/nexus-provider.ts'
 
+const SEARCH_ROOTS = ['apps', 'packages', 'plugins']
+const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.nuxt', '.output', 'coverage'])
+
+function* sourceFiles(dir: string): Generator<string> {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue
+      yield* sourceFiles(path.join(dir, entry.name))
+      continue
+    }
+    if (/\.(ts|tsx|vue|js|mjs)$/.test(entry.name)) yield path.join(dir, entry.name)
+  }
+}
+
+/**
+ * Implemented with node:fs rather than by shelling out. A first version used ripgrep, which is
+ * not installed on the CI runner — the guard then failed as `spawnSync rg ENOENT`, which is the
+ * loud version of a check that cannot run, but a check that cannot run all the same.
+ */
 function declarationsOf(name: string): string[] {
-  const out = execFileSync(
-    'rg',
-    [
-      '--line-number',
-      '--no-heading',
-      '--glob',
-      '!**/node_modules/**',
-      '--glob',
-      '!**/dist/**',
-      `export (const|function) ${name}\\b`,
-      'apps',
-      'packages',
-      'plugins'
-    ],
-    { cwd: REPO_ROOT, encoding: 'utf8' }
-  )
-  return out.split('\n').filter(Boolean)
+  const pattern = new RegExp(`export\\s+(?:const|function)\\s+${name}\\b`)
+  const found: string[] = []
+
+  for (const root of SEARCH_ROOTS) {
+    const absolute = path.join(REPO_ROOT, root)
+    if (!existsSync(absolute)) continue
+    for (const file of sourceFiles(absolute)) {
+      if (pattern.test(readFileSync(file, 'utf8')))
+        found.push(path.relative(REPO_ROOT, file))
+    }
+  }
+
+  return found.sort()
 }
 
 describe('isNexusManagedProvider', () => {
@@ -88,7 +102,7 @@ describe('single declaration', () => {
 
       // Non-empty first: a broken pattern returning nothing would otherwise read as "one place".
       expect(declarations.length).toBeGreaterThan(0)
-      expect(declarations.map((line) => line.split(':')[0])).toEqual([DECLARING_FILE])
+      expect(declarations).toEqual([DECLARING_FILE])
     }
   )
 })
