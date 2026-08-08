@@ -6,7 +6,10 @@
  */
 
 import type { PermissionStore } from './permission-store'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { normalizePermissionId, permissionRegistry } from '@talex-touch/utils/permission'
+
+const permissionGuardLog = getLogger('permission-guard')
 
 /**
  * Permission check result
@@ -138,6 +141,9 @@ export class PermissionGuard {
     slowChecks: 0 // > 5ms
   }
 
+  /** API names that reached check() with no mapping, and how often. See #915. */
+  private unmappedApis = new Map<string, { count: number; plugins: Set<string> }>()
+
   constructor(store: PermissionStore) {
     this.store = store
 
@@ -157,7 +163,14 @@ export class PermissionGuard {
     const requiredPermissions = this.getRequiredPermissions(apiName)
 
     if (requiredPermissions.length === 0) {
-      // No permission required for this API
+      // Unmapped names are allowed, which makes this an opt-in denylist keyed on a
+      // hand-maintained table rather than a default-deny gate (#915). Flipping the default
+      // needs an inventory of every name that legitimately reaches here — four call sites
+      // feed it, two of them with a caller-supplied string — and that inventory does not
+      // exist yet. Recording each one is how it gets built: an allow that leaves a trace is
+      // still a gap, but it is a countable gap rather than a silent one.
+      this.recordUnmappedApi(pluginId, apiName)
+
       const duration = performance.now() - startTime
       this.recordPerformance(duration)
       return {
@@ -273,6 +286,33 @@ export class PermissionGuard {
   /**
    * Get required permissions for an API
    */
+  private recordUnmappedApi(pluginId: string, apiName: string): void {
+    const entry = this.unmappedApis.get(apiName)
+    if (entry) {
+      entry.count += 1
+      entry.plugins.add(pluginId)
+      return
+    }
+
+    this.unmappedApis.set(apiName, { count: 1, plugins: new Set([pluginId]) })
+    // First sighting only: these repeat per call and would drown the log otherwise.
+    permissionGuardLog.warn(
+      `"${apiName}" matches no entry in API_PERMISSION_MAPPINGS and was allowed by default.`,
+      { meta: { apiName, pluginId } }
+    )
+  }
+
+  /**
+   * Every unmapped name seen so far. This is the inventory a default-deny flip needs: each
+   * entry is either an API that should require a permission, or one that should be declared
+   * as deliberately public.
+   */
+  getUnmappedApis(): { apiName: string; count: number; plugins: string[] }[] {
+    return [...this.unmappedApis.entries()]
+      .map(([apiName, entry]) => ({ apiName, count: entry.count, plugins: [...entry.plugins] }))
+      .sort((left, right) => right.count - left.count)
+  }
+
   getRequiredPermissions(apiName: string): string[] {
     // Exact match
     const exact = this.mappings.get(apiName)
