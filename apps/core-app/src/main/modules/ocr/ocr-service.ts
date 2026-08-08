@@ -1538,6 +1538,18 @@ class OcrService {
     await this.withDbWrite('ocr.clipboard.meta', async (db) =>
       db.transaction(async (tx) => {
         if (insertValues.length > 0) {
+          // Same replace-not-append rule as clipboard-meta-persistence (#646). ocr_status walks
+          // queued -> processing -> retrying -> completed, so appending leaves four rows for one
+          // key and a stale 'processing' can win the read.
+          await tx.delete(clipboardHistoryMeta).where(
+            and(
+              eq(clipboardHistoryMeta.clipboardId, clipboardId),
+              inArray(
+                clipboardHistoryMeta.key,
+                insertValues.map((entry) => entry.key)
+              )
+            )
+          )
           await tx.insert(clipboardHistoryMeta).values(insertValues)
         }
 

@@ -164,6 +164,10 @@ export class ClipboardHistoryPersistence {
         .select()
         .from(clipboardHistoryMeta)
         .where(inArray(clipboardHistoryMeta.clipboardId, ids))
+        // Writers now replace instead of appending, but databases created before that still hold
+        // duplicates until each key is next written. Ordering makes last-write-wins true for them
+        // rather than dependent on the query plan (#646).
+        .orderBy(clipboardHistoryMeta.id)
 
       for (const metaRow of metaRows) {
         if (typeof metaRow.clipboardId !== 'number') continue
