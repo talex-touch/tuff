@@ -1093,23 +1093,30 @@ export class CommonChannelModule extends BaseModule {
      * Defaults to cancel, and a dialog that fails to show is treated as a refusal.
      */
     const confirmOpen = async (url: string): Promise<boolean> => {
-      const parent = BrowserWindow.getFocusedWindow() ?? undefined
+      const parent = BrowserWindow.getFocusedWindow()
       // Long URLs are truncated so the dialog cannot be pushed off screen, and the raw string
       // goes to `detail` rather than `message` so it is never mistaken for app-authored text.
       const shown = url.length > 320 ? `${url.slice(0, 320)}…` : url
+      const options = {
+        type: 'question' as const,
+        buttons: [t('common.cancel'), t('common.open')],
+        defaultId: 0,
+        cancelId: 0,
+        message: t('common.openExternalConfirm'),
+        detail: shown,
+        noLink: true
+      }
       try {
-        const { response } = await dialog.showMessageBox(parent, {
-          type: 'question',
-          buttons: [t('common.cancel'), t('common.open')],
-          defaultId: 0,
-          cancelId: 0,
-          message: t('common.openExternalConfirm'),
-          detail: shown,
-          noLink: true
-        })
+        // Two calls rather than passing `undefined`: the parented overload does not accept it,
+        // and a modal with no owner window is the correct shape when nothing is focused.
+        const { response } = parent
+          ? await dialog.showMessageBox(parent, options)
+          : await dialog.showMessageBox(options)
         return response === 1
       } catch (error) {
-        log.warn('open url confirmation failed, refusing', { meta: { url, error } })
+        log.warn('open url confirmation failed, refusing', {
+          meta: { url, error: error instanceof Error ? error.message : String(error) }
+        })
         return false
       }
     }
