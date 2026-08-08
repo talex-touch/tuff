@@ -11,6 +11,7 @@ declare global {
     PLUGIN_PACKAGES?: R2Bucket
     APP_AUTH_JWT_SECRET?: string
     AUTH_SECRET?: string
+    NUXT_DOC_TOKEN_SECRET?: string
     NUXT_INTELLIGENCE_ENCRYPT_KEY?: string
     RELEASE_SIGNATURE_PUBLIC_KEY?: string
     UPDATE_SIGNATURE_PUBLIC_KEY?: string
