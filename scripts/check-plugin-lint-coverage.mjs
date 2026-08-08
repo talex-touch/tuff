@@ -53,6 +53,28 @@ export function findStaleEntries(pluginDirs, braceList) {
   return braceList.filter(name => !present.has(name))
 }
 
+/**
+ * `pnpm lint` coverage is not the same question as pre-commit coverage.
+ *
+ * Five plugins carry their own eslint.config.*, and each adds a rule the root config does not
+ * have — axios/fetch must go through @talex-touch/utils/network. Only a `pnpm -C <plugin>` run
+ * applies it, so a plugin owning a config needs its own lint-staged entry or that rule is
+ * enforced solely by a full lint nobody runs before committing. clipboard-history and
+ * touch-dev-utils were in exactly that state (#1133).
+ *
+ * Reported both ways: a config owner with no entry is the gap, and an entry for a plugin with
+ * no config is a `pnpm -C` invocation that resolves to the root config and quietly does nothing
+ * per-plugin.
+ */
+export function findLintStagedGaps(configOwners, lintStagedPlugins) {
+  const staged = new Set(lintStagedPlugins)
+  const owners = new Set(configOwners)
+  return {
+    unstaged: configOwners.filter(name => !staged.has(name)),
+    pointless: lintStagedPlugins.filter(name => !owners.has(name)),
+  }
+}
+
 function listPluginDirs() {
   if (!existsSync(PLUGINS_DIR))
     return []
@@ -65,6 +87,28 @@ function listPluginDirs() {
 function readLintScript() {
   const manifest = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
   return manifest.scripts?.lint
+}
+
+/** Plugins that own an eslint.config.* — the ones a per-plugin lint run is meaningful for. */
+function listConfigOwningPlugins(pluginDirs) {
+  return pluginDirs.filter(dir =>
+    ['js', 'mjs', 'cjs', 'ts'].some(ext =>
+      existsSync(path.join(PLUGINS_DIR, dir, `eslint.config.${ext}`)),
+    ),
+  )
+}
+
+/** Plugin names appearing in lint-staged globs, e.g. `plugins/touch-image/**` -> touch-image. */
+function readLintStagedPluginNames() {
+  const manifest = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+  const config = manifest['lint-staged'] ?? {}
+  const names = new Set()
+  for (const glob of Object.keys(config)) {
+    const match = /^plugins\/([^/*]+)\//.exec(glob)
+    if (match)
+      names.add(match[1])
+  }
+  return [...names].sort()
 }
 
 function selfTest() {
@@ -122,6 +166,23 @@ function selfTest() {
   if (noList !== null)
     failures += 1
 
+  const gaps = findLintStagedGaps(['owns-config', 'also-owns'], ['also-owns', 'no-config'])
+  const gapsOk = JSON.stringify(gaps) === JSON.stringify({
+    unstaged: ['owns-config'],
+    pointless: ['no-config'],
+  })
+  console.log(`${gapsOk ? 'ok  ' : 'FAIL'} a config owner missing from lint-staged, and a stray entry, are both reported`)
+  if (!gapsOk) {
+    failures += 1
+    console.log(`     got ${JSON.stringify(gaps)}`)
+  }
+
+  const noGaps = findLintStagedGaps(['a', 'b'], ['b', 'a'])
+  const noGapsOk = noGaps.unstaged.length === 0 && noGaps.pointless.length === 0
+  console.log(`${noGapsOk ? 'ok  ' : 'FAIL'} matching sets report no gap regardless of order`)
+  if (!noGapsOk)
+    failures += 1
+
   const real = evaluate()
   console.log(`${real.problems.length === 0 ? 'ok  ' : 'FAIL'} the real tree is covered`)
   if (real.problems.length > 0) {
@@ -161,21 +222,41 @@ function evaluate() {
     )
   }
 
-  return { problems, braceList, pluginDirs }
+  const configOwners = listConfigOwningPlugins(pluginDirs)
+  const { unstaged, pointless } = findLintStagedGaps(configOwners, readLintStagedPluginNames())
+
+  for (const name of unstaged) {
+    problems.push(
+      `plugins/${name} owns an eslint.config.* but has no lint-staged entry, so its own rules `
+      + `(the network restriction the root config lacks) are never applied on commit. Add a `
+      + `"plugins/${name}/**" entry running \`pnpm -C "plugins/${name}" exec eslint\`.`,
+    )
+  }
+
+  for (const name of pointless) {
+    problems.push(
+      `lint-staged runs \`pnpm -C "plugins/${name}"\` but that plugin owns no eslint.config.*, `
+      + `so the run resolves to the root config and adds nothing. Remove the entry, or give the `
+      + `plugin the config it is supposed to have.`,
+    )
+  }
+
+  return { problems, braceList, pluginDirs, configOwners }
 }
 
 if (process.argv.includes('--self-test')) {
   process.exit(selfTest() > 0 ? 1 : 0)
 }
 
-const { problems, braceList, pluginDirs } = evaluate()
+const { problems, braceList, pluginDirs, configOwners } = evaluate()
 if (problems.length > 0) {
-  console.error('[plugin-lint-coverage] plugin directories `pnpm lint` cannot reach:\n')
+  console.error('[plugin-lint-coverage] plugin lint coverage gaps:\n')
   for (const problem of problems) console.error(`  - ${problem}`)
   process.exit(1)
 }
 
 console.log(
   `[plugin-lint-coverage] ${pluginDirs.length} plugin directories covered `
-  + `(${pluginDirs.length - braceList.length} as workspaces, ${braceList.length} by name)`,
+  + `(${pluginDirs.length - braceList.length} as workspaces, ${braceList.length} by name); `
+  + `${configOwners.length} own an eslint config and all are in lint-staged`,
 )
