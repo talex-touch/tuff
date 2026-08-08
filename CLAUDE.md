@@ -88,14 +88,45 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 4. **Stop**: Module deactivation (optional)
 5. **Destroy**: Cleanup and resource release (required)
 
-**Base Module Interface:**
+**Base Module Interface** (`main/modules/abstract-base-module.ts`):
 ```typescript
-abstract class BaseModule {
-  abstract onInit(ctx: ModuleInitContext): MaybePromise<void>
-  abstract onDestroy(ctx: ModuleDestroyContext): MaybePromise<void>
-  created?(ctx: ModuleCreateContext): MaybePromise<void>
-  start?(ctx: ModuleStartContext): MaybePromise<void>
-  stop?(ctx: ModuleStopContext): MaybePromise<void>
+abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<E> {
+  /** Singleton id the manager keys on. Set from the constructor argument. */
+  public readonly name: ModuleKey
+  public readonly file?: ModuleFileConfig   // declarative <root>/modules/<dirName>
+  public readonly env?: ModuleEnvFlag       // env flag(s) gating auto-load
+
+  protected constructor(key: ModuleKey, file?: ModuleFileConfig, env?: ModuleEnvFlag)
+
+  // The manager calls init/destroy; these record filePath and delegate to the hooks below.
+  init(ctx: ModuleInitContext<E>): MaybePromise<void>
+  destroy(ctx: ModuleDestroyContext<E>): MaybePromise<void>
+
+  abstract onInit(ctx: ModuleInitContext<E>): MaybePromise<void>
+  abstract onDestroy(ctx: ModuleDestroyContext<E>): MaybePromise<void>
+  created?(ctx: ModuleCreateContext<E>): MaybePromise<void>
+  start?(ctx: ModuleStartContext<E>): MaybePromise<void>
+  stop?(ctx: ModuleStopContext<E>): MaybePromise<void>
+
+  /** ModuleDirectory for this module, or undefined when file.create is not set. */
+  protected directory(ctx: ModuleInitContext<E> | ...): ModuleDirectory | undefined
+}
+```
+
+The constructor is the part that is easy to miss: a subclass must pass its key up, or the
+manager has nothing to register it under. The established shape is a static symbol:
+
+```typescript
+export class CommonChannelModule extends BaseModule {
+  static key: symbol = Symbol.for('CommonChannel')
+  name: ModuleKey = CommonChannelModule.key
+
+  constructor() {
+    super(CommonChannelModule.key, { create: false, dirName: 'channel' })
+  }
+
+  onInit(ctx: ModuleInitContext): MaybePromise<void> { /* … */ }
+  onDestroy(ctx: ModuleDestroyContext): MaybePromise<void> { /* … */ }
 }
 ```
 
