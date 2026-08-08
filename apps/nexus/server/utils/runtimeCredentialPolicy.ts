@@ -4,6 +4,10 @@ const MINIMUM_RUNTIME_CREDENTIAL_LENGTH = 16
 
 const LOCAL_ONLY_CREDENTIAL_VALUES = new Set([
   'tuff-dev-secret',
+  // Shipped in a tracked apps/nexus/.env, so it is public. Any deployment that picked that
+  // file up signed app JWTs with it, and a token minted against it authenticates as any user
+  // id (#890).
+  'dev-secret-change-me',
   'tuff-local-pages-preview-secret',
   'tuff-local-app-auth-jwt-secret',
   'tuff-local-intelligence-encrypt-key',
@@ -13,6 +17,10 @@ const LOCAL_ONLY_CREDENTIAL_VALUES = new Set([
 
 const DOCUMENTED_PLACEHOLDER_PATTERNS = [
   /^change[-_ ]?me(?:[-_ ].*)?$/i,
+  // Anchoring only at the start missed the far more common spelling, where the marker is a
+  // suffix: `dev-secret-change-me`, `api-key-changeme`. That is how #890 slipped through a
+  // guard written to catch exactly this kind of value.
+  /[-_ ]change[-_ ]?me$/i,
   /^your(?:[-_ ].*)?$/i,
   /^replace[-_ ]?with(?:[-_ ].*)?$/i,
   /^placeholder(?:[-_ ].*)?$/i,
