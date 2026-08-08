@@ -4297,6 +4297,7 @@
     "no": "No",
     "retry": "Retry",
     "cancel": "Cancel",
+    "openExternalConfirm": "Open this link outside Tuff?",
     "save": "Save",
     "confirm": "Confirm",
     "delete": "Delete",

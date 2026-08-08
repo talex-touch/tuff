@@ -149,7 +149,8 @@ vi.mock('electron', () => ({
   },
   dialog: {
     showOpenDialog: vi.fn(),
-    showSaveDialog: vi.fn()
+    showSaveDialog: vi.fn(),
+    showMessageBox: vi.fn(async () => ({ response: 0 }))
   },
   screen: {
     getPrimaryDisplay: vi.fn(() => ({
@@ -468,7 +469,8 @@ vi.mock('../utils/common-util', () => ({
 }))
 
 vi.mock('../utils/i18n-helper', () => ({
-  setLocale: setLocaleMock
+  setLocale: setLocaleMock,
+  t: vi.fn((key: string) => key)
 }))
 
 vi.mock('../utils/logger', () => ({
@@ -504,6 +506,8 @@ vi.mock('../utils/storage-usage', () => ({
   getStorageUsageReport: vi.fn(async () => ({}))
 }))
 
+import { dialog, shell } from 'electron'
+import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { CommonChannelModule } from './common'
 
 type CommonChannelModuleTestInstance = {
@@ -516,6 +520,7 @@ type CommonChannelModuleTestInstance = {
     event: { toEventName: () => string },
     handler: (payload: unknown, context: unknown) => Promise<unknown> | unknown
   ) => unknown
+  createOpenUrlHandler: () => (url: string) => Promise<void>
   readSystemFile: (payload: { source?: string; allowMissing?: boolean }) => Promise<string>
   buildTraySettingsFromAppSettings: (
     appSettings: Record<string, unknown>,
@@ -2103,5 +2108,83 @@ describe('CommonChannelModule private helpers', () => {
       (source) => source.descriptor.id === 'browser-bookmarks'
     )!
     expect(otherSource.health.lastError).toBe('raw other-source text')
+  })
+})
+
+/**
+ * What reaches shell.openExternal (#910).
+ *
+ * TouchWindow's will-navigate listener emits every blocked navigation as OPEN_EXTERNAL_URL,
+ * which lands here — so this receives renderer-controlled URLs. `file:` was decided as 'open'
+ * and handed straight to the OS, and the 'confirm' decision logged and then opened anyway, so
+ * nothing was ever actually confirmed.
+ */
+describe('createOpenUrlHandler', () => {
+  const openExternal = vi.mocked(shell.openExternal)
+  const showMessageBox = vi.mocked(dialog.showMessageBox)
+
+  function handler(): (url: string) => Promise<void> {
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    return module.createOpenUrlHandler()
+  }
+
+  function answer(open: boolean): void {
+    // buttons are [Cancel, Open], so index 1 is approval.
+    showMessageBox.mockResolvedValue({ response: open ? 1 : 0 } as never)
+  }
+
+  it('asks before opening a file: URL instead of handing it straight to the OS', async () => {
+    // The regression. shell.openExternal on file: launches whatever the OS has registered,
+    // an executable included.
+    answer(false)
+    await handler()('file:///etc/passwd')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('opens a file: URL once the prompt is accepted', async () => {
+    answer(true)
+    await handler()('file:///etc/passwd')
+    expect(openExternal).toHaveBeenCalledWith('file:///etc/passwd')
+  })
+
+  it('does not open an http URL that the user declined', async () => {
+    answer(false)
+    await handler()('https://evil.test/payload')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('opens an http URL the user approved', async () => {
+    answer(true)
+    await handler()('https://example.test/docs')
+    expect(openExternal).toHaveBeenCalledWith('https://example.test/docs')
+  })
+
+  it('refuses when the confirmation dialog itself fails', async () => {
+    // Fail closed: a dialog that cannot be shown must not be read as approval.
+    showMessageBox.mockRejectedValue(new Error('no window'))
+    await handler()('https://evil.test/payload')
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('still skips the app and tfile schemes without prompting', async () => {
+    // Positive control on the other side: the fix must not start prompting for internal
+    // navigation, which would make the app unusable rather than safe.
+    answer(true)
+    // Read from the constants rather than hardcoded, so the assertion follows the schemes the
+    // app actually registers instead of drifting from them.
+    await handler()(`${APP_SCHEMA}://some/route`)
+    await handler()(`${FILE_SCHEMA}:///tmp/icon.png`)
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('still skips a relative path or fragment', async () => {
+    answer(true)
+    await handler()('/settings')
+    await handler()('#/settings')
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
   })
 })
