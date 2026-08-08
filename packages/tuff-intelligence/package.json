@@ -42,7 +42,7 @@
     "src"
   ],
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.15.0"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --splitting --clean --target node24 --platform node && tsup src/client.ts --format cjs --target node24 --platform node",
