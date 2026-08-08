@@ -2706,7 +2706,8 @@
         "defaultsRestored": "已恢复默认设置",
         "tempCleaned": "临时文件已清理",
         "tempCleanFailed": "清理临时文件失败",
-        "tempDirSelectFailed": "选择临时目录失败"
+        "tempDirSelectFailed": "选择临时目录失败",
+        "destinationSelectFailed": "选择下载目录失败"
       }
     },
     "settingNetwork": {
