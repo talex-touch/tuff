@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
 const snippetsUrl = new URL('../../../../plugins/touch-snippets/index.js', import.meta.url)
-const snippetsPlugin = loadPluginModule(snippetsUrl)
-const { __test: snippetsTest } = snippetsPlugin
 
 class FakeBuilder {
   item: Record<string, unknown>
