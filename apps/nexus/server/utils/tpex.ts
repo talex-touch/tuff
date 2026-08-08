@@ -183,12 +183,33 @@ function buildSecurityScanFiles(files: Record<string, Buffer>) {
   })
 }
 
-function generateSignature(filesObject: Record<string, string>): string {
+function canonicalFileMapJson(filesObject: Record<string, string>): string {
   const sortedKeys = Object.keys(filesObject).sort()
   const sortedObject: Record<string, string> = {}
   for (const key of sortedKeys)
     sortedObject[key] = filesObject[key] ?? ''
-  return createHash('md5').update(JSON.stringify(sortedObject)).digest('base64')
+  return JSON.stringify(sortedObject)
+}
+
+/**
+ * The checksum values manifest._signature may legitimately hold.
+ *
+ * The field name is misleading and this is the honest description of it: an unkeyed digest of
+ * the file map, which anyone repacking the archive recomputes along with the per-file hashes
+ * it covers. It proves the manifest is internally consistent and nothing more. Publisher
+ * authenticity comes from the keyed envelope in pluginSigning, and a passing value here is not
+ * evidence of provenance (#893).
+ *
+ * SHA-256 is what the CLI now writes; MD5 is accepted so packages built before that change
+ * keep validating. Neither makes the field a signature — MD5 is dropped from new packages
+ * because a collision-broken digest has no business in a field with this name.
+ */
+function fileMapChecksums(filesObject: Record<string, string>): string[] {
+  const json = canonicalFileMapJson(filesObject)
+  return [
+    createHash('sha256').update(json).digest('base64'),
+    createHash('md5').update(json).digest('base64'),
+  ]
 }
 
 function normalizeManifestFileKey(key: string): string {
@@ -223,7 +244,7 @@ function verifyManifestIntegrity(
   if (!expectedFiles || typeof expectedFiles !== 'object' || Array.isArray(expectedFiles))
     return { valid: false, reason: 'manifest._files is missing or invalid.' }
   if (typeof expectedSignature !== 'string' || !expectedSignature.trim())
-    return { valid: false, reason: 'manifest._signature is missing or invalid.' }
+    return { valid: false, reason: 'manifest._signature checksum is missing or invalid.' }
 
   const actualFiles: Record<string, string> = {}
   for (const [name, fileBuffer] of Object.entries(files)) {
@@ -251,12 +272,16 @@ function verifyManifestIntegrity(
       return { valid: false, reason: `manifest._files hash mismatch for ${key}.` }
   }
 
-  const signatureCandidates = new Set([
-    generateSignature(expectedRecord as Record<string, string>),
-    generateSignature(normalizedExpectedFiles),
+  const checksumCandidates = new Set([
+    ...fileMapChecksums(expectedRecord as Record<string, string>),
+    ...fileMapChecksums(normalizedExpectedFiles),
   ])
-  if (!signatureCandidates.has(expectedSignature.trim()))
-    return { valid: false, reason: 'manifest._signature does not match manifest._files.' }
+  if (!checksumCandidates.has(expectedSignature.trim())) {
+    return {
+      valid: false,
+      reason: 'manifest._signature checksum does not match manifest._files.',
+    }
+  }
 
   return { valid: true }
 }
