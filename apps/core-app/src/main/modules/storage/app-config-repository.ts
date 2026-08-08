@@ -89,7 +89,14 @@ export function resolveAppConfigBackend(env: NodeJS.ProcessEnv = process.env): A
   return 'sqlite'
 }
 
-function normalizeConfigKey(key: string): string {
+/**
+ * Exported for testing: this pair is the containment boundary that keeps a config key inside
+ * the config root, and it had no test anywhere in the repo (#928). A boundary nothing
+ * exercises is one a refactor can quietly remove — dropping the `..` segment check, or the
+ * backslash check that blocks `..\..\` on Windows, would reintroduce traversal with the
+ * suite still green.
+ */
+export function normalizeConfigKey(key: string): string {
   if (
     typeof key !== 'string' ||
     key.length === 0 ||
@@ -108,7 +115,8 @@ function normalizeConfigKey(key: string): string {
   return segments.join('/')
 }
 
-function resolveLegacyPath(root: string, key: string): string {
+/** Exported for testing alongside normalizeConfigKey. See the note there. */
+export function resolveLegacyPath(root: string, key: string): string {
   const normalized = normalizeConfigKey(key)
   const resolved = path.resolve(root, ...normalized.split('/'))
   const relative = path.relative(root, resolved)
