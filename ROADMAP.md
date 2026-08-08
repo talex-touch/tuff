@@ -64,9 +64,6 @@
 | 任务 | 优先级 | 状态 |
 |------|--------|------|
 | [audit-search-system-architecture](.trellis/tasks/07-09-audit-search-system-architecture/prd.md) | **P0** | 🔄 planning [3/7]：搜索架构审计与整改父任务 |
-| ├ [scope-search-sessions-and-streams](.trellis/tasks/07-09-scope-search-sessions-and-streams/prd.md) | P1 | planning |
-| ├ [gate-search-on-storage-hydration](.trellis/tasks/07-09-gate-search-on-storage-hydration/prd.md) | P1 | planning |
-| ├ [establish-single-search-index-writer](.trellis/tasks/07-09-establish-single-search-index-writer/prd.md) | P1 | planning |
 | └ [unify-search-provider-lifecycle](.trellis/tasks/07-09-unify-search-provider-lifecycle/prd.md) | P2 | planning |
 | [catalog-service-mvp](.trellis/tasks/07-13-catalog-service-mvp/prd.md) | P1 | planning |
 | [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |
