@@ -1092,6 +1092,11 @@ export class SearchEngineCore
           // ignore
         }
 
+        // A failed gather never reaches the normal completion path, so without
+        // this the session's entry stayed in the map for the process lifetime —
+        // one per keystroke for a provider that throws on every query (#669).
+        this.searchFirstResultMetrics.delete(sessionId)
+
         const totalDuration = Date.now() - startTime
         this.logSearchTrace({
           event: 'session.error',
@@ -1639,12 +1644,14 @@ export class SearchEngineCore
 
   private queueExecuteTelemetry(sessionId: string, item: TuffItem, startedAt?: number): void {
     try {
+      // Released before the telemetry check, not after: with telemetry off (the
+      // privacy default) the early return used to skip the cleanup entirely.
+      this.searchFirstResultMetrics.delete(sessionId)
+
       const sentryService = getSentryService()
       if (!sentryService.isTelemetryEnabled()) {
         return
       }
-
-      this.searchFirstResultMetrics.delete(sessionId)
 
       const meta = item.meta as Record<string, unknown> | undefined
       const metadata: Record<string, unknown> = {
