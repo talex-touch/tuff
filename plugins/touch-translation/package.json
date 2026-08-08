@@ -39,7 +39,6 @@
     "unocss": "^66.7.5",
     "unplugin-auto-import": "^20.3.0",
     "unplugin-vue-components": "^30.0.0",
-    "unplugin-vue-router": "^0.16.2",
     "vite": "^7.3.6",
     "vitest": "^3.2.7",
     "vue-tsc": "^3.3.6"
