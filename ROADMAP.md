@@ -57,9 +57,6 @@
 | 任务 | 优先级 | 状态 |
 |------|--------|------|
 | [audit-search-system-architecture](.trellis/tasks/07-09-audit-search-system-architecture/prd.md) | **P0** | 🔄 planning [3/7]：搜索架构审计与整改父任务 |
-| ├ [scope-search-sessions-and-streams](.trellis/tasks/07-09-scope-search-sessions-and-streams/prd.md) | P1 | planning |
-| ├ [gate-search-on-storage-hydration](.trellis/tasks/07-09-gate-search-on-storage-hydration/prd.md) | P1 | planning |
-| ├ [establish-single-search-index-writer](.trellis/tasks/07-09-establish-single-search-index-writer/prd.md) | P1 | planning |
 | └ [unify-search-provider-lifecycle](.trellis/tasks/07-09-unify-search-provider-lifecycle/prd.md) | P2 | planning |
 | [catalog-service-mvp](.trellis/tasks/07-13-catalog-service-mvp/prd.md) | P1 | planning |
 | [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |
@@ -73,7 +70,6 @@
 | ├ [ota-one-click-background-update](.trellis/tasks/07-22-ota-one-click-background-update/prd.md) | P2 | 🔄 in_progress |
 | └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
 | [harden-app-icon-self-healing](.trellis/tasks/07-24-harden-app-icon-self-healing/prd.md) | P2 | 🔄 real-profile evidence ready；N+1 release 开放 |
-| [install-launch-v2-4-13-beta-23](.trellis/tasks/07-26-install-launch-v2-4-13-beta-23/prd.md) | P2 | 🔄 in_progress |
 | [audit-plugin-privileged-security](.trellis/tasks/07-27-audit-plugin-privileged-security/prd.md) | P2 | planning |
 | [base-anchor-liquid-animation](.trellis/tasks/07-27-base-anchor-liquid-animation/prd.md) | P2 | 🔄 in_progress（AC 验收中） |
 | [fix-plugin-folder-button](.trellis/tasks/07-27-fix-plugin-folder-button/prd.md) | P2 | 🔄 in_progress |
