@@ -1241,13 +1241,25 @@ export class DatabaseModule extends BaseModule {
     })
 
     try {
-      // Use resolved path for migration
-      await timing.cost(
-        async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }),
-        {
-          folder: migrationsFolderResolved
+      // Scoped to migrate() alone. The duplicate-column case below is tolerated, and when the
+      // five ensure* fixups shared this try they were skipped along with the rest of the block
+      // -- the app then ran with recommendation/analytics tables and hot-path indexes missing,
+      // which is exactly what those fixups exist to guarantee (#638).
+      try {
+        // Use resolved path for migration
+        await timing.cost(
+          async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }),
+          {
+            folder: migrationsFolderResolved
+          }
+        )
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error ?? '')
+        if (!message.includes('duplicate column name: provider_id')) {
+          throw error
         }
-      )
+        dbLog.warn('Migration warning: column `provider_id` already exists')
+      }
 
       await this.ensureKeywordMappingsProviderColumn()
       await this.ensureRecommendationTables()
@@ -1259,24 +1271,18 @@ export class DatabaseModule extends BaseModule {
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
       dbLog.info(`Migrations completed successfully in ${duration}ms`)
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error ?? '')
-      const duplicateColumn = message.includes('duplicate column name: provider_id')
+      // Reaching here is fatal: the tolerated duplicate-column case is absorbed above, so this
+      // is either a real migration failure or a failed fixup. Both leave the schema unusable.
+      dbLog.error('Migration failed', { error })
 
-      if (duplicateColumn) {
-        dbLog.warn('Migration warning: column `provider_id` already exists')
-      } else {
-        dbLog.error('Migration failed', { error })
+      const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
+      const errorInstance = error instanceof Error ? error : new Error(errorMessage)
+      await this.showDatabaseErrorDialog(
+        errorInstance,
+        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
+      )
 
-        const errorMessage =
-          error instanceof Error ? error.message : String(error ?? 'Unknown error')
-        const errorInstance = error instanceof Error ? error : new Error(errorMessage)
-        await this.showDatabaseErrorDialog(
-          errorInstance,
-          `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
-        )
-
-        process.exit(1)
-      }
+      process.exit(1)
     }
 
     // Give the search-index worker its own file (search-index.db) before any
