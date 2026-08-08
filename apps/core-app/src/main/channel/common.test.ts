@@ -160,7 +160,8 @@ vi.mock('electron', () => ({
     }))
   },
   powerMonitor: {
-    on: vi.fn()
+    on: vi.fn(),
+    off: vi.fn()
   },
   shell: {
     openExternal: vi.fn(),
@@ -497,6 +498,8 @@ import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { CommonChannelModule } from './common'
 
 type CommonChannelModuleTestInstance = {
+  setupBatteryStatusBroadcast: () => void
+  onDestroy: () => unknown
   createSafeOperationHandler: (transport: {
     on: (
       event: unknown,
@@ -2172,5 +2175,50 @@ describe('createOpenUrlHandler', () => {
     await handler()('#/settings')
     expect(showMessageBox).not.toHaveBeenCalled()
     expect(openExternal).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * powerMonitor is an app-lifetime singleton, so handlers registered on it outlive the module
+ * unless explicitly removed. onDestroy cleared the poll interval and the transport disposers but
+ * left these attached, so an 'on-battery' event after teardown called startPolling() again and
+ * re-armed a task on the global PollingService (#532).
+ */
+describe('CommonChannelModule powerMonitor lifecycle', () => {
+  it('removes both powerMonitor handlers on destroy', async () => {
+    const { powerMonitor } = (await import('electron')) as unknown as {
+      powerMonitor: { on: ReturnType<typeof vi.fn>; off: ReturnType<typeof vi.fn> }
+    }
+    powerMonitor.on.mockClear()
+    powerMonitor.off.mockClear()
+
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    module.setupBatteryStatusBroadcast()
+
+    const registered = powerMonitor.on.mock.calls.map((call) => call[0])
+    expect(registered).toEqual(['on-ac', 'on-battery'])
+
+    await module.onDestroy()
+
+    const removed = powerMonitor.off.mock.calls.map((call) => call[0])
+    expect(removed).toEqual(['on-ac', 'on-battery'])
+  })
+
+  it('removes the same function references it registered', async () => {
+    // off() with a different closure is a silent no-op, so identity is the thing that matters.
+    const { powerMonitor } = (await import('electron')) as unknown as {
+      powerMonitor: { on: ReturnType<typeof vi.fn>; off: ReturnType<typeof vi.fn> }
+    }
+    powerMonitor.on.mockClear()
+    powerMonitor.off.mockClear()
+
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    module.setupBatteryStatusBroadcast()
+    await module.onDestroy()
+
+    for (const [event, handler] of powerMonitor.on.mock.calls) {
+      const match = powerMonitor.off.mock.calls.find((call) => call[0] === event)
+      expect(match?.[1]).toBe(handler)
+    }
   })
 })

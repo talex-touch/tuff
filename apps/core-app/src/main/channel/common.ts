@@ -841,6 +841,12 @@ export class CommonChannelModule extends BaseModule {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
+  /**
+   * powerMonitor is an app-lifetime singleton, so handlers registered on it outlive this module
+   * unless removed. Without this the 'on-battery' handler kept calling startPolling() after
+   * destroy, re-arming a task on the global PollingService (#532).
+   */
+  private powerMonitorDisposers: Array<() => void> = []
   private touchApp: TalexTouch.TouchApp | null = null
 
   constructor() {
@@ -911,15 +917,21 @@ export class CommonChannelModule extends BaseModule {
         startPolling()
       }
 
-      powerMonitor.on('on-ac', () => {
+      const handleOnAc = (): void => {
         stopPolling()
         void broadcastBatteryStatus()
-      })
-
-      powerMonitor.on('on-battery', () => {
+      }
+      const handleOnBattery = (): void => {
         startPolling()
         void broadcastBatteryStatus()
-      })
+      }
+
+      powerMonitor.on('on-ac', handleOnAc)
+      powerMonitor.on('on-battery', handleOnBattery)
+      this.powerMonitorDisposers.push(
+        () => powerMonitor.off('on-ac', handleOnAc),
+        () => powerMonitor.off('on-battery', handleOnBattery)
+      )
     } catch (error) {
       log.warn('Failed to initialize battery status broadcaster:', { error })
     }
@@ -2058,6 +2070,17 @@ export class CommonChannelModule extends BaseModule {
 
   onDestroy(): MaybePromise<void> {
     log.info('CommonChannelModule destroyed')
+
+    // Before clearing the timer: an 'on-battery' event arriving between the two would otherwise
+    // call startPolling() and leave a fresh interval behind.
+    for (const dispose of this.powerMonitorDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.powerMonitorDisposers = []
 
     if (this.batteryPollTimer) {
       clearInterval(this.batteryPollTimer)
