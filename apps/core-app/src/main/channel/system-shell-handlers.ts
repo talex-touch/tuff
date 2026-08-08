@@ -18,9 +18,28 @@ export const systemShellCapabilities: SystemShellCapabilities = {
 const SYSTEM_SHELL_PATH_REQUIRED = 'SYSTEM_SHELL_PATH_REQUIRED'
 const SYSTEM_SHELL_PATH_UNAVAILABLE = 'SYSTEM_SHELL_PATH_UNAVAILABLE'
 const SYSTEM_SHELL_OPEN_PATH_FAILED = 'SYSTEM_SHELL_OPEN_PATH_FAILED'
+const SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT = 'SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT'
+const SYSTEM_SHELL_PATH_NOT_A_DIRECTORY = 'SYSTEM_SHELL_PATH_NOT_A_DIRECTORY'
+
+/**
+ * Whether `target` is the app root itself or a path beneath it.
+ *
+ * Compared after path.resolve so that '..' segments cannot climb out, and with a trailing
+ * separator so a sibling like `<root>-backup` does not match the prefix.
+ */
+function isWithinAppRoot(target: string, appRoot: string): boolean {
+  const resolvedRoot = path.resolve(appRoot)
+  const resolvedTarget = path.resolve(target)
+  if (resolvedTarget === resolvedRoot) {
+    return true
+  }
+  return resolvedTarget.startsWith(resolvedRoot + path.sep)
+}
 
 export interface SystemShellHandlerOptions {
   configRootPath: () => string | null | undefined
+  /** The app's own data root. executeCommand may not open anything outside it. */
+  appRootPath: () => string | null | undefined
   logger: { warn: (message: unknown, options?: LogOptions) => void }
   registerSafeHandler: <TReq, TExtra extends Record<string, unknown> = Record<string, never>>(
     event: TuffEvent<TReq, unknown> & { toEventName: () => string },
@@ -107,6 +126,41 @@ export function registerSystemShellHandlers(
         const command = typeof payload?.command === 'string' ? payload.command : ''
         if (!command) {
           throw new Error('No command provided')
+        }
+
+        // shell.openPath does not "run a command" — it hands the path to the OS association,
+        // which for a .command, .bat or .app means execution. The event accepted any string,
+        // so a plugin could write a script through the download handler and then ask the main
+        // process to launch it (#909).
+        //
+        // The one caller in the app is Settings > About opening the application folder, so
+        // the surface it actually needs is: a directory, inside the app's own root. Both
+        // conditions matter — restricting to the root alone would still allow launching a
+        // .app bundle or a script that a plugin had written into its own storage.
+        const appRoot = options.appRootPath()
+        if (!appRoot) {
+          throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
+        }
+        if (!isWithinAppRoot(command, appRoot)) {
+          options.logger.warn('Blocked executeCommand outside the app root', {
+            meta: { reason: SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT }
+          })
+          throw new Error(SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT)
+        }
+
+        let stats: Awaited<ReturnType<typeof fs.stat>>
+        try {
+          stats = await fs.stat(command)
+        } catch {
+          throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
+        }
+        // A macOS .app bundle is a directory that executes, so the directory check alone is
+        // not enough even inside the root.
+        if (!stats.isDirectory() || path.extname(command).toLowerCase() === '.app') {
+          options.logger.warn('Blocked executeCommand on a non-directory target', {
+            meta: { reason: SYSTEM_SHELL_PATH_NOT_A_DIRECTORY }
+          })
+          throw new Error(SYSTEM_SHELL_PATH_NOT_A_DIRECTORY)
         }
 
         const error = await shell.openPath(command)
