@@ -26,6 +26,10 @@ const mocks = vi.hoisted(() => {
   const eventHandlers = new Map<unknown, (event: unknown) => void>()
   const removedPaths = new Set<string>()
   const symbolicPaths = new Set<string>()
+  const inodes = new Map<string, number>()
+  const renamedAway = new Set<string>()
+  const renamedInto = new Set<string>()
+  let nextInode = 1000
   let capturedManagerFactory: CapturedManagerFactory | null = null
   const transportOn = vi.fn(
     (channel: unknown, handler: (payload: unknown, context: unknown) => unknown) => {
@@ -111,6 +115,40 @@ const mocks = vi.hoisted(() => {
     eventHandlers,
     fsPathExists: vi.fn(),
     fsRemove: vi.fn(),
+    // Inode bookkeeping for the uninstall pinning checks. captureDirectoryIdentity
+    // records dev/ino for the data and code roots, and assertPinnedDirectory later
+    // re-checks them -- including after the quarantine rename, which is safe in
+    // production precisely because an inode follows the directory rather than the path.
+    // A path-derived identity would pass the first check and fail that one, so the
+    // double has to model the same thing: an inode belongs to a directory and moves
+    // with it.
+    inodes,
+    renamedAway,
+    renamedInto,
+    inodeFor: (target: string) => {
+      const existing = inodes.get(target)
+      if (existing !== undefined) return existing
+      nextInode += 1
+      inodes.set(target, nextInode)
+      return nextInode
+    },
+    renameEntry: (from: string, to: string) => {
+      const ino = inodes.get(from)
+      if (ino !== undefined) {
+        inodes.delete(from)
+        inodes.set(to, ino)
+      }
+      renamedAway.add(from)
+      renamedInto.add(to)
+      renamedInto.delete(from)
+      renamedAway.delete(to)
+    },
+    entryExistsSync: (target: string) => {
+      if (removedPaths.has(target) || renamedAway.has(target)) return false
+      if (renamedInto.has(target)) return true
+      const base = target.slice(target.lastIndexOf('/') + 1)
+      return !base.startsWith('plugin-sdk.sqlite')
+    },
     getCapturedManagerFactory: () => capturedManagerFactory,
     getNetworkService: vi.fn(),
     handlers,
@@ -193,21 +231,72 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(), openPath: vi.fn(), showItemInFolder: vi.fn() }
 }))
 
+// captureDirectoryIdentity pins the roots with real node:fs while everything else here
+// goes through the fs-extra mock, so the two disagreed by construction: the pin saw
+// ENOENT on /fixture/... and recorded state 'missing', then assertPinnedDirectory found
+// the mocked directory and threw PLUGIN_DISPOSITION_OWNER_PATH_CHANGED. That failed the
+// first uninstall barrier and took 19 tests with it, all reported as
+// PLUGIN_UNINSTALL_TEARDOWN_FAILED.
+//
+// Both now read one model, so the pinning is exercised rather than stubbed out: dev/ino
+// still have to match, a symlinked path still fails, and an inode still has to survive
+// the quarantine rename.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    lstatSync: vi.fn((target: string) => {
+      if (!mocks.entryExistsSync(target)) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+      const symbolic = mocks.symbolicPaths.has(target)
+      return {
+        dev: 1,
+        ino: mocks.inodeFor(target),
+        isDirectory: () => !symbolic,
+        isSymbolicLink: () => symbolic
+      }
+    }),
+    realpathSync: vi.fn((target: string) => target)
+  }
+})
+
+// The quarantine rename moves a directory before deleting it, so the recovery path must
+// inherit the original inode -- that is the property assertPinnedDirectory relies on to
+// confirm it is deleting the same directory it admitted.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    rename: vi.fn(async (from: string, to: string) => {
+      if (!mocks.entryExistsSync(from)) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+      mocks.renameEntry(from, to)
+    })
+  }
+})
+
 vi.mock('fs-extra', () => ({
   default: {
     ensureDir: vi.fn(),
     existsSync: vi.fn(() => false),
     lstat: vi.fn(async (target: string) => {
-      if (mocks.removedPaths.has(target) || !(await mocks.fsPathExists(target))) {
+      if (!mocks.entryExistsSync(target) || !(await mocks.fsPathExists(target))) {
         throw Object.assign(new Error('missing'), { code: 'ENOENT' })
       }
       const symbolic = mocks.symbolicPaths.has(target)
       return {
+        dev: 1,
+        ino: mocks.inodeFor(target),
         isDirectory: () => !symbolic,
         isSymbolicLink: () => symbolic
       }
     }),
-    pathExists: mocks.fsPathExists,
+    pathExists: vi.fn(async (target: string) => {
+      if (!mocks.entryExistsSync(target)) return false
+      return await mocks.fsPathExists(target)
+    }),
     readFileSync: vi.fn(),
     readdir: vi.fn(async () => ['config']),
     realpath: vi.fn(async (target: string) => target),
@@ -492,6 +581,16 @@ interface ActualManagerHarness {
   loggerDestroy: ReturnType<typeof vi.fn>
   sqliteClosePlugin: ReturnType<typeof vi.fn>
   sqliteHasPlugin: ReturnType<typeof vi.fn>
+}
+
+// Deletion is two-phase now: the directory is renamed to a `<path>.uninstall-<uuid>.recovery`
+// quarantine, re-pinned against the identity captured at admission, and only then removed.
+// So fse.remove sees the recovery path, not the original, and matchers keyed on the
+// original literals stopped matching anything. Normalising back to the original keeps the
+// ordering assertions about the directory being removed rather than about which of the two
+// phases happened to call remove.
+function removalTarget(target: string): string {
+  return target.replace(/\.uninstall-[0-9a-f-]+\.recovery$/i, '')
 }
 
 async function createActualManagerHarness(order: string[] = []): Promise<ActualManagerHarness> {
@@ -1400,7 +1499,8 @@ describe('PluginModule facade', () => {
     mocks.reportPluginUninstall.mockImplementation(async () => {
       order.push('analytics-uninstall-report')
     })
-    mocks.fsRemove.mockImplementation(async (target: string) => {
+    mocks.fsRemove.mockImplementation(async (rawTarget: string) => {
+      const target = removalTarget(rawTarget)
       if (target === '/fixture/plugin-data/calendar/cache') order.push('cache-remove')
       else if (target === '/fixture/plugin-data/calendar/temp') order.push('temp-remove')
       else if (target === '/fixture/plugin-data/calendar') order.push('data-root-remove')
@@ -1785,7 +1885,8 @@ describe('PluginModule facade', () => {
     async (failedStage, code) => {
       const { manager } = await createActualManagerHarness()
       if (failedStage === 'code' || failedStage === 'data') {
-        mocks.fsRemove.mockImplementation(async (target: string) => {
+        mocks.fsRemove.mockImplementation(async (rawTarget: string) => {
+          const target = removalTarget(rawTarget)
           if (
             (failedStage === 'code' && target === '/fixture/plugins/calendar') ||
             (failedStage === 'data' && target === '/fixture/plugin-data/calendar/config')
@@ -1889,7 +1990,8 @@ describe('PluginModule facade', () => {
     const { manager, plugin } = await createActualManagerHarness()
     const existing = new Set(['/fixture/plugins/calendar', '/fixture/plugin-data/calendar'])
     mocks.fsPathExists.mockImplementation(async (target: string) => existing.has(target))
-    mocks.fsRemove.mockImplementation(async (target: string) => {
+    mocks.fsRemove.mockImplementation(async (rawTarget: string) => {
+      const target = removalTarget(rawTarget)
       existing.delete(target)
     })
     const pending = (
