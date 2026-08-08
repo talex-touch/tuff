@@ -101,13 +101,6 @@ vi.mock('../search-engine/search-logger', () => ({
   }
 }))
 
-vi.mock('./ipc', () => ({
-  ipcManager: {
-    register: vi.fn(),
-    unregister: vi.fn()
-  }
-}))
-
 vi.mock('./window', () => ({
   windowManager: {
     create: vi.fn(),
