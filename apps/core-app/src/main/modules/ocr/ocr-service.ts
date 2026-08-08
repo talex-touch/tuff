@@ -38,7 +38,6 @@ import { windowManager } from '../box-tool/core-box/window'
 import { databaseModule } from '../database'
 import { notificationModule } from '../notification'
 import {
-  OCR_START_WRITE_SKIP_QUEUE_DEPTH,
   computeOcrConfigPersistSignature,
   getOcrConfigWriteLabel,
   resolveOcrConfigPersistOptions,
@@ -960,10 +959,17 @@ class OcrService {
 
         const attemptCount = (job.attempts ?? 0) + 1
 
-        const skipStartWrite =
-          dbWriteScheduler.getStats().queued >= OCR_START_WRITE_SKIP_QUEUE_DEPTH
-        if (!skipStartWrite) {
-          await this.withDbWrite('ocr.jobs.start', (db) =>
+        // Never skipped, however deep the write queue is. This row is what bounds retries: if the
+        // attempt is not persisted and the process dies before failJob() runs, the job comes back
+        // as pending/attempts=0, MAX_ATTEMPTS is never reached, and an image that crashes the
+        // native worker is re-dispatched every poll, forever, across launches (#645).
+        //
+        // Marked critical and non-droppable rather than bypassing the scheduler, so it still
+        // queues behind ordering rules instead of jumping them. The cost is one UPDATE per
+        // dispatch, and WORKER_CONCURRENCY is 1.
+        await this.withDbWrite(
+          'ocr.jobs.start',
+          (db) =>
             db
               .update(ocrJobs)
               .set({
@@ -973,9 +979,9 @@ class OcrService {
                 lastError: null,
                 nextRetryAt: null
               })
-              .where(eq(ocrJobs.id, job.id!))
-          )
-        }
+              .where(eq(ocrJobs.id, job.id!)),
+          { priority: 'critical', dropPolicy: 'none' }
+        )
 
         job.attempts = attemptCount
 
