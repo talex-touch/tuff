@@ -20,7 +20,7 @@ import {
 import { readCloudflareBindings } from '../../utils/cloudflare'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
-import { oauthEmailProvesMailboxControl } from '../../utils/oauthEmailTrust'
+import { oauthEmailProvesMailboxControl, selectVerifiedGitHubEmail } from '../../utils/oauthEmailTrust'
 import {
   assertRuntimeCredential,
   isLocalDevelopmentRuntime,
@@ -576,24 +576,19 @@ function getAuthOptions(authSecret: string): AuthOptions {
               if (emailResponse.status >= 200 && emailResponse.status < 300) {
                 const emails = Array.isArray(emailResponse.data) ? emailResponse.data : []
                 if (Array.isArray(emails)) {
-                  const primary =
-                    emails.find(item => {
-                      return (
-                        item &&
-                        typeof item.email === 'string' &&
-                        item.email.length > 0 &&
-                        item.verified === true &&
-                        item.primary === true
-                      )
-                    }) ??
-                    emails.find(item => {
-                      return item && typeof item.email === 'string' && item.email.length > 0 && item.verified === true
-                    }) ??
-                    emails.find(item => {
-                      return item && typeof item.email === 'string' && item.email.length > 0
-                    })
-
-                  if (primary && typeof primary.email === 'string') profile.email = primary.email
+                  // Verified addresses only. There used to be a further branch taking any
+                  // address at all when neither matched, and GitHub returns addresses a user
+                  // has merely *added* (`verified: false`), so it could hand back one the
+                  // signer never proved they own (#917).
+                  //
+                  // This matters more than it looks: oauthEmailProvesMailboxControl trusts
+                  // 'github' unconditionally, and the reason it may is precisely that this
+                  // selection yields verified addresses only. The fallback contradicted the
+                  // premise the rest of the account-linking rule rests on. Left unset when
+                  // nothing is verified — sign-in still works, it just cannot resolve to a
+                  // pre-existing account, which is the outcome worth protecting.
+                  const selected = selectVerifiedGitHubEmail(emails)
+                  if (selected) profile.email = selected
                 }
               }
             }

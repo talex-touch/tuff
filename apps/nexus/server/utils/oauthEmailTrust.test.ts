@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Profile } from 'next-auth'
 import { describe, expect, it } from 'vitest'
-import { EMAIL_VERIFYING_OAUTH_PROVIDERS, oauthEmailProvesMailboxControl } from './oauthEmailTrust'
+import { EMAIL_VERIFYING_OAUTH_PROVIDERS, oauthEmailProvesMailboxControl, selectVerifiedGitHubEmail } from './oauthEmailTrust'
 
 /**
  * The rule that decides whether an OAuth email may be used to sign in as an account that
@@ -76,5 +76,58 @@ describe('linuxdo provider configuration', () => {
     // not.toContain above and report a fixed provider forever.
     const github = source.slice(source.indexOf('GitHubProvider({'))
     expect(github).toContain('allowDangerousEmailAccountLinking: true')
+  })
+})
+
+/**
+ * Which address GitHub's /user/emails contributes (#917).
+ *
+ * The selection had a last-resort branch that took any address when no verified one matched.
+ * GitHub returns addresses a user has merely *added*, so that branch could yield one the
+ * signer never proved they own — and oauthEmailProvesMailboxControl above trusts 'github'
+ * unconditionally on the premise that this selection is verified-only.
+ */
+describe('selectVerifiedGitHubEmail', () => {
+  const entry = (email: string, verified: boolean, primary = false) => ({ email, verified, primary })
+
+  it('prefers the verified primary address', () => {
+    expect(selectVerifiedGitHubEmail([
+      entry('other@example.com', true),
+      entry('me@example.com', true, true),
+    ])).toBe('me@example.com')
+  })
+
+  it('takes a verified non-primary when no verified primary exists', () => {
+    expect(selectVerifiedGitHubEmail([
+      entry('unverified@example.com', false, true),
+      entry('me@example.com', true),
+    ])).toBe('me@example.com')
+  })
+
+  it('returns nothing when the only addresses are unverified', () => {
+    // The regression. This used to return victim@example.com, which then matched an existing
+    // Nexus account and linked the attacker's GitHub identity to it.
+    expect(selectVerifiedGitHubEmail([
+      entry('victim@example.com', false, true),
+      entry('attacker@example.com', false),
+    ])).toBeUndefined()
+  })
+
+  it('never prefers an unverified primary over a verified non-primary', () => {
+    expect(selectVerifiedGitHubEmail([
+      entry('victim@example.com', false, true),
+      entry('attacker@example.com', true),
+    ])).toBe('attacker@example.com')
+  })
+
+  it('treats a non-boolean verified value as unverified', () => {
+    for (const value of ['true', 1, 'yes', {}])
+      expect(selectVerifiedGitHubEmail([{ email: 'x@example.com', verified: value, primary: true }]), String(value)).toBeUndefined()
+  })
+
+  it('handles the shapes a failed API call can produce', () => {
+    for (const value of [[], null, undefined, {}, 'nope'])
+      expect(selectVerifiedGitHubEmail(value)).toBeUndefined()
+    expect(selectVerifiedGitHubEmail([null, { email: '' , verified: true }, { verified: true }])).toBeUndefined()
   })
 })
