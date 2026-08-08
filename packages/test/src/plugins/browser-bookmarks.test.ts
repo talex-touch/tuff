@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const browserBookmarksUrl = new URL('../../../../plugins/touch-browser-bookmarks/index.js', import.meta.url)
-const browserBookmarksPlugin = loadPluginModule(browserBookmarksUrl)
-const { __test: browserBookmarksTest } = browserBookmarksPlugin
 
 class FakeBuilder {
   item: Record<string, unknown>
@@ -49,64 +47,21 @@ describe('browser bookmarks plugin', () => {
     expect(manifest.permissionReasons['network.internet']).toContain('默认浏览器打开')
   })
 
-  it('normalizes only http and https URL inputs', () => {
-    expect(browserBookmarksTest.normalizeUrlInput('example.com')).toBe('https://example.com/')
-    expect(browserBookmarksTest.normalizeUrlInput('https://example.com/docs')).toBe('https://example.com/docs')
-    expect(browserBookmarksTest.normalizeUrlInput('file:///tmp/demo.txt')).toBeNull()
-  })
-
-  it('upserts bookmark by url', () => {
-    const now = 1_700_000_000_000
-    const first = browserBookmarksTest.upsertBookmark([], {
-      url: 'example.com',
-      title: 'Example',
-      tags: ['news'],
-    }, now)
-
-    const second = browserBookmarksTest.upsertBookmark(first, {
-      url: 'https://example.com',
-      title: 'Example Updated',
-      tags: ['daily'],
-      pinned: true,
-    }, now + 1000)
-
-    expect(second.length).toBe(1)
-    expect(second[0].title).toBe('Example Updated')
-    expect(second[0].pinned).toBe(true)
-    expect(second[0].tags).toContain('news')
-    expect(second[0].tags).toContain('daily')
-  })
-
-  it('cleans recent items and removes expired/duplicate entries', () => {
-    const now = Date.now()
-    const tooOld = now - (31 * 24 * 60 * 60 * 1000)
-    const cleaned = browserBookmarksTest.cleanupRecent([
-      { url: 'https://a.com', title: 'A old', lastUsedAt: tooOld },
-      { url: 'https://a.com', title: 'A new', lastUsedAt: now - 1000 },
-      { url: 'https://b.com', title: 'B', lastUsedAt: now - 500 },
-    ], now)
-
-    expect(cleaned.length).toBe(2)
-    expect(cleaned[0].url).toBe('https://b.com/')
-    expect(cleaned[1].url).toBe('https://a.com/')
-    expect(cleaned[1].title).toBe('A new')
-  })
-
-  it('merges recent display by excluding bookmarks', () => {
-    const recent = [
-      { url: 'https://a.com/', title: 'A', lastUsedAt: 3 },
-      { url: 'https://b.com/', title: 'B', lastUsedAt: 2 },
-      { url: 'https://c.com/', title: 'C', lastUsedAt: 1 },
-    ]
-    const bookmarks = [
-      { url: 'https://b.com/' },
-    ]
-
-    const merged = browserBookmarksTest.mergeRecentForDisplay(recent, bookmarks)
-    expect(merged.length).toBe(2)
-    expect(merged[0].url).toBe('https://a.com/')
-    expect(merged[1].url).toBe('https://c.com/')
-  })
+  // These four called normalizeUrlInput / upsertBookmark / cleanupRecent /
+  // mergeRecentForDisplay through the __test export that e37c92c8c removed.
+  //
+  // The security-relevant half of normalizeUrlInput -- that a non-http(s) URL never
+  // reaches the open capability -- is now covered by 'refuses to open a non-http(s)
+  // URL' below, through the lifecycle.
+  //
+  // The other three are data-shaping semantics with no boundary coverage:
+  // plugins/touch-browser-bookmarks/index.test.cjs asserts that recent state is
+  // persisted, but not that duplicates collapse, that expired entries are dropped,
+  // or that bookmarked URLs are excluded from the recent list. Recorded as todo
+  // rather than deleted, so the gap stays visible in the test output.
+  it.todo('collapses duplicate bookmarks by url')
+  it.todo('drops expired and duplicate recent entries')
+  it.todo('excludes bookmarked urls from the recent display')
 
   it('shows network permission diagnostics without prompting', async () => {
     const items: Array<{ title?: string, meta?: Record<string, any>, subtitle?: string }> = []
@@ -123,7 +78,14 @@ describe('browser bookmarks plugin', () => {
           pushItems(next: Array<{ title?: string, meta?: Record<string, any>, subtitle?: string }>) { items.push(...next) },
         },
         storage: {
-          async getFile() { return null },
+          // Keyed by file: the plugin reads bookmarks.json and recent-urls.json
+          // separately, and a bare null made it render its load-failure item
+          // instead of the list these tests inspect.
+          async getFile(name: string) {
+            return name === 'recent-urls.json'
+              ? { items: [], updatedAt: 0 }
+              : { items: [] }
+          },
           async setFile() {},
         },
       },
@@ -162,7 +124,14 @@ describe('browser bookmarks plugin', () => {
           pushItems(next: Array<{ title?: string, meta?: Record<string, any>, subtitle?: string }>) { items.push(...next) },
         },
         storage: {
-          async getFile() { return null },
+          // Keyed by file: the plugin reads bookmarks.json and recent-urls.json
+          // separately, and a bare null made it render its load-failure item
+          // instead of the list these tests inspect.
+          async getFile(name: string) {
+            return name === 'recent-urls.json'
+              ? { items: [], updatedAt: 0 }
+              : { items: [] }
+          },
           async setFile() {},
         },
       },
@@ -179,251 +148,52 @@ describe('browser bookmarks plugin', () => {
     })
   })
 
-  it('blocks external URL opening when network permission is denied', async () => {
-    const openUrl = vi.fn()
-    const request = vi.fn(async () => false)
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      openUrl,
-      permission: {
-        check: async () => false,
-        request,
-      },
-      plugin: {
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    }))
+  // The six permission variants and two success paths that were here are removed,
+  // not ported. plugins/touch-browser-bookmarks/index.test.cjs already covers the
+  // same ground at the boundary and covers it better:
+  //
+  //   maps host clipboard and open-url permission denials without leaking native detail
+  //     -> asserts reason 'permission-denied' for BOTH copy-url and open-url, plus
+  //        doesNotMatch(/private|clipboard denied/) leak checks these never had
+  //   maps ordinary clipboard failures without misreporting a permission denial
+  //     -> asserts reason 'clipboard-write-failed', keeping the two codes separable
+  //   opens, copies and persists recent state when host capabilities grant calls
+  //     -> the success paths
+  //
+  // The three-way split here (denied / sdk unavailable / request fails) described the
+  // pre-check model that e37c92c8c removed: the plugin no longer calls
+  // permission.request(), it invokes the capability and maps the thrown
+  // PLUGIN_HOST_CAPABILITY_* code (index.js:525-536). Two outcomes exist now, and
+  // the package-local suite asserts both.
 
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'open-url',
-        payload: { url: 'https://example.com', title: 'Example' },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-denied',
-    })
-    expect(request).toHaveBeenCalledWith('network.internet', '需要 network.internet 权限以默认浏览器打开网址')
-    expect(openUrl).not.toHaveBeenCalled()
-  })
-
-  it('blocks external URL opening when permission sdk is unavailable', async () => {
+  // Kept, because nothing covers it at the boundary: a non-http(s) URL must never
+  // reach the open capability. normalizeUrlInput returns null and open-url bails
+  // (index.js:753-755), so this is observable without the removed __test export.
+  it('refuses to open a non-http(s) URL', async () => {
     const openUrl = vi.fn()
     const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
       openUrl,
-      permission: withoutGlobal(),
       plugin: {
+        feature: { clearItems() {}, pushItems() {} },
         storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'open-url',
-        payload: { url: 'https://example.com', title: 'Example' },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-sdk-unavailable',
-    })
-    expect(openUrl).not.toHaveBeenCalled()
-  })
-
-  it('blocks external URL opening when network permission request fails', async () => {
-    const openUrl = vi.fn()
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      openUrl,
-      permission: {
-        check: async () => false,
-        request: async () => {
-          throw new Error('permission transport failed')
-        },
-      },
-      plugin: {
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'open-url',
-        payload: { url: 'https://example.com', title: 'Example' },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-request-failed',
-    })
-    expect(openUrl).not.toHaveBeenCalled()
-  })
-
-  it('blocks URL copy when clipboard.write permission is denied', async () => {
-    const writeText = vi.fn()
-    const request = vi.fn(async () => false)
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: {
-        check: async () => false,
-        request,
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'copy-url',
-        payload: { url: 'example.com' },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-denied',
-    })
-    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制链接')
-    expect(writeText).not.toHaveBeenCalled()
-  })
-
-  it('blocks URL copy when permission sdk is unavailable', async () => {
-    const writeText = vi.fn()
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: withoutGlobal(),
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'copy-url',
-        payload: { url: 'example.com' },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-sdk-unavailable',
-    })
-    expect(writeText).not.toHaveBeenCalled()
-  })
-
-  it('blocks URL copy when clipboard permission request fails', async () => {
-    const writeText = vi.fn()
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: {
-        check: async () => false,
-        request: async () => {
-          throw new Error('permission transport failed')
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'copy-url',
-        payload: { url: 'example.com' },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-request-failed',
-    })
-    expect(writeText).not.toHaveBeenCalled()
-  })
-
-  it('copies URL after clipboard.write permission is granted', async () => {
-    const writeText = vi.fn()
-    const request = vi.fn(async () => true)
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: {
-        check: async () => false,
-        request,
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'copy-url',
-        payload: { url: 'example.com' },
-      },
-    })
-
-    expect(result).toMatchObject({ externalAction: true, status: 'started' })
-    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制链接')
-    expect(writeText).toHaveBeenCalledWith('https://example.com/')
-  })
-
-  it('opens external URL after network permission is granted and records recent URL', async () => {
-    const openUrl = vi.fn(async () => undefined)
-    const writes: Array<{ file: string, data: any }> = []
-    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
-      openUrl,
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        storage: {
-          async getFile() { return null },
-          async setFile(file: string, data: any) { writes.push({ file, data }) },
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-bookmarks',
-        actionId: 'open-url',
-        payload: { url: 'example.com', title: 'Example' },
-      },
-    })
-
-    expect(result).toMatchObject({ externalAction: true, status: 'started' })
-    expect(openUrl).toHaveBeenCalledWith('https://example.com/')
-    expect(writes.at(-1)).toMatchObject({
-      file: 'recent-urls.json',
-      data: {
-        items: [
-          {
-            url: 'https://example.com/',
-            title: 'Example',
+          async getFile() {
+            return { items: [], updatedAt: 0 }
           },
-        ],
+          setFile: vi.fn(),
+        },
       },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: { defaultAction: 'browser-bookmarks' },
+      actions: [{ id: 'open-url', payload: { url: 'file:///tmp/demo.txt' } }],
     })
+
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(result).toBeUndefined()
   })
+
   it('renders manual, pinned, recent, and direct quicklinks with compatible source payloads', async () => {
     const items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }> = []
     const files: Record<string, unknown> = {
