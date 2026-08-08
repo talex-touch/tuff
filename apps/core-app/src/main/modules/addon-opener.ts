@@ -7,7 +7,6 @@ import type {
   PluginInstallRequest
 } from '@talex-touch/utils/transport/events/opener'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
@@ -19,6 +18,7 @@ import type { AppSecondaryLaunch } from '../core/eventbus/touch-event'
 import { TalexEvents } from '../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../core/runtime-accessor'
 import { resolveSilentLaunchIntent } from '../core/silent-launch'
+import { buildTempPluginPath } from '../utils/temp-plugin-path'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { focusMainWindowIfAlive, registerMacOSOpenUrlHandler } from './addon-opener-handlers'
@@ -236,7 +236,8 @@ export class AddonOpenerModule extends BaseModule {
 
     const installPluginHandler = async (payload: PluginInstallRequest) => {
       const { name, buffer, forceUpdate } = payload ?? {}
-      const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+      // `name` arrives over IPC; joined raw it escaped the temp directory (#690).
+      const tempFilePath = buildTempPluginPath(name, Date.now())
       try {
         await fs.promises.writeFile(tempFilePath, buffer)
         let lastEvent: { status: string; msg: unknown; event?: unknown } | null = null
@@ -282,7 +283,8 @@ export class AddonOpenerModule extends BaseModule {
       payload: PluginDropInstallRequest
     ): Promise<PluginDropInstallResponse> => {
       const { name, buffer } = payload ?? {}
-      const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+      // `name` arrives over IPC; joined raw it escaped the temp directory (#690).
+      const tempFilePath = buildTempPluginPath(name, Date.now())
       try {
         await fs.promises.writeFile(tempFilePath, buffer)
 
