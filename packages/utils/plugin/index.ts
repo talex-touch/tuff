@@ -226,11 +226,24 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 
 export interface IFeatureCommand {
   type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
-  value: string | string[] | RegExp | FeatureCommandMatcher
+  /**
+   * Always a string pattern. Features are declared in `manifest.json` and cross IPC, so a
+   * `RegExp` or a matcher function cannot reach a consumer -- JSON degrades them to `{}` or
+   * drops them. The union used to admit both, which let the matcher cast unsoundly to `RegExp`
+   * and throw on the string a manifest actually carries (#885).
+   *
+   * For `type: 'regex'` this is the pattern source; the host compiles it.
+   */
+  value: string | string[]
   /** Optional trigger callback - not serialized over IPC */
   onTrigger?: () => void
 }
 
+/**
+ * @deprecated Never reachable. A feature command is declared in `manifest.json` and crosses
+ * IPC, so a function value cannot survive to the host. Nothing constructs one, and the
+ * `'function'` command type has no matcher branch. Kept only so existing imports still resolve.
+ */
 export type FeatureCommandMatcher = (queryText: string) => boolean
 
 export type OmniTransferTarget = 'plugin' | 'corebox' | 'system'
