@@ -422,3 +422,62 @@ describe('OcrService runAgentJob local-first options', () => {
     }
   })
 })
+
+/**
+ * The start write must survive write-queue pressure (#645).
+ *
+ * It used to be skipped whenever the scheduler was backed up, which dropped the attempts
+ * increment. A job whose image crashes the native worker then comes back as pending/attempts=0 on
+ * the next launch, MAX_ATTEMPTS is never reached, and it is re-dispatched every poll forever.
+ */
+describe('ocr dispatch persists the attempt', () => {
+  type Dispatchable = {
+    db: unknown
+    processing: boolean
+    activeJobs: Map<number, Promise<void>>
+    processQueue: () => Promise<void>
+    runAgentJob: (jobId: number, job: unknown) => Promise<void>
+    upsertConfig: (key: string, value: unknown) => Promise<void>
+    isQueueDisabled: () => Promise<boolean>
+    withDbWrite: (label: string, op: unknown, options?: unknown) => Promise<unknown>
+  }
+
+  function readyJobDb(job: Record<string, unknown>) {
+    const builder = {
+      from: () => builder,
+      where: () => builder,
+      orderBy: () => builder,
+      limit: async () => [job]
+    }
+    return { select: () => builder }
+  }
+
+  it('schedules ocr.jobs.start as critical and undroppable, however deep the queue', async () => {
+    const service = ocrService as unknown as Dispatchable
+    const writes: Array<{ label: string; options?: { priority?: string; dropPolicy?: string } }> =
+      []
+
+    service.db = readyJobDb({ id: 42, clipboardId: 7, attempts: 0 })
+    service.processing = false
+    service.activeJobs = new Map()
+    service.isQueueDisabled = async () => false
+    service.upsertConfig = async () => {}
+    service.runAgentJob = async () => {}
+    service.withDbWrite = async (label, _op, options) => {
+      writes.push({ label, options: options as { priority?: string; dropPolicy?: string } })
+      return undefined
+    }
+
+    await service.processQueue()
+
+    const startWrite = writes.find((entry) => entry.label === 'ocr.jobs.start')
+
+    // Positive control: the dispatch path ran at all. Without it an early return would satisfy
+    // every assertion below by never writing anything.
+    expect(writes.length).toBeGreaterThan(0)
+
+    expect(startWrite, 'ocr.jobs.start was not scheduled').toBeDefined()
+    expect(startWrite?.options?.priority).toBe('critical')
+    expect(startWrite?.options?.dropPolicy).toBe('none')
+  })
+})

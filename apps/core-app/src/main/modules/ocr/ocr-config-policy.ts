@@ -7,7 +7,14 @@ export interface OcrConfigPersistOptions {
   skipIfUnchanged?: boolean
 }
 
-export const OCR_START_WRITE_SKIP_QUEUE_DEPTH = 8
+/**
+ * Queue depth past which the droppable OCR breadcrumbs stop being written.
+ *
+ * Named for the config writes it governs, not for the job start write: that one used to share this
+ * threshold and no longer does, because skipping it lost the attempts increment that bounds
+ * retries (#645). These three are `dropPolicy: 'drop'` telemetry and are safe to shed.
+ */
+export const OCR_CONFIG_SKIP_QUEUE_DEPTH = 8
 const OCR_LAST_QUEUED_MIN_PERSIST_INTERVAL_MS = 30 * 1000
 const OCR_LAST_DISPATCH_MIN_PERSIST_INTERVAL_MS = 30 * 1000
 const OCR_LAST_SUCCESS_MIN_PERSIST_INTERVAL_MS = 30 * 1000
@@ -15,19 +22,19 @@ const OCR_LAST_SUCCESS_MIN_PERSIST_INTERVAL_MS = 30 * 1000
 const OCR_CONFIG_PERSIST_OPTIONS: Record<string, OcrConfigPersistOptions> = {
   'ocr:last-queued': {
     minIntervalMs: OCR_LAST_QUEUED_MIN_PERSIST_INTERVAL_MS,
-    skipWhenQueueDepthAtLeast: OCR_START_WRITE_SKIP_QUEUE_DEPTH,
+    skipWhenQueueDepthAtLeast: OCR_CONFIG_SKIP_QUEUE_DEPTH,
     dropPolicy: 'drop',
     maxQueueWaitMs: 10_000
   },
   'ocr:last-dispatch': {
     minIntervalMs: OCR_LAST_DISPATCH_MIN_PERSIST_INTERVAL_MS,
-    skipWhenQueueDepthAtLeast: OCR_START_WRITE_SKIP_QUEUE_DEPTH,
+    skipWhenQueueDepthAtLeast: OCR_CONFIG_SKIP_QUEUE_DEPTH,
     dropPolicy: 'drop',
     maxQueueWaitMs: 10_000
   },
   'ocr:last-success': {
     minIntervalMs: OCR_LAST_SUCCESS_MIN_PERSIST_INTERVAL_MS,
-    skipWhenQueueDepthAtLeast: OCR_START_WRITE_SKIP_QUEUE_DEPTH,
+    skipWhenQueueDepthAtLeast: OCR_CONFIG_SKIP_QUEUE_DEPTH,
     dropPolicy: 'drop',
     maxQueueWaitMs: 10_000
   },
