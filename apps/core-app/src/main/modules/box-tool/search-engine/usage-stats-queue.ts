@@ -88,6 +88,19 @@ export class UsageStatsQueue {
   private pendingActionEvents = 0
   private searchFlushing = false
   private actionFlushing = false
+
+  /**
+   * Bumped by clear(). A flush captures it before awaiting and refuses to merge its snapshot back
+   * if it has changed since.
+   *
+   * The snapshot is taken out of the queue before the write, so a failing flush restores it. If a
+   * privacy or retention reset called clear() in that window, the restore put back exactly the
+   * rows the user asked to erase — and then scheduled a flush that persisted them (#657).
+   *
+   * A generation rather than clearing searchFlushing/actionFlushing: those guard against a second
+   * concurrent flush, and resetting them would let one start while the first is still in the air.
+   */
+  private clearGeneration = 0
   private readonly db: LibSQLDatabase<typeof schema>
   private readonly options: Required<UsageStatsQueueOptions>
 
@@ -423,6 +436,7 @@ export class UsageStatsQueue {
     }
 
     this.searchFlushing = true
+    const generation = this.clearGeneration
     const records = Array.from(this.searchQueue.values()).map((record) =>
       this.cloneAggregate(record)
     )
@@ -448,6 +462,10 @@ export class UsageStatsQueue {
             queuedWrites: dbWriteScheduler.getStats().queued
           }
         })
+      } else if (generation !== this.clearGeneration) {
+        usageStatsQueueLog.debug('Search flush failed after a clear; snapshot discarded', {
+          meta: { eventCount, uniqueItems: records.length }
+        })
       } else {
         this.mergeBack(records, true)
         this.pendingSearchEvents += this.sumEventCount(records)
@@ -470,6 +488,7 @@ export class UsageStatsQueue {
     }
 
     this.actionFlushing = true
+    const generation = this.clearGeneration
     const records = Array.from(this.actionQueue.values()).map((record) =>
       this.cloneAggregate(record)
     )
@@ -485,6 +504,12 @@ export class UsageStatsQueue {
         meta: { eventCount, uniqueItems: records.length }
       })
     } catch (error) {
+      if (generation !== this.clearGeneration) {
+        usageStatsQueueLog.debug('Action flush failed after a clear; snapshot discarded', {
+          meta: { eventCount, uniqueItems: records.length }
+        })
+        return
+      }
       this.mergeBack(records, false)
       this.pendingActionEvents += this.sumEventCount(records)
       usageStatsQueueLog.error('Failed to flush action queue', {
@@ -529,5 +554,6 @@ export class UsageStatsQueue {
     this.actionQueue.clear()
     this.pendingSearchEvents = 0
     this.pendingActionEvents = 0
+    this.clearGeneration += 1
   }
 }
