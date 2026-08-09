@@ -18,6 +18,7 @@
   "main": "index.ts",
   "module": "./index.ts",
   "files": [
+    "dist",
     "account",
     "analytics",
     "animation",
@@ -49,13 +50,15 @@
     "node": ">=24.15.0"
   },
   "scripts": {
+    "build": "tsup index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
     "benchmark:preview": "vitest run \"__tests__/core-box/preview-sdk.benchmark.test.ts\" --reporter verbose",
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "publish": "npm publish --access public"
+    "publish": "pnpm publish --access public",
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "electron": "^40.0.0 || ^41.0.0",
@@ -74,7 +77,14 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@vitest/coverage-v8": "^3.2.7",
+    "tsup": "^8.5.1",
     "vitest": "^3.2.7",
     "vue": "^3.5.39"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.mjs",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.mts"
   }
 }
