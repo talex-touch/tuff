@@ -17,7 +17,7 @@ vi.mock('vue-router', () => ({
 
 function mountItem(props: Record<string, unknown> = {}) {
   return mount(TouchMenuItem, {
-    props: { name: 'Home', route: '/home', ...props },
+    props: { icon: 'i-ri-home-line', name: 'Home', route: '/home', ...props },
     global: {
       directives: { wave: {} },
       provide: { changePointer: () => {} }

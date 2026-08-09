@@ -67,7 +67,7 @@ onUnmounted(() => {
   }
 })
 
-function handleClick($event: MouseEvent) {
+function handleClick($event: MouseEvent | KeyboardEvent) {
   if (props.disabled) return
 
   if (props.route) router.push(props.route)
