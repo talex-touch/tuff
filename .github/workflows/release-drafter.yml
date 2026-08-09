@@ -9,6 +9,22 @@ on:
     types:
       - closed
 
+# One draft release, one writer. push (on master) and pull_request_target (on
+# merge) both fire for the same merge, and release-drafter mutates the same draft
+# in place — two concurrent runs race on it (#725).
+#
+# Keyed on the TARGET branch, not github.ref. The two triggers report different
+# refs for the same merge — push gives refs/heads/master, pull_request_target
+# gives refs/pull/<n>/merge — so a ref-keyed group lands them in separate buckets
+# and serializes nothing.
+#
+# cancel-in-progress is deliberately false, unlike ci.yml: these runs are not
+# interchangeable rebuilds of a check, they are writes. Cancelling one mid-write
+# is what this is trying to avoid, so they queue instead.
+concurrency:
+  group: release-drafter-${{ github.event.pull_request.base.ref || github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: read
