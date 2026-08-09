@@ -50,7 +50,7 @@
 
 ---
 
-## 📁 活跃 Trellis 任务全景（24 个）
+## 📁 活跃 Trellis 任务全景（22 个）
 
 优先级与状态以各任务 `task.json` / `prd.md` 为准。父子任务缩进展示。
 
@@ -73,11 +73,9 @@
 | ├ [ota-one-click-background-update](.trellis/tasks/07-22-ota-one-click-background-update/prd.md) | P2 | 🔄 in_progress |
 | └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
 | [harden-app-icon-self-healing](.trellis/tasks/07-24-harden-app-icon-self-healing/prd.md) | P2 | 🔄 real-profile evidence ready；N+1 release 开放 |
-| [install-launch-v2-4-13-beta-23](.trellis/tasks/07-26-install-launch-v2-4-13-beta-23/prd.md) | P2 | 🔄 in_progress |
-| [audit-plugin-privileged-security](.trellis/tasks/07-27-audit-plugin-privileged-security/prd.md) | P2 | planning |
+| install-launch-v2-4-13-beta-23 <sup>本地任务，未入库</sup> | P2 | 🔄 in_progress |
 | [base-anchor-liquid-animation](.trellis/tasks/07-27-base-anchor-liquid-animation/prd.md) | P2 | 🔄 in_progress（AC 验收中） |
 | [fix-plugin-folder-button](.trellis/tasks/07-27-fix-plugin-folder-button/prd.md) | P2 | 🔄 in_progress |
-| [tuffex-docs-audit](.trellis/tasks/07-28-tuffex-docs-audit/prd.md) | P2 | 🔄 审计进行中 |
 | [docs-roadmap-consolidation-cleanup](.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/prd.md) | P2 | 🔄 in_progress（本任务） |
 | [expose-plugin-search-sdk](.trellis/tasks/07-27-expose-plugin-search-sdk/prd.md) | P3 | planning |
 
