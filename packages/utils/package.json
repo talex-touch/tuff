@@ -18,7 +18,6 @@
   "main": "index.ts",
   "module": "./index.ts",
   "files": [
-    "dist",
     "account",
     "analytics",
     "animation",
@@ -28,6 +27,7 @@
     "cloud-sync",
     "common",
     "core-box",
+    "dist",
     "electron",
     "env",
     "eventbus",
