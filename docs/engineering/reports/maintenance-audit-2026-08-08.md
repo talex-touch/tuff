@@ -11,7 +11,6 @@
 
 ## 数据库、功能与跨平台门禁
 
-- **搜索索引分库仍可静默丢数据** — `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认关闭，但环境变量仍可启用半迁移模式：剩余 provider/embedding 写入 `database.db`，读取改走 `search-index.db`。应完成每个 writer 的 worker 归属和 flag-on 应用证据，或在完成前硬禁用运行时开关；不得维持可公开激活的半迁移模式。跟踪：[#331](https://github.com/talex-touch/tuff/issues/331)。
 - **SQLite writer ownership 分散** — scheduler、retry、worker、admission 与 observer 的职责尚未收敛，新的写路径可绕过策略。完成 #331 后需建立 owner map、显式窄 bypass 与真实锁竞争/恢复测试。跟踪：[#351](https://github.com/talex-touch/tuff/issues/351)。
 - **大目录索引尚无量化发布门禁** — worker、生产 client 与 reconciliation 已改为流式/有界路径，但 #480 仍缺百万项 fixture、明确内存预算、三层峰值测量、取消/关机释放和打包响应性证据。未通过前不能宣称 OOM 风险已完成关闭。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
 - **macOS 架构发布策略未决** — 配置当前仅产出 `darwin/arm64`。需明确 arm64-only 并在下载/OTA 中显式拒绝不支持架构，或交付 x64/Universal 的签名、公证、清单、选择逻辑和真机矩阵。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
@@ -27,3 +26,5 @@
 - **Trellis 工作可见性不足** — 79 个活跃任务中，32 个 `in_progress` 与 30 个 `planning` 记录同时缺少 `meta.blocker` 和 `meta.nextAction`；这不是任务失败证据，但无法区分受阻、等待人工证据与正常进行。任务负责人需补充真实下一动作或 blocker，完成后更新/归档状态。
 - **工作树隔离风险** — 当前工作树含 42 个未提交改动，包括源文件修改与删除。审计文档已限定为独立提交；任何后续合并、发布或验证前，负责人需复核这些改动的归属、测试状态与删除意图，避免将并行工作误带入。
 - **可同步的包元数据漂移** — 根 `package.json` 缺少 `homepage`，而 `apps/core-app/package.json` 为 `https://tuff.tagzxia.com`。按 `scripts/sync-core-package.mjs` 的选择字段，此项不一致；应由拥有 package metadata 的任务决定规范值后运行受控同步，避免审计阶段直接覆盖。
+- **审计陈述缺少可验证性门禁** — 本报告初版错误复述了“search-index split 默认关闭”；实际 `TUFF_DB_SEARCH_SPLIT_ENABLED` 自 2026-08-05 起默认开启，`=0` 是应急回退，且 #331 已关闭。报告生成是手工承接上一日的过程，需对机器可读的 flag 默认值重新求值或增加文档断言，防止旧结论再次成为当前索引。跟踪：[#1107](https://github.com/talex-touch/tuff/issues/1107)。
+- **Documentation Quality 已失去 PR 信号价值** — `docs:verify` 在 `app-shell-v2` 基线有 142 个预存 findings，其中 125 个为 task metadata 规则与 `task.py create` 产物不一致；任何 PR 都因此失败，真实文档退化无法区分。需由 workflow owner 决定收窄 gate 至有意义的任务状态，或修正 producer 后迁移存量任务，并单独处置剩余 17 个真问题。跟踪：[#1254](https://github.com/talex-touch/tuff/issues/1254)。
