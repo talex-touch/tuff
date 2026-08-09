@@ -63,11 +63,26 @@ const NEUTRAL_TIME_CONTEXT: TimePattern = {
  * was built from, without the signal ever carrying that content. Duplicating the algorithm at a
  * call site would work until one side changed.
  */
+/** How long a Do Not Disturb reading stays good for. See getFocusContext. */
+const FOCUS_CONTEXT_TTL_MS = 30 * 1000
+
+/** Upper bound on the `defaults` read, so a blocked cfprefsd degrades instead of hanging. */
+const FOCUS_CONTEXT_TIMEOUT_MS = 500
+
 export function hashContextContent(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
 }
 
 export class ContextProvider {
+  private focusContextCache: {
+    at: number
+    value: {
+      available: boolean
+      isDNDEnabled: boolean
+      focusMode: 'active' | 'inactive' | 'unknown'
+    }
+  } | null = null
+
   /**
    * Retrieves complete current context signal.
    */
@@ -491,6 +506,17 @@ export class ContextProvider {
     }
   }
 
+  /**
+   * Reads macOS Do Not Disturb, bounded and memoised.
+   *
+   * This spawns `defaults` inside the awaited Promise.all of getCurrentContext, which runs on every
+   * recommend() — the CoreBox-open path. Two problems, and the second is the one that hurts:
+   * tens of milliseconds per open, and no timeout, so if `defaults` blocks on cfprefsd contention
+   * getCurrentContext never resolves and the grid stays empty with nothing logged (#654).
+   *
+   * The cache window is short because Focus is something a user toggles and then expects to matter
+   * within the same sitting; the timeout is what turns a hang into a degraded answer.
+   */
   private async getFocusContext(): Promise<{
     available: boolean
     isDNDEnabled: boolean
@@ -500,17 +526,37 @@ export class ContextProvider {
       return { available: false, isDNDEnabled: false, focusMode: 'unknown' }
     }
 
+    const now = Date.now()
+    if (this.focusContextCache && now - this.focusContextCache.at < FOCUS_CONTEXT_TTL_MS) {
+      return this.focusContextCache.value
+    }
+
+    let value: {
+      available: boolean
+      isDNDEnabled: boolean
+      focusMode: 'active' | 'inactive' | 'unknown'
+    }
+
     try {
-      const { stdout } = await execFileAsync('defaults', ['read', 'com.apple.ncprefs', 'dnd_prefs'])
+      const { stdout } = await execFileAsync(
+        'defaults',
+        ['read', 'com.apple.ncprefs', 'dnd_prefs'],
+        { timeout: FOCUS_CONTEXT_TIMEOUT_MS }
+      )
       const enabled = /\buserPref\s*=\s*1\b|\benabled\s*=\s*1\b/i.test(stdout)
-      return {
+      value = {
         available: true,
         isDNDEnabled: enabled,
         focusMode: enabled ? 'active' : 'inactive'
       }
     } catch {
-      return { available: false, isDNDEnabled: false, focusMode: 'unknown' }
+      value = { available: false, isDNDEnabled: false, focusMode: 'unknown' }
     }
+
+    // Cached either way: a machine where the read times out or the key is absent should not retry
+    // on every keystroke-driven recommend either.
+    this.focusContextCache = { at: now, value }
+    return value
   }
 
   /**

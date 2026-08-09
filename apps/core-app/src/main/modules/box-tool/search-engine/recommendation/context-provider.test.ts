@@ -6,6 +6,23 @@ import { ContextProvider } from './context-provider'
 
 const getActiveAppMock = vi.hoisted(() => vi.fn())
 
+// getFocusContext spawns `defaults` on darwin. Mocked so the probe can be observed and driven —
+// the point of #654 is how often it runs and what happens when it hangs.
+const execFileMock = vi.hoisted(() =>
+  vi.fn(
+    (
+      _file: string,
+      _args: string[],
+      _options: unknown,
+      callback: (error: Error | null, result: { stdout: string; stderr: string }) => void
+    ) => {
+      callback(null, { stdout: 'userPref = 1;', stderr: '' })
+    }
+  )
+)
+
+vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('../../../system/active-app', () => ({
   activeAppService: {
     getActiveApp: getActiveAppMock
@@ -320,5 +337,84 @@ describe('ContextProvider timezone change', () => {
     stored.timezoneChangedAt = Date.now() - 49 * 60 * 60 * 1000
 
     expect(await resolveTimezoneChanged(provider, 'Europe/Berlin')).toBe(false)
+  })
+})
+
+describe('ContextProvider focus context', () => {
+  const originalPlatform = process.platform
+
+  function setDarwin(): void {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  }
+
+  beforeEach(() => {
+    execFileMock.mockClear()
+    setDarwin()
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('bounds the defaults read with a timeout', async () => {
+    // #654: no timeout meant a blocked cfprefsd left getCurrentContext unresolved forever, and
+    // the recommendation grid stayed empty with nothing logged.
+    const provider = new ContextProvider() as unknown as {
+      getFocusContext: () => Promise<{ isDNDEnabled: boolean }>
+    }
+
+    await provider.getFocusContext()
+
+    expect(execFileMock).toHaveBeenCalledOnce()
+    const [file, args, options] = execFileMock.mock.calls[0]!
+    expect(file).toBe('defaults')
+    expect(args).toEqual(['read', 'com.apple.ncprefs', 'dnd_prefs'])
+    expect((options as { timeout?: number }).timeout).toBeGreaterThan(0)
+  })
+
+  it('spawns once for repeated reads inside the cache window', async () => {
+    const provider = new ContextProvider() as unknown as {
+      getFocusContext: () => Promise<{ isDNDEnabled: boolean }>
+    }
+
+    const first = await provider.getFocusContext()
+    const second = await provider.getFocusContext()
+
+    // Positive control on the value, so this cannot pass by returning nothing at all.
+    expect(first.isDNDEnabled).toBe(true)
+    expect(second.isDNDEnabled).toBe(true)
+    expect(execFileMock).toHaveBeenCalledOnce()
+  })
+
+  it('caches the failed reading too', async () => {
+    // A machine where the key is absent or the read times out must not retry on every recommend
+    // either — that is the same per-keystroke spawn, just with a worse outcome.
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      callback(new Error('does not exist'), { stdout: '', stderr: '' })
+    })
+
+    const provider = new ContextProvider() as unknown as {
+      getFocusContext: () => Promise<{ available: boolean }>
+    }
+
+    const first = await provider.getFocusContext()
+    const second = await provider.getFocusContext()
+
+    expect(first.available).toBe(false)
+    expect(second.available).toBe(false)
+    expect(execFileMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not spawn anything off darwin', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+
+    const provider = new ContextProvider() as unknown as {
+      getFocusContext: () => Promise<{ focusMode: string }>
+    }
+
+    const result = await provider.getFocusContext()
+
+    expect(result.focusMode).toBe('unknown')
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 })
