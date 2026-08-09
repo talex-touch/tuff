@@ -1,6 +1,25 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { resolveCurrentAuxDb, scheduleAuxWrite } from './db-write'
+
+/**
+ * Largest number of keys to put in one composite-key lookup.
+ *
+ * Each key contributes two bound parameters (one per inArray), and SQLite refuses a statement past
+ * SQLITE_MAX_VARIABLE_NUMBER — 32,766 by default. A user with 20,000 tracked items exceeded that
+ * on a single call and the query failed outright rather than degrading (#653).
+ */
+const COMPOSITE_KEY_CHUNK_SIZE = 4000
+
+function chunkKeys<T>(keys: T[], size = COMPOSITE_KEY_CHUNK_SIZE): T[][] {
+  if (keys.length <= size) return [keys]
+
+  const chunks: T[][] = []
+  for (let index = 0; index < keys.length; index += size) {
+    chunks.push(keys.slice(index, index + size))
+  }
+  return chunks
+}
 import * as schema from './schema'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
@@ -444,16 +463,40 @@ function createDbUtilsInternal(
       const sourceIds = keys.map((k) => k.sourceId)
       const itemIds = keys.map((k) => k.itemId)
 
-      // 使用 IN 查询优化（预过滤）
-      return db
-        .select()
-        .from(schema.itemUsageStats)
-        .where(
-          and(
-            inArray(schema.itemUsageStats.sourceId, sourceIds),
-            inArray(schema.itemUsageStats.itemId, itemIds)
+      // 使用 IN 查询优化（预过滤），分批以免超出 SQLite 的绑定参数上限
+      const chunks = chunkKeys(keys)
+      if (chunks.length === 1) {
+        return db
+          .select()
+          .from(schema.itemUsageStats)
+          .where(
+            and(
+              inArray(schema.itemUsageStats.sourceId, sourceIds),
+              inArray(schema.itemUsageStats.itemId, itemIds)
+            )
           )
-        )
+      }
+
+      const rows: Array<typeof schema.itemUsageStats.$inferSelect> = []
+      for (const chunk of chunks) {
+        const batch = await db
+          .select()
+          .from(schema.itemUsageStats)
+          .where(
+            and(
+              inArray(
+                schema.itemUsageStats.sourceId,
+                chunk.map((key) => key.sourceId)
+              ),
+              inArray(
+                schema.itemUsageStats.itemId,
+                chunk.map((key) => key.itemId)
+              )
+            )
+          )
+        rows.push(...batch)
+      }
+      return rows
     },
 
     async getUsageStatsBySource(sourceId: string) {
@@ -470,19 +513,56 @@ function createDbUtilsInternal(
       const sourceIds = keys.map((k) => k.sourceId)
       const itemIds = keys.map((k) => k.itemId)
 
+      // Same bound-parameter ceiling as getUsageStatsBatch — identical shape, two definitions apart.
+      const chunks = chunkKeys(keys)
+      if (chunks.length === 1) {
+        return db
+          .select()
+          .from(schema.itemTimeStats)
+          .where(
+            and(
+              inArray(schema.itemTimeStats.sourceId, sourceIds),
+              inArray(schema.itemTimeStats.itemId, itemIds)
+            )
+          )
+      }
+
+      const rows: Array<typeof schema.itemTimeStats.$inferSelect> = []
+      for (const chunk of chunks) {
+        const batch = await db
+          .select()
+          .from(schema.itemTimeStats)
+          .where(
+            and(
+              inArray(
+                schema.itemTimeStats.sourceId,
+                chunk.map((key) => key.sourceId)
+              ),
+              inArray(
+                schema.itemTimeStats.itemId,
+                chunk.map((key) => key.itemId)
+              )
+            )
+          )
+        rows.push(...batch)
+      }
+      return rows
+    },
+
+    /**
+     * Time stats for scoring, newest first and bounded.
+     *
+     * Unbounded before: every cold recommend() read the whole table, parsed each row and passed one
+     * key per row into a composite lookup, so the work grew with lifetime item count (#653).
+     * Ordering by lastUpdated keeps the rows most likely to win a time slot; the tail it drops is
+     * items the user has not touched in a long time, which is a trade-off rather than a free win.
+     */
+    async getAllItemTimeStats(limit = 2000) {
       return db
         .select()
         .from(schema.itemTimeStats)
-        .where(
-          and(
-            inArray(schema.itemTimeStats.sourceId, sourceIds),
-            inArray(schema.itemTimeStats.itemId, itemIds)
-          )
-        )
-    },
-
-    async getAllItemTimeStats() {
-      return db.select().from(schema.itemTimeStats)
+        .orderBy(desc(schema.itemTimeStats.lastUpdated))
+        .limit(limit)
     },
 
     // Recommendation Cache
