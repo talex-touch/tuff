@@ -14,6 +14,21 @@ const log = createLogger('DbWriteScheduler')
 
 const taskContext = new AsyncLocalStorage<boolean>()
 
+/**
+ * A write the scheduler deliberately shed — queue pressure, a latest-wins supersede, or an open
+ * circuit breaker. Never a database or driver failure.
+ *
+ * A class rather than a message convention because callers have to tell the two apart to decide
+ * whether to retry: matching on `message.includes('dropped')` also caught real errors worded with
+ * it, such as a driver reporting 'connection dropped', and silently discarded the batch (#656).
+ */
+export class DbWriteDroppedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DbWriteDroppedError'
+  }
+}
+
 export type DbWritePriority = 'critical' | 'interactive' | 'background' | 'best_effort'
 export type DbWriteDropPolicy = 'none' | 'drop' | 'latest_wins'
 export type DbWriteLane = 'primary' | 'aux'
@@ -494,7 +509,7 @@ export class DbWriteScheduler {
         const waitedMs = Date.now() - queued.enqueuedAt
         this.recordTaskSettled(queued.label, waitedMs, 'dropped')
         queued.reject(
-          new Error(
+          new DbWriteDroppedError(
             `DB write task dropped by latest_wins policy: ${queued.label} (${task.budgetKey})`
           )
         )
@@ -568,7 +583,9 @@ export class DbWriteScheduler {
     }
 
     if (this.shouldRejectByCircuit(task)) {
-      return Promise.reject(new Error(`DB write task dropped by circuit breaker: ${label}`))
+      return Promise.reject(
+        new DbWriteDroppedError(`DB write task dropped by circuit breaker: ${label}`)
+      )
     }
 
     return new Promise<T>((resolve, reject) => {
@@ -938,7 +955,9 @@ export class DbWriteScheduler {
         log.warn(`Dropping stale task after ${waitedMs}ms: ${task.label}`)
         this.recordTaskSettled(task.label, waitedMs, 'dropped')
         task.reject(
-          new Error(`DB write task dropped after ${waitedMs}ms queue wait: ${task.label}`)
+          new DbWriteDroppedError(
+            `DB write task dropped after ${waitedMs}ms queue wait: ${task.label}`
+          )
         )
         laneState.currentTaskLabel = null
         laneState.currentTaskPriority = null
@@ -949,7 +968,9 @@ export class DbWriteScheduler {
 
       if (this.shouldRejectByCircuit(task)) {
         this.recordTaskSettled(task.label, waitedMs, 'dropped')
-        task.reject(new Error(`DB write task dropped by circuit breaker: ${task.label}`))
+        task.reject(
+          new DbWriteDroppedError(`DB write task dropped by circuit breaker: ${task.label}`)
+        )
         laneState.currentTaskLabel = null
         laneState.currentTaskPriority = null
         this.notifyCapacityWaiters()

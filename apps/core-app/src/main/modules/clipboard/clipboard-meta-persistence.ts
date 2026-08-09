@@ -4,6 +4,7 @@ import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import type { AuxDbResolver, MainDatabase } from '../../db/db-write'
 import type { LogOptions } from '../../utils/logger'
 import { and, eq, inArray } from 'drizzle-orm'
+import { DbWriteDroppedError } from '../../db/db-write-scheduler'
 import { scheduleAuxWrite } from '../../db/db-write'
 import { clipboardHistoryMeta } from '../../db/schema'
 
@@ -32,9 +33,15 @@ export function isForeignKeyConstraintError(error: unknown): boolean {
   return /foreign key constraint failed/i.test(message)
 }
 
+/**
+ * Whether the scheduler shed this write on purpose, as opposed to it failing.
+ *
+ * Identified by type rather than by message text: the string form also matched real errors that
+ * happen to be worded with it — a driver reporting a dropped connection, for one — and a deliberate
+ * drop is retried differently from a failure (#656).
+ */
 export function isDroppedDbWriteTaskError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('DB write task dropped')
+  return error instanceof DbWriteDroppedError
 }
 
 export class ClipboardMetaPersistence {
