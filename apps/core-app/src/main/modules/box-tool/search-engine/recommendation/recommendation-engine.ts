@@ -14,6 +14,7 @@ import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags
 import * as schema from '../../../../db/schema'
 import { getSentryService } from '../../../sentry'
 import { ContextProvider, hashContextContent } from './context-provider'
+import { toParsedItemTimeStats } from '../time-stats-aggregator'
 import { ItemRebuilder } from './item-rebuilder'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { recommendationExposureService } from './recommendation-exposure-service'
@@ -1686,14 +1687,10 @@ export class RecommendationEngine {
 
     for (let idx = 0; idx < allTimeStats.length; idx++) {
       const raw = allTimeStats[idx]
-      const parsed: ParsedItemTimeStats = {
-        sourceId: raw.sourceId,
-        itemId: raw.itemId,
-        hourDistribution: JSON.parse(raw.hourDistribution),
-        dayOfWeekDistribution: JSON.parse(raw.dayOfWeekDistribution),
-        timeSlotDistribution: JSON.parse(raw.timeSlotDistribution),
-        lastUpdated: raw.lastUpdated
-      }
+      // Shared with TimeStatsAggregator rather than parsed inline: these are plain TEXT columns,
+      // and a raw JSON.parse here aborted recommend() entirely for one malformed row — this loop
+      // sits inside the unguarded getCandidates chain (#649).
+      const parsed: ParsedItemTimeStats = toParsedItemTimeStats(raw)
 
       const timeScore = this.calculateTimeRelevance(parsed, timePattern)
       if (timeScore > 0) {

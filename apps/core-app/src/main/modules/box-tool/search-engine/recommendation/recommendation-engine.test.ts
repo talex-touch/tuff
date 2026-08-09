@@ -1451,6 +1451,43 @@ describe('RecommendationEngine', () => {
     expect(candidates).toEqual([])
   })
 
+  it('survives a corrupt item_time_stats row instead of aborting the whole recommendation', async () => {
+    // #649: this loop is inside the unguarded getCandidates chain, so a raw JSON.parse on one bad
+    // row took down recommend() entirely rather than costing that item its time history.
+    const good = {
+      sourceId: 'app-provider',
+      itemId: 'com.apple.Terminal',
+      hourDistribution: JSON.stringify(Array.from({ length: 24 }, () => 5)),
+      dayOfWeekDistribution: JSON.stringify(Array.from({ length: 7 }, () => 5)),
+      timeSlotDistribution: JSON.stringify({ morning: 9, afternoon: 0, evening: 0, night: 0 }),
+      lastUpdated: new Date()
+    }
+    const corrupt = { ...good, itemId: 'com.apple.Safari', hourDistribution: '{"truncated' }
+
+    const dbUtils = {
+      ...createDbUtils(),
+      getAllItemTimeStats: vi.fn(async () => [corrupt, good]),
+      getUsageStatsBatch: vi.fn(async () => [
+        createUsageStats('com.apple.Terminal', { executeCount: 3 }),
+        createUsageStats('com.apple.Safari', { executeCount: 3 })
+      ])
+    }
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    const items = await (
+      engine as unknown as {
+        getTimeBasedTopItems: (
+          pattern: unknown,
+          limit: number
+        ) => Promise<Array<{ itemId: string }>>
+      }
+    ).getTimeBasedTopItems(morningContext.time, 10)
+
+    // Positive control: the healthy row still scores, so this is not passing because the method
+    // returned nothing at all.
+    expect(items.map((item) => item.itemId)).toContain('com.apple.Terminal')
+  })
+
   it('recommends catalog apps on a cold start with no usage history', async () => {
     const dbUtils = createDbUtils()
     const catalogApps = [
