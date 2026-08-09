@@ -2730,7 +2730,8 @@
         "defaultsRestored": "Default settings restored",
         "tempCleaned": "Temporary files cleaned up",
         "tempCleanFailed": "Failed to cleanup temporary files",
-        "tempDirSelectFailed": "Failed to select temporary directory"
+        "tempDirSelectFailed": "Failed to select temporary directory",
+        "destinationSelectFailed": "Failed to select download location"
       }
     },
     "settingNetwork": {
