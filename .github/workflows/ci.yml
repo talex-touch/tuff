@@ -14,6 +14,7 @@ jobs:
   job1:
     name: Check Not Allowed File Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       release_acceptance: ${{ steps.filter_not_allowed.outputs.release_acceptance }}
       nexus: ${{ steps.filter_not_allowed.outputs.nexus }}
@@ -46,6 +47,7 @@ jobs:
   docs_verify:
     name: Documentation Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     steps:
       - name: Checkout Code
@@ -75,6 +77,7 @@ jobs:
   job_quality_pr:
     name: PR Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     steps:
       - name: Checkout Code
@@ -156,6 +159,7 @@ jobs:
   job_typecheck_all:
     name: Typecheck (workspace)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     steps:
       - name: Checkout Code
@@ -188,6 +192,7 @@ jobs:
   job_release_acceptance:
     name: Release acceptance (macOS)
     runs-on: macos-latest
+    timeout-minutes: 30
     needs: job1
     if: ${{ needs.job1.outputs.release_acceptance == 'true' }}
     steps:
@@ -238,6 +243,7 @@ jobs:
   job_nexus:
     name: Nexus (build + checks)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     if: ${{ needs.job1.outputs.nexus == 'true' }}
     steps:
@@ -276,6 +282,7 @@ jobs:
   job_app_tests:
     name: App suites (${{ matrix.app }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     strategy:
       fail-fast: false
@@ -351,6 +358,7 @@ jobs:
   job_integration_tests:
     name: Integration suite (packages/test)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     steps:
       - name: Checkout Code

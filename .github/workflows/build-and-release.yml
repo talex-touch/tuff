@@ -48,6 +48,7 @@ jobs:
   build-and-release:
     name: Build and Release Tuff App
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.sync_tag == ''
     permissions:
       contents: read
@@ -826,6 +827,7 @@ jobs:
     name: Create Release
     needs: build-and-release
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     if: >
       always() && (
         needs.build-and-release.result == 'success'
@@ -1260,6 +1262,7 @@ jobs:
     name: Sync Nexus Release
     needs: create-release
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     if: >
