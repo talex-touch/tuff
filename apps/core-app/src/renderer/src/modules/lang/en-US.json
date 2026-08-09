@@ -4612,6 +4612,14 @@
     "daysAgo": "{count} days ago"
   },
   "intelligence": {
+    "builtin": "Built-in",
+    "builtinPrompts": "Built-in prompts",
+    "createNewPrompt": "Create new prompt",
+    "custom": "Custom",
+    "customPrompts": "Custom prompts",
+    "managePrompts": "Manage prompts",
+    "promptSelectedHint": "Instructions come from the selected prompt",
+    "selectPrompt": "Select a prompt",
     "errorRecovery": {
       "authTitle": "Sign in required",
       "authDetail": "Sign in to Tuff Nexus, then retry this AI request.",
