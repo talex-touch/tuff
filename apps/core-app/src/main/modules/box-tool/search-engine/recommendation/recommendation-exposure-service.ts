@@ -16,6 +16,16 @@ export const EXPOSURE_K_BUCKETS = [1, 3, 5, 10] as const
 /** An exposed id stays clickable for this long; older entries are pruned on write. */
 const EXPOSURE_TTL_MS = 10 * 60 * 1000
 const EXPOSURE_MAX_ENTRIES = 500
+
+/**
+ * Ceiling on how many keys one renderer report may contribute.
+ *
+ * The transport handler passes `data?.itemKeys ?? []` through unchecked, so this is the only thing
+ * standing between a buggy or compromised renderer and a million Map entries held for the TTL
+ * (#651). Well above any real grid — the widest k bucket is 10 — and well under the map budget, so
+ * a single report cannot evict everything that came before it.
+ */
+const EXPOSURE_MAX_KEYS_PER_REPORT = 100
 const DEFAULT_SURFACE = 'core-box'
 
 export interface ExposureReport {
@@ -49,16 +59,23 @@ export class RecommendationExposureService {
 
   /** Renderer reported a rendered recommendation list. */
   recordExposure(report: ExposureReport): void {
-    const itemKeys = report.itemKeys.filter((key) => typeof key === 'string' && key.length > 0)
-    if (itemKeys.length === 0) return
+    const reported = report.itemKeys.filter((key) => typeof key === 'string' && key.length > 0)
+    if (reported.length === 0) return
+
+    // Truncated from the front: rank order is what the k buckets measure, so the entries worth
+    // keeping are the ones a grid showed first.
+    const itemKeys = reported.slice(0, EXPOSURE_MAX_KEYS_PER_REPORT)
 
     const surface = report.surface || DEFAULT_SURFACE
     const now = Date.now()
-    this.pruneExposed(now)
 
     itemKeys.forEach((key, rank) => {
       this.exposed.set(key, { rank, surface, exposedAt: now })
     })
+
+    // After inserting, not before: pruning first left the size limit applying only to whatever the
+    // *next* call happened to bring, so an oversized report was held in full until then.
+    this.pruneExposed(now)
 
     const day = toDayBucket(now)
     for (const k of EXPOSURE_K_BUCKETS) {

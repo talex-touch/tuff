@@ -117,3 +117,58 @@ describe('RecommendationExposureService', () => {
     expect(new Set(auxWrites.map((write) => write.surface))).toEqual(new Set(['division-box']))
   })
 })
+
+describe('RecommendationExposureService report bounds', () => {
+  function exposedSize(target: RecommendationExposureService): number {
+    return (target as unknown as { exposed: Map<string, unknown> }).exposed.size
+  }
+
+  it('does not hold an oversized report in full', () => {
+    // #651: the transport handler passes data?.itemKeys ?? [] through unchecked, and the prune ran
+    // *before* the insert — so a report of a million keys sat in the map for the whole TTL, until
+    // whenever the next call happened to arrive.
+    const service = new RecommendationExposureService()
+    const keys = Array.from({ length: 5_000 }, (_, index) => `app-provider:item-${index}`)
+
+    service.recordExposure({ itemKeys: keys })
+
+    expect(exposedSize(service)).toBeLessThanOrEqual(500)
+  })
+
+  it('keeps the highest-ranked keys when it truncates', () => {
+    // Rank order is what the k buckets measure, so a truncation that kept the tail would discard
+    // exactly the entries a click is most likely to land on.
+    const service = new RecommendationExposureService()
+    const keys = Array.from({ length: 5_000 }, (_, index) => `app-provider:item-${index}`)
+
+    service.recordExposure({ itemKeys: keys })
+    const exposed = (service as unknown as { exposed: Map<string, { rank: number }> }).exposed
+
+    expect(exposed.has('app-provider:item-0')).toBe(true)
+    expect(exposed.get('app-provider:item-0')?.rank).toBe(0)
+    expect(exposed.has('app-provider:item-4999')).toBe(false)
+  })
+
+  it('still records an ordinary grid in full', () => {
+    // Positive control: every bound above would also hold for a service that recorded nothing.
+    const service = new RecommendationExposureService()
+    const keys = Array.from({ length: 12 }, (_, index) => `app-provider:item-${index}`)
+
+    service.recordExposure({ itemKeys: keys })
+
+    expect(exposedSize(service)).toBe(12)
+  })
+
+  it('a click on a truncated-away key is simply not counted', () => {
+    // The cost of the cap, stated rather than discovered: an item beyond the ceiling was still
+    // rendered, but its click cannot be attributed. At 100 keys against a widest bucket of 10,
+    // nothing a real grid measures is affected.
+    const service = new RecommendationExposureService()
+    const keys = Array.from({ length: 5_000 }, (_, index) => `app-provider:item-${index}`)
+
+    service.recordExposure({ itemKeys: keys })
+    service.recordClick('app-provider', 'item-4999')
+
+    expect(exposedSize(service)).toBeLessThanOrEqual(500)
+  })
+})
