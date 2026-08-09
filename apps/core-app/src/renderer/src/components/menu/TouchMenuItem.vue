@@ -1,6 +1,7 @@
 <script lang="ts" name="TouchMenuItem" setup>
 // Legacy navigation surface: new CoreApp code should use TuffEx navigation/menu primitives.
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
+import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -22,7 +23,7 @@ const props = defineProps({
   },
   doActive: {
     type: Function,
-    default: (route, $route) => {
+    default: (route: string, $route: RouteLocationNormalizedLoaded | undefined) => {
       if (!$route) return false
       // 精确匹配路由路径
       if ($route.path === route) return true
@@ -40,7 +41,7 @@ const active = computed(() => props.doActive(props.route, route))
 
 const changePointer = inject<(el: HTMLElement) => void>('changePointer')
 
-let removeGuard
+let removeGuard: (() => void) | undefined
 
 onMounted(() => {
   removeGuard = router.afterEach((to, _from) => {
@@ -66,7 +67,7 @@ onUnmounted(() => {
   }
 })
 
-function handleClick($event) {
+function handleClick($event: MouseEvent) {
   if (props.disabled) return
 
   if (props.route) router.push(props.route)
