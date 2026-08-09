@@ -10,10 +10,11 @@ import { describe, expect, it } from 'vitest'
  * this — `t()` returns the key rather than throwing, so the only symptom is in the UI, on an error
  * path, in the moment the user is already stuck.
  *
- * Rather than pin the one key, this is a ratchet over the whole renderer: the two inventories below
- * are the gaps that exist today, and the assertions are that nothing outside them is broken *and*
- * that everything inside them is still broken. A new gap fails the first; fixing a listed one fails
- * the second, so the lists cannot rot into a permanent excuse.
+ * Rather than pin the one key, this is a ratchet over the whole renderer: the inventory below
+ * is the gap that exists today, and the assertions are that nothing outside it is broken *and* that
+ * everything inside it is still broken. A new gap fails the first; fixing a listed one fails the
+ * second, so the list cannot rot into a permanent excuse. Locale parity is already exact, so that
+ * half is asserted as an equality.
  *
  * Only statically written keys are covered. `t(\`a.${b}\`)` cannot be resolved by reading source,
  * and there is no attempt to pretend otherwise.
@@ -64,22 +65,6 @@ const MISSING_FROM_BOTH = [
   'userProfile.overview',
   'userProfile.security',
   'userProfile.securityActions'
-]
-
-/** Keys defined in en-US but not zh-CN, so a Chinese user sees English. Tracked by #503. */
-const ENGLISH_ONLY = [
-  'settings.intelligence.addBinding',
-  'settings.intelligence.addFirstModel',
-  'settings.intelligence.dragToReorder',
-  'settings.intelligence.modelOrder',
-  'settings.intelligence.modelSelection',
-  'settings.intelligence.noModelsConfigured',
-  'settings.intelligence.providerSelection',
-  'settings.intelligence.removeBinding',
-  'settings.settingAISDK.promptVariablesLabel',
-  'settings.settingAISDK.promptVariablesPlaceholder',
-  'settings.settingAISDK.userMessageLabel',
-  'settings.settingAISDK.userMessagePlaceholder'
 ]
 
 function loadLocale(name: string): Record<string, unknown> {
@@ -152,11 +137,10 @@ describe('translation coverage', () => {
     expect(missing).toEqual([...MISSING_FROM_BOTH].sort())
   })
 
-  it('introduces no key that only one locale has', () => {
-    const asymmetric = [...enUS].filter((key) => !zhCN.has(key)).sort()
-
-    expect(asymmetric).toEqual([...ENGLISH_ONLY].sort())
-    // The other direction is already clean and must stay that way.
+  it('keeps the two locales on exactly the same key set', () => {
+    // #503 closed the last gap here, so this is an equality rather than a ratchet: any key added to
+    // one file must be added to the other, in either direction.
+    expect([...enUS].filter((key) => !zhCN.has(key))).toEqual([])
     expect([...zhCN].filter((key) => !enUS.has(key))).toEqual([])
   })
 })
