@@ -4576,6 +4576,14 @@
     "daysAgo": "{count} 天前"
   },
   "intelligence": {
+    "builtin": "内置",
+    "builtinPrompts": "内置提示词",
+    "createNewPrompt": "新建提示词",
+    "custom": "自定义",
+    "customPrompts": "自定义提示词",
+    "managePrompts": "管理提示词",
+    "promptSelectedHint": "指令内容来自所选提示词",
+    "selectPrompt": "选择提示词",
     "errorRecovery": {
       "authTitle": "需要登录",
       "authDetail": "登录 Tuff Nexus 后再重试这次 AI 请求。",
