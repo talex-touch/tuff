@@ -17,7 +17,9 @@ vi.mock('../../../db/db-write', () => ({
   scheduleDbWrite: mocks.scheduleDbWrite
 }))
 
-vi.mock('../../../db/db-write-scheduler', () => ({
+// importOriginal so DbWriteDroppedError stays the real class; the flush classifies by instanceof.
+vi.mock('../../../db/db-write-scheduler', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   dbWriteScheduler: { getStats: () => ({ queued: mocks.queuedWrites }) }
 }))
 
@@ -25,6 +27,7 @@ vi.mock('../../../utils/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() })
 }))
 
+import { DbWriteDroppedError } from '../../../db/db-write-scheduler'
 import { createEmptyTimeBuckets } from './item-time-stats-buckets'
 import { UsageStatsQueue } from './usage-stats-queue'
 
@@ -84,6 +87,59 @@ describe('UsageStatsQueue clear during an in-flight flush', () => {
 
     expect(queue.actionQueue.size).toBe(0)
     expect(queue.pendingActionEvents).toBe(0)
+  })
+
+  it('merges back a real error whose message happens to say dropped', async () => {
+    // #656: classification was `message.includes('dropped')`, so a driver error such as
+    // 'connection dropped' was treated as a deliberate shed and up to 2,000 aggregated search
+    // events were discarded at debug level.
+    const queue = createQueue()
+    queue.searchQueue.set('app-provider:com.apple.Safari', {
+      sourceId: 'app-provider',
+      itemId: 'com.apple.Safari',
+      sourceType: 'app',
+      searchCount: 1,
+      executeCount: 0,
+      cancelCount: 0,
+      clickCount: 0,
+      lastUsed: new Date(),
+      keywords: ['saf'],
+      timeBuckets: createEmptyTimeBuckets()
+    })
+
+    mocks.scheduleDbWrite.mockImplementationOnce(async () => {
+      throw new Error('connection dropped by peer')
+    })
+
+    await queue.flushSearchQueue()
+
+    expect(queue.searchQueue.size).toBe(1)
+  })
+
+  it('discards the batch when the scheduler shed it on purpose', async () => {
+    // The other side: a deliberate drop must still not be merged back, or the queue would grow
+    // without bound exactly when the scheduler is trying to relieve pressure.
+    const queue = createQueue()
+    queue.searchQueue.set('app-provider:com.apple.Safari', {
+      sourceId: 'app-provider',
+      itemId: 'com.apple.Safari',
+      sourceType: 'app',
+      searchCount: 1,
+      executeCount: 0,
+      cancelCount: 0,
+      clickCount: 0,
+      lastUsed: new Date(),
+      keywords: ['saf'],
+      timeBuckets: createEmptyTimeBuckets()
+    })
+
+    mocks.scheduleDbWrite.mockImplementationOnce(async () => {
+      throw new DbWriteDroppedError('DB write task dropped after 10000ms queue wait: search')
+    })
+
+    await queue.flushSearchQueue()
+
+    expect(queue.searchQueue.size).toBe(0)
   })
 
   it('still restores the snapshot when no clear intervened', async () => {

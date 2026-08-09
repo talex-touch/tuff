@@ -3,7 +3,7 @@ import type * as schema from '../../../db/schema'
 import type { ScheduleOptions } from '../../../db/db-write-scheduler'
 import type { TimeBuckets } from './item-time-stats-buckets'
 import { and, eq, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { DbWriteDroppedError, dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { scheduleDbWrite } from '../../../db/db-write'
 import { itemTimeStats, itemUsageStats } from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
@@ -453,7 +453,7 @@ export class UsageStatsQueue {
         meta: { eventCount, uniqueItems: records.length }
       })
     } catch (error) {
-      const isDropped = error instanceof Error && error.message.includes('dropped')
+      const isDropped = error instanceof DbWriteDroppedError
       if (isDropped) {
         usageStatsQueueLog.debug('Search flush dropped under queue pressure', {
           meta: {
