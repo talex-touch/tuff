@@ -54,8 +54,18 @@ jobs:
       contents: read
 
     env:
-      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
-      ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+      # No ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR here, deliberately.
+      #
+      # These pinned npmmirror.com for every platform and channel, so the Electron
+      # runtime that gets code-signed and notarized came from outside the project's
+      # trust boundary. Electron verifies the download against a SHASUMS file it
+      # fetches from the same host, so a compromised mirror serves a modified binary
+      # and a matching checksum (#729).
+      #
+      # The mirror bought nothing here: every job in this matrix runs on a
+      # GitHub-hosted runner, which reaches github.com releases directly. If these
+      # downloads ever become a bottleneck, the answer is the ELECTRON_CACHE below,
+      # not a third-party host in the signing path.
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/../electron-builder-cache
       BUILD_PUBLISH: never
