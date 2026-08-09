@@ -1,5 +1,6 @@
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import {
+  migrateTuffNexusRuntimeServer,
   NEXUS_BASE_URL,
   type TuffNexusRuntimeServer,
   resolveTuffNexusBaseUrl
@@ -9,10 +10,6 @@ import { appSetting } from '~/modules/storage/app-storage'
 type LegacyDevSettings = AppSetting['dev'] & {
   authServer?: TuffNexusRuntimeServer
   runtimeServer?: TuffNexusRuntimeServer
-}
-
-function normalizeRuntimeServer(value: unknown): TuffNexusRuntimeServer {
-  return value === 'local' ? 'local' : 'production'
 }
 
 export function ensureRuntimeServerSettings(): TuffNexusRuntimeServer {
@@ -25,12 +22,9 @@ export function ensureRuntimeServerSettings(): TuffNexusRuntimeServer {
   }
 
   const dev = appSetting.dev as LegacyDevSettings
-  const current = dev.runtimeServer
-  const next = current ?? dev.authServer ?? 'production'
-  dev.runtimeServer = normalizeRuntimeServer(next)
-  delete dev.authServer
+  const runtimeServer = migrateTuffNexusRuntimeServer(dev)
   appSetting.dev = dev
-  return dev.runtimeServer
+  return runtimeServer
 }
 
 export function getRuntimeServerMode(): TuffNexusRuntimeServer {
