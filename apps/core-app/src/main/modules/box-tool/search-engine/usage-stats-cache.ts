@@ -8,7 +8,8 @@ const usageStatsCacheLog = createLogger('UsageStatsCache')
  * Usage stats cache entry
  */
 interface CacheEntry {
-  data: typeof schema.itemUsageStats.$inferSelect
+  /** null marks a key the database is known not to have — see markAbsent. */
+  data: typeof schema.itemUsageStats.$inferSelect | null
   timestamp: number
 }
 
@@ -20,10 +21,14 @@ export class UsageStatsCache {
   private readonly maxSize: number
   private readonly ttl: number // Time to live in milliseconds
 
-  constructor(maxSize = 10000, ttl = 15 * 60 * 1000) {
+  /** Negative entries expire sooner than real rows; see markAbsent. */
+  private readonly absenceTtl: number
+
+  constructor(maxSize = 10000, ttl = 15 * 60 * 1000, absenceTtl = 30 * 1000) {
     // 15 minutes default TTL
     this.maxSize = maxSize
     this.ttl = ttl
+    this.absenceTtl = absenceTtl
   }
 
   /**
@@ -46,7 +51,7 @@ export class UsageStatsCache {
 
     // Check if entry is expired
     const now = Date.now()
-    if (now - entry.timestamp > this.ttl) {
+    if (now - entry.timestamp > this.absenceTtlFor(entry)) {
       this.cache.delete(key)
       return null
     }
@@ -72,8 +77,9 @@ export class UsageStatsCache {
       const key = this.getKey(sourceId, itemId)
       const entry = this.cache.get(key)
 
-      if (entry && now - entry.timestamp <= this.ttl) {
-        result.set(key, entry.data)
+      if (entry && now - entry.timestamp <= this.absenceTtlFor(entry)) {
+        // A tombstone is a hit for "do not query again", but not a row to return.
+        if (entry.data) result.set(key, entry.data)
         // Move to end (LRU)
         this.cache.delete(key)
         this.cache.set(key, entry)
@@ -119,6 +125,42 @@ export class UsageStatsCache {
     for (const stat of stats) {
       this.set(stat.sourceId, stat.itemId, stat)
     }
+  }
+
+  /**
+   * Records that the database has no row for these keys.
+   *
+   * Without this, a search returning items the user has never executed re-queried every one of
+   * them on every debounced keystroke — a batch of misses that returns zero rows, on the
+   * interactive path (#658).
+   *
+   * Held for a shorter window than a real row: an absent key becomes present the first time the
+   * user runs the item, and although executeItem invalidates the key directly, the short TTL keeps
+   * the damage bounded if any future writer forgets to.
+   */
+  markAbsent(keys: Array<{ sourceId: string; itemId: string }>): void {
+    const timestamp = Date.now()
+
+    for (const { sourceId, itemId } of keys) {
+      const key = this.getKey(sourceId, itemId)
+      if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+        const firstKey = this.cache.keys().next().value
+        if (firstKey) this.cache.delete(firstKey)
+      }
+      this.cache.delete(key)
+      this.cache.set(key, { data: null, timestamp })
+    }
+  }
+
+  /** Whether this key is cached as known-absent and still inside the negative TTL. */
+  isKnownAbsent(sourceId: string, itemId: string): boolean {
+    const entry = this.cache.get(this.getKey(sourceId, itemId))
+    if (!entry || entry.data !== null) return false
+    return Date.now() - entry.timestamp <= this.absenceTtl
+  }
+
+  private absenceTtlFor(entry: CacheEntry): number {
+    return entry.data === null ? this.absenceTtl : this.ttl
   }
 
   /**
@@ -174,8 +216,11 @@ export async function getUsageStatsBatchCached(
   const cached = cache.getBatch(keys)
 
   // Find missing keys
+  // Keys the database is already known not to have are not misses — re-querying them is what made
+  // a fresh result set cost a full round trip on every keystroke (#658).
   const missingKeys = keys.filter(
-    ({ sourceId, itemId }) => !cached.has(cache.getKey(sourceId, itemId))
+    ({ sourceId, itemId }) =>
+      !cached.has(cache.getKey(sourceId, itemId)) && !cache.isKnownAbsent(sourceId, itemId)
   )
 
   // If all keys are cached, return immediately
@@ -199,6 +244,12 @@ export async function getUsageStatsBatchCached(
 
   // Cache the results
   cache.setBatch(dbResults)
+
+  // And remember the ones it did not return, so the next keystroke does not ask again.
+  const returned = new Set(dbResults.map((stat) => cache.getKey(stat.sourceId, stat.itemId)))
+  cache.markAbsent(
+    missingKeys.filter(({ sourceId, itemId }) => !returned.has(cache.getKey(sourceId, itemId)))
+  )
 
   // Combine cached and database results
   const resultMap = new Map<string, typeof schema.itemUsageStats.$inferSelect>()
