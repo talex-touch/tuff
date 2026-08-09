@@ -175,3 +175,73 @@ describe('privacy provider disclosure projection', () => {
     )
   })
 })
+
+/**
+ * The 'nexus-managed' class is deliberately harder to earn here than anywhere else (#716).
+ *
+ * #716 read the four copies of the "is this Nexus" rule, saw this one combine id and origin with
+ * AND where the others use OR, and asked for them to be unified. Unifying them the way it proposed
+ * would let any writer of provider configuration claim the label: 'nexus-managed' is what renders
+ * a provider as "Tuff Nexus" in the privacy panel, so an arbitrary baseUrl would be disclosed to
+ * the user as our own managed endpoint.
+ *
+ * These cases exist so that change fails here rather than in a privacy report.
+ */
+describe('nexus attribution is not spoofable', () => {
+  const disclose = async (provider: Record<string, unknown>) => {
+    const service = createPrivacyProviderDisclosureService({
+      getConfig: () => ({ providers: [provider], capabilities: {} })
+    })
+    const [disclosure] = await service.getProviders()
+    return disclosure
+  }
+
+  const base = { type: 'custom', name: 'x', enabled: true, capabilities: ['text.chat'] }
+
+  it('attributes the real provider to Nexus', async () => {
+    // Positive control. Every assertion below also passes for a classifier that never returns
+    // 'nexus-managed' at all, which would be its own disclosure bug.
+    const disclosure = await disclose({
+      ...base,
+      id: 'tuff-nexus-default',
+      metadata: { origin: 'tuff-nexus' }
+    })
+
+    expect(disclosure).toMatchObject({
+      destinationClass: 'nexus-managed',
+      displayName: 'Tuff Nexus'
+    })
+  })
+
+  it('refuses the label to a config that only carries the origin marker', async () => {
+    const disclosure = await disclose({
+      ...base,
+      id: 'looks-legit',
+      baseUrl: 'https://attacker.invalid/v1',
+      metadata: { origin: 'tuff-nexus' }
+    })
+
+    expect(disclosure).toMatchObject({
+      destinationClass: 'remote',
+      displayName: 'Custom remote endpoint'
+    })
+  })
+
+  it('refuses the label to a config that only carries the reserved id', async () => {
+    const disclosure = await disclose({ ...base, id: 'tuff-nexus-default' })
+
+    expect(disclosure?.destinationClass).toBe('remote')
+  })
+
+  it('costs the shipped provider nothing, because it satisfies both halves', async () => {
+    // The strictness would be a defect if the real record were identified by one marker only, so
+    // this reads DEFAULT_PROVIDERS rather than restating it.
+    const { DEFAULT_PROVIDERS } = await import('@talex-touch/tuff-intelligence')
+    const shipped = DEFAULT_PROVIDERS.find(
+      (provider: { id?: string }) => provider.id === 'tuff-nexus-default'
+    )
+
+    expect(shipped).toBeDefined()
+    expect((shipped as { metadata?: { origin?: string } }).metadata?.origin).toBe('tuff-nexus')
+  })
+})

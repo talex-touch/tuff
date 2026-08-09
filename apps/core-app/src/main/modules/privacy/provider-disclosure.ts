@@ -5,6 +5,10 @@ import type {
   PrivacyRetentionCategory
 } from '@talex-touch/utils/transport/events/types'
 import { isProxy } from 'node:util/types'
+import {
+  TUFF_NEXUS_PROVIDER_ID,
+  TUFF_NEXUS_PROVIDER_ORIGIN
+} from '@talex-touch/utils/intelligence/nexus-provider'
 
 export interface PrivacyProviderDisclosureSource {
   getConfig: () => unknown | Promise<unknown>
@@ -91,9 +95,28 @@ function capabilitiesForProvider(
   return Object.freeze([...capabilities].sort())
 }
 
+/**
+ * Whether this provider is the one Nexus manages — deliberately stricter than
+ * `isNexusManagedProvider`, which the rest of the app uses. Do not "unify" the two (#716).
+ *
+ * Everywhere else the question is "should this request go through the Nexus path", and either
+ * marker answering yes is fine. Here the answer becomes a claim shown to the user: the
+ * 'nexus-managed' class is what renders the provider as "Tuff Nexus" and suppresses the "Custom
+ * remote endpoint" wording. Provider records come from user-editable configuration, so anything
+ * that can write `metadata.origin` could make the privacy panel attribute its own baseUrl to us.
+ * Requiring the reserved id as well means a spoofed record is disclosed as what it is —
+ * `provider-disclosure.test.ts` pins that with a provider literally named "Spoofed Nexus".
+ *
+ * The strictness costs nothing against the real provider: DEFAULT_PROVIDERS ships
+ * `tuff-nexus-default` carrying `metadata.origin` too, so both halves hold. Only the combinator
+ * differs from the shared rule — the constants are imported so the values cannot drift apart.
+ *
+ * ownValues is applied first for the same reason: it rejects proxies and prototype-polluted
+ * objects, a guarantee this module makes about every untrusted provider record.
+ */
 function isNexusProvider(provider: Record<string, unknown>): boolean {
   const metadata = ownValues(provider.metadata)
-  return provider.id === 'tuff-nexus-default' && metadata?.origin === 'tuff-nexus'
+  return provider.id === TUFF_NEXUS_PROVIDER_ID && metadata?.origin === TUFF_NEXUS_PROVIDER_ORIGIN
 }
 
 function isLoopbackHost(hostname: string): boolean {
