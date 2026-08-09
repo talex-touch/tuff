@@ -97,14 +97,36 @@ When inserting a module, place it by the dependency you actually have — the ar
 4. **Stop**: Module deactivation (optional)
 5. **Destroy**: Cleanup and resource release (required)
 
-**Base Module Interface:**
+**Base Module Interface** ([abstract-base-module.ts](apps/core-app/src/main/modules/abstract-base-module.ts)):
 ```typescript
-abstract class BaseModule {
-  abstract onInit(ctx: ModuleInitContext): MaybePromise<void>
-  abstract onDestroy(ctx: ModuleDestroyContext): MaybePromise<void>
-  created?(ctx: ModuleCreateContext): MaybePromise<void>
-  start?(ctx: ModuleStartContext): MaybePromise<void>
-  stop?(ctx: ModuleStopContext): MaybePromise<void>
+abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<E> {
+  readonly name: ModuleKey        // = symbol; the singleton id ModuleManager registers under
+  readonly file?: ModuleFileConfig
+  readonly env?: ModuleEnvFlag
+  filePath?: string               // set by init() from ctx.file.dirPath
+
+  protected constructor(key: ModuleKey, file?: ModuleFileConfig, env?: ModuleEnvFlag)
+
+  abstract onInit(ctx: ModuleInitContext<E>): MaybePromise<void>
+  abstract onDestroy(ctx: ModuleDestroyContext<E>): MaybePromise<void>
+  created?(ctx: ModuleCreateContext<E>): MaybePromise<void>
+  start?(ctx: ModuleStartContext<E>): MaybePromise<void>
+  stop?(ctx: ModuleStopContext<E>): MaybePromise<void>
+}
+```
+
+`init` and `destroy` are concrete wrappers — override `onInit` / `onDestroy`, never those. The constructor argument is what gives a module its identity, so a subclass that omits it has no key to be registered under:
+
+```typescript
+export class MyModule extends BaseModule {
+  static key: symbol = Symbol.for('my-module')
+
+  constructor() {
+    super(MyModule.key, { create: false })
+  }
+
+  onInit(): void {}
+  onDestroy(): void {}
 }
 ```
 
