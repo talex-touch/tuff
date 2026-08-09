@@ -30,6 +30,7 @@ import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/scene-client'
 import { normalizeIntelligenceError } from '../intelligence-error-normalizer'
 import { IntelligenceProvider } from '../runtime/base-provider'
+import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
 
 interface NexusInvokeResponse<T = unknown> {
   invocation?: {
@@ -231,11 +232,15 @@ function parseJsonResult<T extends object>(value: unknown, fallback: T): T {
   return fallback
 }
 
+/**
+ * Kept as a named export because provider-factory reads better for it, but the rule itself lives in
+ * @talex-touch/utils so all four call sites cannot drift (#716).
+ */
 export function isNexusProviderConfig(config: {
   id?: string
   metadata?: Record<string, unknown>
 }): boolean {
-  return config.id === 'tuff-nexus-default' || config.metadata?.origin === 'tuff-nexus'
+  return isNexusManagedProvider(config)
 }
 
 export class NexusProvider extends IntelligenceProvider {
