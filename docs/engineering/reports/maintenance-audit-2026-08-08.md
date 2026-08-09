@@ -23,8 +23,8 @@
 
 ## 任务记录、生成文件与人工复核
 
-- **Trellis 工作可见性不足** — 79 个活跃任务中，32 个 `in_progress` 与 30 个 `planning` 记录同时缺少 `meta.blocker` 和 `meta.nextAction`；这不是任务失败证据，但无法区分受阻、等待人工证据与正常进行。任务负责人需补充真实下一动作或 blocker，完成后更新/归档状态。
+- **Trellis 工作可见性不足** — 79 个活跃任务中，32 个 `in_progress` 与 30 个 `planning` 记录同时缺少 `meta.blocker` 和 `meta.nextAction`；这不是任务失败证据，但无法区分受阻、等待人工证据与正常进行。任务负责人需补充真实下一动作或 blocker，完成后更新/归档状态。跟踪：[#309](https://github.com/talex-touch/tuff/issues/309)。
 - **工作树隔离风险** — 当前工作树含 42 个未提交改动，包括源文件修改与删除。审计文档已限定为独立提交；任何后续合并、发布或验证前，负责人需复核这些改动的归属、测试状态与删除意图，避免将并行工作误带入。
-- **可同步的包元数据漂移** — 根 `package.json` 缺少 `homepage`，而 `apps/core-app/package.json` 为 `https://tuff.tagzxia.com`。按 `scripts/sync-core-package.mjs` 的选择字段，此项不一致；应由拥有 package metadata 的任务决定规范值后运行受控同步，避免审计阶段直接覆盖。
+- **可同步的包元数据漂移** — 根 `package.json` 缺少 `homepage`，而 `apps/core-app/package.json` 为 `https://tuff.tagzxia.com`。按 `scripts/sync-core-package.mjs` 的选择字段，此项不一致；应由拥有 package metadata 的任务决定规范值后运行受控同步，避免审计阶段直接覆盖。跟踪：[#740](https://github.com/talex-touch/tuff/issues/740)。
 - **审计陈述缺少可验证性门禁** — 本报告初版错误复述了“search-index split 默认关闭”；实际 `TUFF_DB_SEARCH_SPLIT_ENABLED` 自 2026-08-05 起默认开启，`=0` 是应急回退，且 #331 已关闭。报告生成是手工承接上一日的过程，需对机器可读的 flag 默认值重新求值或增加文档断言，防止旧结论再次成为当前索引。跟踪：[#1107](https://github.com/talex-touch/tuff/issues/1107)。
 - **Documentation Quality 已失去 PR 信号价值** — `docs:verify` 在 `app-shell-v2` 基线有 142 个预存 findings，其中 125 个为 task metadata 规则与 `task.py create` 产物不一致；任何 PR 都因此失败，真实文档退化无法区分。需由 workflow owner 决定收窄 gate 至有意义的任务状态，或修正 producer 后迁移存量任务，并单独处置剩余 17 个真问题。跟踪：[#1254](https://github.com/talex-touch/tuff/issues/1254)。
