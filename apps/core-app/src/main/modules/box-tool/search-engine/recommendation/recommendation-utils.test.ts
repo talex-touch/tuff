@@ -109,3 +109,48 @@ describe('calculateTimeRelevanceScore hour weighting', () => {
     expect(calculateTimeRelevanceScore(empty, morningNine)).toBe(0)
   })
 })
+
+describe('calculateTimeRelevanceScore weekday evidence', () => {
+  /** Same slot profile for both, so only the weekday distribution differs. */
+  const withWeekdays = (dayOfWeekDistribution: number[]) =>
+    createTimeStats({ dayOfWeekDistribution })
+
+  it('ranks weak weekday evidence above none', () => {
+    // #650: absence gave the neutral factor 1 while a below-average count gave < 1, so an item
+    // never used on a Monday outranked one the user does use on Mondays.
+    const neverOnMonday = withWeekdays([10, 0, 10, 10, 10, 10, 10])
+    const twiceOnMonday = withWeekdays([10, 2, 10, 10, 10, 10, 10])
+
+    expect(calculateTimeRelevanceScore(twiceOnMonday, morningNine)).toBeGreaterThan(
+      calculateTimeRelevanceScore(neverOnMonday, morningNine)
+    )
+  })
+
+  it('still ranks a typical weekday above an atypical one', () => {
+    // Positive control on direction: the factor must remain monotone, not merely non-inverted.
+    const mostlyMonday = withWeekdays([0, 20, 0, 0, 0, 0, 0])
+    const rarelyMonday = withWeekdays([20, 1, 20, 20, 20, 20, 20])
+
+    expect(calculateTimeRelevanceScore(mostlyMonday, morningNine)).toBeGreaterThan(
+      calculateTimeRelevanceScore(rarelyMonday, morningNine)
+    )
+  })
+
+  it('does not erase an item that has never been used on this weekday', () => {
+    // Dividing unconditionally would make the factor 0 and zero the whole score. getTimeBasedTopItems
+    // keeps only timeScore > 0, so the item would vanish from time-based results entirely — worse
+    // than the mis-ranking being fixed.
+    const neverOnMonday = withWeekdays([10, 0, 10, 10, 10, 10, 10])
+
+    expect(calculateTimeRelevanceScore(neverOnMonday, morningNine)).toBeGreaterThan(0)
+  })
+
+  it('is monotone in the weekday count', () => {
+    const scores = [0, 1, 2, 5, 10, 20].map((count) =>
+      calculateTimeRelevanceScore(withWeekdays([10, count, 10, 10, 10, 10, 10]), morningNine)
+    )
+
+    for (let index = 1; index < scores.length; index++)
+      expect(scores[index]).toBeGreaterThan(scores[index - 1]!)
+  })
+})

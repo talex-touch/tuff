@@ -88,6 +88,26 @@ export function calculateHourAffinity(
  * table existed but was never read — an item used every day at 09:00 scored
  * the same at 11:30 as at 09:05 because both fall in the "morning" slot.
  */
+/**
+ * How much today's weekday argues for this item, relative to its own average day.
+ *
+ * Smoothed rather than a bare ratio. The bare form has two failure modes and this sits between
+ * them:
+ *
+ * - the old `dayUsage > 0 ? ratio : 1` made *absence* neutral, so an item never used on a Monday
+ *   (factor 1) outranked one used twice against an average of ten (factor 0.2) — absence of
+ *   evidence beating weak evidence (#650)
+ * - dividing unconditionally makes absence a factor of 0, which zeroes the whole relevance score.
+ *   The caller keeps only `timeScore > 0`, so an item would disappear from time-based results on
+ *   every weekday it has not been used, however strong its hour-of-day affinity
+ *
+ * (dayUsage + 1) / (avgDayUsage + 1) is strictly increasing in dayUsage, so any evidence always
+ * beats none, and it is never 0, so nothing is erased for lack of a weekday sample.
+ */
+function calculateDayFactor(dayUsage: number, avgDayUsage: number): number {
+  return (dayUsage + 1) / (avgDayUsage + 1)
+}
+
 export function calculateTimeRelevanceScore(
   itemTimeStats: ParsedItemTimeStats,
   currentTime: TimePattern
@@ -100,7 +120,7 @@ export function calculateTimeRelevanceScore(
   const slotRatio = slotUsage / totalUsage
   const dayUsage = itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek] ?? 0
   const avgDayUsage = itemTimeStats.dayOfWeekDistribution.reduce((a, b) => a + b, 0) / 7
-  const dayFactor = dayUsage > 0 ? dayUsage / (avgDayUsage || 1) : 1
+  const dayFactor = calculateDayFactor(dayUsage, avgDayUsage)
   const boost = calculateTimeContextBoost(itemTimeStats, currentTime)
   const slotScore = slotRatio * TIME_RELEVANCE_SCALE * dayFactor
 
