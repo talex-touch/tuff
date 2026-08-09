@@ -6,14 +6,18 @@ const intelligenceSdkMock = vi.hoisted(() => ({
   ragRerank: vi.fn()
 }))
 
+// A stable instance: the engine resolves the singleton once, so a factory returning a fresh object
+// per call would leave every assertion on one the code under test never held.
+const pollingMock = vi.hoisted(() => ({
+  isRegistered: vi.fn(() => false),
+  unregister: vi.fn(),
+  register: vi.fn(),
+  start: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
-    getInstance: () => ({
-      isRegistered: vi.fn(() => false),
-      unregister: vi.fn(),
-      register: vi.fn(),
-      start: vi.fn()
-    })
+    getInstance: () => pollingMock
   }
 }))
 
@@ -1486,6 +1490,59 @@ describe('RecommendationEngine', () => {
     // Positive control: the healthy row still scores, so this is not passing because the method
     // returned nothing at all.
     expect(items.map((item) => item.itemId)).toContain('com.apple.Terminal')
+  })
+
+  it('does not run a refresh after stopBackgroundRefresh cancels the jitter window', async () => {
+    // #652: the polling callback only *schedules* the refresh, through an untracked setTimeout.
+    // stopBackgroundRefresh unregistered the polling task and left that pending, so a full
+    // recommendation pass still ran after shutdown — against a database the owner had torn down.
+    vi.useFakeTimers()
+    try {
+      pollingMock.register.mockClear()
+
+      const engine = new RecommendationEngine(createDbUtils() as never)
+      const runBackgroundRefresh = vi.fn(async () => {})
+      Object.assign(engine as unknown as Record<string, unknown>, { runBackgroundRefresh })
+      ;(engine as unknown as { startBackgroundRefresh: () => void }).startBackgroundRefresh()
+
+      const scheduled = pollingMock.register.mock.calls.find(
+        (call) => typeof call[1] === 'function'
+      )?.[1] as (() => void) | undefined
+
+      // Positive control: the polling task registered a callback at all.
+      expect(scheduled).toBeTypeOf('function')
+
+      scheduled?.()
+      engine.stopBackgroundRefresh()
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(runBackgroundRefresh).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still refreshes when the jitter window elapses without a stop', async () => {
+    // The other half: a fix that simply never scheduled would pass the test above.
+    vi.useFakeTimers()
+    try {
+      pollingMock.register.mockClear()
+
+      const engine = new RecommendationEngine(createDbUtils() as never)
+      const runBackgroundRefresh = vi.fn(async () => {})
+      Object.assign(engine as unknown as Record<string, unknown>, { runBackgroundRefresh })
+      ;(engine as unknown as { startBackgroundRefresh: () => void }).startBackgroundRefresh()
+      const scheduled = pollingMock.register.mock.calls.find(
+        (call) => typeof call[1] === 'function'
+      )?.[1] as (() => void) | undefined
+
+      scheduled?.()
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(runBackgroundRefresh).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('recommends catalog apps on a cold start with no usage history', async () => {
