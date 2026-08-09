@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
   logWarn: vi.fn()
 }))
 
-vi.mock('../../db/db-write-scheduler', () => ({
+// importOriginal so DbWriteDroppedError stays the real class — the classification is now an
+// instanceof check, and a stub class would make it pass against a different constructor (#656).
+vi.mock('../../db/db-write-scheduler', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   dbWriteScheduler: {
     schedule: mocks.schedule
   }
@@ -30,6 +33,7 @@ vi.mock('drizzle-orm', () => ({
   inArray: (column: unknown, values: unknown[]) => ({ inArray: [column, values] })
 }))
 
+import { DbWriteDroppedError } from '../../db/db-write-scheduler'
 import {
   ClipboardMetaPersistence,
   isDroppedDbWriteTaskError,
@@ -113,10 +117,15 @@ describe('clipboard-meta-persistence', () => {
   })
 
   it('classifies dropped and foreign-key errors for safe persistence', async () => {
-    expect(isDroppedDbWriteTaskError(new Error('DB write task dropped: clipboard.meta'))).toBe(true)
+    // #656: this used to match on message text, so a driver error worded with 'dropped' was
+    // classified as a deliberate shed. It is the type that decides now.
+    expect(isDroppedDbWriteTaskError(new DbWriteDroppedError('dropped: clipboard.meta'))).toBe(true)
+    expect(isDroppedDbWriteTaskError(new Error('DB write task dropped: clipboard.meta'))).toBe(
+      false
+    )
     expect(isForeignKeyConstraintError(new Error('FOREIGN KEY constraint failed'))).toBe(true)
 
-    mocks.values.mockRejectedValueOnce(new Error('DB write task dropped: clipboard.meta'))
+    mocks.values.mockRejectedValueOnce(new DbWriteDroppedError('dropped: clipboard.meta'))
     const persistence = createPersistence(createDb())
 
     persistence.persistMetaEntriesSafely(8, { tag: 'url' })
