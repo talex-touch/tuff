@@ -56,14 +56,9 @@ const MISSING_FROM_BOTH = [
   'settingMessages.title',
   'settingMessages.unread',
   'settingMessages.unreadTag',
-  'settingUser.stepUp',
-  'settingUser.syncSecurity',
   'store.official',
   'system.unknownError',
-  'systemPermission.requiredPermission',
-  'userProfile.overview',
-  'userProfile.security',
-  'userProfile.securityActions'
+  'systemPermission.requiredPermission'
 ]
 
 /** Keys defined in en-US but not zh-CN, so a Chinese user sees English. Tracked by #503. */

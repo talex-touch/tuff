@@ -562,6 +562,8 @@
     }
   },
   "settingUser": {
+    "syncSecurity": "Sync security",
+    "stepUp": "Step-up verification",
     "groupTitle": "Account",
     "groupDesc": "Manage your account information and login status.",
     "logout": "Logout",
@@ -684,6 +686,9 @@
     "billingNoticeTitle": "Billing notice"
   },
   "userProfile": {
+    "overview": "Overview",
+    "security": "Security & sign-in",
+    "securityActions": "Sign-in and security options",
     "title": "Account",
     "unknownName": "User",
     "unknownEmail": "No email",
