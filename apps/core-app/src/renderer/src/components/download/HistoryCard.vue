@@ -57,7 +57,7 @@ function getModuleName(module: DownloadModule): string {
 }
 
 function getStatusText(status: DownloadStatus): string {
-  const statusTexts = {
+  const statusTexts: Partial<Record<DownloadStatus, string>> = {
     [DownloadStatus.COMPLETED]: t('download.status_completed'),
     [DownloadStatus.FAILED]: t('download.status_failed'),
     [DownloadStatus.CANCELLED]: t('download.status_cancelled')
