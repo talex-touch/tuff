@@ -185,3 +185,39 @@ export function getTelemetryApiBase(): string {
 export function getTpexApiBase(): string {
   return resolveTuffNexusBaseUrl()
 }
+
+/**
+ * The `dev` block of app settings, as it exists on disk rather than as declared.
+ *
+ * `authServer` is the name this setting shipped under before it also selected the runtime backend
+ * for non-auth calls. Installations from that era still hold it, so every reader has to migrate.
+ */
+export interface TuffNexusRuntimeServerSettings {
+  authServer?: TuffNexusRuntimeServer
+  runtimeServer?: TuffNexusRuntimeServer
+}
+
+/** Unknown values become 'production'; only an explicit 'local' opts out. */
+export function normalizeTuffNexusRuntimeServer(value: unknown): TuffNexusRuntimeServer {
+  return value === 'local' ? 'local' : 'production'
+}
+
+/**
+ * Resolves the runtime backend and migrates the legacy key in place.
+ *
+ * Shared because both processes make this decision independently — main from the config file,
+ * renderer from the reactive settings object — and a disagreement means the two halves of one app
+ * talk to different backends. Only the policy is shared; how each side obtains and persists `dev`
+ * is genuinely different and stays where it is.
+ *
+ * Mutates: `runtimeServer` is written back normalized and `authServer` is dropped, so a caller that
+ * persists `dev` afterwards completes the migration.
+ */
+export function migrateTuffNexusRuntimeServer(
+  dev: TuffNexusRuntimeServerSettings
+): TuffNexusRuntimeServer {
+  const next = dev.runtimeServer ?? dev.authServer ?? 'production'
+  dev.runtimeServer = normalizeTuffNexusRuntimeServer(next)
+  delete dev.authServer
+  return dev.runtimeServer
+}
