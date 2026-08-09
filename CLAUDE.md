@@ -70,8 +70,17 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **OCR** ([modules/ocr/](apps/core-app/src/main/modules/ocr/)): Native OCR via @talex-touch/tuff-native (Apple Vision / Windows OCR) with AI-provider fallback
 - **Clipboard** ([modules/clipboard/](apps/core-app/src/main/modules/clipboard/)): System clipboard operations
 
-**Module Loading Order** (sequential after Electron ready):
-1. DatabaseModule → 2. StorageModule → 3. ShortcutModule → 4. ExtensionLoaderModule → 5. CommonChannelModule → 6. PluginModule → 7. PluginLogModule → 8. CoreBoxModule → 9. TrayHolderModule → 10. AddonOpenerModule → 11. ClipboardModule → 12. TuffDashboardModule → 13. FileSystemWatcher → 14. FileProtocolModule → 15. TerminalModule
+**Module Loading Order**
+
+The order is defined by `foregroundModulesToLoad` and `deferredModulesToLoad` in [src/main/index.ts](apps/core-app/src/main/index.ts) — read those arrays rather than a list here, which goes stale as modules are added. Currently 38 foreground and 2 deferred.
+
+What the arrays alone don't tell you:
+
+- **Two phases.** Foreground modules load sequentially once Electron is ready. Deferred modules (`extensionLoaderModule`, `FileSystemWatcher`) are scheduled via `setImmediate` after the first window is up, so they must not be depended on during startup.
+- **Optional modules.** Members of `optionalModulesToLoad` (currently `trayManagerModule`) log a warning and let startup continue if they fail. Every other module failing to load aborts startup.
+- **Ordering constraints that are load-bearing**, and are marked as such in the array: `permissionModule` must precede `pluginModule`, and `flowBusModule` must follow it. `databaseModule` is first because storage and everything downstream reads through it.
+
+When inserting a module, place it by the dependency you actually have — the array position is the whole contract, and getting it wrong reproduces only at startup.
 
 **Renderer Process (src/renderer/):**
 - Vue 3 application with TypeScript
