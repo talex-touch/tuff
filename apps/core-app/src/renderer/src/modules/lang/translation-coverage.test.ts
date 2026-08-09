@@ -57,14 +57,9 @@ const MISSING_FROM_BOTH = [
   'settingMessages.title',
   'settingMessages.unread',
   'settingMessages.unreadTag',
-  'settingUser.stepUp',
-  'settingUser.syncSecurity',
   'store.official',
   'system.unknownError',
-  'systemPermission.requiredPermission',
-  'userProfile.overview',
-  'userProfile.security',
-  'userProfile.securityActions'
+  'systemPermission.requiredPermission'
 ]
 
 function loadLocale(name: string): Record<string, unknown> {
