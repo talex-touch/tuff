@@ -562,6 +562,8 @@
     }
   },
   "settingUser": {
+    "syncSecurity": "同步安全",
+    "stepUp": "二次验证",
     "groupTitle": "账户",
     "groupDesc": "管理您的账户信息和登录状态。",
     "logout": "登出",
@@ -684,6 +686,9 @@
     "billingNoticeTitle": "计费提示"
   },
   "userProfile": {
+    "overview": "概览",
+    "security": "安全与登录",
+    "securityActions": "登录与安全选项",
     "title": "账户",
     "unknownName": "用户",
     "unknownEmail": "暂无邮箱",
