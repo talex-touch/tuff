@@ -272,20 +272,30 @@ The application uses a custom channel system abstracting Electron IPC:
 - `ChannelType.MAIN`: Main process ↔ renderer communication
 - `ChannelType.PLUGIN`: Plugin-specific isolated communication
 
-**Key APIs:**
-```typescript
-// Register handlers
-regChannel(type: ChannelType, eventName: string, callback): () => void
+**Key APIs** — two classes, not one surface. Every main-process call carries a `ChannelType`; no renderer call does.
 
-// Send messages
-send(eventName: string, arg?: any): Promise<any>
-sendTo(window: BrowserWindow, eventName: string, arg?: any): Promise<any>
-sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+Main process ([core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)):
+```typescript
+regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void
+
+send(type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
+sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
+sendPlugin(pluginName: string, eventName: string, arg?: unknown): Promise<unknown>
 
 // Key management (encryption for plugin isolation)
-requestKey(name: string): string
+requestKey(name: string, activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>): string
 revokeKey(key: string): boolean
 ```
+
+Renderer ([modules/channel/channel-core.ts](apps/core-app/src/renderer/src/modules/channel/channel-core.ts)) — the whole surface is three methods; there is no `sendTo`, `sendPlugin`, `requestKey` or `revokeKey`:
+```typescript
+regChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): () => void
+unRegChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): boolean
+
+send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): Promise<TResponse>
+```
+
+The two `regChannel` signatures are the trap: passing a `ChannelType` to the renderer's registers a handler under that value as the event name, which type-checks and then never fires.
 
 **Implementation Notes:**
 - Uses IPC listeners on `@main-process-message` and `@plugin-process-message`
