@@ -117,4 +117,38 @@ describe('aI PR review CI security contract', () => {
       assert.match(result.stdout, message)
     },
   )
+
+  it('has no wildcard escape hatch in the author-association gate', () => {
+    // pull_request_target runs with repository secrets in scope on fork PRs, so a '*' in
+    // AI_REVIEW_ALLOWED_ASSOCIATIONS would hand any fork author a job holding
+    // OPENAI_API_KEY. It reads like a convenience setting and is not one (#733).
+    const source = fs.readFileSync(reviewScriptPath, 'utf8')
+
+    assert.ok(
+      !/!allowedAssociations\.includes\('\*'\)/.test(source),
+      'the wildcard must not be treated as "allow everyone"',
+    )
+    assert.ok(
+      source.includes('List the associations explicitly.'),
+      'a wildcard must be refused with an explanation',
+    )
+  })
+
+  it('constrains where OPENAI_API_KEY may be sent', () => {
+    const source = fs.readFileSync(reviewScriptPath, 'utf8')
+
+    // A host allowlist, not a prefix test: 'starts with https' still accepts
+    // https://api.openai.com.evil.test.
+    assert.ok(source.includes('ALLOWED_OPENAI_HOSTS'), 'expected a host allowlist')
+    assert.match(source, /new URL\(openaiBaseUrl\)\.hostname/)
+    assert.ok(source.includes('Refusing to send OPENAI_API_KEY to an unrecognised host'))
+  })
+
+  it('still runs on pull_request_target, which is what makes both gates load-bearing', () => {
+    // Control. If the trigger ever moves to pull_request, the two assertions above stop
+    // guarding secrets, and that should be revisited rather than silently passing.
+    const workflow = parse(fs.readFileSync(workflowPath, 'utf8'))
+
+    assert.ok(workflow.on.pull_request_target, 'trigger must remain pull_request_target')
+  })
 })
