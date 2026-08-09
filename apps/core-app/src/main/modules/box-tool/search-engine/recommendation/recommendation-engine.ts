@@ -286,6 +286,14 @@ export class RecommendationEngine {
   private trendBackfillQueue: number[] | null = null
   private trendBackfillCompleted = false
   private usageIdentityMigrationTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * The jittered handle for the next background refresh.
+   *
+   * Tracked because the polling callback only *schedules* the refresh: stopBackgroundRefresh
+   * unregistered the polling task but left this pending, so a full recommendation pass could still
+   * run after shutdown, against a database the owner had already torn down (#652).
+   */
+  private refreshJitterTimer: NodeJS.Timeout | null = null
   private usageIdentityMigrationScheduled = false
 
   /** Plugin-registered recommendation providers */
@@ -579,7 +587,8 @@ export class RecommendationEngine {
         }
         this.refreshInFlight = true
         const jitterMs = Math.floor(Math.random() * this.REFRESH_JITTER_MS)
-        setTimeout(() => {
+        this.refreshJitterTimer = setTimeout(() => {
+          this.refreshJitterTimer = null
           void this.runBackgroundRefresh()
         }, jitterMs)
       },
@@ -967,6 +976,13 @@ export class RecommendationEngine {
     this.pollingService.unregister(this.refreshTaskId)
     this.pollingService.unregister(this.trendBackfillTaskId)
     this.pollingService.unregister(this.telemetryTaskId)
+    if (this.refreshJitterTimer) {
+      clearTimeout(this.refreshJitterTimer)
+      this.refreshJitterTimer = null
+    }
+    // Cleared so a stop during the jitter window does not leave the guard latched: the next
+    // startBackgroundRefresh would then schedule nothing at all.
+    this.refreshInFlight = false
     if (this.usageIdentityMigrationTimer) {
       clearTimeout(this.usageIdentityMigrationTimer)
       this.usageIdentityMigrationTimer = null
