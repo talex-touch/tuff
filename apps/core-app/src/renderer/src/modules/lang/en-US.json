@@ -2890,11 +2890,7 @@
       "enableCache": "Enable Response Cache",
       "enableCacheDesc": "Cache AI responses to reduce costs and latency",
       "cacheExpiration": "Cache Expiration",
-      "cacheExpirationDesc": "How long to keep cached responses",
-      "userMessageLabel": "User message",
-      "userMessagePlaceholder": "Hello, can you summarize this...",
-      "promptVariablesLabel": "Prompt variables (JSON)",
-      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}"
+      "cacheExpirationDesc": "How long to keep cached responses"
     },
     "settingFileIndex": {
       "groupTitle": "File Index",
@@ -3584,14 +3580,6 @@
       "activeProviders": "Active Channels",
       "totalBindings": "Total Bindings",
       "configuredModels": "Configured Models",
-      "addBinding": "Add Binding",
-      "removeBinding": "Remove Binding",
-      "modelOrder": "Model Order",
-      "noModelsConfigured": "No models configured",
-      "dragToReorder": "Drag to reorder",
-      "addFirstModel": "Add your first model",
-      "providerSelection": "Provider Selection",
-      "modelSelection": "Model Selection",
       "capabilityTestTitle": "Test Capability",
       "capabilityTestDesc": "Test if this capability works with current configuration",
       "testProvider": "Select Test Provider",
