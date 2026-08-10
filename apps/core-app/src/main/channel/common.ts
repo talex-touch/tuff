@@ -42,12 +42,8 @@ import type {
   TraySettingsUpdateRequest,
   TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
-import type {
-  CleanupDownloadsOptions,
-  CleanupFileIndexOptions
-} from '../service/storage-maintenance'
-import type { StorageCleanupResult } from '../service/types/storage-maintenance'
 import { cleanupDownloads, cleanupFileIndex, cleanupUpdates } from '../service/storage-maintenance'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { validateExternalUrl } from '../utils/external-url-policy'
 import type { Locale } from '../utils/i18n-helper'
 import { Buffer } from 'node:buffer'
@@ -269,25 +265,6 @@ const systemGetStorageUsageEvent = defineRawEvent<StorageUsageRequest, StorageUs
   'system:get-storage-usage'
 )
 
-/**
- * Storage cleanup, one event per domain the storage view offers a button for.
- *
- * Storagable.vue has rendered these buttons and sent these names since it was written, and nothing
- * answered them — so a user clicked "清理索引", confirmed the dialog and got "清理失败". Meanwhile
- * storage-maintenance.ts held the working implementation with no importer, so anyone debugging
- * "cleanup did not free space" read that file and found the logic correct (#527).
- *
- * The payload shapes are the ones the view already sends, matched to the service's option types.
- */
-const storageCleanupFileIndexEvent = defineRawEvent<CleanupFileIndexOptions, StorageCleanupResult>(
-  'storage:cleanup:file-index'
-)
-const storageCleanupDownloadsEvent = defineRawEvent<CleanupDownloadsOptions, StorageCleanupResult>(
-  'storage:cleanup:downloads'
-)
-const storageCleanupUpdatesEvent = defineRawEvent<void, StorageCleanupResult>(
-  'storage:cleanup:updates'
-)
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }
@@ -1629,13 +1606,13 @@ export class CommonChannelModule extends BaseModule {
           perfMonitor.recordRendererReport(payload)
         }
       }),
-      transport.on(storageCleanupFileIndexEvent, async (payload) => {
+      transport.on(StorageEvents.cleanup.fileIndex, async (payload) => {
         return await cleanupFileIndex(payload ?? {})
       }),
-      transport.on(storageCleanupDownloadsEvent, async (payload) => {
+      transport.on(StorageEvents.cleanup.downloads, async (payload) => {
         return await cleanupDownloads(payload ?? {})
       }),
-      transport.on(storageCleanupUpdatesEvent, async () => {
+      transport.on(StorageEvents.cleanup.updates, async () => {
         return await cleanupUpdates()
       }),
       transport.on(systemGetStorageUsageEvent, async (payload) => {

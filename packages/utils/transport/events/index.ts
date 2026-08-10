@@ -517,6 +517,9 @@ import type {
   PluginStorageGetRequest,
   PluginStorageSetRequest,
   StorageDeleteRequest,
+  StorageCleanupDownloadsRequest,
+  StorageCleanupFileIndexRequest,
+  StorageCleanupResponse,
   StorageGetRequest,
   StorageGetVersionedResponse,
   StorageSaveRequest,
@@ -1532,6 +1535,33 @@ export const StorageEvents = {
      * Delete a value from plugin storage.
      */
     delete: defineEvent('storage').module('plugin').event('delete').define<PluginStorageDeleteRequest, void>(),
+  },
+
+  /**
+   * Per-domain storage cleanup, one event per button the storage view offers.
+   *
+   * Typed rather than raw: a three-segment name fits the builder, and
+   * transport-event-boundary.test.ts rejects `defineRawEvent` for those — the first wiring of
+   * these used raw definitions and broke that rule for every PR touching utils (#527).
+   */
+  cleanup: {
+    /** Clears file-index tables; the caller decides whether to also clear and rebuild search. */
+    fileIndex: defineEvent('storage')
+      .module('cleanup')
+      .event('file-index')
+      .define<StorageCleanupFileIndexRequest, StorageCleanupResponse>(),
+
+    /** Deletes download bookkeeping rows, all of them or those older than `beforeDays`. */
+    downloads: defineEvent('storage')
+      .module('cleanup')
+      .event('downloads')
+      .define<StorageCleanupDownloadsRequest, StorageCleanupResponse>(),
+
+    /** Deletes the update history records. */
+    updates: defineEvent('storage')
+      .module('cleanup')
+      .event('updates')
+      .define<void, StorageCleanupResponse>(),
   },
 } as const
 
