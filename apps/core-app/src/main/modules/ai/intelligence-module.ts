@@ -2261,7 +2261,6 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         let closed = false
         let doneSent = false
         let keepaliveTimer: ReturnType<typeof setInterval> | null = null
-        let cancelWatcher: ReturnType<typeof setInterval> | null = null
         let unsubscribe: () => void = () => {}
 
         const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
@@ -2284,16 +2283,44 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             clearInterval(keepaliveTimer)
             keepaliveTimer = null
           }
-          if (cancelWatcher) {
-            clearInterval(cancelWatcher)
-            cancelWatcher = null
-          }
           unsubscribe()
           try {
             streamContext.end()
           } catch {
             // Ignore stream close failures on disconnected clients.
           }
+        }
+
+        /**
+         * Resolves when this stream should stop: the client cancelled, or its renderer went away.
+         *
+         * The renderer half matters because handleCancel only runs on an explicit cancel message
+         * (#764). A reloaded, closed or crashed window never sends one, so the previous 250ms
+         * poll on isCancelled() never resolved and the keepalive timer, the poll itself and the
+         * trace subscription stayed live for the rest of the process -- one more set per reload.
+         *
+         * The poll is gone because it was only ever observing the same state as `signal`:
+         * handleCancel sets `cancelled` and calls `abortController.abort()` together, and
+         * `signal` is that controller's.
+         */
+        const waitForStreamRelease = (): Promise<void> => {
+          const sender = streamContext.sender
+          if (streamContext.isCancelled() || !sender || sender.isDestroyed()) {
+            return Promise.resolve()
+          }
+
+          return new Promise<void>((resolve) => {
+            const release = (): void => {
+              streamContext.signal.removeEventListener('abort', release)
+              sender.off('destroyed', release)
+              sender.off('render-process-gone', release)
+              resolve()
+            }
+
+            streamContext.signal.addEventListener('abort', release)
+            sender.once('destroyed', release)
+            sender.once('render-process-gone', release)
+          })
         }
 
         const replayTrace = async () => {
@@ -2402,14 +2429,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             })
           }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
 
-          await new Promise<void>((resolve) => {
-            cancelWatcher = setInterval(() => {
-              if (!streamContext.isCancelled()) {
-                return
-              }
-              resolve()
-            }, 250)
-          })
+          await waitForStreamRelease()
 
           await pauseOnDisconnect()
           if (!doneSent) {
