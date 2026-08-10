@@ -3,6 +3,7 @@ import type {
   ConversationRecord,
   ConversationSaveRequest
 } from '@talex-touch/utils/transport/sdk/domains/conversation'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createConversationSdk } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { ref, toRaw, type Ref } from 'vue'
@@ -15,6 +16,8 @@ export interface UseConversationHistoryReturn {
   persist: (id: string, title: string, messages: ConversationMessage[]) => Promise<void>
   remove: (id: string) => Promise<void>
 }
+
+const conversationHistoryLog = createRendererLogger('ConversationHistory')
 
 /** `crypto.randomUUID` is available in every renderer this ships to; no polyfill path is needed. */
 export function createConversationId(): string {
@@ -97,7 +100,16 @@ export function useConversationHistory(): UseConversationHistoryReturn {
   }
 
   async function load(id: string): Promise<ConversationMessage[] | null> {
-    const detail = await sdk.get(id)
+    let detail: Awaited<ReturnType<typeof sdk.get>>
+    try {
+      detail = await sdk.get(id)
+    } catch (error) {
+      // Degrades to "nothing to restore", the same policy refresh() already uses. Without this the
+      // rejection escaped through HomePage's async route watcher, where Vue can only log it as an
+      // unhandled rejection (#827).
+      conversationHistoryLog.error(`Failed to load conversation ${id}`, error)
+      return null
+    }
     if (!detail) return null
     return detail.messages.map((message) => {
       // Parts ride inside meta for storage; pull them back out so the meta the
