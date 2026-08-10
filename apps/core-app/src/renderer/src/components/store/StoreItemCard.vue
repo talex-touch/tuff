@@ -88,9 +88,24 @@ const descriptionText = computed(() => props.item.description || t('store.noDesc
 /**
  * Handles card click to open plugin details
  */
-function handleOpen(event: MouseEvent): void {
+function handleOpen(event: MouseEvent | KeyboardEvent): void {
   const source = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   emit('open', source)
+}
+
+/**
+ * Enter/Space open the card, matching what `role="button"` promises a screen reader.
+ *
+ * The card is not a native `<button>` because it contains one (StoreInstallButton), and nesting
+ * interactive elements is invalid. The target check is what keeps that safe: a native button fires
+ * `click` from Enter/Space, and StoreInstallButton stops only that click - its keydown still
+ * bubbles here, so without the check installing with the keyboard would also open the card.
+ */
+function handleOpenKeydown(event: KeyboardEvent): void {
+  if (event.target !== event.currentTarget) return
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  handleOpen(event)
 }
 
 /**
@@ -105,7 +120,11 @@ function handleInstall(): void {
   <div
     class="store-item-card"
     :class="{ 'official-provider': item.providerTrustLevel === 'official' }"
+    role="button"
+    tabindex="0"
+    :aria-label="t('store.openPluginDetails', { name: item.name || 'Unnamed Plugin' })"
     @click="handleOpen"
+    @keydown="handleOpenKeydown"
   >
     <div class="StoreItemCard-Inner">
       <TxPluginMetaHeader

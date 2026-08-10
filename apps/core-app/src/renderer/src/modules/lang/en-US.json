@@ -1050,6 +1050,7 @@
     "upgrade": "Upgrade",
     "upgradeAvailable": "Update available",
     "officialBadge": "Official",
+    "openPluginDetails": "Open details for {name}",
     "lastUpdated": "Last updated {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "Tuff CLI is detected on this machine. Beta preview capabilities are available now.",
