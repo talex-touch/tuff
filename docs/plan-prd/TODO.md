@@ -5,7 +5,7 @@
 ## Current order
 
 1. **Close verified release and runtime blockers.** Complete the active OTA, macOS release-evidence, and application-icon acceptance work according to their task-local PRDs. The OTA parent remains concurrently owned; this document does not restate its volatile child status.
-2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the default-off [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). The split flag must remain off until its child task has direct flag-on app-run evidence for every writer.
+2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). Reconcile the migration task's stale default-off/flag-on wording with the current runtime topology so task evidence does not contradict the roadmap.
 3. **Continue remaining independently-owned active tasks** in the order recorded here only after the preceding blocker lane is resolved; task-local PRDs define implementation order and acceptance.
 
 ## Non-negotiable safety gates
@@ -28,7 +28,7 @@
 - Nexus: [TODO-nexus.md](./TODO-nexus.md)
 - Long-term debt: [docs/TODO-BACKLOG-LONG-TERM.md](./TODO-BACKLOG-LONG-TERM.md)
 - Historical completion facts: [01-project/CHANGES.md](./01-project/CHANGES.md)
-- 2026-08-08 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-08.md).
+- 2026-08-10 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-10.md).
 
 ## Topical guardrails
 
