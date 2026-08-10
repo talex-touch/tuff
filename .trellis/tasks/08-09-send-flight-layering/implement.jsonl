@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Vue SFC / 样式与可访问性约定；本任务改 HomePage.vue 的层级与样式"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "禁用模式与验证要求；本任务要消除魔数并保持 lint/typecheck 干净"}
