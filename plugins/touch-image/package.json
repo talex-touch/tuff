@@ -17,7 +17,7 @@
     },
     "plugin": {
       "dev": {
-        "enable": true,
+        "enable": false,
         "address": "http://127.0.0.1:6001"
       }
     },

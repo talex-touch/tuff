@@ -51,6 +51,31 @@ const KNOWN_PERMISSION_IDS = new Set([
   'lexicon.register',
 ])
 
+/**
+ * A committed `dev.enable: true` points the loader at a developer's local server, so a shipped
+ * plugin either fails to load or loads whatever is answering on that port.
+ *
+ * AGENTS.md prescribes `pnpm plugins:validate` as the manifest gate, but neither validator
+ * inspected the dev block at all — the prescribed gate could not catch the exact class of defect
+ * it is cited for (#812).
+ *
+ * Only `enable` is policed. A `dev.address` alongside `enable: false` is the normal way to keep a
+ * local server configured without turning it on, and every manifest in the tree uses it that way.
+ *
+ * @returns true when an error was logged.
+ */
+function reportDevLeakage(pluginName, dev, source) {
+  if (!dev || typeof dev !== 'object' || dev.enable !== true)
+    return false
+
+  const address = typeof dev.address === 'string' ? ` (address: ${dev.address})` : ''
+  logError(
+    pluginName,
+    `${source} declares dev.enable: true${address} — a released plugin must not point at a local dev server`,
+  )
+  return true
+}
+
 function resolveSearchProviderPermissionIds(scopes = []) {
   const permissionIds = scopes.flatMap((scope) => {
     switch (scope) {
@@ -97,6 +122,34 @@ function logOk(pluginName, message) {
 
 // Discover plugin directories
 const entries = fs.readdirSync(pluginsDir, { withFileTypes: true })
+/**
+ * `--self-test` proves the dev-leakage detector fires, because "no plugin declares dev.enable"
+ * looks exactly the same whether the check works or does nothing — which is the state this script
+ * was in before (#812).
+ *
+ * Placed before the scan so it can answer without validating the tree, and after logError so the
+ * counters it flips are already declared.
+ */
+if (process.argv.includes('--self-test')) {
+  const cases = [
+    { name: 'enable true is rejected', dev: { enable: true, address: 'http://127.0.0.1:6001' }, expected: true },
+    { name: 'enable true without an address is still rejected', dev: { enable: true }, expected: true },
+    { name: 'enable false with an address is allowed', dev: { enable: false, address: 'http://127.0.0.1:3488' }, expected: false },
+    { name: 'no dev block is allowed', dev: undefined, expected: false },
+    { name: 'a non-object dev block is ignored rather than crashing', dev: 'yes', expected: false },
+  ]
+
+  let failures = 0
+  for (const testCase of cases) {
+    const actual = reportDevLeakage('self-test', testCase.dev, 'fixture')
+    const ok = actual === testCase.expected
+    console.log(`${ok ? 'ok  ' : 'FAIL'} ${testCase.name}`)
+    if (!ok)
+      failures += 1
+  }
+  process.exit(failures > 0 ? 1 : 0)
+}
+
 const pluginDirs = entries
   .filter(e => e.isDirectory())
   .map(e => e.name)
@@ -120,6 +173,10 @@ for (const pluginName of pluginDirs) {
         logError(pluginName, `package.json name must be "${expectedPackageName}" (received "${packageManifest.name || '<missing>'}")`)
         pluginHasError = true
       }
+      // The build copies this block into dist/manifest.json, so dev leakage reaches a shipped
+      // plugin through package.json just as readily as through a tracked manifest.
+      if (reportDevLeakage(pluginName, packageManifest['talex-touch']?.plugin?.dev, 'package.json'))
+        pluginHasError = true
     }
     catch (e) {
       logError(pluginName, `package.json parse error: ${e.message}`)
@@ -146,6 +203,9 @@ for (const pluginName of pluginDirs) {
     pluginHasError = true
     continue
   }
+
+  if (reportDevLeakage(pluginName, manifest.dev, 'manifest.json'))
+    pluginHasError = true
 
   // 2. Required fields: id (or name), name, version
   if (!manifest.name) {
