@@ -1748,43 +1748,51 @@ export class RecommendationEngine {
   private async getPluginCandidates(context: ContextSignal): Promise<CandidateItem[]> {
     if (this.pluginProviders.size === 0) return []
 
-    const candidates: CandidateItem[] = []
+    // Providers run concurrently. Awaiting them in a for-of made
+    // PLUGIN_PROVIDER_TIMEOUT_MS a per-provider budget rather than a shared one,
+    // so six slow plugins blocked the empty-query grid for 1.2s on every open
+    // (#674). Promise.all preserves order, so the candidate sequence is unchanged.
+    const settled = await Promise.all(
+      Array.from(this.pluginProviders.values(), async ({ provider }) => {
+        if (!provider.canProvide(context)) return []
 
-    for (const [_id, { provider }] of this.pluginProviders) {
-      try {
-        if (!provider.canProvide(context)) continue
+        // The timer is cleared when the provider wins. Left armed, each call
+        // leaked a pending 200ms timeout that kept the event loop awake.
+        let timer: ReturnType<typeof setTimeout> | undefined
+        try {
+          const result = await Promise.race([
+            Promise.resolve(provider.getCandidates(context)),
+            new Promise<PluginRecommendCandidate[]>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error(`Provider ${provider.id} timed out`)),
+                PLUGIN_PROVIDER_TIMEOUT_MS
+              )
+            })
+          ])
 
-        const result = await Promise.race([
-          Promise.resolve(provider.getCandidates(context)),
-          new Promise<PluginRecommendCandidate[]>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Provider ${provider.id} timed out`)),
-              PLUGIN_PROVIDER_TIMEOUT_MS
-            )
-          )
-        ])
-
-        for (const candidate of result) {
-          candidates.push({
+          return result.map((candidate) => ({
             sourceId: `plugin-recommend:${provider.id}`,
             itemId: candidate.id,
-            sourceType: 'plugin-recommend',
+            sourceType: 'plugin-recommend' as const,
             usageStats: EMPTY_USAGE_STATS,
-            source: 'plugin',
+            source: 'plugin' as const,
             pluginCandidate: {
               ...candidate,
               providerId: provider.id
             }
+          }))
+        } catch (error) {
+          recommendationLog.warn('Plugin recommendation provider failed', {
+            meta: { providerId: provider.id, ...toErrorMeta(error) }
           })
+          return []
+        } finally {
+          if (timer) clearTimeout(timer)
         }
-      } catch (error) {
-        recommendationLog.warn('Plugin recommendation provider failed', {
-          meta: { providerId: provider.id, ...toErrorMeta(error) }
-        })
-      }
-    }
+      })
+    )
 
-    return candidates
+    return settled.flat()
   }
 
   /**
