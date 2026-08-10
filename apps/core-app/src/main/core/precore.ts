@@ -217,7 +217,7 @@ if (process.platform === 'win32' && release().startsWith('6.1')) app.disableHard
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
-setupSingleInstanceGuard({
+const hasSingleInstanceLock = setupSingleInstanceGuard({
   app,
   startupBenchmarkMode,
   emitSecondaryLaunch: (eventName, payload) => touchEventBus.emit(eventName, payload),
@@ -230,6 +230,18 @@ setupSingleInstanceGuard({
     warn: (message, options) => mainLog.warn(message, options)
   }
 })
+
+/**
+ * True in a second launch, whose app.quit() was issued before Electron was ready.
+ *
+ * The quit does not take effect immediately -- the before-quit handler below used to
+ * preventDefault unconditionally and run an async shutdown -- so whenReady still fired and the
+ * duplicate began loading modules, including the database. Two processes opening the same libsql
+ * file is the failure this guards (#790).
+ */
+export function isDuplicateInstance(): boolean {
+  return !hasSingleInstanceLock
+}
 
 void app.whenReady().then(() => {
   // Installed here rather than in a module: modules load after this, and some of
@@ -311,6 +323,13 @@ app.on('before-quit', (event) => {
   const intent = ensureUserNormalQuitIntent('electron-before-quit')
   markAppQuitting('before-quit')
   if (beforeQuitFlowDone) {
+    return
+  }
+
+  // A duplicate instance has loaded no modules and holds no resources, so there is nothing for
+  // the shutdown flow to flush. Delaying its quit is what let it reach whenReady in the first
+  // place, so it is allowed to exit immediately.
+  if (intent.kind === 'duplicate-instance') {
     return
   }
 
