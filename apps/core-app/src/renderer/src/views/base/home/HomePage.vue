@@ -18,6 +18,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import { toChainSteps } from '~/modules/conversation/chain-steps'
+import { createLatestOnly } from '~/modules/conversation/latest-only'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
@@ -483,6 +484,13 @@ const history = useConversationHistory()
 let conversationId: string | null = null
 
 /**
+ * Which navigation the watcher is currently serving. Two overlapping restores are not sequenced by
+ * anything else, so a slower earlier load used to land after a faster later one and leave the URL
+ * naming one thread while the view showed another (#826).
+ */
+const restoreSequence = createLatestOnly()
+
+/**
  * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
  *
  * Watching the param rather than loading once on mount is what makes the sidebar work: navigating
@@ -492,6 +500,9 @@ watch(
   () => route.params.id,
   async (id) => {
     const target = typeof id === 'string' ? id : null
+    // Claimed before any await, so a plain /home navigation also invalidates a restore in flight -
+    // otherwise it would land on top of the blank thread reset() just produced.
+    const isCurrentRestore = restoreSequence.claim()
     if (!target) {
       conversationId = null
       conversation.reset()
@@ -500,6 +511,8 @@ watch(
     if (target === conversationId) return
 
     const restored = await history.load(target)
+    // A newer navigation started while this load was in flight; it owns the view now.
+    if (!isCurrentRestore()) return
     if (!restored) return
     conversationId = target
     conversation.restore(restored)
