@@ -39,12 +39,12 @@
 来源：[`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)
 
 1. **关闭已验证的 release 和 runtime blocker** — OTA、macOS release-evidence、application-icon acceptance
-2. **完成搜索和跨平台修复** — Windows Everything productionization、search-index split write-path migration（flag 默认 off）
+2. **完成搜索和跨平台修复** — Windows Everything productionization、search-index split write-path migration（flag 自 `cd39bdbf6` / 2026-08-05 起默认 **on**）
 3. **继续其余独立活跃任务** — 按 Trellis task-local PRD 定义的实现顺序
 
 ### 安全门禁（不可绕过）
 
-- `DB_SEARCH_SPLIT_ENABLED` 默认 **off**，开启前必须有 flag-on app run evidence
+- `DB_SEARCH_SPLIT_ENABLED` 自 `cd39bdbf6`（2026-08-05）起默认 **on**，2d.3 write-path 迁移与之同批落地；`TUFF_DB_SEARCH_SPLIT_ENABLED=0` 是回退到共享文件拓扑的应急开关，不是安全默认值
 - 不把 local mock/dry-run/preflight/focused test 写成生产完成
 - SQLite 是本地 SoT；JSON 只允许作为密文同步载荷
 
@@ -68,7 +68,7 @@
 | └ [optimize-clipboard-plugin](.trellis/tasks/07-27-optimize-clipboard-plugin/prd.md) | P1 | planning |
 | [search-crossplatform-audit](.trellis/tasks/07-13-search-crossplatform-audit/prd.md) | P2 | 🔄 审计父任务 [1/3] |
 | ├ [windows-everything-productionization](.trellis/tasks/07-17-windows-everything-productionization/prd.md) | P1 | 🔴 backend gate passed，packaged UI manifest 开放 |
-| └ [migrate-search-index-split-write-paths](.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md) | P1 | 🔴 flag 默认 off，等待全部 writer 迁移 |
+| └ [migrate-search-index-split-write-paths](.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md) | P1 | flag 默认 on（`cd39bdbf6`），剩余 writer 归属待收口 |
 | [unify-ota-update-flow](.trellis/tasks/07-17-unify-ota-update-flow/prd.md) | P2 | 🔄 OTA lifecycle 落地 [4/6]；host acceptance 开放 |
 | ├ [ota-one-click-background-update](.trellis/tasks/07-22-ota-one-click-background-update/prd.md) | P2 | 🔄 in_progress |
 | └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
@@ -160,7 +160,7 @@ talex-touch/
 
 | 类别 | 风险 | 状态 |
 |------|------|------|
-| **数据安全** | `DB_SEARCH_SPLIT_ENABLED` flag-off 前开启会导致 silent data loss | 🔴 默认 off，待 evidence |
+| **数据安全** | `DB_SEARCH_SPLIT_ENABLED` 半迁移状态会导致 silent data loss | 默认 on 自 `cd39bdbf6`；该失效态随 2d.3 写路径迁移一并消失 |
 | **搜索** | B1 语义搜索接而未用 | ✅ 已修（延迟召回二段推送）；余 1 项派生 carve-out 开放 |
 | **搜索** | B2 completion 加权被 sorter 绕过 | ✅ 已修（46 相关用例通过） |
 | **跨平台** | R1 Rust screenshot 模块未接入构建 | 🟠 已审计，开放 |

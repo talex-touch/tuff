@@ -12,6 +12,7 @@
 ## 数据库、发布与跨平台门禁
 
 - **搜索索引分库仍可静默丢数据** — `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认关闭，但环境变量仍可启用半迁移模式：剩余 provider/embedding 写入 `database.db`，读取改走 `search-index.db`。应完成每个 writer 的 worker 归属和 flag-on 应用证据，或在完成前硬禁用运行时开关；不得维持可公开激活的半迁移模式。跟踪：[#331](https://github.com/talex-touch/tuff/issues/331)。
+  > **2026-08-10 更正：** 这条在写下当天就已过时。`cd39bdbf6`（2026-08-05）把该 flag 改为默认 **on**，2d.3 write-path 迁移与之同批落地，本条描述的半迁移失效态不再存在；`TUFF_DB_SEARCH_SPLIT_ENABLED=0` 现在是回退到共享文件拓扑的应急开关。原文保留，因为这是当日的审计记录（#633）。
 - **SQLite writer ownership 分散** — scheduler、retry、worker、admission 与 observer 的职责尚未收敛，新的写路径可绕过策略。完成 #331 后需建立 owner map、显式窄 bypass 与真实锁竞争/恢复测试。跟踪：[#351](https://github.com/talex-touch/tuff/issues/351)。
 - **大目录扫描/对账可 OOM** — worker、client 与 reconciliation 同时物化完整集合；百万级根目录可同时保留约三份数据。需采用有界背压批次，并对 worker/client/reconciliation 峰值、取消和关机释放建立验收。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
 - **macOS 架构发布策略未决** — 需明确 arm64-only，或交付完整 x64/Universal 的签名、公证、清单、下载选择和真机矩阵；不支持的架构必须显式失败，不能下发不兼容资产。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
