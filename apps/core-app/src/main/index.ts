@@ -62,6 +62,10 @@ import './polyfills'
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
 process.env.WS_NO_BUFFER_UTIL = 'true'
 
+// No bypassCSP: renderer/index.html already names `tfile:` in default-src, connect-src,
+// img-src and media-src, so the capability is granted by the policy rather than exempted from
+// it. Keeping the bypass left tfile: as an open hole that survives any future CSP tightening
+// (#785).
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'tfile',
@@ -70,7 +74,6 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       stream: true,
-      bypassCSP: true,
       corsEnabled: true
     }
   }
