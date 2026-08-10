@@ -229,36 +229,6 @@ export class QueryCompletionService {
     }
   }
 
-  /** Remove completion records older than retention period */
-  async cleanupOldCompletions(retentionDays = 90): Promise<number> {
-    const timer = log.time('cleanupOldCompletions')
-    const db = this.dbUtils.getDb()
-
-    try {
-      const expirationDate = new Date()
-      expirationDate.setDate(expirationDate.getDate() - retentionDays)
-
-      await scheduleDbWrite(
-        'query-completions.cleanup',
-        () =>
-          db
-            .delete(schema.queryCompletions)
-            .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`),
-        { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
-      )
-
-      timer.end('info')
-      log.info('Cleaned up old completions', {
-        meta: { cutoffDate: expirationDate.toISOString() }
-      })
-
-      return 0
-    } catch (error) {
-      log.error('Failed to cleanup old completions', { error })
-      return 0
-    }
-  }
-
   getStats() {
     return { ...this.stats }
   }
