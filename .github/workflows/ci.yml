@@ -124,6 +124,11 @@ jobs:
       - name: Verify search-index writer ownership
         run: pnpm -C apps/core-app check:search-index-writers && pnpm -C apps/core-app check:search-index-writers:self-test
 
+      # Runs here rather than as a core-app vitest file: the App suites job is
+      # continue-on-error, so a test there cannot fail a PR (#915).
+      - name: Verify permission API mapping coverage
+        run: pnpm -C apps/core-app check:permission-api-mappings && pnpm -C apps/core-app check:permission-api-mappings:self-test
+
       # The script existed but no workflow ran it (#555). ~1s: re-derives the sensitive-data
       # inventory's 28 evidence anchors from the TypeScript AST, so it needs the root
       # `typescript` dependency and nothing else.
