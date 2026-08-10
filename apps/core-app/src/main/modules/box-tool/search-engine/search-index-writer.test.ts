@@ -141,7 +141,9 @@ describe('SearchIndexWriter worker init failure', () => {
     // search-index.db. The rejection must flow to the initialize() caller
     // exactly once, flag the writer unavailable, and make every later write
     // fail fast — never silently reopen another database file.
-    const initError = new Error('SQLITE_ERROR: table keyword_mappings has no column named provider_id')
+    const initError = new Error(
+      'SQLITE_ERROR: table keyword_mappings has no column named provider_id'
+    )
     const client = {
       init: vi.fn<(dbPath: string) => Promise<void>>(async () => {
         throw initError
@@ -154,9 +156,9 @@ describe('SearchIndexWriter worker init failure', () => {
     await expect(writer.initialize('/tmp/search-index.db')).rejects.toBe(initError)
     expect(writer.getStatus().readiness).toBe('failed')
 
-    await expect(writer.indexItems('file-provider', [indexedItem('file:/tmp/one.txt')])).rejects.toBe(
-      initError
-    )
+    await expect(
+      writer.indexItems('file-provider', [indexedItem('file:/tmp/one.txt')])
+    ).rejects.toBe(initError)
     expect(client.init).toHaveBeenCalledTimes(1)
     expect(client.applyProviderItems).not.toHaveBeenCalled()
 

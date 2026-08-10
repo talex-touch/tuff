@@ -191,74 +191,66 @@ describe('initSearchDatabase schema parity with the primary fixups', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  it(
-    'creates search-index.db with provider_id and source-scoped scan_progress',
-    async () => {
-      const module = new DatabaseModule()
-      const internals = moduleInternals(module)
+  it('creates search-index.db with provider_id and source-scoped scan_progress', async () => {
+    const module = new DatabaseModule()
+    const internals = moduleInternals(module)
 
-      await internals.initSearchDatabase(dir)
+    await internals.initSearchDatabase(dir)
 
-      expect(internals.searchInitialized).toBe(true)
-      expect(internals.searchDbPath).toBe(join(dir, 'search-index.db'))
-      const searchClient = internals.searchClient
-      expect(searchClient).not.toBeNull()
-      try {
-        expect(await hasProviderIdColumn(searchClient!)).toBe(true)
-        expect(await readScanProgressPrimaryKey(searchClient!)).toEqual(['source_id', 'path'])
-        // Regression: the statement that killed the V1 worker init must work
-        // against the fresh search file.
-        await expect(searchClient!.execute(V1_FAILING_INDEX_DDL)).resolves.toBeDefined()
-        // Perf-index parity: embeddings are split-routed, so the search file
-        // needs the same (source_type, source_id) index the primary gets from
-        // ensureSearchPerformanceIndexes().
-        const perfIndex = await searchClient!.execute(
-          "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_embeddings_source' LIMIT 1"
-        )
-        expect(perfIndex.rows).toHaveLength(1)
-      } finally {
-        searchClient?.close()
-      }
-    },
-    60_000
-  )
+    expect(internals.searchInitialized).toBe(true)
+    expect(internals.searchDbPath).toBe(join(dir, 'search-index.db'))
+    const searchClient = internals.searchClient
+    expect(searchClient).not.toBeNull()
+    try {
+      expect(await hasProviderIdColumn(searchClient!)).toBe(true)
+      expect(await readScanProgressPrimaryKey(searchClient!)).toEqual(['source_id', 'path'])
+      // Regression: the statement that killed the V1 worker init must work
+      // against the fresh search file.
+      await expect(searchClient!.execute(V1_FAILING_INDEX_DDL)).resolves.toBeDefined()
+      // Perf-index parity: embeddings are split-routed, so the search file
+      // needs the same (source_type, source_id) index the primary gets from
+      // ensureSearchPerformanceIndexes().
+      const perfIndex = await searchClient!.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_embeddings_source' LIMIT 1"
+      )
+      expect(perfIndex.rows).toHaveLength(1)
+    } finally {
+      searchClient?.close()
+    }
+  }, 60_000)
 
-  it(
-    'fails search init closed and falls back when the scan_progress fixup is blocked',
-    async () => {
-      // Pre-migrate the search file, then poison scan_progress with a blank
-      // path row so the source-scope plan reports 'blocked'.
-      const searchDbPath = join(dir, 'search-index.db')
-      const seedClient = createClient({ url: `file:${searchDbPath}` })
-      const testDir = dirname(fileURLToPath(import.meta.url))
-      const migrationsFolder = resolve(testDir, '../../../../resources/db/migrations')
-      await migrate(drizzle(seedClient), { migrationsFolder })
-      await seedClient.execute("INSERT INTO scan_progress (path, last_scanned) VALUES ('', 1)")
-      seedClient.close()
+  it('fails search init closed and falls back when the scan_progress fixup is blocked', async () => {
+    // Pre-migrate the search file, then poison scan_progress with a blank
+    // path row so the source-scope plan reports 'blocked'.
+    const searchDbPath = join(dir, 'search-index.db')
+    const seedClient = createClient({ url: `file:${searchDbPath}` })
+    const testDir = dirname(fileURLToPath(import.meta.url))
+    const migrationsFolder = resolve(testDir, '../../../../resources/db/migrations')
+    await migrate(drizzle(seedClient), { migrationsFolder })
+    await seedClient.execute("INSERT INTO scan_progress (path, last_scanned) VALUES ('', 1)")
+    seedClient.close()
 
-      const module = new DatabaseModule()
-      const internals = moduleInternals(module)
+    const module = new DatabaseModule()
+    const internals = moduleInternals(module)
 
-      await internals.initSearchDatabase(dir)
+    await internals.initSearchDatabase(dir)
 
-      // Fixup failure must follow the existing fallback: no split, primary
-      // topology preserved (this is exactly the flag-off behavior).
-      expect(internals.searchInitialized).toBe(false)
-      expect(internals.searchClient).toBeNull()
-      expect(internals.searchDbPath).toBe('')
-      expect(dbLogMock.warn).toHaveBeenCalledWith(
-        'scan_progress source-scope migration blocked on search database',
-        expect.objectContaining({
-          meta: expect.objectContaining({
-            blockers: expect.arrayContaining(['scan_progress blank path rows'])
-          })
+    // Fixup failure must follow the existing fallback: no split, primary
+    // topology preserved (this is exactly the flag-off behavior).
+    expect(internals.searchInitialized).toBe(false)
+    expect(internals.searchClient).toBeNull()
+    expect(internals.searchDbPath).toBe('')
+    expect(dbLogMock.warn).toHaveBeenCalledWith(
+      'scan_progress source-scope migration blocked on search database',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          blockers: expect.arrayContaining(['scan_progress blank path rows'])
         })
-      )
-      expect(dbLogMock.warn).toHaveBeenCalledWith(
-        'Search index database initialization failed; falling back to primary DB',
-        expect.objectContaining({ error: expect.anything() })
-      )
-    },
-    60_000
-  )
+      })
+    )
+    expect(dbLogMock.warn).toHaveBeenCalledWith(
+      'Search index database initialization failed; falling back to primary DB',
+      expect.objectContaining({ error: expect.anything() })
+    )
+  }, 60_000)
 })
