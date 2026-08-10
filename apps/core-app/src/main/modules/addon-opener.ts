@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { APP_SCHEMA } from '../config/default'
 import { installDevPluginFromPath } from '../modules/plugin/dev-plugin-installer'
@@ -267,7 +268,26 @@ export class AddonOpenerModule extends BaseModule {
 
     this.transportDisposers.push(transport.on(OpenerEvents.install.request, installPluginHandler))
 
-    const installDevPluginHandler = async (payload: PluginDevInstallRequest) => {
+    const installDevPluginHandler = async (
+      payload: PluginDevInstallRequest,
+      context?: HandlerContext
+    ) => {
+      // Installing from a caller-supplied path registers a new plugin with its own permissions.
+      // A plugin view could point this at a directory it had staged elsewhere on disk and get a
+      // second, attacker-authored plugin installed -- lateral movement out of its own sandbox
+      // (#791). It is a development affordance, so it is closed in both directions: not from a
+      // plugin, and not in a packaged build at all.
+      if (context?.plugin) {
+        addonOpenerLog.warn('Blocked dev plugin install requested by a plugin', {
+          meta: { plugin: context.plugin.name }
+        })
+        return { status: 'error', error: 'HOST_ONLY' }
+      }
+      if (app.isPackaged) {
+        addonOpenerLog.warn('Blocked dev plugin install in a packaged build')
+        return { status: 'error', error: 'DEV_ONLY' }
+      }
+
       const sourcePath = payload?.path
       if (!sourcePath) {
         return { status: 'error', error: 'INVALID_PATH' }
