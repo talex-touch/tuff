@@ -80,11 +80,24 @@ function call(
   })
 }
 
+/**
+ * The gateway's JSON body as a test reads it.
+ *
+ * `JSON.parse` returns `any`, and the assertions reach fields the helper cannot know about, so this
+ * keeps indexing ergonomic without spreading `any` — an unknown key is `unknown`, which still has
+ * to be narrowed before it is used as anything.
+ */
+interface GatewayJson {
+  [key: string]: unknown
+  isError?: boolean
+  output?: string
+}
+
 async function invoke(
   gateway: ToolGatewayHandle,
   body: unknown,
   token = gateway.token
-): Promise<{ status: number; json: any }> {
+): Promise<{ status: number; json: GatewayJson }> {
   const response = await call(gateway.url, { token, body })
   return {
     status: response.status,

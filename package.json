@@ -215,7 +215,7 @@
   },
   "lint-staged": {
     "apps/core-app/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --no-warn-ignored"
+      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "apps/nexus/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"apps/nexus\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
