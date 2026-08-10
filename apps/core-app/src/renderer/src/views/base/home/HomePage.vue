@@ -14,6 +14,8 @@ import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
@@ -112,6 +114,23 @@ const autoContext = computed({
 const agentTools = useAgentTools()
 
 /**
+ * Mirrors the flag to main and puts it back if main refuses.
+ *
+ * The setter wrote the persisted flag and discarded both the result and the rejection, so a
+ * failed sync (gateway port in use, handler not registered) left the pill reading `on` and
+ * `aria-pressed="true"` across restarts while the tool gateway was shut — every tool call the
+ * model attempted then failed (#835).
+ */
+const syncAgentTools = createRollbackSync<boolean>({
+  sync: (value) => agentTools.setEnabled(value),
+  rollback: (previous) => {
+    if (appSetting.tools) appSetting.tools.agentTools = previous
+    toast.error(t('home.error.agentToolsSync'))
+  },
+  onError: (error) => homeLog.error('Failed to sync agent tools with main', error)
+})
+
+/**
  * Whether the assistant may run tools. Persisted in `appSetting` like Auto
  * Context, and mirrored to main on change — the gateway only opens, and the
  * allowlist only reaches `pi`, once this is on.
@@ -119,8 +138,9 @@ const agentTools = useAgentTools()
 const agentToolsEnabled = computed({
   get: () => appSetting.tools?.agentTools === true,
   set: (value: boolean) => {
+    const previous = appSetting.tools?.agentTools === true
     if (appSetting.tools) appSetting.tools.agentTools = value
-    void agentTools.setEnabled(value)
+    void syncAgentTools(value, previous)
   }
 })
 
