@@ -25,6 +25,17 @@ class NativeCarrierError extends Error {
     this.code = code
     this.category = options.category ?? 'availability'
     this.retryable = options.retryable ?? false
+    // The native error is the only place the real code and message survive; without it a caller
+    // sees 'Native carrier invocation failed' and nothing about why (#850). Non-enumerable so it
+    // does not widen anything that serialises this error.
+    if (options.cause !== undefined) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        configurable: true,
+        enumerable: false,
+        writable: true,
+      })
+    }
     if (options.carrierId)
       this.carrierId = options.carrierId
     if (options.requestId)
@@ -69,12 +80,13 @@ class NapiCarrier {
     try {
       encoded = this.binding.nativeProtocolV1Handshake(encodeControl(hello))
     }
-    catch {
+    catch (error) {
       this.safeLog('warn', 'handshake-failed', { code: 'CARRIER_HANDSHAKE_FAILED' })
       throw carrierError(
         'CARRIER_HANDSHAKE_FAILED',
         'Native carrier handshake failed',
         this.id,
+        { cause: error },
       )
     }
 
@@ -82,11 +94,12 @@ class NapiCarrier {
     try {
       snapshot = decodeControl(encoded)
     }
-    catch {
+    catch (error) {
       throw carrierError(
         'CARRIER_PROTOCOL_VIOLATION',
         'Native carrier returned an invalid handshake',
         this.id,
+        { cause: error },
       )
     }
     if (snapshot.kind !== 'server_hello') {
@@ -127,7 +140,7 @@ class NapiCarrier {
         attachments,
       )
     }
-    catch {
+    catch (error) {
       this.safeLog('warn', 'invoke-failed', {
         code: 'CARRIER_INVOKE_FAILED',
         requestId: safeIdentifier(control.requestId),
@@ -136,7 +149,7 @@ class NapiCarrier {
         'CARRIER_INVOKE_FAILED',
         'Native carrier invocation failed',
         this.id,
-        { requestId: control.requestId },
+        { requestId: control.requestId, cause: error },
       )
     }
     const packet = this.decodePacket(raw, 'invoke')
@@ -181,13 +194,13 @@ class NapiCarrier {
         raw => this.handleFrame(state, raw),
       )
     }
-    catch {
+    catch (error) {
       this.streams.delete(streamId)
       throw carrierError(
         'CARRIER_OPEN_STREAM_FAILED',
         'Native carrier could not open the stream',
         this.id,
-        { requestId: control.requestId, streamId },
+        { requestId: control.requestId, streamId, cause: error },
       )
     }
     const accepted = this.decodePacket(rawAccepted, 'open-stream')
@@ -247,12 +260,14 @@ class NapiCarrier {
       }))
       return true
     }
-    catch {
+    catch (error) {
       throw carrierError(
         'CARRIER_CANCEL_FAILED',
         'Native cancellation failed',
         this.id,
-        targetType === 'stream' ? { streamId: id } : { requestId: id },
+        targetType === 'stream'
+          ? { streamId: id, cause: error }
+          : { requestId: id, cause: error },
       )
     }
   }
@@ -291,11 +306,12 @@ class NapiCarrier {
     try {
       await this.binding.nativeProtocolV1Dispose()
     }
-    catch {
+    catch (error) {
       throw carrierError(
         'CARRIER_DISPOSE_FAILED',
         'Native carrier disposal failed',
         this.id,
+        { cause: error },
       )
     }
     finally {
@@ -396,7 +412,7 @@ class NapiCarrier {
     try {
       return validatePacket(raw.control, raw.attachments)
     }
-    catch {
+    catch (error) {
       this.safeLog('warn', 'packet-invalid', {
         code: 'CARRIER_PROTOCOL_VIOLATION',
         source,
@@ -405,6 +421,7 @@ class NapiCarrier {
         'CARRIER_PROTOCOL_VIOLATION',
         'Native carrier returned an invalid packet',
         this.id,
+        { cause: error },
       )
     }
   }
@@ -464,6 +481,7 @@ function carrierError(code, message, carrierId, correlation = {}) {
     carrierId,
     requestId: safeIdentifier(correlation.requestId),
     streamId: safeIdentifier(correlation.streamId),
+    cause: correlation.cause,
   })
 }
 
