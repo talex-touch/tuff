@@ -799,6 +799,57 @@ describe('CommonChannelModule private helpers', () => {
     expect(shell.openExternal).toHaveBeenCalledWith('https://example.com/docs')
   })
 
+  it('debug.openDevTools 拒绝插件调用,并在打包构建中拒绝一切调用', async () => {
+    const { app } = await import('electron')
+    const openDevTools = vi.fn()
+    const handlers = new Map<string, (payload: unknown, context: unknown) => unknown>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, openDevTools, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const handler = handlers.get(AppEvents.debug.openDevTools.toEventName())
+    expect(handler).toBeTypeOf('function')
+
+    // A plugin view must never reach it, packaged or not.
+    expect(() => handler?.(undefined, { plugin: { name: 'third-party' } })).toThrow(
+      'HOST_ONLY_HANDLER'
+    )
+    expect(openDevTools).not.toHaveBeenCalled()
+
+    // The host can still open DevTools during development.
+    handler?.(undefined, {})
+    expect(openDevTools).toHaveBeenCalledTimes(1)
+
+    // ...but not once the app is packaged.
+    vi.mocked(app).isPackaged = true
+    try {
+      handler?.(undefined, {})
+      expect(openDevTools).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.mocked(app).isPackaged = false
+    }
+  })
+
   it('maps each supported desktop wallpaper backend output to a usable path', async () => {
     const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
     const transport = {
