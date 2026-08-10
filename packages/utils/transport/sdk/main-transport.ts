@@ -96,6 +96,18 @@ type LocalHandler = (
 ) => unknown | Promise<unknown>;
 const localHandlers = new Map<string, Set<LocalHandler>>();
 
+/**
+ * Whether an invoke arrived from a frame nested inside another document.
+ *
+ * `senderFrame` is null once the frame has been destroyed — a race on window close rather than an
+ * attack — so that case is left to the handler, which sees a dead sender anyway. Only a frame that
+ * has a parent is refused.
+ */
+export function isSubframeSender(event: Pick<IpcMainInvokeEvent, 'senderFrame'>): boolean {
+  const frame = event.senderFrame;
+  return Boolean(frame && frame.parent);
+}
+
 function registerInvokeHandler<TReq, TRes>(
   eventName: string,
   handler: InvokeHandler<TReq, TRes>,
@@ -106,6 +118,19 @@ function registerInvokeHandler<TReq, TRes>(
     invokeHandlers.set(eventName, handlers);
 
     ipcMain.handle(eventName, async (event, payload) => {
+      // Subframes cannot invoke. Every transport event opens a global ipcMain.handle channel, so a
+      // frame that can name one reaches a privileged main-process handler directly, skipping the
+      // identity resolution the channel-core path performs (#692). Nothing legitimate invokes from
+      // a subframe: the renderer has no <iframe>, and plugin surfaces are separate WebContents
+      // whose own main frame is top-level. So this costs nothing today and closes the case where a
+      // plugin surface later embeds remote content.
+      //
+      // Not a full answer to #692 — it does not establish *which* window a top-level frame belongs
+      // to. That needs a trusted-sender registry, tracked on the issue.
+      if (isSubframeSender(event)) {
+        return undefined;
+      }
+
       const active = invokeHandlers.get(eventName);
       if (!active || active.size === 0) {
         return undefined;
