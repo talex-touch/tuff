@@ -12,21 +12,31 @@ import zh from '../../i18n/locales/route/zh/dashboard'
  * text rendered to an English user (#682).
  *
  * That fallback is exactly why this has to be checked rather than eyeballed: the
- * page renders fine either way. 23 keys were missing from BOTH locales; zh simply
- * had no visible symptom because the fallback literal was already Chinese.
+ * page renders fine either way. notifications.vue was missing 23 keys and team.vue
+ * 39, in BOTH locales — zh simply had no visible symptom, because the fallback
+ * literal was already Chinese (#682, #683).
  */
-
-const PAGE = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../pages/dashboard/notifications.vue',
-)
 
 const KEY_PREFIX = 'dashboard.'
 
-function usedKeys(): string[] {
-  const source = readFileSync(PAGE, 'utf8')
-  const matches = source.matchAll(/t\(\s*'(dashboard\.notifications\.[\w.]+)'/g)
-  return [...new Set([...matches].map(match => match[1]!))]
+const PAGES = [
+  { file: 'notifications.vue', namespace: 'dashboard.notifications', minKeys: 40 },
+  { file: 'team.vue', namespace: 'dashboard.team', minKeys: 40 },
+] as const
+
+/**
+ * Matches any quoted occurrence of the key, not just `t(key, 'default')`.
+ * team.vue reaches `dashboard.team.seatUsage` as `t(key, { used, total })` with no
+ * default at all — a shape the narrower pattern misses, and the one with the worst
+ * symptom, since a missing key there renders the raw key path to every locale.
+ */
+function usedKeys(page: (typeof PAGES)[number]): string[] {
+  const source = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../pages/dashboard', page.file),
+    'utf8',
+  )
+  const pattern = new RegExp(`['"\`](${page.namespace.replace('.', '\\.')}\\.[\\w.]+)['"\`]`, 'g')
+  return [...new Set([...source.matchAll(pattern)].map(match => match[1]!))]
 }
 
 function resolveKey(tree: unknown, path: string): unknown {
@@ -36,26 +46,25 @@ function resolveKey(tree: unknown, path: string): unknown {
   }, tree)
 }
 
-function missingIn(locale: unknown): string[] {
-  return usedKeys().filter(
+function missingIn(locale: unknown, page: (typeof PAGES)[number]): string[] {
+  return usedKeys(page).filter(
     key => typeof resolveKey(locale, key.slice(KEY_PREFIX.length)) !== 'string',
   )
 }
 
-describe('dashboard notifications i18n coverage', () => {
-  it('finds the keys to check at all', () => {
+describe('dashboard i18n key coverage', () => {
+  it.each(PAGES)('finds the keys to check at all in $file', (page) => {
     // Positive control. If the regex ever stops matching — the page switches to
     // $t, or to a computed key — every assertion below would pass vacuously.
-    expect(usedKeys().length).toBeGreaterThan(40)
-    expect(usedKeys()).toContain('dashboard.notifications.title')
+    expect(usedKeys(page).length).toBeGreaterThan(page.minKeys)
   })
 
-  it('defines every key the page uses in English', () => {
-    expect(missingIn(en)).toEqual([])
+  it.each(PAGES)('defines every key $file uses in English', (page) => {
+    expect(missingIn(en, page)).toEqual([])
   })
 
-  it('defines every key the page uses in Chinese', () => {
-    expect(missingIn(zh)).toEqual([])
+  it.each(PAGES)('defines every key $file uses in Chinese', (page) => {
+    expect(missingIn(zh, page)).toEqual([])
   })
 
   it('keeps the relative-time values usable as suffixes', () => {
