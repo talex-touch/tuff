@@ -1,5 +1,5 @@
 import type { DbUtils } from '../../../db/utils'
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { scheduleDbWrite } from '../../../db/db-write'
 import { parseStoredTimeBuckets } from './item-time-stats-buckets'
@@ -14,6 +14,9 @@ const log = createLogger('TimeStatsAggregator')
  * 多行 VALUES 语句无界增长。
  */
 const AGGREGATE_CHUNK_SIZE = 500
+
+/** 一次读进内存的日志行数上限。 */
+const LOG_PAGE_SIZE = 5000
 
 /**
  * Opt-in switch for the destructive full rebuild below. Off by default: the
@@ -59,58 +62,79 @@ export class TimeStatsAggregator {
 
       const db = this.dbUtils.getDb()
 
-      // 1. 查询所有执行日志
-      const logs = await db
-        .select({
-          sourceId: schema.usageLogs.source,
-          itemId: schema.usageLogs.itemId,
-          timestamp: schema.usageLogs.timestamp
-        })
-        .from(schema.usageLogs)
-        .where(eq(schema.usageLogs.action, 'execute'))
-        .orderBy(desc(schema.usageLogs.timestamp))
-        .all()
-
-      log.debug(`Found ${logs.length} execution logs`)
-
-      if (logs.length === 0) return
-
-      // 2. 构建统计数据 — 每 50 行让出事件循环
+      // 1-2. 逐页读取执行日志并就地折叠进桶里。
+      //
+      // 之前是一次 .all() 把整张 usage_logs 的 execute 行物化成数组：保留窗口调大的
+      // 老装机会累积上百万行，而这条路径可以被 IPC 强制触发，等于在主进程里一次性
+      // 建出上百万个行对象。改成按主键 keyset 分页（id > lastId），常驻内存只剩一页
+      // 加上 statsMap —— 后者的规模由「去重后的 item 数」决定，与日志行数无关。
+      //
+      // 没有按 issue 建议改成 SQL GROUP BY：下面的 getHours()/getDay() 取的是本地时区，
+      // 而 SQLite 的 strftime 按 UTC 分组，换过去会静默改变非 UTC 用户的分桶结果。
       const statsMap = new Map<string, ItemTimeStatsData>()
+      let totalLogs = 0
+      let lastId = 0
+      let rowsSinceYield = 0
 
-      for (let i = 0; i < logs.length; i++) {
-        const entry = logs[i]
-        const key = `${entry.sourceId}:${entry.itemId}`
-        const date = new Date(entry.timestamp)
-        const hour = date.getHours()
-        const dayOfWeek = date.getDay()
-        const timeSlot = resolveTimeSlot(hour)
-
-        if (!statsMap.has(key)) {
-          statsMap.set(key, {
-            sourceId: entry.sourceId,
-            itemId: entry.itemId,
-            hourDistribution: Array.from({ length: 24 }, () => 0),
-            dayOfWeekDistribution: Array.from({ length: 7 }, () => 0),
-            timeSlotDistribution: {
-              morning: 0,
-              afternoon: 0,
-              evening: 0,
-              night: 0
-            }
+      for (;;) {
+        const page = await db
+          .select({
+            id: schema.usageLogs.id,
+            sourceId: schema.usageLogs.source,
+            itemId: schema.usageLogs.itemId,
+            timestamp: schema.usageLogs.timestamp
           })
+          .from(schema.usageLogs)
+          .where(and(eq(schema.usageLogs.action, 'execute'), gt(schema.usageLogs.id, lastId)))
+          .orderBy(asc(schema.usageLogs.id))
+          .limit(LOG_PAGE_SIZE)
+          .all()
+
+        if (page.length === 0) break
+
+        lastId = page[page.length - 1].id
+        totalLogs += page.length
+
+        for (const entry of page) {
+          const key = `${entry.sourceId}:${entry.itemId}`
+          const date = new Date(entry.timestamp)
+          const hour = date.getHours()
+          const dayOfWeek = date.getDay()
+          const timeSlot = resolveTimeSlot(hour)
+
+          if (!statsMap.has(key)) {
+            statsMap.set(key, {
+              sourceId: entry.sourceId,
+              itemId: entry.itemId,
+              hourDistribution: Array.from({ length: 24 }, () => 0),
+              dayOfWeekDistribution: Array.from({ length: 7 }, () => 0),
+              timeSlotDistribution: {
+                morning: 0,
+                afternoon: 0,
+                evening: 0,
+                night: 0
+              }
+            })
+          }
+
+          const stats = statsMap.get(key)!
+          stats.hourDistribution[hour]++
+          stats.dayOfWeekDistribution[dayOfWeek]++
+          stats.timeSlotDistribution[timeSlot]++
+
+          // 每 50 行让出事件循环，避免连续同步操作累积阻塞
+          if (++rowsSinceYield >= 50) {
+            rowsSinceYield = 0
+            await new Promise<void>((resolve) => setImmediate(resolve))
+          }
         }
 
-        const stats = statsMap.get(key)!
-        stats.hourDistribution[hour]++
-        stats.dayOfWeekDistribution[dayOfWeek]++
-        stats.timeSlotDistribution[timeSlot]++
-
-        // 每 50 行让出事件循环，避免连续同步操作累积阻塞
-        if ((i + 1) % 50 === 0) {
-          await new Promise<void>((resolve) => setImmediate(resolve))
-        }
+        if (page.length < LOG_PAGE_SIZE) break
       }
+
+      log.debug(`Found ${totalLogs} execution logs`)
+
+      if (totalLogs === 0) return
 
       // 3. 批量写入数据库 — 分块提交，每块自成一次 scheduleDbWrite。
       //    之前这里是「一个事务体内部每 20 条 await setImmediate」：让出事件循环时
