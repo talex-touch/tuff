@@ -33,6 +33,7 @@ jobs:
   protocol:
     name: Protocol (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
