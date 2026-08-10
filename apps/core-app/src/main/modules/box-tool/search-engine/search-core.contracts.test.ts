@@ -413,6 +413,28 @@ describe('SearchEngineCore facade contracts', () => {
     if (!lifecycle.destroying) await core.destroy()
   })
 
+  it('releases first-result metrics even when telemetry is disabled', () => {
+    // getSentryService is mocked with isTelemetryEnabled() === false, which is
+    // the privacy default. The delete used to sit after that early return, so
+    // the entry survived every execute on a privacy-default install (#669).
+    const internals = core as unknown as {
+      searchFirstResultMetrics: Map<string, unknown>
+      queueExecuteTelemetry: (sessionId: string, item: unknown, startedAt?: number) => void
+    }
+
+    internals.searchFirstResultMetrics.set('session-1', { sessionId: 'session-1' })
+    expect(internals.searchFirstResultMetrics.has('session-1')).toBe(true)
+
+    internals.queueExecuteTelemetry('session-1', {
+      id: 'item-1',
+      kind: 'app',
+      source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+      render: { mode: 'default', basic: { title: 'Demo' } }
+    })
+
+    expect(internals.searchFirstResultMetrics.has('session-1')).toBe(false)
+  })
+
   it('injects the App runtime delegate through SearchCore initialization', () => {
     expect(state.appProviderRuntimeDelegate).toHaveBeenCalledWith(
       expect.objectContaining({
