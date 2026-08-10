@@ -1,5 +1,5 @@
 import type { DbUtils } from '../../../db/utils'
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { scheduleDbWrite } from '../../../db/db-write'
 import { parseStoredTimeBuckets } from './item-time-stats-buckets'
@@ -8,6 +8,12 @@ import { enterPerfContext } from '../../../utils/perf-context'
 import { resolveTimeSlot } from './item-time-stats-buckets'
 
 const log = createLogger('TimeStatsAggregator')
+
+/**
+ * 每次写事务的上限。与 backfillTrendDay 一致：足够摊薄事务开销，又不会让单条
+ * 多行 VALUES 语句无界增长。
+ */
+const AGGREGATE_CHUNK_SIZE = 500
 
 /**
  * Opt-in switch for the destructive full rebuild below. Off by default: the
@@ -106,48 +112,49 @@ export class TimeStatsAggregator {
         }
       }
 
-      // 3. 批量写入数据库 — 抽出事务体，通过统一的单写入队列 (scheduleDbWrite)
-      //    串行化；SQLITE_BUSY 由调度器自身以「延迟重新入队」处理（退避发生在
-      //    排队期间，不占用写循环、不阻塞事件循环）。
+      // 3. 批量写入数据库 — 分块提交，每块自成一次 scheduleDbWrite。
+      //    之前这里是「一个事务体内部每 20 条 await setImmediate」：让出事件循环时
+      //    WAL 写锁仍被握着，整个重建期间 search-index worker 的并发写都会撞
+      //    SQLITE_BUSY。改为 backfillTrendDay 同款分块写法后，写锁只在单块内持有，
+      //    让步发生在两次事务之间。
       let updatedCount = 0
       const allStats = Array.from(statsMap.values())
+      const now = new Date()
+      const values = allStats.map((stats) => ({
+        sourceId: stats.sourceId,
+        itemId: stats.itemId,
+        hourDistribution: JSON.stringify(stats.hourDistribution),
+        dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
+        timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
+        lastUpdated: now
+      }))
 
-      const writeAggregatedStats = (): Promise<void> =>
-        db.transaction(async (tx) => {
-          for (let i = 0; i < allStats.length; i++) {
-            const stats = allStats[i]
-            await tx
+      for (let i = 0; i < values.length; i += AGGREGATE_CHUNK_SIZE) {
+        const chunk = values.slice(i, i + AGGREGATE_CHUNK_SIZE)
+        await scheduleDbWrite(
+          'usage.time-stats.aggregate',
+          () =>
+            db
               .insert(schema.itemTimeStats)
-              .values({
-                sourceId: stats.sourceId,
-                itemId: stats.itemId,
-                hourDistribution: JSON.stringify(stats.hourDistribution),
-                dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
-                timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
-                lastUpdated: new Date()
-              })
+              .values(chunk)
               .onConflictDoUpdate({
                 target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
                 set: {
-                  hourDistribution: JSON.stringify(stats.hourDistribution),
-                  dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
-                  timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
-                  lastUpdated: new Date()
+                  hourDistribution: sql`excluded.hour_distribution`,
+                  dayOfWeekDistribution: sql`excluded.day_of_week_distribution`,
+                  timeSlotDistribution: sql`excluded.time_slot_distribution`,
+                  lastUpdated: sql`excluded.last_updated`
                 }
-              })
-            updatedCount++
+              }),
+          { priority: 'background', dropPolicy: 'none' }
+        )
+        updatedCount += chunk.length
 
-            // 每 20 条 upsert 让出事件循环
-            if ((i + 1) % 20 === 0) {
-              await new Promise<void>((resolve) => setImmediate(resolve))
-            }
-          }
-        })
-
-      await scheduleDbWrite('usage.time-stats.aggregate', writeAggregatedStats, {
-        priority: 'background',
-        dropPolicy: 'none'
-      })
+        // 让步放在两次事务之间，此时没有写锁在手。
+        if (i + AGGREGATE_CHUNK_SIZE < values.length) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      }
 
       const duration = performance.now() - startTime
       log.debug(`Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`)
