@@ -761,6 +761,22 @@ export class DatabaseModule extends BaseModule {
     return this.parseCount(first.cnt ?? first['count(*)'])
   }
 
+  /**
+   * Column names of `tableName`, in that database's physical order.
+   *
+   * The aux copy used to be `SELECT *`, which is positional. Physical order is set by the
+   * migration history, not by schema.ts: `ALTER TABLE ... ADD COLUMN` appends, so `next_retry_at`
+   * (0001), `plugin_version` (0007) and `retention_protected` (0008) sit last in the main
+   * database while the freshly written aux DDL places them mid-table. Copying positionally wrote
+   * those values into whichever column happened to share the index (#637).
+   */
+  private async getTableColumns(client: Client, tableName: string): Promise<string[]> {
+    const rs = await client.execute(`PRAGMA table_info(${tableName})`)
+    return (rs.rows ?? [])
+      .map((row) => (row as unknown as Record<string, unknown>).name)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
+  }
+
   private async hasAuxMigrationMarker(): Promise<boolean> {
     if (!this.db) return false
     try {
@@ -954,7 +970,32 @@ export class DatabaseModule extends BaseModule {
     await this.auxClient.execute(`ATTACH DATABASE '${escapedMainPath}' AS coredb`)
     try {
       for (const table of AUX_COPY_TABLES) {
-        await this.auxClient.execute(`INSERT OR IGNORE INTO ${table} SELECT * FROM coredb.${table}`)
+        // Copy by name, never positionally. Only columns the two schemas share are moved; one
+        // side having an extra column is survivable, silently shifting values is not.
+        const [targetColumns, sourceColumns] = await Promise.all([
+          this.getTableColumns(this.auxClient, table),
+          this.getTableColumns(this.auxClient, `coredb.${table}`)
+        ])
+        const shared = targetColumns.filter((column) => sourceColumns.includes(column))
+        if (shared.length === 0) {
+          dbLog.warn(`Aux migration found no shared columns for ${table}; skipping copy`, {
+            meta: { targetColumns, sourceColumns }
+          })
+          continue
+        }
+        if (shared.length !== targetColumns.length || shared.length !== sourceColumns.length) {
+          dbLog.warn(`Aux migration copying a column subset for ${table}`, {
+            meta: {
+              copied: shared.length,
+              targetOnly: targetColumns.filter((c) => !sourceColumns.includes(c)),
+              sourceOnly: sourceColumns.filter((c) => !targetColumns.includes(c))
+            }
+          })
+        }
+        const columnList = shared.map((column) => `"${column}"`).join(', ')
+        await this.auxClient.execute(
+          `INSERT OR IGNORE INTO ${table} (${columnList}) SELECT ${columnList} FROM coredb.${table}`
+        )
         const [sourceCount, targetCount] = await Promise.all([
           this.getTableCount(this.auxClient, `coredb.${table}`),
           this.getTableCount(this.auxClient, table)
