@@ -248,6 +248,16 @@ export class IntelligenceAuditLogger {
   private flushTimer: NodeJS.Timeout | null = null
   private readonly flushErrorThrottleMs = 60_000
   private lastFlushErrorLogAt = 0
+  /**
+   * Cap on the unflushed buffer. memoryLogs is trimmed at 1000; pendingLogs was not, so a
+   * database that keeps rejecting writes grew it without bound while the retry loop above ran
+   * every 200ms over an ever-longer array (#779).
+   */
+  private readonly maxPendingLogs = 5000
+  private droppedPendingCount = 0
+  /** Consecutive failed flushes, used to back the retry off instead of hammering at 200ms. */
+  private consecutiveFlushFailures = 0
+  private readonly maxFlushRetryDelayMs = 30_000
   private suppressedFlushErrorCount = 0
   private readonly usageStatsErrorThrottleMs = 60_000
   private lastUsageStatsErrorLogAt = 0
@@ -306,6 +316,7 @@ export class IntelligenceAuditLogger {
 
     // Add to buffered batch for persistence
     this.pendingLogs.push(sanitized)
+    this.trimPendingLogs()
 
     // Flush if batch is full
     if (this.pendingLogs.length >= this.flushBatchSize) {
@@ -321,6 +332,31 @@ export class IntelligenceAuditLogger {
       this.flushTimer = null
       void this.flushToDB()
     }, delayMs)
+  }
+
+  /**
+   * Oldest-first, matching how memoryLogs is trimmed. Dropping audit records is bad, so the loss
+   * is counted and surfaced rather than absorbed silently.
+   */
+  private trimPendingLogs(): void {
+    if (this.pendingLogs.length <= this.maxPendingLogs) return
+    const overflow = this.pendingLogs.length - this.maxPendingLogs
+    this.pendingLogs.splice(0, overflow)
+    this.droppedPendingCount += overflow
+    auditLog.warn('Dropped audit logs that could not be flushed', {
+      meta: {
+        dropped: overflow,
+        droppedTotal: this.droppedPendingCount,
+        pending: this.pendingLogs.length,
+        code: 'INTELLIGENCE_AUDIT_PENDING_OVERFLOW'
+      }
+    })
+  }
+
+  private nextFlushDelayMs(): number {
+    if (this.consecutiveFlushFailures === 0) return this.flushDelayMs
+    const backoff = this.flushDelayMs * 2 ** this.consecutiveFlushFailures
+    return Math.min(backoff, this.maxFlushRetryDelayMs)
   }
 
   private async yieldToEventLoop(): Promise<void> {
@@ -380,8 +416,12 @@ export class IntelligenceAuditLogger {
         }
         const success = await this.flushBatch(logsToFlush)
         if (!success) {
+          this.consecutiveFlushFailures += 1
           break
         }
+        // Reset on any successful batch: the next failure starts from the short delay again,
+        // so a single transient error does not leave the logger backed off for 30s.
+        this.consecutiveFlushFailures = 0
         if (this.pendingLogs.length > 0) {
           await this.yieldToEventLoop()
         }
@@ -393,7 +433,9 @@ export class IntelligenceAuditLogger {
     } finally {
       this.flushPromise = null
       if (this.pendingLogs.length > 0) {
-        this.scheduleFlush()
+        // Back off while the database keeps refusing. Retrying a failing write every 200ms only
+        // burns CPU and grows the buffer it is trying to drain.
+        this.scheduleFlush(this.nextFlushDelayMs())
       }
     }
   }
