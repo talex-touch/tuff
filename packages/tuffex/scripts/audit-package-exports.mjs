@@ -40,7 +40,13 @@ async function collectFiles(dir, predicate) {
 async function collectComponentSubpaths() {
   const dirents = await readdir(componentSrcRoot, { withFileTypes: true })
   return dirents
-    .filter(dirent => dirent.isDirectory() && dirent.name !== 'utils')
+    // Every directory under components/src is treated as a publishable component
+    // subpath, so anything that is not one has to be excluded here. 'utils' is shared
+    // code; '__tests__' arrived with 14274af8b and is a test directory, which the build
+    // correctly does not emit a bundle for -- leaving the audit to report
+    // dist/es/__tests__/index.js as a *missing export* rather than as something that
+    // should never have been expected.
+    .filter(dirent => dirent.isDirectory() && dirent.name !== 'utils' && !/^__.*__$/.test(dirent.name))
     .map(dirent => dirent.name)
     .sort()
 }
