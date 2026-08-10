@@ -17,10 +17,13 @@ type TransportPortHandoffWindow = Pick<
  * script running in the page satisfies, so an injected script could take the port
  * and keep it for the lifetime of the page (#694).
  *
- * Mirrors the rule already used by sendPreloadEvent in the app preload: an opaque
- * origin serialises as the string 'null', for which postMessage has no usable
- * specific value — file: pages get 'file://' and anything else falls back to '*',
- * which is no worse than today for those cases and correct for every real origin.
+ * An opaque origin serialises as the string 'null', for which postMessage has no usable
+ * specific value — file: pages get 'file://' and anything else falls back to '*'.
+ *
+ * The app preload used to share this rule, but sendPreloadEvent now skips the post instead of
+ * broadcasting it (#798). This one still widens to '*' because the two are not comparable: the
+ * preload drops a loading-state payload, while dropping here would leave the transport with no
+ * port and no session at all. Narrowing it is its own change, with its own fallback to design.
  */
 function resolveHandoffTargetOrigin(targetWindow: TransportPortHandoffWindow): string {
   const location = targetWindow.location
