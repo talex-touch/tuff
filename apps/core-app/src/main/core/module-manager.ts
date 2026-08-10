@@ -295,13 +295,17 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   /**
    * Overload signature: Loads a module by its instance.
    * @param module - The module instance to load.
-   * @returns A Promise that resolves to `true` if the module was successfully loaded (or already loaded), otherwise `false`.
+   * @returns A Promise that resolves to `true` when the module is usable - freshly loaded,
+   * already loaded, or deliberately skipped by an env flag - and `false` only when a lifecycle
+   * phase actually failed.
    */
   public loadModule<T extends TalexTouch.IModule<TalexEvents>>(module: T): Promise<boolean>
   /**
    * Overload signature: Loads a module by its constructor.
    * @param module - The module constructor to load.
-   * @returns A Promise that resolves to `true` if the module was successfully loaded (or already loaded), otherwise `false`.
+   * @returns A Promise that resolves to `true` when the module is usable - freshly loaded,
+   * already loaded, or deliberately skipped by an env flag - and `false` only when a lifecycle
+   * phase actually failed.
    */
   public loadModule<T extends TalexTouch.IModule<TalexEvents>>(
     module: ModuleCtor<T, TalexEvents>
@@ -356,7 +360,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     const key = instance.name
     if (this.modules.has(key)) {
-      return false
+      // Already loaded is not a failure - and the documented contract above already said so
+      // while this returned false. loadStartupModules cannot tell the reasons apart and treats
+      // any false on a required module as fatal, so it quit the app (#788).
+      return true
     }
 
     const moduleName = key.description ?? key.toString()
@@ -368,7 +375,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
           envFlags: envFlags.join(', ')
         }
       })
-      return false
+      // Deliberately not loaded, which is the point of declaring env flags. Returning false here
+      // meant the first module to declare one would quit the app on every machine where that
+      // variable is unset.
+      return true
     }
 
     moduleLog.info('Loading module', {
