@@ -713,4 +713,31 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     await settleAsyncWork()
     await completeRun(payload, execution)
   })
+
+  it('worker 迟迟不 ready 时,start() 有界失败并杀掉子进程', async () => {
+    // A worker that spawns but never posts runtime.ready: the process is alive so no 'exit'
+    // fires, and execute() awaits start() before arming its own run timeout, so before #766
+    // this promise stayed pending forever.
+    hostMocks.fork.mockImplementationOnce(() => hostMocks.child)
+
+    const host = new PiAgentRuntimeHost()
+    const started = host.start()
+    const assertion = expect(started).rejects.toThrow(/not ready within/i)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    await assertion
+
+    expect(hostMocks.child.kill).toHaveBeenCalled()
+  })
+
+  it('正常 ready 的 worker 不会被这个定时器杀掉', async () => {
+    // The control: a fix written as "always kill after 30s" would fail here.
+    const host = new PiAgentRuntimeHost()
+
+    await expect(host.start()).resolves.toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(hostMocks.child.kill).not.toHaveBeenCalled()
+  })
 })
