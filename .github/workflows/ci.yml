@@ -2,11 +2,19 @@ name: CI
 
 on:
   pull_request:
+  # Also on the default branch. Two PRs that each pass independently can break typecheck or a test
+  # in combination — a semantic conflict PR-level CI cannot see — and with no run on the merge
+  # commit the branch stays broken until the next PR, whose failure then looks like its own (#723).
+  push:
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
 
 concurrency:
+  # github.ref for a push, so a master run is not cancelled by an unrelated PR and vice versa.
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
@@ -16,10 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      release_acceptance: ${{ steps.filter_not_allowed.outputs.release_acceptance }}
-      nexus: ${{ steps.filter_not_allowed.outputs.nexus }}
+      # On a push there is no filtering: the default branch gets the full run, which is the point of
+      # validating it at all. paths-filter is also PR-shaped here — it resolves the base through the
+      # API and this job has no checkout, so it cannot diff a push (#723).
+      release_acceptance: ${{ github.event_name == 'push' && 'true' || steps.filter_not_allowed.outputs.release_acceptance }}
+      nexus: ${{ github.event_name == 'push' && 'true' || steps.filter_not_allowed.outputs.nexus }}
     steps:
       - name: Check Not Allowed File Changes
+        if: ${{ github.event_name == 'pull_request' }}
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter_not_allowed
         with:
@@ -37,8 +49,9 @@ jobs:
               - 'packages/tuffex/**'
               - '.github/workflows/ci.yml'
 
+      # A contribution policy, so it only makes sense on the incoming change, not on the branch.
       - name: Fail on foreign lockfile changes
-        if: ${{ steps.filter_not_allowed.outputs.change == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && steps.filter_not_allowed.outputs.change == 'true' }}
         run: |
           echo "Foreign lockfile changes are not accepted in this PR workflow:"
           echo '${{ steps.filter_not_allowed.outputs.change_files }}'
