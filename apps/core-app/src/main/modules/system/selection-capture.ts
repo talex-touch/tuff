@@ -93,18 +93,47 @@ function snapshotClipboard(): ClipboardSnapshot {
 }
 
 function restoreClipboard(snapshot: ClipboardSnapshot): boolean {
+  // clear() has already destroyed the original by the time the writes run, so one throwing
+  // format used to abort the loop and take every format after it with it -- a user with an
+  // image plus RTF could be left with neither (#768). Each write is attempted independently
+  // now, so a format that cannot be restored costs only itself.
+  let cleared = false
+  const failedFormats: string[] = []
+
   try {
     clipboard.clear()
-    for (const item of snapshot.items) {
-      clipboard.writeBuffer(item.format, item.data)
-    }
-    return true
+    cleared = true
   } catch (error) {
-    selectionCaptureLog.warn('Failed to restore clipboard snapshot', {
+    selectionCaptureLog.warn('Failed to clear clipboard before restore', {
       error: error instanceof Error ? error.message : String(error)
     })
     return false
   }
+
+  for (const item of snapshot.items) {
+    try {
+      clipboard.writeBuffer(item.format, item.data)
+    } catch (error) {
+      failedFormats.push(item.format)
+      selectionCaptureLog.warn('Failed to restore a clipboard format', {
+        meta: { format: item.format },
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  if (failedFormats.length > 0) {
+    selectionCaptureLog.warn('Clipboard snapshot restored only in part', {
+      meta: {
+        restored: snapshot.items.length - failedFormats.length,
+        total: snapshot.items.length,
+        failedFormats
+      }
+    })
+    return false
+  }
+
+  return cleared
 }
 
 async function captureSelection(

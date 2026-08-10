@@ -227,6 +227,26 @@ describe('selectionCaptureService.capture', () => {
     }
   )
 
+  it('单个格式写入失败时,其余格式仍然被恢复', async () => {
+    // clear() has already run by the time the writes happen, so aborting the loop at the first
+    // throw took every later format down with it (#768).
+    mocks.availableFormats.mockReturnValue(['text/plain', 'text/html', 'image/png'])
+    mocks.readBuffer.mockImplementation((format: string) => Buffer.from(`original-${format}`))
+    mocks.readText.mockReturnValue('new selection')
+    mocks.writeBuffer.mockImplementation((format: string) => {
+      if (format === 'text/html') throw new Error('clipboard locked')
+    })
+
+    const capture = withPlatform('linux', () => selectionCaptureService.capture({ enabled: true }))
+    await advanceCopyPollingDelay()
+    await capture
+
+    const restored = mocks.writeBuffer.mock.calls.map(([format]: [string]) => format)
+    // The format after the failing one is the point: it used to never be attempted.
+    expect(restored).toContain('image/png')
+    expect(restored).toEqual(['text/plain', 'text/html', 'image/png'])
+  })
+
   it('fails closed without selected text when clipboard restoration fails', async () => {
     mocks.availableFormats.mockReturnValue(['text/html'])
     mocks.readBuffer.mockReturnValue(Buffer.from('<i>original</i>'))
