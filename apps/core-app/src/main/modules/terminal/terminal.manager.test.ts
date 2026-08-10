@@ -72,7 +72,8 @@ function fakeStream() {
 
 function fakeProcess() {
   return {
-    stdin: { write: vi.fn() },
+    // Mirrors a real ChildProcess.stdin: a stream, so 'error' can be listened for (#641).
+    stdin: { write: vi.fn(), on: vi.fn() },
     stdout: fakeStream(),
     stderr: fakeStream(),
     on: vi.fn(),
@@ -140,6 +141,22 @@ describe('terminal session ownership', () => {
 
     terminal.write({ id, data: 'ok' }, asPlugin('com.a.plugin', 4))
     expect(proc.stdin.write).toHaveBeenCalledWith('ok')
+  })
+
+  it('survives a stdin that fails, and listens for the async failure too', () => {
+    // A child that has exited leaves a broken pipe behind. Both shapes have to be contained:
+    // write() throwing here, and an 'error' arriving on the stream later. Neither may reach
+    // the main process as an unhandled failure (#641).
+    const { id } = terminal.create({ command: 'ls' }, asWindow(1))
+
+    expect(proc.stdin.on).toHaveBeenCalledWith('error', expect.any(Function))
+
+    proc.stdin.write.mockImplementationOnce(() => {
+      const err: NodeJS.ErrnoException = new Error('write EPIPE')
+      err.code = 'EPIPE'
+      throw err
+    })
+    expect(() => terminal.write({ id, data: 'x' }, asWindow(1))).not.toThrow()
   })
 
   it('ignores an id that does not exist without revealing the difference', () => {
