@@ -1050,6 +1050,7 @@
     "upgrade": "升级",
     "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
+    "openPluginDetails": "查看 {name} 的详情",
     "lastUpdated": "上次更新 {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "检测到本机已安装 Tuff CLI，当前可体验 Beta 预览能力。",
