@@ -201,6 +201,77 @@ describe('UpdateSystem install handoff preparation', () => {
     )
   })
 
+  /*
+   * electron-builder.yml sets `verifyUpdateCodeSignature: false`, so Windows performs no
+   * publisher check on a downloaded package (#787). Until a code-signing certificate exists,
+   * these four throws in resolveVerifiedInstallTask are the entire integrity story for an
+   * update, and only two of them were pinned: the happy path and a checksum mismatch. The
+   * three below are the ones that decide whether a missing or forged signature stops an
+   * install or merely gets logged.
+   */
+  it('缺少校验和时拒绝安装,而不是跳过校验', async () => {
+    const downloadCenter = createDownloadCenterMock()
+    downloadCenter.task.status = DownloadStatus.COMPLETED
+    downloadCenter.task.metadata.checksum = ''
+    const updateSystem = new UpdateSystem(downloadCenter as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(updateSystem.prepareInstallHandoff('task-1')).rejects.toThrow(
+      /checksum is required but missing/i
+    )
+  })
+
+  it('缺少签名 URL 时拒绝安装', async () => {
+    const chunks = [Buffer.from('trusted-'), Buffer.from('package')]
+    const checksum = crypto.createHash('sha256').update(Buffer.concat(chunks)).digest('hex')
+    const downloadCenter = createDownloadCenterMock()
+    downloadCenter.task.status = DownloadStatus.COMPLETED
+    downloadCenter.task.metadata.checksum = checksum
+    downloadCenter.task.metadata.signatureUrl = ''
+    createReadStreamMock.mockReturnValue(
+      (async function* () {
+        yield* chunks
+      })()
+    )
+    const updateSystem = new UpdateSystem(downloadCenter as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(updateSystem.prepareInstallHandoff('task-1')).rejects.toThrow(
+      /signature is required but missing/i
+    )
+  })
+
+  it('签名验证失败时抛错,而不是记一条日志继续', async () => {
+    const chunks = [Buffer.from('trusted-'), Buffer.from('package')]
+    const checksum = crypto.createHash('sha256').update(Buffer.concat(chunks)).digest('hex')
+    const downloadCenter = createDownloadCenterMock()
+    downloadCenter.task.status = DownloadStatus.COMPLETED
+    downloadCenter.task.metadata.checksum = checksum
+    createReadStreamMock.mockReturnValue(
+      (async function* () {
+        yield* chunks
+      })()
+    )
+    const updateSystem = new UpdateSystem(downloadCenter as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+    // The module-level SignatureVerifier mock always returns valid; override this instance.
+    ;(
+      updateSystem as unknown as {
+        signatureVerifier: { verifyFileSignatureWithCache: () => Promise<unknown> }
+      }
+    ).signatureVerifier.verifyFileSignatureWithCache = vi.fn(async () => ({
+      valid: false,
+      reason: 'signature mismatch'
+    }))
+
+    await expect(updateSystem.prepareInstallHandoff('task-1')).rejects.toThrow(
+      /signature verification failed/i
+    )
+  })
+
   it('returns rollback compatibility when the installed version exactly matches the manifest target', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const updateSystem = new UpdateSystem(createDownloadCenterMock() as never, {
