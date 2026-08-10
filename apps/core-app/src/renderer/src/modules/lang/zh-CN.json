@@ -1062,6 +1062,7 @@
     "docsLinkDesc": "打开 Nexus 文档，了解能力目录与调用方式",
     "docsOpen": "打开 Nexus 文档",
     "sourceEditor": {
+      "removeSource": "移除源 {name}",
       "title": "来源",
       "subtitle": "编辑插件市场来源",
       "addSource": "新增来源",

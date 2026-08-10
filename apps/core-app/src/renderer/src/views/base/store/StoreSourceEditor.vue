@@ -232,14 +232,17 @@ watch(
                     size="small"
                     @change="toggleSource(item.id)"
                   />
-                  <div
+                  <button
+                    type="button"
                     :class="{ disabled: sources.length === 1 || item.readOnly }"
                     class="transition-cubic action-btn"
+                    :disabled="sources.length === 1 || item.readOnly"
+                    :aria-label="t('store.sourceEditor.removeSource', { name: item.name })"
                     @click="deleteSource(item.id)"
                   >
                     <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
                     <div v-else class="i-carbon-carbon-for-salesforce" />
-                  </div>
+                  </button>
                 </div>
               </div>
             </TransitionGroup>
@@ -281,14 +284,17 @@ watch(
                     size="small"
                     @change="toggleSource(item.id)"
                   />
-                  <div
+                  <button
+                    type="button"
                     :class="{ disabled: sources.length === 1 || item.readOnly }"
                     class="transition-cubic action-btn"
+                    :disabled="sources.length === 1 || item.readOnly"
+                    :aria-label="t('store.sourceEditor.removeSource', { name: item.name })"
                     @click="deleteSource(item.id)"
                   >
                     <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
                     <div v-else class="i-carbon-carbon-for-salesforce" />
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -569,6 +575,10 @@ watch(
     justify-content: center;
     width: 28px;
     height: 28px;
+    // The rule was written for a div; a native button brings its own chrome.
+    padding: 0;
+    border: none;
+    font: inherit;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
