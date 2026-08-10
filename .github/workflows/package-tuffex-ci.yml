@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "packages/tuffex/**"
+      - "packages/utils/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/package-tuffex-ci.yml"
@@ -14,6 +15,7 @@ on:
       - main
     paths:
       - "packages/tuffex/**"
+      - "packages/utils/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/package-tuffex-ci.yml"
