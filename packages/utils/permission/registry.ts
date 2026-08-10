@@ -366,6 +366,11 @@ export const PermissionIds = {
 
   // Search
   SEARCH_ROOT_RESULTS: "search.root-results",
+
+  // Localization and Domain Lexicon
+  I18N_READ: "i18n.read",
+  LEXICON_READ: "lexicon.read",
+  LEXICON_REGISTER: "lexicon.register",
 } as const;
 
 export type PermissionId = (typeof PermissionIds)[keyof typeof PermissionIds];
