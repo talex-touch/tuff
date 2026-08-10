@@ -57,10 +57,10 @@ describe('isAppViewNavigationAllowed', () => {
 
 describe('installAppViewNavigationPolicy', () => {
   function fakeWebContents() {
-    const handlers = new Map<string, (...args: any[]) => void>()
+    const handlers = new Map<string, (...args: unknown[]) => void>()
     return {
       handlers,
-      on: vi.fn((event: string, listener: (...args: any[]) => void) => {
+      on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
         handlers.set(event, listener)
       }),
       setWindowOpenHandler: vi.fn()
@@ -83,11 +83,11 @@ describe('installAppViewNavigationPolicy', () => {
     const willNavigate = wc.handlers.get('will-navigate')!
 
     const blocked = { preventDefault: vi.fn() }
-    willNavigate(blocked, 'https://evil.example/')
+    willNavigate(blocked as never, 'https://evil.example/')
     expect(blocked.preventDefault).toHaveBeenCalled()
 
     const allowed = { preventDefault: vi.fn() }
-    willNavigate(allowed, 'http://localhost:5173/index.html#/meta-overlay')
+    willNavigate(allowed as never, 'http://localhost:5173/index.html#/meta-overlay')
     expect(allowed.preventDefault).not.toHaveBeenCalled()
   })
 
@@ -96,7 +96,7 @@ describe('installAppViewNavigationPolicy', () => {
     installAppViewNavigationPolicy(wc as never, devEntry)
 
     const event = { preventDefault: vi.fn() }
-    wc.handlers.get('will-attach-webview')!(event)
+    wc.handlers.get('will-attach-webview')!(event as never)
     expect(event.preventDefault).toHaveBeenCalled()
   })
 })
