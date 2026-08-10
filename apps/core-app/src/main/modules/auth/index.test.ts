@@ -714,3 +714,44 @@ describe('forced auth credential persistence', () => {
     )
   })
 })
+
+describe('tuff://auth/callback deep link', () => {
+  it('refuses a callback when no login is in flight', async () => {
+    // The drive-by case: a page navigates the user's browser to
+    // tuff://auth/callback?token=… with nothing pending in the app (#695).
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setActiveDeviceAuthCode(null)
+
+    await expect(authModule.applyExternalAuthCallback('attacker-token')).resolves.toBe(false)
+    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an app_token just the same', async () => {
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setActiveDeviceAuthCode(null)
+
+    await expect(authModule.applyExternalAuthCallback('', 'attacker-app-token')).resolves.toBe(
+      false
+    )
+    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+  })
+
+  it('gets past the gate while a login this app started is pending', async () => {
+    // Control: the legitimate deep link races the device-code poll and must not be
+    // blocked. This asserts the gate is passed, not that the whole callback
+    // succeeds — the remote profile fetch is out of scope here.
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setActiveDeviceAuthCode('device-code-in-flight')
+    authLoggerMock.warn.mockClear()
+
+    await authModule.applyExternalAuthCallback('', 'legitimate-app-token')
+
+    expect(authLoggerMock.warn).not.toHaveBeenCalledWith(
+      'Rejected auth callback with no login in flight',
+      expect.anything()
+    )
+  })
+})
