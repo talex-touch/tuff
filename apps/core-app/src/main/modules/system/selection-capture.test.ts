@@ -104,7 +104,19 @@ describe('selectionCaptureService.capture', () => {
       limitations: ['Direct AX selection is available.'],
       capturedAt: CAPTURED_AT
     })
-    expect(mocks.execFileAsync).toHaveBeenCalledWith('osascript', expect.any(Array))
+    // The probe must be bounded: the frontmost app answers Apple events on its main thread, so a
+    // beachball or a TCC sheet blocks it and captureSelection() never returns (#771).
+    expect(mocks.execFileAsync).toHaveBeenCalledWith(
+      'osascript',
+      expect.any(Array),
+      expect.objectContaining({ timeout: expect.any(Number) })
+    )
+    const [, , probeOptions] = mocks.execFileAsync.mock.calls[0] as [
+      string,
+      string[],
+      { timeout?: number }
+    ]
+    expect(probeOptions.timeout).toBeGreaterThan(0)
     expect(mocks.sendPlatformShortcut).not.toHaveBeenCalled()
     expect(mocks.availableFormats).not.toHaveBeenCalled()
   })
