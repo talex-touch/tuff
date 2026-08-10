@@ -840,13 +840,15 @@ describe('CommonChannelModule private helpers', () => {
     handler?.(undefined, {})
     expect(openDevTools).toHaveBeenCalledTimes(1)
 
-    // ...but not once the app is packaged.
-    vi.mocked(app).isPackaged = true
+    // ...but not once the app is packaged. Electron types isPackaged read-only, so the mock is
+    // flipped through an explicitly writable view rather than by suppressing the error.
+    const packagedFlag = app as unknown as { isPackaged: boolean }
+    packagedFlag.isPackaged = true
     try {
       handler?.(undefined, {})
       expect(openDevTools).toHaveBeenCalledTimes(1)
     } finally {
-      vi.mocked(app).isPackaged = false
+      packagedFlag.isPackaged = false
     }
   })
 
