@@ -51,6 +51,13 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
 
   private disposers: Array<() => void> = []
   private handle: ToolGatewayHandle | null = null
+  /**
+   * The in-flight start, so overlapping callers join it instead of each binding a port.
+   * `handle` alone cannot guard this: it is only assigned once startToolGateway() resolves,
+   * so two setEnabled(true) calls both passed the check, both bound, and the second assignment
+   * dropped the first server on the floor still listening (#642).
+   */
+  private starting: Promise<ToolGatewayHandle> | null = null
   private enabled = false
   private pending = new Map<string, (decision: ConfirmationDecision) => void>()
   /**
@@ -121,8 +128,12 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
     broadcast: (event: unknown, payload: unknown) => unknown
   }): Promise<void> {
     if (this.handle) return
+    if (this.starting) {
+      await this.starting
+      return
+    }
 
-    this.handle = await startToolGateway({
+    this.starting = startToolGateway({
       tools: createToolRegistry(this.registryOptions()),
       onLog: (message) => toolLog.info(message),
       confirm: async (request) => {
@@ -151,6 +162,13 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
         })
       }
     })
+
+    try {
+      this.handle = await this.starting
+    } finally {
+      // Cleared on failure too, so a start that throws does not wedge every later attempt.
+      this.starting = null
+    }
 
     toolLog.info(`Tool gateway listening on ${this.handle.url}`)
   }
