@@ -243,6 +243,52 @@ describe('AiImportedConfigRuntime scoped imports', () => {
     )
   })
 
+  it("参数里的 $& / $' / $1 按字面插入,不被当成替换模式", async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'command-echo',
+        kind: 'command',
+        name: 'echo',
+        alias: 'echo',
+        contentRef: 'command-echo-content'
+      })
+    )
+    importedConfigMocks.content.set('command-echo-content', 'ARGS=[$ARGUMENTS]; TAIL')
+    const runtime = new AiImportedConfigRuntime()
+
+    // $& would expand to the matched '$ARGUMENTS', $' to everything after it.
+    const prompt = await runtime.buildSystemPrompt(
+      profile(),
+      '/workspace/release',
+      "/echo\tfix the $& and $' handler"
+    )
+
+    expect(prompt).toContain("ARGS=[fix the $& and $' handler]; TAIL")
+  })
+
+  it('用户参数里的 $1 不会被位置替换二次改写', async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'command-pos',
+        kind: 'command',
+        name: 'pos',
+        alias: 'pos',
+        contentRef: 'command-pos-content'
+      })
+    )
+    importedConfigMocks.content.set('command-pos-content', 'ARGS=[$ARGUMENTS]; FIRST=[$1]')
+    const runtime = new AiImportedConfigRuntime()
+
+    const prompt = await runtime.buildSystemPrompt(
+      profile(),
+      '/workspace/release',
+      '/pos\tkeep $1 literal'
+    )
+
+    // The template's own $1 still expands to the first token; the one the user typed does not.
+    expect(prompt).toContain('ARGS=[keep $1 literal]; FIRST=[keep]')
+  })
+
   it('rejects a skill read outside its workspace while allowing reads inside that workspace', async () => {
     importedConfigMocks.items.push(
       importedItem({

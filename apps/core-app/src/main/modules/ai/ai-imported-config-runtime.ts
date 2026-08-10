@@ -48,9 +48,20 @@ function expandCommand(content: string, args: string): string {
   const values = Array.from(args.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)).map(
     (match) => match[1] ?? match[2] ?? match[3] ?? ''
   )
-  return content
-    .replace(/\$ARGUMENTS\b/g, args)
-    .replace(/\$(\d)\b/g, (_, index: string) => values[Number(index) - 1] ?? '')
+  /*
+   * One pass, and every substitution goes through a replacer function.
+   *
+   * Passing `args` as a replacement string let String.replace interpret it as a pattern, so a
+   * user typing `/mycommand fix the $& handler` had `$&` expand to the matched text and `$'` to
+   * the rest of the command body (#773). A replacer function never does that.
+   *
+   * Single pass because two passes rescan text that was just inserted: `$1` typed by the user
+   * landed in the content and was then substituted by the positional pass, mangling it the same
+   * way. `$1` in the command template still expands -- that is what it is for.
+   */
+  return content.replace(/\$ARGUMENTS\b|\$(\d)\b/g, (_match, index?: string) =>
+    index === undefined ? args : (values[Number(index) - 1] ?? '')
+  )
 }
 
 function ruleApplies(item: AiImportedConfigItem, objective: string, cwd: string): boolean {
