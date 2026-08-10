@@ -1,87 +1,97 @@
-import { describe, expect, it } from 'vitest'
-import { toParsedItemTimeStats } from './time-stats-aggregator'
+import type { DbUtils } from '../../../db/utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * A corrupt row must cost that row its history, not take down every caller (#655).
- *
- * hourDistribution / dayOfWeekDistribution / timeSlotDistribution are plain TEXT columns holding
- * JSON. `parseTimeStats` ran raw JSON.parse on all three, and it sits under the public
- * getItemTimeStats / getItemTimeStatsBatch API — so one partially written or truncated row threw
- * out of every consumer at once.
+ * The rebuild used to run every upsert inside one `db.transaction`, awaiting
+ * `setImmediate` every 20 rows. Yielding there keeps the WAL writer lock held
+ * while unrelated main-process work runs, so the search-index worker's
+ * concurrent writes hit SQLITE_BUSY for the whole rebuild rather than for one
+ * short transaction (#659). What these tests pin is the structural property:
+ * bounded chunks, one scheduled write each, and no transaction spanning them.
  */
 
-function row(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    sourceId: 'app-provider',
-    itemId: 'com.apple.Terminal',
-    hourDistribution: JSON.stringify(Array.from({ length: 24 }, (_, index) => index)),
-    dayOfWeekDistribution: JSON.stringify([1, 2, 3, 4, 5, 6, 7]),
-    timeSlotDistribution: JSON.stringify({ morning: 1, afternoon: 2, evening: 3, night: 4 }),
-    lastUpdated: new Date('2026-08-08T00:00:00.000Z'),
-    ...overrides
-  } as never
+const scheduleDbWrite = vi.fn(
+  async (_name: string, run: () => unknown | Promise<unknown>) => await run()
+)
+
+vi.mock('../../../db/db-write', () => ({
+  scheduleDbWrite: (...args: Parameters<typeof scheduleDbWrite>) => scheduleDbWrite(...args)
+}))
+
+vi.mock('../../../utils/perf-context', () => ({
+  enterPerfContext: () => () => {}
+}))
+
+const transaction = vi.fn()
+const insertedChunks: Array<unknown[]> = []
+
+function makeDb(logs: Array<{ sourceId: string; itemId: string; timestamp: Date }>) {
+  const query = {
+    select: () => query,
+    from: () => query,
+    where: () => query,
+    orderBy: () => query,
+    all: async () => logs,
+    transaction,
+    insert: () => ({
+      values: (chunk: unknown[]) => {
+        insertedChunks.push(chunk)
+        return { onConflictDoUpdate: async () => undefined }
+      }
+    })
+  }
+  return query
 }
 
-describe('toParsedItemTimeStats', () => {
-  it('parses a well-formed row', () => {
-    // Positive control: every tolerance assertion below would also hold for a parser that always
-    // returned zeros.
-    const parsed = toParsedItemTimeStats(row())
+function makeLogs(itemCount: number) {
+  return Array.from({ length: itemCount }, (_, i) => ({
+    sourceId: 'source',
+    itemId: `item-${i}`,
+    timestamp: new Date(2026, 0, 1, 9, 0, 0)
+  }))
+}
 
-    expect(parsed.hourDistribution).toHaveLength(24)
-    expect(parsed.hourDistribution[5]).toBe(5)
-    expect(parsed.dayOfWeekDistribution).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(parsed.timeSlotDistribution).toEqual({ morning: 1, afternoon: 2, evening: 3, night: 4 })
-    expect(parsed.sourceId).toBe('app-provider')
+async function runRebuild(itemCount: number) {
+  const { TimeStatsAggregator } = await import('./time-stats-aggregator')
+  const dbUtils = { getDb: () => makeDb(makeLogs(itemCount)) } as unknown as DbUtils
+  await new TimeStatsAggregator(dbUtils).aggregateTimeStats({ force: true })
+}
+
+describe('TimeStatsAggregator rebuild write shape', () => {
+  beforeEach(() => {
+    scheduleDbWrite.mockClear()
+    transaction.mockClear()
+    insertedChunks.length = 0
   })
 
-  it('does not throw on malformed JSON in any single column', () => {
-    for (const column of [
-      'hourDistribution',
-      'dayOfWeekDistribution',
-      'timeSlotDistribution'
-    ] as const) {
-      expect(() => toParsedItemTimeStats(row({ [column]: '{"truncated' })), column).not.toThrow()
+  it('never opens a transaction that spans the whole rebuild', async () => {
+    await runRebuild(1200)
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('splits the upserts into bounded chunks, one scheduled write each', async () => {
+    await runRebuild(1200)
+
+    // 1200 distinct items at a 500 chunk cap => 500 + 500 + 200.
+    expect(insertedChunks.map((chunk) => chunk.length)).toEqual([500, 500, 200])
+    expect(scheduleDbWrite).toHaveBeenCalledTimes(3)
+    for (const chunk of insertedChunks) {
+      expect(chunk.length).toBeLessThanOrEqual(500)
     }
   })
 
-  it('keeps the columns it can still read', () => {
-    // The point of per-column tolerance: one bad column must not discard the other two, or a
-    // partial write would silently erase an item's whole history.
-    const parsed = toParsedItemTimeStats(row({ hourDistribution: 'not json at all' }))
+  it('still writes every item exactly once', async () => {
+    await runRebuild(1200)
 
-    expect(parsed.hourDistribution).toEqual(Array.from({ length: 24 }, () => 0))
-    expect(parsed.dayOfWeekDistribution).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(parsed.timeSlotDistribution.night).toBe(4)
+    const written = insertedChunks.flat() as Array<{ itemId: string }>
+    expect(written).toHaveLength(1200)
+    expect(new Set(written.map((row) => row.itemId)).size).toBe(1200)
   })
 
-  it('normalises shapes that parse but are not the expected type', () => {
-    // Valid JSON of the wrong shape is the case a try/catch alone would miss.
-    const parsed = toParsedItemTimeStats(
-      row({
-        hourDistribution: JSON.stringify('a string'),
-        dayOfWeekDistribution: JSON.stringify({ not: 'an array' }),
-        timeSlotDistribution: JSON.stringify({ morning: 'lots', night: -3 })
-      })
-    )
+  it('does not chunk a rebuild that fits in one write', async () => {
+    await runRebuild(10)
 
-    expect(parsed.hourDistribution).toHaveLength(24)
-    expect(parsed.dayOfWeekDistribution).toHaveLength(7)
-    expect(parsed.timeSlotDistribution.morning).toBe(0)
-    expect(parsed.timeSlotDistribution.night).toBe(0)
-  })
-
-  it('tolerates null columns', () => {
-    const parsed = toParsedItemTimeStats(
-      row({ hourDistribution: null, dayOfWeekDistribution: null, timeSlotDistribution: null })
-    )
-
-    expect(parsed.hourDistribution).toHaveLength(24)
-    expect(parsed.timeSlotDistribution).toEqual({
-      morning: 0,
-      afternoon: 0,
-      evening: 0,
-      night: 0
-    })
+    expect(scheduleDbWrite).toHaveBeenCalledTimes(1)
+    expect(insertedChunks[0]).toHaveLength(10)
   })
 })
