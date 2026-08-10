@@ -65,7 +65,7 @@ function normalizeCacheOptions(options?: SendOptions): CacheConfig | null {
   }
 }
 
-function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string): string {
+function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string): string | null {
   if (overrideKey) {
     return overrideKey
   }
@@ -78,7 +78,10 @@ function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string
     return `${eventName}:${JSON.stringify(payload)}`
   }
   catch {
-    return `${eventName}:${Object.prototype.toString.call(payload)}`
+    // Same defect as the plugin transport (#880): the old fallback was a constant for every
+    // plain object, so distinct circular payloads on one event shared a cache entry and the
+    // second send got the first's response. Unkeyable means uncached, not cached-together.
+    return null
   }
 }
 
@@ -312,9 +315,11 @@ export class TuffRendererTransport implements ITuffTransport {
 
     const eventName = event.toEventName()
     const cacheConfig = normalizeCacheOptions(options)
-    const cacheKey = cacheConfig ? buildCacheKey(eventName, payload, cacheConfig.key) : ''
+    const cacheKey = cacheConfig ? buildCacheKey(eventName, payload, cacheConfig.key) : null
     if (cacheConfig) {
-      const cached = this.readCache<TRes>(cacheKey)
+      const cached = cacheKey === null
+        ? { hit: false as const, value: undefined }
+        : this.readCache<TRes>(cacheKey)
       if (cached.hit) {
         return cached.value as TRes
       }
@@ -333,7 +338,7 @@ export class TuffRendererTransport implements ITuffTransport {
     try {
       const shouldPassPayload = payload !== undefined
       const result = await this.sendRaw<TReq, TRes>(eventName, shouldPassPayload ? payload : undefined)
-      if (cacheConfig) {
+      if (cacheConfig && cacheKey !== null) {
         this.writeCache(cacheKey, result, cacheConfig.ttlMs)
       }
       return result
