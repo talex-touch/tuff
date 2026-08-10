@@ -792,3 +792,110 @@ describe('part assembly', () => {
     expect(conversation.messages.value[1]?.parts).toBeUndefined()
   })
 })
+
+/**
+ * discardActiveTurn() cancelled the StreamController but never concluded the turn, so `settled`
+ * stayed false and `finished` was never resolved:
+ *
+ *   - a non-streaming fallback has no controller to cancel, so when its awaited chat call resolved
+ *     it ran complete() -> conclude() against whatever turn had since replaced it (#824)
+ *   - `await finished` in runTurn stayed pending for the life of the window, retaining the whole
+ *     turn closure per cancelled turn (#825)
+ *
+ * Both are invisible from the message list alone, which is why these assert on the returned
+ * promise and on isStreaming under a *replacement* turn.
+ */
+describe('discarding a turn settles it', () => {
+  /** Resolves when `promise` settles, or to the marker if it is still pending after a tick. */
+  function settledOrPending<T>(promise: Promise<T>): Promise<T | 'pending'> {
+    return Promise.race([promise, flush().then(() => 'pending' as const)])
+  }
+
+  it('restore() 之后,原本 await 的 send() 会结束而不是永远挂起 (#825)', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    conversation.restore([])
+
+    await expect(settledOrPending(turn)).resolves.not.toBe('pending')
+  })
+
+  it('reset() 之后同样结束', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    conversation.reset()
+
+    await expect(settledOrPending(turn)).resolves.not.toBe('pending')
+  })
+
+  it('丢弃时仍然取消底层的 StreamController(否则只是"提前结束"而没真正停下)', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    void conversation.send('hello')
+    await flush()
+    conversation.reset()
+
+    expect(double.cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('被丢弃的非流式回合结算后,不会把接替它的新回合掐断 (#824)', async () => {
+    // One conversation, two turns: the first has no stream-capable provider so it goes down the
+    // fallback path (no controller to cancel), the second streams. Using two composables would
+    // prove nothing - they share no state, so a stale turn could not reach the other one anyway.
+    // Held on an object rather than a `let`: TS narrows a local assigned only inside a callback
+    // down to `never` at the call site, which vitest would never have told me about.
+    const staleChat: { release?: (result: IntelligenceInvokeResult<string>) => void } = {}
+    let streamAttempts = 0
+    const double = createSdkDouble({
+      startStream: () => {
+        streamAttempts += 1
+        if (streamAttempts === 1) return Promise.reject(new Error('no chatStream'))
+        return Promise.resolve({ cancel: vi.fn(), cancelled: false, streamId: 'stream-second' })
+      },
+      chat: () =>
+        new Promise<IntelligenceInvokeResult<string>>((resolve) => {
+          staleChat.release = resolve
+        })
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    void conversation.send('first')
+    await flush()
+    conversation.restore([])
+
+    void conversation.send('second')
+    await flush()
+    expect(conversation.isStreaming.value).toBe(true)
+
+    // The abandoned fallback finally answers, into a conversation that has moved on.
+    staleChat.release?.(invokeResult('stale answer'))
+    await flush()
+
+    // Before the fix: complete() -> conclude() ran, flipping streaming off and nulling activeTurn
+    // under the second turn - the Stop button stops working and the composer re-enables mid-stream.
+    expect(conversation.isStreaming.value).toBe(true)
+    expect(conversation.messages.value.map((message) => message.content)).not.toContain(
+      'stale answer'
+    )
+  })
+
+  it('正常结束的回合不受影响(否则上面几条会掩盖"永远立刻结算")', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    double.emit().onDelta?.('hi', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(conversation.messages.value[1]).toMatchObject({ content: 'hi', status: 'complete' })
+    expect(double.cancel).not.toHaveBeenCalled()
+  })
+})

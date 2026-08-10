@@ -499,7 +499,18 @@ export function useHomeConversation(
    * whatever thread had replaced it.
    */
   function discardActiveTurn(): void {
-    activeController?.cancel()
+    // Through the turn's own cancel, not the raw controller. Cancelling the controller alone left
+    // `settled` false, with two consequences:
+    //
+    //   - the non-streaming fallback has no controller to cancel, so when its awaited chat call
+    //     resolved it still ran complete() -> conclude(), nulling activeTurn and flipping
+    //     streaming off under whatever turn had since replaced it (#824)
+    //   - `await finished` in runTurn was only ever resolved by conclude(), and StreamController
+    //     guarantees no further callbacks after cancel(), so it stayed pending for the life of the
+    //     window, retaining the whole turn closure (#825)
+    //
+    // cancel() is a no-op on an already-settled turn, so this stays safe to call at any time.
+    activeTurn?.cancel()
     activeController = null
     activeTurn = null
     streaming.value = false
@@ -519,7 +530,9 @@ export function useHomeConversation(
 
   if (getCurrentScope()) {
     onScopeDispose(() => {
-      activeController?.cancel()
+      // Same reason as discardActiveTurn: cancelling the controller alone leaves `await finished`
+      // pending, which retains the turn closure past the scope that owned it.
+      activeTurn?.cancel()
       activeController = null
       activeTurn = null
     })
