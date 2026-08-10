@@ -103,7 +103,7 @@ export class IndexedSourceEventRouter {
     this.subscribed = true
   }
 
-  unsubscribe(): void {
+  async unsubscribe(): Promise<void> {
     if (!this.subscribed) return
     touchEventBus.off(TalexEvents.FILE_ADDED, this.handleFileAddedOrChanged)
     touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleFileAddedOrChanged)
@@ -114,6 +114,12 @@ export class IndexedSourceEventRouter {
     touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleAppUnlinked)
     touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleAppAddedOrChanged)
     touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleAppUnlinked)
+    // Drained before disposing. dispose() only drops the coalescing window and
+    // leaves pending entries "for the next flush" — but the handlers are detached
+    // above, so no next enqueue can ever come. An app dropped into /Applications
+    // within the 400ms coalescing window was discarded outright, with no reconcile
+    // marker, leaving the index stale until the next full scan (#676).
+    await Promise.all([this.appQueue.drain(), this.fileQueue.drain()])
     this.appQueue.dispose()
     this.fileQueue.dispose()
     this.subscribed = false
