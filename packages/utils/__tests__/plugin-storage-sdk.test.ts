@@ -108,9 +108,13 @@ describe('Plugin Storage SDK', () => {
     )
   })
 
-  it('listens to storage updates through typed plugin storage event', () => {
+  // This asserted `callback` received `{ name, fileName }` - the broadcast envelope, which is
+  // exactly the defect reported in #868. The filtering half was always right and is kept; the
+  // payload assertion was encoding the bug and now checks the file content instead.
+  it('listens to storage updates through typed plugin storage event', async () => {
     const dispose = vi.fn()
     mocks.on.mockReturnValueOnce(dispose)
+    mocks.send.mockResolvedValue({ theme: 'dark' })
     const sdk = usePluginStorage()
     const callback = vi.fn()
 
@@ -128,12 +132,10 @@ describe('Plugin Storage SDK', () => {
     listener?.({ name: 'other-plugin', fileName: 'settings.json' })
     listener?.({ name: 'demo-plugin', fileName: 'other.json' })
     listener?.({ name: 'demo-plugin', fileName: 'settings.json' })
+    await vi.waitFor(() => expect(callback).toHaveBeenCalled())
 
     expect(callback).toHaveBeenCalledTimes(1)
-    expect(callback).toHaveBeenCalledWith({
-      name: 'demo-plugin',
-      fileName: 'settings.json',
-    })
+    expect(callback).toHaveBeenCalledWith({ theme: 'dark' })
 
     unsubscribe()
     expect(dispose).toHaveBeenCalled()
