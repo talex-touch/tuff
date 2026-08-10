@@ -169,19 +169,23 @@ describe('notificationService', () => {
     })
   })
 
-  describe('update Download Complete Notification', () => {
+  describe('update Ready Notification', () => {
+    // Was showUpdateDownloadCompleteNotification(version, taskId). It is now
+    // showUpdateReadyNotification({ version, platform, onClick }) and returns
+    // whether it notified, so the config gate can be asserted rather than merely
+    // smoke-tested with .not.toThrow().
+    function readyOptions() {
+      return { version: 'v2.0.0', platform: 'darwin' as NodeJS.Platform, onClick: () => {} }
+    }
+
     it('should show notification when update download completes', () => {
-      expect(() => {
-        notificationService.showUpdateDownloadCompleteNotification('v2.0.0', 'task-123')
-      }).not.toThrow()
+      expect(notificationService.showUpdateReadyNotification(readyOptions())).toBe(true)
     })
 
     it('should not show notification when disabled', () => {
       notificationService.updateConfig({ updateDownloadComplete: false })
 
-      expect(() => {
-        notificationService.showUpdateDownloadCompleteNotification('v2.0.0', 'task-123')
-      }).not.toThrow()
+      expect(notificationService.showUpdateReadyNotification(readyOptions())).toBe(false)
     })
   })
 
