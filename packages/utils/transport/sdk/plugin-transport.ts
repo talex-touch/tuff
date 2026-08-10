@@ -32,7 +32,16 @@ interface PortConfirmRecord {
   payload: TransportPortConfirmPayload
 }
 
+interface QueuedPortConfirm extends PortConfirmRecord {
+  timeout?: ReturnType<typeof setTimeout>
+}
+
 const PORT_CONFIRM_TIMEOUT_MS = 10000
+// A confirm can only arrive while the main process still holds the record, so an abandoned id is
+// worthless once the main-side reap window has elapsed. Bounding by age and count keeps a long
+// session from accumulating one string per failed open. Mirrors renderer-transport.ts.
+const ABANDONED_PORT_RETENTION_MS = 30000
+const ABANDONED_PORT_MAX_ENTRIES = 64
 
 function resolveIpcRenderer(): IpcRendererLike | null {
   if (typeof globalThis === 'undefined') {
@@ -160,8 +169,9 @@ export class TuffPluginTransport implements ITuffTransport {
     }
   >()
 
-  private queuedPortConfirms = new Map<string, PortConfirmRecord>()
-  private abandonedPorts = new Set<string>()
+  private queuedPortConfirms = new Map<string, QueuedPortConfirm>()
+  /** portId -> expiry timestamp. A Set here grew for the life of the plugin session. */
+  private abandonedPorts = new Map<string, number>()
   private portListenerCleanup: (() => void) | null = null
   private portEventSubscriptions = new Map<string, PortEventSubscription>()
 
@@ -280,8 +290,7 @@ export class TuffPluginTransport implements ITuffTransport {
     }
 
     const { portId, channel } = confirmPayload
-    if (this.abandonedPorts.has(portId)) {
-      this.abandonedPorts.delete(portId)
+    if (this.abandonedPorts.delete(portId)) {
       try {
         port.close()
       }
@@ -308,7 +317,14 @@ export class TuffPluginTransport implements ITuffTransport {
       pending.resolve(record)
     }
     else {
-      this.queuedPortConfirms.set(portId, record)
+      // The confirm beat its `openPort` waiter. Expire it if the waiter never shows up (the
+      // upgrade round-trip rejected, or the opener was torn down), otherwise a live MessagePort
+      // stays pinned here for the lifetime of the transport.
+      const queued: QueuedPortConfirm = { ...record }
+      queued.timeout = setTimeout(() => {
+        this.discardQueuedPortConfirm(portId, 'confirm_unclaimed')
+      }, PORT_CONFIRM_TIMEOUT_MS)
+      this.queuedPortConfirms.set(portId, queued)
     }
 
     void this.send(TransportEvents.port.confirm, confirmPayload).catch(() => {})
@@ -322,11 +338,14 @@ export class TuffPluginTransport implements ITuffTransport {
     const queued = this.queuedPortConfirms.get(portId)
     if (queued) {
       this.queuedPortConfirms.delete(portId)
+      if (queued.timeout) {
+        clearTimeout(queued.timeout)
+      }
       return Promise.resolve(queued)
     }
 
     if (timeoutMs <= 0) {
-      this.abandonedPorts.add(portId)
+      this.rememberAbandonedPort(portId)
       void this.send(TransportEvents.port.close, { channel, portId, reason: 'confirm_timeout' }).catch(() => {})
       return Promise.resolve(null)
     }
@@ -334,13 +353,61 @@ export class TuffPluginTransport implements ITuffTransport {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         this.pendingPortConfirms.delete(portId)
-        this.abandonedPorts.add(portId)
+        this.rememberAbandonedPort(portId)
         void this.send(TransportEvents.port.close, { channel, portId, reason: 'confirm_timeout' }).catch(() => {})
         resolve(null)
       }, timeoutMs)
 
       this.pendingPortConfirms.set(portId, { channel, resolve, timeout })
     })
+  }
+
+  /**
+   * Records a port the plugin stopped waiting for so a late confirm is rejected instead of
+   * building a handle nobody owns. Entries are evicted by age and count because a confirm can
+   * never arrive once the main process has reaped the record.
+   */
+  private rememberAbandonedPort(portId: string): void {
+    const now = Date.now()
+    // Constant retention means insertion order is expiry order, so the first live entry ends
+    // the sweep.
+    for (const [id, expiresAt] of this.abandonedPorts) {
+      if (expiresAt > now) {
+        break
+      }
+      this.abandonedPorts.delete(id)
+    }
+
+    while (this.abandonedPorts.size >= ABANDONED_PORT_MAX_ENTRIES) {
+      const oldest = this.abandonedPorts.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.abandonedPorts.delete(oldest)
+    }
+
+    this.abandonedPorts.set(portId, now + ABANDONED_PORT_RETENTION_MS)
+  }
+
+  private discardQueuedPortConfirm(portId: string, reason: string): void {
+    const queued = this.queuedPortConfirms.get(portId)
+    if (!queued) {
+      return
+    }
+
+    this.queuedPortConfirms.delete(portId)
+    if (queued.timeout) {
+      clearTimeout(queued.timeout)
+    }
+    try {
+      queued.port.close()
+    }
+    catch {}
+    void this.send(TransportEvents.port.close, {
+      channel: queued.payload.channel,
+      portId,
+      reason,
+    }).catch(() => {})
   }
 
   private evictPortHandle(portId: string, channel?: string): void {
@@ -744,6 +811,9 @@ export class TuffPluginTransport implements ITuffTransport {
     this.pendingPortConfirms.clear()
 
     for (const [portId, record] of this.queuedPortConfirms) {
+      if (record.timeout) {
+        clearTimeout(record.timeout)
+      }
       try {
         record.port.close()
       }
