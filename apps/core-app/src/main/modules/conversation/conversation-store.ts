@@ -105,33 +105,39 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
   // One scheduled unit: the delete and the re-insert must not be separated by another writer, or a
   // concurrent read would see the thread with its messages already gone.
   await scheduleDbWrite('conversation.save', async () => {
-    if (existing) {
-      await db
-        .update(conversations)
-        .set({ title: input.title, updatedAt: now })
-        .where(eq(conversations.id, input.id))
-    } else {
-      await db
-        .insert(conversations)
-        .values({ id: input.id, title: input.title, createdAt: now, updatedAt: now })
-    }
+    // Transactional because this is a replace-all: the DELETE below removes every message row
+    // before the INSERT puts them back. Without a rollback boundary a failing insert -- a
+    // duplicate message id from a retried stream, a full disk, a SQLITE_BUSY that outlives the
+    // retry budget -- leaves the thread row present and permanently empty.
+    await db.transaction(async (tx) => {
+      if (existing) {
+        await tx
+          .update(conversations)
+          .set({ title: input.title, updatedAt: now })
+          .where(eq(conversations.id, input.id))
+      } else {
+        await tx
+          .insert(conversations)
+          .values({ id: input.id, title: input.title, createdAt: now, updatedAt: now })
+      }
 
-    await db.delete(conversationMessages).where(eq(conversationMessages.conversationId, input.id))
+      await tx.delete(conversationMessages).where(eq(conversationMessages.conversationId, input.id))
 
-    if (input.messages.length > 0) {
-      await db.insert(conversationMessages).values(
-        input.messages.map((message, index) => ({
-          id: message.id,
-          conversationId: input.id,
-          role: message.role,
-          content: message.content,
-          status: message.status,
-          meta: message.meta ? JSON.stringify(message.meta) : null,
-          seq: index,
-          createdAt: message.createdAt ?? now
-        }))
-      )
-    }
+      if (input.messages.length > 0) {
+        await tx.insert(conversationMessages).values(
+          input.messages.map((message, index) => ({
+            id: message.id,
+            conversationId: input.id,
+            role: message.role,
+            content: message.content,
+            status: message.status,
+            meta: message.meta ? JSON.stringify(message.meta) : null,
+            seq: index,
+            createdAt: message.createdAt ?? now
+          }))
+        )
+      }
+    })
   })
 
   return {
