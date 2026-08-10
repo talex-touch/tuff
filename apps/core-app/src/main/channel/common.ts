@@ -1525,7 +1525,15 @@ export class CommonChannelModule extends BaseModule {
         touchApp.window.window.show()
         touchApp.window.window.focus()
       }),
-      transport.on(AppEvents.debug.openDevTools, (payload) => {
+      transport.on(AppEvents.debug.openDevTools, (payload, context) => {
+        // DevTools runs arbitrary JS in the main renderer and exposes everything it holds, so a
+        // plugin view reaching this handler is a way out of the plugin sandbox (#783).
+        this.assertHostOnly(context, 'debug.openDevTools')
+        // The same intent already exists for Ctrl+R, which touch-app.ts blocks once packaged.
+        if (app.isPackaged) {
+          log.warn('Refused to open DevTools in a packaged build')
+          return
+        }
         const options =
           payload && typeof payload === 'object' ? (payload as OpenDevToolsOptions) : undefined
         touchApp.window.openDevTools(options)
