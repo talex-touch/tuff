@@ -21,6 +21,14 @@ export {
   TxMermaidBlock,
   TxStreamMarkdown,
 }
+export {
+  allowRemoteImageOnce,
+  allowRemoteImagesForSession,
+  isRemoteImage,
+  isRemoteImageAllowed,
+  resetRemoteImagePolicy,
+} from './src/remote-image-policy'
+export { completeInlineMarkup, completeTable } from './src/complete-inline-markup'
 export { createBlockStream } from './src/use-block-stream'
 export type { BlockStream, BlockStreamOptions } from './src/use-block-stream'
 export type {
