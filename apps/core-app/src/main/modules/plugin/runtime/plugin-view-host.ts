@@ -46,7 +46,7 @@ function stripHostControlledPreferences(
 }
 
 export function buildPluginViewWebPreferences(
-  _profile: PluginViewSecurityProfile,
+  profile: PluginViewSecurityProfile,
   options: PluginViewWebPreferenceOptions
 ): Electron.WebPreferences {
   const safeOverrides = stripHostControlledPreferences(options.overrides)
@@ -64,7 +64,9 @@ export function buildPluginViewWebPreferences(
     }
   })
 
-  return buildWindowWebPreferences('trusted-plugin-view', {
+  // Forwarded rather than hard-coded: the caller resolves this through
+  // resolvePluginViewSecurityProfile, and pinning it here made that resolution decorative (#792).
+  return buildWindowWebPreferences(profile, {
     ...safeOverrides,
     partition,
     preload: resolvePluginViewPreloadPath(),
