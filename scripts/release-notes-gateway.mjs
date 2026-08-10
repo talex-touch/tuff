@@ -13,6 +13,13 @@ import {
 const argv = process.argv.slice(2)
 const command = argv[0] || 'verify'
 const repoRoot = path.resolve(getArgValue(argv, '--repo-root', process.cwd()))
+// Tracked separately from the values themselves: when --version is omitted it defaults to
+// the root package.json, and when --tag is omitted it defaults to `v${version}`. The
+// root-version and tag-version checks then compare a value against itself and can never
+// fail. CI reaches this through quality:pr with no flags, so both reported "pass" while
+// testing nothing (#731).
+const versionProvided = getArgValue(argv, '--version', null) !== null
+const tagProvided = getArgValue(argv, '--tag', null) !== null
 const version = getArgValue(argv, '--version', readPackageVersion(repoRoot))
 const tag = getArgValue(argv, '--tag', `v${version}`)
 
@@ -75,19 +82,27 @@ function verify() {
   const checks = [
     {
       name: 'root-version',
-      pass: rootVersion === version,
+      // Not applicable rather than passing: with no --version there is nothing independent
+      // to compare the root package.json against. A PR has no release tag, so this is the
+      // normal CI case, not a misconfiguration.
+      pass: versionProvided ? rootVersion === version : true,
+      applicable: versionProvided,
       expected: version,
       actual: rootVersion,
     },
     {
       name: 'core-version',
+      applicable: true,
       pass: coreVersion === version,
       expected: version,
       actual: coreVersion,
     },
     {
       name: 'tag-version',
-      pass: tag.replace(/^v/, '') === version,
+      // Needs a real tag from outside this process. Defaulting to `v${version}` compares
+      // the derived value with what it was derived from.
+      pass: tagProvided ? tag.replace(/^v/, '') === version : true,
+      applicable: tagProvided,
       expected: version,
       actual: tag.replace(/^v/, ''),
     },
