@@ -368,6 +368,9 @@ importers:
       iconv-lite:
         specifier: ^0.7.3
         version: 0.7.3
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.45
       log4js:
         specifier: ^6.9.1
         version: 6.9.1
@@ -989,6 +992,9 @@ importers:
       gsap:
         specifier: ^3.15.0
         version: 3.15.0
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.45
       marked:
         specifier: ^12.0.2
         version: 12.0.2
@@ -1014,6 +1020,9 @@ importers:
       '@types/gulp-sass':
         specifier: ^5.0.4
         version: 5.0.4
+      '@types/katex':
+        specifier: ^0.16.8
+        version: 0.16.8
       '@types/node':
         specifier: 24.13.2
         version: 24.13.2
