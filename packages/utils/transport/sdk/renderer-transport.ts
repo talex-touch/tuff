@@ -475,6 +475,15 @@ export class TuffRendererTransport implements ITuffTransport {
       return
     }
 
+    // Sequential on purpose, and it costs latency: N queued sends become N serialised
+    // round-trips, which for a pure read is worse than not batching at all (#866).
+    //
+    // Promise.all here would reorder them, and the events using this strategy include
+    // BoxItemEvents.upsert / delete and plugin log writes - a delete overtaking its own upsert is
+    // a corruption, not a slow response. Ordering is what `queue` means; see BatchMergeStrategy.
+    //
+    // Real batching - one round-trip carrying all N, order preserved inside it - needs the
+    // BatchPayload envelope in transport/types.ts, which has no main-process handler (#867).
     await queue.queue.reduce<Promise<void>>(
       (promise, entry) => promise.then(() => this.flushEntry(eventName, entry)),
       Promise.resolve(),
