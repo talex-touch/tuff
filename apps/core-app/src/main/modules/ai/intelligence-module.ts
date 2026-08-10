@@ -676,10 +676,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
   async onDestroy(): Promise<void> {
     intelligenceLog.info('Destroying Intelligence module')
-    try {
-      await this.waitForAgentRuntime()
-    } catch (error) {
-      intelligenceLog.warn('Intelligence agent runtime was not ready during destroy', { error })
+    // Only wait for a runtime that was actually started. waitForAgentRuntime() starts one on
+    // demand -- which is what the request paths at agent.run, workflow.execute and the agent
+    // channels rely on -- but at teardown that means registering builtin tools and agents and
+    // awaiting the orchestrator and agent manager just to shut them down again, stalling quit
+    // for as long as initialization takes (#765).
+    if (this.agentRuntimePromise) {
+      try {
+        await this.agentRuntimePromise
+      } catch (error) {
+        intelligenceLog.warn('Intelligence agent runtime was not ready during destroy', { error })
+      }
     }
     if (this.agentChannelsCleanup) {
       this.agentChannelsCleanup()
