@@ -2114,7 +2114,7 @@ export class SearchEngineCore
     await this.sessionRegistry.destroy()
     this.usageSummaryService?.stop()
     this.stopMaintenance()
-    this.indexedSourceEventRouter.unsubscribe()
+    await this.indexedSourceEventRouter.unsubscribe()
     const drainFailures: Error[] = []
     const recordDrainFailure = (message: string, error: unknown): void => {
       searchEngineLog.error(message, { error })
