@@ -226,7 +226,14 @@ tell application "System Events"
   return appName & "||" & appID & "||" & (appPID as text) & "||" & winTitle
 end tell`
 
-      const { stdout } = await execFileAsync('osascript', ['-e', script])
+      // The only command in this file that used to run unbounded. AppleScript's
+      // 'first application process whose frontmost is true' blocks while the frontmost app is
+      // beachballing or a TCC prompt is up, and resolveActiveWindowMacOS dedupes callers onto
+      // macosResolveInFlight - so one hung call left that field set for the rest of the session
+      // and every later lookup returned the same promise that never settles (#770).
+      const { stdout } = await execFileAsync('osascript', ['-e', script], {
+        timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+      })
       const parts = stdout.trim().split('||')
       const appName = parts[0] ?? ''
       const bundleId = parts[1] || null
