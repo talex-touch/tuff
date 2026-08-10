@@ -14,10 +14,13 @@ import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import { toChainSteps } from '~/modules/conversation/chain-steps'
+import { createLatestOnly } from '~/modules/conversation/latest-only'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
@@ -112,6 +115,23 @@ const autoContext = computed({
 const agentTools = useAgentTools()
 
 /**
+ * Mirrors the flag to main and puts it back if main refuses.
+ *
+ * The setter wrote the persisted flag and discarded both the result and the rejection, so a
+ * failed sync (gateway port in use, handler not registered) left the pill reading `on` and
+ * `aria-pressed="true"` across restarts while the tool gateway was shut — every tool call the
+ * model attempted then failed (#835).
+ */
+const syncAgentTools = createRollbackSync<boolean>({
+  sync: (value) => agentTools.setEnabled(value),
+  rollback: (previous) => {
+    if (appSetting.tools) appSetting.tools.agentTools = previous
+    toast.error(t('home.error.agentToolsSync'))
+  },
+  onError: (error) => homeLog.error('Failed to sync agent tools with main', error)
+})
+
+/**
  * Whether the assistant may run tools. Persisted in `appSetting` like Auto
  * Context, and mirrored to main on change — the gateway only opens, and the
  * allowlist only reaches `pi`, once this is on.
@@ -119,8 +139,9 @@ const agentTools = useAgentTools()
 const agentToolsEnabled = computed({
   get: () => appSetting.tools?.agentTools === true,
   set: (value: boolean) => {
+    const previous = appSetting.tools?.agentTools === true
     if (appSetting.tools) appSetting.tools.agentTools = value
-    void agentTools.setEnabled(value)
+    void syncAgentTools(value, previous)
   }
 })
 
@@ -483,6 +504,13 @@ const history = useConversationHistory()
 let conversationId: string | null = null
 
 /**
+ * Which navigation the watcher is currently serving. Two overlapping restores are not sequenced by
+ * anything else, so a slower earlier load used to land after a faster later one and leave the URL
+ * naming one thread while the view showed another (#826).
+ */
+const restoreSequence = createLatestOnly()
+
+/**
  * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
  *
  * Watching the param rather than loading once on mount is what makes the sidebar work: navigating
@@ -492,6 +520,9 @@ watch(
   () => route.params.id,
   async (id) => {
     const target = typeof id === 'string' ? id : null
+    // Claimed before any await, so a plain /home navigation also invalidates a restore in flight -
+    // otherwise it would land on top of the blank thread reset() just produced.
+    const isCurrentRestore = restoreSequence.claim()
     if (!target) {
       conversationId = null
       conversation.reset()
@@ -500,6 +531,8 @@ watch(
     if (target === conversationId) return
 
     const restored = await history.load(target)
+    // A newer navigation started while this load was in flight; it owns the view now.
+    if (!isCurrentRestore()) return
     if (!restored) return
     conversationId = target
     conversation.restore(restored)

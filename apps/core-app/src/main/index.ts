@@ -57,6 +57,7 @@ import { pluginLogModule } from './service/plugin-log.service'
 
 import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
+import { getAnalyticsMessageStore } from './modules/analytics/message-store'
 
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
@@ -171,6 +172,30 @@ applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 // Permission module instance
 const permissionModule = new PermissionModule()
 
+/**
+ * An optional module that fails is a feature the user silently does not have. Only logging it
+ * means nobody outside a log file ever learns, which is why widening the optional tier needs
+ * this first: trading "the app refuses to start" for "the feature is quietly missing" is not an
+ * improvement unless the absence is visible (#789).
+ */
+function reportOptionalModuleFailure(tier: 'foreground' | 'deferred', moduleName: string): void {
+  mainLog.warn(`Optional ${tier} module failed to load, continue startup`, {
+    meta: { module: moduleName }
+  })
+  try {
+    getAnalyticsMessageStore().add({
+      source: 'system',
+      severity: 'warn',
+      title: 'A feature failed to start',
+      message: `${moduleName} did not load. The app started without it.`,
+      meta: { module: moduleName, tier }
+    })
+  } catch (error) {
+    // Reporting must never be the thing that stops startup.
+    mainLog.warn('Failed to record optional module failure', { error })
+  }
+}
+
 const foregroundModulesToLoad = [
   databaseModule,
   conversationModule,
@@ -239,6 +264,9 @@ app.whenReady().then(async () => {
   if (!canContinue) return
 
   electronReadyTime = Date.now()
+  // Names the sequence below, which is the only startup health check there is. A core/startup-health
+  // module used to exist and this line read as its log; it was a 14-line generic helper nothing
+  // imported, deleted in #802.
   const startupTimer = mainLog.time('Startup health check passed', 'success')
   const foregroundModuleLoadTimer = mainLog.time('Foreground modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
@@ -307,9 +335,7 @@ app.whenReady().then(async () => {
       },
       optionalModules: optionalModulesToLoad,
       onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
-        mainLog.warn('Optional foreground module failed to load, continue startup', {
-          meta: { module: metric.name }
-        })
+        reportOptionalModuleFailure('foreground', metric.name)
       },
       onLoaded: handleModuleLoaded
     })) as ModuleLoadMetric[]
@@ -369,9 +395,7 @@ app.whenReady().then(async () => {
           },
           optionalModules: optionalModulesToLoad,
           onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
-            mainLog.warn('Optional deferred module failed to load, continue startup', {
-              meta: { module: metric.name }
-            })
+            reportOptionalModuleFailure('deferred', metric.name)
           },
           onLoaded: handleModuleLoaded
         })) as ModuleLoadMetric[]

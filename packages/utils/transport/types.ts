@@ -231,9 +231,19 @@ export interface StreamContext<TChunk> {
 // ============================================================================
 // Batch Types
 // ============================================================================
+//
+// Reserved wire format, not implemented (#867). Nothing builds or parses this envelope: the
+// transports batch on the *client* side only - they collect sends within a window and then issue
+// them individually. Turning these into a real single round-trip needs a main-process handler
+// that unpacks `requests` and answers with `results`.
+//
+// They are exported from the package's public surface, so they are documented rather than
+// deleted; do not write code that expects a peer to understand them.
 
 /**
  * Payload for a batched request.
+ *
+ * @remarks Reserved. No producer or consumer exists yet - see the note above.
  */
 export interface BatchPayload {
   /**

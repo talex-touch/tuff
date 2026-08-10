@@ -210,7 +210,14 @@ export class TuffRendererTransport implements ITuffTransport {
   private invokeSender: ((eventName: string, payload?: unknown) => Promise<unknown>) | null = null
   private cache = new Map<string, CacheEntry>()
   private handlers = new Map<string, Set<(payload: any) => any>>()
+  /**
+   * Channel-level registrations made by on(). The per-handler disposer is returned to the caller,
+   * but destroy() has to be able to release the ones the caller never held.
+   */
+  private channelCleanups = new Set<() => void>()
   private streamControllers = new Map<string, StreamController>()
+  /** Distinguishes batch payloads that cannot be serialised into a comparable key. */
+  private unkeyableBatchSeq = 0
   private batchQueues = new Map<string, BatchQueue<any>>()
   private portCache = new Map<string, TransportPortHandle>()
   private portEventSubscriptions = new Map<string, PortEventSubscription>()
@@ -445,7 +452,13 @@ export class TuffRendererTransport implements ITuffTransport {
       return `json:${JSON.stringify(payload)}`
     }
     catch {
-      return `ref:${Object.prototype.toString.call(payload)}`
+      // Object.prototype.toString.call is '[object Object]' for every plain object, so under
+      // mergeStrategy 'dedupe' two unrelated circular payloads merged into one request and both
+      // callers were handed the same response (#865). A payload we cannot serialise is a payload
+      // we cannot prove equal to anything, so it gets a key of its own and merges with nothing.
+      // Dedupe is an optimisation; answering the wrong question quickly is not one.
+      this.unkeyableBatchSeq += 1
+      return `ref:${this.unkeyableBatchSeq}`
     }
   }
 
@@ -475,6 +488,15 @@ export class TuffRendererTransport implements ITuffTransport {
       return
     }
 
+    // Sequential on purpose, and it costs latency: N queued sends become N serialised
+    // round-trips, which for a pure read is worse than not batching at all (#866).
+    //
+    // Promise.all here would reorder them, and the events using this strategy include
+    // BoxItemEvents.upsert / delete and plugin log writes - a delete overtaking its own upsert is
+    // a corruption, not a slow response. Ordering is what `queue` means; see BatchMergeStrategy.
+    //
+    // Real batching - one round-trip carrying all N, order preserved inside it - needs the
+    // BatchPayload envelope in transport/types.ts, which has no main-process handler (#867).
     await queue.queue.reduce<Promise<void>>(
       (promise, entry) => promise.then(() => this.flushEntry(eventName, entry)),
       Promise.resolve(),
@@ -1066,6 +1088,8 @@ export class TuffRendererTransport implements ITuffTransport {
       }
     })
 
+    this.channelCleanups.add(cleanup)
+
     // Return combined cleanup
     return () => {
       handlerSet.delete(handler)
@@ -1073,7 +1097,9 @@ export class TuffRendererTransport implements ITuffTransport {
         this.handlers.delete(eventName)
         this.releasePortEventSubscription(eventName)
       }
-      cleanup()
+      // Dropping it first keeps destroy() from calling the same cleanup a second time.
+      if (this.channelCleanups.delete(cleanup))
+        cleanup()
     }
   }
 
@@ -1098,7 +1124,18 @@ export class TuffRendererTransport implements ITuffTransport {
     }
     this.streamControllers.clear()
 
-    // Clear all handlers
+    // Clear all handlers. The channel registrations have to go too: on() hands its disposer to the
+    // caller, and a caller that only kept the transport left the underlying regChannel attached,
+    // still firing handlers against a destroyed transport.
+    for (const cleanup of this.channelCleanups) {
+      try {
+        cleanup()
+      }
+      catch (error) {
+        console.error('[TuffTransport] Channel cleanup failed during destroy:', error)
+      }
+    }
+    this.channelCleanups.clear()
     this.handlers.clear()
 
     if (this.portListenerCleanup) {

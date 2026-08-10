@@ -983,6 +983,7 @@
     "regenerate": "重新生成",
     "error": {
       "noProvider": "还没有可用的 AI 提供商，去「设置 · AI」配置一个再试",
+      "agentToolsSync": "无法连接工具网关，智能体工具保持关闭",
       "empty": "模型没有返回任何内容",
       "generic": "这轮回复失败了"
     },
@@ -1050,6 +1051,7 @@
     "upgrade": "升级",
     "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
+    "openPluginDetails": "查看 {name} 的详情",
     "lastUpdated": "上次更新 {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "检测到本机已安装 Tuff CLI，当前可体验 Beta 预览能力。",
@@ -1062,6 +1064,7 @@
     "docsLinkDesc": "打开 Nexus 文档，了解能力目录与调用方式",
     "docsOpen": "打开 Nexus 文档",
     "sourceEditor": {
+      "removeSource": "移除源 {name}",
       "title": "来源",
       "subtitle": "编辑插件市场来源",
       "addSource": "新增来源",

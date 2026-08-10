@@ -50,11 +50,11 @@
 
 ---
 
-## 📁 活跃 Trellis 任务（部分，本表 22 个）
+## 📁 活跃 Trellis 任务（部分，本表 19 个）
 
 优先级与状态以各任务 `task.json` / `prd.md` 为准。父子任务缩进展示。
 
-> **这张表不是全集。** `.trellis/tasks/` 下当前有 60 个带 `prd.md` 的活跃任务,本表收录 22 个。
+> **这张表不是全集。** `.trellis/tasks/` 下当前有 60 个带 `prd.md` 的活跃任务,本表收录 19 个。
 > 表内最新的一条是 `07-30`;`08-03` 及以后建立的 29 个任务**一条都没有**,`07-28`/`07-29`
 > 的 screenshot 系列也基本缺席。要看全集请直接列目录或跑 `task.py list`,不要以本表为准。
 >
@@ -64,9 +64,6 @@
 | 任务 | 优先级 | 状态 |
 |------|--------|------|
 | [audit-search-system-architecture](.trellis/tasks/07-09-audit-search-system-architecture/prd.md) | **P0** | 🔄 planning [3/7]：搜索架构审计与整改父任务 |
-| ├ [scope-search-sessions-and-streams](.trellis/tasks/07-09-scope-search-sessions-and-streams/prd.md) | P1 | planning |
-| ├ [gate-search-on-storage-hydration](.trellis/tasks/07-09-gate-search-on-storage-hydration/prd.md) | P1 | planning |
-| ├ [establish-single-search-index-writer](.trellis/tasks/07-09-establish-single-search-index-writer/prd.md) | P1 | planning |
 | └ [unify-search-provider-lifecycle](.trellis/tasks/07-09-unify-search-provider-lifecycle/prd.md) | P2 | planning |
 | [catalog-service-mvp](.trellis/tasks/07-13-catalog-service-mvp/prd.md) | P1 | planning |
 | [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |

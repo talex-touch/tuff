@@ -42,6 +42,8 @@ import type {
   TraySettingsUpdateRequest,
   TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
+import { cleanupDownloads, cleanupFileIndex, cleanupUpdates } from '../service/storage-maintenance'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { validateExternalUrl } from '../utils/external-url-policy'
 import type { Locale } from '../utils/i18n-helper'
 import { Buffer } from 'node:buffer'
@@ -262,6 +264,7 @@ interface StorageUsageRequest {
 const systemGetStorageUsageEvent = defineRawEvent<StorageUsageRequest, StorageUsageReport>(
   'system:get-storage-usage'
 )
+
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }
@@ -1602,6 +1605,15 @@ export class CommonChannelModule extends BaseModule {
         if (isRendererPerfReport(payload)) {
           perfMonitor.recordRendererReport(payload)
         }
+      }),
+      transport.on(StorageEvents.cleanup.fileIndex, async (payload) => {
+        return await cleanupFileIndex(payload ?? {})
+      }),
+      transport.on(StorageEvents.cleanup.downloads, async (payload) => {
+        return await cleanupDownloads(payload ?? {})
+      }),
+      transport.on(StorageEvents.cleanup.updates, async () => {
+        return await cleanupUpdates()
       }),
       transport.on(systemGetStorageUsageEvent, async (payload) => {
         const storageStats = storageModule.getCacheStats()

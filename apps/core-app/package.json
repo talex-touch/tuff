@@ -87,7 +87,9 @@
     "quickops:evidence:verify": "pnpm exec tsx \"scripts/quickops-evidence-verify.ts\"",
     "context:entrypoint:evidence:verify": "pnpm exec tsx \"scripts/context-entrypoint-evidence.ts\"",
     "check:search-index-writers": "node scripts/check-search-index-writers.mjs",
-    "check:search-index-writers:self-test": "node scripts/check-search-index-writers.mjs --self-test"
+    "check:search-index-writers:self-test": "node scripts/check-search-index-writers.mjs --self-test",
+    "check:permission-api-mappings": "node scripts/check-permission-api-mappings.mjs",
+    "check:permission-api-mappings:self-test": "node scripts/check-permission-api-mappings.mjs --self-test"
   },
   "dependencies": {
     "@arrow-js/core": "1.0.6",
@@ -122,7 +124,6 @@
     "drizzle-orm": "^0.45.2",
     "echarts": "catalog:",
     "esbuild": "^0.28.1",
-    "extract-file-icon": "^0.3.2",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
     "fs-extra": "^11.3.6",
@@ -143,11 +144,12 @@
     "vue-i18n": "^11.4.0",
     "vue-router": "^4.6.4",
     "vue-sonner": "^2.0.9",
-            "zod": "3.25.76"
+    "zod": "3.25.76"
   },
   "optionalDependencies": {
     "@crosscopy/clipboard": "^0.3.6",
     "bufferutil": "^4.1.0",
+    "extract-file-icon": "^0.3.2",
     "uiohook-napi": "^1.5.5",
     "utf-8-validate": "^6.0.6"
   },

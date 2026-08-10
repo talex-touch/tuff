@@ -28,6 +28,7 @@ import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
+import { finalizeBeforeQuit } from './before-quit-finalize'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -193,8 +194,15 @@ log4js.configure({
 
 mainLog.success('Talex Touch bootstrap started')
 
-// Increase renderer process V8 heap limit (main process uses NODE_OPTIONS)
-const v8JsFlags = ['--max-old-space-size=512']
+// V8 flags handed to every child process, renderers and utility processes included.
+//
+// This list used to carry `--max-old-space-size=512` under a comment claiming it raised the
+// limit. On 64-bit platforms V8's default old-space is already far above that, so the flag
+// lowered the ceiling for every renderer instead - which is the opposite of what the commit
+// that added it set out to do, and touch-window.ts already reports RENDER_PROCESS_OOM (#795).
+// Nothing is set now, so renderers get V8's default. Per-process budgets that are deliberate,
+// like the plugin runtime's, are set at their own spawn sites.
+const v8JsFlags: string[] = []
 
 // Opt-in escape hatch for the macOS 26/27 (Tahoe) V8 JIT-page crash
 // (electron/electron#51351): `--jitless` removes the executable MAP_JIT pages
@@ -205,7 +213,9 @@ if (parseBooleanEnv(process.env.TUFF_V8_JITLESS)) {
   mainLog.warn('V8 JIT disabled via TUFF_V8_JITLESS (slower JS; Tahoe crash workaround)')
 }
 
-app.commandLine.appendSwitch('js-flags', v8JsFlags.join(' '))
+if (v8JsFlags.length > 0) {
+  app.commandLine.appendSwitch('js-flags', v8JsFlags.join(' '))
+}
 
 // Disable GPU Acceleration for Windows 7 (NT 6.1).
 // The platform guard is load-bearing: os.release() returns the kernel version on
@@ -361,18 +371,27 @@ app.on('before-quit', (event) => {
     } catch (error) {
       mainLog.error('before-quit handlers failed, continue shutdown', { error })
     }
-    broadcastBeforeQuit()
     mainLog.info('App quit requested')
 
-    // Development mode: let DevProcessManager orchestrate shutdown steps.
-    if (!app.isPackaged && !devProcessManager.isShuttingDownProcess()) {
-      mainLog.debug('Development mode: delegating quit to DevProcessManager')
-      devProcessManager.triggerGracefulShutdown()
+    const finalized = finalizeBeforeQuit({
+      broadcast: broadcastBeforeQuit,
+      // Development mode: let DevProcessManager orchestrate shutdown steps.
+      shouldDelegateToDevManager: () =>
+        !app.isPackaged && !devProcessManager.isShuttingDownProcess(),
+      delegateToDevManager: () => {
+        mainLog.debug('Development mode: delegating quit to DevProcessManager')
+        devProcessManager.triggerGracefulShutdown()
+      },
+      quit: () => {
+        beforeQuitFlowDone = true
+        app.quit()
+      },
+      logError: (message, error) => mainLog.error(message, { error })
+    })
+
+    if (finalized.delegated) {
       return
     }
-
-    beforeQuitFlowDone = true
-    app.quit()
   })()
     .catch((error) => {
       mainLog.error('before-quit cleanup flow failed', { error })

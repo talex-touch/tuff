@@ -983,6 +983,7 @@
     "regenerate": "Regenerate",
     "error": {
       "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
+      "agentToolsSync": "Could not reach the tool gateway — agent tools stay off",
       "empty": "The model returned nothing",
       "generic": "This reply failed"
     },
@@ -1050,6 +1051,7 @@
     "upgrade": "Upgrade",
     "upgradeAvailable": "Update available",
     "officialBadge": "Official",
+    "openPluginDetails": "Open details for {name}",
     "lastUpdated": "Last updated {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "Tuff CLI is detected on this machine. Beta preview capabilities are available now.",
@@ -1062,6 +1064,7 @@
     "docsLinkDesc": "Open Nexus docs for capability catalog and usage",
     "docsOpen": "Open Nexus Docs",
     "sourceEditor": {
+      "removeSource": "Remove source {name}",
       "title": "Source",
       "subtitle": "Edit plugin store source.",
       "addSource": "Add source",

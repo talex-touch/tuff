@@ -89,13 +89,20 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
       touchWindowLog.debug('Apply MicaMaterial on window (fallback)')
     }
 
+    // Registered against webContents directly, not inside ready-to-show. That event fires only
+    // after the renderer's first paint, so the guard did not exist during initial load and early
+    // script execution - and a window whose first load failed never reached it at all, running
+    // permanently unrestricted (#805). A security control must not depend on render timing.
+    //
+    // Safe to move earlier: will-navigate does not fire for programmatic navigation, so the app's
+    // own loadURL/loadFile still reaches the renderer.
+    this.window.webContents.addListener('will-navigate', (event: ElectronEvent, url: string) => {
+      touchEventBus.emit(TalexEvents.OPEN_EXTERNAL_URL, new OpenExternalUrlEvent(url))
+
+      event.preventDefault()
+    })
+
     this.window.once('ready-to-show', () => {
-      this.window.webContents.addListener('will-navigate', (event: ElectronEvent, url: string) => {
-        touchEventBus.emit(TalexEvents.OPEN_EXTERNAL_URL, new OpenExternalUrlEvent(url))
-
-        event.preventDefault()
-      })
-
       if (options?.autoShow) {
         this.window.show()
       }
