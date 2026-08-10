@@ -300,12 +300,17 @@ function isPreferenceToken(token: string): boolean {
 
 function splitIdentifier(value?: string): string[] {
   if (!value) return []
-  return value
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[^a-zA-Z0-9]+/g, ' ')
-    .split(/\s+/)
-    .map((part) => part.trim().toLowerCase())
-    .filter((part) => part.length > 1 && !STOP_TOKENS.has(part))
+  return (
+    value
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      // Unicode-aware: the old [^a-zA-Z0-9] class erased CJK, Cyrillic and accented
+      // Latin wholesale, so every non-ASCII-named app produced the same empty
+      // profile and scored identically (#661).
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .split(/\s+/)
+      .map((part) => part.trim().toLowerCase())
+      .filter((part) => part.length > 1 && !STOP_TOKENS.has(part))
+  )
 }
 
 function inferAppCategoryTokens(identifier: string): string[] {
