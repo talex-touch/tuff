@@ -10,6 +10,7 @@ import appLogoSvgRaw from '../../public/logo.svg?raw'
 import { contextBridge, ipcRenderer } from 'electron'
 import { RAW_MAIN_PROCESS_CHANNEL, RAW_PLUGIN_PROCESS_CHANNEL } from '../shared/ipc/raw-channel'
 import { resolvePreloadTargetOrigin } from './preload-target-origin'
+import { isTrustedPreloadMessage } from './trusted-preload-message'
 
 interface StartupHandshakePayload {
   rendererStartTime: number
@@ -684,6 +685,7 @@ function useLoading(options: LoadingOptions) {
   }
 
   const messageListener = (ev: MessageEvent) => {
+    if (!isTrustedPreloadMessage(ev, window)) return
     if (ev.data?.channel !== PRELOAD_LOADING_CHANNEL) return
     const payload = ev.data.data as LoadingEvent | undefined
     if (!payload) return
@@ -779,7 +781,10 @@ domReady().then(() => {
   document.body.classList.add(info.platform)
 })
 
-window.onmessage = (ev) => {
+// addEventListener rather than `window.onmessage =`: the assignment form replaces whatever the
+// page had registered, which is not this preload's call to make (#797).
+window.addEventListener('message', (ev) => {
+  if (!isTrustedPreloadMessage(ev, window)) return
   if (!ev.data) return
   if (ev.data.payload === 'removeLoading') {
     removeLoading()
@@ -788,7 +793,7 @@ window.onmessage = (ev) => {
   if (ev.data.channel === PRELOAD_LOADING_CHANNEL) {
     handleEvent(ev.data.data as LoadingEvent)
   }
-}
+})
 
 window.addEventListener('DOMContentLoaded', () => {
   updateMessage('Renderer initializing modules...')
