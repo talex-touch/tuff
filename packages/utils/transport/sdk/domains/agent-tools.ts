@@ -23,6 +23,26 @@ export const CHART_RESULT_PREFIX = 'tuff:chart:'
  */
 export const FORM_RESULT_PREFIX = 'tuff:form:'
 
+/**
+ * Marks a tool result as a model-authored widget: arrow-js source the renderer
+ * runs inside an origin-isolated sandbox. Unlike the chart and form prefixes,
+ * what follows is code rather than a validated spec — the main process cannot
+ * meaningfully vet arbitrary JS, so the boundary is the sandbox, not a parser.
+ */
+export const WIDGET_RESULT_PREFIX = 'tuff:widget:'
+
+/** Matches `WIDGET_SANDBOX_SOURCE_MAX_CHARS`, the plugin widget source ceiling. */
+export const WIDGET_SOURCE_MAX_CHARS = 1_048_576
+
+/**
+ * A model-authored widget. `source` is arrow-js code, evaluated only inside the
+ * sandbox — never in the app's realm.
+ */
+export interface WidgetSpec {
+  title?: string
+  source: string
+}
+
 /** Field kinds a rendered form can ask for; each maps onto one tuffex input. */
 export type FormFieldType = 'text' | 'textarea' | 'number' | 'select' | 'checkbox'
 

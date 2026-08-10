@@ -2,16 +2,19 @@ import type {
   FormField,
   FormFieldType,
   FormFieldValue,
-  FormSpec
+  FormSpec,
+  WidgetSpec
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import type { PluginFeatureSource } from './plugin-feature-source'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import {
   CHART_RESULT_PREFIX,
-  FORM_RESULT_PREFIX
+  FORM_RESULT_PREFIX,
+  WIDGET_RESULT_PREFIX,
+  WIDGET_SOURCE_MAX_CHARS
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 
 /**
@@ -72,6 +75,8 @@ export function resolveUserPath(input: string): string {
 
 /** Reading more than this into a model's context is never the intent. */
 const MAX_READ_BYTES = 256 * 1024
+/** Creation cap — a note or a document, not an asset pipeline. */
+const MAX_WRITE_BYTES = 1024 * 1024
 
 const BINARY_EXTENSIONS = new Set([
   '.png',
@@ -274,6 +279,27 @@ function parseFormDefault(
  * name the offending field — the model gets one back and fixes that field
  * instead of guessing at the whole spec.
  */
+/**
+ * Accepts a model-authored widget.
+ *
+ * Deliberately thin. The chart and form parsers validate every field because
+ * their output drives fixed renderers; this one cannot — `source` is arbitrary
+ * JS, and no parser here can decide whether it is safe. Pretending to validate
+ * it would be worse than not validating it, because the reader would trust the
+ * result. The real boundary is the renderer's origin-isolated sandbox; the only
+ * jobs here are refusing what is obviously unusable and capping the size.
+ */
+export function parseWidgetSpec(args: Record<string, unknown>): WidgetSpec | string {
+  const source = typeof args.source === 'string' ? args.source : ''
+  if (!source.trim()) return 'source is required'
+  if (source.length > WIDGET_SOURCE_MAX_CHARS) {
+    return `source is over the ${WIDGET_SOURCE_MAX_CHARS / 1024}KB limit`
+  }
+
+  const title = typeof args.title === 'string' ? args.title.trim() : ''
+  return title ? { title, source } : { source }
+}
+
 export function parseFormSpec(args: Record<string, unknown>): FormSpec | string {
   const rawFields = Array.isArray(args.fields) ? args.fields : []
   if (rawFields.length === 0) return 'fields must be a non-empty array'
@@ -376,6 +402,49 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
           return { output: await readFile(path, 'utf8'), isError: false }
         } catch (error) {
           return { output: `Could not read file: ${(error as Error).message}`, isError: true }
+        }
+      }
+    },
+    {
+      name: 'tuff_write_file',
+      risk: 'write',
+      summarize: (args) => `Write ${readStringArg(args, 'path')}`,
+      execute: async (args) => {
+        const path = resolveUserPath(readStringArg(args, 'path'))
+        if (!path) return { output: 'path is required', isError: true }
+        const content = typeof args.content === 'string' ? args.content : null
+        if (content === null) return { output: 'content is required', isError: true }
+        if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES) {
+          return {
+            output: `Content is over the ${MAX_WRITE_BYTES / 1024}KB write limit.`,
+            isError: true
+          }
+        }
+        if (looksBinary(path)) {
+          return { output: 'Refusing to write a binary extension.', isError: true }
+        }
+
+        try {
+          // `wx` is the whole safety story: this tool creates, never clobbers.
+          // Overwriting would let one hallucinated path destroy a real file;
+          // the model can pick a fresh name when the write bounces.
+          await writeFile(path, content, { encoding: 'utf8', flag: 'wx' })
+          return { output: `Created ${path}`, isError: false }
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code
+          if (code === 'EEXIST') {
+            return {
+              output: 'File already exists — this tool never overwrites. Pick a new name.',
+              isError: true
+            }
+          }
+          if (code === 'ENOENT') {
+            return {
+              output: 'Parent directory does not exist — this tool does not create directories.',
+              isError: true
+            }
+          }
+          return { output: `Could not write file: ${(error as Error).message}`, isError: true }
         }
       }
     },
@@ -599,6 +668,22 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         const spec = parseFormSpec(args)
         if (typeof spec === 'string') return { output: `Invalid form: ${spec}`, isError: true }
         return { output: `${FORM_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
+      }
+    },
+    {
+      name: 'tuff_render_widget',
+      // Still `read`: the code runs in an origin-isolated frame with no network
+      // and no host capabilities, so putting one on screen touches nothing.
+      // This will need revisiting the day the sandbox is granted capabilities.
+      risk: 'read',
+      summarize: (args) => {
+        const title = readStringArg(args, 'title').trim()
+        return title ? `Render the widget "${title}"` : 'Render a custom widget'
+      },
+      execute: async (args) => {
+        const spec = parseWidgetSpec(args)
+        if (typeof spec === 'string') return { output: `Invalid widget: ${spec}`, isError: true }
+        return { output: `${WIDGET_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
     }
   ]
