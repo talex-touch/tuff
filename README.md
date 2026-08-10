@@ -54,6 +54,11 @@ Tuff integrates a variety of practical functions to make your desktop smarter an
 - **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
 - **Unified Download Center:** Centralized download management with progress tracking and resume support.
 
+### Plugin management policy
+
+- Plugins installed from the official marketplace have the `dev` entry in their manifest disabled during installation, so they cannot accidentally connect to a development server.
+- Every plugin's origin is recorded in the database, and uninstalling removes the plugin directory and its cached data along with it.
+
 ## 🍀 Simple and Easy-to-Use Operations
 
 The operation of Tuff is very simple and user-friendly, allowing users to easily complete various tasks. You only need to open the required function through the menu or shortcut keys to enjoy the convenience brought by Tuff.
