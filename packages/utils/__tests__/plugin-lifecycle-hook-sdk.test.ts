@@ -7,7 +7,10 @@ const channel = {
   send: vi.fn(),
 }
 
-const sdk: { __hooks?: Record<string, Array<(data: unknown) => void>> } = {}
+const sdk: {
+  __hooks?: Record<string, Array<(data: unknown) => void>>
+  __signalDisposers?: Record<string, () => void>
+} = {}
 
 const mocks = vi.hoisted(() => ({
   on: vi.fn(),
@@ -32,6 +35,9 @@ vi.mock('../transport', () => ({
 describe('Plugin lifecycle hooks SDK', () => {
   beforeEach(() => {
     delete sdk.__hooks
+    // Signal subscriptions live on the SDK object now, so a stale registry would stop a later
+    // test from registering at all.
+    delete sdk.__signalDisposers
     channel.regChannel.mockReset()
     channel.send.mockReset()
     mocks.on.mockReset()
@@ -65,7 +71,9 @@ describe('Plugin lifecycle hooks SDK', () => {
     expect(listener?.({ id: 'plugin-a' })).toBe(false)
     expect(processFunc).toHaveBeenCalled()
     expect(hook).toHaveBeenCalledWith({ id: 'plugin-a' })
-    expect(sdk.__hooks?.[LifecycleHooks.ACTIVE]).toBeUndefined()
+    // This asserted the hook array was `undefined` after the signal - i.e. it pinned the delete
+    // that made every lifecycle hook one-shot (#858). Hooks outlive the signal that delivered them.
+    expect(sdk.__hooks?.[LifecycleHooks.ACTIVE]).toHaveLength(1)
   })
 
   it('maps every public lifecycle hook to the current lifecycle signal catalog', () => {
