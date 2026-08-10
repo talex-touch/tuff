@@ -27,7 +27,9 @@
     "dev": "tsup --watch",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "check:externals": "node ../../scripts/check-bundled-externals.mjs",
+    "check:externals:self-test": "node ../../scripts/check-bundled-externals.mjs --self-test"
   },
   "dependencies": {
     "@talex-touch/utils": "workspace:^",
@@ -38,6 +40,7 @@
     "debug": "^4.4.3",
     "esbuild": "^0.28.1",
     "fs-extra": "^11.3.6",
+    "glob": "^13.0.6",
     "pathe": "^1.1.2",
     "unplugin": "^2.3.11",
     "vite": "^7.3.6"

@@ -51,3 +51,5 @@ jobs:
         pnpm --dir ../.. --filter "@talex-touch/tuff-cli-core" run build
         pnpm --dir ../.. --filter "@talex-touch/unplugin-export-plugin" run build
         pnpm build
+        pnpm check:externals
+        pnpm check:externals:self-test
