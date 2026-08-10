@@ -147,6 +147,16 @@ function resolveBuilderBin() {
   return binPath
 }
 
+// Presence check only. It stands in for electron-builder's install-app-deps on the macOS
+// legs, which set SKIP_INSTALL_APP_DEPS=true, and that substitution is sound because every
+// @talex-touch/tuff-native addon is N-API (node-addon-api): `nm -u` shows napi_ imports and
+// no v8/node symbols, so a Node-targeted build is ABI-compatible with Electron. CI says the
+// same thing out loud - the Windows rebuild step is named "for Node.js".
+//
+// Not covered: tuff_native_screenshot.node, which screenshot-protocol.js loads on every
+// platform. It is deliberately left out because that loader degrades gracefully
+// (`binding-unavailable`) rather than throwing, so requiring it here would turn a soft
+// capability loss into a hard build failure.
 function verifyNativeModules(strict, target) {
   const releaseDir = path.join(
     projectRoot,
@@ -173,7 +183,7 @@ function verifyNativeModules(strict, target) {
 
   const message =
     `Required native modules missing from ${releaseDir}: ${missingModuleNames.join(', ')}. ` +
-    'Please ensure @talex-touch/tuff-native was rebuilt for the Electron target.'
+    'Run `pnpm --filter @talex-touch/tuff-native rebuild` to produce them.'
 
   if (strict || target === 'win') {
     throw new Error(message)
