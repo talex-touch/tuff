@@ -789,11 +789,14 @@ export class SearchIndexService {
     if (!prefix) return []
     await this.ensureInitialized()
 
-    const likePattern = `${prefix}%`
+    // Escaped like the subsequence sibling below. Concatenating raw user text let
+    // '%' and '_' through as wildcards: typing '%' produced '%%' and matched every
+    // keyword row for the provider (#663).
+    const likePattern = `${escapeLikeWildcards(prefix)}%`
     const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
       sql`SELECT km.item_id, km.keyword, km.priority
           FROM keyword_mappings km
-          WHERE km.keyword LIKE ${likePattern}
+          WHERE km.keyword LIKE ${likePattern} ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}
             AND km.provider_id = ${providerId}
             AND km.keyword NOT LIKE 'ng:%'
           LIMIT ${limit}`
@@ -1646,13 +1649,21 @@ function subsequenceScore(query: string, target: string): number {
   return coverage * 0.5 + consecutiveBonus * 0.5
 }
 
+/**
+ * Neutralises SQLite LIKE metacharacters so user text is matched literally.
+ * Callers must pair this with `ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}`.
+ */
+function escapeLikeWildcards(value: string): string {
+  return value.replace(
+    SQLITE_LIKE_WILDCARD_REGEX,
+    (match) => `${SUBSEQUENCE_LIKE_ESCAPE_CHAR}${match}`
+  )
+}
+
 function buildSubsequenceLikePattern(query: string): string {
   let pattern = '%'
   for (const char of query) {
-    pattern += char.replace(
-      SQLITE_LIKE_WILDCARD_REGEX,
-      (value) => `${SUBSEQUENCE_LIKE_ESCAPE_CHAR}${value}`
-    )
+    pattern += escapeLikeWildcards(char)
     pattern += '%'
   }
   return pattern
