@@ -54,8 +54,18 @@ jobs:
       contents: read
 
     env:
-      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
-      ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+      # No ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR here, deliberately.
+      #
+      # These pinned npmmirror.com for every platform and channel, so the Electron
+      # runtime that gets code-signed and notarized came from outside the project's
+      # trust boundary. Electron verifies the download against a SHASUMS file it
+      # fetches from the same host, so a compromised mirror serves a modified binary
+      # and a matching checksum (#729).
+      #
+      # The mirror bought nothing here: every job in this matrix runs on a
+      # GitHub-hosted runner, which reaches github.com releases directly. If these
+      # downloads ever become a bottleneck, the answer is the ELECTRON_CACHE below,
+      # not a third-party host in the signing path.
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/../electron-builder-cache
       BUILD_PUBLISH: never
@@ -1315,6 +1325,26 @@ jobs:
             echo "NEXUS_API_KEY is required for release sync."
             exit 1
           fi
+
+          # Every curl below sends the NEXUS_API_KEY bearer token to NEXUS_BASE_URL, and that
+          # value comes from vars.NEXUS_SYNC_BASE_URL — a plaintext repository variable, not a
+          # secret. Nothing validated it, so a typo or a settings change pointed the production
+          # key at an arbitrary host and the first sign would have been the credential already
+          # sent (#732).
+          #
+          # An allowlist rather than a shape check: "is it https" would still accept
+          # https://attacker.example. Localhost is permitted so a self-hosted or tunnelled Nexus
+          # can be exercised without editing this file.
+          case "${NEXUS_BASE_URL}" in
+            https://tuff.tagzxia.com|https://tuff.tagzxia.com/*) ;;
+            http://localhost:*|http://127.0.0.1:*|https://localhost:*|https://127.0.0.1:*) ;;
+            *)
+              echo "Refusing to send NEXUS_API_KEY to an unrecognised host: ${NEXUS_BASE_URL}"
+              echo "vars.NEXUS_SYNC_BASE_URL must name the official Nexus origin or a local one."
+              echo "If a new deployment origin is legitimate, add it to the allowlist in this step."
+              exit 1
+              ;;
+          esac
 
           # Cloudflare Access is optional — both empty means it is not in front of Nexus.
           # Half-configured is not, and it is the state a setup that kept the client secret
