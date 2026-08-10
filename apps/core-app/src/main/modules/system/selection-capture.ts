@@ -15,6 +15,16 @@ const selectionCaptureLog = createLogger('SelectionCapture')
 const execFileAsync = promisify(execFile)
 const COPY_COMMAND_TIMEOUT_MS = 900
 const COPY_RESULT_POLL_DELAY_MS = 120
+/**
+ * Bound on the direct-selection AppleScript probe.
+ *
+ * The frontmost app answers Apple events on its main thread, so a beachball or an open TCC
+ * consent sheet blocks the query indefinitely. Without this the probe hung captureSelection()
+ * itself, and the transport handler awaiting it never replied - the caller saw a request that
+ * never returned instead of the 'failed' result this function is built to produce (#771).
+ * Matched to the copy shortcut's budget: both are "ask the foreground app something".
+ */
+const DIRECT_SELECTION_PROBE_TIMEOUT_MS = 900
 
 interface ClipboardSnapshot {
   items: Array<{
@@ -67,7 +77,9 @@ async function captureMacSelectionTextDirectly(): Promise<string | null> {
       '  end tell',
       'end tell'
     ].join('\n')
-    const { stdout } = await execFileAsync('osascript', ['-e', script])
+    const { stdout } = await execFileAsync('osascript', ['-e', script], {
+      timeout: DIRECT_SELECTION_PROBE_TIMEOUT_MS
+    })
     const selectedText = typeof stdout === 'string' ? stdout.trim() : ''
     return selectedText || null
   } catch {
