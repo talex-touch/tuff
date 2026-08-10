@@ -50,24 +50,39 @@ export class ChunkManager {
   // 合并切片文件
   async mergeChunks(task: DownloadTask, chunks: ChunkInfo[]): Promise<void> {
     const outputPath = path.join(task.destination, task.filename)
+    // Merged into a sibling temp file and renamed into place, rather than opened at the real
+    // filename with 'w'. Truncating the destination first meant a crash or an incomplete chunk
+    // left a truncated file under the real name - and unlike the single-stream path, nothing
+    // removed it (#781). A rename within the same directory is atomic, so the destination either
+    // holds the previous file or the complete new one, never a partial merge.
+    const tempOutputPath = `${outputPath}.${task.id}.part`
 
     // 确保输出目录存在
     await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
-    // 按顺序合并切片
-    const writeStream = await fs.open(outputPath, 'w')
-
     try {
-      for (const chunk of chunks) {
-        if (chunk.status === ChunkStatus.COMPLETED) {
-          const chunkData = await fs.readFile(chunk.filePath)
-          await writeStream.write(chunkData)
-        } else {
-          throw new Error(`Chunk ${chunk.index} is not completed`)
+      // 按顺序合并切片
+      const writeStream = await fs.open(tempOutputPath, 'w')
+
+      try {
+        for (const chunk of chunks) {
+          if (chunk.status === ChunkStatus.COMPLETED) {
+            const chunkData = await fs.readFile(chunk.filePath)
+            await writeStream.write(chunkData)
+          } else {
+            throw new Error(`Chunk ${chunk.index} is not completed`)
+          }
         }
+      } finally {
+        await writeStream.close()
       }
-    } finally {
-      await writeStream.close()
+
+      await fs.rename(tempOutputPath, outputPath)
+    } catch (error) {
+      // The destination was never touched; drop the partial merge rather than leaving it beside
+      // the file it failed to replace.
+      await fs.rm(tempOutputPath, { force: true }).catch(() => {})
+      throw error
     }
 
     // 清理临时切片文件和任务临时目录
