@@ -225,7 +225,7 @@ function detectAiAdapterSignals(aiSources: Array<{ path: string; source: string 
     sourceIncludes(
       aiSources,
       'plugins/touch-quickops/index.test.cjs',
-      'buildFlowAdapterTrace redacts request and payload values'
+      'publishes only whitelisted meta, so request detail cannot leak'
     )
   ) {
     signals.push('plugins/touch-quickops/index.test.cjs:contract')
@@ -261,8 +261,16 @@ function linksRequestTargetConfirmationResult(
     sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'targetId') &&
     sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'confirmation') &&
     sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'result') &&
-    sourceIncludes(aiSources, 'plugins/touch-quickops/index.test.cjs', 'payloadKeys') &&
-    sourceIncludes(aiSources, 'plugins/touch-quickops/index.test.cjs', 'sensitivePayloadRedacted')
+    // Retargeted from the flowAdapterTrace's own payloadKeys / sensitivePayloadRedacted
+    // fields. That trace has no consumer anywhere in the repo and projectItemsForHost
+    // strips it before items reach the host, so asserting it proved a structure nothing
+    // reads. The protection that actually holds is the projection whitelist, so the
+    // evidence points there. See #323.
+    sourceIncludes(
+      aiSources,
+      'plugins/touch-quickops/index.test.cjs',
+      'publishes only whitelisted meta, so request detail cannot leak'
+    )
   )
 }
 
@@ -288,10 +296,12 @@ function hasRuntimeDispatchBridge(aiSources: Array<{ path: string; source: strin
     sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'confirmationToken') &&
     sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'runtimeDispatchBridge: true') &&
     sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'runtimeDispatchBridge: false') &&
+    // The suite covers this under a more specific name than the marker used to expect;
+    // the test was never lost, only the marker went stale.
     sourceIncludes(
       aiSources,
       'plugins/touch-quickops/index.test.cjs',
-      'onItemAction dispatches safe QuickOps Flow action'
+      'onItemAction dispatches only the fixed Flow payload and awaits the acknowledgement'
     )
   )
 }
