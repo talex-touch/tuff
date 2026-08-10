@@ -18,6 +18,12 @@
       what the renderer actually reaches at runtime (user-configured AI provider origins,
       the Vite dev server and its websocket) that a static reading cannot produce; tracked
       on the issue rather than guessed at here.
+
+      object-src, frame-src and worker-src are set because they were falling through to
+      `default-src *` while nothing uses them: the renderer contains no <object>, <embed> or
+      <iframe>, and no `new Worker`. worker-src keeps 'self' blob: rather than 'none' because a
+      dependency may create one at runtime — that still excludes remote origins, which is the
+      part that mattered (#689).
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -30,6 +36,9 @@
     style-src * 'unsafe-inline' blob: data:;
     style-src-elem * 'unsafe-inline' blob: data:;
     media-src * blob: data: tfile:;
+    object-src 'none';
+    frame-src 'none';
+    worker-src 'self' blob:;
   "
     />
 
