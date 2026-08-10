@@ -227,6 +227,17 @@ function createGatherController(
     rejectPromise = reject
   })
 
+  // The only consumer (SearchSession.attachGather) keeps the controller for
+  // .abort() and .signal and never touches .promise, so a rejection here had
+  // nowhere to land and surfaced as an unhandled rejection on the main process.
+  // This keeps the promise available to any future caller — awaiting it still
+  // rethrows — while guaranteeing the rejection is observed exactly once (#668).
+  promise.catch((error) => {
+    gatherLog.debug('Gather failed with no consumer attached', {
+      error: error instanceof Error ? error : new Error(String(error))
+    })
+  })
+
   const resolve = (value: number): void => {
     if (settled) return
     settled = true
