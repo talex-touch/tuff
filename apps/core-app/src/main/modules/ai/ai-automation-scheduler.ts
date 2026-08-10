@@ -96,19 +96,44 @@ function isValidCronExpression(expression: string): boolean {
     isValidCronField(fields[1]!, 0, 23) &&
     isValidCronField(fields[2]!, 1, 31) &&
     isValidCronField(fields[3]!, 1, 12) &&
-    isValidCronField(fields[4]!, 0, 6)
+    isValidCronField(fields[4]!, 0, 7)
   )
+}
+
+/**
+ * Cron spells Sunday as both 0 and 7; Date.getDay() only ever reports 0, so a schedule written
+ * `0 9 * * 7` matched nothing before (#772).
+ */
+function matchesDayOfWeek(day: number, expression: string): boolean {
+  if (matchesCronField(day, expression, 0, 7)) return true
+  return day === 0 && matchesCronField(7, expression, 0, 7)
 }
 
 export function cronMatches(expression: string, date: Date): boolean {
   const fields = expression.trim().split(/\s+/)
   if (fields.length !== 5) return false
+
+  const dayOfMonthExpression = fields[2]!
+  const dayOfWeekExpression = fields[4]!
+
+  /*
+   * POSIX unions the two day fields when both are restricted: `0 9 1 * 1` means "the 1st, and
+   * every Monday", not "Mondays that happen to fall on the 1st" -- which is roughly once a year
+   * instead of about five times a month. Only a literal `*` counts as unrestricted, matching
+   * Vixie cron, so `1-31` is still a restriction.
+   */
+  const dayOfMonthMatches = matchesCronField(date.getDate(), dayOfMonthExpression, 1, 31)
+  const dayOfWeekMatches = matchesDayOfWeek(date.getDay(), dayOfWeekExpression)
+  const dayMatches =
+    dayOfMonthExpression === '*' || dayOfWeekExpression === '*'
+      ? dayOfMonthMatches && dayOfWeekMatches
+      : dayOfMonthMatches || dayOfWeekMatches
+
   return (
     matchesCronField(date.getMinutes(), fields[0]!, 0, 59) &&
     matchesCronField(date.getHours(), fields[1]!, 0, 23) &&
-    matchesCronField(date.getDate(), fields[2]!, 1, 31) &&
     matchesCronField(date.getMonth() + 1, fields[3]!, 1, 12) &&
-    matchesCronField(date.getDay(), fields[4]!, 0, 6)
+    dayMatches
   )
 }
 
