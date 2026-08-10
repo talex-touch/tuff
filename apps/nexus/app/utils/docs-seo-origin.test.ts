@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { buildDocsSeoHead } from './docs-seo'
 
@@ -48,6 +49,23 @@ describe('docs SEO absolute origin', () => {
     const serialized = JSON.stringify(seo)
     expect(serialized).not.toContain('http://localhost')
     expect(seo.canonicalUrl).toMatch(/^https:\/\//)
+  })
+
+  it('页面在 setup 阶段取 runtimeConfig,而不是在 computed 里', () => {
+    // The first version of this fix called useRuntimeConfig() inside the computed that feeds
+    // useHead. unhead resolves those tags after the setup context is gone, so every prerendered
+    // docs page died with `[nuxt] instance unavailable` and a 500.
+    const page = readFileSync(
+      new URL('../pages/docs/[...slug].vue', import.meta.url),
+      'utf8',
+    )
+
+    // Positive control: the read produced the real page, so the absence check below means
+    // something.
+    expect(page).toContain('const seoOrigin = computed(')
+
+    expect(page).toContain('const runtimeConfig = useRuntimeConfig()')
+    expect(page).not.toMatch(/computed\([\s\S]{0,200}?useRuntimeConfig\(\)/)
   })
 
   it('still honours whatever origin it is handed', () => {

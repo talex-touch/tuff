@@ -44,8 +44,12 @@ const requestUrl = useRequestURL()
 // not vary with how the page was fetched, and at prerender time there is no
 // request host at all. The configured site URL wins; the request origin stays as
 // a fallback for deployments that leave NUXT_PUBLIC_SITE_URL unset (#679).
+// Resolved during setup, not inside the computed: `docSeoHead` is handed to `useHead`, and
+// unhead resolves those tags after the setup context is gone. Calling a Nuxt composable there
+// throws `[nuxt] instance unavailable`, which failed prerender on every docs page.
+const runtimeConfig = useRuntimeConfig()
 const seoOrigin = computed(
-  () => (useRuntimeConfig().public.siteUrl as string | undefined) || requestUrl.origin,
+  () => (runtimeConfig.public.siteUrl as string | undefined) || requestUrl.origin,
 )
 const { t, setLocale } = useI18n()
 const activeRoutePath = ref(route.path)
