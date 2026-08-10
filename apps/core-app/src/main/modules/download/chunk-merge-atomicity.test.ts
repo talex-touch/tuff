@@ -43,7 +43,7 @@ async function chunk(dir: string, index: number, body: string, status: ChunkStat
 describe('chunk merge does not damage the destination', () => {
   it('合并成功后目标文件是完整拼接结果', async () => {
     const dir = await createWorkspace()
-    const manager = new ChunkManager(dir)
+    const manager = new ChunkManager(undefined, dir)
     const chunks = [
       await chunk(dir, 0, 'hello-', ChunkStatus.COMPLETED),
       await chunk(dir, 1, 'world', ChunkStatus.COMPLETED)
@@ -58,7 +58,7 @@ describe('chunk merge does not damage the destination', () => {
     const dir = await createWorkspace()
     const destination = path.join(dir, 'payload.bin')
     await fs.writeFile(destination, 'previous-good-download')
-    const manager = new ChunkManager(dir)
+    const manager = new ChunkManager(undefined, dir)
     const chunks = [
       await chunk(dir, 0, 'partial-', ChunkStatus.COMPLETED),
       await chunk(dir, 1, 'never-written', ChunkStatus.PENDING)
@@ -70,9 +70,9 @@ describe('chunk merge does not damage the destination', () => {
     expect(await fs.readFile(destination, 'utf8')).toBe('previous-good-download')
   })
 
-  it('失败后不留下 .part 残file', async () => {
+  it('失败后不留下 .part 残留文件', async () => {
     const dir = await createWorkspace()
-    const manager = new ChunkManager(dir)
+    const manager = new ChunkManager(undefined, dir)
     const chunks = [
       await chunk(dir, 0, 'partial-', ChunkStatus.COMPLETED),
       await chunk(dir, 1, 'never-written', ChunkStatus.PENDING)
@@ -86,7 +86,7 @@ describe('chunk merge does not damage the destination', () => {
 
   it('目标文件此前不存在且合并失败时,不会凭空造出一个截断文件', async () => {
     const dir = await createWorkspace()
-    const manager = new ChunkManager(dir)
+    const manager = new ChunkManager(undefined, dir)
     const chunks = [
       await chunk(dir, 0, 'partial-', ChunkStatus.COMPLETED),
       await chunk(dir, 1, 'never-written', ChunkStatus.PENDING)
