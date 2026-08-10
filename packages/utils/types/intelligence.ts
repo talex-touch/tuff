@@ -405,6 +405,14 @@ export interface IntelligenceMessage {
   /** Optional sender name. */
   name?: string;
   /**
+   * Routing and context-policy hints carried alongside the turn.
+   *
+   * `unknown` rather than `any`: the only consumer spreads it and adds a key
+   * (agent-runtime normalising promptInjection), so nothing needs to index it, and `any` here
+   * would leak through every re-export.
+   */
+  metadata?: Record<string, unknown>;
+  /**
    * Attachments the user sent with this turn. Optional by design: a provider that cannot read
    * binaries simply never looks at it, which is what keeps the degrade silent instead of fatal.
    */

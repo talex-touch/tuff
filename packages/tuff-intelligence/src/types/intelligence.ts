@@ -1,5 +1,36 @@
+/**
+ * The IPC message shape, owned by @talex-touch/utils.
+ *
+ * It was declared here as well, and the two had already drifted — this copy carried `metadata`
+ * and the utils one did not. Main-process code imports the utils copy and renderer components
+ * import this one, so nothing typechecked them against each other and the divergence was
+ * invisible until a message crossed the boundary (#519).
+ *
+ * Re-exported rather than re-declared: tuff-intelligence already depends on utils, so the
+ * direction is settled and there is no second declaration left to drift.
+ */
+
 import { DEFAULT_CAPABILITIES as SHARED_DEFAULT_CAPABILITIES } from "@talex-touch/utils/types/intelligence";
 import { NEXUS_BASE_URL } from "../env";
+/**
+ * The IPC message shape, owned by @talex-touch/utils.
+ *
+ * It was declared here as well, and the two had already drifted — this copy carried `metadata`
+ * and the utils one did not. Main-process code imports the utils copy and renderer components
+ * import this one, so nothing typechecked them against each other and the divergence was
+ * invisible until a message crossed the boundary (#519).
+ *
+ * Re-exported rather than re-declared: tuff-intelligence already depends on utils, so the
+ * direction is settled and there is no second declaration left to drift. The import alongside is
+ * needed because `export type … from` does not bind the name locally, and this file uses it.
+ */
+import type { IntelligenceMessage } from "@talex-touch/utils/types/intelligence";
+
+export type {
+  IntelligenceMessage,
+  IntelligenceMessageAttachment
+} from "@talex-touch/utils/types/intelligence";
+
 
 export type {
   BuildContextInput,
@@ -438,39 +469,7 @@ export interface IntelligenceProviderConfig {
   metadata?: Record<string, any>;
 }
 
-/**
- * A binary the user attached to a turn.
- *
- * Carried inline as a data URL rather than as a path: the renderer holds the bytes in memory and
- * only the main process may write to disk, so a path would name a file the sender cannot produce.
- */
-export interface IntelligenceMessageAttachment {
-  /** Images are the only kind carried today; providers that cannot read one ignore the field. */
-  type: "image";
-  /** `data:image/(png|jpeg|webp|gif);base64,…`, re-validated by whoever consumes it. */
-  dataUrl: string;
-  /** Original filename, for display only — never trusted to decide the on-disk extension. */
-  name?: string;
-}
 
-/**
- * Chat message structure.
- */
-export interface IntelligenceMessage {
-  /** Message role. */
-  role: "system" | "user" | "assistant";
-  /** Message content. */
-  content: string;
-  /** Optional metadata for routing/context policies. */
-  metadata?: Record<string, any>;
-  /** Optional sender name. */
-  name?: string;
-  /**
-   * Attachments the user sent with this turn. Optional by design: a provider that cannot read
-   * binaries simply never looks at it, which is what keeps the degrade silent instead of fatal.
-   */
-  attachments?: IntelligenceMessageAttachment[];
-}
 
 /**
  * Options for invoking an intelligence capability.
