@@ -983,6 +983,7 @@
     "regenerate": "重新生成",
     "error": {
       "noProvider": "还没有可用的 AI 提供商，去「设置 · AI」配置一个再试",
+      "agentToolsSync": "无法连接工具网关，智能体工具保持关闭",
       "empty": "模型没有返回任何内容",
       "generic": "这轮回复失败了"
     },
