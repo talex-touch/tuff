@@ -82,6 +82,23 @@ pub fn compose_region(
         .iter()
         .map(|attachment| (attachment.descriptor.id.as_str(), attachment))
         .collect();
+    // Every attachment any source names, whether or not that source ends up intersecting the
+    // requested rect. The post-loop check below uses this rather than `used_attachments`, which
+    // only records what was actually decoded.
+    let referenced_attachments: HashSet<&str> = input
+        .sources
+        .iter()
+        .flat_map(|source| {
+            source
+                .image_parts
+                .iter()
+                .map(|part| part.attachment_id.as_str())
+        })
+        .collect();
+    let unreferenced = attachments
+        .iter()
+        .any(|attachment| !referenced_attachments.contains(attachment.descriptor.id.as_str()));
+
     let mut used_attachments = HashSet::new();
     let mut decoded_sources = Vec::with_capacity(input.sources.len());
     let mut working_set_bytes: u64 = 0;
@@ -128,7 +145,12 @@ pub fn compose_region(
         decoded_sources.push((source.global_rect, intersection, source_scale, image));
     }
 
-    if decoded_sources.is_empty() || used_attachments.len() != attachments.len() {
+    // Requiring every attachment to have been *decoded* made the skip branch above unreachable: a
+    // source that does not intersect the rect never consumes its attachments, so freezing three
+    // displays and composing a region across two of them failed the whole request with
+    // SCREENSHOT_INVALID_REGION (#847). What the check is for - refusing payload no source asked
+    // for - is preserved by testing against the referenced set instead.
+    if decoded_sources.is_empty() || unreferenced {
         return Err(ScreenshotError::InvalidRegion.to_protocol_error());
     }
     let output_size = PixelSize::new(
@@ -394,6 +416,90 @@ mod tests {
             .into_rgba8();
         assert_eq!(image.get_pixel(0, 0).0, [255, 0, 0, 255]);
         assert_eq!(image.get_pixel(3, 0).0, [0, 0, 255, 255]);
+    }
+
+    /// Three frozen displays, a region covering two of them. The third source hits the
+    /// non-intersecting `continue`, so its attachment is never decoded — and requiring every
+    /// attachment to have been decoded failed the whole request (#847).
+    #[test]
+    fn composes_across_a_subset_of_frozen_displays() {
+        let left = attachment("source:0", png([255, 0, 0, 255], 2, 2));
+        let right = attachment("source:1", png([0, 0, 255, 255], 2, 2));
+        let far = attachment("source:2", png([0, 255, 0, 255], 2, 2));
+        let result = compose_region(
+            json!({
+                "generation": "generation:test",
+                "rect": { "x": 0.0, "y": 0.0, "width": 2.0, "height": 1.0 },
+                "sources": [
+                    {
+                        "globalRect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                        "imageParts": [{ "attachmentId": "source:0", "offset": 0, "byteLength": left.data.len() }]
+                    },
+                    {
+                        "globalRect": { "x": 1.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                        "imageParts": [{ "attachmentId": "source:1", "offset": 0, "byteLength": right.data.len() }]
+                    },
+                    {
+                        "globalRect": { "x": 50.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                        "imageParts": [{ "attachmentId": "source:2", "offset": 0, "byteLength": far.data.len() }]
+                    }
+                ]
+            }),
+            vec![left, right, far],
+            ScreenshotLimits::default(),
+        )
+        .unwrap();
+
+        let image = image::load_from_memory(&result.png_bytes)
+            .unwrap()
+            .into_rgba8();
+        assert_eq!(image.get_pixel(0, 0).0, [255, 0, 0, 255]);
+        assert_eq!(image.get_pixel(3, 0).0, [0, 0, 255, 255]);
+    }
+
+    /// The half the old check was actually guarding, and which must survive the fix: payload no
+    /// source ever names is still refused.
+    #[test]
+    fn rejects_an_attachment_no_source_references() {
+        let used = attachment("source:0", png([255, 0, 0, 255], 1, 1));
+        let stray = attachment("source:stray", png([0, 255, 0, 255], 1, 1));
+        let error = compose_region(
+            json!({
+                "generation": "generation:test",
+                "rect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                "sources": [{
+                    "globalRect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                    "imageParts": [{ "attachmentId": "source:0", "offset": 0, "byteLength": used.data.len() }]
+                }]
+            }),
+            vec![used, stray],
+            ScreenshotLimits::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "SCREENSHOT_INVALID_REGION");
+    }
+
+    /// A request whose sources all miss the rect has nothing to compose, so it stays an error -
+    /// otherwise "skipped sources are fine" would quietly mean "an empty canvas is fine".
+    #[test]
+    fn rejects_a_region_no_source_intersects() {
+        let far = attachment("source:0", png([0, 255, 0, 255], 1, 1));
+        let error = compose_region(
+            json!({
+                "generation": "generation:test",
+                "rect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                "sources": [{
+                    "globalRect": { "x": 50.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                    "imageParts": [{ "attachmentId": "source:0", "offset": 0, "byteLength": far.data.len() }]
+                }]
+            }),
+            vec![far],
+            ScreenshotLimits::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "SCREENSHOT_INVALID_REGION");
     }
 
     #[test]
