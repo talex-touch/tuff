@@ -1278,10 +1278,12 @@ export class ClipboardModule extends BaseModule {
         .map((filePath) => pathToFileURL(filePath).toString())
         .join('\n')
       const buffer = Buffer.from(fileUrlContent, 'utf8')
+      // Same ordering rule as clipboard-autopaste-automation: clipboard.write() replaces
+      // everything, so the file formats have to be written after it, not before (#782).
+      clipboard.write({ text: resolvedPaths[0] ?? '' })
       for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
         clipboard.writeBuffer(format, buffer)
       }
-      clipboard.write({ text: resolvedPaths[0] ?? '' })
       this.clipboardHelper?.primeFiles(resolvedPaths)
       this.lastSuccessfulClipboardScanAt = Date.now()
       return
