@@ -17,7 +17,11 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, '..')
-const pluginsDir = path.resolve(rootDir, 'plugins')
+// TUFF_PLUGINS_DIR lets the gate's own tests point it at a fixture tree. Without it the only way
+// to prove the checks fire is to break a real plugin, which is how a gate ends up untested.
+const pluginsDir = process.env.TUFF_PLUGINS_DIR
+  ? path.resolve(process.env.TUFF_PLUGINS_DIR)
+  : path.resolve(rootDir, 'plugins')
 
 // Known permission IDs from packages/utils/permission/registry.ts
 const KNOWN_PERMISSION_IDS = new Set([
@@ -103,6 +107,29 @@ const pluginDirs = entries
 
 console.log(`\nValidating ${pluginDirs.length} plugins in plugins/\n`)
 
+/**
+ * Fails a plugin that ships with its development loader switched on.
+ *
+ * `dev.enable: true` makes the runtime fetch the Surface from `dev.address` — a localhost port —
+ * instead of the packaged files, so a committed one is a plugin that silently does nothing on a
+ * user's machine. AGENTS.md cites `pnpm plugins:validate` as the manifest gate, and it did not
+ * look at the dev block at all: three manifests shipped `dev.enable: true` while it reported
+ * 24/24 passed (#812).
+ *
+ * Both sources are checked. The block lives in `manifest.json` for most plugins and in
+ * `package.json` under `talex-touch.plugin.dev` for package-backed ones — and the second is where
+ * it was actually still hiding, in a directory the manifest check skips entirely.
+ *
+ * @returns true when the plugin should fail.
+ */
+function checkDevLeakage(pluginName, dev, source) {
+  if (!dev || dev.enable !== true)
+    return false
+  const address = typeof dev.address === 'string' ? ` (${dev.address})` : ''
+  logError(pluginName, `${source} ships dev.enable: true${address} — the runtime would load the Surface from a dev server instead of the packaged files`)
+  return true
+}
+
 for (const pluginName of pluginDirs) {
   totalPlugins++
   const pluginPath = path.join(pluginsDir, pluginName)
@@ -120,6 +147,8 @@ for (const pluginName of pluginDirs) {
         logError(pluginName, `package.json name must be "${expectedPackageName}" (received "${packageManifest.name || '<missing>'}")`)
         pluginHasError = true
       }
+      if (checkDevLeakage(pluginName, packageManifest?.['talex-touch']?.plugin?.dev, 'package.json'))
+        pluginHasError = true
     }
     catch (e) {
       logError(pluginName, `package.json parse error: ${e.message}`)
@@ -146,6 +175,9 @@ for (const pluginName of pluginDirs) {
     pluginHasError = true
     continue
   }
+
+  if (checkDevLeakage(pluginName, manifest?.dev, 'manifest.json'))
+    pluginHasError = true
 
   // 2. Required fields: id (or name), name, version
   if (!manifest.name) {

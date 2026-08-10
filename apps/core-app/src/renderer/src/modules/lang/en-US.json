@@ -983,6 +983,7 @@
     "regenerate": "Regenerate",
     "error": {
       "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
+      "agentToolsSync": "Could not reach the tool gateway — agent tools stay off",
       "empty": "The model returned nothing",
       "generic": "This reply failed"
     },

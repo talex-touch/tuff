@@ -15,12 +15,6 @@
       "type": "class",
       "value": "i-ri-image-2-line"
     },
-    "plugin": {
-      "dev": {
-        "enable": true,
-        "address": "http://127.0.0.1:6001"
-      }
-    },
     "build": {
       "files": [
         "README.md"
