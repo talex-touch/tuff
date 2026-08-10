@@ -9,6 +9,7 @@ import { AppEvents, installTransportPortHandoff } from '@talex-touch/utils/trans
 import appLogoSvgRaw from '../../public/logo.svg?raw'
 import { contextBridge, ipcRenderer } from 'electron'
 import { RAW_MAIN_PROCESS_CHANNEL, RAW_PLUGIN_PROCESS_CHANNEL } from '../shared/ipc/raw-channel'
+import { resolvePreloadTargetOrigin } from './preload-target-origin'
 
 interface StartupHandshakePayload {
   rendererStartTime: number
@@ -103,12 +104,11 @@ const api: CoreAppPreloadAPI = {
    * Update loading overlay from renderer when needed.
    */
   sendPreloadEvent(event: LoadingEvent) {
-    const targetOrigin =
-      window.location.origin !== 'null'
-        ? window.location.origin
-        : window.location.protocol === 'file:'
-          ? 'file://'
-          : '*'
+    const targetOrigin = resolvePreloadTargetOrigin(window.location)
+    if (!targetOrigin) {
+      console.warn('[preload] Skipped a loading event: the page origin could not be determined')
+      return
+    }
     window.postMessage({ channel: PRELOAD_LOADING_CHANNEL, data: event }, targetOrigin)
   },
   async getStartupContext() {
