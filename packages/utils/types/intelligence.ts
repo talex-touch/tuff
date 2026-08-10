@@ -1,4 +1,5 @@
 import { NEXUS_BASE_URL } from "../env";
+import { TUFF_NEXUS_PROVIDER_ID } from "../intelligence/nexus-provider";
 
 /**
  * Supported intelligence provider types.
@@ -2937,7 +2938,7 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     rateLimit: {},
   },
   {
-    id: "tuff-nexus-default",
+    id: TUFF_NEXUS_PROVIDER_ID,
     type: IntelligenceProviderType.CUSTOM,
     name: "Tuff Nexus",
     enabled: false,
@@ -2989,7 +2990,7 @@ export const DEFAULT_CAPABILITIES: Record<
     label: "对话 / Chat",
     description: "通用对话、问答、助理类能力",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "openai-default", priority: 2, enabled: false },
       { providerId: "anthropic-default", priority: 3, enabled: false },
       { providerId: "deepseek-default", priority: 4, enabled: true },
@@ -3048,7 +3049,7 @@ export const DEFAULT_CAPABILITIES: Record<
     label: "图片翻译 / Image Translation",
     description: "将图片中的文字翻译并返回译后图片",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
     ],
   },
   "text.translate": {
@@ -3058,7 +3059,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "你是专业翻译助手。请将以下文本翻译成 {{targetLang}}，只返回译文，不要解释。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
       { providerId: "anthropic-default", priority: 4, enabled: false },
@@ -3071,7 +3072,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "请用简洁的语言总结以下内容的核心要点，不超过 {{maxLength}} 字。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
       { providerId: "anthropic-default", priority: 4, enabled: false },
@@ -3084,7 +3085,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "请按 {{style}} 风格、{{tone}} 语气改写以下文本，并尽量保留原意。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
       { providerId: "anthropic-default", priority: 4, enabled: false },
@@ -3121,7 +3122,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "分析用户输入的意图，返回 JSON 格式：{intent: string, confidence: number, entities: string[]}",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
@@ -3133,7 +3134,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "你是编程助手。根据需求生成 {{language}} 代码，包含注释说明。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       {
         providerId: "deepseek-default",
         models: ["deepseek-coder"],
@@ -3155,7 +3156,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "你是编程导师。用通俗易懂的语言解释这段代码的功能、逻辑和关键点。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       {
         providerId: "deepseek-default",
         models: ["deepseek-coder"],
@@ -3172,7 +3173,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "从文本中提取关键信息，返回 JSON 格式：{dates: [], people: [], locations: [], keywords: []}",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
@@ -3184,7 +3185,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       '分析文本情感倾向，返回 JSON：{sentiment: "positive"|"negative"|"neutral", score: 0-1, keywords: []}',
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
@@ -3196,7 +3197,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "作为资深代码审查员，审查以下代码。关注：1) 潜在bug 2) 性能问题 3) 安全隐患 4) 最佳实践 5) 可读性",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       {
         providerId: "deepseek-default",
         models: ["deepseek-coder"],
@@ -3262,7 +3263,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "从文本中提取最重要的关键词，返回 JSON 数组：{keywords: [{term: string, relevance: number}]}",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
