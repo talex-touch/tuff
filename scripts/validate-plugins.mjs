@@ -43,6 +43,12 @@ const KNOWN_PERMISSION_IDS = new Set([
   'search.root-results',
   'window.create',
   'window.capture',
+  // Added when the drift below was measured: the registry had 27 ids, this set had 22.
+  'storage.sqlite',
+  'media.read',
+  'i18n.read',
+  'lexicon.read',
+  'lexicon.register',
 ])
 
 function resolveSearchProviderPermissionIds(scopes = []) {
@@ -181,7 +187,10 @@ for (const pluginName of pluginDirs) {
       .forEach(id => declaredPermissionIds.add(id))
     const unknownIds = rawIds.filter(id => typeof id === 'string' && !KNOWN_PERMISSION_IDS.has(id))
     if (unknownIds.length > 0) {
-      logWarn(pluginName, `Unknown permission IDs: ${unknownIds.join(', ')}`)
+      // logError, not logWarn: a warning does not affect the exit code, so a manifest
+      // asking for a permission the runtime does not define passed CI silently. All 24
+      // plugins are clean today, so this fails nothing that currently works (#735).
+      logError(pluginName, `Unknown permission IDs: ${unknownIds.join(', ')}`)
     }
   }
 
