@@ -63,8 +63,8 @@ describe('saveConversation rolls back a failed replace-all', () => {
       id: 'thread-1',
       title: 'first',
       messages: [
-        { id: 'm1', role: 'user', content: 'hello', status: 'complete', seq: 0, createdAt: 1 },
-        { id: 'm2', role: 'assistant', content: 'hi', status: 'complete', seq: 1, createdAt: 2 }
+        { id: 'm1', role: 'user', content: 'hello', status: 'complete', createdAt: 1 },
+        { id: 'm2', role: 'assistant', content: 'hi', status: 'complete', createdAt: 2 }
       ]
     })
 
@@ -78,8 +78,8 @@ describe('saveConversation rolls back a failed replace-all', () => {
       id: 'thread-1',
       title: 'first',
       messages: [
-        { id: 'm1', role: 'user', content: 'hello', status: 'complete', seq: 0, createdAt: 1 },
-        { id: 'm2', role: 'assistant', content: 'hi', status: 'complete', seq: 1, createdAt: 2 }
+        { id: 'm1', role: 'user', content: 'hello', status: 'complete', createdAt: 1 },
+        { id: 'm2', role: 'assistant', content: 'hi', status: 'complete', createdAt: 2 }
       ]
     })
 
@@ -90,8 +90,8 @@ describe('saveConversation rolls back a failed replace-all', () => {
         id: 'thread-1',
         title: 'second',
         messages: [
-          { id: 'dup', role: 'user', content: 'a', status: 'complete', seq: 0, createdAt: 3 },
-          { id: 'dup', role: 'assistant', content: 'b', status: 'complete', seq: 1, createdAt: 4 }
+          { id: 'dup', role: 'user', content: 'a', status: 'complete', createdAt: 3 },
+          { id: 'dup', role: 'assistant', content: 'b', status: 'complete', createdAt: 4 }
         ]
       })
     ).rejects.toThrow()
