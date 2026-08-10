@@ -241,7 +241,7 @@ describe('selectionCaptureService.capture', () => {
     await advanceCopyPollingDelay()
     await capture
 
-    const restored = mocks.writeBuffer.mock.calls.map(([format]: [string]) => format)
+    const restored = mocks.writeBuffer.mock.calls.map((call: unknown[]) => call[0] as string)
     // The format after the failing one is the point: it used to never be attempted.
     expect(restored).toContain('image/png')
     expect(restored).toEqual(['text/plain', 'text/html', 'image/png'])

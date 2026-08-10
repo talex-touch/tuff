@@ -127,7 +127,7 @@ function restoreClipboard(snapshot: ClipboardSnapshot): boolean {
       meta: {
         restored: snapshot.items.length - failedFormats.length,
         total: snapshot.items.length,
-        failedFormats
+        failedFormats: failedFormats.join(', ')
       }
     })
     return false
