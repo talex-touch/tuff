@@ -15,6 +15,7 @@ import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport/main'
 import { app, BrowserWindow } from 'electron'
+import { resolveSentryTracesSampleRate } from '@talex-touch/utils/base/sentry-sampling'
 import { innerRootPath } from '../../core/precore'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -793,8 +794,12 @@ export class SentryServiceModule extends BaseModule {
         environment: process.env.BUILD_TYPE || (app.isPackaged ? 'production' : 'development'),
         // Release information
         release: `${getAppVersionSafe()}@${process.env.BUILD_TYPE || 'release'}`,
-        // Sample rate for performance monitoring
-        tracesSampleRate: 1.0,
+        // Sample rate for performance monitoring. isDevelopmentRuntime is computed just above and
+        // was already branching `environment`; sampling now uses it too (#799).
+        tracesSampleRate: resolveSentryTracesSampleRate({
+          isDevelopment: isDevelopmentRuntime,
+          override: process.env.TUFF_SENTRY_TRACES_SAMPLE_RATE
+        }),
         // Before send hook to filter sensitive data
         beforeSend(event) {
           event.contexts = {
