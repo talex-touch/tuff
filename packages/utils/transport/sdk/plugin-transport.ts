@@ -148,6 +148,11 @@ function unwrapPayload<T>(raw: unknown): T {
 export class TuffPluginTransport implements ITuffTransport {
   private cache = new Map<string, CacheEntry>()
   private handlers = new Map<string, Set<(payload: any) => any>>()
+  /**
+   * Channel-level registrations made by on(). The per-handler disposer goes to the caller, but
+   * destroy() has to be able to release the ones the caller never held.
+   */
+  private channelCleanups = new Set<() => void>()
   private streamControllers = new Map<string, StreamController>()
   private portCache = new Map<string, TransportPortHandle>()
   private portHandlesById = new Map<string, TransportPortHandle>()
@@ -689,13 +694,18 @@ export class TuffPluginTransport implements ITuffTransport {
       throw new TypeError('[TuffPluginTransport] Channel on function not available')
     }
 
+    const releaseChannel = cleanupChannel
+    this.channelCleanups.add(releaseChannel)
+
     return () => {
       handlerSet.delete(handler)
       if (handlerSet.size === 0) {
         this.handlers.delete(eventName)
         this.releasePortEventSubscription(eventName)
       }
-      cleanupChannel?.()
+      // Dropping it first keeps destroy() from calling the same cleanup a second time.
+      if (this.channelCleanups.delete(releaseChannel))
+        releaseChannel()
     }
   }
 
@@ -708,6 +718,18 @@ export class TuffPluginTransport implements ITuffTransport {
       controller.cancel()
     }
     this.streamControllers.clear()
+    // The channel registrations go too: on() hands its disposer to the caller, and a caller that
+    // only kept the transport left the underlying onMain/regChannel attached, still firing
+    // handlers against a destroyed transport.
+    for (const cleanup of this.channelCleanups) {
+      try {
+        cleanup()
+      }
+      catch (error) {
+        console.error('[TuffPluginTransport] Channel cleanup failed during destroy:', error)
+      }
+    }
+    this.channelCleanups.clear()
     this.handlers.clear()
 
     if (this.portListenerCleanup) {
