@@ -1,12 +1,28 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../db/utils'
-import { sql } from 'drizzle-orm'
+import { desc, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { scheduleDbWrite } from '../../../db/db-write'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('QueryCompletionService')
 const MIN_COMPLETION_QUERY_LENGTH = 2
+const LIKE_ESCAPE_CHAR = '\\'
+const SQLITE_LIKE_WILDCARD_REGEX = /[%_\\]/g
+
+/**
+ * Upper bound on rows pulled into JS for scoring. The final ranking is computed
+ * in JS (frequency x recency x match quality), so the SQL LIMIT cannot simply be
+ * `limit` — that would hand the JS sort a different candidate set than the one it
+ * is meant to rank. The scan is ordered by the terms that dominate the score so
+ * the strongest candidates fall inside the window.
+ */
+const COMPLETION_SCAN_LIMIT = 200
+
+/** Neutralises SQLite LIKE metacharacters; pair with `ESCAPE ${LIKE_ESCAPE_CHAR}`. */
+function escapeLikeWildcards(value: string): string {
+  return value.replace(SQLITE_LIKE_WILDCARD_REGEX, (match) => `${LIKE_ESCAPE_CHAR}${match}`)
+}
 
 export interface CompletionSuggestion {
   sourceId: string
@@ -108,10 +124,22 @@ export class QueryCompletionService {
     const prefix = this.normalizePrefix(query)
 
     try {
+      // Escaped and bounded. Previously the pattern came straight from user text,
+      // so typing '%' matched every row, and there was no SQL LIMIT at all — the
+      // `limit` argument was applied only after the whole table had been loaded
+      // and exp()-scored in JS, on every debounced keystroke (#664).
+      const likePattern = `${escapeLikeWildcards(prefix)}%`
       const results = await db
         .select()
         .from(schema.queryCompletions)
-        .where(sql`${schema.queryCompletions.prefix} LIKE ${`${prefix}%`}`)
+        .where(
+          sql`${schema.queryCompletions.prefix} LIKE ${likePattern} ESCAPE ${LIKE_ESCAPE_CHAR}`
+        )
+        .orderBy(
+          desc(schema.queryCompletions.completionCount),
+          desc(schema.queryCompletions.lastCompleted)
+        )
+        .limit(Math.max(limit, COMPLETION_SCAN_LIMIT))
         .all()
 
       if (results.length === 0) {
