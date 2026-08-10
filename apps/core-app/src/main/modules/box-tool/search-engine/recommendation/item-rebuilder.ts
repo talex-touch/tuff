@@ -27,6 +27,30 @@ const getMetaString = (item: TuffItem, key: string): string | undefined => {
   return typeof value === 'string' ? value : undefined
 }
 
+/**
+ * Every identifier an app item is legitimately known by. buildProcessedAppItem
+ * ids an app as `appIdentity || path || bundleId`, and a scored candidate may
+ * have been recorded under any of those, so matching has to span the forms —
+ * but only by exact equality, never by containment.
+ */
+const getAppIdentitySet = (item: TuffItem): Set<string> => {
+  const meta = item.meta as Record<string, unknown> | undefined
+  const app = meta?.app as Record<string, unknown> | undefined
+  const identities = new Set<string>()
+
+  for (const value of [
+    item.id,
+    getMetaString(item, '_originalItemId'),
+    typeof app?.path === 'string' ? app.path : undefined,
+    typeof app?.bundleId === 'string' ? app.bundleId : undefined,
+    typeof app?.launchTarget === 'string' ? app.launchTarget : undefined
+  ]) {
+    if (value) identities.add(value)
+  }
+
+  return identities
+}
+
 function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
   if (!icon || typeof icon !== 'object') return { ...DEFAULT_PLUGIN_RECOMMEND_ICON }
 
@@ -499,12 +523,19 @@ export class ItemRebuilder {
       return scoredItems.find((s) => s.itemId.endsWith(`/${itemId}`) || s.itemId === itemId)
     }
 
-    // App provider: match by path or bundleId inclusion
+    // App provider: the rebuilt item and the scored candidate can legitimately
+    // carry different forms of the same app (buildProcessedAppItem ids by
+    // appIdentity || path || bundleId), so this still matches across forms — but
+    // against the item's own identity set, by equality.
+    //
+    // It used to be a two-way `includes`, which made one app inherit another's
+    // score whenever one id was a prefix of the other: 'com.google.Chrome' is a
+    // substring of 'com.google.Chrome.canary', so Chrome was enriched with
+    // Canary's score and, through _originalItemId, deduped and pin-matched as
+    // Canary (#666).
     if (sourceId === 'app-provider' || sourceId === 'application') {
-      return scoredItems.find((s) => {
-        if (itemId.startsWith('/') && s.itemId.startsWith('/')) return itemId === s.itemId
-        return s.itemId.includes(itemId) || itemId.includes(s.itemId)
-      })
+      const identities = getAppIdentitySet(item)
+      return scoredItems.find((s) => identities.has(s.itemId))
     }
 
     return undefined
@@ -523,10 +554,14 @@ export class ItemRebuilder {
 
     for (const item of items) {
       const originalItemId = getMetaString(item, '_originalItemId')
+      // Source-qualified keys are tried before bare ones. scoreMap holds both
+      // spellings, and item_usage_stats still carries two source ids for apps
+      // ('application' and 'app-provider'), so two candidates can share an
+      // itemId; a bare-key hit returns whichever was registered last (#667).
       const scored =
         (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
-        scoreMap.get(item.id) ||
         scoreMap.get(`${item.source.id}:${item.id}`) ||
+        scoreMap.get(item.id) ||
         this.findScoredByPartialMatch(item, scoredItems)
       if (!scored) continue
 

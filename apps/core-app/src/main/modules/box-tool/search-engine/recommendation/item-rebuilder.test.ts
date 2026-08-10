@@ -173,6 +173,184 @@ describe('ItemRebuilder', () => {
     expect(result.map((item) => item.scoring?.final)).toEqual([9_000, 120])
   })
 
+  it("does not let one app inherit a longer-named sibling's score", async () => {
+    // 'com.google.Chrome' is a substring of 'com.google.Chrome.canary'. The old
+    // two-way `includes` therefore matched Chrome against Canary's scored entry,
+    // handing Chrome the wrong score and, via _originalItemId, the wrong pin and
+    // dedupe identity (#666).
+    const dbUtils = {
+      getFilesByPaths: vi.fn(async () => []),
+      getFilesByBundleIds: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Google Chrome.app',
+          name: 'Google Chrome',
+          displayName: 'Google Chrome',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: 'com.google.Chrome',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Google Chrome' } },
+        actions: [],
+        meta: { app: { path: '/Applications/Google Chrome.app', bundleId: 'com.google.Chrome' } }
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'app-provider',
+        itemId: 'com.google.Chrome.canary',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 9_999
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+    const chrome = result.find((item) => item.id === 'com.google.Chrome')
+
+    expect(chrome?.scoring?.final ?? 0).not.toBe(9_999)
+  })
+
+  it('still matches an app recorded under a different identity form', async () => {
+    // The fallback exists because the rebuilt id (appIdentity) and the scored
+    // entry (path) can be different forms of the same app. Equality across the
+    // identity set has to keep that working, or the fix trades one bug for another.
+    const dbUtils = {
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Google Chrome.app',
+          name: 'Google Chrome',
+          displayName: 'Google Chrome',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: 'com.google.Chrome',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Google Chrome' } },
+        actions: [],
+        meta: { app: { path: '/Applications/Google Chrome.app', bundleId: 'com.google.Chrome' } }
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'app-provider',
+        itemId: '/Applications/Google Chrome.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 321
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+    const chrome = result.find((item) => item.id === 'com.google.Chrome')
+
+    expect(chrome?.scoring?.final).toBe(321)
+  })
+
+  it('prefers the candidate whose source matches the item over a bare id collision', async () => {
+    // item_usage_stats still carries both spellings of the app source, so two
+    // candidates can share an itemId and both survive deduplicateCandidates,
+    // which keys on sourceId:itemId. Querying the bare key first returned
+    // whichever happened to be registered last (#667).
+    const dbUtils = {
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Demo.app',
+          name: 'Demo',
+          displayName: 'Demo',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: '/Applications/Demo.app',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Demo' } },
+        actions: [],
+        meta: {}
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    // Same itemId under both source spellings; the 'application' one is
+    // registered last, so it wins the bare key.
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'app-provider',
+        itemId: '/Applications/Demo.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 500
+      },
+      {
+        sourceId: 'application',
+        itemId: '/Applications/Demo.app',
+        sourceType: 'app',
+        usageStats,
+        source: 'frequent',
+        score: 42
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+    const demo = result.find((item) => item.id === '/Applications/Demo.app')
+
+    // The rebuilt item's source is 'app-provider', so it must take that score.
+    expect(demo?.scoring?.final).toBe(500)
+  })
+
   it('preserves plugin recommendation icon metadata and class badge icons', async () => {
     const rebuilder = new ItemRebuilder({} as never)
     const scoredItems: ScoredItem[] = [
