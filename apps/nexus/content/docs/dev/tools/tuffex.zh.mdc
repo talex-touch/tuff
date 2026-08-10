@@ -86,19 +86,19 @@ code: |
 | 组件 | 描述 | 来源 |
 |------|------|------|
 | `TuffButton` | 带触感反馈的交互按钮 | `button/` |
-| `TuffFlatButton` | 扁平按钮，支持 loading 状态 | `base/button/FlatButton` |
-| `TuffSwitch` | 流畅动画的开关组件 | `base/switch/TSwitch` |
-| `TuffInput` | 输入框，支持 clearable 和 textarea | `base/input/FlatInput` |
-| `TuffCheckbox` | 复选框，SVG 动画勾选效果 | `base/checkbox/TCheckbox` |
-| `TuffSelect` | 下拉选择器，浮动定位 | `base/select/TSelect` |
-| `TuffSelectItem` | 选择器选项 | `base/select/TSelectItem` |
-| `TuffProgress` | 进度条，支持 indeterminate | `base/ProgressBar` |
+| `TuffFlatButton` | 扁平按钮，支持 loading 状态 | `flat-button/` |
+| `TuffSwitch` | 流畅动画的开关组件 | `switch/` |
+| `TuffInput` | 输入框，支持 clearable 和 textarea | `flat-input/` |
+| `TuffCheckbox` | 复选框，SVG 动画勾选效果 | `checkbox/` |
+| `TuffSelect` | 下拉选择器，浮动定位 | `select/` |
+| `TuffSelectItem` | 选择器选项 | `select/` |
+| `TuffProgress` | 进度条，支持 indeterminate | `progress/` |
 
 **计划中**
 
 | 组件 | 描述 | 来源 |
 |------|------|------|
-| `TuffModal` | 带入场动画的模态对话框 | `base/dialog/` |
+| `TuffModal` | 带入场动画的模态对话框 | `modal/` |
 | `TxScroll` | 原生体验的自定义滚动条 | `@talex-touch/tuffex` |
 | `TuffTabs` | 带指示器动画的标签页 | `tabs/` |
 | `TuffMenu` | 菜单组件 | `menu/` |
