@@ -42,6 +42,11 @@ class NativeCarrierError extends Error {
       this.requestId = options.requestId
     if (options.streamId)
       this.streamId = options.streamId
+    // Native-supplied. validate_error bounds the keys to identifiers and the values to
+    // string/number/boolean, so this cannot become a payload smuggling channel; it stays off the
+    // message for the same reason `cause` does.
+    if (options.details && typeof options.details === 'object')
+      this.details = options.details
   }
 }
 
@@ -476,12 +481,57 @@ function safeIdentifier(value) {
     : undefined
 }
 
+/**
+ * Matches PROTOCOL_ERROR_ENVELOPE_PREFIX in native-napi/src/lib.rs. The napi Status enum is fixed,
+ * so a protocol code cannot ride on `err.code` the way QueueFull does; the reason string is the
+ * only channel with room for the structure, and this is where the two halves agree on its shape.
+ */
+const PROTOCOL_ERROR_ENVELOPE_PREFIX = '|protocol-error:'
+// Kept in step with ERROR_ENVELOPE_PREFIX in native-core/src/error.rs by protocol-contract's
+// own check rather than by hoping; see protocol-error-envelope.test.js.
+
+/**
+ * Reads the structured ProtocolError a native rejection carries, or null when it carries none.
+ *
+ * Deliberately returns the fields and not the text: `message` stays out, because a carrier error's
+ * message must not surface native content — the sanitised-error tests in this package's suite are
+ * the contract for that, and predate this envelope.
+ */
+function readProtocolError(error) {
+  const reason = typeof error?.message === 'string' ? error.message : ''
+  const at = reason.indexOf(PROTOCOL_ERROR_ENVELOPE_PREFIX)
+  if (at === -1)
+    return null
+
+  let parsed
+  try {
+    parsed = JSON.parse(reason.slice(at + PROTOCOL_ERROR_ENVELOPE_PREFIX.length))
+  }
+  catch {
+    return null
+  }
+
+  if (!parsed || typeof parsed.code !== 'string' || typeof parsed.retryable !== 'boolean')
+    return null
+
+  return {
+    code: parsed.code,
+    category: typeof parsed.category === 'string' ? parsed.category : undefined,
+    retryable: parsed.retryable,
+    details: parsed.details && typeof parsed.details === 'object' ? parsed.details : undefined,
+  }
+}
+
 function carrierError(code, message, carrierId, correlation = {}) {
-  return new NativeCarrierError(code, message, {
+  const native = readProtocolError(correlation.cause)
+  return new NativeCarrierError(native?.code ?? code, message, {
     carrierId,
     requestId: safeIdentifier(correlation.requestId),
     streamId: safeIdentifier(correlation.streamId),
     cause: correlation.cause,
+    category: native?.category,
+    retryable: native?.retryable,
+    details: native?.details,
   })
 }
 
