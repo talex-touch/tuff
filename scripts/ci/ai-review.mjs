@@ -46,10 +46,19 @@ const allowedAssociations = allowedAssociationsEnv
       .filter(Boolean)
   : ['MEMBER', 'OWNER', 'COLLABORATOR']
 
-if (
-  !allowedAssociations.includes('*')
-  && !allowedAssociations.includes(pr.author_association)
-) {
+// No '*' escape hatch. This workflow is pull_request_target, so it runs with repository
+// secrets in scope on pull requests from forks; a wildcard in AI_REVIEW_ALLOWED_ASSOCIATIONS
+// hands any fork author a job holding OPENAI_API_KEY. It reads like a convenience setting
+// and is not one (#733).
+if (allowedAssociations.includes('*')) {
+  console.error(
+    'AI_REVIEW_ALLOWED_ASSOCIATIONS contains "*", which would let fork authors trigger a '
+    + 'pull_request_target job holding OPENAI_API_KEY. List the associations explicitly.',
+  )
+  exit(1)
+}
+
+if (!allowedAssociations.includes(pr.author_association)) {
   console.log(
     `Author association ${pr.author_association} not in allowed list, skip.`,
   )
@@ -77,6 +86,34 @@ if (!openaiKey) {
 
 const baseUrlRaw = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 const openaiBaseUrl = normalizeOpenAiBaseUrl(baseUrlRaw)
+
+// OPENAI_BASE_URL is a plaintext repository variable, and normalizeOpenAiBaseUrl only strips
+// a trailing slash, so nothing stopped the OPENAI_API_KEY bearer token going to an arbitrary
+// host. An allowlist rather than a shape check: "starts with https" still accepts
+// https://api.openai.com.evil.test (#733).
+const ALLOWED_OPENAI_HOSTS = new Set([
+  'api.openai.com',
+  'api.deepseek.com',
+  'localhost',
+  '127.0.0.1',
+])
+
+let openaiHost
+try {
+  openaiHost = new URL(openaiBaseUrl).hostname
+}
+catch {
+  console.error(`OPENAI_BASE_URL is not a valid URL: ${openaiBaseUrl}`)
+  exit(1)
+}
+
+if (!ALLOWED_OPENAI_HOSTS.has(openaiHost)) {
+  console.error(
+    `Refusing to send OPENAI_API_KEY to an unrecognised host: ${openaiHost}. `
+    + 'Add it to ALLOWED_OPENAI_HOSTS in scripts/ci/ai-review.mjs if it is legitimate.',
+  )
+  exit(1)
+}
 const completionsPathRaw = env.OPENAI_COMPLETIONS_PATH || '/chat/completions'
 const completionsPath = normalizeOpenAiCompletionsPath(completionsPathRaw)
 const model = env.AI_REVIEW_MODEL || 'gpt-4o-mini'

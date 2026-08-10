@@ -1326,6 +1326,26 @@ jobs:
             exit 1
           fi
 
+          # Every curl below sends the NEXUS_API_KEY bearer token to NEXUS_BASE_URL, and that
+          # value comes from vars.NEXUS_SYNC_BASE_URL — a plaintext repository variable, not a
+          # secret. Nothing validated it, so a typo or a settings change pointed the production
+          # key at an arbitrary host and the first sign would have been the credential already
+          # sent (#732).
+          #
+          # An allowlist rather than a shape check: "is it https" would still accept
+          # https://attacker.example. Localhost is permitted so a self-hosted or tunnelled Nexus
+          # can be exercised without editing this file.
+          case "${NEXUS_BASE_URL}" in
+            https://tuff.tagzxia.com|https://tuff.tagzxia.com/*) ;;
+            http://localhost:*|http://127.0.0.1:*|https://localhost:*|https://127.0.0.1:*) ;;
+            *)
+              echo "Refusing to send NEXUS_API_KEY to an unrecognised host: ${NEXUS_BASE_URL}"
+              echo "vars.NEXUS_SYNC_BASE_URL must name the official Nexus origin or a local one."
+              echo "If a new deployment origin is legitimate, add it to the allowlist in this step."
+              exit 1
+              ;;
+          esac
+
           # Cloudflare Access is optional — both empty means it is not in front of Nexus.
           # Half-configured is not, and it is the state a setup that kept the client secret
           # in a *variable* lands in, because this job now reads it from secrets only (#541).
