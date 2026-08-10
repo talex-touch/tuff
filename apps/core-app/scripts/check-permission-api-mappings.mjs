@@ -9,9 +9,10 @@
  * log for exactly that.
  *
  * This guards the other half, which needs no inventory: **every API name written at a call site
- * today must already be in the table.** It is currently true — all 12 literals reaching
- * `enforcePermission` match a pattern — so the value is prospective: adding a call site with an
- * unmapped name stops being a silent allow discovered in production logs, and becomes a red PR.
+ * today must already be in the table.** It is currently true — all 19 literals reaching
+ * `enforcePermission` match one of the 50 patterns — so the value is prospective: adding a call
+ * site with an unmapped name stops being a silent allow discovered in production logs, and becomes
+ * a red PR.
  *
  * Deliberately not a vitest file. The `App suites (core-app)` job is `continue-on-error`, so a
  * test there cannot fail a PR; `PR Quality` runs these scripts as gates.
