@@ -394,6 +394,13 @@ export interface IFeatureLifeCycle {
   /**
    * Called when user input changes within this feature’s input box.
    * For example, search text or commands typed.
+   *
+   * @deprecated Not invoked on a Prelude. `triggerInputChanged` calls {@link onFeatureTriggered}
+   * again and then the per-feature listeners registered as {@link ITargetFeatureLifeCycle}, which
+   * declares an identically named hook that *is* called. A Prelude implementing this one gets a
+   * handler that never runs (#823) — handle input changes in `onFeatureTriggered`, which is
+   * re-entered on every keystroke.
+   *
    * @param input - The new input value
    */
   onInputChanged?: (input: string) => void
