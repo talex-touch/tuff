@@ -34,6 +34,7 @@ import {
   type ClipboardPhaseDurations
 } from './clipboard-phase-diagnostics'
 import { createClipboardFreshnessState } from './clipboard-freshness'
+import { isClipboardCaptureSuppressed } from './clipboard-capture-suppression'
 
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_SLOW_THRESHOLD_MS = 200
@@ -76,6 +77,12 @@ export class ClipboardCapturePipeline {
   constructor(private readonly options: ClipboardCapturePipelineOptions) {}
 
   public async process(source: ClipboardCaptureSource): Promise<void> {
+    // The app writes to the clipboard itself during selection capture. Those writes are not user
+    // copies and must not reach the history (#769).
+    if (isClipboardCaptureSuppressed()) {
+      return
+    }
+
     const helper = this.options.getClipboardHelper()
     // Database readiness gate only; the persist itself resolves its write
     // handle at enqueue time through metaPersistence.withDbWrite.

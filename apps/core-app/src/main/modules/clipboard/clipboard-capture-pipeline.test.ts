@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import { ClipboardCapturePipeline } from './clipboard-capture-pipeline'
 import { ClipboardHelper } from './clipboard-capture-freshness'
+import {
+  resetClipboardCaptureSuppression,
+  withClipboardCaptureSuppressed
+} from './clipboard-capture-suppression'
 
 interface FakeClipboardImage {
   isEmpty: () => boolean
@@ -305,5 +309,40 @@ describe('clipboard-capture-pipeline', () => {
       expect.objectContaining({ id: 13, type: 'image' })
     )
     expect(context.notifyTransportChange).toHaveBeenCalled()
+  })
+})
+
+describe('capture is skipped while the app is writing the clipboard itself', () => {
+  afterEach(() => {
+    resetClipboardCaptureSuppression()
+  })
+
+  it('抑制期间 process() 不读取剪贴板,也不落库', async () => {
+    const getClipboardHelper = vi.fn()
+    const getDatabase = vi.fn()
+    const pipeline = new ClipboardCapturePipeline({
+      getClipboardHelper,
+      getDatabase
+    } as never)
+
+    await withClipboardCaptureSuppressed(async () => {
+      await pipeline.process('poll' as never)
+    })
+
+    // The gate is before the helper/database lookup, so nothing downstream is reached at all.
+    expect(getClipboardHelper).not.toHaveBeenCalled()
+    expect(getDatabase).not.toHaveBeenCalled()
+  })
+
+  it('抑制解除后照常处理(守卫不是"永远跳过")', async () => {
+    const getClipboardHelper = vi.fn(() => undefined)
+    const pipeline = new ClipboardCapturePipeline({
+      getClipboardHelper,
+      getDatabase: vi.fn(() => undefined)
+    } as never)
+
+    await pipeline.process('poll' as never)
+
+    expect(getClipboardHelper).toHaveBeenCalled()
   })
 })

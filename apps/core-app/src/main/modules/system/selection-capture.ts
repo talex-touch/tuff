@@ -10,6 +10,7 @@ import { getXdotoolUnavailableReason } from './linux-desktop-tools'
 // Captured selections feed the recommendation context (hashed at ingest);
 // the store is separate so readers do not import this module's Electron deps.
 import { selectionSnapshotStore } from './selection-snapshot-store'
+import { withClipboardCaptureSuppressed } from '../clipboard/clipboard-capture-suppression'
 
 const selectionCaptureLog = createLogger('SelectionCapture')
 const execFileAsync = promisify(execFile)
@@ -159,62 +160,68 @@ async function captureSelection(
   const startedAt = Date.now()
   let result: SelectionCaptureResult
 
-  try {
-    await withTimeout(sendPlatformShortcut('copy'), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
-    await delay(COPY_RESULT_POLL_DELAY_MS)
-    const text = clipboard.readText().trim()
-    if (text) {
-      selectionSnapshotStore.set({ text, capturedAt })
+  // Everything from here to the restore is the app writing to the clipboard, not the user. The
+  // native watcher cannot tell the difference, so without this the selected text lands in
+  // clipboard_history and the restore adds a duplicate row of what was already there (#769).
+  return await withClipboardCaptureSuppressed(async () => {
+    try {
+      await withTimeout(sendPlatformShortcut('copy'), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
+      await delay(COPY_RESULT_POLL_DELAY_MS)
+      const text = clipboard.readText().trim()
+      if (text) {
+        selectionSnapshotStore.set({ text, capturedAt })
+      }
+      result = text
+        ? {
+            text,
+            ...baseResult
+          }
+        : {
+            text: '',
+            ...baseResult,
+            issueCode: 'empty',
+            issueMessage: 'No selected text was captured from the active application.'
+          }
+    } catch (error) {
+      const issueMessage =
+        error instanceof Error ? error.message : 'Failed to capture selected text'
+      const xdotoolUnavailableReason = getXdotoolUnavailableReason()
+      result = {
+        text: '',
+        ...baseResult,
+        issueCode: issueMessage === xdotoolUnavailableReason ? 'unsupported' : 'failed',
+        issueMessage,
+        limitations:
+          issueMessage === xdotoolUnavailableReason && xdotoolUnavailableReason
+            ? [xdotoolUnavailableReason]
+            : baseResult.limitations
+      }
     }
-    result = text
-      ? {
-          text,
-          ...baseResult
-        }
-      : {
-          text: '',
-          ...baseResult,
-          issueCode: 'empty',
-          issueMessage: 'No selected text was captured from the active application.'
-        }
-  } catch (error) {
-    const issueMessage = error instanceof Error ? error.message : 'Failed to capture selected text'
-    const xdotoolUnavailableReason = getXdotoolUnavailableReason()
-    result = {
-      text: '',
-      ...baseResult,
-      issueCode: issueMessage === xdotoolUnavailableReason ? 'unsupported' : 'failed',
-      issueMessage,
-      limitations:
-        issueMessage === xdotoolUnavailableReason && xdotoolUnavailableReason
-          ? [xdotoolUnavailableReason]
-          : baseResult.limitations
-    }
-  }
 
-  const restored = restoreClipboard(clipboardSnapshot)
-  selectionCaptureLog.debug('Selection capture completed', {
-    meta: {
-      costMs: Date.now() - startedAt,
-      restored,
-      supportLevel: result.supportLevel,
-      issueCode: result.issueCode
+    const restored = restoreClipboard(clipboardSnapshot)
+    selectionCaptureLog.debug('Selection capture completed', {
+      meta: {
+        costMs: Date.now() - startedAt,
+        restored,
+        supportLevel: result.supportLevel,
+        issueCode: result.issueCode
+      }
+    })
+
+    if (!restored) {
+      // The caller is told the capture failed, so the snapshot must not survive
+      // it either.
+      selectionSnapshotStore.clear()
+      return {
+        text: '',
+        ...baseResult,
+        issueCode: 'failed',
+        issueMessage: 'Clipboard snapshot restore failed after selection capture.'
+      }
     }
+
+    return result
   })
-
-  if (!restored) {
-    // The caller is told the capture failed, so the snapshot must not survive
-    // it either.
-    selectionSnapshotStore.clear()
-    return {
-      text: '',
-      ...baseResult,
-      issueCode: 'failed',
-      issueMessage: 'Clipboard snapshot restore failed after selection capture.'
-    }
-  }
-
-  return result
 }
 
 export const selectionCaptureService = {
