@@ -203,3 +203,44 @@ describe('parts persistence', () => {
     expect(send.mock.calls[0]?.[1].messages[0].meta).toBeUndefined()
   })
 })
+
+/**
+ * `load()` called sdk.get with no try/catch, unlike its sibling refresh(). Its only caller is
+ * HomePage's async route watcher, which has none either, so an IPC failure became an unhandled
+ * rejection: the view kept showing the previous thread while the URL named the new one (#827).
+ */
+describe('load survives a store failure', () => {
+  it('sdk 拒绝时返回 null,而不是把 rejection 抛给路由 watcher', async () => {
+    send.mockRejectedValue(new Error('conversation store unavailable'))
+    const history = useConversationHistory()
+
+    await expect(history.load('c1')).resolves.toBeNull()
+  })
+
+  it('依然会记录失败原因,而不是静默吞掉', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    send.mockRejectedValue(new Error('conversation store unavailable'))
+
+    await useConversationHistory().load('c1')
+
+    expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
+  it('正常返回的会话仍然被还原(否则上面两条会掩盖"永远返回 null")', async () => {
+    send.mockResolvedValue({
+      id: 'c1',
+      messages: [{ id: 'm1', role: 'user', content: 'hi', status: 'complete', meta: {} }]
+    })
+
+    await expect(useConversationHistory().load('c1')).resolves.toMatchObject([
+      { id: 'm1', role: 'user', content: 'hi' }
+    ])
+  })
+
+  it('不存在的会话仍然返回 null', async () => {
+    send.mockResolvedValue(null)
+
+    await expect(useConversationHistory().load('missing')).resolves.toBeNull()
+  })
+})
