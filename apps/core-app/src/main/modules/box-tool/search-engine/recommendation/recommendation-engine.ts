@@ -2761,20 +2761,34 @@ export class RecommendationEngine {
   private applyDiversityFilter(scored: ScoredItem[], limit: number): ScoredItem[] {
     const result: ScoredItem[] = []
     const typeCount = new Map<string, number>()
+    const deferred: ScoredItem[] = []
+
+    // 同类型不超过总数的 40%
+    const maxPerType = Math.ceil(limit * 0.4)
 
     for (const item of scored) {
       if (result.length >= limit) break
 
       const currentCount = typeCount.get(item.sourceType) || 0
 
-      // 同类型不超过总数的 40%
-      const maxPerType = Math.ceil(limit * 0.4)
       if (currentCount >= maxPerType && result.length >= limit / 2) {
+        deferred.push(item)
         continue
       }
 
       result.push(item)
       typeCount.set(item.sourceType, currentCount + 1)
+    }
+
+    // The quota is a preference, not a hard ceiling. A homogeneous candidate pool
+    // — the normal case, since every app candidate carries sourceType
+    // 'application' and getCandidates already drops files — used to latch both
+    // conditions at once and return exactly limit/2 items, half an empty-query
+    // grid. Items skipped for diversity are put back in score order to fill the
+    // remaining slots rather than left on the floor (#672).
+    for (const item of deferred) {
+      if (result.length >= limit) break
+      result.push(item)
     }
 
     return result

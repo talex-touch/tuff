@@ -307,6 +307,63 @@ describe('RecommendationEngine', () => {
     expect(key).not.toContain('Asia/Shanghai')
   })
 
+  it('fills the grid when every candidate shares one source type', () => {
+    // maxPerType is ceil(10 * 0.4) = 4 and the half-mark is 5. A homogeneous pool
+    // latches both conditions at once: items 1-5 get in (the 5th because
+    // result.length is still 4), then everything after is skipped forever, so the
+    // empty-query grid came back half full (#672).
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const diversify = (
+      engine as unknown as {
+        applyDiversityFilter: (scored: unknown[], limit: number) => unknown[]
+      }
+    ).applyDiversityFilter.bind(engine)
+
+    const pool = Array.from({ length: 20 }, (_, i) => ({
+      sourceId: 'app-provider',
+      itemId: `/Applications/App-${i}.app`,
+      sourceType: 'application',
+      score: 1000 - i
+    }))
+
+    const picked = diversify(pool, 10) as Array<{ itemId: string }>
+
+    expect(picked).toHaveLength(10)
+    // Backfill must preserve score order, not append the leftovers arbitrarily.
+    expect(picked.map((item) => item.itemId)).toEqual(pool.slice(0, 10).map((i) => i.itemId))
+  })
+
+  it('still spreads a mixed pool across source types', () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const diversify = (
+      engine as unknown as {
+        applyDiversityFilter: (scored: unknown[], limit: number) => unknown[]
+      }
+    ).applyDiversityFilter.bind(engine)
+
+    // 12 apps ahead of 4 plugins on score. Without the quota the plugins would
+    // never appear; the backfill must not undo that.
+    const pool = [
+      ...Array.from({ length: 12 }, (_, i) => ({
+        sourceId: 'app-provider',
+        itemId: `app-${i}`,
+        sourceType: 'application',
+        score: 1000 - i
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        sourceId: 'plugin-recommend',
+        itemId: `plugin-${i}`,
+        sourceType: 'plugin',
+        score: 500 - i
+      }))
+    ]
+
+    const picked = diversify(pool, 10) as Array<{ sourceType: string }>
+
+    expect(picked).toHaveLength(10)
+    expect(picked.filter((item) => item.sourceType === 'plugin').length).toBeGreaterThan(0)
+  })
+
   it('does not reuse memory cache when the time context changes', async () => {
     const dbUtils = createDbUtils()
     const engine = new RecommendationEngine(dbUtils as never)
