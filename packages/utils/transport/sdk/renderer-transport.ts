@@ -216,6 +216,8 @@ export class TuffRendererTransport implements ITuffTransport {
    */
   private channelCleanups = new Set<() => void>()
   private streamControllers = new Map<string, StreamController>()
+  /** Distinguishes batch payloads that cannot be serialised into a comparable key. */
+  private unkeyableBatchSeq = 0
   private batchQueues = new Map<string, BatchQueue<any>>()
   private portCache = new Map<string, TransportPortHandle>()
   private portEventSubscriptions = new Map<string, PortEventSubscription>()
@@ -450,7 +452,13 @@ export class TuffRendererTransport implements ITuffTransport {
       return `json:${JSON.stringify(payload)}`
     }
     catch {
-      return `ref:${Object.prototype.toString.call(payload)}`
+      // Object.prototype.toString.call is '[object Object]' for every plain object, so under
+      // mergeStrategy 'dedupe' two unrelated circular payloads merged into one request and both
+      // callers were handed the same response (#865). A payload we cannot serialise is a payload
+      // we cannot prove equal to anything, so it gets a key of its own and merges with nothing.
+      // Dedupe is an optimisation; answering the wrong question quickly is not one.
+      this.unkeyableBatchSeq += 1
+      return `ref:${this.unkeyableBatchSeq}`
     }
   }
 
