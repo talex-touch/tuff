@@ -624,7 +624,13 @@ async function runFastLayer(
   ])
   clearTimeout(timeout)
 
-  didTimeout = fastLayerState === 'timeout'
+  // The race resolving 'timeout' does not by itself mean work is outstanding:
+  // resolveTimeout() runs unconditionally, outside the `completed < total` guard
+  // above, and providers can finish in the same tick the timer fires. Overwriting
+  // unconditionally here made that guard dead, so a fast layer that finished at
+  // 79ms with a timeout of 80ms still reported didTimeout and cost the caller an
+  // extra `await completion` plus a second dispatcher round trip (#670).
+  didTimeout = fastLayerState === 'timeout' && completed < total
 
   return {
     immediateResults: results,
