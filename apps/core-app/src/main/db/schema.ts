@@ -278,7 +278,13 @@ export const itemUsageStats = sqliteTable(
     pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
     retentionIdx: index('item_usage_stats_retention_idx').on(
       sql`MAX(COALESCE(${table.lastSearched}, 0), COALESCE(${table.lastExecuted}, 0), COALESCE(${table.lastCancelled}, 0), ${table.updatedAt})`
-    )
+    ),
+    // The recommendation candidate queries order by these and take a small
+    // LIMIT. Unindexed they were `SCAN item_usage_stats` + `USE TEMP B-TREE FOR
+    // ORDER BY` over a table that grows by one row per distinct item ever seen
+    // (#677). Plain indexes are enough — SQLite scans them backwards for DESC.
+    executeCountIdx: index('item_usage_stats_execute_count_idx').on(table.executeCount),
+    lastExecutedIdx: index('item_usage_stats_last_executed_idx').on(table.lastExecuted)
   })
 )
 
