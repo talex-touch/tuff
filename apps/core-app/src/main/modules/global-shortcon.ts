@@ -1,5 +1,8 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import type {
+  Shortcut,
+  ShortcutMeta
+} from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import process from 'node:process'
 import {
   ShortcutTriggerKind,
@@ -296,7 +299,7 @@ export class ShortcutModule extends BaseModule {
       }
       if (typeof options?.enabled === 'boolean' && meta?.enabled === undefined) {
         this.storage!.updateShortcutEnabled(id, options.enabled)
-        existingShortcut.meta.enabled = options.enabled
+        this.ensureShortcutMeta(existingShortcut).enabled = options.enabled
         updated = true
       }
       if (updated) {
@@ -444,6 +447,25 @@ export class ShortcutModule extends BaseModule {
   }
 
   /**
+   * `Shortcut.meta` is typed as required, but this file guards it with `?.` in a dozen places
+   * because records written by an older schema, a hand-edited store or a partial write reach us
+   * without one. Writing through the guarded value then threw, and since reregisterAllShortcuts
+   * starts with globalShortcut.unregisterAll(), that TypeError took every shortcut down with it
+   * -- including the CoreBox trigger -- until the app restarted (#776).
+   */
+  private ensureShortcutMeta(shortcut: Shortcut): ShortcutMeta {
+    if (!shortcut.meta) {
+      const now = Date.now()
+      shortcut.meta = {
+        creationTime: now,
+        modificationTime: now,
+        author: SYSTEM_SHORTCUT_AUTHOR
+      }
+    }
+    return shortcut.meta
+  }
+
+  /**
    * Core function: unregisters everything and re-registers from storage.
    */
   private reregisterAllShortcuts(): void {
@@ -460,66 +482,74 @@ export class ShortcutModule extends BaseModule {
     const statusMap = new Map<string, ShortcutStatus>()
 
     for (const shortcut of allShortcuts) {
-      if (shortcut.meta?.enabled === false) {
-        statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
-        continue
-      }
-      if (shortcut.type === ShortcutType.TRIGGER) {
-        if (!mainTriggerRegistry.has(shortcut.id)) {
+      // One malformed record must not abort classification: the loop runs after
+      // unregisterAll(), so throwing here leaves every shortcut unregistered.
+      try {
+        if (shortcut.meta?.enabled === false) {
+          statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
+          continue
+        }
+        if (shortcut.type === ShortcutType.TRIGGER) {
+          if (!mainTriggerRegistry.has(shortcut.id)) {
+            statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
+            continue
+          }
+          const triggerKind =
+            typeof shortcut.meta?.triggerKind === 'string' &&
+            shortcut.meta.triggerKind.trim().length > 0
+              ? shortcut.meta.triggerKind
+              : shortcut.accelerator
+
+          if (!triggerKind) {
+            statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
+            shortconLog.error(`Invalid trigger kind for shortcut ${shortcut.id}`)
+            continue
+          }
+
+          if (shortcut.accelerator !== triggerKind) {
+            this.storage!.updateShortcutAccelerator(shortcut.id, triggerKind)
+            shortcut.accelerator = triggerKind
+          }
+          if (shortcut.meta?.triggerKind !== triggerKind) {
+            const meta = this.ensureShortcutMeta(shortcut)
+            meta.triggerKind = triggerKind
+            meta.modificationTime = Date.now()
+            this.persistShortcutMeta()
+          }
+
+          statusMap.set(shortcut.id, { state: 'active' })
+          continue
+        }
+
+        if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) {
           statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
           continue
         }
-        const triggerKind =
-          typeof shortcut.meta?.triggerKind === 'string' &&
-          shortcut.meta.triggerKind.trim().length > 0
-            ? shortcut.meta.triggerKind
-            : shortcut.accelerator
 
-        if (!triggerKind) {
+        const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
+        if (!normalizedAccelerator) {
           statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
-          shortconLog.error(`Invalid trigger kind for shortcut ${shortcut.id}`)
+          shortconLog.error(
+            `Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`
+          )
           continue
         }
 
-        if (shortcut.accelerator !== triggerKind) {
-          this.storage!.updateShortcutAccelerator(shortcut.id, triggerKind)
-          shortcut.accelerator = triggerKind
-        }
-        if (shortcut.meta?.triggerKind !== triggerKind) {
-          shortcut.meta.triggerKind = triggerKind
-          shortcut.meta.modificationTime = Date.now()
-          this.persistShortcutMeta()
+        if (normalizedAccelerator !== shortcut.accelerator) {
+          this.storage!.updateShortcutAccelerator(shortcut.id, normalizedAccelerator)
+          shortcut.accelerator = normalizedAccelerator
         }
 
-        statusMap.set(shortcut.id, { state: 'active' })
-        continue
-      }
-
-      if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) {
-        statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
-        continue
-      }
-
-      const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
-      if (!normalizedAccelerator) {
+        normalizedMap.set(shortcut.id, normalizedAccelerator)
+        const group = groupedByAccelerator.get(normalizedAccelerator)
+        if (group) {
+          group.push(shortcut)
+        } else {
+          groupedByAccelerator.set(normalizedAccelerator, [shortcut])
+        }
+      } catch (error) {
         statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
-        shortconLog.error(
-          `Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`
-        )
-        continue
-      }
-
-      if (normalizedAccelerator !== shortcut.accelerator) {
-        this.storage!.updateShortcutAccelerator(shortcut.id, normalizedAccelerator)
-        shortcut.accelerator = normalizedAccelerator
-      }
-
-      normalizedMap.set(shortcut.id, normalizedAccelerator)
-      const group = groupedByAccelerator.get(normalizedAccelerator)
-      if (group) {
-        group.push(shortcut)
-      } else {
-        groupedByAccelerator.set(normalizedAccelerator, [shortcut])
+        shortconLog.error(`Failed to classify shortcut ${shortcut.id}`, { error })
       }
     }
 
