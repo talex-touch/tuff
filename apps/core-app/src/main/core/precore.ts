@@ -6,7 +6,7 @@ import process from 'node:process'
  * This file describes the pre-core of the touch app.
  * Running necessary settings or environment params before startup the touch app.
  */
-import { app, crashReporter, powerMonitor } from 'electron'
+import { app, crashReporter, powerMonitor, session } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveRuntimeRootPath } from '../utils/app-root-path'
@@ -23,6 +23,7 @@ import {
   touchEventBus,
   WindowAllClosedEvent
 } from './eventbus/touch-event'
+import { installDefaultSessionPermissionPolicy } from './default-session-permissions'
 import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
@@ -231,6 +232,17 @@ setupSingleInstanceGuard({
 })
 
 void app.whenReady().then(() => {
+  // Installed here rather than in a module: modules load after this, and some of
+  // them create windows. A window that loads before the handlers are attached
+  // would run under Electron's approve-by-default (#696).
+  installDefaultSessionPermissionPolicy(session.defaultSession, {
+    onDenied: (permission) => {
+      mainLog.warn('Denied a permission request on the default session', {
+        meta: { permission }
+      })
+    }
+  })
+
   powerMonitor.on('shutdown', () => {
     setQuitIntent('system-shutdown', 'power-monitor-shutdown')
     markAppQuitting('power-monitor-shutdown')
