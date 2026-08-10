@@ -39,7 +39,7 @@ const ENFORCE_CALL = /enforcePermission\s*\(\s*[^,()]+,\s*'([^']+)'/g
 
 /** Patterns as written in API_PERMISSION_MAPPINGS. `*` matches any remaining characters. */
 function readPatterns(source) {
-  return [...source.matchAll(/pattern:\s*'([^']+)'/g)].map(match => match[1])
+  return [...source.matchAll(/pattern:\s*'([^']+)'/g)].map((match) => match[1])
 }
 
 function matchesPattern(apiName, pattern) {
@@ -55,8 +55,8 @@ function listSourceFiles() {
   })
   return output
     .split('\n')
-    .map(line => line.trim().replace(/^src\/main\//, ''))
-    .filter(file => file.length > 0 && !file.includes('.test.'))
+    .map((line) => line.trim().replace(/^src\/main\//, ''))
+    .filter((file) => file.length > 0 && !file.includes('.test.'))
 }
 
 function readFromDisk(file) {
@@ -83,7 +83,7 @@ function collectGuardedNames(read, files) {
 
 function findUnmapped(read, files, patterns) {
   return collectGuardedNames(read, files).filter(
-    entry => !patterns.some(pattern => matchesPattern(entry.apiName, pattern))
+    (entry) => !patterns.some((pattern) => matchesPattern(entry.apiName, pattern))
   )
 }
 
