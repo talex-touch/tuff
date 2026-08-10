@@ -8,10 +8,11 @@ class FakeBuilder {
   item: Record<string, unknown>
 
   constructor(id: string) {
-    this.item = { id }
+    this.item = { id, meta: {}, actions: [] }
   }
 
-  setSource() {
+  setSource(type: string, id: string, name: string) {
+    this.item.source = { type, id, name }
     return this
   }
 
@@ -29,14 +30,32 @@ class FakeBuilder {
     return this
   }
 
+  // Merges, like the real builder. The plugin calls setMeta twice per item, so
+  // overwriting dropped whichever half came first.
   setMeta(meta: Record<string, unknown>) {
-    this.item.meta = meta
+    this.item.meta = { ...(this.item.meta as Record<string, unknown>), ...meta }
+    return this
+  }
+
+  // buildActionItem (plugins/touch-browser-bookmarks/index.js:448-465) builds every item
+  // with createAndAddAction. Without it each build threw, and the handler's catch turned
+  // that into a generic failure item -- which is why unrelated assertions all reported
+  // reading properties of undefined.
+  createAndAddAction(id: string, type: string, label: string, payload: unknown) {
+    ;(this.item.actions as unknown[]).push({ id, type, label, payload })
     return this
   }
 
   build() {
     return this.item
   }
+}
+
+// buildActionItem puts the payload, sourceType and capability diagnostics in the item's
+// *action*; item.meta carries only pluginName / featureId / defaultAction. The assertions
+// below read the action, which is where the plugin actually writes them.
+function actionPayload(item: unknown): Record<string, any> | undefined {
+  return (item as { actions?: Array<{ payload?: Record<string, any> }> })?.actions?.[0]?.payload
 }
 
 describe('browser bookmarks plugin', () => {
@@ -95,7 +114,7 @@ describe('browser bookmarks plugin', () => {
 
     const openItem = items.find(item => item.title === '默认浏览器打开')
     expect(openItem?.subtitle).toContain('缺少 network.internet 权限')
-    expect(openItem?.meta?.capability).toMatchObject({
+    expect(actionPayload(openItem)?.capability).toMatchObject({
       id: 'network.internet',
       type: 'network',
       permission: 'network.internet',
@@ -141,7 +160,7 @@ describe('browser bookmarks plugin', () => {
 
     const openItem = items.find(item => item.title === '默认浏览器打开')
     expect(openItem?.subtitle).toContain('缺少 network.internet 权限')
-    expect(openItem?.meta?.capability).toMatchObject({
+    expect(actionPayload(openItem)?.capability).toMatchObject({
       status: 'permission-missing',
       reason: 'permission-sdk-unavailable',
       permission: 'network.internet',
@@ -253,36 +272,24 @@ describe('browser bookmarks plugin', () => {
     const pinned = items.find(item => item.title === '手动收藏 · Pinned manual bookmark')
     const recent = items.find(item => item.title === '手动最近 · Recent manual quicklink')
 
-    expect(regular?.meta).toMatchObject({
+    expect(actionPayload(regular)).toMatchObject({
       sourceType: 'manual-quicklink',
-      sourceKind: 'manual-quicklink',
-      payload: {
-        url: 'https://regular.example/',
-        title: 'Regular manual bookmark',
-        source: 'bookmark',
-        sourceType: 'manual-quicklink',
-      },
+      url: 'https://regular.example/',
+      title: 'Regular manual bookmark',
+      source: 'bookmark',
     })
-    expect(pinned?.meta).toMatchObject({
+    expect(actionPayload(pinned)).toMatchObject({
       sourceType: 'manual-pinned-quicklink',
-      sourceKind: 'manual-pinned-quicklink',
-      payload: {
-        url: 'https://pinned.example/',
-        title: 'Pinned manual bookmark',
-        source: 'bookmark',
-        sourceType: 'manual-pinned-quicklink',
-      },
+      url: 'https://pinned.example/',
+      title: 'Pinned manual bookmark',
+      source: 'bookmark',
     })
     expect(pinned?.subtitle).toContain('PINNED')
-    expect(recent?.meta).toMatchObject({
+    expect(actionPayload(recent)).toMatchObject({
       sourceType: 'manual-recent-quicklink',
-      sourceKind: 'manual-recent-quicklink',
-      payload: {
-        url: 'https://recent.example/',
-        title: 'Recent manual quicklink',
-        source: 'recent',
-        sourceType: 'manual-recent-quicklink',
-      },
+      url: 'https://recent.example/',
+      title: 'Recent manual quicklink',
+      source: 'recent',
     })
 
     await pluginModule.onFeatureTriggered('browser-bookmarks', 'https://direct.example')
@@ -291,21 +298,19 @@ describe('browser bookmarks plugin', () => {
     const directAdd = items.find(item => item.title === '添加到收藏')
     const directCopy = items.find(item => item.title === '复制 URL')
 
-    expect(directOpen?.meta).toMatchObject({
+    // sourceType and the payload live in the action; sourceKind no longer exists in
+    // the plugin at all, so it is dropped rather than relocated.
+    expect(actionPayload(directOpen)).toMatchObject({
       sourceType: 'manual-quicklink',
-      sourceKind: 'manual-quicklink',
-      payload: {
-        url: 'https://direct.example/',
-        source: 'quick',
-        sourceType: 'manual-quicklink',
-      },
+      url: 'https://direct.example/',
+      source: 'quick',
     })
-    expect(directAdd?.meta?.payload).toMatchObject({
+    expect(actionPayload(directAdd)).toMatchObject({
       url: 'https://direct.example/',
       sourceType: 'manual-quicklink',
     })
-    expect(directAdd?.meta?.payload?.source).toBeUndefined()
-    expect(directCopy?.meta?.payload).toEqual({
+    expect(actionPayload(directAdd)?.source).toBeUndefined()
+    expect(actionPayload(directCopy)).toEqual({
       url: 'https://direct.example/',
       sourceType: 'manual-quicklink',
     })
