@@ -150,3 +150,25 @@ describe('SearchSessionRegistry', () => {
     expect(registry.size).toBe(0)
   })
 })
+
+describe('SearchSessionRegistry shutdown guard', () => {
+  it('keeps refusing new sessions after the drain finishes', async () => {
+    // destroyPromise is nulled in a finally so repeat destroy() calls re-drain.
+    // That also reopened the shutdown guard the moment the drain completed, so a
+    // late request built a live session against torn-down services (#678).
+    const registry = new SearchSessionRegistry()
+
+    await registry.destroy()
+
+    expect(() => registry.create({ caller: coreBoxCaller, query, activations: [] })).toThrow(
+      /shutting down/
+    )
+  })
+
+  it('still accepts sessions before any destroy', () => {
+    // Control: the latch must not be set at construction.
+    const registry = new SearchSessionRegistry()
+
+    expect(() => registry.create({ caller: coreBoxCaller, query, activations: [] })).not.toThrow()
+  })
+})

@@ -781,6 +781,13 @@ export class SearchEngineCore
   }
 
   startSearch(query: TuffQuery, context?: SearchRequestContext): SearchExecution {
+    // The CoreBox window outlives module teardown ordering, so a renderer search
+    // stream can arrive after destroy(). Without this it built a live session
+    // against dbUtils/indexWriter handles that were already closed (#678).
+    if (this.destroying) {
+      throw new Error('Search engine is shutting down')
+    }
+
     const onboardingDecision = onboardingGate.evaluate()
     if (onboardingDecision.state !== 'allowed') {
       throw new OnboardingGateError(onboardingDecision)
