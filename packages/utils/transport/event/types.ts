@@ -22,8 +22,11 @@ declare const _TuffEventBrand: unique symbol
  * Merge strategy for batch requests.
  *
  * @remarks
- * - `queue` - All requests are queued in order
- * - `dedupe` - Duplicate payloads share a single request/response
+ * - `queue` - All requests are queued and dispatched **in arrival order**, one at a time. The
+ *   ordering is the guarantee; the cost is that N queued sends become N serialised round-trips,
+ *   so for an event whose handler is order-independent this is slower than not batching. Use
+ *   `dedupe` there instead.
+ * - `dedupe` - Duplicate payloads share a single request/response, and are dispatched concurrently
  * - `latest` - Only the latest request for a given key is kept
  */
 export type BatchMergeStrategy = 'queue' | 'dedupe' | 'latest'
