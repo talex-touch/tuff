@@ -1062,6 +1062,7 @@
     "docsLinkDesc": "Open Nexus docs for capability catalog and usage",
     "docsOpen": "Open Nexus Docs",
     "sourceEditor": {
+      "removeSource": "Remove source {name}",
       "title": "Source",
       "subtitle": "Edit plugin store source.",
       "addSource": "Add source",
