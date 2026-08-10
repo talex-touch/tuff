@@ -108,7 +108,7 @@
     "build:screenshot": "node scripts/build-screenshot.js",
     "build:audio": "node scripts/build-audio.js",
     "build:protocol-fixture": "node scripts/build-protocol-fixture.js",
-    "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js",
+    "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js protocol-error-cause.test.js",
     "test:screenshot-protocol": "node --test screenshot-addon-contract.test.js screenshot-protocol.test.js",
     "verify:screenshot-production": "node scripts/verify-screenshot-production.js",
     "rebuild": "node-gyp rebuild",
