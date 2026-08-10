@@ -322,6 +322,11 @@ export default defineNuxtConfig({
       notificationWebPush: {
         publicKey: process.env.NOTIFICATION_WEB_PUSH_PUBLIC_KEY,
       },
+      // Absolute origin for canonical / og:url / hreflang / JSON-LD. These must not
+      // come from the request: during Nitro prerender there is no real host, so
+      // useRequestURL() yields http://localhost and every prerendered page shipped
+      // that as its canonical (#679).
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://tuff.tagzxia.com',
     },
   },
 
