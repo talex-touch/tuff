@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { IProviderActivate } from '@talex-touch/utils'
-import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { PluginFeaturesAdapter } from './plugin-features-adapter'
+import { isCommandMatch, PluginFeaturesAdapter } from './plugin-features-adapter'
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
 
@@ -21,6 +21,18 @@ function createAdapter(): PluginFeaturesAdapter {
   adapter.attach(searchEngineHost)
   return adapter
 }
+
+const featureLogWarn = vi.hoisted(() => vi.fn())
+
+vi.mock('@talex-touch/utils/common/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getLogger: () => ({
+    warn: featureLogWarn,
+    info: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
+  })
+}))
 
 vi.mock('../plugin-module', () => ({
   pluginModule: {
@@ -516,5 +528,60 @@ describe('search engine coupling (#523)', () => {
     }
 
     expect(() => adapter.attach(host)).not.toThrow()
+  })
+})
+
+/**
+ * Features are declared in `manifest.json` and cross IPC, so `value` can only ever be a string.
+ * The matcher cast it to `RegExp` and called `.test`, which threw on every real declaration, and
+ * `type: 'function'` had no branch at all so it fell through to a silent `false` (#885).
+ */
+describe('plugin feature command matching', () => {
+  function command(type: IFeatureCommand['type'], value: string | string[]): IFeatureCommand {
+    return { type, value }
+  }
+
+  it('compiles a regex string pattern instead of throwing on it', () => {
+    // The defect: `(command.value as RegExp).test` -> TypeError: value.test is not a function.
+    expect(() => isCommandMatch(command('regex', '^calc '), 'calc 1+1')).not.toThrow()
+    expect(isCommandMatch(command('regex', '^calc '), 'calc 1+1')).toBe(true)
+  })
+
+  it('does not match when the regex does not apply', () => {
+    // Guards against a fix that made every regex command match unconditionally.
+    expect(isCommandMatch(command('regex', '^calc '), 'weather today')).toBe(false)
+  })
+
+  it('accepts an array of regex patterns', () => {
+    const cmd = command('regex', ['^calc ', '^convert '])
+
+    expect(isCommandMatch(cmd, 'convert 3kg')).toBe(true)
+    expect(isCommandMatch(cmd, 'translate hi')).toBe(false)
+  })
+
+  it('ignores an invalid regex pattern rather than throwing', () => {
+    featureLogWarn.mockClear()
+
+    expect(isCommandMatch(command('regex', '('), 'anything')).toBe(false)
+    expect(featureLogWarn).toHaveBeenCalledWith(expect.stringContaining('invalid regex'))
+  })
+
+  it('warns instead of failing silently for the unreachable function type', () => {
+    featureLogWarn.mockClear()
+
+    // Still false -- a matcher function genuinely cannot survive manifest JSON or IPC -- but a
+    // plugin author now gets told why the feature never matches.
+    expect(isCommandMatch(command('function', 'whatever'), 'query')).toBe(false)
+    expect(featureLogWarn).toHaveBeenCalledWith(
+      expect.stringContaining('does not survive JSON or IPC')
+    )
+  })
+
+  it('keeps match, contain and over behaving as before', () => {
+    expect(isCommandMatch(command('match', 'calc'), 'calc 1+1')).toBe(true)
+    expect(isCommandMatch(command('match', 'calc'), 'my calc')).toBe(false)
+    expect(isCommandMatch(command('contain', 'calc'), 'my calc')).toBe(true)
+    expect(isCommandMatch(command('over', ''), '')).toBe(true)
+    expect(isCommandMatch(command('match', ['a', 'b']), 'b thing')).toBe(true)
   })
 })
