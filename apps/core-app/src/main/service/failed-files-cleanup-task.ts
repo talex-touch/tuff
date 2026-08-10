@@ -59,7 +59,10 @@ export class FailedFilesCleanupTask implements BackgroundTask {
   private readonly deps: FailedFilesCleanupTaskDeps
   private options: FailedFilesCleanupTaskOptions
 
-  constructor(deps: FailedFilesCleanupTaskDeps, options: Partial<FailedFilesCleanupTaskOptions> = {}) {
+  constructor(
+    deps: FailedFilesCleanupTaskDeps,
+    options: Partial<FailedFilesCleanupTaskOptions> = {}
+  ) {
     this.deps = deps
     this.options = {
       maxRetryAge: 24 * 60 * 60 * 1000, // 24小时

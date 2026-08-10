@@ -72,7 +72,10 @@ describe('failed-files-cleanup-task split routing', () => {
   })
 
   it('split on: forwards ONE compiled delete through the worker writer', async () => {
-    const compiled = { sql: 'DELETE FROM file_index_progress WHERE file_id IN (?, ?, ?)', params: [11, 12, 13] }
+    const compiled = {
+      sql: 'DELETE FROM file_index_progress WHERE file_id IN (?, ?, ?)',
+      params: [11, 12, 13]
+    }
     const read = createReadDbMock({ rows: failedRows, compiled })
     const primary = createPrimaryDbMock()
     const execSearchIndexWrite = vi.fn(async () => [])

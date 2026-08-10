@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as schema from '../../db/schema'
-import { sanitizeTelemetryFailureCode, TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
+import {
+  sanitizeTelemetryFailureCode,
+  TelemetryUploadStatsStore
+} from './telemetry-upload-stats-store'
 
 let clients: Client[] = []
 let directory: string | undefined

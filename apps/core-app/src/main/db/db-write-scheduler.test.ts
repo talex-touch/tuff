@@ -387,7 +387,6 @@ describe('DbWriteScheduler scheduler-native busy retry', () => {
     expect(result).toBe(42)
     expect(order).toEqual(['outer:start', 'inner', 'outer:end'])
   })
-
 })
 
 // Phase 3 lane split: the pre-split test asserting "lane is accepted but
