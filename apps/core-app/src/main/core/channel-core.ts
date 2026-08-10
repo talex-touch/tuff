@@ -252,7 +252,25 @@ class TouchChannel {
   }
 
   __handle_main(e: Electron.IpcMainEvent, arg: unknown) {
-    const rawData = this.__parse_raw_data(e, arg)
+    // ipcMain.on listeners run inside an EventEmitter, so anything thrown here becomes an
+    // uncaught main-process exception -- and the only uncaughtException handler in the tree
+    // (dev-process-manager) returns early when app.isPackaged. Before this guard, any renderer
+    // or plugin view could end the app with `ipcRenderer.send('@main-process-message', 'x')`
+    // (#784).
+    let rawData: RawStandardChannelData
+    try {
+      rawData = this.__parse_raw_data(e, arg)
+    } catch (error) {
+      channelLog.error('[Channel] Dropped an unparseable message', { error })
+      // A sendSync caller would otherwise block waiting for a value nobody sets. Guarded the
+      // same way as the returnValue assignment further down, which can throw on a gone sender.
+      try {
+        e.returnValue = null
+      } catch {
+        // The sender is already gone; there is nothing to unblock.
+      }
+      return
+    }
 
     if (rawData.header.status === 'reply' && rawData.sync) {
       const { id } = rawData.sync
