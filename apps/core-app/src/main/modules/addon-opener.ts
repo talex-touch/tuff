@@ -202,8 +202,12 @@ export class AddonOpenerModule extends BaseModule {
         // Remove old registration first to ensure clean state
         app.removeAsDefaultProtocolClient(APP_SCHEMA)
 
-        // Register with electron binary and project path
-        app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, ['--inspect', appPath])
+        // No --inspect. This registration is what the OS launches for a tuff:// link, so baking
+        // the flag in meant any web page containing one could start Electron with an open Node
+        // inspector port — and anything able to reach that port has main-process code execution.
+        // A developer who wants the inspector passes it on their own `pnpm core:dev` invocation;
+        // nothing about protocol handling needs it (#803).
+        app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, [appPath])
 
         addonOpenerLog.debug('Dev mode protocol registration', {
           meta: {
@@ -215,7 +219,11 @@ export class AddonOpenerModule extends BaseModule {
       addonOpenerLog.debug(`Set as default protocol handler: ${APP_SCHEMA}`)
     }
 
-    if (!app.isDefaultProtocolClient(APP_SCHEMA)) {
+    // A packaged build registers unconditionally. `isDefaultProtocolClient` answers "is this
+    // scheme mine", not "does the registration point at this binary", so skipping on true let a
+    // dev registration — pointing at a checkout that may no longer exist — survive into packaged
+    // runs with nothing ever replacing it (#803).
+    if (app.isPackaged || !app.isDefaultProtocolClient(APP_SCHEMA)) {
       registerProtocol()
     } else {
       addonOpenerLog.debug(`Already registered as protocol handler: ${APP_SCHEMA}`)
