@@ -47,7 +47,7 @@ concurrency:
 jobs:
   build-and-release:
     name: Build and Release Tuff App
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.image }}
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.sync_tag == ''
     permissions:
       contents: read
@@ -62,7 +62,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, macos-latest, ubuntu-latest]
+        # `os` is the logical platform key, not a runner label. Every `matrix.os == ...`
+        # condition below compares against it -- including the macOS signing secrets -- and the
+        # uploaded artifact is named `${{ matrix.os }}-<channel>`, which the collect job looks
+        # up by that exact string. Renaming `os` therefore disables code signing silently.
+        # `image` is the runner that actually executes, pinned so a tag rebuild cannot land on
+        # a different toolchain. Bump `image` deliberately; leave `os` alone.
+        include:
+          - os: windows-2022
+            image: windows-2022
+          - os: macos-latest
+            image: macos-26
+          - os: ubuntu-latest
+            image: ubuntu-24.04
 
     steps:
       - name: Check out git repository
