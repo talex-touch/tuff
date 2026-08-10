@@ -28,6 +28,7 @@ import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
+import { finalizeBeforeQuit } from './before-quit-finalize'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -361,18 +362,27 @@ app.on('before-quit', (event) => {
     } catch (error) {
       mainLog.error('before-quit handlers failed, continue shutdown', { error })
     }
-    broadcastBeforeQuit()
     mainLog.info('App quit requested')
 
-    // Development mode: let DevProcessManager orchestrate shutdown steps.
-    if (!app.isPackaged && !devProcessManager.isShuttingDownProcess()) {
-      mainLog.debug('Development mode: delegating quit to DevProcessManager')
-      devProcessManager.triggerGracefulShutdown()
+    const finalized = finalizeBeforeQuit({
+      broadcast: broadcastBeforeQuit,
+      // Development mode: let DevProcessManager orchestrate shutdown steps.
+      shouldDelegateToDevManager: () =>
+        !app.isPackaged && !devProcessManager.isShuttingDownProcess(),
+      delegateToDevManager: () => {
+        mainLog.debug('Development mode: delegating quit to DevProcessManager')
+        devProcessManager.triggerGracefulShutdown()
+      },
+      quit: () => {
+        beforeQuitFlowDone = true
+        app.quit()
+      },
+      logError: (message, error) => mainLog.error(message, { error })
+    })
+
+    if (finalized.delegated) {
       return
     }
-
-    beforeQuitFlowDone = true
-    app.quit()
   })()
     .catch((error) => {
       mainLog.error('before-quit cleanup flow failed', { error })
