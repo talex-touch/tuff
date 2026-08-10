@@ -205,6 +205,45 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     vi.useRealTimers()
   })
 
+  it('run.start 投递失败时不留下 run id,重试不再报 already active', async () => {
+    const host = new PiAgentRuntimeHost()
+    const payload = startPayload()
+
+    // The child goes away between the availability check and the post, or the payload is not
+    // structured-cloneable. Either way postMessage throws.
+    hostMocks.child.postMessage.mockImplementationOnce(() => {
+      throw new Error('child is gone')
+    })
+
+    await expect(host.execute(payload)).rejects.toThrow(/child is gone/)
+
+    // Before #767 the map still held the id, so this second attempt failed with
+    // 'Run <id> is already active' instead of reaching the runtime at all.
+    const retry = host.execute(payload)
+    await settleAsyncWork()
+
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
+      type: 'run.start',
+      payload,
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION
+    })
+    await completeRun(payload, retry)
+  })
+
+  it('投递失败也不会留下一个稍后触发的运行定时器', async () => {
+    const host = new PiAgentRuntimeHost()
+    const payload = startPayload()
+    await host.start()
+
+    const before = vi.getTimerCount()
+    hostMocks.child.postMessage.mockImplementationOnce(() => {
+      throw new Error('child is gone')
+    })
+    await expect(host.execute(payload)).rejects.toThrow(/child is gone/)
+
+    expect(vi.getTimerCount()).toBe(before)
+  })
+
   it('preserves run and model request IDs while relaying host-owned model responses', async () => {
     const payload = startPayload()
     const host = new PiAgentRuntimeHost()

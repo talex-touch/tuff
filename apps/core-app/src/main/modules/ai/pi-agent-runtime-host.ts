@@ -395,7 +395,18 @@ export class PiAgentRuntimeHost {
         reject,
         timeout
       })
-      this.post({ type: 'run.start', payload })
+      try {
+        this.post({ type: 'run.start', payload })
+      } catch (error) {
+        // The entry and its timer are registered before the post so an immediate reply can find
+        // them. post() throws when the child has gone away between the check above and here,
+        // and postMessage throws on a payload that is not structured-cloneable. Rejecting alone
+        // left the run id wedged -- every retry hit 'already active' -- and the timer still
+        // fired later into settleRun on a promise that had already rejected (#767).
+        clearTimeout(timeout)
+        this.activeRuns.delete(payload.run.id)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
