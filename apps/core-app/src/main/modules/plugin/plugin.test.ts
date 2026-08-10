@@ -3569,3 +3569,68 @@ describe('touchPlugin.enable', () => {
     })
   })
 })
+
+describe('savePluginFile enforces the per-plugin storage quota', () => {
+  const tempRoots: string[] = []
+
+  afterEach(() => {
+    for (const root of tempRoots.splice(0)) {
+      fse.removeSync(root)
+    }
+  })
+
+  function createPlugin(name: string): TouchPlugin {
+    const rootPath = fse.mkdtempSync(path.join(os.tmpdir(), 'plugin-quota-'))
+    tempRoots.push(rootPath)
+    return new TouchPlugin(
+      name,
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath, mainWindowId: 1 } }
+    )
+  }
+
+  /** A payload whose JSON encoding is at least `bytes` long. */
+  function payloadOfSize(bytes: number): { blob: string } {
+    return { blob: 'x'.repeat(bytes) }
+  }
+
+  it('单个文件仍然可以写到接近上限', () => {
+    const plugin = createPlugin('quota-single')
+
+    expect(
+      plugin.savePluginFile('a.json', payloadOfSize(4 * 1024 * 1024), { broadcast: false })
+    ).toEqual({
+      success: true
+    })
+  })
+
+  it('多个各自合规的文件累计超出 10MB 时必须被拒绝', () => {
+    const plugin = createPlugin('quota-total')
+    const fourMb = payloadOfSize(4 * 1024 * 1024)
+
+    expect(plugin.savePluginFile('a.json', fourMb, { broadcast: false }).success).toBe(true)
+    expect(plugin.savePluginFile('b.json', fourMb, { broadcast: false }).success).toBe(true)
+
+    // Third 4MB file: each payload passes the per-file check, the directory total does not.
+    const third = plugin.savePluginFile('c.json', fourMb, { broadcast: false })
+    expect(third.success).toBe(false)
+    expect(third.error).toContain('Storage quota exceeded')
+
+    expect(fse.existsSync(path.join(plugin.getConfigPath(), 'c.json'))).toBe(false)
+  })
+
+  it('覆写已存在的文件不会把旧内容重复计入', () => {
+    const plugin = createPlugin('quota-replace')
+    const sixMb = payloadOfSize(6 * 1024 * 1024)
+
+    expect(plugin.savePluginFile('a.json', sixMb, { broadcast: false }).success).toBe(true)
+    // Replacing 6MB with 6MB stays at 6MB; counting the old copy too would wrongly reject.
+    expect(plugin.savePluginFile('a.json', sixMb, { broadcast: false }).success).toBe(true)
+  })
+})
