@@ -5,13 +5,13 @@
 ## Current order
 
 1. **Close verified release and runtime blockers.** Complete the active OTA, macOS release-evidence, and application-icon acceptance work according to their task-local PRDs. The OTA parent remains concurrently owned; this document does not restate its volatile child status.
-2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the default-off [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). The split flag must remain off until its child task has direct flag-on app-run evidence for every writer.
+2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). The migration task's default-off/flag-on wording is stale against the current runtime flag and must be reconciled before any release-readiness claim.
 3. **Continue remaining independently-owned active tasks** in the order recorded here only after the preceding blocker lane is resolved; task-local PRDs define implementation order and acceptance.
 
 ## Non-negotiable safety gates
 
-- `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` defaults **off**. Enabling it before all named 2d/2e writes migrate causes provider writes to land in `database.db` while reads use `search-index.db`: **silent data loss**.
-- A flag-on app run, not typecheck alone, must prove first-launch reindex, matching app/file counts, correct results, populated `search-index.db`, healthy indexing, and flag-off rollback before the split can be enabled.
+- `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` defaults **on**; `=0` is the emergency rollback to shared-file topology. The task PRD and runtime-release evidence must be reconciled before treating the current split topology as release-ready; do not infer safety from the stale default-off language.
+- A real application run, not typecheck alone, must prove first-launch reindex, matching app/file counts, correct results, populated `search-index.db`, healthy indexing, and the `=0` shared-file rollback path before the topology can be declared release-ready.
 - Historical reports prove only their recorded environment. Packaged and production claims require exact observed artifacts or deployed surfaces; they are never inferred from source state.
 
 ## Task-state rules
@@ -28,7 +28,7 @@
 - Nexus: [TODO-nexus.md](./TODO-nexus.md)
 - Long-term debt: [docs/TODO-BACKLOG-LONG-TERM.md](./TODO-BACKLOG-LONG-TERM.md)
 - Historical completion facts: [01-project/CHANGES.md](./01-project/CHANGES.md)
-- 2026-08-08 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-08.md).
+- 2026-08-10 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-10.md).
 
 ## Topical guardrails
 
