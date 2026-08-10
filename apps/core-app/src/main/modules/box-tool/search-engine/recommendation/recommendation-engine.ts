@@ -1101,12 +1101,15 @@ export class RecommendationEngine {
       }
     }
 
-    const cached = await this.getCachedRecommendations(
-      context,
-      semanticSettings,
-      pinnedCacheSignature
-    )
-    if (cached && !options.forceRefresh) {
+    // Skipped outright on a forced refresh rather than read and discarded. The
+    // read is a cache-key build, a SELECT on recommendation_cache (which falls
+    // back to the primary db when the aux row is missing), a JSON.parse of up to
+    // 10 fully-rendered TuffItems and a dedupe pass — all of it thrown away. The
+    // 15-minute background refresh and every user-triggered refresh pay it (#675).
+    const cached = options.forceRefresh
+      ? null
+      : await this.getCachedRecommendations(context, semanticSettings, pinnedCacheSignature)
+    if (cached) {
       const items = await this.applyVolatileContextRerank(
         cached.items,
         context,
