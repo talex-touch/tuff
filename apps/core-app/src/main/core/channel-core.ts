@@ -679,7 +679,20 @@ class TouchChannel {
     if (type === ChannelType.PLUGIN) {
       const argRecord = toRecord(arg)
       if (argRecord.plugin === void 0) {
-        throw new Error('Invalid plugin name!')
+        // Resolved, not thrown. This is the only path in a Promise-returning function that threw
+        // synchronously, so `_sendTo(...).catch(handler)` could not catch it: the exception left
+        // before the promise existed, and the main process has no production uncaughtException
+        // handler to stop it terminating (#808).
+        channelLog.error(`[Channel] Cannot send "${eventName}" without a plugin name.`)
+        traceIpc(eventName, startedAt, false)
+        return Promise.resolve({
+          code: DataCode.ERROR,
+          data: {
+            message: 'Invalid plugin name',
+            reason: 'invalid_plugin',
+            eventName
+          }
+        })
       }
       _channelCategory = RAW_PLUGIN_PROCESS_CHANNEL
       if (webContents.isDestroyed()) {
