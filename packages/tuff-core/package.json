@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --splitting --clean --target node24 --platform node",
+    "prepublishOnly": "pnpm run build",
     "dev": "tsup src/index.ts --format esm --dts --splitting --clean --target node24 --platform node --watch",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
