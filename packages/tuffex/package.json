@@ -45,6 +45,7 @@
     }
   },
   "scripts": {
+    "prepublishOnly": "pnpm run build",
     "build": "node ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
     "build:vite": "vite build",
     "dev": "vite build --watch",
