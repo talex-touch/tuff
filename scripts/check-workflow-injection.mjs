@@ -58,6 +58,15 @@ export function findInjections(files, readFile, unsafe = UNSAFE) {
     const text = readFile(file)
     if (!text)
       continue
+
+    // `inputs.` means two different things. In a workflow_dispatch workflow it is text a
+    // user typed into the Actions UI. In a reusable workflow it is a literal written in a
+    // caller workflow committed to this repository — the same trust level as the file doing
+    // the interpolating, and not attacker-influenced. Policing both makes the reusable
+    // package-ci.yml a permanent false positive, which is how a real check gets disabled.
+    const reusableOnly = /^on:[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s+workflow_call:/m.test(text)
+      && !/^\s+workflow_dispatch:/m.test(text)
+    const active = reusableOnly ? unsafe.filter(entry => entry !== 'inputs.') : unsafe
     const lines = text.split('\n')
     let inRun = false
     let runIndent = 0
@@ -69,6 +78,21 @@ export function findInjections(files, readFile, unsafe = UNSAFE) {
         runIndent = indent
         return
       }
+      // A single-line `run: echo ${{ … }}` is a run body too. Only block scalars were
+      // recognised, so every one-line step was invisible to this check — including
+      // package-ci.yml:82, `run: ${{ inputs.typecheck-command }}`. Verified by injecting
+      // github.event.pull_request.title into a real workflow: it parsed, it sat in a run:
+      // step, and the scan still reported clean (#741).
+      const inlineRun = stripped.match(/^-?\s*run:\s*(\S.*)$/)
+      if (inlineRun) {
+        const body = inlineRun[1]
+        if (body.includes('${{')) {
+          const context = active.find(candidate => body.includes(candidate))
+          if (context)
+            problems.push({ file, line: index + 1, context, text: stripped.slice(0, 90) })
+        }
+        return
+      }
       if (inRun && stripped && indent <= runIndent)
         inRun = false
       if (!inRun || !line.includes('${{'))
@@ -76,7 +100,7 @@ export function findInjections(files, readFile, unsafe = UNSAFE) {
       // One finding per line. `github.event.inputs.x` matches both `github.event.inputs.`
       // and `inputs.`, and reporting it twice makes the count meaningless — which the
       // self-test caught before this shipped.
-      const context = unsafe.find(candidate => line.includes(candidate))
+      const context = active.find(candidate => line.includes(candidate))
       if (context)
         problems.push({ file, line: index + 1, context, text: stripped.slice(0, 90) })
     })
@@ -99,6 +123,27 @@ function readWorkflow(file) {
 
 function selfTest() {
   const cases = [
+    {
+      // The blind spot this check shipped with: only `run: |` and `run: >` were treated as
+      // run bodies, so every one-line step was invisible. Proven by injecting this into a
+      // real workflow, which parsed and still scanned clean (#741).
+      name: 'a single-line run: is inspected, not only block scalars',
+      text: '      run: echo "${{ github.event.pull_request.title }}"\n',
+      expect: 1,
+    },
+    {
+      // inputs. means a caller-written literal in a reusable workflow and a user-typed
+      // value in a dispatchable one. Policing the first makes package-ci.yml a permanent
+      // false positive, and a check that always fails gets turned off.
+      name: 'workflow_call inputs are not treated as attacker-influenced',
+      text: 'on:\n  workflow_call:\n    inputs:\n      cmd:\n        type: string\njobs:\n  a:\n    steps:\n      - run: ${{ inputs.cmd }}\n',
+      expect: 0,
+    },
+    {
+      name: 'the same inputs. reference is caught once the workflow is dispatchable',
+      text: 'on:\n  workflow_dispatch:\n  workflow_call:\n    inputs:\n      cmd:\n        type: string\njobs:\n  a:\n    steps:\n      - run: ${{ inputs.cmd }}\n',
+      expect: 1,
+    },
     {
       name: 'a workflow_dispatch input inside run: is caught',
       text: '      run: |\n        X="${{ github.event.inputs.tag }}"\n',
