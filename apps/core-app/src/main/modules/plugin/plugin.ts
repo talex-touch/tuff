@@ -3636,6 +3636,45 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 文件内容
    * @returns 保存结果
    */
+  /**
+   * Size and file count of the config directory as they would be after writing `targetPath`
+   * with `nextBytes`. `targetPath` is excluded from the walk because it is being replaced.
+   *
+   * The 10MB figure getStorageStats reports as `maxSize` is a per-plugin budget, but
+   * savePluginFile only ever compared the single payload against it, so a plugin could write
+   * 100 distinct 9MB files and occupy ~900MB while the stats reported usagePercent in the
+   * thousands (#774). This mirrors assertProjectedQuota in plugin-business-file-storage.
+   *
+   * Scoped to the config directory this API owns. getStorageRoots also covers logs and temp,
+   * and counting those here would let ordinary log growth lock a plugin out of its own storage.
+   */
+  private projectConfigStorage(
+    configPath: string,
+    targetPath: string,
+    nextBytes: number
+  ): { totalBytes: number; fileCount: number } {
+    let totalBytes = nextBytes
+    let fileCount = 1
+
+    const walk = (dirPath: string): void => {
+      for (const name of fse.readdirSync(dirPath)) {
+        const entryPath = path.join(dirPath, name)
+        const entry = fse.lstatSync(entryPath)
+        if (entry.isDirectory()) {
+          walk(entryPath)
+          continue
+        }
+        if (!entry.isFile() || entryPath === targetPath) continue
+        fileCount += 1
+        totalBytes += entry.size
+      }
+    }
+
+    if (fse.existsSync(configPath)) walk(configPath)
+
+    return { totalBytes, fileCount }
+  }
+
   savePluginFile(
     fileName: string,
     content: unknown,
@@ -3652,7 +3691,9 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
-    if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
+    const PLUGIN_CONFIG_MAX_FILES = 1_000
+    const nextBytes = Buffer.byteLength(configData, 'utf-8')
+    if (nextBytes > PLUGIN_CONFIG_MAX_SIZE) {
       return {
         success: false,
         error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`
@@ -3660,6 +3701,21 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const p = safePath.resolvedPath
+
+    const projected = this.projectConfigStorage(configPath, p, nextBytes)
+    if (
+      projected.totalBytes > PLUGIN_CONFIG_MAX_SIZE ||
+      projected.fileCount > PLUGIN_CONFIG_MAX_FILES
+    ) {
+      return {
+        success: false,
+        error:
+          `Storage quota exceeded for plugin ${this.name}: ` +
+          `${projected.fileCount} file(s), ${projected.totalBytes} bytes would exceed ` +
+          `${PLUGIN_CONFIG_MAX_FILES} files / ${PLUGIN_CONFIG_MAX_SIZE} bytes`
+      }
+    }
+
     fse.ensureDirSync(configPath)
     fse.writeFileSync(p, configData)
 
