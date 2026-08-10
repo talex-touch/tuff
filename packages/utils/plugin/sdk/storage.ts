@@ -34,7 +34,11 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the file has been stored.
      */
     setFile: async (fileName: string, content: any): Promise<{ success: boolean, error?: string }> => {
-      return transport.send(PluginEvents.storage.setFile, { pluginName, fileName, content: JSON.parse(JSON.stringify(content)) })
+      const serialized = serializeStorageContent(content)
+      if (!serialized.ok)
+        return { success: false, error: `Cannot store "${fileName}": ${serialized.reason}` }
+
+      return transport.send(PluginEvents.storage.setFile, { pluginName, fileName, content: serialized.value })
     },
 
     /**
@@ -137,4 +141,31 @@ export function usePluginStorage() {
       return transport.on(PluginEvents.storage.update, listener)
     },
   }
+}
+
+/**
+ * Round-trips content through JSON to drop the non-cloneables that would break structured clone
+ * on the way to the main process.
+ *
+ * The round trip itself has two failure modes and neither used to be caught: `JSON.stringify`
+ * throws on circular references and BigInt, and it *returns* `undefined` for a top-level
+ * `undefined`, function or symbol - which `JSON.parse` then reads as the string "undefined" and
+ * rejects. Both escaped as a synchronous throw from a method declared to resolve
+ * `{ success, error? }`.
+ */
+function serializeStorageContent(
+  content: unknown,
+): { ok: true, value: unknown } | { ok: false, reason: string } {
+  let json: string | undefined
+  try {
+    json = JSON.stringify(content)
+  }
+  catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+  }
+
+  if (json === undefined)
+    return { ok: false, reason: `content of type ${typeof content} has no JSON representation` }
+
+  return { ok: true, value: JSON.parse(json) }
 }
