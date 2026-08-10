@@ -162,7 +162,6 @@ jobs:
           find . -name "app-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
           find . -name "app-builder-bin" -type f -exec chmod +x {} \; 2>/dev/null || true
           find . -name "electron-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
-          find . -name "snapcraft" -type f -exec chmod +x {} \; 2>/dev/null || true
           echo "Binary permissions fixed"
 
       - name: Determine Release Type
@@ -201,7 +200,6 @@ jobs:
           # 确保输出目录存在
           mkdir -p apps/core-app/dist
           mkdir -p apps/core-app/dist/__appImage-x64
-          mkdir -p apps/core-app/dist/__snap-x64
           mkdir -p apps/core-app/dist/__deb-x64
           mkdir -p apps/core-app/dist/@talex-touch
           mkdir -p "${GITHUB_WORKSPACE}/.cache/electron"
@@ -606,10 +604,11 @@ jobs:
           else
             APPIMAGE_COUNT=$(find apps/core-app/dist -name "*.AppImage" -type f 2>/dev/null | wc -l || echo "0")
             DEB_COUNT=$(find apps/core-app/dist -name "*.deb" -type f 2>/dev/null | wc -l || echo "0")
-            SNAP_COUNT=$(find apps/core-app/dist -name "*.snap" -type f 2>/dev/null | wc -l || echo "0")
-            echo "Found $APPIMAGE_COUNT .AppImage, $DEB_COUNT .deb, $SNAP_COUNT .snap file(s)"
-            if [ "$APPIMAGE_COUNT" -gt 0 ] || [ "$DEB_COUNT" -gt 0 ] || [ "$SNAP_COUNT" -gt 0 ]; then
-              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" -o -name "*.snap" \) -type f 2>/dev/null
+            # No .snap: the Linux targets are AppImage and deb, and snapcraft is deliberately not
+            # installed a few steps above. A counter that cannot be non-zero read as coverage (#801).
+            echo "Found $APPIMAGE_COUNT .AppImage, $DEB_COUNT .deb file(s)"
+            if [ "$APPIMAGE_COUNT" -gt 0 ] || [ "$DEB_COUNT" -gt 0 ]; then
+              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" \) -type f 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
           fi
@@ -620,7 +619,7 @@ jobs:
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "ERROR: No .dmg files, .app directories, or .zip files found in dist directory!"
             else
-              echo "ERROR: No Linux artifacts (.AppImage, .deb, or .snap) found in dist directory!"
+              echo "ERROR: No Linux artifacts (.AppImage or .deb) found in dist directory!"
             fi
             echo "This may indicate the electron-builder step failed silently."
             echo "Check the electron-builder output above for errors."
