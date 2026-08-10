@@ -119,6 +119,16 @@ jobs:
           pnpm -C packages/tuff-native run test:screenshot-protocol &&
           pnpm -C packages/tuff-native run verify:screenshot-production
 
+      # This workflow already filters on packages/test/src/native/** but never ran it, so a
+      # change there triggered a job that could not observe it. Run it here, where the addon
+      # has just been built, and demand the binding loads -- the integration suite tolerates
+      # its absence because it does not build Rust, and that tolerance is only safe if some
+      # job insists on the real thing.
+      - name: Test native carriers from the integration suite
+        env:
+          TUFF_NATIVE_SCREENSHOT_REQUIRED: '1'
+        run: pnpm -C packages/test exec vitest run src/native
+
       - name: Verify packed native package contents
         run: pnpm -C packages/tuff-native pack --dry-run
 

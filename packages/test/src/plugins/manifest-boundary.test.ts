@@ -170,8 +170,6 @@ describe('official plugin manifest trust boundary', () => {
         declaredPermissionIds: declaredPermissions,
       })
 
-      expect(providerResolution.issues, `${manifest.name} search provider issues`).toEqual([])
-      expect(providerResolution.derivedFromPushFeatures, `${manifest.name} must not use legacy provider derivation`).toBe(false)
       // touch-intelligence declares 5 push features and 1 provider. That is a real gap --
       // four features reach root results with no admission policy of their own -- and it is
       // tracked in #1203, where the resolver now names them instead of reporting nothing.
@@ -180,8 +178,25 @@ describe('official plugin manifest trust boundary', () => {
       // held to it and a permanently-red file does not end up masking the seven assertions
       // around this one. Remove the entry when the manifest is settled.
       const PARTIAL_PROVIDER_COVERAGE_EXEMPT = new Set(['touch-intelligence'])
+      const exempt = PARTIAL_PROVIDER_COVERAGE_EXEMPT.has(manifest.name)
 
-      if (!PARTIAL_PROVIDER_COVERAGE_EXEMPT.has(manifest.name)) {
+      // The exemption covers exactly the warning that names the gap, not the whole issue list:
+      // once #1203 made the resolver report it, this assertion started failing for the plugin
+      // the count assertion below already excused. Any other issue on touch-intelligence is
+      // still fatal, and the negative assertion keeps the entry from outliving the gap.
+      const issues = exempt
+        ? providerResolution.issues.filter(issue => issue.code !== 'SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE')
+        : providerResolution.issues
+      expect(issues, `${manifest.name} search provider issues`).toEqual([])
+      if (exempt) {
+        expect(
+          providerResolution.issues.map(issue => issue.code),
+          `${manifest.name} is exempt for a gap it no longer has`,
+        ).toContain('SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE')
+      }
+      expect(providerResolution.derivedFromPushFeatures, `${manifest.name} must not use legacy provider derivation`).toBe(false)
+
+      if (!exempt) {
         expect(providerResolution.descriptors.length, `${manifest.name} provider count`).toBeGreaterThanOrEqual(pushIds.length)
       }
 
