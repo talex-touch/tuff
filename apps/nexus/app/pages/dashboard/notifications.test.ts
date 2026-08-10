@@ -46,7 +46,12 @@ describe('dashboard notification inbox UI contract', () => {
     expect(page).toContain('window.Notification.requestPermission()')
     expect(page).toContain('new window.Notification')
     expect(page).toContain("tag: 'tuff-dashboard-notification-test'")
-    expect(page).toContain("navigator.serviceWorker.register('/notification-sw.js')")
+    // The page no longer registers the worker itself: doing so with no scope claimed '/' and
+    // fought the PWA worker for it. It delegates instead, and the URL and scope of that
+    // registration are asserted in push-service-worker.test.ts.
+    expect(page).toContain("import { registerPushServiceWorker } from '~/utils/push-service-worker'")
+    expect(page).toContain('registerPushServiceWorker(navigator.serviceWorker)')
+    expect(page).not.toContain('navigator.serviceWorker.register(')
     expect(page).toContain('registration.pushManager.subscribe')
     expect(page).toContain('urlBase64ToArrayBuffer(browserPushPublicKey.value)')
     expect(page).toContain('runtimeConfig.public?.notificationWebPush?.publicKey')
