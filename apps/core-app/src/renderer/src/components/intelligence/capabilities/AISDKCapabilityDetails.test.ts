@@ -99,7 +99,6 @@ function mountCapabilityDetails() {
         FlipDialog: true,
         ProviderList: true,
         TuffBlockSlot: { template: '<section><slot /></section>' },
-        TuffDrawer: { props: ['visible'], template: '<section v-if="visible"><slot /></section>' },
         TuffInput: true,
         TuffGroupBlock: { template: '<section><slot /></section>' }
       }
