@@ -97,16 +97,41 @@ export function usePluginStorage() {
 
     /**
      * Listens for changes to the storage.
+     *
+     * The broadcast carries only `{ name, fileName }`, so the new content is read back before the
+     * callback runs - the callback receives what `getFile` would return, or `null` once the file
+     * is gone.
+     *
+     * A broadcast with no `fileName` is `clearStorage()`, which empties every storage root. Every
+     * subscribed file really did change, so every subscriber is notified and each reads back
+     * `null`. Suppressing those would leave subscribers serving state for files that no longer
+     * exist.
+     *
      * @param fileName The file name to listen for changes
      * @param callback The function to call when the storage changes for the current plugin.
      * @returns A function to unsubscribe from the listener.
      */
     onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+      let latestTicket = 0
+
       const listener = (data: { name: string, fileName?: string }) => {
-        if (data.name === pluginName
-          && (data.fileName === fileName || data.fileName === undefined)) {
-          callback(data)
-        }
+        if (data.name !== pluginName)
+          return
+        if (data.fileName !== undefined && data.fileName !== fileName)
+          return
+
+        // Reading back is asynchronous, so two quick writes can resolve out of order. Only the
+        // most recently requested read is allowed to reach the callback.
+        const ticket = ++latestTicket
+        transport
+          .send(PluginEvents.storage.getFile, { pluginName, fileName })
+          .then((content: unknown) => {
+            if (ticket === latestTicket)
+              callback(content)
+          })
+          .catch((error: unknown) => {
+            console.error(`[Plugin Storage] Failed to read "${fileName}" after a change notification:`, error)
+          })
       }
 
       return transport.on(PluginEvents.storage.update, listener)
