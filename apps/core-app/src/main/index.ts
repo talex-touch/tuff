@@ -264,6 +264,9 @@ app.whenReady().then(async () => {
   if (!canContinue) return
 
   electronReadyTime = Date.now()
+  // Names the sequence below, which is the only startup health check there is. A core/startup-health
+  // module used to exist and this line read as its log; it was a 14-line generic helper nothing
+  // imported, deleted in #802.
   const startupTimer = mainLog.time('Startup health check passed', 'success')
   const foregroundModuleLoadTimer = mainLog.time('Foreground modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
