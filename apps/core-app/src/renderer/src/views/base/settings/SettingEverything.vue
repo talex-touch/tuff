@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingEverything">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
