@@ -168,6 +168,11 @@ export function useTypedChannel<TChannelMap extends Record<string, any>>() {
       );
     },
 
-    regChannel: channel.regChannel,
+    // Bound, not copied. `send` above keeps its receiver because it is called through
+    // `channel.send(...)` inside a closure; `regChannel` was handed out by reference, so the
+    // documented `const c = useTypedChannel(); c.regChannel(...)` usage called it detached.
+    // The resolved TouchChannel is a class instance whose regChannel reads `this.channelMap`,
+    // so that threw "Cannot read properties of undefined (reading 'channelMap')" (#886).
+    regChannel: channel.regChannel?.bind(channel),
   };
 }
