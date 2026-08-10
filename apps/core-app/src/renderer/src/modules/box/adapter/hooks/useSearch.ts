@@ -1229,7 +1229,13 @@ export function useSearch(
         return
       }
 
-      currentSearchId.value = initialResult.sessionId || null
+      // Only when the snapshot actually carries an id. `sessionId` is optional on
+      // TuffSearchResult, and the unconditional `|| null` threw away the identity the `session`
+      // chunk had already established - after which every later update/no-results/complete chunk
+      // failed its session guard, applySearchEnd never ran, and the spinner stayed up forever
+      // (#830). The snapshot handler has already proven the ids match, so this is at most a
+      // no-op reassignment and never a downgrade.
+      if (initialResult.sessionId) currentSearchId.value = initialResult.sessionId
       // The snapshot arrives ranked, so the quota only decides which of the
       // overflow survives — a cache hit (which carries the whole accumulated
       // set) then shows what the live run ended with instead of a plain top cut.
