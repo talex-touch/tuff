@@ -525,7 +525,15 @@ export class IntelligenceAuditLogger {
             }
           })
       } catch (error) {
+        // Logged and then rethrown. These upserts share a transaction with the audit-log insert
+        // precisely so the rows and the counters they aggregate cannot disagree; swallowing the
+        // error let the transaction commit with the audit rows written and the counters not
+        // advanced, and quota checks read those counters (#780).
+        //
+        // flushBatch already handles the throw: it logs, requeues the batch through
+        // requeueAfterRetention and returns false, so nothing is lost and the retry backs off.
         this.logUsageStatsError(`${callerId}:${period}`, error)
+        throw error
       }
     }
   }
