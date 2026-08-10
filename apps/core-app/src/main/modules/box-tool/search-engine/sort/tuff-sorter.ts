@@ -21,6 +21,21 @@ const APP_TITLE_PREFIX_INTENT_BONUS = 480_000
 const APP_TITLE_SUBSTRING_INTENT_BONUS = 180_000
 const APP_EXACT_TOKEN_INTENT_BONUS = 6_200_000
 const APP_PREFIX_TOKEN_INTENT_BONUS = 5_700_000
+/**
+ * Ceiling for the plugin-supplied `feature.priority` from a manifest.
+ *
+ * The value was previously unbounded, so a feature declaring `"priority": 100000` scored
+ * 100000 * KIND_SCORE_MULTIPLIER = 3e7 and outranked an exact app title match (6_200_000)
+ * on every query it recalled on -- contradicting the "soft bias" it is documented to be.
+ *
+ * 500 puts the ceiling (500 * 300 = 150_000) below the smallest app intent bonus
+ * (APP_TITLE_SUBSTRING_INTENT_BONUS = 180_000), while leaving headroom above the largest
+ * value any shipped manifest declares: touch-intelligence's 200. Clamping to the range the
+ * audit suggested (0..100) would have collapsed that plugin's 200/195/194/193/192 ladder
+ * into a single value and destroyed its intended ordering.
+ */
+const MAX_META_PRIORITY = 500
+
 const LOW_CONFIDENCE_APP_FUZZY_MATCH_CAP = 160
 const LOW_CONFIDENCE_FEATURE_FREQUENCY_CAP = 18
 const LOW_CONFIDENCE_FEATURE_RECENCY_CAP = 1
@@ -29,8 +44,10 @@ function getKindBias(item: TuffItem): number {
   const kind = item.kind || 'unknown'
   const baseBias = DEFAULT_KIND_BIAS[kind] || 0
 
-  // Feature manifest priority remains effective, but only as a soft bias.
-  const metaPriority = Number(item.meta?.priority) || 0
+  // Feature manifest priority remains effective, but only as a soft bias: it is
+  // plugin-supplied, so it is clamped rather than trusted.
+  const rawPriority = Number(item.meta?.priority) || 0
+  const metaPriority = Math.min(Math.max(rawPriority, 0), MAX_META_PRIORITY)
   return baseBias + metaPriority
 }
 
