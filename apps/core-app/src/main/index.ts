@@ -10,7 +10,7 @@ import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
-import { innerRootPath } from './core/precore'
+import { innerRootPath, isDuplicateInstance } from './core/precore'
 import { setQuitIntent } from './core/quit-intent'
 import { loadStartupModules } from './core/startup-module-loader'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
@@ -225,6 +225,13 @@ try {
 }
 
 app.whenReady().then(async () => {
+  // A duplicate launch already called app.quit(); bootstrapping here would open the database a
+  // second time before that quit lands (#790).
+  if (isDuplicateInstance()) {
+    mainLog.info('Duplicate instance detected, skipping bootstrap')
+    return
+  }
+
   const canContinue = await enforceDevReleaseStartupConstraint()
   if (!canContinue) return
 
