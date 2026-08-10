@@ -111,9 +111,16 @@ export class LoggerManager {
       // Determine log level
       let level = stringToLogLevel(this.config.globalLevel)
       if (moduleConfig?.level) {
-        level = Math.max(level, stringToLogLevel(moduleConfig.level))
+        // An explicit per-module level is an override, not a floor. LogLevel is ordered
+        // DEBUG=0..ERROR=3, so Math.max always picked the more restrictive of the two and made
+        // it impossible to turn one module up while the global level stayed quiet --
+        // setModuleConfig applied the level directly, then the next applyConfig() silently
+        // undid it (#882).
+        level = stringToLogLevel(moduleConfig.level)
       }
       else if (defaults?.level !== undefined) {
+        // MODULE_DEFAULTS are defaults rather than stated intent, so they stay bounded by the
+        // global level.
         level = Math.max(level, defaults.level)
       }
       if (options?.level !== undefined) {
@@ -282,9 +289,16 @@ export class LoggerManager {
       // Determine log level
       let level = stringToLogLevel(this.config.globalLevel)
       if (moduleConfig?.level) {
-        level = Math.max(level, stringToLogLevel(moduleConfig.level))
+        // An explicit per-module level is an override, not a floor. LogLevel is ordered
+        // DEBUG=0..ERROR=3, so Math.max always picked the more restrictive of the two and made
+        // it impossible to turn one module up while the global level stayed quiet --
+        // setModuleConfig applied the level directly, then the next applyConfig() silently
+        // undid it (#882).
+        level = stringToLogLevel(moduleConfig.level)
       }
       else if (defaults?.level !== undefined) {
+        // MODULE_DEFAULTS are defaults rather than stated intent, so they stay bounded by the
+        // global level.
         level = Math.max(level, defaults.level)
       }
 
