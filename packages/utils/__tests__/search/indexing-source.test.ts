@@ -1168,6 +1168,9 @@ describe("search provider sdk contracts", () => {
       hasPushFeatures: true,
       hasExplicitProviders: false,
       needsExplicitProviderMigration: true,
+      // Nothing declared, so there is no per-feature mapping to be partial about --
+      // needsExplicitProviderMigration already covers this manifest.
+      uncoveredPushFeatureIds: [],
     });
 
     expect(
@@ -1186,6 +1189,38 @@ describe("search provider sdk contracts", () => {
       explicitProviderCount: 1,
       hasExplicitProviders: true,
       needsExplicitProviderMigration: false,
+      // The declared provider carries no featureId, so the mapping is implicit and
+      // nothing can be concluded about coverage. Reporting the push feature as
+      // uncovered here would fire on every hand-written single-provider manifest.
+      uncoveredPushFeatureIds: [],
+    });
+  });
+
+  it("names push features left without a provider once the manifest maps any by id", () => {
+    // needsExplicitProviderMigration only fires when there are *no* declared providers,
+    // so a manifest that declares one and forgets the rest reported nothing at all.
+    expect(
+      getSearchProviderManifestCoverage(
+        [
+          { id: "ask", name: "Ask", push: true },
+          { id: "rewrite", name: "Rewrite", push: true },
+          { id: "summarize", name: "Summarize", push: true },
+        ],
+        [
+          {
+            id: "plugin.ask",
+            featureId: "ask",
+            mode: "push",
+            permissionScopes: ["root-results"],
+            defaultState: "ask",
+          },
+        ],
+      ),
+    ).toMatchObject({
+      pushFeatureCount: 3,
+      explicitProviderCount: 1,
+      needsExplicitProviderMigration: false,
+      uncoveredPushFeatureIds: ["rewrite", "summarize"],
     });
   });
 
