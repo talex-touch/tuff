@@ -42,6 +42,7 @@ import type {
   TraySettingsUpdateRequest,
   TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
+import { validateExternalUrl } from '../utils/external-url-policy'
 import type { Locale } from '../utils/i18n-helper'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
@@ -1096,6 +1097,27 @@ export class CommonChannelModule extends BaseModule {
           return 'skip'
         }
         return 'confirm'
+      }
+
+      // Scheme allowlist, not just a confirmation. #910 made the 'confirm' branch
+      // actually confirm, which removed the silent open — but every remaining
+      // protocol still reached shell.openExternal if the user clicked through, and
+      // a dialog is a poor place to judge whether `smb:` or a third-party handler
+      // scheme is safe. validateExternalUrl already encodes that decision
+      // (http/https/mailto/tel/tuff) and is used at a dozen other call sites; this
+      // was the one that forwarded renderer-controlled URLs without it (#691).
+      // `file:` keeps its prompt. #910 deliberately routed it to 'confirm' rather
+      // than opening it, and two tests are named for that behaviour, so it is a
+      // decision to preserve — not an omission to tighten. It is absent from the
+      // allowlist because that list governs unattended opens elsewhere.
+      if (protocol !== 'file') {
+        const decision = validateExternalUrl(url)
+        if (!decision.allowed) {
+          log.warn('Blocked external navigation with a disallowed scheme', {
+            meta: { reason: decision.reason, protocol: decision.protocol }
+          })
+          return 'skip'
+        }
       }
 
       return 'confirm'
