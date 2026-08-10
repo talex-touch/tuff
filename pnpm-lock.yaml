@@ -921,6 +921,9 @@ importers:
       fs-extra:
         specifier: ^11.3.6
         version: 11.3.6
+      glob:
+        specifier: ^13.0.6
+        version: 13.0.6
       pathe:
         specifier: ^1.1.2
         version: 1.1.2
