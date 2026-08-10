@@ -129,22 +129,6 @@ linux:
     - deb
   maintainer: tagzxia.com
   category: Utility
-snap:
-  confinement: strict
-  grade: stable
-  summary: A powerful productivity launcher and automation tool
-  description: |
-    Talex Touch is a modern productivity launcher that helps you quickly access applications,
-    files, and perform various automation tasks with a clean, efficient interface.
-  plugs:
-    - home
-    - network
-    - removable-media
-  environment:
-    DISABLE_WAYLAND: '1'
-  # 修复 app-builder 执行问题
-  useTemplateApp: false
-  desktop:
 appImage:
   artifactName: ${productName}-${version}.${ext}
   category: Utility
