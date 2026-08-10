@@ -200,3 +200,32 @@ export interface PluginStorageUpdateNotification extends StorageUpdateNotificati
    */
   pluginName: string
 }
+
+/**
+ * Options for clearing the file index.
+ *
+ * Mirrors `CleanupFileIndexOptions` in the main-process service; the storage view already sends
+ * this shape, and typing it here is what lets the transport check the two agree (#527).
+ */
+export interface StorageCleanupFileIndexRequest {
+  includeEmbeddings?: boolean
+  clearSearchIndex?: boolean
+  rebuild?: boolean
+}
+
+/** Options for clearing download bookkeeping. Omitting `beforeDays` clears everything. */
+export interface StorageCleanupDownloadsRequest {
+  beforeDays?: number
+}
+
+/**
+ * What a cleanup reports back.
+ *
+ * `removedCount` is optional because not every domain can count what it deleted, and the view
+ * renders the detail only when it is present.
+ */
+export interface StorageCleanupResponse {
+  success: boolean
+  removedCount?: number
+  error?: string
+}

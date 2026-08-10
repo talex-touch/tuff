@@ -19,6 +19,10 @@ import { describe, expect, it } from 'vitest'
 
 const VIEW = path.resolve(process.cwd(), 'src/renderer/src/views/storage/Storagable.vue')
 const MAIN = path.resolve(process.cwd(), 'src/main')
+const EVENTS_REGISTRY = path.resolve(
+  process.cwd(),
+  '../../packages/utils/transport/events/index.ts'
+)
 
 /**
  * Channels the view sends that no main-process handler answers.
@@ -52,22 +56,59 @@ function isHandledInMain(channel: string): boolean {
   try {
     hits = execFileSync('grep', ['-rlF', channel, MAIN], { encoding: 'utf8' })
   } catch {
-    return false
+    hits = ''
   }
 
   for (const file of hits.split('\n').filter(Boolean)) {
-    const source = readFileSync(file, 'utf8')
-    // `const someEvent = defineRawEvent<…>(\n  'channel'\n)` — the binding may be lines away.
-    const binding = new RegExp(
-      `const\\s+(\\w+)\\s*=\\s*define\\w*Event[\\s\\S]{0,200}?['"\`]${channel}['"\`]`
-    ).exec(source)
-    const constant = binding?.[1]
-    if (constant && new RegExp(`transport\\.on\\(\\s*${constant}\\b`).test(source)) return true
-    // A handler may also register the literal directly.
-    if (new RegExp(`(?:transport\\.on|regChannel)\\([^)]{0,80}['"\`]${channel}['"\`]`).test(source))
-      return true
+    if (registersChannel(readFileSync(file, 'utf8'), channel)) return true
   }
-  return false
+
+  // A typed event lives in the shared registry, so its name never appears under src/main at all —
+  // the handler reads `transport.on(StorageEvents.cleanup.fileIndex, …)`. Resolve the accessor
+  // path from the registry source, then look for a registration of that path.
+  const accessor = accessorForChannel(channel)
+  if (!accessor) return false
+  try {
+    execFileSync('grep', ['-rqF', `transport.on(${accessor}`, MAIN], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** A handler registered against a literal or a locally-defined event constant. */
+function registersChannel(source: string, channel: string): boolean {
+  const binding = new RegExp(
+    `const\\s+(\\w+)\\s*=\\s*define\\w*Event[\\s\\S]{0,200}?['"\`]${channel}['"\`]`
+  ).exec(source)
+  const constant = binding?.[1]
+  if (constant && new RegExp(`transport\\.on\\(\\s*${constant}\\b`).test(source)) return true
+  return new RegExp(`(?:transport\\.on|regChannel)\\([^)]{0,80}['"\`]${channel}['"\`]`).test(source)
+}
+
+/**
+ * `StorageEvents.cleanup.fileIndex` for `storage:cleanup:file-index`, read out of the registry.
+ *
+ * Derived rather than hard-coded: the point of this file is to notice a channel nobody handles, and
+ * a hand-written map would have to be updated by the same person who forgot the handler.
+ */
+function accessorForChannel(channel: string): string | null {
+  const registry = readFileSync(EVENTS_REGISTRY, 'utf8')
+  const [domain, ...rest] = channel.split(':')
+  const event = rest.at(-1)
+  const module = rest.length > 1 ? rest[0] : undefined
+  if (!domain || !event) return null
+
+  const pattern = new RegExp(
+    `(\\w+):\\s*defineEvent\\('${domain}'\\)\\s*` +
+      (module ? `\\.module\\('${module}'\\)\\s*` : '') +
+      `\\.event\\('${event}'\\)`
+  )
+  const key = pattern.exec(registry)?.[1]
+  if (!key) return null
+
+  const registryName = `${domain[0]!.toUpperCase()}${domain.slice(1)}Events`
+  return module ? `${registryName}.${module}.${key}` : `${registryName}.${key}`
 }
 
 describe('storage cleanup channels', () => {
