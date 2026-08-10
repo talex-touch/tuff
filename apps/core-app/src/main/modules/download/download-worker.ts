@@ -406,14 +406,22 @@ export class DownloadWorker {
       progressTracker.updateProgress(downloadedSize, totalSize)
     })
 
-    const writeStream = createWriteStream(outputPath, { flags: 'w' })
+    // Streamed into a sibling temp file and renamed into place, matching the chunked path (#781).
+    // Opening the real filename with 'w' truncated whatever was already there before a single new
+    // byte was known good, and the failure path then unlinked it - so a failed re-download did not
+    // merely corrupt the previous file, it removed it (#1457). A rename within the same directory
+    // is atomic: the destination holds either the previous file or the complete new one.
+    const tempOutputPath = `${outputPath}.${task.id}.part`
+    const writeStream = createWriteStream(tempOutputPath, { flags: 'w' })
 
     try {
       await pipeline(response.stream, writeStream)
+      await fs.rename(tempOutputPath, outputPath)
     } catch (error) {
       writeStream.destroy()
       try {
-        await fs.unlink(outputPath)
+        // The destination was never touched; only the partial download is dropped.
+        await fs.unlink(tempOutputPath)
       } catch (cleanupError: unknown) {
         const code =
           typeof cleanupError === 'object' && cleanupError !== null && 'code' in cleanupError

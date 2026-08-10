@@ -87,7 +87,9 @@
     "quickops:evidence:verify": "pnpm exec tsx \"scripts/quickops-evidence-verify.ts\"",
     "context:entrypoint:evidence:verify": "pnpm exec tsx \"scripts/context-entrypoint-evidence.ts\"",
     "check:search-index-writers": "node scripts/check-search-index-writers.mjs",
-    "check:search-index-writers:self-test": "node scripts/check-search-index-writers.mjs --self-test"
+    "check:search-index-writers:self-test": "node scripts/check-search-index-writers.mjs --self-test",
+    "check:permission-api-mappings": "node scripts/check-permission-api-mappings.mjs",
+    "check:permission-api-mappings:self-test": "node scripts/check-permission-api-mappings.mjs --self-test"
   },
   "dependencies": {
     "@arrow-js/core": "1.0.6",
