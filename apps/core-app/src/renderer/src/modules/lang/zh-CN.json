@@ -986,9 +986,46 @@
       "tokens": "Token",
       "latency": "耗时",
       "compactions": "上下文压缩",
-      "noTurn": "还没有产生回复，发一条消息后这里会显示本轮用到的提供方、模型与用量。",
-      "workLog": "工作过程",
-      "workLogEmpty": "本轮没有工具调用或工件产出。工具调用与工件能力尚未实现，实现后会记录在这里。"
+      "noTurn": "还没有产生回复，发一条消息后这里会显示本轮用到的提供方、模型与用量。"
+    },
+    "preview": {
+      "artifacts": "产物",
+      "widgets": "组件",
+      "toolCalls": "工作过程",
+      "sources": "引用",
+      "artifactsCreated": "本次生成",
+      "artifactsUploaded": "你上传的",
+      "artifactsEmpty": "这次会话还没有生成或上传文件。",
+      "widgetsEmpty": "这次会话还没有出现图表或表单。",
+      "toolCallsEmpty": "这次会话还没有调用任何工具。",
+      "sourcesEmpty": "这次会话还没有读取文件、搜索或调用 MCP。",
+      "chart": "图表",
+      "form": "表单",
+      "sandboxWidget": "模型组件",
+      "untitled": "未命名",
+      "locate": "在对话中定位",
+      "open": "打开",
+      "reveal": "在文件夹中显示",
+      "openFailed": "打开失败",
+      "sourceFile": "本地文件",
+      "sourceSearch": "搜索命中",
+      "sourceMcp": "MCP",
+      "sourceWeb": "网页"
+    },
+    "table": {
+      "copyTable": "复制为 CSV",
+      "copiedTable": "已复制"
+    },
+    "image": {
+      "blocked": "已拦截远程图片",
+      "loadOnce": "加载这张",
+      "allowSession": "本次会话允许"
+    },
+    "widget": {
+      "generated": "模型生成的组件",
+      "sandboxed": "沙箱运行",
+      "loading": "正在启动组件…",
+      "failed": "这个组件没能运行起来。"
     },
     "modelName": "Tuff 智能",
     "effortHigh": "高",
@@ -1014,6 +1051,7 @@
     "chartAddPlaceholder": "新数据点标签",
     "chartView": {"line": "线", "bar": "柱", "area": "面"},
     "toolPayload": "参数",
+    "toolInterrupted": "该调用未返回，回合已结束",
     "formSubmit": "提交",
     "formReset": "重置",
     "formRequired": "该字段必填",

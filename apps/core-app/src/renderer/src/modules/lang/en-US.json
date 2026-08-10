@@ -986,9 +986,46 @@
       "tokens": "Tokens",
       "latency": "Latency",
       "compactions": "Context compactions",
-      "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here.",
-      "workLog": "Work log",
-      "workLogEmpty": "No tool calls or artifacts this turn. Tool calling and artifacts are not implemented yet; they will be recorded here once they are."
+      "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here."
+    },
+    "preview": {
+      "artifacts": "Files",
+      "widgets": "Widgets",
+      "toolCalls": "Work log",
+      "sources": "Sources",
+      "artifactsCreated": "Created here",
+      "artifactsUploaded": "You uploaded",
+      "artifactsEmpty": "Nothing has been created or uploaded in this conversation yet.",
+      "widgetsEmpty": "No chart or form has appeared in this conversation yet.",
+      "toolCallsEmpty": "No tool has been called in this conversation yet.",
+      "sourcesEmpty": "No file has been read, searched or fetched over MCP yet.",
+      "chart": "Chart",
+      "form": "Form",
+      "sandboxWidget": "Model widget",
+      "untitled": "Untitled",
+      "locate": "Find it in the conversation",
+      "open": "Open",
+      "reveal": "Reveal in folder",
+      "openFailed": "Could not open this file",
+      "sourceFile": "Local file",
+      "sourceSearch": "Search hit",
+      "sourceMcp": "MCP",
+      "sourceWeb": "Web"
+    },
+    "table": {
+      "copyTable": "Copy CSV",
+      "copiedTable": "Copied"
+    },
+    "image": {
+      "blocked": "Remote image blocked",
+      "loadOnce": "Load this image",
+      "allowSession": "Allow for this conversation"
+    },
+    "widget": {
+      "generated": "Model-authored widget",
+      "sandboxed": "Sandboxed",
+      "loading": "Starting the widget…",
+      "failed": "This widget could not start."
     },
     "modelName": "Tuff Auto",
     "effortHigh": "High",
@@ -1014,6 +1051,7 @@
     "chartAddPlaceholder": "New point label",
     "chartView": {"line": "Line", "bar": "Bar", "area": "Area"},
     "toolPayload": "Payload",
+    "toolInterrupted": "This call never returned; the turn ended.",
     "formSubmit": "Submit",
     "formReset": "Reset",
     "formRequired": "This field is required",

@@ -2,8 +2,13 @@
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
-import type { FormFieldValue, FormSpec } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type {
+  FormFieldValue,
+  FormSpec,
+  WidgetSpec
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
+import type { MessageSegment } from '~/modules/conversation/chain-steps'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
@@ -11,20 +16,23 @@ import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
+import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
 import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import {
   CHART_RESULT_PREFIX,
-  FORM_RESULT_PREFIX
+  FORM_RESULT_PREFIX,
+  WIDGET_RESULT_PREFIX
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
+import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
-import { toChainSteps } from '~/modules/conversation/chain-steps'
+import { toMessageSegments } from '~/modules/conversation/chain-steps'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
@@ -451,8 +459,16 @@ function speakStateOf(message: ConversationMessage): 'idle' | 'loading' | 'speak
   return speaking.value?.id === message.id ? speaking.value.state : 'idle'
 }
 
-function chainStepsOf(message: ConversationMessage) {
-  return toChainSteps(message.parts, message.status === 'streaming')
+/**
+ * The message body, in the order the provider streamed it: each thinking span
+ * its own block, each tool call its own card. Derived per render rather than
+ * cached — `parts` grows in place on every delta.
+ */
+function segmentsOf(message: ConversationMessage): MessageSegment[] {
+  return toMessageSegments(message.parts, message.status === 'streaming', {
+    thinking: t('home.thinking'),
+    interrupted: t('home.toolInterrupted')
+  })
 }
 
 /**
@@ -474,6 +490,22 @@ function formSpecOf(tool: AiToolCallPart): FormSpec | null {
   if (tool.status !== 'done' || !output?.startsWith(FORM_RESULT_PREFIX)) return null
   try {
     return JSON.parse(output.slice(FORM_RESULT_PREFIX.length)) as FormSpec
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A model-authored widget. No parse of the payload's *code* is attempted here —
+ * only the envelope — because nothing this side could check would make running
+ * it safer. The sandbox is what makes it safe.
+ */
+function widgetSpecOf(tool: AiToolCallPart): WidgetSpec | null {
+  const output = tool.output
+  if (tool.status !== 'done' || !output?.startsWith(WIDGET_RESULT_PREFIX)) return null
+  try {
+    const spec = JSON.parse(output.slice(WIDGET_RESULT_PREFIX.length)) as WidgetSpec
+    return typeof spec?.source === 'string' && spec.source ? spec : null
   } catch {
     return null
   }
@@ -505,16 +537,6 @@ function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void
   void conversation.send(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`)
 }
 
-/** A lone tool call renders as its own card; two or more become the timeline. */
-function soloToolOf(message: ConversationMessage): AiToolCallPart[] {
-  const steps = chainStepsOf(message)
-  if (steps.length !== 1) return []
-  const tools = (message.parts ?? []).filter(
-    (part): part is AiToolCallPart => part.type === 'tool-call'
-  )
-  return tools.length === 1 ? tools : []
-}
-
 /**
  * The raw payload affordance is for builders: dev builds only, and even
  * there just a whisper of a toggle per widget. It opens a dialog with the
@@ -536,42 +558,13 @@ const payloadJson = computed(() => {
 })
 
 /**
- * The cards a message renders in its body. A lone tool call shows whatever it
- * is; on a multi-step turn the trail carries the log, but calls that produced
- * a *widget* — a form, a chart — must still surface as the real thing: the
- * form the model believes is on screen cannot live only as a JSON line inside
- * a collapsed timeline.
- */
-function toolCardsOf(message: ConversationMessage): AiToolCallPart[] {
-  const solo = soloToolOf(message)
-  if (solo.length > 0) return solo
-  return (message.parts ?? []).filter(
-    (part): part is AiToolCallPart =>
-      part.type === 'tool-call' && (formSpecOf(part) !== null || chartSpecOf(part) !== null)
-  )
-}
-
-/**
- * The reader's manual open/collapse per message. Held here rather than in the
- * chain component because streaming re-renders can recreate that instance —
- * state kept there dies mid-turn, which read as "clicking does nothing".
+ * The reader's manual open/collapse, keyed per thinking block. Held here rather
+ * than in the chain component because streaming re-renders can recreate that
+ * instance — state kept there dies mid-turn, which read as "clicking does
+ * nothing". Keyed by segment rather than by message now that one turn can
+ * carry several blocks.
  */
 const chainOpen = reactive(new Map<string, boolean>())
-
-/**
- * A real trail (2+ steps) always shows. A lone step depends on what it is: a
- * thinking step is the turn's only record of its reasoning, so it stays after
- * the turn settles (collapsed — the reader chooses to look); a lone tool call
- * already renders as its own card, so a trail would say everything twice.
- * While streaming, a lone step of any kind shows so a turn whose only
- * activity is one live span never reads as a hang.
- */
-function showChain(message: ConversationMessage): boolean {
-  const steps = chainStepsOf(message)
-  if (steps.length > 1) return true
-  if (steps.length !== 1 || soloToolOf(message).length > 0) return false
-  return steps[0]?.kind === 'thinking' || message.status === 'streaming'
-}
 
 const quickPills = [
   { icon: 'i-ri-file-search-line', key: 'searchFiles' },
@@ -635,7 +628,8 @@ async function submit(): Promise<void> {
       headEl.style.position = 'absolute'
       headEl.style.top = `${Math.round(headRect.top - host.top)}px`
       headEl.style.left = `${Math.round(headRect.left - host.left)}px`
-      headEl.style.zIndex = '0'
+      // Only the measured offsets are inline; the layer rides the shared scale.
+      headEl.classList.add('is-leaving')
     }
   }
 
@@ -721,6 +715,11 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
   clone.removeAttribute('data-message-id') // the knock query must not hit the stand-in
   clone.setAttribute('aria-hidden', 'true')
   clone.classList.remove('HomePage-Message--enter')
+  // The layer comes from the class, not from here: it belongs on the same scale
+  // as the composer it has to stay under, and a number written at this site
+  // drifts out of that scale silently. The clone keeps the scope attribute it
+  // inherited from the real row, so the scoped rule still matches it.
+  clone.classList.add('HomePage-FlightClone')
   Object.assign(clone.style, {
     position: 'fixed',
     top: `${finalTop}px`,
@@ -728,7 +727,6 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
     width: `${bubbleRect.width}px`,
     margin: '0',
     pointerEvents: 'none',
-    zIndex: '30',
     willChange: 'transform'
   } satisfies Partial<CSSStyleDeclaration>)
   host.appendChild(clone)
@@ -1032,6 +1030,27 @@ const history = useConversationHistory()
 const conversationId = ref<string | null>(null)
 
 /**
+ * Remote images in a reply are held back until the reader asks for them: an
+ * image fetches with no click, so an unreviewed `src` reports their IP to
+ * whoever wrote the markdown — which, for a reply built from pages the model
+ * just read, is not the model. TuffEx carries no i18n, so the wording comes
+ * from here.
+ */
+const markdownLabels = computed(() => ({
+  blockedImageText: t('home.image.blocked'),
+  loadImageOnceText: t('home.image.loadOnce'),
+  allowSessionImagesText: t('home.image.allowSession'),
+  copyTableText: t('home.table.copyTable'),
+  copiedTableText: t('home.table.copiedTable')
+}))
+
+/**
+ * Consent is per conversation. Carrying it into the next thread would widen it
+ * without asking, and the reader has no way to notice that it happened.
+ */
+watch(conversationId, () => resetRemoteImagePolicy())
+
+/**
  * Restores the thread named by `/home/c/:id`, and resets to a blank one on plain `/home`.
  *
  * Watching the param rather than loading once on mount is what makes the sidebar work: navigating
@@ -1117,6 +1136,8 @@ watch(
       :title="conversationTitle"
       :model-name="modelLabel"
       :panel-open="panelOpen"
+      :turn="lastTurn"
+      :message-count="messages.length"
       @toggle-panel="panelOpen = !panelOpen"
     />
 
@@ -1187,49 +1208,76 @@ watch(
                     </template>
 
                     <template v-else>
-                      <!-- The trail of reasoning and tool calls, above the answer
-                           it produced. Rendered from parts; a single step reads
-                           better as the plain card the tool card already is. -->
-                      <!-- Keyed: the surrounding v-if/v-for branches churn on
-                           every streaming delta, and unkeyed alignment can
-                           recreate this component mid-turn — taking the
-                           user's open/collapse choice with it. -->
-                      <TxChainOfThought
-                        v-if="showChain(message)"
-                        key="chain"
-                        class="HomePage-Chain"
-                        :steps="chainStepsOf(message)"
-                        :streaming="message.status === 'streaming'"
-                        :default-open="false"
-                        :user-open="chainOpen.get(message.id)"
-                        :label="t('home.chainOfThought')"
-                        @toggle="chainOpen.set(message.id, $event)"
-                      />
-                      <template v-for="tool in toolCardsOf(message)" :key="tool.id">
+                      <!-- Reasoning and tool calls in the order they streamed:
+                           each thinking span its own block, each call its own
+                           card. One trail per turn used to fold everything into
+                           a single box, which lost that order entirely.
+                           Keyed by segment: the surrounding v-if/v-for branches
+                           churn on every streaming delta, and unkeyed alignment
+                           can recreate these mid-turn — taking the user's
+                           open/collapse choice with it. -->
+                      <template v-for="segment in segmentsOf(message)" :key="segment.id">
+                        <!-- The label carries the span's own title, so the
+                             block reads as that thought rather than as a
+                             generic container. -->
+                        <TxChainOfThought
+                          v-if="segment.kind === 'reasoning'"
+                          class="HomePage-Chain"
+                          :steps="[segment.step]"
+                          :streaming="message.status === 'streaming'"
+                          :default-open="false"
+                          :user-open="chainOpen.get(segment.id)"
+                          :label="segment.step.title"
+                          @toggle="chainOpen.set(segment.id, $event)"
+                        />
+
+                        <!-- Prose sits where it was spoken. Tested before the
+                             widget branch below, which reads `segment.part` —
+                             a text segment carries no call to read it from. -->
+                        <TxStreamMarkdown
+                          v-else-if="segment.kind === 'text'"
+                          class="HomePage-Reply"
+                          :content="segment.text"
+                          :streaming="segment.streaming"
+                          v-bind="markdownLabels"
+                        />
+
                         <!-- Widgets embed as themselves — a form is a form, not
                              a tool log with a form inside. The machinery card
                              stays for tools without a face, and for the
                              running window before a widget's spec exists. -->
                         <div
-                          v-if="formSpecOf(tool) || chartSpecOf(tool)"
+                          v-else-if="
+                            formSpecOf(segment.part) ||
+                            chartSpecOf(segment.part) ||
+                            widgetSpecOf(segment.part)
+                          "
                           class="HomePage-WidgetBlock"
                         >
+                          <ToolWidgetCard
+                            v-if="widgetSpecOf(segment.part)"
+                            :source="widgetSpecOf(segment.part)!.source"
+                            :title="widgetSpecOf(segment.part)!.title"
+                            :fallback="segment.part.output"
+                          />
                           <ToolFormCard
-                            v-if="formSpecOf(tool)"
-                            :spec="formSpecOf(tool)!"
-                            :submitted="submittedForms.has(tool.id) || tool.submitted === true"
-                            :initial-values="formDrafts.get(tool.id)"
+                            v-else-if="formSpecOf(segment.part)"
+                            :spec="formSpecOf(segment.part)!"
+                            :submitted="
+                              submittedForms.has(segment.part.id) || segment.part.submitted === true
+                            "
+                            :initial-values="formDrafts.get(segment.part.id)"
                             :submit-label="t('home.formSubmit')"
                             :reset-label="t('home.formReset')"
                             :required-hint="t('home.formRequired')"
                             :submitted-label="t('home.formDone')"
                             :select-placeholder="t('home.formSelect')"
-                            @submit="submitForm(tool, $event)"
-                            @change="formDrafts.set(tool.id, $event)"
+                            @submit="submitForm(segment.part, $event)"
+                            @change="formDrafts.set(segment.part.id, $event)"
                           />
                           <ToolChartCard
                             v-else
-                            :spec="chartSpecOf(tool)!"
+                            :spec="chartSpecOf(segment.part)!"
                             :animate="message.status === 'streaming'"
                           />
 
@@ -1239,7 +1287,7 @@ watch(
                             v-if="showToolPayload"
                             class="HomePage-PayloadBtn"
                             type="button"
-                            @click="payloadFor = tool"
+                            @click="payloadFor = segment.part"
                           >
                             <span class="i-ri-braces-line" />
                             <span>{{ t('home.toolPayload') }}</span>
@@ -1248,21 +1296,31 @@ watch(
                         <TxToolCallCard
                           v-else
                           class="HomePage-Tool"
-                          :tool-call="tool"
+                          :tool-call="segment.part"
                           :retry-label="t('home.retry')"
                         />
                       </template>
 
+                      <!-- A turn that never carried structured parts stays a
+                           plain string; the loop above has nothing to render
+                           for it. Guarded on `parts` rather than on segment
+                           count so a turn whose parts are all tool calls does
+                           not replay its text here as well. -->
                       <TxStreamMarkdown
-                        v-if="message.content"
+                        v-if="!message.parts && message.content"
                         class="HomePage-Reply"
+                        v-bind="markdownLabels"
                         :content="message.content"
                         :streaming="message.status === 'streaming'"
                       />
 
                       <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. -->
                       <TxThinkingOrb
-                        v-else-if="message.status === 'streaming' && !chainStepsOf(message).length"
+                        v-else-if="
+                          message.status === 'streaming' &&
+                          !message.content &&
+                          !segmentsOf(message).length
+                        "
                         class="HomePage-Thinking"
                         :size="64"
                         :display-size="28"
@@ -1497,7 +1555,7 @@ watch(
       -->
       <Transition name="home-panel">
         <div v-if="panelOpen" class="HomePage-PanelSlot">
-          <HomeSidePanel :turn="lastTurn" :message-count="messages.length" />
+          <HomeSidePanel :messages="messages" @locate="streamRef?.scrollToIndex($event)" />
         </div>
       </Transition>
     </div>
@@ -1506,8 +1564,28 @@ watch(
 
 <style lang="scss" scoped>
 .HomePage {
-  // Shared by the animating slot and the panel inside it, so the two can never drift apart.
-  --home-panel-width: 280px;
+  /**
+   * Shared by the animating slot and the panel inside it, so the two can never drift apart.
+   * 360 rather than the original 280: the panel now carries four tabs and file paths, and 280
+   * truncated both.
+   */
+  --home-panel-width: 360px;
+
+  // ---------------------------------------------------------------------------
+  // Layer scale. One rule governs it: the composer is the top layer and a
+  // message is always one layer beneath it — mid-flight included. The send
+  // animation's clone used to carry a hardcoded `z-index: 30` and flew OVER
+  // the box it had just left.
+  //
+  // The four values compete directly: nothing between here and them opens a
+  // stacking context (`.HomePage-Center` is `position: relative` at `z-index:
+  // auto`, `.HomePage-Body` only has `overflow`), so they have to be read off
+  // one scale rather than picked per site.
+  // ---------------------------------------------------------------------------
+  --home-z-leaving: 0; // the stream and greeting dissolving on their way out
+  --home-z-flight: 1; // the send animation's in-air bubble clone
+  --home-z-composer: 2; // the composer — above every message, always
+  --home-z-confirm: 3; // pending-tool card: not a message, so it may sit higher
 
   // ---------------------------------------------------------------------------
   // TuffEx token bridge: every tuffex component under this surface renders in
@@ -1624,7 +1702,7 @@ watch(
  */
 .home-stream-leave-active {
   position: absolute;
-  z-index: 0;
+  z-index: var(--home-z-leaving);
   inset: 0;
   transition:
     opacity 0.26s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1650,6 +1728,12 @@ watch(
   flex-direction: column;
   gap: 18px;
   align-items: center;
+
+  /* Pinned out of flow by `submit`, which measures the offsets; the layer is
+     the scale's, so the greeting dissolves under the returning composer. */
+  &.is-leaving {
+    z-index: var(--home-z-leaving);
+  }
 }
 
 .HomePage-Mark {
@@ -1719,6 +1803,15 @@ watch(
   }
 }
 
+/**
+ * The stand-in that flies from the composer to the landing row. It is a message,
+ * so it obeys the message rule: one layer under the composer, which means the
+ * bubble rises out from behind the box instead of sliding across its face.
+ */
+.HomePage-FlightClone {
+  z-index: var(--home-z-flight);
+}
+
 .HomePage-MsgAttachments {
   max-width: 78%;
 }
@@ -1734,7 +1827,7 @@ watch(
   right: 0;
   bottom: calc(var(--home-composer-height, 112px) + 28px);
   left: 0;
-  z-index: 2;
+  z-index: var(--home-z-confirm);
   width: 720px;
   max-width: calc(100vw - var(--shell-sidebar-width) - 64px);
   margin: 0 auto;
@@ -1914,9 +2007,10 @@ watch(
   flex-direction: column;
   gap: 18px;
   align-items: center;
-  // Above the dissolving stream while a conversation is being left.
+  // Above the dissolving stream while a conversation is being left, and above
+  // the send animation's clone while a message is on its way up.
   position: relative;
-  z-index: 1;
+  z-index: var(--home-z-composer);
 
   /**
    * Floats over the stream rather than sitting below it, so the transcript runs the full height of
