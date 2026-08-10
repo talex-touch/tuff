@@ -1,6 +1,8 @@
 <script lang="ts" name="HomeTopBar" setup>
+import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConversation'
 import { useI18n } from 'vue-i18n'
 import HomeModelMenu from './HomeModelMenu.vue'
+import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
  * The conversation top bar, from artboards `JVvAr` / `lbZ9a` (untitled) and `LI40e` / `zdhVu`
@@ -13,11 +15,13 @@ const props = defineProps<{
   modelName: string
   /** Whether the right panel is open, so the toggle can describe what it will do. */
   panelOpen?: boolean
+  /** Metadata of the last settled turn, read by the `⋯` float panel. */
+  turn?: ConversationTurnMeta
+  messageCount: number
 }>()
 
 defineEmits<{
   (event: 'toggle-panel'): void
-  (event: 'open-menu'): void
 }>()
 
 const { t } = useI18n()
@@ -64,15 +68,23 @@ const { t } = useI18n()
         <!-- Remix has no `panel-right-open`; `layout-right` is its equivalent right-panel glyph. -->
         <span class="i-ri-layout-right-line" />
       </button>
-      <button
-        class="HomeTopBar-IconBtn"
-        type="button"
-        :aria-label="t('home.moreActions')"
-        :title="t('home.moreActions')"
-        @click="$emit('open-menu')"
-      >
-        <span class="i-ri-more-line" />
-      </button>
+      <!-- The bar is a drag region; the button and the panel it opens must stay clickable. -->
+      <div class="HomeTopBar-MenuSlot">
+        <HomeTurnInfoMenu :turn="props.turn" :message-count="props.messageCount">
+          <template #trigger="{ open }">
+            <button
+              class="HomeTopBar-IconBtn"
+              type="button"
+              aria-haspopup="menu"
+              :aria-expanded="open"
+              :aria-label="t('home.moreActions')"
+              :title="t('home.moreActions')"
+            >
+              <span class="i-ri-more-line" />
+            </button>
+          </template>
+        </HomeTurnInfoMenu>
+      </div>
     </div>
   </div>
 </template>
@@ -168,6 +180,13 @@ const { t } = useI18n()
   flex: none;
   gap: 2px;
   align-items: center;
+}
+
+/** Same exemption the mode pill needs: the bar drags, its controls must not. */
+.HomeTopBar-MenuSlot {
+  display: inline-flex;
+  flex: none;
+  -webkit-app-region: no-drag;
 }
 
 .HomeTopBar-IconBtn {
