@@ -129,6 +129,10 @@ vi.mock('../ai/intelligence-sdk', () => ({
 import { ocrService } from './ocr-service'
 
 interface OcrServiceTestAccess {
+  processQueue: () => Promise<void>
+  processing: boolean
+  isQueueDisabled: () => Promise<boolean>
+  db: unknown
   runAgentJob: (jobId: number, job: Record<string, unknown>) => Promise<void>
   updateClipboardMeta: (...args: unknown[]) => Promise<void>
   normalizeSourceForAgent: (...args: unknown[]) => Promise<{
@@ -479,5 +483,61 @@ describe('ocr dispatch persists the attempt', () => {
     expect(startWrite, 'ocr.jobs.start was not scheduled').toBeDefined()
     expect(startWrite?.options?.priority).toBe('critical')
     expect(startWrite?.options?.dropPolicy).toBe('none')
+  })
+})
+
+describe('OcrService processQueue re-entrancy', () => {
+  it('lets only one concurrent caller past the guard', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const originalProcessing = service.processing
+    const originalDb = service.db
+    const originalIsQueueDisabled = service.isQueueDisabled
+
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const isQueueDisabled = vi.fn(async () => {
+      await gate
+      return true // stop before touching the database; the guard is what is under test
+    })
+
+    service.processing = false
+    service.db = {}
+    service.isQueueDisabled = isQueueDisabled
+
+    try {
+      // Both start before either can finish the config read.
+      const first = service.processQueue()
+      const second = service.processQueue()
+      release!()
+      await Promise.all([first, second])
+
+      // The defect: both callers reached the config read, so both went on to dispatch.
+      expect(isQueueDisabled).toHaveBeenCalledTimes(1)
+    } finally {
+      service.processing = originalProcessing
+      service.db = originalDb
+      service.isQueueDisabled = originalIsQueueDisabled
+    }
+  })
+
+  it('releases the guard even when the queue is disabled', async () => {
+    // The claim moved above an early return, so a missed finally would wedge the queue shut.
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const originalDb = service.db
+    const originalIsQueueDisabled = service.isQueueDisabled
+
+    service.processing = false
+    service.db = {}
+    service.isQueueDisabled = vi.fn(async () => true)
+
+    try {
+      await service.processQueue()
+      expect(service.processing).toBe(false)
+    } finally {
+      service.db = originalDb
+      service.isQueueDisabled = originalIsQueueDisabled
+    }
   })
 })
