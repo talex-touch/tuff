@@ -164,10 +164,30 @@ impl BackendFrameSource for MacFrameSource {
         self.request_stop();
         let control = Arc::clone(&self.control);
         Box::pin(async move {
-            while !control.stopped.load(Ordering::Acquire) {
-                control.stop_notify.notified().await;
+            // The Notified is registered before `stopped` is read.
+            //
+            // `notify_waiters()` only reaches waiters that are already registered, and the actor
+            // thread calls it exactly once per stream. Reading the flag first left a window where
+            // the store and the notify both landed before this future registered, so it parked
+            // with no further wakeup coming: `stop()` never resolved, the frames operation never
+            // emitted its terminal frame, and `finish_dispose()` timed out with the entry still in
+            // `NativeRuntime::streams` (#839).
+            //
+            // `native-core/src/stream.rs`, `native-core/src/runtime.rs` and `backend/mod.rs` all
+            // build the Notified before checking their state; this is the same shape, with
+            // `enable()` making the registration explicit rather than resting on when the future
+            // happens to be first polled.
+            loop {
+                let notified = control.stop_notify.notified();
+                tokio::pin!(notified);
+                notified.as_mut().enable();
+
+                if control.stopped.load(Ordering::Acquire) {
+                    return Ok(());
+                }
+
+                notified.await;
             }
-            Ok(())
         })
     }
 }
