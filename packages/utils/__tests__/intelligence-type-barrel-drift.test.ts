@@ -3,22 +3,19 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * A type declared in both intelligence barrels must not drift apart (#520).
+ * `tuff-intelligence` must forward the shared intelligence surface, not restate it (#520).
  *
- * `packages/utils/types/intelligence.ts` owns the shared surface. `tuff-intelligence` forwards 58
- * names by hand and re-declares 146 more locally, so the two files hold ~146 declarations of the
- * same names — and renderer components import from `@talex-touch/tuff-intelligence`, which is the
- * copy that wins for them.
+ * It used to re-declare 151 names that `packages/utils/types/intelligence.ts` already owned, and
+ * renderer components import the tuff-intelligence copy, so that copy is the one that wins for
+ * them. The arrangement produced the `IntelligenceMessage` fork (#519) and a live data drift:
+ * 7faea27bf consolidated `DEFAULT_CAPABILITIES` onto the shared declaration and left
+ * `DEFAULT_PROVIDERS` a literal, so utils gained two speech models while the copy kept a third
+ * and the app shipped the stale set for four weeks with nothing failing.
  *
- * That is the arrangement that produced the `IntelligenceMessage` fork (#519). It also produced a
- * live one in *runtime data*: 7faea27bf consolidated `DEFAULT_CAPABILITIES` onto the shared
- * declaration and left `DEFAULT_PROVIDERS` a literal, so utils gained two speech models while the
- * copy kept a third — and `intelligence-config.ts` imports the copy, so the app shipped the stale
- * set for four weeks with nothing failing.
- *
- * This does not stop the duplication; replacing it with `export type *` needs the 146 local
- * declarations deleted first, and would drop 7 value exports that a type-only re-export cannot
- * carry. What it does is make a divergence loud, which is the part that was missing.
+ * The copy is gone. What this guards now is that it stays gone, and that the one part a wildcard
+ * cannot carry keeps working: `export type *` forwards types only, so every runtime value has to
+ * be named explicitly, and a value added upstream is silently unreachable from the renderer until
+ * someone adds it here.
  *
  * Lives in packages/utils because `ci / CI - utils` is a blocking check.
  */
@@ -31,58 +28,58 @@ const TUFF_INTELLIGENCE = readFileSync(
   'utf8',
 )
 
-/** Top-level exported declarations, keyed by name, with comments and whitespace normalised away. */
-function declarations(source: string): Map<string, string> {
-  const lines = source.split('\n')
-  const found = new Map<string, string>()
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = /^export (?:type|interface|enum|const) (\w+)/.exec(lines[index]!)
-    if (!match)
-      continue
-    let end = index + 1
-    while (end < lines.length && !(lines[end]!).startsWith('export ')) end += 1
-    found.set(
-      match[1]!,
-      lines
-        .slice(index, end)
-        .join('\n')
-        .replace(/\/\*\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*$/gm, '')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    )
-  }
-  return found
+/** Top-level exported declaration names. */
+function declaredNames(source: string): string[] {
+  return [
+    ...source.matchAll(/^export (?:declare )?(?:type|interface|enum|const|class) (\w+)/gm),
+  ].map(match => match[1]!)
 }
 
-const utils = declarations(UTILS)
-const local = declarations(TUFF_INTELLIGENCE)
-const duplicated = [...local.keys()].filter(name => utils.has(name))
+/** Exported names that exist at runtime, so a type-only forward cannot carry them. */
+function valueNames(source: string): string[] {
+  return [...source.matchAll(/^export (?:declare )?(?:enum|const|class) (\w+)/gm)].map(
+    match => match[1]!,
+  )
+}
+
+/** Names listed in `export { … } from "…"`, which is how the values are forwarded. */
+function reExportedValues(source: string): Set<string> {
+  const blocks = [...source.matchAll(/export \{([^}]*)\} from ["'][^"']*["']/g)]
+  const names = new Set<string>()
+  for (const block of blocks) {
+    for (const raw of block[1]!.split(',')) {
+      const name = raw.trim().split(/\s+as\s+/)[0]!.trim()
+      if (name) names.add(name)
+    }
+  }
+  return names
+}
 
 describe('the intelligence type barrels', () => {
-  it('read the two files they mean to compare', () => {
-    // Positive control: "nothing has drifted" is also what two empty maps report, which is what a
-    // wrong path or a changed declaration style produces.
-    expect(utils.size).toBeGreaterThan(150)
-    expect(local.size).toBeGreaterThan(100)
-    expect(duplicated.length).toBeGreaterThan(100)
+  it('reads the two files it means to compare', () => {
+    // Positive control: a wrong path or a changed declaration style would otherwise make every
+    // assertion below vacuously true.
+    expect(declaredNames(UTILS).length).toBeGreaterThan(150)
+    expect(valueNames(UTILS).length).toBeGreaterThan(3)
+    expect(TUFF_INTELLIGENCE).toContain('@talex-touch/utils/types/intelligence')
   })
 
-  it('declare the duplicated names identically', () => {
-    // A name that delegates to the shared declaration is the *fixed* state, and its text differs
-    // from the original by definition — so it is excluded here and checked below instead. Matching
-    // on `SHARED_` rather than on a name list keeps that exclusion from becoming a place to hide.
-    const drifted = duplicated
-      .filter(name => !/=\s*SHARED_\w+/.test(local.get(name)!))
-      .filter(name => utils.get(name) !== local.get(name))
+  it('forwards the shared types with a wildcard instead of restating them', () => {
+    expect(TUFF_INTELLIGENCE).toMatch(
+      /export type \* from ["']@talex-touch\/utils\/types\/intelligence["']/,
+    )
 
-    expect(drifted).toEqual([])
+    // Nothing may be declared here. Anything re-declared is a second copy of a name utils owns,
+    // and the renderer reads this one.
+    expect(declaredNames(TUFF_INTELLIGENCE)).toEqual([])
   })
 
-  it('delegate the shared runtime constants rather than copying them', () => {
-    // Types drifting is a compile error somewhere eventually. A constant drifting is not — it
-    // ships. Both of these are values the app reads at startup, so they get named explicitly.
-    expect(TUFF_INTELLIGENCE).toMatch(/DEFAULT_CAPABILITIES[\s\S]{0,80}=\s*SHARED_DEFAULT_CAPABILITIES/)
-    expect(TUFF_INTELLIGENCE).toMatch(/DEFAULT_PROVIDERS[\s\S]{0,80}=\s*SHARED_DEFAULT_PROVIDERS/)
+  it('names every runtime value, which a type-only wildcard cannot carry', () => {
+    const forwarded = reExportedValues(TUFF_INTELLIGENCE)
+    const missing = valueNames(UTILS).filter(name => !forwarded.has(name))
+
+    // A value added upstream is unreachable from the renderer until it is listed here, and
+    // nothing else reports that -- the wildcard above silently covers only the types.
+    expect(missing).toEqual([])
   })
 })
