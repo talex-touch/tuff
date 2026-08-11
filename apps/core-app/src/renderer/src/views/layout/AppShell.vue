@@ -102,6 +102,20 @@ function onRouteEnterStart(fullPath: string): void {
   routeTransitionStartedAt.set(fullPath, performance.now())
 }
 
+/**
+ * Vue fires this instead of `after-enter` when a transition is interrupted, so without it an
+ * interrupted navigation left its entry behind forever (#836).
+ *
+ * The key is `route.fullPath` and conversation routes are `/home/c/<uuid>`, so the key space is
+ * unbounded: clicking through the sidebar faster than the 0.35s transition added one entry per
+ * conversation visited. AppShell is the root layout and never unmounts, so nothing cleared them.
+ *
+ * No report — an interrupted transition never finished, so it has no duration worth recording.
+ */
+function onRouteEnterCancelled(fullPath: string): void {
+  routeTransitionStartedAt.delete(fullPath)
+}
+
 function onRouteEnterEnd(fullPath: string): void {
   const startedAt = routeTransitionStartedAt.get(fullPath)
   if (startedAt === undefined) {
@@ -168,6 +182,7 @@ onMounted(() => {
             appear
             @before-enter="() => onRouteEnterStart(route.fullPath)"
             @after-enter="() => onRouteEnterEnd(route.fullPath)"
+            @enter-cancelled="() => onRouteEnterCancelled(route.fullPath)"
           >
             <KeepAlive v-if="Component && isKeepAliveRoute(route)">
               <component :is="Component" :key="resolveRouteCacheKey(route)" />
