@@ -21,6 +21,16 @@ const SILENCE_RMS_THRESHOLD: f32 = 0.01;
 /// the max-duration cap and the trailing-silence window. A manual stop or cancel
 /// does not wait for this — it wakes the thread directly.
 const POLL_INTERVAL_MS: u64 = 50;
+/// Largest encoded input `play_audio` will look at. 64 MiB comfortably holds an
+/// uncompressed five-minute stereo WAV at 48 kHz (~57 MiB), which is far beyond
+/// any TTS response or notification sound this plays.
+const MAX_PLAYBACK_INPUT_BYTES: usize = 64 * 1024 * 1024;
+/// Largest decoded interleaved sample count `play_audio` will accumulate: five
+/// minutes of 48 kHz stereo, ~115 MiB as `f32`.
+///
+/// The byte limit above cannot stand in for this — a few megabytes of MP3 decode
+/// to hundreds of megabytes, which is the shape of the failure being bounded.
+const MAX_DECODED_SAMPLES: usize = 48_000 * 2 * 300;
 /// How long `stop_capture` / `cancel_capture` will wait for the capture thread to
 /// drop its cpal stream and return.
 ///
@@ -368,13 +378,16 @@ pub fn drain_capture(session_id: String) -> Result<AudioPcmChunk> {
     })
 }
 
-#[napi]
-pub fn play_audio(bytes: Buffer) -> Result<AudioPlaybackStart> {
-    // Decode on the calling thread so bad audio surfaces synchronously; playback
-    // itself runs on a dedicated thread (cpal `Stream` is not Send) and continues
-    // after this returns.
+fn play_audio_blocking(bytes: Vec<u8>) -> Result<String> {
+    if bytes.len() > MAX_PLAYBACK_INPUT_BYTES {
+        return Err(Error::from_reason(format!(
+            "audio-too-large: {} bytes exceeds {MAX_PLAYBACK_INPUT_BYTES}",
+            bytes.len()
+        )));
+    }
+
     let (interleaved, source_rate, source_channels) =
-        decode_audio(bytes.to_vec()).map_err(Error::from_reason)?;
+        decode_audio(bytes).map_err(Error::from_reason)?;
     let mono = downmix_to_mono(&interleaved, source_channels);
     if mono.is_empty() {
         return Err(Error::from_reason("no-audio-decoded"));
@@ -404,7 +417,38 @@ pub fn play_audio(bytes: Buffer) -> Result<AudioPlaybackStart> {
         )));
     }
 
-    Ok(AudioPlaybackStart { playback_id })
+    Ok(playback_id)
+}
+
+/// Runs the decode on the libuv pool instead of the JS thread.
+///
+/// Decoding on the calling thread was deliberate — it makes bad audio surface as a
+/// thrown error rather than a playback that silently never starts — but the calling
+/// thread is the Electron main thread, and symphonia walks every packet of an input
+/// nothing bounded. Returning a promise keeps the error attached to the call while
+/// taking the work off the event loop (#845, same shape as #841).
+pub struct PlayAudioTask {
+    bytes: Vec<u8>,
+}
+
+impl Task for PlayAudioTask {
+    type Output = String;
+    type JsValue = AudioPlaybackStart;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        play_audio_blocking(std::mem::take(&mut self.bytes))
+    }
+
+    fn resolve(&mut self, _env: Env, playback_id: Self::Output) -> Result<Self::JsValue> {
+        Ok(AudioPlaybackStart { playback_id })
+    }
+}
+
+#[napi]
+pub fn play_audio(bytes: Buffer) -> AsyncTask<PlayAudioTask> {
+    AsyncTask::new(PlayAudioTask {
+        bytes: bytes.to_vec(),
+    })
 }
 
 #[napi]
@@ -1038,6 +1082,15 @@ fn resample_linear(input: &[f32], rate_in: u32, rate_out: u32) -> Vec<f32> {
 /// Decode WAV/MP3 (and any other enabled symphonia codec) bytes to interleaved
 /// f32 PCM, returning `(samples, sample_rate, channels)`.
 fn decode_audio(bytes: Vec<u8>) -> std::result::Result<(Vec<f32>, u32, u16), String> {
+    decode_audio_limited(bytes, MAX_DECODED_SAMPLES)
+}
+
+/// The limit is a parameter so the guard can be exercised without synthesising a
+/// five-minute file; `decode_audio` is the only caller that picks a real one.
+fn decode_audio_limited(
+    bytes: Vec<u8>,
+    max_samples: usize,
+) -> std::result::Result<(Vec<f32>, u32, u16), String> {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
     use symphonia::core::errors::Error as SymphoniaError;
@@ -1094,6 +1147,15 @@ fn decode_audio(bytes: Vec<u8>) -> std::result::Result<(Vec<f32>, u32, u16), Str
                 let mut sample_buffer = SampleBuffer::<f32>::new(buffer.capacity() as u64, spec);
                 sample_buffer.copy_interleaved_ref(buffer);
                 samples.extend_from_slice(sample_buffer.samples());
+
+                // Checked here rather than up front: the input byte length bounds
+                // an uncompressed file, but says almost nothing about a compressed
+                // one. This bounds what actually gets allocated.
+                if samples.len() > max_samples {
+                    return Err(format!(
+                        "audio-too-long: decoded past {max_samples} samples"
+                    ));
+                }
             }
             Err(SymphoniaError::DecodeError(_)) => continue,
             Err(SymphoniaError::IoError(error))
@@ -1454,6 +1516,40 @@ mod tests {
             extend_snapshot(&mut cache, &interleaved[range], channels);
         }
         cache.pcm
+    }
+
+    #[test]
+    fn a_decode_stops_once_it_passes_the_sample_limit() {
+        // Positive control first: the same file decodes fine under a limit it fits.
+        let wav = encode_wav_pcm16(&[0.1, -0.2, 0.3, -0.4, 0.5], 16_000).unwrap();
+        let (samples, rate, channels) = decode_audio_limited(wav.clone(), 1_000).unwrap();
+        assert_eq!(samples.len(), 5);
+        assert_eq!((rate, channels), (16_000, 1));
+
+        // And refuses once it would exceed one.
+        let error = decode_audio_limited(wav, 2).unwrap_err();
+        assert!(error.starts_with("audio-too-long"), "{error}");
+    }
+
+    #[test]
+    fn an_oversized_input_is_refused_before_it_is_decoded() {
+        // Bounds the uncompressed case. The sample limit above bounds the
+        // compressed one, which this cannot see.
+        let error = play_audio_blocking(vec![0u8; MAX_PLAYBACK_INPUT_BYTES + 1]).unwrap_err();
+        assert!(
+            error.reason.starts_with("audio-too-large"),
+            "{}",
+            error.reason
+        );
+    }
+
+    #[test]
+    fn the_shipped_limits_are_the_ones_the_docs_promise() {
+        // audio.d.ts tells callers 64 MiB and five minutes of 48 kHz stereo, and the
+        // rejection reasons are part of the API. Drifting either silently changes
+        // what the binding accepts.
+        assert_eq!(MAX_PLAYBACK_INPUT_BYTES, 67_108_864);
+        assert_eq!(MAX_DECODED_SAMPLES, 28_800_000);
     }
 
     #[test]
