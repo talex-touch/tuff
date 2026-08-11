@@ -38,4 +38,4 @@ jobs:
       # Only the two that pass today. audit:types is broken by construction and audit:size
       # has been over budget since well before this change -- both tracked in #1555, and
       # wiring them here would land a gate that is red on every PR.
-      post-build-command: pnpm audit:exports && pnpm audit:readme
+      post-build-command: pnpm audit:exports && pnpm audit:readme && pnpm audit:types
