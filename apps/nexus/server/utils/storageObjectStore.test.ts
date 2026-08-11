@@ -37,16 +37,19 @@ function createMemory() {
 }
 
 function createMockBucket() {
-  const objects = new Map<string, { data: Buffer, contentType: string }>()
+  const objects = new Map<string, { data: Buffer, contentType: string, customMetadata?: Record<string, string> }>()
 
   return {
-    put: async (key: string, data: ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }) => {
+    // customMetadata is modelled because that is where ownership lives on R2 (#898). A mock that
+    // dropped it would let the round-trip test pass without the real backend ever carrying one.
+    put: async (key: string, data: ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string }, customMetadata?: Record<string, string> }) => {
       const buffer = data instanceof ArrayBuffer
         ? Buffer.from(data)
         : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
       objects.set(key, {
         data: buffer,
         contentType: options?.httpMetadata?.contentType || 'application/octet-stream',
+        customMetadata: options?.customMetadata,
       })
     },
     get: async (key: string) => {
@@ -58,6 +61,7 @@ function createMockBucket() {
         httpMetadata: {
           contentType: object.contentType,
         },
+        customMetadata: object.customMetadata,
         arrayBuffer: async () => object.data.buffer.slice(
           object.data.byteOffset,
           object.data.byteOffset + object.data.byteLength,
@@ -649,5 +653,85 @@ describe('storageObjectStore', () => {
       limit: 10,
     })
     expect(rows.filter(row => row.action === 'storage.write')).toHaveLength(0)
+  })
+})
+
+describe('storage object ownership (#898)', () => {
+  const base = { resourceType: 'scene-asset', externalStorage: null as any }
+
+  it('round-trips the owner through memory storage', async () => {
+    const memoryStorage = createMemory()
+    await putStorageObject({
+      ...base,
+      event: event('own-memory'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_a-cap-1-b.png',
+      data: Buffer.from('body'),
+      ownerId: 'user-1',
+    })
+
+    const read = await getStorageObject({
+      ...base,
+      event: event('own-memory'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_a-cap-1-b.png',
+    })
+
+    expect(read?.ownerId).toBe('user-1')
+    expect(read?.storesOwnership).toBe(true)
+  })
+
+  it('round-trips the owner through the bucket', async () => {
+    const memoryStorage = createMemory()
+    const bucket = createMockBucket() as any
+    await putStorageObject({
+      ...base,
+      event: event('own-bucket'),
+      bucket,
+      memoryStorage,
+      key: 'scene_run_c-cap-1-d.png',
+      data: Buffer.from('body'),
+      ownerId: 'user-2',
+    })
+
+    const read = await getStorageObject({
+      ...base,
+      event: event('own-bucket'),
+      bucket,
+      memoryStorage,
+      key: 'scene_run_c-cap-1-d.png',
+    })
+
+    expect(read?.ownerId).toBe('user-2')
+    expect(read?.storesOwnership).toBe(true)
+  })
+
+  it('reports an object written before ownership tracking as unowned, not unrecordable', async () => {
+    // The distinction the download check turns on: a backend that records ownership and has
+    // none for this object is a refusal, whereas a backend that cannot record it at all is a
+    // different question entirely. Collapsing the two either locks people out or waves
+    // everything through.
+    const memoryStorage = createMemory()
+    await putStorageObject({
+      ...base,
+      event: event('own-legacy'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_e-cap-1-f.png',
+      data: Buffer.from('body'),
+    })
+
+    const read = await getStorageObject({
+      ...base,
+      event: event('own-legacy'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_e-cap-1-f.png',
+    })
+
+    expect(read?.ownerId).toBeUndefined()
+    expect(read?.storesOwnership).toBe(true)
   })
 })
