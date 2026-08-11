@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -55,6 +55,17 @@ pub struct MacScreenActor {
 struct ActorInner {
     sender: SyncSender<Command>,
     closed: AtomicBool,
+    /// Streams whose StopFrames command the mailbox refused.
+    ///
+    /// ACTOR_QUEUE_CAPACITY is 16 and `try_send` drops rather than blocks, so a consumer
+    /// disconnecting while the actor thread sits in `wait_for_image` (up to SYSTEM_CALLBACK_TIMEOUT
+    /// = 5s) had its stop discarded. The caller was told the stream had stopped while
+    /// `ActorState::streams` still held the MacStreamSession, and ScreenCaptureKit kept capturing
+    /// until the whole actor shut down (#851).
+    ///
+    /// Recorded here instead, and drained by the actor loop, so a refused command is deferred
+    /// rather than lost.
+    pending_stops: Mutex<Vec<(u64, Arc<FrameControl>)>>,
 }
 
 enum Command {
@@ -155,8 +166,16 @@ impl BackendFrameSource for MacFrameSource {
             control: Arc::clone(&self.control),
         };
         if self.actor.sender.try_send(command).is_err() {
-            self.control.stopped.store(true, Ordering::Release);
-            self.control.stop_notify.notify_waiters();
+            if self.actor.closed.load(Ordering::Acquire) {
+                // Nothing will ever drain the queue, so the stream is as stopped as it can be.
+                self.control.stopped.store(true, Ordering::Release);
+                self.control.stop_notify.notify_waiters();
+                return;
+            }
+            // Deferred, not dropped. Marking it stopped here is what orphaned the session: the
+            // caller believed the stream was gone while the actor still held it (#851).
+            lock_pending_stops(&self.actor.pending_stops)
+                .push((self.stream_id, Arc::clone(&self.control)));
         }
     }
 
@@ -201,6 +220,7 @@ impl MacScreenActor {
         let inner = Arc::new(ActorInner {
             sender,
             closed: AtomicBool::new(false),
+            pending_stops: Mutex::new(Vec::new()),
         });
         let actor_inner = Arc::downgrade(&inner);
         thread::Builder::new()
@@ -316,12 +336,33 @@ fn actor_main(
     run_actor_loop(receiver, &mut state, actor_inner);
 }
 
+fn lock_pending_stops(
+    slot: &Mutex<Vec<(u64, Arc<FrameControl>)>>,
+) -> std::sync::MutexGuard<'_, Vec<(u64, Arc<FrameControl>)>> {
+    slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Tears down streams whose StopFrames the mailbox refused.
+///
+/// Drained before every command rather than on a timer: a refusal only happens when the queue is
+/// full, so there is always work behind it and the deferral is short (#851).
+fn drain_pending_stops(state: &mut ActorState, actor_inner: &Weak<ActorInner>) {
+    let Some(inner) = actor_inner.upgrade() else {
+        return;
+    };
+    let pending = std::mem::take(&mut *lock_pending_stops(&inner.pending_stops));
+    for (stream_id, control) in pending {
+        state.stop_frames(stream_id, &control);
+    }
+}
+
 fn run_actor_loop(
     receiver: Receiver<Command>,
     state: &mut ActorState,
     actor_inner: Weak<ActorInner>,
 ) {
     while let Ok(command) = receiver.recv() {
+        drain_pending_stops(state, &actor_inner);
         match command {
             Command::Refresh {
                 input,
@@ -1507,6 +1548,113 @@ mod tests {
         assert!(state.streams.is_empty());
     }
 
+    fn frame_control_for_stop() -> Arc<FrameControl> {
+        Arc::new(FrameControl {
+            slot: LatestFrameSlot::new(),
+            stopped: AtomicBool::new(false),
+            stop_requested: AtomicBool::new(false),
+            stop_notify: Notify::new(),
+        })
+    }
+
+    /// A StopFrames the mailbox refuses is deferred, not dropped.
+    ///
+    /// The defect (#851): `try_send` failing marked the control stopped and returned, so the caller
+    /// believed the stream was gone while `ActorState::streams` still held the MacStreamSession and
+    /// ScreenCaptureKit kept capturing until the whole actor shut down.
+    ///
+    /// Reporting stopped is the part that made it unrecoverable — nothing downstream ever asked
+    /// again. So the assertion is twofold: the request is recorded, *and* the control is still not
+    /// claiming to be stopped.
+    #[test]
+    fn a_refused_stop_is_recorded_rather_than_reported_as_stopped() {
+        let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let actor = MacScreenActor {
+            inner: Arc::new(ActorInner {
+                sender,
+                closed: AtomicBool::new(false),
+                pending_stops: Mutex::new(Vec::new()),
+            }),
+        };
+        for index in 0..ACTOR_QUEUE_CAPACITY {
+            actor.submit(refresh_command(index % 2 == 0)).unwrap();
+        }
+
+        let control = frame_control_for_stop();
+        let source = MacFrameSource {
+            stream_id: 77,
+            actor: Arc::clone(&actor.inner),
+            control: Arc::clone(&control),
+        };
+        source.request_stop();
+
+        let pending = lock_pending_stops(&actor.inner.pending_stops);
+        assert_eq!(pending.len(), 1, "the refused stop was dropped");
+        assert_eq!(pending[0].0, 77);
+        assert!(
+            !control.stopped.load(Ordering::Acquire),
+            "a deferred stop must not report the stream as stopped",
+        );
+        drop(receiver);
+    }
+
+    /// With no actor left to drain the queue, the stream is as stopped as it can be.
+    ///
+    /// Without this branch the deferral above would hang a caller awaiting `stop()` forever once
+    /// the actor is gone — which is worse than the leak it replaces.
+    /// The deferral only helps if something drains it.
+    ///
+    /// Without this, `a_refused_stop_is_recorded_rather_than_reported_as_stopped` is satisfied by
+    /// a queue nothing ever reads — which trades a leaked session for a caller that waits forever.
+    #[test]
+    fn draining_a_pending_stop_tears_the_stream_down() {
+        let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let inner = Arc::new(ActorInner {
+            sender,
+            closed: AtomicBool::new(false),
+            pending_stops: Mutex::new(Vec::new()),
+        });
+        let control = frame_control_for_stop();
+        lock_pending_stops(&inner.pending_stops).push((79, Arc::clone(&control)));
+
+        let mut state = test_actor_state();
+        drain_pending_stops(&mut state, &Arc::downgrade(&inner));
+
+        assert!(
+            control.stopped.load(Ordering::Acquire),
+            "the drain did not stop the stream",
+        );
+        assert!(lock_pending_stops(&inner.pending_stops).is_empty());
+        drop(receiver);
+    }
+
+    #[test]
+    fn a_refused_stop_on_a_closed_actor_still_completes() {
+        let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let actor = MacScreenActor {
+            inner: Arc::new(ActorInner {
+                sender,
+                closed: AtomicBool::new(true),
+                pending_stops: Mutex::new(Vec::new()),
+            }),
+        };
+        for index in 0..ACTOR_QUEUE_CAPACITY {
+            let _ = actor.inner.sender.try_send(refresh_command(index % 2 == 0));
+        }
+
+        let control = frame_control_for_stop();
+        MacFrameSource {
+            stream_id: 78,
+            actor: Arc::clone(&actor.inner),
+            control: Arc::clone(&control),
+        }
+        .request_stop();
+
+        assert!(control.stopped.load(Ordering::Acquire));
+        assert!(lock_pending_stops(&actor.inner.pending_stops).is_empty());
+        drop(receiver);
+    }
+
     #[test]
     fn actor_mailbox_is_fifo_bounded_and_closed_state_fails_fast() {
         let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
@@ -1514,6 +1662,7 @@ mod tests {
             inner: Arc::new(ActorInner {
                 sender,
                 closed: AtomicBool::new(false),
+                pending_stops: Mutex::new(Vec::new()),
             }),
         };
 
