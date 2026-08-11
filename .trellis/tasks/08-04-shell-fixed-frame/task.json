@@ -22,5 +22,9 @@
   "parent": "08-03-app-shell-ai-redesign",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Run the visual acceptance. Six of the thirteen criteria are already met and checkable from source; the rest are measurements against the design boards - sidebar width 260 with a 1px right border, padding 14, gap 10, nav item padding [7,10], TopBar height 52 with padding [0,32], traffic lights unobstructed on macOS and absent on Windows, every existing route still rendering, and contrast in light and dark.",
+    "blocker": "A running app on macOS and Windows. Nothing in the remaining criteria is a source fact.",
+    "evidence": "Checked from source 2026-08-11, with AppShell as a positive control for the scan. AC1-AC3 met: zero files match LayoutShell, LayoutAtomProvider, FloatingNav, layouts-definition, useDynamicTuffLayout, DynamicLayout or LayoutPreview. LayoutSkeleton survives only as tuffex's TxLayoutSkeleton and two nexus demos, none of them under components/layout. AC5 met: coreBoxCanvasConfig is still reached from CoreBoxCanvasSection.vue, CoreBoxEditorOverlay.vue and useCoreBoxTheme.ts. AC6 met: no read or write of appSettingsData.layout remains in apps/core-app/src. AC13: typecheck:node clean, typecheck:web 154 errors, none of them in a shell or layout file - all under packages/tuffex/packages/components."
+  }
 }
