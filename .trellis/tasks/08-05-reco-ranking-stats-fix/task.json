@@ -22,5 +22,9 @@
   "parent": "08-05-search-audit-remediation",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Close the four AC1 assertions that have no test: scoring.final populated is asserted in recommendation-engine tests, and scored order across sources plus pinned truncation are covered, but nothing covers the type/id identity regression, the idempotent migration mapping all four known type->id pairs, or the snapshot taken before focus steal and consumed by the context provider. Then archive: AC2 and AC3 already hold.",
+    "blocker": "None. The remaining work is writing tests, not a decision.",
+    "evidence": "AC2 measured 2026-08-11: recommendation suite 99 passed / 7 files. AC3 met: the digest at .trellis/tasks/08-05-search-audit-remediation/research/audit-findings-digest.md records \"R1 fix-reco-ranking-and-stats - FIXED 2026-08-05\" and names P0-1, P0-2, P1-3 and P1-4. AC1 is partial - 2 of 6 assertions have matching tests."
+  }
 }
