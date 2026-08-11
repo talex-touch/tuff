@@ -7,6 +7,7 @@ import {
   h,
   onBeforeUnmount,
   onErrorCaptured,
+  onMounted,
   reactive,
   ref,
   watch,
@@ -386,17 +387,35 @@ function mountShadowApp(): void {
   }
 }
 
-watch(
-  () => [canRenderShadow.value, rendererKey.value],
-  ([enabled]) => {
-    if (!enabled) {
-      unmountShadowApp()
-      return
-    }
-    mountShadowApp()
-  },
-  { immediate: true }
-)
+function syncShadowApp(): void {
+  if (!canRenderShadow.value) {
+    unmountShadowApp()
+    return
+  }
+  mountShadowApp()
+}
+
+/**
+ * Both halves are needed, and neither is redundant. Measured against this repo's Vue:
+ *
+ * | when                                     | is `shadowHost` populated? |
+ * |------------------------------------------|----------------------------|
+ * | `immediate` callback, `flush: 'pre'`      | no                         |
+ * | `immediate` callback, `flush: 'post'`     | no                         |
+ * | `onMounted`, node rendered at mount       | yes                        |
+ * | pre-flush watcher, enabled flips later    | no                         |
+ * | post-flush watcher, enabled flips later   | yes                        |
+ *
+ * The watcher was `{ immediate: true }` with the default pre flush, so the only run that ever
+ * happened read the ref before the `v-else-if` div existed: ensureShadowRoot returned null,
+ * mountShadowApp bailed, and nothing re-triggered it — shadow mode could never mount (#833).
+ *
+ * `immediate` cannot be salvaged by switching flush: Vue calls that first invocation directly
+ * rather than through the scheduler, so it stays pre-mount either way.
+ */
+onMounted(syncShadowApp)
+
+watch(() => [canRenderShadow.value, rendererKey.value], syncShadowApp, { flush: 'post' })
 
 onBeforeUnmount(() => {
   clearMissingRendererTimer()
