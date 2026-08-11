@@ -85,8 +85,17 @@ export declare function drainCapture(sessionId: string): AudioPcmChunk
 export declare function stopCapture(sessionId: string): AudioCaptureResult
 /** Cancel the capture session and discard its buffered PCM. Throws `session-not-found: <id>` for an unknown id. */
 export declare function cancelCapture(sessionId: string): void
-/** Decode WAV/MP3 bytes and play them through the default output device. Returns immediately; playback continues on a native thread. Degrades to a no-op (`{ playbackId: '' }`) when the native binding is unavailable or disabled; throws when the audio can't be decoded. */
-export declare function playAudio(bytes: Buffer): AudioPlaybackStart
+/**
+ * Decode WAV/MP3 bytes and play them through the default output device.
+ *
+ * The decode runs on the libuv pool, so it does not block the Electron main thread;
+ * the promise resolves once playback has started and continues on a native thread.
+ * Degrades to a no-op (`{ playbackId: '' }`) when the native binding is unavailable
+ * or disabled. Rejects when the audio can't be decoded, when the input exceeds
+ * 64 MiB (`audio-too-large`), or when it decodes past five minutes of 48 kHz stereo
+ * (`audio-too-long`).
+ */
+export declare function playAudio(bytes: Buffer): Promise<AudioPlaybackStart>
 /** Stop one playback by id, or all playbacks when omitted. Unknown/absent id is a no-op. */
 export declare function stopPlayback(playbackId?: string): void
 /** macOS: whether this process has Accessibility (AX) trust; always true on Windows/Linux. Never prompts. */

@@ -93,10 +93,12 @@ function getSnapshotCapture():
 }
 
 /** Optional native playAudio accessor — enables speaker playback when present. */
-function getPlayAudio(): ((bytes: Buffer) => { playbackId: string }) | undefined {
+function getPlayAudio():
+  | ((bytes: Buffer) => Promise<{ playbackId: string }> | { playbackId: string })
+  | undefined {
   return (
     nativeAudio as unknown as {
-      playAudio?: (bytes: Buffer) => { playbackId: string }
+      playAudio?: (bytes: Buffer) => Promise<{ playbackId: string }> | { playbackId: string }
     }
   ).playAudio
 }
@@ -236,7 +238,9 @@ export class VoiceService {
       if (bytes && bytes.length > 0 && playAudio) {
         try {
           throwIfCancelled(signal)
-          const playback = playAudio(bytes)
+          // Awaited because the decode moved to the libuv pool (#845); a binding
+          // that still returns synchronously resolves to the same object.
+          const playback = await playAudio(bytes)
           played = Boolean(playback?.playbackId)
         } catch (error) {
           if (signal?.aborted) throw voiceCancellationError()
