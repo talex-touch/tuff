@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -17,8 +17,18 @@ const DEFAULT_MAX_DURATION_MS: u32 = 15_000;
 const DEFAULT_SILENCE_STOP_MS: u32 = 1_500;
 /// RMS level (0..1) above which an incoming chunk counts as speech, not silence.
 const SILENCE_RMS_THRESHOLD: f32 = 0.01;
-/// How often the capture thread re-checks its stop conditions.
+/// How often the capture thread re-checks the conditions nothing can signal:
+/// the max-duration cap and the trailing-silence window. A manual stop or cancel
+/// does not wait for this — it wakes the thread directly.
 const POLL_INTERVAL_MS: u64 = 50;
+/// How long `stop_capture` / `cancel_capture` will wait for the capture thread to
+/// drop its cpal stream and return.
+///
+/// These run on the Electron main thread, so the wait has to be bounded: a wedged
+/// CoreAudio/WASAPI teardown would otherwise freeze the whole UI with no way out.
+/// Half a second is far longer than a healthy teardown (single-digit ms) and short
+/// enough to read as a hitch rather than a hang.
+const STOP_WAIT_BUDGET_MS: u64 = 500;
 
 #[napi(object)]
 pub struct NativeAudioSupport {
@@ -104,8 +114,7 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
     let silence_stop_ms = options.silence_stop_ms.unwrap_or(DEFAULT_SILENCE_STOP_MS);
     let requested_sample_rate = options.sample_rate;
 
-    let stop_flag = Arc::new(AtomicBool::new(false));
-    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let sync = Arc::new(StopSignal::default());
     let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
     let silence = Arc::new(SilenceState::new());
     let meta = Arc::new(Mutex::new(CaptureMeta::default()));
@@ -114,22 +123,20 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
 
     let (ready_tx, ready_rx) = mpsc::channel::<std::result::Result<(), String>>();
 
-    let thread_stop = stop_flag.clone();
-    let thread_cancel = cancel_flag.clone();
+    let thread_sync = sync.clone();
     let thread_samples = samples.clone();
     let thread_silence = silence.clone();
     let thread_meta = meta.clone();
 
     // cpal `Stream` is neither Send nor Sync, so it is created and owned entirely
     // on this dedicated OS thread. We communicate with it via Arc<Mutex<..>> for
-    // the sample buffer, atomic flags for stop/cancel, and an mpsc channel that
-    // reports whether the input stream actually started.
+    // the sample buffer, a StopSignal for stop/cancel and completion, and an mpsc
+    // channel that reports whether the input stream actually started.
     let join_handle = thread::Builder::new()
         .name("tuff-audio-capture".to_string())
         .spawn(move || {
             capture_thread_main(
-                thread_stop,
-                thread_cancel,
+                thread_sync,
                 thread_samples,
                 thread_silence,
                 thread_meta,
@@ -158,8 +165,7 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
 
     let session_id = next_session_id();
     let handle = SessionHandle {
-        stop_flag,
-        cancel_flag,
+        sync,
         samples,
         meta,
         join_handle,
@@ -176,8 +182,8 @@ pub fn stop_capture(session_id: String) -> Result<AudioCaptureResult> {
         .remove(&session_id)
         .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
 
-    handle.stop_flag.store(true, Ordering::Relaxed);
-    let _ = handle.join_handle.join();
+    handle.sync.request(StopRequest::Stop);
+    settle(handle.join_handle, &handle.sync, &session_id);
 
     let meta = lock(&handle.meta).clone();
     let interleaved = lock(&handle.samples).clone();
@@ -267,9 +273,8 @@ pub fn cancel_capture(session_id: String) -> Result<()> {
         .remove(&session_id)
         .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
 
-    handle.cancel_flag.store(true, Ordering::Relaxed);
-    handle.stop_flag.store(true, Ordering::Relaxed);
-    let _ = handle.join_handle.join();
+    handle.sync.request(StopRequest::Cancel);
+    settle(handle.join_handle, &handle.sync, &session_id);
 
     Ok(())
 }
@@ -459,12 +464,128 @@ struct CaptureMeta {
     stopped_reason: Option<StopReason>,
 }
 
+/// What a caller has asked the capture thread to do.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum StopRequest {
+    Stop,
+    Cancel,
+}
+
+/// The handshake between the JS thread and the capture thread, in both directions.
+///
+/// Both halves live under one mutex rather than in atomics because the capture
+/// thread has to *check* for a request and then *wait* for one, and an atomic set
+/// between those two steps is a lost wakeup — the thread would sleep out a whole
+/// poll interval with the stop already pending. Holding the guard across the wait
+/// closes that window; `Condvar::wait_timeout` releases it atomically.
+#[derive(Default)]
+struct StopSignal {
+    state: Mutex<StopState>,
+    changed: Condvar,
+}
+
+#[derive(Default, Clone, Copy)]
+struct StopState {
+    stop: bool,
+    cancel: bool,
+    /// Set by the capture thread after it has dropped the cpal stream and written
+    /// `meta.stopped_reason` — so observing it means the session is fully settled.
+    finished: bool,
+}
+
+impl StopSignal {
+    fn request(&self, request: StopRequest) {
+        {
+            let mut state = lock(&self.state);
+            match request {
+                // A cancel is also a stop: it ends the capture, it just discards it.
+                StopRequest::Cancel => {
+                    state.cancel = true;
+                    state.stop = true;
+                }
+                StopRequest::Stop => state.stop = true,
+            }
+        }
+        self.changed.notify_all();
+    }
+
+    fn mark_finished(&self) {
+        lock(&self.state).finished = true;
+        self.changed.notify_all();
+    }
+}
+
+/// Wait out one poll interval, returning early the moment a stop or cancel lands.
+///
+/// `None` means the budget expired with nothing requested, which is the capture
+/// thread's cue to re-check the conditions no one signals (max duration, silence).
+fn wait_for_stop_request(sync: &StopSignal, budget: Duration) -> Option<StopReason> {
+    let mut state = lock(&sync.state);
+    loop {
+        // Cancel outranks stop: a session that was cancelled is discarded even if a
+        // plain stop arrived first.
+        if state.cancel {
+            return Some(StopReason::Cancelled);
+        }
+        if state.stop {
+            return Some(StopReason::Manual);
+        }
+
+        let (next, timeout) = sync
+            .changed
+            .wait_timeout(state, budget)
+            .unwrap_or_else(|poison| poison.into_inner());
+        if timeout.timed_out() {
+            return None;
+        }
+        state = next;
+    }
+}
+
+/// Wait for the capture thread to report that it has finished, up to `budget`.
+/// Returns whether it did.
+fn wait_until_finished(sync: &StopSignal, budget: Duration) -> bool {
+    let deadline = Instant::now() + budget;
+    let mut state = lock(&sync.state);
+    loop {
+        if state.finished {
+            return true;
+        }
+        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+            return false;
+        };
+        let (next, _) = sync
+            .changed
+            .wait_timeout(state, remaining)
+            .unwrap_or_else(|poison| poison.into_inner());
+        state = next;
+    }
+}
+
+/// Give the capture thread a bounded window to finish, then stop waiting on it.
+///
+/// Joining only once it has reported `finished` keeps the join instant — the thread
+/// does nothing after that but unwind. If the window expires, the handle is dropped
+/// instead: the thread is detached, still owns its `Arc`s, and frees them whenever
+/// the stalled device teardown eventually returns. That costs nothing the caller can
+/// observe, and it is the only option that does not hand the Electron main thread an
+/// unbounded wait.
+fn settle(join_handle: JoinHandle<()>, sync: &StopSignal, session_id: &str) {
+    if wait_until_finished(sync, Duration::from_millis(STOP_WAIT_BUDGET_MS)) {
+        let _ = join_handle.join();
+        return;
+    }
+    eprintln!(
+        "[tuff-native-audio] capture thread for {session_id} did not stop within \
+         {STOP_WAIT_BUDGET_MS}ms; detaching"
+    );
+}
+
 /// Everything start_capture keeps so a later stop/cancel can join the thread and
 /// collect the recorded PCM. The cpal `Stream` is intentionally NOT stored here
 /// (it is not Send) — it lives and dies on the capture thread.
 struct SessionHandle {
-    stop_flag: Arc<AtomicBool>,
-    cancel_flag: Arc<AtomicBool>,
+    sync: Arc<StopSignal>,
     samples: Arc<Mutex<Vec<f32>>>,
     meta: Arc<Mutex<CaptureMeta>>,
     join_handle: JoinHandle<()>,
@@ -496,8 +617,7 @@ fn next_session_id() -> String {
 
 #[allow(clippy::too_many_arguments)]
 fn capture_thread_main(
-    stop_flag: Arc<AtomicBool>,
-    cancel_flag: Arc<AtomicBool>,
+    sync: Arc<StopSignal>,
     samples: Arc<Mutex<Vec<f32>>>,
     silence: Arc<SilenceState>,
     meta: Arc<Mutex<CaptureMeta>>,
@@ -563,13 +683,11 @@ fn capture_thread_main(
 
     // Auto-stop policy: end on manual/cancel signal, on the hard duration cap,
     // or on a trailing-silence window once speech has been detected.
+    //
+    // The duration and silence conditions have nothing to signal them, so they are
+    // still polled. A stop or cancel does: the wait below ends the moment one lands,
+    // rather than up to POLL_INTERVAL_MS later with the caller blocked on the join.
     let reason = loop {
-        if cancel_flag.load(Ordering::Relaxed) {
-            break StopReason::Cancelled;
-        }
-        if stop_flag.load(Ordering::Relaxed) {
-            break StopReason::Manual;
-        }
         let elapsed_ms = started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
         if elapsed_ms >= max_duration_ms as u64 {
             break StopReason::MaxDuration;
@@ -582,12 +700,26 @@ fn capture_thread_main(
         ) {
             break StopReason::Silence;
         }
-        thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+        if let Some(requested) =
+            wait_for_stop_request(&sync, Duration::from_millis(POLL_INTERVAL_MS))
+        {
+            break requested;
+        }
     };
 
     // Dropping the stream stops the OS capture; do it before recording the reason.
     drop(stream);
-    lock(&meta).stopped_reason = Some(reason);
+    finish_capture(reason, &meta, &sync);
+}
+
+/// Record why the session ended, then announce that it has.
+///
+/// The order is the contract: a caller that observes `finished` has to be able to
+/// rely on the reason and the sample buffer already being final, so the
+/// announcement goes last.
+fn finish_capture(reason: StopReason, meta: &Mutex<CaptureMeta>, sync: &StopSignal) {
+    lock(meta).stopped_reason = Some(reason);
+    sync.mark_finished();
 }
 
 fn build_capture_stream(
@@ -1104,6 +1236,120 @@ mod tests {
     #[test]
     fn rms_of_constant_amplitude() {
         assert!((rms(&[0.5, -0.5, 0.5, -0.5]) - 0.5).abs() < 1e-6);
+    }
+
+    /// Long enough that a wait which actually blocks for it is unmistakable, so the
+    /// assertions below discriminate on "did it wake" rather than on wall-clock noise.
+    const NEVER: Duration = Duration::from_secs(30);
+    /// Generous ceiling for something that is meant to return at once.
+    const PROMPTLY: Duration = Duration::from_secs(5);
+
+    #[test]
+    fn a_stop_requested_before_the_wait_is_not_lost() {
+        // The lost wakeup the mutex exists to prevent: with a bare atomic, a request
+        // that lands before the thread waits is invisible until the next poll.
+        let sync = StopSignal::default();
+        sync.request(StopRequest::Stop);
+
+        let started = Instant::now();
+        assert_eq!(
+            wait_for_stop_request(&sync, NEVER),
+            Some(StopReason::Manual)
+        );
+        assert!(started.elapsed() < PROMPTLY);
+    }
+
+    #[test]
+    fn a_stop_requested_during_the_wait_ends_it_at_once() {
+        let sync = Arc::new(StopSignal::default());
+        let requester = Arc::clone(&sync);
+        let handle = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            requester.request(StopRequest::Cancel);
+        });
+
+        let started = Instant::now();
+        assert_eq!(
+            wait_for_stop_request(&sync, NEVER),
+            Some(StopReason::Cancelled)
+        );
+        assert!(started.elapsed() < PROMPTLY);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn an_expired_wait_reports_no_request() {
+        // Without this, a wait that returned Some unconditionally would pass the two
+        // tests above while ending every session the moment it started.
+        let sync = StopSignal::default();
+        assert_eq!(
+            wait_for_stop_request(&sync, Duration::from_millis(10)),
+            None
+        );
+    }
+
+    #[test]
+    fn cancel_outranks_a_stop_that_arrived_first() {
+        // Order matters: a cancelled session is discarded, a stopped one is kept.
+        let sync = StopSignal::default();
+        sync.request(StopRequest::Stop);
+        sync.request(StopRequest::Cancel);
+
+        assert_eq!(
+            wait_for_stop_request(&sync, NEVER),
+            Some(StopReason::Cancelled)
+        );
+    }
+
+    #[test]
+    fn waiting_on_a_thread_that_never_finishes_is_bounded() {
+        // The whole point: this runs on the Electron main thread, so a wedged device
+        // teardown has to cost a bounded hitch rather than the process.
+        let sync = StopSignal::default();
+
+        let started = Instant::now();
+        assert!(!wait_until_finished(&sync, Duration::from_millis(30)));
+        assert!(started.elapsed() < PROMPTLY);
+    }
+
+    #[test]
+    fn a_finish_signalled_before_the_wait_is_seen() {
+        // The same lost wakeup, in the other direction.
+        let sync = StopSignal::default();
+        sync.mark_finished();
+
+        let started = Instant::now();
+        assert!(wait_until_finished(&sync, NEVER));
+        assert!(started.elapsed() < PROMPTLY);
+    }
+
+    #[test]
+    fn a_finish_signalled_during_the_wait_ends_it_at_once() {
+        let sync = Arc::new(StopSignal::default());
+        let finisher = Arc::clone(&sync);
+        let handle = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            finisher.mark_finished();
+        });
+
+        let started = Instant::now();
+        assert!(wait_until_finished(&sync, NEVER));
+        assert!(started.elapsed() < PROMPTLY);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn a_finished_capture_announces_itself_as_well_as_recording_why() {
+        // Recording the reason without announcing it is the quiet failure here: every
+        // stop would still work, just 500ms slower, which is exactly the kind of thing
+        // that survives review.
+        let meta = Mutex::new(CaptureMeta::default());
+        let sync = StopSignal::default();
+
+        finish_capture(StopReason::Silence, &meta, &sync);
+
+        assert_eq!(lock(&meta).stopped_reason, Some(StopReason::Silence));
+        assert!(wait_until_finished(&sync, NEVER));
     }
 
     #[test]
