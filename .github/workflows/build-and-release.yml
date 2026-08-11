@@ -830,8 +830,14 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Keep .dmg files, .zip files (contain .app), and .app directories
-          find apps/core-app/dist -type f ! -name "*.dmg" ! -name "*.zip" -delete 2>/dev/null || true
+          # Runs after Upload Artifacts; this only reclaims runner disk.
+          #
+          # `! -path "*.app/*"` is what makes the comment above true. A .app is a directory whose
+          # contents are files -- Contents/MacOS/tuff, Info.plist, the frameworks -- so without it
+          # this deletes the bundle's insides and leaves the skeleton. Harmless while the upload
+          # happens first; anyone who reorders these, or adds a second upload after this step, would
+          # otherwise ship an empty shell that still has the .app suffix and still counts (#1612).
+          find apps/core-app/dist -type f ! -path "*.app/*" ! -name "*.dmg" ! -name "*.zip" -delete 2>/dev/null || true
           find apps/core-app/dist -type d -name "mac-*" -prune -o -type d ! -name "*.app" -empty -delete 2>/dev/null || true
 
   create-release:
