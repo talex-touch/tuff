@@ -56,6 +56,7 @@
     "audit:exports": "node ./scripts/audit-package-exports.mjs",
     "audit:types": "node ./scripts/audit-package-types.mjs",
     "audit:readme": "node ./scripts/audit-readme-inventory.mjs",
+    "audit:readme:self-test": "node ./scripts/audit-readme-inventory.mjs --self-test",
     "audit:size": "node ./scripts/audit-package-size.mjs"
   },
   "files": [
