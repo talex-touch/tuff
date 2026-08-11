@@ -282,7 +282,7 @@ send(type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
 sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
 sendPlugin(pluginName: string, eventName: string, arg?: unknown): Promise<unknown>
 
-// Key management (encryption for plugin isolation)
+// Key management (per-activation capability tokens for plugin isolation)
 requestKey(name: string, activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>): string
 revokeKey(key: string): boolean
 ```
@@ -300,7 +300,7 @@ The two `regChannel` signatures are the trap: passing a `ChannelType` to the ren
 **Implementation Notes:**
 - Uses IPC listeners on `@main-process-message` and `@plugin-process-message`
 - Supports both sync and async request-response patterns
-- Plugin channels use encrypted keys for additional security
+- Plugin channels are addressed by a per-activation random capability token, not by plugin name
 
 ### Window Management
 - **Main Window**: Primary application interface with Vibrancy (macOS) or Mica (Windows) effects
@@ -428,7 +428,7 @@ await accountSDK.hasPrioritySupport()     // Priority support
 
 1. **Module Directory Pattern**: Each module requests an isolated directory for persistent storage without knowing the root path
 
-2. **Encryption for Plugin Isolation**: Plugin channels use encrypted keys instead of direct names for additional security
+2. **Capability Tokens for Plugin Isolation**: Plugin channels are addressed by a 16-byte random token minted per activation, not by plugin name. Nothing is encrypted — the token is a bearer capability, and its security comes from being unguessable, from rotating when a plugin re-activates, and from being revoked on disable, crash and failed activation.
 
 3. **Broadcast Storage Updates**: Storage module broadcasts updates to all windows to keep UI in sync across multiple renderer instances
 
