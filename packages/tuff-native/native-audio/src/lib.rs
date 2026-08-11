@@ -180,8 +180,19 @@ fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String
         meta,
         join_handle,
         drain_cursor,
+        last_read: Mutex::new(Instant::now()),
     };
-    lock(sessions()).insert(session_id.clone(), handle);
+    {
+        // Reap here rather than on a timer: the map only grows when a session is
+        // started, so this is exactly where accumulation would happen, and it costs
+        // one pass over a map that is normally empty.
+        let mut map = lock(sessions());
+        let reaped = reap_abandoned_sessions(&mut map, Instant::now(), ABANDONED_SESSION_TTL);
+        if reaped > 0 {
+            eprintln!("[tuff-native-audio] reaped {reaped} abandoned capture session(s)");
+        }
+        map.insert(session_id.clone(), handle);
+    }
 
     Ok(session_id)
 }
@@ -258,6 +269,7 @@ pub fn poll_capture(session_id: String) -> Result<AudioCaptureState> {
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
+        touch_session(handle);
         (handle.meta.clone(), handle.samples.clone())
     };
 
@@ -288,6 +300,7 @@ pub fn snapshot_capture(session_id: String) -> Result<AudioSnapshot> {
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
+        touch_session(handle);
         (
             handle.meta.clone(),
             handle.samples.clone(),
@@ -345,6 +358,7 @@ pub fn drain_capture(session_id: String) -> Result<AudioPcmChunk> {
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
+        touch_session(handle);
         (
             handle.meta.clone(),
             handle.samples.clone(),
@@ -552,6 +566,9 @@ struct CaptureMeta {
     channels: u16,
     /// `None` while the capture thread is still running; `Some` once it stopped.
     stopped_reason: Option<StopReason>,
+    /// When the capture thread finished. Set alongside `stopped_reason`, and the
+    /// clock the reaper measures an abandoned session against.
+    stopped_at: Option<Instant>,
 }
 
 /// What a caller has asked the capture thread to do.
@@ -712,13 +729,72 @@ struct SessionHandle {
     join_handle: JoinHandle<()>,
     /// Interleaved-sample read cursor for `drain_capture` (delta streaming).
     drain_cursor: Arc<AtomicUsize>,
+    /// Last time any caller looked at this session. A caller polling towards its
+    /// own collection is not abandoning it, however long the recording runs.
+    last_read: Mutex<Instant>,
 }
+
+/// A session's id is the only handle to it: `SESSIONS` is keyed by id, every
+/// removal path needs one, and nothing enumerates the map. So a caller that loses
+/// an id -- a renderer that goes away mid-flight, a teardown that races an
+/// in-flight start (#1552) -- strands the interleaved buffer (15s x 48kHz x 2ch x
+/// 4B ~= 5.8MB) plus the snapshot cache for the life of the process.
+///
+/// Nothing can recover the id, so this recovers the memory instead: a session that
+/// has stopped and that nobody has looked at since is not coming back.
+///
+/// The window is deliberately generous. It only starts once the capture thread has
+/// finished, and any poll, snapshot or drain resets it, so a caller working towards
+/// its own collection is never reaped out from under itself.
+const ABANDONED_SESSION_TTL: Duration = Duration::from_secs(60);
 
 static SESSIONS: OnceLock<Mutex<HashMap<String, SessionHandle>>> = OnceLock::new();
 static SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn sessions() -> &'static Mutex<HashMap<String, SessionHandle>> {
     SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Whether a session can no longer be waiting for anyone.
+///
+/// A session still running is never abandoned, however long it has been going --
+/// the caller may simply be recording. Only one that has stopped, and that nobody
+/// has read since, qualifies.
+fn session_is_abandoned(
+    stopped_at: Option<Instant>,
+    last_read: Instant,
+    now: Instant,
+    ttl: Duration,
+) -> bool {
+    let Some(stopped_at) = stopped_at else {
+        return false;
+    };
+    now.saturating_duration_since(stopped_at.max(last_read)) >= ttl
+}
+
+/// Drop sessions nothing can reach any more. Returns how many went.
+///
+/// Dropping the `JoinHandle` detaches rather than joins, which is what we want:
+/// the thread has already returned (`stopped_at` is written on its way out), so
+/// there is nothing to wait for, and a join here would be a blocking call inside
+/// the sessions lock.
+fn reap_abandoned_sessions(
+    map: &mut HashMap<String, SessionHandle>,
+    now: Instant,
+    ttl: Duration,
+) -> usize {
+    let before = map.len();
+    map.retain(|_, handle| {
+        let stopped_at = lock(&handle.meta).stopped_at;
+        let last_read = *lock(&handle.last_read);
+        !session_is_abandoned(stopped_at, last_read, now, ttl)
+    });
+    before - map.len()
+}
+
+/// Note that a caller has looked at this session, so the reaper leaves it alone.
+fn touch_session(handle: &SessionHandle) {
+    *lock(&handle.last_read) = Instant::now();
 }
 
 /// Recover the guard even if a previous holder panicked; a poisoned sample
@@ -839,7 +915,11 @@ fn capture_thread_main(
 /// rely on the reason and the sample buffer already being final, so the
 /// announcement goes last.
 fn finish_capture(reason: StopReason, meta: &Mutex<CaptureMeta>, sync: &StopSignal) {
-    lock(meta).stopped_reason = Some(reason);
+    {
+        let mut guard = lock(meta);
+        guard.stopped_reason = Some(reason);
+        guard.stopped_at = Some(Instant::now());
+    }
     sync.mark_finished();
 }
 
@@ -1604,6 +1684,151 @@ mod tests {
         let staged = snapshot_prefixes(&interleaved, 2, &[3, 8]);
         let whole = pcm16_le_bytes(&downmix_to_mono(&interleaved, 2));
         assert_eq!(staged, whole);
+    }
+
+    /// A session handle whose thread has already exited, so the reaper can be
+    /// exercised without a capture device.
+    fn finished_session(stopped_at: Option<Instant>, last_read: Instant) -> SessionHandle {
+        SessionHandle {
+            sync: Arc::new(StopSignal::default()),
+            samples: Arc::new(Mutex::new(Vec::new())),
+            snapshot: Arc::new(Mutex::new(SnapshotCache::default())),
+            meta: Arc::new(Mutex::new(CaptureMeta {
+                sample_rate: 48_000,
+                channels: 1,
+                stopped_reason: stopped_at.map(|_| StopReason::MaxDuration),
+                stopped_at,
+            })),
+            join_handle: thread::spawn(|| {}),
+            drain_cursor: Arc::new(AtomicUsize::new(0)),
+            last_read: Mutex::new(last_read),
+        }
+    }
+
+    #[test]
+    fn a_running_session_is_never_abandoned() {
+        // However long it has been going: the caller may simply be recording.
+        let now = Instant::now();
+        let ancient = now - Duration::from_secs(3_600);
+        assert!(!session_is_abandoned(
+            None,
+            ancient,
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn a_stopped_session_survives_until_the_window_passes() {
+        let now = Instant::now();
+        let stopped = now - ABANDONED_SESSION_TTL + Duration::from_secs(1);
+        assert!(!session_is_abandoned(
+            Some(stopped),
+            stopped,
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+
+        let older = now - ABANDONED_SESSION_TTL;
+        assert!(session_is_abandoned(
+            Some(older),
+            older,
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn a_session_someone_is_still_reading_is_never_reaped() {
+        // The half that decides whether this is a safety net or a bug: a caller
+        // polling towards its own collection must not have the session pulled out
+        // from under it, however long ago the thread stopped.
+        let now = Instant::now();
+        let stopped_long_ago = now - Duration::from_secs(3_600);
+        assert!(!session_is_abandoned(
+            Some(stopped_long_ago),
+            now - Duration::from_secs(1),
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn reaping_removes_only_the_unreachable_sessions() {
+        let now = Instant::now();
+        let stale = now - Duration::from_secs(3_600);
+        let mut map = HashMap::new();
+        map.insert(
+            "abandoned".to_string(),
+            finished_session(Some(stale), stale),
+        );
+        map.insert("running".to_string(), finished_session(None, stale));
+        map.insert(
+            "just-collected".to_string(),
+            finished_session(Some(stale), now),
+        );
+
+        let reaped = reap_abandoned_sessions(&mut map, now, ABANDONED_SESSION_TTL);
+
+        assert_eq!(reaped, 1);
+        let mut left: Vec<_> = map.keys().cloned().collect();
+        left.sort();
+        assert_eq!(
+            left,
+            vec!["just-collected".to_string(), "running".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_read_moves_a_session_out_of_the_reaper_s_reach() {
+        // touch_session is what the poll/snapshot/drain entry points call; without
+        // it every long-running collection would be a race against the TTL.
+        let now = Instant::now();
+        let stale = now - Duration::from_secs(3_600);
+        let handle = finished_session(Some(stale), stale);
+
+        touch_session(&handle);
+
+        let last_read = *lock(&handle.last_read);
+        assert!(!session_is_abandoned(
+            Some(stale),
+            last_read,
+            Instant::now(),
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn every_read_path_touches_the_session() {
+        // The mutation the tests above cannot see: dropping the call from *one* of
+        // the three entry points. `touch_session` stays alive for the other two, so
+        // there is no dead-code warning, and the only symptom is that a session read
+        // solely through that path gets reaped mid-collection.
+        let source = include_str!("lib.rs");
+
+        for entry in ["poll_capture", "snapshot_capture", "drain_capture"] {
+            let body = source
+                .split(&format!("pub fn {entry}("))
+                .nth(1)
+                .unwrap_or_else(|| panic!("{entry} not found"));
+            // Up to the next entry point, so this reads one function's body.
+            let body = body.split("\n#[napi]").next().unwrap();
+            assert!(
+                body.contains("touch_session(handle);"),
+                "{entry} does not mark the session as read"
+            );
+        }
+    }
+
+    #[test]
+    fn a_finished_capture_records_when_it_stopped() {
+        // The reaper's clock. Without it every stopped session looks equally old.
+        let meta = Mutex::new(CaptureMeta::default());
+        let sync = StopSignal::default();
+
+        finish_capture(StopReason::Silence, &meta, &sync);
+
+        assert!(lock(&meta).stopped_at.is_some());
     }
 
     #[test]
