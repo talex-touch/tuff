@@ -322,6 +322,12 @@ export function checkTasks(repoRoot, scope) {
 }
 
 const PLACEHOLDER = /\b(?:TBD|TODO\s*:\s*(?:fill|complete|determine)|to be determined|\[placeholder\])\b|<evidence>|待定|待填写|待补充|占位符|请填写/gi
+// `matchAll` requires the global flag; `test` is broken by it. A /g regex advances lastIndex on
+// every `test`, so the same string alternates true/false across calls -- a section whose only
+// content is TBD reads as substantive on the second look. Worse, `matchAll` inherits whatever
+// lastIndex the previous `test` left behind, so it can skip the first placeholder in a string.
+// One source, two objects, no shared cursor.
+const PLACEHOLDER_TEST = new RegExp(PLACEHOLDER.source, 'i')
 const REQUIRED_PRD_SECTION = /^(?:goal|objective|acceptance criteria|evidence|目标|验收标准|证据)$/i
 function sectionHasSubstantiveContent(nodes) {
   return nodes.some((node) => {
@@ -329,7 +335,7 @@ function sectionHasSubstantiveContent(nodes) {
       return false
     let substantive = false
     walk(node, (child) => {
-      if (child.type === 'text' && /[\p{L}\p{N}]/u.test(child.value) && !PLACEHOLDER.test(child.value))
+      if (child.type === 'text' && /[\p{L}\p{N}]/u.test(child.value) && !PLACEHOLDER_TEST.test(child.value))
         substantive = true
     })
     return substantive
@@ -370,7 +376,7 @@ export function checkPlaceholders(repoRoot, scope) {
     walk(tree, (node) => {
       if (node.type !== 'text' && node.type !== 'html')
         return
-      for (const match of node.value.matchAll(PLACEHOLDER)) {
+      for (const match of node.value.matchAll(new RegExp(PLACEHOLDER.source, 'gi'))) {
         const token = match[0]
         if (!placeholderAllowed(file, token))
           diagnostics.push(diagnostic('DOC-PRD-PLACEHOLDER', file, node.position?.start, `unresolved placeholder ${token}`))
