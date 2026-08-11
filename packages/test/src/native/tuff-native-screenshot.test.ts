@@ -1,10 +1,19 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { loadScreenshotCarrier } from '@talex-touch/tuff-native/screenshot-protocol'
 import { describe, expect, it } from 'vitest'
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_SCREENSHOT'
+
+/**
+ * Native tests the workflow deliberately does not run, each with a reason.
+ *
+ * `tuff-native-ocr.test.ts` fails on Windows only: Windows OCR reads nothing from a fixture that
+ * was built and validated against Apple Vision, on the one platform that could run it (#1517).
+ */
+const WORKFLOW_EXCLUDED = new Set(['tuff-native-ocr.test.ts'])
 
 /**
  * The carrier is a compiled Rust addon. `Integration suite (packages/test)` installs and runs;
@@ -23,7 +32,26 @@ describe('tuff-native screenshot protocol contract', () => {
     // Without this, the tolerance below is indistinguishable from no coverage: every runner
     // would report the binding absent and the capability shape would go unasserted anywhere.
     expect(WORKFLOW).toContain('TUFF_NATIVE_SCREENSHOT_REQUIRED')
-    expect(WORKFLOW).toMatch(/packages\/test[\s\S]{0,120}src\/native/)
+    expect(WORKFLOW).toContain('src/native/tuff-native-screenshot.test.ts')
+  })
+
+  it('is listed in that workflow along with every other native test, or excluded by name', () => {
+    // The workflow names files rather than the directory, so a new native test would silently
+    // never run under a built addon — the exact gap this step was added to close.
+    const missing = readdirSync(path.dirname(fileURLToPath(import.meta.url)))
+      .filter(name => name.endsWith('.test.ts'))
+      .filter(name => !WORKFLOW_EXCLUDED.has(name))
+      .filter(name => !WORKFLOW.includes(`src/native/${name}`))
+
+    expect(missing).toEqual([])
+  })
+
+  it('does not exclude a file that no longer exists', () => {
+    // Keeps the exclusion list from outliving the failure it records.
+    const present = new Set(readdirSync(path.dirname(fileURLToPath(import.meta.url))))
+    const stale = [...WORKFLOW_EXCLUDED].filter(name => !present.has(name))
+
+    expect(stale).toEqual([])
   })
 
   it('loads the screenshot carrier and reports the versioned capability shape', async () => {
