@@ -776,6 +776,7 @@ export default {
         },
       },
       menu: {
+        risk: 'Risk control',
         title: 'Workspace menu',
         workspaceTitle: 'Workspace',
         accountTitle: 'Account',
@@ -1418,6 +1419,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
       team: {
+        currentTeam: 'Current team',
         title: 'Team Management',
         subtitle: 'Manage team members, invites, and shared quota.',
         waitlistCta: 'Upgrade to Team',
