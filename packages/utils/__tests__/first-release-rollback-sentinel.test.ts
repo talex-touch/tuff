@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isValidRollbackFromVersion, validateUpdateReleaseManifest } from '../types/update'
+import {
+  AppPreviewChannel,
+  isValidRollbackFromVersion,
+  validateUpdateReleaseManifest,
+} from '../types/update'
 
 /**
  * A channel's first release has to produce a manifest that already-shipped clients accept (#559).
@@ -48,10 +52,16 @@ describe('first-release rollback sentinel', () => {
   it('is accepted by the validator running in already-shipped clients', () => {
     const found = sentinels()
 
-    expect(isValidRollbackFromVersion('2.5.0', found.RELEASE, 'RELEASE')).toBe(true)
-    expect(isValidRollbackFromVersion('2.5.0-beta.1', found.BETA, 'BETA')).toBe(true)
+    expect(
+      isValidRollbackFromVersion('2.5.0', found.RELEASE, AppPreviewChannel.RELEASE),
+    ).toBe(true)
+    expect(
+      isValidRollbackFromVersion('2.5.0-beta.1', found.BETA, AppPreviewChannel.BETA),
+    ).toBe(true)
     // …and stays channel-correct, which is what a bare `0.0.0` would get wrong for BETA.
-    expect(isValidRollbackFromVersion('2.5.0-beta.1', found.RELEASE, 'BETA')).toBe(false)
+    expect(
+      isValidRollbackFromVersion('2.5.0-beta.1', found.RELEASE, AppPreviewChannel.BETA),
+    ).toBe(false)
   })
 
   it('cannot be omitted instead, because the shipped client requires a string', () => {
