@@ -41,13 +41,13 @@ import { GlobalDictationController } from './global-dictation'
  * `await` here does not fail loudly -- it stores a Promise and every later call receives one.
  * Verified: mutating the await away leaves the whole voice suite green without these.
  */
-function pressShortcut(): () => void {
+function pressShortcut(): { press: () => void; controller: GlobalDictationController } {
   const controller = new GlobalDictationController()
   mocks.registerMainShortcut.mockReturnValue(true)
   controller.register()
   const handler = mocks.registerMainShortcut.mock.calls[0]?.[2] as () => void
   expect(typeof handler).toBe('function')
-  return handler
+  return { press: handler, controller }
 }
 
 describe('global dictation toggle', () => {
@@ -58,7 +58,7 @@ describe('global dictation toggle', () => {
   })
 
   it('把解析后的 session id 交给 endCapture,而不是一个 Promise', async () => {
-    const press = pressShortcut()
+    const { press } = pressShortcut()
 
     press()
     await vi.waitFor(() => expect(mocks.beginCapture).toHaveBeenCalledTimes(1))
@@ -71,8 +71,30 @@ describe('global dictation toggle', () => {
     expect(typeof sessionId).toBe('string')
   })
 
+  it('拆除时正在启动的采集会被取消,而不是留在原生侧', async () => {
+    // beginCapture 是异步的,期间 activeSessionId 还是 null,unregister 无从取消。
+    // 落到一个已拆除的控制器上的 session id 是原生侧唯一的句柄,丢了就再也回收不了 (#1552)。
+    let resolveCapture!: (value: string) => void
+    mocks.beginCapture.mockImplementation(
+      async () =>
+        await new Promise<string>((resolve) => {
+          resolveCapture = resolve
+        })
+    )
+    const { press, controller } = pressShortcut()
+
+    press()
+    await vi.waitFor(() => expect(mocks.beginCapture).toHaveBeenCalledTimes(1))
+
+    controller.unregister()
+    expect(mocks.abortCapture).not.toHaveBeenCalled()
+
+    resolveCapture('session-late')
+    await vi.waitFor(() => expect(mocks.abortCapture).toHaveBeenCalledWith('session-late'))
+  })
+
   it('第二次按下之前不会重复开启采集', async () => {
-    const press = pressShortcut()
+    const { press } = pressShortcut()
 
     press()
     await vi.waitFor(() => expect(mocks.beginCapture).toHaveBeenCalledTimes(1))
