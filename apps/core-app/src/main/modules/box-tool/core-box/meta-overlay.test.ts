@@ -130,18 +130,16 @@ const item = {
 // init() resolves the CoreBox renderer URL, and electron.app is mocked as unpackaged above, so it
 // takes the development branch and throws without one. Introduced by #1465, which gave app-profile
 // views the navigation guards plugin views have; this test was not updated with it.
-const previousRendererUrl = process.env.ELECTRON_RENDERER_URL
-
+// Set through vi.stubEnv rather than by assignment: electron-vite declares ELECTRON_RENDERER_URL
+// readonly, so writing it fails the main-process typecheck (TS2540/TS2704) even though the test
+// itself passes. vi.unstubAllEnvs also restores it, which the hand-rolled save/restore was for.
 afterAll(() => {
-  if (previousRendererUrl === undefined)
-    delete process.env.ELECTRON_RENDERER_URL
-  else
-    process.env.ELECTRON_RENDERER_URL = previousRendererUrl
+  vi.unstubAllEnvs()
 })
 
 describe('MetaOverlayManager action execution', () => {
-beforeEach(() => {
-  process.env.ELECTRON_RENDERER_URL = 'http://localhost:5173/'
+  beforeEach(() => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
 
     vi.clearAllMocks()
     metaOverlayManager.unregisterPluginActions('plugin-a')
