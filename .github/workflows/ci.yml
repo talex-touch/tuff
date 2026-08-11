@@ -345,8 +345,16 @@ jobs:
         if: ${{ matrix.app == 'nexus' }}
         run: pnpm -C packages/tuffex build
 
+      # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, which only
+      # electron-vite build produces and this job does not run. Their guard refuses to skip
+      # silently and fails instead, which is right -- but it was the last thing standing between
+      # this suite and a zero baseline. Skipping is declared here rather than discovered, and it
+      # costs no coverage: those six cases report `skipped` with or without this (#1596).
+      # Building the worker here would actually run them; that is the open half of #1596.
       - name: Run ${{ matrix.app }} suite
         continue-on-error: ${{ matrix.app != 'nexus' }}
+        env:
+          TUFF_SKIP_SQLITE_WORKER_TESTS: '1'
         run: >-
           pnpm -C "apps/${{ matrix.app }}" exec vitest run
           --reporter=default
