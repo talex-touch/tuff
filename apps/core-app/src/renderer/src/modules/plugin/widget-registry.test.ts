@@ -2,7 +2,7 @@
 import type { Component } from 'vue'
 import { createApp, h, nextTick, ref } from 'vue'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getWidgetSandboxAuditLog } from './widget-sandbox-policy'
+import { getWidgetSandboxAuditLog, guardWidgetDomNavigation } from './widget-sandbox-policy'
 
 const transportState = vi.hoisted(() => ({
   handlers: new Map<string, Function>(),
@@ -11,6 +11,7 @@ const transportState = vi.hoisted(() => ({
 }))
 let handleWidgetRegister: typeof import('./widget-registry').handleWidgetRegister
 let handleWidgetFailed: typeof import('./widget-registry').handleWidgetFailed
+let handleWidgetUnregister: typeof import('./widget-registry').handleWidgetUnregister
 let buildWidgetSandboxEvidence: typeof import('./widget-registry').buildWidgetSandboxEvidence
 let getWidgetFailure: typeof import('./widget-registry').getWidgetFailure
 let getWidgetSandboxEvidence: typeof import('./widget-registry').getWidgetSandboxEvidence
@@ -101,7 +102,8 @@ describe('widget-registry runtime hosts', () => {
       getWidgetFailure,
       getWidgetSandboxEvidence,
       handleWidgetFailed,
-      handleWidgetRegister
+      handleWidgetRegister,
+      handleWidgetUnregister
     } = await import('./widget-registry'))
     // 30s, not 10s. This import pulls a large graph and takes ~4.5s on its own, but the
     // hook runs while the rest of the 636-file suite is being transformed concurrently,
@@ -203,6 +205,67 @@ describe('widget-registry runtime hosts', () => {
       code: 'WIDGET_COMPILE_FAILED',
       hash: 'new-hash'
     })
+  })
+
+  it('unregistering a widget releases its renderer, styles, evidence and policy state', async () => {
+    const payload = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'module.exports = {',
+          '  name: "DisposableWidget",',
+          '  setup() {',
+          '    return () => h("strong", "disposable")',
+          '  }',
+          '}'
+        ].join('\n')
+      ),
+      styles: '.disposable-widget { color: blue; }'
+    }
+
+    await handleWidgetRegister(payload)
+    expect(await getRenderer(payload.widgetId)).toBeDefined()
+    expect(document.head.querySelector(`style[data-widget-id="${payload.widgetId}"]`)).toBeTruthy()
+    expect(getWidgetSandboxEvidence(payload.widgetId)).toBeDefined()
+
+    handleWidgetUnregister({ widgetId: payload.widgetId })
+
+    expect(transportState.renderers.has(payload.widgetId)).toBe(false)
+    expect(document.head.querySelector(`style[data-widget-id="${payload.widgetId}"]`)).toBeNull()
+    expect(getWidgetSandboxEvidence(payload.widgetId)).toBeNull()
+  })
+
+  // Disposal releases the policy but deliberately keeps the id in `disposedWidgetIds`, so
+  // `guardWidgetDomNavigation` still returns true for a widget that no longer has one. Without
+  // that, a torn-down widget's in-flight click would find no policy, fall straight through the
+  // `!policy && !disposedWidgetIds.has(id)` guard, and navigate the host -- teardown would open
+  // the exact hole the sandbox exists to close. This assertion is what stops a future
+  // "clean up everything on unregister" change from looking correct.
+  it('keeps guarding DOM navigation for a widget after its policy is disposed', async () => {
+    const payload = await register(
+      'vue',
+      [
+        'const { h } = require("vue")',
+        'module.exports = { name: "NavWidget", setup() { return () => h("div", "nav") } }'
+      ].join('\n')
+    )
+
+    handleWidgetUnregister({ widgetId: payload.widgetId })
+
+    const link = document.createElement('a')
+    link.href = 'https://outside.invalid/'
+    document.body.appendChild(link)
+
+    let guarded: boolean | null = null
+    const listener = (event: Event): void => {
+      guarded = guardWidgetDomNavigation(payload.widgetId, event)
+    }
+    document.addEventListener('click', listener, true)
+    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    document.removeEventListener('click', listener, true)
+
+    expect(guarded).toBe(true)
   })
 
   it('builds widget sandbox evidence for the runtime boundary', () => {
