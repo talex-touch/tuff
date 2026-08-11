@@ -136,6 +136,9 @@ jobs:
       - name: Test native carriers from the integration suite
         env:
           TUFF_NATIVE_SCREENSHOT_REQUIRED: '1'
+          # Forbids the OCR test's early return. Without it a green Windows leg cannot be told
+          # apart from one that never reached the engine -- which is the gap #1517 is about.
+          TUFF_NATIVE_OCR_REQUIRED: '1'
         run: >-
           pnpm -C packages/test exec vitest run
           src/native/tuff-native-audio.test.ts
