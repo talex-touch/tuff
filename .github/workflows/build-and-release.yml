@@ -172,19 +172,19 @@ jobs:
             # 标签触发：从标签提取版本信息
             REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
             if [[ "$REF_NAME_LOWER" == *"beta"* ]]; then
-              echo "type=beta" >> $GITHUB_OUTPUT
+              echo "type=beta" >> "$GITHUB_OUTPUT"
             elif [[ "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "type=snapshot" >> $GITHUB_OUTPUT
+              echo "type=snapshot" >> "$GITHUB_OUTPUT"
             else
-              echo "type=release" >> $GITHUB_OUTPUT
+              echo "type=release" >> "$GITHUB_OUTPUT"
             fi
-            echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
-            echo "version=${REF_NAME#v}" >> $GITHUB_OUTPUT
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
             # 手动触发：只设置构建类型，不处理版本和标签
-            echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-            echo "tag=" >> $GITHUB_OUTPUT
-            echo "version=" >> $GITHUB_OUTPUT
+            echo "type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
           fi
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -1016,31 +1016,31 @@ jobs:
           if [ -n "$RECOVER_RUN_ID" ]; then
             REF_NAME_LOWER=$(echo "$SYNC_TAG" | tr '[:upper:]' '[:lower:]')
             if [[ "$REF_NAME_LOWER" == *"beta"* ]]; then
-              echo "type=beta" >> $GITHUB_OUTPUT
+              echo "type=beta" >> "$GITHUB_OUTPUT"
             elif [[ "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "type=snapshot" >> $GITHUB_OUTPUT
+              echo "type=snapshot" >> "$GITHUB_OUTPUT"
             else
-              echo "type=release" >> $GITHUB_OUTPUT
+              echo "type=release" >> "$GITHUB_OUTPUT"
             fi
-            echo "tag=$SYNC_TAG" >> $GITHUB_OUTPUT
-            echo "name=Release $SYNC_TAG" >> $GITHUB_OUTPUT
-            echo "target_ref=$SYNC_TAG" >> $GITHUB_OUTPUT
+            echo "tag=$SYNC_TAG" >> "$GITHUB_OUTPUT"
+            echo "name=Release $SYNC_TAG" >> "$GITHUB_OUTPUT"
+            echo "target_ref=$SYNC_TAG" >> "$GITHUB_OUTPUT"
             if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           elif [ "$EVENT_NAME" = "push" ]; then
             # 标签触发：使用标签信息创建 release
             REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
-            echo "type=release" >> $GITHUB_OUTPUT
-            echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
-            echo "name=Release $REF_NAME" >> $GITHUB_OUTPUT
-            echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
+            echo "type=release" >> "$GITHUB_OUTPUT"
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "name=Release $REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "target_ref=$TARGET_SHA" >> "$GITHUB_OUTPUT"
             if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           else
             # 手动触发：创建 draft release，使用时间戳作为临时标签
@@ -1063,14 +1063,14 @@ jobs:
               beta) CHANNEL_LABEL=beta ;;
               *) CHANNEL_LABEL=master ;;
             esac
-            echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-            echo "tag=v${BASE_VERSION}-${CHANNEL_LABEL}.${TIMESTAMP}" >> $GITHUB_OUTPUT
-            echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
-            echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
+            echo "type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+            echo "tag=v${BASE_VERSION}-${CHANNEL_LABEL}.${TIMESTAMP}" >> "$GITHUB_OUTPUT"
+            echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> "$GITHUB_OUTPUT"
+            echo "target_ref=$TARGET_SHA" >> "$GITHUB_OUTPUT"
             if [ "$RELEASE_TYPE" = "snapshot" ] || [ "$RELEASE_TYPE" = "beta" ]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
