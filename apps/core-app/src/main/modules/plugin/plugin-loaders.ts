@@ -16,6 +16,7 @@ import type {
   SearchProviderManifestDescriptor
 } from '@talex-touch/utils/search'
 import path from 'node:path'
+import { isFeatureUnavailableOnPlatform } from './feature-platform'
 import {
   isLocalizedList,
   isLocalizedText,
@@ -453,6 +454,19 @@ abstract class BasePluginLoader {
             },
             timestamp: Date.now()
           })
+        }
+
+        // C.1.5: Honour the manifest's platform declaration
+        if (isFeatureUnavailableOnPlatform(feature, process.platform)) {
+          this.touchPlugin.issues.push({
+            type: 'warning',
+            message: `Feature '${feature.name || feature.id}' is not registered: its manifest declares it unavailable on ${process.platform}.`,
+            source: `feature:${feature.id}`,
+            code: 'FEATURE_PLATFORM_EXCLUDED',
+            meta: { featureId: feature.id, platform: process.platform },
+            timestamp: Date.now()
+          })
+          return
         }
 
         // C.2: Validate feature commands structure
