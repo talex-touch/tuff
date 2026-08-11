@@ -22,5 +22,9 @@
   "parent": "08-05-search-audit-remediation",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Write the two AC1 scenarios that have no test: the completion cache containing deferred items, and a single publish per batch. The other four are covered in useSearch.rank.test.ts (deferred outranks fast, pinned tops, per-source floor above the render cap, selection preserved across a re-rank).",
+    "blocker": "None. The two missing tests need writing, not a decision.",
+    "evidence": "AC2 measured 2026-08-11: renderer box adapter + main search-engine suites 736 passed / 86 files; typecheck:node 0 errors. typecheck:web reports 154 errors, all under packages/tuffex/packages/components and none touching useSearch or the box adapter, so the AC2 wording \"for touched files\" holds. AC1 is 4 of 6 scenarios covered; AC3 (D1-D7) not independently verified."
+  }
 }
