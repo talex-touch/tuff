@@ -4,11 +4,19 @@ import { randomBytes } from 'node:crypto'
 /**
  * Per-plugin channel keys and the activation they belong to.
  *
- * This is the isolation CLAUDE.md describes as "plugin channels use encrypted keys instead of
- * direct names". It lived inside TouchChannel, where it could not be tested: constructing that
- * class pulls in Electron, Sentry, the perf monitor and most of the main process, so every
- * test that touched these methods replaced them with vi.fn() and the rotation logic itself had
- * never run (#929).
+ * The key is a **bearer capability token**, not encryption of anything: 16 random bytes minted per
+ * activation. CLAUDE.md described it as encryption until #804, which is worth stating plainly —
+ * a reviewer who reads that word assumes confidentiality and replay resistance and stops looking
+ * for the things that actually matter here, namely where the token travels and when it dies.
+ *
+ * What it does provide: it is unguessable, it rotates whenever the activation changes, and it is
+ * revoked on disable, on runtime crash and on failed activation. There is no TTL, because the
+ * token's lifetime is the activation's — a timer would expire a key out from under a live plugin
+ * without making a leaked one meaningfully less useful in the window before it fired.
+ *
+ * It lived inside TouchChannel, where it could not be tested: constructing that class pulls in
+ * Electron, Sentry, the perf monitor and most of the main process, so every test that touched
+ * these methods replaced them with vi.fn() and the rotation logic itself had never run (#929).
  *
  * It is pure state with no Electron dependency, so it belongs in its own unit — which is also
  * the shape a security boundary should have.
