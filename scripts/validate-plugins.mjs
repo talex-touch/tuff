@@ -107,6 +107,15 @@ const pluginDirs = entries
 
 console.log(`\nValidating ${pluginDirs.length} plugins in plugins/\n`)
 
+// Discovery returning nothing is not a pass. Every rule below -- dev leakage, the manifest
+// feature.platform shape, search-provider migration -- applies per plugin, so an empty list
+// makes the run assert nothing while still printing success and exiting 0. A moved directory,
+// a bad path after a refactor, or a partial checkout all land here (#1586).
+if (pluginDirs.length === 0) {
+  console.error('\x1B[31mNo plugin directories found in plugins/ — validation would pass without checking anything.\x1B[0m\n')
+  process.exit(1)
+}
+
 /**
  * Fails a plugin that ships with its development loader switched on.
  *
