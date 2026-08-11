@@ -38,7 +38,6 @@
   "module": "src/index.ts",
   "types": "src/index.ts",
   "files": [
-    "dist",
     "src"
   ],
   "engines": {
