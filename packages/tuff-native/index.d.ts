@@ -47,6 +47,11 @@ export interface DarwinAppIconWriteResult {
   height: number
 }
 
+/**
+ * Resolves a Promise, but blocks the calling thread while it works: the underlying AppKit call
+ * must run on the main thread, which in Electron is the JS thread. ~28 ms p50 per app on a cold
+ * index. See the note in index.js and #857.
+ */
 export declare function writeDarwinAppIcon(
   options: DarwinAppIconWriteOptions,
 ): Promise<DarwinAppIconWriteResult>
