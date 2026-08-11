@@ -413,6 +413,7 @@ impl ActorState {
             self_process_ids,
             input.self_context.bundle_ids,
             self_native_ids,
+            self.limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
         let selection_policy = WindowSelectionPolicy::new(
@@ -422,11 +423,12 @@ impl ActorState {
                 .iter()
                 .map(|value| (*value).to_string())
                 .collect(),
+            self.limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
         let shareable_windows = system_windows
             .iter()
-            .filter_map(|window| shareable_window(window, generation_number).ok())
+            .filter_map(|window| shareable_window(window, generation_number, self.limits).ok())
             .collect::<Vec<_>>();
         let cg_windows = cg_windows
             .iter()
@@ -492,7 +494,7 @@ impl ActorState {
         let windows = hit_test_windows(
             &current.windows,
             input.point,
-            WindowHitTestOptions::new(input.include_panels, input.max_candidates),
+            WindowHitTestOptions::new(input.include_panels, input.max_candidates, self.limits),
         );
         let candidates = windows
             .iter()
@@ -1249,6 +1251,7 @@ fn encode_png(image: &MacCapturedImage) -> Result<Vec<u8>, ProtocolError> {
 fn shareable_window(
     window: &MacSystemWindow,
     generation_number: u64,
+    limits: ScreenshotLimits,
 ) -> Result<ShareableWindow, ProtocolError> {
     ShareableWindow::new(
         descriptor(format!(
@@ -1260,6 +1263,7 @@ fn shareable_window(
             window.process_id,
             window.bundle_id.clone(),
             window.application_name.clone(),
+            limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?,
         window.title.clone(),
@@ -1268,6 +1272,7 @@ fn shareable_window(
         window.on_screen,
         Some(window.active),
         true,
+        limits,
     )
     .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())
 }
