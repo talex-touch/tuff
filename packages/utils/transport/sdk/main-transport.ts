@@ -29,6 +29,7 @@ import { randomUUID } from "node:crypto";
 import * as electron from "electron";
 import { assertTuffEvent } from "../event/builder";
 import { TransportEvents } from "../events";
+import { isPluginFacingEvent } from "../security/plugin-facing-events";
 import { isPortChannelEnabled } from "./port-policy";
 import { createServerStreamRuntime } from "./stream/server-runtime";
 import {
@@ -42,6 +43,8 @@ const BRIDGE_CHANNEL = {
   PLUGIN: "plugin",
 } as const;
 const BRIDGE_SUCCESS_CODE = 200;
+/** Stands in for a plugin-channel registration that default-deny refused to make (#688). */
+const NOOP_UNREGISTER = (): void => {};
 type BridgeChannelType = (typeof BRIDGE_CHANNEL)[keyof typeof BRIDGE_CHANNEL];
 type BridgeChannelCallback = (data: any) => unknown;
 type MainChannelBridge = {
@@ -737,11 +740,12 @@ export class TuffMainTransport implements ITuffTransportMain {
       eventName,
       channelHandler,
     );
-    const unregisterPlugin = this.channel.regChannel(
-      BRIDGE_CHANNEL.PLUGIN,
-      eventName,
-      channelHandler,
-    );
+    // Default-deny on the plugin channel. Binding every handler to it made the whole main
+    // process reachable from any plugin view, with each handler's own `context.plugin`
+    // check as the only thing between them (#688).
+    const unregisterPlugin = isPluginFacingEvent(eventName)
+      ? this.channel.regChannel(BRIDGE_CHANNEL.PLUGIN, eventName, channelHandler)
+      : NOOP_UNREGISTER;
     const unregisterInvoke = registerInvokeHandler(eventName, invokeHandler);
     const unregisterLocal = registerLocalHandler(eventName, localHandler);
 
@@ -902,16 +906,23 @@ export class TuffMainTransport implements ITuffTransportMain {
       cancelEventName,
       cancelHandler,
     );
-    const startCleanupPlugin = this.channel.regChannel(
-      BRIDGE_CHANNEL.PLUGIN,
-      startEventName,
-      startHandler,
-    );
-    const cancelCleanupPlugin = this.channel.regChannel(
-      BRIDGE_CHANNEL.PLUGIN,
-      cancelEventName,
-      cancelHandler,
-    );
+    // Same gate as `on()`. Covering only `on()` would leave the entire stream surface bound
+    // to the plugin channel, which is the half that is easy to miss (#688).
+    const pluginFacing = isPluginFacingEvent(eventName);
+    const startCleanupPlugin = pluginFacing
+      ? this.channel.regChannel(
+          BRIDGE_CHANNEL.PLUGIN,
+          startEventName,
+          startHandler,
+        )
+      : NOOP_UNREGISTER;
+    const cancelCleanupPlugin = pluginFacing
+      ? this.channel.regChannel(
+          BRIDGE_CHANNEL.PLUGIN,
+          cancelEventName,
+          cancelHandler,
+        )
+      : NOOP_UNREGISTER;
 
     return () => {
       startCleanupMain();

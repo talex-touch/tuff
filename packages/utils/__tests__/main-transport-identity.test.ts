@@ -8,6 +8,7 @@ import {
 } from "../transport/security/plugin-identity";
 import { TuffMainTransport } from "../transport/sdk/main-transport";
 import { defineRawEvent } from "../transport/event/builder";
+import { PluginEvents } from "../transport/events";
 import { describe, expect, it, vi } from "vitest";
 
 const { ipcHandle, browserWindowMock } = vi.hoisted(() => ({
@@ -24,10 +25,17 @@ vi.mock("electron", () => ({
   BrowserWindow: browserWindowMock,
 }));
 
+/**
+ * A real plugin-facing event, not a synthetic one.
+ *
+ * The plugin channel is default-deny since #688, so a `test:*` name is no longer bound to it
+ * — and a test asserting how a plugin-channel handler resolves identity has to use an event
+ * a plugin can actually reach, or it is asserting about a path that cannot happen.
+ */
 function identityEvent(suffix: string) {
-  return defineRawEvent<unknown, HandlerContext>(
-    `test:caller-identity:${suffix}`,
-  );
+  const source =
+    suffix === "channel" ? PluginEvents.storage.getStats : PluginEvents.storage.getTree;
+  return defineRawEvent<unknown, HandlerContext>(source.toEventName());
 }
 
 function activation(
