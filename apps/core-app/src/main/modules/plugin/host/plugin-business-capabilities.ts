@@ -14,6 +14,7 @@ import type {
   PluginSqliteResourceClient
 } from '../runtime/plugin-sqlite-resource-owner'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
+import { privilegedPluginFor } from '../privileged-plugins'
 
 export type PluginBusinessItemScope = 'active-feature' | 'root-results'
 export type PluginBusinessDto =
@@ -238,14 +239,16 @@ const MAX_FEATURE_COMMANDS = 64
 const MAX_FEATURE_KEYWORDS = 64
 const MAX_SQL_PARAMS = 256
 const MAX_SQL_PARAM_BYTES = 1024 * 1024
+const INTELLIGENCE_PLUGIN = privilegedPluginFor('intelligenceContext')
+
 const FIXED_WIDGET_NAVIGATION = Object.freeze({
   'open-intelligence-settings': Object.freeze({
-    pluginName: 'touch-intelligence',
+    pluginName: INTELLIGENCE_PLUGIN,
     path: '/intelligence/channels'
   }),
   'open-plugin-permissions': Object.freeze({
-    pluginName: 'touch-intelligence',
-    path: '/plugin/touch-intelligence?tab=Permissions'
+    pluginName: INTELLIGENCE_PLUGIN,
+    path: `/plugin/${INTELLIGENCE_PLUGIN}?tab=Permissions`
   })
 })
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor', '__tuffHostWire'])

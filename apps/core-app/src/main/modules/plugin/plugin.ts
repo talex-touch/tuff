@@ -166,6 +166,7 @@ import {
 } from './runtime/plugin-prelude-resolver'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
+import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from './privileged-plugins'
 
 interface FeatureEventUtil {
   onFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
@@ -2072,7 +2073,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createSystemActionCapability(
     activation: PluginActivationIdentity
   ): PluginSystemActionCapabilities | null {
-    if (this.name !== 'touch-quick-actions' && this.name !== 'touch-system-actions') return null
+    if (!SYSTEM_ACTION_PLUGIN_NAMES.includes(this.name)) return null
     const factory = TouchPlugin.capability('systemAction')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'), {
@@ -2085,7 +2086,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBrowserOpenCapability(
     activation: PluginActivationIdentity
   ): PluginBrowserOpenCapabilities | null {
-    if (this.name !== 'touch-browser-open') return null
+    if (!isPrivilegedPluginFor('browserOpen', this.name)) return null
     const factory = TouchPlugin.capability('browserOpen')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'), {
@@ -2098,7 +2099,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBrowserDataCapability(
     activation: PluginActivationIdentity
   ): PluginBrowserDataCapabilities | null {
-    if (this.name !== 'touch-browser-data') return null
+    if (!isPrivilegedPluginFor('browserData', this.name)) return null
     const factory = TouchPlugin.capability('browserData')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'), {
@@ -2124,7 +2125,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createIntelligenceContextCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceContextCapabilities | null {
-    if (this.name !== 'touch-intelligence') return null
+    if (!isPrivilegedPluginFor('intelligenceContext', this.name)) return null
     const factory = TouchPlugin.capability('intelligenceContext')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'), {
@@ -2137,7 +2138,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createWindowManagerCapability(
     activation: PluginActivationIdentity
   ): PluginWindowManagerCapabilities | null {
-    if (this.name !== 'touch-window-manager') return null
+    if (!isPrivilegedPluginFor('windowManager', this.name)) return null
     const factory = TouchPlugin.capability('windowManager')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'), {
@@ -2150,7 +2151,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createWindowPresetCapability(
     activation: PluginActivationIdentity
   ): PluginWindowPresetCapabilities | null {
-    if (this.name !== 'touch-window-presets') return null
+    if (!isPrivilegedPluginFor('windowPresets', this.name)) return null
     const factory = TouchPlugin.capability('windowPreset')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'), {
@@ -2163,7 +2164,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createWorkspaceScriptCapability(
     activation: PluginActivationIdentity
   ): PluginWorkspaceScriptCapabilities | null {
-    if (this.name !== 'touch-workspace-scripts') return null
+    if (!isPrivilegedPluginFor('workspaceScripts', this.name)) return null
     const factory = TouchPlugin.capability('workspaceScript')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'), {
@@ -2382,7 +2383,7 @@ export class TouchPlugin implements ITouchPlugin {
       const capabilityAllowlist =
         this.name === 'touch-translation'
           ? TRANSLATION_RUNTIME_CAPABILITIES
-          : this.name === 'touch-intelligence'
+          : isPrivilegedPluginFor('intelligenceContext', this.name)
             ? INTELLIGENCE_RUNTIME_CAPABILITIES
             : undefined
       const runtimeActivation = await activeRuntime.startActivation({
