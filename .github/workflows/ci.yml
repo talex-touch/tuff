@@ -98,6 +98,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      # actionlint comes from mise's [tools], the same way docs:verify's toolchain does. It runs
+      # here rather than in the Documentation Quality job because that one is red on every PR
+      # (#1254) -- a new check added there would report into a job nobody can read a signal from.
+      - name: Setup mise
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          cache: true
+          install: true
+
       - name: Setup PNPM
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -164,6 +173,19 @@ jobs:
       # benign lines and get switched off.
       - name: Verify no workflow script injection
         run: pnpm check:workflow-injection && pnpm check:workflow-injection:self-test
+
+      # actionlint was named an "external acceptance gap" in #482 on the grounds that it was
+      # unavailable locally. It was not unavailable -- it was never wired: zero references outside
+      # .trellis task records, none in any workflow, script, or mise.toml.
+      #
+      # This starts green, but not on the first measurement: without shellcheck installed the run
+      # reported 0 findings, and with it (as on every GitHub runner) the same command reported 32,
+      # all in build-and-release.yml. 28 were unquoted `>> $GITHUB_OUTPUT`, fixed in this change;
+      # the other 4 are shellcheck's style tier, which -S info excludes. Both layers are
+      # mutation-checked -- an injected `${{ github.event.* }}` in a run block and an unquoted
+      # variable inside one each turn this step red.
+      - name: Lint workflows
+        run: mise run workflows:lint
 
       # 17 test files under scripts/ — the release machinery — that no workflow ran (#1135).
       # Three are excluded, each with its reason named in the config: one needs a prior build, and

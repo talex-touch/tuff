@@ -1,6 +1,10 @@
 [tools]
+actionlint = "1.7.12"
 node = "24.18.0"
 pnpm = "10.34.4"
+# Pinned because actionlint silently skips all run-block analysis when shellcheck is absent:
+# without it the same command reports 0 findings locally and 32 on a GitHub runner.
+shellcheck = "0.10.0"
 
 [tasks."ai-docs:dev"]
 description = "Fast AI docs validation"
@@ -10,6 +14,12 @@ run = "node scripts/ai-docs/verify-ai-docs.mjs"
 description = "Release AI docs validation"
 depends = ["ai-docs:dev"]
 run = "git diff --check -- mise.toml scripts/ai-docs docs/plan-prd/04-implementation docs/plan-prd/03-features docs/plan-prd/TODO.md docs/INDEX.md"
+
+[tasks."workflows:lint"]
+description = "Static analysis of GitHub Actions workflows (actionlint + shellcheck on run blocks)"
+# -S info gates on error/warning/info and drops shellcheck's pure-style tier, which only ever
+# flagged "combine consecutive >> redirects" in this repo.
+run = "actionlint -shellcheck 'shellcheck -S info'"
 
 [tasks."docs:verify"]
 description = "Deterministic read-only documentation verification"
