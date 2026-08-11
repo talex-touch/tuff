@@ -153,6 +153,14 @@ jobs:
       - name: Validate plugin manifests and package policy
         run: pnpm plugins:validate && pnpm plugins:validate:self-test
 
+      # The per-plugin index.test.cjs suites were passing long before anything ran them.
+      # plugins/* is in the pnpm workspace, but most of these directories ship no package.json,
+      # so pnpm -r never reaches them, and the App suites matrix is [core-app, nexus]. Commit
+      # 911fe1c6f cut 2,274 lines from seven plugin suites in packages/test while rewriting the
+      # preludes they covered, which is how that baseline went green (#330).
+      - name: Run plugin suites
+        run: pnpm test:plugins && pnpm test:plugins:self-test
+
       # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
       # list, and touch-dictation was in neither (#562). The list is the kind that drifts
       # silently, so this asserts the two paths between them still cover every directory.
