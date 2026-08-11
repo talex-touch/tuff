@@ -1,5 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils/core-box'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   sendTo: vi.fn(async (_target: unknown, _event: unknown, _payload: unknown) => undefined),
@@ -97,6 +97,10 @@ vi.mock('electron', () => ({
     webContents = {
       addListener: vi.fn(),
       on: vi.fn(),
+      // installAppViewNavigationPolicy, which init() now runs (#1465), denies window.open and
+      // rejects webview attachment through these. A mock without them throws before the test
+      // reaches what it is actually asserting.
+      setWindowOpenHandler: vi.fn(),
       isLoading: vi.fn(() => false),
       isDestroyed: vi.fn(() => false),
       close: vi.fn(),
@@ -123,8 +127,22 @@ const item = {
   meta: { app: { path: '/Applications/App.app' } }
 } as TuffItem
 
+// init() resolves the CoreBox renderer URL, and electron.app is mocked as unpackaged above, so it
+// takes the development branch and throws without one. Introduced by #1465, which gave app-profile
+// views the navigation guards plugin views have; this test was not updated with it.
+const previousRendererUrl = process.env.ELECTRON_RENDERER_URL
+
+afterAll(() => {
+  if (previousRendererUrl === undefined)
+    delete process.env.ELECTRON_RENDERER_URL
+  else
+    process.env.ELECTRON_RENDERER_URL = previousRendererUrl
+})
+
 describe('MetaOverlayManager action execution', () => {
-  beforeEach(() => {
+beforeEach(() => {
+  process.env.ELECTRON_RENDERER_URL = 'http://localhost:5173/'
+
     vi.clearAllMocks()
     metaOverlayManager.unregisterPluginActions('plugin-a')
     metaOverlayManager.destroy()
