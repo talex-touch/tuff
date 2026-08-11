@@ -140,7 +140,7 @@ jobs:
       # until #1099 removed it (#1128). If the declaration this commit adds is wrong, this
       # step is where it shows up rather than in whichever release script runs next.
       - name: Validate plugin manifests and package policy
-        run: pnpm plugins:validate
+        run: pnpm plugins:validate && pnpm plugins:validate:self-test
 
       # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
       # list, and touch-dictation was in neither (#562). The list is the kind that drifts
