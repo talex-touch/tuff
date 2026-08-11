@@ -78,7 +78,6 @@
 | └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
 | [harden-app-icon-self-healing](.trellis/tasks/07-24-harden-app-icon-self-healing/prd.md) | P2 | 🔄 real-profile evidence ready；N+1 release 开放 |
 | install-launch-v2-4-13-beta-23 <sup>本地任务，未入库</sup> | P2 | 🔄 in_progress |
-| [base-anchor-liquid-animation](.trellis/tasks/07-27-base-anchor-liquid-animation/prd.md) | P2 | 🔄 in_progress（AC 验收中） |
 | [fix-plugin-folder-button](.trellis/tasks/07-27-fix-plugin-folder-button/prd.md) | P2 | 🔄 in_progress |
 | [docs-roadmap-consolidation-cleanup](.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/prd.md) | P2 | 🔄 in_progress（本任务） |
 | [expose-plugin-search-sdk](.trellis/tasks/07-27-expose-plugin-search-sdk/prd.md) | P3 | planning |

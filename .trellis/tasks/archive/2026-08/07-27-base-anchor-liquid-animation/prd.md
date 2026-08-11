@@ -97,21 +97,21 @@
 
 ## Acceptance Criteria
 
-- [ ] **AC1** `BaseAnchorAnimationType` 包含 `'liquid'`，且 `transfer` / `boom` / `opacity` / `none` 的既有测试全部继续通过。
-- [ ] **AC2** liquid 打开时，DOM 中存在一个 goo 滤镜（`feGaussianBlur` `stdDeviation=4.5` + `feColorMatrix` 阈值矩阵），且触发器幽灵形状与面板形状是同一滤镜的兄弟节点。
-- [ ] **AC3** 描边滤镜链包含 `feMorphology[operator=erode]` + `feComposite[operator=out]` + `feFlood`，且 flood 颜色可配置、默认约 `#DFE2E8`；触发器与面板元素自身无 `border` / `outline` 声明。
-- [ ] **AC4** 承载阴影的元素不在任何 `filter: url(#…)` 子树内（测试断言其祖先链无 goo 滤镜）。
-- [ ] **AC5** 几何纯函数可单测：`geometryAt(p)` 在稿值输入下满足 `p=0 → {top: 20, height: 12}`、`p=1 → {top: 48, height: 146}`、`p=0.45 → {top: 48, height: 12 + 134*0.834}`（±0.5px）。
-- [ ] **AC6** `height` 由独立公式给出；构造 `top` 越过 `top + height` 的输入时高度仍 `>= seed`（不塌成细线）。
-- [ ] **AC7** 打开 260ms / `cubic-bezier(0.23,1,0.32,1)`，关闭 150ms / `cubic-bezier(0.25,0.46,0.45,0.94)`，两者可从解析后的动画配置读出；关闭时长严格小于打开；代码中不存在弹簧缓动。
-- [ ] **AC8** 菜单项透明度是面板当前高度的函数：给定 `fill < itemTop` 的状态，该项 opacity 为 0。
-- [ ] **AC9** liquid 下 `panelBackground` 被强制为不透明路径，`showArrow` 被抑制，`clip` 的 `overflow` 为 `visible`。
-- [ ] **AC10** `BaseAnchorLiquidDemo` 已注册且文档引用可解析：`pnpm -C apps/nexus exec vitest run test/docs/tuffex-component-docs-coverage.test.ts app/components/content/demo-client-boundary.test.ts` 通过。
-- [ ] **AC11** `corepack pnpm -C packages/tuffex exec vitest run packages/components/src/base-anchor` 通过。
-- [ ] **AC12** `pnpm lint:changed` 与 tuffex / nexus typecheck 通过。
-- [ ] **AC14** `bead` 的收腰在峰值速度达到 `beadPinch`（每侧），随后单调衰减，结束时归零回到全宽；`x + width/2` 恒等于面板中线。
-- [ ] **AC15** `normalizedVelocity` 对线性匀速返回 `1.0`，对 `dt <= 0` 与非有限输入返回 `0`；开关两个方向同样收腰（取绝对值）。
-- [ ] **AC13** en / zh 两份文档新增章节一一对应，API 表格同步，`syncStatus: reviewed` / `verified: true` / `since: 2.5.0` 保持不变。
+- [x] **AC1** `BaseAnchorAnimationType` 包含 `'liquid'`，且 `transfer` / `boom` / `opacity` / `none` 的既有测试全部继续通过。
+- [x] **AC2** liquid 打开时，DOM 中存在一个 goo 滤镜（`feGaussianBlur` `stdDeviation=4.5` + `feColorMatrix` 阈值矩阵），且触发器幽灵形状与面板形状是同一滤镜的兄弟节点。
+- [x] **AC3** 描边滤镜链包含 `feMorphology[operator=erode]` + `feComposite[operator=out]` + `feFlood`，且 flood 颜色可配置、默认约 `#DFE2E8`；触发器与面板元素自身无 `border` / `outline` 声明。
+- [x] **AC4** 承载阴影的元素不在任何 `filter: url(#…)` 子树内（测试断言其祖先链无 goo 滤镜）。
+- [x] **AC5** 几何纯函数可单测：`geometryAt(p)` 在稿值输入下满足 `p=0 → {top: 20, height: 12}`、`p=1 → {top: 48, height: 146}`、`p=0.45 → {top: 48, height: 12 + 134*0.834}`（±0.5px）。
+- [x] **AC6** `height` 由独立公式给出；构造 `top` 越过 `top + height` 的输入时高度仍 `>= seed`（不塌成细线）。
+- [x] **AC7** 打开 260ms / `cubic-bezier(0.23,1,0.32,1)`，关闭 150ms / `cubic-bezier(0.25,0.46,0.45,0.94)`，两者可从解析后的动画配置读出；关闭时长严格小于打开；代码中不存在弹簧缓动。
+- [x] **AC8** 菜单项透明度是面板当前高度的函数：给定 `fill < itemTop` 的状态，该项 opacity 为 0。
+- [x] **AC9** liquid 下 `panelBackground` 被强制为不透明路径，`showArrow` 被抑制，`clip` 的 `overflow` 为 `visible`。
+- [x] **AC10** `BaseAnchorLiquidDemo` 已注册且文档引用可解析：`pnpm -C apps/nexus exec vitest run test/docs/tuffex-component-docs-coverage.test.ts app/components/content/demo-client-boundary.test.ts` 通过。
+- [x] **AC11** `corepack pnpm -C packages/tuffex exec vitest run packages/components/src/base-anchor` 通过。
+- [x] **AC12** `pnpm lint:changed` 与 tuffex / nexus typecheck 通过。
+- [x] **AC14** `bead` 的收腰在峰值速度达到 `beadPinch`（每侧），随后单调衰减，结束时归零回到全宽；`x + width/2` 恒等于面板中线。
+- [x] **AC15** `normalizedVelocity` 对线性匀速返回 `1.0`，对 `dt <= 0` 与非有限输入返回 `0`；开关两个方向同样收腰（取绝对值）。
+- [x] **AC13** en / zh 两份文档新增章节一一对应，API 表格同步，`syncStatus: reviewed` / `verified: true` / `since: 2.5.0` 保持不变。
 
 ## Open Questions
 
@@ -121,3 +121,26 @@
 
 - 稿值到通用参数的映射：`20 = triggerH/2`、`48 = triggerH + offset`、圆角 11 取自 reference 自身 `border-radius`、面板圆角取 `panelRadius`。
 - 参考实现：`packages/tuffex/packages/components/src/fusion/src/TxFusion.vue`（goo 滤镜写法、per-instance filter id、测试断言约定）。
+
+## 验收证据（2026-08-11 回填）
+
+实测命令与结果，而非重述实现：
+
+| AC | 证据 |
+|---|---|
+| AC10 | `pnpm -C apps/nexus exec vitest run test/docs/tuffex-component-docs-coverage.test.ts app/components/content/demo-client-boundary.test.ts` → **22 passed / 2 files**；`BaseAnchorDripDemo` / `BaseAnchorBeadDemo` 的 `.vue` 与 `demo-registry.ts` 单行登记均在位 |
+| AC11 | `vitest run packages/components/src/base-anchor` → **53 passed / 2 files** |
+| AC12 | tuffex `lint` RC=0、tuffex `typecheck` 0 errors、nexus `typecheck` 0 errors |
+| AC13 | en / zh 各 6 个 `##`、13 个 `###`、8 个 `TuffDemoWrapper`；两份 frontmatter 同为 `since: 2.5.0` / `syncStatus: reviewed` / `verified: true` |
+| AC1–AC8、AC14 | 对应断言存在于 `__tests__/base-anchor-liquid.test.ts` 与 `base-anchor.test.ts`，抽查过数值而非只看用例名：AC5 的 `p=0 → top≈20 / height≈12` 由 `reproduces the spec geometry at both ends of p` 直接断言 |
+| AC15 | 「非有限输入返回 0」此前**无任何测试**，本次补齐（`reports no speed at all rather than a non-finite one`）。两个变异各自杀死它：移除 `Number.isFinite` 守卫 → 失败；移除 `Math.abs` → 失败 |
+
+### 三处措辞与覆盖的偏差，勾选时按实际行为判定
+
+1. **AC1 写 `'liquid'`**，`BaseAnchorAnimationType` 实际是 `'drip' | 'bead'`（`types.ts:11`）。按实现判定为满足。
+2. **AC15 写 `normalizedVelocity` 与 `dt <= 0`**，源码里是 `liquidVelocityAt(p, t, ease)`，采闭式求导、不再有 `dt`（该设计正是它替换掉的，见函数注释）。`dt <= 0` 一项已不适用；其余按实际签名验证。
+3. **AC9 的第三项**（`clip` 的 `overflow` 为 `visible`）由 `.tx-base-anchor.is-liquid .tx-base-anchor__clip` 的 CSS 提供，jsdom 不套用 SFC `<style>`，**无法在 vitest 中断言计算样式**。测试断言的是 `is-liquid` 这个类挂上了，即该规则的挂钩；规则本身经代码检视确认。另两项（抑制箭头、面板不透明）由 `suppresses the arrow, the rounded-rect outline, and the card surface` 覆盖。
+
+### 一处排查中被推翻的判断
+
+AC9 的「`panelBackground` 被强制为不透明」一度被判为未实现——`TxBaseAnchor.vue` 确实原样透传该 prop。但模板是 `v-if="usesLiquidMotion"` 走 liquid 面板、`v-else-if="props.useCard"` 才走 `TxCard`，**liquid 下 `TxCard` 不渲染，`panelCardProps` 从不被消费**。liquid 自己在 goo 层以 `feFlood`（`--tx-fill-color-lighter`）画不透明面，该 AC 的实质本就满足，只是不经过这个 prop。据此写的强制逻辑是死代码，已回退。
