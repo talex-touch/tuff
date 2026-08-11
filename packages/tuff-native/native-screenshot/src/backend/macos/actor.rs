@@ -1861,6 +1861,7 @@ mod tests {
             let actor = Arc::new(ActorInner {
                 sender,
                 closed: AtomicBool::new(false),
+                pending_stops: Mutex::new(Vec::new()),
             });
             let control = Arc::new(FrameControl {
                 slot: LatestFrameSlot::new(),
@@ -1918,6 +1919,7 @@ mod tests {
             actor: Arc::new(ActorInner {
                 sender,
                 closed: AtomicBool::new(false),
+                pending_stops: Mutex::new(Vec::new()),
             }),
             control: Arc::clone(&control),
         };
