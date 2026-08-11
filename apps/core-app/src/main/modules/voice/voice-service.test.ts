@@ -315,6 +315,32 @@ describe('VoiceService.speak', () => {
     expect(playAudio).not.toHaveBeenCalled()
   })
 
+  it('waits for the native decode instead of inspecting the promise', async () => {
+    // playAudio returns a promise since the decode moved to the libuv pool (#845).
+    // Without the await, `playback?.playbackId` reads a property off the Promise
+    // itself and `played` silently reports false while the audio plays fine.
+    playAudio.mockResolvedValue({ playbackId: 'p2' })
+
+    const result = await new VoiceService().speak({ text: 'hello' })
+
+    expect(result.played).toBe(true)
+  })
+
+  it('treats a rejected playback the same as a thrown one', async () => {
+    // An oversized or undecodable input now arrives as a rejection rather than a
+    // synchronous throw. Synthesis still has to survive it and still return audio.
+    //
+    // This asserts the outcome, not the await — dropping the await produces the
+    // same `played: false`, just via an escaped rejection. The test above is the
+    // one that catches that.
+    playAudio.mockRejectedValue(new Error('audio-too-large: 70000000 bytes'))
+
+    const result = await new VoiceService().speak({ text: 'hello' })
+
+    expect(result.audio).toBe('data:audio/wav;base64,QUJD')
+    expect(result.played).toBe(false)
+  })
+
   it('still returns the synthesized audio when playback throws', async () => {
     playAudio.mockImplementation(() => {
       throw new Error('probe-failed')
