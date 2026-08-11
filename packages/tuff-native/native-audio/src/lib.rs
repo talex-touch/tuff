@@ -167,6 +167,7 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
     let handle = SessionHandle {
         sync,
         samples,
+        snapshot: Arc::new(Mutex::new(SnapshotCache::default())),
         meta,
         join_handle,
         drain_cursor,
@@ -240,12 +241,16 @@ pub fn snapshot_capture(session_id: String) -> Result<AudioSnapshot> {
     // Non-destructive: encode a WAV of everything captured so far WITHOUT stopping
     // the stream or removing the session, so a caller can poll it repeatedly to
     // drive chunked-batch streaming ASR while capture continues.
-    let (meta_arc, samples_arc) = {
+    let (meta_arc, samples_arc, snapshot_arc) = {
         let guard = lock(sessions());
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
-        (handle.meta.clone(), handle.samples.clone())
+        (
+            handle.meta.clone(),
+            handle.samples.clone(),
+            handle.snapshot.clone(),
+        )
     };
 
     let (sample_rate, channels) = {
@@ -253,13 +258,22 @@ pub fn snapshot_capture(session_id: String) -> Result<AudioSnapshot> {
         (meta.sample_rate, meta.channels)
     };
 
-    // Copy the accumulated PCM out under the same Mutex the capture thread appends
-    // through, so the snapshot can't tear against an in-flight write; encode the
-    // owned copy afterwards, off the lock.
-    let interleaved = lock(&samples_arc).clone();
-    let mono = downmix_to_mono(&interleaved, channels);
-    let audio = encode_wav_pcm16(&mono, sample_rate).map_err(Error::from_reason)?;
-    let duration_ms = mono_duration_ms(mono.len(), sample_rate);
+    // Downmix and encode only what has arrived since the last snapshot, appending
+    // to a cached PCM prefix. The caller polls this on an interval and needs the
+    // whole recording back each time, so the response is unavoidably O(n) — but
+    // the *work* no longer is, which is what made a 15 s session quadratic.
+    //
+    // The delta is taken under the same Mutex the capture thread appends through,
+    // so it can't tear against an in-flight write; the encode happens off the lock.
+    let mut snapshot = lock(&snapshot_arc);
+    let delta = {
+        let buffer = lock(&samples_arc);
+        buffer[snapshot_delta_range(snapshot.consumed, buffer.len(), channels)].to_vec()
+    };
+    extend_snapshot(&mut snapshot, &delta, channels);
+
+    let audio = wav_from_pcm16(&snapshot.pcm, sample_rate).map_err(Error::from_reason)?;
+    let duration_ms = mono_duration_ms(snapshot.pcm.len() / 2, sample_rate);
 
     Ok(AudioSnapshot {
         audio: Buffer::from(audio),
@@ -584,9 +598,40 @@ fn settle(join_handle: JoinHandle<()>, sync: &StopSignal, session_id: &str) {
 /// Everything start_capture keeps so a later stop/cancel can join the thread and
 /// collect the recorded PCM. The cpal `Stream` is intentionally NOT stored here
 /// (it is not Send) — it lives and dies on the capture thread.
+/// The encoded prefix `snapshot_capture` keeps between polls, so each poll only
+/// has to encode what arrived since the last one.
+#[derive(Default)]
+struct SnapshotCache {
+    /// Mono 16-bit LE PCM for everything consumed so far, WITHOUT a WAV header.
+    pcm: Vec<u8>,
+    /// How many interleaved samples `pcm` accounts for. Always frame-aligned.
+    consumed: usize,
+}
+
+/// Which interleaved samples a snapshot has not folded in yet.
+///
+/// Never splits a frame: the cursor only ever advances to a frame boundary, so the
+/// downmix of each delta groups exactly as it would over the whole buffer. cpal
+/// delivers whole frames, so in practice this defers nothing.
+fn snapshot_delta_range(consumed: usize, len: usize, channels: u16) -> std::ops::Range<usize> {
+    let channel_count = channels.max(1) as usize;
+    let end = len - len % channel_count;
+    consumed.min(end)..end
+}
+
+/// Fold an already-taken delta into the cache. Kept separate from the range so the
+/// encode runs off the sample-buffer lock the capture callback appends through.
+fn extend_snapshot(cache: &mut SnapshotCache, delta: &[f32], channels: u16) {
+    cache.consumed += delta.len();
+    cache
+        .pcm
+        .extend_from_slice(&pcm16_le_bytes(&downmix_to_mono(delta, channels)));
+}
+
 struct SessionHandle {
     sync: Arc<StopSignal>,
     samples: Arc<Mutex<Vec<f32>>>,
+    snapshot: Arc<Mutex<SnapshotCache>>,
     meta: Arc<Mutex<CaptureMeta>>,
     join_handle: JoinHandle<()>,
     /// Interleaved-sample read cursor for `drain_capture` (delta streaming).
@@ -899,6 +944,33 @@ fn encode_wav_pcm16(mono: &[f32], sample_rate: u32) -> std::result::Result<Vec<u
         writer.finalize().map_err(|error| error.to_string())?;
     }
     Ok(cursor.into_inner())
+}
+
+/// Wrap already-encoded mono 16-bit LE PCM in a WAV container.
+///
+/// The header comes from hound writing zero samples, with only the two length
+/// fields patched. Deriving it rather than hand-writing 44 bytes keeps hound the
+/// single source of the layout, so this cannot drift away from
+/// `encode_wav_pcm16` without the equivalence test noticing.
+fn wav_from_pcm16(pcm: &[u8], sample_rate: u32) -> std::result::Result<Vec<u8>, String> {
+    let mut header = encode_wav_pcm16(&[], sample_rate)?;
+    // Canonical WAV: RIFF size at 4..8 covers everything after it, data size at
+    // 40..44 covers the samples.
+    const RIFF_SIZE: std::ops::Range<usize> = 4..8;
+    const DATA_SIZE: std::ops::Range<usize> = 40..44;
+    if header.len() != DATA_SIZE.end {
+        return Err(format!("unexpected-wav-header-length: {}", header.len()));
+    }
+
+    let data_len = u32::try_from(pcm.len()).map_err(|_| "wav-data-too-large".to_string())?;
+    let riff_len = data_len
+        .checked_add(header.len() as u32 - RIFF_SIZE.end as u32)
+        .ok_or_else(|| "wav-data-too-large".to_string())?;
+    header[RIFF_SIZE].copy_from_slice(&riff_len.to_le_bytes());
+    header[DATA_SIZE].copy_from_slice(&data_len.to_le_bytes());
+
+    header.extend_from_slice(pcm);
+    Ok(header)
 }
 
 /// Convert mono float PCM to raw little-endian 16-bit signed PCM bytes.
@@ -1336,6 +1408,74 @@ mod tests {
         assert!(wait_until_finished(&sync, NEVER));
         assert!(started.elapsed() < PROMPTLY);
         handle.join().unwrap();
+    }
+
+    /// Replays what `snapshot_capture` does across a sequence of polls, without
+    /// needing a capture device: feed the interleaved buffer in growing prefixes.
+    ///
+    /// Calls the same two functions the napi entry point does, so a mutation to
+    /// either is caught here rather than hidden behind a parallel implementation.
+    fn snapshot_prefixes(interleaved: &[f32], channels: u16, cuts: &[usize]) -> Vec<u8> {
+        let mut cache = SnapshotCache::default();
+        for &visible in cuts {
+            let range = snapshot_delta_range(cache.consumed, visible, channels);
+            extend_snapshot(&mut cache, &interleaved[range], channels);
+        }
+        cache.pcm
+    }
+
+    #[test]
+    fn a_wav_built_from_cached_pcm_is_the_one_hound_would_have_written() {
+        // The property the whole cache rests on. If these ever diverge, snapshots
+        // silently become a differently-encoded file rather than failing.
+        for channels in [1u16, 2] {
+            for frames in [0usize, 1, 7, 512] {
+                let interleaved: Vec<f32> = (0..frames * channels as usize)
+                    .map(|index| ((index as f32) * 0.017).sin())
+                    .collect();
+                let mono = downmix_to_mono(&interleaved, channels);
+
+                let whole = encode_wav_pcm16(&mono, 48_000).unwrap();
+                let assembled = wav_from_pcm16(&pcm16_le_bytes(&mono), 48_000).unwrap();
+
+                assert_eq!(assembled, whole, "channels={channels} frames={frames}");
+            }
+        }
+    }
+
+    #[test]
+    fn encoding_in_pieces_matches_encoding_all_at_once() {
+        // Same recording, polled at different moments, has to reach the same bytes
+        // as a single encode of the finished buffer.
+        let channels = 2u16;
+        let interleaved: Vec<f32> = (0..2_000).map(|i| ((i as f32) * 0.013).cos()).collect();
+        let whole = pcm16_le_bytes(&downmix_to_mono(&interleaved, channels));
+
+        for cuts in [
+            vec![2_000],
+            vec![10, 2_000],
+            vec![10, 11, 12, 1_999, 2_000],
+            vec![400, 800, 1_200, 1_600, 2_000],
+        ] {
+            assert_eq!(
+                snapshot_prefixes(&interleaved, channels, &cuts),
+                whole,
+                "cuts={cuts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_snapshot_never_splits_a_frame() {
+        // An odd visible length on a stereo buffer must defer the half frame rather
+        // than downmix it against the wrong neighbour, which would shift every
+        // sample after it.
+        let interleaved: Vec<f32> = (0..8).map(|index| index as f32 / 8.0).collect();
+
+        // Poll after 3 samples (one and a half frames), then after all 8.
+        let staged = snapshot_prefixes(&interleaved, 2, &[3, 8]);
+        let whole = pcm16_le_bytes(&downmix_to_mono(&interleaved, 2));
+        assert_eq!(staged, whole);
     }
 
     #[test]
