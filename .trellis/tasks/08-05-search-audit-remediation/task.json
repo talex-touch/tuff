@@ -35,5 +35,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Keep landing the child batches. Its own criterion is that each child lands with its gates green, and R1 is already marked FIXED in the digest while R2 is not.",
+    "blocker": "None. It is a tracking parent, and its progress is its children.",
+    "evidence": "Four research artefacts, and they are load-bearing rather than notes: research/audit-findings-digest.md is what records R1 fix-reco-ranking-and-stats as FIXED 2026-08-05 with P0-1, P0-2, P1-3 and P1-4 named, and it is the file two child tasks are measured against. Also realtime-chain-diagnosis.md, reco-signal-program.md and reco-signals-audit.md."
+  }
 }
