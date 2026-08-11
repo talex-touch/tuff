@@ -14,7 +14,13 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// This file drives a real libsql migration chain. It runs in 325ms here, but on a CI
+// runner -- fewer cores, the whole suite in parallel workers -- it went past vitest's 5s
+// default and timed out (#1596). Raised per file rather than globally so a genuine hang
+// elsewhere still fails fast.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(testDir, '../../../../resources/db/migrations')
