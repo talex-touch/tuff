@@ -50,7 +50,7 @@
     "node": ">=24.15.0"
   },
   "scripts": {
-    "build": "tsup index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "build": "tsup core-box/index.ts index.ts network/index.ts plugin/index.ts plugin/preload.ts plugin/sdk/box-sdk.ts plugin/sdk/clipboard.ts plugin/sdk/index.ts plugin/sdk/service/index.ts plugin/sdk/storage.ts plugin/sdk/system.ts plugin/sdk/types.ts service/protocol/index.ts transport/events/types/index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
     "benchmark:preview": "vitest run \"__tests__/core-box/preview-sdk.benchmark.test.ts\" --reporter verbose",
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
@@ -85,6 +85,79 @@
     "access": "public",
     "main": "./dist/index.mjs",
     "module": "./dist/index.mjs",
-    "types": "./dist/index.d.mts"
+    "types": "./dist/index.d.mts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
+      },
+      "./core-box": {
+        "types": "./dist/core-box/index.d.mts",
+        "import": "./dist/core-box/index.mjs",
+        "default": "./dist/core-box/index.mjs"
+      },
+      "./network": {
+        "types": "./dist/network/index.d.mts",
+        "import": "./dist/network/index.mjs",
+        "default": "./dist/network/index.mjs"
+      },
+      "./plugin": {
+        "types": "./dist/plugin/index.d.mts",
+        "import": "./dist/plugin/index.mjs",
+        "default": "./dist/plugin/index.mjs"
+      },
+      "./plugin/preload": {
+        "types": "./dist/plugin/preload.d.mts",
+        "import": "./dist/plugin/preload.mjs",
+        "default": "./dist/plugin/preload.mjs"
+      },
+      "./plugin/sdk": {
+        "types": "./dist/plugin/sdk/index.d.mts",
+        "import": "./dist/plugin/sdk/index.mjs",
+        "default": "./dist/plugin/sdk/index.mjs"
+      },
+      "./plugin/sdk/box-sdk": {
+        "types": "./dist/plugin/sdk/box-sdk.d.mts",
+        "import": "./dist/plugin/sdk/box-sdk.mjs",
+        "default": "./dist/plugin/sdk/box-sdk.mjs"
+      },
+      "./plugin/sdk/clipboard": {
+        "types": "./dist/plugin/sdk/clipboard.d.mts",
+        "import": "./dist/plugin/sdk/clipboard.mjs",
+        "default": "./dist/plugin/sdk/clipboard.mjs"
+      },
+      "./plugin/sdk/service": {
+        "types": "./dist/plugin/sdk/service/index.d.mts",
+        "import": "./dist/plugin/sdk/service/index.mjs",
+        "default": "./dist/plugin/sdk/service/index.mjs"
+      },
+      "./plugin/sdk/storage": {
+        "types": "./dist/plugin/sdk/storage.d.mts",
+        "import": "./dist/plugin/sdk/storage.mjs",
+        "default": "./dist/plugin/sdk/storage.mjs"
+      },
+      "./plugin/sdk/system": {
+        "types": "./dist/plugin/sdk/system.d.mts",
+        "import": "./dist/plugin/sdk/system.mjs",
+        "default": "./dist/plugin/sdk/system.mjs"
+      },
+      "./plugin/sdk/types": {
+        "types": "./dist/plugin/sdk/types.d.mts",
+        "import": "./dist/plugin/sdk/types.mjs",
+        "default": "./dist/plugin/sdk/types.mjs"
+      },
+      "./service/protocol": {
+        "types": "./dist/service/protocol/index.d.mts",
+        "import": "./dist/service/protocol/index.mjs",
+        "default": "./dist/service/protocol/index.mjs"
+      },
+      "./transport/events/types": {
+        "types": "./dist/transport/events/types/index.d.mts",
+        "import": "./dist/transport/events/types/index.mjs",
+        "default": "./dist/transport/events/types/index.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   }
 }
