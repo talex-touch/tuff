@@ -110,6 +110,7 @@
     "build:protocol-fixture": "node scripts/build-protocol-fixture.js",
     "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js protocol-error-cause.test.js protocol-error-envelope.test.js",
     "test:screenshot-protocol": "node --test screenshot-addon-contract.test.js screenshot-protocol.test.js",
+    "verify:audio-production": "node scripts/verify-audio-production.js",
     "verify:screenshot-production": "node scripts/verify-screenshot-production.js",
     "rebuild": "node-gyp rebuild",
     "check:everything": "node scripts/everything-selfcheck.js"
