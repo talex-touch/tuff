@@ -103,6 +103,20 @@ jobs:
           pnpm -C packages/tuff-native run test:screenshot-protocol &&
           pnpm -C packages/tuff-native run verify:screenshot-production
 
+      # native-audio is already a member of packages/tuff-native/Cargo.toml, so the cargo
+      # fmt/clippy/test/build steps above have always covered the crate on all three runners.
+      # What nothing ran was build:audio -- the step that copies the compiled library to
+      # build/Release/tuff_native_audio.node, which is the artifact audio.js actually opens.
+      # So the crate could compile while the addon the runtime loads was never produced (#322).
+      #
+      # The verifier passes on a runner with no microphone and fails when the module is absent:
+      # it separates reasons the native module produces (no-input-device, input-probe-failed,
+      # platform-not-supported) from reasons the JS wrapper produces when the binding is missing.
+      - name: Build production audio addon and verify it loads
+        run: >-
+          pnpm -C packages/tuff-native run build:audio &&
+          pnpm -C packages/tuff-native run verify:audio-production
+
       - name: Build deterministic screenshot addon
         env:
           TUFF_SCREENSHOT_PROTOCOL_TEST_BACKEND: '1'
