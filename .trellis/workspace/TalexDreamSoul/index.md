@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 50
-- **Last Active**: 2026-08-05
+- **Total Sessions**: 51
+- **Last Active**: 2026-08-11
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1831 | Active |
+| `journal-1.md` | ~1890 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 51 | 2026-08-11 | audit backlog: tuffex gates, native races, and two retracted claims | `c72aad40e`, `1b923a84e`, `f7c245a8d`, `bf95c966d`, `250950078`, `056524ec8`, `033b84b37`, `8c5b5e797`, `1cbad953f`, `574c618aa` | `ci/1555-ratchet-css-budgets` |
 | 50 | 2026-08-05 | C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs | `4594c3200`, `c7b935831`, `787e2c554`, `d05aa8c08`, `fe0ae08b1`, `c3cb09839`, `2045c628d` | `TalexDreamSoul/app-shell-v2` |
 | 49 | 2026-08-05 | Database single-writer root fix: land search split, de-amplify write queue | `90aa26b17`, `3c62566fb`, `052d1d506`, `08b64b650`, `95d7fb3c3`, `d12af493e`, `571af84ed`, `cd39bdbf6`, `c2350bc6c`, `ab904670a`, `e91a4b085` | `TalexDreamSoul/app-shell-v2` |
 | 48 | 2026-08-05 | 下载空闲超时、死开关甄别与深色对比度核对 | `5f3edaabb`, `c5fbf1485` | `TalexDreamSoul/app-shell-v2` |

@@ -1838,3 +1838,53 @@ MCP client 已存在的翻案把 C 收窄为三桥一面：注入桥（surface �
 - 途中两代理撞额度上限,SendMessage 原地续跑无损;高负载(load 93-126)下 hook 超时定性为既有负载敏感 flake(search-core init),单跑全过。
 - 发现:db:generate 是死命令(drizzle-kit 未装,0015 起 22 个迁移手写)→迁移链+DDL parity 测试为正确门禁,记 E-NEW8;剪贴板 URL 候选的 content 是哈希非 URL(HEAD 既有,设计问题待决)。
 - 待用户:重启 dev 实例后跑 .trellis/tasks/08-05-realtime-index-freshness/verify-realtime-index-freshness.sh 验收「装 app ≤10s 可搜」。
+
+
+## Session 51: audit backlog: tuffex gates, native races, and two retracted claims
+
+**Date**: 2026-08-11
+**Task**: audit backlog: tuffex gates, native races, and two retracted claims
+**Branch**: `ci/1555-ratchet-css-budgets`
+
+### Summary
+
+Worked the GitHub audit backlog, not a Trellis task. Ten PRs merged; open audit issues 36 -> 25 and the tuffex label emptied twice over before new findings refilled it.
+
+Native: #851 (a refused StopFrames was reported as stopped, orphaning an SCStream), #841 (startCapture blocked the Electron main thread 157ms; moved to a napi AsyncTask after establishing that recv_timeout would break first-run mic consent, which nothing in the repo requests ahead of time), and #1542's race tests. #1547 unbroke the base: two PRs each green alone left cargo test --workspace uncompilable, half of it my own tests constructing ActorInner literally.
+
+tuffex: found four audit scripts that no workflow ran (0 hits each against 9 for typecheck). Wired the two that pass (#1556), fixed audit:types which had been dead since a workspace: dependency was added after it was written (#1561), then measured its CI cost at 9s rather than guessing from a 4-minute local run and wired it too (#1563). Fixing it surfaced a duplicated vendored GitHub markdown sheet in components.css -- 37.2 KiB, 8% of the bundle, two SFCs each @import-ing it (#1569).
+
+Two claims I made and then disproved myself. #1557: I reported pnpm consumers hitting TS2307 on an undeclared @vue/reactivity; a faithful install resolves it via pnpm's default hoist dir, and hoist=false resolves it too. My repro had hand-extracted the tarball into a layout no package manager produces. #1565: I judged AC9's opaque-panel requirement unimplemented and wrote the forcing logic, then found TxCard sits in the v-else-if and never renders under liquid, so the prop I was constraining is never read. Both retracted on the issues; the second's code was reverted.
+
+Also corrected the #1125 diagnosis: the 119 docs findings are not a rule/state-machine mismatch. All of them land on active planning/in_progress tasks, all created after the rule shipped, and task.py never writes the three fields it demands. Archiving is what drops the requirement -- that rule only applies to active tasks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c72aad40e` | (see git log) |
+| `1b923a84e` | (see git log) |
+| `f7c245a8d` | (see git log) |
+| `bf95c966d` | (see git log) |
+| `250950078` | (see git log) |
+| `056524ec8` | (see git log) |
+| `033b84b37` | (see git log) |
+| `8c5b5e797` | (see git log) |
+| `1cbad953f` | (see git log) |
+| `574c618aa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
