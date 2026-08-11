@@ -34,15 +34,18 @@ const source = readFileSync(
 const exported = [...source.matchAll(/^export \* from '\.\/([^/]+)\/index'/gm)].map(m => m[1])
 const exportedSet = new Set(exported)
 
-const problems = []
-
-for (const readme of READMES) {
-  const body = readFileSync(readme.path, 'utf8')
+/**
+ * The whole rule set, over text rather than the filesystem, so `--self-test` can hand it inputs
+ * that must fail. A drift checker that matched nothing would look exactly like one that found no
+ * drift, and until now nothing here could tell those apart (#1589).
+ */
+export function inventoryProblems(readme, body, exported, exportedSet) {
+  const problems = []
 
   const countMatch = body.match(readme.countPattern)
   if (!countMatch) {
     problems.push(`${readme.label}: could not find the module-count line`)
-    continue
+    return problems
   }
   if (Number(countMatch[1]) !== exported.length)
     problems.push(`${readme.label}: claims ${countMatch[1]} modules, components.ts exports ${exported.length}`)
@@ -51,7 +54,7 @@ for (const readme of READMES) {
   const endIndex = body.indexOf(readme.end, startIndex)
   if (startIndex === -1 || endIndex === -1) {
     problems.push(`${readme.label}: could not locate the inventory block`)
-    continue
+    return problems
   }
   const inventory = body.slice(startIndex, endIndex)
 
@@ -76,7 +79,17 @@ for (const readme of READMES) {
     problems.push(`${readme.label}: lists ${unknown.length} module(s) that are not exported: ${unknown.join(', ')}`)
   if (duplicated.length)
     problems.push(`${readme.label}: lists module(s) more than once: ${[...new Set(duplicated)].join(', ')}`)
+
+  return problems
 }
+
+if (process.argv.includes('--self-test')) {
+  process.exit(selfTest() > 0 ? 1 : 0)
+}
+
+const problems = []
+for (const readme of READMES)
+  problems.push(...inventoryProblems(readme, readFileSync(readme.path, 'utf8'), exported, exportedSet))
 
 if (problems.length) {
   console.error('README component inventory is out of sync with components.ts:\n')
@@ -87,3 +100,47 @@ if (problems.length) {
 }
 
 console.log(`README component inventory matches components.ts (${exported.length} modules, both languages).`)
+
+/**
+ * Every case is an inventory this audit must reject, plus one it must accept. Mirrors the shape
+ * used by check-plugin-lint-coverage.mjs and validate-plugins.mjs.
+ */
+function selfTest() {
+  const readme = {
+    label: 'probe',
+    countPattern: /modules: \*\*(\d+)\*\*/,
+    start: '## Inventory',
+    end: '\nReference:',
+  }
+  const build = (count, categoryCount, items) =>
+    `modules: **${count}**\n\n## Inventory\n\n- \`Group (${categoryCount})\`: ${items.map(i => `\`${i}\``).join(', ')}\n\nReference: x\n`
+  const exported = ['button', 'input']
+  const exportedSet = new Set(exported)
+
+  const cases = [
+    { name: 'a matching inventory is accepted', body: build(2, 2, ['button', 'input']), expect: 0 },
+    { name: 'a wrong count line is caught', body: build(9, 2, ['button', 'input']), expect: 1 },
+    { name: 'a missing module is caught', body: build(2, 1, ['button']), expect: 1 },
+    { name: 'a category subtotal that disagrees with its list is caught', body: build(2, 9, ['button', 'input']), expect: 1 },
+    { name: 'a module that is not exported is caught', body: build(2, 3, ['button', 'input', 'ghost']), expect: 1 },
+    { name: 'a duplicated module is caught', body: build(2, 3, ['button', 'input', 'input']), expect: 1 },
+    { name: 'a missing count line is caught', body: '## Inventory\n\nReference: x\n', expect: 1 },
+    { name: 'a missing inventory block is caught', body: 'modules: **2**\n', expect: 1 },
+  ]
+
+  let failures = 0
+  for (const testCase of cases) {
+    const found = inventoryProblems(readme, testCase.body, exported, exportedSet).length
+    if (found === testCase.expect) {
+      console.log(`  \u001B[32m\u2713\u001B[0m ${testCase.name}`)
+    }
+    else {
+      console.error(`  \u001B[31m\u2717\u001B[0m ${testCase.name}: expected ${testCase.expect} problem(s), got ${found}`)
+      failures += 1
+    }
+  }
+  console.log(failures === 0
+    ? '\naudit-readme-inventory self-test passed.\n'
+    : `\naudit-readme-inventory self-test failed: ${failures} case(s).\n`)
+  return failures
+}
