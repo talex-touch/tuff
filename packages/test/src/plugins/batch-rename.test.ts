@@ -164,6 +164,49 @@ describe('batch rename rules', () => {
 
     expect(applyItem).toBeUndefined()
     expect(storageSetFile).not.toHaveBeenCalled()
+    // The SDK is absent, so there is nothing for the user to grant. Showing "请授予文件读取权限"
+    // here sent them after a permission they may already hold (#821); it is reserved for a
+    // real denial, which the test above covers.
+    expect(pushedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: '权限系统不可用',
+        subtitle: '无法确认文件读取权限 · permission-sdk-unavailable',
+      }),
+    ]))
+  })
+
+  it('does tell the user to grant it when fs.read is genuinely denied', async () => {
+    // The other half of the branch above. Without this, moving the grant advice behind a
+    // condition could silently retire it for everyone.
+    const pushedItems: Array<Record<string, any>> = []
+    const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: { check: vi.fn(async () => false) },
+      plugin: {
+        feature: {
+          clearItems() {
+            pushedItems.length = 0
+          },
+          pushItems(items: Array<Record<string, any>>) {
+            pushedItems.push(...items)
+          },
+        },
+        storage: {
+          async getFile() {
+            return null
+          },
+          async setFile() {},
+        },
+      },
+    }))
+
+    await pluginModule.onFeatureTriggered('batch-rename', {
+      text: 'prefix:NEW_',
+      inputs: [
+        { type: 'files', content: JSON.stringify(['/tmp/example.txt']) },
+      ],
+    })
+
     expect(pushedItems).toEqual(expect.arrayContaining([
       expect.objectContaining({
         title: '缺少读取权限',
@@ -172,13 +215,14 @@ describe('batch rename rules', () => {
     ]))
   })
 
-  // hasPermission (index.js:190-196) calls permission.check only. There is no
-  // permission.request path left, so the assertions that one was called with a reason
-  // string were describing a gate that e37c92c8c removed. It also collapses three
-  // distinct situations -- denied, SDK absent, check threw -- into a single false, so
-  // all three surface as 'permission-denied'. That conflation is pinned below rather
-  // than hidden, and reported on #330: a user whose permission host is missing or
-  // broken is currently told they lack a permission.
+  // ensurePermission (index.js) calls permission.check only. There is no permission.request
+  // path left, so the assertions that one was called with a reason string were describing a
+  // gate that e37c92c8c removed.
+  //
+  // It used to collapse three distinct situations -- denied, SDK absent, check threw -- into a
+  // single false, so all three surfaced as 'permission-denied' and a user whose permission host
+  // was missing was told to grant a permission they may already hold. Fixed in #821; the three
+  // tests below now hold the reasons apart, which is what makes the fix checkable.
   function undoModule(permissionOverride: unknown, storageGetFile = vi.fn()) {
     return {
       storageGetFile,
@@ -226,13 +270,14 @@ describe('batch rename rules', () => {
     const result = await harness.module.onItemAction(undoItem)
 
     expect(harness.storageGetFile).not.toHaveBeenCalled()
-    // Reported as a denial, not as a missing SDK: hasPermission returns false for both
-    // and the caller has nothing left to tell them apart with.
+    // Still fail-closed, but named as what it is. Telling this user to grant fs.write would
+    // send them after a permission they may already hold (#821).
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: 'permission-sdk-unavailable',
+      message: '权限系统不可用',
     })
   })
 
@@ -246,12 +291,14 @@ describe('batch rename rules', () => {
 
     expect(check).toHaveBeenCalledWith('fs.write')
     expect(harness.storageGetFile).not.toHaveBeenCalled()
-    // Same collapse: a transport fault is indistinguishable from a denial here.
+    // A transport fault is its own reason now, so it is diagnosable rather than looking like
+    // something the user did wrong.
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: 'permission-check-failed',
+      message: '权限检查失败',
     })
   })
 
