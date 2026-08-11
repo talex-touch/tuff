@@ -7,6 +7,7 @@ import {
   type PluginHostCapabilityDefinition
 } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
+import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from '../privileged-plugins'
 
 export const PLUGIN_SYSTEM_ACTION_IDS = Object.freeze([
   'restart',
@@ -51,7 +52,7 @@ export const PLUGIN_SYSTEM_ACTION_POLICIES: Readonly<
 })
 
 export const PLUGIN_SYSTEM_ACTION_TIMEOUT_MS = 15_000
-const SYSTEM_ACTION_PLUGIN_NAMES = new Set(['touch-quick-actions', 'touch-system-actions'])
+const SYSTEM_ACTION_PLUGIN_NAME_SET = new Set(SYSTEM_ACTION_PLUGIN_NAMES)
 const SYSTEM_WINDOW_ACTION = 'open-main-window' satisfies PluginSystemActionId
 const QUICK_ACTION_IDS = new Set<PluginSystemActionId>([
   'restart',
@@ -355,9 +356,10 @@ function isActionId(value: unknown): value is PluginSystemActionId {
 }
 
 function isActionAllowedForPlugin(pluginName: string, actionId: PluginSystemActionId): boolean {
-  return pluginName === 'touch-quick-actions'
+  return isPrivilegedPluginFor('systemActionsBasic', pluginName)
     ? QUICK_ACTION_IDS.has(actionId)
-    : pluginName === 'touch-system-actions' && ADVANCED_SYSTEM_ACTION_IDS.has(actionId)
+    : isPrivilegedPluginFor('systemActionsAdvanced', pluginName) &&
+        ADVANCED_SYSTEM_ACTION_IDS.has(actionId)
 }
 
 function isShellAction(actionId: PluginSystemActionId): boolean {
@@ -628,7 +630,7 @@ export function createPluginSystemActionCapabilities(
   })
   const platform = options.platform as NodeJS.Platform
   const expectedActivation = snapshotActivation(options.activation)
-  if (!SYSTEM_ACTION_PLUGIN_NAMES.has(expectedActivation.name)) invalid()
+  if (!SYSTEM_ACTION_PLUGIN_NAME_SET.has(expectedActivation.name)) invalid()
 
   const assertAuthority = (context: PluginSecurityContext): number => {
     if (!isAuthoritativePluginContext(context)) invalid()

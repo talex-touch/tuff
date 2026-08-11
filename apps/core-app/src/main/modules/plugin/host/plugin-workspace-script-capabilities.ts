@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
@@ -1021,7 +1022,7 @@ export function createPluginWorkspaceScriptCapabilities(
     invalid()
   }
   const expectedActivation = snapshotActivation(options.activation)
-  if (expectedActivation.name !== 'touch-workspace-scripts') invalid()
+  if (!isPrivilegedPluginFor('workspaceScripts', expectedActivation.name)) invalid()
   const resolveCurrentActivation =
     options.resolveCurrentActivation as PluginWorkspaceScriptCapabilitiesOptions['resolveCurrentActivation']
   const resolveHostGeneration =

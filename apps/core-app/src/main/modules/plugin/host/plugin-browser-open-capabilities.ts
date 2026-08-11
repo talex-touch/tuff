@@ -4,6 +4,7 @@ import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/secur
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
@@ -716,7 +717,7 @@ export function createPluginBrowserOpenCapabilities(
     invalid()
   }
   const expectedActivation = snapshotActivation(options.activation)
-  if (expectedActivation.name !== 'touch-browser-open') invalid()
+  if (!isPrivilegedPluginFor('browserOpen', expectedActivation.name)) invalid()
   const service = options.service as TrustedBrowserOpenService
   const listBrowsers = dataMethod<TrustedBrowserOpenService['list']>(service, 'list')
   const revalidateBrowser = dataMethod<TrustedBrowserOpenService['revalidate']>(

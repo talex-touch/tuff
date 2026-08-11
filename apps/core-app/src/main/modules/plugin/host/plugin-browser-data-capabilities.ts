@@ -7,6 +7,7 @@ import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, stat } from 'node:f
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
 import { PluginSqliteWorkerClient } from '../runtime/plugin-sqlite-worker-client'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
@@ -1308,7 +1309,7 @@ export function createPluginBrowserDataCapabilities(
     invalid()
   }
   const expectedActivation = snapshotActivation(options.activation)
-  if (expectedActivation.name !== 'touch-browser-data') invalid()
+  if (!isPrivilegedPluginFor('browserData', expectedActivation.name)) invalid()
   const service = options.service as TrustedPluginBrowserDataService
   const scanService = dataMethod<TrustedPluginBrowserDataService['scan']>(service, 'scan')
   const resolveCurrentActivation =
