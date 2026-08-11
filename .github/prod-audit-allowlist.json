@@ -1,0 +1,83 @@
+{
+  "$comment": [
+    "Exceptions for scripts/check-prod-audit.mjs. Every Critical/High advisory in `pnpm audit --prod`",
+    "must appear here or CI fails. Entries expire; an expired entry fails the same gate. An entry whose",
+    "advisory no longer appears also fails, so the list cannot only grow and cannot silently pre-approve",
+    "a re-introduction. Removing an entry is the fix in that case.",
+    "This list is the state on 2026-08-11, not an endorsement of it. #328 owns clearing it."
+  ],
+  "advisories": [
+    {
+      "id": "GHSA-279x-mwfv-vcqv",
+      "module": "@nuxt/devtools",
+      "severity": "critical",
+      "reason": "Reaches --prod through core-app's vue-sonner, whose optional nuxt peer pnpm satisfied from nexus. core-app is Electron+Vite and never loads a Nuxt module; nexus keeps nuxt in devDependencies. Severing that edge is #328's open decision.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-9f4c-93c8-jc8g",
+      "module": "electron",
+      "severity": "high",
+      "reason": "Patched line is >=41.10.3 against the 40.x the app is on. A major Electron upgrade, not a dependency bump.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-28wg-ghj8-5hjv",
+      "module": "nanoid",
+      "severity": "high",
+      "reason": "Transitive under the same nuxt closure as @nuxt/devtools.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-2v37-7h3g-55p8",
+      "module": "nanoid",
+      "severity": "high",
+      "reason": "Transitive under the same nuxt closure as @nuxt/devtools.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-9473-5f9j-94wq",
+      "module": "nuxt",
+      "severity": "high",
+      "reason": "Same vue-sonner optional-peer edge; not loaded by core-app.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-9pgf-384g-p7mv",
+      "module": "nuxt",
+      "severity": "high",
+      "reason": "Same vue-sonner optional-peer edge; not loaded by core-app.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-hxcr-hm88-mpq6",
+      "module": "nuxt",
+      "severity": "high",
+      "reason": "Same vue-sonner optional-peer edge; not loaded by core-app.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-hxvh-4h3w-prp9",
+      "module": "nuxt",
+      "severity": "high",
+      "reason": "Same vue-sonner optional-peer edge; not loaded by core-app.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-wm8w-6qjm-cv43",
+      "module": "nuxt",
+      "severity": "high",
+      "reason": "Same vue-sonner optional-peer edge; not loaded by core-app.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    }
+  ]
+}
