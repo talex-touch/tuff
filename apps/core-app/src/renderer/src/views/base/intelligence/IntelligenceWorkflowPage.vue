@@ -1327,7 +1327,11 @@ onMounted(async () => {
   letter-spacing: 0.08em;
 }
 
-input,
+// Excludes checkboxes deliberately. Chromium honours width, border, background and padding on
+// them, so the bare `input` selector rendered all 7 on this page as stretched rounded boxes
+// rather than squares -- wrong against the old dark panels too, just less visible there than on
+// a white card (#1023).
+input:not([type='checkbox']),
 select,
 textarea {
   width: 100%;
