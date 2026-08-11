@@ -27,5 +27,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Continue through its children. Two of them - 08-04-shell-fixed-frame and 08-04-settings-ia-primitives - are in progress with their own records, and their remaining criteria are board measurements needing a running app.",
+    "blocker": "The same running app its children need, for the visual acceptance.",
+    "evidence": "design.md is the produced artefact and is measured rather than estimated: it states the values come from the design boards iqbKR (settings v2) and JVvAr (home v2) in docs/design/corebox/v2.5.0.pen, not from estimation."
+  }
 }
