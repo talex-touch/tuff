@@ -124,8 +124,10 @@ jobs:
       - name: Verify search-index writer ownership
         run: pnpm -C apps/core-app check:search-index-writers && pnpm -C apps/core-app check:search-index-writers:self-test
 
-      # Runs here rather than as a core-app vitest file: the App suites job is
-      # continue-on-error, so a test there cannot fail a PR (#915).
+      # Runs here rather than as a core-app vitest file: when this was written the App suites
+      # job was continue-on-error, so a test there could not fail a PR (#915). That is no longer
+      # true (#1596), but a guard over a permission mapping belongs with the other source-level
+      # guards either way, and moving it now would only churn.
       - name: Verify permission API mapping coverage
         run: pnpm -C apps/core-app check:permission-api-mappings && pnpm -C apps/core-app check:permission-api-mappings:self-test
 
@@ -326,18 +328,19 @@ jobs:
       # only four hand-named core-app files were covered, inside a path-filtered
       # native-protocol job. See #924.
       #
-      # nexus is now BLOCKING: 180 files / 963 tests, zero failures (#327 closed).
-      # core-app stays non-blocking at 2 failing files, down from 20 (#323). Both
-      # remaining failures there are product-side rather than test-side -- the
-      # packaged runtime closure shipping openai@6 against @langchain/openai's
-      # ^4.87.3, and plugins/touch-quickops having lost its contract tests -- so
-      # they need decisions, not an assertion edit, and blocking on them would
-      # stop every unrelated PR.
+      # Both apps are BLOCKING now. nexus since #327; core-app since #1596, which is what
+      # measured what the non-blocking job had been hiding -- 10 real failures reported as
+      # success, in a suite whose count had been quoted as "2 failing files" for long enough
+      # that the comment here said so. It runs 5840 tests; a step that reports success whatever
+      # they do carries no information at all, and this session it let a base-breaking merge
+      # through as well.
       #
-      # The counts are the whole reason for the JUnit report below: a
-      # continue-on-error job reports success, so a jump like 20 -> 28 files is
-      # invisible unless the numbers are an artifact rather than something you
-      # have to scrape out of a 6000-line log.
+      # Verified at zero before removing the escape hatch: 700 files, 5830 passed, 10 skipped,
+      # exit 0, under this job's own TUFF_SKIP_SQLITE_WORKER_TESTS.
+      #
+      # The JUnit report below stays. It was there because a continue-on-error job hides its
+      # counts; now it is there so a regression names its file instead of being scraped out of
+      # a 6000-line log.
       # apps/nexus imports @talex-touch/tuffex/utils, whose exports map resolves
       # only into dist/ — without a build those tests fail on module resolution
       # rather than on anything they actually assert.
@@ -352,7 +355,6 @@ jobs:
       # costs no coverage: those six cases report `skipped` with or without this (#1596).
       # Building the worker here would actually run them; that is the open half of #1596.
       - name: Run ${{ matrix.app }} suite
-        continue-on-error: ${{ matrix.app != 'nexus' }}
         env:
           TUFF_SKIP_SQLITE_WORKER_TESTS: '1'
         run: >-
@@ -361,8 +363,9 @@ jobs:
           --reporter=junit
           --outputFile.junit=../../test-reports/${{ matrix.app }}.junit.xml
 
-      # if: always() — the report is only interesting when the suite failed, and
-      # the step above is continue-on-error, so it must not be gated on success.
+      # if: always() — the report is only interesting when the suite failed, and the step above
+      # blocks now (#1596), so gating this on success would drop the report exactly when it is
+      # needed.
       - name: Upload ${{ matrix.app }} test report
         if: always()
         uses: actions/upload-artifact@v7
