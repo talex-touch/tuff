@@ -169,6 +169,30 @@ mod tests {
         }
     }
 
+    /// The control for the test above: it only requires that `cancelled()` *resolves*, and
+    /// a "return immediately" implementation satisfies that too. A live token has to keep
+    /// it pending, or the race test would be measuring nothing.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancelled_stays_pending_while_the_token_is_live() {
+        let token = CancellationToken::new();
+        let waiter = token.clone();
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(250), waiter.cancelled())
+                .await
+                .is_err(),
+            "cancelled() resolved on a token that was never cancelled"
+        );
+
+        token.cancel(CancelReason::Caller);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), token.cancelled())
+                .await
+                .expect("cancelled() must resolve once the token is cancelled"),
+            CancelReason::Caller
+        );
+    }
+
     // #840's second half -- `cancel` flipping a separate `cancelled` bool before storing
     // the reason, so a reader could see a cancelled token reporting `None` -- has no test
     // here on purpose. The window is two adjacent stores; a tight-spin observer on its own
