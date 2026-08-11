@@ -38,6 +38,14 @@ impl NapiRuntimeAdapter {
 
     pub fn handshake(&self, env: &Env, encoded: String) -> Result<String> {
         self.ensure_cleanup(env)?;
+        // A disposed runtime cannot serve anything, and the adapter is a process-wide OnceLock
+        // with no reset path — so this state is terminal. Reporting a healthy server_hello here
+        // left every later invoke returning a well-formed ok=false response, which reads as a
+        // capability error rather than an unavailable carrier and never triggers the caller's
+        // fallback (#848). Failing the handshake is what marks the carrier unavailable.
+        if self.runtime.is_disposed() {
+            return Err(to_napi_error(ProtocolError::transport_disposed()));
+        }
         let hello = decode_control(&encoded).map_err(to_napi_error)?;
         let Control::ClientHello {
             protocol,

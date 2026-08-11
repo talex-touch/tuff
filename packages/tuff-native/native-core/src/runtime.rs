@@ -318,6 +318,15 @@ impl NativeRuntime {
         read(&self.registry).descriptors()
     }
 
+    /// Whether `begin_dispose` has run.
+    ///
+    /// Exposed so a carrier can refuse its handshake instead of reporting healthy and then failing
+    /// every invoke — the adapter lives in a process-wide `OnceLock` with no reset, so a runtime
+    /// disposed by a module teardown stays disposed for the life of the process (#848).
+    pub fn is_disposed(&self) -> bool {
+        self.disposed.load(Ordering::Acquire)
+    }
+
     pub fn health_payload(&self) -> Value {
         json!({
             "disposed": self.disposed.load(Ordering::Acquire),
@@ -1266,6 +1275,28 @@ mod tests {
             response_error_code(&packet.control),
             Some("TRANSPORT_DISPOSED")
         );
+    }
+
+    /// The terminal state has to be observable, not only felt through failing invokes.
+    ///
+    /// The adapter is a process-wide `OnceLock` with no reset, so a runtime disposed by a module
+    /// teardown stays disposed for the life of the process. A carrier built afterwards used to
+    /// report a healthy server_hello and then return a well-formed `ok=false` for every call,
+    /// which reads as a capability error rather than an unavailable carrier — so no fallback
+    /// fired and screenshots stayed broken until the app restarted (#848).
+    #[tokio::test]
+    async fn a_disposed_runtime_reports_itself_disposed() {
+        let runtime = NativeRuntime::new(registry(), ProtocolLimits::default());
+        assert!(
+            !runtime.is_disposed(),
+            "a fresh runtime must not be disposed"
+        );
+
+        assert!(runtime.begin_dispose());
+        assert!(runtime.is_disposed());
+
+        runtime.finish_dispose().await.expect("dispose");
+        assert!(runtime.is_disposed(), "disposal is terminal");
     }
 
     fn response_error_code(control: &Control) -> Option<&str> {
