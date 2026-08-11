@@ -158,4 +158,67 @@ describe('workspace scripts isolated Prelude', () => {
     ).resolves.toMatchObject({ status: 'blocked', reason: 'invalid-action' })
     expect(harness.run).not.toHaveBeenCalled()
   })
+
+  it('degrades to an item when the capability is absent, instead of throwing at the host', async () => {
+    // onFeatureTriggered used to throw here, outside its own try, so the error escaped into the
+    // host. It fires on every input change, and the host marks a plugin CRASHED and disables it
+    // after ten errors in 60s — so typing the keyword with no capability was enough to take the
+    // plugin down until someone re-enabled it by hand (#819).
+    const items: Array<Record<string, any>> = []
+    const pluginModule = loadPluginModule(
+      scriptsUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeTuffItemBuilder,
+        plugin: {
+          getLocale: () => 'en-US',
+          feature: {
+            async clearItems() {
+              items.length = 0
+            },
+            async pushItems(next: Array<Record<string, any>>) {
+              items.push(...next)
+            },
+          },
+        },
+      }),
+    )
+
+    // Ten in a row, which is what the host's sliding window counts.
+    for (let attempt = 0; attempt < 10; attempt += 1)
+      await expect(pluginModule.onFeatureTriggered('workspace-scripts', { text: 'lint' })).resolves.toBe(true)
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        title: 'Workspace Scripts Unavailable',
+        subtitle: 'capability-unavailable',
+      }),
+    ])
+  })
+
+  it('still blocks the action itself when the capability is absent', async () => {
+    // The other half: degrading the display must not make the action look runnable.
+    const pluginModule = loadPluginModule(
+      scriptsUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeTuffItemBuilder,
+        plugin: {
+          getLocale: () => 'en-US',
+          feature: {
+            async clearItems() {},
+            async pushItems() {},
+          },
+        },
+      }),
+    )
+
+    await expect(
+      pluginModule.onItemAction(
+        {
+          meta: { defaultAction: 'run-script' },
+          actions: [{ id: 'run-script', payload: { scriptToken: SCRIPT_TOKEN } }],
+        },
+        { actionId: 'run-script' },
+      ),
+    ).resolves.toMatchObject({ status: 'blocked', reason: 'capability-unavailable' })
+  })
 })
