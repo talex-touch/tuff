@@ -2,7 +2,7 @@
   "id": "fix-plugin-folder-button",
   "name": "fix-plugin-folder-button",
   "title": "修复插件目录按钮无响应",
-  "description": "",
+  "description": "The folder button on the installed-plugins page did nothing visible. It called appSdk.showInFolder on the plugin root, and the handler passed every target to Electron shell.showItemInFolder -- which reveals a file inside its parent, and is not the same thing as opening a directory. Opening the directory is what this entry did before f86d4596c4, so the SDK migration was a behaviour regression, and the failure was unobservable because showItemInFolder returns void.",
   "status": "in_progress",
   "dev_type": null,
   "scope": null,
@@ -20,11 +20,15 @@
   "subtasks": [],
   "children": [],
   "parent": null,
-  "relatedFiles": [],
-  "notes": "",
+  "relatedFiles": [
+    "apps/core-app/src/main/channel/system-shell-handlers.ts",
+    "apps/core-app/src/main/channel/system-shell-handlers.test.ts",
+    "apps/core-app/src/renderer/src/views/base/Plugin.vue"
+  ],
+  "notes": "Implementation and automated coverage are in the tree. system-shell-handlers.ts branches on fs.stat: a directory goes to shell.openPath and a non-empty error string or a throw becomes a rejected Promise, while a regular file still goes to showItemInFolder, so the reveal-a-file semantics did not regress. Plugin.vue reads info.path.pluginPath rather than modulePath, awaits the call, and on failure logs and shows toast.error(t('plugin.folderOpenFailed')) -- a key that exists in both en-US and zh-CN under the plugin scope -- with the loading flag reset in finally, so the debounce is intact.\n\nFour of the five prd acceptance criteria are checked. The fifth is annotated in the prd itself as pending confirmation on a launchable Electron runtime, which is the only thing left. Reported on #353.",
   "meta": {
-    "nextAction": "Verify the installed-plugin folder action opens the plugin root and exposes user-visible failure feedback.",
-    "blocker": "The implementation and focused UI/runtime acceptance evidence are not yet recorded.",
-    "evidence": "prd.md and task-local focused verification define the folder-action contract."
+    "nextAction": "Confirm on a running macOS build that the plugin-page folder button opens the plugin root in Finder, then check the last prd criterion and close the task.",
+    "blocker": "A launchable Electron runtime. The prd marks this criterion as needing real-machine confirmation, and it is the only one still unchecked.",
+    "evidence": "system-shell-handlers.ts branches directory -> shell.openPath and file -> showItemInFolder, turning empty, unreachable and failed-open targets into rejected Promises. six vitest cases in system-shell-handlers.test.ts cover exactly those branches: opens directories directly, rejects when Electron fails to open a directory, sanitizes rejected directory-open errors, reveals regular files in their containing folder, rejects empty folder targets, rejects inaccessible folder targets without exposing the path."
   }
 }
