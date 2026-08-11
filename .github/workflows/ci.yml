@@ -394,14 +394,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Baseline measured on this runner, which is the number a future run must be compared
-      # against: 11 of 27 files and 72 of 240 tests failing. A local darwin run reports
-      # 63 of 242 instead — the suite is platform-sensitive, so the local figure would make
-      # the first CI run look like a regression. Flip continue-on-error off when this reaches
-      # zero; until then the artifact below is the only way a jump is noticeable, because a
-      # continue-on-error job reports success either way.
+      # That baseline reached zero, so continue-on-error is gone and this job blocks (#1255).
+      # It went 72 → 4 → 0 failing tests; the last four were a plugin whose Prelude stopped
+      # running actions on trigger (#817), a manifest gap the resolver only started reporting
+      # after #1203, and a compiled Rust addon this job does not build — that one now runs
+      # under native-protocol.yml, which does.
+      #
+      # Note when reading a local run: the suite is platform-sensitive, and a worktree whose
+      # node_modules is symlinked to another checkout resolves @talex-touch/* to *that*
+      # checkout's source, not the branch. Both make local counts disagree with this runner.
       - name: Run integration suite
-        continue-on-error: true
         run: >-
           pnpm -C "packages/test" exec vitest run
           --reporter=default
