@@ -85,6 +85,7 @@
     "@number-flow/vue": "^0.5.1",
     "@shikijs/engine-javascript": "^4.4.2",
     "@talex-touch/utils": "workspace:^",
+    "@vue/reactivity": "^3.5.27",
     "@vueuse/core": "^14.3.0",
     "dompurify": "^3.4.11",
     "gsap": "^3.15.0",
