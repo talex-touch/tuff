@@ -175,7 +175,6 @@ function isSuppressedFence(block: StreamBlock): boolean {
 </template>
 
 <style lang="scss">
-@import '../../markdown-view/src/github-markdown.css';
 
 .tx-stream-md {
   font-size: 14px;
