@@ -50,11 +50,23 @@ function sourceFiles(dir: string, found: string[] = []): string[] {
 
 const files = sourceFiles(MAIN)
 
+/**
+ * Files allowed to keep a literal, each because the name is not an authorization subject there.
+ *
+ * `FIXED_WIDGET_NAVIGATION` names `touch-intelligence` as a navigation *destination*, and
+ * `widget-navigation-contract.test.ts` parses this file for a literal `pluginName` and `path`
+ * because the host and the renderer have to agree on the exact route. Interpolating a constant
+ * breaks that guard, which is the guard doing its job.
+ */
+const LITERAL_ALLOWED = new Map([
+  ['modules/plugin/host/plugin-business-capabilities.ts', 'FIXED_WIDGET_NAVIGATION'],
+])
+
 /** Files quoting a privileged plugin name, other than the module that owns them. */
 function offenders(): string[] {
   return files
     .map(file => ({ file: path.relative(MAIN, file), source: readFileSync(file, 'utf8') }))
-    .filter(({ file }) => file !== SOURCE_OF_TRUTH)
+    .filter(({ file }) => file !== SOURCE_OF_TRUTH && !LITERAL_ALLOWED.has(file))
     .filter(({ source }) => PRIVILEGED_NAMES.some(name => source.includes(`'${name}'`)))
     .map(({ file }) => file)
 }
@@ -75,6 +87,16 @@ describe('privileged plugin names', () => {
     }
 
     expect(offenders()).toEqual([])
+  })
+
+  it('does not carry an exception past the reason for it', () => {
+    // Each allowed file has to still contain the construct that justifies it. Without this the
+    // exception outlives its reason and becomes a place to put a gate nobody notices.
+    for (const [file, justification] of LITERAL_ALLOWED) {
+      const source = readFileSync(path.join(MAIN, file), 'utf8')
+      expect(source, file).toContain(justification)
+      expect(source, file).toContain(`pluginName: '`)
+    }
   })
 
   it('keeps the two system-action tiers apart', () => {
