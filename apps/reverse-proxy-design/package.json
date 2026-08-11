@@ -10,11 +10,9 @@
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "deploy": "pnpm run build && wrangler deploy"
   },
-  "dependencies": {
-    "astro": "^6.3.1"
-  },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "astro": "^6.3.1",
     "typescript": "catalog:dev",
     "wrangler": "catalog:dev"
   }
