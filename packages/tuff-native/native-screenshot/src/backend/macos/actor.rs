@@ -162,34 +162,39 @@ impl BackendFrameSource for MacFrameSource {
 
     fn stop(&self) -> BackendFuture<()> {
         self.request_stop();
-        let control = Arc::clone(&self.control);
-        Box::pin(async move {
-            // The Notified is registered before `stopped` is read.
-            //
-            // `notify_waiters()` only reaches waiters that are already registered, and the actor
-            // thread calls it exactly once per stream. Reading the flag first left a window where
-            // the store and the notify both landed before this future registered, so it parked
-            // with no further wakeup coming: `stop()` never resolved, the frames operation never
-            // emitted its terminal frame, and `finish_dispose()` timed out with the entry still in
-            // `NativeRuntime::streams` (#839).
-            //
-            // `native-core/src/stream.rs`, `native-core/src/runtime.rs` and `backend/mod.rs` all
-            // build the Notified before checking their state; this is the same shape, with
-            // `enable()` making the registration explicit rather than resting on when the future
-            // happens to be first polled.
-            loop {
-                let notified = control.stop_notify.notified();
-                tokio::pin!(notified);
-                notified.as_mut().enable();
-
-                if control.stopped.load(Ordering::Acquire) {
-                    return Ok(());
-                }
-
-                notified.await;
-            }
-        })
+        await_stopped(Arc::clone(&self.control))
     }
+}
+
+/// Resolves once the actor thread has marked the stream stopped.
+///
+/// Extracted from `stop()` so it can be hammered against a bare `FrameControl` — `MacFrameSource`
+/// needs a live ScreenCaptureKit session, and the race below is not reachable without one
+/// otherwise (#839, #1541).
+///
+/// The `Notified` is registered before `stopped` is read. `notify_waiters()` reaches only waiters
+/// that are already registered, and the actor thread calls it exactly once per stream, so reading
+/// the flag first left a window where the store and the notify both landed before this future
+/// registered: `stop()` never resolved, the frames operation never emitted its terminal frame, and
+/// `finish_dispose()` timed out with the entry still in `NativeRuntime::streams`.
+///
+/// `native-core/src/stream.rs`, `native-core/src/runtime.rs` and `backend/mod.rs` all build the
+/// Notified before checking their state; this is the same shape, with `enable()` making the
+/// registration explicit rather than resting on when the future happens to be first polled.
+fn await_stopped(control: Arc<FrameControl>) -> BackendFuture<()> {
+    Box::pin(async move {
+        loop {
+            let notified = control.stop_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            if control.stopped.load(Ordering::Acquire) {
+                return Ok(());
+            }
+
+            notified.await;
+        }
+    })
 }
 
 impl MacScreenActor {
@@ -1434,6 +1439,87 @@ mod tests {
             cancellation: CancellationToken::new(),
             response,
         }
+    }
+
+    fn frame_control() -> Arc<FrameControl> {
+        Arc::new(FrameControl {
+            slot: LatestFrameSlot::new(),
+            stopped: AtomicBool::new(false),
+            stop_requested: AtomicBool::new(false),
+            stop_notify: Notify::new(),
+        })
+    }
+
+    /// A stop landing while the waiter is registering must not be lost.
+    ///
+    /// The defect (#839): `stop()` read `stopped` and only then built the `Notified`, so a
+    /// `store(true)` + `notify_waiters()` pair landing in that window left the future parked with
+    /// nothing further coming.
+    ///
+    /// The load is what makes a window this narrow reachable. Eight waiters per iteration over
+    /// 60k iterations detects the restored defect on every run here; a single waiter and a few
+    /// thousand iterations does not, which is how a race test ends up unable to catch its own
+    /// defect (#1541).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn a_stop_racing_registration_is_never_lost() {
+        const WAITERS: usize = 8;
+        const ITERATIONS: usize = 60_000;
+
+        for _ in 0..ITERATIONS {
+            let control = frame_control();
+            let gate = Arc::new(tokio::sync::Barrier::new(WAITERS + 1));
+
+            let waiters = (0..WAITERS)
+                .map(|_| {
+                    let control = Arc::clone(&control);
+                    let gate = Arc::clone(&gate);
+                    tokio::spawn(async move {
+                        gate.wait().await;
+                        await_stopped(control).await
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            let stopper = {
+                let control = Arc::clone(&control);
+                let gate = Arc::clone(&gate);
+                tokio::spawn(async move {
+                    gate.wait().await;
+                    // Exactly what the actor thread does in stop_frames.
+                    control.stopped.store(true, Ordering::Release);
+                    control.stop_notify.notify_waiters();
+                })
+            };
+            stopper.await.expect("stopper completes");
+
+            for waiter in waiters {
+                tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
+                    .await
+                    .expect("a waiter parked after the stop")
+                    .expect("waiter completes")
+                    .expect("stop resolves");
+            }
+        }
+    }
+
+    /// It has to actually wait for the actor.
+    ///
+    /// Without this the race test above is satisfied by an `await_stopped` that returns
+    /// immediately — verified by mutating it to do exactly that (#1541).
+    #[tokio::test]
+    async fn await_stopped_stays_pending_until_the_actor_reports_stopped() {
+        let control = frame_control();
+        let waiter = tokio::spawn({
+            let control = Arc::clone(&control);
+            async move { await_stopped(control).await }
+        });
+
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), waiter)
+                .await
+                .is_err(),
+            "await_stopped resolved before the actor reported stopped",
+        );
     }
 
     fn test_actor_state() -> ActorState {

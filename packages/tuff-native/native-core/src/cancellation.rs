@@ -132,23 +132,7 @@ mod tests {
 
     /// A cancel delivered to an already-waiting task completes it.
     ///
-    /// **This does not reproduce the race in #840, and is not claimed to.** That window is the few
-    /// instructions between reading the reason and registering the waker; I ran this at 2,000
-    /// iterations against the unfixed order and it passed every time, so shipping it as a
-    /// regression guard would have been a test that cannot fail.
-    ///
-    /// What establishes the fix is structural: `notified()` is created and enabled *before* the
-    /// state is read, so `notify_waiters()` either wakes a future that is already registered, or
-    /// the read that follows observes the reason. Neither order can drop the wakeup. Under the
-    /// previous order a cancel landing in that window was lost, and because `cancel()` fires
-    /// exactly once the waiter parked forever — an idle `frames` stream torn down by
-    /// `begin_dispose` never terminated and `finish_dispose` returned NATIVE_DISPOSE_TIMEOUT.
-    ///
-    /// Proving the absence of that interleaving needs `loom`, which is a dependency decision rather
-    /// than something to add alongside a fix.
-    ///
-    /// What this *does* cover is the ordinary path, with a timeout so a regression that parks the
-    /// waiter fails the suite instead of hanging it.
+    /// The ordinary path, kept as a cheap control alongside the hammered race test below.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn cancel_wakes_a_task_already_waiting() {
         for _ in 0..256 {
@@ -204,6 +188,62 @@ mod tests {
 
         assert_eq!(token.cancelled().await, CancelReason::ConsumerClosed);
         assert!(token.is_cancelled());
+    }
+
+    /// A cancel racing a waiter's registration must not be lost.
+    ///
+    /// The defect (#840): `cancelled()` read the state and only then built the `Notified`.
+    /// `notify_waiters()` reaches only already-registered futures and `cancel()` fires exactly
+    /// once, so a cancel landing in that window was dropped and the waiter parked forever.
+    ///
+    /// Reaching a window a few instructions wide needs the load. Measured against the defect
+    /// deliberately restored: eight waiters per iteration over 20k iterations detects it on every
+    /// run; **one** waiter per iteration misses roughly one run in six. The eight-way concurrency
+    /// is load-bearing, not decorative — my first attempt at this test used a single waiter and
+    /// 2,000 iterations and never failed, which is how a guard ends up unable to catch its own
+    /// defect.
+    ///
+    /// The barrier is what lines the two sides up: waiters and canceller are released together,
+    /// so the cancel lands while the waiters are registering rather than long before or after.
+    /// The timeout turns a parked waiter into a failure instead of a hung suite.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn a_cancel_racing_registration_is_never_lost() {
+        const WAITERS: usize = 8;
+        const ITERATIONS: usize = 60_000;
+
+        for _ in 0..ITERATIONS {
+            let token = CancellationToken::new();
+            let gate = Arc::new(tokio::sync::Barrier::new(WAITERS + 1));
+
+            let waiters = (0..WAITERS)
+                .map(|_| {
+                    let token = token.clone();
+                    let gate = Arc::clone(&gate);
+                    tokio::spawn(async move {
+                        gate.wait().await;
+                        token.cancelled().await
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            let canceller = {
+                let token = token.clone();
+                let gate = Arc::clone(&gate);
+                tokio::spawn(async move {
+                    gate.wait().await;
+                    token.cancel(CancelReason::Dispose);
+                })
+            };
+            canceller.await.expect("canceller completes");
+
+            for waiter in waiters {
+                let reason = tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
+                    .await
+                    .expect("a waiter parked after the cancel")
+                    .expect("waiter completes");
+                assert_eq!(reason, CancelReason::Dispose);
+            }
+        }
     }
 
     #[tokio::test]
