@@ -40,6 +40,7 @@ import { completeTiming, sleep, startTiming, StorageList, timingLogger } from '@
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import type { TuffItem } from '@talex-touch/utils'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import {
   IndexedSourceGroupedEvidenceService,
@@ -74,7 +75,27 @@ import { iconService } from '../../../../service/icon-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
-import searchEngineCore from '../../search-engine/search-core'
+/**
+ * How a launched app reports itself back to the search engine.
+ *
+ * This used to be a direct `import searchEngineCore from '../../search-engine/search-core'`,
+ * and search-core imports `appProvider` back, so the two modules instantiated each other at
+ * module scope. That only worked because AppProvider's constructor is a single log call --
+ * promoting any of its methods into constructor-time work would have dereferenced
+ * `searchEngineCore` mid-evaluation and failed at boot rather than at the call site (#712).
+ *
+ * The recorder is invoked **synchronously**; a lazy `await import()` was tried first and broke
+ * `records a session-scoped usage event before handing the app to the launch boundary`, because
+ * deferring by a microtask puts the record after the launch it is supposed to precede.
+ */
+export type AppExecutionRecorder = (sessionId: string, item: TuffItem) => Promise<void>
+
+let recordAppExecution: AppExecutionRecorder = async () => {}
+
+export function setAppExecutionRecorder(recorder: AppExecutionRecorder): void {
+  recordAppExecution = recorder
+}
+
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
@@ -3438,7 +3459,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const sessionId = searchResult?.sessionId
     if (sessionId) {
       logApp(`Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
-      searchEngineCore.recordExecute(sessionId, item).catch((err) => {
+      recordAppExecution(sessionId, item).catch((err) => {
         logApp(`Failed to record execution: ${chalk.red(err.message)}`, LogStyle.error)
       })
     }

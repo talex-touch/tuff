@@ -302,12 +302,6 @@ vi.mock('../../file-system-watcher', () => ({
   }
 }))
 
-vi.mock('../../search-engine/search-core', () => ({
-  default: {
-    recordExecute: searchRecordExecuteMock
-  }
-}))
-
 vi.mock('./app-scanner', () => ({
   appScanner: {
     getApps: getAppsMock,
@@ -461,6 +455,9 @@ export async function withTimeout<T>(
 
 export async function loadSubject() {
   const subject = await import('./app-provider')
+  // app-provider no longer imports search-core (#712), so mocking that module would sit inert.
+  // The recorder is registered through the same seam search-core uses in production.
+  subject.setAppExecutionRecorder(searchRecordExecuteMock)
   subject.appProvider.setIndexedSourceRuntimeDelegate({
     scan: appRuntimeScanMock,
     reconcile: appRuntimeReconcileMock,
