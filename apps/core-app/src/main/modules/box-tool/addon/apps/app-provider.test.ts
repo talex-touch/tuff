@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
 import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
@@ -676,6 +677,12 @@ describe('appProvider rebuild maintenance', () => {
     } as IExecuteArgs)
 
     expect(searchRecordExecuteMock).toHaveBeenCalledWith('search-session-42', item)
+    // "before" has to be asserted, not implied by the await: awaiting onExecute drains the
+    // microtask queue, so a recorder deferred by a Promise.resolve().then() still ends up
+    // called by the time these run. Invocation order is what actually pins it (#712).
+    expect(searchRecordExecuteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      scheduleAppLaunchMock.mock.invocationCallOrder[0]
+    )
     expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
       name: 'Recorded App',
       path: '/Applications/Recorded.app',
@@ -685,6 +692,25 @@ describe('appProvider rebuild maintenance', () => {
       workingDirectory: undefined,
       sourceItemId: 'recorded-app'
     })
+  })
+
+  it('has search-core register the recorder, since nothing else can', async () => {
+    // The seam defaults to a no-op. If search-core stops registering, app launches simply stop
+    // being recorded -- no error, no failing assertion anywhere else, because every other test
+    // registers the mock itself. Read from source: importing search-core here would drag in the
+    // whole engine, and the thing worth pinning is that the call site exists at all (#712).
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const searchCore = await fs.readFile(
+      path.resolve(here, '../../search-engine/search-core.ts'),
+      'utf-8'
+    )
+
+    expect(searchCore).toContain('setAppExecutionRecorder(')
+    expect(searchCore).toMatch(/setAppExecutionRecorder\(\s*\(sessionId, item\) =>/)
+
+    // And app-provider must not reach back, or the cycle returns.
+    const provider = await fs.readFile(path.resolve(here, './app-provider.ts'), 'utf-8')
+    expect(provider).not.toMatch(/^import .*search-engine\/search-core/m)
   })
 
   it('requests a runtime reset for public rebuilds', async () => {
