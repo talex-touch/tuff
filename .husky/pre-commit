@@ -20,4 +20,8 @@ elif ! git diff --quiet -- "$CORE_PKG" 2>/dev/null; then
   echo "[pre-commit] silently include your other changes. Stage it yourself when ready."
 fi
 
+# Fails with an actionable message instead of a MODULE_NOT_FOUND naming a path nobody
+# recognises, when node_modules/.bin belongs to a checkout at a different depth (#1564).
+node scripts/check-bin-shims.mjs || exit 1
+
 pnpm lint:staged
