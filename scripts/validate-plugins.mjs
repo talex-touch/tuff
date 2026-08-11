@@ -130,6 +130,63 @@ function checkDevLeakage(pluginName, dev, source) {
   return true
 }
 
+/**
+ * A manifest feature's `platform` must be `{ win32, darwin, linux }` booleans (#820).
+ *
+ * There are two platform shapes in this codebase and they are easy to confuse:
+ *
+ * - **manifest** — `{ win32: boolean, darwin: boolean, linux: boolean }`. All 20 manifests use
+ *   it, so it is the de-facto convention, and this is the one enforced here.
+ * - **runtime registration** — `{ win|darwin|linux: { enable, arch, os } }`, the `IPlatform` type,
+ *   which the host validates with `exactRecord` when a Prelude calls `features.addFeature`.
+ *
+ * `touch-browser-open` uses both — the manifest shape in `manifest.json` and the runtime shape in
+ * `index.js` — which is how you can hold them side by side and still write the wrong one.
+ *
+ * This pins the shape only. Nothing in the main process reads a manifest feature's `platform`, so
+ * the declarations are inert; whether they should gate registration is on #820.
+ *
+ * @returns true when the plugin should fail.
+ */
+function checkFeaturePlatformShape(pluginName, features) {
+  const MANIFEST_KEYS = ['win32', 'darwin', 'linux']
+  let failed = false
+
+  for (const feature of Array.isArray(features) ? features : []) {
+    const platform = feature?.platform
+    if (platform === undefined)
+      continue
+
+    const id = feature.id || feature.name || '<unnamed>'
+    if (platform === null || typeof platform !== 'object' || Array.isArray(platform)) {
+      logError(pluginName, `feature "${id}" has a non-object "platform"`)
+      failed = true
+      continue
+    }
+
+    const keys = Object.keys(platform).sort()
+    if (keys.join(',') !== [...MANIFEST_KEYS].sort().join(',')) {
+      const runtimeShaped = keys.includes('win') || keys.some(key => typeof platform[key] === 'object')
+      const hint = runtimeShaped ? ' — that is the runtime addFeature shape, which a manifest is not read as' : ''
+      logError(
+        pluginName,
+        `feature "${id}" declares platform keys [${keys.join(', ')}]; a manifest needs exactly [${MANIFEST_KEYS.join(', ')}]${hint}`,
+      )
+      failed = true
+      continue
+    }
+
+    for (const key of MANIFEST_KEYS) {
+      if (typeof platform[key] !== 'boolean') {
+        logError(pluginName, `feature "${id}" platform.${key} must be a boolean (received ${JSON.stringify(platform[key])})`)
+        failed = true
+      }
+    }
+  }
+
+  return failed
+}
+
 for (const pluginName of pluginDirs) {
   totalPlugins++
   const pluginPath = path.join(pluginsDir, pluginName)
@@ -177,6 +234,9 @@ for (const pluginName of pluginDirs) {
   }
 
   if (checkDevLeakage(pluginName, manifest?.dev, 'manifest.json'))
+    pluginHasError = true
+
+  if (checkFeaturePlatformShape(pluginName, manifest?.features))
     pluginHasError = true
 
   // 2. Required fields: id (or name), name, version
