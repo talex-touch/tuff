@@ -22,5 +22,9 @@
   "parent": "08-05-ai-toolchain-suite",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Confirm the P0 five are all registered and exported with their four-state and streaming behaviour under mock data, then the theme and reduced-motion pass. The ai-elements suite is green, so what is open is the per-component checklist and the visual half.",
+    "blocker": "A running app for themes and reduced-motion.",
+    "evidence": "Measured 2026-08-11: ai-elements plus stream-markdown, 58 passed / 6 files, which covers the \"existing ai-elements tests stay green\" half of the parts-type criterion. The component directory carries its own tests (ai-elements.test.ts, ai-message-parts.test.ts) alongside the Vue sources."
+  }
 }
