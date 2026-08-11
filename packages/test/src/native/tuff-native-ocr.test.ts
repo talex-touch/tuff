@@ -7,6 +7,17 @@ import { describe, expect, it } from 'vitest'
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_OCR'
 
+/**
+ * Set by `native-protocol.yml`, which builds the addon, to forbid the early return below.
+ *
+ * Without it a green run cannot be told apart from a run that never touched OCR: the fixture
+ * assertion returns when support is absent, and support is legitimately absent in the
+ * integration suite, which does not build Rust. That is the same shape as the gap #1517 was
+ * filed for — a path nothing exercised, reporting success — so the fix for it must not be
+ * verifiable only by a result that skipping produces too.
+ */
+const REQUIRE_OCR = process.env.TUFF_NATIVE_OCR_REQUIRED === '1'
+
 describe('tuff-native ocr smoke & contract', () => {
   it('exports required ocr functions', () => {
     expect(typeof nativeOcr.getNativeOcrSupport).toBe('function')
@@ -64,6 +75,12 @@ describe('tuff-native ocr smoke & contract', () => {
   it('recognizes visible text from project fixture image', async () => {
     const support = nativeOcr.getNativeOcrSupport()
     if (!support.supported) {
+      expect(
+        REQUIRE_OCR,
+        `native OCR reported unsupported on ${process.platform} (${support.reason}) while ${
+          'TUFF_NATIVE_OCR_REQUIRED'
+        } is set — this assertion would otherwise have been skipped silently`,
+      ).toBe(false)
       return
     }
 
