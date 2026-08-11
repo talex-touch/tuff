@@ -50,7 +50,7 @@
     "node": ">=24.15.0"
   },
   "scripts": {
-    "build": "tsup core-box/index.ts index.ts network/index.ts plugin/index.ts plugin/preload.ts plugin/sdk/box-sdk.ts plugin/sdk/clipboard.ts plugin/sdk/index.ts plugin/sdk/service/index.ts plugin/sdk/storage.ts plugin/sdk/system.ts plugin/sdk/types.ts service/protocol/index.ts transport/events/types/index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "build": "tsup account/index.ts analytics/index.ts auth/index.ts base/index.ts cloud-share/index.ts cloud-sync/index.ts common/index.ts core-box/index.ts electron/index.ts env/index.ts eventbus/index.ts i18n/index.ts icons/index.ts index.ts intelligence/index.ts network/index.ts permission/index.ts plugin/index.ts plugin/preload.ts plugin/sdk/box-sdk.ts plugin/sdk/clipboard.ts plugin/sdk/index.ts plugin/sdk/service/index.ts plugin/sdk/storage.ts plugin/sdk/system.ts plugin/sdk/types.ts preload/index.ts search/index.ts service/index.ts service/protocol/index.ts store/index.ts transport/events/types/index.ts transport/index.ts types/index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
     "benchmark:preview": "vitest run \"__tests__/core-box/preview-sdk.benchmark.test.ts\" --reporter verbose",
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
@@ -92,15 +92,85 @@
         "import": "./dist/index.mjs",
         "default": "./dist/index.mjs"
       },
+      "./account": {
+        "types": "./dist/account/index.d.mts",
+        "import": "./dist/account/index.mjs",
+        "default": "./dist/account/index.mjs"
+      },
+      "./analytics": {
+        "types": "./dist/analytics/index.d.mts",
+        "import": "./dist/analytics/index.mjs",
+        "default": "./dist/analytics/index.mjs"
+      },
+      "./auth": {
+        "types": "./dist/auth/index.d.mts",
+        "import": "./dist/auth/index.mjs",
+        "default": "./dist/auth/index.mjs"
+      },
+      "./base": {
+        "types": "./dist/base/index.d.mts",
+        "import": "./dist/base/index.mjs",
+        "default": "./dist/base/index.mjs"
+      },
+      "./cloud-share": {
+        "types": "./dist/cloud-share/index.d.mts",
+        "import": "./dist/cloud-share/index.mjs",
+        "default": "./dist/cloud-share/index.mjs"
+      },
+      "./cloud-sync": {
+        "types": "./dist/cloud-sync/index.d.mts",
+        "import": "./dist/cloud-sync/index.mjs",
+        "default": "./dist/cloud-sync/index.mjs"
+      },
+      "./common": {
+        "types": "./dist/common/index.d.mts",
+        "import": "./dist/common/index.mjs",
+        "default": "./dist/common/index.mjs"
+      },
       "./core-box": {
         "types": "./dist/core-box/index.d.mts",
         "import": "./dist/core-box/index.mjs",
         "default": "./dist/core-box/index.mjs"
       },
+      "./electron": {
+        "types": "./dist/electron/index.d.mts",
+        "import": "./dist/electron/index.mjs",
+        "default": "./dist/electron/index.mjs"
+      },
+      "./env": {
+        "types": "./dist/env/index.d.mts",
+        "import": "./dist/env/index.mjs",
+        "default": "./dist/env/index.mjs"
+      },
+      "./eventbus": {
+        "types": "./dist/eventbus/index.d.mts",
+        "import": "./dist/eventbus/index.mjs",
+        "default": "./dist/eventbus/index.mjs"
+      },
+      "./i18n": {
+        "types": "./dist/i18n/index.d.mts",
+        "import": "./dist/i18n/index.mjs",
+        "default": "./dist/i18n/index.mjs"
+      },
+      "./icons": {
+        "types": "./dist/icons/index.d.mts",
+        "import": "./dist/icons/index.mjs",
+        "default": "./dist/icons/index.mjs"
+      },
+      "./intelligence": {
+        "types": "./dist/intelligence/index.d.mts",
+        "import": "./dist/intelligence/index.mjs",
+        "default": "./dist/intelligence/index.mjs"
+      },
       "./network": {
         "types": "./dist/network/index.d.mts",
         "import": "./dist/network/index.mjs",
         "default": "./dist/network/index.mjs"
+      },
+      "./permission": {
+        "types": "./dist/permission/index.d.mts",
+        "import": "./dist/permission/index.mjs",
+        "default": "./dist/permission/index.mjs"
       },
       "./plugin": {
         "types": "./dist/plugin/index.d.mts",
@@ -147,15 +217,45 @@
         "import": "./dist/plugin/sdk/types.mjs",
         "default": "./dist/plugin/sdk/types.mjs"
       },
+      "./preload": {
+        "types": "./dist/preload/index.d.mts",
+        "import": "./dist/preload/index.mjs",
+        "default": "./dist/preload/index.mjs"
+      },
+      "./search": {
+        "types": "./dist/search/index.d.mts",
+        "import": "./dist/search/index.mjs",
+        "default": "./dist/search/index.mjs"
+      },
+      "./service": {
+        "types": "./dist/service/index.d.mts",
+        "import": "./dist/service/index.mjs",
+        "default": "./dist/service/index.mjs"
+      },
       "./service/protocol": {
         "types": "./dist/service/protocol/index.d.mts",
         "import": "./dist/service/protocol/index.mjs",
         "default": "./dist/service/protocol/index.mjs"
       },
+      "./store": {
+        "types": "./dist/store/index.d.mts",
+        "import": "./dist/store/index.mjs",
+        "default": "./dist/store/index.mjs"
+      },
+      "./transport": {
+        "types": "./dist/transport/index.d.mts",
+        "import": "./dist/transport/index.mjs",
+        "default": "./dist/transport/index.mjs"
+      },
       "./transport/events/types": {
         "types": "./dist/transport/events/types/index.d.mts",
         "import": "./dist/transport/events/types/index.mjs",
         "default": "./dist/transport/events/types/index.mjs"
+      },
+      "./types": {
+        "types": "./dist/types/index.d.mts",
+        "import": "./dist/types/index.mjs",
+        "default": "./dist/types/index.mjs"
       },
       "./package.json": "./package.json"
     }
