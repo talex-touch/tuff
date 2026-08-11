@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 
-use image::{DynamicImage, ImageFormat, Rgba, RgbaImage, imageops};
+use image::{DynamicImage, ImageFormat, ImageReader, Rgba, RgbaImage, imageops};
 use serde::Deserialize;
 use serde_json::Value;
 use tuff_native_core::{InputAttachment, ProtocolError};
@@ -84,6 +84,7 @@ pub fn compose_region(
         .collect();
     let mut used_attachments = HashSet::new();
     let mut decoded_sources = Vec::with_capacity(input.sources.len());
+    let mut working_set_bytes: u64 = 0;
     let mut output_scale = AxisScale::new(limits.min_output_scale(), limits.min_output_scale())
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
 
@@ -97,6 +98,24 @@ pub fn compose_region(
             &mut used_attachments,
             limits,
         )?;
+        // Budget the decoded bitmaps before allocating any of them. The header is read on its own
+        // because a PNG's compression ratio has no lower bound: `max_packet_attachment_bytes`
+        // bounds the *compressed* attachment, and `max_static_output_pixels` bounds only the final
+        // canvas, so neither one bounds what the decoder is about to allocate. Checking after the
+        // decode would just report a blow-up that already happened. Every other capture path
+        // budgets this (backend/xcap.rs, backend/macos/actor.rs, region_plan.rs); this one did not.
+        let (source_width, source_height) =
+            ImageReader::with_format(Cursor::new(&png_bytes), ImageFormat::Png)
+                .into_dimensions()
+                .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
+        working_set_bytes = u64::from(source_width)
+            .checked_mul(u64::from(source_height))
+            .and_then(|pixels| pixels.checked_mul(4))
+            .and_then(|bytes| working_set_bytes.checked_add(bytes))
+            .ok_or_else(|| ScreenshotError::OutputTooLarge.to_protocol_error())?;
+        if working_set_bytes > limits.max_static_working_set_bytes() {
+            return Err(ScreenshotError::OutputTooLarge.to_protocol_error());
+        }
         let image = image::load_from_memory_with_format(&png_bytes, ImageFormat::Png)
             .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?
             .into_rgba8();
@@ -319,9 +338,9 @@ fn blend_pixel(destination: &mut Rgba<u8>, source: Rgba<u8>) {
 mod tests {
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
     use serde_json::json;
-    use tuff_native_core::{AttachmentDescriptor, InputAttachment};
+    use tuff_native_core::{AttachmentDescriptor, InputAttachment, ProtocolError};
 
-    use super::compose_region;
+    use super::{ComposedCapture, compose_region};
     use crate::limits::ScreenshotLimits;
 
     fn png(color: [u8; 4], width: u32, height: u32) -> Vec<u8> {
@@ -397,6 +416,83 @@ mod tests {
             .unwrap()
             .into_rgba8();
         assert_eq!(image.get_pixel(1, 0).0, [0, 0, 0, 0]);
+    }
+
+    /// Two 2x2 sources, so the budget is crossed by the *sum* rather than by either one alone.
+    fn compose_two_small_sources(
+        limits: ScreenshotLimits,
+    ) -> Result<ComposedCapture, ProtocolError> {
+        let left = attachment("source:0", png([255, 0, 0, 255], 2, 2));
+        let right = attachment("source:1", png([0, 0, 255, 255], 2, 2));
+        compose_region(
+            json!({
+                "generation": "generation:test",
+                "rect": { "x": -1.0, "y": 0.0, "width": 2.0, "height": 1.0 },
+                "sources": [
+                    {
+                        "globalRect": { "x": -1.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                        "imageParts": [{ "attachmentId": "source:0", "offset": 0, "byteLength": left.data.len() }]
+                    },
+                    {
+                        "globalRect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                        "imageParts": [{ "attachmentId": "source:1", "offset": 0, "byteLength": right.data.len() }]
+                    }
+                ]
+            }),
+            vec![left, right],
+            limits,
+        )
+    }
+
+    /// 2 * (2 * 2 px * 4 bytes) = 32 bytes of decoded bitmap held at once.
+    const TWO_SMALL_SOURCES_BYTES: u64 = 32;
+
+    #[test]
+    fn rejects_sources_whose_decoded_bytes_exceed_the_working_set() {
+        let limits = ScreenshotLimits::default()
+            .with_static_working_set_bytes_for_test(TWO_SMALL_SOURCES_BYTES - 1);
+        let error = compose_two_small_sources(limits).unwrap_err();
+        assert_eq!(error.code, "SCREENSHOT_OUTPUT_TOO_LARGE");
+    }
+
+    #[test]
+    fn composes_when_the_working_set_budget_is_exactly_met() {
+        // The control for the test above: without it, an always-reject budget would look correct.
+        let limits = ScreenshotLimits::default()
+            .with_static_working_set_bytes_for_test(TWO_SMALL_SOURCES_BYTES);
+        let result = compose_two_small_sources(limits).unwrap();
+        assert_eq!((result.width, result.height), (4, 2));
+    }
+
+    #[test]
+    fn budgets_the_decoded_size_rather_than_the_compressed_attachment() {
+        // A solid 512x512 PNG compresses to a few hundred bytes and decodes to 1 MiB. This is the
+        // gap `max_packet_attachment_bytes` cannot close, and the reason the budget has to be
+        // spent against the decoded dimensions.
+        let source = attachment("source:0", png([7, 7, 7, 255], 512, 512));
+        let compressed = source.data.len() as u64;
+        let decoded = 512 * 512 * 4;
+        let limits = ScreenshotLimits::default().with_static_working_set_bytes_for_test(64 * 1024);
+        assert!(
+            compressed < limits.max_packet_attachment_bytes(),
+            "the attachment budget must be the one that lets this through: {compressed} bytes"
+        );
+        assert!(compressed < 64 * 1024 && decoded > 64 * 1024);
+
+        let error = compose_region(
+            json!({
+                "generation": "generation:test",
+                "rect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                "sources": [{
+                    "globalRect": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+                    "imageParts": [{ "attachmentId": "source:0", "offset": 0, "byteLength": source.data.len() }]
+                }]
+            }),
+            vec![source],
+            limits,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "SCREENSHOT_OUTPUT_TOO_LARGE");
     }
 
     #[test]
