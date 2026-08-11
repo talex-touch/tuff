@@ -58,7 +58,6 @@ for (const engine of SEARCH_ENGINES) {
 }
 
 let requestSequence = 0
-let activeSearch = null
 let browsersByToken = new Map()
 
 function normalizeText(value) {
@@ -492,7 +491,6 @@ function buildSearchItems(featureId, engine, query, suggestions, warning) {
 async function handleSearchFeature(featureId, engine, query, signal) {
   const sequence = nextRequest()
   const text = normalizeSearchText(query)
-  activeSearch = { featureId, engine }
   await publishItems(buildSearchItems(featureId, engine, text, [], ''), sequence)
   if (!text || signal?.aborted)
     return true
@@ -584,16 +582,9 @@ const pluginLifecycle = {
       const parsed = parseSearchQuery(getQueryText(query), settings)
       return handleSearchFeature(featureId, parsed.engine, parsed.query, signal)
     }
-    activeSearch = null
     if (featureId !== BROWSER_FEATURE_ID)
       return false
     return handleBrowserFeature(featureId, query)
-  },
-
-  async onInputChanged(input, signal) {
-    if (!activeSearch)
-      return false
-    return handleSearchFeature(activeSearch.featureId, activeSearch.engine, getQueryText(input), signal)
   },
 
   async onItemAction(item, context = {}) {
@@ -615,7 +606,6 @@ const pluginLifecycle = {
         return external({ status: result?.status || 'failed', reason: result?.reason || 'open-failed' })
       if (browser)
         await saveRecentBrowser(browser)
-      activeSearch = null
       return external({ status: 'completed' }, true)
     }
     catch (error) {
@@ -627,7 +617,6 @@ const pluginLifecycle = {
 
   async onDestroy() {
     requestSequence += 1
-    activeSearch = null
     browsersByToken.clear()
   },
 }
