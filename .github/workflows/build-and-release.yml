@@ -1039,9 +1039,26 @@ jobs:
           else
             # 手动触发：创建 draft release，使用时间戳作为临时标签
             # 标签会被 release action 自动创建，但因为是 draft，不会正式发布
+            #
+            # The tag has to be semver-shaped. The next step feeds it to
+            # resolve-update-rollback-version.mjs, which calls inferManifestChannel and throws on
+            # anything that is not MAJOR.MINOR.PATCH[-label.x] -- manual-build-<timestamp> is not,
+            # so every manual run died after the full three-platform build (#727).
+            #
+            # The label picks the channel, and only these work: snapshot/beta/alpha map to BETA,
+            # master maps to RELEASE; manual, release and rc all return null. The base version is
+            # used rather than the package version because inferManifestChannel reads the *first*
+            # prerelease identifier -- appending to 2.4.14-beta.2 keeps resolving to BETA even for
+            # a release-type build.
             TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
+            case "$RELEASE_TYPE" in
+              snapshot) CHANNEL_LABEL=snapshot ;;
+              beta) CHANNEL_LABEL=beta ;;
+              *) CHANNEL_LABEL=master ;;
+            esac
             echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-            echo "tag=manual-build-$TIMESTAMP" >> $GITHUB_OUTPUT
+            echo "tag=v${BASE_VERSION}-${CHANNEL_LABEL}.${TIMESTAMP}" >> $GITHUB_OUTPUT
             echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
             echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
             if [ "$RELEASE_TYPE" = "snapshot" ] || [ "$RELEASE_TYPE" = "beta" ]; then
