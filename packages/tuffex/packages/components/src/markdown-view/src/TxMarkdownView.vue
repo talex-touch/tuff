@@ -155,7 +155,6 @@ const resolvedTheme = computed<'light' | 'dark'>(() => {
 </template>
 
 <style lang="scss">
-@import './github-markdown.css';
 
 .tx-markdown-view {
   font-size: 14px;
