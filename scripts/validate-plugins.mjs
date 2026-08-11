@@ -100,6 +100,10 @@ function logOk(pluginName, message) {
 }
 
 // Discover plugin directories
+if (process.argv.includes('--self-test')) {
+  process.exit(selfTest() > 0 ? 1 : 0)
+}
+
 const entries = fs.readdirSync(pluginsDir, { withFileTypes: true })
 const pluginDirs = entries
   .filter(e => e.isDirectory())
@@ -111,7 +115,7 @@ console.log(`\nValidating ${pluginDirs.length} plugins in plugins/\n`)
 // feature.platform shape, search-provider migration -- applies per plugin, so an empty list
 // makes the run assert nothing while still printing success and exiting 0. A moved directory,
 // a bad path after a refactor, or a partial checkout all land here (#1586).
-if (pluginDirs.length === 0) {
+if (discoveryFoundNothing(pluginDirs)) {
   console.error('\x1B[31mNo plugin directories found in plugins/ — validation would pass without checking anything.\x1B[0m\n')
   process.exit(1)
 }
@@ -385,4 +389,74 @@ if (hasErrors) {
 }
 else {
   console.log('\x1B[32mAll plugins validated successfully.\x1B[0m\n')
+}
+
+/**
+ * Discovery returning nothing is not a pass (#1586). Pulled out of the call site so `--self-test`
+ * can reach it: the rule it encodes is exactly the one that cannot be observed from a normal run,
+ * because a validator that checked nothing looks identical to one where nothing was wrong.
+ */
+export function discoveryFoundNothing(pluginDirs) {
+  return !Array.isArray(pluginDirs) || pluginDirs.length === 0
+}
+
+/**
+ * Proves the detectors fire. Every case here is a manifest this script must reject; if a refactor
+ * makes one of them pass, CI says so instead of reporting a clean sweep over inputs it stopped
+ * reading. Mirrors the shape used by check-plugin-lint-coverage.mjs and check-action-pins.mjs.
+ */
+function selfTest() {
+  const cases = [
+    {
+      name: 'discovery finding nothing fails rather than reporting success',
+      run: () => discoveryFoundNothing([]),
+      expect: true,
+    },
+    {
+      name: 'discovery finding plugins does not fail',
+      run: () => discoveryFoundNothing(['touch-snipaste']),
+      expect: false,
+    },
+    {
+      name: 'a committed dev.enable is caught',
+      run: () => checkDevLeakage('probe', { enable: true, address: 'http://localhost:3333/' }, 'manifest.json'),
+      expect: true,
+    },
+    {
+      name: 'dev.enable false is allowed',
+      run: () => checkDevLeakage('probe', { enable: false }, 'manifest.json'),
+      expect: false,
+    },
+    {
+      name: 'the runtime addFeature platform shape is rejected in a manifest',
+      run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win: { enable: true, arch: [], os: [] } } }]),
+      expect: true,
+    },
+    {
+      name: 'a non-boolean manifest platform value is rejected',
+      run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win32: 'yes', darwin: false, linux: false } }]),
+      expect: true,
+    },
+    {
+      name: 'the manifest platform shape is accepted',
+      run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win32: true, darwin: false, linux: false } }]),
+      expect: false,
+    },
+  ]
+
+  let failures = 0
+  for (const testCase of cases) {
+    const actual = testCase.run()
+    if (actual === testCase.expect) {
+      console.log(`  \x1B[32m✓\x1B[0m ${testCase.name}`)
+    }
+    else {
+      console.error(`  \x1B[31m✗\x1B[0m ${testCase.name}: expected ${testCase.expect}, got ${actual}`)
+      failures += 1
+    }
+  }
+  console.log(failures === 0
+    ? '\n\x1B[32mvalidate-plugins self-test passed.\x1B[0m\n'
+    : `\n\x1B[31mvalidate-plugins self-test failed: ${failures} case(s).\x1B[0m\n`)
+  return failures
 }
