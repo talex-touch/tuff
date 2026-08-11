@@ -156,6 +156,36 @@ describe('unmapped API inventory', () => {
     expect(guard.getUnmappedApis()).toEqual([])
   })
 
+  it('requires a permission that is named directly, rather than waving it through', () => {
+    // `withPermission({ permissionId: 'system.shell' })` hands channel-guard a permission
+    // id, and channel-guard passes it straight to check() as the apiName. No entry in
+    // API_PERMISSION_MAPPINGS contains a dot, so this fell off the end and returned
+    // allowed:true — the terminal gate was open to any plugin (#915).
+    const result = guard.check(TEST_PLUGIN_ID, 'system.shell', SDK_VERSION)
+
+    expect(result.allowed).toBe(false)
+    expect(result.permissionId).toBe('system.shell')
+    expect(guard.getUnmappedApis()).toEqual([])
+  })
+
+  it('still allows a directly-named permission once it is declared and granted', async () => {
+    // The other half: turning the gate on must not deny a plugin that did everything right.
+    store.setDeclaredPermissions(TEST_PLUGIN_ID, {
+      required: ['network.internet'],
+      optional: []
+    })
+    await store.grant(TEST_PLUGIN_ID, 'network.internet', 'user')
+
+    expect(guard.check(TEST_PLUGIN_ID, 'network.internet', SDK_VERSION).allowed).toBe(true)
+  })
+
+  it('resolves an API name through the table even when a permission shares its stem', () => {
+    // `clipboard:read` (API) and `clipboard.read` (permission) both exist. The table has to
+    // win for the API form, or the fallback would quietly bypass the mapping layer.
+    expect(guard.getRequiredPermissions('clipboard:read')).toEqual(['clipboard.read'])
+    expect(guard.getRequiredPermissions('clipboard.read')).toEqual(['clipboard.read'])
+  })
+
   it('orders the inventory by frequency, so the flip starts with the common names', () => {
     guard.check(TEST_PLUGIN_ID, 'unmapped:rare', SDK_VERSION)
     guard.check(TEST_PLUGIN_ID, 'unmapped:common', SDK_VERSION)

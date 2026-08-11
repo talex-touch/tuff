@@ -164,11 +164,14 @@ export class PermissionGuard {
 
     if (requiredPermissions.length === 0) {
       // Unmapped names are allowed, which makes this an opt-in denylist keyed on a
-      // hand-maintained table rather than a default-deny gate (#915). Flipping the default
-      // needs an inventory of every name that legitimately reaches here — four call sites
-      // feed it, two of them with a caller-supplied string — and that inventory does not
-      // exist yet. Recording each one is how it gets built: an allow that leaves a trace is
-      // still a gap, but it is a countable gap rather than a silent one.
+      // hand-maintained table rather than a default-deny gate (#915). What still reaches
+      // here is a name that matches no API pattern AND is not a registered permission —
+      // i.e. one nothing in the permission model knows about at all. Every literal the
+      // main process passes today is one or the other, so this branch should be empty in
+      // practice; recording it is how a new one gets noticed.
+      //
+      // An allow that leaves a trace is still a gap, but it is a countable gap rather
+      // than a silent one.
       this.recordUnmappedApi(pluginId, apiName)
 
       const duration = performance.now() - startTime
@@ -325,6 +328,21 @@ export class PermissionGuard {
       if (this.matchPattern(pattern, apiName)) {
         return mapping.permissions.map((permissionId) => normalizePermissionId(permissionId))
       }
+    }
+
+    // Two vocabularies reach this function. `API_PERMISSION_MAPPINGS` is keyed on
+    // colon-separated *API names* (`clipboard:read`), but `withPermission` and
+    // `createProtectedRegister` name a dotted *permission id* directly
+    // (`system.shell`) — and channel-guard passes that straight through as the
+    // apiName. No pattern contains a dot, so every one of those fell off the end
+    // and was waved through: the terminal, network, plugin-window, localization
+    // and agent-execution gates were all allow-everything (#915).
+    //
+    // A name that is a registered permission is required as itself. There is no
+    // ambiguity to resolve — API names use colons and permission ids use dots.
+    const normalized = normalizePermissionId(apiName)
+    if (permissionRegistry.get(normalized)) {
+      return [normalized]
     }
 
     return []
