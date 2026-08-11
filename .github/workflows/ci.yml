@@ -171,6 +171,13 @@ jobs:
       - name: Production dependency audit
         run: pnpm check:prod-audit && pnpm check:prod-audit:self-test
 
+      # On darwin, app.getFileIcon(path, { size: 'large' }) is the unsupported path behind the
+      # SIGTRAP / EXC_BREAKPOINT reports in #310. canUseElectronFileIcon refuses it -- but a
+      # wrapper only protects the callers that use it, and #310's "no unsupported large icon path
+      # occurs" was verified once by hand on a real Mac. This makes it a fact about the tree.
+      - name: macOS file-icon guard
+        run: pnpm check:file-icon-guard && pnpm check:file-icon-guard:self-test
+
       # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
       # list, and touch-dictation was in neither (#562). The list is the kind that drifts
       # silently, so this asserts the two paths between them still cover every directory.
