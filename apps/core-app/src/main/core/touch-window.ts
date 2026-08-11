@@ -11,7 +11,11 @@ import { app, BrowserWindow, nativeTheme } from 'electron'
 import { IS_WINDOWS_11, MicaBrowserWindow, useMicaElectron, WIN10 } from 'talex-mica-electron'
 import { createLogger } from '../utils/logger'
 import { operationalErrorService } from '../modules/observability'
-import { shouldApplyMicaFallback } from './window-effects'
+import {
+  OPAQUE_WINDOW_ENV_VAR,
+  shouldApplyMicaFallback,
+  withOpaqueFallback
+} from './window-effects'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 
 const touchWindowLog = createLogger('TouchWindow')
@@ -35,7 +39,11 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
   private isMicaWindow: boolean = false
 
-  constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
+  constructor(rawOptions?: TalexTouch.TouchWindowConstructorOptions) {
+    // Every window in the app is built through here, so this is the one place the escape
+    // hatch has to be applied for it to mean anything (#806).
+    const options = withOpaqueFallback(rawOptions, process.env)
+
     if (isWindows) {
       try {
         // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
@@ -87,6 +95,15 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
       // Fallback for Windows if MicaBrowserWindow is not used
       this.window.setBackgroundMaterial('mica')
       touchWindowLog.debug('Apply MicaMaterial on window (fallback)')
+    } else if (process.platform === 'linux') {
+      // Linux has no equivalent effect to apply, and Electron exposes nothing to ask whether
+      // this session composites. Named rather than left as a fall-through so the next reader
+      // sees that the gap is known, and so the log says what to do when the window turns out
+      // to be black or invisible — which is not something you can fix from inside a window
+      // you cannot see (#806).
+      touchWindowLog.debug(
+        `No window effect on linux; set ${OPAQUE_WINDOW_ENV_VAR}=1 if transparent windows render black or invisible`
+      )
     }
 
     // Registered against webContents directly, not inside ready-to-show. That event fires only
