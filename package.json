@@ -47,6 +47,8 @@
     "release:notes:verify": "node scripts/release-notes-gateway.mjs verify",
     "plugins:validate": "tsx scripts/validate-plugin-package-policy.ts && node scripts/validate-plugins.mjs",
     "plugins:validate:self-test": "node scripts/validate-plugins.mjs --self-test",
+    "test:plugins": "node scripts/test-plugins.mjs",
+    "test:plugins:self-test": "node scripts/test-plugins.mjs --self-test",
     "plugins:release:audit": "tsx scripts/plugin-source-package-audit.ts",
     "publish:check": "node scripts/validate-publish-manifests.mjs",
     "publish:check:pack": "node scripts/validate-publish-manifests.mjs --pack",
