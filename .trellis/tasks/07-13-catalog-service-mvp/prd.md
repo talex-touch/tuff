@@ -33,7 +33,7 @@ The detailed EARS contract is `.spec-workflow/specs/catalog-service-mvp/requirem
 - [x] Nexus manifest/download requests use NetworkService and content-addressed paths; no update, invalid response, and download failure leave SQLite and active registry unchanged.
 - [x] Plugin SDK official resolve/search/collision checks follow the active registry dynamically while existing plugin overlays remain intact and isolated.
 - [x] Diagnostics report the required low-sensitive state and degraded baseline fallback.
-- [ ] Focused shared contract, SQLite lifecycle, remote flow, plugin integration, lint, and CoreApp node/web typechecks pass.
+- [x] Focused shared contract, SQLite lifecycle, remote flow, plugin integration, lint, and CoreApp node/web typechecks pass.
 - [ ] R8 PRD, execution plan, quality baseline, changelog, task artifacts, and developer documentation state the exact completed/open boundary.
 
 ## Risk / Approval Gate
