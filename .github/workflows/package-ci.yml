@@ -41,6 +41,11 @@ on:
         required: false
         type: string
         default: "pnpm test"
+      post-build-command:
+        description: "Package-specific checks to run after the build, e.g. audits that read dist/. Skipped when empty."
+        required: false
+        type: string
+        default: ""
       lint-command:
         description: "Custom lint command (default: pnpm lint)"
         required: false
@@ -96,6 +101,13 @@ jobs:
         if: ${{ inputs.run-build }}
         working-directory: ${{ inputs.package-path }}
         run: ${{ inputs.build-command }}
+
+      # After the build so an audit can read dist/, and before the artifact upload so a
+      # failure stops the run rather than publishing a dist nothing checked.
+      - name: Post-build checks
+        if: ${{ inputs.run-build && inputs.post-build-command != '' }}
+        working-directory: ${{ inputs.package-path }}
+        run: ${{ inputs.post-build-command }}
 
       - name: Upload Build Artifacts
         if: ${{ inputs.run-build }}
