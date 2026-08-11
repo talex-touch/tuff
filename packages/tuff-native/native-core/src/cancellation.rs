@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use tokio::sync::Notify;
 
@@ -11,9 +11,13 @@ const REASON_CONSUMER_CLOSED: u8 = 2;
 const REASON_DEADLINE: u8 = 3;
 const REASON_DISPOSE: u8 = 4;
 
+/// State and reason in one atomic.
+///
+/// They used to be an `AtomicBool` plus an `AtomicU8`, set in that order, so a reader could observe
+/// `cancelled == true` while `reason` was still `REASON_NONE` — and `reason()` maps that to `None`,
+/// which reads as "not cancelled". One cell cannot be half-written (#840).
 #[derive(Debug)]
 struct CancellationState {
-    cancelled: AtomicBool,
     reason: AtomicU8,
     notify: Notify,
 }
@@ -33,46 +37,57 @@ impl CancellationToken {
     pub fn new() -> Self {
         Self {
             state: Arc::new(CancellationState {
-                cancelled: AtomicBool::new(false),
                 reason: AtomicU8::new(REASON_NONE),
                 notify: Notify::new(),
             }),
         }
     }
 
+    /// Elects one winner and publishes its reason in the same store.
     pub fn cancel(&self, reason: CancelReason) -> bool {
         if self
             .state
-            .cancelled
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .reason
+            .compare_exchange(
+                REASON_NONE,
+                reason_to_u8(reason),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
             .is_err()
         {
             return false;
         }
-        self.state
-            .reason
-            .store(reason_to_u8(reason), Ordering::Release);
         self.state.notify.notify_waiters();
         true
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.state.cancelled.load(Ordering::Acquire)
+        self.state.reason.load(Ordering::Acquire) != REASON_NONE
     }
 
     pub fn reason(&self) -> Option<CancelReason> {
-        if !self.is_cancelled() {
-            return None;
-        }
         u8_to_reason(self.state.reason.load(Ordering::Acquire))
     }
 
+    /// Resolves once cancelled, including when the cancel lands mid-registration.
+    ///
+    /// The `Notified` is created and `enable()`d *before* the state is read. `notify_waiters()`
+    /// only wakes futures already registered, and `cancel()` fires exactly once, so the previous
+    /// order — read, then register — dropped any cancel landing in that window and parked the
+    /// waiter forever. An idle `frames` stream torn down by `begin_dispose` never terminated, and
+    /// `finish_dispose` returned NATIVE_DISPOSE_TIMEOUT with the entry left in the runtime (#840).
     pub async fn cancelled(&self) -> CancelReason {
         loop {
+            let notified = self.state.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
             if let Some(reason) = self.reason() {
                 return reason;
             }
-            self.state.notify.notified().await;
+
+            notified.await;
         }
     }
 }
@@ -113,5 +128,96 @@ mod tests {
             CancelReason::Deadline
         );
         assert_eq!(token.reason(), Some(CancelReason::Deadline));
+    }
+
+    /// A cancel delivered to an already-waiting task completes it.
+    ///
+    /// **This does not reproduce the race in #840, and is not claimed to.** That window is the few
+    /// instructions between reading the reason and registering the waker; I ran this at 2,000
+    /// iterations against the unfixed order and it passed every time, so shipping it as a
+    /// regression guard would have been a test that cannot fail.
+    ///
+    /// What establishes the fix is structural: `notified()` is created and enabled *before* the
+    /// state is read, so `notify_waiters()` either wakes a future that is already registered, or
+    /// the read that follows observes the reason. Neither order can drop the wakeup. Under the
+    /// previous order a cancel landing in that window was lost, and because `cancel()` fires
+    /// exactly once the waiter parked forever — an idle `frames` stream torn down by
+    /// `begin_dispose` never terminated and `finish_dispose` returned NATIVE_DISPOSE_TIMEOUT.
+    ///
+    /// Proving the absence of that interleaving needs `loom`, which is a dependency decision rather
+    /// than something to add alongside a fix.
+    ///
+    /// What this *does* cover is the ordinary path, with a timeout so a regression that parks the
+    /// waiter fails the suite instead of hanging it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn cancel_wakes_a_task_already_waiting() {
+        for _ in 0..256 {
+            let token = CancellationToken::new();
+            let waiter = token.clone();
+            let task = tokio::spawn(async move { waiter.cancelled().await });
+            tokio::task::yield_now().await;
+            token.cancel(CancelReason::Dispose);
+
+            let reason = tokio::time::timeout(std::time::Duration::from_secs(5), task)
+                .await
+                .expect("waiter must not park after a cancel")
+                .expect("waiter completes");
+            assert_eq!(reason, CancelReason::Dispose);
+        }
+    }
+
+    /// A cancelled token always reports a reason.
+    ///
+    /// `cancelled` and `reason` used to be two atomics written in that order, so a reader could
+    /// catch `is_cancelled() == true` with `reason == REASON_NONE` — which `reason()` maps to
+    /// `None`, i.e. indistinguishable from "not cancelled". They are one cell now, so the pair
+    /// cannot be observed half-written.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn cancelled_state_and_reason_are_never_observed_apart() {
+        for _ in 0..2_000 {
+            let token = CancellationToken::new();
+            let reader = token.clone();
+            let observer = tokio::spawn(async move {
+                loop {
+                    if reader.is_cancelled() {
+                        return reader.reason();
+                    }
+                    tokio::task::yield_now().await;
+                }
+            });
+
+            token.cancel(CancelReason::Caller);
+            assert_eq!(
+                observer.await.expect("observer completes"),
+                Some(CancelReason::Caller),
+                "is_cancelled() was true while reason() said None",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_waiter_starting_after_cancel_returns_immediately() {
+        // Positive control for the two races above: they are also satisfied by a token that
+        // resolves `cancelled()` unconditionally.
+        let token = CancellationToken::new();
+        assert!(token.cancel(CancelReason::ConsumerClosed));
+
+        assert_eq!(token.cancelled().await, CancelReason::ConsumerClosed);
+        assert!(token.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn an_uncancelled_token_does_not_resolve() {
+        // The other half of that control: `cancelled()` must actually wait.
+        let token = CancellationToken::new();
+        let waiter = token.clone();
+        let task = tokio::spawn(async move { waiter.cancelled().await });
+
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), task)
+                .await
+                .is_err(),
+            "cancelled() resolved without a cancel",
+        );
     }
 }
