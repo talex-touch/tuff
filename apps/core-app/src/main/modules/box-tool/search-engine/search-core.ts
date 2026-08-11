@@ -36,7 +36,7 @@ import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
 import { OnboardingGateError, onboardingGate } from '../../storage'
-import { appProvider } from '../addon/apps/app-provider'
+import { appProvider, setAppExecutionRecorder } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
@@ -2199,4 +2199,12 @@ export class SearchEngineCore
   }
 }
 
-export default SearchEngineCore.getInstance()
+const searchEngineCore = SearchEngineCore.getInstance()
+
+// app-provider used to import this module to report a launch, which closed a module-scope cycle
+// between the two (#712). The dependency is registered from this side instead, so app-provider
+// no longer needs to know search-core exists. Registered synchronously at module evaluation:
+// the recorder must run before the launch it precedes, not a microtask later.
+setAppExecutionRecorder((sessionId, item) => searchEngineCore.recordExecute(sessionId, item))
+
+export default searchEngineCore
