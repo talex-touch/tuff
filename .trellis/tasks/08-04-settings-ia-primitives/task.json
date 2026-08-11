@@ -22,5 +22,9 @@
   "parent": "08-03-app-shell-ai-redesign",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Run the visual acceptance against the boards - SettingRow padding [12,16], gap 16, title 13.5, description 12 at line-height 1.5; IdentityCard padding 16, gap 18, radius-lg, $bg with a 1px $border. Also settle two source-level points: the categories table has 11 entries where the criterion says 9, and AC6 names an AppMark component that does not exist under that name - so either the criteria or the code has moved since they were written.",
+    "blocker": "A running app, for the board measurements and the light/dark pass.",
+    "evidence": "Checked from source 2026-08-11. AC1 met in shape: one route per category driven by categories.ts, and /setting redirects to DEFAULT_SETTING_PATH, which is /setting/overview. AC2 met: LEGACY_SECTION_REDIRECTS maps the old ?section= links, with everything pointing at /setting/file-index. AC9: settings modules and views 122 passed / 21 files, including categories.smoke.test.ts. SettingRow and IdentityCard both exist; AppMark does not."
+  }
 }
