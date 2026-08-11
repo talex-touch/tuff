@@ -145,7 +145,7 @@ export class VoiceService {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
 
-    const { sessionId } = nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
+    const { sessionId } = await nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
     const cancelCapture = (): void => {
       try {
         nativeAudio.cancelCapture(sessionId)
@@ -254,10 +254,15 @@ export class VoiceService {
     }
   }
 
-  /** Begins a toggle-controlled capture (global hotkey). Returns the native session id. */
-  beginCapture(): string {
+  /**
+   * Begins a toggle-controlled capture (global hotkey). Resolves to the native session id.
+   *
+   * Async since #841: opening the input stream is what takes the time, and it used to take it on
+   * the main thread -- the global hotkey froze the app while CoreAudio came up.
+   */
+  async beginCapture(): Promise<string> {
     this.assertSupported()
-    const { sessionId } = nativeAudio.startCapture({
+    const { sessionId } = await nativeAudio.startCapture({
       maxDurationMs: TOGGLE_MAX_DURATION_MS,
       silenceStopMs: TOGGLE_SILENCE_STOP_MS
     })
@@ -361,7 +366,7 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
-    const { sessionId } = nativeAudio.startCapture({
+    const { sessionId } = await nativeAudio.startCapture({
       maxDurationMs: DEFAULT_MAX_DURATION_MS,
       silenceStopMs: DEFAULT_SILENCE_STOP_MS
     })
@@ -406,7 +411,7 @@ export class VoiceService {
     const snapshotCapture = getSnapshotCapture()
     const pollCapture = getPollCapture()
 
-    const { sessionId } = nativeAudio.startCapture({
+    const { sessionId } = await nativeAudio.startCapture({
       maxDurationMs: DEFAULT_MAX_DURATION_MS,
       silenceStopMs: DEFAULT_SILENCE_STOP_MS
     })

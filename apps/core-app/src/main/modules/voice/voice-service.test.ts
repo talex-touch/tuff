@@ -36,6 +36,9 @@ import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domai
 import { VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
+// Resolved rather than plain values: `startCapture` is async since #841, and a mock returning a
+// bare object lets a dropped `await` keep passing -- `const { sessionId } = promise` would just
+// hand every downstream call an undefined id.
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
 const pollCapture = nativeAudio.pollCapture as unknown as ReturnType<typeof vi.fn>
 const snapshotCapture = nativeAudio.snapshotCapture as unknown as ReturnType<typeof vi.fn>
@@ -59,7 +62,7 @@ describe('VoiceService.dictate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     support.mockReturnValue({ supported: true, platform: 'darwin' })
-    startCapture.mockReturnValue({ sessionId: 's1' })
+    startCapture.mockResolvedValue({ sessionId: 's1' })
     pollCapture.mockReturnValue({ active: false, durationMs: 1200, stoppedReason: 'silence' })
     stopCapture.mockReturnValue({
       audio: wav(),
@@ -171,7 +174,7 @@ describe('VoiceService.streamDictation', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     support.mockReturnValue({ supported: true, platform: 'darwin' })
-    startCapture.mockReturnValue({ sessionId: 's1' })
+    startCapture.mockResolvedValue({ sessionId: 's1' })
     snapshotCapture.mockReturnValue({ audio: wav(), durationMs: 1000 })
     stopCapture.mockReturnValue({
       audio: wav(),
@@ -379,7 +382,7 @@ describe('VoiceService toggle capture', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     support.mockReturnValue({ supported: true, platform: 'darwin' })
-    startCapture.mockReturnValue({ sessionId: 't1' })
+    startCapture.mockResolvedValue({ sessionId: 't1' })
     stopCapture.mockReturnValue({
       audio: wav(),
       format: 'wav',
@@ -390,8 +393,8 @@ describe('VoiceService toggle capture', () => {
     })
   })
 
-  it('beginCapture starts native capture and returns a session id', () => {
-    const id = new VoiceService().beginCapture()
+  it('beginCapture starts native capture and returns a session id', async () => {
+    const id = await new VoiceService().beginCapture()
     expect(id).toBe('t1')
     expect(startCapture).toHaveBeenCalledTimes(1)
   })
