@@ -22,5 +22,9 @@
   "parent": "08-03-app-shell-ai-redesign",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Reconcile with 08-04-settings-ia-primitives, which is in progress and already carries the route table and row primitives. This task narrowed its scope on 2026-08-05 by user confirmation, so what is left of it may already be covered there.",
+    "blocker": "None recorded.",
+    "evidence": "design.md exists, and the prd opens with a scope reduction dated 2026-08-05 marked as user confirmed - so the narrowing is a decision on record rather than drift."
+  }
 }
