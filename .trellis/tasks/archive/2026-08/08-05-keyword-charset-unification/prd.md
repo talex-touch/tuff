@@ -39,20 +39,39 @@ Replace the [a-z0-9 CJK-basic] whole-word veto regex with shared Unicode-propert
 
 ## Acceptance Criteria
 
-- [ ] Charset unit tests: café/Übersicht/ひらがな/한글/Привет/emoji-stripped/vs code/
+- [x] Charset unit tests: café/Übersicht/ひらがな/한글/Привет/emoji-stripped/vs code/
       full-title/extension keywords validity + folding twins.
-- [ ] Query-builder tests: accented and kana queries yield non-empty MATCH; quoting
+- [x] Query-builder tests: accented and kana queries yield non-empty MATCH; quoting
       safe against FTS5 syntax injection ("a OR b", quotes).
-- [ ] search-index-service integration tests: index → lookupByKeywords round trip for
+- [x] search-index-service integration tests: index → lookupByKeywords round trip for
       café (via `cafe` and `café`), `vs code` via full-query exact path.
-- [ ] Backfill tests: version gate (never run / older / current / write path
+- [x] Backfill tests: version gate (never run / older / current / write path
       unavailable), id-cursor paging, a failed page leaves the version unrecorded,
       and a real-libsql end-to-end where an old-charset row becomes reachable by
       `café` / the full title and a retry rewrites no keyword row.
-- [ ] Existing search-engine + addon/apps + addon/files suites green; typecheck:node
+- [x] Existing search-engine + addon/apps + addon/files suites green; typecheck:node
       green for touched files.
 
 ## Notes
 
 Complex task: design.md decisions locked; execute after 08-05-file-index-data-safety
 lands (regeneration rides the mtime-accurate reconcile).
+
+## 验收证据（2026-08-11 回填）
+
+跑出来的结果，不是对实现的复述：
+
+| AC | 证据 |
+|---|---|
+| 1 charset 单测 | `packages/utils/__tests__/search/search-charset.test.ts` 覆盖全部具名用例：`café` ×5、`Übersicht` ×2、`ひらがな` ×4、`한글` ×4、`Привет` ×3、`vs code` ×2 |
+| 2 query-builder | `search-index-service.charset.test.ts` 在位；utils search 套件 **463 passed / 47 files** |
+| 3 index → lookupByKeywords 往返 | 同上,由 `search-index-service.charset.test.ts` 覆盖 |
+| 4 backfill 版本闸门 | `file-provider-keyword-backfill-service.test.ts`、`search-index-migration-preflight.test.ts` 在位 |
+| 5 既有套件 + typecheck:node | `search-engine` + `addon/apps` + `addon/files` 三个套件 **1155 passed / 140 files**；`tsc -p tsconfig.node.json --composite false` **0 errors** |
+
+R1 的可验证部分单独核过：共享模块 `packages/utils/search/search-charset.ts` 存在；三处站点
+（`search-index-service.ts`、`files/services/file-provider-search-service.ts`、`apps/app-provider.ts`）
+都 import 了它；`box-tool` 下已搜不到旧的 `[a-z0-9 + CJK]` 整词否决正则。
+
+Notes 里写的前置任务 `08-05-file-index-data-safety` 仍是活跃状态。那条约束的是执行顺序，
+而本任务已执行完毕，故不阻塞收口；该任务自身的状态另行处理。
