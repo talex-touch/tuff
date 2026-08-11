@@ -134,6 +134,23 @@ impl ScreenshotLimits {
         self
     }
 
+    /// Raises the hit-test candidate ceiling above the default, so a test can tell a
+    /// configured limit apart from the hardcoded one.
+    #[cfg(test)]
+    pub(crate) fn with_window_candidates_for_test(mut self, max_candidates: usize) -> Self {
+        assert!(max_candidates > 0);
+        self.max_window_candidates = max_candidates;
+        self
+    }
+
+    /// Tightens the bundle id ceiling below the default, for the same reason.
+    #[cfg(test)]
+    pub(crate) fn with_bundle_id_bytes_for_test(mut self, max_bytes: usize) -> Self {
+        assert!(max_bytes > 0);
+        self.max_bundle_id_bytes = max_bytes;
+        self
+    }
+
     pub fn public(self) -> ScreenshotLimitsPublic {
         ScreenshotLimitsPublic {
             max_displays: self.max_displays,
