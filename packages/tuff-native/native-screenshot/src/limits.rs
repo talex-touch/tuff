@@ -126,6 +126,14 @@ impl ScreenshotLimits {
         self
     }
 
+    /// Lets a test squeeze the working-set budget instead of allocating the real 512 MiB.
+    #[cfg(test)]
+    pub(crate) fn with_static_working_set_bytes_for_test(mut self, max_bytes: u64) -> Self {
+        assert!(max_bytes > 0);
+        self.max_static_working_set_bytes = max_bytes;
+        self
+    }
+
     pub fn public(self) -> ScreenshotLimitsPublic {
         ScreenshotLimitsPublic {
             max_displays: self.max_displays,
