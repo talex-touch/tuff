@@ -51,6 +51,8 @@
     "test:plugins:self-test": "node scripts/test-plugins.mjs --self-test",
     "check:prod-audit": "node scripts/check-prod-audit.mjs",
     "check:prod-audit:self-test": "node scripts/check-prod-audit.mjs --self-test",
+    "check:file-icon-guard": "node scripts/check-file-icon-guard.mjs",
+    "check:file-icon-guard:self-test": "node scripts/check-file-icon-guard.mjs --self-test",
     "plugins:release:audit": "tsx scripts/plugin-source-package-audit.ts",
     "publish:check": "node scripts/validate-publish-manifests.mjs",
     "publish:check:pack": "node scripts/validate-publish-manifests.mjs --pack",
