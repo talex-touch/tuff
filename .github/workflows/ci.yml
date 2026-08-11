@@ -346,15 +346,27 @@ jobs:
         if: ${{ matrix.app == 'nexus' }}
         run: pnpm -C packages/tuffex build
 
-      # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, which only
-      # electron-vite build produces and this job does not run. Their guard refuses to skip
-      # silently and fails instead, which is right -- but it was the last thing standing between
-      # this suite and a zero baseline. Skipping is declared here rather than discovered, and it
-      # costs no coverage: those six cases report `skipped` with or without this (#1596).
-      # Building the worker here would actually run them; that is the open half of #1596.
+      # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, and only
+      # electron-vite build produces it: the worker is a rollup input in the main-process build
+      # and the CLI has --rendererOnly but no --mainOnly, so this is the whole build. Their guard
+      # refuses to skip silently, so until now the job declared the skip and six sandbox cases
+      # had never run in CI (#1596, #1607).
+      #
+      # Main process only, via a config that takes `main` straight from electron.vite.config.ts
+      # -- derived rather than restated, so the two cannot drift. A full `electron-vite build`
+      # also does the renderer, which is what pulls in tuffex's dist and most of the time: 58s
+      # plus a 29s tuffex build on this runner, against 6s locally for main alone. Nothing here
+      # needs the renderer.
+      #
+      # The whole out/main is needed, not the one file -- the worker is code-split and loads
+      # siblings from out/main/chunks (50 of them). Copying only plugin-sqlite-worker.js fails
+      # all six with `Cannot find module './chunks/plugin-sqlite-worker-protocol-*.js'`, which
+      # reads exactly like a real defect.
+      - name: Build core-app main process
+        if: ${{ matrix.app == 'core-app' }}
+        run: pnpm -C apps/core-app exec electron-vite build -c electron.vite.ci-main.config.ts
+
       - name: Run ${{ matrix.app }} suite
-        env:
-          TUFF_SKIP_SQLITE_WORKER_TESTS: '1'
         run: >-
           pnpm -C "apps/${{ matrix.app }}" exec vitest run
           --reporter=default
