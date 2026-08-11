@@ -14,7 +14,8 @@ use crate::compose::{ComposedCapture, compose_region};
 use crate::error::ScreenshotError;
 use crate::limits::ScreenshotLimits;
 use crate::model::{
-    FramesInput, PixelSize, ScreenshotProbeResult, ScreenshotRequest, decode_screenshot_request,
+    ContentSnapshot, FramesInput, PixelSize, ScreenshotProbeResult, ScreenshotRequest,
+    decode_screenshot_request,
 };
 use crate::region_plan::{AttachmentChunkLimits, plan_attachment_chunks};
 
@@ -126,7 +127,8 @@ impl ScreenshotCapability {
                 })
             }
             ScreenshotRequest::Refresh(input) => {
-                serialize_output(self.backend.refresh(input, cancellation).await?)
+                let snapshot = self.backend.refresh(input, cancellation).await?;
+                refresh_output(snapshot)
             }
             ScreenshotRequest::HitTest(input) => {
                 serialize_output(self.backend.hit_test(input, cancellation).await?)
@@ -430,6 +432,22 @@ fn split_attachments(
     Ok(SplitAttachments { parts, attachments })
 }
 
+/// Serializes a snapshot and reports the windows the backend had to drop.
+///
+/// Rides `RunMeta.counters`, alongside the existing `dropped-source-frames`, so the diagnostic
+/// reaches the caller without a new protocol concept. Absent when nothing was dropped, since
+/// `counters` is skipped when empty (#853).
+fn refresh_output(snapshot: ContentSnapshot) -> Result<OperationOutput, ProtocolError> {
+    let dropped_windows = snapshot.dropped_windows;
+    let mut output = serialize_output(snapshot)?;
+    if dropped_windows > 0 {
+        output
+            .counters
+            .insert("dropped-windows".to_string(), dropped_windows);
+    }
+    Ok(output)
+}
+
 fn serialize_output<T>(value: T) -> Result<OperationOutput, ProtocolError>
 where
     T: Serialize,
@@ -470,5 +488,65 @@ impl Drop for FrameSourceGuard {
         if self.armed {
             self.source.request_stop();
         }
+    }
+}
+
+#[cfg(test)]
+mod refresh_counter_tests {
+    use super::*;
+    use crate::model::{AccessibilityStatus, CoordinateSpace, DescriptorId};
+
+    fn snapshot(dropped_windows: u64) -> ContentSnapshot {
+        ContentSnapshot {
+            dropped_windows,
+            generation: DescriptorId::new("generation:test").unwrap(),
+            coordinate_space: CoordinateSpace::GlobalDipV1,
+            captured_at_unix_ms: 0,
+            displays: Vec::new(),
+            windows: Vec::new(),
+            accessibility: AccessibilityStatus::Unknown,
+        }
+    }
+
+    /// A window the backend had to drop is reported, not just missing.
+    ///
+    /// `GlobalDipRect::new` rejects a non-positive dimension, so a window mid-creation or fully
+    /// collapsed disappears from the snapshot. It then cannot be hit-tested, and a later capture
+    /// targeting it fails with SCREENSHOT_WINDOW_NOT_FOUND — previously with nothing anywhere
+    /// explaining why, because the error was discarded at the `filter_map` (#853).
+    #[test]
+    fn dropped_windows_are_reported_through_run_counters() {
+        let output = refresh_output(snapshot(3)).expect("refresh output");
+
+        assert_eq!(output.counters.get("dropped-windows"), Some(&3));
+    }
+
+    /// Absent rather than zero, so an ordinary refresh carries no counters at all.
+    ///
+    /// `RunMeta.counters` is skipped when empty, and a `dropped-windows: 0` on every refresh would
+    /// turn that into noise — and make a real drop harder to notice, which is the whole point.
+    #[test]
+    fn an_ordinary_refresh_reports_no_counter() {
+        let output = refresh_output(snapshot(0)).expect("refresh output");
+
+        assert!(
+            output.counters.is_empty(),
+            "a refresh that dropped nothing should carry no counters",
+        );
+    }
+
+    /// The diagnostic must not leak into the snapshot payload.
+    ///
+    /// It is a property of the refresh, not of the content, and the payload is the serialized
+    /// protocol surface — adding a field there would be a protocol change rather than a
+    /// diagnostic.
+    #[test]
+    fn the_counter_is_not_serialized_into_the_payload() {
+        let output = refresh_output(snapshot(3)).expect("refresh output");
+
+        assert!(
+            !output.payload.to_string().contains("droppedWindows"),
+            "the diagnostic leaked into the serialized snapshot",
+        );
     }
 }

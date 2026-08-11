@@ -446,13 +446,22 @@ impl ActorState {
             self.limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
+        // Counted rather than only discarded. GlobalDipRect::new rejects any non-positive
+        // dimension, so a window mid-creation or fully collapsed vanishes here -- it never reaches
+        // the snapshot, hit_test cannot return it, and a later capture fails with
+        // SCREENSHOT_WINDOW_NOT_FOUND with nothing explaining why (#853).
+        let mut dropped_windows: u64 = 0;
         let shareable_windows = system_windows
             .iter()
-            .filter_map(|window| shareable_window(window, generation_number, self.limits).ok())
+            .filter_map(|window| {
+                shareable_window(window, generation_number, self.limits)
+                    .inspect_err(|_| dropped_windows += 1)
+                    .ok()
+            })
             .collect::<Vec<_>>();
         let cg_windows = cg_windows
             .iter()
-            .filter_map(|window| cg_window(window).ok())
+            .filter_map(|window| cg_window(window).inspect_err(|_| dropped_windows += 1).ok())
             .collect::<Vec<_>>();
         let windows = build_window_descriptors(
             shareable_windows,
@@ -463,6 +472,7 @@ impl ActorState {
         let snapshot_windows = windows.iter().map(snapshot_window).collect::<Vec<_>>();
         ensure_active(cancellation)?;
         let snapshot = ContentSnapshot {
+            dropped_windows,
             generation: generation.clone(),
             coordinate_space: CoordinateSpace::GlobalDipV1,
             captured_at_unix_ms: unix_time_ms()?,
@@ -1451,6 +1461,7 @@ mod tests {
         let generation = DescriptorId::new(id).unwrap();
         GenerationState {
             snapshot: ContentSnapshot {
+                dropped_windows: 0,
                 generation: generation.clone(),
                 coordinate_space: CoordinateSpace::GlobalDipV1,
                 captured_at_unix_ms: 1,

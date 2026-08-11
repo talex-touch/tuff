@@ -121,6 +121,7 @@ impl<S: XcapSource> XcapBackend<S> {
             descriptors.push(descriptor);
         }
         let snapshot = ContentSnapshot {
+            dropped_windows: 0,
             generation: generation.clone(),
             coordinate_space: CoordinateSpace::GlobalDipV1,
             captured_at_unix_ms: unix_time_ms(),
