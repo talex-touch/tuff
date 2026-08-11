@@ -1132,6 +1132,9 @@ importers:
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../utils
+      '@vue/reactivity':
+        specifier: ^3.5.27
+        version: 3.5.39
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.39(typescript@5.9.3))
