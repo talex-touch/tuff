@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,12 +34,29 @@ async function runPnpm(args, cwd) {
 
 const workspace = await mkdtemp(join(tmpdir(), 'tuffex-types-'))
 
+// Install the tarball, not the source directory.
+//
+// `file:${root}` made pnpm read the raw package.json, workspace protocol and all, so the
+// install died on `@talex-touch/utils@workspace:^` -- unresolvable outside the monorepo.
+// That specifier was added after this script was written, which is when the audit stopped
+// running; nothing in CI ran it, so nothing said so (#1555). `pnpm pack` rewrites workspace
+// specifiers to the versions a published consumer resolves, which is also what this audit
+// is supposed to be checking.
+await runPnpm(['pack', '--pack-destination', workspace], root)
+const packed = (await readdir(workspace)).filter(entry => entry.endsWith('.tgz'))
+if (packed.length !== 1) {
+  throw new Error(
+    `[audit-package-types] expected exactly one tarball in the scratch workspace, found ${packed.length}`,
+  )
+}
+const tarball = join(workspace, packed[0])
+
 await writeFile(
   join(workspace, 'package.json'),
   JSON.stringify({
     type: 'module',
     dependencies: {
-      '@talex-touch/tuffex': `file:${root}`,
+      '@talex-touch/tuffex': `file:${tarball}`,
       typescript: '^5.9.3',
       vue: '^3.5.33',
     },
