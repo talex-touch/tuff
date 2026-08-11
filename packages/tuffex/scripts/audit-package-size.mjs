@@ -417,6 +417,10 @@ async function auditDistSizes(errors) {
 
 const errors = []
 
+if (process.argv.includes('--self-test')) {
+  process.exit(selfTest() > 0 ? 1 : 0)
+}
+
 await auditDistSizes(errors)
 await auditOnDemandImports(errors)
 await auditRootImports(errors)
@@ -431,3 +435,88 @@ if (errors.length > 0) {
 }
 
 console.log('[audit-package-size] package size and Core App root import budgets are within limits')
+
+/**
+ * Proves the two functions the on-demand budget rests on still discriminate.
+ *
+ * `collectRuntimeSpecifiers` is a regex over emitted JS: if a change in output shape stops it
+ * matching, every on-demand entry reports an empty import graph and the budget passes over
+ * nothing. `resolveRuntimeSpecifier` decides what counts as an in-package runtime edge, so an
+ * over-eager filter has the same effect. Neither failure is visible from a green run (#1589).
+ */
+function selfTest() {
+  const inDist = file => `${distEs}/${file}`
+  const cases = [
+    {
+      name: 'a default import is collected',
+      run: () => collectRuntimeSpecifiers("import a from './a'"),
+      expect: './a',
+    },
+    {
+      name: 'a side-effect import is collected',
+      run: () => collectRuntimeSpecifiers("import './a.css'"),
+      expect: './a.css',
+    },
+    {
+      name: 'a re-export is collected',
+      run: () => collectRuntimeSpecifiers("export * from './b/index'"),
+      expect: './b/index',
+    },
+    {
+      name: 'a named re-export is collected',
+      run: () => collectRuntimeSpecifiers("export { x } from './c'"),
+      expect: './c',
+    },
+    {
+      name: 'several specifiers are all collected',
+      run: () => collectRuntimeSpecifiers("import a from './a'\nexport * from './b'\n"),
+      expect: './a,./b',
+    },
+    {
+      name: 'source with no imports collects nothing',
+      run: () => collectRuntimeSpecifiers('const x = 1'),
+      expect: '',
+    },
+    {
+      name: 'a relative sibling resolves to an in-package edge',
+      run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), './style') ?? 'null'],
+      expect: `${distEs}/button/style`,
+    },
+    {
+      name: 'a bare specifier is not an in-package edge',
+      run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), 'vue') ?? 'null'],
+      expect: 'null',
+    },
+    {
+      name: 'a css specifier is not a runtime edge',
+      run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), './style.css') ?? 'null'],
+      expect: 'null',
+    },
+    {
+      name: 'an edge leaving dist/es is not followed',
+      run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), '../../../outside') ?? 'null'],
+      expect: 'null',
+    },
+    {
+      name: 'a node_modules edge is not followed',
+      run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), './node_modules/x') ?? 'null'],
+      expect: 'null',
+    },
+  ]
+
+  let failures = 0
+  for (const testCase of cases) {
+    const actual = testCase.run().join(',')
+    if (actual === testCase.expect) {
+      console.log(`  \u001B[32m\u2713\u001B[0m ${testCase.name}`)
+    }
+    else {
+      console.error(`  \u001B[31m\u2717\u001B[0m ${testCase.name}: expected ${JSON.stringify(testCase.expect)}, got ${JSON.stringify(actual)}`)
+      failures += 1
+    }
+  }
+  console.log(failures === 0
+    ? '\naudit-package-size self-test passed.\n'
+    : `\naudit-package-size self-test failed: ${failures} case(s).\n`)
+  return failures
+}
