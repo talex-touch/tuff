@@ -54,6 +54,7 @@
     "test": "vitest run",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "audit:exports": "node ./scripts/audit-package-exports.mjs",
+    "audit:exports:self-test": "node ./scripts/audit-package-exports.mjs --self-test",
     "audit:types": "node ./scripts/audit-package-types.mjs",
     "audit:readme": "node ./scripts/audit-readme-inventory.mjs",
     "audit:readme:self-test": "node ./scripts/audit-readme-inventory.mjs --self-test",
