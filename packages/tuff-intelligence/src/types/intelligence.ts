@@ -10,8 +10,10 @@
  * direction is settled and there is no second declaration left to drift.
  */
 
-import { DEFAULT_CAPABILITIES as SHARED_DEFAULT_CAPABILITIES } from "@talex-touch/utils/types/intelligence";
-import { NEXUS_BASE_URL } from "../env";
+import {
+  DEFAULT_CAPABILITIES as SHARED_DEFAULT_CAPABILITIES,
+  DEFAULT_PROVIDERS as SHARED_DEFAULT_PROVIDERS,
+} from "@talex-touch/utils/types/intelligence";
 /**
  * The IPC message shape, owned by @talex-touch/utils.
  *
@@ -2415,101 +2417,14 @@ export interface IntelligenceStorageData {
 /**
  * Default provider configurations.
  */
-export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
-  {
-    id: "openai-default",
-    type: IntelligenceProviderType.OPENAI,
-    name: "OpenAI",
-    enabled: false,
-    priority: 1,
-    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-    defaultModel: "gpt-4o-mini",
-    timeout: 30000,
-    rateLimit: {},
-  },
-  {
-    id: "anthropic-default",
-    type: IntelligenceProviderType.ANTHROPIC,
-    name: "Anthropic",
-    enabled: false,
-    priority: 2,
-    models: [
-      "claude-3-5-sonnet-20241022",
-      "claude-3-opus-20240229",
-      "claude-3-haiku-20240307",
-    ],
-    defaultModel: "claude-3-5-sonnet-20241022",
-    timeout: 30000,
-    rateLimit: {},
-  },
-  {
-    id: "deepseek-default",
-    type: IntelligenceProviderType.DEEPSEEK,
-    name: "DeepSeek",
-    enabled: false,
-    priority: 2,
-    models: ["deepseek-chat", "deepseek-coder"],
-    defaultModel: "deepseek-chat",
-    timeout: 30000,
-    rateLimit: {},
-  },
-  {
-    id: "siliconflow-default",
-    type: IntelligenceProviderType.SILICONFLOW,
-    name: "SiliconFlow",
-    enabled: false,
-    priority: 2,
-    baseUrl: "https://api.siliconflow.cn/v1",
-    models: [
-      "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
-      "tencent/Hunyuan-MT-7B",
-      "TeleAI/TeleSpeechASR",
-      "THUDM/GLM-4.1V-9B-Thinking",
-      "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-      "BAAI/bge-reranker-v2-m3",
-      "netease-youdao/bce-embedding-base_v1",
-      "Kwai-Kolors/Kolors",
-      "BAAI/bge-m3",
-    ],
-    defaultModel: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
-    timeout: 30000,
-    rateLimit: {},
-  },
-  {
-    id: "tuff-nexus-default",
-    type: IntelligenceProviderType.CUSTOM,
-    name: "Tuff Nexus",
-    enabled: false,
-    priority: 1,
-    baseUrl: `${NEXUS_BASE_URL}/v1`,
-    models: ["gpt-4o", "gpt-4o-mini"],
-    defaultModel: "gpt-4o-mini",
-    timeout: 30000,
-    rateLimit: {},
-    capabilities: [
-      "text.chat",
-      "text.translate",
-      "text.summarize",
-      "text.rewrite",
-      "vision.ocr",
-      "image.translate.e2e",
-    ],
-    metadata: {
-      origin: "tuff-nexus",
-    },
-  },
-  {
-    id: "local-default",
-    type: IntelligenceProviderType.LOCAL,
-    name: "Local Model",
-    enabled: false,
-    priority: 3,
-    models: [],
-    baseUrl: "http://localhost:11434",
-    timeout: 60000,
-    rateLimit: {},
-  },
-];
+/**
+ * Re-exported rather than copied. 7faea27bf consolidated DEFAULT_CAPABILITIES onto the shared
+ * declaration and left this one a literal, so utils gained FunAudioLLM/SenseVoiceSmall and
+ * fnlp/MOSS-TTSD-v0.5 while this copy kept TeleAI/TeleSpeechASR — and core-app imports this one,
+ * so the app has been shipping the stale set since 2026-07-14 (#520).
+ */
+export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] =
+  SHARED_DEFAULT_PROVIDERS;
 
 export const DEFAULT_GLOBAL_CONFIG: IntelligenceGlobalConfig = {
   defaultStrategy: "adaptive-default",
