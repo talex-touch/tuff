@@ -7,8 +7,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use napi::bindgen_prelude::Buffer;
-use napi::{Error, Result};
+use napi::bindgen_prelude::{AsyncTask, Buffer};
+use napi::{Env, Error, Result, Task};
 use napi_derive::napi;
 
 /// Default hard cap on a capture session before it auto-stops.
@@ -99,8 +99,7 @@ pub fn get_native_audio_support() -> NativeAudioSupport {
     )
 }
 
-#[napi]
-pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptureStart> {
+fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String> {
     if !platform_supported() {
         return Err(Error::from_reason("platform-not-supported"));
     }
@@ -173,7 +172,40 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
     };
     lock(sessions()).insert(session_id.clone(), handle);
 
-    Ok(AudioCaptureStart { session_id })
+    Ok(session_id)
+}
+
+/// Runs the blocking half on the libuv pool instead of the JS thread.
+///
+/// The wait itself is deliberate -- `start_capture` reports device failures rather than handing
+/// back a session that never produces audio -- but it was being served on the Electron main
+/// thread. `default_input_device()`, `build_input_stream()` and `stream.play()` on CoreAudio take
+/// seconds while a Bluetooth input is (re)connecting, and on first use macOS raises the microphone
+/// consent sheet before the AudioUnit starts, which waits on a human. Nothing in this repo asks
+/// for that permission ahead of time -- `assertSupported()` in voice-service.ts only checks
+/// `getNativeAudioSupport()` -- so the very first dictation blocks for as long as the user takes
+/// to click. A `recv_timeout` short enough to protect the event loop would have to be short enough
+/// to fail that (#841).
+pub struct StartCaptureTask {
+    options: Option<AudioCaptureOptions>,
+}
+
+impl Task for StartCaptureTask {
+    type Output = String;
+    type JsValue = AudioCaptureStart;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        start_capture_blocking(self.options.take())
+    }
+
+    fn resolve(&mut self, _env: Env, session_id: Self::Output) -> Result<Self::JsValue> {
+        Ok(AudioCaptureStart { session_id })
+    }
+}
+
+#[napi]
+pub fn start_capture(options: Option<AudioCaptureOptions>) -> AsyncTask<StartCaptureTask> {
+    AsyncTask::new(StartCaptureTask { options })
 }
 
 #[napi]

@@ -64,7 +64,7 @@ export class GlobalDictationController {
       if (this.activeSessionId) {
         await this.finish(this.activeSessionId)
       } else {
-        this.activeSessionId = voiceService.beginCapture()
+        this.activeSessionId = await voiceService.beginCapture()
         this.notify('🎙️ 正在听写…', '再次按下快捷键停止并键入')
       }
     } catch (error) {

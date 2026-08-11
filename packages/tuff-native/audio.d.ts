@@ -70,7 +70,14 @@ export interface TypeTextResult {
 }
 
 export declare function getNativeAudioSupport(): NativeAudioSupport
-export declare function startCapture(options?: AudioCaptureOptions): AudioCaptureStart
+/**
+ * Opens the input stream and resolves once the capture thread confirms it is live.
+ *
+ * Asynchronous so the wait does not sit on the Electron main thread: opening a CoreAudio input can
+ * take seconds while a Bluetooth device reconnects, and on first use macOS raises the microphone
+ * consent sheet, which waits on a human (#841).
+ */
+export declare function startCapture(options?: AudioCaptureOptions): Promise<AudioCaptureStart>
 export declare function pollCapture(sessionId: string): AudioCaptureState
 export declare function snapshotCapture(sessionId: string): AudioSnapshot
 /** Returns only the NEW captured PCM since the last drain (raw 16-bit LE mono). Throws `session-not-found: <id>` for an unknown id. */
