@@ -113,6 +113,8 @@ fn u8_to_reason(reason: u8) -> Option<CancelReason> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
 
     #[tokio::test]
@@ -219,5 +221,48 @@ mod tests {
                 .is_err(),
             "cancelled() resolved without a cancel",
         );
+    }
+
+    /// #1541: the tests above cover the paths around the #840 window -- an already-parked
+    /// waiter, a waiter starting after the cancel, an uncancelled token, the reason/flag
+    /// pair -- but none of them races a cancel against a waiter's registration, which is
+    /// the defect itself. Restoring the pre-fix ordering left all five green on 3 of 3
+    /// runs.
+    ///
+    /// This hammers the window: a barrier releases eight waiters and the canceller
+    /// together so they all race the same cancel, and the timeout turns a parked waiter
+    /// into a failure rather than a hung suite. Calibrated against the defect deliberately
+    /// restored: 6 of 6 runs caught it, latest at iteration 4268, so the 20k bound carries
+    /// roughly a 5x margin. One waiter per iteration missed on one run in six, so the
+    /// eight-way concurrency is load-bearing rather than decorative.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn a_cancel_racing_a_waiters_registration_is_not_lost() {
+        const WAITERS: usize = 8;
+
+        for iteration in 0..20_000u32 {
+            let token = CancellationToken::new();
+            let barrier = Arc::new(std::sync::Barrier::new(WAITERS + 1));
+            let tasks = (0..WAITERS)
+                .map(|_| {
+                    let waiter = token.clone();
+                    let released = Arc::clone(&barrier);
+                    tokio::spawn(async move {
+                        released.wait();
+                        waiter.cancelled().await
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            barrier.wait();
+            token.cancel(CancelReason::Dispose);
+
+            for task in tasks {
+                let reason = tokio::time::timeout(Duration::from_secs(5), task)
+                    .await
+                    .unwrap_or_else(|_| panic!("cancelled() parked at iteration {iteration}"))
+                    .expect("the waiter task must not panic");
+                assert_eq!(reason, CancelReason::Dispose);
+            }
+        }
     }
 }
