@@ -22,5 +22,9 @@
   "parent": "08-03-app-shell-ai-redesign",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Cover the two halves of AC4 that pi-cli-runtime.test.ts does not: an abnormal exit of the pi child process, and cancellation. Its thirty cases already cover the NDJSON side (text delta out of message_update, requesting NDJSON in non-interactive mode, non-JSON stdout treated as skippable) and usage aggregation (four cases including dropping an all-zero block). The rest of the criteria need the app running with the pi CLI present.",
+    "blocker": "A running app with the pi CLI installed, for everything except AC4. Whether a streaming reply arrives with no cloud provider configured, whether the stop key leaves no orphan process, and whether an undetected pi produces actionable guidance rather than a bare error are all observations, not source facts.",
+    "evidence": "AC4 is 2 of 4 as of 2026-08-11. pi-cli-runtime.test.ts has 30 cases: NDJSON parsing and usage aggregation are covered; no case names an abnormal exit or a cancellation, and the file contains no exit, cancel or abort assertion."
+  }
 }
