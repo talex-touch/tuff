@@ -125,10 +125,27 @@ function linkDiagnostics(file, tree, scope) {
   return diagnostics
 }
 
+function readTrackedText(repoRoot, file, diagnostics) {
+  try {
+    return fs.readFileSync(path.join(repoRoot, file), 'utf8')
+  }
+  catch {
+    // The file list comes from `git ls-files`, i.e. the index, but the read is from the working
+    // tree. A directory move staged in halves, an interrupted rebase, or a deletion that has not
+    // been added yet puts those two out of step. Throwing here takes the whole run down and
+    // prints a Node stack instead of the findings, which reads as a broken tool rather than a
+    // tree mid-move. readTask already reports rather than throws; this matches it.
+    diagnostics.push(diagnostic('DOC-FILE-UNREADABLE', file, null, 'tracked file could not be read from the working tree'))
+    return undefined
+  }
+}
+
 export function checkMarkdownAndLinks(repoRoot, scope) {
   const diagnostics = []
   for (const file of scope.lintDocuments) {
-    const text = fs.readFileSync(path.join(repoRoot, file), 'utf8')
+    const text = readTrackedText(repoRoot, file, diagnostics)
+    if (text === undefined)
+      continue
     diagnostics.push(...markdownDiagnostics(file, text))
     try {
       const tree = unified().use(remarkParse).use(remarkMdc).parse(text)
@@ -339,7 +356,9 @@ function placeholderAllowed(file, token) {
 export function checkPlaceholders(repoRoot, scope) {
   const diagnostics = []
   for (const file of scope.activePrds) {
-    const text = fs.readFileSync(path.join(repoRoot, file), 'utf8')
+    const text = readTrackedText(repoRoot, file, diagnostics)
+    if (text === undefined)
+      continue
     let tree
     try {
       tree = unified().use(remarkParse).use(remarkMdc).parse(text)
