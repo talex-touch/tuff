@@ -50,6 +50,34 @@ let lifecycleEventsRegistered = false
 registerNotificationHub(transport)
 registerMainWindowSideEffects()
 registerLifecycleEvents()
+reportContentSecurityPolicyViolations()
+
+/**
+ * Logs violations of the report-only CSP in index.html (#689).
+ *
+ * `default-src` and `connect-src` are still wildcards because narrowing them needs to know what the
+ * renderer actually reaches, and a static reading cannot produce that — a dependency can ask for
+ * something at runtime that no literal in the tree mentions. The report-only policy names the
+ * candidate, blocks nothing, and this turns each would-be block into a line naming the directive
+ * and the origin.
+ *
+ * When this stays quiet in real use, the candidate becomes the enforcing policy and the wildcards
+ * go. Until then it is the only honest way to get from here to there.
+ */
+function reportContentSecurityPolicyViolations(): void {
+  document.addEventListener('securitypolicyviolation', (event) => {
+    // The enforcing policy blocks nothing here, so anything reaching this listener is a request
+    // the narrow candidate would have refused — a finding, not an error.
+    mainLog.warn(
+      `[csp-report-only] ${event.effectiveDirective} would block ${event.blockedURI || '<inline>'}`,
+      {
+        documentURI: event.documentURI,
+        sourceFile: event.sourceFile,
+        line: event.lineNumber
+      }
+    )
+  })
+}
 
 function registerRouterEvents(instance: Router): void {
   if (routerEventsRegistered) {

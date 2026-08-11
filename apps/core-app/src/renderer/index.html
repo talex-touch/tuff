@@ -42,6 +42,37 @@
   "
     />
 
+    <!--
+      The candidate narrow policy, in report-only mode. It blocks nothing; it exists to produce
+      the runtime inventory that narrowing `default-src` and `connect-src` for real has been
+      waiting on (#689).
+
+      Reading the renderer statically says those wildcards are close to unused. There are three
+      `fetch`/`axios` matches in the whole renderer and two of them are comments in i18n.ts; the
+      only real one is `attachment-payload.ts`, which reads `blob:` URLs and already refuses any
+      other scheme. `nexus-store-provider.ts` resolves a user-configurable base URL but does not
+      fetch it — that request is made in main. There is no `new WebSocket` and no `EventSource`,
+      and the widget sandbox denies `sendBeacon` outright. What genuinely remains is Sentry, which
+      is initialised in the renderer, and the dev server.
+
+      Static reading is exactly what cannot settle this, though: a dependency may reach for
+      something at runtime that no literal in the tree mentions. So this reports rather than
+      enforces, `securitypolicyviolation` is logged from the renderer entry, and the wildcards
+      above stay until that log is empty in real use.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy-Report-Only"
+      content="
+    default-src 'self' blob: data: tfile: remix:;
+    connect-src 'self' https://o4508024637620224.ingest.us.sentry.io blob: data: tfile: ws://localhost:* http://localhost:*;
+    img-src 'self' data: blob: tfile: file: remix:;
+    font-src 'self' data: blob:;
+    style-src 'self' 'unsafe-inline' blob: data:;
+    style-src-elem 'self' 'unsafe-inline' blob: data:;
+    media-src 'self' blob: data: tfile:;
+  "
+    />
+
     <title>Tuff</title>
   </head>
 
