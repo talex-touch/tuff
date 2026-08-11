@@ -138,7 +138,11 @@ jobs:
           TUFF_NATIVE_SCREENSHOT_REQUIRED: '1'
           # Forbids the OCR test's early return. Without it a green Windows leg cannot be told
           # apart from one that never reached the engine -- which is the gap #1517 is about.
-          TUFF_NATIVE_OCR_REQUIRED: '1'
+          #
+          # Off on Linux, where getNativeOcrSupport() reports platform-not-supported: there is
+          # no native OCR to reach, so demanding one there asserts a platform fact rather than
+          # coverage. Learned by demanding it everywhere and watching the ubuntu leg go red.
+          TUFF_NATIVE_OCR_REQUIRED: ${{ runner.os == 'Linux' && '0' || '1' }}
         run: >-
           pnpm -C packages/test exec vitest run
           src/native/tuff-native-audio.test.ts
