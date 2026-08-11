@@ -161,6 +161,16 @@ jobs:
       - name: Run plugin suites
         run: pnpm test:plugins && pnpm test:plugins:self-test
 
+      # There was no production dependency gate at all. `pnpm audit --prod` sat in #328's
+      # Verification block and #325's acceptance criteria while nothing ran it, so the advisory
+      # count moved from 28 to 19 unobserved -- including a `sharp` High that was really `astro`
+      # filed under dependencies. A bare `--audit-level high` cannot be the gate: it is red on
+      # arrival and would be continue-on-error within a day. This ratchets against
+      # .github/prod-audit-allowlist.json, where an entry needs a reason, an owner and an expiry,
+      # and a stale entry fails too so the list cannot only grow (#325, #328).
+      - name: Production dependency audit
+        run: pnpm check:prod-audit && pnpm check:prod-audit:self-test
+
       # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
       # list, and touch-dictation was in neither (#562). The list is the kind that drifts
       # silently, so this asserts the two paths between them still cover every directory.

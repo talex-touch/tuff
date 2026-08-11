@@ -49,6 +49,8 @@
     "plugins:validate:self-test": "node scripts/validate-plugins.mjs --self-test",
     "test:plugins": "node scripts/test-plugins.mjs",
     "test:plugins:self-test": "node scripts/test-plugins.mjs --self-test",
+    "check:prod-audit": "node scripts/check-prod-audit.mjs",
+    "check:prod-audit:self-test": "node scripts/check-prod-audit.mjs --self-test",
     "plugins:release:audit": "tsx scripts/plugin-source-package-audit.ts",
     "publish:check": "node scripts/validate-publish-manifests.mjs",
     "publish:check:pack": "node scripts/validate-publish-manifests.mjs --pack",
