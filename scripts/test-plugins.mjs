@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
 /**
  * Runs the per-plugin `index.test.cjs` suites.
  *
@@ -17,7 +18,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawnSync } from 'node:child_process'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const pluginsDir = path.join(repoRoot, 'plugins')
@@ -56,19 +56,23 @@ export function classifySuiteRun({ status, stdout }) {
   const pass = read('pass')
   const fail = read('fail')
 
-  if (status !== 0) return { ok: false, pass, fail, reason: `exited ${status}` }
-  if (pass === null) return { ok: false, pass, fail, reason: 'exit 0 but no test counts in output' }
-  if (pass === 0) return { ok: false, pass, fail, reason: 'exit 0 but ran no tests' }
+  if (status !== 0)
+    return { ok: false, pass, fail, reason: `exited ${status}` }
+  if (pass === null)
+    return { ok: false, pass, fail, reason: 'exit 0 but no test counts in output' }
+  if (pass === 0)
+    return { ok: false, pass, fail, reason: 'exit 0 but ran no tests' }
   return { ok: true, pass, fail, reason: null }
 }
 
 export function findSuites(root = pluginsDir) {
-  if (!fs.existsSync(root)) return []
+  if (!fs.existsSync(root))
+    return []
   return fs
     .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({ name: entry.name, file: path.join(root, entry.name, 'index.test.cjs') }))
-    .filter((suite) => fs.existsSync(suite.file))
+    .filter(entry => entry.isDirectory())
+    .map(entry => ({ name: entry.name, file: path.join(root, entry.name, 'index.test.cjs') }))
+    .filter(suite => fs.existsSync(suite.file))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -81,40 +85,41 @@ function selfTest() {
     {
       name: 'a passing suite passes',
       actual: classifySuiteRun({ status: 0, stdout: 'ℹ pass 4\nℹ fail 0\n' }).ok,
-      expected: true
+      expected: true,
     },
     {
       name: 'the TAP reporter shape is read too',
       actual: classifySuiteRun({ status: 0, stdout: '# pass 4\n# fail 0\n' }).ok,
-      expected: true
+      expected: true,
     },
     {
       name: 'a non-zero exit fails even when the counts look clean',
       actual: classifySuiteRun({ status: 1, stdout: 'ℹ pass 4\nℹ fail 0\n' }).ok,
-      expected: false
+      expected: false,
     },
     {
       name: 'exit 0 with unreadable output fails rather than passing blind',
       actual: classifySuiteRun({ status: 0, stdout: 'something else entirely' }).ok,
-      expected: false
+      expected: false,
     },
     {
       name: 'exit 0 having run no tests fails',
       actual: classifySuiteRun({ status: 0, stdout: 'ℹ pass 0\nℹ fail 0\n' }).ok,
-      expected: false
-    }
+      expected: false,
+    },
   ]
 
   let failures = 0
   for (const testCase of cases) {
     const ok = testCase.actual === testCase.expected
-    if (!ok) failures += 1
+    if (!ok)
+      failures += 1
     console.log(`${ok ? '\x1B[32m  ok\x1B[0m' : '\x1B[31mFAIL\x1B[0m'}  ${testCase.name}`)
   }
   console.log(
     failures === 0
       ? `\n\x1B[32mSelf-test passed: ${cases.length} cases.\x1B[0m\n`
-      : `\n\x1B[31mSelf-test failed: ${failures}/${cases.length} cases.\x1B[0m\n`
+      : `\n\x1B[31mSelf-test failed: ${failures}/${cases.length} cases.\x1B[0m\n`,
   )
   return failures
 }
@@ -127,7 +132,7 @@ const suites = findSuites()
 
 if (discoveryFoundNothing(suites)) {
   console.error(
-    '\x1B[31mNo plugins/*/index.test.cjs found — this run would report success without executing a single plugin test.\x1B[0m\n'
+    '\x1B[31mNo plugins/*/index.test.cjs found — this run would report success without executing a single plugin test.\x1B[0m\n',
   )
   process.exit(1)
 }
@@ -140,13 +145,14 @@ const failed = []
 for (const suite of suites) {
   const run = spawnSync(process.execPath, ['--test', 'index.test.cjs'], {
     cwd: path.dirname(suite.file),
-    encoding: 'utf8'
+    encoding: 'utf8',
   })
   const verdict = classifySuiteRun({ status: run.status, stdout: `${run.stdout ?? ''}${run.stderr ?? ''}` })
   if (verdict.ok) {
     totalCases += verdict.pass
     console.log(`\x1B[32m  ✓\x1B[0m ${suite.name.padEnd(28)} ${String(verdict.pass).padStart(3)} cases`)
-  } else {
+  }
+  else {
     failed.push({ suite, verdict, output: run.stdout ?? '' })
     console.log(`\x1B[31m  ✗\x1B[0m ${suite.name.padEnd(28)} ${verdict.reason}`)
   }
