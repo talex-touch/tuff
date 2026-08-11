@@ -22,5 +22,9 @@
   "parent": "08-05-tuffex-ai-suite",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Run the manual acceptance with a real streaming reply: long text with code blocks and a mermaid diagram fading in block by block, the cursor, the diagram closing, and no full-page reflow while scrolling. Then 500 injected history entries for scroll smoothness and a bounded DOM, image paste and drag with preview and delete, the behaviour non-regression checklist item by item, and both themes.",
+    "blocker": "A running app with a live model. Every criterion here is an observation of rendering under a real stream - fade-in, cursor, reflow, scroll smoothness, DOM bounds - none of which a test run can report on.",
+    "evidence": "The unit half of AC4 measured 2026-08-11: ai modules plus the home views, 559 passed, 1 skipped / 58 files. The rest is unmeasured by design."
+  }
 }
