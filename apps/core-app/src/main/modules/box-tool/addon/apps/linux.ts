@@ -6,11 +6,43 @@ import type { ScannedAppInfo } from './app-types'
 
 type AppInfo = ScannedAppInfo
 
-const APP_PATHS = [
-  '/usr/share/applications',
-  '/var/lib/snapd/desktop/applications',
-  `${os.homedir()}/.local/share/applications`
-]
+/**
+ * Resolves the directories that hold `.desktop` entries on this machine.
+ *
+ * The list used to be three hardcoded paths, which missed flatpak entirely -- flatpak exports to
+ * its own prefixes and does not copy into `/usr/share/applications`, so on a Silverblue box, or
+ * for the growing share of Ubuntu/Mint users who install that way, those applications were
+ * invisible to search with nothing to indicate they had been skipped.
+ *
+ * `XDG_DATA_DIRS` and `XDG_DATA_HOME` are the mechanism the desktop already uses to answer this
+ * question, and reading them covers flatpak, nix and custom prefixes without enumerating any of
+ * them. The spec defaults are applied when unset, which is what produced the old `/usr/share`
+ * entry anyway.
+ *
+ * Snap and flatpak roots are then added explicitly rather than relied on through XDG. Both are
+ * normally injected into `XDG_DATA_DIRS` by a profile script, and a profile script only runs for
+ * login shells -- an Electron app launched from a `.desktop` entry or a session manager can
+ * legitimately see a minimal environment. Adding them costs nothing: findDesktopFiles swallows
+ * errors for directories that do not exist.
+ */
+export function resolveApplicationRoots(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir()
+): string[] {
+  const dataHome = env.XDG_DATA_HOME?.trim() || path.join(home, '.local', 'share')
+  const dataDirs = (env.XDG_DATA_DIRS?.trim() || '/usr/local/share:/usr/share')
+    .split(':')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+
+  const roots = [dataHome, ...dataDirs].map((dir) => path.join(dir, 'applications'))
+
+  roots.push('/var/lib/snapd/desktop/applications')
+  roots.push('/var/lib/flatpak/exports/share/applications')
+  roots.push(path.join(dataHome, 'flatpak', 'exports', 'share', 'applications'))
+
+  return [...new Set(roots)]
+}
 
 async function findIconPath(iconName: string): Promise<string> {
   if (path.isAbsolute(iconName) && (await fs.stat(iconName).catch(() => null))) {
@@ -121,7 +153,7 @@ async function findDesktopFiles(dir: string): Promise<string[]> {
 }
 
 export async function getApps(): Promise<AppInfo[]> {
-  const allDesktopFilesPromises = APP_PATHS.map((p) => findDesktopFiles(p))
+  const allDesktopFilesPromises = resolveApplicationRoots().map((p) => findDesktopFiles(p))
   const nestedDesktopFiles = await Promise.all(allDesktopFilesPromises)
   const allDesktopFiles = nestedDesktopFiles.flat()
 
