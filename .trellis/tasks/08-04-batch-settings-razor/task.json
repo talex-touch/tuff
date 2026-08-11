@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Get the planning artefacts reviewed. The task states its own gate: implementation may not start until the user has reviewed them and task.py start has been run.",
+    "blocker": "User review, by the task's own final criterion. This is a planning task whose output is documents - a settings inventory with code locations, a keep/merge/default/migrate/developer-visible/delete verdict per item, the credential-protection design, and contract updates to sensitive-data-inventory.json and the privacy spec. None of it can be closed by running anything.",
+    "evidence": "None to measure. Six criteria, all describing documents rather than behaviour, so there is no suite or check that can report on them."
+  }
 }
