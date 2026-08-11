@@ -124,17 +124,22 @@ jobs:
       # has just been built, and demand the binding loads -- the integration suite tolerates
       # its absence because it does not build Rust, and that tolerance is only safe if some
       # job insists on the real thing.
-      # Named files rather than the directory: tuff-native-ocr.test.ts fails on Windows only --
-      # Windows OCR reads nothing from a fixture built and validated against Apple Vision, which
-      # no job had ever run (#1517). Excluding it by name keeps this step landing instead of
-      # waiting behind an unrelated pre-existing failure, and the suite's own guard fails if a new
-      # file appears in src/native without being listed here, so the exclusion cannot grow quietly.
+      # Named files rather than the directory, and the suite's own guard fails if a file appears
+      # in src/native without being listed here -- so coverage cannot quietly shrink back.
+      #
+      # tuff-native-ocr.test.ts was excluded while Windows OCR read nothing from a fixture that
+      # had been built and validated against Apple Vision, on the only platform that ever ran it.
+      # The fixture now carries antialiased edges rather than hard-edged 704x248 block letters,
+      # which is the first of the three candidates in #1517 and the only one testable without a
+      # Windows desktop. This step is the test of that: if the Windows leg is green, the fixture
+      # was the problem.
       - name: Test native carriers from the integration suite
         env:
           TUFF_NATIVE_SCREENSHOT_REQUIRED: '1'
         run: >-
           pnpm -C packages/test exec vitest run
           src/native/tuff-native-audio.test.ts
+          src/native/tuff-native-ocr.test.ts
           src/native/tuff-native-screenshot.test.ts
 
       - name: Verify packed native package contents

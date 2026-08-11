@@ -10,10 +10,12 @@ const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_SCREENSHOT'
 /**
  * Native tests the workflow deliberately does not run, each with a reason.
  *
- * `tuff-native-ocr.test.ts` fails on Windows only: Windows OCR reads nothing from a fixture that
- * was built and validated against Apple Vision, on the one platform that could run it (#1517).
+ * Empty since the OCR fixture was regenerated with antialiased edges (#1517) and
+ * `tuff-native-ocr.test.ts` went back into the workflow. Anything added here needs a reason
+ * written next to it, because an entry with no explanation is indistinguishable from a test
+ * someone switched off to get a merge through.
  */
-const WORKFLOW_EXCLUDED = new Set(['tuff-native-ocr.test.ts'])
+const WORKFLOW_EXCLUDED = new Set<string>()
 
 /**
  * The carrier is a compiled Rust addon. `Integration suite (packages/test)` installs and runs;
