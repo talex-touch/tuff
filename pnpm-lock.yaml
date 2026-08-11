@@ -1422,9 +1422,6 @@ importers:
 
   plugins/touch-music:
     dependencies:
-      '@milkdown/theme-nord':
-        specifier: ^7.21.2
-        version: 7.21.3
       '@talex-touch/tuffex':
         specifier: workspace:^
         version: link:../../packages/tuffex
@@ -1434,9 +1431,6 @@ importers:
       axios:
         specifier: ^1.18.1
         version: 1.18.1
-      granim:
-        specifier: ^2.0.0
-        version: 2.0.0
       gsap:
         specifier: 'catalog:'
         version: 3.15.0
@@ -1455,9 +1449,6 @@ importers:
       vue:
         specifier: ^3.5.39
         version: 3.5.39(typescript@5.9.3)
-      wavesurfer.js:
-        specifier: ^7.12.10
-        version: 7.12.10
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.7
@@ -9137,9 +9128,6 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  granim@2.0.0:
-    resolution: {integrity: sha512-aqa79K49ndjoUBtpYzlO8sKcuVQED+5axvX0SveqTLDR+Fa2G42AGntuQ36ysCFOWGVkWCLfHowFwk+D/9rGDg==}
-
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
@@ -13590,9 +13578,6 @@ packages:
   watchpack@2.5.2:
     resolution: {integrity: sha512-6i/00NBjP4yGPs+caKSyRfpTF/8Torsu0MOW3mMzIbhgISFder8i7xbqgHlLMwJrdiN8ndBV3UA1/AfzPSr+jg==}
     engines: {node: '>=10.13.0'}
-
-  wavesurfer.js@7.12.10:
-    resolution: {integrity: sha512-M3AC5biFmvfy7Oxe8FN6I88H0z1c8Vuz81N6Oq2CY4kOumNDb6U1/0qg4pomjP619vJqdWADlgUcpOKvfGifng==}
 
   web-namespaces@2.0.1:
     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}
@@ -22832,8 +22817,6 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  granim@2.0.0: {}
-
   graphemer@1.4.0: {}
 
   gsap@3.15.0: {}
@@ -28414,8 +28397,6 @@ snapshots:
   watchpack@2.5.2:
     dependencies:
       graceful-fs: 4.2.11
-
-  wavesurfer.js@7.12.10: {}
 
   web-namespaces@2.0.1: {}
 
