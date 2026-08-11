@@ -1591,4 +1591,104 @@ mod tests {
         assert_eq!(parse_native_window_id(&zero), None);
         assert_eq!(parse_native_window_id(&descriptor_id), None);
     }
+
+    /// #839: `stop()` loaded `stopped` and only then built its `Notified`. tokio snapshots
+    /// the notify_waiters counter at construction and `stop_frames` notifies exactly once,
+    /// so a stop landing between the load and the construction was already accounted for:
+    /// the future registered as a waiter and parked with no wakeup left to come.
+    /// `invoke_stream` awaits this after `request_stop()`, so a lost notify means the
+    /// frames operation never emits its terminal frame and its entry stays in
+    /// NativeRuntime::streams until finish_dispose gives up with NATIVE_DISPOSE_TIMEOUT.
+    ///
+    /// #1536 fixed it with no test, so the window is currently unguarded. This hammers it:
+    /// a barrier releases eight waiters and the actor-side store together. `request_stop`
+    /// is idempotent (`stop_requested.swap`), so the eight `stop()` calls queue one
+    /// command, not eight. Calibrated against the defect deliberately restored on the
+    /// merged implementation: 6 of 6 runs caught it, latest at iteration 5821 against the
+    /// 20k bound.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn a_stop_landing_after_the_flag_read_is_not_lost() {
+        const WAITERS: usize = 8;
+
+        for iteration in 0..20_000u32 {
+            let (sender, _receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+            let actor = Arc::new(ActorInner {
+                sender,
+                closed: AtomicBool::new(false),
+            });
+            let control = Arc::new(FrameControl {
+                slot: LatestFrameSlot::new(),
+                stopped: AtomicBool::new(false),
+                stop_requested: AtomicBool::new(false),
+                stop_notify: Notify::new(),
+            });
+            let source = MacFrameSource {
+                stream_id: 1,
+                actor,
+                control: Arc::clone(&control),
+            };
+
+            let barrier = Arc::new(std::sync::Barrier::new(WAITERS + 1));
+            let tasks = (0..WAITERS)
+                .map(|_| {
+                    let pending = source.stop();
+                    let released = Arc::clone(&barrier);
+                    tokio::spawn(async move {
+                        released.wait();
+                        pending.await
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            barrier.wait();
+            // What stop_frames does once the actor thread has torn the session down.
+            control.stopped.store(true, Ordering::Release);
+            control.stop_notify.notify_waiters();
+
+            for task in tasks {
+                tokio::time::timeout(std::time::Duration::from_secs(5), task)
+                    .await
+                    .unwrap_or_else(|_| panic!("stop() parked at iteration {iteration}"))
+                    .expect("the waiter task must not panic")
+                    .expect("stop must not fail");
+            }
+        }
+    }
+
+    /// The control for the test above: it only asserts that `stop()` *resolves*, which a
+    /// "return immediately" implementation would satisfy just as well. `stop()` must stay
+    /// pending until the actor actually reports the session torn down.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn stop_stays_pending_until_the_actor_reports_stopped() {
+        let (sender, _receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let control = Arc::new(FrameControl {
+            slot: LatestFrameSlot::new(),
+            stopped: AtomicBool::new(false),
+            stop_requested: AtomicBool::new(false),
+            stop_notify: Notify::new(),
+        });
+        let source = MacFrameSource {
+            stream_id: 1,
+            actor: Arc::new(ActorInner {
+                sender,
+                closed: AtomicBool::new(false),
+            }),
+            control: Arc::clone(&control),
+        };
+
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(250), source.stop())
+                .await
+                .is_err(),
+            "stop() resolved before the actor reported the session stopped"
+        );
+
+        control.stopped.store(true, Ordering::Release);
+        control.stop_notify.notify_waiters();
+
+        tokio::time::timeout(std::time::Duration::from_secs(5), source.stop())
+            .await
+            .expect("stop() must resolve once the actor reports stopped")
+            .expect("stop must not fail");
+    }
 }
