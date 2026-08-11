@@ -1,4 +1,5 @@
 use crate::geometry::DisplayGeometry;
+use crate::limits::ScreenshotLimits;
 use crate::model::{DescriptorId, GlobalDipPoint, GlobalDipRect, PixelSize, Rotation};
 use crate::region_plan::RegionDisplay;
 use crate::test_fixtures::fixture;
@@ -16,6 +17,7 @@ fn owner(process_id: u32, bundle_id: &str) -> WindowOwner {
         process_id,
         Some(bundle_id.to_string()),
         Some("Shared Owner Name".to_string()),
+        ScreenshotLimits::default(),
     )
     .expect("valid owner")
 }
@@ -38,6 +40,7 @@ fn shareable(
         true,
         None,
         true,
+        ScreenshotLimits::default(),
     )
     .expect("valid shareable window")
 }
@@ -58,12 +61,18 @@ fn cg(native_id: u32, process_id: u32, frame: GlobalDipRect, layer: i32) -> CgWi
 fn selection_policy() -> WindowSelectionPolicy {
     WindowSelectionPolicy::new(
         8.0,
-        SelfWindowPolicy::new(vec![700], vec!["com.talex.touch".to_string()], vec![7000])
-            .expect("valid self policy"),
+        SelfWindowPolicy::new(
+            vec![700],
+            vec!["com.talex.touch".to_string()],
+            vec![7000],
+            ScreenshotLimits::default(),
+        )
+        .expect("valid self policy"),
         vec![
             "com.apple.dock".to_string(),
             "com.apple.systemuiserver".to_string(),
         ],
+        ScreenshotLimits::default(),
     )
     .expect("valid selection policy")
 }
@@ -187,6 +196,7 @@ fn off_screen_and_protected_windows_do_not_become_default_candidates() {
         false,
         None,
         true,
+        ScreenshotLimits::default(),
     )
     .unwrap();
     let protected = ShareableWindow::new(
@@ -199,6 +209,7 @@ fn off_screen_and_protected_windows_do_not_become_default_candidates() {
         true,
         None,
         false,
+        ScreenshotLimits::default(),
     )
     .unwrap();
     let descriptors = build_window_descriptors(
@@ -215,7 +226,7 @@ fn off_screen_and_protected_windows_do_not_become_default_candidates() {
         hit_test_windows(
             &descriptors,
             GlobalDipPoint::new(10.0, 10.0).unwrap(),
-            WindowHitTestOptions::new(false, 16),
+            WindowHitTestOptions::new(false, 16, ScreenshotLimits::default()),
         )
         .is_empty()
     );
@@ -296,7 +307,7 @@ fn sharing_alpha_size_system_and_self_rules_fail_closed() {
     let hits = hit_test_windows(
         &descriptors,
         GlobalDipPoint::new(10.0, 10.0).unwrap(),
-        WindowHitTestOptions::new(false, 16),
+        WindowHitTestOptions::new(false, 16, ScreenshotLimits::default()),
     );
     assert!(hits.is_empty());
     assert!(GlobalDipRect::new(0.0, 0.0, 0.0, 10.0).is_err());
@@ -328,7 +339,11 @@ fn panels_are_opt_in_transients_are_excluded_and_candidates_are_truncated() {
     assert_eq!(descriptors[2].kind(), WindowKind::Transient);
 
     let point = GlobalDipPoint::new(10.0, 10.0).unwrap();
-    let default_hits = hit_test_windows(&descriptors, point, WindowHitTestOptions::new(false, 16));
+    let default_hits = hit_test_windows(
+        &descriptors,
+        point,
+        WindowHitTestOptions::new(false, 16, ScreenshotLimits::default()),
+    );
     assert_eq!(
         default_hits
             .iter()
@@ -336,7 +351,11 @@ fn panels_are_opt_in_transients_are_excluded_and_candidates_are_truncated() {
             .collect::<Vec<_>>(),
         vec![1, 4]
     );
-    let panel_hits = hit_test_windows(&descriptors, point, WindowHitTestOptions::new(true, 2));
+    let panel_hits = hit_test_windows(
+        &descriptors,
+        point,
+        WindowHitTestOptions::new(true, 2, ScreenshotLimits::default()),
+    );
     assert_eq!(
         panel_hits
             .iter()
@@ -406,5 +425,85 @@ fn cross_display_windows_report_all_coverage_and_maximum_scale() {
     assert_eq!(
         descriptor.maximum_scale(),
         Some(window.expected_maximum_scale)
+    );
+}
+
+/// #854: every constructor in window_candidates.rs used to build its own
+/// `ScreenshotLimits::default()`, so a capability configured with anything else had
+/// its window-selection limits silently replaced by the hardcoded ones. Both tests
+/// below pick a limit that *differs* from the default in the direction that matters
+/// -- with the default value they would pass against the old code too.
+#[test]
+fn hit_test_honours_a_candidate_ceiling_above_the_default() {
+    let frame = rect(0.0, 0.0, 400.0, 300.0);
+    let default_ceiling = ScreenshotLimits::default().max_window_candidates();
+    let wanted = default_ceiling + 4;
+
+    let windows = (0..wanted)
+        .map(|index| {
+            shareable(
+                &format!("window:stack-{index}"),
+                index as u32 + 1,
+                101,
+                "com.example",
+                frame,
+                0,
+            )
+        })
+        .collect::<Vec<_>>();
+    let metadata = (0..wanted)
+        .map(|index| cg(index as u32 + 1, 101, frame, 0))
+        .collect::<Vec<_>>();
+    let descriptors = build_window_descriptors(
+        windows,
+        metadata,
+        &[display("display:main", frame, 1)],
+        &selection_policy(),
+    );
+    let point = GlobalDipPoint::new(10.0, 10.0).unwrap();
+
+    let configured = ScreenshotLimits::default().with_window_candidates_for_test(wanted);
+    let hits = hit_test_windows(
+        &descriptors,
+        point,
+        WindowHitTestOptions::new(false, wanted, configured),
+    );
+    assert_eq!(hits.len(), wanted);
+
+    // The default still clamps, so this is a ceiling being honoured rather than removed.
+    let clamped = hit_test_windows(
+        &descriptors,
+        point,
+        WindowHitTestOptions::new(false, wanted, ScreenshotLimits::default()),
+    );
+    assert_eq!(clamped.len(), default_ceiling);
+}
+
+#[test]
+fn window_owner_honours_a_bundle_id_ceiling_below_the_default() {
+    let bundle_id = "c".repeat(64);
+    let configured = ScreenshotLimits::default().with_bundle_id_bytes_for_test(32);
+
+    assert!(
+        bundle_id.len() < ScreenshotLimits::default().max_bundle_id_bytes(),
+        "the default must accept this id, or the test proves nothing"
+    );
+    assert!(
+        WindowOwner::new(
+            101,
+            Some(bundle_id.clone()),
+            Some("Shared Owner Name".to_string()),
+            ScreenshotLimits::default(),
+        )
+        .is_ok()
+    );
+    assert!(
+        WindowOwner::new(
+            101,
+            Some(bundle_id),
+            Some("Shared Owner Name".to_string()),
+            configured,
+        )
+        .is_err()
     );
 }
