@@ -28,7 +28,7 @@
     "build": "pnpm run release:notes:catalog && pnpm run typecheck && electron-vite build",
     "build:vite": "pnpm run release:notes:catalog && electron-vite build",
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "node scripts/db/assert-snapshot-baseline.mjs && drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:beta": "node scripts/build-target.js --type=beta",
