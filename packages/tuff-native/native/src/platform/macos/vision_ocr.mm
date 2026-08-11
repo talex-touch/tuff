@@ -139,8 +139,10 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
     CGImageRelease(image);
 
     if (lines.empty()) {
+      // See the note in winrt_ocr.cpp: both engines used to report this with the same words, so
+      // the message could not tell you which one had failed (#1517).
       error.code = "ERR_OCR_RECOGNIZE_FAILED";
-      error.message = "No text recognized from image";
+      error.message = "Apple Vision recognized no text in the image";
       return false;
     }
 

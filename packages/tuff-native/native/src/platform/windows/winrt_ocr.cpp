@@ -172,8 +172,12 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
     result.text = ToUtf8(ocrResult.Text());
 
     if (result.text.empty()) {
+      // Names the engine because the message alone used to be identical to the macOS one, and a
+      // failure surfaces without a `result` to read `engine` from -- so a CI log said only that
+      // *some* engine found nothing, on a fixture built and validated against the other one
+      // (#1517). The two neighbouring failures here already say "Windows OCR".
       error.code = "ERR_OCR_RECOGNIZE_FAILED";
-      error.message = "No text recognized from image";
+      error.message = "Windows OCR recognized no text in the image";
       return false;
     }
 
