@@ -9,6 +9,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { PluginInstallSourceResponse } from '@talex-touch/utils/transport/events/types/plugin'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
+import type { ComputedRef, UnwrapNestedRefs } from 'vue'
 import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
@@ -219,8 +220,13 @@ interface EnvOptions {
   }
 }
 
-// Reactive plugin data object
-const plugin = reactive<Plugin>({
+// Reactive plugin data object.
+//
+// Annotated because `dev.enable` is a computed that reads `plugin.dev.address` — the object
+// references itself inside its own initializer, so inference gives up and the whole thing becomes
+// implicit `any` (#548). The annotation is the *unwrapped* type: reactive() turns the
+// ComputedRef<boolean> the interface declares into a plain boolean.
+const plugin: UnwrapNestedRefs<Plugin> = reactive<Plugin>({
   template: false,
   name: '',
   desc: '',

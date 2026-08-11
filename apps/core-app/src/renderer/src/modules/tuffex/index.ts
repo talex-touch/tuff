@@ -60,7 +60,10 @@ const COMPONENT_IMPORTERS = {
  */
 export async function loadTuffexComponent(name: EnabledComponent) {
   try {
-    const module = await COMPONENT_IMPORTERS[name]()
+    // Annotated rather than inferred: `satisfies` above keeps the literal type, so the inferred
+    // result is a union of the concrete module shapes and `module[name]` indexes it implicitly as
+    // `any`. The satisfies clause already proves every importer meets this contract (#548).
+    const module: TuffexComponentModule = await COMPONENT_IMPORTERS[name]()
     return module[name] || null
   } catch (error) {
     tuffexLog.warn(`Failed to load component: ${name}`, error)
@@ -74,6 +77,20 @@ export async function loadTuffexComponent(name: EnabledComponent) {
  * @param app - Vue application instance
  * @param components - List of component names to register (defaults to all enabled)
  */
+/**
+ * Whether a component carries an `install`, and so may be handed to `app.use`.
+ *
+ * The runtime check was always here; what was missing is that it says something to the type
+ * system. `InstallableComponent` is `Component & Partial<Plugin>`, and `app.use` needs a whole
+ * `Plugin` — the implicit `any` on the loaded module was hiding that gap rather than closing it
+ * (#548).
+ */
+function isInstallable(
+  component: InstallableComponent
+): component is InstallableComponent & { install: (app: App) => void } {
+  return typeof component.install === 'function'
+}
+
 export async function registerTuffexComponents(
   app: App,
   components: EnabledComponent[] = [...ENABLED_COMPONENTS]
@@ -81,7 +98,7 @@ export async function registerTuffexComponents(
   try {
     for (const name of components) {
       const component = await loadTuffexComponent(name)
-      if (component && typeof component.install === 'function') {
+      if (component && isInstallable(component)) {
         app.use(component)
       } else if (component) {
         app.component(name, component)
