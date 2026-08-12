@@ -156,6 +156,7 @@ import { getNetworkService } from '../network'
 import { createPluginHttpClient } from './plugin-http-client'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
+import { validatePluginFeatureAdmission } from './plugin-feature-admission'
 import { PluginFeature } from './plugin-feature'
 import {
   bundlePluginPreludeFromContent,
@@ -192,31 +193,6 @@ interface PluginStorageRoot {
   name: string
   path: string
 }
-
-const disallowedArrays = [
-  '官方',
-  'touch',
-  'talex',
-  '第一',
-  '权利',
-  '权威性',
-  '官方认证',
-  '触控',
-  '联系',
-  '互动',
-  '互动式',
-  '触控技术',
-  '互动体验',
-  '互动设计',
-  '创意性',
-  '创造性',
-  '首发',
-  '首部',
-  '首款',
-  '首张',
-  '排行',
-  '排名系统'
-]
 
 const pluginSystemLog = createLogger('PluginSystem').child('Plugin')
 const TRANSIENT_ISSUE_CODES = new Set([
@@ -620,24 +596,20 @@ export class TouchPlugin implements ITouchPlugin {
       return false
     }
 
-    const { id, name, desc, commands } = feature
-
-    const regex = /^[\w-]+$/
-    if (!regex.test(id)) {
-      pluginSystemLog.error(`[Plugin ${this.name}] Feature add error, id ${id} not valid.`)
+    const admission = validatePluginFeatureAdmission(feature)
+    if (!admission.admitted) {
+      if (admission.reason === 'invalid-id') {
+        pluginSystemLog.error(
+          `[Plugin ${this.name}] Feature add error, id ${feature.id} not valid.`
+        )
+      }
+      if (admission.reason === 'disallowed-words') {
+        pluginSystemLog.error(
+          `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`
+        )
+      }
       return false
     }
-
-    if (
-      disallowedArrays.filter((item: string) => name.includes(item) || desc.includes(item)).length
-    ) {
-      pluginSystemLog.error(
-        `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`
-      )
-      return false
-    }
-
-    if (commands.length < 1) return false
 
     const shouldInitializeIcon = !(feature instanceof PluginFeature)
     // 如果已经是 PluginFeature 实例，直接使用；否则创建新实例
