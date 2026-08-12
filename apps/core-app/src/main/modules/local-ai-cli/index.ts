@@ -783,16 +783,17 @@ export class LocalAiCliModule extends BaseModule {
       })
     })
     const exitSubscription = process.onExit(
-      ({ exitCode, signal }: { exitCode: number, signal?: number }) => {
-      this.disposeTerminalSession(sessionId)
-      if (sender.isDestroyed() || !this.transport) return
-      const payload: LocalAiCliTerminalExit = {
-        sessionId,
-        exitCode,
-        ...(typeof signal === 'number' ? { signal } : {})
+      ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
+        this.disposeTerminalSession(sessionId)
+        if (sender.isDestroyed() || !this.transport) return
+        const payload: LocalAiCliTerminalExit = {
+          sessionId,
+          exitCode,
+          ...(typeof signal === 'number' ? { signal } : {})
+        }
+        void this.transport.sendTo(sender, LocalAiCliEvents.terminal.exit, payload)
       }
-      void this.transport.sendTo(sender, LocalAiCliEvents.terminal.exit, payload)
-    })
+    )
     this.terminalSessions.set(sessionId, {
       ownerId,
       process,
