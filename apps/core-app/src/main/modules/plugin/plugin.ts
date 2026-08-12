@@ -25,7 +25,7 @@ import type {
   PluginStandardChannelData
 } from '@talex-touch/utils/plugin/sdk/channel-client'
 import type { IndexedSourceDescriptor, SearchProviderDescriptor } from '@talex-touch/utils/search'
-import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { ITuffTransport, SendOptions, TuffEvent } from '@talex-touch/utils/transport'
 import type {
   ClipboardActionResult,
   ClipboardCopyAndPasteRequest,
@@ -3014,9 +3014,13 @@ export class TouchPlugin implements ITouchPlugin {
     }
     const pluginIntelligenceTransport: ITuffTransport = {
       ...pluginSdkTransport,
-      send: ((event, payload, options) =>
+      // The cast stays: ITuffTransport['send'] is an intersection of two generic signatures and
+      // no plain arrow satisfies it. But `as` applies to the finished function, so it never typed
+      // the parameters on the way in -- annotating them explicitly is what removes the implicit
+      // any without pretending the overload can be implemented directly (#548).
+      send: ((event: TuffEvent<unknown, unknown>, payload: unknown, options?: SendOptions) =>
         pluginSdkTransport.send(
-          event,
+          event as never,
           withPluginSdkapiPayload(payload, this.sdkapi) as never,
           options
         )) as ITuffTransport['send'],
