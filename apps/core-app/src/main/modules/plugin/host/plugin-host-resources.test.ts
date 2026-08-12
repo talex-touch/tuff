@@ -496,7 +496,7 @@ describe('PluginHostChildResourceClient', () => {
       owner,
       session,
       allocateRequestId: () => ++requestId,
-      postMessage: (message) => sent.push(message),
+      postMessage: (message: HostWireMessage) => sent.push(message),
       onFatalViolation: vi.fn(),
       onDisposed: disposed,
       maxResources: 64,

@@ -126,7 +126,9 @@ vi.mock('node:fs', () => ({
 }))
 
 vi.mock('node:child_process', () => {
-  execFileMock[Symbol.for('nodejs.util.promisify.custom')] = (command: string, args: string[]) =>
+  ;(execFileMock as unknown as Record<symbol, unknown>)[
+    Symbol.for('nodejs.util.promisify.custom')
+  ] = (command: string, args: string[]) =>
     new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       execFileMock(command, args, {}, (error: Error | null, stdout = '', stderr = '') => {
         if (error) {

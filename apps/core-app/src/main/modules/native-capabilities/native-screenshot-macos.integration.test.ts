@@ -245,10 +245,17 @@ describe('nativeTransport real macOS screenshot integration', () => {
         expect(first.done).toBe(false)
         expect(first.value.value.pixelFormat).toBe('bgra8-premultiplied')
         expect(first.value.value.stride).toBe(first.value.value.width * 4)
-        expect(first.value.attachments.reduce((total, part) => total + part.length, 0)).toBe(
-          first.value.value.stride * first.value.value.height
-        )
-        expect(first.value.attachments.every((part) => part.length <= 32 * 1024 * 1024)).toBe(true)
+        expect(
+          first.value.attachments.reduce(
+            (total: number, part: { length: number }) => total + part.length,
+            0
+          )
+        ).toBe(first.value.value.stride * first.value.value.height)
+        expect(
+          first.value.attachments.every(
+            (part: { length: number }) => part.length <= 32 * 1024 * 1024
+          )
+        ).toBe(true)
         await iterator.return?.()
         expect((await frames.closed).kind).toBe('cancelled')
 
