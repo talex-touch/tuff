@@ -255,6 +255,7 @@ function signS3Request(input: {
   url: URL
   body: Buffer | null
   contentType?: string | null
+  ownerId?: string | null
   storage: StorageObjectExternalConfig
   now?: Date
 }): Record<string, string> {
@@ -264,6 +265,9 @@ function signS3Request(input: {
     host: input.url.host,
     'x-amz-content-sha256': payloadHash,
     'x-amz-date': longDate,
+    // Included in `headers` before canonicalizeHeaders runs, so it is covered by the signature
+    // rather than sent alongside it -- an unsigned x-amz-* header is rejected outright (#1644).
+    ...(input.ownerId ? { 'x-amz-meta-ownerid': input.ownerId } : {}),
   }
   if (input.contentType)
     headers['content-type'] = input.contentType
@@ -303,6 +307,7 @@ function signOssRequest(input: {
   url: URL
   body: Buffer | null
   contentType?: string | null
+  ownerId?: string | null
   storage: StorageObjectExternalConfig
   now?: Date
 }): Record<string, string> {
@@ -311,6 +316,7 @@ function signOssRequest(input: {
     host: input.url.host,
     'x-oss-content-sha256': 'UNSIGNED-PAYLOAD',
     'x-oss-date': longDate,
+    ...(input.ownerId ? { 'x-oss-meta-ownerid': input.ownerId } : {}),
   }
   if (input.contentType)
     headers['content-type'] = input.contentType
@@ -350,6 +356,7 @@ function buildExternalHeaders(input: {
   url: URL
   body: Buffer | null
   contentType?: string | null
+  ownerId?: string | null
   storage: StorageObjectExternalConfig
 }) {
   return input.storage.channel === 'oss'
@@ -425,13 +432,14 @@ async function resolveObjectStorageBackend(input: StorageObjectContext): Promise
   }
 }
 
-async function putExternalObject(storage: StorageObjectExternalConfig, key: string, data: Buffer, contentType: string): Promise<void> {
+async function putExternalObject(storage: StorageObjectExternalConfig, key: string, data: Buffer, contentType: string, ownerId?: string | null): Promise<void> {
   const url = buildExternalObjectUrl(storage, key)
   const headers = buildExternalHeaders({
     method: 'PUT',
     url,
     body: data,
     contentType,
+    ownerId,
     storage,
   })
   const response = await (storage.fetch ?? fetch)(url, {
@@ -454,7 +462,7 @@ async function getExternalObject(
   storage: StorageObjectExternalConfig,
   key: string,
   fallbackContentType: string,
-): Promise<{ data: Buffer, contentType: string } | null> {
+): Promise<{ data: Buffer, contentType: string, ownerId?: string } | null> {
   const url = buildExternalObjectUrl(storage, key)
   const headers = buildExternalHeaders({
     method: 'GET',
@@ -476,7 +484,13 @@ async function getExternalObject(
   }
   const data = Buffer.from(await response.arrayBuffer())
   const contentType = normalizeContentType(response.headers.get('content-type'), fallbackContentType)
-  return { data, contentType }
+  // Both dialects are read because a single deployment is one or the other and the response is
+  // the only place that says which -- resolveObjectStorageBackend has already picked by then.
+  const ownerId
+    = response.headers.get('x-amz-meta-ownerid')
+      ?? response.headers.get('x-oss-meta-ownerid')
+      ?? undefined
+  return { data, contentType, ownerId: ownerId || undefined }
 }
 
 async function deleteExternalObject(storage: StorageObjectExternalConfig, key: string): Promise<void> {
@@ -719,7 +733,13 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
   const uploadRetry = backend.externalStorage || backend.bucket
     ? await runStorageWriteWithRetry(backend, input.retryPolicy, async () => {
       if (backend.externalStorage) {
-        await putExternalObject(backend.externalStorage, input.key, data.buffer, contentType)
+        await putExternalObject(
+          backend.externalStorage,
+          input.key,
+          data.buffer,
+          contentType,
+          input.ownerId
+        )
         return
       }
 
@@ -764,7 +784,7 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     storageProvider: backend.provider,
     uploadRetry,
     ownerId: input.ownerId ?? undefined,
-    storesOwnership: !backend.externalStorage,
+    storesOwnership: true,
   }
 }
 
@@ -805,10 +825,11 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       contentType: object.contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
-      // S3/OSS reads go through a signed request whose headers are part of the signature, so
-      // carrying x-amz-meta-* here means changing what gets signed. Left alone rather than
-      // changed blind against a backend no test in this repo exercises -- tracked as #1644.
-      storesOwnership: false,
+      // The metadata header is added to the record *before* canonicalizeHeaders runs, so it is
+      // covered by the signature rather than sent beside it, which S3 and OSS both reject
+      // (#1644). Same mechanism for either dialect, so both are supported.
+      ownerId: object.ownerId,
+      storesOwnership: true,
     }
   }
 

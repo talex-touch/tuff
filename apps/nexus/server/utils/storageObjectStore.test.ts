@@ -95,7 +95,9 @@ function createExternalStorage(channel: 's3' | 'oss', fetchImpl: typeof fetch): 
 }
 
 function createMockExternalFetch() {
-  const objects = new Map<string, { data: Buffer, contentType: string }>()
+  // ownerId is modelled because that is where ownership lives on S3/OSS (#1644). A mock that
+  // dropped it would let the round-trip tests pass while the real backend carried nothing.
+  const objects = new Map<string, { data: Buffer, contentType: string, ownerId?: string }>()
   const requests: Array<{ method: string, url: string, authorization: string | null }> = []
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -114,6 +116,8 @@ function createMockExternalFetch() {
       objects.set(url, {
         data: body,
         contentType: headers.get('content-type') || 'application/octet-stream',
+        ownerId:
+          headers.get('x-amz-meta-ownerid') ?? headers.get('x-oss-meta-ownerid') ?? undefined,
       })
       return new Response(null, { status: 200 })
     }
@@ -132,7 +136,10 @@ function createMockExternalFetch() {
         return new Response(null, { status: 404 })
       return new Response(object.data, {
         status: 200,
-        headers: { 'content-type': object.contentType },
+        headers: {
+          'content-type': object.contentType,
+          ...(object.ownerId ? { 'x-amz-meta-ownerid': object.ownerId } : {}),
+        },
       })
     }
 
@@ -733,5 +740,67 @@ describe('storage object ownership (#898)', () => {
 
     expect(read?.ownerId).toBeUndefined()
     expect(read?.storesOwnership).toBe(true)
+  })
+})
+
+describe('external storage ownership (#1644)', () => {
+  for (const channel of ['s3', 'oss'] as const) {
+    it(`signs the ownership header and reads it back over ${channel}`, async () => {
+      const marker = `own-${channel}`
+      const h3Event = event(marker)
+      const memoryStorage = createMemory()
+      const mock = createMockExternalFetch()
+      const external = createExternalStorage(channel, mock.fetchImpl)
+      const shared = {
+        event: h3Event,
+        bucket: null,
+        memoryStorage,
+        externalStorage: external,
+        key: `${marker}.bin`,
+        resourceType: `scene-asset-${marker}`,
+      }
+
+      const stored = await putStorageObject({
+        ...shared,
+        data: Buffer.from('body'),
+        contentType: 'application/octet-stream',
+        ownerId: 'user-external',
+      })
+      const loaded = await getStorageObject(shared)
+
+      expect(stored.storesOwnership).toBe(true)
+      expect(loaded?.ownerId).toBe('user-external')
+      expect(loaded?.storesOwnership).toBe(true)
+
+      // The decisive assertion. The header arriving proves only that it was sent; S3 and OSS both
+      // reject an x-amz-*/x-oss-* header that is not covered by the signature, so what has to be
+      // true is that it appears in SignedHeaders. That is the whole reason it is added to the
+      // record before canonicalizeHeaders rather than merged in afterwards.
+      const put = mock.requests.find((request) => request.method === 'PUT')
+      expect(put?.authorization).toContain(`x-${channel === 'oss' ? 'oss' : 'amz'}-meta-ownerid`)
+    })
+  }
+
+  it('reports an external object written before ownership as unowned, not unrecordable', async () => {
+    const marker = 'own-external-legacy'
+    const h3Event = event(marker)
+    const memoryStorage = createMemory()
+    const external = createExternalStorage('s3', createMockExternalFetch().fetchImpl)
+    const shared = {
+      event: h3Event,
+      bucket: null,
+      memoryStorage,
+      externalStorage: external,
+      key: `${marker}.bin`,
+      resourceType: `scene-asset-${marker}`,
+    }
+
+    await putStorageObject({ ...shared, data: Buffer.from('body') })
+    const loaded = await getStorageObject(shared)
+
+    // Same distinction the download check turns on: this backend can record ownership, so an
+    // object without one is refused rather than waved through.
+    expect(loaded?.ownerId).toBeUndefined()
+    expect(loaded?.storesOwnership).toBe(true)
   })
 })
