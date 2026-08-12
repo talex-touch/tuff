@@ -1888,3 +1888,87 @@ Also corrected the #1125 diagnosis: the 119 docs findings are not a rule/state-m
 ### Next Steps
 
 - None - task complete
+
+
+## Session 52: Issue sweep: 14 closed, 25 PRs, and five guards that could not fail
+
+**Date**: 2026-08-12
+**Task**: Issue sweep: 14 closed, 25 PRs, and five guards that could not fail
+**Branch**: `docs/1098-correct-nanoid-attribution`
+
+### Summary
+
+以 issue 为单位推进 25 个 PR;关闭 14 条;用开关取代 implicit-any ratchet;发现并修复自己在 #1648 埋的产物命名缺陷;沉淀 guard-thinking-guide
+
+### Main Changes
+
+本轮以 GitHub issue 为单位推进,未创建 Trellis 任务;工作全部经 PR 合入 `TalexDreamSoul/app-shell-v2`,共 25 个 PR。
+
+## 关闭的 issue
+
+#1564 hook 解析、#1125 native-protocol 全红、#806 Linux 窗口效果、#1517 Windows OCR 读不出、#857 图标主线程阻塞、#898 场景资产归属、#594 与 #786 macOS 发布产物、#713 TouchPlugin 拆分、#1303 drizzle 快照、#1608 macOS 产物计数、#344 COM apartment、#548 noImplicitAny、#480(并入 #318)、#1644 external storage 归属。
+
+## 几处需要记住的判断
+
+**#548 用开关取代了 ratchet。** 227 条隐式 any 分九个 PR 清完之后,做了一个五分钟实验:直接在 `tsconfig.node.json` 打开 `noImplicitAny`,结果恰好 19 条、全是 TS7xxx、继承链不带出别的严格选项。这个实验本可以是第一件事,而不是第八件。收口时把 ratchet 脚本连同测试一起删了——判据是「数字若能归零就用开关,不能归零才用 ratchet」。据此审了全部四个 ratchet:drizzle 快照正确、CSS 预算是带余量的上限(正确)、透明窗口守卫正确但说明过期(已改写,它还在指示读者去做 #806 已经否决的事)。
+
+**#1648 我自己埋了一个雷,在 #311 上挖出来。** 那次把 macOS artifactName 改成 `${productName}-${version}-${arch}.${ext}` 解决了架构碰撞,却让 zip 无法被 `inferCoreArtifactIdentity` 归类(它认 `macos`/`darwin` 或 `.dmg`/`.app.zip`),而 `isCorePackageFileName` 仍返回 true——于是它会作为「无法推断平台的核心产物」在**签名公证上传完成之后**才被 manifest 校验拒掉。更要紧的是当时那条守卫断言的是「含 `${arch}`」,坏名字完全满足它。已改成跑发布流水线自己的推断函数。
+
+**守卫失效是本轮的主线。** 一共五处:artifactName 含 `${arch}`、ratchet 数字对得上、`.catch(` 出现在文件里、actionlint 退出 0(缺 shellcheck 时静默跳过全部 run 块,本地 0 条 CI 32 条)、OCR 测试通过(不支持时提前返回)。形状相同:断言命名了性质的代理,而代理可以在性质不成立时被满足。已写成 `.trellis/spec/guides/guard-thinking-guide.md`。
+
+**重跑会抹掉 flake 证据。** GitHub API 返回最新一次尝试的结论,所以 `gh run rerun` 之后原始失败在 `conclusion` 里消失。据此统计 `App suites (core-app)` 得到 1/29≈3.4%,而当天三次连中概率约十万分之四——是测量错了。改读 `run_attempt`:最近 30 次至少 4 次曾失败(约 13%,下界)。推论:任何按当前结论算的 CI 稳定性指标,会被处理 flake 的动作本身污染,越勤快越好看。
+
+## 仍待你定夺
+
+#321 截图 addon:验收项要求「移除模块即失败」,而 `build-target.js` 明确写着刻意不要求(loader 优雅降级)。两边自洽,取决于「无截图能力的发布算不算合格发布」。
+
+#328 依赖 PR #1572(app-shell-v2 → master)。量化过:冲突全部来自 master 独有的 4 个提交,9 个文件,其中 5 个机械/加性、1 个 lockfile 该重生、真正需人判断的 3 个源码文件。当前 master 上 4 critical / 28 high。
+
+#311 macOS 架构策略、#689 CSP 清单(需要你跑一段时间后搜 `[csp-report-only]`)、#213(需要报告者说明装的是 deb 还是 AppImage)、#305 catalog 任务第 9 条(是真缺口还是流程遗留)。
+
+## 共享 worktree 的代价
+
+分支被并发会话切走至少四次,导致两次提交落到别人分支、两次测量被在途改动污染、一次 `git add -A` 卷进别人的工作、一次差点与 #318 重复劳动。此后所有提交改为按 SHA 用 `commit-tree` 以 base 为父重建再推。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b412c4c9f` | (see git log) |
+| `3686376dd` | (see git log) |
+| `d9dd1a06f` | (see git log) |
+| `616dc7a01` | (see git log) |
+| `e64b795ea` | (see git log) |
+| `e5594a127` | (see git log) |
+| `595b2c0f8` | (see git log) |
+| `ce0f55aaf` | (see git log) |
+| `58cb33a55` | (see git log) |
+| `d50fbae39` | (see git log) |
+| `6058a07a4` | (see git log) |
+| `0766072c0` | (see git log) |
+| `1401305a1` | (see git log) |
+| `c98e27733` | (see git log) |
+| `092435aa2` | (see git log) |
+| `224cf91d4` | (see git log) |
+| `c206e8ec4` | (see git log) |
+| `3fe748f8d` | (see git log) |
+| `89d408777` | (see git log) |
+| `d53663d01` | (see git log) |
+| `721e0aa0b` | (see git log) |
+| `476374cc1` | (see git log) |
+| `02b0884d5` | (see git log) |
+| `5e9370fc2` | (see git log) |
+| `07109069c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
