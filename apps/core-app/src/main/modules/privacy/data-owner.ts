@@ -475,7 +475,10 @@ export function definePrivacyDataOwner(candidate: PrivacyDataOwnerCandidate): Pr
       return result
     }
 
-    return Object.freeze({
+    // Explicit type argument: `Object.freeze<T>(o: T)` infers T from its argument, so the
+    // enclosing function's `: PrivacyDataOwner` return type never reaches the object literal
+    // and every callback parameter below fell back to `any` (#548).
+    return Object.freeze<PrivacyDataOwner>({
       categories,
       inspect: (request, signal) => serialize(() => inspect(request, signal)),
       previewDelete: (request, signal) => serialize(() => previewDelete(request, signal)),
