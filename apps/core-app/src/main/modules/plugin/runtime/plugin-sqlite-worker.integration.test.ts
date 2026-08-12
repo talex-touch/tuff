@@ -101,6 +101,18 @@ function invokeWorker(
   })
 }
 
+/**
+ * The quota test's budget, spelled out rather than picked (#1688).
+ *
+ * Its cost is `round trips x per-round-trip latency`, and the second term is scheduling time on a
+ * shared runner. 90ms is 30x the 3.0ms measured on an idle CI runner, which is what it takes to
+ * survive the tail rather than the median.
+ */
+const QUOTA_WRITE_BYTES = 100_000
+const QUOTA_ROUND_TRIP_CEILING = 700
+const QUOTA_MS_PER_ROUND_TRIP = 90
+const QUOTA_TIMEOUT_MS = QUOTA_ROUND_TRIP_CEILING * QUOTA_MS_PER_ROUND_TRIP
+
 describeBuiltWorker('built plugin SQLite worker', () => {
   const workers: Worker[] = []
   const clients: PluginSqliteWorkerClient[] = []
@@ -308,30 +320,76 @@ describeBuiltWorker('built plugin SQLite worker', () => {
     })
   })
 
-  it('maps the worker-owned database cap to a stable quota error', async () => {
-    const root = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-plugin-sqlite-quota-')))
-    roots.push(root)
-    const worker = createWorker(path.join(root, 'plugin.sqlite'))
-    workers.push(worker)
+  /**
+   * This is the file's only flaky test (#1688), and the reason is its shape rather than its
+   * logic: filling a 64 MiB database 100 KB at a time is 668 serialised worker round trips.
+   *
+   * Each round trip is a `postMessage` and a reply, so its cost is a scheduling quantity. On an
+   * idle CI runner the whole test is 2.02s (~3.0ms per round trip); on the run that failed it
+   * passed 15s (>22ms per round trip) while the suite as a whole was only 40% slower. Contention
+   * does not slow this test proportionally — it multiplies by 668.
+   *
+   * ## Why the round trips cannot be reduced
+   *
+   * Four ways of writing more per round trip were measured against the built worker, and each
+   * one dies on a *different* limit before reaching the disk quota:
+   *
+   * | attempt | outcome |
+   * | --- | --- |
+   * | 1 MiB rows (the `PLUGIN_SQL_MAX_PARAM_BYTES` ceiling) | `PLUGIN_SQLITE_UNAVAILABLE` at ~40 |
+   * | 8 × 100 KB rows per statement | `PLUGIN_SQLITE_UNAVAILABLE` at ~38 |
+   * | `INSERT INTO blobs SELECT value FROM blobs` (doubling) | `PLUGIN_SQLITE_UNAVAILABLE` at 9 |
+   * | `randomblob(100000)`, generated server-side | `PLUGIN_SQLITE_STATEMENT_DENIED` |
+   *
+   * The first three are the worker's own `maxOldGenerationSizeMb: 64`: a bigger param means a
+   * bigger retained copy per message, and the worker runs out of V8 heap long before the
+   * database runs out of its 64 MiB. The fourth is `plugin-sql-policy` refusing a function call,
+   * which is a rule this suite exists to protect. 100 KB × 1 row is the largest write that
+   * survives to the quota, which is why the loop looks like this.
+   *
+   * ## What the budget is
+   *
+   * 668 round trips × 90ms, which is 30× the measured idle-CI rate. It is derived from the round
+   * trip count rather than raised until the failure stopped, and the assertion below pins that
+   * count so a change making the loop need ten times as many round trips fails on the count
+   * rather than quietly eating the budget.
+   */
+  it(
+    'maps the worker-owned database cap to a stable quota error',
+    { timeout: QUOTA_TIMEOUT_MS },
+    async () => {
+      const root = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-plugin-sqlite-quota-')))
+      roots.push(root)
+      const worker = createWorker(path.join(root, 'plugin.sqlite'))
+      workers.push(worker)
 
-    await invokeWorker(worker, {
-      type: 'execute',
-      sql: 'CREATE TABLE blobs(value BLOB)',
-      params: []
-    })
-    let quotaResponse: PluginSqliteWorkerResponse | undefined
-    for (let index = 0; index < 700; index += 1) {
-      const response = await invokeWorker(worker, {
+      await invokeWorker(worker, {
         type: 'execute',
-        sql: 'INSERT INTO blobs VALUES (?)',
-        params: [new Uint8Array(100_000)]
+        sql: 'CREATE TABLE blobs(value BLOB)',
+        params: []
       })
-      if (response.type === 'error') {
-        quotaResponse = response
-        break
+      let quotaResponse: PluginSqliteWorkerResponse | undefined
+      let roundTrips = 0
+      for (let index = 0; index < QUOTA_ROUND_TRIP_CEILING; index += 1) {
+        roundTrips += 1
+        const response = await invokeWorker(worker, {
+          type: 'execute',
+          sql: 'INSERT INTO blobs VALUES (?)',
+          params: [new Uint8Array(QUOTA_WRITE_BYTES)]
+        })
+        if (response.type === 'error') {
+          quotaResponse = response
+          break
+        }
       }
-    }
 
-    expect(quotaResponse).toMatchObject({ type: 'error', code: 'PLUGIN_SQLITE_DISK_QUOTA' })
-  }, 15_000)
+      expect(quotaResponse).toMatchObject({ type: 'error', code: 'PLUGIN_SQLITE_DISK_QUOTA' })
+
+      // The budget above is round trips x 90ms, so the count is what it has to hold. 668 on every
+      // machine measured; the window allows for page-size and overhead differences without
+      // allowing a change that makes the loop an order of magnitude longer.
+      expect(roundTrips).toBeGreaterThan(600)
+      expect(roundTrips).toBeLessThan(700)
+    }
+  )
 })
