@@ -158,6 +158,14 @@ jobs:
       # so pnpm -r never reaches them, and the App suites matrix is [core-app, nexus]. Commit
       # 911fe1c6f cut 2,274 lines from seven plugin suites in packages/test while rewriting the
       # preludes they covered, which is how that baseline went green (#330).
+      # Three times in a month someone found test files that no job executed -- 623 core-app and
+      # 180 nexus (#924), 16 plugin suites (#1629), 8 vitest files in two plugin packages (#1670).
+      # All of them had been passing throughout, which is why nothing complained: a test that never
+      # runs looks exactly like a test that always passes. This is a directory walk and a set
+      # difference, so it does not need to wait for the next person who thinks to count (#330).
+      - name: Check for orphan test files
+        run: pnpm check:orphan-tests && pnpm check:orphan-tests:self-test
+
       - name: Run plugin suites
         run: pnpm test:plugins && pnpm test:plugins:self-test
 
