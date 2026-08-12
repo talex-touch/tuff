@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 /**
- * Runs the per-plugin `index.test.cjs` suites.
+ * Runs the per-plugin test suites — both the `index.test.cjs` ones and the vitest ones.
  *
  * These suites existed and passed long before this script did -- 97 cases across 16 plugins --
  * but nothing executed them. `plugins/*` is in the pnpm workspace, yet most of these directories
@@ -14,6 +14,13 @@ import { spawnSync } from 'node:child_process'
  * That matters because commit 911fe1c6f cut 2,274 lines from seven plugin suites in
  * `packages/test` while rewriting the plugin preludes those suites covered. The integration
  * baseline went green partly by moving coverage into files no gate reads (#330).
+ *
+ * The same hole existed one layer over. `touch-translation` and `clipboard-history` are real
+ * workspace packages that declare a vitest `test` script, and between them they carry 8 test
+ * files and 39 passing cases that no job ran either -- this script only knew about
+ * `index.test.cjs`, and nothing else in CI runs `pnpm -r test`. Finding tests that pass and are
+ * never executed twice in the same area is what makes discovery, not the runner, the thing worth
+ * asserting on.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -71,9 +78,74 @@ export function findSuites(root = pluginsDir) {
   return fs
     .readdirSync(root, { withFileTypes: true })
     .filter(entry => entry.isDirectory())
-    .map(entry => ({ name: entry.name, file: path.join(root, entry.name, 'index.test.cjs') }))
+    .map(entry => ({
+      name: entry.name,
+      runner: 'node-test',
+      dir: path.join(root, entry.name),
+      file: path.join(root, entry.name, 'index.test.cjs'),
+    }))
     .filter(suite => fs.existsSync(suite.file))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** True when a plugin's own `test` script hands the work to vitest rather than `node --test`. */
+export function declaresVitestSuite(packageJsonText) {
+  let parsed
+  try {
+    parsed = JSON.parse(String(packageJsonText ?? ''))
+  }
+  catch {
+    return false
+  }
+  return typeof parsed?.scripts?.test === 'string' && /\bvitest\b/.test(parsed.scripts.test)
+}
+
+/**
+ * Vitest plugins, found by their declared script rather than by a file pattern.
+ *
+ * The declaration is the contract — `touch-translation`'s script is a bare `vitest`, so the
+ * runner below forces `run` rather than calling the script and inheriting watch mode.
+ */
+export function findVitestSuites(root = pluginsDir) {
+  if (!fs.existsSync(root))
+    return []
+  return fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => ({
+      name: entry.name,
+      runner: 'vitest',
+      dir: path.join(root, entry.name),
+      file: path.join(root, entry.name, 'package.json'),
+    }))
+    .filter((suite) => {
+      if (!fs.existsSync(suite.file))
+        return false
+      return declaresVitestSuite(fs.readFileSync(suite.file, 'utf8'))
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Decides a vitest suite. Same split as above: the exit code is the verdict, the counts report.
+ *
+ * `status === null` gets its own branch because that is what `spawnSync` returns when the binary
+ * was never found — a missing pnpm would otherwise fall through whatever the count check decided.
+ */
+export function classifyVitestRun({ status, stdout }) {
+  const text = String(stdout ?? '')
+  if (status === null)
+    return { ok: false, pass: null, reason: 'the runner could not be spawned' }
+  const match = text.match(/Tests\s+(?:\d+ failed \| )?(\d+) passed/)
+  const pass = match ? Number(match[1]) : null
+
+  if (status !== 0)
+    return { ok: false, pass, reason: `exited ${status}` }
+  if (pass === null)
+    return { ok: false, pass, reason: 'exit 0 but no test counts in output' }
+  if (pass === 0)
+    return { ok: false, pass, reason: 'exit 0 but ran no tests' }
+  return { ok: true, pass, reason: null }
 }
 
 /** Proves the verdict logic fires, so a refactor cannot quietly turn this gate into a no-op. */
@@ -107,6 +179,61 @@ function selfTest() {
       actual: classifySuiteRun({ status: 0, stdout: 'ℹ pass 0\nℹ fail 0\n' }).ok,
       expected: false,
     },
+    {
+      name: 'a vitest test script is recognised',
+      actual: declaresVitestSuite('{"scripts":{"test":"vitest"}}'),
+      expected: true,
+    },
+    {
+      name: 'a vitest run script is recognised',
+      actual: declaresVitestSuite('{"scripts":{"test":"vitest run"}}'),
+      expected: true,
+    },
+    {
+      name: 'a node --test script is not a vitest suite',
+      actual: declaresVitestSuite('{"scripts":{"test":"node --test index.test.cjs"}}'),
+      expected: false,
+    },
+    {
+      name: 'a package with no test script is not a vitest suite',
+      actual: declaresVitestSuite('{"scripts":{"build":"vitest-ish"}}'),
+      expected: false,
+    },
+    {
+      name: 'unparseable package.json is not a vitest suite',
+      actual: declaresVitestSuite('{ not json'),
+      expected: false,
+    },
+    {
+      name: 'a passing vitest suite passes',
+      actual: classifyVitestRun({ status: 0, stdout: ' Tests  19 passed (19)\n' }).ok,
+      expected: true,
+    },
+    {
+      name: 'vitest counts are read past a failed segment',
+      actual: classifyVitestRun({ status: 1, stdout: ' Tests  1 failed | 18 passed (19)\n' }).pass,
+      expected: 18,
+    },
+    {
+      name: 'a failing vitest suite fails',
+      actual: classifyVitestRun({ status: 1, stdout: ' Tests  1 failed | 18 passed (19)\n' }).ok,
+      expected: false,
+    },
+    {
+      name: 'vitest exit 0 with no counts fails rather than passing blind',
+      actual: classifyVitestRun({ status: 0, stdout: 'No test files found' }).ok,
+      expected: false,
+    },
+    {
+      name: 'vitest exit 0 having run no tests fails',
+      actual: classifyVitestRun({ status: 0, stdout: ' Tests  0 passed (0)\n' }).ok,
+      expected: false,
+    },
+    {
+      name: 'a runner that could not be spawned fails',
+      actual: classifyVitestRun({ status: null, stdout: '' }).ok,
+      expected: false,
+    },
   ]
 
   let failures = 0
@@ -128,32 +255,54 @@ if (process.argv.includes('--self-test')) {
   process.exit(selfTest() > 0 ? 1 : 0)
 }
 
-const suites = findSuites()
+const nodeTestSuites = findSuites()
+const vitestSuites = findVitestSuites()
 
-if (discoveryFoundNothing(suites)) {
+if (discoveryFoundNothing(nodeTestSuites)) {
   console.error(
     '\x1B[31mNo plugins/*/index.test.cjs found — this run would report success without executing a single plugin test.\x1B[0m\n',
   )
   process.exit(1)
 }
 
-console.log(`\nRunning ${suites.length} plugin suites\n`)
+/**
+ * The vitest half gets the same treatment, separately.
+ *
+ * Folding both into one emptiness check would let either half disappear silently as long as the
+ * other still found something, which is the shape that hid these suites in the first place.
+ */
+if (discoveryFoundNothing(vitestSuites)) {
+  console.error(
+    '\x1B[31mNo plugins/*/package.json declares a vitest test script — either the packages moved or this half of the run checks nothing.\x1B[0m\n',
+  )
+  process.exit(1)
+}
+
+const suites = [...nodeTestSuites, ...vitestSuites]
+
+console.log(
+  `\nRunning ${suites.length} plugin suites (${nodeTestSuites.length} node --test, ${vitestSuites.length} vitest)\n`,
+)
 
 let totalCases = 0
 const failed = []
 
 for (const suite of suites) {
-  const run = spawnSync(process.execPath, ['--test', 'index.test.cjs'], {
-    cwd: path.dirname(suite.file),
-    encoding: 'utf8',
-  })
-  const verdict = classifySuiteRun({ status: run.status, stdout: `${run.stdout ?? ''}${run.stderr ?? ''}` })
+  const run = suite.runner === 'vitest'
+    // `exec` rather than `run test`: touch-translation's script is a bare `vitest`, which without
+    // this would sit in watch mode and never return.
+    ? spawnSync('pnpm', ['-C', suite.dir, 'exec', 'vitest', 'run'], { encoding: 'utf8' })
+    : spawnSync(process.execPath, ['--test', 'index.test.cjs'], { cwd: suite.dir, encoding: 'utf8' })
+  const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
+  const verdict = suite.runner === 'vitest'
+    ? classifyVitestRun({ status: run.status, stdout: output })
+    : classifySuiteRun({ status: run.status, stdout: output })
   if (verdict.ok) {
     totalCases += verdict.pass
     console.log(`\x1B[32m  ✓\x1B[0m ${suite.name.padEnd(28)} ${String(verdict.pass).padStart(3)} cases`)
   }
   else {
-    failed.push({ suite, verdict, output: run.stdout ?? '' })
+    failed.push({ suite, verdict, output })
     console.log(`\x1B[31m  ✗\x1B[0m ${suite.name.padEnd(28)} ${verdict.reason}`)
   }
 }
