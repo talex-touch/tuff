@@ -174,7 +174,12 @@ export function createPluginIntelligenceContextCapabilities(
   const definition: PluginHostCapabilityDefinition<
     PluginIntelligenceContextRequest,
     PluginIntelligenceContextResult
-  > = Object.freeze({
+  > = Object.freeze<
+    PluginHostCapabilityDefinition<
+      PluginIntelligenceContextRequest,
+      PluginIntelligenceContextResult
+    >
+  >({
     id: 'intelligence.context.invoke',
     permission: 'intelligence.basic',
     timeoutMs: 60_000,
