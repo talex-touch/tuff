@@ -231,6 +231,9 @@ importers:
       '@panva/hkdf':
         specifier: 1.2.1
         version: 1.2.1
+      '@types/plist':
+        specifier: ^3.0.5
+        version: 3.0.5
       '@typescript-eslint/parser':
         specifier: ^8.64.0
         version: 8.64.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
@@ -5967,6 +5970,9 @@ packages:
 
   '@types/picomatch@4.0.2':
     resolution: {integrity: sha512-qHHxQ+P9PysNEGbALT8f8YOSHW0KJu6l2xU8DYY0fu/EmGxXdVnuTLvFUvBgPJMSqXq29SYHveejeAha+4AYgA==}
+
+  '@types/plist@3.0.5':
+    resolution: {integrity: sha512-E6OCaRmAe4WDmWNsL/9RMqdkkzDCY1etutkflWk4c+AcjDU07Pcz1fQwTX0TQz+Pxqn9i4L1TU3UFpjnrcDgxA==}
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
@@ -18976,6 +18982,11 @@ snapshots:
       parse-path: 7.1.0
 
   '@types/picomatch@4.0.2': {}
+
+  '@types/plist@3.0.5':
+    dependencies:
+      '@types/node': 24.13.2
+      xmlbuilder: 15.1.1
 
   '@types/resolve@1.20.2': {}
 
