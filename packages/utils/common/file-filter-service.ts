@@ -73,6 +73,28 @@ function pathSegments(value: string): string[] {
   return normalizePath(value).split("/").filter(Boolean);
 }
 
+/**
+ * Whether `segments` names a directory sitting directly at the filesystem root (#1727).
+ *
+ * `SYSTEM_BLACKLISTED_DIRS` is a list of OS locations -- `usr`, `var`, `tmp`, `private`, `dev`,
+ * `Library`, `Windows.old` -- and every one of them is also an ordinary word someone may name a
+ * folder. Matched on the leaf name alone it excluded `~/Documents/tmp`, `~/Pictures/private` and
+ * `~/Documents/Library`, silently: the check runs before `readdir`, so nothing errors, nothing is
+ * counted, and the file simply never appears in search.
+ *
+ * Measured on one default install: six of 545 directories under the default roots, five of them
+ * real user content.
+ *
+ * POSIX roots are one segment (`/usr`). Windows roots are two, because the drive is a segment
+ * (`C:/Windows`). `~/Library` and `%APPDATA%` keep their exclusion through the anchored patterns
+ * in `PATH_PATTERNS.SYSTEM_PATHS` (`/^\/Users\/[^/]+\/Library\//`), which is where root-level
+ * system paths were already handled -- this check was only ever adding the unanchored half.
+ */
+function isFilesystemRootChild(segments: readonly string[]): boolean {
+  if (segments.length === 1) return true;
+  return segments.length === 2 && /^[a-z]:$/i.test(segments[0] ?? "");
+}
+
 function basename(value: string): string {
   const normalized = normalizePath(value).replace(/\/+$/, "");
   const separator = normalized.lastIndexOf("/");
@@ -177,7 +199,8 @@ export class FileFilterService {
     if (options.customBlacklistedDirs?.has(directoryName))
       return "excluded-path";
     if (LOWERCASE_DEV_DIRS.has(lowerDirectoryName)) return "development-path";
-    if (LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName)) return "system-path";
+    if (isFilesystemRootChild(segments) && LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName))
+      return "system-path";
     if (LOWERCASE_TEMP_DIRS.has(lowerDirectoryName)) return "cache-path";
 
     if (
