@@ -62,3 +62,49 @@ describe('renderer content security policy', () => {
     expect(html).not.toMatch(/\son[a-z]+\s*=\s*["']/i)
   })
 })
+
+describe('report-only CSP violations reach somewhere they can be read (#689)', () => {
+  const entry = readFileSync(fileURLToPath(new URL('./src/main.ts', import.meta.url)), 'utf8')
+  /**
+   * Bounded to the listener itself. The first version of this sliced to end-of-file, so the
+   * `.catch(` assertion below matched unrelated code further down and passed against a
+   * mutation that removed the real one.
+   */
+  const listenerStart = entry.indexOf('securitypolicyviolation')
+  const listenerEnd = entry.indexOf('function registerRouterEvents', listenerStart)
+  const listener = entry.slice(listenerStart, listenerEnd)
+
+  it('is reading the listener and not the whole file', () => {
+    // Without this the two assertions below can pass on text that has nothing to do with the
+    // listener, which is exactly how the first version of this block was wrong.
+    expect(listenerStart).toBeGreaterThan(-1)
+    expect(listenerEnd).toBeGreaterThan(listenerStart)
+    expect(listener.length).toBeLessThan(1500)
+  })
+
+  it('forwards violations to the main process', () => {
+    // The report-only policy exists to produce a runtime inventory of what the renderer
+    // actually reaches, so default-src and connect-src can stop being wildcards. That
+    // inventory was unreachable: createRendererLogger writes to the renderer console and
+    // nowhere else, so the findings only ever existed in a devtools panel nobody has open
+    // during real use. A policy that reports into a void is indistinguishable from no policy.
+    expect(listener).toContain('AppEvents.security.reportCspViolation')
+  })
+
+  it('does not swallow the report when the send fails', () => {
+    // Fire-and-forget, but explicitly: an unhandled rejection here would surface as noise in
+    // the very console this moved the reporting out of.
+    expect(listener).toMatch(/\.catch\(/)
+  })
+
+  it('the renderer logger it replaced really is console-only', () => {
+    // Positive control for the claim above. If this ever starts persisting, the test at the
+    // top of this block is asserting a workaround for a problem that no longer exists.
+    const rendererLog = readFileSync(
+      fileURLToPath(new URL('./src/utils/renderer-log.ts', import.meta.url)),
+      'utf8'
+    )
+    expect(rendererLog).toMatch(/console\.(log|info|warn|error)/)
+    expect(rendererLog).not.toMatch(/transport|ipcRenderer|window\.electron/)
+  })
+})
