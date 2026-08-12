@@ -178,6 +178,15 @@ jobs:
       - name: macOS file-icon guard
         run: pnpm check:file-icon-guard && pnpm check:file-icon-guard:self-test
 
+      # drizzle-kit generate diffs schema.ts against the highest meta/NNNN_snapshot.json. That
+      # stopped at 0014 while the journal reached 0037, so its first output re-proposes every
+      # table 0015+ already created -- 45 CREATE TABLE, none with IF NOT EXISTS, which fails on
+      # any existing install. Rebuilding the baseline is #1303's decision and touches files that
+      # run against users' databases; this only stops the gap growing, and fails in both
+      # directions so the recorded number cannot quietly become a ceiling nobody measures.
+      - name: drizzle snapshot drift
+        run: pnpm check:drizzle-snapshot-drift && pnpm check:drizzle-snapshot-drift:self-test
+
       # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
       # list, and touch-dictation was in neither (#562). The list is the kind that drifts
       # silently, so this asserts the two paths between them still cover every directory.
