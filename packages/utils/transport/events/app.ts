@@ -17,6 +17,7 @@ import type {
   BatteryStatusPayload,
   BuildVerificationStatus,
   CounterPayload,
+  CspViolationReport,
   DevToolsOptions,
   ExecuteCommandRequest,
   ExecuteCommandResponse,
@@ -629,6 +630,20 @@ export const AppEvents = {
       .module("debug")
       .event("open-devtools")
       .define<DevToolsOptions | void, void>(),
+  },
+
+  /**
+   * Security telemetry from the renderer.
+   */
+  security: {
+    /**
+     * Report a violation of the renderer's report-only CSP so it reaches the main process log
+     * (#689). Fire-and-forget: a dropped report must never disturb the page it came from.
+     */
+    reportCspViolation: defineEvent("app")
+      .module("security")
+      .event("report-csp-violation")
+      .define<CspViolationReport, void>(),
   },
 
   /**

@@ -68,14 +68,19 @@ function reportContentSecurityPolicyViolations(): void {
   document.addEventListener('securitypolicyviolation', (event) => {
     // The enforcing policy blocks nothing here, so anything reaching this listener is a request
     // the narrow candidate would have refused — a finding, not an error.
-    mainLog.warn(
-      `[csp-report-only] ${event.effectiveDirective} would block ${event.blockedURI || '<inline>'}`,
-      {
+    // Forwarded to main rather than logged here: createRendererLogger writes to the renderer
+    // console and nowhere else, so the inventory this policy exists to produce only existed in
+    // a devtools panel nobody has open during real use (#689).
+    transport
+      .send(AppEvents.security.reportCspViolation, {
+        effectiveDirective: event.effectiveDirective,
+        blockedURI: event.blockedURI,
         documentURI: event.documentURI,
         sourceFile: event.sourceFile,
-        line: event.lineNumber
-      }
-    )
+        lineNumber: event.lineNumber
+      })
+      // A dropped report must not disturb the page that produced it.
+      .catch(() => {})
   })
 }
 
