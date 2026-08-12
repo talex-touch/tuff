@@ -13,13 +13,35 @@ import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
-import { resolvePluginRegistrationByWebContents } from '../modules/plugin/runtime/plugin-view-registry'
+import {
+  maskPluginViewChannelKey,
+  resolvePluginKeyByViewNonce,
+  resolvePluginRegistrationByWebContents,
+  resolvePluginViewNonce
+} from '../modules/plugin/runtime/plugin-view-registry'
 import { resolveChannelCallerIdentity } from './channel-caller-identity'
 import {
+  PLUGIN_VIEW_NONCE_CHANNEL,
   RAW_MAIN_PROCESS_CHANNEL,
   RAW_PLUGIN_PROCESS_CHANNEL,
   resolveRawProcessChannel
 } from '../../shared/ipc/raw-channel'
+
+/**
+ * Rewrites the outbound channel key to the target surface's alias, in place (#697).
+ *
+ * Applied at every `webContents.send`, because a missed one is silent in both directions: the
+ * plugin view drops a message whose key it does not recognise, and a message that keeps the key
+ * hands the credential back to the surface this change took it away from.
+ */
+function maskOutboundChannelKey(webContents: Electron.WebContents, data: unknown): void {
+  if (!data || typeof data !== 'object') return
+  const header = (data as { header?: unknown }).header
+  if (!header || typeof header !== 'object') return
+  const current = (header as Record<string, unknown>).uniqueKey
+  if (typeof current !== 'string' || !current) return
+  ;(header as Record<string, unknown>).uniqueKey = maskPluginViewChannelKey(webContents.id, current)
+}
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const CHANNEL_PAYLOAD_WARN_BYTES = 256 * 1024
@@ -49,6 +71,14 @@ interface RawChannelHeaderData {
   type: ChannelType
   _originData?: unknown
   uniqueKey?: string
+  /**
+   * Exactly what the sender put on the wire, before the plugin-view alias was resolved (#697).
+   *
+   * `uniqueKey` above is the real channel key, because every downstream identity check compares
+   * against it. Replies have to echo this instead: the plugin view filters on the value it sent,
+   * and it never learns the key.
+   */
+  declaredKey?: string
   event?: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
   plugin?: string
 }
@@ -151,6 +181,12 @@ class TouchChannel {
 
     ipcMain.on(RAW_MAIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
     ipcMain.on(RAW_PLUGIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
+    ipcMain.on(PLUGIN_VIEW_NONCE_CHANNEL, (event) => {
+      // The alias belongs to the asking surface and nothing else, so it is looked up by sender id
+      // rather than accepted from the payload. An unregistered sender gets null, which the plugin
+      // view preload treats as fatal (#697).
+      event.returnValue = resolvePluginViewNonce(event.sender?.id) ?? null
+    })
 
     perfMonitor.start()
     if (!perfReportListenerRegistered) {
@@ -205,7 +241,10 @@ class TouchChannel {
 
       if (header && typeof header === 'object' && header !== null) {
         const rawUniqueKey = (header as Record<string, unknown>).uniqueKey
-        const uniqueKey = typeof rawUniqueKey === 'string' ? rawUniqueKey : undefined
+        const declaredKey = typeof rawUniqueKey === 'string' ? rawUniqueKey : undefined
+        // A plugin view sends its per-surface alias; everything else — the app renderer, the
+        // plugin host process — still sends the key itself, and passes through untouched (#697).
+        const uniqueKey = resolvePluginKeyByViewNonce(declaredKey) ?? declaredKey
         let senderDestroyed = true
         try {
           senderDestroyed = e.sender.isDestroyed()
@@ -227,7 +266,8 @@ class TouchChannel {
             type: caller.pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
             event: e,
-            uniqueKey
+            uniqueKey,
+            declaredKey
           },
           sync: sync as RawChannelSyncData | undefined,
           code: code as DataCode,
@@ -312,7 +352,7 @@ class TouchChannel {
       )
       delete rData.header.event
       if (rawData.header.uniqueKey) {
-        rData.header.uniqueKey = rawData.header.uniqueKey
+        rData.header.uniqueKey = rawData.header.declaredKey ?? rawData.header.uniqueKey
       }
 
       let finalData: RawStandardChannelData
@@ -388,7 +428,7 @@ class TouchChannel {
           delete rData.header.event
 
           if (rawData.header.uniqueKey) {
-            rData.header.uniqueKey = rawData.header.uniqueKey
+            rData.header.uniqueKey = rawData.header.declaredKey ?? rawData.header.uniqueKey
           }
 
           let finalData: unknown
@@ -713,6 +753,7 @@ class TouchChannel {
           return
         }
 
+        maskOutboundChannelKey(webContents, finalData)
         webContents.send(_channelCategory, finalData)
 
         const timeoutMs = finalData.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
@@ -864,6 +905,7 @@ class TouchChannel {
     const channel = resolveRawProcessChannel(type)
 
     try {
+      maskOutboundChannelKey(webContents, finalData)
       webContents.send(channel, finalData)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -921,6 +963,7 @@ class TouchChannel {
     }
 
     try {
+      maskOutboundChannelKey(webContents, finalData)
       webContents.send(RAW_PLUGIN_PROCESS_CHANNEL, finalData)
     } catch {
       // Ignore send errors for broadcasts
