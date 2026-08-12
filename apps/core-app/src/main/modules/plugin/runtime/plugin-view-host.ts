@@ -53,7 +53,6 @@ export function buildPluginViewWebPreferences(
   const partition = buildPluginViewPartition(options.plugin.name, options.source)
   const bootstrapArgument = buildPluginViewBootstrapArgument({
     bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
-    channelKey: options.plugin._uniqueChannelKey,
     plugin: {
       name: options.plugin.name,
       version: options.plugin.version,
