@@ -23,7 +23,6 @@ import type { IndexedSourceDescriptor, SearchProviderDescriptor } from '@talex-t
 import type { ITuffTransport, SendOptions, TuffEvent } from '@talex-touch/utils/transport'
 import type {
   ClipboardActionResult,
-  ClipboardCopyAndPasteRequest,
   QuickOpsAuditGetRequest,
   QuickOpsAuditGetResponse,
   QuickOpsBatteryStatusGetResponse,
@@ -128,7 +127,7 @@ import {
   PluginEvents,
   QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
-import { app, clipboard, dialog, shell } from 'electron'
+import { app } from 'electron'
 import fse from 'fs-extra'
 import {
   PluginLogAppendEvent,
@@ -138,7 +137,13 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { deviceIdleService } from '../../service/device-idle-service'
-import { validateExternalUrl } from '../../utils/external-url-policy'
+import {
+  createRemovedChannelError,
+  createSafePluginClipboardApi,
+  createSafePluginDialogApi,
+  createSafePluginOpenUrl,
+  withPluginSdkapiPayload
+} from './plugin-safe-api'
 import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getStyles } from '../../utils/plugin-injection'
@@ -170,85 +175,6 @@ interface FeatureEventUtil {
 }
 
 type BoxItemWriteScope = 'root-results' | 'active-feature'
-
-type PluginCopyAndPasteOptions = Omit<ClipboardCopyAndPasteRequest, '_sdkapi'>
-
-type PluginClipboardApi = Pick<
-  Electron.Clipboard,
-  'readText' | 'writeText' | 'readImage' | 'writeImage' | 'clear' | 'has'
-> & {
-  copyAndPaste: (options: PluginCopyAndPasteOptions) => Promise<boolean>
-}
-
-function createSafePluginDialogApi() {
-  return {
-    showMessageBox: (...args: Parameters<typeof dialog.showMessageBox>) =>
-      dialog.showMessageBox(...args),
-    showOpenDialog: (...args: Parameters<typeof dialog.showOpenDialog>) =>
-      dialog.showOpenDialog(...args),
-    showSaveDialog: (...args: Parameters<typeof dialog.showSaveDialog>) =>
-      dialog.showSaveDialog(...args)
-  }
-}
-
-function createSafePluginClipboardApi(
-  copyAndPaste: PluginClipboardApi['copyAndPaste']
-): PluginClipboardApi {
-  return {
-    readText: (...args: Parameters<typeof clipboard.readText>) => clipboard.readText(...args),
-    writeText: (...args: Parameters<typeof clipboard.writeText>) => clipboard.writeText(...args),
-    readImage: (...args: Parameters<typeof clipboard.readImage>) => clipboard.readImage(...args),
-    writeImage: (...args: Parameters<typeof clipboard.writeImage>) => clipboard.writeImage(...args),
-    clear: (...args: Parameters<typeof clipboard.clear>) => clipboard.clear(...args),
-    has: (...args: Parameters<typeof clipboard.has>) => clipboard.has(...args),
-    copyAndPaste
-  }
-}
-
-function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
-  return async (url: string): Promise<void> => {
-    const decision = validateExternalUrl(url)
-    if (!decision.allowed) {
-      const error = new Error(`PLUGIN_OPEN_URL_BLOCKED:${decision.reason}`)
-      logger.warn(`[Plugin ${pluginName}] openUrl blocked`, {
-        reason: decision.reason,
-        protocol: decision.protocol
-      })
-      throw error
-    }
-
-    try {
-      await shell.openExternal(decision.url)
-    } catch (error) {
-      logger.warn(`[Plugin ${pluginName}] openUrl failed`, {
-        error: error instanceof Error ? error.message : String(error)
-      })
-      throw error
-    }
-  }
-}
-
-function withPluginSdkapiPayload(payload: unknown, sdkapi?: number): unknown {
-  if (
-    !payload ||
-    typeof payload !== 'object' ||
-    Array.isArray(payload) ||
-    typeof sdkapi !== 'number'
-  ) {
-    return payload
-  }
-
-  return {
-    ...(payload as Record<string, unknown>),
-    _sdkapi: sdkapi
-  }
-}
-
-function createRemovedChannelError(capability: 'channel.raw'): Error {
-  return new Error(
-    `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
-  )
-}
 
 interface StorageTreeNode {
   name: string
