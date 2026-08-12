@@ -996,7 +996,9 @@ describe('official simple Prelude isolation regression', () => {
     ).resolves.toBe(true)
     expect(first.state.windowPresetStatusCalls).toBe(1)
     const devPreset = first.state.items.find(
-      (item) => item.actions?.[0]?.payload?.actionId === 'preset-dev-split'
+      (item) =>
+        (item.actions as Array<{ payload?: { actionId?: string } }> | undefined)?.[0]?.payload
+          ?.actionId === 'preset-dev-split'
     )
     expect(devPreset).toBeDefined()
 
@@ -1020,7 +1022,9 @@ describe('official simple Prelude isolation regression', () => {
       { id: 'window-presets' }
     ]).promise
     const clearPreset = second.state.items.find(
-      (item) => item.actions?.[0]?.payload?.actionId === 'preset-clear-topmost'
+      (item) =>
+        (item.actions as Array<{ payload?: { actionId?: string } }> | undefined)?.[0]?.payload
+          ?.actionId === 'preset-clear-topmost'
     )
     await expect(
       second.runtime.callLifecycle('onItemAction', [clearPreset, { actionId: 'run-action' }])
