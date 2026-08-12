@@ -27,7 +27,11 @@ jobs:
       package-name: intelligence-uikit
       package-path: packages/intelligence-uikit
       run-typecheck: true
-      typecheck-command: pnpm typecheck
+      # tuffex's exports map resolves only into dist/, so without a build every
+      # `@talex-touch/tuffex/*` import is TS2307 -- the same reason ci.yml builds tuffex before the
+      # nexus suite. package-ci.yml runs typecheck first and has no pre-step hook, so the build
+      # goes in the command.
+      typecheck-command: pnpm -F @talex-touch/tuffex build && pnpm typecheck
       run-lint: true
       lint-command: pnpm lint
       run-test: true
