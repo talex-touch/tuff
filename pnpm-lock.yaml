@@ -68,8 +68,8 @@ catalogs:
       specifier: ^17.0.6
       version: 17.0.6
     mermaid:
-      specifier: ^11.16.0
-      version: 11.16.0
+      specifier: ^11.16.1
+      version: 11.16.1
     ogl:
       specifier: ^1.0.11
       version: 1.0.11
@@ -256,8 +256,8 @@ importers:
         specifier: ^16.4.0
         version: 16.4.0
       markdown-it:
-        specifier: 14.1.0
-        version: 14.1.0
+        specifier: 14.2.0
+        version: 14.2.0
       markdownlint:
         specifier: 0.39.0
         version: 0.39.0
@@ -655,7 +655,7 @@ importers:
         version: 3.10.1
       mermaid:
         specifier: 'catalog:'
-        version: 11.16.0
+        version: 11.16.1
       nitropack:
         specifier: 2.13.4
         version: 2.13.4(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.17.4(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(oxc-parser@0.133.0)
@@ -1147,8 +1147,8 @@ importers:
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.39(typescript@5.9.3))
       dompurify:
-        specifier: ^3.4.11
-        version: 3.4.12
+        specifier: ^3.4.13
+        version: 3.4.13
       gsap:
         specifier: ^3.15.0
         version: 3.15.0
@@ -1157,7 +1157,7 @@ importers:
         version: 17.0.6
       mermaid:
         specifier: 'catalog:'
-        version: 11.16.0
+        version: 11.16.1
       shiki:
         specifier: ^4.4.2
         version: 4.4.2
@@ -8007,8 +8007,8 @@ packages:
     resolution: {integrity: sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==}
     engines: {node: '>= 4'}
 
-  dompurify@3.4.12:
-    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+  dompurify@3.4.13:
+    resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
 
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
@@ -10251,8 +10251,8 @@ packages:
   mark.js@8.11.1:
     resolution: {integrity: sha512-1I+1qpDt4idfgLQG+BNWmrqku+7/2bi5nLf4YwF8y8zXvmfiTBY3PV3ZibfrjBueCByROpuBjLLFCajqkgYoLQ==}
 
-  markdown-it@14.1.0:
-    resolution: {integrity: sha512-a54IwgWPaeBCAAsv13YgmALOF1elABB08FxO9i+r4VFk5Vl4pKokRPeX8u5TCgSsPi6ec1otfLjdOpVcgbpshg==}
+  markdown-it@14.2.0:
+    resolution: {integrity: sha512-1TGiQiJVRQ3NPmZH6sx5Cfnmg6GQm9jvC1ch4TK511NjSJvjzKLzn5pPfZRNZkRPZP0HqCioSndqH8v2nRaWVQ==}
     hasBin: true
 
   markdown-table@3.0.4:
@@ -10354,8 +10354,8 @@ packages:
     resolution: {integrity: sha512-Sz8FzjzI0kN13GK/6MVEsVzMZEPvOhnmmI1lU5+/1cGOiK3QUahntrNNtdVeihrO7t9JpoH75iMNXg6R6uWflQ==}
     engines: {node: '>=18.0.0'}
 
-  mermaid@11.16.0:
-    resolution: {integrity: sha512-Zvm3kbstgdpvIJPPItlL7fppIZ3kibvc1oZIGxdvk9t6UFz6flv+Jw7FtRGKwfcI8OckmH04LqG6LlS6X4B1pA==}
+  mermaid@11.16.1:
+    resolution: {integrity: sha512-TQsq6u22fAn3rek5VOubrhKPo1g5hwC3FXUN9hiyupTckcYiGuuKGkNQrKYwGJkXUxZdojwRG46gsSCFZMDp4g==}
 
   micromark-core-commonmark@2.0.3:
     resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
@@ -21519,7 +21519,7 @@ snapshots:
     dependencies:
       domelementtype: 2.3.0
 
-  dompurify@3.4.12:
+  dompurify@3.4.13:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -24097,7 +24097,7 @@ snapshots:
 
   mark.js@8.11.1: {}
 
-  markdown-it@14.1.0:
+  markdown-it@14.2.0:
     dependencies:
       argparse: 2.0.1
       entities: 4.5.0
@@ -24281,7 +24281,7 @@ snapshots:
 
   meriyah@6.1.4: {}
 
-  mermaid@11.16.0:
+  mermaid@11.16.1:
     dependencies:
       '@braintree/sanitize-url': 7.1.2
       '@iconify/utils': 3.1.4
@@ -24295,7 +24295,7 @@ snapshots:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.21
-      dompurify: 3.4.12
+      dompurify: 3.4.13
       es-toolkit: 1.49.0
       katex: 0.16.45
       khroma: 2.1.0
