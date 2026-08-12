@@ -281,96 +281,111 @@ function selfTest() {
   return failures
 }
 
+/**
+ * Everything after this point runs the suites, so it must not fire on import.
+ *
+ * check-orphan-tests.mjs asks this module which plugins it would run rather than restating the
+ * rule. Restating it would let the two drift in the dangerous direction — a runner that narrowed
+ * its discovery while the guard still called those plugins covered.
+ */
+const invokedDirectly
+  = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+
 if (process.argv.includes('--self-test')) {
   process.exit(selfTest() > 0 ? 1 : 0)
 }
 
-/**
- * Plugin vite configs import built workspace packages.
- *
- * `touch-translation/vite.config.ts` imports `@talex-touch/unplugin-export-plugin/vite`, whose
- * `dist/` is gitignored, so a fresh checkout cannot load that config at all. Locally it was
- * already built from some earlier run and every suite came back green; the first CI run is what
- * said otherwise. Building it here rather than in the workflow step keeps a direct
- * `node scripts/test-plugins.mjs` behaving the same way as the pipeline.
- */
-const VITEST_PREREQUISITE_PACKAGES = ['@talex-touch/unplugin-export-plugin']
+function main() {
+  /**
+   * Plugin vite configs import built workspace packages.
+   *
+   * `touch-translation/vite.config.ts` imports `@talex-touch/unplugin-export-plugin/vite`, whose
+   * `dist/` is gitignored, so a fresh checkout cannot load that config at all. Locally it was
+   * already built from some earlier run and every suite came back green; the first CI run is what
+   * said otherwise. Building it here rather than in the workflow step keeps a direct
+   * `node scripts/test-plugins.mjs` behaving the same way as the pipeline.
+   */
+  const VITEST_PREREQUISITE_PACKAGES = ['@talex-touch/unplugin-export-plugin']
 
-function buildVitestPrerequisites() {
-  for (const name of VITEST_PREREQUISITE_PACKAGES) {
-    const build = spawnSync('pnpm', ['-F', name, 'run', 'build'], { encoding: 'utf8' })
-    if (build.status !== 0) {
-      console.error(
-        `\n\x1B[31mCould not build ${name}, which the plugin vite configs import — `
-        + `the vitest suites would fail to load their config.\x1B[0m`,
-      )
-      console.error(stripAnsi(`${build.stdout ?? ''}${build.stderr ?? ''}`).split('\n').slice(-15).join('\n'))
-      process.exit(1)
+  function buildVitestPrerequisites() {
+    for (const name of VITEST_PREREQUISITE_PACKAGES) {
+      const build = spawnSync('pnpm', ['-F', name, 'run', 'build'], { encoding: 'utf8' })
+      if (build.status !== 0) {
+        console.error(
+          `\n\x1B[31mCould not build ${name}, which the plugin vite configs import — `
+          + `the vitest suites would fail to load their config.\x1B[0m`,
+        )
+        console.error(stripAnsi(`${build.stdout ?? ''}${build.stderr ?? ''}`).split('\n').slice(-15).join('\n'))
+        process.exit(1)
+      }
     }
   }
-}
 
-const nodeTestSuites = findSuites()
-const vitestSuites = findVitestSuites()
+  const nodeTestSuites = findSuites()
+  const vitestSuites = findVitestSuites()
 
-if (discoveryFoundNothing(nodeTestSuites)) {
-  console.error(
-    '\x1B[31mNo plugins/*/index.test.cjs found — this run would report success without executing a single plugin test.\x1B[0m\n',
+  if (discoveryFoundNothing(nodeTestSuites)) {
+    console.error(
+      '\x1B[31mNo plugins/*/index.test.cjs found — this run would report success without executing a single plugin test.\x1B[0m\n',
+    )
+    process.exit(1)
+  }
+
+  /**
+   * The vitest half gets the same treatment, separately.
+   *
+   * Folding both into one emptiness check would let either half disappear silently as long as the
+   * other still found something, which is the shape that hid these suites in the first place.
+   */
+  if (discoveryFoundNothing(vitestSuites)) {
+    console.error(
+      '\x1B[31mNo plugins/*/package.json declares a vitest test script — either the packages moved or this half of the run checks nothing.\x1B[0m\n',
+    )
+    process.exit(1)
+  }
+
+  buildVitestPrerequisites()
+
+  const suites = [...nodeTestSuites, ...vitestSuites]
+
+  console.log(
+    `\nRunning ${suites.length} plugin suites (${nodeTestSuites.length} node --test, ${vitestSuites.length} vitest)\n`,
   )
-  process.exit(1)
-}
 
-/**
- * The vitest half gets the same treatment, separately.
- *
- * Folding both into one emptiness check would let either half disappear silently as long as the
- * other still found something, which is the shape that hid these suites in the first place.
- */
-if (discoveryFoundNothing(vitestSuites)) {
-  console.error(
-    '\x1B[31mNo plugins/*/package.json declares a vitest test script — either the packages moved or this half of the run checks nothing.\x1B[0m\n',
-  )
-  process.exit(1)
-}
+  let totalCases = 0
+  const failed = []
 
-buildVitestPrerequisites()
-
-const suites = [...nodeTestSuites, ...vitestSuites]
-
-console.log(
-  `\nRunning ${suites.length} plugin suites (${nodeTestSuites.length} node --test, ${vitestSuites.length} vitest)\n`,
-)
-
-let totalCases = 0
-const failed = []
-
-for (const suite of suites) {
-  const run = suite.runner === 'vitest'
-    // `exec` rather than `run test`: touch-translation's script is a bare `vitest`, which without
-    // this would sit in watch mode and never return.
-    ? spawnSync('pnpm', ['-C', suite.dir, 'exec', 'vitest', 'run'], { encoding: 'utf8' })
-    : spawnSync(process.execPath, ['--test', 'index.test.cjs'], { cwd: suite.dir, encoding: 'utf8' })
-  const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
-  const verdict = suite.runner === 'vitest'
-    ? classifyVitestRun({ status: run.status, stdout: output })
-    : classifySuiteRun({ status: run.status, stdout: output })
-  if (verdict.ok) {
-    totalCases += verdict.pass
-    console.log(`\x1B[32m  ✓\x1B[0m ${suite.name.padEnd(28)} ${String(verdict.pass).padStart(3)} cases`)
+  for (const suite of suites) {
+    const run = suite.runner === 'vitest'
+      // `exec` rather than `run test`: touch-translation's script is a bare `vitest`, which without
+      // this would sit in watch mode and never return.
+      ? spawnSync('pnpm', ['-C', suite.dir, 'exec', 'vitest', 'run'], { encoding: 'utf8' })
+      : spawnSync(process.execPath, ['--test', 'index.test.cjs'], { cwd: suite.dir, encoding: 'utf8' })
+    const output = `${run.stdout ?? ''}${run.stderr ?? ''}`
+    const verdict = suite.runner === 'vitest'
+      ? classifyVitestRun({ status: run.status, stdout: output })
+      : classifySuiteRun({ status: run.status, stdout: output })
+    if (verdict.ok) {
+      totalCases += verdict.pass
+      console.log(`\x1B[32m  ✓\x1B[0m ${suite.name.padEnd(28)} ${String(verdict.pass).padStart(3)} cases`)
+    }
+    else {
+      failed.push({ suite, verdict, output })
+      console.log(`\x1B[31m  ✗\x1B[0m ${suite.name.padEnd(28)} ${verdict.reason}`)
+    }
   }
-  else {
-    failed.push({ suite, verdict, output })
-    console.log(`\x1B[31m  ✗\x1B[0m ${suite.name.padEnd(28)} ${verdict.reason}`)
+
+  if (failed.length > 0) {
+    for (const entry of failed) {
+      console.error(`\n\x1B[31m--- ${entry.suite.name}: ${entry.verdict.reason} ---\x1B[0m`)
+      console.error(entry.output.split('\n').slice(-25).join('\n'))
+    }
+    console.error(`\n\x1B[31m${failed.length}/${suites.length} plugin suites failed.\x1B[0m\n`)
+    process.exit(1)
   }
+
+  console.log(`\n\x1B[32mAll ${suites.length} plugin suites passed — ${totalCases} cases.\x1B[0m\n`)
 }
 
-if (failed.length > 0) {
-  for (const entry of failed) {
-    console.error(`\n\x1B[31m--- ${entry.suite.name}: ${entry.verdict.reason} ---\x1B[0m`)
-    console.error(entry.output.split('\n').slice(-25).join('\n'))
-  }
-  console.error(`\n\x1B[31m${failed.length}/${suites.length} plugin suites failed.\x1B[0m\n`)
-  process.exit(1)
-}
-
-console.log(`\n\x1B[32mAll ${suites.length} plugin suites passed — ${totalCases} cases.\x1B[0m\n`)
+if (invokedDirectly)
+  main()
