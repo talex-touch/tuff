@@ -164,7 +164,7 @@
     "@intlify/unplugin-vue-i18n": "^11.1.2",
     "@milkdown/core": "^7.21.3",
     "@milkdown/ctx": "^7.21.3",
-    "@milkdown/plugin-listener": "^7.21.3",
+    "@milkdown/plugin-listener": "^7.22.0",
     "@milkdown/preset-commonmark": "^7.21.3",
     "@milkdown/theme-nord": "^7.21.3",
     "@milkdown/utils": "^7.21.3",
