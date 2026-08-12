@@ -55,7 +55,7 @@ export function discoveryFoundNothing(suites) {
  * failure mode that put #330 on the board.
  */
 export function classifySuiteRun({ status, stdout }) {
-  const text = String(stdout ?? '')
+  const text = stripAnsi(stdout)
   const read = (label) => {
     const match = text.match(new RegExp(`(?:^|\\s)${label}\\s+(\\d+)`, 'm'))
     return match ? Number(match[1]) : null
@@ -132,8 +132,19 @@ export function findVitestSuites(root = pluginsDir) {
  * `status === null` gets its own branch because that is what `spawnSync` returns when the binary
  * was never found — a missing pnpm would otherwise fall through whatever the count check decided.
  */
+/**
+ * Vitest colours its summary on CI, so the line arrives as
+ * `Tests \x1B[22m \x1B[1m\x1B[32m20 passed`. Reading it raw made a passing suite report
+ * "exit 0 but no test counts in output" on the runner while it parsed fine locally, where the
+ * same command emitted no escapes at all.
+ */
+export function stripAnsi(text) {
+  // eslint-disable-next-line no-control-regex
+  return String(text ?? '').replace(/\x1B\[[0-9;]*[a-z]/gi, '')
+}
+
 export function classifyVitestRun({ status, stdout }) {
-  const text = String(stdout ?? '')
+  const text = stripAnsi(stdout)
   if (status === null)
     return { ok: false, pass: null, reason: 'the runner could not be spawned' }
   const match = text.match(/Tests\s+(?:\d+ failed \| )?(\d+) passed/)
@@ -234,6 +245,25 @@ function selfTest() {
       actual: classifyVitestRun({ status: null, stdout: '' }).ok,
       expected: false,
     },
+    {
+      // The exact shape CI produced, which the first version of this parser could not read.
+      name: 'the coloured summary CI emits is read',
+      actual: classifyVitestRun({
+        status: 0,
+        stdout: '\x1B[2m      Tests \x1B[22m \x1B[1m\x1B[32m20 passed\x1B[39m\x1B[22m\x1B[90m (20)\x1B[39m',
+      }).pass,
+      expected: 20,
+    },
+    {
+      name: 'a coloured node --test summary is read too',
+      actual: classifySuiteRun({ status: 0, stdout: '\x1B[32mℹ pass 4\x1B[0m\n\x1B[32mℹ fail 0\x1B[0m\n' }).ok,
+      expected: true,
+    },
+    {
+      name: 'stripping colour leaves the text alone',
+      actual: stripAnsi('\x1B[31mplain\x1B[0m'),
+      expected: 'plain',
+    },
   ]
 
   let failures = 0
@@ -253,6 +283,31 @@ function selfTest() {
 
 if (process.argv.includes('--self-test')) {
   process.exit(selfTest() > 0 ? 1 : 0)
+}
+
+/**
+ * Plugin vite configs import built workspace packages.
+ *
+ * `touch-translation/vite.config.ts` imports `@talex-touch/unplugin-export-plugin/vite`, whose
+ * `dist/` is gitignored, so a fresh checkout cannot load that config at all. Locally it was
+ * already built from some earlier run and every suite came back green; the first CI run is what
+ * said otherwise. Building it here rather than in the workflow step keeps a direct
+ * `node scripts/test-plugins.mjs` behaving the same way as the pipeline.
+ */
+const VITEST_PREREQUISITE_PACKAGES = ['@talex-touch/unplugin-export-plugin']
+
+function buildVitestPrerequisites() {
+  for (const name of VITEST_PREREQUISITE_PACKAGES) {
+    const build = spawnSync('pnpm', ['-F', name, 'run', 'build'], { encoding: 'utf8' })
+    if (build.status !== 0) {
+      console.error(
+        `\n\x1B[31mCould not build ${name}, which the plugin vite configs import — `
+        + `the vitest suites would fail to load their config.\x1B[0m`,
+      )
+      console.error(stripAnsi(`${build.stdout ?? ''}${build.stderr ?? ''}`).split('\n').slice(-15).join('\n'))
+      process.exit(1)
+    }
+  }
 }
 
 const nodeTestSuites = findSuites()
@@ -277,6 +332,8 @@ if (discoveryFoundNothing(vitestSuites)) {
   )
   process.exit(1)
 }
+
+buildVitestPrerequisites()
 
 const suites = [...nodeTestSuites, ...vitestSuites]
 
