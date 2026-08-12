@@ -52,31 +52,72 @@ export const CEILING_SLACK = 50
  * explained a decision in a file whose whole problem is that its decisions are unexplained.
  *
  * Not `wc -l` either, which counts newline characters and reports `'a\nb'` as 1.
+ *
+ * A character scan rather than a per-line one. The line version got four shapes wrong, all found
+ * by CodeRabbit: a one-line block comment with code after it lost that code, a block opened after
+ * code mid-line was not seen, a generator method `*gen()` read as a comment continuation, and so
+ * did a wrapped expression beginning with `*`. (Those shapes cannot be written literally in this
+ * comment -- the first one closes it. The self-test carries them as strings.) Measured on all four guarded files the two agree exactly -- 3249, 2594, 3950,
+ * 3703 -- so none of those shapes is present today, and no ceiling moved for this. They would have
+ * bitten the first time one appeared, which is reason enough.
+ *
+ * Quotes are tracked so a `/*` inside a string is not read as a comment.
  */
 export function countLines(text) {
-  let count = 0
+  const lines = []
+  let current = ''
+  let index = 0
   let inBlockComment = false
-  for (const raw of text.split('\n')) {
-    const line = raw.trim()
-    if (!line)
+  let quote = null
+
+  while (index < text.length) {
+    const char = text[index]
+    const next = text[index + 1]
+
+    if (char === '\n') {
+      lines.push(current)
+      current = ''
+      index += 1
       continue
+    }
     if (inBlockComment) {
-      if (line.includes('*/'))
+      if (char === '*' && next === '/') {
         inBlockComment = false
+        index += 2
+      }
+      else { index += 1 }
       continue
     }
-    if (line.startsWith('/*')) {
-      if (!line.includes('*/'))
-        inBlockComment = true
+    if (quote) {
+      current += char
+      if (char === '\\') {
+        current += next ?? ''
+        index += 2
+        continue
+      }
+      if (char === quote)
+        quote = null
+      index += 1
       continue
     }
-    // `*` catches continuation lines of a block comment that this loop already skipped past, and
-    // costs nothing real: a statement never starts with a bare asterisk.
-    if (line.startsWith('//') || line.startsWith('*'))
+    if (char === '/' && next === '*') {
+      inBlockComment = true
+      index += 2
       continue
-    count += 1
+    }
+    if (char === '/' && next === '/') {
+      while (index < text.length && text[index] !== '\n') index += 1
+      continue
+    }
+    if (char === '"' || char === '\'' || char === '`')
+      quote = char
+
+    current += char
+    index += 1
   }
-  return count
+  lines.push(current)
+
+  return lines.filter(line => line.trim() !== '').length
 }
 
 /** Every ceiling in `entries` higher than the same file's ceiling in `baseEntries`. */
@@ -250,6 +291,13 @@ function selfTest() {
     { name: 'code after a block comment closes is counted again', actual: countLines('/*\n */\nb'), expected: 1 },
     { name: 'a trailing comment on a code line does not remove the line', actual: countLines('a // why'), expected: 1 },
     { name: 'a file that is entirely comment is zero code', actual: countLines('// a\n// b\n'), expected: 0 },
+    /* The four shapes the per-line version got wrong. None occurs in the guarded files today. */
+    { name: 'code after a closing block comment on the same line still counts', actual: countLines('/* why */ b'), expected: 1 },
+    { name: 'a block comment opened after code still ends the comment correctly', actual: countLines('a /*\nmore */\nb'), expected: 2 },
+    { name: 'a generator method is code, not a comment continuation', actual: countLines('  *gen() {\n  }'), expected: 2 },
+    { name: 'a wrapped expression beginning with * is code', actual: countLines('const x = 1\n  * 2'), expected: 2 },
+    { name: 'a block comment inside a string is not a comment', actual: countLines('const s = "/*"\nconst t = 1'), expected: 2 },
+    { name: 'an escaped quote does not end the string', actual: countLines('const s = "a\\"/*"\nconst t = 1'), expected: 2 },
     { name: 'a file with no trailing newline still counts its last line', actual: countLines('a\nb'), expected: 2 },
     { name: 'a trailing newline is not an extra line', actual: countLines('a\nb\n'), expected: 2 },
     { name: 'an empty file is zero lines', actual: countLines(''), expected: 0 },
