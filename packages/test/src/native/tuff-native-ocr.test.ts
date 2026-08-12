@@ -110,4 +110,35 @@ describe('tuff-native ocr smoke & contract', () => {
     expect(Array.isArray(result.blocks)).toBe(true)
     expect((result.blocks || []).length).toBeGreaterThan(0)
   })
+
+  it('survives repeated and concurrent calls on reused threads', async () => {
+    const support = nativeOcr.getNativeOcrSupport()
+    if (!support.supported) {
+      expect(
+        REQUIRE_OCR,
+        `native OCR reported unsupported on ${process.platform} (${support.reason})`,
+      ).toBe(false)
+      return
+    }
+
+    // Windows initialises a COM apartment per call. It used to do so with nothing paired to it,
+    // so every reused N-API worker thread accumulated a reference (#344). One call cannot show
+    // that; a sequence on the same pool can, and the concurrent round additionally lands calls on
+    // threads another call already initialised -- the RPC_E_CHANGED_MODE path.
+    const fixturePath = fileURLToPath(new URL('./fixtures/tuff-ocr-fixture.png', import.meta.url))
+    const image = readFileSync(fixturePath)
+    const recognize = async (): Promise<string> => {
+      const result = await nativeOcr.recognizeImageText({ image })
+      return result.text.toLowerCase()
+    }
+
+    for (let index = 0; index < 5; index += 1) {
+      expect(await recognize()).toContain('tuff')
+    }
+
+    const concurrent = await Promise.all(Array.from({ length: 4 }, () => recognize()))
+    for (const text of concurrent) {
+      expect(text).toContain('tuff')
+    }
+  })
 })

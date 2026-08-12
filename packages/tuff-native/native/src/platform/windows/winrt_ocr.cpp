@@ -146,6 +146,47 @@ std::array<double, 4> MergeWordBoundingBox(const winrt::Windows::Media::Ocr::Ocr
   return {minX, minY, std::max(0.0, maxX - minX), std::max(0.0, maxY - minY)};
 }
 
+/**
+ * Owns the COM apartment for one OCR call, and only when this call created it.
+ *
+ * `init_apartment` ran per call with nothing paired to it. Every N-API worker thread is reused,
+ * so each call left another reference behind; and a caller that had already initialised the
+ * thread single-threaded made the call throw RPC_E_CHANGED_MODE with no handling at all (#344).
+ *
+ * The two failure modes need opposite treatment, which is why this cannot be a bare
+ * init/uninit pair. CoInitializeEx returns S_FALSE when the apartment already exists in the same
+ * mode -- that is a success and still takes a reference, so it must be released. RPC_E_CHANGED_MODE
+ * takes no reference, so releasing on that path would tear down an apartment owned by someone
+ * else, on a thread this addon does not own.
+ */
+class ApartmentScope {
+ public:
+  ApartmentScope() {
+    try {
+      winrt::init_apartment(winrt::apartment_type::multi_threaded);
+      owned_ = true;
+    } catch (const winrt::hresult_error& ex) {
+      if (ex.code() != RPC_E_CHANGED_MODE) {
+        throw;
+      }
+      // The thread already has an apartment in another mode. WinRT still marshals across it, so
+      // the OCR proceeds -- it simply is not ours to release.
+    }
+  }
+
+  ApartmentScope(const ApartmentScope&) = delete;
+  ApartmentScope& operator=(const ApartmentScope&) = delete;
+
+  ~ApartmentScope() {
+    if (owned_) {
+      winrt::uninit_apartment();
+    }
+  }
+
+ private:
+  bool owned_ = false;
+};
+
 } // namespace
 
 bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& error) {
@@ -154,7 +195,8 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
   const auto startedAt = std::chrono::steady_clock::now();
 
   try {
-    winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    // Destroyed on every exit from this try block, including the throwing ones below.
+    const ApartmentScope apartment;
 
     winrt::Windows::Graphics::Imaging::SoftwareBitmap bitmap{nullptr};
     if (!BuildBitmapFromBytes(options.image, bitmap, error)) {
