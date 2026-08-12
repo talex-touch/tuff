@@ -182,6 +182,19 @@ jobs:
       - name: Check maintenance-audit report claims
         run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
 
+      # plugin.ts was ~3,060 lines when #339 asked for it to be split. Three extraction PRs landed
+      # and each reported real progress -- 4,069 to 3,947 to 3,872 to 3,844 -- against a baseline
+      # that had already grown a thousand lines since the issue was written. Extraction removed 225
+      # lines while accretion added 1,009, and nothing said so, because each PR compared with the
+      # previous PR.
+      #
+      # This does not measure what #339 is about; that issue says "the concern is not line count by
+      # itself" and is right. It measures whether the split is losing, which is the question three
+      # PRs in a row could not answer. The ceiling falls and never rises, and a ceiling left too far
+      # above the file also fails -- a ratchet nobody tightens is a comment.
+      - name: Check module size ratchet
+        run: pnpm check:module-size-ratchet && pnpm check:module-size-ratchet:self-test
+
       - name: Run plugin suites
         run: pnpm test:plugins && pnpm test:plugins:self-test
 

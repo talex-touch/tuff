@@ -1,0 +1,22 @@
+{
+  "$comment": [
+    "Ceilings for scripts/check-module-size-ratchet.mjs. A ceiling may fall and may not rise:",
+    "the check compares each value here against the same file in the PR base revision, so lowering",
+    "one is part of the change that shrinks the file and raising one fails the build.",
+    "Only the two files #339 names. This is not a general file-size policy."
+  ],
+  "files": [
+    {
+      "file": "apps/core-app/src/main/modules/plugin/plugin.ts",
+      "ceiling": 3844,
+      "issue": "#339",
+      "note": "~3,060 when #339 was filed; peaked at 4,069 while three extraction PRs were landing."
+    },
+    {
+      "file": "apps/core-app/src/main/modules/quick-ops/index.ts",
+      "ceiling": 2875,
+      "issue": "#339",
+      "note": "~2,999 when #339 was filed. Down 124 since, and this holds that."
+    }
+  ]
+}
