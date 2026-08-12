@@ -2032,7 +2032,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBatchRenameFilesystemCapability(
     activation: PluginActivationIdentity
   ): PluginBatchRenameFilesystemCapability | null {
-    if (this.name !== 'touch-batch-rename') return null
+    if (!isPrivilegedPluginFor('batchRenameFilesystem', this.name)) return null
     return createPluginBatchRenameFilesystemCapability({
       activation,
       platform: process.platform,
@@ -2060,7 +2060,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createSnipasteProcessCapability(
     activation: PluginActivationIdentity
   ): PluginSnipasteProcessCapability | null {
-    if (this.name !== 'touch-snipaste') return null
+    if (!isPrivilegedPluginFor('snipasteProcess', this.name)) return null
     const factory = TouchPlugin.capability('snipasteProcess')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'), {
@@ -2112,7 +2112,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createTranslationCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceCapabilities | null {
-    if (this.name !== 'touch-translation') return null
+    if (!isPrivilegedPluginFor('translation', this.name)) return null
     const factory = TouchPlugin.capability('translation')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'), {
