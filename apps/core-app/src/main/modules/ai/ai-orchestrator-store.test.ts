@@ -79,7 +79,10 @@ const storeMocks = vi.hoisted(() => {
         imports.splice(0, imports.length, ...survivors)
       }
     }),
-    transaction: async (operation: (tx: typeof db) => Promise<void>) => await operation(db)
+    // `typeof db` inside db's own initializer is a circular reference, which is what made the
+    // whole object implicitly any (#548). The callback receives db itself either way, so the
+    // parameter is typed by what callers actually do with it rather than by db's own shape.
+    transaction: async (operation: (tx: unknown) => Promise<void>) => await operation(db)
   }
 
   return {
