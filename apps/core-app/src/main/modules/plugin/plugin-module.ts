@@ -92,7 +92,11 @@ import {
   createPluginBusinessCapabilities,
   pluginBusinessSecretPrefix
 } from './host/plugin-business-capabilities'
-import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import type {
+  PluginBusinessCapabilities,
+  PluginBusinessClipboardHostService,
+  PluginBusinessNetworkService
+} from './host/plugin-business-capabilities'
 import {
   createFixedPluginBrowserDataService,
   createPluginBrowserDataCapabilities,
@@ -110,6 +114,7 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import type { PluginVoiceHostService } from './host/plugin-voice-capabilities'
 import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
 import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
 import { createPluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
@@ -1939,7 +1944,7 @@ export class PluginModule extends BaseModule {
             pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
           )
       }),
-      clipboard: Object.freeze({
+      clipboard: Object.freeze<PluginBusinessClipboardHostService>({
         read: async (request, context, signal) => {
           const service = getClipboardHostService()
           if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
@@ -1960,7 +1965,7 @@ export class PluginModule extends BaseModule {
         await openValidatedExternalUrl(url, {
           opener: async (target) => await shell.openExternal(target)
         }),
-      network: Object.freeze({
+      network: Object.freeze<PluginBusinessNetworkService>({
         requestPinned: async (options, policy) =>
           await getNetworkService().requestPinnedNoRedirect(options, policy),
         resolveAddresses: async (hostname) =>
@@ -2017,7 +2022,7 @@ export class PluginModule extends BaseModule {
         ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
       resolveHostGeneration: (activation) =>
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
-      service: Object.freeze({
+      service: Object.freeze<PluginVoiceHostService>({
         dictate: async (payload, signal, caller) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           const result = await voiceService.dictate(payload, undefined, signal, caller)
