@@ -49,6 +49,8 @@
     "plugins:validate:self-test": "node scripts/validate-plugins.mjs --self-test",
     "test:plugins": "node scripts/test-plugins.mjs",
     "check:audit-report-claims": "node scripts/check-audit-report-claims.mjs",
+    "check:module-size-ratchet": "node scripts/check-module-size-ratchet.mjs",
+    "check:module-size-ratchet:self-test": "node scripts/check-module-size-ratchet.mjs --self-test",
     "check:audit-report-claims:self-test": "node scripts/check-audit-report-claims.mjs --self-test",
     "check:orphan-tests": "node scripts/check-orphan-tests.mjs",
     "check:orphan-tests:self-test": "node scripts/check-orphan-tests.mjs --self-test",
