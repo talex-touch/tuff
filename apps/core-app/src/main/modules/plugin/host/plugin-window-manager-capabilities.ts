@@ -1385,7 +1385,7 @@ export function createPluginWindowManagerCapabilities(
   const actionsForWindow = (): readonly PluginWindowManagerActionId[] =>
     platform === 'darwin' ? MAC_WINDOW_ACTIONS : WINDOWS_ACTIONS
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.window-manager',
     permission: 'system.shell',
     timeoutMs: PLUGIN_WINDOW_MANAGER_TIMEOUT_MS,

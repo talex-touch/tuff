@@ -34,7 +34,7 @@ function fakeClient(
 
 function collector() {
   const records: Readonly<Record<string, unknown>>[] = []
-  const writer: PrivacyOwnerExportWriter = Object.freeze({
+  const writer: PrivacyOwnerExportWriter = Object.freeze<PrivacyOwnerExportWriter>({
     write: async (record) => {
       records.push(record)
       return { byteCount: Buffer.byteLength(JSON.stringify(record), 'utf8') }

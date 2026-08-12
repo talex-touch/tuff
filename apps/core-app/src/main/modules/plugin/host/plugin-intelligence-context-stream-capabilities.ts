@@ -508,7 +508,7 @@ export function createPluginIntelligenceContextStreamCapabilities(
     return current
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'intelligence.stream',
     permission: 'intelligence.basic',
     timeoutMs: 30_000,
