@@ -584,22 +584,28 @@ jobs:
               ARTIFACTS_FOUND=true
             fi
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            # Check for .dmg files, .app directories, and .zip files (zip contains .app)
             DMG_COUNT=$(find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null | wc -l || echo "0")
-            APP_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
             ZIP_COUNT=$(find apps/core-app/dist -name "*.zip" -type f 2>/dev/null | wc -l || echo "0")
-            echo "Found $DMG_COUNT .dmg file(s), $APP_COUNT .app directory/directories, and $ZIP_COUNT .zip file(s)"
+            # A bare .app is reported but does not count. The release step collects with
+            # `find artifacts -type f` over a fixed extension list, and nothing in this workflow
+            # repackages a .app -- upload-artifact compresses for transport and download-artifact
+            # extracts it straight back to a directory. Counting it set ARTIFACTS_FOUND=true while
+            # macOS contributed zero assets (#1608); the mirror of the SNAP_COUNT case in #801,
+            # where a counter that could never be non-zero read as coverage.
+            APP_DIR_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
+            echo "Found $DMG_COUNT .dmg file(s) and $ZIP_COUNT .zip file(s); $APP_DIR_COUNT unpackaged .app directory/directories (not uploadable)"
             if [ "$DMG_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null
-              ARTIFACTS_FOUND=true
-            fi
-            if [ "$APP_COUNT" -gt 0 ]; then
-              find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
             if [ "$ZIP_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.zip" -type f 2>/dev/null
               ARTIFACTS_FOUND=true
+            fi
+            if [ "$ARTIFACTS_FOUND" != "true" ] && [ "$APP_DIR_COUNT" -gt 0 ]; then
+              echo "The macOS target produced only an unpackaged .app. Nothing here can become a"
+              echo "release asset -- see #594 for the target format, which is independent of signing."
+              find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null
             fi
           else
             APPIMAGE_COUNT=$(find apps/core-app/dist -name "*.AppImage" -type f 2>/dev/null | wc -l || echo "0")
