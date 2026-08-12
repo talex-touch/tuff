@@ -25,7 +25,6 @@ import {
   SETTING_CATEGORIES
 } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
-import { createStylesRouteRecord } from './style-routes'
 
 const ROUTE_NAVIGATE_WARN_MS = 200
 const ROUTE_RENDER_WARN_MS = 350
@@ -225,7 +224,17 @@ const routes: RouteRecordRaw[] = [
       requiresDashboard: true
     }
   },
-  createStylesRouteRecord(withRouteComponentPerf),
+  {
+    // Appearance lives under settings in the v2.5 IA, and `/styles` was the pre-shell top-level
+    // entry -- no longer linked from the sidebar, but kept as a redirect so any bookmark still
+    // lands somewhere, the way `/setting/advanced` and `/setting/storage` are (#1024).
+    //
+    // Its `/styles/theme` child went with it rather than getting a redirect of its own: it could
+    // match and change the URL but never render, because `ThemeStyle` has no `<router-view>` for
+    // it. Nothing user-visible is lost by dropping a route that displayed nothing.
+    path: '/styles',
+    redirect: '/setting/appearance'
+  },
   {
     path: '/application',
     name: '$I18n:router.application',

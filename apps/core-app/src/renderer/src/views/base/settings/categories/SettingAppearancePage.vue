@@ -4,15 +4,15 @@ import SettingsPage from '~/components/settings/SettingsPage.vue'
 import ThemeStyle from '~/views/base/styles/ThemeStyle.vue'
 
 /**
- * `ThemeStyle` used to be mounted full-bleed because it is a complete page with its own heading
- * and scroller, which left appearance as the one category with no page title. `embedded` drops
- * that inner chrome so this body reads like every other one.
+ * The only mount of `ThemeStyle`. It used to carry its own `ViewTemplate` for the standalone
+ * `/styles` route, behind an `embedded` prop this page set to drop that chrome; `/styles` is now
+ * a redirect here, so the branch is gone and the component renders one way (#1024).
  */
 const { t } = useI18n()
 </script>
 
 <template>
   <SettingsPage :title="t('settingsNav.category.appearance')">
-    <ThemeStyle embedded />
+    <ThemeStyle />
   </SettingsPage>
 </template>

@@ -13,7 +13,6 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -45,13 +44,6 @@ import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
 
-/**
- * Mounted inside `SettingsPage` when it backs the appearance category, which already supplies the
- * heading, scroll container and edge fades. Rendering its own `ViewTemplate` there would stack two
- * headings and two scrollers on one body.
- */
-const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
-const shell = computed(() => (props.embedded ? 'div' : ViewTemplate))
 const transport = useTuffTransport()
 const themeStyleLog = createRendererLogger('ThemeStyle')
 type OpenFileRequest = Record<string, unknown>
@@ -489,7 +481,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
 
 <template>
   <div class="ThemeStyle-Page">
-    <component :is="shell" v-bind="embedded ? {} : { title: t('themeStyle.styles') }">
+    <div>
       <WindowSectionVue>
         <SectionItem v-model="windowPreference" title="pure" :label="t('themeStyle.windowPure')" />
         <SectionItem
@@ -882,7 +874,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           <ThemePreviewIcon variant="guide" :active="active" />
         </template>
       </TuffBlockSwitch>
-    </component>
+    </div>
 
     <Teleport to="body">
       <div v-if="windowPreferenceLoading" class="ThemeStyle-WindowLoadingMask">
