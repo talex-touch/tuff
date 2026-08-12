@@ -95,6 +95,8 @@ import {
   type SearchRequestContext,
   type SearchSession
 } from './search-session'
+import type { SearchCacheTelemetrySnapshot } from './search-cache-telemetry'
+import { classifySearchCacheLookup, SearchCacheTelemetry } from './search-cache-telemetry'
 
 interface SearchCacheEntry {
   result: CachedSearchResultSnapshot
@@ -184,6 +186,14 @@ export class SearchEngineCore
   private readonly maintenanceTaskId = 'search-engine.maintenance'
   private readonly providerHealthService = new ProviderHealthService()
   private searchCache = new Map<string, SearchCacheEntry>()
+  /**
+   * Counts what the cache actually does, so #346's keep-or-remove decision has a number.
+   *
+   * Nothing measured a lookup before this. The reason breakdown matters more than the hit rate:
+   * entries here are thrown away by any index commit, including from providers the query never
+   * reached, so a low hit rate may say more about the invalidation policy than about users.
+   */
+  private readonly cacheTelemetry = new SearchCacheTelemetry()
   private searchFirstResultMetrics = new Map<string, SearchFirstResultMetrics>()
   private readonly indexCommitStreams = new Set<StreamContext<CoreBoxSearchIndexCommitPayload>>()
   private indexCommitUnsubscribe: (() => void) | null = null
@@ -218,7 +228,10 @@ export class SearchEngineCore
           oldestKey = key
         }
       }
-      if (oldestKey) this.searchCache.delete(oldestKey)
+      if (oldestKey) {
+        this.searchCache.delete(oldestKey)
+        this.cacheTelemetry.recordInvalidation('lru-evict', 1)
+      }
     }
 
     this.searchCache.set(cacheKey, {
@@ -410,8 +423,19 @@ export class SearchEngineCore
     await this.searchUsageService.flush()
   }
 
+  /**
+   * Read-only counters for the query cache (#346).
+   *
+   * Counts and durations only -- no query text, no cache key, no item content -- so a report
+   * built from this cannot reconstruct what anyone searched for.
+   */
+  public getSearchCacheTelemetry(): SearchCacheTelemetrySnapshot {
+    return this.cacheTelemetry.snapshot()
+  }
+
   public completePrivacyRetentionCleanup(): void {
     this.searchUsageService.invalidateRetentionCaches()
+    this.cacheTelemetry.recordInvalidation('privacy-cleanup', this.searchCache.size)
     this.searchCache.clear()
     this.recommendationEngine?.invalidateCache()
   }
@@ -429,6 +453,7 @@ export class SearchEngineCore
   }
 
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
+    this.cacheTelemetry.recordInvalidation('index-commit', this.searchCache.size)
     this.searchCache.clear()
     for (const context of this.indexCommitStreams) {
       if (context.isCancelled()) {
@@ -893,11 +918,19 @@ export class SearchEngineCore
 
     const searchRevision = searchIndexCommitHub.getRevision()
     const cachedEntry = this.searchCache.get(cacheKey)
-    if (
-      cachedEntry &&
-      cachedEntry.revision === searchRevision &&
-      Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS
-    ) {
+    const cacheCheckedAt = Date.now()
+    const cachedAgeMs = cachedEntry ? cacheCheckedAt - cachedEntry.timestamp : 0
+    // The reason is the point, not the hit rate: `revision-mismatch` means an index commit denied
+    // the entry, which is a different story from a query nobody repeated (#346).
+    const cacheOutcome = classifySearchCacheLookup({
+      entry: cachedEntry,
+      currentRevision: searchRevision,
+      now: cacheCheckedAt,
+      ttlMs: SEARCH_CACHE_TTL_MS
+    })
+    if (cacheOutcome !== 'hit') this.cacheTelemetry.recordMiss(cacheOutcome)
+    if (cacheOutcome === 'hit' && cachedEntry) {
+      this.cacheTelemetry.recordHit(cachedAgeMs, cachedEntry.result.duration)
       const cachedResult = materializeCachedSearchResult(cachedEntry.result, sessionId)
       cachedResult.items = fileFilterService.filterSearchItems(cachedResult.items ?? [])
       const cachedItems = cachedResult.items.length
@@ -2077,6 +2110,7 @@ export class SearchEngineCore
         const { sourceId, itemId, sourceType } = data
         const isPinned = await instance.dbUtils.togglePin(sourceId, itemId, sourceType)
         instance.invalidatePinnedCache()
+        instance.cacheTelemetry.recordInvalidation('pin-toggle', instance.searchCache.size)
         instance.searchCache.clear()
         instance.recommendationEngine?.invalidateCache()
         return { success: true, isPinned }
