@@ -332,6 +332,120 @@ describe('fileIndexedSource', () => {
     expect(producerSignal?.aborted).toBe(true)
   })
 
+  /**
+   * The backpressure bound (#318).
+   *
+   * `enqueue` parks the producer while two batches sit unconsumed, and that constant is the
+   * memory bound the whole R3 risk rests on: peak retention is batch size x 2 regardless of how
+   * many files the tree holds. Nothing tested it. Someone could raise it to 1000, or delete the
+   * `while` and keep the `push`, and every structural argument in the code review would still
+   * read as true while a million-file root went back to being unbounded.
+   */
+  describe('scan backpressure', () => {
+    function trackedProducer(total: number): {
+      accepted: () => number
+      emitted: Promise<void>
+    } {
+      let accepted = 0
+      const emitted = Promise.withResolvers<void>()
+      fileProviderMock.scanIndexedSource.mockImplementation(
+        async (
+          _request: unknown,
+          options: { onRecordBatch: (batch: IndexedSourceRecordBatch) => Promise<void> }
+        ) => {
+          for (let index = 0; index < total; index += 1) {
+            await options.onRecordBatch({
+              sourceId: 'file-provider',
+              records: [],
+              done: index === total - 1
+            })
+            accepted += 1
+          }
+          emitted.resolve()
+          return { batches: [] }
+        }
+      )
+      return { accepted: () => accepted, emitted: emitted.promise }
+    }
+
+    /** Lets the parked producer run as far as it can before the assertion reads its counter. */
+    async function settle(): Promise<void> {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    }
+
+    it('parks the producer once two batches are waiting', async () => {
+      const producer = trackedProducer(50)
+      const source = buildFileIndexedSource()
+
+      const iterator = source
+        .scan({ sourceId: 'file-provider', reason: IndexedSourceScanReasons.Scheduled })
+        [Symbol.asyncIterator]()
+      // Pulling one starts the producer; nothing else consumes after that.
+      await iterator.next()
+      await settle()
+
+      // One yielded plus two queued. A producer that buffered would be at 50.
+      expect(producer.accepted()).toBe(3)
+
+      await iterator.return?.()
+    })
+
+    it('releases exactly one batch per batch consumed, however large the tree', async () => {
+      const producer = trackedProducer(200)
+      const source = buildFileIndexedSource()
+
+      const iterator = source
+        .scan({ sourceId: 'file-provider', reason: IndexedSourceScanReasons.Scheduled })
+        [Symbol.asyncIterator]()
+
+      for (let consumed = 1; consumed <= 10; consumed += 1) {
+        await iterator.next()
+        await settle()
+        // The bound is a constant offset from what has been consumed, not a fraction of the tree.
+        expect(producer.accepted(), `after ${consumed} consumed`).toBe(consumed + 2)
+      }
+
+      await iterator.return?.()
+    })
+
+    /**
+     * The park is inside a loop that re-checks the abort signal, so a cancelled scan cannot leave
+     * the producer waiting on a consumer that will never pull again. Without that check this test
+     * hangs rather than fails, which is why it asserts the producer settled at all.
+     */
+    it('releases a parked producer when the consumer stops early', async () => {
+      const producer = trackedProducer(50)
+      const source = buildFileIndexedSource()
+
+      const iterator = source
+        .scan({ sourceId: 'file-provider', reason: IndexedSourceScanReasons.Scheduled })
+        [Symbol.asyncIterator]()
+      await iterator.next()
+      await settle()
+      expect(producer.accepted()).toBe(3)
+
+      await expect(iterator.return?.()).resolves.toEqual({ value: undefined, done: true })
+      expect(producer.accepted()).toBeLessThan(50)
+    })
+
+    it('does not park a scan that produces fewer batches than the bound', async () => {
+      const producer = trackedProducer(2)
+      const source = buildFileIndexedSource()
+
+      const batches: IndexedSourceRecordBatch[] = []
+      for await (const batch of source.scan({
+        sourceId: 'file-provider',
+        reason: IndexedSourceScanReasons.Scheduled
+      })) {
+        batches.push(batch)
+      }
+
+      expect(producer.accepted()).toBe(2)
+      expect(batches).toHaveLength(2)
+      expect(batches.at(-1)?.done).toBe(true)
+    })
+  })
+
   it('propagates a FileProvider scan failure without yielding a terminal batch', async () => {
     const source = buildFileIndexedSource()
     const scanError = new Error('file scan failed')
