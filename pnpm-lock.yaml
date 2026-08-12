@@ -118,8 +118,8 @@ catalogs:
       version: 4.107.1
   frontend:
     '@vueuse/core':
-      specifier: ^14.3.0
-      version: 14.3.0
+      specifier: ^14.4.0
+      version: 14.4.0
     pinia:
       specifier: ^3.0.4
       version: 3.0.4
@@ -358,7 +358,7 @@ importers:
         version: 3.5.39
       '@vueuse/core':
         specifier: catalog:frontend
-        version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+        version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       '@xterm/addon-fit':
         specifier: ^0.10.0
         version: 0.10.0(@xterm/xterm@5.5.0)
@@ -551,7 +551,7 @@ importers:
         version: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(esbuild@0.28.1)))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
       unplugin-auto-import:
         specifier: ^20.3.0
-        version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.3.0(vue@3.5.39(typescript@5.9.3)))
+        version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3)))
       unplugin-vue-components:
         specifier: ^30.0.0
         version: 30.0.0(@babel/parser@7.29.7)(@nuxt/kit@4.4.8(magicast@0.5.4))(vue@3.5.39(typescript@5.9.3))
@@ -820,7 +820,7 @@ importers:
         version: link:../../packages/tuffex
       '@vueuse/core':
         specifier: catalog:frontend
-        version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+        version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       vue:
         specifier: catalog:frontend
         version: 3.5.39(typescript@5.9.3)
@@ -6626,6 +6626,11 @@ packages:
     peerDependencies:
       vue: ^3.5.0
 
+  '@vueuse/core@14.4.0':
+    resolution: {integrity: sha512-X4WHz1HlCzCBoYXesUkifzzWBAcZgXG8Fi5iNPQg/epdzOB3gu8Fawj3hvuwYR1nGcXGnvxwYYcUC/71++svtQ==}
+    peerDependencies:
+      vue: ^3.5.0
+
   '@vueuse/integrations@14.3.0':
     resolution: {integrity: sha512-76I5FT2ESvCmCaSwapI+a/u/CFtNXmzl9f9lNp1hRtx8vKB8hfiokJr8IvQqcQG5ckGXElyXK516b54ozV3MvA==}
     peerDependencies:
@@ -6671,8 +6676,16 @@ packages:
   '@vueuse/metadata@14.3.0':
     resolution: {integrity: sha512-BwxmbAzwAVF50+MW57GXOUEV61nFBGnlBvrTqj49PqWJu3uw7hdu72ztXeZ33RdZtDY6kO+bfCAE1PCn88Tktw==}
 
+  '@vueuse/metadata@14.4.0':
+    resolution: {integrity: sha512-swx/255R6JyHZFJhx845iz5CRWDZdCfvkZOpACWc5+c5WHcG24mv8gUT1WIdFQaHt6dq79rvILd9QnCWiyVm9g==}
+
   '@vueuse/shared@14.3.0':
     resolution: {integrity: sha512-bZpge9eSXwa4ToSiqJ7j6KRwhAsneMFoSz3LMWKQDkqimm3D/tbFlrklrs/IOqC8tEcYmXQZJ6N0UrjhBirVCg==}
+    peerDependencies:
+      vue: ^3.5.0
+
+  '@vueuse/shared@14.4.0':
+    resolution: {integrity: sha512-JRgY90Sz8DDtPMsaDflvPMp9xYk69JZAmbuDvAquUVXKr2gEjqtzGNTTthLfckH0BzBqvnu31gb4a8TGLRe79g==}
     peerDependencies:
       vue: ^3.5.0
 
@@ -20004,6 +20017,13 @@ snapshots:
       '@vueuse/shared': 14.3.0(vue@3.5.39(typescript@5.9.3))
       vue: 3.5.39(typescript@5.9.3)
 
+  '@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3))':
+    dependencies:
+      '@types/web-bluetooth': 0.0.21
+      '@vueuse/metadata': 14.4.0
+      '@vueuse/shared': 14.4.0(vue@3.5.39(typescript@5.9.3))
+      vue: 3.5.39(typescript@5.9.3)
+
   '@vueuse/integrations@14.3.0(axios@1.18.1)(change-case@5.4.4)(focus-trap@8.2.2)(fuse.js@7.5.0)(vue@3.5.39(typescript@5.9.3))':
     dependencies:
       '@vueuse/core': 14.3.0(vue@3.5.39(typescript@5.9.3))
@@ -20017,7 +20037,13 @@ snapshots:
 
   '@vueuse/metadata@14.3.0': {}
 
+  '@vueuse/metadata@14.4.0': {}
+
   '@vueuse/shared@14.3.0(vue@3.5.39(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.39(typescript@5.9.3)
+
+  '@vueuse/shared@14.4.0(vue@3.5.39(typescript@5.9.3))':
     dependencies:
       vue: 3.5.39(typescript@5.9.3)
 
@@ -27896,6 +27922,18 @@ snapshots:
     optionalDependencies:
       '@nuxt/kit': 4.4.8(magicast@0.5.4)
       '@vueuse/core': 14.3.0(vue@3.5.39(typescript@5.9.3))
+
+  unplugin-auto-import@20.3.0(@nuxt/kit@4.4.8(magicast@0.5.3))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3))):
+    dependencies:
+      local-pkg: 1.2.1
+      magic-string: 0.30.21
+      picomatch: 4.0.5
+      unimport: 5.7.0
+      unplugin: 2.3.11
+      unplugin-utils: 0.3.1
+    optionalDependencies:
+      '@nuxt/kit': 4.4.8(magicast@0.5.3)
+      '@vueuse/core': 14.4.0(vue@3.5.39(typescript@5.9.3))
 
   unplugin-utils@0.3.1:
     dependencies:
