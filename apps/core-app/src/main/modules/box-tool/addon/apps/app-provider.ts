@@ -37,14 +37,20 @@ import type {
   AppIndexUpsertEntryRequest
 } from '@talex-touch/utils/transport/events/types'
 import { completeTiming, sleep, startTiming, StorageList, timingLogger } from '@talex-touch/utils'
+import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import type { TuffItem } from '@talex-touch/utils'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import {
   IndexedSourceGroupedEvidenceService,
   IndexedSourceResetReasons,
   IndexedSourceRootEvidenceService,
-  IndexedSourceScanReasons
+  IndexedSourceScanReasons,
+  buildSearchKeywordLookupTerms,
+  collectSearchKeywordMatches,
+  hasHanCharacter,
+  normalizeSearchText
 } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -58,18 +64,38 @@ import type {
   FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
 import { config as configSchema, fileExtensions, files as filesSchema } from '../../../../db/schema'
-import { dbWriteScheduler, type DbWritePriority } from '../../../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { type DbWritePriority } from '../../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../../db/db-write'
+import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 
 import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/utils'
-import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { iconService } from '../../../../service/icon-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
-import searchEngineCore from '../../search-engine/search-core'
+/**
+ * How a launched app reports itself back to the search engine.
+ *
+ * This used to be a direct `import searchEngineCore from '../../search-engine/search-core'`,
+ * and search-core imports `appProvider` back, so the two modules instantiated each other at
+ * module scope. That only worked because AppProvider's constructor is a single log call --
+ * promoting any of its methods into constructor-time work would have dereferenced
+ * `searchEngineCore` mid-evaluation and failed at boot rather than at the call site (#712).
+ *
+ * The recorder is invoked **synchronously**; a lazy `await import()` was tried first and broke
+ * `records a session-scoped usage event before handing the app to the launch boundary`, because
+ * deferring by a microtask puts the record after the launch it is supposed to precede.
+ */
+export type AppExecutionRecorder = (sessionId: string, item: TuffItem) => Promise<void>
+
+let recordAppExecution: AppExecutionRecorder = async () => {}
+
+export function setAppExecutionRecorder(recorder: AppExecutionRecorder): void {
+  recordAppExecution = recorder
+}
+
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
@@ -309,7 +335,35 @@ const STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS = 30_000
 const STARTUP_HEAVY_TASK_WAIT_RENDERER_TIMEOUT_MS = 30_000
 const STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
 const STARTUP_MDLS_SCAN_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
+const PROD_MDLS_SCAN_MIN_INTERVAL_MS = 60 * 60 * 1000
 const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
+
+// Install-to-searchable budget for one app, summed across the watch chain:
+//   FSEvents dispatch  0.1-1s   (OS, chokidar-fsevents)
+// + event coalescing   0.4s     (APP_WATCH_COALESCE_WINDOW_MS, indexed-source-event-router)
+// + stability wait     0.55s    (APP_STABILITY_PROBE_INTERVAL_MS + APP_STABILITY_SETTLE_MS)
+// + app info + upsert  ~0.35s
+//   = 1.5-2.5s against a 10s target.
+// chokidar already applies a 2000ms awaitWriteFinish threshold upstream, so the probe pair here
+// only has to catch a bundle still being copied in, not debounce the write burst itself.
+const APP_STABILITY_PROBE_INTERVAL_MS = 300
+const APP_STABILITY_SETTLE_MS = 250
+
+// Per-path resolution retry (F1). A transient failure — chunk load, mdls throttle, Spotlight lag,
+// bundle mid-write — is retried out of band so the watch route (and its source mutation lease) is
+// not held for the whole backoff. Retries are scheduled, never awaited inline.
+const APP_RESOLUTION_RETRY_DELAYS_MS = [2_000, 8_000, 30_000] as const
+const APP_RESOLUTION_RETRY_MAX_TRACKED_PATHS = 64
+// Dead-letter sweep runs only while the set is non-empty and is torn down as soon as it drains,
+// so an idle app index holds zero timers.
+const APP_RESOLUTION_DEAD_LETTER_SWEEP_INTERVAL_MS = 10 * 60 * 1000
+const APP_RESOLUTION_DEAD_LETTER_MAX_SWEEPS = 3
+const APP_RESOLUTION_DEAD_LETTER_MAX_ENTRIES = 64
+
+// The watch-root cardinality probe (F4) only ever runs on macOS, so it states the normalization
+// platform instead of reading the running one: the two unicode forms it has to reconcile are an
+// Apple filesystem artefact, and on a byte-exact filesystem they would be two different bundles.
+const WATCH_ROOT_PROBE_PLATFORM = 'darwin'
 
 function resolveScannedDisplayName(app: Pick<ScannedAppInfo, 'displayName' | 'name'>): string {
   return resolveDisplayName(app.displayName, app.name)
@@ -372,6 +426,19 @@ interface PendingDeletionEntry {
   missCount: number
 }
 
+interface AppResolutionRetryEntry {
+  /** Retries already scheduled for this path; indexes into APP_RESOLUTION_RETRY_DELAYS_MS. */
+  attempt: number
+  managedEntry: boolean
+  timer: NodeJS.Timeout | null
+}
+
+interface AppResolutionDeadLetterEntry {
+  managedEntry: boolean
+  sweeps: number
+  lastError: string
+}
+
 interface ScannedAppMetadataUpdate {
   fileId: number
   app: ScannedAppInfo
@@ -387,7 +454,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   readonly type = 'application' as const
   readonly supportedInputTypes = [TuffInputType.Text]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 50
 
   private dbUtils: DbUtils | null = null
   private context: ProviderContext | null = null
@@ -398,6 +464,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private searchIndex: SearchIndexService | null = null
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
+  /**
+   * Set when a Startup-reason backfill skipped its filesystem diff + DB writes
+   * because it ran inside the startup degrade window (R4). scanIndexedSource
+   * must then NOT stamp the last-backfill timestamp — the window-gated timer
+   * re-run owns the real (write-performing) backfill, and stamping early would
+   * make its dev recent-backfill guard skip it.
+   */
+  private startupBackfillWritesDeferred = false
   private startupIndexHealthCheckStarted = false
   private volatileLastBackfillTime: number | null = null
   private volatileLastFullSyncTime: number | null = null
@@ -410,6 +484,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private startupBackfillTask: Promise<void> | null = null
   private semanticAliasCatalogTimer: NodeJS.Timeout | null = null
   private semanticAliasCatalogTask: Promise<void> | null = null
+  private readonly appResolutionRetries = new Map<string, AppResolutionRetryEntry>()
+  private readonly appResolutionDeadLetters = new Map<string, AppResolutionDeadLetterEntry>()
+  private appResolutionSweepTimer: NodeJS.Timeout | null = null
   private readonly startupProducerAbort = new AbortController()
   private readonly externalMutationTasks = new Set<Promise<unknown>>()
   private readonly appIconHydrationPending = new Set<string>()
@@ -465,10 +542,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     operation: () => Promise<T>,
     priority: DbWritePriority = 'background'
   ): Promise<T> {
-    return await dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
-      priority,
-      dropPolicy: 'none'
-    })
+    // Busy retry is scheduler-owned (delayed re-enqueue); no inner withSqliteRetry.
+    return await scheduleDbWrite(label, operation, { priority, dropPolicy: 'none' })
   }
 
   private async runAppTransaction<T>(
@@ -634,6 +709,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         this.shuttingDown = true
         this.startupProducerAbort.abort(new Error('APP_PROVIDER_SHUTTING_DOWN'))
         this.clearStartupProducerTimers()
+        this.clearAppResolutionTimers()
         pollingService.unregister('app_provider_mdls_update_scan')
         const settlement = Promise.allSettled([
           this.mdlsReconcileTask,
@@ -753,11 +829,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const loadStart = startTiming()
     logApp('Loading AppProvider service...', LogStyle.process)
     this.context = context
-    this.dbUtils = createDbUtils(context.databaseManager.getDb(), undefined, {
-      enabled: context.databaseManager.isSearchSplitEnabled(),
-      searchDb: context.databaseManager.getSearchDb(),
-      writer: searchIndexWriter
-    })
+    // The app CATALOG (files/file_extensions rows of type 'app', including
+    // user-authored managed entries) lives on the PRIMARY db: every write in
+    // this provider is a raw transaction on getDb(), and manual entries are
+    // user data that must not move into the rebuildable search-index.db. So
+    // reads must target the primary too — passing the search-split context here
+    // (c86d82db5) routed catalog READS to the empty search file while the raw
+    // txn WRITES stayed on the primary, and with the split on the record-batch
+    // builder then found zero apps and never pushed anything into the search
+    // index (V1 2026-08-05 ship-blocker #3). The search-index HOME is bridged
+    // by the push pipeline instead: catalog rows → indexed-source records →
+    // worker-owned search_index/keyword_mappings in search-index.db.
+    this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
 
     this.loadAppIndexSettings()
@@ -1002,7 +1085,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       } while (!backfillSettled)
 
       await task
-      await this._setLastBackfillTime(Date.now())
+      if (this.startupBackfillWritesDeferred) {
+        // The backfill deferred its writes past the degrade window: leave the
+        // last-backfill timestamp untouched so the timer-driven re-run is not
+        // skipped by the dev recent-backfill guard (and isAppIndexWarming
+        // keeps reporting an unfinished first pass on a true first launch).
+        this.startupBackfillWritesDeferred = false
+      } else {
+        await this._setLastBackfillTime(Date.now())
+      }
       yield* this.buildChangedIndexedSourceRecordBatches(
         request.sourceId,
         fingerprints,
@@ -1650,10 +1741,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return this.maintenance.run(taskKey, task)
   }
 
-  private async getAppSearchIndexHealth(): Promise<{
+  /**
+   * @param options.probeFilesystem Also compare the watch roots against the stored rows. Row counts
+   *   alone cannot see an app that never made it into the database — a full `/Applications` and a
+   *   full index agree with each other while both are missing the same bundle — so the decision
+   *   points that can act on the answer (startup health check, backfill guard) ask for the
+   *   filesystem cardinality too. It is a readdir per root, never polled.
+   */
+  private async getAppSearchIndexHealth(options?: { probeFilesystem?: boolean }): Promise<{
     appCount: number
     indexedItemCount: number
     healthy: boolean
+    unindexedOnDisk?: number
   }> {
     if (!this.dbUtils || !this.searchIndex) {
       return { appCount: 0, indexedItemCount: 0, healthy: false }
@@ -1669,10 +1768,76 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
     ])
 
+    const countsHealthy = apps.length > 0 && indexedItemCount > 0
+    if (!countsHealthy || options?.probeFilesystem !== true) {
+      return { appCount: apps.length, indexedItemCount, healthy: countsHealthy }
+    }
+
+    const unindexedOnDisk = await this.countUnindexedWatchRootApps(apps)
+    if (unindexedOnDisk > 0) {
+      logApp(
+        `Watch roots hold ${chalk.yellow(unindexedOnDisk)} app(s) missing from the index`,
+        LogStyle.warning
+      )
+    }
+
     return {
       appCount: apps.length,
       indexedItemCount,
-      healthy: apps.length > 0 && indexedItemCount > 0
+      healthy: unindexedOnDisk === 0,
+      unindexedOnDisk
+    }
+  }
+
+  /**
+   * Counts `.app` bundles sitting directly in a watch root that have no row yet. Cardinality only:
+   * no stat of the bundle contents, no plist read, no mdls. The scan depth for these roots is 1, so
+   * a single readdir per root sees everything the watcher itself would report.
+   *
+   * Because a non-zero answer is what makes the source unhealthy, a miscount is expensive: it buys
+   * a full backfill on every launch. Two things are therefore checked before counting an entry —
+   * both sides of the comparison are normalized (macOS hands out decomposed names where the stored
+   * row is composed, see normalizeFsPath), and the entry has to carry a manifest, because a
+   * directory merely named `*.app` can never produce a row and would otherwise pin the source
+   * unhealthy forever. The manifest check costs one `access` per *unmatched* entry, so a healthy
+   * index pays nothing for it.
+   */
+  private async countUnindexedWatchRootApps(appRows: DbAppRecord[]): Promise<number> {
+    if (!this.isMac) return 0
+
+    const indexedPaths = new Set(
+      appRows.map((row) => normalizeFsPath(path.resolve(row.path), WATCH_ROOT_PROBE_PLATFORM))
+    )
+    let unindexed = 0
+
+    for (const watchPath of appScanner.getWatchPaths()) {
+      if (!watchPath) continue
+      let entries: string[]
+      try {
+        entries = await fs.readdir(watchPath)
+      } catch {
+        // A missing or unreadable root is the watcher's problem, not evidence of a stale index.
+        continue
+      }
+
+      for (const entry of entries) {
+        if (!entry.endsWith('.app')) continue
+        const entryPath = path.resolve(watchPath, entry)
+        if (indexedPaths.has(normalizeFsPath(entryPath, WATCH_ROOT_PROBE_PLATFORM))) continue
+        if (!(await this.hasBundleManifest(entryPath))) continue
+        unindexed += 1
+      }
+    }
+
+    return unindexed
+  }
+
+  private async hasBundleManifest(bundlePath: string): Promise<boolean> {
+    try {
+      await fs.access(path.join(bundlePath, 'Contents', 'Info.plist'))
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -1951,7 +2116,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await this.waitForAppIndexPipelineIdle()
       if (this.shuttingDown) return
 
-      const health = await this.getAppSearchIndexHealth()
+      const health = await this.getAppSearchIndexHealth({ probeFilesystem: true })
       if (health.healthy) {
         appProviderLog.debug('App search index health check passed', { meta: health })
         return
@@ -1967,7 +2132,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp(
         `App search index is empty or incomplete (apps=${chalk.cyan(
           health.appCount
-        )}, indexed=${chalk.cyan(health.indexedItemCount)}), triggering startup backfill`,
+        )}, indexed=${chalk.cyan(health.indexedItemCount)}, unindexedOnDisk=${chalk.cyan(
+          health.unindexedOnDisk ?? 0
+        )}), triggering startup backfill`,
         LogStyle.warning
       )
 
@@ -2038,9 +2205,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.startupBackfillStarted = true
 
     const isDevelopmentRuntime = this.isDevelopmentRuntime()
-    const delayMs = isDevelopmentRuntime
+    const baseDelayMs = isDevelopmentRuntime
       ? STARTUP_BACKFILL_INITIAL_DELAY_MS + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
       : STARTUP_BACKFILL_INITIAL_DELAY_MS
+    // Startup write-storm gate (R4): defer the backfill (and its batched
+    // backfill-add/backfill-update writes) past the DB startup degrade window.
+    const delayMs = Math.max(baseDelayMs, getStartupDegradeWindowRemainingMs())
     logApp(`Scheduling startup backfill (deferred ${Math.round(delayMs / 1000)}s)`, LogStyle.info)
     this.startupBackfillTimer = setTimeout(() => {
       this.startupBackfillTimer = null
@@ -2117,14 +2287,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         lastBackfillTime &&
         Date.now() - lastBackfillTime < STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS
       ) {
-        const health = await this.getAppSearchIndexHealth()
+        const health = await this.getAppSearchIndexHealth({ probeFilesystem: true })
         if (health.healthy) {
           return { allowed: false, reason: 'recent-backfill' }
         }
         logApp(
           `Ignoring recent-backfill guard because app search index is unhealthy (apps=${chalk.cyan(
             health.appCount
-          )}, indexed=${chalk.cyan(health.indexedItemCount)})`,
+          )}, indexed=${chalk.cyan(health.indexedItemCount)}, unindexedOnDisk=${chalk.cyan(
+            health.unindexedOnDisk ?? 0
+          )})`,
           LogStyle.warning
         )
       }
@@ -2166,6 +2338,37 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     signal?.throwIfAborted()
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping startup backfill', LogStyle.error)
+      return
+    }
+
+    // Startup write-storm gate (R4), boot-path edition. The window-gated timer
+    // in _scheduleStartupBackfill() no longer owns boot: since the Runtime
+    // writer-ownership change, the boot backfill runs inline through
+    // search-core's initial app scan (runInitialAppScan → scanIndexedSource →
+    // here) ~1-2s after boot, so the gate must live on this shared execution
+    // path. Inside the window we skip the mdls/filesystem diff and every DB
+    // write it can produce (backfill-add, backfill-update, icon-pointer
+    // repair) and arm the deferred timer to run the real backfill after the
+    // window. First launch is exempt (last-backfill timestamp still null, the
+    // same signal isAppIndexWarming uses): initial population is what makes
+    // apps searchable, and there is no startup indexing load worth protecting
+    // ahead of it.
+    const degradeRemainingMs = getStartupDegradeWindowRemainingMs()
+    if (degradeRemainingMs > 0 && (await this._getLastBackfillTime()) !== null) {
+      this.startupBackfillWritesDeferred = true
+      logApp(
+        `Startup backfill deferred past DB degrade window (${Math.round(
+          degradeRemainingMs / 1000
+        )}s remaining)`,
+        LogStyle.info
+      )
+      // Arm the window-gated timer unless one is already pending/running; the
+      // started-latch only guards double-arming, so release it for this
+      // deliberate deferral re-arm (bounded: the window itself expires).
+      if (this.startupBackfillTimer === null && this.startupBackfillTask === null) {
+        this.startupBackfillStarted = false
+        this._scheduleStartupBackfill()
+      }
       return
     }
 
@@ -2497,8 +2700,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           .map((value) => value.trim())
       )
     )
-    const CHINESE_REGEX = /[\u4E00-\u9FA5]/
-    const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]/i
 
     for (const name of names) {
       const lowerCaseName = name.toLowerCase()
@@ -2512,7 +2713,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const acronym = this._generateAcronym(name)
       if (acronym) generatedKeywords.add(acronym)
 
-      if (CHINESE_REGEX.test(name)) {
+      if (hasHanCharacter(name)) {
         try {
           const { pinyin } = await import('pinyin-pro')
           const pinyinFull = pinyin(name, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
@@ -2530,10 +2731,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const aliasList = this.resolveAliasesForApp(appInfo)
     aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
 
+    // Keywords are cleaned rather than vetoed, so multi-word aliases
+    // ("vs code") and non-Latin names survive instead of being dropped whole.
     const finalKeywords = new Set<string>()
     for (const keyword of generatedKeywords) {
-      if (keyword.length > 1 && !INVALID_KEYWORD_REGEX.test(keyword)) {
-        finalKeywords.add(keyword)
+      const normalized = normalizeSearchText(keyword)
+      if (normalized.length > 1) {
+        finalKeywords.add(normalized)
       }
     }
 
@@ -2812,7 +3016,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       const updateData: Partial<typeof filesSchema.$inferInsert> = {
         name: isProbablyCorruptedDisplayName(appInfo.name) ? existingFile.name : appInfo.name,
-        mtime: appInfo.lastModified
+        mtime: appInfo.lastModified,
+        lastIndexedAt: new Date()
       }
 
       const normalizedDisplayName = normalizeDisplayName(resolveScannedDisplayName(appInfo))
@@ -2868,7 +3073,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               displayName: resolveScannedDisplayName(appInfo),
               type: 'app' as const,
               mtime: appInfo.lastModified,
-              ctime: new Date()
+              ctime: new Date(),
+              lastIndexedAt: new Date()
             })
             .returning()
 
@@ -2902,7 +3108,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async processAppPath(
     appPath: string,
-    options: { managedEntry?: boolean } = {}
+    options: { managedEntry?: boolean; scheduleRetry?: boolean } = {}
   ): Promise<AppIndexProcessPathResult> {
     if (this.processingPaths.has(appPath)) {
       return { success: false, status: 'invalid', reason: 'processing' }
@@ -2921,14 +3127,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
 
       logApp(`Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process)
-      const appInfo = await appScanner.getAppInfoByPath(appPath)
-      if (!appInfo) {
-        logApp(`Could not get app info for: ${chalk.yellow(appPath)}`, LogStyle.warning)
-        return { success: false, status: 'invalid', reason: 'not-app' }
+      const resolution = await appScanner.resolveAppInfoByPath(appPath)
+      if (!resolution.ok) {
+        if (resolution.outcome === 'not-app') {
+          logApp(`Not an app, skipping: ${chalk.yellow(appPath)}`, LogStyle.warning)
+          this.forgetAppResolutionFailure(appPath)
+          return { success: false, status: 'invalid', reason: 'not-app' }
+        }
+
+        logApp(`Failed to resolve app info for: ${chalk.yellow(appPath)}`, LogStyle.warning, {
+          error:
+            resolution.error instanceof Error ? resolution.error.message : String(resolution.error)
+        })
+        this.handleAppResolutionFailure(appPath, resolution.error, options)
+        return { success: false, status: 'error', reason: 'scan-failed' }
       }
 
+      const appInfo = resolution.appInfo
       const status = await this.upsertAppInfo(appInfo, options)
       this.scheduleAppIconHydration([appInfo])
+      this.forgetAppResolutionFailure(appPath)
       return { success: true, status, path: appInfo.path, appInfo }
     } catch (error) {
       const report = operationalErrorService.report({
@@ -2942,6 +3160,203 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     } finally {
       this.processingPaths.delete(appPath)
     }
+  }
+
+  /**
+   * Parks a transient resolution failure for an out-of-band retry. The watch route must not await
+   * the backoff: it runs under the per-source mutation lease, so sleeping here would stall every
+   * other app event for the length of the ladder.
+   */
+  private handleAppResolutionFailure(
+    appPath: string,
+    error: unknown,
+    options: { managedEntry?: boolean; scheduleRetry?: boolean } = {}
+  ): void {
+    if (options.scheduleRetry === false || this.shuttingDown) return
+
+    const managedEntry = options.managedEntry === true
+    const existing = this.appResolutionRetries.get(appPath)
+    const attempt = existing?.attempt ?? 0
+    if (existing?.timer) clearTimeout(existing.timer)
+
+    const delayMs = APP_RESOLUTION_RETRY_DELAYS_MS[attempt]
+    if (delayMs === undefined) {
+      this.moveAppResolutionToDeadLetter(appPath, error, managedEntry, attempt, 'retries-exhausted')
+      return
+    }
+    if (!existing && this.appResolutionRetries.size >= APP_RESOLUTION_RETRY_MAX_TRACKED_PATHS) {
+      // Too many paths are failing at once to give this one a ladder of its own; it skips straight
+      // to the sweep, which is the bounded queue the ladder would have handed it to anyway.
+      this.moveAppResolutionToDeadLetter(appPath, error, managedEntry, attempt, 'retry-slots-full')
+      return
+    }
+
+    const timer = setTimeout(() => {
+      const entry = this.appResolutionRetries.get(appPath)
+      if (entry) entry.timer = null
+      void this.retryAppResolution(appPath, managedEntry)
+    }, delayMs)
+    timer.unref?.()
+    // The attempt counter must survive the timer firing, otherwise the ladder restarts at its
+    // first delay on every failure and never reaches the dead letter.
+    this.appResolutionRetries.set(appPath, { attempt: attempt + 1, managedEntry, timer })
+
+    logApp(
+      `App resolution failed, retry ${attempt + 1}/${APP_RESOLUTION_RETRY_DELAYS_MS.length} in ${Math.round(
+        delayMs / 1000
+      )}s: ${chalk.yellow(appPath)}`,
+      LogStyle.warning
+    )
+  }
+
+  private async retryAppResolution(appPath: string, managedEntry: boolean): Promise<void> {
+    if (this.shuttingDown) return
+    try {
+      const result = await this.processAppPath(appPath, { managedEntry })
+      if (!result.success || !result.appInfo) return
+      logApp(`App resolution recovered on retry: ${chalk.green(appPath)}`, LogStyle.success)
+      await this.publishRecoveredAppResolution(result.appInfo)
+    } catch (error) {
+      logApp('App resolution retry failed', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  /**
+   * A retry runs outside the watch route, so nothing downstream publishes its record; the provider
+   * has to hand the recovered app to the runtime itself or the row would stay out of the index.
+   */
+  private async publishRecoveredAppResolution(appInfo: ScannedAppInfo): Promise<void> {
+    try {
+      await this.publishAppRuntimeUpsert(appInfo, 'app-resolution-retry-upsert')
+    } catch (error) {
+      logApp('Failed to publish recovered app resolution', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  private moveAppResolutionToDeadLetter(
+    appPath: string,
+    error: unknown,
+    managedEntry: boolean,
+    attempts: number,
+    cause: 'retries-exhausted' | 'retry-slots-full'
+  ): void {
+    const existing = this.appResolutionRetries.get(appPath)
+    if (existing?.timer) clearTimeout(existing.timer)
+    this.appResolutionRetries.delete(appPath)
+
+    const message = error instanceof Error ? error.message : String(error)
+    const report = operationalErrorService.report({
+      domain: 'app-index',
+      operation: 'resolve-path',
+      error: error instanceof Error ? error : new Error(message),
+      code: 'APP_INDEX_RESOLVE_RETRIES_EXHAUSTED',
+      userImpact: 'degraded',
+      context: { attempts, cause }
+    })
+
+    if (
+      !this.appResolutionDeadLetters.has(appPath) &&
+      this.appResolutionDeadLetters.size >= APP_RESOLUTION_DEAD_LETTER_MAX_ENTRIES
+    ) {
+      const oldest = this.appResolutionDeadLetters.keys().next()
+      if (!oldest.done) this.appResolutionDeadLetters.delete(oldest.value)
+    }
+    this.appResolutionDeadLetters.set(appPath, { managedEntry, sweeps: 0, lastError: message })
+
+    logApp(
+      cause === 'retries-exhausted'
+        ? `App resolution exhausted ${attempts} retries, parked for sweep: ${chalk.yellow(appPath)}`
+        : `App resolution retry slots are full, parked for sweep without retrying: ${chalk.yellow(
+            appPath
+          )}`,
+      LogStyle.error,
+      { reportId: report.id, deadLetters: this.appResolutionDeadLetters.size }
+    )
+    this.ensureAppResolutionSweep()
+  }
+
+  /** The sweep exists only while something is parked, so an idle app index holds no timer. */
+  private ensureAppResolutionSweep(): void {
+    if (this.appResolutionSweepTimer || this.shuttingDown) return
+    if (this.appResolutionDeadLetters.size === 0) return
+
+    const timer = setInterval(() => {
+      void this.sweepAppResolutionDeadLetters()
+    }, APP_RESOLUTION_DEAD_LETTER_SWEEP_INTERVAL_MS)
+    timer.unref?.()
+    this.appResolutionSweepTimer = timer
+  }
+
+  private stopAppResolutionSweep(): void {
+    if (!this.appResolutionSweepTimer) return
+    clearInterval(this.appResolutionSweepTimer)
+    this.appResolutionSweepTimer = null
+  }
+
+  private async sweepAppResolutionDeadLetters(): Promise<void> {
+    if (this.shuttingDown) {
+      this.stopAppResolutionSweep()
+      return
+    }
+
+    for (const [appPath, entry] of [...this.appResolutionDeadLetters]) {
+      // A later watch event can put a parked path back on the ladder. The ladder then owns it: it
+      // ends either by resolving the path (which clears both maps) or by parking it here again,
+      // whereas a sweep running in parallel would only race it and leave a retry entry that
+      // nothing re-arms.
+      if (this.appResolutionRetries.has(appPath)) continue
+
+      if (entry.sweeps >= APP_RESOLUTION_DEAD_LETTER_MAX_SWEEPS) {
+        this.appResolutionDeadLetters.delete(appPath)
+        logApp(
+          `Dropping app path that stayed unresolvable across ${entry.sweeps} sweeps: ${chalk.yellow(
+            appPath
+          )}`,
+          LogStyle.warning,
+          { lastError: entry.lastError }
+        )
+        continue
+      }
+
+      entry.sweeps += 1
+      // The sweep is the ladder's continuation, not a new failure, so it must not re-enter the
+      // backoff schedule — the sweep count is what bounds it from here.
+      const result = await this.processAppPath(appPath, {
+        managedEntry: entry.managedEntry,
+        scheduleRetry: false
+      })
+      if (result.success && result.appInfo) {
+        logApp(`App resolution recovered on sweep: ${chalk.green(appPath)}`, LogStyle.success)
+        await this.publishRecoveredAppResolution(result.appInfo)
+      }
+    }
+
+    if (this.appResolutionDeadLetters.size === 0) this.stopAppResolutionSweep()
+  }
+
+  /** Called whenever a path reaches a terminal state (resolved, not an app, or removed). */
+  private forgetAppResolutionFailure(appPath: string): void {
+    const retry = this.appResolutionRetries.get(appPath)
+    if (retry) {
+      if (retry.timer) clearTimeout(retry.timer)
+      this.appResolutionRetries.delete(appPath)
+    }
+    if (this.appResolutionDeadLetters.delete(appPath)) {
+      if (this.appResolutionDeadLetters.size === 0) this.stopAppResolutionSweep()
+    }
+  }
+
+  private clearAppResolutionTimers(): void {
+    for (const entry of this.appResolutionRetries.values()) {
+      if (entry.timer) clearTimeout(entry.timer)
+      entry.timer = null
+    }
+    this.appResolutionRetries.clear()
+    this.stopAppResolutionSweep()
   }
 
   private handleItemUnlinked = async (event: unknown): Promise<string[]> => {
@@ -2963,6 +3378,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     logApp(`App deletion detected: ${chalk.cyan(appPath)}`, LogStyle.process)
+    // A removed bundle will never resolve, so retiring its pending retries here is what keeps a
+    // deleted app from holding a timer (and eventually a dead-letter slot) for nothing.
+    this.forgetAppResolutionFailure(appPath)
     this.processingPaths.add(appPath)
 
     try {
@@ -3041,7 +3459,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const sessionId = searchResult?.sessionId
     if (sessionId) {
       logApp(`Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
-      searchEngineCore.recordExecute(sessionId, item).catch((err) => {
+      recordAppExecution(sessionId, item).catch((err) => {
         logApp(`Failed to record execution: ${chalk.red(err.message)}`, LogStyle.error)
       })
     }
@@ -3100,15 +3518,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const db = this.dbUtils.getDb()
-    const normalizedQuery = rawText.toLowerCase()
+    const normalizedQuery = rawText.normalize('NFC').toLowerCase()
     const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
     const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
+    // Keywords are stored in cleaned form (and, for accented text, in a folded
+    // twin), so every term is looked up as typed, cleaned and folded. The whole
+    // cleaned query is looked up as a single keyword too, which is what reaches
+    // spaced aliases like "vs code" and full titles.
+    const cleanedQuery = normalizeSearchText(rawText)
 
     let preciseMatchedItemIds: Set<string> | null = null
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
-    const preciseLookupTerms = shouldCheckPhrase
-      ? Array.from(new Set([...terms, normalizedQuery]))
-      : terms
+    const preciseLookupTerms = buildSearchKeywordLookupTerms([
+      ...terms,
+      normalizedQuery,
+      cleanedQuery
+    ])
     const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
     const preciseStart = startTiming()
     logApp(`Executing precise query: ${chalk.cyan(terms.join(', '))}`, LogStyle.info)
@@ -3121,7 +3546,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
       this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit),
       shouldLookupPrefix
-        ? this.searchIndex.lookupByKeywordPrefix(this.id, normalizedQuery, 200)
+        ? this.searchIndex.lookupByKeywordPrefix(this.id, cleanedQuery || normalizedQuery, 200)
         : Promise.resolve([]),
       ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
     ])
@@ -3130,9 +3555,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return new TuffSearchResultBuilder(query).build()
     }
 
-    const termMatches = terms.map(
-      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
-    )
+    const termMatches = terms.map((term) => collectSearchKeywordMatches(preciseResultMap, term))
     if (termMatches.length > 0) {
       preciseMatchedItemIds = termMatches.reduce<Set<string> | null>((accumulator, current) => {
         if (!accumulator) return current
@@ -3154,10 +3577,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (shouldCheckPhrase) {
       const phraseStart = startTiming()
-      const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
+      const phraseSet = collectSearchKeywordMatches(preciseResultMap, normalizedQuery)
 
-      if (phraseMatches.length > 0) {
-        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
+      if (phraseSet.size > 0) {
         preciseMatchedItemIds = preciseMatchedItemIds
           ? new Set([...preciseMatchedItemIds, ...phraseSet])
           : phraseSet
@@ -3403,10 +3825,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return new TuffSearchResultBuilder(query).setItems(sortedItems).build()
   }
 
+  /**
+   * Build the FTS query string. Terms are cleaned with the shared charset rules
+   * (non-Latin scripts survive instead of being deleted); the tokens are quoted
+   * when SearchIndexService turns this string into an FTS5 MATCH expression.
+   */
   private buildFtsQuery(terms: string[]): string {
     const tokens: string[] = []
     for (const term of terms) {
-      const cleaned = term.replace(/[^a-z0-9\u4E00-\u9FA5]+/gi, ' ').trim()
+      const cleaned = normalizeSearchText(term)
       if (!cleaned) continue
       tokens.push(...cleaned.split(/\s+/))
     }
@@ -3449,7 +3876,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async _waitForItemStable(itemPath: string, delay = 500, retries = 5): Promise<boolean> {
+  private async _waitForItemStable(
+    itemPath: string,
+    delay = APP_STABILITY_PROBE_INTERVAL_MS,
+    retries = 5
+  ): Promise<boolean> {
     logApp(`Waiting for item to stabilize: ${chalk.cyan(itemPath)}`, LogStyle.info)
 
     for (let i = 0; i < retries; i++) {
@@ -3460,7 +3891,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
         if (size1 === size2) {
           logApp(`Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success)
-          await sleep(1000)
+          await sleep(APP_STABILITY_SETTLE_MS)
           return true
         } else {
           logApp(
@@ -3579,11 +4010,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const lastScanTimestamp = (await this._getLastScanTime()) || 0
         const now = Date.now()
 
-        if (!isDevelopmentRuntime && now - lastScanTimestamp > 60 * 60 * 1000) {
+        if (!isDevelopmentRuntime && now - lastScanTimestamp > PROD_MDLS_SCAN_MIN_INTERVAL_MS) {
           logApp('Over 1 hour since last scan, starting mdls scan', LogStyle.info)
           await this._runScheduledMdlsReconcile()
-        } else if (isDevelopmentRuntime && !lastScanTimestamp) {
-          logApp('First scan in dev mode', LogStyle.info)
+        } else if (
+          isDevelopmentRuntime &&
+          // Gating on "never scanned" instead of an interval made this poll a one-shot: after the
+          // first scan it took the else branch forever, leaving the 24h full sync as dev's only
+          // way to notice an app the watch chain missed.
+          now - lastScanTimestamp > STARTUP_MDLS_SCAN_MIN_INTERVAL_DEV_MS
+        ) {
+          logApp('Over 6 hours since last scan in dev mode, starting mdls scan', LogStyle.info)
           await this.waitForMainRendererReady()
           await this._runScheduledMdlsReconcile()
         } else {
@@ -3734,15 +4171,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const db = this.dbUtils.getDb()
     try {
-      await dbWriteScheduler.schedule(`app-provider.config.${key}`, () =>
-        withSqliteRetry(
-          () =>
-            db.insert(configSchema).values({ key, value }).onConflictDoUpdate({
-              target: configSchema.key,
-              set: { value }
-            }),
-          { label: `app-provider.config.${key}` }
-        )
+      await scheduleDbWrite(`app-provider.config.${key}`, () =>
+        db.insert(configSchema).values({ key, value }).onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value }
+        })
       )
       return true
     } catch (error) {

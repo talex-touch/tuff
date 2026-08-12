@@ -2,7 +2,6 @@
 import { computed, defineAsyncComponent, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import SettingHeader from './SettingHeader.vue'
 import SettingAssistant from './SettingAssistant.vue'
@@ -18,7 +17,6 @@ const SettingFileIndex = defineAsyncComponent(() => import('./SettingFileIndex.v
 const SettingNetwork = defineAsyncComponent(() => import('./SettingNetwork.vue'))
 const SettingLocalAiCli = defineAsyncComponent(() => import('./SettingLocalAiCli.vue'))
 const SettingSentry = defineAsyncComponent(() => import('./SettingSentry.vue'))
-const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue'))
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 
 const { isWindows } = useRendererPlatform()
@@ -26,9 +24,7 @@ const route = useRoute()
 const targetSection = computed(() =>
   typeof route.query.section === 'string' ? route.query.section : ''
 )
-const showAdvancedSettings = computed(() =>
-  Boolean(appSetting?.dev?.advancedSettings || targetSection.value === 'file-index')
-)
+const showAdvancedSettings = computed(() => false)
 
 watch(
   targetSection,
@@ -80,8 +76,6 @@ watch(
       <SettingUpdate />
 
       <SettingSentry v-if="showAdvancedSettings" />
-
-      <SettingStorage />
 
       <SettingAbout />
     </div>

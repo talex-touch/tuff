@@ -66,6 +66,24 @@ async function recognizeImageText(options) {
   return nativeBinding.recognizeImageText(options)
 }
 
+/**
+ * Writes a macOS app icon. `async` in signature only -- the work runs on the calling thread.
+ *
+ * `iconForFile:` is AppKit, and AppKit here means the main thread: app_icon.mm:140 rejects any
+ * other with `ERR_DARWIN_APP_ICON_WRONG_THREAD`. In Electron the main thread *is* the JS thread,
+ * so there is nowhere to move it to. An AsyncWorker version was written, compiled, and threw that
+ * error on the first call (#857) -- worth knowing before writing it a second time.
+ *
+ * The `setImmediate` below defers when the block starts, not that it blocks. Measured cost is
+ * ~28 ms p50 per app on a cold index; of that only ~6 ms is AppKit work
+ * (fetch 1.0 / draw 3.6 / encode 1.4 warm) and the rest is bundle icon I/O happening *inside*
+ * `iconForFile:`, which cannot leave the main thread either. Moving just the PNG encode and the
+ * file write off-thread would save single digits of the 28.
+ *
+ * The alternative is ImageIO, which is ~50x kinder to the event loop and returns the wrong asset:
+ * it hands back the light-paper icon where AppKit returns the dark-paper one, so on a dark-mode
+ * system essentially every modern app gets the wrong icon. That trade is open on #857.
+ */
 async function writeDarwinAppIcon(options) {
   if (
     !nativeBinding

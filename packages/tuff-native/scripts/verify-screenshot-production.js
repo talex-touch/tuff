@@ -30,12 +30,23 @@ try {
     ])
     if (process.platform === 'linux' && unavailableLinuxReasons.has(capability.reason)) {
       assert.equal(capability.state, 'unavailable')
-      assert.deepEqual(capability.features, [])
+      // Same unconditional append as below: even with no backend features, the
+      // capability layer still adds frozen-compose, so [] cannot occur here either.
+      // This is the branch a headless CI runner takes -- no display server, so the
+      // reason is display-server-unavailable -- which is why the Linux leg kept failing
+      // after the degraded-branch fix.
+      assert.deepEqual(capability.features, ['frozen-compose'])
     }
     else {
       assert.equal(capability.state, 'degraded')
       assert.equal(capability.reason, 'basic-backend-only')
-      assert.deepEqual(capability.features, ['display', 'region'])
+      // ScreenshotCapability::features() appends frozen-compose to whatever the
+      // backend reports, unconditionally (native-screenshot/src/capability.rs:35-39),
+      // so this list could never be just the backend's two. The Rust contract test
+      // already expects all three (backend_contract_tests.rs:377); this assertion was
+      // the outlier, and it made the Windows leg of native-protocol.yml red on every
+      // branch. macOS never noticed because its branch does not assert features.
+      assert.deepEqual(capability.features, ['display', 'region', 'frozen-compose'])
     }
   }
 }

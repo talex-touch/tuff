@@ -858,7 +858,10 @@ export class NetworkService {
         ? Math.max(100, Math.floor(options.timeoutMs))
         : this.getConfigFromSettings().timeoutMs
     const method = (options.method ?? 'GET').toUpperCase()
-    const headers = { ...(options.headers ?? {}), 'accept-encoding': 'identity' }
+    const headers: Record<string, string> = {
+      ...(options.headers ?? {}),
+      'accept-encoding': 'identity'
+    }
     const body = serializePinnedRequestBody(options)
     if (body && !Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
       headers['content-type'] = 'application/json'

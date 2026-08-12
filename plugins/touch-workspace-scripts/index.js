@@ -188,10 +188,23 @@ const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     if (featureId !== FEATURE_ID)
       return false
+    // Publish a degraded item rather than throwing (#819). The throw sat outside the try below,
+    // so it escaped into the host, and onFeatureTriggered fires on every input change: typing
+    // the keyword with the capability absent produced more than ten errors inside the host's 60s
+    // window, which marks the plugin CRASHED and disables it until someone re-enables it by hand.
+    // onItemAction already answered the same condition with a blocked result.
     if (!plugin.workspaceScripts) {
-      throw Object.assign(new Error('workspace scripts capability unavailable'), {
-        code: 'PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE',
-      })
+      logger?.error?.('[touch-workspace-scripts] capability-unavailable')
+      await plugin.feature.clearItems()
+      await plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-unavailable`,
+          featureId,
+          title: t('工作区脚本不可用', 'Workspace Scripts Unavailable'),
+          subtitle: 'capability-unavailable',
+        }),
+      ])
+      return true
     }
 
     try {

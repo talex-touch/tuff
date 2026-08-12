@@ -17,7 +17,11 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, '..')
-const pluginsDir = path.resolve(rootDir, 'plugins')
+// TUFF_PLUGINS_DIR lets the gate's own tests point it at a fixture tree. Without it the only way
+// to prove the checks fire is to break a real plugin, which is how a gate ends up untested.
+const pluginsDir = process.env.TUFF_PLUGINS_DIR
+  ? path.resolve(process.env.TUFF_PLUGINS_DIR)
+  : path.resolve(rootDir, 'plugins')
 
 // Known permission IDs from packages/utils/permission/registry.ts
 const KNOWN_PERMISSION_IDS = new Set([
@@ -43,6 +47,12 @@ const KNOWN_PERMISSION_IDS = new Set([
   'search.root-results',
   'window.create',
   'window.capture',
+  // Added when the drift below was measured: the registry had 27 ids, this set had 22.
+  'storage.sqlite',
+  'media.read',
+  'i18n.read',
+  'lexicon.read',
+  'lexicon.register',
 ])
 
 function resolveSearchProviderPermissionIds(scopes = []) {
@@ -90,12 +100,105 @@ function logOk(pluginName, message) {
 }
 
 // Discover plugin directories
+if (process.argv.includes('--self-test')) {
+  process.exit(selfTest() > 0 ? 1 : 0)
+}
+
 const entries = fs.readdirSync(pluginsDir, { withFileTypes: true })
 const pluginDirs = entries
   .filter(e => e.isDirectory())
   .map(e => e.name)
 
 console.log(`\nValidating ${pluginDirs.length} plugins in plugins/\n`)
+
+// Discovery returning nothing is not a pass. Every rule below -- dev leakage, the manifest
+// feature.platform shape, search-provider migration -- applies per plugin, so an empty list
+// makes the run assert nothing while still printing success and exiting 0. A moved directory,
+// a bad path after a refactor, or a partial checkout all land here (#1586).
+if (discoveryFoundNothing(pluginDirs)) {
+  console.error('\x1B[31mNo plugin directories found in plugins/ — validation would pass without checking anything.\x1B[0m\n')
+  process.exit(1)
+}
+
+/**
+ * Fails a plugin that ships with its development loader switched on.
+ *
+ * `dev.enable: true` makes the runtime fetch the Surface from `dev.address` — a localhost port —
+ * instead of the packaged files, so a committed one is a plugin that silently does nothing on a
+ * user's machine. AGENTS.md cites `pnpm plugins:validate` as the manifest gate, and it did not
+ * look at the dev block at all: three manifests shipped `dev.enable: true` while it reported
+ * 24/24 passed (#812).
+ *
+ * Both sources are checked. The block lives in `manifest.json` for most plugins and in
+ * `package.json` under `talex-touch.plugin.dev` for package-backed ones — and the second is where
+ * it was actually still hiding, in a directory the manifest check skips entirely.
+ *
+ * @returns true when the plugin should fail.
+ */
+function checkDevLeakage(pluginName, dev, source) {
+  if (!dev || dev.enable !== true)
+    return false
+  const address = typeof dev.address === 'string' ? ` (${dev.address})` : ''
+  logError(pluginName, `${source} ships dev.enable: true${address} — the runtime would load the Surface from a dev server instead of the packaged files`)
+  return true
+}
+
+/**
+ * A manifest feature's `platform` must be `{ win32, darwin, linux }` booleans (#820).
+ *
+ * There are two platform shapes in this codebase and they are easy to confuse:
+ *
+ * - **manifest** — `{ win32: boolean, darwin: boolean, linux: boolean }`. All 20 manifests use
+ *   it, so it is the de-facto convention, and this is the one enforced here.
+ * - **runtime registration** — `{ win|darwin|linux: { enable, arch, os } }`, the `IPlatform` type,
+ *   which the host validates with `exactRecord` when a Prelude calls `features.addFeature`.
+ *
+ * `touch-browser-open` uses both — the manifest shape in `manifest.json` and the runtime shape in
+ * `index.js` — which is how you can hold them side by side and still write the wrong one.
+ *
+ * This pins the shape only. Nothing in the main process reads a manifest feature's `platform`, so
+ * the declarations are inert; whether they should gate registration is on #820.
+ *
+ * @returns true when the plugin should fail.
+ */
+function checkFeaturePlatformShape(pluginName, features) {
+  const MANIFEST_KEYS = ['win32', 'darwin', 'linux']
+  let failed = false
+
+  for (const feature of Array.isArray(features) ? features : []) {
+    const platform = feature?.platform
+    if (platform === undefined)
+      continue
+
+    const id = feature.id || feature.name || '<unnamed>'
+    if (platform === null || typeof platform !== 'object' || Array.isArray(platform)) {
+      logError(pluginName, `feature "${id}" has a non-object "platform"`)
+      failed = true
+      continue
+    }
+
+    const keys = Object.keys(platform).sort()
+    if (keys.join(',') !== [...MANIFEST_KEYS].sort().join(',')) {
+      const runtimeShaped = keys.includes('win') || keys.some(key => typeof platform[key] === 'object')
+      const hint = runtimeShaped ? ' — that is the runtime addFeature shape, which a manifest is not read as' : ''
+      logError(
+        pluginName,
+        `feature "${id}" declares platform keys [${keys.join(', ')}]; a manifest needs exactly [${MANIFEST_KEYS.join(', ')}]${hint}`,
+      )
+      failed = true
+      continue
+    }
+
+    for (const key of MANIFEST_KEYS) {
+      if (typeof platform[key] !== 'boolean') {
+        logError(pluginName, `feature "${id}" platform.${key} must be a boolean (received ${JSON.stringify(platform[key])})`)
+        failed = true
+      }
+    }
+  }
+
+  return failed
+}
 
 for (const pluginName of pluginDirs) {
   totalPlugins++
@@ -114,6 +217,8 @@ for (const pluginName of pluginDirs) {
         logError(pluginName, `package.json name must be "${expectedPackageName}" (received "${packageManifest.name || '<missing>'}")`)
         pluginHasError = true
       }
+      if (checkDevLeakage(pluginName, packageManifest?.['talex-touch']?.plugin?.dev, 'package.json'))
+        pluginHasError = true
     }
     catch (e) {
       logError(pluginName, `package.json parse error: ${e.message}`)
@@ -140,6 +245,12 @@ for (const pluginName of pluginDirs) {
     pluginHasError = true
     continue
   }
+
+  if (checkDevLeakage(pluginName, manifest?.dev, 'manifest.json'))
+    pluginHasError = true
+
+  if (checkFeaturePlatformShape(pluginName, manifest?.features))
+    pluginHasError = true
 
   // 2. Required fields: id (or name), name, version
   if (!manifest.name) {
@@ -181,7 +292,10 @@ for (const pluginName of pluginDirs) {
       .forEach(id => declaredPermissionIds.add(id))
     const unknownIds = rawIds.filter(id => typeof id === 'string' && !KNOWN_PERMISSION_IDS.has(id))
     if (unknownIds.length > 0) {
-      logWarn(pluginName, `Unknown permission IDs: ${unknownIds.join(', ')}`)
+      // logError, not logWarn: a warning does not affect the exit code, so a manifest
+      // asking for a permission the runtime does not define passed CI silently. All 24
+      // plugins are clean today, so this fails nothing that currently works (#735).
+      logError(pluginName, `Unknown permission IDs: ${unknownIds.join(', ')}`)
     }
   }
 
@@ -275,4 +389,74 @@ if (hasErrors) {
 }
 else {
   console.log('\x1B[32mAll plugins validated successfully.\x1B[0m\n')
+}
+
+/**
+ * Discovery returning nothing is not a pass (#1586). Pulled out of the call site so `--self-test`
+ * can reach it: the rule it encodes is exactly the one that cannot be observed from a normal run,
+ * because a validator that checked nothing looks identical to one where nothing was wrong.
+ */
+export function discoveryFoundNothing(pluginDirs) {
+  return !Array.isArray(pluginDirs) || pluginDirs.length === 0
+}
+
+/**
+ * Proves the detectors fire. Every case here is a manifest this script must reject; if a refactor
+ * makes one of them pass, CI says so instead of reporting a clean sweep over inputs it stopped
+ * reading. Mirrors the shape used by check-plugin-lint-coverage.mjs and check-action-pins.mjs.
+ */
+function selfTest() {
+  const cases = [
+    {
+      name: 'discovery finding nothing fails rather than reporting success',
+      run: () => discoveryFoundNothing([]),
+      expect: true,
+    },
+    {
+      name: 'discovery finding plugins does not fail',
+      run: () => discoveryFoundNothing(['touch-snipaste']),
+      expect: false,
+    },
+    {
+      name: 'a committed dev.enable is caught',
+      run: () => checkDevLeakage('probe', { enable: true, address: 'http://localhost:3333/' }, 'manifest.json'),
+      expect: true,
+    },
+    {
+      name: 'dev.enable false is allowed',
+      run: () => checkDevLeakage('probe', { enable: false }, 'manifest.json'),
+      expect: false,
+    },
+    {
+      name: 'the runtime addFeature platform shape is rejected in a manifest',
+      run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win: { enable: true, arch: [], os: [] } } }]),
+      expect: true,
+    },
+    {
+      name: 'a non-boolean manifest platform value is rejected',
+      run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win32: 'yes', darwin: false, linux: false } }]),
+      expect: true,
+    },
+    {
+      name: 'the manifest platform shape is accepted',
+      run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win32: true, darwin: false, linux: false } }]),
+      expect: false,
+    },
+  ]
+
+  let failures = 0
+  for (const testCase of cases) {
+    const actual = testCase.run()
+    if (actual === testCase.expect) {
+      console.log(`  \x1B[32m✓\x1B[0m ${testCase.name}`)
+    }
+    else {
+      console.error(`  \x1B[31m✗\x1B[0m ${testCase.name}: expected ${testCase.expect}, got ${actual}`)
+      failures += 1
+    }
+  }
+  console.log(failures === 0
+    ? '\n\x1B[32mvalidate-plugins self-test passed.\x1B[0m\n'
+    : `\n\x1B[31mvalidate-plugins self-test failed: ${failures} case(s).\x1B[0m\n`)
+  return failures
 }

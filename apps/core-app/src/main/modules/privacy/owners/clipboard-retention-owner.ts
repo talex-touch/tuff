@@ -70,7 +70,7 @@ export interface ClipboardImagePersistenceAdapter {
 export function createClipboardImageRetentionAdapter(
   persistence: ClipboardImagePersistenceAdapter
 ): ClipboardImageRetentionOwner {
-  return Object.freeze({
+  return Object.freeze<ClipboardImageRetentionOwner>({
     deleteReferences: (references, signal) =>
       persistence.deleteOwnedImageReferences(references, signal),
     reconcileOrphans: (signal, maxRows) => persistence.cleanupOrphanClipboardImages(signal, maxRows)
@@ -85,14 +85,16 @@ export interface ClipboardRetentionOwnerOptions {
   readonly onDeleted?: (ids: readonly number[]) => void
 }
 
-const missingImageOwner: ClipboardImageRetentionOwner = Object.freeze({
-  async deleteReferences(references) {
-    return { deletedCount: 0, deletedByteCount: 0, failedCount: references.length }
-  },
-  async reconcileOrphans() {
-    return { deletedCount: 0, deletedByteCount: 0, failedCount: 0 }
+const missingImageOwner: ClipboardImageRetentionOwner = Object.freeze<ClipboardImageRetentionOwner>(
+  {
+    async deleteReferences(references) {
+      return { deletedCount: 0, deletedByteCount: 0, failedCount: references.length }
+    },
+    async reconcileOrphans() {
+      return { deletedCount: 0, deletedByteCount: 0, failedCount: 0 }
+    }
   }
-})
+)
 
 function disabledDelete(): PrivacyOwnerDeleteResult {
   return privacyDeleteResult(CATEGORY, 'PRIVACY_OWNER_DISABLED', emptyDeleteProgress(), {

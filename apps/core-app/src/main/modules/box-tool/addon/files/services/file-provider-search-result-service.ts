@@ -1,6 +1,11 @@
 import type { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
+import {
+  buildSearchKeywordLookupTerms,
+  collectSearchKeywordMatches,
+  normalizeSearchText
+} from '@talex-touch/utils/search'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { DbUtils } from '../../../../../db/utils'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
@@ -137,13 +142,20 @@ export class FileProviderSearchResultService {
       return await this.buildExtensionOnlyResult(query, extensionFilters)
     }
 
-    const normalizedQuery = searchText.toLowerCase()
+    const normalizedQuery = searchText.normalize('NFC').toLowerCase()
     const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
     const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
-    const preciseLookupTerms = shouldCheckPhrase
-      ? Array.from(new Set([...terms, normalizedQuery]))
-      : terms
+    // Keywords are stored in cleaned form (and, for accented text, in a folded
+    // twin), so every term is looked up as typed, cleaned and folded. The whole
+    // cleaned query is looked up as a single keyword too, which is what reaches
+    // keywords containing spaces (multi-word aliases, full titles).
+    const cleanedQuery = normalizeSearchText(searchText)
+    const preciseLookupTerms = buildSearchKeywordLookupTerms([
+      ...terms,
+      normalizedQuery,
+      cleanedQuery
+    ])
     const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
     const shouldLookupPrefix = normalizedQuery.length <= 5
     const ftsQuery = buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
@@ -156,16 +168,18 @@ export class FileProviderSearchResultService {
     const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
       searchIndex.lookupByKeywords(this.deps.providerId, preciseLookupTerms, preciseSearchLimit),
       shouldLookupPrefix
-        ? searchIndex.lookupByKeywordPrefix(this.deps.providerId, normalizedQuery, 200)
+        ? searchIndex.lookupByKeywordPrefix(
+            this.deps.providerId,
+            cleanedQuery || normalizedQuery,
+            200
+          )
         : Promise.resolve([]),
       ftsQuery ? searchIndex.search(this.deps.providerId, ftsQuery, 150) : Promise.resolve([])
     ])
     if (signal.aborted) return this.empty(query)
 
     let preciseMatchPaths: Set<string> | null = null
-    const termMatches = terms.map(
-      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
-    )
+    const termMatches = terms.map((term) => collectSearchKeywordMatches(preciseResultMap, term))
     searchLogger.filePreciseQueries(1)
     searchLogger.filePreciseResults(termMatches.map((matches) => matches.size))
     if (termMatches.length > 0) {
@@ -182,9 +196,7 @@ export class FileProviderSearchResultService {
 
     if (shouldCheckPhrase) {
       const phraseStart = this.now()
-      const phraseSet = new Set(
-        (preciseResultMap.get(normalizedQuery) ?? []).map((entry) => entry.itemId)
-      )
+      const phraseSet = collectSearchKeywordMatches(preciseResultMap, normalizedQuery)
       if (phraseSet.size > 0) {
         preciseMatchPaths = preciseMatchPaths
           ? new Set([...preciseMatchPaths, ...phraseSet])
@@ -230,8 +242,13 @@ export class FileProviderSearchResultService {
     const candidatePaths = [...candidateIds].slice(0, 120)
     searchLogger.fileDataFetch(candidatePaths.length)
     const dataFetchStart = this.now()
+    // Candidate rows MUST come from the split-aware read home: the index that
+    // produced these candidates is the worker's file, and a miss below feeds
+    // cleanupStaleCandidates — a DESTRUCTIVE removal from that same index.
+    // Reading the primary here under the split would judge live search-home
+    // entries against a stale/empty catalog and delete them.
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,
@@ -248,7 +265,14 @@ export class FileProviderSearchResultService {
     })
 
     const filesMap = this.groupRows(rows)
-    const stalePaths = candidatePaths.filter((filePath) => !filesMap.has(filePath))
+    // Stale means the index handed us a candidate the files table has NO row
+    // for — measured against the raw rows, never against filesMap. groupRows
+    // drops rows that getSearchExclusionReason hides from THIS query (and the
+    // type/extension filters below drop more); those files are alive and
+    // indexed, and routing them into cleanup deleted real index rows on every
+    // search that surfaced them.
+    const indexedPaths = new Set(rows.map((row) => row.file.path))
+    const stalePaths = candidatePaths.filter((filePath) => !indexedPaths.has(filePath))
     if (stalePaths.length > 0) this.deps.cleanupStaleCandidates(stalePaths)
     this.filterByTypes(filesMap, typeFilters)
     this.filterByExtensions(filesMap, extensionFilters)
@@ -346,8 +370,11 @@ export class FileProviderSearchResultService {
     }
     if (scoreByFileId.size === 0) return []
 
+    // embeddings.sourceId carries the ids of the home the worker writes —
+    // resolving them against the primary would be a cross-home id collision
+    // (the wrong file could be displayed). Same-home read only.
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,
@@ -402,7 +429,7 @@ export class FileProviderSearchResultService {
     const extensions = resolveExtensionsForTypeFilters(typeFilters)
     if (!dbUtils || extensions.length === 0) return this.empty(query)
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,
@@ -437,7 +464,7 @@ export class FileProviderSearchResultService {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils || extensionFilters.length === 0) return this.empty(query)
     const rows = await dbUtils
-      .getDb()
+      .getFileIndexReadDb()
       .select({
         file: filesSchema,
         extensionKey: fileExtensions.key,

@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   options: () => [],
   multiple: false,
   disabled: false,
-  placeholder: '请选择',
+  placeholder: 'Please select',
   searchable: true,
   clearable: true,
   placement: 'bottom-start',
@@ -80,6 +80,13 @@ async function ensureChildren(node: CascaderNode | null, path: CascaderPath, lev
   try {
     const children = await props.load(node, level)
     loadedChildren.value.set(k, children)
+  }
+  catch (error) {
+    // Callers wire ensureChildren straight to @mouseenter/@click, so a rejected
+    // loader would surface as an unhandled rejection and the column would just
+    // render empty — indistinguishable from a node with no children.
+    // Nothing is cached for a failed path, so expanding again retries.
+    emit('load-error', { path, error })
   }
   finally {
     loadingKeys.value.delete(k)

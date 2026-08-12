@@ -968,6 +968,16 @@ export class TuffIntelligenceSDK {
               model: finalModel
             }
           }
+          if (chunk.partEvent) {
+            yield {
+              type: 'part',
+              capabilityId,
+              traceId: finalTraceId,
+              partEvent: chunk.partEvent,
+              provider: finalProvider,
+              model: finalModel
+            }
+          }
           if (chunk.delta) {
             accumulated += chunk.delta
             yield {

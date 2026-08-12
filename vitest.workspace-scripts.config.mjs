@@ -1,0 +1,53 @@
+import { defineConfig } from 'vitest/config'
+
+/**
+ * Runs the repo-root tooling tests, which no workflow executed until now (#1135).
+ *
+ * `scripts/` holds the release machinery — release-notes generation and verification, asset
+ * preparation, update-manifest validation, rollback-version resolution, plugin-release
+ * evidence, the release gates themselves. Their tests were the only thing standing between a
+ * refactor and a broken release, and nothing ran them, so they were free to rot. One had:
+ * `scripts/ci/ai-review.test.mjs` pinned `actions/checkout@v6` as part of a *security*
+ * contract, Dependabot moved the workflow to v7, and the test went red in silence.
+ *
+ * Deliberately a separate config file rather than `vitest.config.mjs`: a root config named
+ * that way is picked up by any bare `vitest` invocation from the repo root, which would
+ * change what a developer gets when they run vitest expecting a package's own setup.
+ */
+export default defineConfig({
+  test: {
+    // Several of these shell out to `pnpm pack` against real workspace packages, which is
+    // comfortably under a second locally and around six on a CI runner — past vitest's 5s
+    // default. A timeout there reads as a broken test rather than a slow one, so it gets a
+    // ceiling that reflects what the work costs instead of what a pure unit test costs.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
+
+    include: [
+      'scripts/**/*.test.mjs',
+      'scripts/**/*.test.ts',
+    ],
+    exclude: [
+      '**/node_modules/**',
+
+      // Imports packages/tuff-cli-core/dist/index.js by design — the whole point of the case
+      // is that the audit module must resolve the *built* runtime and never the unbuilt CLI
+      // source. It therefore needs a build first, which the PR Quality job does not do.
+      // Not broken; wrong job. Run it after `pnpm -F @talex-touch/tuff-cli-core build`.
+      'scripts/plugin-source-package-audit.test.ts',
+
+      // Exercise a contract that is macOS-only *by design*, so they cannot pass on
+      // ubuntu-latest — and the fixtures are right to hardcode darwin/arm64:
+      //
+      //   scripts/lib/update-downgrade-evidence.mjs:122
+      //   if (pair !== 'darwin/arm64' && executionMode !== 'static-only')
+      //     issues.push(`${label}.${pair} must be static-only on this release acceptance host`)
+      //
+      // The release acceptance host is an Apple-silicon Mac; every other pair must be
+      // static-only. A Linux runner cannot produce a valid `runtime` claim at all. The fix
+      // is a macOS runner, not a fixture change — #1139.
+      'scripts/validate-update-downgrade-evidence.test.mjs',
+      'scripts/generate-release-test-summary.test.mjs',
+    ],
+  },
+})

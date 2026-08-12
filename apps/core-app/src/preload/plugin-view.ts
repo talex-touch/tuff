@@ -2,6 +2,7 @@
 // rather than through a global import.
 import { installTransportPortHandoff } from '@talex-touch/utils/transport'
 import { contextBridge } from 'electron'
+import { PLUGIN_VIEW_NONCE_CHANNEL } from '../shared/ipc/raw-channel'
 import { pluginViewRendererIpcAdapter } from '../shared/ipc/plugin-view-renderer-adapter'
 import { parsePluginViewBootstrapArgument } from '../shared/plugin-view-bridge'
 import { createPluginViewChannel } from './plugin-view-channel'
@@ -50,8 +51,24 @@ const disposeTransportPortHandoff = installTransportPortHandoff(
   window
 )
 const bootstrap = parsePluginViewBootstrapArgument(process.argv)
+
+/**
+ * The channel alias for this surface (#697).
+ *
+ * It is fetched rather than read out of `process.argv` because command-line arguments of a
+ * renderer are readable by any unprivileged process on the machine, and this used to be the
+ * plugin's real long-lived channel key. The main process mints a per-surface nonce when it
+ * registers the webContents — before any content loads — so the answer is always ready here.
+ */
+const channelAlias = pluginViewRendererIpcAdapter.sendSync(PLUGIN_VIEW_NONCE_CHANNEL)
+if (typeof channelAlias !== 'string' || !channelAlias) {
+  // Not recoverable: without an alias every message this surface sends is unattributable, and
+  // continuing would leave a plugin page that silently receives nothing.
+  throw new Error('Trusted plugin views require a channel alias from the host.')
+}
+
 const channel = createPluginViewChannel(pluginViewRendererIpcAdapter, {
-  uniqueKey: bootstrap.channelKey
+  uniqueKey: channelAlias
 })
 
 const publicChannel = Object.freeze({

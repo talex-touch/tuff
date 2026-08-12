@@ -7,7 +7,7 @@ import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import LogTerminal from '~/components/terminal/LogTerminal.vue'
 import { usePluginLogManager } from '~/modules/hooks/usePluginLogManager'
 import { usePluginLogSessions } from '~/modules/hooks/usePluginLogSessions'
@@ -466,7 +466,7 @@ defineExpose({
     </footer>
   </TxCard>
 
-  <TuffDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
+  <TxDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
     <section class="history-panel">
       <div v-if="historySessions.length" class="history-list">
         <TxButton
@@ -515,7 +515,7 @@ defineExpose({
         </TxButton>
       </footer>
     </section>
-  </TuffDrawer>
+  </TxDrawer>
 </template>
 
 <style lang="scss" scoped>

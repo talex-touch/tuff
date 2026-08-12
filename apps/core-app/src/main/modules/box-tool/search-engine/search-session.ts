@@ -311,6 +311,12 @@ export class SearchSessionRegistry {
   private readonly sessions = new Map<string, SearchSession>()
   private readonly completedTraces = new Map<string, SearchSessionTrace>()
   private destroyPromise: Promise<void> | null = null
+  /**
+   * Latches on the first destroy() and never clears. destroyPromise cannot carry
+   * this on its own: it is nulled in a finally so repeat calls re-drain, which
+   * left the shutdown guard open again the moment the drain finished (#678).
+   */
+  private destroyed = false
 
   constructor(
     private readonly options: {
@@ -324,7 +330,7 @@ export class SearchSessionRegistry {
     activations: readonly IProviderActivate[] | null
     sink?: SearchSink
   }): SearchSession {
-    if (this.destroyPromise) {
+    if (this.destroyed || this.destroyPromise) {
       throw new Error('Search session registry is shutting down')
     }
 
@@ -383,6 +389,7 @@ export class SearchSessionRegistry {
   destroy(): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise
 
+    this.destroyed = true
     const sessions = [...this.sessions.values()]
     this.destroyPromise = (async () => {
       for (const session of sessions) session.cancel()

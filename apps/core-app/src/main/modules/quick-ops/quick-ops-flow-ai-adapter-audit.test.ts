@@ -88,9 +88,8 @@ describe('QuickOps Flow and AI adapter audit', () => {
         {
           path: 'plugins/touch-quickops/index.test.cjs',
           source: [
-            'test("buildFlowAdapterTrace redacts request and payload values", () => {})',
-            'expect(trace).toMatchObject({ payloadKeys: [], sensitivePayloadRedacted: true })',
-            'test("onItemAction dispatches safe QuickOps Flow action", () => {})',
+            'test("projectItemsForHost publishes only whitelisted meta, so request detail cannot leak", () => {})',
+            'test("onItemAction dispatches only the fixed Flow payload and awaits the acknowledgement", () => {})',
             'assert.equal(items[0].meta.payload, undefined)',
             'assert.equal(resolveHighRiskFlowAction("kill port 3000").targetId, "quickops.port-kill")'
           ].join('\n')

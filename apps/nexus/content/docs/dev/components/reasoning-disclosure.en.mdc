@@ -1,0 +1,74 @@
+---
+title: Reasoning Disclosure
+description: A collapsible reasoning trace that follows its own tail while streaming.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, reasoning, disclosure]
+syncStatus: reviewed
+verified: true
+---
+# Reasoning Disclosure
+
+`TxReasoningDisclosure` tucks a model's thinking into a collapsible block: a thinking orb and "Thinking…" while it streams, a bulb icon and an elapsed time once it settles.
+
+Manually verified against `packages/tuffex/packages/components/src/reasoning-disclosure/src/TxReasoningDisclosure.vue`.
+
+## Basic Usage
+
+### Reasoning Disclosure
+::::TuffDemoWrapper{demo="ReasoningDisclosureReasoningDisclosureDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxReasoningDisclosure streaming text="Breaking the problem down…" />
+
+    <TxReasoningDisclosure
+      :duration-ms="4200"
+      default-open
+      text="Confirm the input bounds first, then pick the algorithm."
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Open state is owned by the component and seeded from `defaultOpen`. It is uncontrolled: changing `defaultOpen` afterwards does not reopen or close it.
+- Clicking the header toggles it and emits `toggle` with the state **after** the change.
+- The header label follows `streaming` — `thinkingLabel` while true, `label` otherwise.
+- The duration only appears when streaming is false *and* `durationMs` is set, so a partial time never shows mid-stream. The default format is `Thought for X.Xs`; `durationFormatter` replaces it.
+- While `streaming` is true, every change to `text` scrolls the text region to the bottom so new output stays visible. It does not touch the scroll position otherwise.
+- The header is a real `<button>` with `aria-expanded` and an `aria-controls` pointing at the body. Both icons are `aria-hidden`.
+- Collapsing hides the body but keeps it mounted — a long trace still occupies memory while closed.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string` | `''` | The reasoning body, rendered as-is with line breaks preserved. |
+| `streaming` | `boolean` | `false` | Whether output is still arriving; drives the header label, the icon and the auto-scroll. |
+| `durationMs` | `number` | — | Thinking time in milliseconds; shown only once streaming is false. |
+| `defaultOpen` | `boolean` | `false` | Initial open state. Read once, on mount. |
+| `label` | `string` | `'Reasoning'` | Header label after it settles. |
+| `thinkingLabel` | `string` | `'Thinking…'` | Header label while streaming. |
+| `durationFormatter` | `(ms: number) => string` | — | Replaces the duration text. Falls back to `Thought for X.Xs`. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `toggle` | `(open: boolean)` | Emitted when the header is clicked, carrying the resulting open state. |
+
+## Slots
+
+`TxReasoningDisclosure` exposes no slots. The body takes plain `text` only; compose with `TxStreamMarkdown` yourself if you need Markdown or rich content.
+
+## Best Practices
+
+- Leave it collapsed by default. A reasoning trace is optional explanation, and opening it pushes the actual answer below the fold.
+- Set `durationMs` at the same moment you set `streaming` to false, or the elapsed time will never appear.
+- To remember the open state across sessions, hold it yourself and re-key the component — changing `defaultOpen` has no effect.
+- When localizing, override `label`, `thinkingLabel` and `durationFormatter` together; a mix of languages across the three is very visible.

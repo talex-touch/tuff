@@ -673,6 +673,14 @@ pub struct UiElementDescriptor {
 #[derive(Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentSnapshot {
+    /// Windows the backend could not turn into a descriptor, usually a zero-sized frame from a
+    /// window mid-creation or fully collapsed.
+    ///
+    /// `#[serde(skip)]` on purpose: this rides out to `RunMeta.counters` as `dropped-windows`,
+    /// next to the existing `dropped-source-frames`, rather than into the snapshot payload. It is
+    /// a diagnostic about the refresh, not a property of the content (#853).
+    #[serde(skip)]
+    pub dropped_windows: u64,
     pub generation: DescriptorId,
     pub coordinate_space: CoordinateSpace,
     pub captured_at_unix_ms: u64,

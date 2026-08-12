@@ -14,6 +14,7 @@ import type { PrivacyRetentionCoordinator } from './retention-coordinator'
 import path from 'node:path'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { isInStartupDegradeWindow } from '../../db/runtime-flags'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { createPrivacyDataOwnerRegistry } from './data-owner'
@@ -93,7 +94,10 @@ export function createPrivacyProductionOwnerRegistry(
     createDiagnosticsRetentionOwner({
       client: dependencies.auxiliaryClient,
       telemetryLifecycle: dependencies.telemetryLifecycle,
-      logDirectory: dependencies.logDirectory
+      logDirectory: dependencies.logDirectory,
+      // Startup write-storm gate (R4): scheduled-retention telemetry DB-writes
+      // skip while inside the startup degrade window.
+      isStartupDegradeWindowActive: isInStartupDegradeWindow
     })
   ])
 }
@@ -212,7 +216,7 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
 }
 
 function defaultDependencies(): PrivacyLifecycleModuleDependencies {
-  return Object.freeze({
+  return Object.freeze<PrivacyLifecycleModuleDependencies>({
     resolveTransport: (context) =>
       resolveMainRuntime(context, 'PrivacyLifecycleModule.onInit')
         .transport as unknown as PrivacyTransportAdapter,

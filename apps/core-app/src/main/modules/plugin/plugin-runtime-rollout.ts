@@ -1,28 +1,19 @@
-export const PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
-  'clipboard-history',
-  'touch-batch-rename',
-  'touch-browser-bookmarks',
-  'touch-browser-data',
-  'touch-browser-open',
-  'touch-code-snippets',
-  'touch-dev-toolbox',
-  'touch-dev-utils',
-  'touch-dictation',
-  'touch-emoji-symbols',
-  'touch-intelligence',
-  'touch-quick-actions',
-  'touch-quickops',
-  'touch-snipaste',
-  'touch-snippets',
-  'touch-system-actions',
-  'touch-text-snippets',
-  'touch-text-tools',
-  'touch-translation',
-  'touch-window-manager',
-  'touch-window-presets',
-  'touch-workspace-scripts'
-] as const)
-
+/**
+ * The isolated plugin runtime is installed unconditionally.
+ *
+ * This module used to export a frozen 22-name "runtime compatible" allowlist that nothing in
+ * production read — the runtime was installed for every plugin regardless. Anyone adding a
+ * plugin hit the rollout test's length assertion, added their name to the allowlist to make it
+ * pass, and reasonably concluded they had opted the plugin in; in fact the runtime had been
+ * active for it all along (#536).
+ *
+ * The inventory now lives in plugin-runtime-rollout.test.ts, which is the only thing that ever
+ * used it — it scans those preludes for privileged APIs. Adding a name there reads as what it
+ * is: updating a test's inventory, not flipping a runtime switch.
+ *
+ * If a real gate is wanted, it belongs here and must be consulted below — that is a behaviour
+ * change (plugins off the list would lose the runtime) rather than the cleanup this was.
+ */
 const PLUGIN_RUNTIME_DEFAULT_ENABLED = true
 
 export function shouldInstallPluginRuntimeServiceByDefault(): boolean {

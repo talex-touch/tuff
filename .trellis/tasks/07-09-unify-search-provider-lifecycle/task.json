@@ -29,8 +29,8 @@
   ],
   "notes": "Prerequisites: 07-09-scope-search-sessions-and-streams, 07-09-gate-search-on-storage-hydration, and 07-09-establish-single-search-index-writer.",
   "meta": {
-    "nextAction": "Implement typed provider lifecycle and health admission after the session, hydration, and single-writer tasks complete.",
-    "blocker": "Blocked by 07-09-scope-search-sessions-and-streams, 07-09-gate-search-on-storage-hydration, and 07-09-establish-single-search-index-writer.",
+    "nextAction": "Implement the typed provider lifecycle and health admission. The three prerequisites this task waited on are complete, so the first step is the PRD acceptance list itself rather than another dependency: give ISearchProvider a typed destroy/lifecycle contract (packages/utils/core-box/tuff/tuff-dsl.ts:1524) and make search execution read the provider registry instead of the hard-coded map at search-core.ts:428.",
+    "blocker": "None from the prerequisite list. All three named prerequisites completed and archived (07-09-gate-search-on-storage-hydration 2026-07-17, 07-09-establish-single-search-index-writer 2026-07-18, 07-09-scope-search-sessions-and-streams 2026-07-27), each with a fully checked PRD. The remaining gate is scheduling order in docs/plan-prd/TODO.md, not an unresolved dependency (#305).",
     "evidence": "prd.md acceptance checklist and provider lifecycle/registry tests."
   }
 }

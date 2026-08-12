@@ -110,3 +110,90 @@ describe('permissionGuardPerformance', () => {
     }
   )
 })
+
+describe('unmapped API inventory', () => {
+  let tempDir = ''
+  let store: PermissionStore
+  let guard: PermissionGuard
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'permission-unmapped-'))
+    store = new PermissionStore(tempDir)
+    await store.initialize()
+    guard = new PermissionGuard(store)
+  })
+
+  afterEach(async () => {
+    await store?.shutdown()
+    if (!tempDir) return
+    await fs.rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('still allows an unmapped name, but records it', () => {
+    // Deliberately pins the current behaviour rather than the desired one: the default is
+    // not being flipped here, only made observable (#915).
+    const result = guard.check(TEST_PLUGIN_ID, 'totally:unmapped:api', SDK_VERSION)
+
+    expect(result.allowed).toBe(true)
+    expect(guard.getUnmappedApis()).toEqual([
+      { apiName: 'totally:unmapped:api', count: 1, plugins: [TEST_PLUGIN_ID] }
+    ])
+  })
+
+  it('counts repeats and collects every plugin that reached it', () => {
+    guard.check('plugin-a', 'unmapped:one', SDK_VERSION)
+    guard.check('plugin-b', 'unmapped:one', SDK_VERSION)
+    guard.check('plugin-a', 'unmapped:one', SDK_VERSION)
+
+    const [entry] = guard.getUnmappedApis()
+    expect(entry.count).toBe(3)
+    expect([...entry.plugins].sort()).toEqual(['plugin-a', 'plugin-b'])
+  })
+
+  it('does not record a name that the mapping table covers', () => {
+    guard.check(TEST_PLUGIN_ID, 'search:root-results:push', SDK_VERSION)
+
+    expect(guard.getUnmappedApis()).toEqual([])
+  })
+
+  it('requires a permission that is named directly, rather than waving it through', () => {
+    // `withPermission({ permissionId: 'system.shell' })` hands channel-guard a permission
+    // id, and channel-guard passes it straight to check() as the apiName. No entry in
+    // API_PERMISSION_MAPPINGS contains a dot, so this fell off the end and returned
+    // allowed:true — the terminal gate was open to any plugin (#915).
+    const result = guard.check(TEST_PLUGIN_ID, 'system.shell', SDK_VERSION)
+
+    expect(result.allowed).toBe(false)
+    expect(result.permissionId).toBe('system.shell')
+    expect(guard.getUnmappedApis()).toEqual([])
+  })
+
+  it('still allows a directly-named permission once it is declared and granted', async () => {
+    // The other half: turning the gate on must not deny a plugin that did everything right.
+    store.setDeclaredPermissions(TEST_PLUGIN_ID, {
+      required: ['network.internet'],
+      optional: []
+    })
+    await store.grant(TEST_PLUGIN_ID, 'network.internet', 'user')
+
+    expect(guard.check(TEST_PLUGIN_ID, 'network.internet', SDK_VERSION).allowed).toBe(true)
+  })
+
+  it('resolves an API name through the table even when a permission shares its stem', () => {
+    // `clipboard:read` (API) and `clipboard.read` (permission) both exist. The table has to
+    // win for the API form, or the fallback would quietly bypass the mapping layer.
+    expect(guard.getRequiredPermissions('clipboard:read')).toEqual(['clipboard.read'])
+    expect(guard.getRequiredPermissions('clipboard.read')).toEqual(['clipboard.read'])
+  })
+
+  it('orders the inventory by frequency, so the flip starts with the common names', () => {
+    guard.check(TEST_PLUGIN_ID, 'unmapped:rare', SDK_VERSION)
+    guard.check(TEST_PLUGIN_ID, 'unmapped:common', SDK_VERSION)
+    guard.check(TEST_PLUGIN_ID, 'unmapped:common', SDK_VERSION)
+
+    expect(guard.getUnmappedApis().map((entry) => entry.apiName)).toEqual([
+      'unmapped:common',
+      'unmapped:rare'
+    ])
+  })
+})

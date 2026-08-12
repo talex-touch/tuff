@@ -17,6 +17,7 @@ import { buildAppSearchTokens, matchFeature } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
 import type { AppLaunchKind } from './app-types'
+import type { AppToolSourceId } from './app-tool-source-catalog'
 import { formatLog, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
 import { createLogger } from '../../../../utils/logger'
@@ -257,6 +258,101 @@ export function mapAppsToRecommendationItems(apps: AppSearchRow[]): ProcessedTuf
   )
 }
 
+interface AppSearchDerivedInput {
+  name: string
+  displayName: string
+  alternateNames: string[]
+  aliasList: string[]
+  path: string
+  displayPath: string
+  fileName: string
+  bundleId: string
+  appIdentity: string
+  launchTarget: string
+  description: string
+}
+
+interface AppSearchDerived {
+  toolSourceIds: AppToolSourceId[]
+  searchTokens: FeatureSearchToken[]
+}
+
+// Query-independent per-app derivation (catalog scans, pinyin expansion, token
+// build) memoized on content so repeated keystrokes reuse it; fileName derives
+// from displayPath/path/name so the key omits it.
+const APP_SEARCH_DERIVED_CACHE_LIMIT = 512
+const DERIVED_KEY_FIELD_SEP = '\u0001'
+const DERIVED_KEY_LIST_SEP = '\u0002'
+const appSearchDerivedCache = new Map<string, AppSearchDerived>()
+
+function buildAppSearchDerivedKey(input: AppSearchDerivedInput): string {
+  return [
+    input.name,
+    input.displayName,
+    input.alternateNames.join(DERIVED_KEY_LIST_SEP),
+    input.aliasList.join(DERIVED_KEY_LIST_SEP),
+    input.path,
+    input.displayPath,
+    input.bundleId,
+    input.appIdentity,
+    input.launchTarget,
+    input.description
+  ].join(DERIVED_KEY_FIELD_SEP)
+}
+
+function resolveAppSearchDerived(input: AppSearchDerivedInput): AppSearchDerived {
+  const cacheKey = buildAppSearchDerivedKey(input)
+  const cached = appSearchDerivedCache.get(cacheKey)
+  if (cached) {
+    appSearchDerivedCache.delete(cacheKey)
+    appSearchDerivedCache.set(cacheKey, cached)
+    return cached
+  }
+
+  const catalogInput = {
+    name: input.name,
+    displayName: input.displayName,
+    alternateNames: input.alternateNames,
+    path: input.path,
+    displayPath: input.displayPath,
+    fileName: input.fileName,
+    bundleId: input.bundleId,
+    appIdentity: input.appIdentity,
+    launchTarget: input.launchTarget,
+    description: input.description
+  }
+  const semanticAliases = resolveAppSemanticAliases(catalogInput)
+  const toolSourceIds = resolveAppToolSourceIds(catalogInput)
+  const searchTokens = buildAppSearchTokens(
+    {
+      title: input.displayName,
+      name: input.name,
+      alternateNames: input.alternateNames,
+      aliases: [...input.aliasList, ...semanticAliases],
+      path: input.path,
+      displayPath: input.displayPath,
+      fileName: input.fileName,
+      bundleId: input.bundleId,
+      appIdentity: input.appIdentity,
+      launchTarget: input.launchTarget,
+      description: input.description
+    },
+    {
+      getSyllables: getPinyinSyllables,
+      onError: (error) =>
+        searchProcessingLog.warn('Failed to generate app pinyin tokens', { error })
+    }
+  )
+
+  const derived: AppSearchDerived = { toolSourceIds, searchTokens }
+  appSearchDerivedCache.set(cacheKey, derived)
+  if (appSearchDerivedCache.size > APP_SEARCH_DERIVED_CACHE_LIMIT) {
+    const oldestKey = appSearchDerivedCache.keys().next().value
+    if (oldestKey !== undefined) appSearchDerivedCache.delete(oldestKey)
+  }
+  return derived
+}
+
 export async function processSearchResults(
   apps: AppSearchRow[],
   query: TuffQuery,
@@ -281,10 +377,11 @@ export async function processSearchResults(
       aliases[uniqueId] || aliases[app.path] || aliases[app.extensions.bundleId || ''] || []
     const displayPath = app.extensions.displayPath || app.path
     const description = app.extensions.description || ''
-    const semanticAliases = resolveAppSemanticAliases({
+    const derived = resolveAppSearchDerived({
       name,
       displayName,
       alternateNames,
+      aliasList,
       path: app.path,
       displayPath,
       fileName: deriveAppFileName(displayPath || app.path || name),
@@ -293,43 +390,11 @@ export async function processSearchResults(
       launchTarget: app.extensions.launchTarget || app.path,
       description
     })
-    const toolSourceIds = resolveAppToolSourceIds({
-      name,
-      displayName,
-      alternateNames,
-      path: app.path,
-      displayPath,
-      fileName: deriveAppFileName(displayPath || app.path || name),
-      bundleId: app.extensions.bundleId || '',
-      appIdentity,
-      launchTarget: app.extensions.launchTarget || app.path,
-      description
-    })
-    const searchTokens = buildAppSearchTokens(
-      {
-        title: displayName,
-        name,
-        alternateNames,
-        aliases: [...aliasList, ...semanticAliases],
-        path: app.path,
-        displayPath,
-        fileName: deriveAppFileName(displayPath || app.path || name),
-        bundleId: app.extensions.bundleId || '',
-        appIdentity,
-        launchTarget: app.extensions.launchTarget || app.path,
-        description
-      },
-      {
-        getSyllables: getPinyinSyllables,
-        onError: (error) =>
-          searchProcessingLog.warn('Failed to generate app pinyin tokens', { error })
-      }
-    )
 
     const result = matchFeature({
       title: displayName,
       desc: description,
-      searchTokens,
+      searchTokens: derived.searchTokens,
       query: queryText,
       enableFuzzy: isFuzzySearch
     })
@@ -344,8 +409,8 @@ export async function processSearchResults(
         alias: result.matchedAlias,
         score: normalizeAppMatchScore(result.score),
         source: resolveAppMatchSource(result),
-        searchTokens,
-        toolSources: toolSourceIds
+        searchTokens: derived.searchTokens,
+        toolSources: derived.toolSourceIds
       })
     )
   }

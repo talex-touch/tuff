@@ -94,8 +94,12 @@ describe('TPEX authoritative security scan admission', () => {
       ruleId: 'PLUGIN_SCAN_DYNAMIC_EXECUTION',
       owner: 'nexus-security',
       reason: 'Approved compatibility exception',
-      createdAt: '2026-07-17T12:00:00.000Z',
-      expiresAt: '2026-07-19T12:00:00.000Z',
+      // Relative to the run, not written out: these were 2026-07-17/19, which
+      // were in the future when the test was written and have since passed.
+      // The waiver then expired, the finding correctly blocked, and the test
+      // stopped exercising the path its name describes.
+      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }])
 
     expect(metadata.securityScan).toMatchObject({
@@ -106,5 +110,48 @@ describe('TPEX authoritative security scan admission', () => {
       })],
     })
     expect(getTpexAdmissionFailure(metadata)).toBeNull()
+  })
+
+  // The test above says "only a valid waiver" but never proved the negative
+  // half. It was passing accidentally while its own waiver was expired, so the
+  // expired path had no deliberate coverage at all.
+  it('ignores an expired waiver and keeps the finding blocking', async () => {
+    const artifact = createTpex([{ name: 'dynamic.js', content: 'eval("runtime")' }])
+    const artifactSha256 = createHash('sha256').update(artifact).digest('hex')
+
+    const metadata = await extractTpexMetadata(artifact, undefined, [{
+      id: 'nexus-waiver-expired',
+      artifactSha256,
+      ruleId: 'PLUGIN_SCAN_DYNAMIC_EXECUTION',
+      owner: 'nexus-security',
+      reason: 'Lapsed compatibility exception',
+      createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    }])
+
+    expect(metadata.securityScan.decision).toBe('blocked')
+    expect(metadata.securityScan.findings[0]).toMatchObject({
+      code: 'PLUGIN_SCAN_DYNAMIC_EXECUTION',
+    })
+    expect(metadata.securityScan.findings[0]?.waiver).toBeFalsy()
+    expect(getTpexAdmissionFailure(metadata)).not.toBeNull()
+  })
+
+  it('ignores a waiver issued for a different artifact', async () => {
+    const artifact = createTpex([{ name: 'dynamic.js', content: 'eval("runtime")' }])
+
+    const metadata = await extractTpexMetadata(artifact, undefined, [{
+      id: 'nexus-waiver-other-artifact',
+      artifactSha256: createHash('sha256').update('a different artifact').digest('hex'),
+      ruleId: 'PLUGIN_SCAN_DYNAMIC_EXECUTION',
+      owner: 'nexus-security',
+      reason: 'Approved for another package',
+      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }])
+
+    expect(metadata.securityScan.decision).toBe('blocked')
+    expect(metadata.securityScan.findings[0]?.waiver).toBeFalsy()
+    expect(getTpexAdmissionFailure(metadata)).not.toBeNull()
   })
 })

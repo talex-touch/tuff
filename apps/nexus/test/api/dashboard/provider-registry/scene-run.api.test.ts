@@ -78,6 +78,9 @@ describe('/api/dashboard/provider-registry/scenes/:id/run', () => {
         capability: 'text.translate',
         providerId: 'prv_tencent_cloud_mt',
         dryRun: true,
+        // Admin runs are owned by the admin, so no bypass is needed on the download
+        // path -- the owner check answers for them like anyone else (#898).
+        ownerId: 'admin_1',
       },
     )
     expect(result).toEqual({

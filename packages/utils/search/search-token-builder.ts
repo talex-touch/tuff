@@ -1,7 +1,8 @@
 import type { FeatureSearchToken, FeatureSearchTokenSource } from './feature-matcher'
+import { HAN_CHAR_PATTERN } from './search-charset'
 
-const CHINESE_RUN_REGEX = /[\u4E00-\u9FFF]+/gu
-const WORD_REGEX = /[a-z0-9\u4E00-\u9FFF]+/gi
+const CHINESE_RUN_REGEX = new RegExp(`${HAN_CHAR_PATTERN}+`, 'gu')
+const WORD_REGEX = new RegExp(`[a-z0-9${HAN_CHAR_PATTERN}]+`, 'giu')
 
 export type SearchTokenList = FeatureSearchToken[]
 
@@ -95,6 +96,19 @@ function resolveDisplayWordParts(
   })
 }
 
+// Dedup keys per token list; a list mutated by direct push after its first
+// addSearchToken call would bypass dedup, so all producers must funnel through here.
+const tokenDedupKeys = new WeakMap<SearchTokenList, Set<string>>()
+
+function tokenDedupKey(token: FeatureSearchToken): string {
+  return JSON.stringify({
+    value: token.value,
+    source: token.source,
+    display: token.display,
+    segments: token.segments
+  })
+}
+
 export function addSearchToken(tokens: SearchTokenList, token: FeatureSearchToken): void {
   const value = token.value.trim().toLowerCase()
   if (!value) return
@@ -104,27 +118,17 @@ export function addSearchToken(tokens: SearchTokenList, token: FeatureSearchToke
     value,
     display: token.display?.trim() || undefined
   }
-  const key = JSON.stringify({
-    value: normalizedToken.value,
-    source: normalizedToken.source,
-    display: normalizedToken.display,
-    segments: normalizedToken.segments
-  })
 
-  if (
-    tokens.some((item) => {
-      const itemKey = JSON.stringify({
-        value: item.value,
-        source: item.source,
-        display: item.display,
-        segments: item.segments
-      })
-      return itemKey === key
-    })
-  ) {
-    return
+  let seenKeys = tokenDedupKeys.get(tokens)
+  if (!seenKeys) {
+    seenKeys = new Set(tokens.map(tokenDedupKey))
+    tokenDedupKeys.set(tokens, seenKeys)
   }
 
+  const key = tokenDedupKey(normalizedToken)
+  if (seenKeys.has(key)) return
+
+  seenKeys.add(key)
   tokens.push(normalizedToken)
 }
 

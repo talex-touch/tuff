@@ -1,0 +1,31 @@
+{
+  "id": "tuffex-ai-suite",
+  "name": "tuffex-ai-suite",
+  "title": "TuffEx AI 组件系列与主界面聊天融合",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-tuffex-ai-stream-markdown",
+    "08-05-tuffex-ai-conversation-stream",
+    "08-05-tuffex-ai-attachments-toolcards",
+    "08-05-home-chat-tuffex-ai-fusion"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

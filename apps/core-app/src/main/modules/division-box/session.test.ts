@@ -2,6 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { DivisionBoxSession } from './session'
 import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
 
+// talex-mica-electron reads app.commandLine in its module body, so importing
+// ./session transitively crashes at collection with 'Cannot read properties of
+// undefined' before a single test runs. Same stub the intelligence harness uses.
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
+}))
+
 vi.mock('../plugin/plugin-module', () => ({
   pluginModule: { pluginManager: null }
 }))

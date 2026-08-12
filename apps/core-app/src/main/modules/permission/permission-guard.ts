@@ -6,7 +6,10 @@
  */
 
 import type { PermissionStore } from './permission-store'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { normalizePermissionId, permissionRegistry } from '@talex-touch/utils/permission'
+
+const permissionGuardLog = getLogger('permission-guard')
 
 /**
  * Permission check result
@@ -138,6 +141,9 @@ export class PermissionGuard {
     slowChecks: 0 // > 5ms
   }
 
+  /** API names that reached check() with no mapping, and how often. See #915. */
+  private unmappedApis = new Map<string, { count: number; plugins: Set<string> }>()
+
   constructor(store: PermissionStore) {
     this.store = store
 
@@ -157,7 +163,17 @@ export class PermissionGuard {
     const requiredPermissions = this.getRequiredPermissions(apiName)
 
     if (requiredPermissions.length === 0) {
-      // No permission required for this API
+      // Unmapped names are allowed, which makes this an opt-in denylist keyed on a
+      // hand-maintained table rather than a default-deny gate (#915). What still reaches
+      // here is a name that matches no API pattern AND is not a registered permission —
+      // i.e. one nothing in the permission model knows about at all. Every literal the
+      // main process passes today is one or the other, so this branch should be empty in
+      // practice; recording it is how a new one gets noticed.
+      //
+      // An allow that leaves a trace is still a gap, but it is a countable gap rather
+      // than a silent one.
+      this.recordUnmappedApi(pluginId, apiName)
+
       const duration = performance.now() - startTime
       this.recordPerformance(duration)
       return {
@@ -273,6 +289,33 @@ export class PermissionGuard {
   /**
    * Get required permissions for an API
    */
+  private recordUnmappedApi(pluginId: string, apiName: string): void {
+    const entry = this.unmappedApis.get(apiName)
+    if (entry) {
+      entry.count += 1
+      entry.plugins.add(pluginId)
+      return
+    }
+
+    this.unmappedApis.set(apiName, { count: 1, plugins: new Set([pluginId]) })
+    // First sighting only: these repeat per call and would drown the log otherwise.
+    permissionGuardLog.warn(
+      `"${apiName}" matches no entry in API_PERMISSION_MAPPINGS and was allowed by default.`,
+      { meta: { apiName, pluginId } }
+    )
+  }
+
+  /**
+   * Every unmapped name seen so far. This is the inventory a default-deny flip needs: each
+   * entry is either an API that should require a permission, or one that should be declared
+   * as deliberately public.
+   */
+  getUnmappedApis(): { apiName: string; count: number; plugins: string[] }[] {
+    return [...this.unmappedApis.entries()]
+      .map(([apiName, entry]) => ({ apiName, count: entry.count, plugins: [...entry.plugins] }))
+      .sort((left, right) => right.count - left.count)
+  }
+
   getRequiredPermissions(apiName: string): string[] {
     // Exact match
     const exact = this.mappings.get(apiName)
@@ -285,6 +328,21 @@ export class PermissionGuard {
       if (this.matchPattern(pattern, apiName)) {
         return mapping.permissions.map((permissionId) => normalizePermissionId(permissionId))
       }
+    }
+
+    // Two vocabularies reach this function. `API_PERMISSION_MAPPINGS` is keyed on
+    // colon-separated *API names* (`clipboard:read`), but `withPermission` and
+    // `createProtectedRegister` name a dotted *permission id* directly
+    // (`system.shell`) — and channel-guard passes that straight through as the
+    // apiName. No pattern contains a dot, so every one of those fell off the end
+    // and was waved through: the terminal, network, plugin-window, localization
+    // and agent-execution gates were all allow-everything (#915).
+    //
+    // A name that is a registered permission is required as itself. There is no
+    // ambiguity to resolve — API names use colons and permission ids use dots.
+    const normalized = normalizePermissionId(apiName)
+    if (permissionRegistry.get(normalized)) {
+      return [normalized]
     }
 
     return []

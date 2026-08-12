@@ -28,16 +28,10 @@ export default {
         'upg', // Upgrade
       ],
     ],
-    'type-case': [
-      2,
-      'always',
-      [
-        'pascal-case', // PascalCase
-        'lower-case', // lowercase
-        'sentence-case', // Sentence case
-        'start-case', // Start Case
-      ],
-    ],
+    // 只允许 lowercase：type-enum 是精确字符串匹配，且上面每一项都是小写，
+    // 所以 PascalCase / Sentence case / Start Case 的 type 永远过不了 enum。
+    // 保留它们只会让配置宣称一套、实际执行另一套。
+    'type-case': [2, 'always', ['lower-case']],
     'subject-case': [0],
     'subject-empty': [2, 'never'],
     'body-max-line-length': [0],

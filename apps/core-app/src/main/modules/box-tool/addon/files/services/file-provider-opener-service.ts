@@ -269,19 +269,12 @@ export class FileProviderOpenerService {
       return
     }
 
-    const db = dbUtils.getDb()
+    // Same SQL shape as before, but through the split-routed dbUtils write
+    // (execWrite → search-index worker when the split is on) instead of a
+    // direct main-thread insert on the primary connection — file_extensions
+    // is a moved table under the split (2d.3 opener extension writer).
     void this.withDbWrite('file-opener.icon.persist', () =>
-      db
-        .insert(fileExtensions)
-        .values({
-          fileId,
-          key: 'icon',
-          value: logo
-        })
-        .onConflictDoUpdate({
-          target: [fileExtensions.fileId, fileExtensions.key],
-          set: { value: logo }
-        })
+      dbUtils.addFileExtension(fileId, 'icon', logo)
     ).catch((error) => {
       this.logWarn('Failed to persist opener icon', error, { fileId })
     })
@@ -523,7 +516,9 @@ export class FileProviderOpenerService {
     }
 
     try {
-      const db = dbUtils.getDb()
+      // The fileId resolved here feeds persistOpenerIcon writes (routed to
+      // the worker's home under the split) — read the same home.
+      const db = dbUtils.getFileIndexReadDb()
       const mapping = await db
         .select({ fileId: fileExtensions.fileId })
         .from(fileExtensions)

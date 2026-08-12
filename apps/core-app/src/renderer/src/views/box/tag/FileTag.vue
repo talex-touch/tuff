@@ -1,5 +1,5 @@
 <script name="FileTag" setup lang="ts">
-import path from 'path-browserify'
+import { displayBasename } from '@talex-touch/utils/common/utils/safe-path'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
@@ -24,7 +24,7 @@ const image = computed(() => {
 const firstFileName = computed(() => {
   const [firstPath] = props.paths
 
-  return path.basename(firstPath || '')
+  return displayBasename(firstPath || '')
 })
 
 const fileLength = computed(() => props?.paths.length || 0)

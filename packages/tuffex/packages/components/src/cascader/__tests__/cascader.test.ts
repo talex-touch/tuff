@@ -115,6 +115,41 @@ describe('txCascader', () => {
     expect(wrapper.emitted('update:modelValue')?.[0][0]).toEqual(['a', 'a-1'])
   })
 
+  it('surfaces a rejected load instead of leaving an unhandled rejection', async () => {
+    const failure = new Error('offline')
+    const load = vi.fn(async () => {
+      throw failure
+    })
+    const onUnhandled = vi.fn()
+    process.on('unhandledRejection', onUnhandled)
+
+    const wrapper = mount(TxCascader, {
+      props: {
+        options: [{ value: 'a', label: 'Alpha' }],
+        load,
+        expandTrigger: 'click',
+      },
+      global: { stubs: { TxPopover: PopoverStub } },
+    })
+
+    await wrapper.find('.tx-cascader__item').trigger('click')
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    process.off('unhandledRejection', onUnhandled)
+
+    expect(onUnhandled).not.toHaveBeenCalled()
+    expect(wrapper.emitted('load-error')?.[0]?.[0]).toMatchObject({
+      path: ['a'],
+      error: failure,
+    })
+
+    // Nothing is cached for a failed path, so expanding again retries.
+    await wrapper.find('.tx-cascader__item').trigger('click')
+    await nextTick()
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+
   it('exposes open, close, toggle, clear, setValue and getValue helpers', async () => {
     const wrapper = mount(TxCascader, {
       props: {

@@ -5,8 +5,8 @@ import type {
   PreviewCardPayload,
 } from "../types";
 import dayjs from "dayjs";
-import duration from "dayjs/plugin/duration";
-import relativeTime from "dayjs/plugin/relativeTime";
+import duration from "dayjs/plugin/duration.js";
+import relativeTime from "dayjs/plugin/relativeTime.js";
 import { BasePreviewAbility } from "../sdk";
 
 dayjs.extend(duration);

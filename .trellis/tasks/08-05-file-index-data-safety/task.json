@@ -1,0 +1,30 @@
+{
+  "id": "file-index-data-safety",
+  "name": "file-index-data-safety",
+  "title": "File index data safety",
+  "description": "Reconcile empty-scan protection, search-time wrongful deletion fix, NFC normalization single entry + duplicate-row migration, mtime precision mismatch (audit file high-1/2, mid, engine H8).",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-search-audit-remediation",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Decide what to do about the D4 residual its own check log records: normalizeFsPath stores NFC ids, which resolve only on normalisation-insensitive filesystems. Two candidates are already named there - platform-gate normalizeFsPath, or keep the raw path for filesystem access.",
+    "blocker": "None for the acceptance criteria. The D4 residual is a follow-up rather than a gate: it is recorded as such in check.jsonl and does not affect macOS, where the ids resolve.",
+    "evidence": "AC3 measured 2026-08-11: addon/files 322 passed / 48 files; packages/utils search + file-scan-utils 477 passed, 1 skipped / 48 files. check.jsonl records R1/R3/R4/R5 verified implemented and a second search-path deletion route found and closed during check - normalizeFileSearchItem -> cleanupStaleFileResult was deleting on an existsSync verdict, false for EACCES and offline volumes, now on the same ENOENT-only gate as cleanupStaleSearchCandidates, with a test."
+  }
+}

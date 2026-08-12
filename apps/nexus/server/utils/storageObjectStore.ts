@@ -13,6 +13,7 @@ export const STORAGE_OBJECT_WRITE_RETRY_DELAYS_MS = [250, 1000] as const
 export interface StorageObjectRecord {
   data: Buffer
   contentType: string
+  ownerId?: string
 }
 
 export type StorageObjectMemory = Map<string, StorageObjectRecord>
@@ -26,6 +27,18 @@ export interface StorageObjectResult {
   storageChannel: string
   storageProvider: string
   uploadRetry?: StorageUploadRetryMetadata
+  /**
+   * Who wrote the object, when the backend kept that alongside it.
+   *
+   * Read together with `storesOwnership`, never on its own: absent-and-recordable means the
+   * object predates ownership tracking, absent-and-not-recordable means this backend never
+   * had anywhere to put it. A caller that cannot tell those apart will either lock people out
+   * of their own data or let an authorization check pass on a backend that never answered it
+   * (#898).
+   */
+  ownerId?: string
+  /** Whether this backend stores ownership at all. */
+  storesOwnership: boolean
 }
 
 export interface StorageObjectExternalConfig {
@@ -55,6 +68,8 @@ interface PutStorageObjectInput extends StorageObjectContext {
   data: Buffer | ArrayBuffer | Uint8Array
   contentType?: string | null
   actorId?: unknown
+  /** Recorded with the object so a later read can authorize against it. */
+  ownerId?: string | null
   retryPolicy?: Partial<StorageObjectWriteRetryPolicy>
 }
 
@@ -240,6 +255,7 @@ function signS3Request(input: {
   url: URL
   body: Buffer | null
   contentType?: string | null
+  ownerId?: string | null
   storage: StorageObjectExternalConfig
   now?: Date
 }): Record<string, string> {
@@ -249,6 +265,9 @@ function signS3Request(input: {
     host: input.url.host,
     'x-amz-content-sha256': payloadHash,
     'x-amz-date': longDate,
+    // Included in `headers` before canonicalizeHeaders runs, so it is covered by the signature
+    // rather than sent alongside it -- an unsigned x-amz-* header is rejected outright (#1644).
+    ...(input.ownerId ? { 'x-amz-meta-ownerid': input.ownerId } : {}),
   }
   if (input.contentType)
     headers['content-type'] = input.contentType
@@ -288,6 +307,7 @@ function signOssRequest(input: {
   url: URL
   body: Buffer | null
   contentType?: string | null
+  ownerId?: string | null
   storage: StorageObjectExternalConfig
   now?: Date
 }): Record<string, string> {
@@ -296,6 +316,7 @@ function signOssRequest(input: {
     host: input.url.host,
     'x-oss-content-sha256': 'UNSIGNED-PAYLOAD',
     'x-oss-date': longDate,
+    ...(input.ownerId ? { 'x-oss-meta-ownerid': input.ownerId } : {}),
   }
   if (input.contentType)
     headers['content-type'] = input.contentType
@@ -335,6 +356,7 @@ function buildExternalHeaders(input: {
   url: URL
   body: Buffer | null
   contentType?: string | null
+  ownerId?: string | null
   storage: StorageObjectExternalConfig
 }) {
   return input.storage.channel === 'oss'
@@ -410,13 +432,14 @@ async function resolveObjectStorageBackend(input: StorageObjectContext): Promise
   }
 }
 
-async function putExternalObject(storage: StorageObjectExternalConfig, key: string, data: Buffer, contentType: string): Promise<void> {
+async function putExternalObject(storage: StorageObjectExternalConfig, key: string, data: Buffer, contentType: string, ownerId?: string | null): Promise<void> {
   const url = buildExternalObjectUrl(storage, key)
   const headers = buildExternalHeaders({
     method: 'PUT',
     url,
     body: data,
     contentType,
+    ownerId,
     storage,
   })
   const response = await (storage.fetch ?? fetch)(url, {
@@ -439,7 +462,7 @@ async function getExternalObject(
   storage: StorageObjectExternalConfig,
   key: string,
   fallbackContentType: string,
-): Promise<{ data: Buffer, contentType: string } | null> {
+): Promise<{ data: Buffer, contentType: string, ownerId?: string } | null> {
   const url = buildExternalObjectUrl(storage, key)
   const headers = buildExternalHeaders({
     method: 'GET',
@@ -461,7 +484,13 @@ async function getExternalObject(
   }
   const data = Buffer.from(await response.arrayBuffer())
   const contentType = normalizeContentType(response.headers.get('content-type'), fallbackContentType)
-  return { data, contentType }
+  // Both dialects are read because a single deployment is one or the other and the response is
+  // the only place that says which -- resolveObjectStorageBackend has already picked by then.
+  const ownerId
+    = response.headers.get('x-amz-meta-ownerid')
+      ?? response.headers.get('x-oss-meta-ownerid')
+      ?? undefined
+  return { data, contentType, ownerId: ownerId || undefined }
 }
 
 async function deleteExternalObject(storage: StorageObjectExternalConfig, key: string): Promise<void> {
@@ -704,7 +733,13 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
   const uploadRetry = backend.externalStorage || backend.bucket
     ? await runStorageWriteWithRetry(backend, input.retryPolicy, async () => {
       if (backend.externalStorage) {
-        await putExternalObject(backend.externalStorage, input.key, data.buffer, contentType)
+        await putExternalObject(
+          backend.externalStorage,
+          input.key,
+          data.buffer,
+          contentType,
+          input.ownerId
+        )
         return
       }
 
@@ -712,6 +747,9 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
         httpMetadata: {
           contentType,
         },
+        // R2 hands customMetadata back on get(), so this is the whole of the ownership
+        // record -- no second object and no side table to keep in step with the first.
+        ...(input.ownerId ? { customMetadata: { ownerId: input.ownerId } } : {}),
       })
     })
     : undefined
@@ -720,6 +758,7 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     input.memoryStorage.set(input.key, {
       data: data.buffer,
       contentType,
+      ...(input.ownerId ? { ownerId: input.ownerId } : {}),
     })
   }
 
@@ -744,6 +783,8 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     storageChannel: backend.channel,
     storageProvider: backend.provider,
     uploadRetry,
+    ownerId: input.ownerId ?? undefined,
+    storesOwnership: true,
   }
 }
 
@@ -784,6 +825,11 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       contentType: object.contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
+      // The metadata header is added to the record *before* canonicalizeHeaders runs, so it is
+      // covered by the signature rather than sent beside it, which S3 and OSS both reject
+      // (#1644). Same mechanism for either dialect, so both are supported.
+      ownerId: object.ownerId,
+      storesOwnership: true,
     }
   }
 
@@ -824,6 +870,8 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
+      ownerId: object.customMetadata?.ownerId || undefined,
+      storesOwnership: true,
     }
   }
 
@@ -860,6 +908,8 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
     contentType,
     storageChannel: backend.channel,
     storageProvider: backend.provider,
+    ownerId: object.ownerId,
+    storesOwnership: true,
   }
 }
 

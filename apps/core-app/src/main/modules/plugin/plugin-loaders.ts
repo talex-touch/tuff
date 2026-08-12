@@ -16,6 +16,7 @@ import type {
   SearchProviderManifestDescriptor
 } from '@talex-touch/utils/search'
 import path from 'node:path'
+import { isFeatureUnavailableOnPlatform } from './feature-platform'
 import {
   isLocalizedList,
   isLocalizedText,
@@ -455,6 +456,19 @@ abstract class BasePluginLoader {
           })
         }
 
+        // C.1.5: Honour the manifest's platform declaration
+        if (isFeatureUnavailableOnPlatform(feature, process.platform)) {
+          this.touchPlugin.issues.push({
+            type: 'warning',
+            message: `Feature '${feature.name || feature.id}' is not registered: its manifest declares it unavailable on ${process.platform}.`,
+            source: `feature:${feature.id}`,
+            code: 'FEATURE_PLATFORM_EXCLUDED',
+            meta: { featureId: feature.id, platform: process.platform },
+            timestamp: Date.now()
+          })
+          return
+        }
+
         // C.2: Validate feature commands structure
         if (!feature.commands || !Array.isArray(feature.commands)) {
           this.touchPlugin.issues.push({
@@ -536,6 +550,20 @@ abstract class BasePluginLoader {
         code: issue.code,
         suggestion:
           'Declare manifest.searchProviders with mode "push" and permissionScopes ["root-results"].',
+        meta: { featureIds: issue.featureIds ?? [] },
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    if (issue.code === 'SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE') {
+      this.touchPlugin.issues.push({
+        type: 'warning',
+        message: issue.message,
+        source: 'manifest.json',
+        code: issue.code,
+        suggestion:
+          "Declare a searchProvider carrying each push feature's featureId, or drop push from the features that should not reach root results.",
         meta: { featureIds: issue.featureIds ?? [] },
         timestamp: Date.now()
       })

@@ -233,11 +233,11 @@ code: |
 ---
 rows:
   - name: visible
-    description: '控制抽屉可见性'
+    description: '控制抽屉可见性。配合 `v-model:visible` 双向绑定；关闭时组件仍留在 DOM 中（见交互契约）。'
     type: 'boolean'
     default: '*必填*'
   - name: title
-    description: '头部显示的标题'
+    description: '头部显示的标题。留空则不渲染标题行，可改用 `header` 插槽自定义。'
     type: 'string'
     default: "'Drawer'"
   - name: size
@@ -289,9 +289,9 @@ rows:
     type: 'boolean'
     default: 'true'
   - name: zIndex
-    description: '自定义 z-index'
+    description: '自定义 z-index。不传时由运行时 z-index 管理器分配（种子 `10000`，逐个抽屉递增）；仅在需要与外部固定层级共存时手动指定。'
     type: 'number'
-    default: '1998'
+    default: '-'
 ---
 ::
 

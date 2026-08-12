@@ -141,14 +141,14 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `modelValue` | `string \| number` | `''` | 选中值（v-model） |
-| `placeholder` | `string` | `'Search'` | 占位 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `clearable` | `boolean` | `true` | 可清空 |
+| `placeholder` | `string` | `'Search'` | 透传给搜索输入框的占位文本。 |
+| `disabled` | `boolean` | `false` | 禁用输入框、弹层与聚焦展开，并停止发出远程 `search`。 |
+| `clearable` | `boolean` | `true` | 显示输入框清除按钮，允许清空已选值。 |
 | `options` | `TxSearchSelectOption[]` | `[]` | 下拉数据源 |
-| `loading` | `boolean` | `false` | loading 状态 |
+| `loading` | `boolean` | `false` | 在输入框后缀显示小号加载指示器，用于远程结果等待。 |
 | `remote` | `boolean` | `false` | 是否远程搜索（输入触发 `search`） |
 | `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
-| `dropdownMaxHeight` | `number` | `280` | 下拉最大高度 |
+| `dropdownMaxHeight` | `number` | `280` | 选项面板最大高度（px），超出后面板内部滚动。 |
 | `dropdownOffset` | `number` | `6` | 下拉偏移 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |

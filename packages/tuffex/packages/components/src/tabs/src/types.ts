@@ -64,6 +64,8 @@ export interface TabItemProps {
   iconClass?: string
   disabled?: boolean
   activation?: boolean
+  /** Injected by TxTabs; set manually only when using TxTabItem standalone. */
+  active?: boolean
 }
 
 export interface TabHeaderProps {

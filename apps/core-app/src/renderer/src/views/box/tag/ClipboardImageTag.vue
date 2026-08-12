@@ -1,5 +1,8 @@
 <script name="ClipboardImageTag" setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   data: { content?: string | string[]; thumbnail?: string | null } // clipboard data
@@ -44,7 +47,9 @@ const stackWidth = computed(() => {
         alt="clipboard image"
       />
     </div>
-    <span class="label">{{ imageCount > 1 ? `${imageCount} 张图像` : '图像' }}</span>
+    <span class="label">{{
+      imageCount > 1 ? t('boxTag.imageCount', { count: imageCount }) : t('boxTag.image', '图像')
+    }}</span>
   </div>
 </template>
 

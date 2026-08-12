@@ -1,5 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { readdir, rm, mkdir, writeFile } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
@@ -57,7 +57,13 @@ async function getComponentEntries() {
   for (const dirent of dirents) {
     if (!dirent.isDirectory() || dirent.name === 'utils')
       continue
-    entries[dirent.name] = resolve(componentSrcRoot, dirent.name, 'index.ts')
+    // Not every directory under src/ is a component — a shared __tests__ folder
+    // has no index.ts, and listing it as an entry fails the whole build with an
+    // unresolved-entry error. Mirrors the same guard in components/vite.config.js.
+    const entry = resolve(componentSrcRoot, dirent.name, 'index.ts')
+    if (!existsSync(entry))
+      continue
+    entries[dirent.name] = entry
   }
 
   return entries

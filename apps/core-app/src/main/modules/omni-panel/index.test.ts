@@ -118,12 +118,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../core', () => ({
-  genTouchApp: () => ({
-    channel: {}
-  })
-}))
-
 vi.mock('../../core/touch-window', () => ({
   TouchWindow: class TouchWindow {
     window = {

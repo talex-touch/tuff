@@ -177,7 +177,21 @@ function canonicalize(value: unknown): unknown {
     return value.map(item => canonicalize(item))
   if (isRecord(value)) {
     const normalized: Record<string, unknown> = {}
-    for (const key of Object.keys(value).sort((left, right) => left.localeCompare(right, 'en'))) {
+    // Codepoint order, not localeCompare. This string is the exact bytes three runtimes sign
+    // and verify — the publisher CLI, Nexus on Cloudflare Workers, and the Electron main
+    // process — and localeCompare is ICU-dependent, so small-icu and full-icu builds could
+    // disagree about the canonical form of the same object (#894).
+    //
+    // The sharper problem is that ICU collation returns 0 for distinct strings differing only
+    // by ignorable code points: `'a\u00ADb'.localeCompare('ab', 'en')` is 0. A comparator
+    // returning 0 leaves those keys in input order, and for serializePluginFileMap that order
+    // comes from tar entry ordering the publisher controls — so fileMapSha256 was not a
+    // function of the file map alone.
+    //
+    // Object.keys already yields unique keys, so there are no duplicates left to reject;
+    // a codepoint comparator never returns 0 for distinct strings, which is what makes the
+    // ordering total.
+    for (const key of Object.keys(value).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))) {
       const child = value[key]
       if (child === undefined)
         continue

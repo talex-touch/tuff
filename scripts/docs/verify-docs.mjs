@@ -125,10 +125,27 @@ function linkDiagnostics(file, tree, scope) {
   return diagnostics
 }
 
+function readTrackedText(repoRoot, file, diagnostics) {
+  try {
+    return fs.readFileSync(path.join(repoRoot, file), 'utf8')
+  }
+  catch {
+    // The file list comes from `git ls-files`, i.e. the index, but the read is from the working
+    // tree. A directory move staged in halves, an interrupted rebase, or a deletion that has not
+    // been added yet puts those two out of step. Throwing here takes the whole run down and
+    // prints a Node stack instead of the findings, which reads as a broken tool rather than a
+    // tree mid-move. readTask already reports rather than throws; this matches it.
+    diagnostics.push(diagnostic('DOC-FILE-UNREADABLE', file, null, 'tracked file could not be read from the working tree'))
+    return undefined
+  }
+}
+
 export function checkMarkdownAndLinks(repoRoot, scope) {
   const diagnostics = []
   for (const file of scope.lintDocuments) {
-    const text = fs.readFileSync(path.join(repoRoot, file), 'utf8')
+    const text = readTrackedText(repoRoot, file, diagnostics)
+    if (text === undefined)
+      continue
     diagnostics.push(...markdownDiagnostics(file, text))
     try {
       const tree = unified().use(remarkParse).use(remarkMdc).parse(text)
@@ -252,9 +269,21 @@ export function checkTasks(repoRoot, scope) {
     else if (!taskRuleAllowed(file, 'DOC-TASK-META')) {
       if (!nonEmptyString(task.assignee))
         diagnostics.push(diagnostic('DOC-TASK-META', file, null, 'assignee must be a non-empty string'))
-      for (const key of ['nextAction', 'blocker', 'evidence']) {
-        if (!nonEmptyString(task.meta[key]))
-          diagnostics.push(diagnostic('DOC-TASK-META', file, null, `meta.${key} must be a non-empty string`))
+      // `evidence` is empty for a planning task by definition -- it has not started. Demanding it
+      // anyway produced 39 findings across 28 planning tasks and exactly 0 across the 25
+      // in_progress ones, so the rule was already satisfied everywhere it described real work.
+      // Filling the rest would have meant writing "not started" 28 times: the gate goes green and
+      // the record stops saying anything, which is the opposite of what a gate is for (#1254).
+      //
+      // `assignee` above stays required at every status -- it is knowable when the task is created.
+      //
+      // This also stops the count regenerating: task_store.py:291 seeds every new task with
+      // `meta: {}`, so each `task.py create` was adding three findings before any work began.
+      if (task.status !== 'planning') {
+        for (const key of ['nextAction', 'blocker', 'evidence']) {
+          if (!nonEmptyString(task.meta[key]))
+            diagnostics.push(diagnostic('DOC-TASK-META', file, null, `meta.${key} must be a non-empty string`))
+        }
       }
     }
   }
@@ -305,6 +334,12 @@ export function checkTasks(repoRoot, scope) {
 }
 
 const PLACEHOLDER = /\b(?:TBD|TODO\s*:\s*(?:fill|complete|determine)|to be determined|\[placeholder\])\b|<evidence>|待定|待填写|待补充|占位符|请填写/gi
+// `matchAll` requires the global flag; `test` is broken by it. A /g regex advances lastIndex on
+// every `test`, so the same string alternates true/false across calls -- a section whose only
+// content is TBD reads as substantive on the second look. Worse, `matchAll` inherits whatever
+// lastIndex the previous `test` left behind, so it can skip the first placeholder in a string.
+// One source, two objects, no shared cursor.
+const PLACEHOLDER_TEST = new RegExp(PLACEHOLDER.source, 'i')
 const REQUIRED_PRD_SECTION = /^(?:goal|objective|acceptance criteria|evidence|目标|验收标准|证据)$/i
 function sectionHasSubstantiveContent(nodes) {
   return nodes.some((node) => {
@@ -312,7 +347,7 @@ function sectionHasSubstantiveContent(nodes) {
       return false
     let substantive = false
     walk(node, (child) => {
-      if (child.type === 'text' && /[\p{L}\p{N}]/u.test(child.value) && !PLACEHOLDER.test(child.value))
+      if (child.type === 'text' && /[\p{L}\p{N}]/u.test(child.value) && !PLACEHOLDER_TEST.test(child.value))
         substantive = true
     })
     return substantive
@@ -339,7 +374,9 @@ function placeholderAllowed(file, token) {
 export function checkPlaceholders(repoRoot, scope) {
   const diagnostics = []
   for (const file of scope.activePrds) {
-    const text = fs.readFileSync(path.join(repoRoot, file), 'utf8')
+    const text = readTrackedText(repoRoot, file, diagnostics)
+    if (text === undefined)
+      continue
     let tree
     try {
       tree = unified().use(remarkParse).use(remarkMdc).parse(text)
@@ -351,7 +388,7 @@ export function checkPlaceholders(repoRoot, scope) {
     walk(tree, (node) => {
       if (node.type !== 'text' && node.type !== 'html')
         return
-      for (const match of node.value.matchAll(PLACEHOLDER)) {
+      for (const match of node.value.matchAll(new RegExp(PLACEHOLDER.source, 'gi'))) {
         const token = match[0]
         if (!placeholderAllowed(file, token))
           diagnostics.push(diagnostic('DOC-PRD-PLACEHOLDER', file, node.position?.start, `unresolved placeholder ${token}`))

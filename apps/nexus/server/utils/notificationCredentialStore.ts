@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import { evaluateWebhookUrl } from './webhookUrlPolicy'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto'
@@ -200,8 +201,20 @@ function normalizeCredentialPayload(
   }
 
   if (credentialType === 'webhook') {
+    // A length check was the only rule here, so the stored url could be any string — including
+    // http://169.254.169.254/latest/meta-data/, which the dispatcher would then call on every
+    // notification (#899). Rejected at write time so the admin sees why.
+    const url = assertNonEmptyString(credentials.url, 'credentials.url', 2048)
+    const decision = evaluateWebhookUrl(url)
+    if (!decision.allowed) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `credentials.url is not an acceptable webhook destination (${decision.reason})`,
+      })
+    }
+
     return {
-      url: assertNonEmptyString(credentials.url, 'credentials.url', 2048),
+      url: decision.url,
       signingSecret: optionalString(credentials.signingSecret, 'credentials.signingSecret', 4096),
     }
   }

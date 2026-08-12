@@ -17,7 +17,7 @@ Supported functions:
 - **Constants**: `pi`, `e`
 - **Percentage syntax**: `X% of Y` (calculates X% of Y), `X + Y%` (increases X by Y%)
 
-Powered by mathjs with high-precision BigNumber support.
+Evaluated by a deterministic allowlisted parser — only the operators, functions and constants listed above are accepted, and no generic code evaluation is involved.
 
 ---
 

@@ -164,8 +164,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   readonly type = 'file' as const
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 50
 
+  private channelDisposers: Array<() => void> = []
   private esPath: string | null = null
   private configuredCliPath: string | null = null
   private isAvailable = false
@@ -1145,11 +1145,48 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       .build()
   }
 
+  private disposeChannels(): void {
+    for (const dispose of this.channelDisposers.splice(0)) {
+      try {
+        dispose()
+      } catch (error) {
+        this.logWarn('Failed to dispose Everything transport listener', error)
+      }
+    }
+  }
+
+  /**
+   * Called by SearchProviderRegistry.destroy() (search-provider-registry.ts:411), which wraps it
+   * per provider in try/catch. Synchronous because that hook is — releasing listeners needs no
+   * await, but a provider that had async teardown could not express it here.
+   */
+  onDestroy(): void {
+    this.disposeChannels()
+  }
+
   private registerChannels(context: ProviderContext): void {
     const channel = context.touchApp.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
+    const rawTransport = getTuffTransportMain(channel, keyManager)
+
+    // Every `transport.on` below returns a disposer, and all six were being dropped: the file had
+    // no disposer array, no unregister, and no `off(` — so the listeners could not be released even
+    // deliberately. Nothing collected them from outside either: this provider is absent from
+    // SearchCore.destroy(), it has no `onDeactivate` for the registry's fallback to call, and
+    // `onDestroy` did not exist. Three teardown paths, all no-ops (#334).
+    //
+    // Wrapping `on` rather than editing the six call sites keeps the handlers untouched, so this
+    // cannot change which events are registered — only whether they can be let go of.
+    this.disposeChannels()
+    const transport = {
+      ...rawTransport,
+      on: ((...args: Parameters<typeof rawTransport.on>) => {
+        const dispose = rawTransport.on(...args)
+        if (typeof dispose === 'function') this.channelDisposers.push(dispose)
+        return dispose
+      }) as typeof rawTransport.on
+    }
 
     transport.on(everythingStatusEvent, async (payload) => {
       if (payload?.refresh && process.platform === 'win32') {

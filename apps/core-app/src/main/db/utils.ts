@@ -1,8 +1,26 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { and, eq, inArray, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from './db-write-scheduler'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { resolveCurrentAuxDb, scheduleAuxWrite } from './db-write'
+
+/**
+ * Largest number of keys to put in one composite-key lookup.
+ *
+ * Each key contributes two bound parameters (one per inArray), and SQLite refuses a statement past
+ * SQLITE_MAX_VARIABLE_NUMBER — 32,766 by default. A user with 20,000 tracked items exceeded that
+ * on a single call and the query failed outright rather than degrading (#653).
+ */
+const COMPOSITE_KEY_CHUNK_SIZE = 4000
+
+function chunkKeys<T>(keys: T[], size = COMPOSITE_KEY_CHUNK_SIZE): T[][] {
+  if (keys.length <= size) return [keys]
+
+  const chunks: T[][] = []
+  for (let index = 0; index < keys.length; index += size) {
+    chunks.push(keys.slice(index, index + size))
+  }
+  return chunks
+}
 import * as schema from './schema'
-import { withSqliteRetry } from './sqlite-retry'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
 
@@ -77,7 +95,28 @@ function createDbUtilsInternal(
 
   return {
     getDb: () => db,
-    getAuxDb: () => auxDb,
+    /**
+     * The aux handle `scheduleAuxWrite` targets RIGHT NOW (live resolution),
+     * falling back to the construction-time capture only before DatabaseModule
+     * registers the resolver (unit tests). A dbUtils instance is typically
+     * created during module init — before the background aux init completes —
+     * so the captured handle can be the primary fallback for the whole process
+     * lifetime while aux-owned writes (plugin_analytics, clipboard_history,
+     * recommendation_cache) land on the real aux file: reads through this
+     * getter stay coherent with that write home (R3 stale-capture defect).
+     */
+    getAuxDb: () => resolveCurrentAuxDb()?.db ?? auxDb,
+    /**
+     * The split-aware read home for FILE-INDEX domain state (files rows written
+     * by the worker, scan_progress, keyword coverage). Any read that feeds an
+     * index-write decision (scan gating, integrity counts, migration streaming)
+     * must use this handle so it reads the SAME home the worker writes —
+     * reading the primary while the worker writes search-index.db was the
+     * V1 split-validation blocker (stale primary state said "already
+     * indexed/scanned" and no data ever reached the search file). Falls back to
+     * the primary db when the split is off (byte-identical behavior).
+     */
+    getFileIndexReadDb: () => readDb,
 
     // Keyword Mappings
     async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {
@@ -424,16 +463,40 @@ function createDbUtilsInternal(
       const sourceIds = keys.map((k) => k.sourceId)
       const itemIds = keys.map((k) => k.itemId)
 
-      // 使用 IN 查询优化（预过滤）
-      return db
-        .select()
-        .from(schema.itemUsageStats)
-        .where(
-          and(
-            inArray(schema.itemUsageStats.sourceId, sourceIds),
-            inArray(schema.itemUsageStats.itemId, itemIds)
+      // 使用 IN 查询优化（预过滤），分批以免超出 SQLite 的绑定参数上限
+      const chunks = chunkKeys(keys)
+      if (chunks.length === 1) {
+        return db
+          .select()
+          .from(schema.itemUsageStats)
+          .where(
+            and(
+              inArray(schema.itemUsageStats.sourceId, sourceIds),
+              inArray(schema.itemUsageStats.itemId, itemIds)
+            )
           )
-        )
+      }
+
+      const rows: Array<typeof schema.itemUsageStats.$inferSelect> = []
+      for (const chunk of chunks) {
+        const batch = await db
+          .select()
+          .from(schema.itemUsageStats)
+          .where(
+            and(
+              inArray(
+                schema.itemUsageStats.sourceId,
+                chunk.map((key) => key.sourceId)
+              ),
+              inArray(
+                schema.itemUsageStats.itemId,
+                chunk.map((key) => key.itemId)
+              )
+            )
+          )
+        rows.push(...batch)
+      }
+      return rows
     },
 
     async getUsageStatsBySource(sourceId: string) {
@@ -444,51 +507,79 @@ function createDbUtilsInternal(
     },
 
     // Item Time Stats
-    async upsertItemTimeStats(stats: typeof schema.itemTimeStats.$inferInsert) {
-      return db
-        .insert(schema.itemTimeStats)
-        .values(stats)
-        .onConflictDoUpdate({
-          target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
-          set: {
-            hourDistribution: stats.hourDistribution,
-            dayOfWeekDistribution: stats.dayOfWeekDistribution,
-            timeSlotDistribution: stats.timeSlotDistribution,
-            lastUpdated: stats.lastUpdated || new Date()
-          }
-        })
-    },
-
     async getItemTimeStatsBatch(keys: Array<{ sourceId: string; itemId: string }>) {
       if (keys.length === 0) return []
 
       const sourceIds = keys.map((k) => k.sourceId)
       const itemIds = keys.map((k) => k.itemId)
 
+      // Same bound-parameter ceiling as getUsageStatsBatch — identical shape, two definitions apart.
+      const chunks = chunkKeys(keys)
+      if (chunks.length === 1) {
+        return db
+          .select()
+          .from(schema.itemTimeStats)
+          .where(
+            and(
+              inArray(schema.itemTimeStats.sourceId, sourceIds),
+              inArray(schema.itemTimeStats.itemId, itemIds)
+            )
+          )
+      }
+
+      const rows: Array<typeof schema.itemTimeStats.$inferSelect> = []
+      for (const chunk of chunks) {
+        const batch = await db
+          .select()
+          .from(schema.itemTimeStats)
+          .where(
+            and(
+              inArray(
+                schema.itemTimeStats.sourceId,
+                chunk.map((key) => key.sourceId)
+              ),
+              inArray(
+                schema.itemTimeStats.itemId,
+                chunk.map((key) => key.itemId)
+              )
+            )
+          )
+        rows.push(...batch)
+      }
+      return rows
+    },
+
+    /**
+     * Time stats for scoring, newest first and bounded.
+     *
+     * Unbounded before: every cold recommend() read the whole table, parsed each row and passed one
+     * key per row into a composite lookup, so the work grew with lifetime item count (#653).
+     * Ordering by lastUpdated keeps the rows most likely to win a time slot; the tail it drops is
+     * items the user has not touched in a long time, which is a trade-off rather than a free win.
+     */
+    async getAllItemTimeStats(limit = 2000) {
       return db
         .select()
         .from(schema.itemTimeStats)
-        .where(
-          and(
-            inArray(schema.itemTimeStats.sourceId, sourceIds),
-            inArray(schema.itemTimeStats.itemId, itemIds)
-          )
-        )
-    },
-
-    async getAllItemTimeStats() {
-      return db.select().from(schema.itemTimeStats)
+        .orderBy(desc(schema.itemTimeStats.lastUpdated))
+        .limit(limit)
     },
 
     // Recommendation Cache
     async getRecommendationCache(cacheKey: string) {
-      const primary = await auxDb
+      // Read the SAME home setRecommendationCache targets right now (live
+      // resolution — the construction-time auxDb capture may still be the
+      // primary fallback, which would make the cache silently write-only:
+      // writes on real aux, reads pinned to the primary). Then fall back to
+      // the primary db for legacy rows written during the fallback window.
+      const liveAuxDb = resolveCurrentAuxDb()?.db ?? auxDb
+      const cached = await liveAuxDb
         .select()
         .from(schema.recommendationCache)
         .where(eq(schema.recommendationCache.cacheKey, cacheKey))
         .get()
-      if (primary) return primary
-      if (auxDb === db) return null
+      if (cached) return cached
+      if (liveAuxDb === db) return null
       return db
         .select()
         .from(schema.recommendationCache)
@@ -501,29 +592,29 @@ function createDbUtilsInternal(
       const recommendedItems = JSON.stringify(sanitizedItems)
       const createdAt = new Date()
 
-      return dbWriteScheduler.schedule(
+      // recommendation_cache is an aux-owned hot table: resolve the handle at
+      // enqueue time (scheduleAuxWrite) instead of using the auxDb captured at
+      // createDbUtils() time, which may still be the primary fallback when the
+      // dbUtils instance was constructed before the background aux init.
+      return scheduleAuxWrite(
         'recommendation.cache',
-        () =>
-          withSqliteRetry(
-            () =>
-              auxDb
-                .insert(schema.recommendationCache)
-                .values({
-                  cacheKey,
-                  recommendedItems,
-                  createdAt,
-                  expiresAt
-                })
-                .onConflictDoUpdate({
-                  target: schema.recommendationCache.cacheKey,
-                  set: {
-                    recommendedItems,
-                    createdAt,
-                    expiresAt
-                  }
-                }),
-            { label: 'recommendation.cache' }
-          ),
+        (db) =>
+          db
+            .insert(schema.recommendationCache)
+            .values({
+              cacheKey,
+              recommendedItems,
+              createdAt,
+              expiresAt
+            })
+            .onConflictDoUpdate({
+              target: schema.recommendationCache.cacheKey,
+              set: {
+                recommendedItems,
+                createdAt,
+                expiresAt
+              }
+            }),
         {
           priority: 'best_effort',
           dropPolicy: 'latest_wins',
@@ -535,9 +626,16 @@ function createDbUtilsInternal(
 
     async cleanExpiredRecommendationCache() {
       const now = new Date()
-      return auxDb
-        .delete(schema.recommendationCache)
-        .where(sql`${schema.recommendationCache.expiresAt} < ${now.getTime()}`)
+      // Previously a scheduler-bypassing direct delete; route through the
+      // single-writer queue like every other main-process write.
+      return scheduleAuxWrite(
+        'recommendation.cache.clean',
+        (db) =>
+          db
+            .delete(schema.recommendationCache)
+            .where(sql`${schema.recommendationCache.expiresAt} < ${now.getTime()}`),
+        { priority: 'best_effort', dropPolicy: 'drop' }
+      )
     },
 
     // Plugin Data

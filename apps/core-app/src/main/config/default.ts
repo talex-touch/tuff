@@ -14,17 +14,19 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: AppName,
   minWidth: 1100,
   minHeight: 680,
-  height: 680,
+  height: 820,
   width: 1100,
   autoHideMenuBar: true,
   show: false,
   transparent: true,
   titleBarStyle: 'hidden',
-  titleBarOverlay: {
-    color: 'rgba(0,0,0,0)',
-    height: 40,
-    symbolColor: '#1f2937'
-  },
+  // Lands the native buttons inside the shell sidebar's reserved 64x20 block
+  // (sidebar padding + the first light's offset). See ShellChromeBar.vue.
+  trafficLightPosition: { x: 20, y: 18 },
+  // No `titleBarOverlay`: the shell draws its own controls on Windows/Linux
+  // (ShellWindowControls.vue). The native overlay is painted by the OS, so it cannot follow the
+  // dark/contrast themes and the layout has no way to know how much room it takes — with the
+  // top bar gone it would sit straight on top of each page's own top-right controls.
   webPreferences: buildWindowWebPreferences('app', {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
     scrollBounce: true,

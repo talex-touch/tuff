@@ -159,8 +159,6 @@
     },
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
-    "advancedSettings": "Advanced Settings",
-    "advancedSettingsDesc": "Show file indexing, app index scheduling, download, analytics, and storage settings",
     "systemInfoPlaceholder": "System information is only available in development mode"
   },
   "settingLanguage": {
@@ -413,6 +411,10 @@
     "dashboardDesc": "View detailed usage stats and trends in Nexus"
   },
   "settingTools": {
+    "autoContextGroupTitle": "Context",
+    "autoContextGroupDesc": "Controls which local information the model may reach for during a conversation.",
+    "autoContext": "Auto Context",
+    "autoContextDesc": "Lets the model pull web results, file search, clipboard and related data on demand instead of picking tools per message. Off means specifying them every time.",
     "groupTitle": "Utilities",
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
     "customPlaceholder": "Custom Placeholder",
@@ -511,10 +513,10 @@
     "recommendationContextForegroundAppDesc": "Prefer actions related to the app you are currently using.",
     "recommendationContextClipboard": "Clipboard context",
     "recommendationContextClipboardDesc": "Use clipboard type and lightweight content hints for local recommendations.",
+    "recommendationContextSelection": "Selected text context",
+    "recommendationContextSelectionDesc": "Use the shape of your last captured selection (hashed locally, never the text itself) for recommendations.",
     "recommendationContextNetwork": "Network context",
     "recommendationContextNetworkDesc": "Adjust recommendations when the device appears offline or on a specific network type.",
-    "recommendationContextBluetooth": "Bluetooth context",
-    "recommendationContextBluetoothDesc": "Use local Bluetooth availability as a lightweight device context signal.",
     "recommendationContextFocus": "Focus context",
     "recommendationContextFocusDesc": "Prefer work-oriented actions when system focus or do-not-disturb is active.",
     "recommendationContextPower": "Power context",
@@ -529,9 +531,6 @@
     "enableAssistantDesc": "Assistant entries such as the floating ball and voice panel only respond when this is enabled. It stays off by default.",
     "floatingBall": "Show floating ball",
     "floatingBallDesc": "Show a draggable desktop entry. Click it to open the text command panel.",
-    "assistantName": "Assistant name",
-    "assistantNameDesc": "Name shown at the top of the Assistant panel.",
-    "assistantNamePlaceholder": "Alo aler",
     "voiceWake": "Voice wake",
     "voiceWakeDesc": "When enabled, the floating ball and panel may request speech recognition. When disabled, only text input is used.",
     "wakeWords": "Wake words",
@@ -642,6 +641,8 @@
     }
   },
   "settingUser": {
+    "syncSecurity": "Sync security",
+    "stepUp": "Step-up verification",
     "groupTitle": "Account",
     "groupDesc": "Manage your account information and login status.",
     "logout": "Logout",
@@ -690,7 +691,6 @@
     "completeBrowserLoginToast": "Complete sign-in in your browser.",
     "loginPageReopenedToast": "Sign-in page reopened.",
     "tokenRequired": "Enter a token",
-    "secureStorageTitle": "Login credential protection",
     "syncNow": "Sync now",
     "syncEnableFirst": "Turn on sync first",
     "syncComplete": "Sync complete",
@@ -700,15 +700,6 @@
       "enabled": "Sync is on.",
       "userDisabled": "You turned sync off; it will not automatically resume after sign-in.",
       "disabled": "Sync is off."
-    },
-    "secureStorage": {
-      "enabledToast": "Login credential protection enabled",
-      "disabledToast": "Login credential protection disabled.",
-      "disabledDescription": "Enable login credential protection for stronger local credential protection and safer sign-in.",
-      "checkingDescription": "Checking the local credential protection backend.",
-      "unavailableDescription": "Local credential protection is unavailable. When available, enabling it gives stronger protection and safer sign-in.",
-      "enabledDescription": "Login credential protection is enabled: credentials are encrypted with this device's root key for stronger protection.",
-      "sessionModeReminder": "Login credential protection is off. Enable it in Account settings for stronger local credential protection."
     },
     "syncStatus": {
       "unrecorded": "Not recorded",
@@ -774,6 +765,9 @@
     "billingNoticeTitle": "Billing notice"
   },
   "userProfile": {
+    "overview": "Overview",
+    "security": "Security & sign-in",
+    "securityActions": "Sign-in and security options",
     "title": "Account",
     "unknownName": "User",
     "unknownEmail": "No email",
@@ -971,6 +965,7 @@
     "description": "Select the window effect that feels comfortable to you."
   },
   "base": {
+    "details": "Details",
     "last_step": "Last Step",
     "step": "Next",
     "touchCaptcha": {
@@ -1004,17 +999,120 @@
   "flatController": {
     "useNative": "Use native window control instead"
   },
-  "flatNavBar": {
-    "main": "MAIN",
-    "dashboard": "Dashboard",
+  "shell": {
+    "search": "Search",
+    "newChat": "New Chat",
     "store": "Store",
-    "plugin": "Plugin",
-    "details": "Details",
-    "intelligence": "Intelligence",
-    "style": "Style",
-    "setting": "Setting"
+    "setting": "Settings",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "back": "Back",
+    "forward": "Forward",
+    "minimizeWindow": "Minimize",
+    "maximizeWindow": "Maximize",
+    "restoreWindow": "Restore",
+    "closeWindow": "Close"
+  },
+  "home": {
+    "greeting": "What shall we do today?",
+    "placeholder": "Ask Tuff to do anything",
+    "autoContext": "Auto Context",
+    "autoContextHint": "Lets the model pull web, file, clipboard and related context on demand",
+    "agentTools": "Tools",
+    "agentToolsHint": "Let the assistant search, read and open files — every call asks first",
+    "chainOfThought": "Chain of thought",
+    "chartFailed": "The chart could not be rendered.",
+    "toolAllow": "Allow",
+    "toolDeny": "Deny",
+    "toolRemember": "Remember for this session",
+    "model": "Choose model and reasoning effort",
+    "openPanel": "Open side panel",
+    "closePanel": "Close side panel",
+    "moreActions": "More actions",
+    "modelAuto": "Auto",
+    "modelLoading": "Loading available models…",
+    "modelEmpty": "No models available — configure an AI provider first",
+    "configureProvider": "Configure",
+    "panel": {
+      "title": "Conversation info",
+      "turnInfo": "This turn",
+      "messages": "Messages",
+      "provider": "Provider",
+      "model": "Model",
+      "tokens": "Tokens",
+      "latency": "Latency",
+      "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here.",
+      "workLog": "Work log",
+      "workLogEmpty": "No tool calls or artifacts this turn. Tool calling and artifacts are not implemented yet; they will be recorded here once they are."
+    },
+    "modelName": "Tuff Auto",
+    "effortHigh": "High",
+    "attach": "Add attachment",
+    "attachRemove": "Remove attachment",
+    "attachCancel": "Cancel upload",
+    "attachPreview": "Preview",
+    "attachmentNotSent": "Some attachments are not sent to the model",
+    "voice": "Voice input",
+    "send": "Send",
+    "stop": "Stop generating",
+    "retry": "Retry",
+    "thinking": "Thinking",
+    "copy": "Copy",
+    "copied": "Copied",
+    "regenerate": "Regenerate",
+    "error": {
+      "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
+      "agentToolsSync": "Could not reach the tool gateway — agent tools stay off",
+      "empty": "The model returned nothing",
+      "generic": "This reply failed"
+    },
+    "pill": {
+      "searchFiles": "Search files in plain language",
+      "translateClipboard": "Translate the clipboard",
+      "tidyDownloads": "Tidy the downloads folder",
+      "runScript": "Run a workspace script"
+    }
+  },
+  "settingsNav": {
+    "back": "Back to Tuff",
+    "search": "Search settings",
+    "group": {
+      "preference": "Preferences",
+      "capability": "Capabilities",
+      "system": "System"
+    },
+    "category": {
+      "overview": "Overview",
+      "general": "General",
+      "appearance": "Appearance",
+      "intelligence": "Intelligence",
+      "plugins": "Plugins & Tools",
+      "fileIndex": "File Index",
+      "update": "Update",
+      "network": "Network",
+      "download": "Downloads",
+      "storage": "Storage",
+      "about": "About"
+    }
+  },
+  "settingsOverview": {
+    "tagline": "The command bar, reimagined for makers",
+    "account": "Account",
+    "general": "General"
+  },
+  "settingsEntries": {
+    "installedPlugins": "Installed Plugins",
+    "downloadCenter": "Download Center",
+    "downloadCenterDesc": "Track download tasks and history.",
+    "open": "Open",
+    "intelligenceDesc": "Model channels, capabilities, prompts and audit.",
+    "application": "Applications",
+    "applicationDesc": "Browse and manage installed applications.",
+    "store": "Plugin Store",
+    "storeDesc": "Browse, install and manage plugins."
   },
   "store": {
+    "updatedAt": "Updated {time}",
     "title": "Plugin Store",
     "subtitle": "Discover amazing plugins for your workflow",
     "searchPlaceholder": "Search plugins",
@@ -1024,6 +1122,7 @@
     "loading": "Loading official plugins...",
     "refresh": "Refresh",
     "install": "Install",
+    "market": "Store",
     "installed": "Installed",
     "docs": "Docs",
     "cli": "CLI",
@@ -1031,6 +1130,7 @@
     "upgrade": "Upgrade",
     "upgradeAvailable": "Update available",
     "officialBadge": "Official",
+    "openPluginDetails": "Open details for {name}",
     "lastUpdated": "Last updated {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "Tuff CLI is detected on this machine. Beta preview capabilities are available now.",
@@ -1043,6 +1143,7 @@
     "docsLinkDesc": "Open Nexus docs for capability catalog and usage",
     "docsOpen": "Open Nexus Docs",
     "sourceEditor": {
+      "removeSource": "Remove source {name}",
       "title": "Source",
       "subtitle": "Edit plugin store source.",
       "addSource": "Add source",
@@ -1273,6 +1374,13 @@
     }
   },
   "plugin": {
+    "devServerDisconnected": "Dev Server disconnected",
+    "customPreviewSize": "Custom {width}×{height}",
+    "widgetPreview": "Widget preview",
+    "widgetReloadFailed": "Widget reload failed",
+    "widgetReloadAllTriggered": "Reload triggered for all widgets",
+    "perfTrend": "Performance trend",
+    "perf": "Performance",
     "add": "Add Plugin",
     "running": "Running",
     "all": "All",
@@ -1913,8 +2021,6 @@
       "basicInfo": "Basic Information",
       "pluginId": "Plugin ID",
       "pluginName": "Plugin Name",
-      "commandDetailsTitle": "Command Details",
-      "commandDataTitle": "Command Data",
       "copyPluginId": "Copy plugin ID",
       "copyPluginIdSuccess": "Plugin ID copied",
       "copyPluginIdFailed": "Failed to copy plugin ID",
@@ -2238,6 +2344,8 @@
     "title": "Tuff"
   },
   "router": {
+    "home": "Home",
+    "homeConversation": "Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
     "pluginStore": "Plugin Store",
@@ -2287,6 +2395,35 @@
     "modifiedAt": "Modified At"
   },
   "download": {
+    "migration": {
+      "title": "Migrating data",
+      "subtitle": "Please keep the app open until the migration finishes.",
+      "tasks": "Tasks",
+      "history": "History",
+      "config": "Config",
+      "duration": "Duration",
+      "errors": "Errors",
+      "pleaseWait": "Please wait…"
+    },
+    "error_logs": "Error Logs",
+    "no_logs": "No logs yet",
+    "load_logs_failed": "Failed to load logs",
+    "clear_logs": "Clear logs",
+    "clear_logs_confirm_title": "Clear error logs?",
+    "clear_logs_confirm_message": "This permanently deletes the recorded download error logs. This cannot be undone.",
+    "clear_logs_failed": "Failed to clear logs",
+    "logs_cleared": "Logs cleared",
+    "download_logs": "Export logs",
+    "logs_downloaded": "Logs exported",
+    "no_logs_to_download": "There are no logs to export",
+    "last_50_lines": "Last 50 lines",
+    "last_100_lines": "Last 100 lines",
+    "last_500_lines": "Last 500 lines",
+    "all_logs": "All logs",
+    "total_errors": "Total errors",
+    "network_errors": "Network errors",
+    "timeout_errors": "Timeout errors",
+    "disk_errors": "Disk errors",
     "title": "Download Center",
     "settings": "Settings",
     "downloading": "Downloading",
@@ -2540,10 +2677,78 @@
     }
   },
   "settings": {
+    "skillsMcp": {
+      "loading": "Loading…",
+      "loadFailed": "Failed to load",
+      "loadFailedDesc": "Could not read the imported configuration. Click to retry.",
+      "retry": "Retry",
+      "toggleFailed": "Toggle failed",
+      "mcp": {
+        "label": "MCP servers",
+        "addTitle": "Add manually",
+        "addDesc": "Configure a stdio or HTTP MCP server",
+        "addDescEmpty": "No servers yet — configure one by hand or import from an AI CLI",
+        "addAction": "Add",
+        "edit": "Edit",
+        "probe": "Probe",
+        "probeUnavailable": "Server unavailable",
+        "probeUnknownError": "Unknown error",
+        "detailUnknown": "(no detail)",
+        "sourceImported": "Imported",
+        "sourceManual": "Manual",
+        "stateIdle": "Not probed",
+        "stateOk": "OK · {count} tools",
+        "stateProbing": "Probing…",
+        "stateFailed": "Failed",
+        "transportStdio": "stdio",
+        "transportHttp": "HTTP",
+        "transportUnknown": "Unknown",
+        "viewAllTitle": "View all servers",
+        "viewAllDesc": "More servers and import management on the Intelligence page"
+      },
+      "skills": {
+        "label": "Skills",
+        "noDescription": "(no description)",
+        "injectionTitle": "Conversation injection",
+        "injectionDesc": "Active skills and rules ride into home conversations with Auto Context",
+        "importTitle": "Import skills",
+        "importDesc": "Scan and import from local AI CLI configurations",
+        "importDescEmpty": "No skills yet — import from local AI CLI configurations",
+        "viewAllTitle": "View all skills",
+        "viewAllDesc": "More skills and import management on the Intelligence page"
+      },
+      "dialog": {
+        "createTitle": "Add MCP server",
+        "editTitle": "Edit MCP server",
+        "name": "Name",
+        "namePlaceholder": "my-server",
+        "transport": "Transport",
+        "transportStdio": "stdio (local command)",
+        "transportHttp": "HTTP (remote URL)",
+        "command": "Command",
+        "commandPlaceholder": "npx",
+        "args": "Arguments",
+        "argsPlaceholder": "-y @modelcontextprotocol/server-filesystem /tmp",
+        "env": "Environment",
+        "envPlaceholder": "KEY=value, one per line",
+        "envNote": "Values go to the system secure store, never plaintext config",
+        "url": "URL",
+        "urlPlaceholder": "https://example.com/mcp",
+        "headers": "Headers",
+        "headersPlaceholder": "Header: value, one per line",
+        "save": "Save",
+        "saved": "Saved",
+        "saveFailed": "Save failed",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleteConfirm": "Delete this server?",
+        "deleteFailed": "Delete failed"
+      }
+    },
     "platformTags": {
-      "macOnly": "Only",
-      "windowsOnly": "Windows only",
-      "linuxOnly": "Linux only",
+      "macOnly": "macOS",
+      "windowsOnly": "Windows",
+      "linuxOnly": "Linux",
       "beta": "Beta"
     },
     "settingDownload": {
@@ -2581,9 +2786,20 @@
       "resetTempDir": "Use Default Folder",
       "selectTempDirTitle": "Select Download Temp Directory",
       "selectTempDirConfirm": "Use This Folder",
+      "defaultDestination": "Download location",
+      "defaultDestinationDesc": "Where finished files are saved unless a task picks its own folder",
+      "selectDestinationTitle": "Select Download Location",
+      "selectDestinationConfirm": "Use This Folder",
+      "notSet": "Not set",
+      "choose": "Choose…",
+      "notifyOnComplete": "Notify when finished",
+      "notifyOnCompleteDesc": "Send a system notification when a task completes or fails",
+      "retry": "Retry on failure",
+      "retryDesc": "How many times a failed chunk is retried",
+      "cleanTemp": "Clear temp files",
       "defaultPath": "Default Path",
       "noRetry": "No Retry",
-      "days": "days",
+      "days": "{days} days",
       "actions": "Actions",
       "actionsDesc": "Manage download settings and temporary files",
       "cleanupTemp": "Cleanup Temp Files",
@@ -2599,7 +2815,8 @@
         "defaultsRestored": "Default settings restored",
         "tempCleaned": "Temporary files cleaned up",
         "tempCleanFailed": "Failed to cleanup temporary files",
-        "tempDirSelectFailed": "Failed to select temporary directory"
+        "tempDirSelectFailed": "Failed to select temporary directory",
+        "destinationSelectFailed": "Failed to select download location"
       }
     },
     "settingNetwork": {
@@ -2631,6 +2848,14 @@
       "proxyAuthDesc": "Credentials are read only through secure-store references. This page does not save plaintext usernames or passwords.",
       "proxyAuthConfigured": "Secure credential reference configured",
       "proxyAuthNotConfigured": "Not configured",
+      "customProxy": "Custom proxy",
+      "customProxyDesc": "HTTP(S), SOCKS, PAC URL and bypass rules. Only applies in custom mode",
+      "customProxyHint": "Fields left blank are ignored. Credentials belong in Proxy Authentication; this page never stores plaintext.",
+      "separateHttps": "Use a separate address for HTTPS",
+      "configure": "Configure…",
+      "cancel": "Cancel",
+      "pauseOnInstability": "Pause when unstable",
+      "pauseOnInstabilityDesc": "Briefly pause requests after repeated failures and resume on success; off retries immediately",
       "policyGroupTitle": "Network Policy",
       "policyGroupDesc": "Configure timeout, retry, and failure cooldown for shared network requests",
       "timeoutMs": "Request Timeout",
@@ -2750,11 +2975,7 @@
       "enableCache": "Enable Response Cache",
       "enableCacheDesc": "Cache AI responses to reduce costs and latency",
       "cacheExpiration": "Cache Expiration",
-      "cacheExpirationDesc": "How long to keep cached responses",
-      "userMessageLabel": "User message",
-      "userMessagePlaceholder": "Hello, can you summarize this...",
-      "promptVariablesLabel": "Prompt variables (JSON)",
-      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}"
+      "cacheExpirationDesc": "How long to keep cached responses"
     },
     "settingFileIndex": {
       "groupTitle": "File Index",
@@ -3355,6 +3576,13 @@
       "evidenceSaved": "Everything diagnostic evidence saved"
     },
     "intelligence": {
+      "testLatency": "Latency",
+      "testTokenSpeed": "Token speed",
+      "testStabilityAnalysis": "Stability analysis",
+      "userMessageLabel": "User message",
+      "userMessagePlaceholder": "Hello, can you summarize this...",
+      "promptVariablesLabel": "Prompt variables (JSON)",
+      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}",
       "pageTitle": "TaTa Intelligence",
       "pageDesc": "With TaTa Intelligence, command every channel and tailor capabilities—all from one refined interface.",
       "channelsSection": "Channels",
@@ -3437,14 +3665,6 @@
       "activeProviders": "Active Channels",
       "totalBindings": "Total Bindings",
       "configuredModels": "Configured Models",
-      "addBinding": "Add Binding",
-      "removeBinding": "Remove Binding",
-      "modelOrder": "Model Order",
-      "noModelsConfigured": "No models configured",
-      "dragToReorder": "Drag to reorder",
-      "addFirstModel": "Add your first model",
-      "providerSelection": "Provider Selection",
-      "modelSelection": "Model Selection",
       "capabilityTestTitle": "Test Capability",
       "capabilityTestDesc": "Test if this capability works with current configuration",
       "testProvider": "Select Test Provider",
@@ -3736,17 +3956,14 @@
         "monthly": "Every month",
         "never": "Never"
       },
-      "autoDownloadTitle": "Auto Download Updates",
       "autoDownloadDesc": "Automatically download updates when available",
       "autoDownloadDescManual": "Automatically download the installer when available; system installation still remains manual",
       "autoDownloadDescMac": "Download the macOS update package automatically; applying it uses a restart handoff.",
       "autoDownloadDescWindows": "Download the Windows installer automatically; Windows still shows the installer handoff.",
       "autoDownloadDescLinux": "Download the Linux package automatically; opening and installing the package remains manual.",
-      "installOnNormalQuitTitle": "Install on Normal Quit",
-      "installOnNormalQuitDesc": "Install a verified downloaded update the next time the app exits normally. Disable this to keep installation manual.",
       "installOnNormalQuitLocked": "Normal-quit installation is locked because this release has no authoritative N/N-1 rollback compatibility evidence. Install Now remains available when ready.",
       "rendererOverrideTitle": "Renderer Override (Experimental)",
-      "rendererOverrideDesc": "Manually enable the experimental renderer override (requires TUFF_ENABLE_RENDERER_OVERRIDE=1).",
+      "rendererOverrideDesc": "Experimental. Only shown when launched with TUFF_ENABLE_RENDERER_OVERRIDE=1; relaunch with that variable to turn it back on.",
       "statusTitle": "Status",
       "status": {
         "loading": "Loading update status…",
@@ -3873,8 +4090,6 @@
       "assetsCompatibilityMissingChecksum": "Missing checksum",
       "evidenceTitle": "Diagnostic Evidence",
       "evidenceDesc": "Export the authoritative lifecycle snapshot, rollback/recovery metadata, cached release, platform handoff mode, and explicit macOS native-trust verification status.",
-      "copyEvidence": "Copy Evidence",
-      "saveEvidence": "Save Evidence",
       "evidenceMissing": "Load update status first",
       "evidenceCopied": "Update diagnostic evidence copied",
       "evidenceCopyFailed": "Failed to copy update diagnostic evidence",
@@ -3912,8 +4127,6 @@
         "loadFailed": "Failed to load update settings",
         "channelSaved": "Switched to {channel}; checking for updates",
         "frequencySaved": "Frequency saved",
-        "autoDownloadSaved": "Auto download setting saved",
-        "installOnNormalQuitSaved": "Normal-quit installation setting saved",
         "rendererOverrideSaved": "Renderer override setting saved",
         "saveFailed": "Failed to save settings",
         "actionUnavailableForPhase": "This action is unavailable in the current update lifecycle phase.",
@@ -3928,8 +4141,19 @@
         "macSilentUpdateNotWritable": "Tuff cannot replace the current app without a password prompt. Move or reinstall Tuff in an Applications location managed by your user, then retry.",
         "macSilentUpdateUntrusted": "Silent update is blocked because this Tuff build is not an officially verified macOS package.",
         "cacheCleared": "Update cache cleared",
-        "cacheClearFailed": "Failed to clear cache"
-      }
+        "cacheClearFailed": "Failed to clear cache",
+        "installModeSaved": "Install mode saved",
+        "notifyOnUpdateSaved": "Notification preference saved"
+      },
+      "notifyOnUpdate": "Notify on new version",
+      "notifyOnUpdateDesc": "Send a system notification when an update is found or finishes downloading.",
+      "installMode": {
+        "title": "Install mode",
+        "manual": "Notify only",
+        "onQuit": "Download, install on quit",
+        "immediate": "Download and install now"
+      },
+      "exportEvidence": "Export diagnostics"
     },
     "updateModal": {
       "title": "New Version Available",
@@ -3974,10 +4198,16 @@
       "startMinimized": "Start minimized to tray",
       "startMinimizedDesc": "Launch application minimized to system tray",
       "autoStart": "Auto Start on Boot",
-      "autoStartDesc": "Automatically launch app when system starts"
+      "autoStartDesc": "Automatically launch app when system starts",
+      "startSilent": "Start silently",
+      "startSilentDesc": "Launch in the background without showing the main window"
     },
     "setup": {
       "groupTitle": "General Settings",
+      "permissionsGroupTitle": "Permissions",
+      "permissionsGroupDesc": "Granted in System Settings. Tuff can only read the status and point you there.",
+      "startupGroupTitle": "Startup & background",
+      "startupGroupDesc": "When the app starts, whether it stays resident, and how it shows in the tray and Dock.",
       "groupDesc": "Configure permissions and basic settings",
       "accessibility": "Accessibility Permission",
       "accessibilityDesc": "Used to scan apps and read foreground context. Auto paste also needs macOS Automation permission for Tuff to control System Events.",
@@ -3987,8 +4217,8 @@
       "notificationsDesc": "Allow the app to display system notifications. On macOS, the granted state may need to be confirmed in System Settings.",
       "autoStart": "Auto Start on Boot",
       "autoStartDesc": "Automatically launch app when system starts",
-      "showTray": "Show Tray Icon",
-      "showTrayDesc": "Display app icon in system tray",
+      "backgroundMode": "Keep running after closing",
+      "backgroundModeDesc": "Hide the window and keep Tuff available from the system tray",
       "hideDock": "Hide Dock Icon",
       "hideDockDesc": "Hide Dock icon after closing main window",
       "startSilent": "Silent Start",
@@ -4101,8 +4331,47 @@
       "unofficial": "Current version has not passed official build verification, may be unsafe"
     }
   },
+    "widgetFrame": {
+      "compileFailed": "Widget compile failed",
+      "loading": "Loading widget",
+      "rendererMissing": "Widget renderer missing",
+      "rendererUnregistered": "Widget renderer not registered",
+      "missingRendererId": "Missing rendererId",
+      "renderFailed": "Widget failed to render"
+    },
+    "fileIndex": {
+      "failTitle": "File index initialization failed",
+      "failMessage": "The file index failed to initialize, so search may not work correctly.",
+      "viewErrorDetails": "View error details",
+      "rebuilding": "Rebuilding…",
+      "rebuildIndex": "Rebuild index",
+      "later": "Later",
+      "dontRemindAgain": "Don't remind me again"
+    },
+    "previewHistory": {
+      "copyResult": "Copy result",
+      "resultLabel": "Result",
+      "recentTitle": "Recent",
+      "countSummary": "{count} total",
+      "noRecords": "No records yet"
+    },
+    "boxTag": {
+      "image": "Image",
+      "imageCount": "{count} images",
+      "charCount": "{count} chars total",
+      "preparingFiles": "Preparing files…"
+    },
   "common": {
+    "imagePreviewAlt": "Image preview",
+    "wallpaperPreviewAlt": "Custom background preview",
+    "loadMore": "Load more",
+    "copy": "Copy",
+    "copied": "Copied",
+    "yes": "Yes",
+    "no": "No",
+    "retry": "Retry",
     "cancel": "Cancel",
+    "openExternalConfirm": "Open this link outside Tuff?",
     "save": "Save",
     "confirm": "Confirm",
     "delete": "Delete",
@@ -4423,6 +4692,14 @@
     "daysAgo": "{count} days ago"
   },
   "intelligence": {
+    "builtin": "Built-in",
+    "builtinPrompts": "Built-in prompts",
+    "createNewPrompt": "Create new prompt",
+    "custom": "Custom",
+    "customPrompts": "Custom prompts",
+    "managePrompts": "Manage prompts",
+    "promptSelectedHint": "Instructions come from the selected prompt",
+    "selectPrompt": "Select a prompt",
     "errorRecovery": {
       "authTitle": "Sign in required",
       "authDetail": "Sign in to Tuff Nexus, then retry this AI request.",
@@ -5045,6 +5322,11 @@
     "confirmAndSend": "Authorize and send"
   },
   "corebox": {
+    "actionUnsupported": "This action isn't supported yet",
+    "opacity": "Opacity",
+    "debug": "Debug",
+    "alwaysOnTop": "Always on top",
+    "pin": "Pin CoreBox",
     "pinned": "Pinned",
     "unpinned": "Unpinned",
     "pinFailed": "Pin failed",

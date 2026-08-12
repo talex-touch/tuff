@@ -119,7 +119,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid payload' })
   }
 
-  const payload = verifyDocToken(token)
+  const payload = verifyDocToken(event, token)
   if (!payload || payload.sid !== sessionId || payload.cid !== clientId || payload.src !== sourceType) {
     throw createError({ statusCode: 403, statusMessage: 'Invalid token' })
   }

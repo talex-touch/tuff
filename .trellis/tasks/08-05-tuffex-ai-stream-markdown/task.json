@@ -1,0 +1,30 @@
+{
+  "id": "tuffex-ai-stream-markdown",
+  "name": "tuffex-ai-stream-markdown",
+  "title": "TxStreamMarkdown 流式 Markdown 渲染（块级增量 + 代码高亮 + mermaid）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-tuffex-ai-suite",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Only the visual criteria are left: light and dark themes plus reduced-motion, and the zoom overlay behaviour by eye. The streaming, mermaid, code-block and sanitiser criteria all have tests.",
+    "blocker": "A running app for the theme and reduced-motion pass. Nothing else.",
+    "evidence": "Measured 2026-08-11: ai-elements plus stream-markdown, 58 passed / 6 files. Coverage maps to the criteria directly. Block identity: \"keeps settled block DOM nodes across streaming updates\", \"reuses settled block objects and only assigns fresh ids to new blocks\", \"keeps the tail id stable while a paragraph grows\". Cursor: \"marks a paragraph tail for the inline cursor while streaming\". Mermaid: skeleton with draft source while open, diagram once the fence closes under strict security, fallback to source with an alert when rendering fails. Sanitiser: nothing rendered before it resolves, sanitised markup once ready, unsanitised only when the flag is off. Code block: highlight after close, bare fences labelled text without asking shiki, stale highlights ignored."
+  }
+}

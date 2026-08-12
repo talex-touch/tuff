@@ -2298,7 +2298,9 @@ describe('tuffIntelligenceSDK invoke', () => {
     ])
     expect(chat).toHaveBeenCalledOnce()
     const [chatPayload] = chat.mock.calls[0] ?? []
-    const prompt = chatPayload.messages.map(({ content }) => content).join('\n')
+    const prompt = chatPayload.messages
+      .map(({ content }: { content: string }) => content)
+      .join('\n')
     expect(prompt).toContain('Compatibility windows reject remote URLs.')
     expect(prompt).not.toContain('The indexing runtime owns durable search mutations.')
     expect(result.result.answer).toBe('Compatibility windows reject remote URLs.')

@@ -161,17 +161,59 @@ function assertPublishConfig(packages) {
   return issues
 }
 
+/**
+ * A manifest can point `main` / `module` / `types` at a build output that nothing guarantees to
+ * exist. @talex-touch/tuff-core shipped exactly that shape -- `dist/index.js` with no dist, no
+ * prepublishOnly and an `export {}` entry -- and this validator passed it, so `npm publish`
+ * would have produced a package that fails to resolve for every consumer (#889).
+ *
+ * The rule: if an entry field points into a directory that is not present in the working tree,
+ * the package must have a `prepublishOnly` script, so publishing cannot skip the build.
+ */
+function findUnbuiltEntryIssues({ manifest, manifestPath, packageInfo }) {
+  const entryFields = ['main', 'module', 'types', 'typings']
+  const packageDir = path.join(repoRoot, packageInfo.path)
+  const missing = []
+
+  for (const field of entryFields) {
+    const value = manifest[field]
+    if (typeof value !== 'string' || value.length === 0)
+      continue
+    if (!fs.existsSync(path.join(packageDir, value)))
+      missing.push(`${field} -> ${value}`)
+  }
+
+  if (missing.length === 0)
+    return []
+  if (typeof manifest.scripts?.prepublishOnly === 'string')
+    return []
+
+  return [{
+    package: packageInfo.name,
+    manifestPath: toPosixPath(path.relative(repoRoot, manifestPath)),
+    phase: 'source',
+    field: 'scripts.prepublishOnly',
+    spec: missing.join(', '),
+    reason:
+      'entry points at a build output that is absent from the tree and no prepublishOnly '
+      + 'script guarantees it is built, so publishing would ship a package that cannot resolve',
+  }]
+}
+
 function getSourceIssues(packages) {
   return packages.flatMap((packageInfo) => {
     const manifestPath = path.join(repoRoot, packageInfo.path, 'package.json')
     const manifest = readJson(manifestPath)
-    return findForbiddenSpecIssues({
-      manifest,
-      manifestPath,
-      packageInfo,
-      forbiddenProtocols: sourceForbiddenProtocols,
-      phase: 'source',
-    })
+    return [
+      ...findForbiddenSpecIssues({
+        manifest,
+        manifestPath,
+        packageInfo,
+        forbiddenProtocols: sourceForbiddenProtocols,
+        phase: 'source',
+      }),
+      ...findUnbuiltEntryIssues({ manifest, manifestPath, packageInfo }),
+    ]
   })
 }
 

@@ -1,7 +1,10 @@
-## File-based Routing
+## Routing
 
-Routes will be auto-generated for Vue files in this dir with the same file structure.
-Check out [`unplugin-vue-router`](https://github.com/posva/unplugin-vue-router) for more details.
+Routes are declared by hand in [`src/router/index.ts`](../router/index.ts). Adding a page here does
+not register it — add the matching entry there too.
+
+This directory keeps the file-based naming convention (`[name].vue`, `[...all].vue`) from when the
+plugin used `unplugin-vue-router`, but nothing generates routes from it any more.
 
 ### Path Aliasing
 

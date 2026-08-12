@@ -61,7 +61,6 @@ export default defineConfig({
     'fs-extra',
     'glob',
     'pathe',
-    'rollup',
     'unplugin',
     '@vue/compiler-sfc',
     'vite',

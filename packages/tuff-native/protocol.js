@@ -25,12 +25,28 @@ class NativeCarrierError extends Error {
     this.code = code
     this.category = options.category ?? 'availability'
     this.retryable = options.retryable ?? false
+    // The native error is the only place the real code and message survive; without it a caller
+    // sees 'Native carrier invocation failed' and nothing about why (#850). Non-enumerable so it
+    // does not widen anything that serialises this error.
+    if (options.cause !== undefined) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        configurable: true,
+        enumerable: false,
+        writable: true,
+      })
+    }
     if (options.carrierId)
       this.carrierId = options.carrierId
     if (options.requestId)
       this.requestId = options.requestId
     if (options.streamId)
       this.streamId = options.streamId
+    // Native-supplied. validate_error bounds the keys to identifiers and the values to
+    // string/number/boolean, so this cannot become a payload smuggling channel; it stays off the
+    // message for the same reason `cause` does.
+    if (options.details && typeof options.details === 'object')
+      this.details = options.details
   }
 }
 
@@ -69,12 +85,13 @@ class NapiCarrier {
     try {
       encoded = this.binding.nativeProtocolV1Handshake(encodeControl(hello))
     }
-    catch {
+    catch (error) {
       this.safeLog('warn', 'handshake-failed', { code: 'CARRIER_HANDSHAKE_FAILED' })
       throw carrierError(
         'CARRIER_HANDSHAKE_FAILED',
         'Native carrier handshake failed',
         this.id,
+        { cause: error },
       )
     }
 
@@ -82,11 +99,12 @@ class NapiCarrier {
     try {
       snapshot = decodeControl(encoded)
     }
-    catch {
+    catch (error) {
       throw carrierError(
         'CARRIER_PROTOCOL_VIOLATION',
         'Native carrier returned an invalid handshake',
         this.id,
+        { cause: error },
       )
     }
     if (snapshot.kind !== 'server_hello') {
@@ -127,7 +145,7 @@ class NapiCarrier {
         attachments,
       )
     }
-    catch {
+    catch (error) {
       this.safeLog('warn', 'invoke-failed', {
         code: 'CARRIER_INVOKE_FAILED',
         requestId: safeIdentifier(control.requestId),
@@ -136,7 +154,7 @@ class NapiCarrier {
         'CARRIER_INVOKE_FAILED',
         'Native carrier invocation failed',
         this.id,
-        { requestId: control.requestId },
+        { requestId: control.requestId, cause: error },
       )
     }
     const packet = this.decodePacket(raw, 'invoke')
@@ -181,13 +199,13 @@ class NapiCarrier {
         raw => this.handleFrame(state, raw),
       )
     }
-    catch {
+    catch (error) {
       this.streams.delete(streamId)
       throw carrierError(
         'CARRIER_OPEN_STREAM_FAILED',
         'Native carrier could not open the stream',
         this.id,
-        { requestId: control.requestId, streamId },
+        { requestId: control.requestId, streamId, cause: error },
       )
     }
     const accepted = this.decodePacket(rawAccepted, 'open-stream')
@@ -247,12 +265,14 @@ class NapiCarrier {
       }))
       return true
     }
-    catch {
+    catch (error) {
       throw carrierError(
         'CARRIER_CANCEL_FAILED',
         'Native cancellation failed',
         this.id,
-        targetType === 'stream' ? { streamId: id } : { requestId: id },
+        targetType === 'stream'
+          ? { streamId: id, cause: error }
+          : { requestId: id, cause: error },
       )
     }
   }
@@ -291,11 +311,12 @@ class NapiCarrier {
     try {
       await this.binding.nativeProtocolV1Dispose()
     }
-    catch {
+    catch (error) {
       throw carrierError(
         'CARRIER_DISPOSE_FAILED',
         'Native carrier disposal failed',
         this.id,
+        { cause: error },
       )
     }
     finally {
@@ -396,7 +417,7 @@ class NapiCarrier {
     try {
       return validatePacket(raw.control, raw.attachments)
     }
-    catch {
+    catch (error) {
       this.safeLog('warn', 'packet-invalid', {
         code: 'CARRIER_PROTOCOL_VIOLATION',
         source,
@@ -405,6 +426,7 @@ class NapiCarrier {
         'CARRIER_PROTOCOL_VIOLATION',
         'Native carrier returned an invalid packet',
         this.id,
+        { cause: error },
       )
     }
   }
@@ -459,11 +481,57 @@ function safeIdentifier(value) {
     : undefined
 }
 
+/**
+ * Matches PROTOCOL_ERROR_ENVELOPE_PREFIX in native-napi/src/lib.rs. The napi Status enum is fixed,
+ * so a protocol code cannot ride on `err.code` the way QueueFull does; the reason string is the
+ * only channel with room for the structure, and this is where the two halves agree on its shape.
+ */
+const PROTOCOL_ERROR_ENVELOPE_PREFIX = '|protocol-error:'
+// Kept in step with ERROR_ENVELOPE_PREFIX in native-core/src/error.rs by protocol-contract's
+// own check rather than by hoping; see protocol-error-envelope.test.js.
+
+/**
+ * Reads the structured ProtocolError a native rejection carries, or null when it carries none.
+ *
+ * Deliberately returns the fields and not the text: `message` stays out, because a carrier error's
+ * message must not surface native content — the sanitised-error tests in this package's suite are
+ * the contract for that, and predate this envelope.
+ */
+function readProtocolError(error) {
+  const reason = typeof error?.message === 'string' ? error.message : ''
+  const at = reason.indexOf(PROTOCOL_ERROR_ENVELOPE_PREFIX)
+  if (at === -1)
+    return null
+
+  let parsed
+  try {
+    parsed = JSON.parse(reason.slice(at + PROTOCOL_ERROR_ENVELOPE_PREFIX.length))
+  }
+  catch {
+    return null
+  }
+
+  if (!parsed || typeof parsed.code !== 'string' || typeof parsed.retryable !== 'boolean')
+    return null
+
+  return {
+    code: parsed.code,
+    category: typeof parsed.category === 'string' ? parsed.category : undefined,
+    retryable: parsed.retryable,
+    details: parsed.details && typeof parsed.details === 'object' ? parsed.details : undefined,
+  }
+}
+
 function carrierError(code, message, carrierId, correlation = {}) {
-  return new NativeCarrierError(code, message, {
+  const native = readProtocolError(correlation.cause)
+  return new NativeCarrierError(native?.code ?? code, message, {
     carrierId,
     requestId: safeIdentifier(correlation.requestId),
     streamId: safeIdentifier(correlation.streamId),
+    cause: correlation.cause,
+    category: native?.category,
+    retryable: native?.retryable,
+    details: native?.details,
   })
 }
 

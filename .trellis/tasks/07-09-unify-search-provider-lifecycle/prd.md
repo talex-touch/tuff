@@ -11,12 +11,15 @@ runtime state must describe the same executable entry.
 
 - Parent: `07-09-audit-search-system-architecture`.
 - Priority: P2.
-- Explicit prerequisites:
-  - `07-09-scope-search-sessions-and-streams`
-  - `07-09-gate-search-on-storage-hydration`
-  - `07-09-establish-single-search-index-writer`
-- These prerequisites stabilize request, consent, and persistence ownership so
-  this task does not wrap conflicting legacy behavior.
+- Explicit prerequisites, all three completed and archived (#305):
+  - `07-09-scope-search-sessions-and-streams` — completed 2026-07-27, 11/11
+  - `07-09-gate-search-on-storage-hydration` — completed 2026-07-17, 7/7
+  - `07-09-establish-single-search-index-writer` — completed 2026-07-18, 10/10
+- They stabilized request, consent, and persistence ownership so this task does
+  not wrap conflicting legacy behavior. That condition is now met, so nothing on
+  the prerequisite list holds this task any more.
+- Release condition: this task is released. What remains is scheduling, which
+  `docs/plan-prd/TODO.md` owns, not an unresolved dependency.
 
 ## Background
 

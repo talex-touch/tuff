@@ -61,7 +61,6 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   readonly name = '即时预览'
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Html]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 200
 
   constructor(private readonly sdk: PreviewSdk) {}
 

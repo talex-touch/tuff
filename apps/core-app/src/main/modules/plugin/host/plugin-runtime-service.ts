@@ -201,7 +201,7 @@ function snapshotKeyManager(input: unknown): RuntimeKeyManager {
 function snapshotProcessFactory(input: unknown): PluginRuntimeProcessFactory {
   const artifactExists = readMethod(input, 'artifactExists')
   const spawn = readMethod(input, 'spawn')
-  return Object.freeze({
+  return Object.freeze<PluginRuntimeProcessFactory>({
     artifactExists: (artifactPath: string) =>
       artifactExists.call(input, artifactPath) as boolean | Promise<boolean>,
     spawn: (options) =>
@@ -1005,7 +1005,7 @@ export class PluginRuntimeService {
       await call(method, payload, signal)
     }
 
-    return Object.freeze({
+    return Object.freeze<PluginRuntimeLifecycleProxy>({
       onMessage: (key, info) => callVoid('onMessage', [key, info]),
       onLaunch: (feature) => callVoid('onLaunch', [feature]),
       onFeatureTriggered: async (id, data, feature, signal) =>

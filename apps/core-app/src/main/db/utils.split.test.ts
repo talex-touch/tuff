@@ -88,4 +88,43 @@ describe('dbUtils search-split routing (execWrite forwarding)', () => {
     const inMain = await main.client.execute('SELECT file_id FROM file_extensions')
     expect(inMain.rows).toHaveLength(1)
   })
+
+  // Regression for V1 ship-blocker #3 (read-side split-brain): index-state
+  // reads that feed "should I index/scan" decisions must see the SEARCH home,
+  // not stale primary state. getFileIndexReadDb() is the accessor those
+  // decision reads (scan gating, integrity counts) route through.
+  it('getFileIndexReadDb returns the search db when the split is on — stale primary rows are invisible', async () => {
+    const main = await makeDb()
+    const search = await makeDb()
+
+    // Stale pre-split state lives in the PRIMARY; the live (empty) home is the search db.
+    await main.client.execute({
+      sql: 'INSERT INTO file_extensions (file_id, key, value) VALUES (?, ?, ?)',
+      args: [7, 'bundleId', 'stale.primary.row']
+    })
+
+    const writer: DbUtilsSplitContext['writer'] = {
+      execWrite: async () => []
+    }
+    const dbUtils = createDbUtils(main.db, main.db, {
+      enabled: true,
+      searchDb: search.db,
+      writer
+    })
+
+    const readDb = dbUtils.getFileIndexReadDb()
+    const visible = await readDb.select().from(schema.fileExtensions)
+    expect(visible).toHaveLength(0)
+
+    // The primary handle still exposes the catalog home for primary-owned reads.
+    const primaryRows = await dbUtils.getDb().select().from(schema.fileExtensions)
+    expect(primaryRows).toHaveLength(1)
+  })
+
+  it('getFileIndexReadDb falls back to the primary db when the split is off', async () => {
+    const main = await makeDb()
+    const dbUtils = createDbUtils(main.db)
+
+    expect(dbUtils.getFileIndexReadDb()).toBe(dbUtils.getDb())
+  })
 })

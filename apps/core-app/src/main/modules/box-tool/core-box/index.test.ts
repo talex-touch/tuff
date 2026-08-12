@@ -53,6 +53,10 @@ const mocks = vi.hoisted(() => {
     searchLoggerDestroy: vi.fn(() => {
       callOrder.push('search-logger-destroy')
     }),
+    ipcRegister: vi.fn(),
+    ipcUnregister: vi.fn(() => {
+      callOrder.push('ipc-unregister')
+    }),
     coreBoxManagerDestroy: vi.fn(() => {
       callOrder.push('core-box-manager-destroy')
     }),
@@ -142,9 +146,15 @@ vi.mock('../search-engine/search-logger', () => ({
   }
 }))
 
+vi.mock('./ipc', () => ({
+  ipcManager: {
+    register: mocks.ipcRegister,
+    unregister: mocks.ipcUnregister
+  }
+}))
+
 vi.mock('./manager', () => ({
   coreBoxManager: {
-    init: vi.fn(),
     destroy: mocks.coreBoxManagerDestroy,
     trigger: mocks.coreBoxManagerTrigger,
     markExpanded: mocks.markExpanded,
@@ -208,6 +218,22 @@ describe('CoreBoxModule', () => {
       expect.any(Function),
       expect.objectContaining({ enabled: true })
     )
+  })
+
+  it('registers the CoreBox IPC handlers during init', async () => {
+    // Before #524 this happened inside coreBoxManager.init(); the wiring now lives here. If it is
+    // dropped, no CoreBox IPC handler is ever registered and the launcher stops responding —
+    // with nothing throwing to say so.
+    const module = new CoreBoxModule()
+
+    expect(mocks.ipcRegister).not.toHaveBeenCalled()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+
+    expect(mocks.ipcRegister).toHaveBeenCalledTimes(1)
   })
 
   it('opens CoreBox when manager state is stale but real window is hidden', async () => {
@@ -489,6 +515,9 @@ describe('CoreBoxModule', () => {
       'dispose-lag-burst',
       'dispose-transport',
       'search-logger-destroy',
+      // Was inside coreBoxManager.destroy() before #524 moved the wiring to this module; the
+      // relative order has to survive the move.
+      'ipc-unregister',
       'core-box-manager-destroy',
       'clear-runtime'
     ])

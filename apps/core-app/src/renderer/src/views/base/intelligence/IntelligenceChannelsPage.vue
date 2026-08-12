@@ -10,7 +10,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
@@ -397,7 +397,7 @@ useKeyboardNavigation({
       {{ t('settings.intelligence.emptyProviders') }}
     </p>
 
-    <TuffDrawer
+    <TxDrawer
       v-model:visible="basicEditorVisible"
       :title="t('settings.intelligence.editProviderBasic')"
     >
@@ -427,6 +427,6 @@ useKeyboardNavigation({
           </TxButton>
         </div>
       </div>
-    </TuffDrawer>
+    </TxDrawer>
   </div>
 </template>

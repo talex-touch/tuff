@@ -11,7 +11,6 @@ const props = defineProps<{
 
 const { t, locale } = useI18n()
 
-const isZh = computed(() => locale.value.startsWith('zh'))
 const isOfficial = computed(
   () => props.plugin.official === true || props.plugin.providerTrustLevel === 'official'
 )
@@ -40,7 +39,7 @@ const metaItems = computed(() => {
     items.push(props.plugin.providerName)
   }
   if (updatedText.value) {
-    items.push(`${isZh.value ? '更新于' : 'Updated'} ${updatedText.value}`)
+    items.push(t('store.updatedAt', { time: updatedText.value }))
   }
   return items
 })

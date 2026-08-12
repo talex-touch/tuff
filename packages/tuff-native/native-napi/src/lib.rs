@@ -7,7 +7,7 @@ use napi::{Env, Error, Result, Status};
 use napi_derive::napi;
 use tuff_native_core::{
     BinaryPacket, CancelTargetType, Control, NativeRuntime, ProtocolError, RuntimeDescriptor,
-    StreamMessage, decode_control, encode_control, negotiate_version,
+    StreamMessage, decode_control, encode_control, format_error_reason, negotiate_version,
 };
 
 pub const ADAPTER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -38,6 +38,14 @@ impl NapiRuntimeAdapter {
 
     pub fn handshake(&self, env: &Env, encoded: String) -> Result<String> {
         self.ensure_cleanup(env)?;
+        // A disposed runtime cannot serve anything, and the adapter is a process-wide OnceLock
+        // with no reset path — so this state is terminal. Reporting a healthy server_hello here
+        // left every later invoke returning a well-formed ok=false response, which reads as a
+        // capability error rather than an unavailable carrier and never triggers the caller's
+        // fallback (#848). Failing the handshake is what marks the carrier unavailable.
+        if self.runtime.is_disposed() {
+            return Err(to_napi_error(ProtocolError::transport_disposed()));
+        }
         let hello = decode_control(&encoded).map_err(to_napi_error)?;
         let Control::ClientHello {
             protocol,
@@ -231,11 +239,21 @@ fn is_terminal(message: &StreamMessage) -> bool {
     )
 }
 
+/// Carries the whole `ProtocolError` across the boundary instead of flattening it to a string.
+///
+/// `napi::Status` is a fixed enum, so the protocol code cannot ride on `err.code` the way
+/// `QueueFull` does — the reason is the only channel with room for structure. `open_stream` alone
+/// returns `NATIVE_BUSY` (retryable), `DUPLICATE_REQUEST_ID` and `CAPABILITY_NOT_FOUND` (not),
+/// and all three used to arrive as `Error: <CODE>: <message>`, so JS could not tell "retry
+/// shortly" from "give up" without string-splitting and hardcoding a retryable list (#849).
+///
+/// The prefix is kept ahead of the JSON so a raw stack trace still reads as it did; `protocol.js`
+/// parses the envelope and never surfaces the native message itself.
 fn to_napi_error(error: ProtocolError) -> Error {
     let status = if error.code == "NATIVE_BACKPRESSURE_BROKEN" {
         Status::QueueFull
     } else {
         Status::GenericFailure
     };
-    Error::new(status, format!("{}: {}", error.code, error.message))
+    Error::new(status, format_error_reason(&error))
 }

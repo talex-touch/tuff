@@ -69,6 +69,9 @@ Negative `depth` moves in the opposite direction from positive `depth`.
 - `disabled=false` restarts listeners and RAF.
 - `TxFloatingElement` registers on mount, re-registers when `depth` changes, and unregisters on unmount.
 - If an element is used outside `TxFloating`, it renders but does not animate.
+- All parallax motion stops when the user requests `prefers-reduced-motion: reduce`.
+- An `IntersectionObserver` parks the RAF loop while the container is off-screen and resumes it on re-entry.
+- The container listens for window `scroll` and `resize` in the capture phase so the origin is re-measured after page scroll or viewport changes.
 - The implementation guards browser APIs with `hasWindow()` for SSR safety.
 
 ## API

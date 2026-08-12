@@ -20,6 +20,7 @@ import {
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { teardownPluginStorage } from '../plugin/runtime/plugin-storage-lifecycle'
+import { setPermissionModule } from './permission-module-ref'
 import { PermissionGuard } from './permission-guard'
 import { PermissionStore } from './permission-store'
 
@@ -31,6 +32,7 @@ const resolveKeyManager = (channel: unknown): unknown =>
 export { createProtectedRegister, registerProtectedChannels, withPermission } from './channel-guard'
 export type { ProtectedChannelDefinition, ProtectedChannelOptions } from './channel-guard'
 export { PermissionGuard } from './permission-guard'
+export { getPermissionModule, setPermissionModule } from './permission-module-ref'
 export type { ApiPermissionMapping, PermissionCheckResult } from './permission-guard'
 
 /**
@@ -406,15 +408,4 @@ export class PermissionModule extends BaseModule {
     await this.store.shutdown()
     permLog.info('Permission module destroyed')
   }
-}
-
-// Export singleton getter
-let permissionModule: PermissionModule | null = null
-
-export function getPermissionModule(): PermissionModule | null {
-  return permissionModule
-}
-
-export function setPermissionModule(module: PermissionModule): void {
-  permissionModule = module
 }

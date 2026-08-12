@@ -12,22 +12,6 @@ verified: true
 
 Use GroupBlock to organize settings, account options, and compact preference rows with a consistent icon, label, and control layout.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const notifications = ref(true)
-const language = ref<'en' | 'zh'>('en')
-const theme = ref<'light' | 'dark' | 'auto'>('auto')
-const profileName = ref('Talex')
-const displayName = ref('Talex')
-const timezone = ref('local')
-const autoUpdate = ref(true)
-const loading = ref(true)
-const locked = ref(false)
-const dummy = ref(false)
-function handleClick() {}
-</script>
-
 ## Basic Usage
 
 ### GroupBlock
@@ -461,7 +445,7 @@ code: |
 | `defaultIcon` | `TxIconSource \| string` | - | Icon shown when `active=false` or when no active icon is provided. |
 | `activeIcon` | `TxIconSource \| string` | - | Icon shown when `active=true`; falls back to `defaultIcon`. |
 | `iconSize` | `number` | `20` | Icon size in pixels. |
-| `active` | `boolean` | `false` | Switch the slot row into active visual/icon state. |
+| `active` | `boolean` | `false` | When `true`, swaps to `activeIcon` and passes `active` into the `icon`/`default` slot scope; it does not change the row's visual style. |
 | `disabled` | `boolean` | `false` | Apply disabled styling and block row click emits. |
 
 ### TxBlockSlot Events
@@ -561,7 +545,6 @@ code: |
 | Slot | Props | Description |
 |------|-------|-------------|
 | `tags` | - | Inline metadata forwarded to the row title area. |
-
 
 ## Exposed Methods
 

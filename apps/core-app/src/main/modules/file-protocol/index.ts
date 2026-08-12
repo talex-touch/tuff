@@ -12,8 +12,32 @@ import {
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 
-/** Deduplicate error logs -- only log each failing path once per session. */
+/**
+ * Deduplicate error logs -- only log each failing path once, up to a bound.
+ *
+ * Bounded because the inputs are not: a view rendering thumbnails over a churning result set --
+ * clipboard history whose temp files have been deleted, or a plugin emitting unique tfile URLs --
+ * contributes one retained string per distinct missing path, for the lifetime of a launcher
+ * process that is expected to run for days (#647).
+ *
+ * Insertion-ordered eviction rather than a true LRU: this only decides whether a warning repeats,
+ * so the cheapest bound that keeps recent paths quiet is the right one.
+ */
+const LOGGED_ERROR_PATH_LIMIT = 512
 const loggedErrorPaths = new Set<string>()
+
+/** Records a path and reports whether it is newly seen, evicting the oldest entry past the cap. */
+function shouldLogPathOnce(filePath: string): boolean {
+  if (loggedErrorPaths.has(filePath)) return false
+
+  if (loggedErrorPaths.size >= LOGGED_ERROR_PATH_LIMIT) {
+    const oldest = loggedErrorPaths.values().next().value
+    if (oldest !== undefined) loggedErrorPaths.delete(oldest)
+  }
+
+  loggedErrorPaths.add(filePath)
+  return true
+}
 const fileProtocolLog = createLogger('FileProtocolModule')
 
 /**
@@ -78,6 +102,9 @@ function extractAbsolutePath(rawUrl: string): string | null {
 }
 
 export const __test__ = {
+  shouldLogPathOnce,
+  loggedErrorPaths,
+  LOGGED_ERROR_PATH_LIMIT,
   extractAbsolutePath
 }
 
@@ -108,8 +135,7 @@ class FileProtocolModule extends BaseModule {
       const filePath = normalizeDarwinUsersPath(extractedPath)
       const normalizedPath = normalizeAbsolutePath(filePath)
       if (!normalizedPath || !isAllowedLocalFilePath(normalizedPath, allowedRoots)) {
-        if (!loggedErrorPaths.has(filePath)) {
-          loggedErrorPaths.add(filePath)
+        if (shouldLogPathOnce(filePath)) {
           fileProtocolLog.warn(`Blocked path: ${filePath}`)
         }
         return new Response('Forbidden', { status: 403 })
@@ -120,8 +146,7 @@ class FileProtocolModule extends BaseModule {
       try {
         return await net.fetch(fileUrl, { bypassCustomProtocolHandlers: true })
       } catch (error) {
-        if (!loggedErrorPaths.has(normalizedPath)) {
-          loggedErrorPaths.add(normalizedPath)
+        if (shouldLogPathOnce(normalizedPath)) {
           fileProtocolLog.error('tfile request error', {
             meta: {
               filePath: normalizedPath,
@@ -140,6 +165,7 @@ class FileProtocolModule extends BaseModule {
 
   onDestroy(): MaybePromise<void> {
     session.defaultSession.protocol.unhandle(FILE_SCHEMA)
+    loggedErrorPaths.clear()
   }
 }
 

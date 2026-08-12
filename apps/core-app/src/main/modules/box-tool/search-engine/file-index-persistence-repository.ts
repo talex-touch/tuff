@@ -5,6 +5,7 @@ import { withSqliteRetry } from '../../../db/sqlite-retry'
 import {
   normalizeScanProgressSourceId,
   resolveScanProgressSchemaShape,
+  SCAN_PROGRESS_UPSERT_CHUNK_ROWS,
   upsertSourceScopedScanProgress
 } from './scan-progress-schema'
 import { normalizeScanProgressUpsert } from './workers/search-index-worker-scan-progress'
@@ -280,21 +281,31 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       return normalizedUpsert.paths.length
     }
 
-    await withFileIndexPersistenceRetry(
-      () =>
-        this.db.run(sql`
-          INSERT INTO scan_progress (path, last_scanned)
-          VALUES ${sql.join(
-            normalizedUpsert.paths.map(
-              (entryPath) => sql`(${entryPath}, ${normalizedUpsert.lastScanned.getTime()})`
-            ),
-            sql`, `
-          )}
-          ON CONFLICT(path) DO UPDATE SET
-            last_scanned = excluded.last_scanned
-        `),
-      FILE_INDEX_PERSISTENCE_RETRY_LABELS.upsertScanProgress
-    )
+    // Chunked for the same reason as the source-scoped branch: normalizeScanProgressUpsert
+    // dedupes and validates but caps nothing, and two bound parameters per path hits
+    // SQLite's 32766-variable ceiling at 16384 paths (#671).
+    for (
+      let offset = 0;
+      offset < normalizedUpsert.paths.length;
+      offset += SCAN_PROGRESS_UPSERT_CHUNK_ROWS
+    ) {
+      const chunk = normalizedUpsert.paths.slice(offset, offset + SCAN_PROGRESS_UPSERT_CHUNK_ROWS)
+      await withFileIndexPersistenceRetry(
+        () =>
+          this.db.run(sql`
+            INSERT INTO scan_progress (path, last_scanned)
+            VALUES ${sql.join(
+              chunk.map(
+                (entryPath) => sql`(${entryPath}, ${normalizedUpsert.lastScanned.getTime()})`
+              ),
+              sql`, `
+            )}
+            ON CONFLICT(path) DO UPDATE SET
+              last_scanned = excluded.last_scanned
+          `),
+        FILE_INDEX_PERSISTENCE_RETRY_LABELS.upsertScanProgress
+      )
+    }
     return normalizedUpsert.paths.length
   }
 

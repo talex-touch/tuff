@@ -543,7 +543,7 @@ export type DeviceAuthStatus = 'pending' | 'approved' | 'cancelled' | 'rejected'
 export type DeviceAuthGrantType = 'short' | 'long'
 export type DeviceAuthRejectReason = 'ip_mismatch' | 'permission_denied' | 'rate_limited' | 'cooldown' | 'unknown'
 export type DeviceAuthBrowserState = 'unknown' | 'opened' | 'closed'
-export type DeviceAuthAuditAction = 'request' | 'approve' | 'reject' | 'cancel' | 'revoke' | 'trust' | 'untrust'
+export type DeviceAuthAuditAction = 'request' | 'approve' | 'reject' | 'cancel' | 'revoke' | 'trust' | 'untrust' | 'recover'
 export type DeviceAuthAuditStatus = 'success' | 'blocked' | 'failed'
 
 export interface DeviceAuthAuditRecord {
@@ -1190,7 +1190,7 @@ function normalizeDeviceAuthAuditAction(value: unknown): DeviceAuthAuditAction {
   if (typeof value !== 'string')
     return 'request'
   const normalized = value.trim().toLowerCase()
-  if (normalized === 'request' || normalized === 'approve' || normalized === 'reject' || normalized === 'cancel' || normalized === 'revoke' || normalized === 'trust' || normalized === 'untrust')
+  if (normalized === 'request' || normalized === 'approve' || normalized === 'reject' || normalized === 'cancel' || normalized === 'revoke' || normalized === 'trust' || normalized === 'untrust' || normalized === 'recover')
     return normalized
   return 'request'
 }
@@ -1373,6 +1373,63 @@ export async function listDeviceAuthAudits(
     LIMIT ?
   `).bind(...params, limit).all<Record<string, any>>()
   return (result.results ?? []).map(row => mapDeviceAuthAuditRow(row))
+}
+
+/** Failed recovery attempts tolerated per device, then per user, inside the window. */
+const RECOVERY_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const RECOVERY_RATE_LIMIT_MAX_BY_DEVICE = 5
+const RECOVERY_RATE_LIMIT_MAX_BY_USER = 10
+
+export interface RecoveryRateLimitDecision {
+  allowed: boolean
+  scope?: 'device' | 'user'
+  retryAfterMs?: number
+}
+
+/**
+ * Bounds guessing of a device recovery code.
+ *
+ * Nothing counted attempts before: the recovery route called recoverKeyrings on every
+ * request, so anyone holding an app token for the account could submit codes indefinitely,
+ * and the step-up in that route demands nothing when the device is already trusted or the
+ * user has no passkeys registered (#904).
+ *
+ * Counts only failures, so a legitimate recovery does not consume anyone's budget, and counts
+ * per device before per user, so one noisy device cannot lock the account out of every other
+ * device it owns.
+ */
+export async function evaluateRecoveryRateLimit(event: H3Event, payload: {
+  userId: string
+  deviceId?: string | null
+}): Promise<RecoveryRateLimitDecision> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const since = new Date(Date.now() - RECOVERY_RATE_LIMIT_WINDOW_MS).toISOString()
+
+  const checks: Array<{ scope: 'device' | 'user', limit: number, whereSql: string, params: Array<string | number | null> }> = []
+  if (payload.deviceId) {
+    checks.push({
+      scope: 'device',
+      limit: RECOVERY_RATE_LIMIT_MAX_BY_DEVICE,
+      whereSql: 'action = ? AND status = ? AND device_id = ? AND created_at >= ?',
+      params: ['recover', 'failed', payload.deviceId, since],
+    })
+  }
+  checks.push({
+    scope: 'user',
+    limit: RECOVERY_RATE_LIMIT_MAX_BY_USER,
+    whereSql: 'action = ? AND status = ? AND user_id = ? AND created_at >= ?',
+    params: ['recover', 'failed', payload.userId, since],
+  })
+
+  for (const check of checks) {
+    const count = await countDeviceAuthAudits(db, check.whereSql, check.params)
+    if (count >= check.limit) {
+      return { allowed: false, scope: check.scope, retryAfterMs: RECOVERY_RATE_LIMIT_WINDOW_MS }
+    }
+  }
+
+  return { allowed: true }
 }
 
 export async function evaluateDeviceAuthRateLimit(event: H3Event, payload: {
@@ -2758,6 +2815,79 @@ export async function setDeviceTrusted(event: H3Event, userId: string, deviceId:
     WHERE id = ? AND user_id = ? AND revoked_at IS NULL
   `).bind(trusted ? new Date().toISOString() : null, deviceId, userId).run()
   return getDevice(event, userId, deviceId)
+}
+
+/** Failed password attempts tolerated per account, then per IP, inside the window. */
+const PASSWORD_SIGNIN_WINDOW_MS = 15 * 60 * 1000
+const PASSWORD_SIGNIN_MAX_BY_USER = 10
+const PASSWORD_SIGNIN_MAX_BY_IP = 30
+
+export interface PasswordSignInRateLimitDecision {
+  allowed: boolean
+  scope?: 'user' | 'ip'
+  retryAfterMs?: number
+}
+
+async function countRecentLoginFailures(
+  db: D1Database,
+  whereSql: string,
+  params: Array<string | number | null>,
+): Promise<number> {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM ${LOGIN_HISTORY_TABLE}
+    WHERE success = 0 AND ${whereSql}
+  `).bind(...params).first<{ total?: number | string }>()
+  return toSafeInteger(row?.total)
+}
+
+/**
+ * Bounds password guessing.
+ *
+ * Every failure was already written to the login history and never read back, so the attempt
+ * budget was unbounded: a loop against the credentials callback with one victim email and a
+ * password list ran until it succeeded (#897). PBKDF2 at 210k iterations raises the cost of
+ * each guess; it does not limit how many there are.
+ *
+ * Counted per account and per IP because neither alone is enough. A userId is only known when
+ * the email matches an active account, so per-user counting misses guessing against addresses
+ * that do not exist — and per-IP counting alone would let a distributed attempt through while
+ * one shared NAT locked out innocent users. Only failures count, so signing in successfully
+ * never spends anyone's budget.
+ */
+export async function evaluatePasswordSignInRateLimit(event: H3Event, payload: {
+  userId?: string | null
+}): Promise<PasswordSignInRateLimitDecision> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const since = new Date(Date.now() - PASSWORD_SIGNIN_WINDOW_MS).toISOString()
+  const ip = getRequestIp(event)
+
+  const checks: Array<{ scope: 'user' | 'ip', limit: number, whereSql: string, params: Array<string | number | null> }> = []
+  if (payload.userId) {
+    checks.push({
+      scope: 'user',
+      limit: PASSWORD_SIGNIN_MAX_BY_USER,
+      whereSql: 'user_id = ? AND created_at >= ?',
+      params: [payload.userId, since],
+    })
+  }
+  if (ip) {
+    checks.push({
+      scope: 'ip',
+      limit: PASSWORD_SIGNIN_MAX_BY_IP,
+      whereSql: 'ip = ? AND created_at >= ?',
+      params: [ip, since],
+    })
+  }
+
+  for (const check of checks) {
+    const count = await countRecentLoginFailures(db, check.whereSql, check.params)
+    if (count >= check.limit)
+      return { allowed: false, scope: check.scope, retryAfterMs: PASSWORD_SIGNIN_WINDOW_MS }
+  }
+
+  return { allowed: true }
 }
 
 export async function logLoginAttempt(event: H3Event, payload: {

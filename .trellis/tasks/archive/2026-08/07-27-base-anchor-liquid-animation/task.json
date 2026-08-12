@@ -1,0 +1,30 @@
+{
+  "id": "base-anchor-liquid-animation",
+  "name": "base-anchor-liquid-animation",
+  "title": "BaseAnchor liquid drop animation",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-08-11",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "None. AC1-AC15 are ticked against measured evidence recorded in prd.md.",
+    "blocker": "None.",
+    "evidence": "tuffex vitest packages/components/src/base-anchor 53 passed; nexus docs-coverage and demo-client-boundary 22 passed; tuffex lint and typecheck clean; nexus typecheck 0 errors; en/zh docs structurally identical. Full table in prd.md."
+  }
+}

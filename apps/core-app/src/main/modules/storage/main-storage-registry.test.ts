@@ -1,7 +1,11 @@
 import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { describe, expect, it } from 'vitest'
-import { resolveMainStorageValue } from './main-storage-registry'
+import {
+  omitMainOwnedAuthSettings,
+  preserveMainOwnedAuthSettings,
+  resolveMainStorageValue
+} from './main-storage-registry'
 
 describe('main storage app settings normalization', () => {
   it('uses enabled canonical defaults for the three low-frequency settings', () => {
@@ -36,5 +40,50 @@ describe('main storage app settings normalization', () => {
     expect(normalized.setup.hideDock).toBe(false)
     expect(normalized.window.startSilent).toBe(false)
     expect(normalized.omniPanel.autoMountFirstFeatureOnPluginInstall).toBe(false)
+  })
+
+  it('removes legacy auth preference overrides while retaining the main-owned marker', () => {
+    const normalized = resolveMainStorageValue(StorageList.APP_SETTING, {
+      auth: {
+        deviceId: 'device-1',
+        requiresReauthenticationOnNextStartup: true,
+        useSecureStorage: false,
+        secureStorageUserOverridden: true,
+        secureStorageReminderShown: true,
+        secureStorageUnavailable: true
+      }
+    })
+
+    expect(normalized.auth).toEqual({
+      deviceId: 'device-1',
+      requiresReauthenticationOnNextStartup: true
+    })
+    expect(appSettingOriginData.auth).not.toHaveProperty('requiresReauthenticationOnNextStartup')
+  })
+
+  it('omits the marker from renderer and sync projections and preserves it on external writes', () => {
+    const current = {
+      auth: {
+        deviceId: 'device-1',
+        requiresReauthenticationOnNextStartup: true
+      }
+    }
+    const projection = omitMainOwnedAuthSettings(current) as { auth?: Record<string, unknown> }
+    const externalWrite = preserveMainOwnedAuthSettings(
+      {
+        auth: {
+          deviceId: 'device-2',
+          requiresReauthenticationOnNextStartup: false,
+          useSecureStorage: false
+        }
+      },
+      current
+    ) as { auth?: Record<string, unknown> }
+
+    expect(projection.auth).toEqual({ deviceId: 'device-1' })
+    expect(externalWrite.auth).toEqual({
+      deviceId: 'device-2',
+      requiresReauthenticationOnNextStartup: true
+    })
   })
 })

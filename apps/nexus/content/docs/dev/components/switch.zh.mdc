@@ -11,6 +11,8 @@ verified: true
 
 # Switch 开关
 
+`TxSwitch` 用于即时生效的二元状态切换（开/关、启用/停用）。需要「先勾选、后提交」的表单语义时用 `TxCheckbox`。
+
 ## 基础用法
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -216,8 +218,8 @@ code: |
 
 ## 交互契约
 
-- 根节点渲染 `role="switch"`、`aria-checked`、`aria-disabled`，启用时 `tabindex="0"`。
-- `disabled=true` 时设置 `tabindex="-1"`，添加 `is-disabled`，并阻止点击、Enter、Space 触发事件。
+- 根节点是原生 `<button>`，渲染 `role="switch"`、`aria-checked`、`aria-disabled`；不设置 `tabindex`——可聚焦性由按钮元素自身提供。
+- `disabled=true` 时设置原生 `disabled`（因而移出 Tab 序列）、添加 `is-disabled`，并阻止点击、Enter、Space 触发事件。
 - 启用切换会同时触发 `update:modelValue` 与 `change`；组件不会在宿主未处理 `v-model` 更新时自行修改外部状态。
 - `size="small"` 与 `size="large"` 会添加尺寸 modifier；`size="default"` 只保留基础 class。
 
@@ -284,8 +286,8 @@ code: |
 ## 审阅说明 / Review Notes
 
 - **Model contract:** `TxSwitch` 由 `modelValue` 控制。用户交互会同时派发 `update:modelValue` 与 `change`，参数为下一个 boolean；视觉状态在父级回写新 prop 后更新。
-- **键盘契约:** 启用状态响应点击、Enter 与 Space。禁用状态设置 `tabindex="-1"`，保持 `aria-disabled="true"`，且不派发事件。
-- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击派发、禁用阻断，以及禁用时的 tabindex/aria 状态。
+- **键盘契约:** 启用状态响应点击、Enter 与 Space（原生按钮语义）。禁用状态由原生 `disabled` 移出 Tab 序列，保持 `aria-disabled="true"`，且不派发事件。
+- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击派发、禁用阻断，并断言两种状态下均不渲染 `tabindex`。
 
 ## Source
 

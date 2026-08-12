@@ -540,7 +540,7 @@ export function createPluginIntelligenceHostService(
     fail(code)
   }
 
-  return Object.freeze({
+  return Object.freeze<PluginIntelligenceHostService>({
     invoke: async (capabilityId, payload, options, signal, caller) => {
       assertCallBoundary(capabilityId, signal, caller)
       const projectedPayload =

@@ -19,7 +19,6 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { useAuth } from '~/modules/auth/useAuth'
-import { appSetting } from '~/modules/storage/app-storage'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -39,7 +38,7 @@ const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const authBaseUrl = getAuthBaseUrl()
 const { isLoggedIn } = useAuth()
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const showAdvancedSettings = computed(() => false)
 const anonymousEffective = computed(() => (isLoggedIn.value ? anonymous.value : false))
 const dataUploadTooltip = computed(() =>
   t(

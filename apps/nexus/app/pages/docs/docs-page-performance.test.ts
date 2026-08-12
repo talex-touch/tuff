@@ -184,9 +184,21 @@ describe('docs page performance boundaries', () => {
     expect.soft(nuxtConfig).toContain("'@sidebase/nuxt-auth'")
     expect.soft(nuxtConfig).toContain("baseURL: '/api/auth'")
     expect.soft(nuxtConfig).toContain("type: 'authjs'")
-    expect.soft(nuxtConfig).toContain("const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')")
+    // Matched by shape rather than by the exact line: what this guards is that the alias still
+    // targets next-auth's internal core/index.js, not how the path is derived. It used to pin the
+    // literal `resolve(currentDir, 'node_modules/...')`, which made #597 — locating the package
+    // through the resolver instead of assuming shamefully-hoist — read as a regression.
+    expect.soft(nuxtConfig).toMatch(
+      /const nextAuthCoreEntry = resolve\([\s\S]*?next-auth[\s\S]*?core\/index\.js/,
+    )
     expect.soft(nuxtConfig).toMatch(/alias: \{[\s\S]*'next-auth\/core': nextAuthCoreEntry/)
-    expect.soft(packageJson).toContain('"#auth": "./node_modules/@sidebase/nuxt-auth/dist/runtime/server/services/index.js"')
+    // The #auth alias comes from @sidebase/nuxt-auth itself — its module.mjs sets
+    // nitroConfig.alias['#auth'] — so package.json no longer duplicates it through a hard-coded
+    // node_modules path (#598). Two things still have to hold, and both are stronger than the
+    // literal this replaces: the server route reaches auth through the alias, and no local
+    // imports map re-pins the package's dist internals.
+    expect.soft(authApi).toContain("from '#auth'")
+    expect.soft(packageJson).not.toContain('@sidebase/nuxt-auth/dist/runtime')
     expect.soft(authApi).toContain('const createRequestAuthEvent = () => createAuthEvent()')
     expect.soft(authApi).toContain('let cachedAuthHandler')
     expect.soft(authApi).toContain('function getCachedAuthHandler(event: H3Event)')
@@ -720,7 +732,9 @@ describe('docs page performance boundaries', () => {
     expect.soft(docsPageClientCache).toContain('export function readCachedDocsFullBody(cacheKey: string)')
     expect.soft(docsPageClientCache).toContain('export function hasCachedDocsFullBody(cacheKey: string)')
     expect.soft(docsPageClientCache).toContain('export function cacheDocsFullBody(value: DocsPageRecord)')
-    expect.soft(docsPageClientCache).toMatch(/return `doc-full:\$\{normalizeDocsPagePath\(path\)\}:\$\{locale\}`/)
+    // canonicalDocsPageIdentity, not the raw path: a directory route and its index document
+    // must land on one cache entry, or the same body is fetched and stored twice.
+    expect.soft(docsPageClientCache).toMatch(/return `doc-full:\$\{canonicalDocsPageIdentity\(path\)\}:\$\{locale\}`/)
     expect.soft(docsPageClientCache).toContain('while (docsFullBodyCache.size > DOCS_FULL_BODY_CACHE_LIMIT)')
     expect.soft(page).toMatch(/const fullDocCacheKey = computed\(\(\) => resolveDocsFullBodyCacheKey\(docPath\.value, docsLocale\.value\)\)/)
     // The page owns its document locally: Nuxt seeds a newly keyed asyncData entry

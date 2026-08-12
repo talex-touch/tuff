@@ -22,8 +22,11 @@ import type { BottomDialogProps, DialogButton } from './types'
  * @component
  */
 import { computed, onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { TxButton } from '../../button'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxBottomDialog',
@@ -51,7 +54,7 @@ interface ButtonState {
 
 const wholeDom = ref<HTMLElement | null>(null)
 const btnArray = ref<Array<{ value: ButtonState }>>([])
-const baseZIndex = ref(getZIndex())
+const baseZIndex = ref(zIndexAllocator.get())
 const zIndex = computed(() => baseZIndex.value + (props.index ?? 0))
 const titleId = useId()
 const messageId = useId()
@@ -159,7 +162,7 @@ function scrollListener(): void {
 }
 
 onMounted(() => {
-  baseZIndex.value = nextZIndex()
+  baseZIndex.value = zIndexAllocator.next()
   previouslyFocusedElement = document.activeElement as HTMLElement
   if (wholeDom.value) {
     wholeDom.value.focus()
