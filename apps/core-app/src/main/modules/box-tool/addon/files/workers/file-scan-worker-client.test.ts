@@ -268,3 +268,63 @@ describe('FileScanWorkerClient idle shutdown', () => {
     expect(worker.terminateCalls).toBe(1)
   })
 })
+
+describe('FileScanWorkerClient batch backpressure', () => {
+  function fileAt(path: string): ScannedFileInfo {
+    return {
+      path,
+      name: path.split('/').pop() ?? path,
+      extension: '',
+      size: 0,
+      ctime: new Date(0),
+      mtime: new Date(0)
+    }
+  }
+
+  function acksIn(messages: readonly unknown[]): number {
+    return messages.filter((message) => messageTypeOf(message) === 'batchAck').length
+  }
+
+  it('acknowledges a batch only after the consumer has finished with it', async () => {
+    // The worker registers an ack waiter, posts one batch, and awaits that ack before producing
+    // the next -- so exactly one batch is ever in flight, whatever the directory's size. That
+    // bound is only real if the client acks *after* yielding. Acking first would let the worker
+    // run ahead of the consumer and the queue would grow with the directory again, which is the
+    // shape #480 is about, and nothing here would fail.
+    const client = new FileScanWorkerClient()
+    const acksSeenWhileConsuming: number[] = []
+    const consumed: string[] = []
+
+    const run = (async () => {
+      for await (const batch of client.scanBatches(['/tmp'])) {
+        // The generator is suspended at its `yield` for the whole of this block.
+        acksSeenWhileConsuming.push(acksIn(workerMock.workers.at(-1)!.messages))
+        consumed.push(...batch.map((file) => file.path))
+        // A tick, so an ack posted eagerly would have landed before the next assertion.
+        await Promise.resolve()
+      }
+    })()
+
+    await Promise.resolve()
+    const worker = workerMock.workers.at(-1)!
+    const taskId = taskIdOf(worker.messages[0])
+
+    for (let sequence = 0; sequence < 3; sequence += 1) {
+      worker.emit('message', {
+        type: 'batch',
+        taskId,
+        sequence,
+        batch: [fileAt(`/tmp/${String(sequence)}`)]
+      })
+      await Promise.resolve()
+    }
+    worker.emit('message', { type: 'done', taskId, scannedCount: 3 })
+    await run
+
+    expect(consumed).toEqual(['/tmp/0', '/tmp/1', '/tmp/2'])
+    // Nth batch is consumed with N acks behind it, never N+1: the ack for the batch in hand has
+    // not been sent yet.
+    expect(acksSeenWhileConsuming).toEqual([0, 1, 2])
+    expect(acksIn(worker.messages)).toBe(3)
+  })
+})
