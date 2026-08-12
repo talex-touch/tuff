@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { inferCoreArtifactIdentity } from './lib/release-artifacts.mjs'
 
 /**
  * The macOS release contract in electron-builder.yml (#594, #786).
@@ -79,6 +80,33 @@ describe('macOS release targets', () => {
     // interpolate it away and the assertion would pass against any artifactName at all.
     // eslint-disable-next-line no-template-curly-in-string
     expect(match[1]).toContain('${arch}')
+  })
+
+  it('produces names the release manifest can identify', () => {
+    // The substring assertion above is not enough on its own. `${productName}-${version}-${arch}`
+    // satisfies it and still yields `Tuff-2.4.14-arm64.zip`, which inferCoreArtifactIdentity
+    // cannot place: it recognises a mac artifact by `macos`/`darwin` in the name or a `.dmg` /
+    // `.app.zip` suffix, and that name has none of them. isCorePackageFileName still returns true,
+    // so it reaches manifest validation as an artifact whose platform cannot be inferred and is
+    // rejected there -- after the release has been built. Asserting through the real inference
+    // closes the gap between "the template looks right" and "the output is usable".
+    const template = mac.match(/artifactName:\s*(.+)/)[1].trim()
+    for (const arch of ['arm64', 'x64']) {
+      for (const ext of ['dmg', 'zip']) {
+        /* eslint-disable no-template-curly-in-string -- electron-builder's placeholder syntax,
+           matched literally; backticks here would interpolate them away. */
+        const name = template
+          .replace('${productName}', 'Tuff')
+          .replace('${version}', '2.4.14')
+          .replace('${arch}', arch)
+          .replace('${ext}', ext)
+        /* eslint-enable no-template-curly-in-string */
+        expect(inferCoreArtifactIdentity(name), `${name} is not identifiable`).toEqual({
+          platform: 'darwin',
+          arch,
+        })
+      }
+    }
   })
 
   it('notarizes', () => {
