@@ -840,6 +840,64 @@ describe('SearchEngineCore facade contracts', () => {
     expect(search).toHaveBeenCalledTimes(2)
   })
 
+  /**
+   * The first end-to-end read of the cache counters (#346).
+   *
+   * `search-cache-telemetry.test.ts` covers the counter object thoroughly, and
+   * `getSearchCacheTelemetry` had exactly one reference in the repository -- its own declaration.
+   * So every `recordHit` / `recordMiss` / `recordInvalidation` call site in search-core was
+   * unverified: the counters incremented into a snapshot nobody obtained, which reads the same as
+   * counters that were never wired at all.
+   *
+   * The reason distribution is the part #346 turns on. A miss attributed to `absent` says "nobody
+   * repeated this query", which argues for removing the cache; one attributed to
+   * `revision-mismatch` says "the index denied a repeat that would otherwise have hit", which
+   * argues the opposite. This records which reason an index commit actually produces.
+   */
+  it('attributes a repeat denied by an index commit, and pins which reason it used', async () => {
+    const search = vi.fn(
+      async () =>
+        ({ items: [buildItem('telemetry-item', 'telemetry-provider', 'Telemetry')] }) as never
+    )
+    const query = { inputs: [], text: 'cache telemetry contract' } as TuffQuery
+    core.registerProvider(buildProvider('telemetry-provider', search) as never)
+    core.activateProviders([{ id: 'telemetry-provider' }] as IProviderActivate[])
+
+    const run = async (id: string): Promise<void> => {
+      const session = core.startSearch(query, { caller: { kind: 'core-box', id } })
+      await session.result
+      await session.completed
+    }
+
+    await run('telemetry-cold')
+    await run('telemetry-warm')
+    searchIndexCommitHub.markCommitted(['telemetry-provider'])
+    await run('telemetry-after-commit')
+
+    const snapshot = core.getSearchCacheTelemetry()
+
+    // The counters reach the snapshot at all: three lookups, and the middle one served.
+    expect(snapshot.lookups).toBe(3)
+    expect(snapshot.hits).toBe(1)
+    expect(snapshot.hitRate).toBeCloseTo(1 / 3, 5)
+
+    // The commit is counted as an invalidation, by entries dropped rather than by calls.
+    expect(snapshot.invalidations['index-commit']).toBeGreaterThan(0)
+
+    /*
+     * And this is the finding. `revision-mismatch` is unreachable from here: `markCommitted` bumps
+     * the revision and notifies listeners synchronously, and this facade's listener clears the
+     * whole cache before returning. By the time any lookup compares revisions the entry is already
+     * gone, so the miss is `absent`.
+     *
+     * That matters for the report #346 asks for. A repeat denied by a commit is filed under the
+     * same reason as a query nobody repeated, so the distribution understates the cache's value
+     * and cannot carry the keep/remove decision as it stands.
+     */
+    expect(snapshot.misses['revision-mismatch']).toBe(0)
+    expect(snapshot.misses.absent).toBe(2)
+  })
+
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
     core.registerProvider({
