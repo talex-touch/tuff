@@ -1295,7 +1295,7 @@ export function createPluginWorkspaceScriptCapabilities(
     return record
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'process.workspace-scripts',
     permission: 'fs.read',
     timeoutMs: PLUGIN_WORKSPACE_SCRIPT_TIMEOUT_MS,

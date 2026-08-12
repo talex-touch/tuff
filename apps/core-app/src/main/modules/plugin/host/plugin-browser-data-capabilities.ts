@@ -1418,7 +1418,7 @@ export function createPluginBrowserDataCapabilities(
     }
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'browser-data.scan',
     permission: 'fs.read',
     timeoutMs: PLUGIN_BROWSER_DATA_TIMEOUT_MS,

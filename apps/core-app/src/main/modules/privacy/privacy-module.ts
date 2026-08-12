@@ -216,7 +216,7 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
 }
 
 function defaultDependencies(): PrivacyLifecycleModuleDependencies {
-  return Object.freeze({
+  return Object.freeze<PrivacyLifecycleModuleDependencies>({
     resolveTransport: (context) =>
       resolveMainRuntime(context, 'PrivacyLifecycleModule.onInit')
         .transport as unknown as PrivacyTransportAdapter,

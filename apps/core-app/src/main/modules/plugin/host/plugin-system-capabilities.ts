@@ -662,7 +662,7 @@ export function createPluginSystemActionCapabilities(
     return Number(identity.hostGeneration)
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.invoke',
     timeoutMs: PLUGIN_SYSTEM_ACTION_TIMEOUT_MS,
     maxConcurrency: 1,

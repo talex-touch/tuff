@@ -27,7 +27,7 @@ export interface PrivacyRetentionPolicyStore {
 export function createPrivacyRetentionPolicyStore(
   adapter: PrivacyRetentionPolicyStorageAdapter
 ): PrivacyRetentionPolicyStore {
-  return Object.freeze({
+  return Object.freeze<PrivacyRetentionPolicyStore>({
     async load() {
       return normalizePrivacyRetentionPolicy(await adapter.read())
     },

@@ -930,7 +930,7 @@ export function createPluginWindowPresetCapabilities(
     return parseWindows(stdout)
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.window-presets',
     permission: 'system.shell',
     timeoutMs: PLUGIN_WINDOW_PRESET_TIMEOUT_MS,
