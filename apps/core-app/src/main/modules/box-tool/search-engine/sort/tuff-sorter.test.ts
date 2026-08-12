@@ -1,6 +1,6 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
-import { tuffSorter } from './tuff-sorter'
+import { calculateSortScore, tuffSorter } from './tuff-sorter'
 
 type UsageStats = NonNullable<NonNullable<TuffItem['meta']>['usageStats']>
 
@@ -516,5 +516,60 @@ describe('tuff-sorter ranking strategy', () => {
 
     const sorted = tuffSorter.sort([first, second], { text: 'clip' } as TuffQuery, signal)
     expect(sorted[0]?.id).toBe('feature-first')
+  })
+})
+
+describe('manifest priority is a bias, not an override', () => {
+  const signal = new AbortController().signal
+
+  function priorityItem(id: string, priority: number): TuffItem {
+    const item = createItem({
+      id,
+      kind: 'feature',
+      title: 'Unrelated Feature',
+      sourceId: 'plugin-provider'
+    })
+    return { ...item, meta: { ...item.meta, priority } }
+  }
+
+  async function rank(items: TuffItem[], text: string): Promise<string[]> {
+    const query: TuffQuery = { text }
+    const sorted = await tuffSorter.sort(items, query, signal)
+    return sorted.map((entry) => entry.id)
+  }
+
+  it('一个声明超大 priority 的 feature 不能压过精确标题匹配的 app', async () => {
+    const exactApp = createItem({
+      id: 'app-safari',
+      kind: 'app',
+      title: 'Safari',
+      sourceId: 'app-provider',
+      searchTokens: ['safari'],
+      matchResult: [{ start: 0, end: 6 }]
+    })
+
+    const ranked = await rank([priorityItem('greedy-feature', 100_000), exactApp], 'safari')
+
+    expect(ranked[0]).toBe('app-safari')
+  })
+
+  it('钳制之后 priority 仍然能区分同类结果的先后', async () => {
+    const ranked = await rank([priorityItem('low', 1), priorityItem('high', 200)], 'unrelated')
+
+    expect(ranked).toEqual(['high', 'low'])
+  })
+
+  it('钳制在上限处饱和:超出上限的 priority 得到与上限完全相同的分数', () => {
+    const atCap = calculateSortScore(priorityItem('at-cap', 500), 'unrelated')
+    const overCap = calculateSortScore(priorityItem('way-over-cap', 9_999_999), 'unrelated')
+
+    expect(overCap).toBe(atCap)
+  })
+
+  it('负 priority 不会把分数拖到上限之外', () => {
+    const zero = calculateSortScore(priorityItem('zero', 0), 'unrelated')
+    const negative = calculateSortScore(priorityItem('negative', -9_999_999), 'unrelated')
+
+    expect(negative).toBe(zero)
   })
 })

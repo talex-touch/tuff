@@ -2,9 +2,6 @@ name: Utils Package CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - master
     paths:
       - "packages/utils/**"
       - ".github/workflows/package-utils-ci.yml"

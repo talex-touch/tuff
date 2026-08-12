@@ -4,11 +4,12 @@ import type {
   AnalyticsWindowType
 } from '@talex-touch/utils/analytics'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { AuxDbResolver } from '../../../db/db-write'
 import { and, asc, eq, gte, lt, lte } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleAuxWrite } from '../../../db/db-write'
 import { isStartupDegradeActive } from '../../../db/startup-degrade'
 import * as schema from '../../../db/schema'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import {
@@ -55,11 +56,18 @@ interface QueuePressureStats {
 interface DbStoreDeps {
   auxDb: LibSQLDatabase<typeof schema>
   coreDb?: LibSQLDatabase<typeof schema>
+  /**
+   * Live aux-DB resolution (enqueue-time). Production passes the
+   * databaseModule-backed resolver so a store constructed before the
+   * background aux init cannot pin the primary fallback forever; tests that
+   * inject a fixed fake `auxDb` can omit it.
+   */
+  resolveAuxDb?: AuxDbResolver
 }
 
 export class DbStore {
-  private db: LibSQLDatabase<typeof schema>
-  private fallbackDb: LibSQLDatabase<typeof schema> | null
+  private readonly resolveAuxDb: AuxDbResolver
+  private readonly coreDbDep: LibSQLDatabase<typeof schema> | null
   private lastSnapshotPersistAt = new Map<AnalyticsWindowType, number>()
   private lastQueuePressureLogAt = 0
   private queuePressureStats: QueuePressureStats = {
@@ -76,9 +84,20 @@ export class DbStore {
   private lastQueuePressureError: string | null = null
   private snapshotPersistSuspendUntil = 0
   private snapshotPersistFailureStreak = 0
-  constructor({ auxDb, coreDb }: DbStoreDeps) {
-    this.db = auxDb
-    this.fallbackDb = coreDb && coreDb !== auxDb ? coreDb : null
+  constructor({ auxDb, coreDb, resolveAuxDb }: DbStoreDeps) {
+    this.resolveAuxDb = resolveAuxDb ?? (() => ({ db: auxDb, isAux: true }))
+    this.coreDbDep = coreDb ?? null
+  }
+
+  // Both handles resolve live so reads stay coherent with the enqueue-time
+  // write target while the aux DB finishes its background init.
+  private get db(): LibSQLDatabase<typeof schema> {
+    return this.resolveAuxDb().db
+  }
+
+  private get fallbackDb(): LibSQLDatabase<typeof schema> | null {
+    if (!this.coreDbDep) return null
+    return this.coreDbDep !== this.resolveAuxDb().db ? this.coreDbDep : null
   }
 
   private shouldLogQueuePressure(now: number): boolean {
@@ -236,16 +255,14 @@ export class DbStore {
       bytes: totalBytes
     })
     try {
-      await dbWriteScheduler.schedule(
+      await scheduleAuxWrite(
         'analytics.snapshots',
-        () =>
-          withSqliteRetry(() => this.db.insert(schema.analyticsSnapshots).values(rows), {
-            label: 'analytics.snapshots'
-          }),
+        (db) => db.insert(schema.analyticsSnapshots).values(rows),
         {
           priority: 'best_effort',
           dropPolicy: 'drop',
-          maxQueueWaitMs: 10_000
+          maxQueueWaitMs: 10_000,
+          resolveDb: this.resolveAuxDb
         }
       )
       this.snapshotPersistFailureStreak = 0
@@ -315,28 +332,25 @@ export class DbStore {
       return
     }
 
-    await dbWriteScheduler.schedule(
+    await scheduleAuxWrite(
       'analytics.cleanup',
-      () =>
-        withSqliteRetry(
-          async () => {
-            for (const clause of clauses) {
-              await this.db
-                .delete(schema.analyticsSnapshots)
-                .where(
-                  and(
-                    eq(schema.analyticsSnapshots.windowType, clause.windowType),
-                    lt(schema.analyticsSnapshots.timestamp, clause.cutoff)
-                  )
-                )
-            }
-          },
-          { label: 'analytics.cleanup' }
-        ),
+      async (db) => {
+        for (const clause of clauses) {
+          await db
+            .delete(schema.analyticsSnapshots)
+            .where(
+              and(
+                eq(schema.analyticsSnapshots.windowType, clause.windowType),
+                lt(schema.analyticsSnapshots.timestamp, clause.cutoff)
+              )
+            )
+        }
+      },
       {
         priority: 'best_effort',
         dropPolicy: 'drop',
-        maxQueueWaitMs: 10_000
+        maxQueueWaitMs: 10_000,
+        resolveDb: this.resolveAuxDb
       }
     )
   }
@@ -370,26 +384,23 @@ export class DbStore {
         this.recordQueuePressure('pluginSkipped', { queued: queueStats.queued })
         return
       }
-      await dbWriteScheduler.schedule(
+      await scheduleAuxWrite(
         'analytics.plugin',
-        () =>
-          withSqliteRetry(
-            () =>
-              this.db.insert(schema.pluginAnalytics).values({
-                pluginName,
-                pluginVersion,
-                featureId,
-                eventType,
-                count,
-                metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
-                timestamp
-              }),
-            { label: 'analytics.plugin' }
-          ),
+        (db) =>
+          db.insert(schema.pluginAnalytics).values({
+            pluginName,
+            pluginVersion,
+            featureId,
+            eventType,
+            count,
+            metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+            timestamp
+          }),
         {
           priority: 'best_effort',
           dropPolicy: 'drop',
-          maxQueueWaitMs: 10_000
+          maxQueueWaitMs: 10_000,
+          resolveDb: this.resolveAuxDb
         }
       )
     } catch (error) {

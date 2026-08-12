@@ -30,5 +30,9 @@
   "parent": "07-28-rust-native-protocol-screenshot",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Start the children in its delivery map, or fold the map into whichever child now leads. The research it produced is done.",
+    "blocker": "None recorded. This is a parent whose scope is carried by child tasks.",
+    "evidence": "research/pixpin-scrollsnap-feature-audit.md is the produced artefact - a feature audit of the reference implementation. The prd carries a Confirmed Facts section and a Child Delivery Map rather than implementation criteria."
+  }
 }

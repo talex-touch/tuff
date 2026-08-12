@@ -306,15 +306,29 @@ export class IntelligenceMcpRegistry {
           })
 
     let session: ConnectedMcpSession | null = null
+    // A close can arrive while connect() is still awaiting, before there is a session object to
+    // mark. Recording it is what stops the object built below from being returned and cached
+    // with closed: false, leaving the registry serving a dead transport (#777).
+    let closedBeforeSessionExisted = false
     client.onerror = (error) => {
       mcpLog.warn(`MCP profile ${profile.id} transport error`, { error })
     }
     client.onclose = () => {
-      if (session) this.removeSession(profile.id, session)
+      if (session) {
+        this.removeSession(profile.id, session)
+      } else {
+        closedBeforeSessionExisted = true
+      }
       mcpLog.info(`MCP profile ${profile.id} disconnected`)
     }
 
     await client.connect(transport)
+    if (closedBeforeSessionExisted) {
+      // Nothing to remove -- this session was never added to this.sessions. connectProfile
+      // propagates the throw and clears its pending entry in the finally, so the next caller
+      // starts a fresh connect rather than awaiting a dead one.
+      throw new Error(`MCP profile ${profile.id} closed during connect`)
+    }
     session = {
       client,
       transport,

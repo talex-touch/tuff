@@ -37,16 +37,19 @@ function createMemory() {
 }
 
 function createMockBucket() {
-  const objects = new Map<string, { data: Buffer, contentType: string }>()
+  const objects = new Map<string, { data: Buffer, contentType: string, customMetadata?: Record<string, string> }>()
 
   return {
-    put: async (key: string, data: ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string } }) => {
+    // customMetadata is modelled because that is where ownership lives on R2 (#898). A mock that
+    // dropped it would let the round-trip test pass without the real backend ever carrying one.
+    put: async (key: string, data: ArrayBuffer | Uint8Array, options?: { httpMetadata?: { contentType?: string }, customMetadata?: Record<string, string> }) => {
       const buffer = data instanceof ArrayBuffer
         ? Buffer.from(data)
         : Buffer.from(data.buffer, data.byteOffset, data.byteLength)
       objects.set(key, {
         data: buffer,
         contentType: options?.httpMetadata?.contentType || 'application/octet-stream',
+        customMetadata: options?.customMetadata,
       })
     },
     get: async (key: string) => {
@@ -58,6 +61,7 @@ function createMockBucket() {
         httpMetadata: {
           contentType: object.contentType,
         },
+        customMetadata: object.customMetadata,
         arrayBuffer: async () => object.data.buffer.slice(
           object.data.byteOffset,
           object.data.byteOffset + object.data.byteLength,
@@ -91,7 +95,9 @@ function createExternalStorage(channel: 's3' | 'oss', fetchImpl: typeof fetch): 
 }
 
 function createMockExternalFetch() {
-  const objects = new Map<string, { data: Buffer, contentType: string }>()
+  // ownerId is modelled because that is where ownership lives on S3/OSS (#1644). A mock that
+  // dropped it would let the round-trip tests pass while the real backend carried nothing.
+  const objects = new Map<string, { data: Buffer, contentType: string, ownerId?: string }>()
   const requests: Array<{ method: string, url: string, authorization: string | null }> = []
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -110,6 +116,8 @@ function createMockExternalFetch() {
       objects.set(url, {
         data: body,
         contentType: headers.get('content-type') || 'application/octet-stream',
+        ownerId:
+          headers.get('x-amz-meta-ownerid') ?? headers.get('x-oss-meta-ownerid') ?? undefined,
       })
       return new Response(null, { status: 200 })
     }
@@ -128,7 +136,10 @@ function createMockExternalFetch() {
         return new Response(null, { status: 404 })
       return new Response(object.data, {
         status: 200,
-        headers: { 'content-type': object.contentType },
+        headers: {
+          'content-type': object.contentType,
+          ...(object.ownerId ? { 'x-amz-meta-ownerid': object.ownerId } : {}),
+        },
       })
     }
 
@@ -649,5 +660,147 @@ describe('storageObjectStore', () => {
       limit: 10,
     })
     expect(rows.filter(row => row.action === 'storage.write')).toHaveLength(0)
+  })
+})
+
+describe('storage object ownership (#898)', () => {
+  const base = { resourceType: 'scene-asset', externalStorage: null as any }
+
+  it('round-trips the owner through memory storage', async () => {
+    const memoryStorage = createMemory()
+    await putStorageObject({
+      ...base,
+      event: event('own-memory'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_a-cap-1-b.png',
+      data: Buffer.from('body'),
+      ownerId: 'user-1',
+    })
+
+    const read = await getStorageObject({
+      ...base,
+      event: event('own-memory'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_a-cap-1-b.png',
+    })
+
+    expect(read?.ownerId).toBe('user-1')
+    expect(read?.storesOwnership).toBe(true)
+  })
+
+  it('round-trips the owner through the bucket', async () => {
+    const memoryStorage = createMemory()
+    const bucket = createMockBucket() as any
+    await putStorageObject({
+      ...base,
+      event: event('own-bucket'),
+      bucket,
+      memoryStorage,
+      key: 'scene_run_c-cap-1-d.png',
+      data: Buffer.from('body'),
+      ownerId: 'user-2',
+    })
+
+    const read = await getStorageObject({
+      ...base,
+      event: event('own-bucket'),
+      bucket,
+      memoryStorage,
+      key: 'scene_run_c-cap-1-d.png',
+    })
+
+    expect(read?.ownerId).toBe('user-2')
+    expect(read?.storesOwnership).toBe(true)
+  })
+
+  it('reports an object written before ownership tracking as unowned, not unrecordable', async () => {
+    // The distinction the download check turns on: a backend that records ownership and has
+    // none for this object is a refusal, whereas a backend that cannot record it at all is a
+    // different question entirely. Collapsing the two either locks people out or waves
+    // everything through.
+    const memoryStorage = createMemory()
+    await putStorageObject({
+      ...base,
+      event: event('own-legacy'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_e-cap-1-f.png',
+      data: Buffer.from('body'),
+    })
+
+    const read = await getStorageObject({
+      ...base,
+      event: event('own-legacy'),
+      bucket: null,
+      memoryStorage,
+      key: 'scene_run_e-cap-1-f.png',
+    })
+
+    expect(read?.ownerId).toBeUndefined()
+    expect(read?.storesOwnership).toBe(true)
+  })
+})
+
+describe('external storage ownership (#1644)', () => {
+  for (const channel of ['s3', 'oss'] as const) {
+    it(`signs the ownership header and reads it back over ${channel}`, async () => {
+      const marker = `own-${channel}`
+      const h3Event = event(marker)
+      const memoryStorage = createMemory()
+      const mock = createMockExternalFetch()
+      const external = createExternalStorage(channel, mock.fetchImpl)
+      const shared = {
+        event: h3Event,
+        bucket: null,
+        memoryStorage,
+        externalStorage: external,
+        key: `${marker}.bin`,
+        resourceType: `scene-asset-${marker}`,
+      }
+
+      const stored = await putStorageObject({
+        ...shared,
+        data: Buffer.from('body'),
+        contentType: 'application/octet-stream',
+        ownerId: 'user-external',
+      })
+      const loaded = await getStorageObject(shared)
+
+      expect(stored.storesOwnership).toBe(true)
+      expect(loaded?.ownerId).toBe('user-external')
+      expect(loaded?.storesOwnership).toBe(true)
+
+      // The decisive assertion. The header arriving proves only that it was sent; S3 and OSS both
+      // reject an x-amz-*/x-oss-* header that is not covered by the signature, so what has to be
+      // true is that it appears in SignedHeaders. That is the whole reason it is added to the
+      // record before canonicalizeHeaders rather than merged in afterwards.
+      const put = mock.requests.find((request) => request.method === 'PUT')
+      expect(put?.authorization).toContain(`x-${channel === 'oss' ? 'oss' : 'amz'}-meta-ownerid`)
+    })
+  }
+
+  it('reports an external object written before ownership as unowned, not unrecordable', async () => {
+    const marker = 'own-external-legacy'
+    const h3Event = event(marker)
+    const memoryStorage = createMemory()
+    const external = createExternalStorage('s3', createMockExternalFetch().fetchImpl)
+    const shared = {
+      event: h3Event,
+      bucket: null,
+      memoryStorage,
+      externalStorage: external,
+      key: `${marker}.bin`,
+      resourceType: `scene-asset-${marker}`,
+    }
+
+    await putStorageObject({ ...shared, data: Buffer.from('body') })
+    const loaded = await getStorageObject(shared)
+
+    // Same distinction the download check turns on: this backend can record ownership, so an
+    // object without one is refused rather than waved through.
+    expect(loaded?.ownerId).toBeUndefined()
+    expect(loaded?.storesOwnership).toBe(true)
   })
 })

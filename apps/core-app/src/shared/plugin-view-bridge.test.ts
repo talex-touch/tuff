@@ -9,14 +9,12 @@ describe('plugin view bootstrap', () => {
   it('round-trips sanitized metadata without executable source or filesystem paths', () => {
     const argument = buildPluginViewBootstrapArgument({
       bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
-      channelKey: 'secret-key',
       plugin: { name: 'touch-test', version: '1.2.3', sdkapi: 260615 },
       config: { themeStyle: { dark: true } }
     })
 
     expect(parsePluginViewBootstrapArgument([argument])).toEqual({
       bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
-      channelKey: 'secret-key',
       plugin: { name: 'touch-test', version: '1.2.3', sdkapi: 260615 },
       config: { themeStyle: { dark: true } }
     })
@@ -24,9 +22,24 @@ describe('plugin view bootstrap', () => {
     expect(argument).not.toContain('require(')
   })
 
+  // This argument becomes a real command-line argument of the renderer, readable from the process
+  // table by any unprivileged process on the machine. The plugin's channel key used to be in it
+  // (#697); a caller that puts one back should fail here rather than in a `ps` listing.
+  it('carries no channel key even when the caller supplies one', () => {
+    const argument = buildPluginViewBootstrapArgument({
+      bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
+      channelKey: 'plugin-channel-key',
+      plugin: { name: 'touch-test', sdkapi: 260615 },
+      config: { themeStyle: {} }
+    } as never)
+
+    expect(argument).not.toContain('plugin-channel-key')
+    expect(argument).not.toContain('channelKey')
+    expect(parsePluginViewBootstrapArgument([argument])).not.toHaveProperty('channelKey')
+  })
+
   it('rejects missing or unsupported bridge versions', () => {
     const base = {
-      channelKey: 'secret-key',
       plugin: { name: 'touch-test', sdkapi: 260615 },
       config: { themeStyle: {} }
     }

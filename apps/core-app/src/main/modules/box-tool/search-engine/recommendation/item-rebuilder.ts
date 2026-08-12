@@ -27,6 +27,30 @@ const getMetaString = (item: TuffItem, key: string): string | undefined => {
   return typeof value === 'string' ? value : undefined
 }
 
+/**
+ * Every identifier an app item is legitimately known by. buildProcessedAppItem
+ * ids an app as `appIdentity || path || bundleId`, and a scored candidate may
+ * have been recorded under any of those, so matching has to span the forms —
+ * but only by exact equality, never by containment.
+ */
+const getAppIdentitySet = (item: TuffItem): Set<string> => {
+  const meta = item.meta as Record<string, unknown> | undefined
+  const app = meta?.app as Record<string, unknown> | undefined
+  const identities = new Set<string>()
+
+  for (const value of [
+    item.id,
+    getMetaString(item, '_originalItemId'),
+    typeof app?.path === 'string' ? app.path : undefined,
+    typeof app?.bundleId === 'string' ? app.bundleId : undefined,
+    typeof app?.launchTarget === 'string' ? app.launchTarget : undefined
+  ]) {
+    if (value) identities.add(value)
+  }
+
+  return identities
+}
+
 function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
   if (!icon || typeof icon !== 'object') return { ...DEFAULT_PLUGIN_RECOMMEND_ICON }
 
@@ -57,8 +81,25 @@ function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
 
 /** Rebuilds TuffItems from ScoredItems by querying DB and applying provider logic */
 export class ItemRebuilder {
-  constructor(private dbUtils: DbUtils) {}
+  /**
+   * Two read homes under the search split (issue #295): FILE rows are written
+   * by the worker into search-index.db (read via the split-aware `dbUtils`),
+   * while APP rows are the app provider's catalog on the PRIMARY db —
+   * including user-authored managed entries — and must be read from there
+   * (`appCatalogDbUtils`). With the split off both handles are the primary and
+   * behavior is byte-identical.
+   */
+  constructor(
+    private dbUtils: DbUtils,
+    private appCatalogDbUtils: DbUtils = dbUtils
+  ) {}
 
+  /**
+   * Rebuilding fans out per source, so the batches come back grouped by source
+   * (and, inside a batch, in DB row order) — the ranking `scoreAndRank` already
+   * computed. `mergeAndEnrichItems` puts the input order back before returning,
+   * so the caller always sees items ordered by recommendation score.
+   */
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
     if (scoredItems.length === 0) return []
 
@@ -113,10 +154,10 @@ export class ItemRebuilder {
 
       const [appsByPath, appsByBundleId] = await Promise.all([
         pathItems.length > 0
-          ? this.dbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
+          ? this.appCatalogDbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
           : Promise.resolve([]),
         bundleIdItems.length > 0
-          ? this.dbUtils.getFilesByBundleIds(bundleIdItems.map((i) => i.itemId))
+          ? this.appCatalogDbUtils.getFilesByBundleIds(bundleIdItems.map((i) => i.itemId))
           : Promise.resolve([])
       ])
 
@@ -146,7 +187,7 @@ export class ItemRebuilder {
 
   private async fetchExtensionsForApps(apps: AppRow[]): Promise<AppWithExtensions[]> {
     const fileIds = apps.map((app) => app.id)
-    const extensions = await this.dbUtils.getFileExtensionsByFileIds(fileIds)
+    const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(fileIds)
 
     return apps.map((app) => ({
       ...app,
@@ -482,12 +523,19 @@ export class ItemRebuilder {
       return scoredItems.find((s) => s.itemId.endsWith(`/${itemId}`) || s.itemId === itemId)
     }
 
-    // App provider: match by path or bundleId inclusion
+    // App provider: the rebuilt item and the scored candidate can legitimately
+    // carry different forms of the same app (buildProcessedAppItem ids by
+    // appIdentity || path || bundleId), so this still matches across forms — but
+    // against the item's own identity set, by equality.
+    //
+    // It used to be a two-way `includes`, which made one app inherit another's
+    // score whenever one id was a prefix of the other: 'com.google.Chrome' is a
+    // substring of 'com.google.Chrome.canary', so Chrome was enriched with
+    // Canary's score and, through _originalItemId, deduped and pin-matched as
+    // Canary (#666).
     if (sourceId === 'app-provider' || sourceId === 'application') {
-      return scoredItems.find((s) => {
-        if (itemId.startsWith('/') && s.itemId.startsWith('/')) return itemId === s.itemId
-        return s.itemId.includes(itemId) || itemId.includes(s.itemId)
-      })
+      const identities = getAppIdentitySet(item)
+      return scoredItems.find((s) => identities.has(s.itemId))
     }
 
     return undefined
@@ -495,39 +543,52 @@ export class ItemRebuilder {
 
   private mergeAndEnrichItems(items: TuffItem[], scoredItems: ScoredItem[]): TuffItem[] {
     const scoreMap = new Map<string, ScoredItem>()
-    for (const s of scoredItems) {
+    const rankByScored = new Map<ScoredItem, number>()
+    scoredItems.forEach((s, rank) => {
       scoreMap.set(s.itemId, s)
       scoreMap.set(`${s.sourceId}:${s.itemId}`, s)
+      rankByScored.set(s, rank)
+    })
+
+    const ranked: Array<{ item: TuffItem; rank: number }> = []
+
+    for (const item of items) {
+      const originalItemId = getMetaString(item, '_originalItemId')
+      // Source-qualified keys are tried before bare ones. scoreMap holds both
+      // spellings, and item_usage_stats still carries two source ids for apps
+      // ('application' and 'app-provider'), so two candidates can share an
+      // itemId; a bare-key hit returns whichever was registered last (#667).
+      const scored =
+        (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
+        scoreMap.get(`${item.source.id}:${item.id}`) ||
+        scoreMap.get(item.id) ||
+        this.findScoredByPartialMatch(item, scoredItems)
+      if (!scored) continue
+
+      const meta: Record<string, unknown> = {
+        ...(item.meta as Record<string, unknown> | undefined)
+      }
+      meta.recommendation = {
+        score: scored.score,
+        source: scored.source,
+        reason: this.getReasonLabel(scored),
+        isIntelligent: true,
+        badge: this.generateBadge(scored)
+      }
+      // Store original itemId for deduplication in recommendation-engine
+      meta._originalItemId = scored.itemId
+      meta._originalSourceId = scored.sourceId
+      item.meta = meta as TuffItem['meta']
+      // Absolute score, higher first — the same contract the tuff sorter writes
+      // for searched items, so anything ranking a mixed list reads one field.
+      item.scoring = { ...item.scoring, final: scored.score }
+
+      ranked.push({ item, rank: rankByScored.get(scored) ?? Number.MAX_SAFE_INTEGER })
     }
 
-    return items
-      .map((item) => {
-        const originalItemId = getMetaString(item, '_originalItemId')
-        const scored =
-          (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
-          scoreMap.get(item.id) ||
-          scoreMap.get(`${item.source.id}:${item.id}`) ||
-          this.findScoredByPartialMatch(item, scoredItems)
-        if (!scored) return null
-
-        const meta: Record<string, unknown> = {
-          ...(item.meta as Record<string, unknown> | undefined)
-        }
-        meta.recommendation = {
-          score: scored.score,
-          source: scored.source,
-          reason: this.getReasonLabel(scored),
-          isIntelligent: true,
-          badge: this.generateBadge(scored)
-        }
-        // Store original itemId for deduplication in recommendation-engine
-        meta._originalItemId = scored.itemId
-        meta._originalSourceId = scored.sourceId
-        item.meta = meta as TuffItem['meta']
-
-        return item
-      })
-      .filter((item): item is TuffItem => item !== null)
+    // Stable by rank: two rebuilt items resolving to one scored candidate keep
+    // the order their source batch produced them in.
+    return ranked.sort((a, b) => a.rank - b.rank).map(({ item }) => item)
   }
 
   private getReasonLabel(scored: ScoredItem): string {

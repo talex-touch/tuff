@@ -153,7 +153,7 @@ code: |
 ## Review Notes
 
 - **Accessibility note:** The host is a labeled `role="region"` that is also a polite `aria-live` region, so a toast appearing while focus is elsewhere is announced; `danger` toasts escalate to `role="alert"`. Still use persistent visible copy or page-level status text for critical failures and long-running operations.
-- **Timer note:** Reusing an `id` replaces the store item, but existing auto-dismiss timers are not cancelled. Use `duration: 0` for persistent id-based task toasts, or unique ids for repeated transient success messages.
+- **Timer note:** Reusing an `id` replaces the store item and first cancels that id's pending auto-dismiss timer (`clearDismissTimer`); the replacement toast restarts timing from its own `duration`. Use `duration: 0` for persistent task toasts.
 - **Verified coverage:** `toast.test.ts` checks id replacement, returned ids, auto-dismiss, persistent toasts, dismiss/clear helpers, host region semantics, variant classes, rendered title/description, accessible close buttons, and close-button dismissal.
 
 ## Source

@@ -83,6 +83,15 @@ const SENSITIVE_TOOL_OUTPUT_KEY =
   /token|api.?key|secret|password|credential|authorization|cookie|authref/i
 const MAX_SERIALIZED_TOOL_OUTPUT_CHARS = 64 * 1024
 
+/**
+ * How long the forked worker gets to post `runtime.ready`.
+ *
+ * Generous next to what readiness actually costs (module load and a single message) and far
+ * below the run timeout, which defaults to ten minutes -- the point is that a stuck worker
+ * surfaces as an error in seconds rather than as a request that never returns.
+ */
+const READY_TIMEOUT_MS = 30_000
+
 function canonicalToolInput(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value
   if (Array.isArray(value)) return value.map(canonicalToolInput)
@@ -301,6 +310,7 @@ export class PiAgentRuntimeHost {
   private readyPromise: Promise<void> | null = null
   private readyResolve: (() => void) | null = null
   private readyReject: ((error: Error) => void) | null = null
+  private readyTimeout: ReturnType<typeof setTimeout> | null = null
   private readonly activeRuns = new Map<string, ActiveRunContext>()
   private readonly onEvent?: PiAgentRuntimeHostOptions['onEvent']
   private readonly loadToolCallResult?: PiAgentRuntimeHostOptions['loadToolCallResult']
@@ -324,6 +334,12 @@ export class PiAgentRuntimeHost {
     return this.ready
   }
 
+  private clearReadyTimeout(): void {
+    if (!this.readyTimeout) return
+    clearTimeout(this.readyTimeout)
+    this.readyTimeout = null
+  }
+
   async start(): Promise<void> {
     if (this.child && this.readyPromise) return this.readyPromise
     if (!app.isReady()) throw new Error('Pi runtime can only start after Electron app ready')
@@ -334,6 +350,19 @@ export class PiAgentRuntimeHost {
       this.readyResolve = resolve
       this.readyReject = reject
     })
+    // A worker that spawns but never posts runtime.ready leaves this promise pending forever:
+    // the process is alive so no 'exit' fires, and execute() awaits start() before arming its
+    // own run timeout, so every call hangs with nothing to rescue it (#766). Bounded here, and
+    // the child is killed so the exit path can run its normal cleanup.
+    this.readyTimeout = setTimeout(() => {
+      this.readyTimeout = null
+      const error = new Error(`Pi runtime was not ready within ${READY_TIMEOUT_MS}ms`)
+      runtimeLog.error(error.message, { error })
+      this.readyReject?.(error)
+      this.readyResolve = null
+      this.readyReject = null
+      this.child?.kill()
+    }, READY_TIMEOUT_MS)
     const child = utilityProcess.fork(workerPath, [], {
       cwd: app.getPath('userData'),
       env: createRestrictedEnvironment(),
@@ -395,7 +424,18 @@ export class PiAgentRuntimeHost {
         reject,
         timeout
       })
-      this.post({ type: 'run.start', payload })
+      try {
+        this.post({ type: 'run.start', payload })
+      } catch (error) {
+        // The entry and its timer are registered before the post so an immediate reply can find
+        // them. post() throws when the child has gone away between the check above and here,
+        // and postMessage throws on a payload that is not structured-cloneable. Rejecting alone
+        // left the run id wedged -- every retry hit 'already active' -- and the timer still
+        // fired later into settleRun on a promise that had already rejected (#767).
+        clearTimeout(timeout)
+        this.activeRuns.delete(payload.run.id)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
@@ -427,6 +467,7 @@ export class PiAgentRuntimeHost {
       context.reject(new Error('Pi runtime stopped'))
     }
     this.activeRuns.clear()
+    this.clearReadyTimeout()
     this.child?.kill()
     this.child = null
     this.readyPromise = null
@@ -448,6 +489,7 @@ export class PiAgentRuntimeHost {
       case 'runtime.ready':
         this.ready = true
         this.restartAttempts = 0
+        this.clearReadyTimeout()
         this.readyResolve?.()
         this.readyResolve = null
         this.readyReject = null
@@ -710,6 +752,7 @@ export class PiAgentRuntimeHost {
     const error = new Error(`Pi runtime utility process exited with code ${code}`)
     if (!this.shuttingDown) runtimeLog.error(error.message, { error })
     this.ready = false
+    this.clearReadyTimeout()
     this.readyReject?.(error)
     for (const context of this.activeRuns.values()) {
       clearTimeout(context.timeout)

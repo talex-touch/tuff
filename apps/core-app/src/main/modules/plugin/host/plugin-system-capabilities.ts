@@ -7,6 +7,7 @@ import {
   type PluginHostCapabilityDefinition
 } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
+import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from '../privileged-plugins'
 
 export const PLUGIN_SYSTEM_ACTION_IDS = Object.freeze([
   'restart',
@@ -51,7 +52,7 @@ export const PLUGIN_SYSTEM_ACTION_POLICIES: Readonly<
 })
 
 export const PLUGIN_SYSTEM_ACTION_TIMEOUT_MS = 15_000
-const SYSTEM_ACTION_PLUGIN_NAMES = new Set(['touch-quick-actions', 'touch-system-actions'])
+const SYSTEM_ACTION_PLUGIN_NAME_SET = new Set(SYSTEM_ACTION_PLUGIN_NAMES)
 const SYSTEM_WINDOW_ACTION = 'open-main-window' satisfies PluginSystemActionId
 const QUICK_ACTION_IDS = new Set<PluginSystemActionId>([
   'restart',
@@ -355,9 +356,10 @@ function isActionId(value: unknown): value is PluginSystemActionId {
 }
 
 function isActionAllowedForPlugin(pluginName: string, actionId: PluginSystemActionId): boolean {
-  return pluginName === 'touch-quick-actions'
+  return isPrivilegedPluginFor('systemActionsBasic', pluginName)
     ? QUICK_ACTION_IDS.has(actionId)
-    : pluginName === 'touch-system-actions' && ADVANCED_SYSTEM_ACTION_IDS.has(actionId)
+    : isPrivilegedPluginFor('systemActionsAdvanced', pluginName) &&
+        ADVANCED_SYSTEM_ACTION_IDS.has(actionId)
 }
 
 function isShellAction(actionId: PluginSystemActionId): boolean {
@@ -616,19 +618,24 @@ export function createPluginSystemActionCapabilities(
     options.window,
     'showMainWindow'
   )
-  const executor: PluginSystemActionExecutor = Object.freeze({
+  // The type argument is named even though the variable is annotated: Object.freeze<T> infers T
+  // from its argument, so the annotation on the left never reaches the literal and every callback
+  // inside it takes its parameters as `any` (#548).
+  const executor: PluginSystemActionExecutor = Object.freeze<PluginSystemActionExecutor>({
     start: (actionId) => start.call(options.executor, actionId)
   })
-  const confirmation: PluginSystemActionConfirmationService = Object.freeze({
-    confirm: (actionId, signal) => confirm.call(options.confirmation, actionId, signal)
-  })
-  const windowService: PluginSystemActionWindowService = Object.freeze({
-    showMainWindow: (activation, hostGeneration, signal) =>
-      Promise.resolve(showMainWindow.call(options.window, activation, hostGeneration, signal))
-  })
+  const confirmation: PluginSystemActionConfirmationService =
+    Object.freeze<PluginSystemActionConfirmationService>({
+      confirm: (actionId, signal) => confirm.call(options.confirmation, actionId, signal)
+    })
+  const windowService: PluginSystemActionWindowService =
+    Object.freeze<PluginSystemActionWindowService>({
+      showMainWindow: (activation, hostGeneration, signal) =>
+        Promise.resolve(showMainWindow.call(options.window, activation, hostGeneration, signal))
+    })
   const platform = options.platform as NodeJS.Platform
   const expectedActivation = snapshotActivation(options.activation)
-  if (!SYSTEM_ACTION_PLUGIN_NAMES.has(expectedActivation.name)) invalid()
+  if (!SYSTEM_ACTION_PLUGIN_NAME_SET.has(expectedActivation.name)) invalid()
 
   const assertAuthority = (context: PluginSecurityContext): number => {
     if (!isAuthoritativePluginContext(context)) invalid()
@@ -655,7 +662,7 @@ export function createPluginSystemActionCapabilities(
     return Number(identity.hostGeneration)
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.invoke',
     timeoutMs: PLUGIN_SYSTEM_ACTION_TIMEOUT_MS,
     maxConcurrency: 1,

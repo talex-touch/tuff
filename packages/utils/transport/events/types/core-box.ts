@@ -751,6 +751,16 @@ export interface CoreBoxRecommendationResponse {
   error?: string
 }
 
+/**
+ * Which recommendation items a surface actually rendered, in display order.
+ * Local evaluation input for hit-rate@k — ids only, fire-and-forget.
+ */
+export interface CoreBoxRecommendationExposureRequest {
+  /** `sourceId:itemId` per rendered item, in rendered order */
+  itemKeys: string[]
+  surface?: string
+}
+
 export interface CoreBoxAggregateTimeStatsResponse {
   success: boolean
   error?: string

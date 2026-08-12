@@ -51,6 +51,16 @@ export class IntelligenceQuotaManager {
   private quotaCache = new Map<string, QuotaConfig>()
   private usageCache = new Map<string, { usage: CurrentUsage; timestamp: number }>()
   private readonly usageCacheTTL = 10000 // 10 seconds
+  /**
+   * Timestamps of requests this manager has admitted, per caller.
+   *
+   * The cached snapshot is built from intelligence_audit_logs, so it only ever reflects
+   * requests already flushed to the database - and it is reused for 10s on top of that. A
+   * caller with requestsPerMinute: 10 could therefore fire hundreds of calls in two seconds and
+   * every one of them would read the same stale zero (#778). Admissions are counted here the
+   * moment they are granted, so a burst binds against the limit immediately.
+   */
+  private admissions = new Map<string, number[]>()
 
   private getDb() {
     return databaseModule.getDb()
@@ -278,7 +288,17 @@ export class IntelligenceQuotaManager {
       return { allowed: false, reason: 'Quota is disabled for this caller' }
     }
 
-    const usage = await this.getCurrentUsage(callerId, callerType)
+    const snapshot = await this.getCurrentUsage(callerId, callerType)
+    // Whichever is higher: the database has the truth once rows are flushed, the ledger has it
+    // during a burst. Taking the max rather than the sum keeps a request from being counted
+    // twice as its audit row lands.
+    const usage: CurrentUsage = {
+      ...snapshot,
+      requestsThisMinute: Math.max(
+        snapshot.requestsThisMinute,
+        this.countRecentAdmissions(callerId, callerType)
+      )
+    }
 
     // Check requests per minute
     if (quota.requestsPerMinute && usage.requestsThisMinute >= quota.requestsPerMinute) {
@@ -352,6 +372,11 @@ export class IntelligenceQuotaManager {
       }
     }
 
+    // Counted at admission, not when the audit row lands, so the next check in the same burst
+    // sees this request. The unlimited early-return above is deliberately not counted: there is
+    // no limit for it to bind against.
+    this.recordAdmission(callerId, callerType)
+
     // Calculate remaining
     return {
       allowed: true,
@@ -388,7 +413,38 @@ export class IntelligenceQuotaManager {
   /**
    * Clear quota cache
    */
+  private admissionKey(callerId: string, callerType: 'plugin' | 'user' | 'system'): string {
+    return `${callerType}:${callerId}`
+  }
+
+  /** Admissions inside the trailing minute, pruning anything older as it goes. */
+  private countRecentAdmissions(
+    callerId: string,
+    callerType: 'plugin' | 'user' | 'system',
+    now: number = Date.now()
+  ): number {
+    const key = this.admissionKey(callerId, callerType)
+    const recent = (this.admissions.get(key) ?? []).filter((at) => now - at < 60 * 1000)
+    if (recent.length === 0) {
+      this.admissions.delete(key)
+      return 0
+    }
+    this.admissions.set(key, recent)
+    return recent.length
+  }
+
+  private recordAdmission(
+    callerId: string,
+    callerType: 'plugin' | 'user' | 'system',
+    now: number = Date.now()
+  ): void {
+    const key = this.admissionKey(callerId, callerType)
+    this.countRecentAdmissions(callerId, callerType, now)
+    this.admissions.set(key, [...(this.admissions.get(key) ?? []), now])
+  }
+
   clearCache(): void {
+    this.admissions.clear()
     this.quotaCache.clear()
     this.usageCache.clear()
   }

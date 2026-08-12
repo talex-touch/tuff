@@ -9,6 +9,7 @@
   --tx-color-primary-light-8: #d5e9fb;
   --tx-color-primary-light-9: #edf6ff;
   --tx-color-primary-dark-2: #004c9f;
+  --tx-color-on-primary: #ffffff;
 
   --tx-color-success: #166534;
   --tx-color-warning: #9a5b00;
@@ -82,6 +83,12 @@
   --tx-color-primary-light-8: #18394f;
   --tx-color-primary-light-9: #102536;
   --tx-color-primary-dark-2: #b8ddff;
+  /**
+   * The one mode where white ink is outright wrong: `#7cc4ff` is light enough that white text
+   * on a filled primary surface lands at 1.88:1 — the worst ratio of any theme, in the theme
+   * whose whole purpose is contrast. Dark ink reads at 8.28:1 instead.
+   */
+  --tx-color-on-primary: #0a2540;
 
   --tx-color-success: #86efac;
   --tx-color-warning: #facc15;
@@ -157,6 +164,16 @@
   --tx-color-primary-light-7: #c6e2ff;
   --tx-color-primary-light-9: #ecf5ff;
   --tx-color-primary-dark-2: #337ecc;
+  /**
+   * Ink for text and icons sitting on a filled `--tx-color-primary` surface.
+   *
+   * Kept at white to preserve how every component renders today. Worth knowing: white on the
+   * Element-derived `#409eff` is 2.78:1, under the 4.5:1 AA floor, and this token is the seam
+   * to fix that through — darkening the accent or switching this to ink (`#0a2540`, 5.59:1)
+   * are both brand calls, so neither is made here. The high-contrast themes above do override
+   * it, since 1.88:1 there is indefensible regardless of brand.
+   */
+  --tx-color-on-primary: #ffffff;
 
   --tx-color-success: #67c23a;
   --tx-color-warning: #e6a23c;
@@ -299,6 +316,8 @@
   --tx-color-primary-light-7: #213d5b;
   --tx-color-primary-light-9: #18222c;
   --tx-color-primary-dark-2: #66b1ff;
+  // `--tx-color-primary` is the same `#409eff` as light, so the same ink and the same 2.78:1.
+  --tx-color-on-primary: #ffffff;
 
   --tx-text-color-primary: #e5eaf3;
   --tx-text-color-regular: #cfd3dc;

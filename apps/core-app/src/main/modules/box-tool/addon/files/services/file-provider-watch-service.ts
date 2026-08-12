@@ -1,9 +1,8 @@
-import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../../core/eventbus/touch-event'
-import type { ITouchEvent } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import path from 'node:path'
 import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
 import { StorageList } from '@talex-touch/utils'
+import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { appTaskGate } from '../../../../../service/app-task-gate'
 import {
   AppUsageActivityTracker,
@@ -45,15 +44,17 @@ export interface FileProviderWatchServiceDeps {
   getDbUtils: () => DbUtils | null
   getWatchDepthForPath: (watchPath: string) => number
   normalizePath: (rawPath: string) => string
-  enqueueIncrementalUpdate: (
-    rawPath: string,
-    action: 'add' | 'change' | 'delete',
-    manual?: boolean
-  ) => void
   runAutoIndexing: () => Promise<void>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   logError: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
+  /** See FileProviderScanProgressServiceDeps — resolved per call, never captured. */
+  isSearchSplitEnabled?: () => boolean
+  /** Worker-forwarded write path for the split topology (sole writer of search-index.db). */
+  execSearchIndexWrite?: (
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode?: 'single' | 'transaction'
+  ) => Promise<unknown>
 }
 
 export class FileProviderWatchService {
@@ -61,11 +62,15 @@ export class FileProviderWatchService {
   private readonly getDbUtils: FileProviderWatchServiceDeps['getDbUtils']
   private readonly getWatchDepthForPath: FileProviderWatchServiceDeps['getWatchDepthForPath']
   private readonly normalizePath: FileProviderWatchServiceDeps['normalizePath']
-  private readonly enqueueIncrementalUpdate: FileProviderWatchServiceDeps['enqueueIncrementalUpdate']
   private readonly runAutoIndexing: FileProviderWatchServiceDeps['runAutoIndexing']
   private readonly logDebug: FileProviderWatchServiceDeps['logDebug']
   private readonly logWarn: FileProviderWatchServiceDeps['logWarn']
   private readonly logError: FileProviderWatchServiceDeps['logError']
+
+  private readonly isSearchSplitEnabled: NonNullable<
+    FileProviderWatchServiceDeps['isSearchSplitEnabled']
+  >
+  private readonly execSearchIndexWrite: FileProviderWatchServiceDeps['execSearchIndexWrite']
 
   private watchPaths: string[]
   private normalizedWatchPaths: string[]
@@ -76,28 +81,17 @@ export class FileProviderWatchService {
   private watchPathsRegistered = false
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
 
-  readonly handleFsAddedOrChanged = (event: ITouchEvent) => {
-    const fileEvent = event as FileChangedEvent & { filePath?: string }
-    if (!fileEvent?.filePath) return
-    this.enqueueIncrementalUpdate(fileEvent.filePath, 'change')
-  }
-
-  readonly handleFsUnlinked = (event: ITouchEvent) => {
-    const fileEvent = event as FileUnlinkedEvent & { filePath?: string }
-    if (!fileEvent?.filePath) return
-    this.enqueueIncrementalUpdate(fileEvent.filePath, 'delete')
-  }
-
   constructor(deps: FileProviderWatchServiceDeps) {
     this.baseWatchPaths = [...deps.baseWatchPaths]
     this.getDbUtils = deps.getDbUtils
     this.getWatchDepthForPath = deps.getWatchDepthForPath
     this.normalizePath = deps.normalizePath
-    this.enqueueIncrementalUpdate = deps.enqueueIncrementalUpdate
     this.runAutoIndexing = deps.runAutoIndexing
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
     this.logError = deps.logError
+    this.isSearchSplitEnabled = deps.isSearchSplitEnabled ?? (() => false)
+    this.execSearchIndexWrite = deps.execSearchIndexWrite
     const rootSet = resolveIndexedWatchRootSet({
       basePaths: deps.baseWatchPaths,
       normalizePath: deps.normalizePath
@@ -177,7 +171,9 @@ export class FileProviderWatchService {
     for (const rawPath of rawExtraPaths) {
       const trimmed = rawPath.trim()
       if (!trimmed) continue
-      const resolved = path.resolve(trimmed)
+      // Configured-path ingress: an extra path persisted in NFD would produce
+      // NFD scan roots and NFD index ids (see normalizeFsPath).
+      const resolved = normalizeFsPath(path.resolve(trimmed))
       const normalized = this.normalizePath(resolved)
       if (extraPathSet.has(normalized)) {
         continue
@@ -252,12 +248,24 @@ export class FileProviderWatchService {
       taskTimeoutMs: 30 * 60 * 1000
     })
 
-    const db = dbUtils.getDb() as LibSQLDatabase<typeof schema>
-    const cleanupTask = createFailedFilesCleanupTask(db, {
-      maxRetryAge: 24 * 60 * 60 * 1000,
-      batchSize: 100,
-      maxRetries: 3
-    })
+    // Per-call resolution (never constructor capture): the task must follow
+    // the live split topology — file_index_progress rows sit in the
+    // worker-owned search file when the split is on, and their deletes are
+    // forwarded to the worker instead of running on a main-thread connection.
+    const cleanupTask = createFailedFilesCleanupTask(
+      {
+        getReadDb: () =>
+          (this.getDbUtils()?.getFileIndexReadDb() as LibSQLDatabase<typeof schema>) ?? null,
+        getPrimaryDb: () => (this.getDbUtils()?.getDb() as LibSQLDatabase<typeof schema>) ?? null,
+        isSearchSplitEnabled: () => this.isSearchSplitEnabled(),
+        execSearchIndexWrite: this.execSearchIndexWrite
+      },
+      {
+        maxRetryAge: 24 * 60 * 60 * 1000,
+        batchSize: 100,
+        maxRetries: 3
+      }
+    )
 
     this.backgroundTaskService.registerTask(cleanupTask)
 
@@ -300,7 +308,12 @@ export class FileProviderWatchService {
       return { newPaths: [], stalePaths: [], lastScannedAt: null }
     }
 
-    const db = dbUtils.getDb()
+    // Eligibility must read the home the worker writes scan_progress into
+    // (search-index.db when the split is on). Reading the primary here let
+    // stale pre-split rows mark every root "recently scanned", so
+    // shouldRunAutoIndexing never allowed a scan and the empty search file was
+    // never populated (V1 ship-blocker #3). Split off → same handle as before.
+    const db = dbUtils.getFileIndexReadDb()
     const scopedPaths = expandIndexedSourceProgressPaths(this.watchPaths, this.normalizePath)
     const shape = await resolveScanProgressSchemaShape(db)
     const completedScans =

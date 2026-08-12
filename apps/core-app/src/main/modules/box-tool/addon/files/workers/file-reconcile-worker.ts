@@ -6,6 +6,8 @@ import type {
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
+// Direct module path (not the search barrel): the worker must stay small.
+import { quantizeIndexedWriteTimestampToSeconds } from '@talex-touch/utils/search/indexing-write-plan'
 
 interface ReconcileDiskFile {
   path: string
@@ -115,7 +117,13 @@ async function processQueue(): Promise<void> {
       const dbFile = dbMap.get(diskFile.path)
       if (!dbFile) {
         filesToAdd.push(diskFile)
-      } else if (diskFile.mtime > dbFile.mtime) {
+      } else if (
+        // Same second-precision compare as the main-thread fallback
+        // (resolveIndexedWriteReconciliationDiff) — this worker IS the
+        // production path, so the quantization has to live here too.
+        quantizeIndexedWriteTimestampToSeconds(diskFile.mtime) >
+        quantizeIndexedWriteTimestampToSeconds(dbFile.mtime)
+      ) {
         filesToUpdate.push({ ...diskFile, id: dbFile.id })
       }
       dbMap.delete(diskFile.path)

@@ -1,9 +1,4 @@
-import type {
-  CoreBoxCanvasConfig,
-  CoreBoxThemeConfig,
-  LayoutAtomConfig,
-  LayoutCanvasConfig,
-} from './layout-atom-types'
+import type { CoreBoxCanvasConfig, CoreBoxThemeConfig, LayoutAtomConfig, LayoutCanvasConfig } from './layout-atom-types'
 
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
@@ -149,16 +144,11 @@ const _appSettingOriginData = {
     deviceId: '',
     deviceName: '',
     devicePlatform: '',
-    useSecureStorage: true,
-    secureStorageUserOverridden: false,
-    secureStorageReminderShown: false,
-    secureStorageUnavailable: false,
   },
   dev: {
     autoCloseDev: true,
     runtimeServer: 'production' as 'production' | 'local',
     developerMode: false,
-    advancedSettings: false,
   },
   lang: {
     followSystem: true,
@@ -171,8 +161,6 @@ const _appSettingOriginData = {
     settings: 0,
   },
   assistant: {
-    name: '阿洛 aler',
-    identifier: 'aler',
     enabled: false,
   },
   omniPanel: {
@@ -227,6 +215,23 @@ const _appSettingOriginData = {
     machineCodeAttestedAt: '',
   },
   tools: {
+    /**
+     * Lets the model pull web, file, clipboard and related context on demand instead of making
+     * the user pick tools per message.
+     *
+     * Lives here rather than on the composer because the composer switch and the settings row are
+     * the same preference: a local `ref` in the composer would reset on every navigation and would
+     * have nothing for 「设置 · 插件与工具」 to manage.
+     */
+    autoContext: true,
+    /**
+     * Whether the assistant may run tools (search, read, open) at all.
+     *
+     * Off by default and deliberately separate from `autoContext`: pulling
+     * context in is passive, whereas a tool call reaches out and touches the
+     * user's machine — that has to be something they turned on.
+     */
+    agentTools: false,
     autoPaste: {
       enable: true,
       time: 5,
@@ -321,8 +326,8 @@ const _appSettingOriginData = {
       time: true,
       foregroundApp: true,
       clipboard: true,
+      selection: true,
       network: true,
-      bluetooth: true,
       focus: true,
       power: true,
       location: true,
@@ -383,6 +388,13 @@ const _appSettingOriginData = {
     closeToTray: true,
     startMinimized: false,
     startSilent: true,
+  },
+  shell: {
+    /** Sidebar width in px while expanded. Clamped on read — a hand-edited config or a
+     * cross-version rollback can carry a value outside the range the UI allows. */
+    sidebarWidth: 260,
+    /** Whether the sidebar is collapsed to the icon-only rail. */
+    sidebarCollapsed: false,
   },
   setup: {
     fileAccess: false,

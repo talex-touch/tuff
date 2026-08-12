@@ -78,6 +78,7 @@ function jumpToLatest() {
 - `itemKey` may be a field name or function. Missing field values fall back to the visible item index.
 - `scroll` emits `{ scrollTop, startIndex, endIndex }` after internal scroll state updates.
 - `scrollToIndex(index)` clamps negative indexes to zero but does not clamp indexes above the last item; callers should pass valid indexes.
+- The container and rows stay semantically neutral (no `role`/`aria-*`). Because only the visible slice is in the DOM, consumers who need accessible list semantics should supply `role="list"`/`role="listitem"` plus `aria-setsize`/`aria-posinset` themselves, using the real `items.length` and absolute indices rather than the visible-slice offsets.
 
 ## API
 

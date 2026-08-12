@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxModal',
@@ -29,7 +32,7 @@ const visible = computed({
   set: (v: boolean) => emit('update:modelValue', v),
 })
 
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 const overlayRef = ref<HTMLElement | null>(null)
 const titleId = useId()
 let previouslyFocusedElement: HTMLElement | null = null
@@ -38,7 +41,7 @@ watch(
   visible,
   (v) => {
     if (v) {
-      zIndex.value = nextZIndex()
+      zIndex.value = zIndexAllocator.next()
       if (hasDocument())
         previouslyFocusedElement = document.activeElement as HTMLElement
       nextTick(() => {

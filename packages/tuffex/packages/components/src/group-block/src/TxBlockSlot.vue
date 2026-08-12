@@ -78,7 +78,7 @@ const currentIcon = computed(() => {
 
 <template>
   <div
-    class="tx-block-slot TBlockSlot-Container TBlockSelection fake-background index-fix"
+    class="tx-block-slot fake-background index-fix"
     :class="{ 'tx-block-slot--disabled': disabled, disabled }"
     :role="interactive ? 'button' : undefined"
     :tabindex="interactive && !disabled ? 0 : undefined"
@@ -86,11 +86,11 @@ const currentIcon = computed(() => {
     @click="handleClick"
     @keydown="handleKeydown"
   >
-    <div class="tx-block-slot__content TBlockSlot-Content TBlockSelection-Content">
+    <div class="tx-block-slot__content">
       <slot name="icon" :active="active">
         <TuffIcon v-if="currentIcon" :icon="currentIcon" :size="iconSize" />
       </slot>
-      <div class="tx-block-slot__label TBlockSlot-Label TBlockSelection-Label">
+      <div class="tx-block-slot__label">
         <template v-if="$slots.label">
           <slot name="label" />
           <div v-if="$slots.tags" class="tx-block-slot__tags tx-block-slot__tags--after">
@@ -112,15 +112,14 @@ const currentIcon = computed(() => {
         </template>
       </div>
     </div>
-    <div class="tx-block-slot__slot TBlockSlot-Slot TBlockSelection-Func">
+    <div class="tx-block-slot__slot">
       <slot :active="active" />
     </div>
   </div>
 </template>
 
 <style lang="scss">
-.tx-block-slot,
-.TBlockSlot-Container {
+.tx-block-slot {
   position: relative;
   display: flex;
   gap: 16px;
@@ -227,8 +226,7 @@ const currentIcon = computed(() => {
   }
 }
 
-.touch-blur .tx-block-slot,
-.touch-blur .TBlockSlot-Container {
+.touch-blur .tx-block-slot {
   --fake-color: var(--tx-fill-color, #f0f2f5);
 
   &:hover {

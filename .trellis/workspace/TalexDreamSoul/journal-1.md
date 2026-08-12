@@ -1563,16 +1563,25 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 
 - None - task complete
 
+## 2026-08-05 · 08-04-db-single-writer-root-fix · Phases 1–4 landed
 
-## Session 47: 本机 AI CLI 快速调用
+- 根因四层(research/root-cause-analysis.md):R1 双写连接(split flag 默认关)、R2 全局队列内重试睡眠(~20 处)、R3 aux 回落/compat 双写、R4 启动写风暴。
+- Phase 1 调度器原生 busy 重试(延迟重排队,退避不占队头)→ commit 90aa26b17;Phase 2 调用点收敛 scheduleDbWrite/scheduleAuxWrite(enqueue 时解析 aux,修掉 stale-capture 类缺陷)→ commit 3c62566fb。注意:这两个提交由并发 Pi 批量提交会话(pi-rewind 019fd0a9…)从共享工作树创建,内容逐项核验正确;规划工件被扫进 49e4f454b。
+- Phase 3 按库分车道(primary/aux 各自队列+忙退避计时器;WAL gating 读主车道;聚合 stats 形状不变+lanes 明细)→ commit 052d1d506(本会话)。
+- Phase 4 启动期维护写门控(telemetry retention 窗口内跳过且不报 PARTIAL;backfill/UsageSummary 延后;manual-delete 永不门控)→ commit 08b64b650(本会话)。
+- 测试:db/database/privacy/sentry/app-provider/usage-summary 全绿;box-tool/ai 既有 23 失败归因于 privacy #301 测试 mock 缺 PRIVACY_DATA_CATEGORIES 与 shell-chrome 拉入 temp-file 单例(证据:db 提交 diff 零新增相关 import 边),非本任务范围。
+- 待办:V1 验证跑(TUFF_DB_SEARCH_SPLIT_ENABLED=1,被用户 dev 实例单实例锁阻塞)→ Phase 5 翻默认 → V2 全默认验证 → Phase 6 compat 双写退役 → spec 固化(单文件单写者 / 队列不睡眠)。
+
+
+## Session 47: 设置页 IA 重构：拆页、选项收敛与死开关清理
 
 **Date**: 2026-08-05
-**Task**: 本机 AI CLI 快速调用
-**Branch**: `master`
+**Task**: 设置页 IA 重构：拆页、选项收敛与死开关清理
+**Branch**: `TalexDreamSoul/app-shell-v2`
 
 ### Summary
 
-完成 macOS Beta 本机 Pi、Codex、Claude Code、OMP 快速调用，包含双重启用门控、OmniPanel 任务流、逐工具审批、原生 PTY 续接和打包验收。
+把「网络与更新」拆成 更新/网络/下载 三个分类，存储从中转页改为直呈内容，解散 advanced 并新增 file-index，11 个分类页统一 SettingsPage 外壳。选项集按设计稿收敛：更新页合并安装方式、删 8 字段诊断网格与重复信任块；网络页把代理五项收进模态、阈值+冷却合并为一个开关；下载页删五个引擎参数、新增下载位置与完成后通知。清掉多处硬编码 false 的死开关——SettingUpdate 的 showAdvancedSettings、SettingSetup 的 showPermissionRecovery（整个权限区从不渲染，而 main 侧 platform-permission-service 一直在响应）、Renderer Override 改为 env 条件渲染。接线三处此前无消费者的配置：historyRetention（cleanupExpiredData 已实现却从无调用者）、NotificationConfig 的 downloadComplete 与 updateAvailable。Auto Context 从 composer 本地 ref 落到 appSetting，与设置页共用一个键。20/22 验收达成，未达成两条已在 prd 标注原因。
 
 ### Main Changes
 
@@ -1582,7 +1591,375 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 
 | Hash | Message |
 |------|---------|
-| `64bc4b5143890173871ccd543c03562ff2f29e59` | (see git log) |
+| `ea78b1fa8` | (see git log) |
+| `3d7aeca04` | (see git log) |
+| `b977006ea` | (see git log) |
+| `7624798d5` | (see git log) |
+| `c1b82bf3d` | (see git log) |
+| `eb7133ba9` | (see git log) |
+| `3cec262c8` | (see git log) |
+| `3afd2df39` | (see git log) |
+| `eaec11f87` | (see git log) |
+| `d2068e611` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## 2026-08-05 · db-single-writer-root-fix · V1 验证闭环(三轮)
+
+- V1 抓出 3 个 ship-blocker:①新 search 库缺带外 schema 修补(provider_id / scan_progress 形态)+ worker init 拒绝逃逸;②embedding 写脑裂 + 句柄泄漏 + 索引齐平(审计);③「首启重建」无触发器——实为双向镜像脑裂(app 目录读空 search 家/写主库;文件扫描调度读主库旧 scan_progress)。均已修复并提交(schema-complete/fail-safe 提交 + unify-index-homes/bootstrap 提交)。
+- 第三轮 0.2/0.3 全过:4678 条目重建入 search 文件、二次启动跳过、全程零 BUSY。
+- 默认开关暂不翻:2d.3 增量写路径(parked 07-28 任务 migrate-search-index-split-write-paths)未迁移,watch 修改存在跨库 id 碰撞风险;另 scan_progress 持久化存疑、Phase4 backfill 门控需复核。flag-off 拓扑下 Phase1-4 已实测消除全部用户症状(31 分钟零 BUSY 对照)。
+
+## 2026-08-05 · tuffex-ai-suite · ①②落地(stream-markdown + conversation-stream)
+
+- 立项父任务 08-05-tuffex-ai-suite + 四子任务(①流式MD ②会话流 ③附件工具卡 ④主界面融合);①②过审后同会话串行实施并提交(24abbaa33 / 4e4d46b2d / d235fee3d),③④仅 PRD。
+- ①TxStreamMarkdown:比较驱动块级增量(全量重lex+raw前缀比对,不做"已闭合"假设,setext/引用链接改写自然正确);shiki v4(root包+JS引擎,免wasm)、mermaid 走 catalog ^11.16.0,双双动态 import,dist 实证 entry 零静态引用;顺带移除零引用的 ai-elements-vue。37 单测。
+- ②TxConversationStream:live zone 恒为末条(免虚拟↔实挂搬家抖动)、位置缓存按 key(prepend 平移不失效)、原生滚动+IO sentinel+手动锚定(better-scroll 方案否决);loader 签名修订为 () => Promise<{hasMore}>(数据完全受控,消费方自行 unshift)。23 单测。
+- 两个硬坑:①Vue 缺省 Boolean prop 铸 false 吃掉 hasMoreInitial 的 ??回退(withDefaults 显式 undefined 解);②vue-tsc 泛型 SFC expose 面是解包后类型(atBottom 是 boolean 不是 Ref),drift 契约双向失败抓出,且整体结构比较对实例化顺序敏感——契约里先断言 keyof 再比整体。已写 memory。
+- 全量门:tuffex 985 测试/typecheck/lint/build 全绿。①② 的【review 门】真机手测(mermaid 观感、触控板惯性滚动)留到④集成时一并验。
+
+
+## Session 48: 下载空闲超时、死开关甄别与深色对比度核对
+
+**Date**: 2026-08-05
+**Task**: 下载空闲超时、死开关甄别与深色对比度核对
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+修掉下载超时语义：network.timeout 经 AbortSignal.timeout 挂在 fetch 上，对流式响应会连同 body 一起中止，30 秒设置等于杀死所有超过 30 秒的下载。requestStream 本就优先用调用方 signal，故在 download-worker 侧传一个每收 chunk 就重置的空闲计时器，不改 network-service。死开关甄别：上一轮在 SettingUpdate/SettingSetup 挖出的硬编码 false 是真问题，但 SettingTools 的同类门控不是——它有两个用例明确钉住边界，且删改设置属于 08-04-batch-settings-razor 的决定，误解除后已用 git show HEAD 单文件还原，只保留 recommendation.maxItems/showReason 两个零消费者控件的删除。深色态：本次改过的 11 个文件零硬编码颜色；但 --shell-on-primary 未在 .dark 重定义，白字在深色 primary #4e9ae6 上仅 2.96:1（浅色 4.09:1），两者均低于 WCAG AA，因与设计稿一致且属品牌色决定，未擅自修改，待拍板。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f3edaabb` | (see git log) |
+| `c5fbf1485` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## 2026-08-05 · tuffex-ai-attachments-toolcards · ③落地(分部模型+附件+工具卡)
+
+- parts 模型纯可选增量(`AiElementMessage.parts?`,text/reasoning/tool-call/attachment 四类),旧 content 消费方零改动;TxAiConversation 过滤器补"parts-only 空 content 不滤掉"。
+- 新组件×3:TxAttachmentTray(缩略+进度环+TxModal 预览)、TxToolCallCard(四态+`result` Widget 展面槽+320px 内滚约束,零 arrow-js import)、TxReasoningDisclosure(shimmer 思考态+时长完结态);折叠动画统一 grid-rows 0fr↔1fr 免测高。
+- TxChatComposer 原地扩展:paste/drop → `attachmentAdd(File[])`、dragenter/leave 计数器防高亮抖动、**补上缺失的 IME isComposing 守卫**(HomePage 手写版有、组件版一直没有)。
+- 坑:barrel 对同名类型双源 `export *` 会静默歧义化——tool-call-card 不 re-export `AiToolCallPart`。
+- 全量门:1016 测试/typecheck/lint/build 全绿;动画手感 review 门并入④集成验。提交 87e67d03c / 7b4e4d6fa。
+
+
+## Session 49: Database single-writer root fix: land search split, de-amplify write queue
+
+**Date**: 2026-08-05
+**Task**: Database single-writer root fix: land search split, de-amplify write queue
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+Root-caused the recurring SQLITE_BUSY/DATABASE_BUSY_RETRY_EXHAUSTED chain to four interlocking mechanisms (dual writers on database.db behind the dark #295 split flag; ~20 call sites sleeping busy-backoff inside the global write queue; aux fallback/stale-capture + compat dual-writes; boot write storms). Landed scheduler-native delayed-re-enqueue retry, converged all call sites onto scheduleDbWrite/scheduleAuxWrite with live home resolution, split the queue into per-file lanes, gated boot maintenance writers. Three app-run validation rounds caught and fixed three ship-blockers in the parked split (schema parity fixups, read/write home split-brains incl. embeddings, missing bootstrap reindex) plus the 2d.3 write-path migration; V2 ran zero BUSY/FK, DB_SEARCH_SPLIT_ENABLED default flipped ON. Compat dual-writes retired; contracts captured in .trellis/spec/main-process/database-write-contracts.md.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `90aa26b17` | (see git log) |
+| `3c62566fb` | (see git log) |
+| `052d1d506` | (see git log) |
+| `08b64b650` | (see git log) |
+| `95d7fb3c3` | (see git log) |
+| `d12af493e` | (see git log) |
+| `571af84ed` | (see git log) |
+| `cd39bdbf6` | (see git log) |
+| `c2350bc6c` | (see git log) |
+| `ab904670a` | (see git log) |
+| `e91a4b085` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## 2026-08-05 · home-chat-tuffex-ai-fusion · ④落地(首页接入 tuffex ai 全栈)
+
+- 基线是 08-04 未提交的 R2(整会话粒度 transport)——设计随之定型:无 loadOlder(打开即全量+虚拟化兜底)、TxAiMessage 不上首页(卡片语言与 shell v2 平铺冲突,item 插槽承载原版式)、composer 不换件(保焦点/IME,paste/drop 本地实现)。
+- 交接表:手写 stick-to-bottom 全删移交 TxConversationStream;composer 测高改喂 scroller padding+浮钮偏移;keep-alive 切会话后显式 scrollToBottom(整体替换不触发 prepend 锚定)。
+- 附件内存态:ConversationMessage.attachments 挂 user 消息,provider payload 与持久化由构造双双不含;objectURL 卸载统一 revoke;降级提示行 i18n 四 key。
+- 两个大坑:①包目录内 pnpm add 会剪掉 lockfile 的具名 catalogs 段(①时已提交出去的回归,本轮根目录全量 install 修复),且残留 vite@terser 孤儿实例破坏 typecheck:node——已写进 memory;②lang json 用 json.dump 往返引入全文件格式噪声,用 HEAD 紧凑形态逐点收敛,顺带去掉 home 对象的重复键。
+- 纠缠文件(HomePage/useHomeConversation/lang)如实并入一个双任务提交(fe581a6be),pi-cli 层(cf8b4ac5c)与 lockfile 修复(5ba253976)独立成提交。
+- 全量门:tuffex 1016 + core-app conversation 31 + typecheck node/web + lint 全绿。唯一留白:core:dev 目验 review 门(①②③④合并清单)交用户。
+
+## 2026-08-05 · home-chat-tuffex-ai-fusion · CDP 代验 review 门 + 4 个真机 bug
+
+- 验法:dev 实例带 --remote-debugging-port,自写 cdp.mjs(eval/shot/files/mediashot/watch)驱动+截图,我直接读图核验;清单 1-5 全过,截图存 /tmp/tuff-verify/。
+- **bug#1 持久化全挂**(useConversationHistory):reactive meta 过不了 structuredClone,每次 save 静默失败——toRaw+spread 修;修后 URL 变 /home/c/:id、reload 恢复实证。
+- **bug#2 scoped 样式失配**(HomePage):`.HomePage .tx-*` 覆写在 scoped 块里永不匹配子组件内部——:deep() 修;顺带 composer 测高 contentRect→borderBoxSize(浮钮偏移差 40px 的根源)。
+- **bug#3 跟流缴械竞态**(tuffex stick):scrollToBottom 同步 measure 即释放 guard,而 scroll 事件异步到达时内容又长高→误判用户滚动→following 永久 false。改按**位置**判到达(programmaticTarget),内容中途增长不再缴械;补回归单测。
+- **bug#4 follow 打在过期 scrollHeight**(tuffex stream):RO 回调里 spacer 高度还没经 Vue 重渲染落 DOM,scrollTo 目标过期且 spacer 落地无 RO 事件——follow 挪 nextTick(post-flush);viewport 迟到收缩同样补 grew 触发。
+- 发送即回底补齐(旧手写行为):submit 后显式 scrollToBottom。
+- 遗留:pi provider 首发偶发空响应(retry 即恢复,08-04 侧待查);Chromium 会恢复 reload 前滚动位置(与落底逻辑共存,可接受)。
+
+## 2026-08-05 · search-hotpath-quadratic-fix · 搜索热路径去 O(n²)
+
+- 三线并行审查(app/file/engine 代理,70+ 发现)后按用户指令只修搜索级二次方:addSearchToken 去重 O(n²)→WeakMap+Set O(1)(JSON key 等语义保留);processSearchResults 的语义目录×2+拼音+token 构建按内容指纹 LRU(512)记忆化(键含 user aliases);索引期 record-sync 的 isAlias/isAcronym 每关键词全目录重扫 hoist 为一次预计算。
+- bench(临时文件已删):去重 150 app×200→400 token 时旧 4.33×/新 1.82×(1388ms→34ms,40 倍);150 候选冷 21.6ms→热 2.9ms(换查询同样命中,匹配集 75/75/75 全等)。
+- 门:utils 979 + core-app addon/apps 161 + typecheck:node 全绿;packages/test 61 失败为既有(插件 prelude 回归,不 import 搜索模块);lint 净增 +3 同类 style(文件整体与根配置风格不合,新代码贴文件局部风格)。
+- spec 固化 main-process/search-hotpath-contracts.md:去重必须走 addSearchToken 漏斗、记忆化键必须覆盖全部派生输入(漏字段=陈旧缓存 bug 类)、缓存数组共享引用只读。
+- 遗留(审查报告在案未动):排序结果到不了 UI 的结构断层、关键词白名单正则、对账丢数据三件、SQL 前缀全扫——待后续任务。
+
+## 2026-08-05 · home-tool-loop · S3-S7 落地(工具网关→extension→UI→图表)
+
+- **S3 网关**:主进程 loopback HTTP(127.0.0.1 随机端口 + 每会话 bearer token,timingSafeEqual 校验),工具在主进程执行、agent 进程只转发——确认门因此无法被绕过;deny/异常/未知工具一律以 tool error 回给模型让循环继续;read 类可「本会话记住」,write/execute 每次必问;19 例单测。
+- **S4 extension**:packages/pi-extension-tuff(pi 扩展包,`pi install <path> -l` 开发装),三工具薄壳;provider 注入 env + `--tools` 白名单,且**工具开时必须撤 `--no-extensions`**(否则白名单形同虚设)。
+- **S5 UI**:parts→ChainOfThought 时间线(单步退化为 ToolCallCard)、确认卡浮在 composer 上方(agent 被阻塞时滚走也能答)、Tools 开关默认关(翻开关才开网关+发白名单)。
+- **S6**:tuff_search_files 改接 coreBoxManager.search(与启动器同索引同排序);tuff_render_chart 收**声明式 spec**(校验 type/labels/series 对齐)→ ToolChartCard 按需 import echarts 渲染——「数据→报表」不给模型任意执行面。
+- **S7 端到端**:自写 gateway-smoke.mjs 起真网关 + 真 pi 跑通全链。**抓出真 bug**:pi 的 executor 签名是 `(toolCallId, params, …)` 而非 `(args)`,我按后者写 → 网关收到的 args 是 callId 字符串,真实场景下每次调用都会参数校验失败。单测抓不到(没人拥有 pi 的签名),只有端到端能抓;已修 + 加契约回归测试锁死。
+- 全量门:137 测试 / typecheck node+web 双绿。遗留:tuff_list_features / tuff_invoke_feature 未做(插件 feature 调用面);MCP 挂载等 C 任务。
+
+## 2026-08-05 · search-audit-remediation · 批次 A：A4/A1/A3 落地
+
+- 任务树:父任务持久化 70+ 审查发现 digest(E/A/F 编号+B/C 批次映射),批次 A 四子任务。A4 语义目录 token 边界匹配(3a8e40cd3):共享 matcher 只认身份字段,Postgres≠Telegram/家目录不再污染,双 catalog 版本升触发重扫。
+- A1 排序送达 UI(d880b6b22,implement+check 双代理):排序分/pinned 回写浅拷贝(防跨查询泄漏)、主路径单次 full 富化发布(IPC 减半)、渲染端合并→重排→每源保底 6→截 80、完成时缓存累计集、选中按 id 跟随。check 抓到渲染端 80 预截断抵消后端 200 放宽的高危并修复(红绿验证)。
+- A3 文件索引数据安全(7f9e806e3,implement+check+收尾三轮):扫描错误计数+按根删除守卫(空扫/超半删除拦截)、搜索路两条清理全改 ENOENT 闸门、NFC darwin 门控单一入口+幂等迁移(单写者合规,reconcile 让路一轮且不可能永久停摆)、mtime 秒级量化(含 check 抓出的 worker 拷贝路径)。
+- 新发现入 digest:E-NEW1 语义召回在 complete 后必丢;E-NEW3 ai search-agent 语义分被绝对分饱和到 1(阈值失效,待 ai/ 并发会话稳定后专项修);F-NEW1 全空根永不被 reconcile 删(既定保守);用户需求「展示主窗口类命令靠前」入 C4。
+- 门:A1 引擎 499+渲染 89;A3 files 294+utils 986;typecheck node/web 对己方文件零错。packages/test 61 失败与 ai/tuffex 报错均为并发/既有,未触碰。
+- 待办:A2 字符集统一(工件已备,依赖 A3 已落地→可派发);reco-audit 推荐系统评估在飞;批次 A 收口后做合并 spec 更新。
+
+## 2026-08-05 · home-tool-loop · 渲染批+动效批(用户中途追加)
+
+- **渲染批**(3db7b2b64):开围栏 120ms 合并定时器实时高亮(流式中就是彩色的,弃「闭合才高亮」);html/svg/xml 定稿围栏 Preview 切换(空 sandbox srcdoc iframe——不执行脚本不同源);图表家族扩到 10 型(area/doughnut/radar/funnel/gauge/heatmap+轴标/堆叠/数值标签),仍是声明式 spec。
+- **动效批**(2045c628d):composer 首发 FLIP 居中→落底(WAAPI,测量夹在响应式翻转两侧);新消息 iMessage 弹入(overshoot bezier,只在 isStreaming 时标记 id——restore 与虚拟化重挂载不重放,animationend 出集合);问候语退场 Transition;composer 双层阴影(contact+ambient)+focus 柔环;缓动词汇表三档制(out-quint 入场/overshoot 弹入/standard 状态)扫平 HomePage 与 tuffex 折叠族的裸 ease。
+- 坑:Transition 包裹 v-if 会拆断兄弟 v-else 链(改显式 !isEmpty);scoped keyframes 会被 hash 改名,探针要按前缀匹配。
+- 全量门:tuffex 1045/build、core-app typecheck×2、lint 全绿;HMR 已在用户实例生效。
+- 决策记录:MCP 路线定为主进程自建 client(--mcp-config 属第三方扩展且绕确认门,弃);C 任务下轮从 design 起步。
+
+## 2026-08-05 · search-audit-remediation · A2/R1 收口 + 批次 R 全量规划
+
+- A2 字符集统一(7dac5286c,三轮实现+复核):共享 search-charset(\p{L}\p{N} 清洗/折叠孪生含假名浊点例外/Script=Han/FTS5 引号/schema 版本)替换全部本地正则含第 4 处;三态查询变体经共享 search-keyword-lookup 双侧对称;复核真 FTS5 注入 24 条实测+CJK 码位差集穷举=0+红绿 14 条;复核抓到 R5 file 源不成立→版本键门控分页 DB 内回填(拒用会读磁盘的 scheduleIndexing,走纯映射链,幂等以 AUTOINCREMENT id 快照为证),与 path-normalization 串行互斥。
+- R1 推荐三修复(856f89b85,实现+复核):rebuild 按评分序返回+写 scoring.final、pinned 截断在排序后;usage 口径统一 source.id+门控迁移(先改写后合并为负控测试锁死的契约,'system' 字面行透传,映射键与真实 provider id 证明不相交);CoreBox 抢焦点前前台快照(TTL 15s,自见即弃)。复核顺手修 timer 逃逸等 3 处。
+- spec 固化 main-process/search-charset-and-identity-contracts.md:charset 单源、版本 bump 语义(app 自动/file 走绑定回填/禁走读盘 worker)、门控分页迁移模式四要素、usage 身份契约。
+- 批次 R 全量批准并规划(reco-signal-program.md):R2(接现成信号+hit-rate@k 指标)→R3a 采集基座→R3b 系统状态/R3c 文件活动→R3d 日历→R3e 行为学习;真地理位置停放。R4 扩展信号 14 条已入册。
+- 新账:E-NEW5 backfillTrendDay 违写契约(既有)、E-NEW6 迁移读窗竞态(自愈可接受)、E-NEW7 折叠孪生使 E-M2 更早触顶(批次 B 计入)。
+- 门(收口时):box-tool 1132 全绿、utils 1008+1skip、typecheck:node 己方文件零错;并发会话(ai/tool-gateway/conversation)文件全程未触碰。
+
+## 2026-08-06 · skills-mcp-config S1-S3 + 动效反馈轮 + thinking orbs
+
+- **关键翻案**:「主进程自建 MCP client」已存在——intelligence-mcp-registry 本就是全功能 client(双传输/懒连/代际/闲置回收/annotations→风险)。C 收窄为三桥一面;--mcp-config 路线弃(server 会落 agent 进程侧、绕确认门),PRD 验收第 3 条已改道。
+- **S1-S3 双代理并行**(4594c3200):S1 注入(surface 防伪标记 host-only+invoke/stream 双路径+autoContext 门)、S2+S3 网关三工具+扩展 spec;代理间自行对齐 skill_read 的 contentRef 契约;classify 逐调用风险+rememberKey 按被代理工具收窄是代理的超预期设计,采纳。设计漏算:skill_read 也要扩展 spec(共 3 个不是 2 个)。
+- **动效反馈轮**(c7b935831):发送飞行(视觉位起飞+模糊剥离+撞击上方 ±7/3px 交错回弹+加法后座力,WAAPI 类型库旧→animateRaw 窄转换);光环自然化(互质周期 8/11/9/13/6.4/7.6s 反向+色相巡游+呼吸);出字渐显(v-html 尾块每 delta 重建子节点→:last-child 动画天然重放,45%→100%)。
+- **thinking orbs**(fe0ae08b1):vendor 引擎(MIT v0.2.0)+TxThinkingOrb(随机每挂载);三落点(等待首token 28px/推理头/思维链头)。
+- 归属纪律:lang jsons+SettingTools+box-tool/reco+db/utils 是另一会话(reco-wire-existing-signals)在飞件,已避开;typecheck:node 的 9 错全在其范围。
+- 附件诊断存档:UI-only 是任务④有意留白(attachmentNotSent 提示在案);pi 支持 @files 位置参数,打通=临时落盘+@path+消息类型加字段,待立项。
+
+## 2026-08-06 · skills-mcp-config S4-S6 收口（代理撞限，主会话接力）
+
+- S4/S5 双代理在报告前撞会话额度上限,留 85% 成品:S4 三件套已装配齐(15 测试绿),S5 组件成品但缺挂载+全部 60 个 i18n 键。主会话接力:挂进 SettingIntelligencePage、写 zh/en skillsMcp 块、SettingChip tone 三档归属核实为 S5 所需。787e2c554。
+- **lang json 多会话并发的提交法**:git show HEAD 取基线→只应用自己的块→hash-object -w→update-index --cacheinfo。工作区他人未提交行原样保留。两次实战(c3cb09839 三键、787e2c554 68 行块)。
+- **S6 冒烟**:9223 竟是用户在用的实例(我的启动因 5173 被占而失败,dev log 才暴露)——已误导航两次,即刻恢复 #/home。教训:**驱动 CDP 前先验证实例归属(检查 dev log 有没有 Port already in use)**。冒烟改离 app:真 registry+真 npx server 集成测试 15.2s 绿(TUFF_MCP_SMOKE=1 opt-in 守卫)。
+- 遗留观察:用户实例导航到 /setting/intelligence 白屏(组件动态 import 正常,疑设置 shell 上下文问题),待用户从设置入口自然点击核实;pi 回复重复 5 遍的旧毛病再现(08-04 挂账)。
+
+
+## Session 50: C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs
+
+**Date**: 2026-08-05
+**Task**: C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+MCP client 已存在的翻案把 C 收窄为三桥一面：注入桥（surface 防伪+autoContext 门）、网关三工具（classify 逐调用风险+rememberKey 收窄）、设置管理面（probe/手动 upsert/i18n 60 键）、真 server 冒烟 15.2s 绿（opt-in）。代理撞限主会话接力收尾。动效侧：thinking orbs vendor+三落点、发送飞行+撞击、光环互质周期天气化、出字渐显试错后回撤、消息操作栏（pilot 移植）、滚动守卫改实时底部释放。多会话纪律两法沉淀：index-object 提交法、CDP 实例归属预检。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4594c3200` | (see git log) |
+| `c7b935831` | (see git log) |
+| `787e2c554` | (see git log) |
+| `d05aa8c08` | (see git log) |
+| `fe0ae08b1` | (see git log) |
+| `c3cb09839` | (see git log) |
+| `2045c628d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## 2026-08-05 · realtime-freshness + R2 · 豆包诊断落案与推荐信号接线
+
+- 豆包个案取证:直接原因=dev 实例运行期 out/main 被清空(import('./darwin') 失败 93 次),环境事故;照出 4 个 HEAD 真缺陷立项修复(research/realtime-chain-diagnosis.md 含链路图/逐条证伪/验收脚本)。
+- realtime(a09d10bdd):失败三态(failed≠not-app,Info.plist 存在性二分)+2/8/30s 排程退避+死信(64 上限,空集即撤 timer);合并窗 400/300ms 后到者胜(SDK 粘性 delete 会把自动升级的应用删掉,红绿锁死);健康探针文件系统集合差(NFC 归一+manifest 校验,仅两个启动决策点);lastIndexedAt 补写;dev mdls 门 >6h。装→可搜预算 1.5-2.5s,空闲零定时器。复核修 4(NFC 鲁棒/manifest 空壳/死信双所有权泄漏/上报口径)。
+- R2(3ee91b54a):小时分布等量纲进评分;缓存键只剩慢上下文+易变请求时重排(复核抓到剪贴板 URL 候选进缓存的真 bug,红绿修复);冷启动 app catalog 兜底;聚合增量化(全量重建降为门控修复路径,E-NEW5 收口);选区接入+时区切换;isAppSourceType 双拼写修 17 处恒假判定;hit-rate@k 本地指标(0036 aux 表,id 不落盘不进 Sentry)。
+- 途中两代理撞额度上限,SendMessage 原地续跑无损;高负载(load 93-126)下 hook 超时定性为既有负载敏感 flake(search-core init),单跑全过。
+- 发现:db:generate 是死命令(drizzle-kit 未装,0015 起 22 个迁移手写)→迁移链+DDL parity 测试为正确门禁,记 E-NEW8;剪贴板 URL 候选的 content 是哈希非 URL(HEAD 既有,设计问题待决)。
+- 待用户:重启 dev 实例后跑 .trellis/tasks/08-05-realtime-index-freshness/verify-realtime-index-freshness.sh 验收「装 app ≤10s 可搜」。
+
+
+## Session 51: audit backlog: tuffex gates, native races, and two retracted claims
+
+**Date**: 2026-08-11
+**Task**: audit backlog: tuffex gates, native races, and two retracted claims
+**Branch**: `ci/1555-ratchet-css-budgets`
+
+### Summary
+
+Worked the GitHub audit backlog, not a Trellis task. Ten PRs merged; open audit issues 36 -> 25 and the tuffex label emptied twice over before new findings refilled it.
+
+Native: #851 (a refused StopFrames was reported as stopped, orphaning an SCStream), #841 (startCapture blocked the Electron main thread 157ms; moved to a napi AsyncTask after establishing that recv_timeout would break first-run mic consent, which nothing in the repo requests ahead of time), and #1542's race tests. #1547 unbroke the base: two PRs each green alone left cargo test --workspace uncompilable, half of it my own tests constructing ActorInner literally.
+
+tuffex: found four audit scripts that no workflow ran (0 hits each against 9 for typecheck). Wired the two that pass (#1556), fixed audit:types which had been dead since a workspace: dependency was added after it was written (#1561), then measured its CI cost at 9s rather than guessing from a 4-minute local run and wired it too (#1563). Fixing it surfaced a duplicated vendored GitHub markdown sheet in components.css -- 37.2 KiB, 8% of the bundle, two SFCs each @import-ing it (#1569).
+
+Two claims I made and then disproved myself. #1557: I reported pnpm consumers hitting TS2307 on an undeclared @vue/reactivity; a faithful install resolves it via pnpm's default hoist dir, and hoist=false resolves it too. My repro had hand-extracted the tarball into a layout no package manager produces. #1565: I judged AC9's opaque-panel requirement unimplemented and wrote the forcing logic, then found TxCard sits in the v-else-if and never renders under liquid, so the prop I was constraining is never read. Both retracted on the issues; the second's code was reverted.
+
+Also corrected the #1125 diagnosis: the 119 docs findings are not a rule/state-machine mismatch. All of them land on active planning/in_progress tasks, all created after the rule shipped, and task.py never writes the three fields it demands. Archiving is what drops the requirement -- that rule only applies to active tasks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c72aad40e` | (see git log) |
+| `1b923a84e` | (see git log) |
+| `f7c245a8d` | (see git log) |
+| `bf95c966d` | (see git log) |
+| `250950078` | (see git log) |
+| `056524ec8` | (see git log) |
+| `033b84b37` | (see git log) |
+| `8c5b5e797` | (see git log) |
+| `1cbad953f` | (see git log) |
+| `574c618aa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 52: Issue sweep: 14 closed, 25 PRs, and five guards that could not fail
+
+**Date**: 2026-08-12
+**Task**: Issue sweep: 14 closed, 25 PRs, and five guards that could not fail
+**Branch**: `docs/1098-correct-nanoid-attribution`
+
+### Summary
+
+以 issue 为单位推进 25 个 PR;关闭 14 条;用开关取代 implicit-any ratchet;发现并修复自己在 #1648 埋的产物命名缺陷;沉淀 guard-thinking-guide
+
+### Main Changes
+
+本轮以 GitHub issue 为单位推进,未创建 Trellis 任务;工作全部经 PR 合入 `TalexDreamSoul/app-shell-v2`,共 25 个 PR。
+
+## 关闭的 issue
+
+#1564 hook 解析、#1125 native-protocol 全红、#806 Linux 窗口效果、#1517 Windows OCR 读不出、#857 图标主线程阻塞、#898 场景资产归属、#594 与 #786 macOS 发布产物、#713 TouchPlugin 拆分、#1303 drizzle 快照、#1608 macOS 产物计数、#344 COM apartment、#548 noImplicitAny、#480(并入 #318)、#1644 external storage 归属。
+
+## 几处需要记住的判断
+
+**#548 用开关取代了 ratchet。** 227 条隐式 any 分九个 PR 清完之后,做了一个五分钟实验:直接在 `tsconfig.node.json` 打开 `noImplicitAny`,结果恰好 19 条、全是 TS7xxx、继承链不带出别的严格选项。这个实验本可以是第一件事,而不是第八件。收口时把 ratchet 脚本连同测试一起删了——判据是「数字若能归零就用开关,不能归零才用 ratchet」。据此审了全部四个 ratchet:drizzle 快照正确、CSS 预算是带余量的上限(正确)、透明窗口守卫正确但说明过期(已改写,它还在指示读者去做 #806 已经否决的事)。
+
+**#1648 我自己埋了一个雷,在 #311 上挖出来。** 那次把 macOS artifactName 改成 `${productName}-${version}-${arch}.${ext}` 解决了架构碰撞,却让 zip 无法被 `inferCoreArtifactIdentity` 归类(它认 `macos`/`darwin` 或 `.dmg`/`.app.zip`),而 `isCorePackageFileName` 仍返回 true——于是它会作为「无法推断平台的核心产物」在**签名公证上传完成之后**才被 manifest 校验拒掉。更要紧的是当时那条守卫断言的是「含 `${arch}`」,坏名字完全满足它。已改成跑发布流水线自己的推断函数。
+
+**守卫失效是本轮的主线。** 一共五处:artifactName 含 `${arch}`、ratchet 数字对得上、`.catch(` 出现在文件里、actionlint 退出 0(缺 shellcheck 时静默跳过全部 run 块,本地 0 条 CI 32 条)、OCR 测试通过(不支持时提前返回)。形状相同:断言命名了性质的代理,而代理可以在性质不成立时被满足。已写成 `.trellis/spec/guides/guard-thinking-guide.md`。
+
+**重跑会抹掉 flake 证据。** GitHub API 返回最新一次尝试的结论,所以 `gh run rerun` 之后原始失败在 `conclusion` 里消失。据此统计 `App suites (core-app)` 得到 1/29≈3.4%,而当天三次连中概率约十万分之四——是测量错了。改读 `run_attempt`:最近 30 次至少 4 次曾失败(约 13%,下界)。推论:任何按当前结论算的 CI 稳定性指标,会被处理 flake 的动作本身污染,越勤快越好看。
+
+## 仍待你定夺
+
+#321 截图 addon:验收项要求「移除模块即失败」,而 `build-target.js` 明确写着刻意不要求(loader 优雅降级)。两边自洽,取决于「无截图能力的发布算不算合格发布」。
+
+#328 依赖 PR #1572(app-shell-v2 → master)。量化过:冲突全部来自 master 独有的 4 个提交,9 个文件,其中 5 个机械/加性、1 个 lockfile 该重生、真正需人判断的 3 个源码文件。当前 master 上 4 critical / 28 high。
+
+#311 macOS 架构策略、#689 CSP 清单(需要你跑一段时间后搜 `[csp-report-only]`)、#213(需要报告者说明装的是 deb 还是 AppImage)、#305 catalog 任务第 9 条(是真缺口还是流程遗留)。
+
+## 共享 worktree 的代价
+
+分支被并发会话切走至少四次,导致两次提交落到别人分支、两次测量被在途改动污染、一次 `git add -A` 卷进别人的工作、一次差点与 #318 重复劳动。此后所有提交改为按 SHA 用 `commit-tree` 以 base 为父重建再推。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b412c4c9f` | (see git log) |
+| `3686376dd` | (see git log) |
+| `d9dd1a06f` | (see git log) |
+| `616dc7a01` | (see git log) |
+| `e64b795ea` | (see git log) |
+| `e5594a127` | (see git log) |
+| `595b2c0f8` | (see git log) |
+| `ce0f55aaf` | (see git log) |
+| `58cb33a55` | (see git log) |
+| `d50fbae39` | (see git log) |
+| `6058a07a4` | (see git log) |
+| `0766072c0` | (see git log) |
+| `1401305a1` | (see git log) |
+| `c98e27733` | (see git log) |
+| `092435aa2` | (see git log) |
+| `224cf91d4` | (see git log) |
+| `c206e8ec4` | (see git log) |
+| `3fe748f8d` | (see git log) |
+| `89d408777` | (see git log) |
+| `d53663d01` | (see git log) |
+| `721e0aa0b` | (see git log) |
+| `476374cc1` | (see git log) |
+| `02b0884d5` | (see git log) |
+| `5e9370fc2` | (see git log) |
+| `07109069c` | (see git log) |
 
 ### Testing
 

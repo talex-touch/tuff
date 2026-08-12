@@ -1,0 +1,84 @@
+---
+title: Attachment Tray
+description: A message attachment area — images in a grid with a built-in viewer, files as chips, with optional upload progress and removal.
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, attachment, upload]
+syncStatus: reviewed
+verified: true
+---
+# Attachment Tray
+
+`TxAttachmentTray` renders the attachments on a message: images as a clickable grid, files as chips with sizes. It serves two surfaces — pending attachments in a composer, where they can be removed or their upload cancelled, and read-only attachments on a sent message.
+
+Manually verified against `packages/tuffex/packages/components/src/attachment-tray/src/TxAttachmentTray.vue`.
+
+## Basic Usage
+
+### Attachment Tray
+::::TuffDemoWrapper{demo="AttachmentTrayAttachmentTrayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const attachments = [
+    { kind: 'image', id: 'i1', url: 'https://picsum.photos/id/1015/400/300', name: 'canyon.jpg' },
+    { kind: 'file', id: 'f1', name: 'report.pdf', size: 240_000 },
+    { kind: 'file', id: 'f2', name: 'uploading.zip', size: 1_200_000, uploading: true, progress: 0.4 },
+  ]
+  </script>
+
+  <template>
+    <TxAttachmentTray :attachments="attachments" removable @remove="onRemove" @cancel="onCancel" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Attachments are split by `kind`: `image` goes to the grid, `file` to the chips. Pass both in the same `attachments` array.
+- `removable` is the switch between the two modes: true shows remove and cancel-upload affordances (composer), false makes the whole area read-only (message).
+- The three events differ in shape. `remove` and `cancel` carry an `id`; `open` is emitted **by file chips only**, carries the whole attachment, and what "open" means is the consumer's call.
+- Images have no `open` event — clicking one opens the built-in viewer (built on `TxModal`), with nothing for the host to wire up.
+- The viewer pages between images only, and the index is clamped to the valid range. Files take no part in it.
+- The viewer title prefers the image's `name` and falls back to `previewTitle`.
+- A thumbnail that fails to load is recorded by `id` and replaced with a placeholder, rather than showing the browser's broken-image glyph or retrying.
+- Upload progress is driven by `uploading` and `progress` (0–1) on the attachment, drawn as a ring.
+- File sizes default to B / KB / MB with one decimal; `sizeFormatter` replaces that entirely.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `attachments` | `AiAttachment[]` | — | Images and files in one list. Required. |
+| `removable` | `boolean` | `false` | Whether to show remove and cancel-upload. True in a composer, false on a message. |
+| `previewTitle` | `string` | `'Preview'` | Viewer title when the image has no `name`. |
+| `previousLabel` | `string` | `'Previous image'` | Accessible name for the previous button. |
+| `nextLabel` | `string` | `'Next image'` | Accessible name for the next button. |
+| `previousText` | `string` | `'Prev'` | Visible text on the previous button. |
+| `nextText` | `string` | `'Next'` | Visible text on the next button. |
+| `removeLabel` | `string` | `'Remove attachment'` | Accessible name for remove buttons. |
+| `cancelLabel` | `string` | `'Cancel upload'` | Accessible name for cancel-upload buttons. |
+| `sizeFormatter` | `(bytes: number) => string` | — | Replaces the file size text. Falls back to B/KB/MB. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `remove` | `(id: string)` | Emitted when remove is clicked. |
+| `cancel` | `(id: string)` | Emitted when cancel-upload is clicked. |
+| `open` | `(attachment: AiAttachmentFile)` | Emitted by **file chips only**; images use the built-in viewer. |
+
+## Slots
+
+`TxAttachmentTray` exposes no slots. The image grid and file chip layouts are fixed.
+
+## Best Practices
+
+- Pass `removable` in a composer and omit it on a message — it is the only signal separating "still editable" from "already sent".
+- `remove` and `cancel` give you an `id` only; drop the item from your own list. The component never mutates `attachments`.
+- Set `uploading: true` **and** `progress` together on an in-flight attachment; one without the other leaves the ring at zero.
+- Implement `open` for files, or clicking a file chip does nothing at all.
+- Override the six label props plus `sizeFormatter` on non-English surfaces. `previousText` and `nextText` are visible text, so missing them is the most obvious.

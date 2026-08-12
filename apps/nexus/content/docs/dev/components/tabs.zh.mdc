@@ -585,6 +585,7 @@ code: |
 | `iconClass` | `string` | `''` | 导航标签前的可选图标 class。 |
 | `disabled` | `boolean` | `false` | 阻止点击激活，并渲染禁用的原生按钮。 |
 | `activation` | `boolean` | `false` | 当 `modelValue` 和 `defaultValue` 都没有选中 tab 时，作为非受控默认项。 |
+| `active` | `boolean` | `false` | 是否处于激活态；由 TxTabs 自动注入，仅独立使用 TxTabItem 时手动传入。 |
 
 ### TxTabItem 事件
 

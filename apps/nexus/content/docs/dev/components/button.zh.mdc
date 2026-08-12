@@ -161,8 +161,8 @@ rows:
     type:
       kind: enum
       enums: [primary, secondary, ghost, danger, success, warning, info, flat, bare]
-    default: '-'
-    description: '视觉风格变体'
+    default: "'secondary'"
+    description: '视觉风格变体。未显式设置时（且未通过 `type` 推导）回退为 `secondary`。'
   - parameter: type
     type:
       kind: enum
@@ -174,11 +174,11 @@ rows:
       kind: enum
       enums: [sm, md, lg, large, small, mini]
     default: "'md'"
-    description: '按钮尺寸'
+    description: '按钮尺寸。`lg`/`large` 用于页面主操作，`sm`/`small`/`mini` 用于表格行内与紧凑工具条。'
   - parameter: block
     type: boolean
     default: 'false'
-    description: '是否块级（撑满容器）'
+    description: '块级按钮，撑满父容器宽度。移动端表单提交与抽屉底部操作常用。'
   - parameter: plain
     type: boolean
     default: 'false'

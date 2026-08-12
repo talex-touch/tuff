@@ -2,14 +2,21 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { createHash } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { and, eq, inArray, sql } from 'drizzle-orm'
+import {
+  SEARCH_KEYWORD_SCHEMA_VERSION,
+  foldSearchText,
+  hasHanCharacter,
+  isSearchKeywordValid,
+  normalizeSearchText,
+  quoteFtsToken
+} from '@talex-touch/utils/search'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../db/db-write'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 import { AdaptiveBatchScheduler } from './adaptive-batch-scheduler'
 
-const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
-const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]+/i
 const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
 const NGRAM_PREFIX = 'ng:'
@@ -203,14 +210,15 @@ export class SearchIndexService {
   }
 
   /**
-   * Schedule a write operation: in directMode, execute immediately;
-   * otherwise go through DbWriteScheduler + SQLite retry.
+   * Schedule a write operation. In directMode (worker thread — no scheduler,
+   * off the main thread) retry locally with withSqliteRetry; otherwise go
+   * through the shared write queue, whose scheduler owns SQLITE_BUSY retry.
    */
   private async scheduleWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
     if (this.directMode) {
       return withSqliteRetry(operation, { label })
     }
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+    return scheduleDbWrite(label, operation)
   }
 
   private createLogBucket(): SearchIndexLogBucket {
@@ -781,11 +789,14 @@ export class SearchIndexService {
     if (!prefix) return []
     await this.ensureInitialized()
 
-    const likePattern = `${prefix}%`
+    // Escaped like the subsequence sibling below. Concatenating raw user text let
+    // '%' and '_' through as wildcards: typing '%' produced '%%' and matched every
+    // keyword row for the provider (#663).
+    const likePattern = `${escapeLikeWildcards(prefix)}%`
     const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
       sql`SELECT km.item_id, km.keyword, km.priority
           FROM keyword_mappings km
-          WHERE km.keyword LIKE ${likePattern}
+          WHERE km.keyword LIKE ${likePattern} ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}
             AND km.provider_id = ${providerId}
             AND km.keyword NOT LIKE 'ng:%'
           LIMIT ${limit}`
@@ -921,22 +932,25 @@ export class SearchIndexService {
    * - Default (1-3 words): prefix search with implicit AND via FTS5
    */
   private buildFtsMatchExpr(query: string): string {
+    // Every token is quoted before it reaches MATCH: this is the only place the
+    // query text becomes FTS5 syntax, so quoting here keeps user input out of
+    // the operator/column-filter positions regardless of the caller.
     const words = query.split(WORD_SPLIT_REGEX).filter((w) => w.length > 0)
-    if (words.length === 0) return query
+    if (words.length === 0) return quoteFtsToken(query)
 
     if (words.length === 1) {
       // Single word: prefix matching
-      return `${words[0]}*`
+      return `${quoteFtsToken(words[0])}*`
     }
 
     if (words.length > 3) {
       // Long multi-word query: use NEAR for proximity relevance with prefix
-      const escaped = words.map((w) => `"${w}"`).join(' ')
+      const escaped = words.map(quoteFtsToken).join(' ')
       return `NEAR(${escaped}, 10)`
     }
 
     // 2-3 words: prefix each token for better recall
-    return words.map((w) => `${w}*`).join(' ')
+    return words.map((w) => `${quoteFtsToken(w)}*`).join(' ')
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -1312,9 +1326,16 @@ export class SearchIndexService {
     const normalized = Array.from(this.toKeywordPriorityMap(entries).entries()).sort(([a], [b]) =>
       a < b ? -1 : a > b ? 1 : 0
     )
-    const raw = normalized
-      .map(([keyword, priority]) => `${keyword}:${priority.toFixed(4)}`)
-      .join('\n')
+    // The schema version is part of the hash so that changing keyword generation
+    // invalidates every stored hash: the normal delta path then rewrites the
+    // mappings of every item a source re-emits, without a manual rebuild. The
+    // check is independent of mtime, but a source that only re-emits changed
+    // items (files) still leaves untouched items on the old rules — see
+    // SEARCH_KEYWORD_SCHEMA_VERSION.
+    const raw = [
+      `schema:${SEARCH_KEYWORD_SCHEMA_VERSION}`,
+      ...normalized.map(([keyword, priority]) => `${keyword}:${priority.toFixed(4)}`)
+    ].join('\n')
     return createHash('sha1').update(raw).digest('hex')
   }
 
@@ -1352,7 +1373,7 @@ export class SearchIndexService {
     }
 
     // 为所有文件名生成拼音索引（不仅限于中文）
-    if (CHINESE_CHAR_REGEX.test(titleSource)) {
+    if (hasHanCharacter(titleSource)) {
       // 中文：生成完整拼音和首字母
       const { full, first } = await this.generatePinyin(titleSource)
       if (full) this.appendKeyword(keywordMap, full, 1.15)
@@ -1361,11 +1382,11 @@ export class SearchIndexService {
       // 英文：生成首字母缩写作为拼音（如果还没有生成过）
       // 这样可以支持通过拼音首字母搜索英文文件名
       // 例如 "My Document" 可以通过 "md" 搜索到
-      if (!acronym || acronym.length > 1) {
+      if (!acronym || acronym.length <= 1) {
         // 如果acronym已经存在且长度>1，说明是多词缩写，已经添加过了
         // 否则，为单词文件名生成首字母
         const firstLetter = normalizedTitle.charAt(0)
-        if (firstLetter && /[a-z0-9]/.test(firstLetter)) {
+        if (isSearchKeywordValid(firstLetter)) {
           this.appendKeyword(keywordMap, firstLetter, 1.1)
         }
       }
@@ -1429,17 +1450,23 @@ export class SearchIndexService {
       }
     }
 
+    this.appendFoldedKeywordTwins(keywordMap)
+
     const keywordEntries = Array.from(keywordMap.entries())
       .map(([value, priority]) => ({ value, priority }))
-      .filter(({ value }) => this.isKeywordValid(value))
+      .filter(({ value }) => isSearchKeywordValid(value))
 
     // Generate n-gram entries with hard limits to avoid write amplification.
     // We prefer higher-priority keywords (title/alias-like terms) as n-gram sources.
+    // Spaced keywords (full titles, paths, bundle ids) stay out: they are exact
+    // and prefix lookup keys, and feeding whole phrases here would multiply the
+    // n-gram rows without adding recall the compact form does not already give.
     const ngramSources = keywordEntries
       .filter(
         ({ value, priority }) =>
           priority >= NGRAM_SOURCE_MIN_PRIORITY &&
           value.length >= NGRAM_MIN_WORD_LENGTH &&
+          !value.includes(' ') &&
           !value.startsWith(NGRAM_PREFIX)
       )
       .sort((left, right) => {
@@ -1488,11 +1515,27 @@ export class SearchIndexService {
   }
 
   private appendKeyword(store: Map<string, number>, keyword: string, priority: number): void {
-    const normalized = keyword.trim().toLowerCase()
+    // Characters outside the keyword charset are cleaned to spaces rather than
+    // vetoing the whole keyword, so spaced aliases, full titles, dotted
+    // extensions and non-Latin scripts all survive.
+    const normalized = normalizeSearchText(keyword)
     if (!normalized) return
     const existing = store.get(normalized) ?? 0
     if (priority > existing) {
       store.set(normalized, priority)
+    }
+  }
+
+  /**
+   * Store the diacritic-folded twin of every accented keyword, so that a file
+   * named `résumé.pdf` is reachable by typing either `résumé` or `resume`.
+   * Keywords that fold onto themselves add nothing.
+   */
+  private appendFoldedKeywordTwins(store: Map<string, number>): void {
+    for (const [keyword, priority] of Array.from(store.entries())) {
+      const folded = foldSearchText(keyword)
+      if (!folded || folded === keyword) continue
+      this.appendKeyword(store, folded, priority)
     }
   }
 
@@ -1520,14 +1563,6 @@ export class SearchIndexService {
     if (words.length <= 1) return ''
 
     return words.map((word) => word.charAt(0).toLowerCase()).join('')
-  }
-
-  private isKeywordValid(keyword: string): boolean {
-    if (keyword.length === 0) return false
-    if (keyword.length === 1) {
-      return /[a-z0-9\u4E00-\u9FA5]/.test(keyword)
-    }
-    return !INVALID_KEYWORD_REGEX.test(keyword)
   }
 
   private async generatePinyin(text: string): Promise<{ full: string; first: string }> {
@@ -1614,13 +1649,21 @@ function subsequenceScore(query: string, target: string): number {
   return coverage * 0.5 + consecutiveBonus * 0.5
 }
 
+/**
+ * Neutralises SQLite LIKE metacharacters so user text is matched literally.
+ * Callers must pair this with `ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}`.
+ */
+function escapeLikeWildcards(value: string): string {
+  return value.replace(
+    SQLITE_LIKE_WILDCARD_REGEX,
+    (match) => `${SUBSEQUENCE_LIKE_ESCAPE_CHAR}${match}`
+  )
+}
+
 function buildSubsequenceLikePattern(query: string): string {
   let pattern = '%'
   for (const char of query) {
-    pattern += char.replace(
-      SQLITE_LIKE_WILDCARD_REGEX,
-      (value) => `${SUBSEQUENCE_LIKE_ESCAPE_CHAR}${value}`
-    )
+    pattern += escapeLikeWildcards(char)
     pattern += '%'
   }
   return pattern

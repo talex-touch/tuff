@@ -159,8 +159,6 @@
     },
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
-    "advancedSettings": "高级设置",
-    "advancedSettingsDesc": "启用后显示文件索引、应用索引调度、下载、数据分析与存储设置",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
   },
   "settingLanguage": {
@@ -413,6 +411,10 @@
     "dashboardDesc": "在 Nexus 查看详细的使用统计和趋势"
   },
   "settingTools": {
+    "autoContextGroupTitle": "上下文",
+    "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
+    "autoContext": "Auto Context",
+    "autoContextDesc": "开启后模型按需自动取用联网、文件检索、剪贴板与关联数据，无需逐条挑选工具；关闭后每次都要手动指定。",
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
     "customPlaceholder": "自定义占位文本",
@@ -511,10 +513,10 @@
     "recommendationContextForegroundAppDesc": "根据当前正在使用的应用补充相关工具推荐。",
     "recommendationContextClipboard": "推荐分析：剪贴板",
     "recommendationContextClipboardDesc": "根据剪贴板内容类型推荐编辑器、浏览器、文件工具等。",
+    "recommendationContextSelection": "推荐分析：选中文本",
+    "recommendationContextSelectionDesc": "纳入最近一次取词的内容类型（本地哈希，不记录原文），与剪贴板同一隐私档位。",
     "recommendationContextNetwork": "推荐分析：网络",
     "recommendationContextNetworkDesc": "纳入联网状态、网络类型和脱敏网络桶，不记录明文网络名。",
-    "recommendationContextBluetooth": "推荐分析：蓝牙",
-    "recommendationContextBluetoothDesc": "预留蓝牙可用性与连接数量信号，用于后续设备上下文推荐。",
     "recommendationContextFocus": "推荐分析：专注状态",
     "recommendationContextFocusDesc": "纳入 macOS 专注 / 勿扰状态，专注时减少娱乐社交类推荐。",
     "recommendationContextPower": "推荐分析：电源与电量",
@@ -529,9 +531,6 @@
     "enableAssistantDesc": "启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。",
     "floatingBall": "显示悬浮球",
     "floatingBallDesc": "在桌面上显示可拖动的悬浮入口；点击后打开文本指令面板。",
-    "assistantName": "助手名称",
-    "assistantNameDesc": "显示在 Assistant 面板顶部的名称。",
-    "assistantNamePlaceholder": "阿洛 aler",
     "voiceWake": "语音唤醒",
     "voiceWakeDesc": "开启后悬浮球和面板才会请求语音识别；关闭时只保留文本输入。",
     "wakeWords": "唤醒词",
@@ -642,6 +641,8 @@
     }
   },
   "settingUser": {
+    "syncSecurity": "同步安全",
+    "stepUp": "二次验证",
     "groupTitle": "账户",
     "groupDesc": "管理您的账户信息和登录状态。",
     "logout": "登出",
@@ -690,7 +691,6 @@
     "completeBrowserLoginToast": "请在浏览器中完成登录。",
     "loginPageReopenedToast": "已重新打开登录页面。",
     "tokenRequired": "请输入 token",
-    "secureStorageTitle": "登录凭证保护",
     "syncNow": "立即同步",
     "syncEnableFirst": "请先开启同步",
     "syncComplete": "同步完成",
@@ -700,15 +700,6 @@
       "enabled": "同步已开启。",
       "userDisabled": "你已手动关闭，同步不会在登录时自动恢复。",
       "disabled": "同步已关闭。"
-    },
-    "secureStorage": {
-      "enabledToast": "已启用登录凭证保护",
-      "disabledToast": "已关闭登录凭证保护。",
-      "disabledDescription": "启用登录凭证保护后，本地凭证防护更强，登录更安全。",
-      "checkingDescription": "正在检测本地凭证保护后端。",
-      "unavailableDescription": "本地凭证保护当前不可用；可用时开启后能提供更强防护，登录更安全。",
-      "enabledDescription": "登录凭证保护已启用：凭证由本机 root 密钥加密保存，防护更强。",
-      "sessionModeReminder": "登录凭证保护已关闭；可在账户设置中开启，以获得更强的本地凭证防护。"
     },
     "syncStatus": {
       "unrecorded": "未记录",
@@ -774,6 +765,9 @@
     "billingNoticeTitle": "计费提示"
   },
   "userProfile": {
+    "overview": "概览",
+    "security": "安全与登录",
+    "securityActions": "登录与安全选项",
     "title": "账户",
     "unknownName": "用户",
     "unknownEmail": "暂无邮箱",
@@ -971,6 +965,7 @@
     "description": "选择你喜欢的窗口效果。"
   },
   "base": {
+    "details": "详情",
     "last_step": "上一步",
     "step": "下一步",
     "touchCaptcha": {
@@ -1004,17 +999,120 @@
   "flatController": {
     "useNative": "使用原生窗口控件"
   },
-  "flatNavBar": {
-    "main": "主要",
-    "dashboard": "仪表盘",
+  "shell": {
+    "search": "搜索",
+    "newChat": "新建对话",
     "store": "市场",
-    "plugin": "插件",
-    "details": "详细信息",
-    "intelligence": "智能",
-    "style": "样式",
-    "setting": "设置"
+    "setting": "设置",
+    "collapseSidebar": "收起侧边栏",
+    "expandSidebar": "展开侧边栏",
+    "back": "后退",
+    "forward": "前进",
+    "minimizeWindow": "最小化",
+    "maximizeWindow": "最大化",
+    "restoreWindow": "还原",
+    "closeWindow": "关闭"
+  },
+  "home": {
+    "greeting": "今天想做点什么？",
+    "placeholder": "塔芙来帮你做任何事",
+    "autoContext": "Auto Context",
+    "autoContextHint": "开启后模型会按需自动取用联网、文件、剪贴板与关联数据",
+    "agentTools": "工具",
+    "agentToolsHint": "允许助手搜索、读取和打开文件——每次调用都会先征求同意",
+    "chainOfThought": "思考过程",
+    "chartFailed": "图表渲染失败。",
+    "toolAllow": "允许",
+    "toolDeny": "拒绝",
+    "toolRemember": "本会话记住",
+    "model": "选择模型与推理强度",
+    "openPanel": "展开右侧面板",
+    "closePanel": "收起右侧面板",
+    "moreActions": "更多操作",
+    "modelAuto": "自动选择",
+    "modelLoading": "正在读取可用模型…",
+    "modelEmpty": "没有可用的模型，先去配置一个 AI 提供方",
+    "configureProvider": "去配置",
+    "panel": {
+      "title": "会话信息",
+      "turnInfo": "本轮信息",
+      "messages": "消息数",
+      "provider": "提供方",
+      "model": "模型",
+      "tokens": "Token",
+      "latency": "耗时",
+      "noTurn": "还没有产生回复，发一条消息后这里会显示本轮用到的提供方、模型与用量。",
+      "workLog": "工作过程",
+      "workLogEmpty": "本轮没有工具调用或工件产出。工具调用与工件能力尚未实现，实现后会记录在这里。"
+    },
+    "modelName": "Tuff 智能",
+    "effortHigh": "高",
+    "attach": "添加附件",
+    "attachRemove": "移除附件",
+    "attachCancel": "取消上传",
+    "attachPreview": "预览",
+    "attachmentNotSent": "部分附件未发送给模型",
+    "voice": "语音输入",
+    "send": "发送",
+    "stop": "停止生成",
+    "retry": "重试",
+    "thinking": "正在思考",
+    "copy": "复制",
+    "copied": "已复制",
+    "regenerate": "重新生成",
+    "error": {
+      "noProvider": "还没有可用的 AI 提供商，去「设置 · AI」配置一个再试",
+      "agentToolsSync": "无法连接工具网关，智能体工具保持关闭",
+      "empty": "模型没有返回任何内容",
+      "generic": "这轮回复失败了"
+    },
+    "pill": {
+      "searchFiles": "用自然语言搜索文件",
+      "translateClipboard": "翻译剪贴板",
+      "tidyDownloads": "整理下载目录",
+      "runScript": "运行工作区脚本"
+    }
+  },
+  "settingsNav": {
+    "back": "返回 Tuff",
+    "search": "搜索设置",
+    "group": {
+      "preference": "偏好",
+      "capability": "能力",
+      "system": "系统"
+    },
+    "category": {
+      "overview": "总览",
+      "general": "通用",
+      "appearance": "外观",
+      "intelligence": "智能",
+      "plugins": "插件与工具",
+      "fileIndex": "文件索引",
+      "update": "更新",
+      "network": "网络",
+      "download": "下载",
+      "storage": "存储",
+      "about": "关于"
+    }
+  },
+  "settingsOverview": {
+    "tagline": "为创造者们重新构想的命令栏",
+    "account": "账户",
+    "general": "常规"
+  },
+  "settingsEntries": {
+    "installedPlugins": "已安装插件",
+    "downloadCenter": "下载中心",
+    "downloadCenterDesc": "查看下载任务与历史记录。",
+    "open": "打开",
+    "intelligenceDesc": "模型通道、能力、提示词与审计。",
+    "application": "应用",
+    "applicationDesc": "查看与管理已安装的应用。",
+    "store": "插件市场",
+    "storeDesc": "浏览、安装与管理插件。"
   },
   "store": {
+    "updatedAt": "更新于 {time}",
     "title": "插件市场",
     "subtitle": "发现适合您工作流程的优秀插件",
     "searchPlaceholder": "搜索插件...",
@@ -1024,6 +1122,7 @@
     "loading": "正在加载官方插件...",
     "refresh": "刷新",
     "install": "安装",
+    "market": "市场",
     "installed": "已安装",
     "docs": "文档",
     "cli": "CLI",
@@ -1031,6 +1130,7 @@
     "upgrade": "升级",
     "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
+    "openPluginDetails": "查看 {name} 的详情",
     "lastUpdated": "上次更新 {time}",
     "cliGroupTitle": "Tuff CLI",
     "cliGroupDesc": "检测到本机已安装 Tuff CLI，当前可体验 Beta 预览能力。",
@@ -1043,6 +1143,7 @@
     "docsLinkDesc": "打开 Nexus 文档，了解能力目录与调用方式",
     "docsOpen": "打开 Nexus 文档",
     "sourceEditor": {
+      "removeSource": "移除源 {name}",
       "title": "来源",
       "subtitle": "编辑插件市场来源",
       "addSource": "新增来源",
@@ -1273,6 +1374,13 @@
     }
   },
   "plugin": {
+    "devServerDisconnected": "Dev Server 已断开连接",
+    "customPreviewSize": "自定义 {width}×{height}",
+    "widgetPreview": "Widget 预览",
+    "widgetReloadFailed": "Widget 重新加载失败",
+    "widgetReloadAllTriggered": "已触发全部 Widget 重新加载",
+    "perfTrend": "性能趋势",
+    "perf": "性能",
     "add": "添加插件",
     "running": "运行中",
     "all": "全部",
@@ -1913,8 +2021,6 @@
       "basicInfo": "基础信息",
       "pluginId": "插件 ID",
       "pluginName": "插件名称",
-      "commandDetailsTitle": "命令详情",
-      "commandDataTitle": "命令数据",
       "copyPluginId": "复制插件 ID",
       "copyPluginIdSuccess": "插件 ID 已复制",
       "copyPluginIdFailed": "复制插件 ID 失败",
@@ -2214,6 +2320,8 @@
     "title": "Tuff"
   },
   "router": {
+    "home": "首页",
+    "homeConversation": "对话",
     "login": "请先登录!",
     "permission": "您没有权限!",
     "pluginStore": "插件市场",
@@ -2263,6 +2371,35 @@
     "modifiedAt": "修改时间"
   },
   "download": {
+    "migration": {
+      "title": "正在迁移数据",
+      "subtitle": "迁移完成前请保持应用开启。",
+      "tasks": "任务",
+      "history": "历史记录",
+      "config": "配置",
+      "duration": "耗时",
+      "errors": "错误",
+      "pleaseWait": "请稍候…"
+    },
+    "error_logs": "错误日志",
+    "no_logs": "暂无日志",
+    "load_logs_failed": "加载日志失败",
+    "clear_logs": "清空日志",
+    "clear_logs_confirm_title": "确认清空错误日志？",
+    "clear_logs_confirm_message": "此操作将永久删除已记录的下载错误日志，且无法恢复。",
+    "clear_logs_failed": "清空日志失败",
+    "logs_cleared": "日志已清空",
+    "download_logs": "导出日志",
+    "logs_downloaded": "日志已导出",
+    "no_logs_to_download": "没有可导出的日志",
+    "last_50_lines": "最近 50 行",
+    "last_100_lines": "最近 100 行",
+    "last_500_lines": "最近 500 行",
+    "all_logs": "全部日志",
+    "total_errors": "错误总数",
+    "network_errors": "网络错误",
+    "timeout_errors": "超时错误",
+    "disk_errors": "磁盘错误",
     "title": "下载中心",
     "settings": "设置",
     "downloading": "进行中",
@@ -2516,10 +2653,78 @@
     }
   },
   "settings": {
+    "skillsMcp": {
+      "loading": "正在加载…",
+      "loadFailed": "加载失败",
+      "loadFailedDesc": "读取已导入配置时出错，点击重试。",
+      "retry": "重试",
+      "toggleFailed": "切换失败",
+      "mcp": {
+        "label": "MCP 服务器",
+        "addTitle": "手动添加",
+        "addDesc": "配置一个 stdio 或 HTTP 的 MCP 服务器",
+        "addDescEmpty": "还没有服务器——手动配置一个，或从 AI CLI 导入",
+        "addAction": "添加",
+        "edit": "编辑",
+        "probe": "探测",
+        "probeUnavailable": "服务器不可用",
+        "probeUnknownError": "未知错误",
+        "detailUnknown": "（无详情）",
+        "sourceImported": "导入",
+        "sourceManual": "手动",
+        "stateIdle": "未探测",
+        "stateOk": "可用 · {count} 个工具",
+        "stateProbing": "探测中…",
+        "stateFailed": "失败",
+        "transportStdio": "stdio",
+        "transportHttp": "HTTP",
+        "transportUnknown": "未知",
+        "viewAllTitle": "查看全部服务器",
+        "viewAllDesc": "更多服务器与导入管理在智能页"
+      },
+      "skills": {
+        "label": "技能",
+        "noDescription": "（无描述）",
+        "injectionTitle": "会话注入",
+        "injectionDesc": "启用的技能与规则会随 Auto Context 注入首页会话",
+        "importTitle": "导入技能",
+        "importDesc": "从本机 AI CLI 配置扫描导入",
+        "importDescEmpty": "还没有技能——从本机 AI CLI 配置导入",
+        "viewAllTitle": "查看全部技能",
+        "viewAllDesc": "更多技能与导入管理在智能页"
+      },
+      "dialog": {
+        "createTitle": "添加 MCP 服务器",
+        "editTitle": "编辑 MCP 服务器",
+        "name": "名称",
+        "namePlaceholder": "my-server",
+        "transport": "传输",
+        "transportStdio": "stdio（本机命令）",
+        "transportHttp": "HTTP（远程地址）",
+        "command": "命令",
+        "commandPlaceholder": "npx",
+        "args": "参数",
+        "argsPlaceholder": "-y @modelcontextprotocol/server-filesystem /tmp",
+        "env": "环境变量",
+        "envPlaceholder": "KEY=value，每行一个",
+        "envNote": "值会进入系统安全存储，不落明文配置",
+        "url": "地址",
+        "urlPlaceholder": "https://example.com/mcp",
+        "headers": "请求头",
+        "headersPlaceholder": "Header: value，每行一个",
+        "save": "保存",
+        "saved": "已保存",
+        "saveFailed": "保存失败",
+        "cancel": "取消",
+        "delete": "删除",
+        "deleteConfirm": "确认删除该服务器？",
+        "deleteFailed": "删除失败"
+      }
+    },
     "platformTags": {
-      "macOnly": "仅限",
-      "windowsOnly": "仅限 Windows",
-      "linuxOnly": "仅限 Linux",
+      "macOnly": "macOS",
+      "windowsOnly": "Windows",
+      "linuxOnly": "Linux",
       "beta": "Beta"
     },
     "settingDownload": {
@@ -2557,9 +2762,20 @@
       "resetTempDir": "恢复默认目录",
       "selectTempDirTitle": "选择下载临时目录",
       "selectTempDirConfirm": "使用此目录",
+      "defaultDestination": "下载位置",
+      "defaultDestinationDesc": "完成的文件默认保存到这里；单个任务可在下载时另选",
+      "selectDestinationTitle": "选择下载位置",
+      "selectDestinationConfirm": "使用此目录",
+      "notSet": "未设置",
+      "choose": "选择…",
+      "notifyOnComplete": "完成后通知",
+      "notifyOnCompleteDesc": "任务完成或失败时发送系统通知",
+      "retry": "失败重试",
+      "retryDesc": "切片失败后自动重试的次数",
+      "cleanTemp": "清理临时文件",
       "defaultPath": "默认路径",
       "noRetry": "不重试",
-      "days": "天",
+      "days": "{days} 天",
       "actions": "操作",
       "actionsDesc": "管理下载设置和临时文件",
       "cleanupTemp": "清理临时文件",
@@ -2575,7 +2791,8 @@
         "defaultsRestored": "已恢复默认设置",
         "tempCleaned": "临时文件已清理",
         "tempCleanFailed": "清理临时文件失败",
-        "tempDirSelectFailed": "选择临时目录失败"
+        "tempDirSelectFailed": "选择临时目录失败",
+        "destinationSelectFailed": "选择下载位置失败"
       }
     },
     "settingNetwork": {
@@ -2607,6 +2824,14 @@
       "proxyAuthDesc": "认证凭据只通过安全存储引用读取，本页不保存明文账号密码",
       "proxyAuthConfigured": "已配置安全凭据引用",
       "proxyAuthNotConfigured": "未配置",
+      "customProxy": "自定义代理",
+      "customProxyDesc": "HTTP(S)、SOCKS、PAC 地址与绕过规则。仅在自定义模式下生效",
+      "customProxyHint": "留空的项不会生效。凭据请在「代理认证」中单独设置，本页不保存明文账号密码。",
+      "separateHttps": "为 HTTPS 单独设置地址",
+      "configure": "配置…",
+      "cancel": "取消",
+      "pauseOnInstability": "不稳定时暂停",
+      "pauseOnInstabilityDesc": "连续失败后短暂暂停请求，成功后自动恢复；关闭则始终立即重试",
       "policyGroupTitle": "网络策略",
       "policyGroupDesc": "配置统一网络请求的超时、重试和失败冷却",
       "timeoutMs": "请求超时",
@@ -3327,6 +3552,9 @@
       "evidenceSaved": "Everything 诊断证据已保存"
     },
     "intelligence": {
+      "testLatency": "耗时",
+      "testTokenSpeed": "Token 速度",
+      "testStabilityAnalysis": "稳定性分析",
       "pageTitle": "塔塔智能",
       "pageDesc": "通过塔塔智能，你可以优雅调度每条渠道，编排专属能力，并在一块打磨精致的控制面板中掌控全程。",
       "channelsSection": "渠道",
@@ -3704,17 +3932,14 @@
         "monthly": "每月一次",
         "never": "不自动检查"
       },
-      "autoDownloadTitle": "自动下载更新",
       "autoDownloadDesc": "发现新版本时自动下载更新包",
       "autoDownloadDescManual": "发现新版本时自动下载安装包，后续仍需通过系统安装器完成更新",
       "autoDownloadDescMac": "自动下载 macOS 更新包；应用更新时会通过重启完成接管。",
       "autoDownloadDescWindows": "自动下载 Windows 安装器；后续仍会明确启动 Windows 安装器。",
       "autoDownloadDescLinux": "自动下载 Linux 安装包；打开并完成安装仍需手动操作。",
-      "installOnNormalQuitTitle": "正常退出时安装",
-      "installOnNormalQuitDesc": "更新包下载并验证完成后，在应用下次正常退出时安装。关闭后仍可手动触发安装。",
       "installOnNormalQuitLocked": "该版本没有权威 N/N-1 降级兼容证据，已锁定正常退出安装；更新就绪后仍可手动立即安装。",
       "rendererOverrideTitle": "Renderer Override（实验性）",
-      "rendererOverrideDesc": "手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。",
+      "rendererOverrideDesc": "实验性能力，仅在以 TUFF_ENABLE_RENDERER_OVERRIDE=1 启动时可见；关闭后需重新以该变量启动才能再次开启。",
       "statusTitle": "状态",
       "status": {
         "loading": "正在加载更新状态…",
@@ -3829,8 +4054,6 @@
       "assetsCompatibilityMissingChecksum": "缺少校验信息",
       "evidenceTitle": "诊断证据",
       "evidenceDesc": "导出权威生命周期快照、降级/恢复元数据、缓存版本、平台接管模式，以及明确的 macOS native trust 验证状态。",
-      "copyEvidence": "复制证据",
-      "saveEvidence": "保存证据",
       "evidenceMissing": "请先加载更新状态",
       "evidenceCopied": "更新诊断证据已复制",
       "evidenceCopyFailed": "复制更新诊断证据失败",
@@ -3868,8 +4091,6 @@
         "loadFailed": "加载更新设置失败",
         "channelSaved": "已切换到 {channel}，正在检查更新",
         "frequencySaved": "检查频率已保存",
-        "autoDownloadSaved": "自动下载设置已保存",
-        "installOnNormalQuitSaved": "正常退出安装设置已保存",
         "rendererOverrideSaved": "Renderer Override 设置已保存",
         "saveFailed": "保存更新设置失败",
         "actionUnavailableForPhase": "当前更新生命周期阶段不允许执行此操作。",
@@ -3884,8 +4105,19 @@
         "macSilentUpdateNotWritable": "Tuff 无法在不弹出密码框的情况下替换当前应用。请将 Tuff 移动或重新安装到当前用户可管理的 Applications 位置后重试。",
         "macSilentUpdateUntrusted": "当前 Tuff 不是经过官方验证的 macOS 构建，已阻止静默更新。",
         "cacheCleared": "更新缓存已清空",
-        "cacheClearFailed": "清空更新缓存失败"
-      }
+        "cacheClearFailed": "清空更新缓存失败",
+        "installModeSaved": "安装方式已保存",
+        "notifyOnUpdateSaved": "通知设置已保存"
+      },
+      "notifyOnUpdate": "有新版本时通知",
+      "notifyOnUpdateDesc": "检查到可用更新或下载完成时发送系统通知。",
+      "installMode": {
+        "title": "安装方式",
+        "manual": "仅提醒",
+        "onQuit": "自动下载，退出时安装",
+        "immediate": "自动下载并立即安装"
+      },
+      "exportEvidence": "导出诊断"
     },
     "updateModal": {
       "title": "发现新版本",
@@ -3930,10 +4162,16 @@
       "startMinimized": "启动时最小化到托盘",
       "startMinimizedDesc": "应用启动时直接最小化到系统托盘",
       "autoStart": "开机自动启动",
-      "autoStartDesc": "系统启动时自动运行应用"
+      "autoStartDesc": "系统启动时自动运行应用",
+      "startSilent": "静默启动",
+      "startSilentDesc": "在后台启动，不显示主窗口"
     },
     "setup": {
       "groupTitle": "通用配置",
+      "permissionsGroupTitle": "权限",
+      "permissionsGroupDesc": "需要在系统设置中授予，Tuff 只能读取状态并引导你前往。",
+      "startupGroupTitle": "启动与后台",
+      "startupGroupDesc": "应用何时启动、是否驻留后台，以及托盘与 Dock 的显示。",
       "groupDesc": "配置权限和基础设置",
       "accessibility": "辅助功能权限",
       "accessibilityDesc": "用于扫描应用和读取前台上下文；自动粘贴还需要 macOS 自动化权限允许 Tuff 控制 System Events。",
@@ -3943,8 +4181,8 @@
       "notificationsDesc": "允许应用显示系统通知；macOS 授权状态可能需要在系统设置中确认。",
       "autoStart": "开机自动启动",
       "autoStartDesc": "系统启动时自动运行应用",
-      "showTray": "显示托盘图标",
-      "showTrayDesc": "在系统托盘显示应用图标",
+      "backgroundMode": "关闭后继续在后台运行",
+      "backgroundModeDesc": "隐藏窗口并通过系统托盘保持 Tuff 可用",
       "hideDock": "不在 Dock 栏显示",
       "hideDockDesc": "关闭主窗口后不显示 Dock 图标",
       "startSilent": "静默启动",
@@ -4057,8 +4295,47 @@
       "unofficial": "当前版本未通过官方构建验证，可能不安全"
     }
   },
+    "widgetFrame": {
+      "compileFailed": "Widget 编译失败",
+      "loading": "Widget 加载中",
+      "rendererMissing": "Widget renderer 缺失",
+      "rendererUnregistered": "Widget renderer 未注册",
+      "missingRendererId": "缺少 rendererId",
+      "renderFailed": "Widget 渲染失败"
+    },
+    "fileIndex": {
+      "failTitle": "文件索引初始化失败",
+      "failMessage": "文件索引初始化失败，可能导致搜索功能无法正常使用。",
+      "viewErrorDetails": "查看错误详情",
+      "rebuilding": "重建中...",
+      "rebuildIndex": "重新建立索引",
+      "later": "稍后处理",
+      "dontRemindAgain": "不再提醒"
+    },
+    "previewHistory": {
+      "copyResult": "复制结果",
+      "resultLabel": "结果",
+      "recentTitle": "最近处理",
+      "countSummary": "共 {count} 条",
+      "noRecords": "暂无记录"
+    },
+    "boxTag": {
+      "image": "图像",
+      "imageCount": "{count} 张图像",
+      "charCount": "共 {count} 字",
+      "preparingFiles": "文件准备中..."
+    },
   "common": {
+    "imagePreviewAlt": "图片预览",
+    "wallpaperPreviewAlt": "自定义背景预览",
+    "loadMore": "加载更多",
+    "copy": "复制",
+    "copied": "已复制",
+    "yes": "是",
+    "no": "否",
+    "retry": "重试",
     "cancel": "取消",
+    "openExternalConfirm": "在 Tuff 之外打开此链接？",
     "save": "保存",
     "confirm": "确认",
     "delete": "删除",
@@ -4290,7 +4567,6 @@
       "microphonePermissionSettingsOpened": "已完成麦克风权限请求，请点击“重试语音输入”",
       "microphonePermissionSettingsUnavailable": "无法请求或打开麦克风权限设置，请在系统隐私设置中允许 Tuff 使用麦克风",
       "retryVoiceInput": "重试语音输入",
-
       "openIntelligenceSettings": "前往 AI 渠道设置",
       "openingIntelligenceSettings": "正在打开 AI 设置...",
       "intelligenceSettingsOpened": "已打开 AI 渠道设置，请检查登录、额度和 provider 后重试",
@@ -4380,6 +4656,14 @@
     "daysAgo": "{count} 天前"
   },
   "intelligence": {
+    "builtin": "内置",
+    "builtinPrompts": "内置提示词",
+    "createNewPrompt": "新建提示词",
+    "custom": "自定义",
+    "customPrompts": "自定义提示词",
+    "managePrompts": "管理提示词",
+    "promptSelectedHint": "指令内容来自所选提示词",
+    "selectPrompt": "选择提示词",
     "errorRecovery": {
       "authTitle": "需要登录",
       "authDetail": "登录 Tuff Nexus 后再重试这次 AI 请求。",
@@ -5002,6 +5286,11 @@
     "confirmAndSend": "授权并发送"
   },
   "corebox": {
+    "actionUnsupported": "暂不支持该操作",
+    "opacity": "透明度",
+    "debug": "调试",
+    "alwaysOnTop": "置顶",
+    "pin": "固定 CoreBox",
     "pinned": "已固定",
     "unpinned": "已取消固定",
     "pinFailed": "固定失败",

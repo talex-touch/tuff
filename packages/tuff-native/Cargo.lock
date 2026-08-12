@@ -2689,6 +2689,7 @@ version = "0.1.0"
 dependencies = [
  "napi",
  "napi-derive",
+ "serde_json",
  "tuff-native-core",
 ]
 

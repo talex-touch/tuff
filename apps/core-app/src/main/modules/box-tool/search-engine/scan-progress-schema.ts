@@ -47,9 +47,46 @@ export function buildScanProgressPathInClause(paths: readonly string[]): SQL {
   )})`
 }
 
+/**
+ * Plain-SQL scan_progress DELETE for forwarding through the search-index
+ * worker's `execWrite` when the split is enabled. The worker is the sole
+ * writer of search-index.db, so the main process must never run this DELETE
+ * on its own connection against the search file — and running it on the
+ * primary instead silently misses the live rows (read-side fix routes reads to
+ * the search home; this keeps the deletes pointed at the same home).
+ */
+export function buildScanProgressDeleteStatement(input: {
+  sourceScoped: boolean
+  sourceId: string
+  paths: readonly string[]
+}): { sql: string; args: unknown[] } | null {
+  if (input.paths.length === 0) return null
+  const placeholders = input.paths.map(() => '?').join(', ')
+  if (input.sourceScoped) {
+    return {
+      sql: `DELETE FROM scan_progress WHERE source_id = ? AND path IN (${placeholders})`,
+      args: [input.sourceId, ...input.paths]
+    }
+  }
+  return {
+    sql: `DELETE FROM scan_progress WHERE path IN (${placeholders})`,
+    args: [...input.paths]
+  }
+}
+
 export function normalizeScanProgressSourceId(sourceId: unknown): string {
   return typeof sourceId === 'string' && sourceId.trim().length > 0 ? sourceId : 'file-provider'
 }
+
+/**
+ * Rows per INSERT for scan-progress upserts.
+ *
+ * SQLite caps bound parameters at 32766 — measured against this build, where
+ * 16383 two-column rows succeed and 16384 fail with "too many SQL variables".
+ * The source-scoped statement binds three per row, so its true ceiling is 10922.
+ * 4000 leaves headroom under both shapes without making the round trips small.
+ */
+export const SCAN_PROGRESS_UPSERT_CHUNK_ROWS = 4000
 
 export async function upsertSourceScopedScanProgress(
   db: Pick<LibSQLDatabase<typeof schema>, 'run'>,
@@ -60,17 +97,19 @@ export async function upsertSourceScopedScanProgress(
   }
 ): Promise<void> {
   if (input.paths.length === 0) return
-  await db.run(sql`
-    INSERT INTO scan_progress (source_id, path, last_scanned)
-    VALUES ${sql.join(
-      input.paths.map(
-        (entryPath) => sql`(${input.sourceId}, ${entryPath}, ${input.lastScannedAt})`
-      ),
-      sql`, `
-    )}
-    ON CONFLICT(source_id, path) DO UPDATE SET
-      last_scanned = excluded.last_scanned
-  `)
+
+  for (let offset = 0; offset < input.paths.length; offset += SCAN_PROGRESS_UPSERT_CHUNK_ROWS) {
+    const chunk = input.paths.slice(offset, offset + SCAN_PROGRESS_UPSERT_CHUNK_ROWS)
+    await db.run(sql`
+      INSERT INTO scan_progress (source_id, path, last_scanned)
+      VALUES ${sql.join(
+        chunk.map((entryPath) => sql`(${input.sourceId}, ${entryPath}, ${input.lastScannedAt})`),
+        sql`, `
+      )}
+      ON CONFLICT(source_id, path) DO UPDATE SET
+        last_scanned = excluded.last_scanned
+    `)
+  }
 }
 
 export type ScanProgressSourceScopeMigrationStatus = 'ready' | 'blocked' | 'not-needed'

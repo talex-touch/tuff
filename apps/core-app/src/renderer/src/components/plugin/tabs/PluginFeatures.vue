@@ -70,7 +70,7 @@ const devDisconnectIssue = computed(() =>
 const devDisconnectMessage = computed(() => {
   const issue = devDisconnectIssue.value
   if (issue?.message) return resolveI18nMessage(issue.message)
-  return 'Dev Server 已断开连接'
+  return t('plugin.devServerDisconnected', 'Dev Server 已断开连接')
 })
 const devDisconnectSuggestion = computed(() => {
   const suggestion = devDisconnectIssue.value?.suggestion
@@ -163,7 +163,10 @@ const previewFrameStorageKey = computed(() => {
 })
 
 const previewSizeOptions = computed(() => {
-  const customLabel = `自定义 ${previewFrameSize.value.width}×${previewFrameSize.value.height}`
+  const customLabel = t('plugin.customPreviewSize', {
+    width: previewFrameSize.value.width,
+    height: previewFrameSize.value.height
+  })
   return [
     ...previewSizePresets,
     {
@@ -319,7 +322,7 @@ const previewWidgetItem = computed<TuffItem | null>(() => {
       mode: 'custom',
       basic: {
         title,
-        subtitle: 'Widget 预览'
+        subtitle: t('plugin.widgetPreview', 'Widget 预览')
       },
       custom: {
         type: 'vue',
@@ -744,7 +747,7 @@ async function reloadPreviewWidget(): Promise<void> {
   }
   const success = await requestWidgetRegister(widgetId, { emitAsUpdate: true, force: true })
   if (!success) {
-    toast.warning('Widget 重新加载失败')
+    toast.warning(t('plugin.widgetReloadFailed', 'Widget 重新加载失败'))
   }
 }
 
@@ -757,7 +760,7 @@ async function reloadAllWidgets(): Promise<void> {
     }
     await requestWidgetRegister(option.value, { emitAsUpdate: true, force: true })
   }
-  toast.success('已触发全部 Widget 重新加载')
+  toast.success(t('plugin.widgetReloadAllTriggered', '已触发全部 Widget 重新加载'))
 }
 
 function handlePreviewRenderError(error: Error): void {

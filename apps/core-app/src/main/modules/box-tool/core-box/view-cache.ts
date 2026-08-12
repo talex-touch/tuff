@@ -62,7 +62,27 @@ export class ViewCacheManager {
     log.debug(
       `Config updated: maxCachedViews=${this.config.maxCachedViews}, hotCacheDurationMs=${this.config.hotCacheDurationMs}`
     )
+    // Lowering the cap used to change the number and evict nothing, so views
+    // already resident stayed resident — each one a live WebContentsView, i.e. a
+    // renderer process the user asked to reclaim (#673).
+    this.enforceCapacity()
     this.ensureCleanupTask()
+  }
+
+  /**
+   * Evicts until the cache fits the current cap. `evictLRU` removes exactly one
+   * entry, which is enough to make room for an insert but never enough to shrink
+   * toward a lowered cap.
+   */
+  private enforceCapacity(): void {
+    const cap = Math.max(0, this.config.maxCachedViews)
+    while (this.cache.size > cap) {
+      const before = this.cache.size
+      this.evictLRU()
+      // evictLRU is a no-op on an empty cache; bail rather than spin if it ever
+      // fails to remove anything.
+      if (this.cache.size >= before) break
+    }
   }
 
   private ensureCleanupTask(): void {
@@ -173,8 +193,21 @@ export class ViewCacheManager {
 
     this.removeEntry(key, { close: true })
 
-    if (this.cache.size >= this.config.maxCachedViews) {
+    // Caching disabled. The stale-cleanup task is unregistered at this cap, so
+    // anything admitted here would never be drained; the caller keeps owning the
+    // view either way, this only declines to hold a second reference for reuse.
+    if (this.config.maxCachedViews <= 0) {
+      log.debug(`View caching disabled, not caching: ${key}`)
+      this.ensureCleanupTask()
+      return
+    }
+
+    // Loop, not a single eviction: one evict per insert leaves the size
+    // net-unchanged, which is how an over-cap cache stayed over cap.
+    while (this.cache.size >= this.config.maxCachedViews) {
+      const before = this.cache.size
       this.evictLRU()
+      if (this.cache.size >= before) break
     }
 
     const dispose = this.attachLifecycle(key, webContents)

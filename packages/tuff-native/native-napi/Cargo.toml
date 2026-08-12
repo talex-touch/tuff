@@ -7,4 +7,5 @@ license.workspace = true
 [dependencies]
 napi = { workspace = true, features = ["tokio_rt"] }
 napi-derive.workspace = true
+serde_json.workspace = true
 tuff-native-core = { path = "../native-core" }

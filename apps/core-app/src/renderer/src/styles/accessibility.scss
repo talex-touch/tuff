@@ -16,21 +16,56 @@
   border-width: 0;
 }
 
-/* Focus visible styles for better keyboard navigation */
-*:focus-visible {
-  outline: 3px solid var(--tx-color-primary);
-  outline-offset: 2px;
-  border-radius: 4px;
+/**
+ * Focus indicator
+ * ---------------
+ * A two-band ring: an accent band hugging the element, wrapped by a neutral band.
+ *
+ * A single accent ring is not enough. The accent has to contrast with whatever sits directly
+ * behind it (WCAG 2.2 SC 2.4.11 wants 3:1 against adjacent colours), and this app focuses
+ * elements that are themselves accent-tinted — primary buttons, the selected sidebar item on
+ * its `primary-soft` fill. Blue-on-blue disappears. The outer neutral band is what guarantees
+ * the ring reads on any surface, accent-coloured ones included.
+ *
+ * Painting order does the layering for us: the outer `box-shadow` covers 0-4px around the
+ * border box, and the `outline` is painted on top of it across 0-2px. Both follow the
+ * element's own `border-radius`, so pills stay pills.
+ */
+:root {
+  --focus-ring: var(--tx-color-primary);
+  --focus-ring-contrast: rgb(0 0 0 / 58%);
+  --focus-ring-width: 2px;
+  --focus-ring-total: 4px;
 }
 
-/* Enhanced focus for interactive elements */
-button:focus-visible,
-a:focus-visible,
-[role="button"]:focus-visible,
-[role="link"]:focus-visible {
-  outline: 3px solid var(--tx-color-primary);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px var(--tx-color-primary-light-9);
+.dark {
+  --focus-ring-contrast: rgb(255 255 255 / 72%);
+}
+
+*:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  /*
+   * Deliberately no `outline-offset` and no `border-radius` override. The previous rule forced
+   * `border-radius: 4px` on every focused element, which squared off pill-shaped controls the
+   * moment they took focus.
+   */
+  outline-offset: 0;
+  box-shadow: 0 0 0 var(--focus-ring-total) var(--focus-ring-contrast);
+}
+
+/* The app's own high-contrast toggle, plus the OS-level preference. */
+html.contrast,
+html.dark.contrast {
+  --focus-ring-width: 3px;
+  --focus-ring-total: 6px;
+}
+
+html.contrast {
+  --focus-ring-contrast: rgb(0 0 0 / 85%);
+}
+
+html.dark.contrast {
+  --focus-ring-contrast: rgb(255 255 255 / 90%);
 }
 
 /* Skip to main content link (for screen readers) */
@@ -47,18 +82,20 @@ a:focus-visible,
   font-weight: 500;
   transition: top 0.3s ease;
 
+  /* Intentionally `:focus`, not `:focus-visible` — a skip link must appear on programmatic focus. */
   &:focus {
     top: 0;
-    outline: 3px solid var(--tx-color-primary-light-3);
-    outline-offset: 2px;
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: 0;
+    box-shadow: 0 0 0 var(--focus-ring-total) var(--focus-ring-contrast);
   }
 }
 
 /* High contrast mode support */
-@media (prefers-contrast: high) {
-  *:focus-visible {
-    outline-width: 4px;
-    outline-offset: 3px;
+@media (prefers-contrast: more) {
+  :root {
+    --focus-ring-width: 3px;
+    --focus-ring-total: 6px;
   }
 
   button,
@@ -185,9 +222,11 @@ a {
   }
 }
 
-/* Focus within for containers */
+/*
+ * Container-level focus. Softer than the element ring on purpose: it signals "focus is
+ * somewhere inside", it is not the indicator for the focused control itself.
+ */
 .focus-within-highlight:focus-within {
-  outline: 2px solid var(--tx-color-primary-light-5);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 8px;
 }

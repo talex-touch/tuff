@@ -1,0 +1,77 @@
+---
+title: Stream Markdown
+description: 面向流式输出的 Markdown 渲染器，尾部带光标，围栏块可按语言接管。
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, markdown, streaming]
+syncStatus: reviewed
+verified: true
+---
+# Stream Markdown
+
+`TxStreamMarkdown` 渲染仍在生成中的 Markdown：把文档切成块以避免整篇重排，尾部显示光标，并允许按语言把围栏代码块交给自定义组件渲染。
+
+已人工核对 `packages/tuffex/packages/components/src/stream-markdown/src/TxStreamMarkdown.vue`。
+
+## 基础用法
+
+### Stream Markdown
+::::TuffDemoWrapper{demo="StreamMarkdownStreamMarkdownDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import TxMermaidBlock from '@talex-touch/tuffex/stream-markdown'
+
+  const content = ref('# 标题\n\n正在生成…')
+  </script>
+
+  <template>
+    <TxStreamMarkdown
+      :content="content"
+      streaming
+      :renderers="{ mermaid: TxMermaidBlock }"
+    />
+  </template>
+---
+::::
+
+## 交互契约
+
+- 文档被切成块逐块渲染，因此追加文本不会导致整篇重排——这是流式场景下的关键性质。
+- `streaming` 为真时尾部显示光标，且**尚未闭合的尾部围栏会推迟渲染**：半截的代码块不会先以错误的形态闪现，等闭合后再交给渲染器。
+- `fenceClosed` 只对流式文档的尾部围栏为 `false`；缩进代码没有围栏，也报 `false`，组件把任何非尾部块都视作已完成。
+- `sanitize` 默认开启，通过动态 `import('dompurify')` 加载。**请保持开启**——内容来自模型输出。
+- dompurify 加载失败时 `sanitizer` 置空，组件不会因此崩溃；这意味着净化是尽力而为，不能替代服务端的信任边界。
+- 每个实例持有自己的 `Marked`（开启 `gfm` 与 `breaks`），不会修改全局单例——否则会影响应用内其他所有使用方。
+- `renderers` 按围栏语言（首个单词、转小写）匹配；未注册的语言走默认代码块渲染。
+- 注册的渲染器组件会收到 `StreamMarkdownBlockContext` 作为 props，其中包含 `fenceClosed`，可据此在未闭合时显示占位。
+- `theme` 支持 `light` / `dark` / `auto`，`auto` 跟随环境主题。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `content` | `string` | — | Markdown 原文。必填。 |
+| `streaming` | `boolean` | `false` | 是否仍在输出；控制尾部光标与尾部围栏的延迟渲染。 |
+| `sanitize` | `boolean` | `true` | 是否通过 dompurify 净化 HTML。 |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 配色主题。 |
+| `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | 按语言注册的围栏块渲染组件，例如 `{ mermaid: TxMermaidBlock }`。 |
+
+### Events
+
+`TxStreamMarkdown` 不派发组件事件。
+
+## Slots
+
+`TxStreamMarkdown` 不暴露插槽。要自定义某类内容的渲染，请通过 `renderers` 按语言注册组件。
+
+## 最佳实践
+
+- 不要关闭 `sanitize`。模型输出属于不可信内容，而这里是它变成 DOM 的地方。
+- 流式期间保持 `streaming` 为真，结束后再置假；一直为真会让光标永远留在末尾。
+- 自定义渲染器要处理 `fenceClosed` 为 `false` 的情况，给出加载态而不是尝试解析半截内容。
+- `renderers` 的 key 用小写语言名，与围栏首个单词一致（` ```mermaid ` → `mermaid`）。
+- 需要非流式的静态 Markdown 时用 `TxMarkdownView`，不必为它开这套分块与光标机制。

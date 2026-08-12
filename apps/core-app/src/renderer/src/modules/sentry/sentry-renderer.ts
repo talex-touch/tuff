@@ -17,6 +17,7 @@ import {
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { sanitizeRendererSentryEvent } from './sentry-renderer-sanitizer'
+import { resolveSentryTracesSampleRate } from '@talex-touch/utils/base/sentry-sampling'
 
 // Initialize Sentry in renderer process
 let isInitialized = false
@@ -58,7 +59,9 @@ export async function initSentryRenderer(): Promise<void> {
       dsn: 'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488',
       environment: buildType,
       release: `${buildInfo.version}@${buildType}`,
-      tracesSampleRate: 1.0,
+      // Same policy as the main process, from the same module so the two cannot drift (#799).
+      // isRelease is the renderer's equivalent of app.isPackaged.
+      tracesSampleRate: resolveSentryTracesSampleRate({ isDevelopment: !buildInfo.isRelease }),
       beforeSend(event) {
         event.contexts = {
           ...event.contexts,

@@ -1,0 +1,71 @@
+---
+title: Thinking Orb
+description: A canvas thinking indicator that shares one clock and stops when offscreen.
+category: Effects
+status: beta
+since: 2.5.0
+tags: [ai, loading, canvas]
+syncStatus: reviewed
+verified: true
+---
+# Thinking Orb
+
+`TxThinkingOrb` paints a small animated orb on a canvas to say the model is thinking. It has nine forms and picks one at random per mount by default — one orb per thought.
+
+Manually verified against `packages/tuffex/packages/components/src/thinking-orb/src/TxThinkingOrb.vue`.
+
+## Basic Usage
+
+### Thinking Orb
+::::TuffDemoWrapper{demo="ThinkingOrbThinkingOrbDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxThinkingOrb />
+    <TxThinkingOrb state="searching" :size="64" />
+    <TxThinkingOrb state="solving" :size="20" :display-size="14" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- `state` defaults to `'random'`, and the form is rolled **once on mount** and kept for the component's lifetime. To get a different orb, remount it with a new `key` — changing the prop will not do it.
+- The nine forms are `working`, `searching`, `solving`, `listening`, `connecting`, `weaving`, `composing`, `breathing` and `shaping`.
+- Every mounted orb shares one clock (`performance.now`), so several on screen stay **in phase** rather than drifting apart.
+- The loop stops when the orb scrolls offscreen (`IntersectionObserver`) and when the tab is hidden, so a long list of orbs does not keep burning CPU.
+- Under `prefers-reduced-motion: reduce` the animation does not run; a single representative frame is drawn instead, and it still follows theme changes.
+- `size` accepts only `20` and `64` — the preset geometry is hand-tuned for those two. Use `displaySize` for any other rendered size; it changes the CSS box only, not the drawing parameters.
+- The canvas is scaled by `devicePixelRatio`, capped at 2.
+- Where there is no canvas (jsdom, for instance) `getContext('2d')` returns null, and the component keeps the element but skips painting rather than throwing.
+- The accessible name defaults to an English label for the form (`Searching…` and so on); `label` overrides it.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `state` | `OrbState \| 'random'` | `'random'` | Which orb to draw. `'random'` rolls once, on mount. |
+| `size` | `20 \| 64` | `20` | Preset geometry size. Only these two are tuned. |
+| `displaySize` | `number` | same as `size` | Rendered CSS size in px; does not affect the drawing parameters. |
+| `speed` | `number` | `1` | Animation speed multiplier. |
+| `paused` | `boolean` | `false` | Whether to pause the animation. |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Colour theme; `auto` follows the environment. |
+| `label` | `string` | an English label per form | Accessible name. |
+
+### Events
+
+`TxThinkingOrb` emits no component events.
+
+## Slots
+
+`TxThinkingOrb` exposes no slots. It is a pure drawing surface — put any text in a sibling node.
+
+## Best Practices
+
+- To get a new orb per thought, key the component by that thought. Changing `state` will not reroll it.
+- Pass an explicit `state` where you need determinism; a random form makes screenshot tests and screen recordings differ every run.
+- Keep `size` at `20` or `64` and adjust the visual size with `displaySize`; other values distort the tuned presets.
+- Supply `label` on non-English surfaces — the defaults are English.
+- Show one orb per thought. Several stay in phase, but they blur what exactly is in progress.

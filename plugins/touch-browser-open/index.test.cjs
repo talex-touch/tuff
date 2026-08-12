@@ -179,11 +179,12 @@ test('production Prelude contains no privileged child surface or test export', (
   ]) {
     assert.doesNotMatch(source, pattern)
   }
+  // No onInputChanged: the host never calls the prelude's copy of it (#823). Input changes
+  // arrive as a re-invocation of onFeatureTriggered, which is where the refresh happens.
   assert.deepEqual(Object.keys(pluginModule).sort(), [
     'onDestroy',
     'onFeatureTriggered',
     'onInit',
-    'onInputChanged',
     'onItemAction',
   ])
 })

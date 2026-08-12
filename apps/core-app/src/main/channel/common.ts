@@ -42,6 +42,9 @@ import type {
   TraySettingsUpdateRequest,
   TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
+import { cleanupDownloads, cleanupFileIndex, cleanupUpdates } from '../service/storage-maintenance'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
+import { validateExternalUrl } from '../utils/external-url-policy'
 import type { Locale } from '../utils/i18n-helper'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
@@ -122,7 +125,7 @@ import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
 import { TalexTouch } from '../types'
-import { setLocale } from '../utils/i18n-helper'
+import { setLocale, t } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
@@ -261,6 +264,7 @@ interface StorageUsageRequest {
 const systemGetStorageUsageEvent = defineRawEvent<StorageUsageRequest, StorageUsageReport>(
   'system:get-storage-usage'
 )
+
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }
@@ -841,6 +845,14 @@ export class CommonChannelModule extends BaseModule {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
+  /**
+   * Undo for the powerMonitor listeners and the polling registration they arm.
+   *
+   * Kept apart from transportDisposers because these outlive a transport: they attach to the
+   * process-wide powerMonitor and to the PollingService singleton, so leaving them behind means a
+   * destroyed module can still re-register a global task (#532).
+   */
+  private batteryDisposers: Array<() => void> = []
   private touchApp: TalexTouch.TouchApp | null = null
 
   constructor() {
@@ -911,15 +923,26 @@ export class CommonChannelModule extends BaseModule {
         startPolling()
       }
 
-      powerMonitor.on('on-ac', () => {
+      const handleOnAc = (): void => {
         stopPolling()
         void broadcastBatteryStatus()
-      })
+      }
 
-      powerMonitor.on('on-battery', () => {
+      const handleOnBattery = (): void => {
         startPolling()
         void broadcastBatteryStatus()
-      })
+      }
+
+      powerMonitor.on('on-ac', handleOnAc)
+      powerMonitor.on('on-battery', handleOnBattery)
+
+      // Listeners first, then the poll task: dropping the listeners before unregistering means
+      // an 'on-battery' arriving mid-teardown cannot re-arm what was just released.
+      this.batteryDisposers.push(
+        () => powerMonitor.off('on-ac', handleOnAc),
+        () => powerMonitor.off('on-battery', handleOnBattery),
+        () => stopPolling()
+      )
     } catch (error) {
       log.warn('Failed to initialize battery status broadcaster:', { error })
     }
@@ -1071,7 +1094,6 @@ export class CommonChannelModule extends BaseModule {
       const protocol = parsed.protocol.replace(':', '')
 
       if (shouldSkipPromptProtocols.has(protocol)) return 'skip'
-      if (protocol === 'file') return 'open'
 
       if ((protocol === 'http' || protocol === 'https') && isLocalhostUrl(url)) {
         if (isFrontendLocalUrl(parsed)) {
@@ -1080,7 +1102,67 @@ export class CommonChannelModule extends BaseModule {
         return 'confirm'
       }
 
+      // Scheme allowlist, not just a confirmation. #910 made the 'confirm' branch
+      // actually confirm, which removed the silent open — but every remaining
+      // protocol still reached shell.openExternal if the user clicked through, and
+      // a dialog is a poor place to judge whether `smb:` or a third-party handler
+      // scheme is safe. validateExternalUrl already encodes that decision
+      // (http/https/mailto/tel/tuff) and is used at a dozen other call sites; this
+      // was the one that forwarded renderer-controlled URLs without it (#691).
+      // `file:` keeps its prompt. #910 deliberately routed it to 'confirm' rather
+      // than opening it, and two tests are named for that behaviour, so it is a
+      // decision to preserve — not an omission to tighten. It is absent from the
+      // allowlist because that list governs unattended opens elsewhere.
+      if (protocol !== 'file') {
+        const decision = validateExternalUrl(url)
+        if (!decision.allowed) {
+          log.warn('Blocked external navigation with a disallowed scheme', {
+            meta: { reason: decision.reason, protocol: decision.protocol }
+          })
+          return 'skip'
+        }
+      }
+
       return 'confirm'
+    }
+
+    /**
+     * Asks before handing a URL to the OS.
+     *
+     * `will-navigate` on every TouchWindow forwards each blocked navigation here, so this
+     * receives renderer-controlled input. `shell.openExternal` on such a URL launches whatever
+     * the OS has registered for it — for `file:` that is an arbitrary local file, executable
+     * included. The 'confirm' decision existed for this and then opened anyway (#910).
+     *
+     * Defaults to cancel, and a dialog that fails to show is treated as a refusal.
+     */
+    const confirmOpen = async (url: string): Promise<boolean> => {
+      const parent = BrowserWindow.getFocusedWindow()
+      // Long URLs are truncated so the dialog cannot be pushed off screen, and the raw string
+      // goes to `detail` rather than `message` so it is never mistaken for app-authored text.
+      const shown = url.length > 320 ? `${url.slice(0, 320)}…` : url
+      const options = {
+        type: 'question' as const,
+        buttons: [t('common.cancel'), t('common.open')],
+        defaultId: 0,
+        cancelId: 0,
+        message: t('common.openExternalConfirm'),
+        detail: shown,
+        noLink: true
+      }
+      try {
+        // Two calls rather than passing `undefined`: the parented overload does not accept it,
+        // and a modal with no owner window is the correct shape when nothing is focused.
+        const { response } = parent
+          ? await dialog.showMessageBox(parent, options)
+          : await dialog.showMessageBox(options)
+        return response === 1
+      } catch (error) {
+        log.warn('open url confirmation failed, refusing', {
+          meta: { url, error: error instanceof Error ? error.message : String(error) }
+        })
+        return false
+      }
     }
 
     return async (url: string) => {
@@ -1088,6 +1170,11 @@ export class CommonChannelModule extends BaseModule {
       if (decision === 'skip') return
       if (decision === 'open') {
         shell.openExternal(url)
+        return
+      }
+
+      if (!(await confirmOpen(url))) {
+        log.debug('open url refused', { meta: { url, decision } })
         return
       }
 
@@ -1176,6 +1263,27 @@ export class CommonChannelModule extends BaseModule {
     this.registerIndexSettingsTransportHandlers(transport)
     this.registerPluginTempFileTransportHandlers(transport)
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
+  }
+
+  /**
+   * Refuses a handler call that arrived from a plugin.
+   *
+   * Every transport handler is registered on the plugin channel as well as the main one, and
+   * inspecting context.plugin is voluntary per handler — so these were reachable from a
+   * plugin view. window.close ends the application, hide and minimize deny service to the
+   * user, and getCwd/getPath/getPackage hand over the filesystem layout that makes a path
+   * traversal or a shell sink easy to aim (#807).
+   *
+   * This is the per-handler form of the audience mechanism proposed in #688. That change
+   * would make host-only the default for every handler; until then, the handlers that can
+   * end the app or disclose its layout should not depend on it.
+   */
+  private assertHostOnly(context: HandlerContext | undefined, eventName: string): void {
+    if (!context?.plugin) return
+    log.warn('Blocked a host-only handler invoked from a plugin', {
+      meta: { eventName, plugin: context.plugin.name }
+    })
+    throw new Error('HOST_ONLY_HANDLER')
   }
 
   private resolvePluginTempNamespace(context?: HandlerContext): string {
@@ -1392,22 +1500,77 @@ export class CommonChannelModule extends BaseModule {
         const query = normalizeCapabilityQuery(payload)
         return await listPlatformCapabilities(query)
       }),
-      transport.on(AppEvents.window.close, () => closeApp(touchApp)),
-      transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
-      transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
+      transport.on(AppEvents.window.close, (_payload, context) => {
+        this.assertHostOnly(context, 'window.close')
+        return closeApp(touchApp)
+      }),
+      transport.on(AppEvents.window.hide, (_payload, context) => {
+        this.assertHostOnly(context, 'window.hide')
+        touchApp.window.window.hide()
+      }),
+      transport.on(AppEvents.window.minimize, (_payload, context) => {
+        this.assertHostOnly(context, 'window.minimize')
+        touchApp.window.minimize()
+      }),
+      transport.on(AppEvents.window.maximize, () => touchApp.window.maximize()),
+      transport.on(AppEvents.window.unmaximize, () => touchApp.window.unmaximize()),
+      transport.on(AppEvents.window.toggleMaximize, () => touchApp.window.toggleMaximize()),
+      transport.on(AppEvents.window.isMaximized, () => touchApp.window.isMaximized()),
+      // Pushed rather than polled: the state also changes from title-bar double clicks, the OS
+      // shortcut and edge snapping, none of which the renderer sees.
+      touchApp.window.onMaximizedChanged((maximized) => {
+        void transport
+          .sendTo(touchApp.window.window.webContents, AppEvents.window.maximizedChanged, maximized)
+          .catch(() => {})
+      }),
       transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
       transport.on(AppEvents.window.show, () => {
         touchApp.window.window.show()
         touchApp.window.window.focus()
       }),
-      transport.on(AppEvents.debug.openDevTools, (payload) => {
+      transport.on(AppEvents.debug.openDevTools, (payload, context) => {
+        // DevTools runs arbitrary JS in the main renderer and exposes everything it holds, so a
+        // plugin view reaching this handler is a way out of the plugin sandbox (#783).
+        this.assertHostOnly(context, 'debug.openDevTools')
+        // The same intent already exists for Ctrl+R, which touch-app.ts blocks once packaged.
+        if (app.isPackaged) {
+          log.warn('Refused to open DevTools in a packaged build')
+          return
+        }
         const options =
           payload && typeof payload === 'object' ? (payload as OpenDevToolsOptions) : undefined
         touchApp.window.openDevTools(options)
       }),
-      transport.on(AppEvents.system.getCwd, () => process.cwd()),
+      transport.on(AppEvents.security.reportCspViolation, (payload, context) => {
+        // Host renderer only: a plugin view reporting its own violations would let it write
+        // arbitrary lines into the host's log under a security-sounding prefix.
+        this.assertHostOnly(context, 'security.reportCspViolation')
+        if (!payload || typeof payload !== 'object') return
+
+        // The enforcing policy blocks nothing the report-only one names, so every line here is
+        // a finding rather than an error: it is what narrowing default-src and connect-src for
+        // real would have refused (#689). Collected in the main log because the renderer logger
+        // only reaches a devtools console nobody has open during real use.
+        log.warn(
+          `[csp-report-only] ${payload.effectiveDirective} would block ${payload.blockedURI || '<inline>'}`,
+          {
+            meta: {
+              documentURI: payload.documentURI,
+              sourceFile: payload.sourceFile,
+              line: payload.lineNumber
+            }
+          }
+        )
+      }),
+      transport.on(AppEvents.system.getCwd, (_payload, context) => {
+        this.assertHostOnly(context, 'system.getCwd')
+        return process.cwd()
+      }),
       transport.on(AppEvents.system.getOS, () => getOSInformation()),
-      transport.on(AppEvents.system.getPackage, () => packageJson),
+      transport.on(AppEvents.system.getPackage, (_payload, context) => {
+        this.assertHostOnly(context, 'system.getPackage')
+        return packageJson
+      }),
       transport.on<void, AutoStartGetResponse>(AppEvents.system.autoStartGet, () =>
         this.getAutoStartStatus()
       ),
@@ -1422,7 +1585,8 @@ export class CommonChannelModule extends BaseModule {
         AppEvents.system.traySettingsUpdate,
         (payload) => this.updateTraySettings(payload, touchApp)
       ),
-      transport.on(AppEvents.system.getPath, (payload) => {
+      transport.on(AppEvents.system.getPath, (payload, context) => {
+        this.assertHostOnly(context, 'system.getPath')
         const name = typeof payload?.name === 'string' ? payload.name : ''
         if (!name) {
           return null
@@ -1447,6 +1611,7 @@ export class CommonChannelModule extends BaseModule {
       }),
       ...registerSystemShellHandlers(transport, {
         configRootPath: () => storageModule.filePath,
+        appRootPath: () => touchApp.rootPath,
         logger: log,
         registerSafeHandler
       }),
@@ -1461,6 +1626,15 @@ export class CommonChannelModule extends BaseModule {
         if (isRendererPerfReport(payload)) {
           perfMonitor.recordRendererReport(payload)
         }
+      }),
+      transport.on(StorageEvents.cleanup.fileIndex, async (payload) => {
+        return await cleanupFileIndex(payload ?? {})
+      }),
+      transport.on(StorageEvents.cleanup.downloads, async (payload) => {
+        return await cleanupDownloads(payload ?? {})
+      }),
+      transport.on(StorageEvents.cleanup.updates, async () => {
+        return await cleanupUpdates()
       }),
       transport.on(systemGetStorageUsageEvent, async (payload) => {
         const storageStats = storageModule.getCacheStats()
@@ -1970,6 +2144,14 @@ export class CommonChannelModule extends BaseModule {
     if (this.batteryPollTimer) {
       clearInterval(this.batteryPollTimer)
       this.batteryPollTimer = undefined
+    }
+
+    for (const dispose of this.batteryDisposers.splice(0)) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
     }
 
     for (const dispose of this.transportDisposers) {

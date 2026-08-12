@@ -5,7 +5,7 @@ import type { TuffEvent } from '@talex-touch/utils/transport'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
-import { getPermissionModule } from './index'
+import { getPermissionModule } from './permission-module-ref'
 
 export interface ProtectedChannelOptions {
   permissionId: string

@@ -63,6 +63,14 @@ export interface DiagnosticsRetentionOwnerOptions {
   readonly limits?: Partial<PrivacyOwnerLimits>
   readonly scheduleWrite?: PrivacyOwnerWriteScheduler
   readonly removeLogFile?: (filePath: string) => Promise<void>
+  /**
+   * Startup write-storm gate (R4): while this reports true, retention-mode
+   * runs skip the telemetry-stats DB-write for the current run (retention is
+   * idempotent; the next scheduled run covers it). Never applied to
+   * user-requested `manual-delete` runs. Production wires
+   * `isInStartupDegradeWindow`; defaults to "never active".
+   */
+  readonly isStartupDegradeWindowActive?: () => boolean
 }
 
 function isCoreLogFileName(name: string): boolean {
@@ -211,6 +219,7 @@ export function createDiagnosticsRetentionOwner(
   const limits = normalizePrivacyOwnerLimits(options.limits)
   const scheduleWrite = options.scheduleWrite ?? schedulePrivacyOwnerWrite
   const removeLogFile = options.removeLogFile ?? fs.unlink.bind(fs)
+  const isStartupDegradeWindowActive = options.isStartupDegradeWindowActive ?? (() => false)
   const targets: readonly DiagnosticsTarget[] = Object.freeze([
     {
       table: 'analytics_snapshots',
@@ -513,7 +522,13 @@ export function createDiagnosticsRetentionOwner(
           partial: progress.deletedItemCount > 0
         })
       }
-      if (telemetryRemaining > 0) {
+      if (telemetryRemaining <= 0) {
+        ownerBounded = true
+      } else if (request.mode === 'retention' && isStartupDegradeWindowActive()) {
+        // Startup write-storm gate (R4): deliberately skip this retention run's
+        // telemetry DB-write while inside the startup degrade window — the next
+        // scheduled run covers it, and the skip is not a failure/partial result.
+      } else {
         try {
           let clearedCount = 0
           if (options.telemetryLifecycle) {
@@ -566,8 +581,6 @@ export function createDiagnosticsRetentionOwner(
           databaseFailed = true
           progress.failedItemCount += 1
         }
-      } else {
-        ownerBounded = true
       }
 
       if (signal.aborted) {

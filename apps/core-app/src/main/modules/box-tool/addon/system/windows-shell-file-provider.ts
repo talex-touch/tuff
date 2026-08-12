@@ -200,7 +200,6 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
   readonly name = 'Windows Shell File Entries'
   readonly supportedInputTypes = [TuffInputType.Text]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 15
 
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const startTime = performance.now()

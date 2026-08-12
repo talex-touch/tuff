@@ -4,6 +4,14 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ActivatedProviders from './ActivatedProviders.vue'
 
+// The component calls useI18n() in setup for the close control's accessible name, so mounting it
+// without vue-i18n installed throws `Need to install with \`app.use\` function` before a single
+// assertion runs. Mocked rather than installed: these cases are about icon colour mode, and the
+// translated string is not what they check. Same shape as WhatsChangedDialog.test.ts.
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key })
+}))
+
 vi.mock('@talex-touch/tuffex/icon', () => ({
   TxIcon: {
     name: 'TxIcon',

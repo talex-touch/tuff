@@ -74,6 +74,11 @@ export class PluginLogModule extends BaseModule {
   private subscriptions: Map<string, Set<WebContents>> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private uninstallInvalidatorDisposer: (() => void) | null = null
+  /**
+   * Every registration made by listenToLogEvents and setupIpcHandlers. All eight were previously
+   * discarded, so they outlived module teardown (#533).
+   */
+  private handlerDisposers: Array<() => void> = []
 
   static key: symbol = Symbol.for('PluginLog')
   name: ModuleKey = PluginLogModule.key
@@ -174,7 +179,7 @@ export class PluginLogModule extends BaseModule {
   }
 
   public listenToLogEvents(): void {
-    touchEventBus.on(TalexEvents.PLUGIN_LOG_APPEND, (event) => {
+    const handleLogAppend = (event: unknown): void => {
       const logEvent = event as PluginLogAppendEvent
       const log = logEvent.log
       const pluginName = log.plugin
@@ -193,13 +198,26 @@ export class PluginLogModule extends BaseModule {
           }
         })
       }
-    })
+    }
+
+    touchEventBus.on(TalexEvents.PLUGIN_LOG_APPEND, handleLogAppend)
+    this.handlerDisposers.push(() =>
+      touchEventBus.off(TalexEvents.PLUGIN_LOG_APPEND, handleLogAppend)
+    )
   }
 
   public setupIpcHandlers(transport: ReturnType<typeof getTuffTransportMain>): void {
     this.transport = transport
 
-    transport.on(pluginLogSubscribeEvent, (payload, context) => {
+    // Records each disposer as it is created, so adding a handler below cannot forget to
+    // register its cleanup -- the previous code dropped all seven return values on the floor.
+    const on: typeof transport.on = (event, handler) => {
+      const dispose = transport.on(event, handler)
+      this.handlerDisposers.push(dispose)
+      return dispose
+    }
+
+    on(pluginLogSubscribeEvent, (payload, context) => {
       const pluginName = payload?.pluginName
       if (!pluginName || !context.sender) return
 
@@ -207,7 +225,7 @@ export class PluginLogModule extends BaseModule {
       this.subscribe(pluginName, sender)
     })
 
-    transport.on(pluginLogUnsubscribeEvent, (payload, context) => {
+    on(pluginLogUnsubscribeEvent, (payload, context) => {
       const pluginName = payload?.pluginName
       if (!pluginName || !context.sender) return
 
@@ -215,7 +233,7 @@ export class PluginLogModule extends BaseModule {
       this.unsubscribe(pluginName, sender)
     })
 
-    transport.on(pluginLogGetSessionsEvent, (payload) => {
+    on(pluginLogGetSessionsEvent, (payload) => {
       const pluginName = payload?.pluginName
       if (!pluginName) return { error: 'pluginName is required' }
 
@@ -270,7 +288,7 @@ export class PluginLogModule extends BaseModule {
       }
     })
 
-    transport.on(pluginLogOpenSessionFileEvent, async (payload) => {
+    on(pluginLogOpenSessionFileEvent, async (payload) => {
       const { pluginName, sessionFolder, session } = payload || {}
       const targetSession = sessionFolder || session
       if (!pluginName || !targetSession)
@@ -304,7 +322,7 @@ export class PluginLogModule extends BaseModule {
       return { success: true } as const
     })
 
-    transport.on(pluginLogOpenDirectoryEvent, async (payload) => {
+    on(pluginLogOpenDirectoryEvent, async (payload) => {
       const pluginName = payload?.pluginName
       if (!pluginName) return { error: 'pluginName is required' }
 
@@ -334,7 +352,7 @@ export class PluginLogModule extends BaseModule {
       return { success: true } as const
     })
 
-    transport.on(pluginLogGetBufferEvent, (payload) => {
+    on(pluginLogGetBufferEvent, (payload) => {
       const pluginName = payload?.pluginName
       if (!pluginName) return { error: 'pluginName is required' }
 
@@ -352,7 +370,7 @@ export class PluginLogModule extends BaseModule {
       return buffer
     })
 
-    transport.on(pluginLogGetSessionLogEvent, async (payload) => {
+    on(pluginLogGetSessionLogEvent, async (payload) => {
       const { pluginName, session } = payload || {}
       if (!pluginName || !session) return { error: 'pluginName and session are required' }
 
@@ -430,6 +448,17 @@ export class PluginLogModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
+    // Released before the subscription map is cleared: a log event arriving in between would
+    // otherwise repopulate it through a handler that is still attached.
+    for (const dispose of this.handlerDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.handlerDisposers = []
+
     this.uninstallInvalidatorDisposer?.()
     this.uninstallInvalidatorDisposer = null
     this.subscriptions.clear()

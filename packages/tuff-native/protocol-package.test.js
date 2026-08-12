@@ -34,6 +34,11 @@ test('package files include protocol owners without fixtures or Cargo targets', 
     'screenshot-protocol.js',
     'screenshot-protocol.d.ts',
     'scripts/verify-screenshot-production.js',
+    // The audio pair was added mirroring the screenshot pair and this entry was left out, so the
+    // published tarball shipped build-audio.js and audio.js with no way to verify either.
+    // Criterion 3 of #322 -- "packaged runtime resolves the same module path as audio.js" --
+    // cannot be checked from the package without it.
+    'scripts/verify-audio-production.js',
     'native-core/Cargo.toml',
     'native-core/src',
     'native-napi/Cargo.toml',

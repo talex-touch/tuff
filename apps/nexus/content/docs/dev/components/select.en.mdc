@@ -307,7 +307,7 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `modelValue` / `v-model` | `string \| number \| Array<string \| number>` | `''` | Selected value; array in `multiple` mode. |
-| `placeholder` | `string` | `'请选择'` | Placeholder shown in the trigger input when no label is selected. |
+| `placeholder` | `string` | `'Please select'` | Placeholder shown in the trigger input when no label is selected. |
 | `disabled` | `boolean` | `false` | Disables the trigger, closes the dropdown, and blocks option selection. |
 | `multiple` | `boolean` | `false` | Enables multi-select tag mode. |
 | `status` | `'default' \| 'error' \| 'warning'` | `'default'` | Validation border state. |

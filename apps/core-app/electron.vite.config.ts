@@ -179,7 +179,6 @@ export default defineConfig({
         exclude: [
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
-          'mathjs', // 打包进 bundle 以启用 tree-shaking (mathjs/number 剔除 matrix/calculus)
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
           '@earendil-works/pi-ai' // Pi provider bridge 与 agent-core 一并内联
         ]

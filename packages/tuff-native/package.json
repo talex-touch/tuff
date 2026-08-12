@@ -54,6 +54,7 @@
     "binding.gyp",
     "scripts/build-screenshot.js",
     "scripts/verify-screenshot-production.js",
+    "scripts/verify-audio-production.js",
     "scripts/build-audio.js",
     "protocol-contract.js",
     "protocol-contract.d.ts",
@@ -108,8 +109,9 @@
     "build:screenshot": "node scripts/build-screenshot.js",
     "build:audio": "node scripts/build-audio.js",
     "build:protocol-fixture": "node scripts/build-protocol-fixture.js",
-    "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js",
+    "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js protocol-error-cause.test.js protocol-error-envelope.test.js",
     "test:screenshot-protocol": "node --test screenshot-addon-contract.test.js screenshot-protocol.test.js",
+    "verify:audio-production": "node scripts/verify-audio-production.js",
     "verify:screenshot-production": "node scripts/verify-screenshot-production.js",
     "rebuild": "node-gyp rebuild",
     "check:everything": "node scripts/everything-selfcheck.js"

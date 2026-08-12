@@ -142,9 +142,28 @@ function getStateBadgeIcon(state: string) {
       return '🔌'
     case 'destroy':
       return '🗑️'
+    case 'failed':
+      return '⚠️'
     default:
       return '•'
   }
+}
+
+/**
+ * Leaves the shell in a terminal, non-loading state.
+ *
+ * Clearing `isLoading` alone is not enough: `showLoadingIndicator` is also true while
+ * `currentState` is `prepare` or `attach`, and the session is initialised to `prepare`. The
+ * overlay therefore stayed up on a failed getState no matter what `isLoading` said (#829), with
+ * 'Preparing...' under it forever.
+ *
+ * `failed` rides the existing state-badge path rather than a new error surface: the badge already
+ * renders any non-active state, so it needs an icon and a colour, not a component.
+ */
+function failInitialState(reason: unknown): void {
+  divisionBoxShellLog.error(`Failed to get initial state for ${props.sessionId}:`, reason)
+  currentState.value = 'failed'
+  isLoading.value = false
 }
 
 // State change listener cleanup
@@ -186,18 +205,22 @@ onMounted(() => {
   transport
     .send(DivisionBoxEvents.getState, { sessionId: props.sessionId })
     .then((response) => {
-      if (response?.success) {
-        const state = (response.data as { state?: string } | null | undefined)?.state
-        if (state) {
-          currentState.value = state
-        }
-        if (state === 'active') {
-          isLoading.value = false
-        }
+      if (!response?.success) {
+        // A non-success response is as terminal as a rejection: no stateChanged event for this
+        // session will follow, so leaving the shell in `prepare` means the overlay never lifts.
+        failInitialState('Initial state request was refused')
+        return
+      }
+      const state = (response.data as { state?: string } | null | undefined)?.state
+      if (state) {
+        currentState.value = state
+      }
+      if (state === 'active') {
+        isLoading.value = false
       }
     })
     .catch((error: Error) => {
-      divisionBoxShellLog.error(`Failed to get initial state for ${props.sessionId}:`, error)
+      failInitialState(error)
     })
 })
 
@@ -390,6 +413,12 @@ onUnmounted(() => {
   }
 
   &.state-destroy {
+    background: rgba(245, 108, 108, 0.15);
+    color: var(--tx-color-danger);
+    border: 1px solid rgba(245, 108, 108, 0.3);
+  }
+
+  &.state-failed {
     background: rgba(245, 108, 108, 0.15);
     color: var(--tx-color-danger);
     border: 1px solid rgba(245, 108, 108, 0.3);

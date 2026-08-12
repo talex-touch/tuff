@@ -34,4 +34,6 @@ export interface CascaderEmits {
   (e: 'change', v: CascaderValue): void
   (e: 'open'): void
   (e: 'close'): void
+  /** A `load` call rejected; `path` identifies the node whose children failed. */
+  (e: 'load-error', payload: { path: CascaderPath, error: unknown }): void
 }

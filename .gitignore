@@ -32,6 +32,7 @@ pids/
 # Dependencies (all package managers)
 # ========================
 node_modules/
+node_modules
 jspm_packages/
 bower_components/
 web_modules/
@@ -103,6 +104,12 @@ tmp/
 # ========================
 # ignore all .env.*.local
 .env*.local
+# .env itself, not just the *.local variants. apps/nexus/.env was tracked and shipped a
+# working AUTH_SECRET (#890); *.local alone never covered the plain name.
+.env
+.env.*
+!.env.example
+!.env.*.example
 .env.sentry-build-plugin
 *.local.json
 
@@ -183,3 +190,6 @@ apps/quota-gpt-view/
 apps/quota-gpt-ends/
 apps/g-wggu5114-thisai-thisai-ends-/
 apps/g-wggu5114-thisai-thisai-view-/
+
+# Vitest JUnit reports written by the App suites CI job
+test-reports/

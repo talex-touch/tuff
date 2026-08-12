@@ -1,8 +1,21 @@
 // @vitest-environment jsdom
 import type { WidgetSandboxEvidence } from '@talex-touch/utils/plugin/widget'
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import WidgetFrame from './WidgetFrame.vue'
+
+// WidgetFrame calls useI18n() in setup, and mounting it without an installed
+// i18n instance throws 'Need to install with `app.use` function' before a single
+// assertion runs. Same stub shape FlowSelector.test.ts uses.
+//
+// t(key, fallback): with no catalogue loaded vue-i18n resolves to the fallback,
+// so mirror that rather than echoing the key back.
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, fallback?: string) => fallback ?? key
+  })
+}))
+
 import {
   WIDGET_SANDBOX_AUDIT_MAX_ENTRIES,
   WIDGET_SANDBOX_QUOTA_MAX_CALLS,

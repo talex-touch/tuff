@@ -151,6 +151,41 @@ function onClick(e: MouseEvent) {
   openFromEvent(e)
 }
 
+/**
+ * The trigger had no keyboard path at all: the panel implements the full menu
+ * pattern (role="menu", roving items, arrow keys), but it could only ever be
+ * reached with a pointer. The ContextMenu key and Shift+F10 are the platform
+ * gestures for a context menu; Enter/Space open a click-triggered one.
+ */
+function triggerAnchorPoint(): ContextMenuPoint | undefined {
+  const el = triggerRef.value
+  if (!el?.getBoundingClientRect)
+    return undefined
+  const rect = el.getBoundingClientRect()
+  // A pointer-opened menu lands under the cursor; a keyboard-opened one has no
+  // cursor, so anchor it to the trigger's bottom-left like the platform does.
+  return { x: Math.round(rect.left), y: Math.round(rect.bottom) }
+}
+
+function onTriggerKeydown(e: KeyboardEvent) {
+  if (props.disabled)
+    return
+
+  const isContextGesture = e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
+  if (isContextGesture && isContextMenuTriggerEnabled()) {
+    e.preventDefault()
+    openedByContextMenu.value = true
+    openAt(triggerAnchorPoint())
+    return
+  }
+
+  if ((e.key === 'Enter' || e.key === ' ') && isClickTriggerEnabled()) {
+    e.preventDefault()
+    openedByContextMenu.value = false
+    openAt(triggerAnchorPoint())
+  }
+}
+
 function shouldCloseFromTriggerPointerDown(e: MouseEvent) {
   if (!props.closeOnTriggerPointerDown)
     return false
@@ -277,9 +312,14 @@ defineExpose({
     ref="triggerRef"
     class="tx-context-menu__trigger"
     :class="{ 'is-disabled': disabled }"
+    :tabindex="disabled || trigger === 'manual' ? undefined : 0"
+    :aria-haspopup="trigger === 'manual' ? undefined : 'menu'"
+    :aria-expanded="trigger === 'manual' ? undefined : open"
+    :aria-disabled="disabled || undefined"
     @contextmenu="onContextMenu"
     @pointerdown="onTriggerPointerDown"
     @click="onClick"
+    @keydown="onTriggerKeydown"
   >
     <slot name="trigger">
       <slot />

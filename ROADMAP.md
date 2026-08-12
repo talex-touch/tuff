@@ -3,11 +3,11 @@
 > 更新时间：2026-07-31（经全条目事实校准，校准记录见 `.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/research/`）
 > 定位：项目全貌一览。实时任务优先级见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)，任务状态见 [`.trellis/tasks/`](.trellis/tasks/README.md)。本文不复制易漂移细节，只保留稳定入口与高层状态。
 
-## 🎯 当前版本：v2.4.13
+## 🎯 当前版本：v2.4.14-beta.2
 
 | 维度 | 状态 |
 |------|------|
-| CoreApp 版本 | `2.4.13`（`apps/core-app/package.json`） |
+| CoreApp 版本 | `2.4.14-beta.2`（`apps/core-app/package.json`） |
 | Node.js | `>=24.15.0` |
 | pnpm | `10.34.4` |
 | Electron | `^41.10.1`（根 `package.json`） |
@@ -39,30 +39,32 @@
 来源：[`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)
 
 1. **关闭已验证的 release 和 runtime blocker** — OTA、macOS release-evidence、application-icon acceptance
-2. **完成搜索和跨平台修复** — Windows Everything productionization、search-index split write-path migration（flag 默认 off）
+2. **完成搜索和跨平台修复** — Windows Everything productionization、search-index split write-path migration（flag 自 `cd39bdbf6` / 2026-08-05 起默认 **on**）
 3. **继续其余独立活跃任务** — 按 Trellis task-local PRD 定义的实现顺序
 
 ### 安全门禁（不可绕过）
 
-- `DB_SEARCH_SPLIT_ENABLED` 默认 **off**，开启前必须有 flag-on app run evidence
+- `DB_SEARCH_SPLIT_ENABLED` 自 `cd39bdbf6`（2026-08-05）起默认 **on**，2d.3 write-path 迁移与之同批落地；`TUFF_DB_SEARCH_SPLIT_ENABLED=0` 是回退到共享文件拓扑的应急开关，不是安全默认值
 - 不把 local mock/dry-run/preflight/focused test 写成生产完成
 - SQLite 是本地 SoT；JSON 只允许作为密文同步载荷
 
 ---
 
-## 📁 活跃 Trellis 任务全景（27 个）
+## 📁 活跃 Trellis 任务（部分，本表 18 个）
 
 优先级与状态以各任务 `task.json` / `prd.md` 为准。父子任务缩进展示。
+
+> **这张表不是全集。** `.trellis/tasks/` 下当前有 60 个带 `prd.md` 的活跃任务,本表收录 19 个。
+> 表内最新的一条是 `07-30`;`08-03` 及以后建立的 29 个任务**一条都没有**,`07-28`/`07-29`
+> 的 screenshot 系列也基本缺席。要看全集请直接列目录或跑 `task.py list`,不要以本表为准。
+>
+> 先前的标题写作「活跃 Trellis 任务全景(24 个)」,那个「全景」在表停止更新后就不再成立
+> ——一个声称完整而实际只有四成的清单,比一个明说自己不完整的清单更容易误导。
 
 | 任务 | 优先级 | 状态 |
 |------|--------|------|
 | [audit-search-system-architecture](.trellis/tasks/07-09-audit-search-system-architecture/prd.md) | **P0** | 🔄 planning [3/7]：搜索架构审计与整改父任务 |
-| ├ [scope-search-sessions-and-streams](.trellis/tasks/07-09-scope-search-sessions-and-streams/prd.md) | P1 | planning |
-| ├ [gate-search-on-storage-hydration](.trellis/tasks/07-09-gate-search-on-storage-hydration/prd.md) | P1 | planning |
-| ├ [establish-single-search-index-writer](.trellis/tasks/07-09-establish-single-search-index-writer/prd.md) | P1 | planning |
 | └ [unify-search-provider-lifecycle](.trellis/tasks/07-09-unify-search-provider-lifecycle/prd.md) | P2 | planning |
-| [batch-commit-release-v2-4-14-beta-1](.trellis/tasks/07-27-batch-commit-release-v2-4-14-beta-1/prd.md) | P1 | 🔄 planning [1/2] |
-| └ [release-v2-4-14-beta-1](.trellis/tasks/07-27-release-v2-4-14-beta-1/prd.md) | P1 | planning |
 | [catalog-service-mvp](.trellis/tasks/07-13-catalog-service-mvp/prd.md) | P1 | planning |
 | [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |
 | ├ [optimize-intelligence-plugin](.trellis/tasks/07-27-optimize-intelligence-plugin/prd.md) | P1 | planning |
@@ -70,17 +72,13 @@
 | └ [optimize-clipboard-plugin](.trellis/tasks/07-27-optimize-clipboard-plugin/prd.md) | P1 | planning |
 | [search-crossplatform-audit](.trellis/tasks/07-13-search-crossplatform-audit/prd.md) | P2 | 🔄 审计父任务 [1/3] |
 | ├ [windows-everything-productionization](.trellis/tasks/07-17-windows-everything-productionization/prd.md) | P1 | 🔴 backend gate passed，packaged UI manifest 开放 |
-| └ [migrate-search-index-split-write-paths](.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md) | P1 | 🔴 flag 默认 off，等待全部 writer 迁移 |
+| └ [migrate-search-index-split-write-paths](.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md) | P1 | flag 默认 on（`cd39bdbf6`），剩余 writer 归属待收口 |
 | [unify-ota-update-flow](.trellis/tasks/07-17-unify-ota-update-flow/prd.md) | P2 | 🔄 OTA lifecycle 落地 [4/6]；host acceptance 开放 |
 | ├ [ota-one-click-background-update](.trellis/tasks/07-22-ota-one-click-background-update/prd.md) | P2 | 🔄 in_progress |
 | └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
 | [harden-app-icon-self-healing](.trellis/tasks/07-24-harden-app-icon-self-healing/prd.md) | P2 | 🔄 real-profile evidence ready；N+1 release 开放 |
-| [install-launch-v2-4-13-beta-23](.trellis/tasks/07-26-install-launch-v2-4-13-beta-23/prd.md) | P2 | 🔄 in_progress |
-| [audit-plugin-privileged-security](.trellis/tasks/07-27-audit-plugin-privileged-security/prd.md) | P2 | planning |
-| [base-anchor-liquid-animation](.trellis/tasks/07-27-base-anchor-liquid-animation/prd.md) | P2 | 🔄 in_progress（AC 验收中） |
+| install-launch-v2-4-13-beta-23 <sup>本地任务，未入库</sup> | P2 | 🔄 in_progress |
 | [fix-plugin-folder-button](.trellis/tasks/07-27-fix-plugin-folder-button/prd.md) | P2 | 🔄 in_progress |
-| [tuffex-docs-audit](.trellis/tasks/07-28-tuffex-docs-audit/prd.md) | P2 | 🔄 审计进行中 |
-| [fix-file-index-update-redaction-476](.trellis/tasks/07-30-fix-file-index-update-redaction-476/prd.md) | P2 | 🔄 in_progress |
 | [docs-roadmap-consolidation-cleanup](.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/prd.md) | P2 | 🔄 in_progress（本任务） |
 | [expose-plugin-search-sdk](.trellis/tasks/07-27-expose-plugin-search-sdk/prd.md) | P3 | planning |
 
@@ -165,7 +163,7 @@ talex-touch/
 
 | 类别 | 风险 | 状态 |
 |------|------|------|
-| **数据安全** | `DB_SEARCH_SPLIT_ENABLED` flag-off 前开启会导致 silent data loss | 🔴 默认 off，待 evidence |
+| **数据安全** | `DB_SEARCH_SPLIT_ENABLED` 半迁移状态会导致 silent data loss | 默认 on 自 `cd39bdbf6`；该失效态随 2d.3 写路径迁移一并消失 |
 | **搜索** | B1 语义搜索接而未用 | ✅ 已修（延迟召回二段推送）；余 1 项派生 carve-out 开放 |
 | **搜索** | B2 completion 加权被 sorter 绕过 | ✅ 已修（46 相关用例通过） |
 | **跨平台** | R1 Rust screenshot 模块未接入构建 | 🟠 已审计，开放 |

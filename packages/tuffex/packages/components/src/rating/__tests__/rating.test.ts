@@ -196,4 +196,66 @@ describe('txRating', () => {
 
     expect(app.component).toHaveBeenCalledWith('TxRating', RatingInstalled)
   })
+
+  it('keeps keyboard focus on the clicked star', async () => {
+    const wrapper = mount(TxRating, {
+      attachTo: document.body,
+      props: { modelValue: 0, animated: true },
+    })
+
+    const stars = wrapper.findAll<HTMLButtonElement>('.tx-rating__star')
+    stars[2]!.element.focus()
+    await stars[2]!.trigger('click')
+
+    // The pop animation is applied inside requestAnimationFrame; the key only
+    // flips once that runs, so the remount has to be given a chance to happen.
+    flushRaf()
+    await nextTick()
+
+    // The star's :key used to embed the transient animation state, so selecting
+    // it destroyed and recreated the button and the browser dropped focus.
+    expect(document.activeElement).toBe(
+      wrapper.findAll<HTMLButtonElement>('.tx-rating__star')[2]!.element,
+    )
+
+    wrapper.unmount()
+  })
+
+  it('exposes one tab stop and moves the rating with arrow keys', async () => {
+    const wrapper = mount(TxRating, {
+      attachTo: document.body,
+      props: { modelValue: 3 },
+    })
+
+    const tabindexes = wrapper
+      .findAll('.tx-rating__star')
+      .map(star => star.attributes('tabindex'))
+    // ARIA radiogroup: exactly one tab stop, on the checked option.
+    expect(tabindexes).toEqual(['-1', '-1', '0', '-1', '-1'])
+
+    const stars = wrapper.findAll<HTMLButtonElement>('.tx-rating__star')
+    await stars[2]!.trigger('keydown', { key: 'ArrowRight' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([4])
+
+    await stars[2]!.trigger('keydown', { key: 'ArrowLeft' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([2])
+
+    await stars[2]!.trigger('keydown', { key: 'Home' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([1])
+
+    await stars[2]!.trigger('keydown', { key: 'End' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([5])
+
+    wrapper.unmount()
+  })
+
+  it('ignores arrow keys when readonly or disabled', async () => {
+    const wrapper = mount(TxRating, {
+      props: { modelValue: 3, readonly: true },
+    })
+
+    await wrapper.findAll('.tx-rating__star')[2]!.trigger('keydown', { key: 'ArrowRight' })
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
 })

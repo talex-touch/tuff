@@ -7,11 +7,25 @@ import { createLogger } from '../../utils/logger'
 import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
 import { sendPlatformShortcut } from './desktop-shortcut'
 import { getXdotoolUnavailableReason } from './linux-desktop-tools'
+// Captured selections feed the recommendation context (hashed at ingest);
+// the store is separate so readers do not import this module's Electron deps.
+import { selectionSnapshotStore } from './selection-snapshot-store'
+import { withClipboardCaptureSuppressed } from '../clipboard/clipboard-capture-suppression'
 
 const selectionCaptureLog = createLogger('SelectionCapture')
 const execFileAsync = promisify(execFile)
 const COPY_COMMAND_TIMEOUT_MS = 900
 const COPY_RESULT_POLL_DELAY_MS = 120
+/**
+ * Bound on the direct-selection AppleScript probe.
+ *
+ * The frontmost app answers Apple events on its main thread, so a beachball or an open TCC
+ * consent sheet blocks the query indefinitely. Without this the probe hung captureSelection()
+ * itself, and the transport handler awaiting it never replied - the caller saw a request that
+ * never returned instead of the 'failed' result this function is built to produce (#771).
+ * Matched to the copy shortcut's budget: both are "ask the foreground app something".
+ */
+const DIRECT_SELECTION_PROBE_TIMEOUT_MS = 900
 
 interface ClipboardSnapshot {
   items: Array<{
@@ -64,7 +78,9 @@ async function captureMacSelectionTextDirectly(): Promise<string | null> {
       '  end tell',
       'end tell'
     ].join('\n')
-    const { stdout } = await execFileAsync('osascript', ['-e', script])
+    const { stdout } = await execFileAsync('osascript', ['-e', script], {
+      timeout: DIRECT_SELECTION_PROBE_TIMEOUT_MS
+    })
     const selectedText = typeof stdout === 'string' ? stdout.trim() : ''
     return selectedText || null
   } catch {
@@ -90,18 +106,47 @@ function snapshotClipboard(): ClipboardSnapshot {
 }
 
 function restoreClipboard(snapshot: ClipboardSnapshot): boolean {
+  // clear() has already destroyed the original by the time the writes run, so one throwing
+  // format used to abort the loop and take every format after it with it -- a user with an
+  // image plus RTF could be left with neither (#768). Each write is attempted independently
+  // now, so a format that cannot be restored costs only itself.
+  let cleared = false
+  const failedFormats: string[] = []
+
   try {
     clipboard.clear()
-    for (const item of snapshot.items) {
-      clipboard.writeBuffer(item.format, item.data)
-    }
-    return true
+    cleared = true
   } catch (error) {
-    selectionCaptureLog.warn('Failed to restore clipboard snapshot', {
+    selectionCaptureLog.warn('Failed to clear clipboard before restore', {
       error: error instanceof Error ? error.message : String(error)
     })
     return false
   }
+
+  for (const item of snapshot.items) {
+    try {
+      clipboard.writeBuffer(item.format, item.data)
+    } catch (error) {
+      failedFormats.push(item.format)
+      selectionCaptureLog.warn('Failed to restore a clipboard format', {
+        meta: { format: item.format },
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  if (failedFormats.length > 0) {
+    selectionCaptureLog.warn('Clipboard snapshot restored only in part', {
+      meta: {
+        restored: snapshot.items.length - failedFormats.length,
+        total: snapshot.items.length,
+        failedFormats: failedFormats.join(', ')
+      }
+    })
+    return false
+  }
+
+  return cleared
 }
 
 async function captureSelection(
@@ -132,6 +177,7 @@ async function captureSelection(
   if (process.platform === 'darwin') {
     const directSelection = await captureMacSelectionTextDirectly()
     if (directSelection) {
+      selectionSnapshotStore.set({ text: directSelection, capturedAt })
       return {
         text: directSelection,
         ...baseResult
@@ -143,56 +189,68 @@ async function captureSelection(
   const startedAt = Date.now()
   let result: SelectionCaptureResult
 
-  try {
-    await withTimeout(sendPlatformShortcut('copy'), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
-    await delay(COPY_RESULT_POLL_DELAY_MS)
-    const text = clipboard.readText().trim()
-    result = text
-      ? {
-          text,
-          ...baseResult
-        }
-      : {
-          text: '',
-          ...baseResult,
-          issueCode: 'empty',
-          issueMessage: 'No selected text was captured from the active application.'
-        }
-  } catch (error) {
-    const issueMessage = error instanceof Error ? error.message : 'Failed to capture selected text'
-    const xdotoolUnavailableReason = getXdotoolUnavailableReason()
-    result = {
-      text: '',
-      ...baseResult,
-      issueCode: issueMessage === xdotoolUnavailableReason ? 'unsupported' : 'failed',
-      issueMessage,
-      limitations:
-        issueMessage === xdotoolUnavailableReason && xdotoolUnavailableReason
-          ? [xdotoolUnavailableReason]
-          : baseResult.limitations
+  // Everything from here to the restore is the app writing to the clipboard, not the user. The
+  // native watcher cannot tell the difference, so without this the selected text lands in
+  // clipboard_history and the restore adds a duplicate row of what was already there (#769).
+  return await withClipboardCaptureSuppressed(async () => {
+    try {
+      await withTimeout(sendPlatformShortcut('copy'), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
+      await delay(COPY_RESULT_POLL_DELAY_MS)
+      const text = clipboard.readText().trim()
+      if (text) {
+        selectionSnapshotStore.set({ text, capturedAt })
+      }
+      result = text
+        ? {
+            text,
+            ...baseResult
+          }
+        : {
+            text: '',
+            ...baseResult,
+            issueCode: 'empty',
+            issueMessage: 'No selected text was captured from the active application.'
+          }
+    } catch (error) {
+      const issueMessage =
+        error instanceof Error ? error.message : 'Failed to capture selected text'
+      const xdotoolUnavailableReason = getXdotoolUnavailableReason()
+      result = {
+        text: '',
+        ...baseResult,
+        issueCode: issueMessage === xdotoolUnavailableReason ? 'unsupported' : 'failed',
+        issueMessage,
+        limitations:
+          issueMessage === xdotoolUnavailableReason && xdotoolUnavailableReason
+            ? [xdotoolUnavailableReason]
+            : baseResult.limitations
+      }
     }
-  }
 
-  const restored = restoreClipboard(clipboardSnapshot)
-  selectionCaptureLog.debug('Selection capture completed', {
-    meta: {
-      costMs: Date.now() - startedAt,
-      restored,
-      supportLevel: result.supportLevel,
-      issueCode: result.issueCode
+    const restored = restoreClipboard(clipboardSnapshot)
+    selectionCaptureLog.debug('Selection capture completed', {
+      meta: {
+        costMs: Date.now() - startedAt,
+        restored,
+        supportLevel: result.supportLevel,
+        issueCode: result.issueCode
+      }
+    })
+
+    if (!restored) {
+      // The caller is told the capture failed, so the snapshot must not survive
+      // it either.
+      selectionSnapshotStore.clear()
+      return {
+        text: '',
+        ...baseResult,
+        issueCode: 'failed',
+        issueMessage: 'Clipboard snapshot restore failed after selection capture.'
+      }
     }
+
+    return result
   })
-
-  if (!restored) {
-    return {
-      text: '',
-      ...baseResult,
-      issueCode: 'failed',
-      issueMessage: 'Clipboard snapshot restore failed after selection capture.'
-    }
-  }
-
-  return result
 }
 
 export const selectionCaptureService = {

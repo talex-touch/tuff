@@ -904,7 +904,11 @@ const customCss = computed(() => {
             >
               <TuffIcon :icon="{ type: 'class', value: 'i-ri-terminal-box-line' }" />
             </button>
-            <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+            <TuffIcon
+              :icon="pinIcon"
+              :alt="t('corebox.pin', '固定 CoreBox')"
+              @click="handleTogglePin"
+            />
           </template>
         </div>
       </template>

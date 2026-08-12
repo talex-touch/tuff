@@ -7,7 +7,7 @@
   > 指令中心，为创造者们而重塑。
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/master/LICENSE)
   [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?include_prereleases&style=flat-square)](https://github.com/talex-touch/tuff/releases)
   <br>
   [English](./README.md) | 简体中文
@@ -15,9 +15,11 @@
 
 ## 📌 发布与平台状态
 
-仓库当前稳定基线为 `2.4.13`，由一致的[根目录 package manifest](./package.json)与 [CoreApp package manifest](./apps/core-app/package.json)确定。已发布制品以 [GitHub Releases](https://github.com/talex-touch/tuff/releases) 为准。
+仓库最新稳定发布为 `2.4.13`（详见 [GitHub Releases](https://github.com/talex-touch/tuff/releases)）；[根目录 package manifest](./package.json)与 [CoreApp package manifest](./apps/core-app/package.json)中声明的开发版本为 `2.4.14-beta.2`。
 
 当前提供 macOS、Windows 和 Linux 预发布构建。稳定源码版本不代表三端能力成熟度一致，也不代表 OTA 验收已经完成；不支持或降级路径必须明确说明并保持 fail-closed。详情见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。
+
+Ubuntu 24.04 及以上请安装 `.deb` 而不是 AppImage。24.04 默认限制非特权用户命名空间，而 Electron 的沙箱需要它；`.deb` 会在安装时注册一份授予 `userns` 的 AppArmor 配置，AppImage 没有安装步骤，无处注册。若必须使用 AppImage，可用 `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` 临时放开。相关追踪见 [#213](https://github.com/talex-touch/tuff/issues/213)，该 issue 仍在等待一份说明「用的是两者中哪一个」的复测报告。
 
 ## 🔷 项目简介
 
@@ -97,7 +99,7 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
 
 ## 🤝 开源协议
 
-本项目基于 **MIT 许可证** 开源。
+本项目基于 **Mozilla 公共许可证 2.0（MPL-2.0）** 开源——详见 [`LICENSE`](./LICENSE)。
 
 ## ⁉️ 问题反馈
 

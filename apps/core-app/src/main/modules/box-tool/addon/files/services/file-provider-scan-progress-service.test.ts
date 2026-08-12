@@ -54,9 +54,13 @@ function createDbUtils(
     })
   })
 
+  const handle = { all, select }
   return {
     dbUtils: {
-      getDb: vi.fn(() => ({ all, select }))
+      getDb: vi.fn(() => handle),
+      // The service reads scan_progress through the split-aware read home;
+      // with the split off (these tests' default) it is the same handle.
+      getFileIndexReadDb: vi.fn(() => handle)
     },
     all,
     from,
@@ -117,6 +121,11 @@ function createService(
     dbUtils?: unknown
     normalizePath?: (path: string) => string
     ensureSearchIndexWorkerReady?: (reason: string) => Promise<boolean>
+    isSearchSplitEnabled?: () => boolean
+    execSearchIndexWrite?: (
+      statements: Array<{ sql: string; args: unknown[] }>,
+      mode?: 'single' | 'transaction'
+    ) => Promise<unknown>
   } = {}
 ) {
   const ensureSearchIndexWorkerReady = vi.fn(
@@ -130,7 +139,9 @@ function createService(
       getDbUtils: () => (input.dbUtils ?? null) as never,
       normalizePath: input.normalizePath,
       ensureSearchIndexWorkerReady,
-      getSearchIndexWorker: () => ({ upsertScanProgress })
+      getSearchIndexWorker: () => ({ upsertScanProgress }),
+      isSearchSplitEnabled: input.isSearchSplitEnabled,
+      execSearchIndexWrite: input.execSearchIndexWrite
     }),
     upsertScanProgress
   }
@@ -542,7 +553,7 @@ describe('file-provider-scan-progress-service', () => {
         sql: 'INSERT INTO scan_progress(source_id, path, last_scanned) VALUES (?, ?, ?), (?, ?, ?)',
         args: ['file-provider', '/a', 1_780_099_200_000, 'other-provider', '/a', 1_780_185_600_000]
       })
-      const dbUtils = { getDb: () => db }
+      const dbUtils = { getDb: () => db, getFileIndexReadDb: () => db }
       const { service } = createService({ dbUtils })
 
       await expect(service.getSummary(['/a'])).resolves.toEqual({
@@ -710,5 +721,72 @@ describe('file-provider-scan-progress-service', () => {
       lastUpsertReason: 'scan-progress.upsert',
       lastUpsertCheckedAt: 1_700_000_000_001
     })
+  })
+
+  // --- Search-split read/write home routing (V1 ship-blocker #3 regression) ---
+
+  it('reads completed roots from the split read home, not the stale primary db', async () => {
+    // Primary claims every root is scanned; the LIVE home (search file) is empty.
+    const stalePrimary = createDbUtils([
+      { path: '/a', lastScanned: new Date('2026-05-30T00:00:00.000Z') },
+      { path: '/b', lastScanned: new Date('2026-05-30T00:00:00.000Z') }
+    ])
+    const emptySearchHome = createDbUtils([])
+    const dbUtils = {
+      getDb: stalePrimary.dbUtils.getDb,
+      getFileIndexReadDb: emptySearchHome.dbUtils.getFileIndexReadDb
+    }
+    const { service } = createService({ dbUtils })
+
+    // A correct read concludes "nothing scanned → both roots pending".
+    await expect(service.getSummary(['/a', '/b'])).resolves.toEqual({
+      totalRoots: 0,
+      pendingRoots: 2,
+      completedRoots: 0,
+      lastScannedAt: null
+    })
+    expect(stalePrimary.dbUtils.getDb).not.toHaveBeenCalled()
+  })
+
+  it('forwards scan progress deletes through the worker when the split is on', async () => {
+    const readHome = createDbUtils([], { sourceScoped: true })
+    const dbUtils = {
+      getDb: vi.fn(() => {
+        throw new Error('primary connection must not be used for split deletes')
+      }),
+      getFileIndexReadDb: readHome.dbUtils.getFileIndexReadDb
+    }
+    const execSearchIndexWrite = vi.fn(async () => [])
+    const { db } = createDb()
+    const { service } = createService({
+      dbUtils,
+      isSearchSplitEnabled: () => true,
+      execSearchIndexWrite
+    })
+
+    await service.deletePaths(db as never, ['/a'])
+
+    expect(execSearchIndexWrite).toHaveBeenCalledTimes(1)
+    const [statements, mode] = execSearchIndexWrite.mock.calls[0] as unknown as [
+      Array<{ sql: string; args: unknown[] }>,
+      string
+    ]
+    expect(mode).toBe('single')
+    expect(statements[0]!.sql).toContain('DELETE FROM scan_progress')
+    expect(statements[0]!.sql).toContain('source_id = ?')
+    expect(statements[0]!.args).toEqual(['file-provider', '/a'])
+  })
+
+  it('fails closed when the split is on but no worker write path is provided', async () => {
+    const readHome = createDbUtils([], { sourceScoped: true })
+    const { db } = createDb()
+    const { service } = createService({
+      dbUtils: readHome.dbUtils,
+      isSearchSplitEnabled: () => true
+    })
+
+    await expect(service.deletePaths(db as never, ['/a'])).rejects.toThrow(
+      'SCAN_PROGRESS_DELETE_REQUIRES_SEARCH_INDEX_WRITER'
+    )
   })
 })

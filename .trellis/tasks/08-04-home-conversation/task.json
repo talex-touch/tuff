@@ -1,0 +1,30 @@
+{
+  "id": "home-conversation",
+  "name": "home-conversation",
+  "title": "首页对话最小闭环",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-03-app-shell-ai-redesign",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "做 R3 剩下的侧栏历史时间分桶（今天 / 昨天 / 近 7 天 / 更早），跟踪在 #969。R2 不需要再动。",
+    "blocker": "无。此前的 blocker 是状态表把已交付的 R2 记成未开始，读起来像整条数据层还没起步。",
+    "evidence": "R2 四项逐一核过：conversations 与 conversation_messages 两张表在 db/schema.ts:1694 和 :1708；迁移在 apps/core-app/resources/db/migrations/*.sql；对话 transport 在 modules/conversation；路由 /home/c/:id 在 renderer/src/base/router.ts:126。R3 的侧栏分桶只有一条 zh-CN 文案、没有实现，所以标部分而不是已交付。"
+  }
+}

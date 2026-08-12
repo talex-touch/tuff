@@ -130,6 +130,41 @@ describe('search provider registry', () => {
     vi.useRealTimers()
   })
 
+  it('contains provider-load failures behind the allowed decision and retries with backoff', async () => {
+    // Regression (V1 2026-08-04): a search-index worker init failure during
+    // the all-modules-loaded trigger escaped the fire-and-forget event
+    // listener as an UNHANDLED_REJECTION with no retry. The allowed branch
+    // must resolve with the decision, warn, and arm the backoff retry instead.
+    vi.useFakeTimers()
+    onboardingGateMock.waitForDecision.mockResolvedValueOnce({ state: 'allowed' })
+    let attempts = 0
+    const beforeProvidersLoad = vi.fn(async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('search-index worker init failed')
+    })
+    const onProvidersReady = vi.fn(async () => undefined)
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad,
+      onProvidersReady,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+
+    await expect(registry.loadWhenOnboardingAllows('all-modules-loaded')).resolves.toEqual({
+      state: 'allowed'
+    })
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(1)
+    expect(onProvidersReady).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(2)
+    expect(onProvidersReady).toHaveBeenCalledTimes(1)
+
+    registry.destroy()
+    vi.useRealTimers()
+  })
+
   it('combines indexed sources and plugin search providers for settings config', () => {
     const snapshot = buildSearchProviderRegistrySnapshot({
       indexedSources: [createIndexedSource('file-provider')],

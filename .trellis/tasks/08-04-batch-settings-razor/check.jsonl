@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "CoreApp verification and sensitive-data quality constraints"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "Credential lifecycle validation requirements"}

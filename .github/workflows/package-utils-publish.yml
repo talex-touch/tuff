@@ -9,10 +9,19 @@ on:
       - "packages/utils/package.json"
       - ".github/workflows/package-utils-publish.yml"
 
+concurrency:
+  # npm publish is not resumable, so an in-flight run must never be cancelled — queue
+  # behind it instead. Without this, two pushes seconds apart both pass the `npm view`
+  # existence check, both build, and the loser falls back to the duplicate-publish
+  # grep further down this file. Keyed per workflow so the package publishes stay
+  # independent of each other.
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   publish:
     name: Publish - utils
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
 
@@ -23,7 +32,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -57,7 +66,17 @@ jobs:
             exit 0
           fi
 
-          previous_version=$(git show "${before_sha}:packages/utils/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
+          # A force-push (or any branch rewrite) leaves github.event.before pointing at a
+          # commit that is not in the fetched history. Under `set -e`/pipefail an
+          # unguarded `git show` then fails the whole version check, so a real version
+          # bump in that same push is silently never published. Treat an unreachable
+          # before-sha as "no previous version", matching package-tuff-cli-publish.yml.
+          if git cat-file -e "${before_sha}^{commit}" >/dev/null 2>&1; then
+            previous_version=$(git show "${before_sha}:packages/utils/package.json" 2>/dev/null | node -e "const fs=require('fs'); const input=fs.readFileSync(0,'utf8'); if(!input){process.exit(0)}; const pkg=JSON.parse(input); console.log(pkg.version)" || true)
+          else
+            echo "Previous commit ${before_sha} is unreachable (force-push?); treating as no previous version."
+            previous_version=""
+          fi
           echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
 
           if [ "${current_version}" != "${previous_version}" ] || [ "${npm_has_version}" != "true" ]; then
@@ -84,44 +103,16 @@ jobs:
             exit 1
           fi
 
+      # Was a bare `npm publish` in packages/utils. npm does not understand pnpm's `catalog:`
+      # protocol, so it packed the specifier verbatim — `npm pack` here produces
+      # `"gsap": "catalog:"` and `"marked": "catalog:"`, which no consumer can resolve
+      # (#1137). publish-package.mjs packs with pnpm, which rewrites the protocol, then hands
+      # the finished tarball to `npm publish`; it also runs validate-publish-manifests --pack
+      # against that tarball, which every other package already got and this one did not
+      # (#551). Dist-tag selection is identical (`next` for prereleases) and the
+      # already-published check is built in.
       - name: Publish to npm
         if: steps.version_check.outputs.should_publish == 'true'
-        working-directory: packages/utils
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          version="${{ steps.version_check.outputs.current_version }}"
-          dist_tag="latest"
-          if [[ "${version}" == *"-"* ]]; then
-            dist_tag="next"
-          fi
-
-          if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
-            echo "@talex-touch/utils@${version} already published. Skipping."
-            exit 0
-          fi
-
-          publish_log="$(mktemp)"
-          trap 'rm -f "${publish_log}"' EXIT
-
-          set +e
-          npm publish --access public --tag "${dist_tag}" >"${publish_log}" 2>&1
-          publish_status=$?
-          set -e
-
-          cat "${publish_log}"
-
-          if [ "${publish_status}" -eq 0 ]; then
-            exit 0
-          fi
-
-          if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
-            if npm view "@talex-touch/utils@${version}" version >/dev/null 2>&1; then
-              echo "@talex-touch/utils@${version} became available during publish. Treating duplicate publish as success."
-              exit 0
-            fi
-          fi
-
-          exit "${publish_status}"
+        run: node scripts/publish-package.mjs --filter "@talex-touch/utils" --skip-git-check --skip-tests

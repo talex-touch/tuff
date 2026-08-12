@@ -3,7 +3,13 @@ import { migrate } from 'drizzle-orm/libsql/migrator'
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// This file drives a real libsql migration chain. It runs in 549ms here, but on a CI
+// runner -- fewer cores, the whole suite in parallel workers -- it went past vitest's 5s
+// default and timed out (#1596). Raised per file rather than globally so a genuine hang
+// elsewhere still fails fast.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 import {
   applyPrivacyMigrations,
   createPrivacyTestClient,
@@ -11,6 +17,7 @@ import {
 } from './retention-test-utils'
 
 const MIGRATIONS_URL = new URL('../../../../resources/db/migrations/', import.meta.url)
+const RETENTION_INDEXES_MIGRATION = '0034_privacy_retention_indexes.sql'
 const MIGRATIONS_FOLDER = fileURLToPath(MIGRATIONS_URL)
 
 interface MigrationJournal {
@@ -62,8 +69,16 @@ describe('privacy retention indexes migration', () => {
   it('extends the real migration chain without deleting existing rows', async () => {
     const { client } = await createPrivacyTestClient('migration')
     const migrations = await getPrivacyMigrationNames()
-    expect(migrations.at(-1)).toBe('0034_privacy_retention_indexes.sql')
-    await applyPrivacyMigrations(client, migrations.slice(0, -1))
+    // Target the retention-indexes migration by name rather than assuming it is
+    // last. Pinning it to the tail meant that once a later migration landed this
+    // suite would keep passing while exercising a different one entirely --
+    // worse than failing, which is what it did when 0035 and 0036 arrived.
+    const target = migrations.indexOf(RETENTION_INDEXES_MIGRATION)
+    expect(
+      target,
+      `${RETENTION_INDEXES_MIGRATION} is missing from the chain`
+    ).toBeGreaterThanOrEqual(0)
+    await applyPrivacyMigrations(client, migrations.slice(0, target))
 
     await client.execute(
       `INSERT INTO clipboard_history (type, content, timestamp, is_favorite)
@@ -75,7 +90,7 @@ describe('privacy retention indexes migration', () => {
        VALUES ('CANARY_CONTEXT_ROW', 'assistant', 'archived', 1, 1)`
     )
 
-    await applyPrivacyMigrations(client, migrations.slice(-1))
+    await applyPrivacyMigrations(client, [migrations[target]!])
 
     const indexes = await client.execute(
       `SELECT name FROM sqlite_master
@@ -224,7 +239,9 @@ describe('privacy retention indexes migration', () => {
     await migrate(drizzle(client), { migrationsFolder: MIGRATIONS_FOLDER })
 
     const journalRows = await client.execute('SELECT COUNT(*) AS count FROM __drizzle_migrations')
-    expect(Number(journalRows.rows[0]?.count)).toBe(35)
+    // Derived from the journal: a hardcoded count fails on every new migration
+    // while proving nothing about whether they all applied.
+    expect(Number(journalRows.rows[0]?.count)).toBe((await getPrivacyMigrationNames()).length)
     const clipboardColumns = await client.execute(`PRAGMA table_info('clipboard_history')`)
     expect(clipboardColumns.rows.some((row) => row.name === 'retention_protected')).toBe(true)
     const contextColumns = await client.execute(
@@ -236,7 +253,15 @@ describe('privacy retention indexes migration', () => {
   it('upgrades a journaled 0033 database while preserving existing rows', async () => {
     const { client, directory } = await createPrivacyTestClient('migration-upgrade')
     const stagedFolder = join(directory, 'migrations')
-    await stageMigrationChain(stagedFolder, 34)
+    // Both counts are derived from the chain: this test upgrades a database
+    // journaled at the migration before the retention indexes, up to and
+    // including them. Literal 34/35 silently drift as the chain grows.
+    const migrationNames = await getPrivacyMigrationNames()
+    const retentionIndex = migrationNames.indexOf(RETENTION_INDEXES_MIGRATION)
+    expect(retentionIndex).toBeGreaterThan(0)
+    const beforeRetention = retentionIndex
+    const throughRetention = retentionIndex + 1
+    await stageMigrationChain(stagedFolder, beforeRetention)
     await migrate(drizzle(client), { migrationsFolder: stagedFolder })
     await client.execute(
       `INSERT INTO clipboard_history (type, content, timestamp, is_favorite)
@@ -247,7 +272,7 @@ describe('privacy retention indexes migration', () => {
        VALUES ('journal-upgrade', 'assistant', 'archived', 1, 1)`
     )
 
-    await stageMigrationChain(stagedFolder, 35)
+    await stageMigrationChain(stagedFolder, throughRetention)
     await migrate(drizzle(client), { migrationsFolder: stagedFolder })
 
     const clipboard = await client.execute(
@@ -262,7 +287,9 @@ describe('privacy retention indexes migration', () => {
     )
     expect(context.rows[0]?.is_pinned).toBe(0)
     const journalRows = await client.execute('SELECT COUNT(*) AS count FROM __drizzle_migrations')
-    expect(Number(journalRows.rows[0]?.count)).toBe(35)
+    // The staged folder holds only the chain through the retention indexes, so
+    // the journal reflects that subset rather than every migration on disk.
+    expect(Number(journalRows.rows[0]?.count)).toBe(throughRetention)
   })
 
   it('rolls back schema and journal state when 0034 fails mid-migration', async () => {

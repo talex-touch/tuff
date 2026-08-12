@@ -3,7 +3,7 @@
   "name": "catalog-service-mvp",
   "title": "Implement CatalogService MVP",
   "description": "Land R8-F signed fail-closed CatalogService for verified pack import, activation, rollback and diagnostics without expanding into R8-G CI gates.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -20,11 +20,17 @@
   "subtasks": [],
   "children": [],
   "parent": null,
-  "relatedFiles": [],
-  "notes": "Planning-only R8-F slice; it does not declare global priority.",
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/catalog/catalog-service.ts",
+    "apps/core-app/src/main/modules/catalog/catalog-verifier.ts",
+    "apps/core-app/src/main/modules/catalog/catalog-repository.ts",
+    "apps/core-app/src/main/modules/catalog/catalog-remote.ts",
+    "apps/core-app/src/main/modules/catalog/catalog-lifecycle.integration.test.ts"
+  ],
+  "notes": "The implementation landed while the R8-F lane was paused, which is why the record and the code disagreed. apps/core-app/src/main/modules/catalog/ holds verifier, repository, service, remote and module, and a focused run is 6 files / 38 tests passing -- the same baseline #305 cites. Seven of the nine prd criteria were already checked.\n\nThe eighth is now checked too, verified rather than assumed: catalog 38/38, plugin-localization-channels 12/12, and CI carries the rest of that criterion -- the full core-app suite at 5846 passed, Typecheck (workspace), and lint through the PR quality gate.\n\nThe ninth is the real residual and it is documentation, not code: the R8 prd, execution plan, quality baseline, changelog and developer docs still have to state the completed/open boundary. Nothing about the service needs reimplementing, which is what #305 exists to prevent.",
   "meta": {
-    "nextAction": "Resume signed pack import, activation, rollback, and diagnostics after TODO.md releases the R8-F pause.",
-    "blocker": "Paused until the P1 stability sequence in docs/plan-prd/TODO.md is complete.",
-    "evidence": "prd.md acceptance checklist and CatalogService signature/import/rollback tests."
+    "nextAction": "Write the completed/open boundary into the R8 prd, execution plan, quality baseline, changelog and developer docs -- the ninth criterion, and the only one still open. No service code needs writing.",
+    "blocker": "None for the remaining scope. docs/plan-prd/TODO.md:37 still lists R8-F as paused, but that pause governs further lane work; it does not describe what already landed, and treating it as a blocker is what let this record drift from the code.",
+    "evidence": "Focused run: 6 files / 38 tests passing across verifier, repository, service, remote, module and lifecycle integration -- the baseline named in #305. plugin-localization-channels 12/12 for the plugin-integration half of criterion 8. CI carries the rest: core-app suite 5846 passed, Typecheck (workspace) green."
   }
 }

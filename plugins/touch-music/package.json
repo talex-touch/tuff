@@ -11,20 +11,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@milkdown/theme-nord": "^7.21.2",
     "@talex-touch/tuffex": "workspace:^",
     "@types/howler": "^2.2.13",
     "axios": "^1.18.1",
-    "granim": "^2.0.0",
     "gsap": "catalog:",
     "howler": "^2.2.4",
     "remixicon": "^4.9.1",
     "rgbaster": "^2.1.1",
     "typescript": "^5.9.3",
-    "vue": "^3.5.39",
-    "wavesurfer.js": "^7.12.10",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0"
+    "vue": "^3.5.39"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",

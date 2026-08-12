@@ -10,7 +10,7 @@ const labels = computed(() => (locale.value === 'zh'
 
 <template>
   <div style="display: flex; gap: 12px; align-items: center;">
-    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" alt="GitHub user" />
     <TxAvatar :name="labels.name" />
     <TxAvatar icon="user" />
     <TxAvatar>{{ labels.fallback }}</TxAvatar>

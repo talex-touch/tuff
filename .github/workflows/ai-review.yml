@@ -16,6 +16,7 @@ jobs:
   ai-review:
     name: AI PR Review
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout trusted base commit
         uses: actions/checkout@v7

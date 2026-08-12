@@ -97,7 +97,6 @@ const FLOATING_BALL_DEFAULT_PADDING = 24
 const VOICE_PANEL_WIDTH = 420
 const VOICE_PANEL_HEIGHT = 260
 const ASSISTANT_DEFAULT_NAME = '阿洛 aler'
-const ASSISTANT_DEFAULT_ID = 'aler'
 const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
@@ -549,26 +548,20 @@ export class AssistantModule extends BaseModule {
 
     if (!isRecord(setting.assistant)) {
       setting.assistant = {
-        name: ASSISTANT_DEFAULT_NAME,
-        identifier: ASSISTANT_DEFAULT_ID,
         enabled: ASSISTANT_DEFAULT_ENABLED
       }
       changed = true
     } else {
-      if (typeof setting.assistant.name !== 'string' || !setting.assistant.name.trim()) {
-        setting.assistant.name = ASSISTANT_DEFAULT_NAME
-        changed = true
-      }
-      if (
-        typeof setting.assistant.identifier !== 'string' ||
-        !setting.assistant.identifier.trim()
-      ) {
-        setting.assistant.identifier = ASSISTANT_DEFAULT_ID
-        changed = true
-      }
       if (typeof setting.assistant.enabled !== 'boolean') {
         setting.assistant.enabled = ASSISTANT_DEFAULT_ENABLED
         changed = true
+      }
+      const assistantSettings = setting.assistant as Record<string, unknown>
+      for (const key of ['name', 'identifier']) {
+        if (Object.prototype.hasOwnProperty.call(assistantSettings, key)) {
+          delete assistantSettings[key]
+          changed = true
+        }
       }
     }
 
@@ -709,10 +702,7 @@ export class AssistantModule extends BaseModule {
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
     const voiceWake = this.getVoiceWakeSetting(setting)
     const assistantEnabled = this.isAssistantEnabled(setting)
-    const assistantName =
-      typeof setting.assistant?.name === 'string' && setting.assistant.name.trim()
-        ? setting.assistant.name
-        : ASSISTANT_DEFAULT_NAME
+    const assistantName = ASSISTANT_DEFAULT_NAME
     return {
       enabled: assistantEnabled && voiceWake.enabled,
       language: voiceWake.language,

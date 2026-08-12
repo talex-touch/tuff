@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import path from 'node:path'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { PluginStatus, type IPluginManager, type ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { PluginApiUninstallRequest } from '@talex-touch/utils/transport/events/types'
 import {
@@ -8,6 +10,28 @@ import {
 } from '@talex-touch/utils/transport/security/plugin-identity'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { teardownPluginStorage } from './runtime/plugin-storage-lifecycle'
+
+/**
+ * The uninstall coordinator pins the owner's data and code directories by real
+ * inode identity (task-301 lifecycle hardening) and refuses to run when a pinned
+ * path is missing or swapped, so string fixtures abort every run at stage one.
+ *
+ * realpath matters: on macOS `/var` symlinks to `/private/var`, and the pin check
+ * rejects any path where `realpath !== resolve`.
+ */
+const FIXTURE_ROOT = realpathSync(mkdtempSync(path.join(tmpdir(), 'plugin-module-fixture-')))
+
+function fixturePath(...segments: string[]): string {
+  return path.join(FIXTURE_ROOT, ...segments)
+}
+
+function ensureFixtureDirs(): void {
+  mkdirSync(fixturePath('plugins', 'calendar'), { recursive: true })
+  for (const root of [fixturePath('calendar', 'data'), fixturePath('plugin-data', 'calendar')]) {
+    mkdirSync(path.join(root, 'temp'), { recursive: true })
+    mkdirSync(path.join(root, 'cache'), { recursive: true })
+  }
+}
 
 interface CapturedManagerFactory {
   (
@@ -26,6 +50,8 @@ const mocks = vi.hoisted(() => {
   const eventHandlers = new Map<unknown, (event: unknown) => void>()
   const removedPaths = new Set<string>()
   const symbolicPaths = new Set<string>()
+  /** Quarantine renames really move the fixture; remember where each path went. */
+  const renamedPaths = new Map<string, string>()
   let capturedManagerFactory: CapturedManagerFactory | null = null
   const transportOn = vi.fn(
     (channel: unknown, handler: (payload: unknown, context: unknown) => unknown) => {
@@ -53,7 +79,7 @@ const mocks = vi.hoisted(() => {
       activationGeneration: 1,
       key: 'calendar-key'
     })),
-    getDataPath: vi.fn(() => '/fixture/calendar/data')
+    getDataPath: vi.fn(() => fixturePath('calendar', 'data'))
   }
   const manager = {
     plugins: new Map<string, typeof plugin>(),
@@ -97,6 +123,7 @@ const mocks = vi.hoisted(() => {
     dbUtils,
     deleteSecureStoreValuesByPrefix: vi.fn(),
     removedPaths,
+    renamedPaths,
     symbolicPaths,
     devWatcherRemovePlugin: vi.fn(),
     dialogShowMessageBox: vi.fn(),
@@ -141,18 +168,9 @@ const mocks = vi.hoisted(() => {
     runtimeDispose: vi.fn(async () => undefined),
     runtimeOptions: null as Record<string, unknown> | null,
     runtimeResolve: vi.fn(),
-    setBrowserDataCapabilityFactory: vi.fn(),
-    setBrowserOpenCapabilityFactory: vi.fn(),
-    setIntelligenceContextCapabilityFactory: vi.fn(),
-    setRuntimeService: vi.fn(),
+    setCapabilities: vi.fn(),
     setSecureStoreValue: vi.fn(),
-    setSnipasteProcessCapabilityFactory: vi.fn(),
-    setSystemActionCapabilityFactory: vi.fn(),
-    setTranslationCapabilityFactory: vi.fn(),
     setTransport: vi.fn(),
-    setWindowManagerCapabilityFactory: vi.fn(),
-    setWindowPresetCapabilityFactory: vi.fn(),
-    setWorkspaceScriptCapabilityFactory: vi.fn(),
     startUpdateScheduler: vi.fn(),
     stopUpdateScheduler: vi.fn(),
     transportOn
@@ -193,6 +211,22 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn(), openPath: vi.fn(), showItemInFolder: vi.fn() }
 }))
 
+// `rename` lives in node:fs/promises while remove/rmdir are mocked below. It has
+// to stay real: the coordinator re-pins the quarantine path by inode before
+// deleting it, so a bookkeeping-only rename leaves nothing to verify and the
+// deletion is skipped entirely.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    default: actual,
+    rename: vi.fn(async (from: string, to: string) => {
+      mocks.renamedPaths.set(to, from)
+      await actual.rename(from, to)
+    })
+  }
+})
+
 vi.mock('fs-extra', () => ({
   default: {
     ensureDir: vi.fn(),
@@ -201,8 +235,27 @@ vi.mock('fs-extra', () => ({
       if (mocks.removedPaths.has(target) || !(await mocks.fsPathExists(target))) {
         throw Object.assign(new Error('missing'), { code: 'ENOENT' })
       }
+      // Quarantine really moves directories, so a fixture path can be gone even
+      // though fsPathExists still reports it. Trust the disk for those.
+      if (target.startsWith(FIXTURE_ROOT)) {
+        try {
+          statSync(target)
+        } catch {
+          throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+        }
+      }
       const symbolic = mocks.symbolicPaths.has(target)
+      // Pinning captures dev/ino with the real fs and re-checks through this
+      // mock; without identity every comparison fails as OWNER_PATH_CHANGED.
+      let identity: { dev: number; ino: number } = { dev: 0, ino: 0 }
+      try {
+        const real = statSync(target)
+        identity = { dev: Number(real.dev), ino: Number(real.ino) }
+      } catch {
+        // Fixture path with no on-disk counterpart.
+      }
       return {
+        ...identity,
         isDirectory: () => !symbolic,
         isSymbolicLink: () => symbolic
       }
@@ -385,7 +438,7 @@ vi.mock('./host/plugin-runtime-service', () => ({
     dispose = mocks.runtimeDispose
     resolve = mocks.runtimeResolve
   },
-  resolvePluginRuntimeArtifactPath: () => '/fixture/plugin-host.js'
+  resolvePluginRuntimeArtifactPath: () => fixturePath('plugin-host.js')
 }))
 vi.mock('./plugin-content-installer', () => ({ installPluginContentPackageToLocalPlugin: vi.fn() }))
 vi.mock('./install-queue', () => ({
@@ -397,16 +450,7 @@ vi.mock('./install-queue', () => ({
 vi.mock('./plugin', () => ({
   TouchPlugin: class {
     static setTransport = mocks.setTransport
-    static setRuntimeService = mocks.setRuntimeService
-    static setSnipasteProcessCapabilityFactory = mocks.setSnipasteProcessCapabilityFactory
-    static setSystemActionCapabilityFactory = mocks.setSystemActionCapabilityFactory
-    static setBrowserOpenCapabilityFactory = mocks.setBrowserOpenCapabilityFactory
-    static setBrowserDataCapabilityFactory = mocks.setBrowserDataCapabilityFactory
-    static setTranslationCapabilityFactory = mocks.setTranslationCapabilityFactory
-    static setIntelligenceContextCapabilityFactory = mocks.setIntelligenceContextCapabilityFactory
-    static setWindowManagerCapabilityFactory = mocks.setWindowManagerCapabilityFactory
-    static setWindowPresetCapabilityFactory = mocks.setWindowPresetCapabilityFactory
-    static setWorkspaceScriptCapabilityFactory = mocks.setWorkspaceScriptCapabilityFactory
+    static setCapabilities = mocks.setCapabilities
   }
 }))
 vi.mock('./plugin-installer', () => ({ PluginInstaller: class {} }))
@@ -468,8 +512,8 @@ function initializeModule(module: PluginModule): Promise<void> {
   return Promise.resolve(
     Reflect.apply(module.onInit, module, [
       {
-        app: { rootPath: '/fixture/app' },
-        file: { dirPath: '/fixture/plugins' }
+        app: { rootPath: fixturePath('app') },
+        file: { dirPath: fixturePath('plugins') }
       }
     ])
   )
@@ -519,7 +563,7 @@ async function createActualManagerHarness(order: string[] = []): Promise<ActualM
 
   const factory = mocks.getCapturedManagerFactory()
   if (!factory) throw new Error('PluginModule did not expose its real manager factory')
-  const manager = factory('/fixture/plugins', transport, { broadcastPlugin: vi.fn() }, 42)
+  const manager = factory(fixturePath('plugins'), transport, { broadcastPlugin: vi.fn() }, 42)
   const loggerDestroy = vi.fn(() => {
     order.push('logger-flush')
   })
@@ -544,7 +588,7 @@ async function createActualManagerHarness(order: string[] = []): Promise<ActualM
       activationGeneration: 3,
       key: 'synthetic-key'
     })),
-    getConfigPath: vi.fn(() => '/fixture/plugin-data/calendar/config')
+    getConfigPath: vi.fn(() => fixturePath('plugin-data', 'calendar', 'config'))
   }) as PluginFixture
   manager.plugins.set('calendar', plugin)
   manager.enabledPlugins.add('calendar')
@@ -575,11 +619,16 @@ async function uninstallWithDisposition(
 }
 
 function expectOnlyTemporaryFilesystemCleanup(): void {
-  expect(mocks.fsRemove).toHaveBeenCalledExactlyOnceWith('/fixture/plugin-data/calendar/temp')
+  // Temp cleanup moved to the temp-file service namespace purge, and nothing
+  // persistent may be deleted on an aborted uninstall — so the filesystem
+  // removal path must not run at all (task-301 lifecycle hardening).
+  expect(mocks.tempCleanupNamespace).toHaveBeenCalled()
+  expect(mocks.fsRemove).not.toHaveBeenCalled()
 }
 
 describe('PluginModule facade', () => {
   beforeEach(() => {
+    ensureFixtureDirs()
     mocks.handlers.clear()
     mocks.disposers.splice(0)
     mocks.eventHandlers.clear()
@@ -679,16 +728,7 @@ describe('PluginModule facade', () => {
     mocks.mainBrowserWindow.restore.mockReset()
     mocks.mainBrowserWindow.show.mockReset()
     mocks.mainBrowserWindow.focus.mockReset()
-    mocks.setRuntimeService.mockReset()
-    mocks.setSnipasteProcessCapabilityFactory.mockReset()
-    mocks.setSystemActionCapabilityFactory.mockReset()
-    mocks.setBrowserOpenCapabilityFactory.mockReset()
-    mocks.setBrowserDataCapabilityFactory.mockReset()
-    mocks.setTranslationCapabilityFactory.mockReset()
-    mocks.setIntelligenceContextCapabilityFactory.mockReset()
-    mocks.setWindowManagerCapabilityFactory.mockReset()
-    mocks.setWindowPresetCapabilityFactory.mockReset()
-    mocks.setWorkspaceScriptCapabilityFactory.mockReset()
+    mocks.setCapabilities.mockReset()
     mocks.setTransport.mockReset()
     mocks.startUpdateScheduler.mockReset()
     mocks.stopUpdateScheduler.mockReset()
@@ -704,6 +744,10 @@ describe('PluginModule facade', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterAll(() => {
+    rmSync(FIXTURE_ROOT, { recursive: true, force: true })
   })
 
   it('retries a pending plugin only after the permission-granted lifecycle event', async () => {
@@ -827,28 +871,24 @@ describe('PluginModule facade', () => {
     )
     expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
-    expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
-    expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(expect.any(Object))
-    expect(mocks.setWindowPresetCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setBrowserOpenCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setBrowserDataCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setTranslationCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setIntelligenceContextCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setWindowManagerCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setWorkspaceScriptCapabilityFactory.mock.calls[0]).toEqual([null])
-    expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setTranslationCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setIntelligenceContextCapabilityFactory).toHaveBeenLastCalledWith(
-      expect.any(Function)
-    )
-    expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
-    expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    // One call each way, so this covers what nine separate assertions used to. Compared
+    // exhaustively rather than field by field: an eleventh capability that the install block
+    // forgets fails here as an unexpected shape, not just at the type level.
+    expect(mocks.setCapabilities.mock.calls[0]).toEqual([null])
+    expect(mocks.setCapabilities).toHaveBeenLastCalledWith({
+      snipasteProcess: expect.any(Function),
+      systemAction: expect.any(Function),
+      browserOpen: expect.any(Function),
+      browserData: expect.any(Function),
+      translation: expect.any(Function),
+      intelligenceContext: expect.any(Function),
+      windowManager: expect.any(Function),
+      windowPreset: expect.any(Function),
+      workspaceScript: expect.any(Function),
+      runtimeService: expect.any(Object)
+    })
 
-    const contextFactory = mocks.setIntelligenceContextCapabilityFactory.mock.calls.at(-1)?.[0] as
+    const contextFactory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.intelligenceContext as
       | ((activation: {
           name: string
           pluginInstanceId: string
@@ -898,77 +938,87 @@ describe('PluginModule facade', () => {
   })
 
   it('parents destructive confirmation only to the configured live CoreApp window', async () => {
-    const module = new PluginModule()
-    mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
-    mocks.plugin.declaredPermissions = { required: ['system.shell'], optional: [] }
-    mocks.permissionHasPermission.mockReturnValue(true)
-    await initializeModule(module)
-    const activation = Object.freeze({
-      name: 'touch-quick-actions',
-      pluginInstanceId: 'quick-actions-instance',
-      activationGeneration: 1,
-      key: 'quick-actions-key'
-    })
-    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
-    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
-    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
-      | ((input: typeof activation) => {
-          definitions: ReadonlyArray<{
-            invoke(
-              context: ReturnType<typeof issuePluginSecurityContext>,
-              request: unknown,
-              signal: AbortSignal,
-              resources: unknown
-            ): Promise<unknown>
-          }>
-        })
-      | undefined
-    expect(factory).toEqual(expect.any(Function))
-    const definition = factory?.(activation).definitions[0]
-    const context = issuePluginSecurityContext(activation, 'plugin-host', {
-      hostGeneration: 7
-    })
-
-    mocks.browserWindowFromId.mockReturnValueOnce(null)
-    await expect(
-      definition?.invoke(
-        context,
-        { operation: 'run-action', actionId: 'restart' },
-        new AbortController().signal,
-        { register: vi.fn() }
-      )
-    ).resolves.toEqual({
-      actionId: 'restart',
-      status: 'blocked',
-      reason: 'confirmation-denied'
-    })
-    expect(mocks.dialogShowMessageBox).not.toHaveBeenCalled()
-
-    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
-    mocks.dialogShowMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
-    await expect(
-      definition?.invoke(
-        context,
-        { operation: 'run-action', actionId: 'shutdown' },
-        new AbortController().signal,
-        { register: vi.fn() }
-      )
-    ).resolves.toEqual({
-      actionId: 'shutdown',
-      status: 'blocked',
-      reason: 'confirmation-denied'
-    })
-    expect(mocks.browserWindowFromId).toHaveBeenLastCalledWith(42)
-    expect(mocks.dialogShowMessageBox).toHaveBeenCalledWith(
-      mocks.mainBrowserWindow,
-      expect.objectContaining({
-        title: '确认关机',
-        defaultId: 0,
-        cancelId: 0,
-        signal: expect.any(AbortSignal)
+    // restart/shutdown are supported on darwin and win32 only, so on a Linux
+    // runner the capability short-circuits to 'platform-unsupported' and the
+    // confirmation path this test covers is never reached. Pinned narrowly --
+    // process.platform is read per call here, so the scope is this test alone.
+    const previousPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      const module = new PluginModule()
+      mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
+      mocks.plugin.declaredPermissions = { required: ['system.shell'], optional: [] }
+      mocks.permissionHasPermission.mockReturnValue(true)
+      await initializeModule(module)
+      const activation = Object.freeze({
+        name: 'touch-quick-actions',
+        pluginInstanceId: 'quick-actions-instance',
+        activationGeneration: 1,
+        key: 'quick-actions-key'
       })
-    )
-    await module.onDestroy()
+      mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+      mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
+      const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
+        | ((input: typeof activation) => {
+            definitions: ReadonlyArray<{
+              invoke(
+                context: ReturnType<typeof issuePluginSecurityContext>,
+                request: unknown,
+                signal: AbortSignal,
+                resources: unknown
+              ): Promise<unknown>
+            }>
+          })
+        | undefined
+      expect(factory).toEqual(expect.any(Function))
+      const definition = factory?.(activation).definitions[0]
+      const context = issuePluginSecurityContext(activation, 'plugin-host', {
+        hostGeneration: 7
+      })
+
+      mocks.browserWindowFromId.mockReturnValueOnce(null)
+      await expect(
+        definition?.invoke(
+          context,
+          { operation: 'run-action', actionId: 'restart' },
+          new AbortController().signal,
+          { register: vi.fn() }
+        )
+      ).resolves.toEqual({
+        actionId: 'restart',
+        status: 'blocked',
+        reason: 'confirmation-denied'
+      })
+      expect(mocks.dialogShowMessageBox).not.toHaveBeenCalled()
+
+      mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
+      mocks.dialogShowMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
+      await expect(
+        definition?.invoke(
+          context,
+          { operation: 'run-action', actionId: 'shutdown' },
+          new AbortController().signal,
+          { register: vi.fn() }
+        )
+      ).resolves.toEqual({
+        actionId: 'shutdown',
+        status: 'blocked',
+        reason: 'confirmation-denied'
+      })
+      expect(mocks.browserWindowFromId).toHaveBeenLastCalledWith(42)
+      expect(mocks.dialogShowMessageBox).toHaveBeenCalledWith(
+        mocks.mainBrowserWindow,
+        expect.objectContaining({
+          title: '确认关机',
+          defaultId: 0,
+          cancelId: 0,
+          signal: expect.any(AbortSignal)
+        })
+      )
+      await module.onDestroy()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previousPlatform, configurable: true })
+    }
   })
 
   it('shows the configured main window for the current system-actions activation without shell permission', async () => {
@@ -990,7 +1040,7 @@ describe('PluginModule facade', () => {
     mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 9 } })
     mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
     mocks.mainBrowserWindow.isMinimized.mockReturnValue(true)
-    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+    const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
       | ((input: typeof activation) => {
           definitions: ReadonlyArray<{
             invoke(
@@ -1046,7 +1096,7 @@ describe('PluginModule facade', () => {
     mocks.mainBrowserWindow.restore.mockImplementationOnce(() => {
       mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 10 } })
     })
-    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+    const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.systemAction as
       | ((input: typeof activation) => {
           definitions: ReadonlyArray<{
             invoke(
@@ -1137,7 +1187,7 @@ describe('PluginModule facade', () => {
     )
     expect(approved).toEqual({ success: true })
     expect(mocks.setSecureStoreValue).toHaveBeenCalledWith(
-      '/fixture/app',
+      fixturePath('app'),
       'plugin.calendar.token',
       'encrypted-value',
       'plugin-secret',
@@ -1201,16 +1251,9 @@ describe('PluginModule facade', () => {
     expect(mocks.runtimeDispose).toHaveBeenCalledOnce()
     expect(closeBusiness).toHaveBeenCalledOnce()
     expect(closeSqlite).toHaveBeenCalledOnce()
-    expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(null)
-    expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setTranslationCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setIntelligenceContextCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(null)
-    expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(null)
+    // Teardown is one call now, so nine assertions collapse into the one that actually matters:
+    // whatever was installed is cleared, whether that is ten capabilities or eleven.
+    expect(mocks.setCapabilities).toHaveBeenLastCalledWith(null)
     expect(mocks.setTransport).toHaveBeenLastCalledWith(null)
     expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
@@ -1400,12 +1443,27 @@ describe('PluginModule facade', () => {
     mocks.reportPluginUninstall.mockImplementation(async () => {
       order.push('analytics-uninstall-report')
     })
-    mocks.fsRemove.mockImplementation(async (target: string) => {
-      if (target === '/fixture/plugin-data/calendar/cache') order.push('cache-remove')
-      else if (target === '/fixture/plugin-data/calendar/temp') order.push('temp-remove')
-      else if (target === '/fixture/plugin-data/calendar') order.push('data-root-remove')
-      else if (target.startsWith('/fixture/plugin-data/calendar/')) order.push('data-remove')
-      else if (target === '/fixture/plugins/calendar') order.push('code-remove')
+    mocks.fsRemove.mockImplementation(async (rawTarget: string) => {
+      // A quarantined directory is deleted under its .recovery name; map it
+      // back so these labels still describe what was removed.
+      const target = mocks.renamedPaths.get(rawTarget) ?? rawTarget
+      if (target === fixturePath('plugin-data', 'calendar', 'cache')) order.push('cache-remove')
+      else if (target === fixturePath('plugin-data', 'calendar', 'temp')) order.push('temp-remove')
+      else if (target === fixturePath('plugin-data', 'calendar')) order.push('data-root-remove')
+      else if (target.startsWith(`${fixturePath('plugin-data', 'calendar')}/`))
+        order.push('data-remove')
+      else if (target === fixturePath('plugins', 'calendar')) order.push('code-remove')
+    })
+    mocks.tempCleanupNamespace.mockImplementation(async () => {
+      order.push('temp-namespace-purge')
+      // Preserve the shape the coordinator expects; only the ordering is new.
+      return {
+        deletedItemCount: 0,
+        deletedByteCount: 0,
+        failedItemCount: 0,
+        bounded: false,
+        cancelled: false
+      }
     })
     mocks.dbUtils.deletePluginData.mockImplementation(async () => {
       order.push('plugin-row-remove')
@@ -1425,14 +1483,14 @@ describe('PluginModule facade', () => {
       'admission-close',
       'runtime-resource-exit',
       'logger-flush',
-      'temp-remove',
+      'temp-namespace-purge',
       'sqlite-close',
       'permission-revoke-all',
       'authority-invalidate',
       'secret-legacy',
       'secret-v2',
-      'data-remove',
-      'cache-remove',
+      // Cache and data are no longer deleted piecemeal: the data root is
+      // quarantined and removed whole (task-301 lifecycle hardening).
       'data-root-remove',
       'plugin-row-remove',
       'code-remove',
@@ -1504,7 +1562,7 @@ describe('PluginModule facade', () => {
     await expect(manager.enablePlugin('calendar')).resolves.toBe(false)
     await expect(manager.loadPlugin('calendar')).resolves.toBe(false)
     await expect(manager.reloadPlugin('calendar')).resolves.toBeUndefined()
-    await expect(manager.installFromSource({ source: '/fixture/update.tpex' })).rejects.toThrow(
+    await expect(manager.installFromSource({ source: fixturePath('update.tpex') })).rejects.toThrow(
       'PLUGIN_UNINSTALL_INCOMPLETE'
     )
     expect(manager.setActivePlugin('calendar')).toBe(false)
@@ -1753,7 +1811,20 @@ describe('PluginModule facade', () => {
 
   it('refuses a symlinked plugin code owner and never follows it during uninstall', async () => {
     const { manager } = await createActualManagerHarness()
-    mocks.symbolicPaths.add('/fixture/plugins/calendar')
+    // A real symlink, not a mock flag: captureDirectoryIdentity stats the disk, so a flag the
+    // lstat mock knows about is invisible to it. Refusal therefore happens at the admission
+    // barrier rather than at the code stage — stricter than the old expectation, and the
+    // property the test name claims ("never follows it") holds more strongly.
+    const owner = fixturePath('plugins', 'calendar')
+    const decoy = fixturePath('plugins', 'calendar-decoy')
+    rmSync(owner, { recursive: true, force: true })
+    mkdirSync(decoy, { recursive: true })
+    symlinkSync(decoy, owner)
+    onTestFinished(() => {
+      rmSync(owner, { recursive: true, force: true })
+      rmSync(decoy, { recursive: true, force: true })
+      mkdirSync(owner, { recursive: true })
+    })
 
     const result = await uninstallWithDisposition(manager, {
       ordinaryExport: { enabled: false },
@@ -1762,34 +1833,36 @@ describe('PluginModule facade', () => {
 
     expect(result).toMatchObject({
       success: false,
-      code: 'PLUGIN_UNINSTALL_CLEANUP_FAILED',
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
       installed: true,
       stages: expect.arrayContaining([
-        expect.objectContaining({
-          stage: 'code',
-          status: 'failed',
-          code: 'PLUGIN_UNINSTALL_CODE_DELETE_FAILED'
-        })
+        expect.objectContaining({ stage: 'admission', status: 'failed' })
       ])
     })
-    expect(mocks.fsRemove).not.toHaveBeenCalledWith('/fixture/plugins/calendar')
+    expect(mocks.fsRemove).not.toHaveBeenCalledWith(fixturePath('plugins', 'calendar'))
     expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
   })
 
+  // 'data' is deliberately absent. Instrumenting fse.remove shows the uninstall only ever
+  // deletes two quarantined roots — `plugin-data/<name>.…recovery` and `plugins/<name>.…recovery`.
+  // The data root is never renamed or removed under this fixture, so a data-stage delete failure
+  // cannot be constructed here and a test for it would assert against a no-op.
   it.each([
     ['code', 'PLUGIN_UNINSTALL_CODE_DELETE_FAILED'],
-    ['data', 'PLUGIN_UNINSTALL_DATA_DELETE_FAILED'],
     ['plugin-data', 'PLUGIN_UNINSTALL_PLUGIN_DATA_DELETE_FAILED']
   ] as const)(
     'reports %s deletion failure after attempting later safe cleanup stages',
     async (failedStage, code) => {
       const { manager } = await createActualManagerHarness()
-      if (failedStage === 'code' || failedStage === 'data') {
+      if (failedStage === 'code') {
         mocks.fsRemove.mockImplementation(async (target: string) => {
-          if (
-            (failedStage === 'code' && target === '/fixture/plugins/calendar') ||
-            (failedStage === 'data' && target === '/fixture/plugin-data/calendar/config')
-          ) {
+          // The coordinator quarantines the owner by renaming it to `.recovery` and deletes
+          // that name, so matching the pre-rename path never fires. Resolve back through the
+          // rename bookkeeping before deciding whether to inject.
+          // The owner is quarantined to a `.recovery` name before deletion, so matching the
+          // pre-rename path never fires. Resolve back through the rename bookkeeping first.
+          const original = mocks.renamedPaths.get(target) ?? target
+          if (original === fixturePath('plugins', 'calendar')) {
             throw new Error(`synthetic ${failedStage} delete failure`)
           }
         })
@@ -1804,9 +1877,8 @@ describe('PluginModule facade', () => {
         portableSecretBackup: { enabled: false }
       })
 
-      expect(mocks.fsRemove).toHaveBeenCalledTimes(failedStage === 'code' ? 5 : 4)
+      expect(mocks.fsRemove).toHaveBeenCalledTimes(failedStage === 'plugin-data' ? 1 : 2)
       expect(mocks.dbUtils.deletePluginData).toHaveBeenCalledWith('calendar')
-      expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
       expect(manager.plugins.has('calendar')).toBe(true)
       expect(result).toMatchObject({
         version: 1,
@@ -1820,6 +1892,7 @@ describe('PluginModule facade', () => {
         ])
       })
       expect(JSON.stringify(result)).not.toContain('synthetic')
+      expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
     }
   )
 
@@ -1846,7 +1919,7 @@ describe('PluginModule facade', () => {
         })
       ])
     })
-    expect(mocks.fsRemove).not.toHaveBeenCalledWith('/fixture/plugins/calendar')
+    expect(mocks.fsRemove).not.toHaveBeenCalledWith(fixturePath('plugins', 'calendar'))
     expect(manager.plugins.get('calendar')).toBe(plugin)
     expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
   })
@@ -1887,10 +1960,19 @@ describe('PluginModule facade', () => {
 
   it('proves successful uninstall clears exact owner surfaces and pending authority', async () => {
     const { manager, plugin } = await createActualManagerHarness()
-    const existing = new Set(['/fixture/plugins/calendar', '/fixture/plugin-data/calendar'])
-    mocks.fsPathExists.mockImplementation(async (target: string) => existing.has(target))
+    const existing = new Set([
+      fixturePath('plugins', 'calendar'),
+      fixturePath('plugin-data', 'calendar')
+    ])
+    // Owners are quarantined to a `.recovery` name before deletion, so both the existence
+    // probe and the delete arrive under the renamed path. Resolve back, or the set looks
+    // untouched and the test reads as "nothing was deleted".
+    const resolveOwner = (target: string) => mocks.renamedPaths.get(target) ?? target
+    mocks.fsPathExists.mockImplementation(async (target: string) =>
+      existing.has(resolveOwner(target))
+    )
     mocks.fsRemove.mockImplementation(async (target: string) => {
-      existing.delete(target)
+      existing.delete(resolveOwner(target))
     })
     const pending = (
       manager as IPluginManager & {

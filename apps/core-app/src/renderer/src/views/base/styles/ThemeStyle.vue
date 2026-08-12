@@ -13,7 +13,6 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -36,7 +35,7 @@ import {
 } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
-import LayoutSection from './LayoutSection.vue'
+import CoreBoxCanvasSection from './CoreBoxCanvasSection.vue'
 import SectionItem from './SectionItem.vue'
 import { getWallpaperSourceHintKey } from './wallpaper-display-state'
 
@@ -44,6 +43,7 @@ import ThemePreviewIcon from './sub/ThemePreviewIcon.vue'
 import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
+
 const transport = useTuffTransport()
 const themeStyleLog = createRendererLogger('ThemeStyle')
 type OpenFileRequest = Record<string, unknown>
@@ -481,7 +481,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
 
 <template>
   <div class="ThemeStyle-Page">
-    <ViewTemplate :title="t('themeStyle.styles')">
+    <div>
       <WindowSectionVue>
         <SectionItem v-model="windowPreference" title="pure" :label="t('themeStyle.windowPure')" />
         <SectionItem
@@ -496,12 +496,12 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
         />
       </WindowSectionVue>
 
-      <LayoutSection />
+      <CoreBoxCanvasSection />
 
       <TuffGroupBlock
         :name="t('themeStyle.personalized')"
         :description="t('themeStyle.personalizedDesc')"
-        memory-name="theme-style-personalized"
+        :collapsible="false"
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="personalized" :active="active" />
@@ -594,6 +594,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           <div v-if="customBgPath" class="theme-style-wallpaper-preview">
             <img
               :src="customBgPreviewUrl"
+              :alt="t('common.wallpaperPreviewAlt', '自定义背景预览')"
               class="h-24 w-full object-cover"
               :style="{
                 filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
@@ -760,7 +761,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       <TuffGroupBlock
         :name="t('themeStyle.emphasis')"
         :description="t('themeStyle.emphasisDesc')"
-        memory-name="theme-style-emphasis"
+        :collapsible="false"
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="emphasis" :active="active" />
@@ -790,7 +791,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       <TuffGroupBlock
         :name="t('themeStyle.animationGroupTitle')"
         :description="t('themeStyle.animationGroupDesc')"
-        memory-name="theme-style-animation"
+        :collapsible="false"
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="animation" :active="active" />
@@ -873,7 +874,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           <ThemePreviewIcon variant="guide" :active="active" />
         </template>
       </TuffBlockSwitch>
-    </ViewTemplate>
+    </div>
 
     <Teleport to="body">
       <div v-if="windowPreferenceLoading" class="ThemeStyle-WindowLoadingMask">

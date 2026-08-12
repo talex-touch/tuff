@@ -590,7 +590,6 @@ export class ContextActionsProvider implements ISearchProvider<ProviderContext> 
   readonly icon = { type: 'class' as const, value: 'i-ri-magic-line' }
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Image]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 40
 
   private readonly builtinProvider = new BuiltinContextActionProvider()
   private readonly executionStates = new Map<string, ContextActionExecutionState>()

@@ -45,7 +45,16 @@ const settingSetupLog = createRendererLogger('SettingSetup')
 
 // Keep file-access metadata fresh for diagnostics even though this page no longer renders a card.
 const { check: checkFileAccess } = useFileAccessPermission()
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const showAdvancedSettings = computed(() => false)
+/**
+ * The permission rows were switched off wholesale by a hardcoded `false`, so the four the artboard
+ * calls for never rendered — even though `platform-permission-service` on the main side was
+ * answering `system/permission/check` the whole time. Which rows apply is already decided per row
+ * by the platform flags; this only asks whether any of them do, so Linux does not get an empty
+ * card where the group used to be.
+ */
+const showPermissionRecovery = computed(() => isMacOS.value || isWindows.value)
+const showLegacySystemControls = false
 
 interface PermissionState {
   status: SystemPermissionStatus
@@ -116,6 +125,12 @@ const settings = ref({
 })
 const appIndexSettings = ref<AppIndexSettings | null>(null)
 const traySettingsAvailable = ref(false)
+const continueInBackground = computed({
+  get: () => Boolean(appSetting.window?.closeToTray) && settings.value.showTray,
+  set: (value: boolean) => {
+    void updateBackgroundMode(value)
+  }
+})
 let permissionRequestRevision = 0
 
 function createDefaultPermissionAudit() {
@@ -448,17 +463,23 @@ async function updateAutoStart(value: boolean): Promise<void> {
   }
 }
 
-async function updateShowTray(value: boolean): Promise<void> {
+async function updateBackgroundMode(value: boolean): Promise<void> {
+  ensureWindowSettings()
+  const previousCloseToTray = appSetting.window.closeToTray
+  const previousShowTray = settings.value.showTray
+  appSetting.window.closeToTray = value
   settings.value.showTray = value
-  appSetting.setup.showTray = value
   try {
     const updated = await settingsSdk.system.updateTraySettings({ showTray: value })
     traySettingsAvailable.value = updated.available === true
     settings.value.showTray = updated.showTray !== false
     settings.value.hideDock = updated.hideDock === true
+    appSetting.window.closeToTray = value && settings.value.showTray
     toast.success(t('common.success'))
   } catch (error) {
-    settingSetupLog.error('Failed to update showTray', error)
+    appSetting.window.closeToTray = previousCloseToTray
+    settings.value.showTray = previousShowTray
+    settingSetupLog.error('Failed to update background mode', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -575,24 +596,26 @@ function getStatusIconClass(status: string): string {
 </script>
 
 <template>
+  <!--
+    Permissions and preferences were one block, so a row you can only satisfy in System Settings
+    sat in the same list as a switch you flip here. They answer different questions and now read as
+    two groups.
+  -->
   <TuffGroupBlock
-    :name="t('settings.setup.groupTitle')"
-    :description="t('settings.setup.groupDesc')"
-    default-icon="i-carbon-settings-services"
-    active-icon="i-carbon-settings-check"
-    memory-name="setting-setup"
+    v-if="showPermissionRecovery"
+    :name="t('settings.setup.permissionsGroupTitle')"
+    :description="t('settings.setup.permissionsGroupDesc')"
+    :collapsible="false"
   >
     <!-- Permissions Section -->
     <TuffBlockSlot
-      v-if="isMacOS"
+      v-if="showPermissionRecovery && isMacOS"
       :title="t('settings.setup.accessibility')"
       :description="t('settings.setup.accessibilityDesc')"
       :active="permissions.accessibility.status === 'granted'"
       :disabled="
         permissions.accessibility.status === 'unsupported' && !permissions.accessibility.canRequest
       "
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
     >
       <template #tags>
         <TuffMacOSTag />
@@ -617,7 +640,7 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="isMacOS"
+      v-if="showPermissionRecovery && isMacOS"
       :title="t('setupPermissions.fullDiskAccess')"
       :description="t('setupPermissions.fullDiskAccessDesc')"
       :active="permissions.fullDiskAccess.status === 'granted'"
@@ -625,8 +648,6 @@ function getStatusIconClass(status: string): string {
         permissions.fullDiskAccess.status === 'unsupported' &&
         !permissions.fullDiskAccess.canRequest
       "
-      default-icon="i-carbon-folder"
-      active-icon="i-carbon-folder-details"
     >
       <template #tags>
         <TuffMacOSTag />
@@ -651,15 +672,13 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="isMacOS || isWindows"
+      v-if="showPermissionRecovery && (isMacOS || isWindows)"
       :title="t('setupPermissions.microphone')"
       :description="t('setupPermissions.microphoneDesc')"
       :active="permissions.microphone.status === 'granted'"
       :disabled="
         permissions.microphone.status === 'unsupported' && !permissions.microphone.canRequest
       "
-      default-icon="i-carbon-microphone"
-      active-icon="i-carbon-microphone-filled"
     >
       <TuffStatusBadge
         size="md"
@@ -679,15 +698,13 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="isMacOS"
+      v-if="showPermissionRecovery && isMacOS"
       :title="t('settings.setup.notifications')"
       :description="t('settings.setup.notificationsDesc')"
       :active="permissions.notifications.status === 'granted'"
       :disabled="
         permissions.notifications.status === 'unsupported' && !permissions.notifications.canRequest
       "
-      default-icon="i-carbon-notification"
-      active-icon="i-carbon-notification"
     >
       <TuffStatusBadge
         size="md"
@@ -709,12 +726,10 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="isWindows"
+      v-if="showPermissionRecovery && isWindows"
       :title="t('settings.setup.adminPrivileges')"
       :description="t('settings.setup.adminPrivilegesDesc')"
       :active="permissions.adminPrivileges.status === 'granted'"
-      default-icon="i-carbon-security"
-      active-icon="i-carbon-security"
     >
       <template #tags>
         <TuffWindowsTag />
@@ -726,34 +741,32 @@ function getStatusIconClass(status: string): string {
         :text="getStatusText(permissions.adminPrivileges.status)"
       />
     </TuffBlockSlot>
+  </TuffGroupBlock>
 
-    <!-- Settings Section -->
+  <TuffGroupBlock
+    :name="t('settings.setup.startupGroupTitle')"
+    :description="t('settings.setup.startupGroupDesc')"
+    :collapsible="false"
+  >
     <TuffBlockSwitch
       v-model="settings.autoStart"
       :title="t('settings.setup.autoStart')"
       :description="t('settings.setup.autoStartDesc')"
-      default-icon="i-carbon-play"
-      active-icon="i-carbon-play-filled"
       @update:model-value="updateAutoStart"
     />
 
     <TuffBlockSwitch
       v-if="traySettingsAvailable"
-      v-model="settings.showTray"
-      :title="t('settings.setup.showTray')"
-      :description="t('settings.setup.showTrayDesc')"
-      default-icon="i-carbon-portfolio"
-      active-icon="i-carbon-portfolio"
-      @update:model-value="updateShowTray"
+      v-model="continueInBackground"
+      :title="t('settings.setup.backgroundMode')"
+      :description="t('settings.setup.backgroundModeDesc')"
     />
 
     <TuffBlockSwitch
-      v-if="showAdvancedSettings && isMacOS && traySettingsAvailable"
+      v-if="isMacOS && traySettingsAvailable"
       v-model="settings.hideDock"
       :title="t('settings.setup.hideDock')"
       :description="t('settings.setup.hideDockDesc')"
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
       @update:model-value="updateHideDock"
     >
       <template #tags>
@@ -762,12 +775,9 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSwitch>
 
     <TuffBlockSwitch
-      v-if="showAdvancedSettings"
       v-model="settings.startSilent"
       :title="t('settings.setup.startSilent')"
       :description="t('settings.setup.startSilentDesc')"
-      default-icon="i-carbon-notification-off"
-      active-icon="i-carbon-notification-off"
       @update:model-value="updateStartSilent"
     />
 
@@ -776,8 +786,6 @@ function getStatusIconClass(status: string): string {
       v-model="settings.omniAutoMountFeature"
       :title="t('settings.setup.omniAutoMountFeature')"
       :description="t('settings.setup.omniAutoMountFeatureDesc')"
-      default-icon="i-carbon-data-share"
-      active-icon="i-carbon-data-share"
       @update:model-value="updateOmniAutoMountFeature"
     />
 
@@ -786,18 +794,14 @@ function getStatusIconClass(status: string): string {
       v-model="settings.hideNoisySystemApps"
       :title="t('settings.setup.hideNoisySystemApps')"
       :description="t('settings.setup.hideNoisySystemAppsDesc')"
-      default-icon="i-carbon-filter"
-      active-icon="i-carbon-filter"
       @update:model-value="updateHideNoisySystemApps"
     />
 
     <TuffBlockSwitch
-      v-if="isLinux"
+      v-if="showLegacySystemControls && isLinux"
       v-model="settings.customDesktop"
       :title="t('settings.setup.customDesktop')"
       :description="t('settings.setup.customDesktopDesc')"
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
       @update:model-value="updateCustomDesktop"
     >
       <template #tags>
@@ -807,12 +811,10 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSwitch>
 
     <TuffBlockSwitch
-      v-if="isWindows"
+      v-if="showLegacySystemControls && isWindows"
       v-model="settings.runAsAdmin"
       :title="t('settings.setup.runAsAdmin')"
       :description="t('settings.setup.runAsAdminDesc')"
-      default-icon="i-carbon-user-avatar"
-      active-icon="i-carbon-user-avatar-filled"
       @update:model-value="updateRunAsAdmin"
     >
       <template #tags>

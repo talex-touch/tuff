@@ -10,8 +10,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
   push:
+    # `master` is this repository's default branch; there is no `main`. Every other workflow
+    # that guards a branch lists both names, so this trigger was the only one that never fired.
     branches:
-      - main
+      - master
     paths:
       - '.github/workflows/native-protocol.yml'
       - 'apps/core-app/src/main/modules/native-capabilities/**'
@@ -31,6 +33,7 @@ jobs:
   protocol:
     name: Protocol (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +51,7 @@ jobs:
           libclang-dev
           libdbus-1-dev
           libegl-dev
+          libgbm-dev
           libpipewire-0.3-dev
           libwayland-dev
           libxcb1-dev
@@ -58,17 +62,17 @@ jobs:
           pkg-config
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable branch
         with:
           components: rustfmt, clippy
 
       - name: Cache Rust workspace
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: packages/tuff-native
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           run_install: false
 
@@ -99,6 +103,20 @@ jobs:
           pnpm -C packages/tuff-native run test:screenshot-protocol &&
           pnpm -C packages/tuff-native run verify:screenshot-production
 
+      # native-audio is already a member of packages/tuff-native/Cargo.toml, so the cargo
+      # fmt/clippy/test/build steps above have always covered the crate on all three runners.
+      # What nothing ran was build:audio -- the step that copies the compiled library to
+      # build/Release/tuff_native_audio.node, which is the artifact audio.js actually opens.
+      # So the crate could compile while the addon the runtime loads was never produced (#322).
+      #
+      # The verifier passes on a runner with no microphone and fails when the module is absent:
+      # it separates reasons the native module produces (no-input-device, input-probe-failed,
+      # platform-not-supported) from reasons the JS wrapper produces when the binding is missing.
+      - name: Build production audio addon and verify it loads
+        run: >-
+          pnpm -C packages/tuff-native run build:audio &&
+          pnpm -C packages/tuff-native run verify:audio-production
+
       - name: Build deterministic screenshot addon
         env:
           TUFF_SCREENSHOT_PROTOCOL_TEST_BACKEND: '1'
@@ -114,6 +132,36 @@ jobs:
           pnpm -C packages/tuff-native run build:screenshot &&
           pnpm -C packages/tuff-native run test:screenshot-protocol &&
           pnpm -C packages/tuff-native run verify:screenshot-production
+
+      # This workflow already filters on packages/test/src/native/** but never ran it, so a
+      # change there triggered a job that could not observe it. Run it here, where the addon
+      # has just been built, and demand the binding loads -- the integration suite tolerates
+      # its absence because it does not build Rust, and that tolerance is only safe if some
+      # job insists on the real thing.
+      # Named files rather than the directory, and the suite's own guard fails if a file appears
+      # in src/native without being listed here -- so coverage cannot quietly shrink back.
+      #
+      # tuff-native-ocr.test.ts was excluded while Windows OCR read nothing from a fixture that
+      # had been built and validated against Apple Vision, on the only platform that ever ran it.
+      # The fixture now carries antialiased edges rather than hard-edged 704x248 block letters,
+      # which is the first of the three candidates in #1517 and the only one testable without a
+      # Windows desktop. This step is the test of that: if the Windows leg is green, the fixture
+      # was the problem.
+      - name: Test native carriers from the integration suite
+        env:
+          TUFF_NATIVE_SCREENSHOT_REQUIRED: '1'
+          # Forbids the OCR test's early return. Without it a green Windows leg cannot be told
+          # apart from one that never reached the engine -- which is the gap #1517 is about.
+          #
+          # Off on Linux, where getNativeOcrSupport() reports platform-not-supported: there is
+          # no native OCR to reach, so demanding one there asserts a platform fact rather than
+          # coverage. Learned by demanding it everywhere and watching the ubuntu leg go red.
+          TUFF_NATIVE_OCR_REQUIRED: ${{ runner.os == 'Linux' && '0' || '1' }}
+        run: >-
+          pnpm -C packages/test exec vitest run
+          src/native/tuff-native-audio.test.ts
+          src/native/tuff-native-ocr.test.ts
+          src/native/tuff-native-screenshot.test.ts
 
       - name: Verify packed native package contents
         run: pnpm -C packages/tuff-native pack --dry-run
@@ -132,4 +180,11 @@ jobs:
           src/main/modules/native-capabilities/native-transport-napi.integration.test.ts
 
       - name: Type-check Electron main process
+        # The type graph genuinely needs about 2.8 GB: 4,660 files, 2,793 of them
+        # dependency declarations, led by @sentry, typebox, drizzle-orm and openai.
+        # skipLibCheck is already on, so there is no configuration lever left -- the
+        # macOS runner's default heap is simply below what this check costs, and it
+        # died with FatalProcessOutOfMemory rather than reporting a type error.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm -C apps/core-app run typecheck:node

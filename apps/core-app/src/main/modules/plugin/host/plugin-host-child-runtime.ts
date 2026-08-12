@@ -18,6 +18,7 @@ import { PLUGIN_SNIPASTE_ACTION_IDS } from './plugin-process-capabilities'
 import { PLUGIN_SYSTEM_ACTION_IDS } from './plugin-system-capabilities'
 import { PLUGIN_WINDOW_MANAGER_ACTION_IDS } from './plugin-window-manager-capabilities'
 import { PLUGIN_WINDOW_PRESET_ACTION_IDS } from './plugin-window-preset-capabilities'
+import { privilegedPluginFor } from '../privileged-plugins'
 import {
   PLUGIN_HOST_CAPABILITIES,
   PLUGIN_HOST_LIFECYCLE_METHODS,
@@ -1385,20 +1386,20 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasSnipasteFacade =
     !isTranslationPrelude && hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
-    snapshot.manifest.name === 'touch-workspace-scripts' &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('workspaceScripts'))} &&
     hasDeclaredCapability('process.workspace-scripts')
   const hasSystemFacade = !isTranslationPrelude && hasDeclaredCapability('system.invoke')
   const hasBrowserDataFacade =
-    snapshot.manifest.name === 'touch-browser-data' &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserData'))} &&
     hasDeclaredCapability('browser-data.scan')
   const hasBrowserOpenFacade =
-    snapshot.manifest.name === 'touch-browser-open' &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserOpen'))} &&
     hasDeclaredCapability('system.browser-open')
   const hasWindowPresetFacade =
-    snapshot.manifest.name === 'touch-window-presets' &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowPresets'))} &&
     hasDeclaredCapability('system.window-presets')
   const hasWindowManagerFacade =
-    snapshot.manifest.name === 'touch-window-manager' &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowManager'))} &&
     hasDeclaredCapability('system.window-manager')
   const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
   const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
@@ -2896,7 +2897,7 @@ function createContextBridge(
       : 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'
   }
 
-  return Object.freeze({
+  return Object.freeze<ContextBridge>({
     setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
     setInterval: (callback, delay) => timers.setInterval(callback, delay),
     setImmediate: (callback) => timers.setImmediate(callback),

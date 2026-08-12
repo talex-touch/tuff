@@ -15,6 +15,9 @@ const appProviderMock = vi.hoisted(() => ({
 }))
 
 vi.mock('../addon/apps/app-provider', () => ({
+  // search-core.ts imports this alongside appProvider; a factory mock has to carry every
+  // binding the importer names or vitest throws at import time, before any test runs.
+  setAppExecutionRecorder: vi.fn(),
   appProvider: appProviderMock
 }))
 

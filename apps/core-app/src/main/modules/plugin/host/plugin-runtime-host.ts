@@ -317,7 +317,7 @@ function snapshotProcessFactory(value: unknown): PluginRuntimeProcessFactory {
     if (typeof artifactExists !== 'function' || typeof spawn !== 'function') {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
     }
-    return Object.freeze({
+    return Object.freeze<PluginRuntimeProcessFactory>({
       artifactExists: (artifactPath) => artifactExists.call(factory, artifactPath),
       spawn: (options) => spawn.call(factory, options)
     })
@@ -363,7 +363,7 @@ function snapshotCapabilityDispatcher(
     ) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
     }
-    return Object.freeze({
+    return Object.freeze<PluginRuntimeCapabilityDispatcher>({
       owner: expectedOwner,
       activation: expectedActivation,
       dispatch: (capability, payload, signal) =>
@@ -416,7 +416,7 @@ function snapshotResourceDispatcher(
     ) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
     }
-    return Object.freeze({
+    return Object.freeze<PluginHostResourceDispatcher>({
       owner: expectedOwner,
       activation: expectedActivation,
       beginInvocation: (options) => beginInvocation.call(dispatcher, options),

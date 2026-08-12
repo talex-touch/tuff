@@ -4,10 +4,10 @@
 
   <h1>Tuff</h1>
 
-  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-2.1.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
-  [![GitHub release](https://img.shields.io/badge/dev-2.1.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
+  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/master/LICENSE)
+  [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![Dev version](https://img.shields.io/github/package-json/v/talex-touch/tuff?style=flat-square&label=dev&color=64391A)](https://github.com/talex-touch/tuff/discussions/35)
 
   [English](./CONTRIBUTING.md) | 简体中文
 </div>
@@ -53,10 +53,10 @@
    - test(xxx): message
    - build(xxx): message
    - docs(xxx): message
-   - add(xxx): message
-   - upd(xxx): message (诸如更新dependencies的版本也可)
+   - feat(xxx): message
+   - update(xxx): message (诸如更新 dependencies 的版本也可)
    - change(xxx): message (应当留作备选)
-   - 更多请参考 `commitlint.config.js`
+   - 更多请参考 `commitlint.config.cts`
 4. XXX 是你更新了什么，或者是一个抽象范围、模块:
    - 抽象范围 像是 PluginModule
    - 具体文件 像是 touch-core.ts
@@ -72,10 +72,10 @@
    Tuff tree helper:
  > tuff:
    ├── apps: (主要的应用)
-   ├──── core: (Electron 应用)
-   ├──── docs: (文档应用)
+   ├──── core-app: (Electron 应用)
+   ├──── nexus: (文档与生态站点)
    ├── packages: (辅助包)
-   ├──── components: (Tuff 组件)
+   ├──── tuffex: (Tuff UI 组件)
    ├──── utils: (辅助工具)
    ├── plugins: (官方插件)
 ```

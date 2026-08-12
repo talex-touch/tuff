@@ -36,6 +36,8 @@ import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
 import { viewCacheManager } from './view-cache'
 import { getLiveViewWebContents } from './web-contents-view-guard'
+import { installAppViewNavigationPolicy } from '../../../core/app-view-navigation-policy'
+import { getCoreBoxRendererUrl } from '../../../utils/renderer-url'
 
 const pluginViewLog = createLogger('CoreBox').child('Window')
 const CLIPBOARD_TYPE_BITS = {
@@ -269,6 +271,10 @@ export class PluginViewController {
     const view = (this.uiView = new WebContentsView({ webPreferences }))
     if (navigationPolicy) {
       installPluginViewNavigationPolicy(view.webContents, navigationPolicy)
+    } else {
+      // No plugin means the app profile, which had no guards at all: no window-open handler and
+      // no navigation restriction (#793).
+      installAppViewNavigationPolicy(view.webContents, { entryUrl: getCoreBoxRendererUrl() })
     }
     if (plugin) {
       const pluginViewWebContentsId = view.webContents.id

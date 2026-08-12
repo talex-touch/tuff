@@ -17,6 +17,7 @@ permissions:
 jobs:
   apply-labels:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Sync labels based on PR template
         uses: actions/github-script@v9

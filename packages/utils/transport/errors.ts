@@ -141,6 +141,8 @@ export class TuffTransportError extends Error {
       eventName?: string
       pluginName?: string
       cause?: Error
+      /** When the failure happened. Defaults to now; supplied by fromJSON to keep the round-trip lossless. */
+      timestamp?: number
     },
   ) {
     super(message)
@@ -156,7 +158,10 @@ export class TuffTransportError extends Error {
         writable: true,
       })
     }
-    this.timestamp = Date.now()
+    this.timestamp =
+      typeof options?.timestamp === 'number' && Number.isFinite(options.timestamp)
+        ? options.timestamp
+        : Date.now()
 
     // Maintain proper stack trace in V8 environments
     if (Error.captureStackTrace) {
@@ -194,6 +199,7 @@ export class TuffTransportError extends Error {
       {
         eventName: obj.eventName as string | undefined,
         pluginName: obj.pluginName as string | undefined,
+        timestamp: obj.timestamp as number | undefined,
       },
     )
     if (obj.stack && typeof obj.stack === 'string') {
