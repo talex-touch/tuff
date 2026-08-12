@@ -25,14 +25,6 @@
       "expires": "2026-11-09"
     },
     {
-      "id": "GHSA-2v37-7h3g-55p8",
-      "module": "nanoid",
-      "severity": "high",
-      "reason": "Only nanoid@5.1.6 is affected -- the advisory range is >= 4.0.0, < 5.1.16, so the nanoid@3.3.16 that postcss pulls is already on the patched 3.x line and is not covered. 5.1.6 arrives through @vue/devtools-core -> @nuxt/devtools@2.7.0 -> nuxt, so this does move when the nuxt closure moves in #1098. Corrected twice before landing here: #1691 reattributed it to the postcss/vue-router path and #1708 doubled down, both of which describe the 3.x copy the advisory does not cover.",
-      "owner": "#328",
-      "expires": "2026-11-09"
-    },
-    {
       "id": "GHSA-9473-5f9j-94wq",
       "module": "nuxt",
       "severity": "high",
