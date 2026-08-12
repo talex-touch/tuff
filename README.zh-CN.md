@@ -19,6 +19,8 @@
 
 当前提供 macOS、Windows 和 Linux 预发布构建。稳定源码版本不代表三端能力成熟度一致，也不代表 OTA 验收已经完成；不支持或降级路径必须明确说明并保持 fail-closed。详情见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。
 
+Ubuntu 24.04 及以上请安装 `.deb` 而不是 AppImage。24.04 默认限制非特权用户命名空间，而 Electron 的沙箱需要它；`.deb` 会在安装时注册一份授予 `userns` 的 AppArmor 配置，AppImage 没有安装步骤，无处注册。若必须使用 AppImage，可用 `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` 临时放开。相关追踪见 [#213](https://github.com/talex-touch/tuff/issues/213)，该 issue 仍在等待一份说明「用的是两者中哪一个」的复测报告。
+
 ## 🔷 项目简介
 
 Tuff (原 TalexTouch) 是一个基于 Electron, TypeScript 和 Vue.js 构建的、本地优先、AI 原生、可无限扩展的桌面指令中心。它旨在成为您工作流的无缝延伸，帮助您更快地查找任何内容、执行任何指令。
