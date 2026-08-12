@@ -29,7 +29,10 @@ const allowlistPath = path.join(repoRoot, '.github', 'prod-audit-allowlist.json'
 const BLOCKING = new Set(['critical', 'high'])
 
 /**
- * Reads the audit JSON into `{ id -> {module, severity} }` for the severities that block.
+ * Reads the audit JSON into `{ id -> {module, severity, versions} }` for the severities that block.
+ *
+ * `versions` is what the advisory actually hits in this tree, from its own findings. It is here so
+ * the allowlist can be checked against it rather than against prose -- see `evaluate`.
  *
  * Throws rather than returning empty when the payload has no advisory container at all. An audit
  * that failed to reach the registry and an audit that found nothing produce the same empty map,
@@ -50,7 +53,14 @@ export function collectBlockingAdvisories(payload) {
     const id = advisory?.github_advisory_id ?? String(advisory?.id ?? '')
     if (!id)
       continue
-    found.set(id, { module: advisory?.module_name ?? 'unknown', severity })
+    const versions = [
+      ...new Set(
+        (Array.isArray(advisory?.findings) ? advisory.findings : [])
+          .map(finding => String(finding?.version ?? ''))
+          .filter(Boolean),
+      ),
+    ].sort()
+    found.set(id, { module: advisory?.module_name ?? 'unknown', severity, versions })
   }
   return found
 }
@@ -75,8 +85,46 @@ export function evaluate(found, allowlist, today) {
       problems.push(`allowlist entry ${entry.id} needs reason, owner and expires`)
     else if (entry.expires < today)
       problems.push(`allowlist entry ${entry.id} expired on ${entry.expires}`)
-    if (!found.has(entry.id))
+    const live = found.get(entry.id)
+    if (!live) {
       problems.push(`allowlist entry ${entry.id} no longer matches a live advisory — remove it`)
+      continue
+    }
+
+    /*
+     * The declared package and versions are checked against what the audit reports (#328).
+     *
+     * Every other field can be right while the entry describes a different dependency entirely.
+     * That happened four times to one package here: #1691 attributed nanoid to a vue-router root,
+     * #1708 to postcss, and the corrected text was then pasted onto GHSA-2v37-7h3g-55p8, whose
+     * range is < 3.3.17 and whose only finding was the 3.3.16 that the pasted text called "already
+     * on the patched line and not covered". A reviewer cannot catch that by reading -- it reads
+     * perfectly, and it is about a package the sentence never names. The audit knows.
+     */
+    if (!Array.isArray(entry.versions) || entry.versions.length === 0) {
+      problems.push(
+        `allowlist entry ${entry.id} needs versions — the installed version(s) the advisory hits, `
+        + `which the audit reports as ${live.versions?.join(', ') || '(none)'}`,
+      )
+      continue
+    }
+    if (entry.module !== live.module) {
+      problems.push(
+        `allowlist entry ${entry.id} says module ${entry.module}, audit reports ${live.module}`,
+      )
+    }
+    if (entry.severity !== live.severity) {
+      problems.push(
+        `allowlist entry ${entry.id} says severity ${entry.severity}, audit reports ${live.severity}`,
+      )
+    }
+    const declared = [...entry.versions].sort().join(', ')
+    const actual = [...(live.versions ?? [])].sort().join(', ')
+    if (declared !== actual) {
+      problems.push(
+        `allowlist entry ${entry.id} says version(s) ${declared}, audit reports ${actual || '(none)'}`,
+      )
+    }
   }
 
   return problems
@@ -84,8 +132,21 @@ export function evaluate(found, allowlist, today) {
 
 function selfTest() {
   const today = '2026-08-11'
-  const live = new Map([['GHSA-aaaa', { module: 'left', severity: 'high' }]])
-  const good = { advisories: [{ id: 'GHSA-aaaa', reason: 'r', owner: '#328', expires: '2026-11-09' }] }
+  const live = new Map([
+    ['GHSA-aaaa', { module: 'left', severity: 'high', versions: ['1.2.3'] }],
+  ])
+  const entry = {
+    id: 'GHSA-aaaa',
+    module: 'left',
+    severity: 'high',
+    versions: ['1.2.3'],
+    reason: 'r',
+    owner: '#328',
+    expires: '2026-11-09',
+  }
+  const good = { advisories: [entry] }
+  /** The same entry with one field changed, which is how every real mistake here has looked. */
+  const withOnly = patch => ({ advisories: [{ ...entry, ...patch }] })
 
   const cases = [
     {
@@ -112,6 +173,54 @@ function selfTest() {
       name: 'an allowlist entry missing owner/reason/expiry fails',
       actual: evaluate(live, { advisories: [{ id: 'GHSA-aaaa' }] }, today).length > 0,
       expected: true,
+    },
+    /*
+     * The four checks below are the ones #328's nanoid entry needed and did not have. Its id,
+     * reason, owner and expiry were all fine; the sentence described a different package's
+     * advisory range, and nothing could see that.
+     */
+    {
+      name: 'an entry naming the wrong package fails',
+      actual: evaluate(live, withOnly({ module: 'right' }), today)[0],
+      expected: 'allowlist entry GHSA-aaaa says module right, audit reports left',
+    },
+    {
+      name: 'an entry naming a version the advisory does not hit fails',
+      actual: evaluate(live, withOnly({ versions: ['9.9.9'] }), today)[0],
+      expected: 'allowlist entry GHSA-aaaa says version(s) 9.9.9, audit reports 1.2.3',
+    },
+    {
+      name: 'an entry claiming a lower severity than the audit fails',
+      actual: evaluate(live, withOnly({ severity: 'moderate' }), today)[0],
+      expected: 'allowlist entry GHSA-aaaa says severity moderate, audit reports high',
+    },
+    {
+      name: 'an entry with no versions at all fails rather than being taken on trust',
+      actual: evaluate(live, withOnly({ versions: undefined }), today).length,
+      expected: 1,
+    },
+    {
+      name: 'version order does not matter, only the set',
+      actual: evaluate(
+        new Map([['GHSA-aaaa', { module: 'left', severity: 'high', versions: ['2.0.0', '1.2.3'] }]]),
+        withOnly({ versions: ['1.2.3', '2.0.0'] }),
+        today,
+      ).length,
+      expected: 0,
+    },
+    {
+      name: 'the findings a real audit reports become versions',
+      actual: collectBlockingAdvisories({
+        advisories: {
+          a: {
+            severity: 'high',
+            github_advisory_id: 'GHSA-v',
+            module_name: 'v',
+            findings: [{ version: '1.0.0' }, { version: '1.0.0' }, { version: '2.0.0' }],
+          },
+        },
+      }).get('GHSA-v').versions.join(','),
+      expected: '1.0.0,2.0.0',
     },
     {
       name: 'moderate and low advisories do not block',
