@@ -3,7 +3,9 @@ import {
   buildPiArgs,
   buildPiPrompt,
   parsePiCliLine,
-  PI_CLI_DEFAULT_SYSTEM_PROMPT
+  PI_CLI_DEFAULT_SYSTEM_PROMPT,
+  PI_SESSION_PROTOCOL_VERSION,
+  readPiSessionProtocolVersion
 } from './pi-cli-runtime'
 
 /**
@@ -160,6 +162,48 @@ describe('buildPiArgs', () => {
   it('leaves the argument shape untouched when the turn carried no attachment', () => {
     expect(buildPiArgs(prompt, undefined, undefined, [])).toEqual(buildPiArgs(prompt))
     expect(buildPiArgs(prompt).some((arg) => arg.startsWith('@'))).toBe(false)
+  })
+})
+
+describe('pi session protocol version', () => {
+  it('reads the version off a session line', () => {
+    expect(readPiSessionProtocolVersion('{"type":"session","version":3,"id":"x"}')).toBe(3)
+  })
+
+  // The detector exists because `pi` has no version constraint anywhere in this repo, so an
+  // upgrade can move the contract silently. A pin that cannot notice a change is decoration.
+  it('reports a moved version rather than normalising it', () => {
+    expect(readPiSessionProtocolVersion('{"type":"session","version":4,"id":"x"}')).toBe(4)
+    expect(readPiSessionProtocolVersion('{"type":"session","version":4}')).not.toBe(
+      PI_SESSION_PROTOCOL_VERSION
+    )
+  })
+
+  // The `version` here is the point: without the type check this reads it and reports a drift
+  // that never happened. Asserting only on lines that carry no version at all would pass against
+  // a function that ignored the type entirely.
+  it('ignores a version on any event that is not the session line', () => {
+    expect(readPiSessionProtocolVersion('{"type":"turn_start","version":9}')).toBeNull()
+    expect(readPiSessionProtocolVersion('{"type":"message_end","version":9}')).toBeNull()
+    expect(readPiSessionProtocolVersion('{"type":"turn_start"}')).toBeNull()
+    expect(readPiSessionProtocolVersion('{"type":"agent_settled"}')).toBeNull()
+  })
+
+  it('survives the noise a CLI puts on stdout', () => {
+    expect(readPiSessionProtocolVersion('not json at all')).toBeNull()
+    expect(readPiSessionProtocolVersion('')).toBeNull()
+    expect(readPiSessionProtocolVersion('   ')).toBeNull()
+  })
+
+  it('rejects a non-numeric version instead of coercing it', () => {
+    expect(readPiSessionProtocolVersion('{"type":"session","version":"3"}')).toBeNull()
+    expect(readPiSessionProtocolVersion('{"type":"session"}')).toBeNull()
+  })
+
+  // parsePiCliLine's contract is "null for events the chat surface has no use for", and a session
+  // line is still one of those. Drift detection must not change what the mapper returns.
+  it('leaves parsePiCliLine returning null for the same line', () => {
+    expect(parsePiCliLine('{"type":"session","version":3,"id":"x"}')).toBeNull()
   })
 })
 

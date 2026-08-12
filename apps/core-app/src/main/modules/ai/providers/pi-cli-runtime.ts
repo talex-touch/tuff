@@ -340,6 +340,42 @@ function parseUsage(value: unknown): IntelligenceUsageInfo | undefined {
 }
 
 /**
+ * The `session` protocol version this parser was written against.
+ *
+ * `pi` is not a declared dependency -- it is an external CLI with no version constraint anywhere
+ * in the repo -- and the shapes below were read off a live 0.83.0 run. So nothing tells us when
+ * an upgrade changes the contract: the fixtures keep passing against a stream that no longer
+ * matches production, and the first symptom is a user-visible parsing failure (#970).
+ *
+ * The release version would be the wrong thing to pin: it moves on every upgrade, most of which
+ * change nothing here. `pi` already emits `{"type":"session","version":N,…}` as its first line,
+ * and that number moves when the protocol does -- which is the question actually being asked.
+ */
+export const PI_SESSION_PROTOCOL_VERSION = 3
+
+/**
+ * The protocol version from a `session` line, or null for every other line.
+ *
+ * Deliberately separate from `parsePiCliLine` rather than folded into it: that function's contract
+ * is "null for events the chat surface has no use for", and a `session` line is still one of
+ * those. Drift detection is the caller's business, not the mapper's.
+ */
+export function readPiSessionProtocolVersion(line: string): number | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+  const record = asRecord(parsed)
+  if (!record || readString(record.type) !== 'session') return null
+  const version = record.version
+  return typeof version === 'number' && Number.isFinite(version) ? version : null
+}
+
+/**
  * Maps one NDJSON line onto the fields this provider forwards. Returns `null` for the many event
  * types the chat surface has no use for (`session`, `turn_start`, tool traffic, …) so the caller can
  * skip them without knowing the full `pi` event vocabulary.
