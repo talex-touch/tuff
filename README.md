@@ -20,6 +20,14 @@ The repository's latest stable release is `2.4.13` (see [GitHub Releases](https:
 
 Preview artifacts are produced for macOS, Windows, and Linux. A stable source version does not imply identical capability maturity or complete OTA acceptance across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
 
+On Ubuntu 24.04 and later, install from the `.deb` rather than the AppImage. 24.04 restricts
+unprivileged user namespaces by default, which Electron's sandbox needs; the `.deb` registers an
+AppArmor profile granting `userns` during installation, and an AppImage has no install step in
+which to do that. If you must use the AppImage, either allow it for that session with
+`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or use the `.deb`. Tracked in
+[#213](https://github.com/talex-touch/tuff/issues/213), which is still waiting on a report that
+says which of the two was used.
+
 ## Highlights
 
 - Search applications, files, plugin actions, calculations, units, currencies, and time directly from CoreBox.

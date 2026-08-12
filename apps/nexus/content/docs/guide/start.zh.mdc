@@ -9,6 +9,11 @@
 
 > 所有版本均已内置 Node.js 22 运行时，无需额外环境。
 
+> Ubuntu 24.04 及以上请选 `.deb` 而不是 AppImage。24.04 默认限制非特权用户命名空间，而 Electron
+> 的沙箱需要它；`.deb` 在安装时会注册一份授予 `userns` 的 AppArmor 配置，AppImage 没有安装步骤，
+> 无处注册。若必须用 AppImage，可用
+> `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` 临时放开。
+
 ## 2. 初次启动
 1. 打开安装包，勾选「启用 CoreBox 全局快捷键」。
 2. 首次进入会弹出登录窗，支持 Apple ID / GitHub / 邮箱三种方式。
