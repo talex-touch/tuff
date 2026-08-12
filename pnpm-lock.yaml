@@ -417,9 +417,6 @@ importers:
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
-      original-fs:
-        specifier: ^1.2.0
-        version: 1.2.0
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1
@@ -10985,9 +10982,6 @@ packages:
 
   orderedmap@2.1.1:
     resolution: {integrity: sha512-TvAWxi0nDe1j/rtMcWcIj94+Ffe6n7zhow33h40SKxmsmozs6dz/e+EajymfoFcHd7sxNn8yHM8839uixMOV6g==}
-
-  original-fs@1.2.0:
-    resolution: {integrity: sha512-IGo+qFumpIV65oDchJrqL0BOk9kr82fObnTesNJt8t3YgP6vfqcmRs0ofPzg3D9PKMeBHt7lrg1k/6L+oFdS8g==}
 
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
@@ -25256,8 +25250,6 @@ snapshots:
       word-wrap: 1.2.5
 
   orderedmap@2.1.1: {}
-
-  original-fs@1.2.0: {}
 
   own-keys@1.0.1:
     dependencies:
