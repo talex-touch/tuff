@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process'
 import { delimiter, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { createLogger } from '../../../utils/logger'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments, spillAttachments } from './attachment-spill'
 import {
@@ -20,8 +21,12 @@ import {
   buildPiPrompt,
   parsePiCliLine,
   PI_CLI_NOT_FOUND,
+  PI_SESSION_PROTOCOL_VERSION,
+  readPiSessionProtocolVersion,
   resolvePiExecutable
 } from './pi-cli-runtime'
+
+const piCliLog = createLogger('Intelligence').child('PiCli')
 
 /** Enough stderr to identify a failure without letting a chatty run grow unbounded in memory. */
 const STDERR_TAIL_LIMIT = 4_000
@@ -142,7 +147,32 @@ export class PiCliProvider extends IntelligenceProvider {
     try {
       const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
 
+      let protocolChecked = false
+
       for await (const line of lines) {
+        // `pi` is an external CLI with no version constraint in this repo, so an upgrade can change
+        // the stream contract with nothing to announce it. Its first line carries the protocol
+        // version; a mismatch means the shapes this provider parses were read off a different
+        // protocol than the one now running (#970).
+        //
+        // Warn rather than fail: the parser degrades to skipping lines it does not recognise, and
+        // refusing to answer because a number moved would be worse than a partial reply. Once per
+        // run -- this is a diagnostic, not a stream annotation.
+        if (!protocolChecked) {
+          const protocolVersion = readPiSessionProtocolVersion(line)
+          if (protocolVersion !== null) {
+            protocolChecked = true
+            if (protocolVersion !== PI_SESSION_PROTOCOL_VERSION) {
+              piCliLog.warn(
+                'pi session protocol version differs from the one this parser was written against',
+                {
+                  meta: { observed: protocolVersion, expected: PI_SESSION_PROTOCOL_VERSION }
+                }
+              )
+            }
+          }
+        }
+
         const event = parsePiCliLine(line)
         if (!event) continue
 
