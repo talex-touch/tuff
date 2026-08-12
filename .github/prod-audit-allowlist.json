@@ -5,14 +5,14 @@
     "advisory no longer appears also fails, so the list cannot only grow and cannot silently pre-approve",
     "a re-introduction. Removing an entry is the fix in that case.",
     "This list is the state on 2026-08-11, not an endorsement of it. #328 owns clearing it.",
-    "2026-08-12: the eight nuxt-closure reasons said core-app's vue-sonner optional peer. Measured wrong \u2014 moving vue-sonner to devDependencies changed the --prod audit by zero advisories. The real path is apps/nexus's @sentry/nuxt. An exception list is only worth its reasons."
+    "2026-08-12: the eight nuxt-closure reasons said core-app's vue-sonner optional peer. Measured wrong — moving vue-sonner to devDependencies changed the --prod audit by zero advisories. The real path is apps/nexus's @sentry/nuxt. An exception list is only worth its reasons."
   ],
   "advisories": [
     {
       "id": "GHSA-279x-mwfv-vcqv",
       "module": "@nuxt/devtools",
       "severity": "critical",
-      "reason": "Reaches --prod under the same @sentry/nuxt closure as nuxt: @sentry/nuxt -> nuxt -> @nuxt/devtools@2.7.0. The patched range starts at 3.3.1, which needs @nuxt/kit ^4.5.1, i.e. the Nuxt 4.5 line \u2014 blocked behind the unhead 2 -> 3 migration (#1098).",
+      "reason": "Reaches --prod under the same @sentry/nuxt closure as nuxt: @sentry/nuxt -> nuxt -> @nuxt/devtools@2.7.0. The patched range starts at 3.3.1, which needs @nuxt/kit ^4.5.1, i.e. the Nuxt 4.5 line — blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -20,7 +20,7 @@
       "id": "GHSA-28wg-ghj8-5hjv",
       "module": "nanoid",
       "severity": "high",
-      "reason": "Transitive under the same @sentry/nuxt -> nuxt closure. Moves when that closure moves.",
+      "reason": "Two production roots, not one. `pnpm -C apps/nexus why nanoid --prod` shows @sentry/nuxt -> nuxt -> @nuxt/vite-builder -> postcss -> nanoid, and independently vue-router (a direct nexus production dependency) -> @vue-macros/common -> @vue/compiler-sfc -> postcss -> nanoid. So this does NOT clear when the nuxt closure moves in #1098 — the vue-router path survives it. Patched line needs postcss to move, which vue-router pulls on its own.",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -28,7 +28,7 @@
       "id": "GHSA-2v37-7h3g-55p8",
       "module": "nanoid",
       "severity": "high",
-      "reason": "Transitive under the same @sentry/nuxt -> nuxt closure. Moves when that closure moves.",
+      "reason": "Two production roots, not one. `pnpm -C apps/nexus why nanoid --prod` shows @sentry/nuxt -> nuxt -> @nuxt/vite-builder -> postcss -> nanoid, and independently vue-router (a direct nexus production dependency) -> @vue-macros/common -> @vue/compiler-sfc -> postcss -> nanoid. So this does NOT clear when the nuxt closure moves in #1098 — the vue-router path survives it. Patched line needs postcss to move, which vue-router pulls on its own.",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -36,7 +36,7 @@
       "id": "GHSA-9473-5f9j-94wq",
       "module": "nuxt",
       "severity": "high",
-      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
+      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -44,7 +44,7 @@
       "id": "GHSA-9pgf-384g-p7mv",
       "module": "nuxt",
       "severity": "high",
-      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
+      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -52,7 +52,7 @@
       "id": "GHSA-hxcr-hm88-mpq6",
       "module": "nuxt",
       "severity": "high",
-      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
+      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -60,7 +60,7 @@
       "id": "GHSA-hxvh-4h3w-prp9",
       "module": "nuxt",
       "severity": "high",
-      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
+      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -68,7 +68,7 @@
       "id": "GHSA-wm8w-6qjm-cv43",
       "module": "nuxt",
       "severity": "high",
-      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
+      "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
     }
