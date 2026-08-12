@@ -45,7 +45,7 @@ node scripts/check-release-gates.mjs --tag "v<version>" --version "<version>" --
 ```bash
 pnpm exec vitest run scripts/generate-release-notes.test.mjs scripts/check-release-gates.test.mjs scripts/check-release-gates/local-checks.test.mjs
 pnpm quality:pr
-actionlint .github/workflows/build-and-release.yml .github/workflows/ci.yml
+mise run workflows:lint   # actionlint + shellcheck, both pinned in mise.toml (#482 / PR #1628)
 ```
 
 ## 4. RED/GREEN — 生成 CoreApp 内置 catalog
@@ -156,7 +156,19 @@ pnpm -C apps/core-app run build
 git diff --check
 ```
 
-对 UI 还需在桌面与窄窗口做 Playwright/packaged screenshot 验收，检查 modal、主从布局、滚动、文字溢出、focus 与语言切换。发布 workflow 变更必须用 actionlint 和一次不发布真实 release 的 dry-run/fixture 验证。
+对 UI 仍需在桌面与窄窗口做视觉验收，检查 modal、主从布局、滚动、文字溢出、focus 与语言切换。
+
+> **这一条尚未完成，且本仓库没有可用来完成它的工具（#482）。** 原文写的是「Playwright/packaged
+> screenshot」，但 Playwright **不是本仓库任何包的依赖**（三个 package.json 里声明数为 0）。仓库里
+> 仅有的两处 `playwright` 字样都不是它：`packages/tuff-cli` 里是一条**可检测外部工具的目录条目**，
+> `apps/nexus/build/check-runtime-evidence.mjs` 里是一个**历史遗留的目录名** `output/playwright/`，
+> 存放的是带日期的 JSON 运行时证据，不是截图。
+>
+> CoreApp 侧没有任何截图设施：`apps/nexus/scripts/audit-cdp-client.mjs` 那套 headless Chrome 只服务
+> Nexus 这个 Web 应用，接不了 Electron 窗口。
+>
+> 所以这条验收需要**在一台能跑 GUI 的机器上启动应用**手工完成，或先补一套 CoreApp 截图工具。在那之
+> 前，任何静态检查与单元测试都不得记为视觉验收 —— 这正是 #482 立项的原因。发布 workflow 变更必须用 actionlint 和一次不发布真实 release 的 dry-run/fixture 验证。
 
 ## Risk / Rollback Points
 
