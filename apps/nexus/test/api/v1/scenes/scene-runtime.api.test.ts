@@ -78,6 +78,10 @@ describe('/api/v1/scenes/:id/run', () => {
         capability: 'text.translate',
         providerId: 'prv_tencent_cloud_mt',
         dryRun: false,
+        // The endpoint authenticated and threw the result away, so every asset the run
+        // produced was stored with no owner and readable by anyone holding the key (#898).
+        // Pinned here because it is this hand-off, not the storage layer, that was missing.
+        ownerId: 'user_1',
       },
     )
     expect(result).toEqual({
