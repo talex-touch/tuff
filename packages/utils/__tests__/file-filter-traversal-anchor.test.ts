@@ -42,6 +42,20 @@ describe('#1727 system-dir anchoring', () => {
     }
   })
 
+  /**
+   * `pathSegments` drops separators, so `usr` and `/usr` are both one segment. Without the root
+   * marker a caller passing a relative path — `scanDirectory` does not require an absolute one —
+   * would have it classified as a filesystem root. Found by CodeRabbit on #1728.
+   */
+  it('does not treat a relative path as the filesystem root', () => {
+    for (const name of systemNames) {
+      expect(reason(name), name).not.toBe('system-path')
+      expect(reason(`./${name}`), `./${name}`).not.toBe('system-path')
+      expect(reason(`a/${name}`), `a/${name}`).not.toBe('system-path')
+      expect(reason(`C:${name}`), `C:${name}`).not.toBe('system-path')
+    }
+  })
+
   it('keeps the root-anchored patterns doing their job below the root', () => {
     // From PATH_PATTERNS.SYSTEM_PATHS, which is where root-level system paths were always handled;
     // the name list was only ever adding the unanchored half. Platform-split for the same reason

@@ -85,13 +85,20 @@ function pathSegments(value: string): string[] {
  * Measured on one default install: six of 545 directories under the default roots, five of them
  * real user content.
  *
- * POSIX roots are one segment (`/usr`). Windows roots are two, because the drive is a segment
- * (`C:/Windows`). `~/Library` and `%APPDATA%` keep their exclusion through the anchored patterns
+ * POSIX roots are one segment *and* a leading `/` -- the separator is what distinguishes `/usr`
+ * from a relative `usr`, which `pathSegments` renders identically. Windows roots are two segments,
+ * because the drive is one (`C:/Windows`); `C:Library` is drive-relative, stays a single segment
+ * and is therefore not a root. `~/Library` and `%APPDATA%` keep their exclusion through the anchored patterns
  * in `PATH_PATTERNS.SYSTEM_PATHS` (`/^\/Users\/[^/]+\/Library\//`), which is where root-level
  * system paths were already handled -- this check was only ever adding the unanchored half.
  */
-function isFilesystemRootChild(segments: readonly string[]): boolean {
-  if (segments.length === 1) return true;
+function isFilesystemRootChild(
+  normalizedPath: string,
+  segments: readonly string[],
+): boolean {
+  // `pathSegments` drops the separators, so the segment count alone cannot tell `/usr` from a
+  // relative `usr` -- both are one segment. The original path has to carry the root marker.
+  if (segments.length === 1) return normalizedPath.startsWith("/");
   return segments.length === 2 && /^[a-z]:$/i.test(segments[0] ?? "");
 }
 
@@ -199,7 +206,7 @@ export class FileFilterService {
     if (options.customBlacklistedDirs?.has(directoryName))
       return "excluded-path";
     if (LOWERCASE_DEV_DIRS.has(lowerDirectoryName)) return "development-path";
-    if (isFilesystemRootChild(segments) && LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName))
+    if (isFilesystemRootChild(normalizePath(path), segments) && LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName))
       return "system-path";
     if (LOWERCASE_TEMP_DIRS.has(lowerDirectoryName)) return "cache-path";
 
