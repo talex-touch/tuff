@@ -978,7 +978,7 @@ export function createPluginBrowserOpenCapabilities(
     return Object.freeze({ target: record.target })
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.browser-open',
     permission: 'system.shell',
     timeoutMs: PLUGIN_BROWSER_OPEN_TIMEOUT_MS,

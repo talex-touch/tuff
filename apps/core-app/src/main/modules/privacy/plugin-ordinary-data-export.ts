@@ -247,7 +247,7 @@ async function exportRoot(
 export function createPluginOrdinaryDataOwner(
   request: PluginOrdinaryDataExportRequest
 ): PrivacyDataOwner {
-  return Object.freeze({
+  return Object.freeze<PrivacyDataOwner>({
     categories: Object.freeze([CATEGORY]),
     inspect: async () => emptyInspection(),
     previewDelete: async () => emptyPreview(),

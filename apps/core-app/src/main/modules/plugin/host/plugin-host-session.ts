@@ -195,7 +195,7 @@ function snapshotOwner(owner: HostMessageOwner): HostMessageOwner {
   ) {
     throw new PluginHostSessionError('PLUGIN_HOST_SESSION_INVALID_OWNER')
   }
-  return Object.freeze({
+  return Object.freeze<HostMessageOwner>({
     protocolVersion: HOST_PROTOCOL_VERSION,
     activationHandle,
     hostGeneration: Number(hostGeneration)
