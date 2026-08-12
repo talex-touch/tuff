@@ -72,7 +72,7 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 
 **Module Loading Order**
 
-The order is defined by `foregroundModulesToLoad` and `deferredModulesToLoad` in [src/main/index.ts](apps/core-app/src/main/index.ts) — read those arrays rather than a list here, which goes stale as modules are added. Currently 38 foreground and 2 deferred.
+The order is defined by `foregroundModulesToLoad` and `deferredModulesToLoad` in [src/main/index.ts](apps/core-app/src/main/index.ts) — read those arrays rather than a list here, which goes stale as modules are added. Currently 39 foreground and 2 deferred.
 
 What the arrays alone don't tell you:
 

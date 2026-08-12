@@ -11,9 +11,9 @@ import type {
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { FitAddon } from 'xterm-addon-fit'
-import { Terminal } from 'xterm'
-import 'xterm/css/xterm.css'
+import { FitAddon } from '@xterm/addon-fit'
+import { Terminal } from '@xterm/xterm'
+import '@xterm/xterm/css/xterm.css'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -310,7 +310,7 @@ async function openTerminal(): Promise<void> {
     terminal.loadAddon(fitAddon)
     if (terminalHost.value) terminal.open(terminalHost.value)
     fitAddon.fit()
-    terminalInputDispose = terminal.onData((data) => {
+    terminalInputDispose = terminal.onData((data: string) => {
       if (!terminalSessionId.value) return
       void sdk.terminal.write({ sessionId: terminalSessionId.value, data }).catch((error) => {
         log.error('Failed to write local AI CLI terminal input', error)
