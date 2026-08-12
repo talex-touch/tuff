@@ -6,10 +6,13 @@ import type { BaseAnchorClassValue, BaseAnchorProps, BaseAnchorVirtualReference 
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxCard from '../../card/src/TxCard.vue'
 import { beadPinchRatio, beadSpanAt, createLiquidMetrics, geometryAt, itemOpacityAt, LIQUID_DEFAULTS, neckClipAt } from './base-anchor-liquid'
 import { useBaseAnchorMotion } from './base-anchor-motion'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({ name: 'TxBaseAnchor', inheritAttrs: false })
 
@@ -108,7 +111,7 @@ const liquidGooId = `tx-ba-liquid-goo-${uid}`
 const liquidOutlineId = `tx-ba-liquid-outline-${uid}`
 const liquidMaskId = `tx-ba-liquid-mask-${uid}`
 
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 const mounted = ref(false)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const cleanupResizeObserver = ref<(() => void) | null>(null)
@@ -800,7 +803,7 @@ watch(
     }
 
     mounted.value = true
-    zIndex.value = nextZIndex()
+    zIndex.value = zIndexAllocator.next()
     lastOpenedAt.value = performance.now()
 
     await nextTick()

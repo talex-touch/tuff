@@ -21,9 +21,19 @@ export class GlobalDictationController {
   private activeSessionId: string | null = null
   private busy = false
   private registered = false
+  /**
+   * Set by `unregister`, cleared by `register`.
+   *
+   * `beginCapture()` is async, so between the call and its resolution there is no
+   * session id anywhere for teardown to cancel. A capture that lands after this is
+   * set has nobody left to stop it, and the id is the only handle the native side
+   * has to that session (#1552).
+   */
+  private disposed = false
 
   register(): void {
     if (this.registered) return
+    this.disposed = false
     try {
       const ok = shortcutModule.registerMainShortcut(
         SHORTCUT_ID,
@@ -43,6 +53,7 @@ export class GlobalDictationController {
   }
 
   unregister(): void {
+    this.disposed = true
     if (this.registered) {
       try {
         shortcutModule.unregisterMainShortcut(SHORTCUT_ID)
@@ -64,7 +75,14 @@ export class GlobalDictationController {
       if (this.activeSessionId) {
         await this.finish(this.activeSessionId)
       } else {
-        this.activeSessionId = voiceService.beginCapture()
+        const sessionId = await voiceService.beginCapture()
+        if (this.disposed) {
+          // Teardown ran while the native start was in flight. Nothing will toggle
+          // this controller again, so keeping the id here would strand the session.
+          voiceService.abortCapture(sessionId)
+          return
+        }
+        this.activeSessionId = sessionId
         this.notify('🎙️ 正在听写…', '再次按下快捷键停止并键入')
       }
     } catch (error) {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import AppSettings from '../base/settings/AppSettings.vue'
+import { SETTING_CATEGORIES } from '~/modules/settings/categories'
 import Storagable from './Storagable.vue'
 
 const rendererState = vi.hoisted(() => {
@@ -28,62 +28,11 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() })
 }))
 
-vi.mock('~/modules/platform/renderer-platform', () => ({
-  useRendererPlatform: () => ({ isWindows: false })
-}))
-
 vi.mock('~/components/base/template/ViewTemplate.vue', () => ({
   default: {
     name: 'ViewTemplate',
     props: ['title'],
     template: '<main><slot /></main>'
-  }
-}))
-
-vi.mock('../base/settings/SettingHeader.vue', () => ({
-  default: { name: 'SettingHeader', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingAssistant.vue', () => ({
-  default: { name: 'SettingAssistant', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingLanguage.vue', () => ({
-  default: { name: 'SettingLanguage', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingSetup.vue', () => ({
-  default: { name: 'SettingSetup', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingTools.vue', () => ({
-  default: { name: 'SettingTools', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingUser.vue', () => ({
-  default: { name: 'SettingUser', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingAbout.vue', () => ({
-  default: { name: 'SettingAbout', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingDownload.vue', () => ({
-  default: { name: 'SettingDownload', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingEverything.vue', () => ({
-  default: { name: 'SettingEverything', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingFileIndex.vue', () => ({
-  default: { name: 'SettingFileIndex', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingNetwork.vue', () => ({
-  default: { name: 'SettingNetwork', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingSentry.vue', () => ({
-  default: { name: 'SettingSentry', template: '<div />' }
-}))
-vi.mock('../base/settings/SettingUpdate.vue', () => ({
-  default: { name: 'SettingUpdate', template: '<div />' }
-}))
-
-vi.mock('../base/settings/SettingStorage.vue', () => ({
-  default: {
-    name: 'SettingStorage',
-    template: '<nav data-testid="setting-storage-navigation" />'
   }
 }))
 
@@ -136,36 +85,16 @@ describe('Privacy & Data settings placement', () => {
     rendererState.transportSend.mockResolvedValue(structuredClone(storageReport))
   })
 
-  it('keeps the storage navigation visible when advanced settings are disabled', async () => {
-    const wrapper = mount(AppSettings, {
-      global: {
-        directives: { wave: {} },
-        stubs: {
-          ...commonStubs,
-          SettingHeader: { template: '<div />' },
-          SettingUser: { template: '<div />' },
-          SettingLanguage: { template: '<div />' },
-          SettingSetup: { template: '<div />' },
-          SettingTools: { template: '<div />' },
-          SettingAssistant: { template: '<div />' },
-          SettingAbout: { template: '<div />' },
-          SettingDownload: { template: '<div />' },
-          SettingEverything: { template: '<div />' },
-          SettingFileIndex: { template: '<div />' },
-          SettingNetwork: { template: '<div />' },
-          SettingSentry: { template: '<div />' },
-          SettingUpdate: { template: '<div />' },
-          SettingStorage: {
-            template: '<nav data-testid="setting-storage-navigation" />'
-          }
-        }
-      }
-    })
+  it('keeps storage reachable when advanced settings are disabled', () => {
+    // Storage used to hang off the legacy single-page settings view behind a link row. It is now
+    // a first-class category, so no `advancedSettings` branch can hide it.
+    expect(rendererState.appSetting.dev.advancedSettings).toBe(false)
 
-    await flushPromises()
+    const storage = SETTING_CATEGORIES.find((category) => category.key === 'storage-usage')
 
-    expect(wrapper.find('[data-testid="setting-storage-navigation"]').exists()).toBe(true)
-    wrapper.unmount()
+    expect(storage).toBeDefined()
+    expect(storage?.group).toBe('system')
+    expect(storage?.path).toBe('/setting/storage-usage')
   })
 
   it('mounts one page-owned PrivacyDataSection directly in the storage page container', async () => {

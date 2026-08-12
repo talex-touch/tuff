@@ -134,7 +134,7 @@ export function createPrivacyRetentionCoordinator(
     await operation
   }
 
-  return Object.freeze({
+  return Object.freeze<PrivacyRetentionCoordinator>({
     initializeAfterStorageReady: async () => {
       if (state !== 'created') throw new Error('PRIVACY_RETENTION_COORDINATOR_ALREADY_INITIALIZED')
       try {

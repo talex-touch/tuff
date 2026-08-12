@@ -37,10 +37,32 @@ describe('plugin view host', () => {
     const bootstrap = parsePluginViewBootstrapArgument(preferences.additionalArguments ?? [])
     expect(bootstrap).toEqual({
       bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
-      channelKey: 'owner-key',
       plugin: { name: 'touch-test', version: '1.2.3', sdkapi: 260615 },
       config: { themeStyle: { dark: true } }
     })
+  })
+
+  /**
+   * `additionalArguments` become real command-line arguments of the renderer process, which any
+   * unprivileged process on the machine reads out of the process table — `ps -ww` on macOS and
+   * Linux, WMI on Windows. The plugin's channel key travelled there until #697.
+   *
+   * This asserts on the raw arguments rather than the parsed bootstrap: dropping the field from
+   * the interface would satisfy a parsed-shape check while the value still sat in the string.
+   */
+  it('puts no channel key in the renderer command line', () => {
+    const preferences = buildPluginViewWebPreferences('trusted-plugin-view', {
+      plugin,
+      themeStyle: { dark: true },
+      source: 'core-box'
+    })
+
+    const commandLine = (preferences.additionalArguments ?? []).join(' ')
+
+    expect(commandLine).toContain('touch-test')
+    expect(commandLine).not.toContain('owner-key')
+    expect(commandLine).not.toContain(encodeURIComponent('owner-key'))
+    expect(commandLine).not.toContain('channelKey')
   })
 
   it('cannot select a legacy preload through an obsolete profile value', () => {

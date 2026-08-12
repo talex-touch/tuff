@@ -82,6 +82,24 @@ export function buildRecommendationSemanticProfile(
     }
   }
 
+  if (context.selection) {
+    tokens.push('selection')
+    if (context.selection.contentType) {
+      tokens.push(`selection-content:${context.selection.contentType}`)
+    }
+
+    const selectionLanguage = context.selection.meta?.language
+    if (typeof selectionLanguage === 'string' && selectionLanguage) {
+      tokens.push(`lang:${selectionLanguage.toLowerCase()}`)
+    }
+
+    if (context.selection.contentType === 'url' || context.selection.meta?.isUrl === true) {
+      tokens.push('task:web', 'app:browser', 'research')
+    } else if (context.selection.meta?.fileType === 'code') {
+      tokens.push('task:dev', 'code', 'app:ide', 'editor', 'work')
+    }
+  }
+
   if (context.foregroundApp) {
     const foregroundTokens = inferAppCategoryTokens(
       `${context.foregroundApp.bundleId} ${context.foregroundApp.name}`
@@ -102,11 +120,11 @@ export function buildRecommendationSemanticProfile(
     if (state.networkType) {
       tokens.push(`network:${state.networkType}`)
     }
-    if (typeof state.bluetoothConnectedCount === 'number' && state.bluetoothConnectedCount > 0) {
-      tokens.push('device:bluetooth')
-    }
     if (state.locationBucket) {
       tokens.push('location:bucket')
+    }
+    if (state.timezoneChanged) {
+      tokens.push('travel', 'timezone:changed')
     }
 
     if (state.focusMode === 'active' || state.isDNDEnabled) {
@@ -282,12 +300,17 @@ function isPreferenceToken(token: string): boolean {
 
 function splitIdentifier(value?: string): string[] {
   if (!value) return []
-  return value
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[^a-zA-Z0-9]+/g, ' ')
-    .split(/\s+/)
-    .map((part) => part.trim().toLowerCase())
-    .filter((part) => part.length > 1 && !STOP_TOKENS.has(part))
+  return (
+    value
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      // Unicode-aware: the old [^a-zA-Z0-9] class erased CJK, Cyrillic and accented
+      // Latin wholesale, so every non-ASCII-named app produced the same empty
+      // profile and scored identically (#661).
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .split(/\s+/)
+      .map((part) => part.trim().toLowerCase())
+      .filter((part) => part.length > 1 && !STOP_TOKENS.has(part))
+  )
 }
 
 function inferAppCategoryTokens(identifier: string): string[] {

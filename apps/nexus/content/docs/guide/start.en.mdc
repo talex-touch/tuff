@@ -9,6 +9,12 @@
 
 > Node.js 22 runtime ships inside every build—no extra tooling needed.
 
+> On Ubuntu 24.04 and later, choose the `.deb` rather than the AppImage. 24.04 restricts
+> unprivileged user namespaces by default and Electron's sandbox needs them; the `.deb` registers
+> an AppArmor profile granting `userns` during installation, and an AppImage has no install step
+> in which to do that. If you must use the AppImage, allow it for the session with
+> `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
+
 ## 2. First Launch
 1. Run the installer and allow CoreBox global shortcut.
 2. Sign in via Apple ID, GitHub, or email.

@@ -1,0 +1,31 @@
+# Its single test file and 9 cases ran in no workflow at all (#330). The package declares no
+# lint, typecheck or build script, so this runs the one thing it does declare.
+name: Pi Extension Tuff CI
+
+on:
+  pull_request:
+    paths:
+      - "packages/pi-extension-tuff/**"
+      - ".github/workflows/package-pi-extension-ci.yml"
+      - ".github/workflows/package-ci.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "packages/pi-extension-tuff/**"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: pi-extension-tuff
+      package-path: packages/pi-extension-tuff
+      run-typecheck: false
+      run-lint: false
+      run-test: true
+      test-command: pnpm test
+      run-build: false

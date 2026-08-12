@@ -4,6 +4,7 @@ import type { IUseSearch } from '~/modules/box/adapter/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { windowState } from '~/modules/hooks/core-box'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -22,6 +23,7 @@ const emit = defineEmits<
 >()
 
 const { isMac } = useRendererPlatform()
+const { t } = useI18n()
 
 interface Props {
   searchVal: string
@@ -108,22 +110,40 @@ async function handleDebug(): Promise<void> {
 
     <!-- Window Controls -->
     <div class="DivisionBox-Controls">
-      <button type="button" class="control-btn" title="透明度" @click="handleOpacity">
-        <TuffIcon :icon="{ type: 'class', value: opacityIcon }" alt="透明度" :size="18" />
+      <button
+        type="button"
+        class="control-btn"
+        :title="t('corebox.opacity', '透明度')"
+        @click="handleOpacity"
+      >
+        <TuffIcon
+          :icon="{ type: 'class', value: opacityIcon }"
+          :alt="t('corebox.opacity', '透明度')"
+          :size="18"
+        />
       </button>
-      <button type="button" class="control-btn" title="调试" @click="handleDebug">
-        <TuffIcon :icon="{ type: 'class', value: 'i-carbon-debug' }" alt="调试" :size="18" />
+      <button
+        type="button"
+        class="control-btn"
+        :title="t('corebox.debug', '调试')"
+        @click="handleDebug"
+      >
+        <TuffIcon
+          :icon="{ type: 'class', value: 'i-carbon-debug' }"
+          :alt="t('corebox.debug', '调试')"
+          :size="18"
+        />
       </button>
       <button
         type="button"
         class="control-btn"
         :class="{ active: pinned }"
-        title="置顶"
+        :title="t('corebox.alwaysOnTop', '置顶')"
         @click="handlePin"
       >
         <TuffIcon
           :icon="{ type: 'class', value: pinned ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill' }"
-          alt="置顶"
+          :alt="t('corebox.alwaysOnTop', '置顶')"
           :size="18"
         />
       </button>

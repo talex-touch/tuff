@@ -7,7 +7,7 @@
 
 import type { FlowErrorCode, FlowPayloadType, FlowSession } from '@talex-touch/utils/types/flow'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../db/db-write'
 import { flowAuditLogs } from '../../db/schema'
 import { databaseModule } from '../database'
 
@@ -67,7 +67,7 @@ export class FlowAuditLogger {
    */
   async log(entry: FlowAuditEntry): Promise<void> {
     try {
-      await dbWriteScheduler.schedule('flow-audit', async () => {
+      await scheduleDbWrite('flow-audit', async () => {
         const db = databaseModule.getDb()
         await db.insert(flowAuditLogs).values({
           sessionId: entry.sessionId,

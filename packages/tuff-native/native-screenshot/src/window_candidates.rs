@@ -20,11 +20,11 @@ impl WindowOwner {
         process_id: u32,
         bundle_id: Option<String>,
         application_name: Option<String>,
+        limits: ScreenshotLimits,
     ) -> Result<Self, GeometryError> {
         if process_id == 0 {
             return Err(GeometryError::new("window process id must be positive"));
         }
-        let limits = ScreenshotLimits::default();
         validate_optional_text(bundle_id.as_deref(), limits.max_bundle_id_bytes())?;
         validate_optional_text(
             application_name.as_deref(),
@@ -75,11 +75,11 @@ impl ShareableWindow {
         on_screen: bool,
         active: Option<bool>,
         capturable: bool,
+        limits: ScreenshotLimits,
     ) -> Result<Self, GeometryError> {
         if native_id == 0 {
             return Err(GeometryError::new("native window id must be positive"));
         }
-        let limits = ScreenshotLimits::default();
         if title
             .as_deref()
             .is_some_and(|value| value.chars().count() > limits.max_title_scalars())
@@ -159,13 +159,13 @@ impl SelfWindowPolicy {
         process_ids: Vec<u32>,
         bundle_ids: Vec<String>,
         native_window_ids: Vec<u32>,
+        limits: ScreenshotLimits,
     ) -> Result<Self, GeometryError> {
         if process_ids.contains(&0) || native_window_ids.contains(&0) {
             return Err(GeometryError::new(
                 "self window identifiers must be positive",
             ));
         }
-        let limits = ScreenshotLimits::default();
         for bundle_id in &bundle_ids {
             validate_text(bundle_id, limits.max_bundle_id_bytes())?;
         }
@@ -199,11 +199,11 @@ impl WindowSelectionPolicy {
         minimum_size: f64,
         self_windows: SelfWindowPolicy,
         system_bundle_ids: Vec<String>,
+        limits: ScreenshotLimits,
     ) -> Result<Self, GeometryError> {
         if !minimum_size.is_finite() || minimum_size <= 0.0 {
             return Err(GeometryError::new("window minimum size must be positive"));
         }
-        let limits = ScreenshotLimits::default();
         for bundle_id in &system_bundle_ids {
             validate_text(bundle_id, limits.max_bundle_id_bytes())?;
         }
@@ -312,8 +312,7 @@ pub struct WindowHitTestOptions {
 }
 
 impl WindowHitTestOptions {
-    pub fn new(include_panels: bool, max_candidates: usize) -> Self {
-        let limits = ScreenshotLimits::default();
+    pub fn new(include_panels: bool, max_candidates: usize, limits: ScreenshotLimits) -> Self {
         Self {
             include_panels,
             max_candidates: max_candidates.clamp(1, limits.max_window_candidates()),

@@ -195,7 +195,7 @@ function snapshotOwner(owner: HostMessageOwner): HostMessageOwner {
   ) {
     throw new PluginHostSessionError('PLUGIN_HOST_SESSION_INVALID_OWNER')
   }
-  return Object.freeze({
+  return Object.freeze<HostMessageOwner>({
     protocolVersion: HOST_PROTOCOL_VERSION,
     activationHandle,
     hostGeneration: Number(hostGeneration)
@@ -376,7 +376,11 @@ export class PluginHostSession {
   ): HostWireMessage {
     const key = 'payload' in message ? 'payload' : 'result' in message ? 'result' : undefined
     if (!key) return message
-    const value = message[key]
+    // Read through the same `in` narrowing that produced `key`, rather than indexing by it.
+    // HostWireMessage is a union without an index signature, so `message[key]` was an implicit
+    // any even though `key` is already narrowed to 'payload' | 'result' (#548).
+    const value =
+      'payload' in message ? message.payload : 'result' in message ? message.result : undefined
     const context: PluginHostWireValueContext = Object.freeze({
       direction,
       messageType: message.type,

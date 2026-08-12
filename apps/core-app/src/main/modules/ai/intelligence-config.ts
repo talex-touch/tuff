@@ -19,6 +19,11 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { tuffIntelligence } from './intelligence-sdk'
 import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
+import {
+  getResolvedPiExecutable,
+  PI_CLI_ORIGIN,
+  PI_CLI_PROVIDER_ID
+} from './providers/pi-cli-runtime'
 
 const intelligenceConfigLog = getLogger('intelligence-config')
 
@@ -52,6 +57,34 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
 
 const INTERNAL_SYSTEM_OCR_CAPABILITY_ID = 'vision.ocr'
 const INTERNAL_SYSTEM_OCR_MODEL = 'system-ocr'
+
+/**
+ * The locally installed `pi` CLI, exposed as a provider so a machine with it needs no API key to
+ * chat. Injected at runtime rather than persisted, for the same reason as the OCR provider above:
+ * availability is a property of the machine, and a stored `enabled: true` would follow a synced
+ * config onto a machine where the binary does not exist.
+ *
+ * Only `text.chat` is declared. `pi` could serve the other text capabilities through the same chat
+ * call, but declaring them would silently re-route surfaces like translation onto a local agent that
+ * the user never chose for that job.
+ */
+/** Below every seeded binding (the default set tops out at 5), so `pi` sorts last in routing. */
+const PI_CLI_BINDING_PRIORITY = 99
+
+const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
+  id: PI_CLI_PROVIDER_ID,
+  type: IntelligenceProviderType.LOCAL,
+  name: 'Pi (local CLI)',
+  enabled: true,
+  priority: 0,
+  models: [],
+  timeout: 120000,
+  capabilities: ['text.chat'],
+  metadata: {
+    internal: true,
+    origin: PI_CLI_ORIGIN
+  }
+}
 
 let lastAppliedRuntimeConfigSignature: string | null = null
 let teardownConfigUpdateListener: (() => void) | null = null
@@ -415,6 +448,41 @@ function getLatestConfig(): IntelligenceSDKPersistedConfig | undefined {
   return stored
 }
 
+/**
+ * Adds the `pi` binding to `text.chat` routing, returning a copy so the stored config is never
+ * mutated by a runtime-only decision.
+ *
+ * Injecting the provider is not enough on its own: once a capability has any enabled binding,
+ * `allowedProviderIds` is narrowed to exactly those provider ids, and an unbound provider is
+ * filtered out before the credential check ever runs.
+ *
+ * The priority is deliberately the lowest of any binding, so `pi` only ever answers when every
+ * provider the user configured themselves is unusable — it is a floor, not a preference.
+ */
+function withPiChatBinding(
+  capabilities: Record<string, IntelligenceCapabilityRoutingConfig>,
+  piAvailable: boolean
+): Record<string, IntelligenceCapabilityRoutingConfig> {
+  if (!piAvailable) return capabilities
+
+  const chatRouting = capabilities['text.chat']
+  const bindings = chatRouting?.providers ?? []
+  if (bindings.some((binding) => binding.providerId === PI_CLI_PROVIDER_ID)) {
+    return capabilities
+  }
+
+  return {
+    ...capabilities,
+    'text.chat': {
+      ...(chatRouting ?? { id: 'text.chat', providers: [] }),
+      providers: [
+        ...bindings,
+        { providerId: PI_CLI_PROVIDER_ID, priority: PI_CLI_BINDING_PRIORITY, enabled: true }
+      ]
+    }
+  }
+}
+
 export function ensureIntelligenceConfigLoaded(force = false): void {
   // 每次都实时从 storage 读取最新配置
   const stored = getLatestConfig()
@@ -448,6 +516,12 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
   }
 
+  const piAvailable = Boolean(getResolvedPiExecutable())
+  const hasPiProvider = providers.some((provider) => provider.id === PI_CLI_PROVIDER_ID)
+  if (piAvailable && !hasPiProvider) {
+    providers.push({ ...PI_CLI_PROVIDER })
+  }
+
   const nextRuntimeConfig = {
     providers,
     defaultStrategy: normalizedStrategy,
@@ -455,7 +529,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     enableCache: stored.globalConfig?.enableCache ?? false,
     enableQuota: stored.globalConfig?.enableQuota ?? true,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
-    capabilities: stored.capabilities ?? {},
+    capabilities: withPiChatBinding(stored.capabilities ?? {}, piAvailable),
     promptRegistry: stored.promptRegistry ?? [],
     promptBindings: stored.promptBindings ?? []
   }

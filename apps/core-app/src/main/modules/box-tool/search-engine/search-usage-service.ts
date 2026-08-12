@@ -5,6 +5,7 @@ import type { DbUtils } from '../../../db/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
+import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 
 const log = getLogger('search-engine')
 
@@ -147,7 +148,12 @@ export class SearchUsageService {
     await dbUtils.addUsageLog({
       sessionId,
       itemId,
-      source: item.source.type,
+      // `source.id`, not `source.type`: item_usage_stats, item_time_stats and
+      // usage_trend_daily are all keyed by the id, and the time aggregator
+      // copies this column straight into item_time_stats.sourceId. A type here
+      // makes every id-keyed join miss (legacy rows are repaired by
+      // usage-source-identity-migration).
+      source: item.source.id,
       action: 'execute',
       keyword: '',
       timestamp: now,
@@ -162,6 +168,9 @@ export class SearchUsageService {
     void dbUtils.incrementUsageTrendDaily(item.source.id, itemId, now).catch((error) => {
       log.warn(`Failed to update trend stats for item ${itemId}`, { error })
     })
+    // Click side of hit-rate@k: only counts when this id was actually shown as
+    // a recommendation in this session (no-op for plain search executes).
+    recommendationExposureService.recordClick(item.source.id, itemId)
     this.statsCache?.invalidate(item.source.id, itemId)
   }
 

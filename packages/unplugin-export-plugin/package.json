@@ -55,6 +55,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=24.15.0"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -75,11 +78,16 @@
     "@antfu/eslint-config": "^5.4.1",
     "@types/debug": "^4.1.13",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^18.19.130",
+    "@types/node": "catalog:dev",
     "bumpp": "^11.1.0",
+    "debug": "^4.4.3",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
+    "fs-extra": "^11.3.6",
+    "pathe": "^1.1.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
+    "unplugin": "catalog:build",
     "vite": "^7.3.6",
     "vitest": "^3.2.7"
   }

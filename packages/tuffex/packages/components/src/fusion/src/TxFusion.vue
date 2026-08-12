@@ -76,7 +76,6 @@ const stageStyle = computed(() => {
     '--tx-fusion-duration': `${d}ms`,
     '--tx-fusion-easing': props.easing,
     '--tx-fusion-gap': `${props.gap}px`,
-    '--tx-fusion-blur': `${props.blur}px`,
   } as Record<string, string>
 })
 

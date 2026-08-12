@@ -111,6 +111,68 @@ async function confirmAction(question) {
 }
 
 /**
+ * 读取当前分支名。detached HEAD 返回 null。
+ */
+function getCurrentBranch() {
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      encoding: 'utf-8',
+      cwd: rootDir,
+    }).trim()
+    return branch === 'HEAD' ? null : branch
+  }
+  catch (error) {
+    log.error(`Failed to read current branch: ${error.message}`)
+    process.exit(1)
+  }
+}
+
+/**
+ * 校验发布分支。
+ *
+ * 这个脚本会打 tag 并 push，而 build-and-release.yml 监听 `push: tags: v*.*.*`，
+ * 所以从任意分支跑一次 `pnpm version:patch` 就能从未合并的代码发出一个正式签名版本。
+ *
+ * 默认只允许仓库默认分支。发布确实经常从长期集成分支打（本仓库 master 落后集成分支
+ * 数百个提交），所以这里不是硬禁：交互式下提示确认，非交互式下直接失败。
+ * 常用分支可用 TALEX_RELEASE_BRANCHES=a,b 免去每次确认。
+ */
+async function ensureReleaseBranch() {
+  const branch = getCurrentBranch()
+  if (!branch) {
+    log.error('HEAD is detached. A release must be tagged from a branch.')
+    process.exit(1)
+  }
+
+  const allowed = (process.env.TALEX_RELEASE_BRANCHES ?? 'master')
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+
+  if (allowed.includes(branch)) {
+    log.success(`On release branch ${branch}.`)
+    return branch
+  }
+
+  log.warn(`Current branch is ${branch}, which is not a release branch (${allowed.join(', ')}).`)
+  log.warn('Tagging here publishes a signed release built from this branch\'s code.')
+
+  if (!isInteractive) {
+    log.error('Refusing to release from a non-release branch without confirmation.')
+    log.error(`Set TALEX_RELEASE_BRANCHES=${branch} if this is intentional.`)
+    process.exit(1)
+  }
+
+  const shouldContinue = await confirmAction(`Release from ${branch} anyway?`)
+  if (!shouldContinue) {
+    log.info('Cancelled.')
+    process.exit(1)
+  }
+
+  return branch
+}
+
+/**
  * 检查是否有未提交的更改
  * 注意：bumpp 会修改 package.json 和 apps/core-app/package.json，这是预期的
  * 所以只需要在脚本最开始执行时检查一次即可
@@ -148,6 +210,10 @@ async function runVersionSync() {
   // 1. 检查未提交的更改（只在开始时检查一次）
   log.info('Checking git status...')
   checkUncommittedChanges()
+
+  // 分支校验放在 bumpp 之前：从错误分支跑时不应该先把版本文件改脏再失败
+  log.info('Checking release branch...')
+  const releaseBranch = await ensureReleaseBranch()
 
   const versionBefore = readRootVersion()
 
@@ -237,8 +303,8 @@ async function runVersionSync() {
   log.info('Creating annotated tag...')
   runCommand(`git tag -a ${tagName} -m "release: ${tagName}"`)
 
-  log.info('Pushing commits...')
-  runCommand('git push')
+  log.info(`Pushing commits to ${releaseBranch}...`)
+  runCommand(`git push origin HEAD:${releaseBranch}`)
 
   log.info(`Pushing tag ${tagName}...`)
   runCommand(`git push origin ${tagName}`)

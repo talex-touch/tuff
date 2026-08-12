@@ -1,10 +1,32 @@
 import { createError, getQuery } from 'h3'
 import { useRuntimeConfig } from '#imports'
+import { hashIpValue } from '../../utils/adminEmergencyStore'
+import { enforceAdminRateLimit } from '../../utils/adminRateLimitStore'
+import { resolveRequestIp } from '../../utils/ipSecurityStore'
 import { createWebAuthnChallenge, getUserByEmail, listPasskeys } from '../../utils/authStore'
+
+/**
+ * Same account-existence oracle as /api/auth/email-status: passing an email returns 404 when no
+ * active account has it, so this is enumerable too (#921 names both). Also pre-auth by nature,
+ * so it gets the same throttle rather than a guard.
+ */
+const PASSKEY_OPTIONS_RATE_LIMIT = { limit: 20, windowMs: 10 * 60_000 } as const
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const email = typeof query.email === 'string' ? query.email.trim().toLowerCase() : ''
+
+  // Only the email-carrying form is an oracle; an anonymous discovery call reveals nothing.
+  if (email) {
+    const ip = resolveRequestIp(event)
+    if (ip) {
+      await enforceAdminRateLimit(event, {
+        key: `passkey-options:ip:${hashIpValue(event, ip)}`,
+        ...PASSKEY_OPTIONS_RATE_LIMIT,
+      })
+    }
+  }
+
   const user = email ? await getUserByEmail(event, email) : null
   if (email && (!user || user.status !== 'active')) {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })

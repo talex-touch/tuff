@@ -1,0 +1,43 @@
+{
+  "id": "search-audit-remediation",
+  "name": "search-audit-remediation",
+  "title": "CoreBox search audit remediation",
+  "description": "Parent task for the 2026-08-06 three-way search audit remediation. Owns the audit findings as requirement source and the batch A-C task map; children are independently verifiable deliverables.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-semantic-catalog-token-boundary",
+    "08-05-search-sort-reaches-ui",
+    "08-05-file-index-data-safety",
+    "08-05-keyword-charset-unification",
+    "08-05-reco-ranking-stats-fix",
+    "08-05-reco-wire-existing-signals",
+    "08-05-reco-signal-substrate",
+    "08-05-reco-system-state-signals",
+    "08-05-reco-file-activity-signals",
+    "08-05-reco-calendar-signal",
+    "08-05-reco-behavior-learning",
+    "08-05-realtime-index-freshness"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Keep landing the child batches. Its own criterion is that each child lands with its gates green, and R1 is already marked FIXED in the digest while R2 is not.",
+    "blocker": "None. It is a tracking parent, and its progress is its children.",
+    "evidence": "Four research artefacts, and they are load-bearing rather than notes: research/audit-findings-digest.md is what records R1 fix-reco-ranking-and-stats as FIXED 2026-08-05 with P0-1, P0-2, P1-3 and P1-4 named, and it is the file two child tasks are measured against. Also realtime-chain-diagnosis.md, reco-signal-program.md and reco-signals-audit.md."
+  }
+}

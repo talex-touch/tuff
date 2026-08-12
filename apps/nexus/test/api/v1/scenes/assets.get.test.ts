@@ -66,7 +66,9 @@ describe('/api/v1/scenes/assets/:key', () => {
     const governanceResourceId = buildSceneAssetGovernanceResourceId(key)
     h3Mocks.getRouterParam.mockReturnValue(key)
 
-    await uploadSceneAsset(event, key, Buffer.from('scene-asset-bytes'), 'image/png')
+    await uploadSceneAsset(event, key, Buffer.from('scene-asset-bytes'), 'image/png', {
+      ownerId: 'scene-asset-reader@example.com',
+    })
 
     const result = await assetHandler(event)
     const rows = await listPlatformGovernanceEvents(event, {
@@ -102,6 +104,39 @@ describe('/api/v1/scenes/assets/:key', () => {
     ]))
     expect(JSON.stringify(rows)).not.toContain(key)
     expect(JSON.stringify(rows)).not.toContain('scene-asset-reader@example.com')
+  })
+
+  it('refuses an asset belonging to someone else', async () => {
+    // The test above is named for downloading a *private* asset but only ever proved that an
+    // authenticated caller gets bytes back. That passed just as well when the endpoint served
+    // any key to anyone (#898), so the name was doing work the assertions were not.
+    const key = `scene_run_${crypto.randomUUID()}-text.translate-other-${crypto.randomUUID()}.png`
+    const event = makeEvent(key)
+    h3Mocks.getRouterParam.mockReturnValue(key)
+
+    await uploadSceneAsset(event, key, Buffer.from('someone-elses-bytes'), 'image/png', {
+      ownerId: 'scene-asset-owner@example.com',
+    })
+
+    // 404, not 403 -- a distinguishable answer would confirm the key exists.
+    await expect(assetHandler(event)).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Scene asset not found.',
+    })
+    expect(h3Mocks.send).not.toHaveBeenCalled()
+  })
+
+  it('refuses an asset stored before ownership was recorded', async () => {
+    const key = `scene_run_${crypto.randomUUID()}-text.translate-legacy-${crypto.randomUUID()}.png`
+    const event = makeEvent(key)
+    h3Mocks.getRouterParam.mockReturnValue(key)
+
+    await uploadSceneAsset(event, key, Buffer.from('legacy-bytes'), 'image/png')
+
+    await expect(assetHandler(event)).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Scene asset not found.',
+    })
   })
 
   it('rejects missing and path-like scene asset keys before storage reads', async () => {

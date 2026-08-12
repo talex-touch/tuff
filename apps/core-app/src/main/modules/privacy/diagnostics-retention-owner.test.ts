@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client'
 import fs, { mkdir, readdir, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { sanitizeTelemetryFailureCode } from '../sentry/telemetry-upload-stats-store'
 import { createDiagnosticsRetentionOwner } from './owners/diagnostics-retention-owner'
 import { DEFAULT_PRIVACY_RETENTION_POLICY, PRIVACY_RETENTION_DAY_MS } from './retention-policy'
@@ -265,5 +265,79 @@ describe('diagnostics retention owner', () => {
 
     expect(result).toMatchObject({ ok: true, deletedItemCount: 1 })
     expect(cutoffs).toEqual([CUTOFF_MS])
+  })
+
+  it('skips the telemetry retention DB-write inside the startup degrade window without failing the run', async () => {
+    const { client, directory } = await createPrivacyTestClient('diagnostics-startup-window')
+    await createDiagnosticsTables(client)
+    const logDirectory = join(directory, 'logs')
+    await mkdir(logDirectory, { recursive: true })
+    await client.execute({
+      sql: `INSERT INTO analytics_snapshots (window_type, timestamp, metrics, created_at) VALUES ('daily', ?, 'old-metrics', ?)`,
+      args: [CUTOFF_MS - 1, CUTOFF_MS - 1]
+    })
+    const clearFailureBefore = vi.fn(async () => 1)
+    const owner = createDiagnosticsRetentionOwner({
+      client,
+      logDirectory,
+      telemetryLifecycle: { clearFailureBefore },
+      isStartupDegradeWindowActive: () => true
+    })
+
+    const result = await owner.delete(
+      {
+        category: 'diagnostics',
+        mode: 'retention',
+        policy: DEFAULT_PRIVACY_RETENTION_POLICY.categories.diagnostics,
+        nowMs: NOW_MS
+      },
+      new AbortController().signal
+    )
+
+    // Deliberate skip: only the telemetry write is gated (the paged analytics
+    // delete still ran) and the run reports success, not failure/partial.
+    expect(clearFailureBefore).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      ok: true,
+      code: 'PRIVACY_OWNER_COMPLETED',
+      deletedItemCount: 1,
+      failedItemCount: 0,
+      partial: false,
+      cancelled: false
+    })
+    expect(await count(client, 'analytics_snapshots')).toBe(0)
+  })
+
+  it('never gates user-requested manual category deletes on the startup degrade window', async () => {
+    const { client, directory } = await createPrivacyTestClient('diagnostics-manual-window')
+    await createDiagnosticsTables(client)
+    const logDirectory = join(directory, 'logs')
+    await mkdir(logDirectory, { recursive: true })
+    const clearFailureBefore = vi.fn(async () => 1)
+    const owner = createDiagnosticsRetentionOwner({
+      client,
+      logDirectory,
+      telemetryLifecycle: { clearFailureBefore },
+      isStartupDegradeWindowActive: () => true
+    })
+
+    const result = await owner.delete(
+      {
+        category: 'diagnostics',
+        mode: 'manual-delete',
+        confirmation: 'delete-selected-data',
+        policy: DEFAULT_PRIVACY_RETENTION_POLICY.categories.diagnostics,
+        nowMs: NOW_MS
+      },
+      new AbortController().signal
+    )
+
+    expect(clearFailureBefore).toHaveBeenCalledTimes(1)
+    expect(clearFailureBefore).toHaveBeenCalledWith(
+      Number.MAX_SAFE_INTEGER,
+      expect.any(Number),
+      expect.any(AbortSignal)
+    )
+    expect(result).toMatchObject({ ok: true, deletedItemCount: 1 })
   })
 })

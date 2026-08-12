@@ -1,0 +1,30 @@
+{
+  "id": "home-tool-loop",
+  "name": "home-tool-loop",
+  "title": "首页工具调用链路与交互式 UI 工具",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-ai-toolchain-suite",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Run the end-to-end acceptance against a real pi: the four-state tool card streaming through to a table, a widget tool returning an interactive chart in the sandbox with controlled dimensions, a tuff plugin feature round-tripping through the extension bridge, and a denied confirmation leaving the session alive while stop terminates the loop without orphans.",
+    "blocker": "A real pi runtime. Four of the five criteria are end-to-end behaviours of a live tool loop.",
+    "evidence": "AC5, the tools-disabled path, has the closest thing to coverage: pi-cli-runtime.test.ts asserts that --no-tools is kept without an allowlist and that exactly the allowlisted tools are enabled, and the ai suites hold the governance side - an allowed stable tool ID routed while a worker-confirmed cancellation is rejected, a single-use approval fingerprint, sensitive tool output redacted and capped before crossing the worker boundary, and a started but uncompleted call surfaced as interrupted rather than executed. Measured: 559 passed, 1 skipped / 58 files."
+  }
+}

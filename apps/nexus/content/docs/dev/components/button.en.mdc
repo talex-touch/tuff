@@ -161,8 +161,8 @@ rows:
     type:
       kind: enum
       enums: [primary, secondary, ghost, danger, success, warning, info, flat, bare]
-    default: '-'
-    description: 'Visual variant'
+    default: "'secondary'"
+    description: 'Visual style variant. Falls back to `secondary` when unset and not derived from `type`.'
   - parameter: type
     type:
       kind: enum
@@ -174,11 +174,11 @@ rows:
       kind: enum
       enums: [sm, md, lg, large, small, mini]
     default: "'md'"
-    description: 'Button size'
+    description: 'Button size. Use `lg`/`large` for primary page actions, `sm`/`small`/`mini` for table rows and compact toolbars.'
   - parameter: block
     type: boolean
     default: 'false'
-    description: 'Block-level (full width)'
+    description: 'Block-level button that fills the parent width. Common for mobile form submits and drawer footer actions.'
   - parameter: plain
     type: boolean
     default: 'false'

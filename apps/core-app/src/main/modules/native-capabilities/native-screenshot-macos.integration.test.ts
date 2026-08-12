@@ -5,6 +5,28 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { NativeTransport } from './native-transport'
 
+/**
+ * A manual test, and now labelled as one (#927).
+ *
+ * TUFF_SCREENSHOT_MACOS_INTEGRATION is set in no workflow, script or mise task, so this had
+ * never run anywhere — it read as a CI guarantee while being permanently dormant. It is not
+ * enabled in CI because it needs a real display and macOS screen-recording permission, which
+ * a hosted runner does not grant; turning it on there would produce a failure that says
+ * nothing about the code.
+ *
+ * Run it on a Mac with permission granted:
+ *
+ *   TUFF_SCREENSHOT_MACOS_INTEGRATION=1 pnpm -C apps/core-app exec vitest run \
+ *     src/main/modules/native-capabilities/native-screenshot-macos.integration.test.ts
+ *
+ * Add TUFF_SCREENSHOT_MACOS_REQUIRE_AX=1 to also assert the accessibility hit-test path,
+ * which needs Accessibility permission on top.
+ *
+ * The part that does not need a display — that captured bytes travel as attachments and never
+ * enter the JSON control channel — was extracted into
+ * native-transport-image-framing.test.ts, which runs everywhere on every run. That was the
+ * guarantee worth rescuing from this file's dormancy.
+ */
 const enabled =
   process.platform === 'darwin' && process.env.TUFF_SCREENSHOT_MACOS_INTEGRATION === '1'
 const requireAx = process.env.TUFF_SCREENSHOT_MACOS_REQUIRE_AX === '1'
@@ -223,10 +245,17 @@ describe('nativeTransport real macOS screenshot integration', () => {
         expect(first.done).toBe(false)
         expect(first.value.value.pixelFormat).toBe('bgra8-premultiplied')
         expect(first.value.value.stride).toBe(first.value.value.width * 4)
-        expect(first.value.attachments.reduce((total, part) => total + part.length, 0)).toBe(
-          first.value.value.stride * first.value.value.height
-        )
-        expect(first.value.attachments.every((part) => part.length <= 32 * 1024 * 1024)).toBe(true)
+        expect(
+          first.value.attachments.reduce(
+            (total: number, part: { length: number }) => total + part.length,
+            0
+          )
+        ).toBe(first.value.value.stride * first.value.value.height)
+        expect(
+          first.value.attachments.every(
+            (part: { length: number }) => part.length <= 32 * 1024 * 1024
+          )
+        ).toBe(true)
         await iterator.return?.()
         expect((await frames.closed).kind).toBe('cancelled')
 

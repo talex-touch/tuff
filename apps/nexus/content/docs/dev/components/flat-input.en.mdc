@@ -65,7 +65,7 @@ Use `area` for short notes, not for autosizing editors. The component renders a 
 - Without an `icon` prop or default slot, the root gets `none-prefix` and uses a single-column layout.
 - The default slot replaces icon rendering; it is prefix content, not a suffix/action slot.
 - `password=true` renders `input type="password"` and enables Caps Lock detection on keydown.
-- Caps Lock detection is based on key code plus `shiftKey`; the hint is informational and only appears in password mode.
+- Caps Lock detection reads the live modifier state via `KeyboardEvent.getModifierState('CapsLock')` (no keyCode/`shiftKey` inference); the hint is informational and only appears in password mode.
 - `area=true` renders `textarea` instead of `input` and adds the `area` class for fixed height.
 - `nonWin=true` removes the `win` class and therefore the Windows-style focus treatment.
 - The component does not expose `disabled`, `readonly`, `name`, or validation props; use a fuller input primitive when those contracts are required.

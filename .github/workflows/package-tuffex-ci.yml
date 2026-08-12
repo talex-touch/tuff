@@ -2,11 +2,9 @@ name: Tuffex Package CI
 
 on:
   pull_request:
-    branches:
-      - master
-      - main
     paths:
       - "packages/tuffex/**"
+      - "packages/utils/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/package-tuffex-ci.yml"
@@ -17,6 +15,7 @@ on:
       - main
     paths:
       - "packages/tuffex/**"
+      - "packages/utils/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/package-tuffex-ci.yml"
@@ -31,8 +30,12 @@ jobs:
     with:
       package-name: tuffex
       package-path: packages/tuffex
-      run-typecheck: false # Add if typecheck script exists
-      run-lint: false # Add if lint script exists
-      run-test: false # Add if test script exists
+      run-typecheck: true
+      run-lint: true
+      run-test: true
       run-build: true
       build-command: pnpm build
+      # Only the two that pass today. audit:types is broken by construction and audit:size
+      # has been over budget since well before this change -- both tracked in #1555, and
+      # wiring them here would land a gate that is red on every PR.
+      post-build-command: pnpm audit:exports && pnpm audit:exports:self-test && pnpm audit:readme && pnpm audit:readme:self-test && pnpm audit:types && pnpm audit:types:self-test && pnpm audit:size && pnpm audit:size:self-test

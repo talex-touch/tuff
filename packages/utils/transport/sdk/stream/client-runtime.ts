@@ -186,7 +186,13 @@ export async function startClientStream<TReq, TChunk>(
         raw,
       );
       if (data?.error) {
+        // A handler may report failure on the data channel rather than the error channel.
+        // Without this cleanup the controller stayed in adapter.streamControllers and the
+        // data/end/error registrations for this streamId stayed attached forever, so every
+        // such failure leaked one controller and three listeners. Matches the dedicated error
+        // handler below and the MessagePort path above.
         options.onError?.(new Error(data.error));
+        cleanup();
         return;
       }
 

@@ -46,12 +46,20 @@ describe('dashboard notification inbox UI contract', () => {
     expect(page).toContain('window.Notification.requestPermission()')
     expect(page).toContain('new window.Notification')
     expect(page).toContain("tag: 'tuff-dashboard-notification-test'")
-    expect(page).toContain("navigator.serviceWorker.register('/notification-sw.js')")
+    // The page no longer registers the worker itself: doing so with no scope claimed '/' and
+    // fought the PWA worker for it. It delegates instead, and the URL and scope of that
+    // registration are asserted in push-service-worker.test.ts.
+    expect(page).toContain("import { registerPushServiceWorker } from '~/utils/push-service-worker'")
+    expect(page).toContain('registerPushServiceWorker(navigator.serviceWorker)')
+    expect(page).not.toContain('navigator.serviceWorker.register(')
     expect(page).toContain('registration.pushManager.subscribe')
     expect(page).toContain('urlBase64ToArrayBuffer(browserPushPublicKey.value)')
     expect(page).toContain('runtimeConfig.public?.notificationWebPush?.publicKey')
     expect(page).toContain('browserPushStatusLabel')
-    expect(page).toContain('browserNotificationActionDisabled')
+    // Assert the guard condition, not the identifier that used to hold it:
+    // `browserNotificationActionDisabled` was a computed and is now inlined on
+    // the button, so grepping the name failed while the behaviour was intact.
+    expect(page).toMatch(/:disabled="browserNotificationBusy[^"]*browserNotificationPermission === 'denied'[^"]*browserNotificationPermission === 'unsupported'"/)
     expect(page).toContain('browserNotificationPermissionLabel')
     expect(page).toContain('dashboard.notifications.browser.testSent')
     expect(page).toContain('dashboard.notifications.browser.webPushSubscribed')

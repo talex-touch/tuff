@@ -78,6 +78,7 @@ import {
   type ClipboardPollingSettings
 } from './clipboard/clipboard-polling-policy'
 import { registerClipboardHostService } from './clipboard/clipboard-host-service'
+import type { ClipboardHostService } from './clipboard/clipboard-host-service'
 import {
   ClipboardStageBEnrichment,
   type ClipboardStageBJob
@@ -183,6 +184,17 @@ export class ClipboardModule extends BaseModule {
   })
   private readonly metaPersistence = new ClipboardMetaPersistence({
     getDatabase: () => this.db,
+    resolveAuxDb: () => {
+      // Enqueue-time resolution (R3): refresh the module-wide capture so
+      // reads and every other this.db write stay coherent with the write
+      // target once the background aux init completes.
+      const db = databaseModule.getAuxDb()
+      if (db !== this.db) {
+        this.db = db
+        this.historyPersistence.setDatabase(db)
+      }
+      return { db, isAux: databaseModule.isAuxReady() }
+    },
     isDestroyed: () => this.isDestroyed,
     logDebug: (message, data?: LogOptions) => {
       clipboardLog.debug(message, data)
@@ -861,8 +873,8 @@ export class ClipboardModule extends BaseModule {
       metadata
     }
 
-    const inserted = await this.metaPersistence.withDbWrite('clipboard.custom.persist', () =>
-      this.db!.insert(clipboardHistory).values(record).returning()
+    const inserted = await this.metaPersistence.withDbWrite('clipboard.custom.persist', (db) =>
+      db.insert(clipboardHistory).values(record).returning()
     )
     if (inserted.length === 0) {
       return null
@@ -1198,7 +1210,9 @@ export class ClipboardModule extends BaseModule {
   private installClipboardHostService(): void {
     this.clipboardHostServiceDisposer?.()
     this.clipboardHostServiceDisposer = registerClipboardHostService(
-      Object.freeze({
+      // Object.freeze<T> infers T from its argument, so registerClipboardHostService's own
+      // parameter type never reaches this literal and every handler took `any` (#548).
+      Object.freeze<ClipboardHostService>({
         read: async (request, _context, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
           if (request.op === 'text') {
@@ -1210,19 +1224,25 @@ export class ClipboardModule extends BaseModule {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
           if (request.op === 'clear') clipboard.clear()
           else {
+            // `files` is destructured out rather than spread-then-overridden: a conditional
+            // spread does not narrow what the first spread already contributed, so the result
+            // kept `readonly string[]` and never matched ClipboardWriteRequest. Invisible while
+            // the parameter was `any` (#548).
+            const { files, ...content } = request.content
             await this.write({
-              ...request.content,
-              ...(request.content.files ? { files: [...request.content.files] } : {})
+              ...content,
+              ...(files ? { files: [...files] } : {})
             })
           }
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
         },
         copyAndPaste: async (request, context, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          const { files, ...rest } = request
           const result = await this.handleCopyAndPasteRequest(
             {
-              ...request,
-              ...(request.files ? { files: [...request.files] } : {})
+              ...rest,
+              ...(files ? { files: [...files] } : {})
             },
             { plugin: context } as HandlerContext
           )
@@ -1267,10 +1287,12 @@ export class ClipboardModule extends BaseModule {
         .map((filePath) => pathToFileURL(filePath).toString())
         .join('\n')
       const buffer = Buffer.from(fileUrlContent, 'utf8')
+      // Same ordering rule as clipboard-autopaste-automation: clipboard.write() replaces
+      // everything, so the file formats have to be written after it, not before (#782).
+      clipboard.write({ text: resolvedPaths[0] ?? '' })
       for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
         clipboard.writeBuffer(format, buffer)
       }
-      clipboard.write({ text: resolvedPaths[0] ?? '' })
       this.clipboardHelper?.primeFiles(resolvedPaths)
       this.lastSuccessfulClipboardScanAt = Date.now()
       return

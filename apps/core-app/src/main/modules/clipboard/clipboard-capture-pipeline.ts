@@ -34,6 +34,7 @@ import {
   type ClipboardPhaseDurations
 } from './clipboard-phase-diagnostics'
 import { createClipboardFreshnessState } from './clipboard-freshness'
+import { isClipboardCaptureSuppressed } from './clipboard-capture-suppression'
 
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_SLOW_THRESHOLD_MS = 200
@@ -76,9 +77,16 @@ export class ClipboardCapturePipeline {
   constructor(private readonly options: ClipboardCapturePipelineOptions) {}
 
   public async process(source: ClipboardCaptureSource): Promise<void> {
+    // The app writes to the clipboard itself during selection capture. Those writes are not user
+    // copies and must not reach the history (#769).
+    if (isClipboardCaptureSuppressed()) {
+      return
+    }
+
     const helper = this.options.getClipboardHelper()
-    const db = this.options.getDatabase()
-    if (!helper || !db) {
+    // Database readiness gate only; the persist itself resolves its write
+    // handle at enqueue time through metaPersistence.withDbWrite.
+    if (!helper || !this.options.getDatabase()) {
       return
     }
 
@@ -89,7 +97,6 @@ export class ClipboardCapturePipeline {
     const previousScanAt = this.options.getLastSuccessfulScanAt()
     try {
       await this.captureAndPersist({
-        db,
         helper,
         source,
         observedAt,
@@ -107,14 +114,12 @@ export class ClipboardCapturePipeline {
   }
 
   private async captureAndPersist({
-    db,
     helper,
     source,
     observedAt,
     previousScanAt,
     phaseDurations
   }: {
-    db: LibSQLDatabase<typeof schema>
     helper: ClipboardHelper
     source: ClipboardCaptureSource
     observedAt: number
@@ -301,7 +306,6 @@ export class ClipboardCapturePipeline {
     await this.yieldBeforePersist(phaseDurations)
 
     const persisted = await this.persistRecord({
-      db,
       item,
       record,
       phaseDurations
@@ -515,12 +519,10 @@ export class ClipboardCapturePipeline {
   }
 
   private async persistRecord({
-    db,
     item,
     record,
     phaseDurations
   }: {
-    db: LibSQLDatabase<typeof schema>
     item: PendingClipboardItem
     record: PendingClipboardItem & { metadata: string | null; timestamp: Date }
     phaseDurations: ClipboardPhaseDurations
@@ -531,7 +533,7 @@ export class ClipboardCapturePipeline {
     try {
       const queueStats = dbWriteScheduler.getStats()
       inserted = await trackPhaseAsync(phaseDurations, 'db.persistInsert', async () => {
-        return await this.options.metaPersistence.withDbWrite('clipboard.persist', () =>
+        return await this.options.metaPersistence.withDbWrite('clipboard.persist', (db) =>
           db.insert(clipboardHistory).values(record).returning()
         )
       })

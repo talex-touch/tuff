@@ -187,8 +187,10 @@ export class FileProviderAssetService {
     try {
       const thumbnailExtension = alias(fileExtensions, 'thumbnail_extension')
       const thumbnailStatusExtension = alias(fileExtensions, 'thumbnail_status_extension')
+      // Candidate ids feed thumbnail extension WRITES (routed to the worker's
+      // home under the split) — the ids must come from that same home.
       const candidates = await dbUtils
-        .getDb()
+        .getFileIndexReadDb()
         .select({
           id: filesSchema.id,
           path: filesSchema.path,

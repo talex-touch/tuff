@@ -364,7 +364,6 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
   readonly name = 'System Actions'
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files, TuffInputType.Html]
   readonly priority = 'fast' as const
-  readonly expectedDuration = 30
 
   private context: ProviderContext | null = null
 

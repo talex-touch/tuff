@@ -1,0 +1,35 @@
+{
+  "id": "app-shell-ai-redesign",
+  "name": "app-shell-ai-redesign",
+  "title": "app 壳层与设置界面 AI 化全面重构",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-04-shell-fixed-frame",
+    "08-04-settings-ia-primitives",
+    "08-04-settings-rewrite",
+    "08-04-home-conversation"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Continue through its children. Two of them - 08-04-shell-fixed-frame and 08-04-settings-ia-primitives - are in progress with their own records, and their remaining criteria are board measurements needing a running app.",
+    "blocker": "The same running app its children need, for the visual acceptance.",
+    "evidence": "design.md is the produced artefact and is measured rather than estimated: it states the values come from the design boards iqbKR (settings v2) and JVvAr (home v2) in docs/design/corebox/v2.5.0.pen, not from estimation."
+  }
+}

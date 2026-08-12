@@ -278,7 +278,13 @@ export const itemUsageStats = sqliteTable(
     pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
     retentionIdx: index('item_usage_stats_retention_idx').on(
       sql`MAX(COALESCE(${table.lastSearched}, 0), COALESCE(${table.lastExecuted}, 0), COALESCE(${table.lastCancelled}, 0), ${table.updatedAt})`
-    )
+    ),
+    // The recommendation candidate queries order by these and take a small
+    // LIMIT. Unindexed they were `SCAN item_usage_stats` + `USE TEMP B-TREE FOR
+    // ORDER BY` over a table that grows by one row per distinct item ever seen
+    // (#677). Plain indexes are enough — SQLite scans them backwards for DESC.
+    executeCountIdx: index('item_usage_stats_execute_count_idx').on(table.executeCount),
+    lastExecutedIdx: index('item_usage_stats_last_executed_idx').on(table.lastExecuted)
   })
 )
 
@@ -610,6 +616,31 @@ export const recommendationCache = sqliteTable(
   (table) => ({
     expiresIdx: index('idx_recommendation_cache_expires').on(table.expiresAt),
     retentionIdx: index('recommendation_cache_retention_idx').on(table.createdAt)
+  })
+)
+
+/**
+ * 推荐曝光指标表 (aux-homed)
+ *
+ * Local-only evaluation groundwork: per-day impressions and clicks per top-k
+ * bucket, so recommendation changes can be judged by hit-rate@k instead of
+ * intuition. Counts only — no item ids, no content, never leaves the device.
+ */
+export const recommendationExposureDaily = sqliteTable(
+  'recommendation_exposure_daily',
+  {
+    day: integer('day').notNull(), // 天桶 (epoch days)
+    surface: text('surface').notNull(), // 'core-box' | 'division-box' | ...
+    k: integer('k').notNull(), // top-k 位置桶
+    impressions: integer('impressions').notNull().default(0),
+    clicks: integer('clicks').notNull().default(0),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.day, table.surface, table.k] }),
+    dayIdx: index('idx_recommendation_exposure_daily_day').on(table.day)
   })
 )
 
@@ -1647,5 +1678,53 @@ export const aiAutomationRuns = sqliteTable(
       table.createdAt
     ),
     orchestratorIdx: index('idx_ai_automation_runs_orchestrator').on(table.orchestratorRunId)
+  })
+)
+
+// =============================================================================
+// Home conversations
+// =============================================================================
+
+/**
+ * A home-surface conversation thread.
+ *
+ * The title is stored verbatim: the top bar and the sidebar both ellipsise on overflow, and a
+ * string truncated on the way in could never be un-truncated once the display width changed.
+ */
+export const conversations = sqliteTable(
+  'conversations',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull().default(''),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    // The sidebar lists newest-first and buckets by time, so every read is ordered by this column.
+    updatedIdx: index('idx_conversations_updated').on(table.updatedAt)
+  })
+)
+
+export const conversationMessages = sqliteTable(
+  'conversation_messages',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    content: text('content').notNull().default(''),
+    status: text('status').notNull(),
+    /** JSON `ConversationTurnMeta` — provider, model, token usage and latency for the turn. */
+    meta: text('meta'),
+    /**
+     * Explicit ordering rather than `created_at`: two messages of one turn are written in the same
+     * millisecond, and a retry rewrites a message without moving it in the thread.
+     */
+    seq: integer('seq').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    threadIdx: index('idx_conversation_messages_thread').on(table.conversationId, table.seq)
   })
 )

@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer'
 import { platform } from 'node:process'
 import { clipboard, Menu, nativeImage, screen } from 'electron'
 import { TouchWindow } from '../../../core/touch-window'
+import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 
 export interface ImageTranslatePinWindowPayload {
   translatedImageBase64: string
@@ -387,11 +388,7 @@ export async function openImageTranslatePinWindow(
     frame: true,
     title: 'Image Translation',
     alwaysOnTop: true,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    }
+    webPreferences: buildWindowWebPreferences('app')
   })
 
   touchWindow.window.setAlwaysOnTop(true, 'floating')

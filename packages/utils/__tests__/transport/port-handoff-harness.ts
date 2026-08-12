@@ -11,6 +11,7 @@ type NativeTransferList = NonNullable<Parameters<MessagePort['postMessage']>[1]>
 
 interface PortHandoffHarnessOptions {
   throwOnPostMessage?: boolean
+  location?: Pick<Location, 'origin' | 'protocol'>
 }
 
 export interface PortHandoffHarness {
@@ -18,8 +19,11 @@ export interface PortHandoffHarness {
     on: (channel: string, listener: IpcListener) => void
     removeListener: (channel: string, listener: IpcListener) => void
   }
-  targetWindow: Pick<Window, 'addEventListener' | 'postMessage' | 'removeEventListener'>
+  targetWindow: Pick<Window, 'addEventListener' | 'postMessage' | 'removeEventListener'> & {
+    location?: Pick<Location, 'origin' | 'protocol'>
+  }
   postedMessages: unknown[]
+  postedTargetOrigins: string[]
   emit: (channel: string, payload: unknown, ports?: readonly MessagePort[]) => void
   dispatchFrom: (source: unknown, data: unknown, ports?: readonly MessagePort[]) => void
   dispose: () => void
@@ -44,6 +48,7 @@ export function createPortHandoffHarness(
   const ipcListeners = new Map<string, IpcListener>()
   const windowListeners = new Map<unknown, WindowListener>()
   const postedMessages: unknown[] = []
+  const postedTargetOrigins: string[] = []
   const delivery = new MessageChannel()
 
   const targetWindowImplementation = {
@@ -58,10 +63,12 @@ export function createPortHandoffHarness(
         windowListeners.delete(listener)
       }
     },
-    postMessage(data: unknown, _targetOrigin: string, transfer: readonly unknown[] = []): void {
+    location: options.location ?? { origin: 'https://app.example', protocol: 'https:' },
+    postMessage(data: unknown, targetOrigin: string, transfer: readonly unknown[] = []): void {
       if (options.throwOnPostMessage) {
         throw new Error('window delivery unavailable')
       }
+      postedTargetOrigins.push(targetOrigin)
       postedMessages.push(data)
       const nativeTransferList = transfer as NativeTransferList
       delivery.port1.postMessage(data, nativeTransferList)
@@ -70,7 +77,7 @@ export function createPortHandoffHarness(
   const targetWindow = targetWindowImplementation as unknown as Pick<
     Window,
     'addEventListener' | 'postMessage' | 'removeEventListener'
-  >
+  > & { location?: Pick<Location, 'origin' | 'protocol'> }
 
   delivery.port2.addEventListener('message', (event: Event) => {
     if (!('data' in event) || !('ports' in event) || !Array.isArray(event.ports)) {
@@ -98,6 +105,7 @@ export function createPortHandoffHarness(
     },
     targetWindow,
     postedMessages,
+    postedTargetOrigins,
     emit(channel, payload, ports) {
       ipcListeners.get(channel)?.({ ports }, payload)
     },

@@ -73,7 +73,9 @@ describe('SQLite retry exhaustion observer', () => {
               retries: 0
             }
           ),
-        { priority: 'interactive', dropPolicy: 'none' }
+        // busyRetries: 0 disables the scheduler's own busy re-enqueue so this
+        // test keeps pinning the inner withSqliteRetry exhaustion passthrough.
+        { priority: 'interactive', dropPolicy: 'none', busyRetries: 0 }
       )
     ).rejects.toBe(error)
 

@@ -34,6 +34,29 @@ describe('txSwitch', () => {
     expect(wrapper.emitted('change')?.[0]).toEqual([true])
   })
 
+  it('always exposes an accessible name', () => {
+    const wrapper = mount(TxSwitch)
+
+    expect(wrapper.attributes('aria-label')).toBe('Toggle')
+  })
+
+  it('accepts a custom accessible name', () => {
+    const wrapper = mount(TxSwitch, {
+      props: { ariaLabel: 'Enable notifications' },
+    })
+
+    expect(wrapper.attributes('aria-label')).toBe('Enable notifications')
+  })
+
+  it('prefers aria-labelledby over aria-label when a visible label exists', () => {
+    const wrapper = mount(TxSwitch, {
+      props: { ariaLabelledby: 'notifications-label' },
+    })
+
+    expect(wrapper.attributes('aria-labelledby')).toBe('notifications-label')
+    expect(wrapper.attributes('aria-label')).toBeUndefined()
+  })
+
   it('does not emit events when disabled', async () => {
     const wrapper = mount(TxSwitch, {
       props: {

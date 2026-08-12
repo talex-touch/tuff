@@ -1,20 +1,75 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      script-src carries no 'unsafe-inline' and no wildcard: that combination is what let a
+      javascript: URL or an inline handler surviving the markdown sanitiser run inside the
+      privileged renderer, which holds the contextBridge ipcRenderer and is granted every
+      permission by channel-guard (#913).
+
+      'unsafe-eval' stays, and deliberately. The plugin widget runtime executes widget code
+      through `new Function` in widget-registry.ts, so removing it does not harden the
+      renderer — it removes plugin widgets. Replacing that executor is its own change.
+
+      default-src and connect-src are still wildcards. Narrowing them needs an inventory of
+      what the renderer actually reaches at runtime (user-configured AI provider origins,
+      the Vite dev server and its websocket) that a static reading cannot produce; tracked
+      on the issue rather than guessed at here.
+
+      object-src, frame-src and worker-src are set because they were falling through to
+      `default-src *` while nothing uses them: the renderer contains no <object>, <embed> or
+      <iframe>, and no `new Worker`. worker-src keeps 'self' blob: rather than 'none' because a
+      dependency may create one at runtime — that still excludes remote origins, which is the
+      part that mattered (#689).
+    -->
     <meta
       http-equiv="Content-Security-Policy"
       content="
     default-src * blob: data: tfile: remix:;
-    script-src * 'unsafe-inline' 'unsafe-eval' blob: data:;
+    script-src 'self' 'unsafe-eval' blob: data:;
     connect-src * ws: wss: blob: data: tfile:;
     img-src * data: blob: tfile: file: remix:;
     font-src * data: blob:;
     style-src * 'unsafe-inline' blob: data:;
     style-src-elem * 'unsafe-inline' blob: data:;
     media-src * blob: data: tfile:;
+    object-src 'none';
+    frame-src 'none';
+    worker-src 'self' blob:;
+  "
+    />
+
+    <!--
+      The candidate narrow policy, in report-only mode. It blocks nothing; it exists to produce
+      the runtime inventory that narrowing `default-src` and `connect-src` for real has been
+      waiting on (#689).
+
+      Reading the renderer statically says those wildcards are close to unused. There are three
+      `fetch`/`axios` matches in the whole renderer and two of them are comments in i18n.ts; the
+      only real one is `attachment-payload.ts`, which reads `blob:` URLs and already refuses any
+      other scheme. `nexus-store-provider.ts` resolves a user-configurable base URL but does not
+      fetch it — that request is made in main. There is no `new WebSocket` and no `EventSource`,
+      and the widget sandbox denies `sendBeacon` outright. What genuinely remains is Sentry, which
+      is initialised in the renderer, and the dev server.
+
+      Static reading is exactly what cannot settle this, though: a dependency may reach for
+      something at runtime that no literal in the tree mentions. So this reports rather than
+      enforces, `securitypolicyviolation` is logged from the renderer entry, and the wildcards
+      above stay until that log is empty in real use.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy-Report-Only"
+      content="
+    default-src 'self' blob: data: tfile: remix:;
+    connect-src 'self' https://o4508024637620224.ingest.us.sentry.io blob: data: tfile: ws://localhost:* http://localhost:*;
+    img-src 'self' data: blob: tfile: file: remix:;
+    font-src 'self' data: blob:;
+    style-src 'self' 'unsafe-inline' blob: data:;
+    style-src-elem 'self' 'unsafe-inline' blob: data:;
+    media-src 'self' blob: data: tfile:;
   "
     />
 

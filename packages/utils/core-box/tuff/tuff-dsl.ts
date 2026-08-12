@@ -676,9 +676,18 @@ export interface TuffScoring {
 
   /**
    * 最终综合得分
-   * @description 综合各项因素计算的最终分数
+   * @description
+   * 综合各项因素计算的最终分数。Provider 可按 0-1 写入初始值，排序器会在排序后
+   * 回写自己算出的绝对排序分（量级远大于 1），供渲染层在后续批次到达时用同一把
+   * 尺子重排，因此不要按 0-1 去解释排序后的取值。
    */
   final?: number
+
+  /**
+   * 置顶标记
+   * @description 由排序器在排序后回写，让渲染层复用同一套置顶分区规则
+   */
+  pinned?: boolean
 
   /**
    * 排序权重
@@ -1155,8 +1164,15 @@ export interface TuffMeta {
 
   /** 推荐来源标记 */
   recommendation?: {
-    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
+    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context' | 'cold-start'
     score?: number
+    /**
+     * Ranking split: `stableScore` is the cacheable half (time/frequency/
+     * recency/semantic), `volatileScore` the per-request context half. Kept on
+     * the item so re-ranking a cached list stays idempotent.
+     */
+    stableScore?: number
+    volatileScore?: number
   }
 
   /**
@@ -1585,14 +1601,6 @@ export interface ISearchProvider<C> {
    * @default 'deferred'
    */
   readonly priority?: 'fast' | 'deferred'
-
-  /**
-   * Expected search duration in milliseconds
-   * @description Used for sorting providers within the same layer and timeout estimation.
-   * Providers with lower expected duration run first within their layer.
-   * @default 1000
-   */
-  readonly expectedDuration?: number
 
   /**
    * Core search method (PULL mode).

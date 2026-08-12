@@ -91,10 +91,15 @@ function setupThemeObserver(): void {
   themeObserver = new MutationObserver(() => {
     syncAutoTheme()
   })
-  themeObserver.observe(root, {
+  const observerInit: MutationObserverInit = {
     attributes: true,
     attributeFilter: ['class', 'data-theme'],
-  })
+  }
+  themeObserver.observe(root, observerInit)
+  // resolveAutoTheme also reads theme signals off <body>, so a body-driven dark-mode
+  // toggle has to be observed too — the read surface and the watched surface must match.
+  if (document.body)
+    themeObserver.observe(document.body, observerInit)
 }
 
 onMounted(() => {
@@ -150,7 +155,6 @@ const resolvedTheme = computed<'light' | 'dark'>(() => {
 </template>
 
 <style lang="scss">
-@import './github-markdown.css';
 
 .tx-markdown-view {
   font-size: 14px;

@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { evaluateWebhookUrl } from './webhookUrlPolicy'
 import type { PlatformGovernanceConfig } from './platformGovernanceStore'
 import type { NotificationCredentialPayload } from './notificationCredentialStore'
 import { Buffer } from 'node:buffer'
@@ -453,6 +454,21 @@ function createSendResult(reason: string, statusCode: number | null = null): Not
   }
 }
 
+/**
+ * Re-checks a stored webhook URL immediately before dispatch.
+ *
+ * Validation at write time does not cover credentials stored before it existed, and this is
+ * the call that actually leaves the server, so it is the one that has to be safe. Returns a
+ * failed send result rather than throwing, so the refusal is recorded on the delivery instead
+ * of surfacing as an unhandled error (#899).
+ */
+function assertDispatchableWebhookUrl(url: string): NotificationSendResult | null {
+  const decision = evaluateWebhookUrl(url)
+  if (decision.allowed)
+    return null
+  return createSendResult(`webhook-url-rejected:${decision.reason}`, null)
+}
+
 function createHttpSendResult(statusCode: number): NotificationSendResult {
   return createSendResult(statusCode >= 200 && statusCode < 300 ? 'sent' : 'adapter-http-error', statusCode)
 }
@@ -655,6 +671,10 @@ async function sendWebhookNotification(
   if (credential.signingSecret)
     headers['X-Tuff-Signature'] = signBody(body, credential.signingSecret)
 
+  const rejected = assertDispatchableWebhookUrl(credential.url)
+  if (rejected)
+    return rejected
+
   const response = await networkClient.request({
     method: 'POST',
     url: credential.url,
@@ -701,6 +721,10 @@ async function sendGenericEmailNotification(
   }
   if (credential.signingSecret)
     headers['X-Tuff-Signature'] = signBody(body, credential.signingSecret)
+
+  const rejected = assertDispatchableWebhookUrl(credential.url)
+  if (rejected)
+    return rejected
 
   const response = await networkClient.request({
     method: 'POST',
@@ -802,6 +826,10 @@ async function sendWebPushRelayNotification(
   }
   if (credential.signingSecret)
     headers['X-Tuff-Signature'] = signBody(body, credential.signingSecret)
+
+  const rejected = assertDispatchableWebhookUrl(credential.url)
+  if (rejected)
+    return rejected
 
   const response = await networkClient.request({
     method: 'POST',

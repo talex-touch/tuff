@@ -100,7 +100,7 @@ export default function generatorInformation(): Plugin {
   const virtualModuleId = 'talex-touch:information'
   const resolvedVirtualModuleId = `\0${virtualModuleId}`
 
-  let config
+  let config: { command: string } | undefined
 
   return {
     enforce: 'pre',
@@ -130,7 +130,7 @@ export default function generatorInformation(): Plugin {
     load(id) {
       if (id !== resolvedVirtualModuleId) return
 
-      const devMode = config.command === 'serve'
+      const devMode = config?.command === 'serve'
 
       // 开发模式：实时生成构建信息
       if (devMode) {

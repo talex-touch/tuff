@@ -1,5 +1,5 @@
 import { requestJson } from '~/utils/request'
-import { normalizeDocsPagePath } from '#shared/utils/docs-path'
+import { canonicalDocsPageIdentity, normalizeDocsPagePath } from '#shared/utils/docs-path'
 
 type DocsPageBodyMode = '0' | '1'
 type DocsPageLocale = 'en' | 'zh'
@@ -30,7 +30,7 @@ const docsPageRequestPending = new Map<string, Promise<DocsPageRecord>>()
 const docsFullBodyCache = new Map<string, DocsPageRecord>()
 
 export function resolveDocsFullBodyCacheKey(path: string, locale: DocsPageLocale) {
-  return `doc-full:${normalizeDocsPagePath(path)}:${locale}`
+  return `doc-full:${canonicalDocsPageIdentity(path)}:${locale}`
 }
 
 export function isDocsPageRecordForRoute(
@@ -50,8 +50,11 @@ export function isDocsPageRecordForRoute(
   if (localeMatch?.[1] && localeMatch[1] !== locale)
     return false
 
-  return normalizeDocsPagePath(rawPath.replace(/\.(en|zh)$/, ''))
-    === normalizeDocsPagePath(path)
+  // A directory route resolves to its index document, so `/docs/dev` must accept the
+  // `/docs/dev/index.en` record the API returns. Comparing them raw left SSR in `not-found`
+  // and answered 404 for every directory alias.
+  return canonicalDocsPageIdentity(rawPath.replace(/\.(en|zh)$/, ''))
+    === canonicalDocsPageIdentity(path)
 }
 
 function resolveDocsFullBodyCacheKeyFromDoc(value: DocsPageRecord) {
@@ -107,7 +110,7 @@ export function cacheDocsFullBody(value: DocsPageRecord) {
 }
 
 export function resolveDocsPageRequestCacheKey(input: DocsPageRequestInput) {
-  return `docs-page:${normalizeDocsPagePath(input.path)}:${input.locale}:${input.body}`
+  return `docs-page:${canonicalDocsPageIdentity(input.path)}:${input.locale}:${input.body}`
 }
 
 function readCachedDocsPageRequest(cacheKey: string) {

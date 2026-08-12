@@ -93,10 +93,12 @@ function getSnapshotCapture():
 }
 
 /** Optional native playAudio accessor — enables speaker playback when present. */
-function getPlayAudio(): ((bytes: Buffer) => { playbackId: string }) | undefined {
+function getPlayAudio():
+  | ((bytes: Buffer) => Promise<{ playbackId: string }> | { playbackId: string })
+  | undefined {
   return (
     nativeAudio as unknown as {
-      playAudio?: (bytes: Buffer) => { playbackId: string }
+      playAudio?: (bytes: Buffer) => Promise<{ playbackId: string }> | { playbackId: string }
     }
   ).playAudio
 }
@@ -145,7 +147,7 @@ export class VoiceService {
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
 
-    const { sessionId } = nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
+    const { sessionId } = await nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
     const cancelCapture = (): void => {
       try {
         nativeAudio.cancelCapture(sessionId)
@@ -236,7 +238,9 @@ export class VoiceService {
       if (bytes && bytes.length > 0 && playAudio) {
         try {
           throwIfCancelled(signal)
-          const playback = playAudio(bytes)
+          // Awaited because the decode moved to the libuv pool (#845); a binding
+          // that still returns synchronously resolves to the same object.
+          const playback = await playAudio(bytes)
           played = Boolean(playback?.playbackId)
         } catch (error) {
           if (signal?.aborted) throw voiceCancellationError()
@@ -254,10 +258,15 @@ export class VoiceService {
     }
   }
 
-  /** Begins a toggle-controlled capture (global hotkey). Returns the native session id. */
-  beginCapture(): string {
+  /**
+   * Begins a toggle-controlled capture (global hotkey). Resolves to the native session id.
+   *
+   * Async since #841: opening the input stream is what takes the time, and it used to take it on
+   * the main thread -- the global hotkey froze the app while CoreAudio came up.
+   */
+  async beginCapture(): Promise<string> {
     this.assertSupported()
-    const { sessionId } = nativeAudio.startCapture({
+    const { sessionId } = await nativeAudio.startCapture({
       maxDurationMs: TOGGLE_MAX_DURATION_MS,
       silenceStopMs: TOGGLE_SILENCE_STOP_MS
     })
@@ -361,7 +370,7 @@ export class VoiceService {
     caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
-    const { sessionId } = nativeAudio.startCapture({
+    const { sessionId } = await nativeAudio.startCapture({
       maxDurationMs: DEFAULT_MAX_DURATION_MS,
       silenceStopMs: DEFAULT_SILENCE_STOP_MS
     })
@@ -406,7 +415,7 @@ export class VoiceService {
     const snapshotCapture = getSnapshotCapture()
     const pollCapture = getPollCapture()
 
-    const { sessionId } = nativeAudio.startCapture({
+    const { sessionId } = await nativeAudio.startCapture({
       maxDurationMs: DEFAULT_MAX_DURATION_MS,
       silenceStopMs: DEFAULT_SILENCE_STOP_MS
     })

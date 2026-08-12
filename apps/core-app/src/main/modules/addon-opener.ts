@@ -7,10 +7,10 @@ import type {
   PluginInstallRequest
 } from '@talex-touch/utils/transport/events/opener'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { APP_SCHEMA } from '../config/default'
 import { installDevPluginFromPath } from '../modules/plugin/dev-plugin-installer'
@@ -19,6 +19,7 @@ import type { AppSecondaryLaunch } from '../core/eventbus/touch-event'
 import { TalexEvents } from '../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../core/runtime-accessor'
 import { resolveSilentLaunchIntent } from '../core/silent-launch'
+import { buildTempPluginPath } from '../utils/temp-plugin-path'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { focusMainWindowIfAlive, registerMacOSOpenUrlHandler } from './addon-opener-handlers'
@@ -201,8 +202,12 @@ export class AddonOpenerModule extends BaseModule {
         // Remove old registration first to ensure clean state
         app.removeAsDefaultProtocolClient(APP_SCHEMA)
 
-        // Register with electron binary and project path
-        app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, ['--inspect', appPath])
+        // No --inspect. This registration is what the OS launches for a tuff:// link, so baking
+        // the flag in meant any web page containing one could start Electron with an open Node
+        // inspector port — and anything able to reach that port has main-process code execution.
+        // A developer who wants the inspector passes it on their own `pnpm core:dev` invocation;
+        // nothing about protocol handling needs it (#803).
+        app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, [appPath])
 
         addonOpenerLog.debug('Dev mode protocol registration', {
           meta: {
@@ -214,7 +219,11 @@ export class AddonOpenerModule extends BaseModule {
       addonOpenerLog.debug(`Set as default protocol handler: ${APP_SCHEMA}`)
     }
 
-    if (!app.isDefaultProtocolClient(APP_SCHEMA)) {
+    // A packaged build registers unconditionally. `isDefaultProtocolClient` answers "is this
+    // scheme mine", not "does the registration point at this binary", so skipping on true let a
+    // dev registration — pointing at a checkout that may no longer exist — survive into packaged
+    // runs with nothing ever replacing it (#803).
+    if (app.isPackaged || !app.isDefaultProtocolClient(APP_SCHEMA)) {
       registerProtocol()
     } else {
       addonOpenerLog.debug(`Already registered as protocol handler: ${APP_SCHEMA}`)
@@ -236,7 +245,8 @@ export class AddonOpenerModule extends BaseModule {
 
     const installPluginHandler = async (payload: PluginInstallRequest) => {
       const { name, buffer, forceUpdate } = payload ?? {}
-      const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+      // `name` arrives over IPC; joined raw it escaped the temp directory (#690).
+      const tempFilePath = buildTempPluginPath(name, Date.now())
       try {
         await fs.promises.writeFile(tempFilePath, buffer)
         let lastEvent: { status: string; msg: unknown; event?: unknown } | null = null
@@ -266,7 +276,26 @@ export class AddonOpenerModule extends BaseModule {
 
     this.transportDisposers.push(transport.on(OpenerEvents.install.request, installPluginHandler))
 
-    const installDevPluginHandler = async (payload: PluginDevInstallRequest) => {
+    const installDevPluginHandler = async (
+      payload: PluginDevInstallRequest,
+      context?: HandlerContext
+    ) => {
+      // Installing from a caller-supplied path registers a new plugin with its own permissions.
+      // A plugin view could point this at a directory it had staged elsewhere on disk and get a
+      // second, attacker-authored plugin installed -- lateral movement out of its own sandbox
+      // (#791). It is a development affordance, so it is closed in both directions: not from a
+      // plugin, and not in a packaged build at all.
+      if (context?.plugin) {
+        addonOpenerLog.warn('Blocked dev plugin install requested by a plugin', {
+          meta: { plugin: context.plugin.name }
+        })
+        return { status: 'error', error: 'HOST_ONLY' }
+      }
+      if (app.isPackaged) {
+        addonOpenerLog.warn('Blocked dev plugin install in a packaged build')
+        return { status: 'error', error: 'DEV_ONLY' }
+      }
+
       const sourcePath = payload?.path
       if (!sourcePath) {
         return { status: 'error', error: 'INVALID_PATH' }
@@ -282,7 +311,8 @@ export class AddonOpenerModule extends BaseModule {
       payload: PluginDropInstallRequest
     ): Promise<PluginDropInstallResponse> => {
       const { name, buffer } = payload ?? {}
-      const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+      // `name` arrives over IPC; joined raw it escaped the temp directory (#690).
+      const tempFilePath = buildTempPluginPath(name, Date.now())
       try {
         await fs.promises.writeFile(tempFilePath, buffer)
 

@@ -15,7 +15,6 @@ import { createLogger } from '../../../utils/logger'
 import { SearchEngineCore } from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import type { SearchRequestContext } from '../search-engine/search-session'
-import { ipcManager } from './ipc'
 import { windowManager } from './window'
 
 const coreBoxManagerLog = createLogger('CoreBox').child('Manager')
@@ -98,12 +97,7 @@ export class CoreBoxManager {
     return CoreBoxManager.instance
   }
 
-  public init(): void {
-    ipcManager.register()
-  }
-
   public destroy(): void {
-    ipcManager.unregister()
     windowManager.destroy()
   }
 

@@ -585,6 +585,7 @@ code: |
 | `iconClass` | `string` | `''` | Optional icon class rendered before the nav label. |
 | `disabled` | `boolean` | `false` | Block click activation and render a disabled native button. |
 | `activation` | `boolean` | `false` | Mark this tab as the uncontrolled default when neither `modelValue` nor `defaultValue` selects a tab. |
+| `active` | `boolean` | `false` | Whether the item is active; injected automatically by TxTabs — set manually only when using TxTabItem standalone. |
 
 ### TxTabItem Events
 

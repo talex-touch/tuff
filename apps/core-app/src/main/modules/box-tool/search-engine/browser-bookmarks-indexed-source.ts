@@ -20,6 +20,7 @@ import type {
 import { shell } from 'electron'
 import { openValidatedExternalUrl } from '../../../utils/external-url-policy'
 import type { BrowserBookmarkItem, BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
+import { privilegedPluginFor } from '../../plugin/privileged-plugins'
 import {
   createBrowserBookmarksIndexedSourceDescriptor,
   IndexedWriteRuntimeEmitterService,
@@ -139,7 +140,7 @@ function readBrowserBookmarksSnapshot(
     sourceId,
     diagnostics: profileDiagnostics,
     metadata: {
-      scannerOwner: 'touch-browser-data',
+      scannerOwner: privilegedPluginFor('browserData'),
       providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
       runtimeOwner: 'official-plugin'
     }
@@ -201,7 +202,7 @@ function buildProviderLifecycleEvidence(
     reason: enabled ? BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON : BROWSER_BOOKMARKS_DISABLED_REASON,
     metadata: {
       providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
-      currentOwner: 'touch-browser-data',
+      currentOwner: privilegedPluginFor('browserData'),
       runtimeOwner: 'official-plugin',
       storage: 'sqlite-index',
       privacy: 'high',

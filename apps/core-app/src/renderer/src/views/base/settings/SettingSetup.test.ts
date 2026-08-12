@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
 import SettingSetup from './SettingSetup.vue'
 
 const state = vi.hoisted(() => {
@@ -180,49 +179,43 @@ describe('settingSetup advanced settings boundary', () => {
     resetState()
   })
 
-  it('shows hide Dock, silent start, and OmniPanel auto-mount only in advanced settings', async () => {
+  it('keeps legacy implementation controls out of standard settings', async () => {
+    state.appSetting.dev.advancedSettings = true
+    // `resetState` leaves mac on; this case is explicitly the non-mac platforms.
+    state.isMac.value = false
+    state.isWindows.value = true
+    state.isLinux.value = true
     const wrapper = mountSettingSetup()
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('settings.setup.hideDock')
-    expect(wrapper.text()).not.toContain('settings.setup.startSilent')
+    expect(wrapper.text()).toContain('settings.setup.backgroundMode')
+    expect(wrapper.text()).not.toContain('settings.setup.showTray')
+    expect(wrapper.text()).not.toContain('settings.setup.customDesktop')
+    expect(wrapper.text()).not.toContain('settings.setup.runAsAdmin')
+    // Belong to plugins and file index respectively, not to startup behaviour.
     expect(wrapper.text()).not.toContain('settings.setup.omniAutoMountFeature')
-
-    state.appSetting.dev.advancedSettings = true
-    await nextTick()
-
-    expect(wrapper.text()).toContain('settings.setup.hideDock')
-    expect(wrapper.text()).toContain('settings.setup.startSilent')
-    expect(wrapper.text()).toContain('settings.setup.omniAutoMountFeature')
+    expect(wrapper.text()).not.toContain('settings.setup.hideNoisySystemApps')
+    // macOS-only, and this case is Windows/Linux.
+    expect(wrapper.text()).not.toContain('settings.setup.hideDock')
 
     wrapper.unmount()
   })
 
-  it('keeps hide Dock behind both macOS and tray capability gates', async () => {
-    state.appSetting.dev.advancedSettings = true
-    state.getTraySettings.mockResolvedValueOnce({
-      available: false,
-      showTray: true,
-      hideDock: false,
-      trayReady: false,
-      windowVisible: true
-    })
-    const unavailableWrapper = mountSettingSetup()
+  it('shows the startup rows the artboard lists rather than hiding them behind a dead flag', async () => {
+    // `showPermissionRecovery` and `showAdvancedSettings` were hardcoded `false`, so the whole
+    // permission block and most of these switches never rendered at all.
+    state.isMac.value = true
+    const wrapper = mountSettingSetup()
     await flushPromises()
 
-    expect(unavailableWrapper.text()).not.toContain('settings.setup.hideDock')
-    expect(unavailableWrapper.text()).toContain('settings.setup.startSilent')
-    unavailableWrapper.unmount()
+    expect(wrapper.text()).toContain('settings.setup.autoStart')
+    expect(wrapper.text()).toContain('settings.setup.startSilent')
+    expect(wrapper.text()).toContain('settings.setup.accessibility')
+    expect(wrapper.text()).toContain('setupPermissions.fullDiskAccess')
+    expect(wrapper.text()).toContain('setupPermissions.microphone')
+    expect(wrapper.text()).toContain('settings.setup.notifications')
 
-    resetState()
-    state.appSetting.dev.advancedSettings = true
-    state.isMac.value = false
-    const nonMacWrapper = mountSettingSetup()
-    await flushPromises()
-
-    expect(nonMacWrapper.text()).not.toContain('settings.setup.hideDock')
-    expect(nonMacWrapper.text()).toContain('settings.setup.startSilent')
-    nonMacWrapper.unmount()
+    wrapper.unmount()
   })
 
   it('defaults only missing target booleans to true and preserves explicit false', async () => {

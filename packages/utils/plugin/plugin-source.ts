@@ -1,4 +1,4 @@
-import type { IManifest } from '@talex-touch/utils/plugin'
+import type { IManifest } from './index'
 
 /**
  * Interface for plugin download options.

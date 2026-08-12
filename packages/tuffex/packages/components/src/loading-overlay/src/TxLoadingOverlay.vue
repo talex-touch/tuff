@@ -3,7 +3,10 @@ import type { CSSProperties } from 'vue'
 import type { LoadingOverlayProps } from '../index'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { TxSpinner } from '../../spinner'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({
   name: 'TxLoadingOverlay',
@@ -17,7 +20,7 @@ const props = withDefaults(defineProps<LoadingOverlayProps>(), {
   background: 'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)',
 })
 
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 
 const overlayStyle = computed<CSSProperties>(() => {
   return {
@@ -32,7 +35,7 @@ watch(
   () => props.loading && props.fullscreen,
   (open) => {
     if (open) {
-      zIndex.value = nextZIndex()
+      zIndex.value = zIndexAllocator.next()
       // Park focus on the blocking overlay so keyboard users can't Tab to the page
       // behind a fullscreen loading state, and remember where to return afterwards.
       restoreFocus = (document.activeElement as HTMLElement | null) ?? null

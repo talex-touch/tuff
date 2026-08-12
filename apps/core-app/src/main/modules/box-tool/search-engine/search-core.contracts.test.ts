@@ -116,6 +116,8 @@ vi.mock('../../database', () => ({
 }))
 vi.mock('../../plugin/adapters/plugin-features-adapter', () => ({
   default: {
+    // search-core calls this as it registers the provider (#523).
+    attach: vi.fn(),
     id: 'plugin-features',
     onSearch: vi.fn(),
     supportedInputTypes: ['text'],
@@ -148,6 +150,9 @@ vi.mock('../../storage', () => ({
   }
 }))
 vi.mock('../addon/apps/app-provider', () => ({
+  // search-core.ts imports this alongside appProvider; a factory mock has to carry every
+  // binding the importer names or vitest throws at import time, before any test runs.
+  setAppExecutionRecorder: vi.fn(),
   appProvider: {
     id: 'app-provider',
     onSearch: vi.fn(),
@@ -411,6 +416,28 @@ describe('SearchEngineCore facade contracts', () => {
     if (!lifecycle.destroying) await core.destroy()
   })
 
+  it('releases first-result metrics even when telemetry is disabled', () => {
+    // getSentryService is mocked with isTelemetryEnabled() === false, which is
+    // the privacy default. The delete used to sit after that early return, so
+    // the entry survived every execute on a privacy-default install (#669).
+    const internals = core as unknown as {
+      searchFirstResultMetrics: Map<string, unknown>
+      queueExecuteTelemetry: (sessionId: string, item: unknown, startedAt?: number) => void
+    }
+
+    internals.searchFirstResultMetrics.set('session-1', { sessionId: 'session-1' })
+    expect(internals.searchFirstResultMetrics.has('session-1')).toBe(true)
+
+    internals.queueExecuteTelemetry('session-1', {
+      id: 'item-1',
+      kind: 'app',
+      source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+      render: { mode: 'default', basic: { title: 'Demo' } }
+    })
+
+    expect(internals.searchFirstResultMetrics.has('session-1')).toBe(false)
+  })
+
   it('injects the App runtime delegate through SearchCore initialization', () => {
     expect(state.appProviderRuntimeDelegate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -529,12 +556,14 @@ describe('SearchEngineCore facade contracts', () => {
 
     await core.recordExecute('session-usage-1', item)
 
+    // Log, stats and trend rows all key on the provider id; only the separate
+    // source_type column carries the type.
     expect(state.addUsageLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'execute',
         itemId: 'executed-item',
         sessionId: 'session-usage-1',
-        source: 'application'
+        source: 'usage-provider'
       })
     )
     expect(state.incrementUsageSummary).toHaveBeenCalledWith('executed-item')
@@ -671,6 +700,103 @@ describe('SearchEngineCore facade contracts', () => {
     expect(secondResult.items[0].render.basic?.title).toBe('Cached result')
     expect(secondResult.sources).not.toBe(firstResult.sources)
     expect(snapshots.map((result) => result.sessionId)).toEqual([first.sessionId, second.sessionId])
+  })
+
+  it('caches what the session ended with so a repeat query keeps the deferred batch', async () => {
+    const fastSearch = vi.fn(
+      async () => ({ items: [buildItem('fast-item', 'fast-provider', 'accumulated')] }) as never
+    )
+    const deferredSearch = vi.fn(
+      async () =>
+        ({ items: [buildItem('deferred-item', 'deferred-provider', 'accumulated file')] }) as never
+    )
+    const query = { inputs: [], text: 'accumulated cache contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('fast-provider', fastSearch) as never)
+    core.registerProvider({
+      ...buildProvider('deferred-provider', deferredSearch),
+      priority: 'deferred',
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'fast-provider' },
+      { id: 'deferred-provider' }
+    ] as IProviderActivate[])
+
+    const first = core.startSearch(query, { caller: { kind: 'core-box', id: 'accumulated-first' } })
+    await first.result
+    await first.completed
+
+    const snapshots: TuffSearchResult[] = []
+    const second = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'accumulated-second' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        }
+      }
+    })
+    await second.result
+    await second.completed
+
+    expect(deferredSearch).toHaveBeenCalledTimes(1)
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0].items.map((item) => item.id).sort()).toEqual(['deferred-item', 'fast-item'])
+  })
+
+  it('publishes each gather batch once with its enrichment already applied', async () => {
+    const fastSearch = vi.fn(
+      async () => ({ items: [buildItem('single-fast', 'fast-provider', 'single push')] }) as never
+    )
+    const deferredSearch = vi.fn(
+      async () =>
+        ({
+          items: [buildItem('single-deferred', 'deferred-provider', 'single push file')]
+        }) as never
+    )
+    const query = { inputs: [], text: 'single publish contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('fast-provider', fastSearch) as never)
+    core.registerProvider({
+      ...buildProvider('deferred-provider', deferredSearch),
+      priority: 'deferred',
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'fast-provider' },
+      { id: 'deferred-provider' }
+    ] as IProviderActivate[])
+    state.getAllPinnedItems.mockResolvedValue([
+      {
+        itemId: 'single-deferred',
+        order: 0,
+        pinnedAt: new Date(),
+        sourceId: 'deferred-provider',
+        sourceType: 'file'
+      }
+    ])
+
+    const snapshots: TuffSearchResult[] = []
+    const updates: TuffItem[][] = []
+    const execution = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'single-publish' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        },
+        update: (payload) => {
+          updates.push(payload.items)
+        }
+      }
+    })
+    await execution.result
+    await execution.completed
+
+    expect(snapshots).toHaveLength(1)
+    expect(updates).toHaveLength(1)
+    expect(updates[0].map((item) => item.id)).toEqual(['single-deferred'])
+    expect(updates[0][0].scoring).toMatchObject({ pinned: true, final: expect.any(Number) })
+    expect(snapshots[0].items[0].scoring?.final).toEqual(expect.any(Number))
   })
 
   it('does not cache a result that completed after its search revision was superseded', () => {

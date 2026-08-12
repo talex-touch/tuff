@@ -1,13 +1,28 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../db/utils'
-import { sql } from 'drizzle-orm'
+import { desc, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
-import { dbWriteScheduler } from '../../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../../db/db-write'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('QueryCompletionService')
 const MIN_COMPLETION_QUERY_LENGTH = 2
+const LIKE_ESCAPE_CHAR = '\\'
+const SQLITE_LIKE_WILDCARD_REGEX = /[%_\\]/g
+
+/**
+ * Upper bound on rows pulled into JS for scoring. The final ranking is computed
+ * in JS (frequency x recency x match quality), so the SQL LIMIT cannot simply be
+ * `limit` — that would hand the JS sort a different candidate set than the one it
+ * is meant to rank. The scan is ordered by the terms that dominate the score so
+ * the strongest candidates fall inside the window.
+ */
+const COMPLETION_SCAN_LIMIT = 200
+
+/** Neutralises SQLite LIKE metacharacters; pair with `ESCAPE ${LIKE_ESCAPE_CHAR}`. */
+function escapeLikeWildcards(value: string): string {
+  return value.replace(SQLITE_LIKE_WILDCARD_REGEX, (match) => `${LIKE_ESCAPE_CHAR}${match}`)
+}
 
 export interface CompletionSuggestion {
   sourceId: string
@@ -48,48 +63,43 @@ export class QueryCompletionService {
     const label = 'query-completions.record'
 
     try {
-      await dbWriteScheduler.schedule(label, () =>
-        withSqliteRetry(
-          async () => {
-            const existing = await db
-              .select()
-              .from(schema.queryCompletions)
-              .where(
-                sql`${schema.queryCompletions.prefix} = ${prefix}
-                      AND ${schema.queryCompletions.sourceId} = ${item.source.id}
-                      AND ${schema.queryCompletions.itemId} = ${item.id}`
-              )
-              .get()
+      await scheduleDbWrite(label, async () => {
+        const existing = await db
+          .select()
+          .from(schema.queryCompletions)
+          .where(
+            sql`${schema.queryCompletions.prefix} = ${prefix}
+                  AND ${schema.queryCompletions.sourceId} = ${item.source.id}
+                  AND ${schema.queryCompletions.itemId} = ${item.id}`
+          )
+          .get()
 
-            if (existing) {
-              const newCount = existing.completionCount + 1
-              const newAvgLength =
-                (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
+        if (existing) {
+          const newCount = existing.completionCount + 1
+          const newAvgLength =
+            (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
 
-              await db
-                .update(schema.queryCompletions)
-                .set({
-                  completionCount: newCount,
-                  lastCompleted: new Date(),
-                  avgQueryLength: newAvgLength
-                })
-                .where(sql`id = ${existing.id}`)
-              return
-            }
-
-            await db.insert(schema.queryCompletions).values({
-              prefix,
-              sourceId: item.source.id,
-              itemId: item.id,
-              completionCount: 1,
+          await db
+            .update(schema.queryCompletions)
+            .set({
+              completionCount: newCount,
               lastCompleted: new Date(),
-              avgQueryLength: queryLength,
-              createdAt: new Date()
+              avgQueryLength: newAvgLength
             })
-          },
-          { label }
-        )
-      )
+            .where(sql`id = ${existing.id}`)
+          return
+        }
+
+        await db.insert(schema.queryCompletions).values({
+          prefix,
+          sourceId: item.source.id,
+          itemId: item.id,
+          completionCount: 1,
+          lastCompleted: new Date(),
+          avgQueryLength: queryLength,
+          createdAt: new Date()
+        })
+      })
 
       const duration = performance.now() - start
       this.stats.totalRecorded++
@@ -114,10 +124,22 @@ export class QueryCompletionService {
     const prefix = this.normalizePrefix(query)
 
     try {
+      // Escaped and bounded. Previously the pattern came straight from user text,
+      // so typing '%' matched every row, and there was no SQL LIMIT at all — the
+      // `limit` argument was applied only after the whole table had been loaded
+      // and exp()-scored in JS, on every debounced keystroke (#664).
+      const likePattern = `${escapeLikeWildcards(prefix)}%`
       const results = await db
         .select()
         .from(schema.queryCompletions)
-        .where(sql`${schema.queryCompletions.prefix} LIKE ${`${prefix}%`}`)
+        .where(
+          sql`${schema.queryCompletions.prefix} LIKE ${likePattern} ESCAPE ${LIKE_ESCAPE_CHAR}`
+        )
+        .orderBy(
+          desc(schema.queryCompletions.completionCount),
+          desc(schema.queryCompletions.lastCompleted)
+        )
+        .limit(Math.max(limit, COMPLETION_SCAN_LIMIT))
         .all()
 
       if (results.length === 0) {
@@ -204,40 +226,6 @@ export class QueryCompletionService {
       })
     } catch (error) {
       log.error('Failed to inject completion weights', { error })
-    }
-  }
-
-  /** Remove completion records older than retention period */
-  async cleanupOldCompletions(retentionDays = 90): Promise<number> {
-    const timer = log.time('cleanupOldCompletions')
-    const db = this.dbUtils.getDb()
-
-    try {
-      const expirationDate = new Date()
-      expirationDate.setDate(expirationDate.getDate() - retentionDays)
-
-      await dbWriteScheduler.schedule(
-        'query-completions.cleanup',
-        () =>
-          withSqliteRetry(
-            () =>
-              db
-                .delete(schema.queryCompletions)
-                .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`),
-            { label: 'query-completions.cleanup' }
-          ),
-        { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
-      )
-
-      timer.end('info')
-      log.info('Cleaned up old completions', {
-        meta: { cutoffDate: expirationDate.toISOString() }
-      })
-
-      return 0
-    } catch (error) {
-      log.error('Failed to cleanup old completions', { error })
-      return 0
     }
   }
 

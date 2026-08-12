@@ -1,4 +1,4 @@
-import { ContextProvider, type ContextSignal } from './context-provider'
+import { ContextProvider, type ContextSignal, hashContextContent } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const intelligenceSdkMock = vi.hoisted(() => ({
@@ -6,14 +6,18 @@ const intelligenceSdkMock = vi.hoisted(() => ({
   ragRerank: vi.fn()
 }))
 
+// A stable instance: the engine resolves the singleton once, so a factory returning a fresh object
+// per call would leave every assertion on one the code under test never held.
+const pollingMock = vi.hoisted(() => ({
+  isRegistered: vi.fn(() => false),
+  unregister: vi.fn(),
+  register: vi.fn(),
+  start: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
-    getInstance: () => ({
-      isRegistered: vi.fn(() => false),
-      unregister: vi.fn(),
-      register: vi.fn(),
-      start: vi.fn()
-    })
+    getInstance: () => pollingMock
   }
 }))
 
@@ -71,15 +75,30 @@ vi.mock('../../../ai/intelligence-sdk', () => ({
   }
 }))
 
+// The engine re-reads the clipboard when building the URL candidate, and only trusts it if the
+// content still hashes to the digest carried on the context (#648).
+const clipboardLatest = vi.hoisted(() => ({ current: null as { content: string } | null }))
+
+vi.mock('../../../clipboard', () => ({
+  clipboardModule: {
+    getLatestItem: () => clipboardLatest.current
+  }
+}))
+
 vi.mock('./item-rebuilder', () => ({
   ItemRebuilder: class {
-    async rebuildItems(items: Array<{ itemId: string; sourceId: string; source: string }>) {
+    // Mirrors the real rebuilder's contract: input (scored) order out, with the
+    // score published on scoring.final.
+    async rebuildItems(
+      items: Array<{ itemId: string; sourceId: string; source: string; score: number }>
+    ) {
       return items.map((item) => ({
         id: item.itemId,
         source: { id: item.sourceId, type: 'app', name: item.sourceId },
         kind: 'app',
         render: { mode: 'default', basic: { title: item.itemId } },
-        meta: { recommendation: { source: item.source } }
+        scoring: { final: item.score },
+        meta: { recommendation: { source: item.source, score: item.score } }
       }))
     }
   }
@@ -135,8 +154,6 @@ const devFocusCodeContext: ContextSignal = {
     powerMode: 'charging',
     isDNDEnabled: true,
     focusMode: 'active',
-    bluetoothAvailable: true,
-    bluetoothConnectedCount: 1,
     locationBucket: 'loc_work',
     timezone: 'Asia/Shanghai',
     unavailableSignals: []
@@ -236,7 +253,7 @@ describe('RecommendationEngine', () => {
     vi.useRealTimers()
   })
 
-  it('includes time slot and weekday in the production recommendation cache key', () => {
+  it('includes time slot and day type in the production recommendation cache key', () => {
     const provider = new ContextProvider()
     const tuesdayMorningContext: ContextSignal = {
       ...morningContext,
@@ -245,13 +262,21 @@ describe('RecommendationEngine', () => {
         dayOfWeek: 2
       }
     }
+    const sundayMorningContext: ContextSignal = {
+      ...morningContext,
+      time: {
+        ...morningContext.time,
+        dayOfWeek: 0
+      }
+    }
 
-    expect(provider.generateCacheKey(morningContext)).toBe('morning|1')
-    expect(provider.generateCacheKey(afternoonContext)).toBe('afternoon|1')
-    expect(provider.generateCacheKey(tuesdayMorningContext)).toBe('morning|2')
+    expect(provider.generateCacheKey(morningContext)).toBe('morning|workday')
+    expect(provider.generateCacheKey(afternoonContext)).toBe('afternoon|workday')
+    expect(provider.generateCacheKey(tuesdayMorningContext)).toBe('morning|workday')
+    expect(provider.generateCacheKey(sundayMorningContext)).toBe('morning|weekend')
   })
 
-  it('includes privacy-safe system state buckets in the recommendation cache key', () => {
+  it('keeps volatile system state out of the recommendation cache key', () => {
     const provider = new ContextProvider()
     const context: ContextSignal = {
       ...morningContext,
@@ -265,24 +290,78 @@ describe('RecommendationEngine', () => {
         powerMode: 'battery',
         isDNDEnabled: true,
         focusMode: 'active',
-        bluetoothAvailable: false,
-        bluetoothConnectedCount: 0,
         locationBucket: 'loc_12ab',
         timezone: 'Asia/Shanghai',
-        unavailableSignals: ['bluetooth']
+        unavailableSignals: []
       }
     }
 
     const key = provider.generateCacheKey(context)
 
-    expect(key).toContain('nt:wifi')
-    expect(key).toContain('nid:net_9f02')
-    expect(key).toContain('bat:80')
-    expect(key).toContain('pow:battery')
-    expect(key).toContain('dnd:1')
-    expect(key).toContain('bt:na')
-    expect(key).toContain('loc:loc_12ab')
+    expect(key).toBe('morning|workday|net:1')
+    expect(key).not.toContain('nid:')
+    expect(key).not.toContain('bat:')
+    expect(key).not.toContain('pow:')
+    expect(key).not.toContain('dnd:')
+    expect(key).not.toContain('loc:')
     expect(key).not.toContain('Asia/Shanghai')
+  })
+
+  it('fills the grid when every candidate shares one source type', () => {
+    // maxPerType is ceil(10 * 0.4) = 4 and the half-mark is 5. A homogeneous pool
+    // latches both conditions at once: items 1-5 get in (the 5th because
+    // result.length is still 4), then everything after is skipped forever, so the
+    // empty-query grid came back half full (#672).
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const diversify = (
+      engine as unknown as {
+        applyDiversityFilter: (scored: unknown[], limit: number) => unknown[]
+      }
+    ).applyDiversityFilter.bind(engine)
+
+    const pool = Array.from({ length: 20 }, (_, i) => ({
+      sourceId: 'app-provider',
+      itemId: `/Applications/App-${i}.app`,
+      sourceType: 'application',
+      score: 1000 - i
+    }))
+
+    const picked = diversify(pool, 10) as Array<{ itemId: string }>
+
+    expect(picked).toHaveLength(10)
+    // Backfill must preserve score order, not append the leftovers arbitrarily.
+    expect(picked.map((item) => item.itemId)).toEqual(pool.slice(0, 10).map((i) => i.itemId))
+  })
+
+  it('still spreads a mixed pool across source types', () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const diversify = (
+      engine as unknown as {
+        applyDiversityFilter: (scored: unknown[], limit: number) => unknown[]
+      }
+    ).applyDiversityFilter.bind(engine)
+
+    // 12 apps ahead of 4 plugins on score. Without the quota the plugins would
+    // never appear; the backfill must not undo that.
+    const pool = [
+      ...Array.from({ length: 12 }, (_, i) => ({
+        sourceId: 'app-provider',
+        itemId: `app-${i}`,
+        sourceType: 'application',
+        score: 1000 - i
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        sourceId: 'plugin-recommend',
+        itemId: `plugin-${i}`,
+        sourceType: 'plugin',
+        score: 500 - i
+      }))
+    ]
+
+    const picked = diversify(pool, 10) as Array<{ sourceType: string }>
+
+    expect(picked).toHaveLength(10)
+    expect(picked.filter((item) => item.sourceType === 'plugin').length).toBeGreaterThan(0)
   })
 
   it('does not reuse memory cache when the time context changes', async () => {
@@ -338,6 +417,65 @@ describe('RecommendationEngine', () => {
     expect(first.items[0]?.id).toBe('morning-app')
     expect(second.items[0]?.id).toBe('afternoon-app')
     expect(getCandidates).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not read the recommendation cache it is about to discard', async () => {
+    // recommend() awaited getCachedRecommendations and only then checked
+    // forceRefresh, so the 15-minute background refresh and every user-triggered
+    // refresh paid for a SELECT plus a JSON.parse of up to 10 rendered TuffItems
+    // and threw the result away (#675).
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const getCandidates = vi.fn(async () => ({
+      items: [
+        {
+          sourceId: 'app-provider',
+          itemId: 'fresh-app',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('fresh-app', { executeCount: 2 })
+        }
+      ],
+      perf: candidatePerf(1)
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates
+    })
+
+    const forced = await engine.recommend({ limit: 1, forceRefresh: true })
+
+    expect(dbUtils.getRecommendationCache).not.toHaveBeenCalled()
+    expect(forced.items[0]?.id).toBe('fresh-app')
+    expect(getCandidates).toHaveBeenCalledTimes(1)
+  })
+
+  it('still reads the cache on a normal recommend', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(1) }))
+    })
+
+    await engine.recommend({ limit: 1 })
+
+    // The skip must be conditional on forceRefresh, not a blanket removal.
+    expect(dbUtils.getRecommendationCache).toHaveBeenCalled()
   })
 
   it('does not reuse persisted recommendation cache across time slots', async () => {
@@ -439,6 +577,68 @@ describe('RecommendationEngine', () => {
       id: 'pinned',
       itemIds: ['pinned-app']
     })
+  })
+
+  it('drops the lowest-scored recommendation, not the highest, when pinned items take a slot', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const candidates = [
+      {
+        sourceId: 'clipboard-history',
+        itemId: 'low-scored',
+        sourceType: 'history',
+        source: 'frequent' as const,
+        usageStats: createUsageStats('low-scored', { executeCount: 1 })
+      },
+      {
+        sourceId: 'app-provider',
+        itemId: 'high-scored',
+        sourceType: 'app',
+        source: 'frequent' as const,
+        usageStats: createUsageStats('high-scored', { executeCount: 50 })
+      }
+    ]
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}|pinned-truncation`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => [
+        {
+          sourceId: 'pinned-source',
+          itemId: 'pinned-app',
+          sourceType: 'pinned',
+          usageStats: createUsageStats('pinned-app')
+        }
+      ]),
+      getCandidates: vi.fn(async () => ({
+        items: candidates,
+        perf: candidatePerf(candidates.length)
+      })),
+      // A rebuild that hands back a different order than it was given (the
+      // per-source fan-out did exactly this): the truncation must still be
+      // decided by score.
+      itemRebuilder: {
+        rebuildItems: async (
+          items: Array<{ itemId: string; sourceId: string; source: string; score: number }>
+        ) =>
+          [...items].reverse().map((item) => ({
+            id: item.itemId,
+            source: { id: item.sourceId, type: 'app', name: item.sourceId },
+            kind: 'app',
+            render: { mode: 'default', basic: { title: item.itemId } },
+            scoring: { final: item.score },
+            meta: { recommendation: { source: item.source, score: item.score } }
+          }))
+      }
+    })
+
+    const result = await engine.recommend({ limit: 2 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['high-scored', 'pinned-app'])
   })
 
   it('separates persisted recommendation cache by pinned items', async () => {
@@ -561,8 +761,6 @@ describe('RecommendationEngine', () => {
         powerMode: 'charging',
         isDNDEnabled: true,
         focusMode: 'active',
-        bluetoothAvailable: false,
-        bluetoothConnectedCount: 0,
         locationBucket: 'loc_focus',
         timezone: 'Asia/Shanghai',
         unavailableSignals: []
@@ -1155,5 +1353,536 @@ describe('RecommendationEngine', () => {
     expect(morning.items[0]?.id).toBe('morning-app')
     expect(afternoon.items[0]?.id).toBe('afternoon-app')
     expect(getCandidates).toHaveBeenCalledTimes(2)
+  })
+
+  it('serves a cache hit when only volatile context changed, and re-ranks for it', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const perfEvents: Array<{ eventType: string; metadata: Record<string, unknown> }> = []
+    // Same slow-moving context, different foreground app: the 15-min warm-up
+    // and the user's own request must land on the same cache entry.
+    const contexts: ContextSignal[] = [
+      morningContext,
+      {
+        ...morningContext,
+        foregroundApp: { bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' }
+      }
+    ]
+    const getCandidates = vi.fn(async () => ({
+      items: [
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.apple.Terminal',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+        },
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.apple.Preview',
+          sourceType: 'app',
+          source: 'frequent',
+          usageStats: createUsageStats('com.apple.Preview', { executeCount: 4 })
+        }
+      ],
+      perf: candidatePerf(2, 2)
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => contexts.shift() ?? morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates,
+      recordRecommendationPerf: (eventType: string, metadata: Record<string, unknown>) => {
+        perfEvents.push({ eventType, metadata })
+      }
+    })
+
+    const warmup = await engine.recommend({ limit: 5, forceRefresh: true })
+    const userRequest = await engine.recommend({ limit: 5 })
+
+    expect(warmup.items[0]?.id).toBe('com.apple.Preview')
+    expect(userRequest.fromCache).toBe(true)
+    expect(getCandidates).toHaveBeenCalledTimes(1)
+    expect(perfEvents.at(-1)?.metadata.cacheLayer).toBe('memory')
+    // Foreground = an IDE lifts the terminal past the more frequent app.
+    expect(userRequest.items[0]?.id).toBe('com.apple.Terminal')
+  })
+
+  it('keeps re-ranking idempotent across repeated cache hits', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const ideContext: ContextSignal = {
+      ...morningContext,
+      foregroundApp: { bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' }
+    }
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => ideContext),
+        generateCacheKey: () => 'stable-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+          }
+        ],
+        perf: candidatePerf(1, 1)
+      }))
+    })
+
+    const first = await engine.recommend({ limit: 5 })
+    const second = await engine.recommend({ limit: 5 })
+    const third = await engine.recommend({ limit: 5 })
+
+    expect(second.items[0]?.scoring?.final).toBe(first.items[0]?.scoring?.final)
+    expect(third.items[0]?.scoring?.final).toBe(first.items[0]?.scoring?.final)
+  })
+
+  it('never serves a clipboard URL action from the cache after the clipboard changed', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    // `content` carries the privacy digest, not the URL — that is what #648 was about. The engine
+    // re-reads the clipboard and matches on this digest, so the fixture has to hash too.
+    const clipboardContext = (url: string): ContextSignal => ({
+      ...morningContext,
+      clipboard: {
+        type: 'text',
+        content: hashContextContent(url),
+        timestamp: Date.now(),
+        contentType: 'url',
+        meta: { isUrl: true }
+      }
+    })
+    const first = 'https://example.com/first'
+    const second = 'https://example.com/second'
+    const contexts = [clipboardContext(first), clipboardContext(second)]
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => contexts.shift() ?? clipboardContext('second-url')),
+        generateCacheKey: () => 'stable-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      // The real getCandidates runs here on purpose: the regression was that it
+      // injected the clipboard URL action into the pool that gets cached.
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.apple.Terminal',
+          sourceType: 'app',
+          usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+        }
+      ]),
+      getRecentItems: vi.fn(async () => []),
+      getTimeBasedTopItems: vi.fn(async () => []),
+      getTrendingItems: vi.fn(async () => ({
+        items: [],
+        perf: { durationMs: 0, rowCount: 0, ready: true }
+      })),
+      getPluginCandidates: vi.fn(async () => [])
+    })
+
+    clipboardLatest.current = { content: first }
+    await engine.recommend({ limit: 5 })
+
+    clipboardLatest.current = { content: second }
+    const cached = await engine.recommend({ limit: 5 })
+
+    expect(cached.fromCache).toBe(true)
+    const urlActions = cached.items.filter((item) => item.id.startsWith('clipboard-url-open:'))
+    expect(urlActions.map((item) => item.id)).toEqual([`clipboard-url-open:${second}`])
+  })
+
+  it('carries the real URL, not the privacy digest, into the open-url card', async () => {
+    // #648: ContextSignal.clipboard.content is a sha256 prefix. Building the card from it gave a
+    // '打开 URL' entry whose subtitle, id and open-url payload were all '9f2c1a4b8e7d3f01'.
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const url = 'https://github.com/talex-touch/talex-touch'
+    const digest = hashContextContent(url)
+
+    expect(digest).not.toBe(url)
+
+    clipboardLatest.current = { content: url }
+
+    const candidates = await (
+      engine as unknown as {
+        getClipboardUrlCandidates: (
+          context: ContextSignal
+        ) => Promise<Array<{ pluginCandidate?: { data?: { url?: string }; subtitle?: string } }>>
+      }
+    ).getClipboardUrlCandidates({
+      ...morningContext,
+      clipboard: {
+        type: 'text',
+        content: digest,
+        timestamp: Date.now(),
+        contentType: 'url',
+        meta: { isUrl: true }
+      }
+    })
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]?.pluginCandidate?.data?.url).toBe(url)
+    expect(candidates[0]?.pluginCandidate?.subtitle).toContain('github.com')
+    expect(JSON.stringify(candidates[0])).not.toContain(digest)
+  })
+
+  it('produces no card when the clipboard no longer matches the context', async () => {
+    // The race the digest check exists for: between the snapshot and the rebuild the user copied
+    // something else. Opening that instead would be worse than showing nothing.
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    clipboardLatest.current = { content: 'https://example.com/something-else' }
+
+    const candidates = await (
+      engine as unknown as {
+        getClipboardUrlCandidates: (context: ContextSignal) => Promise<unknown[]>
+      }
+    ).getClipboardUrlCandidates({
+      ...morningContext,
+      clipboard: {
+        type: 'text',
+        content: hashContextContent('https://example.com/original'),
+        timestamp: Date.now(),
+        contentType: 'url',
+        meta: { isUrl: true }
+      }
+    })
+
+    expect(candidates).toEqual([])
+  })
+
+  it('survives a corrupt item_time_stats row instead of aborting the whole recommendation', async () => {
+    // #649: this loop is inside the unguarded getCandidates chain, so a raw JSON.parse on one bad
+    // row took down recommend() entirely rather than costing that item its time history.
+    const good = {
+      sourceId: 'app-provider',
+      itemId: 'com.apple.Terminal',
+      hourDistribution: JSON.stringify(Array.from({ length: 24 }, () => 5)),
+      dayOfWeekDistribution: JSON.stringify(Array.from({ length: 7 }, () => 5)),
+      timeSlotDistribution: JSON.stringify({ morning: 9, afternoon: 0, evening: 0, night: 0 }),
+      lastUpdated: new Date()
+    }
+    const corrupt = { ...good, itemId: 'com.apple.Safari', hourDistribution: '{"truncated' }
+
+    const dbUtils = {
+      ...createDbUtils(),
+      getAllItemTimeStats: vi.fn(async () => [corrupt, good]),
+      getUsageStatsBatch: vi.fn(async () => [
+        createUsageStats('com.apple.Terminal', { executeCount: 3 }),
+        createUsageStats('com.apple.Safari', { executeCount: 3 })
+      ])
+    }
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    const items = await (
+      engine as unknown as {
+        getTimeBasedTopItems: (
+          pattern: unknown,
+          limit: number
+        ) => Promise<Array<{ itemId: string }>>
+      }
+    ).getTimeBasedTopItems(morningContext.time, 10)
+
+    // Positive control: the healthy row still scores, so this is not passing because the method
+    // returned nothing at all.
+    expect(items.map((item) => item.itemId)).toContain('com.apple.Terminal')
+  })
+
+  it('does not run a refresh after stopBackgroundRefresh cancels the jitter window', async () => {
+    // #652: the polling callback only *schedules* the refresh, through an untracked setTimeout.
+    // stopBackgroundRefresh unregistered the polling task and left that pending, so a full
+    // recommendation pass still ran after shutdown — against a database the owner had torn down.
+    vi.useFakeTimers()
+    try {
+      pollingMock.register.mockClear()
+
+      const engine = new RecommendationEngine(createDbUtils() as never)
+      const runBackgroundRefresh = vi.fn(async () => {})
+      Object.assign(engine as unknown as Record<string, unknown>, { runBackgroundRefresh })
+      ;(engine as unknown as { startBackgroundRefresh: () => void }).startBackgroundRefresh()
+
+      const scheduled = pollingMock.register.mock.calls.find(
+        (call) => typeof call[1] === 'function'
+      )?.[1] as (() => void) | undefined
+
+      // Positive control: the polling task registered a callback at all.
+      expect(scheduled).toBeTypeOf('function')
+
+      scheduled?.()
+      engine.stopBackgroundRefresh()
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(runBackgroundRefresh).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still refreshes when the jitter window elapses without a stop', async () => {
+    // The other half: a fix that simply never scheduled would pass the test above.
+    vi.useFakeTimers()
+    try {
+      pollingMock.register.mockClear()
+
+      const engine = new RecommendationEngine(createDbUtils() as never)
+      const runBackgroundRefresh = vi.fn(async () => {})
+      Object.assign(engine as unknown as Record<string, unknown>, { runBackgroundRefresh })
+      ;(engine as unknown as { startBackgroundRefresh: () => void }).startBackgroundRefresh()
+      const scheduled = pollingMock.register.mock.calls.find(
+        (call) => typeof call[1] === 'function'
+      )?.[1] as (() => void) | undefined
+
+      scheduled?.()
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(runBackgroundRefresh).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recommends catalog apps on a cold start with no usage history', async () => {
+    const dbUtils = createDbUtils()
+    const catalogApps = [
+      {
+        id: 1,
+        path: '/Applications/Old.app',
+        name: 'Old',
+        displayName: 'Old',
+        ctime: new Date('2026-01-01T00:00:00.000Z'),
+        mtime: new Date('2026-01-01T00:00:00.000Z')
+      },
+      {
+        id: 2,
+        path: '/Applications/New.app',
+        name: 'New',
+        displayName: 'New',
+        ctime: new Date('2026-05-01T00:00:00.000Z'),
+        mtime: new Date('2026-05-01T00:00:00.000Z')
+      }
+    ]
+    const getFilesByType = vi.fn(async () => catalogApps)
+    const engine = new RecommendationEngine(
+      dbUtils as never,
+      { ...dbUtils, getFilesByType } as never
+    )
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: () => 'cold-start-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      // Fresh install: no usage rows anywhere.
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(0, 0) })),
+      getFrequentItems: vi.fn(async () => [])
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    expect(getFilesByType).toHaveBeenCalledWith('app')
+    expect(result.items.map((item) => item.id)).toEqual([
+      '/Applications/New.app',
+      '/Applications/Old.app'
+    ])
+    expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'cold-start' })
+  })
+
+  it('prefers real usage over the cold-start catalog', async () => {
+    const dbUtils = createDbUtils()
+    const getFilesByType = vi.fn(async () => [
+      { id: 1, path: '/Applications/Catalog.app', name: 'Catalog', ctime: null, mtime: null }
+    ])
+    const engine = new RecommendationEngine(
+      dbUtils as never,
+      { ...dbUtils, getFilesByType } as never
+    )
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: () => 'fallback-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(0, 0) })),
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: 'used-app',
+          sourceType: 'app',
+          usageStats: createUsageStats('used-app', { executeCount: 9 })
+        }
+      ])
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['used-app'])
+    expect(getFilesByType).not.toHaveBeenCalled()
+  })
+
+  it('matches path-form app ids against the foreground app', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => ({
+          ...morningContext,
+          foregroundApp: { bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' }
+        })),
+        generateCacheKey: () => 'path-form-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            // Path-form id: what the app provider actually stores for scanned apps.
+            itemId: '/Applications/Visual Studio Code.app',
+            sourceType: 'application',
+            source: 'frequent',
+            usageStats: createUsageStats('/Applications/Visual Studio Code.app', {
+              executeCount: 20
+            })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: '/Applications/Terminal.app',
+            sourceType: 'application',
+            source: 'frequent',
+            usageStats: createUsageStats('/Applications/Terminal.app', { executeCount: 1 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 5 })
+
+    // The already-open app is demoted despite 20x the usage, and the terminal
+    // is promoted because the foreground app is an IDE.
+    expect(result.items[0]?.id).toBe('/Applications/Terminal.app')
+  })
+
+  it('polls plugin recommendation providers concurrently, not one after another', async () => {
+    // Awaiting each provider in a for-of made PLUGIN_PROVIDER_TIMEOUT_MS a
+    // per-provider budget: six slow plugins meant 1.2s of empty grid on every
+    // uncached open of the CoreBox empty-query path (#674).
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const DELAY = 60
+    const PROVIDERS = 4
+
+    let live = 0
+    let peakConcurrent = 0
+
+    for (let i = 0; i < PROVIDERS; i++) {
+      engine.registerPluginProvider('demo-plugin', {
+        id: `provider-${i}`,
+        canProvide: () => true,
+        getCandidates: async () => {
+          live += 1
+          peakConcurrent = Math.max(peakConcurrent, live)
+          await new Promise((resolve) => setTimeout(resolve, DELAY))
+          live -= 1
+          return [{ id: `candidate-${i}`, title: `Candidate ${i}`, action: 'open' }]
+        }
+      } as never)
+    }
+
+    const startedAt = Date.now()
+    const candidates = await (
+      engine as unknown as {
+        getPluginCandidates: (context: unknown) => Promise<unknown[]>
+      }
+    ).getPluginCandidates(morningContext)
+    const elapsed = Date.now() - startedAt
+
+    expect(candidates).toHaveLength(PROVIDERS)
+    // All four in flight at once rather than a queue of one.
+    expect(peakConcurrent).toBe(PROVIDERS)
+    // Sequential would be >= 4 * 60ms; concurrent stays near one delay.
+    expect(elapsed).toBeLessThan(DELAY * PROVIDERS)
+  })
+
+  it('clears the timeout timer when a provider answers in time', async () => {
+    // The race armed a 200ms setTimeout per provider and never cleared it on the
+    // winning path, leaving a pending timer per call keeping the loop awake (#674).
+    vi.useFakeTimers()
+    try {
+      const engine = new RecommendationEngine(createDbUtils() as never)
+
+      for (let i = 0; i < 3; i++) {
+        engine.registerPluginProvider('demo-plugin', {
+          id: `prompt-${i}`,
+          canProvide: () => true,
+          getCandidates: async () => [{ id: `c-${i}`, title: `C ${i}`, action: 'open' }]
+        } as never)
+      }
+
+      const before = vi.getTimerCount()
+      await (
+        engine as unknown as {
+          getPluginCandidates: (context: unknown) => Promise<unknown[]>
+        }
+      ).getPluginCandidates(morningContext)
+
+      expect(vi.getTimerCount()).toBe(before)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves provider registration order in the candidate list', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    // Deliberately inverted delays: if order followed completion rather than
+    // registration, this would come back reversed.
+    for (const [index, delay] of [90, 60, 30, 0].entries()) {
+      engine.registerPluginProvider('demo-plugin', {
+        id: `ordered-${index}`,
+        canProvide: () => true,
+        getCandidates: async () => {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          return [{ id: `candidate-${index}`, title: `Candidate ${index}`, action: 'open' }]
+        }
+      } as never)
+    }
+
+    const candidates = (await (
+      engine as unknown as {
+        getPluginCandidates: (context: unknown) => Promise<Array<{ itemId: string }>>
+      }
+    ).getPluginCandidates(morningContext)) as Array<{ itemId: string }>
+
+    expect(candidates.map((c) => c.itemId)).toEqual([
+      'candidate-0',
+      'candidate-1',
+      'candidate-2',
+      'candidate-3'
+    ])
   })
 })

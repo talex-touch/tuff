@@ -1,7 +1,4 @@
 <script lang="ts" name="SectionItem" setup>
-import { useRouter } from 'vue-router'
-import { createThemeDetailRoute } from './section-route'
-
 const props = defineProps<{
   title: string
   label?: string
@@ -11,18 +8,16 @@ const props = defineProps<{
 
 const value = defineModel<string>('modelValue')
 
-const router = useRouter()
-
+/**
+ * Both halves of the tile select the effect. The label row used to `router.push` to
+ * `/styles/theme` instead, which replaced the settings page with the standalone styles
+ * page and then rendered nothing, because `ThemeStyle` has no `<router-view>` for that
+ * child. A control that looks like it picks an option must pick the option.
+ */
 function handleClick() {
   if (props.disabled) return
 
   value.value = props.title
-}
-
-function goRouter() {
-  if (props.disabled) return
-
-  router.push(createThemeDetailRoute(props.title))
 }
 </script>
 
@@ -48,9 +43,10 @@ function goRouter() {
     </button>
     <button
       type="button"
-      class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2"
+      class="SectionItem-Bar SectionItem-Action px-2 flex items-center cursor-pointer gap-2"
       :disabled="disabled"
-      @click="goRouter"
+      :aria-pressed="value === title"
+      @click="handleClick"
     >
       <div w-3 h-3 rounded-full class="bg-[var(--section-active-color)]" />
       <span v-shared-element:[`theme-preference-${title}`]>

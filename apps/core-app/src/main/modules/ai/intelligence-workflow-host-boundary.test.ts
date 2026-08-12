@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './intelligence-test-harness'
 import { IntelligenceModule } from './intelligence-module'
 
+// Mirrors SAFE_HANDLER_PUBLIC_ERROR in src/main/utils/safe-handler.ts.
+const SAFE_PUBLIC_ERROR = 'The operation failed. Please retry.'
+
 const workflowServiceMocks = vi.hoisted(() => ({
   listWorkflows: vi.fn(),
   getWorkflow: vi.fn(),
@@ -16,7 +19,10 @@ const workflowServiceMocks = vi.hoisted(() => ({
 vi.mock('./intelligence-workflow-service', () => ({
   intelligenceWorkflowService: workflowServiceMocks
 }))
-vi.mock('@talex-touch/utils/transport/events/types', () => ({
+// Spread the real module: a full replacement drops every export the
+// module later gains, which is how PRIVACY_DATA_CATEGORIES broke this.
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
 vi.mock('../sentry/sentry-service', () => {
@@ -145,10 +151,13 @@ describe('intelligenceModule workflow control-plane host boundary', () => {
     async ({ eventName, payload }) => {
       const { handlers, waitForAgentRuntime } = captureWorkflowHandlers()
 
-      await expect(getHandler(handlers, eventName)(payload, pluginContext())).resolves.toEqual({
-        ok: false,
-        error: 'INTELLIGENCE_HOST_ONLY_CAPABILITY'
-      })
+      // safeApiHandler redacts every thrown error to one public string, so the
+      // internal INTELLIGENCE_HOST_ONLY_CAPABILITY code deliberately does not
+      // cross the boundary. Asserting the redaction, and that the code does not
+      // leak, is the contract -- the security half is the untouched service below.
+      const response = await getHandler(handlers, eventName)(payload, pluginContext())
+      expect(response).toEqual({ ok: false, error: SAFE_PUBLIC_ERROR })
+      expect(JSON.stringify(response)).not.toContain('INTELLIGENCE_HOST_ONLY_CAPABILITY')
       expect(waitForAgentRuntime).not.toHaveBeenCalled()
       expectWorkflowServiceUntouched()
     }

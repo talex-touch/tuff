@@ -1,0 +1,30 @@
+{
+  "id": "tuffex-ai-conversation-stream",
+  "name": "tuffex-ai-conversation-stream",
+  "title": "TxConversationStream 会话流（动态高度虚拟滚动 + 触顶历史加载）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-tuffex-ai-suite",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Implement it. TxAiConversation.vue is 91 lines and contains no virtualisation, no stick-to-bottom, no loadOlder and no hasMore, so none of the four criteria has an implementation to test yet.",
+    "blocker": "None. This is unstarted work rather than blocked work.",
+    "evidence": "Checked 2026-08-11 against the criteria rather than the suite: the ai-elements tests that pass cover message rendering, not the scroller. TxAiConversation.vue has zero occurrences of virtual, windowed, visibleRange, stickToBottom, loadOlder or hasMore."
+  }
+}

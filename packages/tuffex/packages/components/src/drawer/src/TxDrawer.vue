@@ -3,7 +3,10 @@ import type { CSSProperties, Slots } from 'vue'
 import type { DrawerDirection, DrawerEmits, DrawerProps } from './types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useSlots, watch } from 'vue'
 import TxDivider from '../../divider/src/TxDivider.vue'
-import { getZIndex, nextZIndex, refreshZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 const MOBILE_BREAKPOINT = 768
 const DRAWER_Z_INDEX_SEED = 10000
@@ -45,7 +48,7 @@ const emit = defineEmits<DrawerEmits>()
 const slots: Slots = useSlots()
 
 const drawerRef = ref<HTMLElement | null>(null)
-const internalZIndex = ref(getZIndex())
+const internalZIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const isMobile = ref(false)
 let previouslyFocusedElement: HTMLElement | null = null
@@ -170,12 +173,12 @@ watch(
   (newVal) => {
     if (newVal) {
       if (props.zIndex != null) {
-        refreshZIndex(props.zIndex, 'drawer(zIndex prop)')
+        zIndexAllocator.refresh(props.zIndex, 'drawer(zIndex prop)')
       }
       else {
-        refreshZIndex(DRAWER_Z_INDEX_SEED, 'drawer')
+        zIndexAllocator.refresh(DRAWER_Z_INDEX_SEED, 'drawer')
       }
-      internalZIndex.value = props.zIndex ?? nextZIndex()
+      internalZIndex.value = props.zIndex ?? zIndexAllocator.next()
       previouslyFocusedElement = typeof document !== 'undefined' ? document.activeElement as HTMLElement : null
       emit('open')
       nextTick(() => {

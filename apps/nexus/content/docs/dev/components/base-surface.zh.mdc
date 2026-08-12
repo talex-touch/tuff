@@ -220,10 +220,10 @@ code: |
 | `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB 通道偏移（底层色散控制）。 |
 | `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | refraction 位移取样通道。 |
 | `mixBlendMode` | `string` | `'difference'` | refraction 混合模式。 |
-| `refractionStrength` | `number` | - | 0-100，统一控制折射强度。 |
-| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | - | 折射风格预设。 |
+| `refractionStrength` | `number` | `62` | 0-100，统一控制折射强度（折射模型激活时的实际兜底值）。 |
+| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 折射风格预设（未显式传入时按 `'filmic'` 计算）。 |
 | `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | 折射色调预设（`vivid` 更通透，`mist` 更柔和）。 |
-| `refractionAngle` | `number` | - | 色散主方向角度（度）。 |
+| `refractionAngle` | `number` | `-24` | 色散主方向角度（度，未显式传入时按 `-24` 计算）。 |
 | `refractionLightX` / `refractionLightY` | `number` | - | 光源锚点（0-1）。 |
 | `refractionHaloOpacity` | `number` | - | halo 透明度（0-1），不传时用内置 filmic 模型。 |
 | `overlayOpacity` | `number` | `0` | 非 mask 模式下附加 mask 层透明度。 |
@@ -267,6 +267,15 @@ code: |
 | `--tx-surface-refraction-light-x` / `--tx-surface-refraction-light-y` | `refractionLightX` / `refractionLightY` 或角度模型 | 折射光源锚点百分比。 |
 | `--tx-surface-refraction-strength` | `refractionStrength` 模型 | 静止、运动和恢复过程中的混合光学强度。 |
 | `--tx-surface-fake-index` | `fakeIndex` prop | fake 伪元素渲染层的 z-index。 |
+| `--tx-surface-fake-bg` | `color` prop 或主题兜底 | fake 模式伪元素的背景色。 |
+| `--tx-surface-fake-opacity` | mask 透明度模型 | fake 模式伪元素的透明度。 |
+| `--tx-surface-mask-opacity-percent` | mask 透明度模型 | mask 透明度的百分比形式（internal，插值输出，勿覆写）。 |
+| `--tx-surface-motion-cover-opacity` | 运动状态模型 | refraction 运动遮盖层透明度（internal）。 |
+| `--tx-surface-refraction-edge-opacity` | 光学模型 | refraction 边缘高光层透明度（internal）。 |
+| `--tx-surface-refraction-streak-angle` | `refractionAngle` 模型 | 折射拉丝角度（角度模型 +92deg，internal）。 |
+| `--tx-surface-refraction-{filter,mask}-{base,primary,secondary,veil}-weight` / `--tx-surface-refraction-streak-weight` | profile/tone 权重模型 | 各光学层的混合权重族（internal）。 |
+| `--tx-surface-refraction-*-gain` / `-boost` / `-base`、`--tx-surface-refraction-halo-opacity`、`--tx-surface-refraction-mask-effective-opacity` | profile/tone 派生量 | 光学插值的派生输出族（internal）。 |
+| `--tx-surface-refraction-mask-color` | 主题钩子（消费） | refraction 各渐变层的基色，可在主题中覆写（默认 `#fff` 系兜底）。 |
 
 ## 交互契约
 
@@ -275,6 +284,7 @@ code: |
 - `blur` 与 `glass` 在 `moving=true` 或自动检测到 transform 运动时降级。`fallbackMode='mask'` 会优先使用 `fallbackMaskOpacity`；`fallbackMode='pure'` 不渲染 mask 层。
 - `glass` 与 `refraction` 会把归一化后的几何和光学参数透传给 `TxGlassSurface`；`brightness <= 3` 会按倍率转换成百分比。
 - `refraction` 会渲染 glass、filter、mask、可选 motion-cover 和 edge 层，并暴露 renderer/profile/tone class 与 light/strength CSS 变量。
+- `refractionStrength` / `refractionAngle` / `refractionProfile` 任一显式传入即切换到派生折射模型（`shouldUseRefractionModel`），未传的项按 `62` / `-24` / `'filmic'` 兜底。
 - `autoDetect` 监听根节点及祖先节点的 `style` mutation，以及 `transitionstart`、`transitionend`、`transitioncancel`；卸载时会移除监听器和 observer。
 - `settleDelay` 与 `transitionDuration` 都会影响降级恢复，实际 settle timer 至少等于 transition duration。
 - `refraction` 在运动中仍保持折射渲染器启用，但会在运动/恢复过程中降低再恢复光学参数。
@@ -291,7 +301,7 @@ code: |
 ## 审阅说明
 
 - 已对照 `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`、`types.ts`、`base-surface-motion.ts`、`base-surface-math.ts` 和 `style/index.scss` 核对。
-- CSS 变量表已改为记录组件实际发出或消费的运行时变量，不再保留早期实现遗留的 blur background 变量说明。
+- CSS 变量表覆盖组件发射的全部运行时变量（标注 internal 的行是插值输出，不作为覆写点）以及消费的主题钩子 `--tx-surface-refraction-mask-color`。
 - 现有测试覆盖根标签/radius/color 变量、mask 透明度 clamp、blur 降级、pure 降级、归一化后的 `TxGlassSurface` props、refraction class/light 变量和 auto-detect 清理。
 - 源码没有事件或暴露方法；视觉状态通过 props 和 CSS 变量控制。
 

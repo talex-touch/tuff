@@ -337,4 +337,98 @@ describe('txTabs', () => {
     expect(size).not.toBeUndefined()
     expect(size).toEqual({ width: 320, height: 180 })
   })
+
+  it('keeps the tablist to one tab stop and links each tab to its panel', async () => {
+    const wrapper = mountTabs()
+    await nextTick()
+
+    const tabItems = wrapper.findAll('.tx-tab-item')
+    // ARIA tablist: exactly one tab stop, on the selected tab.
+    expect(tabItems.map(item => item.attributes('tabindex'))).toEqual(['0', '-1', '-1'])
+
+    const panel = wrapper.find('[role="tabpanel"]')
+    const activeTab = tabItems[0]
+    expect(activeTab.attributes('aria-controls')).toBe(panel.attributes('id'))
+    expect(panel.attributes('aria-labelledby')).toBe(activeTab.attributes('id'))
+    expect(activeTab.attributes('id')).toBeTruthy()
+  })
+
+  it('moves between tabs with arrow keys', async () => {
+    // A horizontal tablist: placement defaults to 'left', where the pattern
+    // correctly uses Up/Down instead.
+    const wrapper = mountTabs({ placement: 'top' })
+    await nextTick()
+
+    const tablist = wrapper.find('[role="tablist"]')
+    expect(tablist.attributes('aria-orientation')).toBe('horizontal')
+
+    await tablist.trigger('keydown', { key: 'ArrowRight' })
+    await nextTick()
+    expect(wrapper.findAll('.tx-tab-item')[1].attributes('aria-selected')).toBe('true')
+
+    await tablist.trigger('keydown', { key: 'ArrowLeft' })
+    await nextTick()
+    expect(wrapper.findAll('.tx-tab-item')[0].attributes('aria-selected')).toBe('true')
+
+    await tablist.trigger('keydown', { key: 'End' })
+    await nextTick()
+    // The fixture's last tab is disabled, so End lands on the last *enabled*
+    // tab — disabled tabs are not navigation targets.
+    const items = wrapper.findAll('.tx-tab-item')
+    expect(items[1].attributes('aria-selected')).toBe('true')
+    expect(items[2].attributes('aria-selected')).toBe('false')
+
+    await tablist.trigger('keydown', { key: 'Home' })
+    await nextTick()
+    expect(wrapper.findAll('.tx-tab-item')[0].attributes('aria-selected')).toBe('true')
+  })
+
+  it('uses up/down on a vertical tablist', async () => {
+    const wrapper = mountTabs({ placement: 'left' })
+    await nextTick()
+
+    const tablist = wrapper.find('[role="tablist"]')
+    expect(tablist.attributes('aria-orientation')).toBe('vertical')
+
+    await tablist.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(wrapper.findAll('.tx-tab-item')[1].attributes('aria-selected')).toBe('true')
+
+    // The cross-axis key is not the navigation key for this orientation.
+    await tablist.trigger('keydown', { key: 'ArrowRight' })
+    await nextTick()
+    expect(wrapper.findAll('.tx-tab-item')[1].attributes('aria-selected')).toBe('true')
+  })
+
+  it('moves focus without depending on the CSS global', async () => {
+    // jsdom (and SSR) has no `CSS`, so building a `#id` selector via CSS.escape
+    // rejected inside the nextTick callback. Every assertion still passed, so the
+    // only symptom was vitest exiting non-zero on an unhandled rejection — assert
+    // on the rejection itself, not on the visible outcome.
+    const originalCss = (globalThis as any).CSS
+    delete (globalThis as any).CSS
+
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown) => rejections.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+
+    try {
+      const wrapper = mountTabs({ placement: 'top' })
+      await nextTick()
+
+      const tablist = wrapper.find('[role="tablist"]')
+      await tablist.trigger('keydown', { key: 'ArrowRight' })
+      await nextTick()
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(rejections).toEqual([])
+      expect(wrapper.findAll('.tx-tab-item')[1].attributes('aria-selected')).toBe('true')
+    }
+    finally {
+      process.off('unhandledRejection', onUnhandled)
+      if (originalCss !== undefined)
+        (globalThis as any).CSS = originalCss
+    }
+  })
 })

@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   getPluginByName: vi.fn()
 }))
 
-vi.mock('../permission/index', () => ({
+vi.mock('../permission/permission-module-ref', () => ({
   getPermissionModule: mocks.getPermissionModule
 }))
 

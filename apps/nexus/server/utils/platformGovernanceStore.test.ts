@@ -34,6 +34,25 @@ function event(providerId: string) {
   } as any
 }
 
+/**
+ * Analytics fixtures are anchored to the run date rather than written out.
+ *
+ * They used to hardcode 2026-05-20..22 against a `{ days: 30 }` query. That sat
+ * inside the window when it was written and silently fell out of it as time
+ * passed — the query then correctly returned nothing, and every aggregate read
+ * zero. Only the spacing between the days is load-bearing for the derived
+ * averages, so the dates are pinned to UTC midnight and offset backwards.
+ */
+function utcMidnightDaysAgo(days: number) {
+  const base = new Date()
+  base.setUTCDate(base.getUTCDate() - days)
+  return base.toISOString().slice(0, 10)
+}
+
+function daysAgoAt(days: number, hour: string) {
+  return `${utcMidnightDaysAgo(days)}T${hour}:00:00.000Z`
+}
+
 describe('platformGovernanceStore', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -2636,11 +2655,11 @@ describe('platformGovernanceStore', () => {
     const pluginId = `plugin_retention_${marker}`
 
     const records = [
-      ['retention-returning@example.com', 'download', 1, '2026-05-20T09:00:00.000Z'],
-      ['retention-returning@example.com', 'invoke', 2, '2026-05-21T09:00:00.000Z'],
-      ['retention-repeat@example.com', 'invoke', 1, '2026-05-20T10:00:00.000Z'],
-      ['retention-repeat@example.com', 'invoke', 1, '2026-05-22T10:00:00.000Z'],
-      ['retention-new@example.com', 'install', 1, '2026-05-22T11:00:00.000Z'],
+      ['retention-returning@example.com', 'download', 1, daysAgoAt(3, '09')],
+      ['retention-returning@example.com', 'invoke', 2, daysAgoAt(2, '09')],
+      ['retention-repeat@example.com', 'invoke', 1, daysAgoAt(3, '10')],
+      ['retention-repeat@example.com', 'invoke', 1, daysAgoAt(1, '10')],
+      ['retention-new@example.com', 'install', 1, daysAgoAt(1, '11')],
     ] as const
 
     for (const [actorId, action, quantity, occurredAt] of records) {
@@ -2678,7 +2697,7 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.retention.trend).toEqual([
       expect.objectContaining({
-        date: '2026-05-20',
+        date: utcMidnightDaysAgo(3),
         newActors: 2,
         returningActors: 0,
         activeActors: 2,
@@ -2687,7 +2706,7 @@ describe('platformGovernanceStore', () => {
         retentionRate: 0,
       }),
       expect.objectContaining({
-        date: '2026-05-21',
+        date: utcMidnightDaysAgo(2),
         newActors: 0,
         returningActors: 1,
         activeActors: 1,
@@ -2696,7 +2715,7 @@ describe('platformGovernanceStore', () => {
         retentionRate: 100,
       }),
       expect.objectContaining({
-        date: '2026-05-22',
+        date: utcMidnightDaysAgo(1),
         newActors: 1,
         returningActors: 1,
         activeActors: 2,
@@ -2716,12 +2735,12 @@ describe('platformGovernanceStore', () => {
     const pluginId = `plugin_owner_action_${marker}`
 
     const records = [
-      [`owner-download-${marker}@example.com`, 'download', 80, '2026-05-20T09:00:00.000Z'],
-      [`owner-install-1-${marker}@example.com`, 'install', 1, '2026-05-21T09:00:00.000Z'],
-      [`owner-install-2-${marker}@example.com`, 'install', 1, '2026-05-21T10:00:00.000Z'],
-      [`owner-install-3-${marker}@example.com`, 'install', 1, '2026-05-21T11:00:00.000Z'],
-      [`owner-install-4-${marker}@example.com`, 'install', 1, '2026-05-21T12:00:00.000Z'],
-      [`owner-invoke-${marker}@example.com`, 'invoke', 5, '2026-05-22T09:00:00.000Z'],
+      [`owner-download-${marker}@example.com`, 'download', 80, daysAgoAt(3, '09')],
+      [`owner-install-1-${marker}@example.com`, 'install', 1, daysAgoAt(2, '09')],
+      [`owner-install-2-${marker}@example.com`, 'install', 1, daysAgoAt(2, '10')],
+      [`owner-install-3-${marker}@example.com`, 'install', 1, daysAgoAt(2, '11')],
+      [`owner-install-4-${marker}@example.com`, 'install', 1, daysAgoAt(2, '12')],
+      [`owner-invoke-${marker}@example.com`, 'invoke', 5, daysAgoAt(1, '09')],
     ] as const
 
     for (const [actorId, action, quantity, occurredAt] of records) {
@@ -2762,7 +2781,7 @@ describe('platformGovernanceStore', () => {
         retentionRate: 0,
         topCountryKey: 'us',
         topCountryShare: 100,
-        latestDate: '2026-05-22',
+        latestDate: utcMidnightDaysAgo(1),
       }),
       expect.objectContaining({
         key: 'low-install-conversion',

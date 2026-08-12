@@ -59,7 +59,7 @@ import { ReleaseNotesService } from './release-notes-service'
 import { UpdateActionController } from './services/update-action-controller'
 import { UpdateInstallCoordinator } from './services/update-install-coordinator'
 import { UpdateDownloadAdapter } from './services/update-download-adapter'
-import { UpdateSystem } from './update-system'
+import { isRendererOverrideAvailable, UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
 import type { NotificationService } from '../download/notification-service'
 
@@ -157,6 +157,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     const typedDownloadCenter = downloadCenterModule as DownloadCenterModule
     this.updateNotificationService = typedDownloadCenter.getNotificationService()
+    // The stored preference has to reach the service on boot too, not only when the switch moves.
+    if (typeof this.settings.notifyOnUpdate === 'boolean') {
+      this.updateNotificationService.updateConfig({
+        updateAvailable: this.settings.notifyOnUpdate,
+        updateDownloadComplete: this.settings.notifyOnUpdate
+      })
+    }
     this.updateSystem = new UpdateSystem(typedDownloadCenter, {
       autoDownload: this.settings.autoDownload,
       autoCheck: this.settings.enabled,
@@ -435,7 +442,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }),
 
       tx.on(UpdateEvents.getSettings, async () => {
-        return { success: true, data: this.settings }
+        // `rendererOverrideAvailable` is derived from the process environment rather than stored,
+        // so it rides along with the settings instead of needing its own channel.
+        return {
+          success: true,
+          data: {
+            ...this.settings,
+            rendererOverrideAvailable: isRendererOverrideAvailable()
+          }
+        }
       }),
 
       tx.on(
@@ -477,6 +492,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               }
               if (sanitizedSettings.updateChannel) {
                 this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
+              }
+              if (typeof sanitizedSettings.notifyOnUpdate === 'boolean') {
+                // Applied straight away rather than at next launch: a notification preference the
+                // user has to restart for reads as broken.
+                this.updateNotificationService?.updateConfig({
+                  updateAvailable: sanitizedSettings.notifyOnUpdate,
+                  updateDownloadComplete: sanitizedSettings.notifyOnUpdate
+                })
               }
               if (typeof sanitizedSettings.rendererOverrideEnabled === 'boolean') {
                 const enabled = sanitizedSettings.rendererOverrideEnabled

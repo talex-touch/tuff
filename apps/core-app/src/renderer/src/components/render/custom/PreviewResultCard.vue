@@ -4,6 +4,9 @@ import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   item: TuffItem
@@ -77,18 +80,18 @@ const accentStyle = computed(() => {
       <div class="card-actions">
         <TxButton variant="bare" class="hint" native-type="button" @click="emit('copy-primary')">
           <span class="hint-key">↵</span>
-          复制结果
+          {{ t('previewHistory.copyResult', '复制结果') }}
         </TxButton>
         <TxButton variant="bare" class="hint" native-type="button" @click="emit('show-history')">
           <span class="hint-key">{{ historyVisible ? '⌘→' : '⌘←' }}</span>
-          最近处理
+          {{ t('previewHistory.recentTitle', '最近处理') }}
         </TxButton>
       </div>
     </div>
     <div class="card-body">
       <div class="primary">
         <div class="primary-label">
-          {{ resolvedPayload?.primaryLabel || '结果' }}
+          {{ resolvedPayload?.primaryLabel || t('previewHistory.resultLabel', '结果') }}
         </div>
         <div v-if="qrCodeSrc" class="qr-preview">
           <img :src="qrCodeSrc" alt="QR Code" />

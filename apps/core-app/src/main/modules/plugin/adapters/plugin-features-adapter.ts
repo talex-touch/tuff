@@ -21,7 +21,6 @@ import { PluginStatus } from '@talex-touch/utils/plugin'
 import { matchFeature } from '@talex-touch/utils/search'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
-import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { resolveClipboardInputs } from '../../box-tool/search-engine/utils/resolve-clipboard-inputs'
 
 import { pluginModule } from '../plugin-module'
@@ -36,7 +35,8 @@ function getErrorCode(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined
 }
 
-function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
+/** Exported for direct branch coverage; the search path reaches it via matchesCommand. */
+export function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
     return true
   }
@@ -58,10 +58,43 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
       }
       return queryText.includes(command.value as string)
     case 'regex':
-      return (command.value as RegExp).test(queryText)
+      // A manifest can only carry the pattern as a string, so the old `as RegExp` cast threw
+      // `command.value.test is not a function` on every real declaration (#885). Compile here.
+      if (Array.isArray(command.value)) {
+        return command.value.some((value) => testRegexCommand(value, queryText))
+      }
+      return testRegexCommand(command.value as string, queryText)
+    case 'function':
+      // Declared in the public type but unreachable: a matcher function cannot survive
+      // manifest JSON or IPC. It used to fall through to `false`, so a plugin declaring it saw
+      // its feature silently never match with nothing to explain why.
+      pluginFeaturesLog.warn(
+        'command type "function" cannot be declared in manifest.json - a matcher function does not survive JSON or IPC. Use "regex" or "match".'
+      )
+      return false
     default:
       return false
   }
+}
+
+const regexCommandCache = new Map<string, RegExp | null>()
+
+/** Compiles once per pattern; an invalid pattern must not match rather than throw. */
+function testRegexCommand(pattern: string, queryText: string): boolean {
+  if (typeof pattern !== 'string') return false
+
+  let compiled = regexCommandCache.get(pattern)
+  if (compiled === undefined) {
+    try {
+      compiled = new RegExp(pattern)
+    } catch {
+      pluginFeaturesLog.warn(`ignoring invalid regex command pattern: ${pattern}`)
+      compiled = null
+    }
+    regexCommandCache.set(pattern, compiled)
+  }
+
+  return compiled ? compiled.test(queryText) : false
 }
 
 function normalizeClassIconValue(value: string): string {
@@ -104,6 +137,19 @@ function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints | u
   return feature.footerHints
 }
 
+/**
+ * The slice of the search engine this adapter drives.
+ *
+ * Declared structurally rather than imported, so the adapter stays off search-core's import graph
+ * (#523). search-core's `attach(this)` call is what type-checks that the real engine still
+ * satisfies this shape, so the two cannot drift apart silently.
+ */
+export interface SearchEngineActivationHost {
+  getActivationState: () => IProviderActivate[] | null
+  activateProviders: (activations: IProviderActivate[] | null) => void
+  deactivateProvider: (uniqueKey: string) => void
+}
+
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
@@ -116,11 +162,28 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   ]
 
   public readonly priority = 'fast' as const
-  public readonly expectedDuration = 30
+
+  private host: SearchEngineActivationHost | null = null
+
+  /** Called by the search engine as it registers this provider. */
+  public attach(host: SearchEngineActivationHost): void {
+    this.host = host
+  }
+
+  /**
+   * Throws rather than no-oping: registering activations against a missing engine would leave
+   * plugin features absent from CoreBox results with nothing in the logs to explain it, which is
+   * the failure mode #523 describes.
+   */
+  private get engine(): SearchEngineActivationHost {
+    if (!this.host)
+      throw new Error('[PluginFeaturesAdapter] attach() must run before the adapter is used')
+    return this.host
+  }
 
   public async handleActiveFeatureInput(payload: CoreBoxInputChangeRequest): Promise<boolean> {
     const query = payload.query
-    const activationState = searchEngineCore.getActivationState()
+    const activationState = this.engine.getActivationState()
 
     const activeFeatureActivation = activationState?.find((a) => a.id === this.id)
     if (!activeFeatureActivation?.meta?.pluginName) {
@@ -299,13 +362,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         showInput: shouldShowInput,
         forceMax: feature.interaction?.forceMax === true
       }
-      searchEngineCore.activateProviders([activation])
+      this.engine.activateProviders([activation])
 
       try {
         await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
       } catch (error) {
         pluginFeaturesLog.error('[PluginFeaturesAdapter] webcontent feature execute failed:', error)
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
@@ -315,7 +378,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         )
       ) {
         // Deactivate if view loading failed
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
@@ -357,7 +420,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         showInput: shouldShowInput, // show input if feature accepts input types or has allowInput
         forceMax: feature.interaction?.forceMax === true
       }
-      searchEngineCore.activateProviders([activation])
+      this.engine.activateProviders([activation])
 
       logExecuteBreadcrumb('push-trigger-start')
       let shouldActivate: boolean | void
@@ -369,13 +432,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           durationMs: Date.now() - executeStart,
           errorCode: getErrorCode(error)
         })
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
       if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
         // Deactivate if feature explicitly returns false
-        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
@@ -507,7 +570,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   }
 
   public async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
-    const activationState = searchEngineCore.getActivationState()
+    const activationState = this.engine.getActivationState()
 
     if (activationState) {
       const activeFeatureActivation = activationState.find((a) => a.id === this.id)

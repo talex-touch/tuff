@@ -305,7 +305,10 @@ export class StartupAnalytics {
     try {
       this.reportQueueStore = new ReportQueueStore({
         auxDb: databaseModule.getAuxDb(),
-        coreDb: databaseModule.getDb()
+        coreDb: databaseModule.getDb(),
+        // Live resolution: startup analytics runs exactly in the window where
+        // the background aux init may not have completed yet (R3).
+        resolveAuxDb: () => ({ db: databaseModule.getAuxDb(), isAux: databaseModule.isAuxReady() })
       })
       return this.reportQueueStore
     } catch {

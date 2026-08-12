@@ -88,20 +88,25 @@
 
 ### 🟠 高危工程风险
 
-- [x] **R1 — Rust 截图模块已接入 CI/安装构建链** ✅ 已修（`07-29-macos-screenshot-capture-core`，原跟踪 #321 已关闭）
+- [ ] **R1 — Rust 截图模块已接入 CI/安装构建链** ⚠️ **契约测试已接入，发布路径未接入**（2026-08-07 复验，原判「已修 / #321 已关闭」不成立——[#321](https://github.com/talex-touch/tuff/issues/321) 仍 open）
   - 修复：`native-protocol.yml` 在 macOS/Windows/Linux 安装 xcap 所需 Linux build deps，构建 ordinary screenshot addon，执行真实 dlopen/export contracts；随后构建 deterministic addon 跑 `.node -> NapiCarrier -> NativeTransport` integration，并在结束前恢复 ordinary addon。
   - 包合同：`@talex-touch/tuff-native.files` 显式包含 macOS/AX/stream/xcap production backend 源码与 `build/Release/tuff_native_screenshot.node`，继续排除 fixture、contract test backend 和 Cargo target。
   - 证据：本地 ordinary/deterministic 双构建、普通 addon strict macOS integration、31/31 Node contracts 和 `pnpm pack --dry-run` 通过；tarball 包含 addon 与全部 production backend，未包含 `test_backend.rs`/contract fixtures/target。
   - 边界：Windows/Linux authoritative native build 由新增 CI matrix 执行；signed Electron packaged runtime evidence 仍由 `07-29-screenshot-packaged-evidence` 独立承接。
+  - ⚠️ **发布路径未接入**（2026-08-07 复验）：`build:screenshot` 的 3 处调用全在 `native-protocol.yml`——那是**契约测试**工作流，不产出发布物。真正的 `build-and-release.yml` 对 `screenshot` / `audio` / `cargo` / `rust` **零命中**（正对照：`packages/tuff-native` 命中 2 次），它在该包里只做 Windows 限定的 Everything 自检与 `pnpm run rebuild`（node-gyp）。且 `apps/core-app/scripts/` 里查不到 `tuff_native_screenshot`，preflight/afterPack 都不要求它。发布产物大概率不含该 addon。跟踪：[#321](https://github.com/talex-touch/tuff/issues/321)。
+  - ⚠️ **同型风险仍在 audio addon 上**（2026-08-07 复验）：`packages/tuff-native/native-audio/` 存在且有 `build:audio` 脚本，但 `.github/workflows/` 里**没有任何 workflow 构建或加载它**（`native-protocol.yml` 对 audio 零提及）。也就是说截图模块修掉的那个「手工 Cargo 构建、CI 无验证」缺口，在 audio 上原样存在。跟踪：[#322](https://github.com/talex-touch/tuff/issues/322)。
 
 - [ ] **R2 — macOS 发行架构范围未决**
   - 位置：`electron-builder.yml:100-119` 当前仅产出 darwin/arm64；下载与 OTA 选择必须与该架构策略一致。
   - 风险：未明确支持范围会让 Intel 用户收到不兼容资产，或迫使发行链临时引入未经签名、公证和真机验证的 x64/Universal 变体。**需产品决策**：保持 arm64-only 并显式告知，或新增完整 x64/Universal 发布矩阵。
   - 2026-07-21 进展：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；OTA 已移除 `electron-updater` 双路径。R2 仍保持 open：架构策略、发布清单、下载选择和真机证据尚未收敛。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
+  - 2026-08-07 复验：`electron-updater` 已不在任何 `package.json` 中声明，双路径确已移除——本条**只剩 Intel/Universal 范围这个产品决策**，不再含 artifact 冲突成分。#311 仍 open。
 
-- [ ] **R3 — 大目录扫描/对账内存峰值**
-  - 位置：`addon/files/workers/file-scan-worker.ts:82`（scanDirectory 全物化）、`file-scan-worker-client.ts:132`（client 再累积）、`addon/files/services/file-provider-reconciliation-run-service.ts:122`（磁盘全集 + DB 全集 `LIKE` 无 LIMIT）
-  - 风险：同一文件列表约 3 份同存，无分块流式落库；百万级根目录（整个 home）OOM。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
+- [ ] **R3 — 大目录扫描/对账内存峰值** ⚠️ 结构问题已消除，**只剩实测未做**（2026-08-07 复验）
+  - 原描述的三层物化**均已不成立**：worker 逐批 post 并等 `batchAckWaiters` 背压；client 的累积版 `scan()` 已删除（[#1091](https://github.com/talex-touch/tuff/pull/1091)），流水线只用 `scanBatches()`；reconciliation 改为消费 `AsyncIterable`、`reconcile()` 逐批调用、`getDbFilesByPaths(diskPaths)` 按批限定路径，行数统计改为 `countRootRows` 普查而非物化集合。
+  - 2026-08-07 **已实测**（`apps/core-app/scripts/file-scan-memory-benchmark.mjs`，合成树 25k/100k/400k × batch 100/500/2000）：`retained` 全部 ≈ 0，无累积；**40 万文件在 `--max-old-space-size=64` 下完整跑完**，峰值堆 33.5 MiB、retained −0.8 MiB。取消在 10 批后立即生效（112ms 返回）。worker 侧在发下一批前 `await acknowledged`，在途未确认批次恒为 1。
+  - ⚠️ **一处需要写清楚的观测**：无堆压力时峰值堆随文件数增长（batch=500 下 13.9 → 33.4 → 58.7 MiB），且**三种批大小在同一文件数下几乎相同**——所以「峰值由 batch size 决定」这句话按字面不成立。真实机制是 V8 有余量时惰性扩堆；施压后同一工作量只用三分之一空间即可完成，说明**上界是真的、只是不由 batch size 表达**。
+  - 仍开的部分：reconciliation 分页与持久化落库的同类实测（本基准只覆盖 traversal）。跟踪：[#318](https://github.com/talex-touch/tuff/issues/318) / [#480](https://github.com/talex-touch/tuff/issues/480)。
 
 ### 🟡 中危架构债
 
@@ -114,9 +119,13 @@
 
 - [ ] **R6 — 平台分支散落、`withOSAdapter` 采用不足**
   - 位置：main 目录 141 处 `process.platform`（`touch-window.ts:83`、`update-system.ts:1445`、`capability-adapter.ts` 通篇内联三分支…），`withOSAdapter` 几乎只有 startup-guard 用。**注意**：审计 OS-04/OS-05 已判定并非全部是 bypass，迁移需逐项复核。
+  - 2026-08-07 **已完成归类**（[#349](https://github.com/talex-touch/tuff/issues/349)，清单见 `docs/engineering/platform-branch-inventory.md`）：现为 **296 处**，但**只有 209 处比较 + 2 个 switch 是真分支**；53 处是 `platform: process.platform` 数据传递、32 处是模板/日志。**把 296 当迁移目标会高估 41%**；11 个文件的全部出现都属数据传递（`screenshot-service.ts` 独占 8 处），`plugin-module.ts` 的 14 处**全部**如此——它出现在「平台分支」排行第六是误读。
+  - 归类：A 原生/后端边界（保持显式，如 Windows 独有的 `everything-provider.ts`）· B 策略/能力三路判定（`platform-permission-service.ts` 25 处为首选候选）· C adapter 层自身（`capability-adapter.ts`，位置正确）· D 偶发重复（同一决策写多遍，如 `everything-provider.ts:325-330` 六行各自重算 `=== 'win32'`）· E 数据传递（非分支）。
+  - ⚠️ **`withOSAdapter` 目前不是合格的迁移目标**：它返回 `T | undefined`（`packages/utils/electron/env-tool.ts:79`），**没有类型化的 supported/degraded/unsupported，也没有 reason/recovery 码**，而 #349 验收条 4 正要求这些。先补契约再迁移，否则要迁两次。`withOSAdapter` 现有 5 个采用点。
 
-- [ ] **R7 — `getStatus` 轮询架空 worker 空闲关闭**
-  - 位置：`addon/files/workers/file-scan-worker-client.ts:70`（getStatus 开头 cancel、结尾重排 60s 窗口）；任何 <60s 轮询 worker 状态的面板都会让空闲 worker 永不自杀，架空 `idle-worker-shutdown` 的内存回收。另：退出无 `will-quit` 优雅 drain，在途 FTS 写可能丢。
+- [x] **R7 — `getStatus` 轮询架空 worker 空闲关闭** ✅ 已修（[#345](https://github.com/talex-touch/tuff/issues/345) / [PR #1089](https://github.com/talex-touch/tuff/pull/1089)，2026-08-07）
+  - 根因比原描述窄：`IdleWorkerShutdownController.schedule()` 本就幂等，真正让截止时间可移动的**只有 `getStatus()` 开头那一次 `cancel()`**。移除后状态读取变为纯观察——不创建 worker、不移动截止时间；metrics 在途仍会推迟终止，但走 `shouldShutdown()` 读 `metricsPending`，而不是重置时钟。fake-timer 测试覆盖高频轮询/活跃任务/已终止客户端/shutdown 四类。
+  - **未做**：退出时的有界 drain。`shutdown()` 仍是取消而非排空（provider 在更上层已 `drainIndexedSourceMutations('shutdown')`），若要改成有界排空需单开。
 
 - [ ] **R8 — Linux 全面二等公民**
   - 应用扫描 139 行 / 图标暴力 360 次 stat 无缓存（`addon/apps/linux.ts:15`）/ 无 OCR / 更新只 openPath / Everything 无对等 / 无验收框架（仅 windows-acceptance-\*）。
@@ -133,10 +142,13 @@
 
 ### 🟢 低危清理
 
-- [ ] **C1 — 死依赖**：`tesseract.js`(~29MB)/`mathjs`(~13MB) 仍在 `apps/core-app/package.json`，靠打包排除（`electron-builder.yml:48-57` 注释已承认未使用）。
-- [ ] **C2 — `expectedDuration` 死配置**：9 处 provider 声明，DSL 文档称按它排序，但 `search-gather.ts` 的 fast/deferred 层从不排序。
-- [ ] **C3 — `searchCache` 收益存疑**：`search-core.ts:145`，5s TTL/100 LRU，cacheKey 依赖激活态易失效，命中率天然低。
-- [ ] **C4 — 死代码**：`file-provider-watch-service.ts:79` 的 `handleFsAddedOrChanged/Unlinked` 从未订阅（真实增量走 `file-indexed-source.ts`）。
+- [x] **C1 — 死依赖** ✅ 已修（2026-08-07）：`mathjs` 已从两处 manifest、Vite externalize 例外与 electron-builder 排除项一并移除（[#338](https://github.com/talex-touch/tuff/issues/338) / [PR #1088](https://github.com/talex-touch/tuff/pull/1088)）；`tesseract.js` 在依赖树里已不存在，其残留的 build-allowlist 条目随 [#347](https://github.com/talex-touch/tuff/issues/347) / [PR #1084](https://github.com/talex-touch/tuff/pull/1084) 一并清除。
+  - **顺带纠正原判断**：`electron-builder.yml` 那段注释称「只把约 2MB 的 mathjs/number 子集打进 bundle」——实测**从未发生**。移除前后 `out/main/index.js` 只差 **21 字节**（就是被内联 package.json 里的那串依赖声明），bundle 内 `createBigNumberClass` / `decimal.js` / `typed-function` 命中数全为 0。
+- [x] **C2 — `expectedDuration` 死配置** ✅ 已修（[#333](https://github.com/talex-touch/tuff/issues/333) / [PR #1085](https://github.com/talex-touch/tuff/pull/1085)，2026-08-07）：10 处声明（9 provider + 1 插件适配器）、`ISearchProvider` 字段及其文档、设计文档引用全部移除。兄弟字段 `priority` 确有消费者（`search-gather.ts:364` 按 `p.priority === 'fast'` 分层），未动。
+- [ ] **C3 — `searchCache` 收益存疑**（2026-08-07 复验，行号更新 + 部分前提修正）：定义在 `search-core.ts:186`，常量在 `:105-112`（TTL 5s / MAX 100 / ITEM 200），唯一读取点 `:887`。
+  - **原判断「命中率天然低」未获证实**：渲染层只发 `{ text, inputs }`（`useSearch.ts:83`），不含时间戳或请求 id，相同查询**能**产生相同键。正确性面也比预想好——命中走 `materializeCachedSearchResult(entry, sessionId)` 用**新** sessionId，且按 `searchIndexCommitHub` 的 revision 失效。
+  - **真正的问题**：`buildSearchCacheKey`（`search-core-utils.ts:133`）把 `TuffQuery` 上除 `text`/`inputs` 外的**所有**字段收进 `extras`，而**没有任何测试断言「相同查询 → 相同键」**（现有三条只断言不同输入键不同）。将来任何人往 `TuffQuery` 加一个每请求都变的字段，命中率会**静默归零**而套件全绿。跟踪：[#346](https://github.com/talex-touch/tuff/issues/346)（保留/移除阈值仍待拍板）。
+- [x] **C4 — 死代码** ✅ 已修（[#342](https://github.com/talex-touch/tuff/issues/342) / [PR #1083](https://github.com/talex-touch/tuff/pull/1083)，2026-08-07）：两个 handler 连同只为它们存在的 `enqueueIncrementalUpdate` 依赖（声明/字段/构造赋值/上游传入的闭包）与三个类型 import 一并删除。确认路径：`file-provider.ts:2442` 传的是 `subscribeToFileSystemEvents: () => undefined`，真实增量在 `indexed-source-event-router.ts:93` 绑的是另一套命名的 `handleFileAddedOrChanged`。
 - [ ] **C5 — Windows OCR COM apartment**：`winrt_ocr.cpp:157` 每次 init 不 uninit → 线程复用下 `RPC_E_CHANGED_MODE` 风险。
 - [ ] **C6 — Windows 全链路重依赖 PowerShell**：应用扫描 4 源 + Everything 装 PATH 全经 `powershell -Command`，ExecutionPolicy 受限时大面积降级且扫描侧无降级 UI。
 

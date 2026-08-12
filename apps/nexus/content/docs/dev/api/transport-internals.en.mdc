@@ -436,7 +436,8 @@ code: |
 
     static fromJSON(obj) {
       return new TuffTransportError(obj.code, obj.message, {
-        eventName: obj.eventName
+        eventName: obj.eventName,
+        timestamp: obj.timestamp
       })
     }
   }

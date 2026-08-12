@@ -58,12 +58,6 @@ const authStateMock = vi.hoisted(() => {
 const appSettingMock = vi.hoisted(() => {
   const { reactive } = require('vue') as typeof VueModule
   return reactive({
-    auth: {
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    },
     security: {
       machineCodeHash: '',
       machineCodeAttestedAt: ''
@@ -135,17 +129,6 @@ vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: transportSendMock
   })
-}))
-
-vi.mock('@talex-touch/utils/common/storage/entity/app-settings', () => ({
-  appSettingOriginData: {
-    auth: {
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    }
-  }
 }))
 
 vi.mock('@talex-touch/utils/env', () => ({
@@ -278,10 +261,6 @@ describe('SettingUser login recovery', () => {
     authStateMock.displayName.value = ''
     authStateMock.primaryEmail.value = ''
     appSettingMock.dev.advancedSettings = false
-    appSettingMock.auth.useSecureStorage = true
-    appSettingMock.auth.secureStorageUserOverridden = false
-    appSettingMock.auth.secureStorageReminderShown = false
-    appSettingMock.auth.secureStorageUnavailable = false
     Object.assign(syncPreferenceMock.state, {
       enabled: false,
       autoEnabledAt: '',
@@ -308,6 +287,15 @@ describe('SettingUser login recovery', () => {
     })
     loginWithBrowserMock.mockReturnValue(new Promise(() => {}))
     reopenBrowserLoginMock.mockResolvedValue(undefined)
+  })
+
+  it('renders only the sync authorization switch and does not send a secure-store health query', () => {
+    authStateMock.isLoggedIn.value = true
+    const wrapper = mountSettingUser()
+
+    expect(wrapper.findAll('label')).toHaveLength(1)
+    expect(wrapper.find('label').text()).toContain('settingUser.syncEnabledTitle')
+    expect(transportSendMock).not.toHaveBeenCalled()
   })
 
   it('renders manual URL and short-code recovery copy actions', async () => {
@@ -357,7 +345,7 @@ describe('SettingUser login recovery', () => {
     expect(wrapper.find('[data-testid="login-recovery-cancel"]').exists()).toBe(false)
   })
 
-  it('renders shared compact account labels and sync status when advanced settings are disabled', async () => {
+  it('renders shared compact account labels with only the sync authorization control', async () => {
     appSettingMock.dev.advancedSettings = false
     authStateMock.isLoggedIn.value = true
     authStateMock.displayName.value = '4mj6b7umhtksb17uiuw1fi8yz6pe'
@@ -380,10 +368,11 @@ describe('SettingUser login recovery', () => {
     expect(text).toContain('shared-email:sjdla')
     expect(text).not.toContain('4mj6b7umhtksb17uiuw1fi8yz6pe')
     expect(text).not.toContain('sjdlaqwerty@privaterelay.linux.do')
-    expect(text).toContain('同步状态')
-    expect(text).toContain('状态：异常')
-    expect(text).toContain('阻塞：鉴权异常')
-    expect(text).toContain('队列：7')
-    expect(text).toContain('错误：E_SYNC')
+    expect(text).toContain('settingUser.syncEnabledTitle')
+    expect(text).not.toContain('同步状态')
+    expect(text).not.toContain('状态：异常')
+    expect(text).not.toContain('阻塞：鉴权异常')
+    expect(text).not.toContain('队列：7')
+    expect(text).not.toContain('错误：E_SYNC')
   })
 })

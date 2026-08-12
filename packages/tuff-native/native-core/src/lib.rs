@@ -6,7 +6,9 @@ pub mod stream;
 pub mod validation;
 
 pub use cancellation::CancellationToken;
-pub use error::{ErrorCategory, ErrorDetailValue, ProtocolError};
+pub use error::{
+    ERROR_ENVELOPE_PREFIX, ErrorCategory, ErrorDetailValue, ProtocolError, format_error_reason,
+};
 pub use model::*;
 pub use runtime::{
     BinaryPacket, CapabilityRegistry, InputAttachment, NativeRuntime, OpenedStream,

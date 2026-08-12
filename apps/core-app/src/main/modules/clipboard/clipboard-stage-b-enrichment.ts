@@ -123,8 +123,8 @@ export class ClipboardStageBEnrichment {
         const nextMetadata = mergeMetadataString(current?.metadata, patch)
         await this.options.metaPersistence.withDbWrite(
           'clipboard.stage-b.source',
-          () =>
-            db
+          (writeDb) =>
+            writeDb
               .update(clipboardHistory)
               .set({
                 sourceApp,
