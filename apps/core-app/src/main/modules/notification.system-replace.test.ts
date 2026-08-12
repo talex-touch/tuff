@@ -41,8 +41,22 @@ const { FakeNotification } = vi.hoisted(() => {
   return { FakeNotification }
 })
 
+/**
+ * `ipcMain` and `MessageChannelMain` are here because this factory replaces the whole `electron`
+ * module, and `packages/utils/transport/sdk/main-transport.ts` destructures both at import time.
+ *
+ * The mock got away without them while the workspace resolved two copies of electron: the utils
+ * package bound to one and this test mocked the other, so main-transport read the real module.
+ * Deduplicating electron (#328) put them on the same specifier and the omission became a
+ * collection failure -- `No "ipcMain" export is defined on the "electron" mock`.
+ */
 vi.mock('electron', () => ({
-  Notification: FakeNotification
+  Notification: FakeNotification,
+  ipcMain: { on: () => {}, off: () => {}, handle: () => {}, removeHandler: () => {} },
+  MessageChannelMain: class {
+    port1 = { on: () => {}, start: () => {}, close: () => {}, postMessage: () => {} }
+    port2 = { on: () => {}, start: () => {}, close: () => {}, postMessage: () => {} }
+  }
 }))
 
 vi.mock('../core/runtime-accessor', () => ({
