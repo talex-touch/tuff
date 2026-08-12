@@ -14,7 +14,6 @@ export interface PluginViewConfigSnapshot {
 
 export interface PluginViewBootstrap {
   bridgeVersion: typeof PLUGIN_VIEW_BRIDGE_VERSION
-  channelKey: string
   plugin: PluginViewMetadata
   config: PluginViewConfigSnapshot
 }
@@ -36,13 +35,12 @@ function normalizeBootstrap(value: unknown): PluginViewBootstrap {
     throw new Error('Plugin view bootstrap is invalid.')
   }
 
-  const channelKey = typeof value.channelKey === 'string' ? value.channelKey.trim() : ''
   const bridgeVersion = value.bridgeVersion
   const name = typeof value.plugin.name === 'string' ? value.plugin.name.trim() : ''
   if (bridgeVersion !== PLUGIN_VIEW_BRIDGE_VERSION) {
     throw new Error('Plugin view bridge version is unsupported.')
   }
-  if (!channelKey || channelKey.length > 256 || !name || name.length > 128) {
+  if (!name || name.length > 128) {
     throw new Error('Plugin view bootstrap identity is invalid.')
   }
 
@@ -58,7 +56,6 @@ function normalizeBootstrap(value: unknown): PluginViewBootstrap {
 
   return cloneSerializable({
     bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
-    channelKey,
     plugin: {
       name,
       ...(typeof version === 'string' ? { version } : {}),
