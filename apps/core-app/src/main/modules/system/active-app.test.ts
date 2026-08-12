@@ -30,7 +30,8 @@ const {
 
 vi.mock('node:child_process', () => {
   const execFile = vi.fn()
-  execFile[Symbol.for('nodejs.util.promisify.custom')] = execFilePromiseMock
+  ;(execFile as unknown as Record<symbol, unknown>)[Symbol.for('nodejs.util.promisify.custom')] =
+    execFilePromiseMock
   return { execFile }
 })
 

@@ -640,7 +640,9 @@ describe('search-core search-trace', () => {
     const diagnostics = await handler()
 
     expect(diagnostics.summary.total).toBe(5)
-    expect(diagnostics.sources.map((source) => source.descriptor.id)).toEqual([
+    expect(
+      diagnostics.sources.map((source: { descriptor: { id: string } }) => source.descriptor.id)
+    ).toEqual([
       'app-provider',
       'file-provider',
       'everything-provider',
