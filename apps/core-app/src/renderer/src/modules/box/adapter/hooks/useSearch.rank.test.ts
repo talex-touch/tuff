@@ -243,6 +243,46 @@ describe('useSearch rendered ranking', () => {
     expect(hook.res.value.map((item) => item.id)).toEqual(['file-high', 'app-low'])
   })
 
+  /**
+   * The question #348 turns on, asked of the renderer rather than assumed.
+   *
+   * That issue says renderer merging is append-only and "a later semantic score cannot reorder
+   * already rendered items". The merge is by id and the rank is by score, so re-sending an item
+   * with a higher score should move it -- but nothing had exercised that, because the backend
+   * excludes already-rendered ids from semantic recall and so never re-sends one.
+   *
+   * If this passes, the renderer needs no contract work and the whole of #348 is one policy line
+   * in `search-core.ts`.
+   */
+  it('reorders an already rendered item when a later batch re-sends it with a higher score', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'rescore', [
+      buildItem('app-top', 'app-provider', { final: 900 }),
+      buildItem('file-buried', 'file-provider', { final: 10 })
+    ])
+    expect(hook.res.value.map((item) => item.id)).toEqual(['app-top', 'file-buried'])
+
+    // The same id, not a new one -- this is what a semantic re-score would look like on the wire.
+    await pushDeferredBatch(stream, [buildItem('file-buried', 'file-provider', { final: 950 })])
+
+    expect(hook.res.value.map((item) => item.id)).toEqual(['file-buried', 'app-top'])
+  })
+
+  /** And the item is replaced, not duplicated, when the same id arrives twice. */
+  it('does not duplicate an item that is re-sent', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'no duplicate', [
+      buildItem('file-once', 'file-provider', { final: 10 })
+    ])
+    await pushDeferredBatch(stream, [buildItem('file-once', 'file-provider', { final: 20 })])
+
+    expect(hook.res.value.filter((item) => item.id === 'file-once')).toHaveLength(1)
+  })
+
   it('keeps pinned items on top regardless of score', async () => {
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
