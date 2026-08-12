@@ -38,7 +38,13 @@ export const PRIVILEGED_PLUGIN_CAPABILITIES = {
   /** Applies saved window geometry presets. */
   windowPresets: ['touch-window-presets'],
   /** Lists and runs scripts from a selected workspace. */
-  workspaceScripts: ['touch-workspace-scripts']
+  workspaceScripts: ['touch-workspace-scripts'],
+  /** Renames files in a chosen directory, under the plugin's declared filesystem permissions. */
+  batchRenameFilesystem: ['touch-batch-rename'],
+  /** Spawns and tracks the screenshot helper process. */
+  snipasteProcess: ['touch-snipaste'],
+  /** Reaches the intelligence providers for translation requests. */
+  translation: ['touch-translation']
 } as const satisfies Record<string, readonly string[]>
 
 export type PrivilegedPluginCapability = keyof typeof PRIVILEGED_PLUGIN_CAPABILITIES
