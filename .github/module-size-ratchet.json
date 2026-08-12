@@ -3,7 +3,7 @@
     "Ceilings for scripts/check-module-size-ratchet.mjs. A ceiling may fall and may not rise:",
     "the check compares each value here against the same file in the PR base revision, so lowering",
     "one is part of the change that shrinks the file and raising one fails the build.",
-    "Only the two files #339 names. This is not a general file-size policy.",
+    "Only the files #339 and #343 name -- two each. This is not a general file-size policy.",
     "2026-08-12: extended to #343 for the same reason as #339. Both issues say line count is not",
     "the point and both are right; both also grew while asking to be split -- plugin.ts +784,",
     "app-provider.ts +377, file-provider.ts +694. Nothing measured that, because every report",
