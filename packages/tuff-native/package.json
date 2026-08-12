@@ -54,6 +54,7 @@
     "binding.gyp",
     "scripts/build-screenshot.js",
     "scripts/verify-screenshot-production.js",
+    "scripts/verify-audio-production.js",
     "scripts/build-audio.js",
     "protocol-contract.js",
     "protocol-contract.d.ts",
