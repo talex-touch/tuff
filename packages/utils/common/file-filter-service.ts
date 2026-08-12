@@ -73,6 +73,35 @@ function pathSegments(value: string): string[] {
   return normalizePath(value).split("/").filter(Boolean);
 }
 
+/**
+ * Whether `segments` names a directory sitting directly at the filesystem root (#1727).
+ *
+ * `SYSTEM_BLACKLISTED_DIRS` is a list of OS locations -- `usr`, `var`, `tmp`, `private`, `dev`,
+ * `Library`, `Windows.old` -- and every one of them is also an ordinary word someone may name a
+ * folder. Matched on the leaf name alone it excluded `~/Documents/tmp`, `~/Pictures/private` and
+ * `~/Documents/Library`, silently: the check runs before `readdir`, so nothing errors, nothing is
+ * counted, and the file simply never appears in search.
+ *
+ * Measured on one default install: six of 545 directories under the default roots, five of them
+ * real user content.
+ *
+ * POSIX roots are one segment *and* a leading `/` -- the separator is what distinguishes `/usr`
+ * from a relative `usr`, which `pathSegments` renders identically. Windows roots are two segments,
+ * because the drive is one (`C:/Windows`); `C:Library` is drive-relative, stays a single segment
+ * and is therefore not a root. `~/Library` and `%APPDATA%` keep their exclusion through the anchored patterns
+ * in `PATH_PATTERNS.SYSTEM_PATHS` (`/^\/Users\/[^/]+\/Library\//`), which is where root-level
+ * system paths were already handled -- this check was only ever adding the unanchored half.
+ */
+function isFilesystemRootChild(
+  normalizedPath: string,
+  segments: readonly string[],
+): boolean {
+  // `pathSegments` drops the separators, so the segment count alone cannot tell `/usr` from a
+  // relative `usr` -- both are one segment. The original path has to carry the root marker.
+  if (segments.length === 1) return normalizedPath.startsWith("/");
+  return segments.length === 2 && /^[a-z]:$/i.test(segments[0] ?? "");
+}
+
 function basename(value: string): string {
   const normalized = normalizePath(value).replace(/\/+$/, "");
   const separator = normalized.lastIndexOf("/");
@@ -177,7 +206,8 @@ export class FileFilterService {
     if (options.customBlacklistedDirs?.has(directoryName))
       return "excluded-path";
     if (LOWERCASE_DEV_DIRS.has(lowerDirectoryName)) return "development-path";
-    if (LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName)) return "system-path";
+    if (isFilesystemRootChild(normalizePath(path), segments) && LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName))
+      return "system-path";
     if (LOWERCASE_TEMP_DIRS.has(lowerDirectoryName)) return "cache-path";
 
     if (
