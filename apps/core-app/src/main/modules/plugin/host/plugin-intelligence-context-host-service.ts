@@ -744,7 +744,7 @@ export function createPluginIntelligenceContextHostService(
   const invoke = dependencies.invoke
   if (!isDirectFunction(invoke)) fail(code)
 
-  return Object.freeze({
+  return Object.freeze<PluginIntelligenceContextHostService>({
     contextInvoke: async (request, signal, caller) => {
       assertCallBoundary(signal, caller)
       if (signal.aborted) cancelled()

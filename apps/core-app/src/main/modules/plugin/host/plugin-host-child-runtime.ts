@@ -2897,7 +2897,7 @@ function createContextBridge(
       : 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'
   }
 
-  return Object.freeze({
+  return Object.freeze<ContextBridge>({
     setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
     setInterval: (callback, delay) => timers.setInterval(callback, delay),
     setImmediate: (callback) => timers.setImmediate(callback),

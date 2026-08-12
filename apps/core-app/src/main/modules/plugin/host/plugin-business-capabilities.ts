@@ -893,7 +893,7 @@ function snapshotFeatureHost(input: unknown): PluginBusinessFeatureHost {
   const removeItem = readMethod(input, 'removeItem')
   const clearItems = readMethod(input, 'clearItems')
   const listItems = readMethod(input, 'listItems')
-  return Object.freeze({
+  return Object.freeze<PluginBusinessFeatureHost>({
     pushItems: (scope, items, signal, replacements) =>
       pushItems.call(input, scope, items, signal, replacements) as never,
     updateItem: (scope, id, patch, signal) =>
@@ -909,7 +909,7 @@ function snapshotSqliteClient(input: unknown): PluginSqliteResourceClient {
   const query = readMethod(input, 'query')
   const transaction = readMethod(input, 'transaction')
   const close = readMethod(input, 'close')
-  return Object.freeze({
+  return Object.freeze<PluginSqliteResourceClient>({
     execute: (sql, params) =>
       execute.call(input, sql, params) as ReturnType<PluginSqliteResourceClient['execute']>,
     query: (sql, params) =>
