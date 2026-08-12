@@ -618,16 +618,21 @@ export function createPluginSystemActionCapabilities(
     options.window,
     'showMainWindow'
   )
-  const executor: PluginSystemActionExecutor = Object.freeze({
+  // The type argument is named even though the variable is annotated: Object.freeze<T> infers T
+  // from its argument, so the annotation on the left never reaches the literal and every callback
+  // inside it takes its parameters as `any` (#548).
+  const executor: PluginSystemActionExecutor = Object.freeze<PluginSystemActionExecutor>({
     start: (actionId) => start.call(options.executor, actionId)
   })
-  const confirmation: PluginSystemActionConfirmationService = Object.freeze({
-    confirm: (actionId, signal) => confirm.call(options.confirmation, actionId, signal)
-  })
-  const windowService: PluginSystemActionWindowService = Object.freeze({
-    showMainWindow: (activation, hostGeneration, signal) =>
-      Promise.resolve(showMainWindow.call(options.window, activation, hostGeneration, signal))
-  })
+  const confirmation: PluginSystemActionConfirmationService =
+    Object.freeze<PluginSystemActionConfirmationService>({
+      confirm: (actionId, signal) => confirm.call(options.confirmation, actionId, signal)
+    })
+  const windowService: PluginSystemActionWindowService =
+    Object.freeze<PluginSystemActionWindowService>({
+      showMainWindow: (activation, hostGeneration, signal) =>
+        Promise.resolve(showMainWindow.call(options.window, activation, hostGeneration, signal))
+    })
   const platform = options.platform as NodeJS.Platform
   const expectedActivation = snapshotActivation(options.activation)
   if (!SYSTEM_ACTION_PLUGIN_NAME_SET.has(expectedActivation.name)) invalid()
