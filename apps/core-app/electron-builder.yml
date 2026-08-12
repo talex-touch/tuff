@@ -136,9 +136,12 @@ mac:
   # have no certificate and are not producing releases.
   forceCodeSigning: false
   hardenedRuntime: true
-  # ${arch} is load-bearing now that two architectures are built: without it the arm64 and x64
-  # dmgs resolve to the same filename and one silently overwrites the other.
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  # Both parts are load-bearing. ${arch}: without it the arm64 and x64 builds resolve to the same
+  # filename and one silently overwrites the other. `macos`: inferCoreArtifactIdentity recognises
+  # a mac artifact by `macos`/`darwin` in the name or a `.dmg`/`.app.zip` suffix, so a plain
+  # `-arm64.zip` counted as a core package it could not identify, and manifest validation rejects
+  # an artifact whose platform cannot be inferred (#311).
+  artifactName: ${productName}-${version}-macos-${arch}.${ext}
 dmg:
 linux:
   target:
