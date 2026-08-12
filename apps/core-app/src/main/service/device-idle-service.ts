@@ -253,6 +253,9 @@ export class DeviceIdleService {
       if (process.platform === 'win32') {
         const { stdout } = await execFileAsync('powershell', [
           '-NoProfile',
+          // Idle detection runs on a schedule rather than on user action, so a prompt here waits
+          // on a user who is by definition not looking (#350).
+          '-NonInteractive',
           '-Command',
           'Get-CimInstance -ClassName Win32_Battery | Select-Object -ExpandProperty EstimatedChargeRemaining | Select-Object -First 1'
         ])
