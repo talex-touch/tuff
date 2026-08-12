@@ -174,7 +174,7 @@
     "@vitejs/plugin-vue-jsx": "^5.1.5",
     "@vue/test-utils": "^2.4.11",
     "drizzle-kit": "^0.31.10",
-    "electron": "^41.10.4",
+    "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
     "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^4.0.1",
