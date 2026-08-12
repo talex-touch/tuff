@@ -441,9 +441,6 @@ importers:
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.39(typescript@5.9.3))
-      vue-sonner:
-        specifier: ^2.0.9
-        version: 2.0.9(@nuxt/kit@4.4.8(magicast@0.5.3))(@nuxt/schema@4.4.8)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -559,6 +556,9 @@ importers:
       vue-eslint-parser:
         specifier: ^10.4.1
         version: 10.4.1(eslint@9.39.4(jiti@2.7.0))
+      vue-sonner:
+        specifier: ^2.0.9
+        version: 2.0.9(@nuxt/kit@4.4.8(magicast@0.5.3))(@nuxt/schema@4.4.8)(nuxt@4.4.8(bc90f1595c7cc9bc6b08337d210bd65b))
       vue-tsc:
         specifier: ^3.3.6
         version: 3.3.7(typescript@5.9.3)
