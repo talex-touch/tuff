@@ -112,16 +112,33 @@ mac:
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
     NSDesktopFolderUsageDescription: Application requests access to the user's Desktop folder.
-  notarize: false
+  # The release workflow already refuses to build a macOS release without Developer ID and an
+  # App Store Connect key (build-and-release.yml, "macOS signing required"), and writes the .p8
+  # for notarytool itself. This was the one place still saying no (#786).
+  notarize: true
   gatekeeperAssess: false
+  # `dir` produces an unpackaged .app: nothing a user can download and install, and nothing the
+  # updater can consume (#594). dmg is what people install from; zip is what electron-updater
+  # reads on macOS, so dropping it would ship an app that cannot update itself.
   target:
-    - target: dir
-      arch: arm64
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
   icon: build/icon.icns
   category: public.app-category.productivity
+  # Deliberately left off. The release job hard-errors when credentials are missing, so the gate
+  # exists where it matters; turning this on would only break local builds for developers who
+  # have no certificate and are not producing releases.
   forceCodeSigning: false
   hardenedRuntime: true
-  artifactName: ${productName}-${version}.${ext}
+  # ${arch} is load-bearing now that two architectures are built: without it the arm64 and x64
+  # dmgs resolve to the same filename and one silently overwrites the other.
+  artifactName: ${productName}-${version}-${arch}.${ext}
 dmg:
 linux:
   target:
