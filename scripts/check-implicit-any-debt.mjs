@@ -34,7 +34,7 @@ const CORE_APP = path.join(REPO_ROOT, 'apps/core-app')
  * only -- every error the flag produces is in that range, so a rise here is new untyped code and
  * not some unrelated type break.
  */
-export const KNOWN_IMPLICIT_ANY_ERRORS = 37
+export const KNOWN_IMPLICIT_ANY_ERRORS = 28
 
 /** Resolves the workspace's own tsc rather than trusting a .bin shim on PATH. */
 function resolveTsc() {

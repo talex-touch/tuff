@@ -78,6 +78,7 @@ import {
   type ClipboardPollingSettings
 } from './clipboard/clipboard-polling-policy'
 import { registerClipboardHostService } from './clipboard/clipboard-host-service'
+import type { ClipboardHostService } from './clipboard/clipboard-host-service'
 import {
   ClipboardStageBEnrichment,
   type ClipboardStageBJob
@@ -1209,7 +1210,9 @@ export class ClipboardModule extends BaseModule {
   private installClipboardHostService(): void {
     this.clipboardHostServiceDisposer?.()
     this.clipboardHostServiceDisposer = registerClipboardHostService(
-      Object.freeze({
+      // Object.freeze<T> infers T from its argument, so registerClipboardHostService's own
+      // parameter type never reaches this literal and every handler took `any` (#548).
+      Object.freeze<ClipboardHostService>({
         read: async (request, _context, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
           if (request.op === 'text') {
@@ -1221,19 +1224,25 @@ export class ClipboardModule extends BaseModule {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
           if (request.op === 'clear') clipboard.clear()
           else {
+            // `files` is destructured out rather than spread-then-overridden: a conditional
+            // spread does not narrow what the first spread already contributed, so the result
+            // kept `readonly string[]` and never matched ClipboardWriteRequest. Invisible while
+            // the parameter was `any` (#548).
+            const { files, ...content } = request.content
             await this.write({
-              ...request.content,
-              ...(request.content.files ? { files: [...request.content.files] } : {})
+              ...content,
+              ...(files ? { files: [...files] } : {})
             })
           }
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
         },
         copyAndPaste: async (request, context, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          const { files, ...rest } = request
           const result = await this.handleCopyAndPasteRequest(
             {
-              ...request,
-              ...(request.files ? { files: [...request.files] } : {})
+              ...rest,
+              ...(files ? { files: [...files] } : {})
             },
             { plugin: context } as HandlerContext
           )
