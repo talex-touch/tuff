@@ -45,6 +45,8 @@ const REVIEWED = {
     'Direct in tuff-cli/tuff-cli-core/core-app and transitive under electron-vite, nitropack, tsup. postinstall installs the platform binary.',
   'extract-file-icon': 'apps/core-app dependency. install compiles the native icon reader.',
   'ffmpeg-static': 'apps/core-app dependency. install downloads the ffmpeg binary.',
+  'node-pty': 'apps/core-app dependency, behind the local AI CLI terminal (#1572 merge). '
+    + 'install compiles the pty binding and ships a per-platform spawn-helper prebuild.',
   'protobufjs': 'Pulled in by @google/genai. postinstall.',
   'sharp': 'apps/core-app dependency. install fetches/builds libvips.',
   'typeit': 'apps/nexus dependency. postinstall + prepare.',
