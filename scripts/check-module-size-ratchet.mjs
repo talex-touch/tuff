@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 /**
- * Stops the two coordination hotspots in #339 from growing while they are being split.
+ * Stops the four files #339 and #343 name from growing while they are being split.
  *
- * What this measures is not what #339 is about. That issue says so in its own words -- "the
- * concern is not line count by itself" -- and it is right: the problem is that each file combines
- * lifecycle, permission policy, execution dispatch, state, transport and diagnostics, and no line
- * count can see that.
+ * What this measures is not what either issue is about, and both say so first: #339 writes "the
+ * concern is not line count by itself" and #343 writes "the goal is not arbitrary line-count
+ * reduction". Both are right -- the problem is that one file owns lifecycle, permission policy,
+ * dispatch, state, transport and diagnostics at once, and no count can see that.
  *
  * It is here because line count is the only thing that would have caught what actually happened.
  * `plugin.ts` was ~3,060 lines when #339 was filed. Three extraction PRs landed -- #1678, #1680,
  * #1681 -- and each reported real progress: 4,069 to 3,947 to 3,872 to 3,844. Every one of those
  * numbers is true and every one is measured against the previous PR, from a baseline that had
  * already grown a thousand lines since the issue was written. Extraction removed 225 lines over the
- * same period that accretion added 1,009, and nothing said so.
+ * same period that accretion added 1,009, and nothing said so. #343's two files did the same:
+ * +377 and +694 against figures that issue quoted correctly.
  *
  * So: a ceiling that may fall and may not rise.
  *
@@ -42,17 +43,40 @@ const RATCHET_FILE = '.github/module-size-ratchet.json'
 export const CEILING_SLACK = 50
 
 /**
- * Lines in `text`, counting a final line with no newline after it.
+ * Code lines in `text` -- comments and blank lines excluded.
  *
- * Deliberately not `wc -l`, which counts newline characters and reports `'a\nb'` as 1. A file whose
- * last line lacks a newline would be measured one short, and its ceiling would then be one tighter
- * than the number anyone reading the file arrives at.
+ * The first version counted raw lines, which made this a check against *writing things down*.
+ * Measured on the four files it guards, comments and blanks are 10-15% of each; on the growth that
+ * put them here it is worse -- of `app-provider.ts`'s +377 since #343 was filed, **+131 is
+ * comments**, 35% of the increase. A ceiling on raw lines would have failed the next person who
+ * explained a decision in a file whose whole problem is that its decisions are unexplained.
+ *
+ * Not `wc -l` either, which counts newline characters and reports `'a\nb'` as 1.
  */
 export function countLines(text) {
-  if (text === '')
-    return 0
-  const lines = text.split('\n')
-  return lines.at(-1) === '' ? lines.length - 1 : lines.length
+  let count = 0
+  let inBlockComment = false
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line)
+      continue
+    if (inBlockComment) {
+      if (line.includes('*/'))
+        inBlockComment = false
+      continue
+    }
+    if (line.startsWith('/*')) {
+      if (!line.includes('*/'))
+        inBlockComment = true
+      continue
+    }
+    // `*` catches continuation lines of a block comment that this loop already skipped past, and
+    // costs nothing real: a statement never starts with a bare asterisk.
+    if (line.startsWith('//') || line.startsWith('*'))
+      continue
+    count += 1
+  }
+  return count
 }
 
 /** Every ceiling in `entries` higher than the same file's ceiling in `baseEntries`. */
@@ -79,13 +103,13 @@ export function evaluate(entries, read) {
     const lines = countLines(text)
     if (lines > entry.ceiling) {
       problems.push(
-        `${entry.file} is ${lines} lines, ceiling ${entry.ceiling} (${entry.issue}). `
+        `${entry.file} is ${lines} code lines, ceiling ${entry.ceiling} (${entry.issue}). `
         + 'This file may shrink, not grow. Put the new code in one of the modules beside it.',
       )
     }
     else if (lines < entry.ceiling - CEILING_SLACK) {
       problems.push(
-        `${entry.file} is ${lines} lines against a ceiling of ${entry.ceiling} — lower the ceiling `
+        `${entry.file} is ${lines} code lines against a ceiling of ${entry.ceiling} — lower the ceiling `
         + `to ${lines} in ${RATCHET_FILE}. A ratchet nobody tightens is a comment.`,
       )
     }
@@ -214,6 +238,18 @@ function selfTest() {
       }),
       expected: null,
     },
+    /*
+     * Added when the counter switched from raw lines to code lines. The four files this guards are
+     * 10-15% comment, and 35% of app-provider.ts's growth since #343 was filed is comment -- so a
+     * raw count made this a check against explaining a decision.
+     */
+    { name: 'a line comment is not code', actual: countLines('a\n// why\nb'), expected: 2 },
+    { name: 'a block comment is not code, however long', actual: countLines('a\n/*\n * why\n */\nb'), expected: 2 },
+    { name: 'a one-line block comment is not code', actual: countLines('a\n/* why */\nb'), expected: 2 },
+    { name: 'a blank line is not code', actual: countLines('a\n\n\nb'), expected: 2 },
+    { name: 'code after a block comment closes is counted again', actual: countLines('/*\n */\nb'), expected: 1 },
+    { name: 'a trailing comment on a code line does not remove the line', actual: countLines('a // why'), expected: 1 },
+    { name: 'a file that is entirely comment is zero code', actual: countLines('// a\n// b\n'), expected: 0 },
     { name: 'a file with no trailing newline still counts its last line', actual: countLines('a\nb'), expected: 2 },
     { name: 'a trailing newline is not an extra line', actual: countLines('a\nb\n'), expected: 2 },
     { name: 'an empty file is zero lines', actual: countLines(''), expected: 0 },
