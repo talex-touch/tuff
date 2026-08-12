@@ -20,7 +20,7 @@
       "id": "GHSA-28wg-ghj8-5hjv",
       "module": "nanoid",
       "severity": "high",
-      "reason": "Reached from production by many roots, and blocked upstream rather than by the nuxt closure. `pnpm why nanoid -r --prod` puts nanoid@3.3.16 under postcss@8.5.23, and postcss is reached directly by @talex-touch/core-app, tuff-cli and tuff-cli-core through @vue/compiler-sfc, as well as by @nuxt/vite-builder and by vue-router. So it does NOT clear when #1098 moves the nuxt closure. It also cannot be bumped here: postcss@8.5.23 requires nanoid ^3.3.16 and the patched line is 5.1.16, which is ESM-only, so the postcss 8.x line will not adopt it. Moves when postcss does.",
+      "reason": "Only nanoid@5.1.6 is affected -- the advisory range is >= 4.0.0, < 5.1.16, so the nanoid@3.3.16 that postcss pulls is already on the patched 3.x line and is not covered. 5.1.6 arrives through @vue/devtools-core -> @nuxt/devtools@2.7.0 -> nuxt, so this does move when the nuxt closure moves in #1098. Corrected twice before landing here: #1691 reattributed it to the postcss/vue-router path and #1708 doubled down, both of which describe the 3.x copy the advisory does not cover.",
       "owner": "#328",
       "expires": "2026-11-09"
     },
@@ -28,7 +28,7 @@
       "id": "GHSA-2v37-7h3g-55p8",
       "module": "nanoid",
       "severity": "high",
-      "reason": "Reached from production by many roots, and blocked upstream rather than by the nuxt closure. `pnpm why nanoid -r --prod` puts nanoid@3.3.16 under postcss@8.5.23, and postcss is reached directly by @talex-touch/core-app, tuff-cli and tuff-cli-core through @vue/compiler-sfc, as well as by @nuxt/vite-builder and by vue-router. So it does NOT clear when #1098 moves the nuxt closure. It also cannot be bumped here: postcss@8.5.23 requires nanoid ^3.3.16 and the patched line is 5.1.16, which is ESM-only, so the postcss 8.x line will not adopt it. Moves when postcss does.",
+      "reason": "Only nanoid@5.1.6 is affected -- the advisory range is >= 4.0.0, < 5.1.16, so the nanoid@3.3.16 that postcss pulls is already on the patched 3.x line and is not covered. 5.1.6 arrives through @vue/devtools-core -> @nuxt/devtools@2.7.0 -> nuxt, so this does move when the nuxt closure moves in #1098. Corrected twice before landing here: #1691 reattributed it to the postcss/vue-router path and #1708 doubled down, both of which describe the 3.x copy the advisory does not cover.",
       "owner": "#328",
       "expires": "2026-11-09"
     },
