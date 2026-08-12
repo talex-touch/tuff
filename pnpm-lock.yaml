@@ -473,8 +473,8 @@ importers:
         specifier: ^7.21.3
         version: 7.21.3
       '@milkdown/ctx':
-        specifier: ^7.21.3
-        version: 7.21.3
+        specifier: ^7.22.0
+        version: 7.22.0
       '@milkdown/plugin-listener':
         specifier: ^7.21.3
         version: 7.21.3
@@ -3767,8 +3767,14 @@ packages:
   '@milkdown/ctx@7.21.3':
     resolution: {integrity: sha512-3mYsMdYsK1JbiHAo1LMqjyVYbVqOmNXHRI97w4m09Y+1Md6O74Z2snqKVRbbJQq8eKwN4GMOYdjF9hcasJVCJg==}
 
+  '@milkdown/ctx@7.22.0':
+    resolution: {integrity: sha512-R2OGYqbOVPGeZv1EAY0QNl8pgkXDN+uwy+1GW3g7QMLvcmgJaSTfhFoYMStbtmrGpIh1VAMVHxG06aT1ZMYpag==}
+
   '@milkdown/exception@7.21.3':
     resolution: {integrity: sha512-+Mne/hJ8Wjfdl4dCG5+Sm+BXWK5StacyP4pcQkCvPw/sBbNAP9eTF7+TC/KRJw/b5Bz60wqztbNkSlDuqd2fSQ==}
+
+  '@milkdown/exception@7.22.0':
+    resolution: {integrity: sha512-66HIsd5l+Fd8Kll84me2wBlO07XSdzGWHPfhFdnkwsEfyPrksnTe51digYh6F7szZWUvmv0kG2xtRJAVgpPbzw==}
 
   '@milkdown/plugin-listener@7.21.3':
     resolution: {integrity: sha512-0lPngmnSjug+F8tcVIlvfxdU6kyqU+5nOG4T2P0Sv2JFHQdIKh2wu9Ns34BE/FyHC/eEPp/WqY0X2+7I8y/njQ==}
@@ -16688,7 +16694,13 @@ snapshots:
     dependencies:
       '@milkdown/exception': 7.21.3
 
+  '@milkdown/ctx@7.22.0':
+    dependencies:
+      '@milkdown/exception': 7.22.0
+
   '@milkdown/exception@7.21.3': {}
+
+  '@milkdown/exception@7.22.0': {}
 
   '@milkdown/plugin-listener@7.21.3':
     dependencies:
