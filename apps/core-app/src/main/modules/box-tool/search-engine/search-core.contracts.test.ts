@@ -859,30 +859,36 @@ describe('SearchEngineCore facade contracts', () => {
       async () =>
         ({ items: [buildItem('telemetry-item', 'telemetry-provider', 'Telemetry')] }) as never
     )
-    const query = { inputs: [], text: 'cache telemetry contract' } as TuffQuery
     core.registerProvider(buildProvider('telemetry-provider', search) as never)
     core.activateProviders([{ id: 'telemetry-provider' }] as IProviderActivate[])
 
-    const run = async (id: string): Promise<void> => {
-      const session = core.startSearch(query, { caller: { kind: 'core-box', id } })
+    const run = async (text: string, id: string): Promise<void> => {
+      const session = core.startSearch({ inputs: [], text } as TuffQuery, {
+        caller: { kind: 'core-box', id }
+      })
       await session.result
       await session.completed
     }
 
-    await run('telemetry-cold')
-    await run('telemetry-warm')
+    // Two distinct queries, so the commit drops two entries. One entry cannot tell "counted per
+    // entry dropped" from "counted per call", and both readings are one line apart in the source.
+    await run('cache telemetry alpha', 'telemetry-alpha-cold')
+    await run('cache telemetry beta', 'telemetry-beta-cold')
+    await run('cache telemetry alpha', 'telemetry-alpha-warm')
     searchIndexCommitHub.markCommitted(['telemetry-provider'])
-    await run('telemetry-after-commit')
+    await run('cache telemetry alpha', 'telemetry-alpha-after-commit')
 
     const snapshot = core.getSearchCacheTelemetry()
 
-    // The counters reach the snapshot at all: three lookups, and the middle one served.
-    expect(snapshot.lookups).toBe(3)
+    // The counters reach the snapshot at all: four lookups, and the third one served.
+    expect(snapshot.lookups).toBe(4)
     expect(snapshot.hits).toBe(1)
-    expect(snapshot.hitRate).toBeCloseTo(1 / 3, 5)
+    expect(snapshot.hitRate).toBeCloseTo(1 / 4, 5)
 
-    // The commit is counted as an invalidation, by entries dropped rather than by calls.
-    expect(snapshot.invalidations['index-commit']).toBeGreaterThan(0)
+    // Exactly two, because two entries were in the cache. Counted by entries dropped rather than
+    // by calls -- a per-call implementation reports 1 here.
+    expect(snapshot.invalidations['index-commit']).toBe(2)
+    expect(snapshot.entriesDropped).toBe(2)
 
     /*
      * And this is the finding. `revision-mismatch` is unreachable from here: `markCommitted` bumps
@@ -895,7 +901,7 @@ describe('SearchEngineCore facade contracts', () => {
      * and cannot carry the keep/remove decision as it stands.
      */
     expect(snapshot.misses['revision-mismatch']).toBe(0)
-    expect(snapshot.misses.absent).toBe(2)
+    expect(snapshot.misses.absent).toBe(3)
   })
 
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
