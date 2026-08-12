@@ -269,9 +269,21 @@ export function checkTasks(repoRoot, scope) {
     else if (!taskRuleAllowed(file, 'DOC-TASK-META')) {
       if (!nonEmptyString(task.assignee))
         diagnostics.push(diagnostic('DOC-TASK-META', file, null, 'assignee must be a non-empty string'))
-      for (const key of ['nextAction', 'blocker', 'evidence']) {
-        if (!nonEmptyString(task.meta[key]))
-          diagnostics.push(diagnostic('DOC-TASK-META', file, null, `meta.${key} must be a non-empty string`))
+      // `evidence` is empty for a planning task by definition -- it has not started. Demanding it
+      // anyway produced 39 findings across 28 planning tasks and exactly 0 across the 25
+      // in_progress ones, so the rule was already satisfied everywhere it described real work.
+      // Filling the rest would have meant writing "not started" 28 times: the gate goes green and
+      // the record stops saying anything, which is the opposite of what a gate is for (#1254).
+      //
+      // `assignee` above stays required at every status -- it is knowable when the task is created.
+      //
+      // This also stops the count regenerating: task_store.py:291 seeds every new task with
+      // `meta: {}`, so each `task.py create` was adding three findings before any work began.
+      if (task.status !== 'planning') {
+        for (const key of ['nextAction', 'blocker', 'evidence']) {
+          if (!nonEmptyString(task.meta[key]))
+            diagnostics.push(diagnostic('DOC-TASK-META', file, null, `meta.${key} must be a non-empty string`))
+        }
       }
     }
   }
