@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveApplicationRoots } from './linux'
+import { resolveApplicationRoots, resolveIconRoots } from './linux'
 
 const HOME = '/home/tester'
 
@@ -64,5 +64,54 @@ describe('linux application roots', () => {
     expect(resolveApplicationRoots({ XDG_DATA_DIRS: '   ' }, HOME)).toContain(
       '/usr/share/applications'
     )
+  })
+})
+
+describe('linux icon theme roots', () => {
+  // The gap #1640 left behind: resolveApplicationRoots made flatpak apps discoverable while the
+  // icon lookup still hardcoded /usr/share/icons, so those apps rendered with no icon.
+  it('covers both flatpak icon prefixes', () => {
+    const roots = resolveIconRoots({}, HOME)
+
+    expect(roots).toContain('/var/lib/flatpak/exports/share/icons')
+    expect(roots).toContain(`${HOME}/.local/share/flatpak/exports/share/icons`)
+  })
+
+  it('applies the XDG defaults when the environment says nothing', () => {
+    const roots = resolveIconRoots({}, HOME)
+
+    expect(roots).toContain('/usr/share/icons')
+    expect(roots).toContain('/usr/local/share/icons')
+    expect(roots).toContain(`${HOME}/.local/share/icons`)
+  })
+
+  // A user-installed theme has to win over the system copy of the same name, so the per-user root
+  // cannot sit behind the system ones -- the search returns the first hit.
+  it('puts the per-user root ahead of the system ones', () => {
+    const roots = resolveIconRoots({}, HOME)
+
+    expect(roots.indexOf(`${HOME}/.local/share/icons`)).toBeLessThan(
+      roots.indexOf('/usr/share/icons')
+    )
+  })
+
+  it('reads XDG_DATA_DIRS instead of assuming the defaults', () => {
+    const roots = resolveIconRoots({ XDG_DATA_DIRS: '/opt/nix/share' }, HOME)
+
+    expect(roots).toContain('/opt/nix/share/icons')
+    expect(roots).not.toContain('/usr/share/icons')
+  })
+
+  it('reads XDG_DATA_HOME for the per-user prefix, including its flatpak subtree', () => {
+    const roots = resolveIconRoots({ XDG_DATA_HOME: '/data/xdg' }, HOME)
+
+    expect(roots).toContain('/data/xdg/icons')
+    expect(roots).toContain('/data/xdg/flatpak/exports/share/icons')
+  })
+
+  it('does not repeat a root that appears twice', () => {
+    const roots = resolveIconRoots({ XDG_DATA_DIRS: '/usr/share:/usr/share' }, HOME)
+
+    expect(new Set(roots).size).toBe(roots.length)
   })
 })
