@@ -26,7 +26,10 @@ const RELEASE_WORKFLOW = path.join(REPO_ROOT, '.github/workflows/build-and-relea
 const UNPACKED_TARGETS = new Set(['dir'])
 
 /** Platforms currently building only unpacked output. Shrink, never grow — see #594. */
-const KNOWN_UNPUBLISHABLE = ['mac']
+// Empty since the app-shell-v2 merge: macOS now builds dmg + zip for arm64 and x64, where it
+// previously produced only `dir`. The gap this recorded is closed, which is the exact
+// condition the header describes as the prompt to update it.
+const KNOWN_UNPUBLISHABLE: string[] = []
 
 function targetsFor(platform: string): string[] {
   const config = readFileSync(BUILDER_CONFIG, 'utf8')
