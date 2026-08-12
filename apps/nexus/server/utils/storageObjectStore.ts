@@ -13,6 +13,7 @@ export const STORAGE_OBJECT_WRITE_RETRY_DELAYS_MS = [250, 1000] as const
 export interface StorageObjectRecord {
   data: Buffer
   contentType: string
+  ownerId?: string
 }
 
 export type StorageObjectMemory = Map<string, StorageObjectRecord>
@@ -26,6 +27,18 @@ export interface StorageObjectResult {
   storageChannel: string
   storageProvider: string
   uploadRetry?: StorageUploadRetryMetadata
+  /**
+   * Who wrote the object, when the backend kept that alongside it.
+   *
+   * Read together with `storesOwnership`, never on its own: absent-and-recordable means the
+   * object predates ownership tracking, absent-and-not-recordable means this backend never
+   * had anywhere to put it. A caller that cannot tell those apart will either lock people out
+   * of their own data or let an authorization check pass on a backend that never answered it
+   * (#898).
+   */
+  ownerId?: string
+  /** Whether this backend stores ownership at all. */
+  storesOwnership: boolean
 }
 
 export interface StorageObjectExternalConfig {
@@ -55,6 +68,8 @@ interface PutStorageObjectInput extends StorageObjectContext {
   data: Buffer | ArrayBuffer | Uint8Array
   contentType?: string | null
   actorId?: unknown
+  /** Recorded with the object so a later read can authorize against it. */
+  ownerId?: string | null
   retryPolicy?: Partial<StorageObjectWriteRetryPolicy>
 }
 
@@ -712,6 +727,9 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
         httpMetadata: {
           contentType,
         },
+        // R2 hands customMetadata back on get(), so this is the whole of the ownership
+        // record -- no second object and no side table to keep in step with the first.
+        ...(input.ownerId ? { customMetadata: { ownerId: input.ownerId } } : {}),
       })
     })
     : undefined
@@ -720,6 +738,7 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     input.memoryStorage.set(input.key, {
       data: data.buffer,
       contentType,
+      ...(input.ownerId ? { ownerId: input.ownerId } : {}),
     })
   }
 
@@ -744,6 +763,8 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     storageChannel: backend.channel,
     storageProvider: backend.provider,
     uploadRetry,
+    ownerId: input.ownerId ?? undefined,
+    storesOwnership: !backend.externalStorage,
   }
 }
 
@@ -784,6 +805,10 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       contentType: object.contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
+      // S3/OSS reads go through a signed request whose headers are part of the signature, so
+      // carrying x-amz-meta-* here means changing what gets signed. Left alone rather than
+      // changed blind against a backend no test in this repo exercises -- tracked as #1644.
+      storesOwnership: false,
     }
   }
 
@@ -824,6 +849,8 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
+      ownerId: object.customMetadata?.ownerId || undefined,
+      storesOwnership: true,
     }
   }
 
@@ -860,6 +887,8 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
     contentType,
     storageChannel: backend.channel,
     storageProvider: backend.provider,
+    ownerId: object.ownerId,
+    storesOwnership: true,
   }
 }
 
