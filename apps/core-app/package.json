@@ -95,7 +95,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.141",
     "@arrow-js/core": "1.0.6",
-    "@earendil-works/pi-agent-core": "0.80.10",
+    "@earendil-works/pi-agent-core": "0.84.1",
     "@earendil-works/pi-ai": "0.80.10",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
