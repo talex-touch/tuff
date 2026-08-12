@@ -8,7 +8,7 @@ import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -433,7 +433,7 @@ onBeforeUnmount(() => {
     />
   </FlipDialog>
 
-  <TuffDrawer
+  <TxDrawer
     v-model:visible="showPromptDrawer"
     :title="t('settings.intelligence.capabilityPromptSectionTitle')"
   >
@@ -443,9 +443,9 @@ onBeforeUnmount(() => {
       </p>
       <FlatMarkdown v-model="promptValue" :readonly="false" />
     </div>
-  </TuffDrawer>
+  </TxDrawer>
 
-  <TuffDrawer
+  <TxDrawer
     v-model:visible="showTestDrawer"
     :title="t('settings.intelligence.capabilityTestTitle')"
   >
@@ -462,7 +462,7 @@ onBeforeUnmount(() => {
         @test="handleTest"
       />
     </div>
-  </TuffDrawer>
+  </TxDrawer>
 </template>
 
 <style lang="scss" scoped>

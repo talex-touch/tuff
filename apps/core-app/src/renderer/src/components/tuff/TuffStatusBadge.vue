@@ -20,12 +20,20 @@ const props = withDefaults(
   }
 )
 
+/**
+ * `info` is deliberately not the accent colour.
+ *
+ * On the permissions list it marks "we could not read this status", which is the absence of an
+ * answer rather than something to act on — rendering it in the same blue as the primary button
+ * next to it read as a third state competing with granted and denied. The accent stays reserved
+ * for primary buttons, switch-on, progress and selection.
+ */
 const toneMap: Record<StatusTone, { color: string; icon: string }> = {
   success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-filled' },
   warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-warning' },
   danger: { color: 'var(--tx-color-error)', icon: 'i-carbon-close-outline' },
-  info: { color: 'var(--tx-color-primary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-minimize' }
+  info: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-information' },
+  muted: { color: 'var(--tx-text-color-placeholder)', icon: 'i-carbon-minimize' }
 }
 
 const resolvedTone = computed<StatusTone>(() => {

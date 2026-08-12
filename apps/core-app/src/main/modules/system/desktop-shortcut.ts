@@ -37,6 +37,9 @@ export async function sendPlatformShortcut(shortcut: DesktopShortcut): Promise<v
 
   if (process.platform === 'win32') {
     await execFileAsync('powershell', [
+      // `-NoLogo` only suppresses the banner; it is not `-NoProfile`, so a user's profile script
+      // still ran inside this invocation (#350).
+      '-NoProfile',
       '-NoLogo',
       '-NonInteractive',
       '-Command',

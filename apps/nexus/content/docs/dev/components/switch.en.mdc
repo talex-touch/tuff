@@ -11,6 +11,8 @@ verified: true
 
 # Switch
 
+`TxSwitch` toggles a binary state that applies immediately (on/off, enabled/disabled). Use `TxCheckbox` when the form semantics are "tick now, submit later".
+
 ## Basic Usage
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -216,8 +218,8 @@ code: |
 
 ## Interaction Contract
 
-- The root renders `role="switch"`, `aria-checked`, `aria-disabled`, and `tabindex="0"` while enabled.
-- `disabled=true` sets `tabindex="-1"`, adds `is-disabled`, and prevents click, Enter, and Space from emitting events.
+- The root is a native `<button>` rendering `role="switch"`, `aria-checked`, and `aria-disabled`; it sets no `tabindex` — focusability comes from the button element itself.
+- `disabled=true` sets the native `disabled` attribute (which removes it from the tab order), adds `is-disabled`, and prevents click, Enter, and Space from emitting events.
 - Enabled toggles emit both `update:modelValue` and `change`; the component does not mutate external state without `v-model` update handling.
 - `size="small"` and `size="large"` add modifier classes; `size="default"` intentionally leaves the base class only.
 
@@ -284,8 +286,8 @@ code: |
 ## Review Notes
 
 - **Model contract:** `TxSwitch` is controlled by `modelValue`. User interaction emits both `update:modelValue` and `change` with the next boolean; the visual state updates after the parent writes the new prop back.
-- **Keyboard contract:** Enabled switches respond to click, Enter, and Space. Disabled switches set `tabindex="-1"`, keep `aria-disabled="true"`, and emit nothing.
-- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, and disabled tabindex/aria state.
+- **Keyboard contract:** Enabled switches respond to click, Enter, and Space via native button semantics. Disabled switches leave the tab order through the native `disabled` attribute, keep `aria-disabled="true"`, and emit nothing.
+- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, and asserts that no `tabindex` is rendered in either state.
 
 ## Source
 

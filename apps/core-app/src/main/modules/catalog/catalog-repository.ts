@@ -18,7 +18,7 @@ import {
 } from '@talex-touch/utils/i18n'
 import { and, asc, eq } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../db/db-write'
 import { catalogDomainLexiconEntries, catalogPacks, catalogState } from '../../db/schema'
 import * as schema from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
@@ -107,7 +107,7 @@ export class SqliteCatalogRepository implements CatalogRepository {
   async initializeBaseline(pack: BuiltinCatalogPack): Promise<CatalogRepositorySnapshot> {
     const prepared = preparePack(pack)
     try {
-      await this.withWrite('catalog.initialize', async () => {
+      await scheduleDbWrite('catalog.initialize', async () => {
         const now = this.now()
         await this.db.transaction(async (tx) => {
           const [existingPack] = await tx
@@ -174,7 +174,7 @@ export class SqliteCatalogRepository implements CatalogRepository {
   async importVerifiedPack(pack: VerifiedDomainLexiconPack): Promise<CatalogStoredPack> {
     const prepared = preparePack(pack)
     try {
-      return await this.withWrite('catalog.import', async () => {
+      return await scheduleDbWrite('catalog.import', async () => {
         const now = this.now()
         const row = await this.db.transaction(async (tx) => {
           const [existing] = await tx
@@ -206,7 +206,7 @@ export class SqliteCatalogRepository implements CatalogRepository {
 
   async activatePack(ref: CatalogPackRef): Promise<CatalogRepositorySnapshot> {
     try {
-      return await this.withWrite('catalog.activate', async () => {
+      return await scheduleDbWrite('catalog.activate', async () => {
         const candidate = await this.loadCandidate(ref)
         const current = await this.getStatusInternal(ref.type)
         if (samePack(current.active, ref)) {
@@ -287,7 +287,7 @@ export class SqliteCatalogRepository implements CatalogRepository {
     }
 
     try {
-      return await this.withWrite('catalog.rollback', async () => {
+      return await scheduleDbWrite('catalog.rollback', async () => {
         const current = await this.getStatusInternal(type)
         if (!current.active || !current.previous) {
           throw catalogError(CATALOG_ERROR_CODES.noPrevious, 'Catalog has no previous pack')
@@ -467,10 +467,6 @@ export class SqliteCatalogRepository implements CatalogRepository {
         'Catalog stored entries are invalid'
       )
     }
-  }
-
-  private async withWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
   }
 }
 

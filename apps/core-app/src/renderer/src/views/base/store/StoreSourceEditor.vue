@@ -9,7 +9,6 @@ import { useI18n } from 'vue-i18n'
 import { vDraggable } from 'vue-draggable-plus'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
-import { appSetting } from '~/modules/storage/app-storage'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
 
 const props = withDefaults(
@@ -38,13 +37,7 @@ const storageState = storeSourcesStorage.get()
 const sources = storageState.sources
 const showCreateDialog = ref(false)
 const createDialogSource = ref<HTMLElement | null>(null)
-const isAdvancedMode = computed(() => {
-  const advancedSettings = appSetting?.dev?.advancedSettings
-  if (typeof advancedSettings === 'string') {
-    return advancedSettings === 'true' || advancedSettings === '1'
-  }
-  return advancedSettings === true
-})
+const isAdvancedMode = computed(() => false)
 const sortableSources = computed(() => sources.filter((item) => !item.outdated))
 const outdatedSources = computed(() => sources.filter((item) => item.outdated))
 const visibleOutdatedSources = computed(() => (isAdvancedMode.value ? outdatedSources.value : []))
@@ -239,14 +232,17 @@ watch(
                     size="small"
                     @change="toggleSource(item.id)"
                   />
-                  <div
+                  <button
+                    type="button"
                     :class="{ disabled: sources.length === 1 || item.readOnly }"
                     class="transition-cubic action-btn"
+                    :disabled="sources.length === 1 || item.readOnly"
+                    :aria-label="t('store.sourceEditor.removeSource', { name: item.name })"
                     @click="deleteSource(item.id)"
                   >
                     <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
                     <div v-else class="i-carbon-carbon-for-salesforce" />
-                  </div>
+                  </button>
                 </div>
               </div>
             </TransitionGroup>
@@ -288,14 +284,17 @@ watch(
                     size="small"
                     @change="toggleSource(item.id)"
                   />
-                  <div
+                  <button
+                    type="button"
                     :class="{ disabled: sources.length === 1 || item.readOnly }"
                     class="transition-cubic action-btn"
+                    :disabled="sources.length === 1 || item.readOnly"
+                    :aria-label="t('store.sourceEditor.removeSource', { name: item.name })"
                     @click="deleteSource(item.id)"
                   >
                     <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
                     <div v-else class="i-carbon-carbon-for-salesforce" />
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -576,6 +575,10 @@ watch(
     justify-content: center;
     width: 28px;
     height: 28px;
+    // The rule was written for a div; a native button brings its own chrome.
+    padding: 0;
+    border: none;
+    font: inherit;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;

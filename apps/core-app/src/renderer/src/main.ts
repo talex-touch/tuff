@@ -27,6 +27,8 @@ import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/base.css'
 import '~/styles/index.scss'
+// Must load after tuffex base.css so the `html.contrast` overrides win on source order.
+import '~/styles/shell-tokens.scss'
 
 import '~/styles/accessibility.scss'
 import 'vue-sonner/style.css'
@@ -48,6 +50,39 @@ let lifecycleEventsRegistered = false
 registerNotificationHub(transport)
 registerMainWindowSideEffects()
 registerLifecycleEvents()
+reportContentSecurityPolicyViolations()
+
+/**
+ * Logs violations of the report-only CSP in index.html (#689).
+ *
+ * `default-src` and `connect-src` are still wildcards because narrowing them needs to know what the
+ * renderer actually reaches, and a static reading cannot produce that — a dependency can ask for
+ * something at runtime that no literal in the tree mentions. The report-only policy names the
+ * candidate, blocks nothing, and this turns each would-be block into a line naming the directive
+ * and the origin.
+ *
+ * When this stays quiet in real use, the candidate becomes the enforcing policy and the wildcards
+ * go. Until then it is the only honest way to get from here to there.
+ */
+function reportContentSecurityPolicyViolations(): void {
+  document.addEventListener('securitypolicyviolation', (event) => {
+    // The enforcing policy blocks nothing here, so anything reaching this listener is a request
+    // the narrow candidate would have refused — a finding, not an error.
+    // Forwarded to main rather than logged here: createRendererLogger writes to the renderer
+    // console and nowhere else, so the inventory this policy exists to produce only existed in
+    // a devtools panel nobody has open during real use (#689).
+    transport
+      .send(AppEvents.security.reportCspViolation, {
+        effectiveDirective: event.effectiveDirective,
+        blockedURI: event.blockedURI,
+        documentURI: event.documentURI,
+        sourceFile: event.sourceFile,
+        lineNumber: event.lineNumber
+      })
+      // A dropped report must not disturb the page that produced it.
+      .catch(() => {})
+  })
+}
 
 function registerRouterEvents(instance: Router): void {
   if (routerEventsRegistered) {

@@ -66,6 +66,8 @@ export interface ChatComposerEmits {
   (e: 'send', payload: { text: string }): void
   (e: 'attachmentClick'): void
   (e: 'paste', event: ClipboardEvent): void
+  /** Files arriving via paste or drag-and-drop; the consumer owns the upload. */
+  (e: 'attachmentAdd', files: File[]): void
   (e: 'focus', event: FocusEvent): void
   (e: 'blur', event: FocusEvent): void
 }

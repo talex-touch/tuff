@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     display,
+    captureForegroundAppSnapshot: vi.fn(),
     updateMetaOverlayBounds: vi.fn(),
     unregisterPolling: vi.fn(),
     getMainConfig: vi.fn(() => ({})),
@@ -93,7 +94,7 @@ vi.mock('@talex-touch/utils/plugin', () => ({
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     broadcastToWindow: vi.fn(),
-    sendTo: vi.fn(),
+    sendTo: vi.fn(async () => undefined),
     sendToPlugin: vi.fn()
   }))
 }))
@@ -234,6 +235,11 @@ vi.mock('./web-contents-view-guard', () => ({
   getLiveViewWebContents: vi.fn(() => null)
 }))
 
+vi.mock('../../system/foreground-app-snapshot', () => ({
+  captureForegroundAppSnapshot: mocks.captureForegroundAppSnapshot
+}))
+
+import { app } from 'electron'
 import { coreBoxManager } from './manager'
 import { COREBOX_MIN_HEIGHT, COREBOX_WIDTH, WindowManager } from './window'
 
@@ -286,6 +292,45 @@ describe('WindowManager CoreBox compact bounds', () => {
     expect(mocks.updateMetaOverlayBounds).toHaveBeenCalled()
     expect(browserWindow.setResizable).toHaveBeenNthCalledWith(1, true)
     expect(browserWindow.setResizable).toHaveBeenLastCalledWith(false)
+  })
+
+  it('snapshots the foreground app before the shortcut show steals focus', () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const order: string[] = []
+      mocks.captureForegroundAppSnapshot.mockImplementation(() => order.push('snapshot'))
+      vi.mocked(app.focus).mockImplementation(() => order.push('app-focus') as unknown as void)
+      const browserWindow = {
+        id: 7,
+        webContents: { id: 8 },
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
+        isResizable: vi.fn(() => false),
+        setResizable: vi.fn(),
+        getBounds: vi.fn(() => ({ x: 600, y: 260, width: 720, height: 240 })),
+        getSize: vi.fn(() => [720, 240]),
+        setMinimumSize: vi.fn(),
+        setBounds: vi.fn(),
+        getMinimumSize: vi.fn(() => [720, COREBOX_MIN_HEIGHT]),
+        show: vi.fn(() => order.push('show')),
+        showInactive: vi.fn(() => order.push('show-inactive')),
+        moveTop: vi.fn(),
+        focus: vi.fn()
+      }
+
+      manager.windows = [
+        {
+          window: browserWindow
+        } as unknown as WindowManager['windows'][number]
+      ]
+
+      manager.show(true)
+
+      expect(order).toEqual(['snapshot', 'app-focus', 'show'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('re-centers and restores compact width when stale bounds already have compact height', () => {

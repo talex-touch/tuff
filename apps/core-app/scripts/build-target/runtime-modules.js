@@ -260,11 +260,43 @@ function getAppRuntimeRootModules(options = {}) {
   }))
 }
 
-function tryResolvePackageRoot(candidatePath) {
-  if (fs.existsSync(path.join(candidatePath, 'package.json'))) {
+function findContainingNodeModules(startDir) {
+  let current = startDir
+  while (current && path.basename(current) !== 'node_modules') {
+    const parent = path.dirname(current)
+    if (parent === current) {
+      return null
+    }
+    current = parent
+  }
+  return path.basename(current) === 'node_modules' ? current : null
+}
+
+function tryResolvePackageRoot(candidatePath, expectedName) {
+  const manifestPath = path.join(candidatePath, 'package.json')
+  if (!fs.existsSync(manifestPath)) {
+    return null
+  }
+  if (!expectedName) {
     return candidatePath
   }
-  return null
+  // A candidate directory having a package.json is not enough: the sibling-lookup
+  // candidate below joins the requested name onto the parent's *scope* directory, so
+  // @langchain/openai asking for "openai" lands back on @langchain/openai itself, which
+  // has a package.json and was accepted. The walker then believed it had found openai,
+  // never descended into the real one, and its dependencies were silently absent from
+  // the packaged closure.
+  try {
+    const name = JSON.parse(fs.readFileSync(manifestPath, 'utf8')).name
+    // Tolerate a manifest with no name rather than rejecting it; only a positive
+    // mismatch is evidence that this is the wrong package.
+    if (name && name !== expectedName) {
+      return null
+    }
+  } catch {
+    return null
+  }
+  return candidatePath
 }
 
 function getRealPath(candidatePath) {
@@ -323,7 +355,15 @@ function resolveRuntimeModuleRoot(moduleName, runtimePaths, sourceDir, options =
     }
     if (realSourceDir !== sourceDir) {
       directCandidates.push(path.join(realSourceDir, 'node_modules', moduleName))
-      directCandidates.push(path.join(path.dirname(realSourceDir), moduleName))
+      // Siblings live in the node_modules directory that contains this package, which is
+      // one level up for "foo" and two for "@scope/foo". Walking to the nearest
+      // node_modules handles both; going up a fixed single level put scoped packages in
+      // their own scope directory, so @langchain/openai looking for "openai" resolved to
+      // itself and its real dependency was never reached.
+      const containingNodeModules = findContainingNodeModules(realSourceDir)
+      if (containingNodeModules) {
+        directCandidates.push(path.join(containingNodeModules, moduleName))
+      }
     }
   }
   directCandidates.push(path.join(runtimePaths.workspaceNodeModules, moduleName))
@@ -335,7 +375,7 @@ function resolveRuntimeModuleRoot(moduleName, runtimePaths, sourceDir, options =
   }
 
   for (const candidate of directCandidates) {
-    const resolved = tryResolvePackageRoot(candidate)
+    const resolved = tryResolvePackageRoot(candidate, moduleName)
     if (resolved) {
       return resolved
     }

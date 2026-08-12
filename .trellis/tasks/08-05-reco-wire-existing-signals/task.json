@@ -1,0 +1,30 @@
+{
+  "id": "reco-wire-existing-signals",
+  "name": "reco-wire-existing-signals",
+  "title": "Wire existing recommendation signals",
+  "description": "R2: hourDistribution into scoring; cache-key cardinality reduction (base ranking cache + volatile-context light re-rank); cold-start fallback; incremental/hourly aggregation preserving history; selection-capture ingestion; timezone-change signal; cleanups (dead bluetooth toggle, upsertItemTimeStats, path-form bundleId matching). After R1. Source: parent research/reco-signals-audit.md",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-search-audit-remediation",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Update the digest with what landed. The same file records R1 as \"FIXED 2026-08-05\" but lists R2 wire-existing-signals only as scope - hourDistribution, cache-key cardinality, cold start, incremental aggregation, selection-capture, timezone-change - with no status, so AC3 is open even though the hour-weighting and cache-key work is tested.",
+    "blocker": "None.",
+    "evidence": "AC2 measured 2026-08-11: recommendation suite 99 passed / 7 files, shared with the R1 task. AC1 has visible coverage - the hour weighting (current hour against busiest hour, uniform distribution as a full match, untouched score with no history, peak-hour item ranked above one peaking elsewhere) and the cache key including time slot and day type. AC3 not met: the digest carries no status line for R2."
+  }
+}

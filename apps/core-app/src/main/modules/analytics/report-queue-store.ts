@@ -1,9 +1,9 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
+import type { AuxDbResolver, ScheduleOptions } from '../../db/db-write'
 import { asc, eq, gte, lt, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleAuxWrite } from '../../db/db-write'
 import * as dbSchema from '../../db/schema'
-import { withSqliteRetry } from '../../db/sqlite-retry'
 
 export interface ReportQueueItem {
   id: number
@@ -19,44 +19,57 @@ interface ReportQueueStoreDeps {
   auxDb: LibSQLDatabase<typeof schema>
   coreDb?: LibSQLDatabase<typeof schema>
   maxItems?: number
+  /**
+   * Live aux-DB resolution (enqueue-time). Production passes the
+   * databaseModule-backed resolver so a store constructed before the
+   * background aux init cannot pin the primary fallback forever; tests that
+   * inject a fixed fake `auxDb` can omit it.
+   */
+  resolveAuxDb?: AuxDbResolver
+}
+
+const REPORT_QUEUE_WRITE_OPTIONS: ScheduleOptions = {
+  priority: 'best_effort',
+  dropPolicy: 'none',
+  maxQueueWaitMs: 15_000
 }
 
 export class ReportQueueStore {
-  private auxDb: LibSQLDatabase<typeof schema>
-  private coreDb: LibSQLDatabase<typeof schema> | null
+  private readonly resolveAuxDb: AuxDbResolver
+  private readonly coreDbDep: LibSQLDatabase<typeof schema> | null
   private readonly maxItems: number
 
-  constructor({ auxDb, coreDb, maxItems }: ReportQueueStoreDeps) {
-    this.auxDb = auxDb
-    this.coreDb = coreDb && coreDb !== auxDb ? coreDb : null
+  constructor({ auxDb, coreDb, maxItems, resolveAuxDb }: ReportQueueStoreDeps) {
+    this.resolveAuxDb = resolveAuxDb ?? (() => ({ db: auxDb, isAux: true }))
+    this.coreDbDep = coreDb ?? null
     this.maxItems =
       typeof maxItems === 'number' && Number.isFinite(maxItems)
         ? Math.min(1_000, Math.max(1, Math.floor(maxItems)))
         : 120
   }
 
+  // Both handles resolve live so reads stay coherent with the enqueue-time
+  // write target while the aux DB finishes its background init.
+  private get auxDb(): LibSQLDatabase<typeof schema> {
+    return this.resolveAuxDb().db
+  }
+
+  private get coreDb(): LibSQLDatabase<typeof schema> | null {
+    if (!this.coreDbDep) return null
+    return this.coreDbDep !== this.resolveAuxDb().db ? this.coreDbDep : null
+  }
+
+  // `.compat` primary mirror retired (design D5): aux is the sole write home
+  // since 2026-08-05. Primary-DB rows are legacy read-only — `list()` keeps
+  // its read-fallback for one more release, then the rows are removable.
   private async withDbWrite<T>(
     label: string,
-    operation: (db: LibSQLDatabase<typeof schema>) => Promise<T>,
-    options?: { mirrorCore?: boolean }
+    operation: (db: LibSQLDatabase<typeof schema>) => Promise<T>
   ): Promise<T> {
-    return dbWriteScheduler.schedule(
-      label,
-      async () => {
-        const result = await withSqliteRetry(() => operation(this.auxDb), { label })
-        if (options?.mirrorCore && this.coreDb) {
-          await withSqliteRetry(() => operation(this.coreDb!), { label: `${label}.compat` }).catch(
-            () => {}
-          )
-        }
-        return result
-      },
-      {
-        priority: 'best_effort',
-        dropPolicy: 'none',
-        maxQueueWaitMs: 15_000
-      }
-    )
+    return scheduleAuxWrite(label, (db) => operation(db), {
+      ...REPORT_QUEUE_WRITE_OPTIONS,
+      resolveDb: this.resolveAuxDb
+    })
   }
 
   private async queryRows(cutoff?: number, dbOverride?: LibSQLDatabase<typeof schema>) {
@@ -131,38 +144,29 @@ export class ReportQueueStore {
         : error
           ? 'ANALYTICS_REPORT_FAILED'
           : null
-    await this.withDbWrite(
-      'analytics.report-queue.mark-attempt',
-      (db) =>
-        db
-          .update(dbSchema.analyticsReportQueue)
-          .set({
-            retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
-            lastAttemptAt: Date.now(),
-            lastError
-          })
-          .where(eq(dbSchema.analyticsReportQueue.id, id)),
-      { mirrorCore: true }
+    await this.withDbWrite('analytics.report-queue.mark-attempt', (db) =>
+      db
+        .update(dbSchema.analyticsReportQueue)
+        .set({
+          retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
+          lastAttemptAt: Date.now(),
+          lastError
+        })
+        .where(eq(dbSchema.analyticsReportQueue.id, id))
     )
   }
 
   async remove(id: number): Promise<void> {
-    await this.withDbWrite(
-      'analytics.report-queue.remove',
-      (db) =>
-        db.delete(dbSchema.analyticsReportQueue).where(eq(dbSchema.analyticsReportQueue.id, id)),
-      { mirrorCore: true }
+    await this.withDbWrite('analytics.report-queue.remove', (db) =>
+      db.delete(dbSchema.analyticsReportQueue).where(eq(dbSchema.analyticsReportQueue.id, id))
     )
   }
 
   async prune(cutoff: number): Promise<number> {
-    const result = await this.withDbWrite(
-      'analytics.report-queue.prune',
-      (db) =>
-        db
-          .delete(dbSchema.analyticsReportQueue)
-          .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff)),
-      { mirrorCore: true }
+    const result = await this.withDbWrite('analytics.report-queue.prune', (db) =>
+      db
+        .delete(dbSchema.analyticsReportQueue)
+        .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff))
     )
     return Number(result.rowsAffected ?? 0)
   }

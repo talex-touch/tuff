@@ -76,8 +76,8 @@ code: |
 |------|------|---------|------|
 | `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | 主轴方向。 |
 | `gap` | `number \| string` | `12` | 子元素间距，数字会转为 px。 |
-| `align` | `string` | `'stretch'` | CSS `align-items` 值。 |
-| `justify` | `string` | `'flex-start'` | CSS `justify-content` 值。 |
+| `align` | `string` | `'stretch'` | 交叉轴对齐，取任意合法 `align-items` 值（`stretch` / `center` / `flex-start` / `flex-end` / `baseline`）。类型未收窄为联合，便于传 `safe center` 等新值。 |
+| `justify` | `string` | `'flex-start'` | 主轴分布，取任意合法 `justify-content` 值（`flex-start` / `center` / `space-between` / `space-around` / `space-evenly`）。等分布局用 `space-between`，居中成组用 `center`。 |
 | `wrap` | `boolean` | `false` | 允许子元素换行。 |
 | `inline` | `boolean` | `false` | 使用 `inline-flex` 而不是块级 `flex`。 |
 

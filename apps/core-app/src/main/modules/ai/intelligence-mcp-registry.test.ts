@@ -145,6 +145,32 @@ describe('IntelligenceMcpRegistry session lifecycle', () => {
     expect(registryMocks.clients[0].callTool).toHaveBeenCalledTimes(2)
   })
 
+  it('连接期间收到 close 时不缓存该会话,下一次调用重新连接', async () => {
+    // onclose is installed before the await, but the session object only exists after it. A
+    // close landing in that window used to hit `session === null`, do nothing, and let the
+    // freshly built object be returned and cached with closed: false (#777).
+    const connection = deferred<void>()
+    registryMocks.connectResults.push(connection.promise)
+    const registry = new IntelligenceMcpRegistry()
+    registries.push(registry)
+    registry.registerProfile(stdioProfile())
+
+    const call = registry.callTool('mcp-profile', 'status', {})
+    await Promise.resolve()
+
+    // The transport dies while connect() is still pending.
+    registryMocks.clients[0].onclose?.()
+    connection.resolve()
+
+    await expect(call).rejects.toThrow(/closed during connect/i)
+
+    // The dead session must not have been cached: a second call has to build a new client.
+    const second = registry.callTool('mcp-profile', 'status', {})
+    await Promise.resolve()
+    expect(registryMocks.clients).toHaveLength(2)
+    await expect(second).resolves.toBe('tool result')
+  })
+
   it('closes a stale connecting generation and retries against the replacement profile', async () => {
     const firstConnection = deferred<void>()
     registryMocks.connectResults.push(firstConnection.promise)

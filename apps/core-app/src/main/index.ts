@@ -6,24 +6,25 @@ import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, nativeTheme, protocol } from 'electron'
+import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
-import { innerRootPath } from './core/precore'
-import { loadStartupModules } from './core/startup-module-loader'
-import { setQuitIntent } from './core/quit-intent'
-import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
-import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
+import { innerRootPath, isDuplicateInstance } from './core/precore'
+import { setQuitIntent } from './core/quit-intent'
+import { loadStartupModules } from './core/startup-module-loader'
+import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { addonOpenerModule } from './modules/addon-opener'
 import { intelligenceModule } from './modules/ai/intelligence-module'
-import { voiceModule } from './modules/voice/voice-module'
 import { analyticsModule, getStartupAnalytics } from './modules/analytics'
 import { assistantModule } from './modules/assistant'
+import { authModule } from './modules/auth'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { buildVerificationModule } from './modules/build-verification'
 import { catalogModule } from './modules/catalog'
 import { clipboardModule } from './modules/clipboard'
+import { conversationModule } from './modules/conversation'
 import { databaseModule } from './modules/database'
 import { divisionBoxModule } from './modules/division-box'
 import { downloadCenterModule } from './modules/download/download-center'
@@ -32,35 +33,41 @@ import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
 import { shortcutModule } from './modules/global-shortcon'
 import { localAiCliModule } from './modules/local-ai-cli'
+import { nativeCapabilitiesModule } from './modules/native-capabilities'
+import { networkModule } from './modules/network'
 import { notificationModule } from './modules/notification'
 import { omniPanelModule } from './modules/omni-panel'
-import { networkModule } from './modules/network'
-import { nativeCapabilitiesModule } from './modules/native-capabilities'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { privacyLifecycleModule } from './modules/privacy/privacy-module'
 import { quickOpsModule } from './modules/quick-ops'
 import { screenshotSessionModule } from './modules/screenshot-session'
 import { sentryModule } from './modules/sentry'
-import { syncModule } from './modules/sync'
-import { authModule } from './modules/auth'
 import { getMainConfig, storageModule, subscribeMainConfig } from './modules/storage'
 import { readStartupAppConfig } from './modules/storage/app-config-repository'
+import { syncModule } from './modules/sync'
+import { systemUpdateModule } from './modules/system-update'
 import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
-import { systemUpdateModule } from './modules/system-update'
 import { terminalModule } from './modules/terminal/terminal.manager'
+import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
+import { voiceModule } from './modules/voice/voice-module'
 import { pluginLogModule } from './service/plugin-log.service'
 
 import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
+import { getAnalyticsMessageStore } from './modules/analytics/message-store'
 
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
 process.env.WS_NO_BUFFER_UTIL = 'true'
 
+// No bypassCSP: renderer/index.html already names `tfile:` in default-src, connect-src,
+// img-src and media-src, so the capability is granted by the policy rather than exempted from
+// it. Keeping the bypass left tfile: as an open hole that survives any future CSP tightening
+// (#785).
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'tfile',
@@ -69,7 +76,6 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       stream: true,
-      bypassCSP: true,
       corsEnabled: true
     }
   }
@@ -167,8 +173,34 @@ applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 // Permission module instance
 const permissionModule = new PermissionModule()
 
+/**
+ * An optional module that fails is a feature the user silently does not have. Only logging it
+ * means nobody outside a log file ever learns, which is why widening the optional tier needs
+ * this first: trading "the app refuses to start" for "the feature is quietly missing" is not an
+ * improvement unless the absence is visible (#789).
+ */
+function reportOptionalModuleFailure(tier: 'foreground' | 'deferred', moduleName: string): void {
+  mainLog.warn(`Optional ${tier} module failed to load, continue startup`, {
+    meta: { module: moduleName }
+  })
+  try {
+    getAnalyticsMessageStore().add({
+      source: 'system',
+      severity: 'warn',
+      title: 'A feature failed to start',
+      message: `${moduleName} did not load. The app started without it.`,
+      meta: { module: moduleName, tier }
+    })
+  } catch (error) {
+    // Reporting must never be the thing that stops startup.
+    mainLog.warn('Failed to record optional module failure', { error })
+  }
+}
+
 const foregroundModulesToLoad = [
   databaseModule,
+  conversationModule,
+  toolGatewayModule,
   storageModule,
   fileProtocolModule,
   shortcutModule,
@@ -223,10 +255,20 @@ try {
 }
 
 app.whenReady().then(async () => {
+  // A duplicate launch already called app.quit(); bootstrapping here would open the database a
+  // second time before that quit lands (#790).
+  if (isDuplicateInstance()) {
+    mainLog.info('Duplicate instance detected, skipping bootstrap')
+    return
+  }
+
   const canContinue = await enforceDevReleaseStartupConstraint()
   if (!canContinue) return
 
   electronReadyTime = Date.now()
+  // Names the sequence below, which is the only startup health check there is. A core/startup-health
+  // module used to exist and this line read as its log; it was a 14-line generic helper nothing
+  // imported, deleted in #802.
   const startupTimer = mainLog.time('Startup health check passed', 'success')
   const foregroundModuleLoadTimer = mainLog.time('Foreground modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
@@ -295,9 +337,7 @@ app.whenReady().then(async () => {
       },
       optionalModules: optionalModulesToLoad,
       onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
-        mainLog.warn('Optional foreground module failed to load, continue startup', {
-          meta: { module: metric.name }
-        })
+        reportOptionalModuleFailure('foreground', metric.name)
       },
       onLoaded: handleModuleLoaded
     })) as ModuleLoadMetric[]
@@ -357,9 +397,7 @@ app.whenReady().then(async () => {
           },
           optionalModules: optionalModulesToLoad,
           onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
-            mainLog.warn('Optional deferred module failed to load, continue startup', {
-              meta: { module: metric.name }
-            })
+            reportOptionalModuleFailure('deferred', metric.name)
           },
           onLoaded: handleModuleLoaded
         })) as ModuleLoadMetric[]

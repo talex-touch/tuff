@@ -59,7 +59,7 @@ code: |
 |------|------|---------|------|
 | `icon` | `string` | `''` | 未提供默认插槽时，通过 `TxIcon` 渲染的图标名称。 |
 | `label` | `string` | `''` | 可访问名称。纯图标操作必填。 |
-| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | 按钮尺寸。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 按钮尺寸。 |
 | `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | 点击区域轮廓。 |
 | `pressed` | `boolean` | - | 持久切换态；定义后转发为 `aria-pressed`。 |
 | `disabled` | `boolean` | `false` | 原生禁用态与禁用样式。 |

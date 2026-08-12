@@ -121,11 +121,19 @@ describe('appSettings layout contract', () => {
 })
 
 describe('macOS settings tag copy', () => {
-  it('keeps the Apple icon while using localized Only copy', () => {
-    expect(macTagSource).toContain('icon="i-simple-icons-apple"')
-    expect(macTagSource).toContain("t('settings.platformTags.macOnly', 'Only')")
-    expect(enCatalog.settings.platformTags.macOnly).toBe('Only')
-    expect(zhCatalog.settings.platformTags.macOnly).toBe('仅限')
+  it('names the platform in text rather than leaning on a vendor glyph', () => {
+    // The glyph carried the platform and the label carried "only", so the chip read as a bare
+    // "Only" with no noun once the icon was scanned past. The label states it outright now.
+    expect(macTagSource).not.toContain('i-simple-icons-apple')
+    expect(macTagSource).toContain("t('settings.platformTags.macOnly'")
+    expect(enCatalog.settings.platformTags.macOnly).toBe('macOS')
+    expect(zhCatalog.settings.platformTags.macOnly).toBe('macOS')
+  })
+
+  it('keeps platform chips neutral so status colours stay meaningful', () => {
+    // These sit beside granted/denied permission chips; a vendor blue competed with that signal.
+    expect(macTagSource).toContain('color="var(--tx-text-color-secondary)"')
+    expect(macTagSource).not.toMatch(/color="#[0-9a-f]{6}"/i)
   })
 
   it('does not repeat platform scope in hide Dock descriptions', () => {

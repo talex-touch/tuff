@@ -64,6 +64,18 @@ interface UpdateSystemConfig {
 const RENDERER_OVERRIDE_STATE_FILE = 'renderer-override.json'
 const RENDERER_OVERRIDE_DIR = 'renderer-override'
 const ENABLE_RENDERER_OVERRIDE = process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
+
+/**
+ * Whether the renderer-override switch is reachable at all in this process.
+ *
+ * The feature is gated twice — by this environment variable and by the persisted setting — so the
+ * settings UI needs the first half to decide whether to render the row. Without it the switch has
+ * to be drawn permanently disabled next to a note telling the user to relaunch with an env var,
+ * which reads as a broken control rather than an unavailable capability.
+ */
+export function isRendererOverrideAvailable(): boolean {
+  return ENABLE_RENDERER_OVERRIDE
+}
 const updateSystemLog = createLogger('UpdateSystem')
 
 interface RendererOverrideState {
@@ -533,36 +545,63 @@ export class UpdateSystem {
     }
     const filePath = path.join(task.destination, task.filename)
 
-    if (artifact.sha256) {
-      const valid = await this.verifyChecksum(filePath, artifact.sha256)
-      if (!valid) {
-        this.reportRendererOverrideIssue(
-          'error',
-          'Renderer override checksum failed',
-          'Checksum verification failed',
-          { tag: release.tag_name }
-        )
-        throw new Error('Renderer override checksum verification failed')
-      }
+    // An installed override runs as the app's renderer, which channel-guard.ts grants
+    // unguarded system.shell along with the shell.openPath and download handlers. It is the
+    // same class of code execution as the installer package, so it is verified to the same
+    // standard as resolveVerifiedInstallTask: checksum and signature both required, and any
+    // failure aborts.
+    //
+    // Previously an absent sha256 or signatureUrl skipped the corresponding check entirely,
+    // and an *invalid* signature only logged a warning before extracting the bundle anyway
+    // (#912) — so an artifact published with neither field, or one whose signature did not
+    // verify, was installed exactly like a good one.
+    if (!artifact.sha256) {
+      this.reportRendererOverrideIssue(
+        'error',
+        'Renderer override checksum missing',
+        'Checksum is required but missing',
+        { tag: release.tag_name }
+      )
+      throw new Error('Renderer override checksum is required but missing')
+    }
+    if (!(await this.verifyChecksum(filePath, artifact.sha256))) {
+      this.reportRendererOverrideIssue(
+        'error',
+        'Renderer override checksum failed',
+        'Checksum verification failed',
+        { tag: release.tag_name }
+      )
+      throw new Error('Renderer override checksum verification failed')
     }
 
     const signatureUrl = task.metadata?.signatureUrl
-    if (typeof signatureUrl === 'string' && signatureUrl.length > 0) {
-      const verifyResult = await this.signatureVerifier.verifyFileSignature(filePath, signatureUrl)
-      if (!verifyResult.valid) {
-        updateSystemLog.warn('Renderer override signature verification failed', {
-          meta: {
-            tag: release.tag_name,
-            reason: verifyResult.reason
-          }
-        })
-        this.reportRendererOverrideIssue(
-          'warn',
-          'Renderer override signature invalid',
-          verifyResult.reason || 'Signature verification failed',
-          { tag: release.tag_name }
-        )
-      }
+    if (typeof signatureUrl !== 'string' || signatureUrl.length === 0) {
+      this.reportRendererOverrideIssue(
+        'error',
+        'Renderer override signature missing',
+        'Signature is required but missing',
+        { tag: release.tag_name }
+      )
+      throw new Error('Renderer override signature is required but missing')
+    }
+
+    const verifyResult = await this.signatureVerifier.verifyFileSignature(filePath, signatureUrl)
+    if (!verifyResult.valid) {
+      updateSystemLog.error('Renderer override signature verification failed', {
+        meta: {
+          tag: release.tag_name,
+          reason: verifyResult.reason
+        }
+      })
+      this.reportRendererOverrideIssue(
+        'error',
+        'Renderer override signature invalid',
+        verifyResult.reason || 'Signature verification failed',
+        { tag: release.tag_name }
+      )
+      throw new Error(
+        `Renderer override signature verification failed: ${verifyResult.reason ?? 'unknown'}`
+      )
     }
 
     const tempDir = path.join(os.tmpdir(), `talex-touch-renderer-${Date.now()}`)

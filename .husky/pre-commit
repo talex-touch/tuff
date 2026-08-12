@@ -1,4 +1,27 @@
+CORE_PKG="apps/core-app/package.json"
+
+# Whether the developer already had unstaged edits here, checked BEFORE the sync runs.
+# sync:core-pkg rewrites five metadata fields, but `git add` stages the whole file — so
+# auto-staging swept an in-progress dependency edit into an unrelated commit (#740).
+if git diff --quiet -- "$CORE_PKG" 2>/dev/null; then
+  CORE_PKG_WAS_CLEAN=1
+else
+  CORE_PKG_WAS_CLEAN=0
+fi
+
 pnpm sync:core-pkg
-git add "apps/core-app/package.json" >/dev/null 2>&1 || true
+
+if [ "$CORE_PKG_WAS_CLEAN" = "1" ]; then
+  # The sync's change is the only change, so staging it cannot capture anything else.
+  git add "$CORE_PKG" >/dev/null 2>&1 || true
+elif ! git diff --quiet -- "$CORE_PKG" 2>/dev/null; then
+  echo "[pre-commit] $CORE_PKG has your own unstaged edits."
+  echo "[pre-commit] Version metadata was synced but NOT staged, so this commit does not"
+  echo "[pre-commit] silently include your other changes. Stage it yourself when ready."
+fi
+
+# Fails with an actionable message instead of a MODULE_NOT_FOUND naming a path nobody
+# recognises, when node_modules/.bin belongs to a checkout at a different depth (#1564).
+node scripts/check-bin-shims.mjs || exit 1
 
 pnpm lint:staged

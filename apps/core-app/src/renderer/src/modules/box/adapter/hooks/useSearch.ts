@@ -449,15 +449,122 @@ export function useSearch(
   const INPUT_CHANGE_DEBOUNCE_MS = 25
   const inputTransport = createCoreBoxInputTransport(transport, INPUT_CHANGE_DEBOUNCE_MS)
 
+  // Deferred providers (the file index) answer after the fast layer, so a plain
+  // top-N cut structurally starves them on short queries no matter how well they
+  // score. Every source present in the merged set keeps this many slots.
+  const MIN_SLOTS_PER_SOURCE = 6
+
+  // Mirrors the backend's per-update safety cap. An arriving batch is ranked and
+  // quota'd together with what is already on screen, so cutting it to the render
+  // cap here would drop a batch's low-ranked source before it can claim its
+  // floor — exactly the starvation the backend stopped doing.
+  const MAX_INCOMING_BATCH_ITEMS = 200
+
   function limitRenderedItems(items: TuffItem[]): TuffItem[] {
     return items.length > MAX_RENDERED_RESULTS ? items.slice(0, MAX_RENDERED_RESULTS) : items
   }
 
+  function limitIncomingBatchItems(items: TuffItem[]): TuffItem[] {
+    return items.length > MAX_INCOMING_BATCH_ITEMS
+      ? items.slice(0, MAX_INCOMING_BATCH_ITEMS)
+      : items
+  }
+
+  function getSourceId(item: TuffItem): string {
+    return item.source?.id ?? ''
+  }
+
+  /**
+   * Cut a ranked list down to the render cap while guaranteeing each source a
+   * floor of slots. The overflow is taken from the tail of the cut, and only
+   * from sources that are still above their own floor, so the result stays a
+   * deterministic function of the ranked input.
+   */
+  function applyRenderedItemQuota(rankedItems: TuffItem[]): TuffItem[] {
+    if (rankedItems.length <= MAX_RENDERED_RESULTS) return rankedItems
+
+    const selectedIds = new Set<string>()
+    for (let index = 0; index < MAX_RENDERED_RESULTS; index++) {
+      selectedIds.add(rankedItems[index].id)
+    }
+
+    const sourceTotals = new Map<string, number>()
+    const sourceSelected = new Map<string, number>()
+    for (const item of rankedItems) {
+      const sourceId = getSourceId(item)
+      sourceTotals.set(sourceId, (sourceTotals.get(sourceId) ?? 0) + 1)
+      if (selectedIds.has(item.id)) {
+        sourceSelected.set(sourceId, (sourceSelected.get(sourceId) ?? 0) + 1)
+      }
+    }
+
+    let evictCursor = MAX_RENDERED_RESULTS - 1
+    const evictLowestSpareSlot = (): boolean => {
+      while (evictCursor >= 0) {
+        const candidate = rankedItems[evictCursor]
+        evictCursor -= 1
+        if (!candidate || !selectedIds.has(candidate.id)) continue
+        if (candidate.scoring?.pinned === true) continue
+        const sourceId = getSourceId(candidate)
+        const selected = sourceSelected.get(sourceId) ?? 0
+        if (selected <= Math.min(MIN_SLOTS_PER_SOURCE, sourceTotals.get(sourceId) ?? 0)) continue
+        selectedIds.delete(candidate.id)
+        sourceSelected.set(sourceId, selected - 1)
+        return true
+      }
+      return false
+    }
+
+    for (const [sourceId, total] of sourceTotals) {
+      let deficit = Math.min(MIN_SLOTS_PER_SOURCE, total) - (sourceSelected.get(sourceId) ?? 0)
+      if (deficit <= 0) continue
+
+      for (const item of rankedItems) {
+        if (deficit <= 0) break
+        if (getSourceId(item) !== sourceId || selectedIds.has(item.id)) continue
+        if (!evictLowestSpareSlot()) break
+        selectedIds.add(item.id)
+        sourceSelected.set(sourceId, (sourceSelected.get(sourceId) ?? 0) + 1)
+        deficit -= 1
+      }
+    }
+
+    return rankedItems.filter((item) => selectedIds.has(item.id))
+  }
+
   function replaceSearchResults(items: TuffItem[]): void {
-    searchResults.value = limitRenderedItems(filterDetachedItems(items))
+    searchResults.value = applyRenderedItemQuota(filterDetachedItems(items))
+  }
+
+  /**
+   * Rank by the score the backend ranker wrote onto the item, so a later batch
+   * competes with the earlier ones instead of being appended below them. Ties
+   * keep the order the user is already looking at.
+   */
+  function rankRenderedItems(items: TuffItem[], previousOrder: Map<string, number>): TuffItem[] {
+    return items
+      .map((item, index) => ({
+        item,
+        index,
+        pinned: item.scoring?.pinned === true,
+        score: typeof item.scoring?.final === 'number' ? item.scoring.final : 0,
+        previousRank: previousOrder.get(item.id) ?? Number.MAX_SAFE_INTEGER
+      }))
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        if (b.score !== a.score) return b.score - a.score
+        if (a.previousRank !== b.previousRank) return a.previousRank - b.previousRank
+        return a.index - b.index
+      })
+      .map((entry) => entry.item)
   }
 
   function mergeRenderedItems(current: TuffItem[], incoming: TuffItem[]): TuffItem[] {
+    const previousOrder = new Map<string, number>()
+    current.forEach((item, index) => {
+      previousOrder.set(item.id, index)
+    })
+
     const itemsById = new Map<string, TuffItem>()
     for (const item of current) {
       itemsById.set(item.id, item)
@@ -465,7 +572,19 @@ export function useSearch(
     for (const item of incoming) {
       itemsById.set(item.id, item)
     }
-    return Array.from(itemsById.values()).slice(0, MAX_RENDERED_RESULTS)
+
+    return applyRenderedItemQuota(rankRenderedItems([...itemsById.values()], previousOrder))
+  }
+
+  /** Selection follows the item across a re-rank, not the row it used to sit in. */
+  function restoreFocusedItem(itemId: string | null): void {
+    if (boxOptions.focus < 0 || !itemId) return
+    const nextIndex = res.value.findIndex((item) => item.id === itemId)
+    if (nextIndex >= 0) {
+      boxOptions.focus = nextIndex
+      return
+    }
+    boxOptions.focus = res.value.length > 0 ? 0 : -1
   }
 
   let searchSequence = 0
@@ -781,6 +900,31 @@ export function useSearch(
     }
   }
 
+  /**
+   * Reports the recommendation ids we just rendered so the main process can
+   * join them against executes for local hit-rate@k. Ids and order only, never
+   * content, and failures are ignored — this must never affect rendering.
+   */
+  const reportRecommendationExposure = (items: TuffItem[]): void => {
+    const itemKeys = items
+      .filter((item) => !item.meta?.pinned?.isPinned)
+      .map((item) => {
+        const meta = item.meta as Record<string, unknown> | undefined
+        const sourceId =
+          typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source.id
+        const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
+        return `${sourceId}:${itemId}`
+      })
+    if (itemKeys.length === 0) return
+
+    transport
+      .send(CoreBoxEvents.recommendation.reportExposure, {
+        itemKeys,
+        surface: isDetachedDivisionMode() ? 'division-box' : 'core-box'
+      })
+      .catch(() => {})
+  }
+
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
     const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
     currentSearchId.value = initialResult.sessionId || null
@@ -791,6 +935,8 @@ export function useSearch(
     boxOptions.layout = initialResult.containerLayout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
+
+    reportRecommendationExposure(filteredItems)
 
     nextTick(() => {
       window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
@@ -848,9 +994,11 @@ export function useSearch(
                 return
               case 'update': {
                 if (currentSearchId.value !== chunk.sessionId) return
-                const items = limitRenderedItems(filterDetachedItems(chunk.items))
+                const items = limitIncomingBatchItems(filterDetachedItems(chunk.items))
                 if (items.length === 0) return
+                const focusedItemId = res.value[boxOptions.focus]?.id ?? null
                 searchResults.value = mergeRenderedItems(searchResults.value, items)
+                restoreFocusedItem(focusedItemId)
                 activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, items)
                 return
               }
@@ -1081,8 +1229,17 @@ export function useSearch(
         return
       }
 
-      currentSearchId.value = initialResult.sessionId || null
-      const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
+      // Only when the snapshot actually carries an id. `sessionId` is optional on
+      // TuffSearchResult, and the unconditional `|| null` threw away the identity the `session`
+      // chunk had already established - after which every later update/no-results/complete chunk
+      // failed its session guard, applySearchEnd never ran, and the spinner stayed up forever
+      // (#830). The snapshot handler has already proven the ids match, so this is at most a
+      // no-op reassignment and never a downgrade.
+      if (initialResult.sessionId) currentSearchId.value = initialResult.sessionId
+      // The snapshot arrives ranked, so the quota only decides which of the
+      // overflow survives — a cache hit (which carries the whole accumulated
+      // set) then shows what the live run ended with instead of a plain top cut.
+      const filteredItems = applyRenderedItemQuota(filterDetachedItems(initialResult.items))
       searchResult.value = isDetachedDivisionMode()
         ? { ...initialResult, items: filteredItems }
         : initialResult

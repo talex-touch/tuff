@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Obtain the remaining official macOS trusted-package silent-update, restart, and health-ack runtime evidence.",
-    "blocker": "The official trusted macOS package acceptance criterion remains unchecked.",
-    "evidence": "prd.md acceptance criteria distinguish completed focused/package checks from the pending official runtime proof."
+    "nextAction": "Run the N to N+1 smoke on a Mac. The artifacts exist: v2.4.14-beta.1 and v2.4.14-beta.2 both ship a signed macOS arm64 .app.zip, and both release jobs report Developer ID signing with \"notarization successful\". What is left is the run and its phase timings, not a build.",
+    "blocker": "A macOS benchmark host. Not, as this said before, the absence of an official trusted package -- that arrived on 2026-08-03.",
+    "evidence": "Nine of the ten prd criteria are checked. The code paths behind them have named tests in update-install-coordinator.test.ts: \"prepares and starts one helper even when BEFORE_APP_QUIT and WILL_QUIT repeat\" covers the single-helper rule, \"keeps a macOS update ready when the current build cannot use silent install\" covers the non-writable case staying ready instead of elevating, \"confirms the target version once, promotes its package, and writes a matching health ack\" and \"refuses to acknowledge health when startup runs a version other than the plan target\" cover the health handshake, and \"marks a previous-version restart as recovered when a matching recovery marker exists\" covers one-shot recovery. The unchecked criterion is the end-to-end timing on real hardware, which no test can stand in for."
   }
 }

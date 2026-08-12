@@ -1,7 +1,10 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { getAuthToken } from '../auth'
 import { resolveProviderCredential } from './provider-credential-runtime'
-import { isNexusManagedProvider, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime-shared'
+import {
+  isNexusManagedProvider,
+  TUFF_NEXUS_PROVIDER_ID
+} from '@talex-touch/utils/intelligence/nexus-provider'
 
 export { isNexusManagedProvider, TUFF_NEXUS_PROVIDER_ID }
 

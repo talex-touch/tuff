@@ -1,13 +1,42 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES,
-  shouldInstallPluginRuntimeServiceByDefault
-} from './plugin-runtime-rollout'
+import { shouldInstallPluginRuntimeServiceByDefault } from './plugin-runtime-rollout'
 
 const workspaceRoot = path.resolve(__dirname, '../../../../../..')
 const pluginsRoot = path.join(workspaceRoot, 'plugins')
+
+/**
+ * The preludes this suite scans for privileged APIs.
+ *
+ * It used to be exported from plugin-runtime-rollout.ts and read as a production gate, which
+ * nothing consulted (#536). It is a test inventory, so it lives with the test; adding a name
+ * here opts a prelude into being scanned, not into the runtime.
+ */
+const COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
+  'clipboard-history',
+  'touch-batch-rename',
+  'touch-browser-bookmarks',
+  'touch-browser-data',
+  'touch-browser-open',
+  'touch-code-snippets',
+  'touch-dev-toolbox',
+  'touch-dev-utils',
+  'touch-dictation',
+  'touch-emoji-symbols',
+  'touch-intelligence',
+  'touch-quick-actions',
+  'touch-quickops',
+  'touch-snipaste',
+  'touch-snippets',
+  'touch-system-actions',
+  'touch-text-snippets',
+  'touch-text-tools',
+  'touch-translation',
+  'touch-window-manager',
+  'touch-window-presets',
+  'touch-workspace-scripts'
+] as const)
 
 const EXPECTED_UNMIGRATED = Object.freeze({})
 
@@ -39,34 +68,15 @@ function officialManifestNames(): string[] {
 describe('plugin runtime production rollout gate', () => {
   it('enables the production default only after all 22 manifested activations are compatible', () => {
     const official = officialManifestNames()
-    const compatible = new Set<string>(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES)
+    const compatible = new Set<string>(COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
 
     expect(official).toHaveLength(22)
-    expect(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES).toEqual([
-      'clipboard-history',
-      'touch-batch-rename',
-      'touch-browser-bookmarks',
-      'touch-browser-data',
-      'touch-browser-open',
-      'touch-code-snippets',
-      'touch-dev-toolbox',
-      'touch-dev-utils',
-      'touch-dictation',
-      'touch-emoji-symbols',
-      'touch-intelligence',
-      'touch-quick-actions',
-      'touch-quickops',
-      'touch-snipaste',
-      'touch-snippets',
-      'touch-system-actions',
-      'touch-text-snippets',
-      'touch-text-tools',
-      'touch-translation',
-      'touch-window-manager',
-      'touch-window-presets',
-      'touch-workspace-scripts'
-    ])
+    // The inventory used to be compared against a hardcoded copy of itself here, which was
+    // already a tautology when both lived in production. Now that the list is this file's own
+    // constant, the meaningful direction is the other one: every plugin on disk must be in it,
+    // which `unmigrated` asserts below, and nothing may be in it that is not on disk.
+    expect([...COMPATIBLE_OFFICIAL_PRELUDES].sort()).toEqual([...official].sort())
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
     expect(unmigrated).toHaveLength(0)
     expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(true)
@@ -129,7 +139,7 @@ describe('plugin runtime production rollout gate', () => {
       /\bnode:(?:fs(?:\/promises)?|child_process|sqlite|worker_threads)\b/,
       /\belectron\b/
     ]
-    for (const name of PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES) {
+    for (const name of COMPATIBLE_OFFICIAL_PRELUDES) {
       const sourcePath =
         name === 'clipboard-history'
           ? path.join(pluginsRoot, name, 'index', 'main.ts')

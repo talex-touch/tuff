@@ -18,6 +18,38 @@ function withDisabledAudio<T>(run: () => T): T {
   }
 }
 
+/**
+ * Whether the `.node` binding actually loaded, which is not the same question as
+ * `support.supported`.
+ *
+ * `getNativeAudioSupport` returns `supported: false` for two unrelated situations, and the test
+ * below only holds for one of them:
+ *
+ *   - the binding is absent, so the wrapper answers with `native-module-not-loaded`, an
+ *     export-mismatch message, or `disabled-by-env`. Its strict methods then throw
+ *     ERR_NATIVE_AUDIO_UNAVAILABLE, which is the fallback contract being asserted.
+ *   - the binding loaded and the *native* module reported there is no usable input device --
+ *     `no-input-device`, `input-probe-failed: …`, `platform-not-supported`
+ *     (native-audio/src/lib.rs, build_native_audio_support). Strict methods then reach Rust and
+ *     do not throw that code at all.
+ *
+ * Guarding on `support.supported` conflated the two. It happened to pass only while nothing in
+ * CI ever built the addon; once native-protocol.yml started running `build:audio`, a headless
+ * Linux runner hit the second case and this test asserted a throw that could not occur (#322).
+ */
+function nativeBindingLoaded(support: nativeAudio.NativeAudioSupport): boolean {
+  if (support.supported)
+    return true
+  const reason = support.reason
+  if (typeof reason !== 'string')
+    return false
+  return (
+    reason === 'no-input-device'
+    || reason === 'platform-not-supported'
+    || reason.startsWith('input-probe-failed: ')
+  )
+}
+
 describe('tuff-native audio contract', () => {
   it('exports the complete audio facade', () => {
     expect(typeof nativeAudio.getNativeAudioSupport).toBe('function')
@@ -45,7 +77,7 @@ describe('tuff-native audio contract', () => {
 
   it('uses strict capture errors and best-effort utility fallbacks when unavailable', () => {
     const support = nativeAudio.getNativeAudioSupport()
-    if (support.supported)
+    if (nativeBindingLoaded(support))
       return
 
     expect(() => nativeAudio.startCapture()).toThrow(

@@ -1,8 +1,20 @@
 import type {
+  AiAttachment,
+  AiAttachmentFile,
+  AiAttachmentImage,
+  AiAttachmentPart,
+  AiChainStep,
   AiConversationProps,
   AiElementMessage,
   AiElementMessageRole,
+  AiMessagePart,
   AiMessageProps,
+  AiReasoningPart,
+  AiSourceItem,
+  AiSourcesPart,
+  AiSuggestion,
+  AiTextPart,
+  AiToolCallPart,
 } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxAiConversation from './src/TxAiConversation.vue'
@@ -18,10 +30,22 @@ export {
   TxAiMessage,
 }
 export type {
+  AiAttachment,
+  AiAttachmentFile,
+  AiAttachmentImage,
+  AiAttachmentPart,
+  AiChainStep,
   AiConversationProps,
   AiElementMessage,
   AiElementMessageRole,
+  AiMessagePart,
   AiMessageProps,
+  AiReasoningPart,
+  AiSourceItem,
+  AiSourcesPart,
+  AiSuggestion,
+  AiTextPart,
+  AiToolCallPart,
 }
 
 export default AiConversation

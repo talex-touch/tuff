@@ -598,7 +598,7 @@ async function handlePrimaryAction(): Promise<void> {
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="shell-chrome-safe-inline-end flex items-center gap-2">
           <TxSplitButton
             variant="primary"
             size="sm"

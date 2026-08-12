@@ -1,0 +1,30 @@
+{
+  "id": "shell-chrome-resizable-sidebar",
+  "name": "shell-chrome-resizable-sidebar",
+  "title": "Shell chrome platform adaptation and resizable sidebar",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Run the manual acceptance. Thirteen of the fifteen criteria are visual or interactive and need the app on the platform in question: traffic-light placement and a draggable top row on macOS, the self-drawn window controls on Windows and Linux, sidebar drag with the 220-360px clamp, the 180px snap to a 64px icon rail and the 110px restore, width persisting across restart, and light/dark/high-contrast. Also settle AC6: ShellTopBar is gone, but ShellBackRow.vue still exists and ShellSidebar.vue imports it, so either the criterion or the component needs updating.",
+    "blocker": "A running app on macOS, Windows and Linux. Nothing here is decidable from source: the criteria are about where the traffic lights land, whether the top row drags the window, and whether contrast holds in three themes.",
+    "evidence": "Machine-checkable parts, 2026-08-11. AC6 half met: ShellTopBar has zero files and zero references; ShellBackRow.vue is still present and imported by ShellSidebar.vue, which reads as repurposed rather than left behind. AC11 met: no flatNavBar.store key remains under apps/core-app. AC13: typecheck:node clean; typecheck:web reports 154 errors, none of them in a shell component - they are all under packages/tuffex/packages/components."
+  }
+}

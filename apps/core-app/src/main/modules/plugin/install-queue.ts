@@ -35,8 +35,6 @@ interface InstallTask {
   prepared?: PreparedPluginInstall
   officialHint?: boolean
   officialActual?: boolean
-  /** Whether the user already confirmed installation on the client side */
-  trustedHint?: boolean
   /** Force update existing plugin */
   forceUpdate?: boolean
   /** Auto re-enable plugin after update */
@@ -118,8 +116,6 @@ export class PluginInstallQueue {
         lastProgress: -1,
         officialHint:
           typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined,
-        trustedHint:
-          typeof request.metadata?.trusted === 'boolean' ? request.metadata.trusted : undefined,
         forceUpdate:
           typeof request.metadata?.forceUpdate === 'boolean'
             ? request.metadata.forceUpdate
@@ -207,10 +203,19 @@ export class PluginInstallQueue {
         this.emitProgress(task, 'verifying', { progress: 100 })
       }
 
-      // Skip confirmation if:
-      // 1. Plugin is official (from provider result)
-      // 2. User already confirmed on client side (trustedHint)
-      const needsConfirmation = !task.officialActual && !task.trustedHint
+      // Confirmation is skipped only when the main process itself established the plugin is
+      // official — officialActual is recomputed here from prepared.providerResult, not taken
+      // from the request.
+      //
+      // It used to also skip on a `trustedHint` read straight off `metadata.trusted` in the IPC
+      // payload. Any code running in the renderer could send `{trusted: true}` and install with
+      // no prompt (#902); the renderer's own dialog is not evidence the main process can check.
+      // The field is gone rather than merely unused, so it cannot be quietly rewired.
+      //
+      // The renderer still shows its own confirmation, so an ordinary store install now asks
+      // twice. That is worth it until the two prompts are merged: the alternative is a control
+      // anything in the renderer can switch off.
+      const needsConfirmation = !task.officialActual
       if (needsConfirmation) {
         await this.requestConfirmation(task, {
           taskId: task.id,

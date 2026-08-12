@@ -66,8 +66,8 @@ async function run() {
 import { z } from "zod";
 import {
   createToolKit,
-  LangChainToolAdapter,
   defineTuffTool,
+  LangChainToolAdapter,
   toToolManifest,
 } from "@talex-touch/tuff-intelligence";
 

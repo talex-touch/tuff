@@ -243,6 +243,52 @@ describe('AiImportedConfigRuntime scoped imports', () => {
     )
   })
 
+  it("参数里的 $& / $' / $1 按字面插入,不被当成替换模式", async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'command-echo',
+        kind: 'command',
+        name: 'echo',
+        alias: 'echo',
+        contentRef: 'command-echo-content'
+      })
+    )
+    importedConfigMocks.content.set('command-echo-content', 'ARGS=[$ARGUMENTS]; TAIL')
+    const runtime = new AiImportedConfigRuntime()
+
+    // $& would expand to the matched '$ARGUMENTS', $' to everything after it.
+    const prompt = await runtime.buildSystemPrompt(
+      profile(),
+      '/workspace/release',
+      "/echo\tfix the $& and $' handler"
+    )
+
+    expect(prompt).toContain("ARGS=[fix the $& and $' handler]; TAIL")
+  })
+
+  it('用户参数里的 $1 不会被位置替换二次改写', async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'command-pos',
+        kind: 'command',
+        name: 'pos',
+        alias: 'pos',
+        contentRef: 'command-pos-content'
+      })
+    )
+    importedConfigMocks.content.set('command-pos-content', 'ARGS=[$ARGUMENTS]; FIRST=[$1]')
+    const runtime = new AiImportedConfigRuntime()
+
+    const prompt = await runtime.buildSystemPrompt(
+      profile(),
+      '/workspace/release',
+      '/pos\tkeep $1 literal'
+    )
+
+    // The template's own $1 still expands to the first token; the one the user typed does not.
+    expect(prompt).toContain('ARGS=[keep $1 literal]; FIRST=[keep]')
+  })
+
   it('rejects a skill read outside its workspace while allowing reads inside that workspace', async () => {
     importedConfigMocks.items.push(
       importedItem({
@@ -387,6 +433,94 @@ describe('AiImportedConfigRuntime scoped imports', () => {
     await expect(
       runtime.assertAgentProfileVisible('profile-release-agent', '/workspace/other')
     ).resolves.toBeUndefined()
+  })
+
+  it('builds a home injection with skill metadata only and every rule that needs no file context', async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'skill-release',
+        contentRef: 'skill-release-content',
+        normalizedProjection: { description: 'Review release readiness.' }
+      }),
+      importedItem({
+        id: 'rule-scoped',
+        kind: 'rule',
+        name: 'typescript-files',
+        contentRef: 'rule-scoped-content',
+        normalizedProjection: { globs: ['src/**/*.ts'] }
+      }),
+      importedItem({
+        id: 'rule-always',
+        kind: 'rule',
+        name: 'security-baseline',
+        contentRef: 'rule-always-content',
+        normalizedProjection: { alwaysApply: true }
+      }),
+      importedItem({ id: 'skill-bodyless', name: 'bodyless', contentRef: undefined })
+    )
+    importedConfigMocks.content.set('skill-release-content', 'INTERNAL SKILL BODY')
+    importedConfigMocks.content.set('rule-scoped-content', 'TYPESCRIPT RULE BODY')
+    importedConfigMocks.content.set('rule-always-content', 'ALWAYS RULE BODY')
+
+    const injection = await new AiImportedConfigRuntime().buildHomeInjection()
+
+    expect(injection).toContain(
+      'Available imported skills (metadata only; call tuff_skill_read with an id before using one)'
+    )
+    expect(injection).toContain('"id":"skill-release"')
+    expect(injection).toContain('Review release readiness.')
+    expect(injection).not.toContain('INTERNAL SKILL BODY')
+    // `tuff_skill_read` can only return managed content, so an id with none is never advertised.
+    expect(injection).not.toContain('skill-bodyless')
+    expect(injection).toContain('RULE security-baseline:\nALWAYS RULE BODY')
+    // Home chat names no paths, so a glob-scoped rule has nothing it could apply to.
+    expect(injection).not.toContain('TYPESCRIPT RULE BODY')
+  })
+
+  it('orders the home injection skills-first and keeps rules in scope-precedence order', async () => {
+    importedConfigMocks.items.push(
+      importedItem({
+        id: 'rule-global',
+        kind: 'rule',
+        name: 'tone',
+        targetScope: 'global',
+        workspaceRoot: undefined,
+        contentRef: 'rule-global-content',
+        normalizedProjection: { alwaysApply: true }
+      }),
+      importedItem({
+        id: 'rule-workspace',
+        kind: 'rule',
+        name: 'format',
+        contentRef: 'rule-workspace-content',
+        normalizedProjection: { alwaysApply: true }
+      }),
+      importedItem({ id: 'skill-release', normalizedProjection: { description: 'Ship it.' } })
+    )
+    importedConfigMocks.content.set('rule-global-content', 'GLOBAL RULE BODY')
+    importedConfigMocks.content.set('rule-workspace-content', 'WORKSPACE RULE BODY')
+
+    const injection = (await new AiImportedConfigRuntime().buildHomeInjection()) ?? ''
+
+    expect(injection.indexOf('skill-release')).toBeLessThan(injection.indexOf('RULE format'))
+    // Workspace items sort ahead of global ones, the same precedence `buildSystemPrompt` applies.
+    expect(injection.indexOf('RULE format')).toBeLessThan(injection.indexOf('RULE tone'))
+  })
+
+  it('returns no home injection when nothing is active', async () => {
+    importedConfigMocks.items.push(
+      importedItem({ id: 'skill-inactive', active: false }),
+      importedItem({ id: 'skill-errored', state: 'invalid' }),
+      importedItem({
+        id: 'rule-empty',
+        kind: 'rule',
+        contentRef: 'rule-empty-content',
+        normalizedProjection: { alwaysApply: true }
+      })
+    )
+    importedConfigMocks.content.set('rule-empty-content', '   \n  ')
+
+    await expect(new AiImportedConfigRuntime().buildHomeInjection()).resolves.toBeNull()
   })
 
   it('registers an enabled MCP profile once, refreshes changed definitions, and unregisters it when disabled', async () => {

@@ -125,7 +125,7 @@ export enum DepartedOS {
 
 export enum SupportOS {
   WINDOWS = 'Windows',
-  WINDOWS_11 = 'Windows 10 Pro',
+  WINDOWS_11 = 'Windows 11',
   WINDOWS_10 = 'Windows 10',
 
   MACOS = 'macOS',
@@ -168,8 +168,8 @@ export enum SupportOS {
   WEB_IPADOS = 'Web iPadOS',
 
   WATCHOS = 'watchOS',
-  WATCHOS_9 = 'watchOS 10',
-  WATCHOS_10 = 'watchOS 9',
+  WATCHOS_9 = 'watchOS 9',
+  WATCHOS_10 = 'watchOS 10',
 
   TVOS = 'tvOS',
   TVOS_17 = 'tvOS 17',

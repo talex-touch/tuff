@@ -9,8 +9,7 @@ import type {
   PrivacyOwnerPreviewResult
 } from './data-owner'
 import { isProxy } from 'node:util/types'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../db/db-write'
 import { isSupportedPrivacyRetentionMs } from './retention-policy'
 
 export interface PrivacyOwnerLimits {
@@ -24,8 +23,10 @@ export type PrivacyOwnerWriteScheduler = <T>(
   operation: () => Promise<T>
 ) => Promise<T>
 
+// SQLITE_BUSY retry is scheduler-owned (delayed re-enqueue); do not re-wrap the
+// operation in withSqliteRetry here.
 export const schedulePrivacyOwnerWrite: PrivacyOwnerWriteScheduler = (label, operation) =>
-  dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+  scheduleDbWrite(label, operation, {
     priority: 'background',
     dropPolicy: 'none',
     maxQueueWaitMs: 15_000

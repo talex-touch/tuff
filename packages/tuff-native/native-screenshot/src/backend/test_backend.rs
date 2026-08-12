@@ -72,6 +72,7 @@ impl ScreenshotBackend for DeterministicBackend {
         *lock(&self.current_generation) = Some(generation.clone());
         Box::pin(async move {
             Ok(ContentSnapshot {
+                dropped_windows: 0,
                 generation,
                 coordinate_space: CoordinateSpace::GlobalDipV1,
                 captured_at_unix_ms: generation_number,

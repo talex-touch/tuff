@@ -3,8 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createClient } from '@libsql/client'
 import fse from 'fs-extra'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../db/db-write'
 import { createLogger } from '../../utils/logger'
 
 const configRepositoryLog = createLogger('Storage').child('ConfigRepository')
@@ -90,7 +89,14 @@ export function resolveAppConfigBackend(env: NodeJS.ProcessEnv = process.env): A
   return 'sqlite'
 }
 
-function normalizeConfigKey(key: string): string {
+/**
+ * Exported for testing: this pair is the containment boundary that keeps a config key inside
+ * the config root, and it had no test anywhere in the repo (#928). A boundary nothing
+ * exercises is one a refactor can quietly remove — dropping the `..` segment check, or the
+ * backslash check that blocks `..\..\` on Windows, would reintroduce traversal with the
+ * suite still green.
+ */
+export function normalizeConfigKey(key: string): string {
   if (
     typeof key !== 'string' ||
     key.length === 0 ||
@@ -109,7 +115,8 @@ function normalizeConfigKey(key: string): string {
   return segments.join('/')
 }
 
-function resolveLegacyPath(root: string, key: string): string {
+/** Exported for testing alongside normalizeConfigKey. See the note there. */
+export function resolveLegacyPath(root: string, key: string): string {
   const normalized = normalizeConfigKey(key)
   const resolved = path.resolve(root, ...normalized.split('/'))
   const relative = path.relative(root, resolved)
@@ -517,21 +524,21 @@ export class ApplicationConfigRepository {
     // writer lock. 'interactive' priority keeps user settings ahead of
     // background indexing. See issue #295.
     //
-    // BUSY is retried around the scheduler rather than inside it: the polling
-    // service's next-tick retry only rescues debounced writes, and a
-    // `persist: true` caller is holding a lifecycle gate open with no later
-    // tick to fall back on (onboarding completion is the live example). Each
-    // attempt still occupies one short slot, and the backoff happens while
-    // queued rather than while holding the writer, so a contended flush no
-    // longer surfaces as a user-facing failure.
+    // BUSY retry is owned by the scheduler itself: on SQLITE_BUSY the task is
+    // re-enqueued with delayed eligibility, so the backoff happens while queued
+    // (other writes keep flowing) rather than while holding the writer — this
+    // repository pioneered that placement with a hand-rolled retry-outside-
+    // schedule loop before the scheduler took it over (design D2). The bounded
+    // budget below keeps a blocked renderer waiting well under a second in the
+    // worst case; sustained contention still fails and defers to the polling
+    // retry (a `persist: true` caller such as onboarding completion has no
+    // later tick, which is why the write retries at all instead of dropping).
     const client = this.requireClient()
-    const result = await withSqliteRetry(
+    const result = await scheduleDbWrite(
+      'storage.config.persist',
       () =>
-        dbWriteScheduler.schedule(
-          'storage.config.persist',
-          () =>
-            client.execute({
-              sql: `
+        client.execute({
+          sql: `
         INSERT INTO app_config_entries (key, value, revision, deleted, updated_at)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET
@@ -541,19 +548,21 @@ export class ApplicationConfigRepository {
           updated_at = excluded.updated_at
         WHERE excluded.revision >= app_config_entries.revision
       `,
-              args: [
-                input.key,
-                input.serialized,
-                input.revision,
-                input.deleted ? 1 : 0,
-                input.updatedAt ?? this.now()
-              ]
-            }),
-          { priority: 'interactive', dropPolicy: 'none' }
-        ),
-      // Bounded so a blocked renderer waits well under a second in the worst
-      // case; sustained contention still fails and defers to the polling retry.
-      { label: 'storage.config.persist', retries: 3, baseDelayMs: 50, maxDelayMs: 400 }
+          args: [
+            input.key,
+            input.serialized,
+            input.revision,
+            input.deleted ? 1 : 0,
+            input.updatedAt ?? this.now()
+          ]
+        }),
+      {
+        priority: 'interactive',
+        dropPolicy: 'none',
+        busyRetries: 3,
+        busyBaseDelayMs: 50,
+        busyMaxDelayMs: 400
+      }
     )
     if (result.rowsAffected === 0) return
     this.rememberPersisted(input)

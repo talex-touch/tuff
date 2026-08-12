@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use tokio::sync::oneshot;
@@ -24,6 +24,17 @@ pub struct MacAxActor {
 struct AxActorInner {
     sender: SyncSender<AxCommand>,
     closed: AtomicBool,
+    /// The generation the producer last asked for, whether or not the Reset command was accepted.
+    ///
+    /// The mailbox holds 16 commands and `submit` is a `try_send`, so a Reset issued while the AX
+    /// thread is mid-call is refused. That refusal used to be discarded at the call site, leaving
+    /// the AX actor on generation N-1 while the screen actor advanced to N — every later hit test
+    /// then failed the generation check and silently degraded to `UnverifiedWindow`, with the
+    /// stale element map never cleared (#852).
+    ///
+    /// Recording the intent here makes the reset independent of mailbox pressure: the actor adopts
+    /// it on the next command it handles, whichever that is.
+    pending_generation: Arc<Mutex<Option<DescriptorId>>>,
 }
 
 pub struct MacAxHitRequest {
@@ -62,25 +73,41 @@ struct AxActorState {
 impl MacAxActor {
     pub fn new(limits: ScreenshotLimits) -> Result<Self, ProtocolError> {
         let (sender, receiver) = sync_channel(AX_QUEUE_CAPACITY);
+        let pending_generation = Arc::new(Mutex::new(None));
+        let actor_pending = Arc::clone(&pending_generation);
         thread::Builder::new()
             .name(format!("tuff-macos-ax-{}", std::process::id()))
-            .spawn(move || ax_actor_main(receiver, limits))
+            .spawn(move || ax_actor_main(receiver, limits, actor_pending))
             .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
         Ok(Self {
             inner: Arc::new(AxActorInner {
                 sender,
                 closed: AtomicBool::new(false),
+                pending_generation,
             }),
         })
     }
 
     pub async fn reset(&self, generation: DescriptorId) -> Result<(), ProtocolError> {
+        // Recorded before the command is offered, so a refused Reset still takes effect.
+        *lock_pending(&self.inner.pending_generation) = Some(generation.clone());
+
         let (response, receiver) = oneshot::channel();
-        self.submit(AxCommand::Reset {
-            generation,
-            response,
-        })
-        .map_err(|_| ScreenshotError::BackendBusy.to_protocol_error())?;
+        if self
+            .submit(AxCommand::Reset {
+                generation,
+                response,
+            })
+            .is_err()
+        {
+            // A closed actor is a real failure; a full mailbox is not, because the generation
+            // above is what the actor adopts next.
+            return if self.inner.closed.load(Ordering::Acquire) {
+                Err(ScreenshotError::BackendFailed.to_protocol_error())
+            } else {
+                Ok(())
+            };
+        }
         receiver
             .await
             .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())
@@ -152,7 +179,17 @@ impl Drop for AxActorInner {
     }
 }
 
-fn ax_actor_main(receiver: Receiver<AxCommand>, limits: ScreenshotLimits) {
+fn lock_pending(
+    slot: &Mutex<Option<DescriptorId>>,
+) -> std::sync::MutexGuard<'_, Option<DescriptorId>> {
+    slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn ax_actor_main(
+    receiver: Receiver<AxCommand>,
+    limits: ScreenshotLimits,
+    pending_generation: Arc<Mutex<Option<DescriptorId>>>,
+) {
     let mut state = AxActorState {
         limits,
         generation: None,
@@ -160,6 +197,10 @@ fn ax_actor_main(receiver: Receiver<AxCommand>, limits: ScreenshotLimits) {
         elements: HashMap::new(),
     };
     while let Ok(command) = receiver.recv() {
+        // Adopt a generation whose Reset command never made it into the mailbox. Doing this
+        // before every command rather than only on HitTest keeps the rule in one place, and it is
+        // a no-op when the Reset did land, since the slot then already matches.
+        state.adopt_pending_generation(lock_pending(&pending_generation).as_ref());
         match command {
             AxCommand::Reset {
                 generation,
@@ -211,6 +252,24 @@ struct PreparedAxElement {
 }
 
 impl AxActorState {
+    /// Takes on a generation the producer recorded, dropping the element map that belonged to the
+    /// previous one.
+    ///
+    /// Same effect as handling a `Reset`, reached from the pending slot instead of the mailbox, so
+    /// a Reset refused while the AX thread was busy still lands (#852). A matching or absent
+    /// generation is a no-op — it must not clear a map that is still current.
+    fn adopt_pending_generation(&mut self, pending: Option<&DescriptorId>) {
+        let Some(generation) = pending else {
+            return;
+        };
+        if self.generation.as_ref() == Some(generation) {
+            return;
+        }
+        self.generation = Some(generation.clone());
+        self.element_counter = 0;
+        self.elements.clear();
+    }
+
     fn prepare_hit_test(
         &self,
         request: MacAxHitRequest,
@@ -317,6 +376,63 @@ const fn map_ax_failure(failure: MacAxFailure) -> AccessibilityFallback {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn state_at(generation: Option<&str>) -> AxActorState {
+        AxActorState {
+            limits: ScreenshotLimits::default(),
+            generation: generation.map(|id| DescriptorId::new(id).unwrap()),
+            element_counter: 7,
+            elements: HashMap::new(),
+        }
+    }
+
+    /// A generation the mailbox refused still takes effect.
+    ///
+    /// This is the #852 defect: `reset()` discarded a `BackendBusy` from a full mailbox, so the AX
+    /// actor stayed on N-1 while the screen actor advanced to N. Every later `prepare_hit_test`
+    /// then failed its generation check and degraded to `UnverifiedWindow` with no error surfaced,
+    /// and the element map for the old generation was never dropped.
+    #[test]
+    fn a_pending_generation_is_adopted_and_clears_the_old_elements() {
+        let mut state = state_at(Some("generation:mac:n-1"));
+        let next = DescriptorId::new("generation:mac:n").unwrap();
+
+        state.adopt_pending_generation(Some(&next));
+
+        assert_eq!(state.generation.as_ref(), Some(&next));
+        assert_eq!(state.element_counter, 0);
+        assert!(state.elements.is_empty());
+    }
+
+    /// The Reset landed normally, so the slot matches and there is nothing to do.
+    ///
+    /// Without this the rule above is satisfied by clearing unconditionally, which would drop a
+    /// live element map on every command the actor handles.
+    #[test]
+    fn a_matching_pending_generation_leaves_the_state_alone() {
+        let mut state = state_at(Some("generation:mac:n"));
+        let same = DescriptorId::new("generation:mac:n").unwrap();
+
+        state.adopt_pending_generation(Some(&same));
+
+        assert_eq!(
+            state.element_counter, 7,
+            "a matching generation cleared the state"
+        );
+    }
+
+    #[test]
+    fn no_pending_generation_leaves_the_state_alone() {
+        let mut state = state_at(Some("generation:mac:n"));
+
+        state.adopt_pending_generation(None);
+
+        assert_eq!(state.element_counter, 7);
+        assert_eq!(
+            state.generation,
+            Some(DescriptorId::new("generation:mac:n").unwrap())
+        );
+    }
 
     #[test]
     fn cancelled_hit_does_not_consume_element_capacity_or_counter() {

@@ -4,6 +4,7 @@ import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/secur
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   type PluginIntelligenceContextRequest,
   type PluginIntelligenceContextSummary,
@@ -462,7 +463,7 @@ export function createPluginIntelligenceContextStreamCapabilities(
     ['activation', 'resolveCurrentActivation', 'resolveHostGeneration', 'service']
   )
   const activation = snapshotActivation(options.activation)
-  if (activation.name !== 'touch-intelligence') invalid()
+  if (!isPrivilegedPluginFor('intelligenceContext', activation.name)) invalid()
   if (
     typeof options.resolveCurrentActivation !== 'function' ||
     utilTypes.isProxy(options.resolveCurrentActivation) ||
@@ -507,7 +508,7 @@ export function createPluginIntelligenceContextStreamCapabilities(
     return current
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'intelligence.stream',
     permission: 'intelligence.basic',
     timeoutMs: 30_000,

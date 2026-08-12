@@ -1,27 +1,17 @@
 <script setup lang="ts">
+import type { SpinnerProps } from './types'
 import { computed } from 'vue'
 
 defineOptions({
   name: 'TxSpinner',
 })
 
-const props = defineProps({
-  size: {
-    type: Number,
-    default: 16,
-  },
-  strokeWidth: {
-    type: Number,
-    default: 2,
-  },
-  fallback: {
-    type: Boolean,
-    default: false,
-  },
-  visible: {
-    type: Boolean,
-    default: true,
-  },
+const props = withDefaults(defineProps<SpinnerProps>(), {
+  size: 16,
+  strokeWidth: 2,
+  fallback: false,
+  visible: true,
+  label: 'Loading',
 })
 
 const styleVars = computed(() => ({
@@ -36,8 +26,10 @@ const styleVars = computed(() => ({
       v-if="visible"
       class="tx-spinner"
       :style="styleVars"
+      role="status"
       aria-busy="true"
       aria-live="polite"
+      :aria-label="label"
     >
       <svg v-if="fallback" class="tx-spinner__svg" viewBox="0 0 24 24" :width="size" :height="size">
         <circle

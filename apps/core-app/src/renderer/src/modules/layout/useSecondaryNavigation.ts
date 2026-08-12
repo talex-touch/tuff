@@ -137,6 +137,14 @@ function findParentByPathPrefix(
       continue
     }
 
+    // A redirect-only record renders nothing, so treating it as a parent produces a back
+    // affordance that bounces straight back to where it started. `/setting` is exactly that:
+    // it redirects into `/setting/overview`, which would otherwise make every settings
+    // category look like it had a parent.
+    if (entry.record.redirect) {
+      continue
+    }
+
     const prefix = `${normalizedParent}/`
     if (!normalizedTarget.startsWith(prefix)) {
       continue

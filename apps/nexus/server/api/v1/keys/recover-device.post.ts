@@ -2,7 +2,7 @@ import { getHeader, readBody } from 'h3'
 import type { H3Event } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
-import { consumeLoginToken, getDevice, listPasskeys, readDeviceId } from '../../../utils/authStore'
+import { consumeLoginToken, evaluateRecoveryRateLimit, getDevice, listPasskeys, readDeviceId, recordDeviceAuthAudit } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import { recoverKeyrings } from '../../../utils/syncStoreV1'
 
@@ -40,7 +40,43 @@ export default defineEventHandler(async (event) => {
   if (!recoveryCode)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Invalid payload')
 
-  const keyrings = await recoverKeyrings(event, userId, { recoveryCode })
+  // Nothing bounded guessing before this: the route called recoverKeyrings on every request,
+  // and the step-up above returns early when the device is already trusted or the user has no
+  // passkeys, so an app token for the account was enough to try codes indefinitely (#904).
+  const rateLimit = await evaluateRecoveryRateLimit(event, { userId, deviceId })
+  if (!rateLimit.allowed) {
+    await recordDeviceAuthAudit(event, {
+      action: 'recover',
+      status: 'blocked',
+      userId,
+      deviceId,
+      reason: 'rate_limited',
+    })
+    throw createSyncError('DEVICE_NOT_AUTHORIZED', 429, 'Too many recovery attempts')
+  }
+
+  let keyrings
+  try {
+    keyrings = await recoverKeyrings(event, userId, { recoveryCode })
+  }
+  catch (error) {
+    // Only failures are counted, so a legitimate recovery never consumes anyone's budget.
+    await recordDeviceAuthAudit(event, {
+      action: 'recover',
+      status: 'failed',
+      userId,
+      deviceId,
+    })
+    throw error
+  }
+
+  await recordDeviceAuthAudit(event, {
+    action: 'recover',
+    status: 'success',
+    userId,
+    deviceId,
+  })
+
   const response: RecoverResponse = { keyrings }
   return response
 })

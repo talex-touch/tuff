@@ -19,6 +19,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, lte, lt, or, sql } from 'drizzle-orm'
 import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleAuxWrite } from '../../db/db-write'
 import {
   clipboardHistory,
   clipboardHistoryMeta,
@@ -26,7 +27,6 @@ import {
   ocrJobs,
   ocrResults
 } from '../../db/schema'
-import { withSqliteRetry } from '../../db/sqlite-retry'
 import {
   INTERNAL_SYSTEM_OCR_PROVIDER_ID,
   ensureIntelligenceConfigLoaded,
@@ -38,7 +38,6 @@ import { windowManager } from '../box-tool/core-box/window'
 import { databaseModule } from '../database'
 import { notificationModule } from '../notification'
 import {
-  OCR_START_WRITE_SKIP_QUEUE_DEPTH,
   computeOcrConfigPersistSignature,
   getOcrConfigWriteLabel,
   resolveOcrConfigPersistOptions,
@@ -394,12 +393,24 @@ class OcrService {
     this.initialized = true
   }
 
+  /**
+   * OCR write entry: schedules through the aux write path with enqueue-time
+   * resolution (R3 stale-capture fix) and refreshes the service's own capture
+   * so the poll-loop reads stay coherent with the write target.
+   */
   private async withDbWrite<T>(
     label: string,
-    operation: () => Promise<T>,
+    operation: (db: LibSQLDatabase<typeof schema>) => Promise<T>,
     options?: ScheduleOptions
   ): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
+    return scheduleAuxWrite(label, operation, {
+      ...options,
+      resolveDb: () => {
+        const db = databaseModule.getAuxDb()
+        this.db = db
+        return { db, isAux: databaseModule.isAuxReady() }
+      }
+    })
   }
 
   private registerChannels(): void {
@@ -687,8 +698,8 @@ class OcrService {
       }
     }
 
-    await this.withDbWrite('ocr.jobs.enqueue', () =>
-      this.db!.insert(ocrJobs).values({
+    await this.withDbWrite('ocr.jobs.enqueue', (db) =>
+      db.insert(ocrJobs).values({
         clipboardId,
         status: 'pending',
         attempts: 0,
@@ -917,10 +928,15 @@ class OcrService {
   private async processQueue(): Promise<void> {
     if (this.processing) return
     if (!this.db) return
-    if (await this.isQueueDisabled()) return
 
+    // Claimed before the first await. isQueueDisabled() reads config, so two callers arriving
+    // during it both used to pass the check above and both enter the loop, dispatching the same
+    // pending jobs twice (#644). The check and the claim have to be in the same synchronous
+    // step; the disabled check moves inside the try so the finally still releases the guard.
     this.processing = true
     try {
+      if (await this.isQueueDisabled()) return
+
       while (this.activeJobs.size < WORKER_CONCURRENCY) {
         if (await this.isQueueDisabled()) {
           break
@@ -948,11 +964,19 @@ class OcrService {
 
         const attemptCount = (job.attempts ?? 0) + 1
 
-        const skipStartWrite =
-          dbWriteScheduler.getStats().queued >= OCR_START_WRITE_SKIP_QUEUE_DEPTH
-        if (!skipStartWrite) {
-          await this.withDbWrite('ocr.jobs.start', () =>
-            this.db!.update(ocrJobs)
+        // Never skipped, however deep the write queue is. This row is what bounds retries: if the
+        // attempt is not persisted and the process dies before failJob() runs, the job comes back
+        // as pending/attempts=0, MAX_ATTEMPTS is never reached, and an image that crashes the
+        // native worker is re-dispatched every poll, forever, across launches (#645).
+        //
+        // Marked critical and non-droppable rather than bypassing the scheduler, so it still
+        // queues behind ordering rules instead of jumping them. The cost is one UPDATE per
+        // dispatch, and WORKER_CONCURRENCY is 1.
+        await this.withDbWrite(
+          'ocr.jobs.start',
+          (db) =>
+            db
+              .update(ocrJobs)
               .set({
                 status: 'processing',
                 attempts: attemptCount,
@@ -960,9 +984,9 @@ class OcrService {
                 lastError: null,
                 nextRetryAt: null
               })
-              .where(eq(ocrJobs.id, job.id!))
-          )
-        }
+              .where(eq(ocrJobs.id, job.id!)),
+          { priority: 'critical', dropPolicy: 'none' }
+        )
 
         job.attempts = attemptCount
 
@@ -1105,8 +1129,9 @@ class OcrService {
     const retryDelaySeconds = getRetryDelaySeconds(reason)
     const nextRetryAt = new Date(Date.now() + retryDelaySeconds * 1000)
 
-    await this.withDbWrite('ocr.jobs.retry', () =>
-      this.db!.update(ocrJobs)
+    await this.withDbWrite('ocr.jobs.retry', (db) =>
+      db
+        .update(ocrJobs)
         .set({
           attempts: currentAttempts,
           status: 'pending',
@@ -1214,8 +1239,8 @@ class OcrService {
       usage: invocation.usage
     }
 
-    await this.withDbWrite('ocr.persist.success', async () =>
-      this.db!.transaction(async (tx) => {
+    await this.withDbWrite('ocr.persist.success', async (db) =>
+      db.transaction(async (tx) => {
         await tx.insert(ocrResults).values({
           jobId,
           text: trimmedTextForDb,
@@ -1460,8 +1485,9 @@ class OcrService {
     const retryDelaySeconds = status === 'pending' ? getRetryDelaySeconds(reason) : null
     const nextRetryAt = retryDelaySeconds ? new Date(Date.now() + retryDelaySeconds * 1000) : null
 
-    await this.withDbWrite('ocr.jobs.fail', () =>
-      this.db!.update(ocrJobs)
+    await this.withDbWrite('ocr.jobs.fail', (db) =>
+      db
+        .update(ocrJobs)
         .set({
           attempts,
           status,
@@ -1520,9 +1546,21 @@ class OcrService {
       value: JSON.stringify(value ?? null)
     }))
 
-    await this.withDbWrite('ocr.clipboard.meta', async () =>
-      this.db!.transaction(async (tx) => {
+    await this.withDbWrite('ocr.clipboard.meta', async (db) =>
+      db.transaction(async (tx) => {
         if (insertValues.length > 0) {
+          // Same replace-not-append rule as clipboard-meta-persistence (#646). ocr_status walks
+          // queued -> processing -> retrying -> completed, so appending leaves four rows for one
+          // key and a stale 'processing' can win the read.
+          await tx.delete(clipboardHistoryMeta).where(
+            and(
+              eq(clipboardHistoryMeta.clipboardId, clipboardId),
+              inArray(
+                clipboardHistoryMeta.key,
+                insertValues.map((entry) => entry.key)
+              )
+            )
+          )
           await tx.insert(clipboardHistoryMeta).values(insertValues)
         }
 
@@ -1606,8 +1644,9 @@ class OcrService {
     const writeLabel = getOcrConfigWriteLabel(key)
     await this.withDbWrite(
       writeLabel,
-      () =>
-        this.db!.insert(config)
+      (db) =>
+        db
+          .insert(config)
           .values({ key, value: serialized })
           .onConflictDoUpdate({
             target: config.key,

@@ -6,7 +6,7 @@ defineOptions({
   name: 'TxTabItem',
 })
 
-const props = withDefaults(defineProps<TabItemProps & { active?: boolean }>(), {
+const props = withDefaults(defineProps<TabItemProps>(), {
   iconClass: '',
   disabled: false,
   activation: false,
@@ -34,6 +34,7 @@ function handleClick() {
     :aria-selected="active"
     :class="{ 'is-active': active, 'is-disabled': disabled }"
     :disabled="disabled"
+    :tabindex="active ? 0 : -1"
     @click="handleClick"
   >
     <span v-if="iconClass || $slots.icon" class="tx-tab-item__icon">

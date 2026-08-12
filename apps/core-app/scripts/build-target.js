@@ -72,6 +72,19 @@ function isBetaVersion(version) {
   return normalizedVersion.includes('-beta.') || normalizedVersion.includes('-beta')
 }
 
+// Build target for the machine we are running on. The npm scripts used to embed
+// `--target=${BUILD_TARGET:-mac}`, which cmd.exe passes through literally and which
+// picked macOS on every host that did expand it.
+const HOST_BUILD_TARGETS = {
+  darwin: 'mac',
+  win32: 'win',
+  linux: 'linux'
+}
+
+function resolveHostBuildTarget() {
+  return HOST_BUILD_TARGETS[process.platform]
+}
+
 function parseArgs(argv) {
   const result = {
     target: process.env.BUILD_TARGET,
@@ -134,6 +147,16 @@ function resolveBuilderBin() {
   return binPath
 }
 
+// Presence check only. It stands in for electron-builder's install-app-deps on the macOS
+// legs, which set SKIP_INSTALL_APP_DEPS=true, and that substitution is sound because every
+// @talex-touch/tuff-native addon is N-API (node-addon-api): `nm -u` shows napi_ imports and
+// no v8/node symbols, so a Node-targeted build is ABI-compatible with Electron. CI says the
+// same thing out loud - the Windows rebuild step is named "for Node.js".
+//
+// Not covered: tuff_native_screenshot.node, which screenshot-protocol.js loads on every
+// platform. It is deliberately left out because that loader degrades gracefully
+// (`binding-unavailable`) rather than throwing, so requiring it here would turn a soft
+// capability loss into a hard build failure.
 function verifyNativeModules(strict, target) {
   const releaseDir = path.join(
     projectRoot,
@@ -160,7 +183,7 @@ function verifyNativeModules(strict, target) {
 
   const message =
     `Required native modules missing from ${releaseDir}: ${missingModuleNames.join(', ')}. ` +
-    'Please ensure @talex-touch/tuff-native was rebuilt for the Electron target.'
+    'Run `pnpm --filter @talex-touch/tuff-native rebuild` to produce them.'
 
   if (strict || target === 'win') {
     throw new Error(message)
@@ -394,12 +417,16 @@ function build() {
   const cleanupTempLock = ensureLocalPnpmLockfile()
   console.time('build-target:total')
   try {
-    const { target, type, publish, dir, arch } = parseArgs(process.argv.slice(2))
+    const { target: requestedTarget, type, publish, dir, arch } = parseArgs(process.argv.slice(2))
     const skipInstallAppDeps = process.env.SKIP_INSTALL_APP_DEPS === 'true'
+
+    // Precedence: --target, then BUILD_TARGET (both resolved by parseArgs), then this host.
+    const target = requestedTarget || resolveHostBuildTarget()
 
     if (!target) {
       console.error(
-        'Missing build target. Usage: node build-target.js --target=win|mac|linux [--type=beta|snapshot|release]'
+        `Cannot determine a build target for platform "${process.platform}". ` +
+          'Usage: node build-target.js --target=win|mac|linux [--type=beta|snapshot|release]'
       )
       process.exit(1)
     }

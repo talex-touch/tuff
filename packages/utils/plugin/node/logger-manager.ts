@@ -3,7 +3,7 @@ import type { LogItem } from '../log/types'
 import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { structuredStrictStringify } from '@talex-touch/utils'
+import { structuredStrictStringify } from '../../common/utils/index'
 import { PollingService } from '../../common/utils/polling'
 
 /**

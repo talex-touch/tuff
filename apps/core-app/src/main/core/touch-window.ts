@@ -11,7 +11,11 @@ import { app, BrowserWindow, nativeTheme } from 'electron'
 import { IS_WINDOWS_11, MicaBrowserWindow, useMicaElectron, WIN10 } from 'talex-mica-electron'
 import { createLogger } from '../utils/logger'
 import { operationalErrorService } from '../modules/observability'
-import { shouldApplyMicaFallback } from './window-effects'
+import {
+  OPAQUE_WINDOW_ENV_VAR,
+  shouldApplyMicaFallback,
+  withOpaqueFallback
+} from './window-effects'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 
 const touchWindowLog = createLogger('TouchWindow')
@@ -35,7 +39,11 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
   private isMicaWindow: boolean = false
 
-  constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
+  constructor(rawOptions?: TalexTouch.TouchWindowConstructorOptions) {
+    // Every window in the app is built through here, so this is the one place the escape
+    // hatch has to be applied for it to mean anything (#806).
+    const options = withOpaqueFallback(rawOptions, process.env)
+
     if (isWindows) {
       try {
         // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
@@ -87,15 +95,31 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
       // Fallback for Windows if MicaBrowserWindow is not used
       this.window.setBackgroundMaterial('mica')
       touchWindowLog.debug('Apply MicaMaterial on window (fallback)')
+    } else if (process.platform === 'linux') {
+      // Linux has no equivalent effect to apply, and Electron exposes nothing to ask whether
+      // this session composites. Named rather than left as a fall-through so the next reader
+      // sees that the gap is known, and so the log says what to do when the window turns out
+      // to be black or invisible — which is not something you can fix from inside a window
+      // you cannot see (#806).
+      touchWindowLog.debug(
+        `No window effect on linux; set ${OPAQUE_WINDOW_ENV_VAR}=1 if transparent windows render black or invisible`
+      )
     }
 
+    // Registered against webContents directly, not inside ready-to-show. That event fires only
+    // after the renderer's first paint, so the guard did not exist during initial load and early
+    // script execution - and a window whose first load failed never reached it at all, running
+    // permanently unrestricted (#805). A security control must not depend on render timing.
+    //
+    // Safe to move earlier: will-navigate does not fire for programmatic navigation, so the app's
+    // own loadURL/loadFile still reaches the renderer.
+    this.window.webContents.addListener('will-navigate', (event: ElectronEvent, url: string) => {
+      touchEventBus.emit(TalexEvents.OPEN_EXTERNAL_URL, new OpenExternalUrlEvent(url))
+
+      event.preventDefault()
+    })
+
     this.window.once('ready-to-show', () => {
-      this.window.webContents.addListener('will-navigate', (event: ElectronEvent, url: string) => {
-        touchEventBus.emit(TalexEvents.OPEN_EXTERNAL_URL, new OpenExternalUrlEvent(url))
-
-        event.preventDefault()
-      })
-
       if (options?.autoShow) {
         this.window.show()
       }
@@ -108,6 +132,51 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   minimize(): void {
     this.window.minimize()
+  }
+
+  maximize(): void {
+    this.window.maximize()
+  }
+
+  unmaximize(): void {
+    this.window.unmaximize()
+  }
+
+  isMaximized(): boolean {
+    return this.window.isMaximized()
+  }
+
+  /**
+   * Toggles the maximized state and reports the state after the toggle.
+   */
+  toggleMaximize(): boolean {
+    if (this.window.isMaximized()) {
+      this.window.unmaximize()
+      return false
+    }
+
+    this.window.maximize()
+    return true
+  }
+
+  /**
+   * Subscribes to maximize/unmaximize, which fire for OS-driven changes too — double-clicking
+   * the title bar, the keyboard shortcut and edge snapping never round-trip through the
+   * renderer, so a custom window-control button cannot track the state from its own clicks.
+   *
+   * @returns A disposer that detaches both listeners.
+   */
+  onMaximizedChanged(listener: (maximized: boolean) => void): () => void {
+    const handleMaximize = (): void => listener(true)
+    const handleUnmaximize = (): void => listener(false)
+
+    this.window.on('maximize', handleMaximize)
+    this.window.on('unmaximize', handleUnmaximize)
+
+    return () => {
+      this.window.off('maximize', handleMaximize)
+      this.window.off('unmaximize', handleUnmaximize)
+    }
   }
 
   openDevTools(options?: OpenDevToolsOptions): void {

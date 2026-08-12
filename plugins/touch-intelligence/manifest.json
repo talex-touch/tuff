@@ -12,7 +12,7 @@
   "description": "CoreBox 智能问答、内置 AI 命令与本地自定义命令注册表",
   "main": "index.js",
   "dev": {
-    "enable": true,
+    "enable": false,
     "source": true,
     "address": "http://127.0.0.1:5174/"
   },

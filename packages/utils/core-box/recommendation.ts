@@ -33,6 +33,24 @@ export interface ContextSignal {
       language?: string
     }
   }
+  /**
+   * Latest captured text selection, same privacy tier as `clipboard`:
+   * content is hashed, only shape metadata travels.
+   */
+  selection?: {
+    /** Hashed content for privacy (not original text) */
+    content: string
+    timestamp: number
+    contentType?: 'url' | 'text' | 'code' | 'file'
+    meta?: {
+      isUrl?: boolean
+      urlDomain?: string
+      textLength?: number
+      fileExtension?: string
+      fileType?: 'code' | 'text' | 'image' | 'document' | 'other'
+      language?: string
+    }
+  }
   foregroundApp?: {
     bundleId: string
     name: string
@@ -41,8 +59,6 @@ export interface ContextSignal {
     isOnline: boolean
     networkType?: 'offline' | 'wired' | 'wifi' | 'cellular' | 'unknown'
     networkIdHash?: string
-    bluetoothAvailable?: boolean
-    bluetoothConnectedCount?: number
     batteryLevel?: number
     isCharging?: boolean
     isOnBattery?: boolean
@@ -51,6 +67,8 @@ export interface ContextSignal {
     powerMode?: 'charging' | 'battery' | 'unknown'
     locationBucket?: string
     timezone?: string
+    /** True within 48h of the system timezone changing (travel signal) */
+    timezoneChanged?: boolean
     unavailableSignals?: string[]
   }
 }

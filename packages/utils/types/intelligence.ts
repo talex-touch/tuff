@@ -1,4 +1,5 @@
 import { NEXUS_BASE_URL } from "../env";
+import { TUFF_NEXUS_PROVIDER_ID } from "../intelligence/nexus-provider";
 
 /**
  * Supported intelligence provider types.
@@ -379,6 +380,21 @@ export interface IntelligenceProviderConfig {
 }
 
 /**
+ * A binary the user attached to a turn.
+ *
+ * Carried inline as a data URL rather than as a path: the renderer holds the bytes in memory and
+ * only the main process may write to disk, so a path would name a file the sender cannot produce.
+ */
+export interface IntelligenceMessageAttachment {
+  /** Images are the only kind carried today; providers that cannot read one ignore the field. */
+  type: "image";
+  /** `data:image/(png|jpeg|webp|gif);base64,…`, re-validated by whoever consumes it. */
+  dataUrl: string;
+  /** Original filename, for display only — never trusted to decide the on-disk extension. */
+  name?: string;
+}
+
+/**
  * Chat message structure.
  */
 export interface IntelligenceMessage {
@@ -388,6 +404,19 @@ export interface IntelligenceMessage {
   content: string;
   /** Optional sender name. */
   name?: string;
+  /**
+   * Routing and context-policy hints carried alongside the turn.
+   *
+   * `unknown` rather than `any`: the only consumer spreads it and adds a key
+   * (agent-runtime normalising promptInjection), so nothing needs to index it, and `any` here
+   * would leak through every re-export.
+   */
+  metadata?: Record<string, unknown>;
+  /**
+   * Attachments the user sent with this turn. Optional by design: a provider that cannot read
+   * binaries simply never looks at it, which is what keeps the degrade silent instead of fatal.
+   */
+  attachments?: IntelligenceMessageAttachment[];
 }
 
 /**
@@ -418,6 +447,28 @@ export interface IntelligenceInvokeOptions {
   metadata?: Record<string, any>;
   /** Mark as test run. */
   testRun?: boolean;
+}
+
+/**
+ * Marks an invocation as originating from the home conversation.
+ *
+ * Home chat runs on `text.chat`, the same capability that capability tests and plugins invoke, so
+ * the surface has to be named explicitly — otherwise main cannot tell a user conversation apart
+ * from a provider smoke test and would inject the user's skills into both.
+ */
+export const INTELLIGENCE_HOME_SURFACE = "home-conversation" as const;
+
+/** `IntelligenceInvokeOptions.metadata` shape the home conversation sends. */
+export interface IntelligenceHomeSurfaceMetadata {
+  surface: typeof INTELLIGENCE_HOME_SURFACE;
+  /**
+   * Live value of `appSetting.tools.autoContext`, read at send time.
+   *
+   * Carried on the request rather than mirrored to main through its own channel: the surface
+   * marker already has to travel with every turn, and a value read from the same reactive setting
+   * the composer toggle writes cannot go stale between the toggle and the send.
+   */
+  autoContext: boolean;
 }
 
 /**
@@ -472,6 +523,26 @@ export interface IntelligenceInvokeResult<T = any> {
 /**
  * Streaming response chunk.
  */
+/**
+ * A structured event inside a streamed turn — reasoning spans and tool calls.
+ * Providers that run an agent loop (pi CLI first; cloud tool-use later) emit
+ * these alongside text deltas; surfaces assemble them into message parts.
+ */
+export type IntelligencePartEvent =
+  | { kind: "reasoning-start" }
+  | { kind: "reasoning-delta"; delta: string }
+  | { kind: "reasoning-end"; durationMs?: number }
+  | { kind: "tool-start"; callId: string; name: string }
+  | { kind: "tool-input-delta"; callId: string; delta: string }
+  | { kind: "tool-input-end"; callId: string; input: unknown }
+  | {
+      kind: "tool-result";
+      callId: string;
+      name: string;
+      output: string;
+      isError: boolean;
+    };
+
 export interface IntelligenceStreamChunk {
   /** Content delta. */
   delta: string;
@@ -479,6 +550,8 @@ export interface IntelligenceStreamChunk {
   done: boolean;
   /** Final usage info (when done). */
   usage?: IntelligenceUsageInfo;
+  /** Structured part event riding this chunk (no text delta implied). */
+  partEvent?: IntelligencePartEvent;
   /** Provider trace identifier when known. */
   traceId?: string;
   /** Effective provider selected by a routed backend. */
@@ -495,6 +568,7 @@ export type IntelligenceStreamEventType =
   | "message"
   | "usage"
   | "metadata"
+  | "part"
   | "end";
 
 export interface IntelligenceStreamEvent<T = unknown> {
@@ -510,6 +584,8 @@ export interface IntelligenceStreamEvent<T = unknown> {
   result?: T;
   usage?: IntelligenceUsageInfo;
   metadata?: Record<string, unknown>;
+  /** Present when `type` is "part". */
+  partEvent?: IntelligencePartEvent;
 }
 
 export interface IntelligenceStreamOptions<T = unknown> {
@@ -525,6 +601,11 @@ export interface IntelligenceStreamOptions<T = unknown> {
   ) => void;
   onMetadata?: (
     metadata: Record<string, unknown>,
+    event: IntelligenceStreamEvent<T>,
+  ) => void;
+  /** Structured reasoning/tool events from agent-loop providers. */
+  onPartEvent?: (
+    partEvent: IntelligencePartEvent,
     event: IntelligenceStreamEvent<T>,
   ) => void;
   onEnd?: (event: IntelligenceStreamEvent<T>) => void;
@@ -2865,7 +2946,7 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     rateLimit: {},
   },
   {
-    id: "tuff-nexus-default",
+    id: TUFF_NEXUS_PROVIDER_ID,
     type: IntelligenceProviderType.CUSTOM,
     name: "Tuff Nexus",
     enabled: false,
@@ -2917,7 +2998,7 @@ export const DEFAULT_CAPABILITIES: Record<
     label: "对话 / Chat",
     description: "通用对话、问答、助理类能力",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "openai-default", priority: 2, enabled: false },
       { providerId: "anthropic-default", priority: 3, enabled: false },
       { providerId: "deepseek-default", priority: 4, enabled: true },
@@ -2976,7 +3057,7 @@ export const DEFAULT_CAPABILITIES: Record<
     label: "图片翻译 / Image Translation",
     description: "将图片中的文字翻译并返回译后图片",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
     ],
   },
   "text.translate": {
@@ -2986,7 +3067,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "你是专业翻译助手。请将以下文本翻译成 {{targetLang}}，只返回译文，不要解释。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
       { providerId: "anthropic-default", priority: 4, enabled: false },
@@ -2999,7 +3080,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "请用简洁的语言总结以下内容的核心要点，不超过 {{maxLength}} 字。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
       { providerId: "anthropic-default", priority: 4, enabled: false },
@@ -3012,7 +3093,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "请按 {{style}} 风格、{{tone}} 语气改写以下文本，并尽量保留原意。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
       { providerId: "anthropic-default", priority: 4, enabled: false },
@@ -3049,7 +3130,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "分析用户输入的意图，返回 JSON 格式：{intent: string, confidence: number, entities: string[]}",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
@@ -3061,7 +3142,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "你是编程助手。根据需求生成 {{language}} 代码，包含注释说明。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       {
         providerId: "deepseek-default",
         models: ["deepseek-coder"],
@@ -3083,7 +3164,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "你是编程导师。用通俗易懂的语言解释这段代码的功能、逻辑和关键点。",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       {
         providerId: "deepseek-default",
         models: ["deepseek-coder"],
@@ -3100,7 +3181,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "从文本中提取关键信息，返回 JSON 格式：{dates: [], people: [], locations: [], keywords: []}",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
@@ -3112,7 +3193,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       '分析文本情感倾向，返回 JSON：{sentiment: "positive"|"negative"|"neutral", score: 0-1, keywords: []}',
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],
@@ -3124,7 +3205,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "作为资深代码审查员，审查以下代码。关注：1) 潜在bug 2) 性能问题 3) 安全隐患 4) 最佳实践 5) 可读性",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       {
         providerId: "deepseek-default",
         models: ["deepseek-coder"],
@@ -3190,7 +3271,7 @@ export const DEFAULT_CAPABILITIES: Record<
     promptTemplate:
       "从文本中提取最重要的关键词，返回 JSON 数组：{keywords: [{term: string, relevance: number}]}",
     providers: [
-      { providerId: "tuff-nexus-default", priority: 1, enabled: false },
+      { providerId: TUFF_NEXUS_PROVIDER_ID, priority: 1, enabled: false },
       { providerId: "deepseek-default", priority: 2, enabled: true },
       { providerId: "openai-default", priority: 3, enabled: false },
     ],

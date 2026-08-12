@@ -6,7 +6,6 @@ import Vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
-import VueMacros from 'unplugin-vue-macros/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -23,16 +22,10 @@ export default defineConfig({
   plugins: [
     TouchPluginExport(),
 
-    VueMacros({
-      defineOptions: false,
-      defineModels: false,
-      plugins: {
-        vue: Vue({
-          script: {
-            propsDestructure: true,
-            defineModel: true,
-          },
-        }),
+    Vue({
+      script: {
+        propsDestructure: true,
+        defineModel: true,
       },
     }),
 

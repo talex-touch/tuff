@@ -21,6 +21,12 @@ export function getPluginChannelPreludeCode(
   const { ipcRenderer } = require('electron');
   const DataCode = ${JSON.stringify(DATA_CODE)};
   const CHANNEL_DEFAULT_TIMEOUT = 60000;
+  // The early queue exists for one race: a message arriving before its handler registers. That
+  // window is short, so an entry older than this is not waiting for anyone. Without a bound, an
+  // event the plugin never handles - a broadcast on every search keystroke, say - appends the
+  // full rawData plus the IpcRendererEvent for the life of the session (#876).
+  const EARLY_MESSAGE_MAX_AGE_MS = 30000;
+  const EARLY_MESSAGE_MAX_PER_EVENT = 32;
 
   class TouchChannel {
     channelMap = new Map();
@@ -35,10 +41,18 @@ export function getPluginChannelPreludeCode(
       if (arg) {
         const { name, header, code, plugin, data, sync } = arg;
         if (header) {
+          // A missing key is a rejection, not a warning.
+          //
+          // This used to warn and then dispatch the message anyway, so the key check that is
+          // the plugin channel's isolation boundary was bypassed by simply not supplying a
+          // key — anything able to emit on the shared @plugin-process-message channel reached
+          // this plugin's handlers (#875).
           const { uniqueKey: thisUniqueKey } = header;
           if (!thisUniqueKey) {
-            console.warn('[Plugin] uniqueKey missing in header:', arg);
-          } else if (thisUniqueKey !== uniqueKey) {
+            console.error('[Plugin] uniqueKey missing in header:', arg);
+            return null;
+          }
+          if (thisUniqueKey !== uniqueKey) {
             console.error('[Plugin] uniqueKey mismatch:', thisUniqueKey, uniqueKey);
             return null;
           }
@@ -73,9 +87,21 @@ export function getPluginChannelPreludeCode(
         this.__dispatch(e, rawData, listeners);
       } else {
         const queue = this.earlyMessageQueue.get(rawData.name) || [];
-        queue.push({ e, rawData });
-        this.earlyMessageQueue.set(rawData.name, queue);
+        queue.push({ e, rawData, at: Date.now() });
+        this.earlyMessageQueue.set(rawData.name, this.__trim_early_queue(queue));
       }
+    }
+
+    /** Drops entries too old to still be racing a registration, then the oldest over the cap. */
+    __trim_early_queue(queue) {
+      const cutoff = Date.now() - EARLY_MESSAGE_MAX_AGE_MS;
+      let start = 0;
+      // Entries are appended in arrival order, so the first live one ends the sweep.
+      while (start < queue.length && queue[start].at < cutoff) start += 1;
+      const fresh = start > 0 ? queue.slice(start) : queue;
+      return fresh.length > EARLY_MESSAGE_MAX_PER_EVENT
+        ? fresh.slice(fresh.length - EARLY_MESSAGE_MAX_PER_EVENT)
+        : fresh;
     }
 
     __dispatch(e, rawData, listeners) {
@@ -89,8 +115,21 @@ export function getPluginChannelPreludeCode(
           },
           ...rawData
         };
-        func(handInData);
-        handInData.reply(DataCode.SUCCESS, undefined);
+        // The result used to be discarded and undefined replied unconditionally, unlike the
+        // sibling plugin/channel.ts implementation (#874). A promise has to be awaited too: a
+        // Promise cannot survive structured clone, so replying with one directly would fail.
+        const result = func(handInData);
+        if (result && typeof result.then === 'function') {
+          result.then(
+            (resolved) => handInData.reply(DataCode.SUCCESS, resolved),
+            (error) => {
+              console.error('[Plugin] handler for', rawData.name, 'rejected:', error);
+              handInData.reply(DataCode.ERROR, error && error.message ? error.message : String(error));
+            }
+          );
+        } else {
+          handInData.reply(DataCode.SUCCESS, result);
+        }
       });
     }
 

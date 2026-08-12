@@ -47,7 +47,8 @@ concurrency:
 jobs:
   build-and-release:
     name: Build and Release Tuff App
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 60
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.sync_tag == ''
     permissions:
       contents: read
@@ -62,7 +63,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, macos-latest, ubuntu-latest]
+        # `os` is the logical platform key, not a runner label. Every `matrix.os == ...`
+        # condition below compares against it -- including the macOS signing secrets -- and the
+        # uploaded artifact is named `${{ matrix.os }}-<channel>`, which the collect job looks
+        # up by that exact string. Renaming `os` therefore disables code signing silently.
+        # `image` is the runner that actually executes, pinned so a tag rebuild cannot land on
+        # a different toolchain. Bump `image` deliberately; leave `os` alone.
+        include:
+          - os: windows-2022
+            image: windows-2022
+          - os: macos-latest
+            image: macos-26
+          - os: ubuntu-latest
+            image: ubuntu-24.04
 
     steps:
       - name: Check out git repository
@@ -78,7 +91,7 @@ jobs:
           python -m pip install setuptools
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           run_install: false
 
@@ -87,6 +100,13 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
+
+      # A tag and the manifest are two different sources for "which release is this", and
+      # nothing reconciled them (#550). Runs before the platform builds so a mismatch costs
+      # seconds instead of three builds, and skips cleanly on a branch ref, which is what a
+      # workflow_dispatch build without a sync_tag has.
+      - name: Verify the tag matches the built version
+        run: node scripts/check-release-tag-version.mjs --tag "${GITHUB_REF_NAME}"
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -142,7 +162,6 @@ jobs:
           find . -name "app-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
           find . -name "app-builder-bin" -type f -exec chmod +x {} \; 2>/dev/null || true
           find . -name "electron-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
-          find . -name "snapcraft" -type f -exec chmod +x {} \; 2>/dev/null || true
           echo "Binary permissions fixed"
 
       - name: Determine Release Type
@@ -153,19 +172,19 @@ jobs:
             # 标签触发：从标签提取版本信息
             REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
             if [[ "$REF_NAME_LOWER" == *"beta"* ]]; then
-              echo "type=beta" >> $GITHUB_OUTPUT
+              echo "type=beta" >> "$GITHUB_OUTPUT"
             elif [[ "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "type=snapshot" >> $GITHUB_OUTPUT
+              echo "type=snapshot" >> "$GITHUB_OUTPUT"
             else
-              echo "type=release" >> $GITHUB_OUTPUT
+              echo "type=release" >> "$GITHUB_OUTPUT"
             fi
-            echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
-            echo "version=${REF_NAME#v}" >> $GITHUB_OUTPUT
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
             # 手动触发：只设置构建类型，不处理版本和标签
-            echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-            echo "tag=" >> $GITHUB_OUTPUT
-            echo "version=" >> $GITHUB_OUTPUT
+            echo "type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
           fi
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -181,7 +200,6 @@ jobs:
           # 确保输出目录存在
           mkdir -p apps/core-app/dist
           mkdir -p apps/core-app/dist/__appImage-x64
-          mkdir -p apps/core-app/dist/__snap-x64
           mkdir -p apps/core-app/dist/__deb-x64
           mkdir -p apps/core-app/dist/@talex-touch
           mkdir -p "${GITHUB_WORKSPACE}/.cache/electron"
@@ -192,12 +210,19 @@ jobs:
 
       - name: Set Build Environment Variables
         shell: bash
+        env:
+          # Passed as an environment value rather than spliced into the script text below.
+          # A secret containing a quote or $(…) would otherwise be either a bash syntax error
+          # that fails every release build on all three runners, or a command substitution
+          # bash executes. Log masking does not help — the value is evaluated, not printed
+          # (#540). The same secret is already passed this way at the build step further down.
+          TUFF_ENCRYPTION_KEY: ${{ secrets.TUFF_ENCRYPTION_KEY }}
         run: |
           # GitHub Actions 自动提供 GITHUB_SHA
-          echo "GITHUB_SHA is set: ${{ github.sha }}"
+          echo "GITHUB_SHA is set: ${GITHUB_SHA}"
           echo "Setting Electron download/cache mirrors..."
           # TUFF_ENCRYPTION_KEY 从 secrets 中获取，如果不存在则为空（非官方构建）
-          if [ -n "${{ secrets.TUFF_ENCRYPTION_KEY }}" ]; then
+          if [ -n "${TUFF_ENCRYPTION_KEY}" ]; then
             echo "TUFF_ENCRYPTION_KEY is set (official build)"
           else
             echo "TUFF_ENCRYPTION_KEY is not set (unofficial build)"
@@ -559,30 +584,37 @@ jobs:
               ARTIFACTS_FOUND=true
             fi
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            # Check for .dmg files, .app directories, and .zip files (zip contains .app)
             DMG_COUNT=$(find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null | wc -l || echo "0")
-            APP_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
             ZIP_COUNT=$(find apps/core-app/dist -name "*.zip" -type f 2>/dev/null | wc -l || echo "0")
-            echo "Found $DMG_COUNT .dmg file(s), $APP_COUNT .app directory/directories, and $ZIP_COUNT .zip file(s)"
+            # A bare .app is reported but does not count. The release step collects with
+            # `find artifacts -type f` over a fixed extension list, and nothing in this workflow
+            # repackages a .app -- upload-artifact compresses for transport and download-artifact
+            # extracts it straight back to a directory. Counting it set ARTIFACTS_FOUND=true while
+            # macOS contributed zero assets (#1608); the mirror of the SNAP_COUNT case in #801,
+            # where a counter that could never be non-zero read as coverage.
+            APP_DIR_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
+            echo "Found $DMG_COUNT .dmg file(s) and $ZIP_COUNT .zip file(s); $APP_DIR_COUNT unpackaged .app directory/directories (not uploadable)"
             if [ "$DMG_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null
-              ARTIFACTS_FOUND=true
-            fi
-            if [ "$APP_COUNT" -gt 0 ]; then
-              find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
             if [ "$ZIP_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.zip" -type f 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
+            if [ "$ARTIFACTS_FOUND" != "true" ] && [ "$APP_DIR_COUNT" -gt 0 ]; then
+              echo "The macOS target produced only an unpackaged .app. Nothing here can become a"
+              echo "release asset -- see #594 for the target format, which is independent of signing."
+              find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null
+            fi
           else
             APPIMAGE_COUNT=$(find apps/core-app/dist -name "*.AppImage" -type f 2>/dev/null | wc -l || echo "0")
             DEB_COUNT=$(find apps/core-app/dist -name "*.deb" -type f 2>/dev/null | wc -l || echo "0")
-            SNAP_COUNT=$(find apps/core-app/dist -name "*.snap" -type f 2>/dev/null | wc -l || echo "0")
-            echo "Found $APPIMAGE_COUNT .AppImage, $DEB_COUNT .deb, $SNAP_COUNT .snap file(s)"
-            if [ "$APPIMAGE_COUNT" -gt 0 ] || [ "$DEB_COUNT" -gt 0 ] || [ "$SNAP_COUNT" -gt 0 ]; then
-              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" -o -name "*.snap" \) -type f 2>/dev/null
+            # No .snap: the Linux targets are AppImage and deb, and snapcraft is deliberately not
+            # installed a few steps above. A counter that cannot be non-zero read as coverage (#801).
+            echo "Found $APPIMAGE_COUNT .AppImage, $DEB_COUNT .deb file(s)"
+            if [ "$APPIMAGE_COUNT" -gt 0 ] || [ "$DEB_COUNT" -gt 0 ]; then
+              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" \) -type f 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
           fi
@@ -593,7 +625,7 @@ jobs:
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "ERROR: No .dmg files, .app directories, or .zip files found in dist directory!"
             else
-              echo "ERROR: No Linux artifacts (.AppImage, .deb, or .snap) found in dist directory!"
+              echo "ERROR: No Linux artifacts (.AppImage or .deb) found in dist directory!"
             fi
             echo "This may indicate the electron-builder step failed silently."
             echo "Check the electron-builder output above for errors."
@@ -804,14 +836,21 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Keep .dmg files, .zip files (contain .app), and .app directories
-          find apps/core-app/dist -type f ! -name "*.dmg" ! -name "*.zip" -delete 2>/dev/null || true
+          # Runs after Upload Artifacts; this only reclaims runner disk.
+          #
+          # `! -path "*.app/*"` is what makes the comment above true. A .app is a directory whose
+          # contents are files -- Contents/MacOS/tuff, Info.plist, the frameworks -- so without it
+          # this deletes the bundle's insides and leaves the skeleton. Harmless while the upload
+          # happens first; anyone who reorders these, or adds a second upload after this step, would
+          # otherwise ship an empty shell that still has the .app suffix and still counts (#1612).
+          find apps/core-app/dist -type f ! -path "*.app/*" ! -name "*.dmg" ! -name "*.zip" -delete 2>/dev/null || true
           find apps/core-app/dist -type d -name "mac-*" -prune -o -type d ! -name "*.app" -empty -delete 2>/dev/null || true
 
   create-release:
     name: Create Release
     needs: build-and-release
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     if: >
       always() && (
         needs.build-and-release.result == 'success'
@@ -912,7 +951,7 @@ jobs:
           done
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           run_install: false
 
@@ -983,44 +1022,61 @@ jobs:
           if [ -n "$RECOVER_RUN_ID" ]; then
             REF_NAME_LOWER=$(echo "$SYNC_TAG" | tr '[:upper:]' '[:lower:]')
             if [[ "$REF_NAME_LOWER" == *"beta"* ]]; then
-              echo "type=beta" >> $GITHUB_OUTPUT
+              echo "type=beta" >> "$GITHUB_OUTPUT"
             elif [[ "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "type=snapshot" >> $GITHUB_OUTPUT
+              echo "type=snapshot" >> "$GITHUB_OUTPUT"
             else
-              echo "type=release" >> $GITHUB_OUTPUT
+              echo "type=release" >> "$GITHUB_OUTPUT"
             fi
-            echo "tag=$SYNC_TAG" >> $GITHUB_OUTPUT
-            echo "name=Release $SYNC_TAG" >> $GITHUB_OUTPUT
-            echo "target_ref=$SYNC_TAG" >> $GITHUB_OUTPUT
+            echo "tag=$SYNC_TAG" >> "$GITHUB_OUTPUT"
+            echo "name=Release $SYNC_TAG" >> "$GITHUB_OUTPUT"
+            echo "target_ref=$SYNC_TAG" >> "$GITHUB_OUTPUT"
             if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           elif [ "$EVENT_NAME" = "push" ]; then
             # 标签触发：使用标签信息创建 release
             REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
-            echo "type=release" >> $GITHUB_OUTPUT
-            echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
-            echo "name=Release $REF_NAME" >> $GITHUB_OUTPUT
-            echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
+            echo "type=release" >> "$GITHUB_OUTPUT"
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "name=Release $REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "target_ref=$TARGET_SHA" >> "$GITHUB_OUTPUT"
             if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           else
             # 手动触发：创建 draft release，使用时间戳作为临时标签
             # 标签会被 release action 自动创建，但因为是 draft，不会正式发布
+            #
+            # The tag has to be semver-shaped. The next step feeds it to
+            # resolve-update-rollback-version.mjs, which calls inferManifestChannel and throws on
+            # anything that is not MAJOR.MINOR.PATCH[-label.x] -- manual-build-<timestamp> is not,
+            # so every manual run died after the full three-platform build (#727).
+            #
+            # The label picks the channel, and only these work: snapshot/beta/alpha map to BETA,
+            # master maps to RELEASE; manual, release and rc all return null. The base version is
+            # used rather than the package version because inferManifestChannel reads the *first*
+            # prerelease identifier -- appending to 2.4.14-beta.2 keeps resolving to BETA even for
+            # a release-type build.
             TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-            echo "tag=manual-build-$TIMESTAMP" >> $GITHUB_OUTPUT
-            echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
-            echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
+            BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
+            case "$RELEASE_TYPE" in
+              snapshot) CHANNEL_LABEL=snapshot ;;
+              beta) CHANNEL_LABEL=beta ;;
+              *) CHANNEL_LABEL=master ;;
+            esac
+            echo "type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
+            echo "tag=v${BASE_VERSION}-${CHANNEL_LABEL}.${TIMESTAMP}" >> "$GITHUB_OUTPUT"
+            echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> "$GITHUB_OUTPUT"
+            echo "target_ref=$TARGET_SHA" >> "$GITHUB_OUTPUT"
             if [ "$RELEASE_TYPE" = "snapshot" ] || [ "$RELEASE_TYPE" = "beta" ]; then
-              echo "prerelease=true" >> $GITHUB_OUTPUT
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
-              echo "prerelease=false" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
@@ -1065,6 +1121,15 @@ jobs:
           TAG: ${{ steps.release-info.outputs.tag }}
           RELEASE_TYPE: ${{ steps.release-info.outputs.type }}
           RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          # Passed as environment variables rather than interpolated into the script below.
+          # GitHub substitutes ${{ }} into the run: text before bash ever parses it, so a
+          # workflow_dispatch input containing $(…) executed as a command — in this step,
+          # which decodes RELEASE_SIGNING_PRIVATE_KEY to disk a few lines earlier (#539).
+          CHANNEL: ${{ steps.rollback.outputs.channel }}
+          ROLLBACK_FROM_VERSION: ${{ steps.rollback.outputs.from_version }}
+          ROLLBACK_COMPATIBLE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_compatible || 'false' }}
+          ROLLBACK_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence || '' }}
+          ROLLBACK_EVIDENCE_SIGNATURE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence_signature || '' }}
         run: |
           set -euo pipefail
 
@@ -1113,9 +1178,6 @@ jobs:
             OUTPUT_PATHS+=("$target")
           done
 
-          CHANNEL="${{ steps.rollback.outputs.channel }}"
-          ROLLBACK_FROM_VERSION="${{ steps.rollback.outputs.from_version }}"
-
           if [ -z "${RELEASE_SIGNING_PRIVATE_KEY}" ]; then
             echo "RELEASE_SIGNING_PRIVATE_KEY is required for official release assets."
             exit 1
@@ -1130,9 +1192,6 @@ jobs:
             printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" | base64 --decode > "${signing_key_path}"
           fi
 
-          ROLLBACK_COMPATIBLE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_compatible || 'false' }}"
-          ROLLBACK_EVIDENCE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence || '' }}"
-          ROLLBACK_EVIDENCE_SIGNATURE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence_signature || '' }}"
           case "${ROLLBACK_COMPATIBLE}" in
             true)
               if [ -z "${ROLLBACK_EVIDENCE}" ] || [ -z "${ROLLBACK_EVIDENCE_SIGNATURE}" ]; then
@@ -1227,7 +1286,7 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ steps.release-info.outputs.tag }}
           name: ${{ steps.release-info.outputs.name }}
@@ -1243,6 +1302,7 @@ jobs:
     name: Sync Nexus Release
     needs: create-release
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     if: >
@@ -1260,8 +1320,13 @@ jobs:
     env:
       NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
       NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+      # The client ID is an identifier, so a variable is a reasonable place for it.
+      # The client secret is not: repository and organization variables are plaintext
+      # configuration, readable in the settings UI and the API, and never masked in Actions
+      # logs — so a `curl -v` printing the CF-Access-Client-Secret header would put standing
+      # access to the Nexus admin API into a public release log (#541). Secrets only.
       NEXUS_CF_ACCESS_CLIENT_ID: ${{ vars.ADMIN_CF_ACCESS_CLIENT_ID || secrets.ADMIN_CF_ACCESS_CLIENT_ID }}
-      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ vars.ADMIN_CF_ACCESS_CLIENT_SECRET || secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
+      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
       TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag || github.ref_name }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -1269,6 +1334,23 @@ jobs:
         run: |
           if [ -z "${NEXUS_API_KEY}" ]; then
             echo "NEXUS_API_KEY is required for release sync."
+            exit 1
+          fi
+
+          # Cloudflare Access is optional — both empty means it is not in front of Nexus.
+          # Half-configured is not, and it is the state a setup that kept the client secret
+          # in a *variable* lands in, because this job now reads it from secrets only (#541).
+          # Saying so here beats an opaque 403 several steps later.
+          if [ -n "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -z "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            echo "NEXUS_CF_ACCESS_CLIENT_ID is set but NEXUS_CF_ACCESS_CLIENT_SECRET is empty."
+            echo "The client secret is read from secrets.ADMIN_CF_ACCESS_CLIENT_SECRET only."
+            echo "If it is currently stored as a repository or organization *variable*, move it"
+            echo "to a secret — variables are plaintext and are never masked in workflow logs."
+            exit 1
+          fi
+
+          if [ -z "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -n "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            echo "NEXUS_CF_ACCESS_CLIENT_SECRET is set but NEXUS_CF_ACCESS_CLIENT_ID is empty."
             exit 1
           fi
 
@@ -1296,7 +1378,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag || github.sha }}
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           run_install: false
 

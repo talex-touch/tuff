@@ -277,6 +277,12 @@ export class ClipboardAutopasteAutomation {
       .join('\n')
     const buffer = Buffer.from(fileUrlContent, 'utf8')
 
+    // Text first, then the file formats on top. clipboard.write() replaces the whole clipboard,
+    // so writing the file URLs before it discarded all three and a paste into Finder or Explorer
+    // got a plain string instead of the files (#782). writeBuffer sets one format without
+    // clearing the others, so this order keeps both.
+    clipboard.write({ text: resolvedPaths[0] ?? '' })
+
     try {
       for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
         clipboard.writeBuffer(format, buffer)
@@ -284,8 +290,6 @@ export class ClipboardAutopasteAutomation {
     } catch (error) {
       this.options.logWarn('Failed to populate file clipboard formats', { error })
     }
-
-    clipboard.write({ text: resolvedPaths[0] ?? '' })
     this.options.primeFiles?.(resolvedPaths)
     this.options.onWrite?.()
   }

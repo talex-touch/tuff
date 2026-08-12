@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 47
-- **Last Active**: 2026-08-05
+- **Total Sessions**: 52
+- **Last Active**: 2026-08-12
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1597 | Active |
+| `journal-1.md` | ~1974 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,7 +30,12 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 47 | 2026-08-05 | 本机 AI CLI 快速调用 | `64bc4b5143890173871ccd543c03562ff2f29e59` | `master` |
+| 52 | 2026-08-12 | Issue sweep: 14 closed, 25 PRs, and five guards that could not fail | `b412c4c9f`, `3686376dd`, `d9dd1a06f`, `616dc7a01`, `e64b795ea`, `e5594a127`, `595b2c0f8`, `ce0f55aaf`, `58cb33a55`, `d50fbae39`, `6058a07a4`, `0766072c0`, `1401305a1`, `c98e27733`, `092435aa2`, `224cf91d4`, `c206e8ec4`, `3fe748f8d`, `89d408777`, `d53663d01`, `721e0aa0b`, `476374cc1`, `02b0884d5`, `5e9370fc2`, `07109069c` | `docs/1098-correct-nanoid-attribution` |
+| 51 | 2026-08-11 | audit backlog: tuffex gates, native races, and two retracted claims | `c72aad40e`, `1b923a84e`, `f7c245a8d`, `bf95c966d`, `250950078`, `056524ec8`, `033b84b37`, `8c5b5e797`, `1cbad953f`, `574c618aa` | `ci/1555-ratchet-css-budgets` |
+| 50 | 2026-08-05 | C 任务全程：skills 与 MCP 桥入首页 + 动效反馈三轮 + thinking orbs | `4594c3200`, `c7b935831`, `787e2c554`, `d05aa8c08`, `fe0ae08b1`, `c3cb09839`, `2045c628d` | `TalexDreamSoul/app-shell-v2` |
+| 49 | 2026-08-05 | Database single-writer root fix: land search split, de-amplify write queue | `90aa26b17`, `3c62566fb`, `052d1d506`, `08b64b650`, `95d7fb3c3`, `d12af493e`, `571af84ed`, `cd39bdbf6`, `c2350bc6c`, `ab904670a`, `e91a4b085` | `TalexDreamSoul/app-shell-v2` |
+| 48 | 2026-08-05 | 下载空闲超时、死开关甄别与深色对比度核对 | `5f3edaabb`, `c5fbf1485` | `TalexDreamSoul/app-shell-v2` |
+| 47 | 2026-08-05 | 设置页 IA 重构：拆页、选项收敛与死开关清理 | `ea78b1fa8`, `3d7aeca04`, `b977006ea`, `7624798d5`, `c1b82bf3d`, `eb7133ba9`, `3cec262c8`, `3afd2df39`, `eaec11f87`, `d2068e611` | `TalexDreamSoul/app-shell-v2` |
 | 46 | 2026-08-04 | CoreBox packaged runtime performance closure | `15a47a91c`, `92f7eeb0b`, `0619fe42e` | `master` |
 | 45 | 2026-08-02 | 推送 CoreApp 快捷键作用域修复 | `d8549845f` | `master` |
 | 44 | 2026-08-02 | 修正 CoreApp 快捷键作用域 | `d8549845f` | `master` |

@@ -1,5 +1,6 @@
 import type { TuffItem } from '@core-box/tuff'
 import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
+import type { ScanDirectoryStats } from '@talex-touch/utils/common/file-scan-utils'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ScannedFileInfo } from './types'
 import path from 'node:path'
@@ -64,8 +65,8 @@ export async function scanDirectoryBatches(
   options?: FileScanOptions,
   signal?: AbortSignal,
   batchSize = 500
-): Promise<void> {
-  await globalScanDirectoryBatches(
+): Promise<ScanDirectoryStats> {
+  return await globalScanDirectoryBatches(
     dirPath,
     async (batch) => {
       await onBatch(

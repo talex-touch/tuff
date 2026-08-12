@@ -92,7 +92,11 @@ import {
   createPluginBusinessCapabilities,
   pluginBusinessSecretPrefix
 } from './host/plugin-business-capabilities'
-import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import type {
+  PluginBusinessCapabilities,
+  PluginBusinessClipboardHostService,
+  PluginBusinessNetworkService
+} from './host/plugin-business-capabilities'
 import {
   createFixedPluginBrowserDataService,
   createPluginBrowserDataCapabilities,
@@ -110,6 +114,7 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import type { PluginVoiceHostService } from './host/plugin-voice-capabilities'
 import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
 import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
 import { createPluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
@@ -1875,16 +1880,7 @@ export class PluginModule extends BaseModule {
     this.transport = ioRuntime.transport
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
-    TouchPlugin.setRuntimeService(null)
-    TouchPlugin.setSnipasteProcessCapabilityFactory(null)
-    TouchPlugin.setSystemActionCapabilityFactory(null)
-    TouchPlugin.setBrowserOpenCapabilityFactory(null)
-    TouchPlugin.setBrowserDataCapabilityFactory(null)
-    TouchPlugin.setTranslationCapabilityFactory(null)
-    TouchPlugin.setIntelligenceContextCapabilityFactory(null)
-    TouchPlugin.setWindowManagerCapabilityFactory(null)
-    TouchPlugin.setWindowPresetCapabilityFactory(null)
-    TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
+    TouchPlugin.setCapabilities(null)
 
     const pluginRuntime = buildPluginManagerRuntime({
       pluginRootDir: file.dirPath!,
@@ -1948,7 +1944,7 @@ export class PluginModule extends BaseModule {
             pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
           )
       }),
-      clipboard: Object.freeze({
+      clipboard: Object.freeze<PluginBusinessClipboardHostService>({
         read: async (request, context, signal) => {
           const service = getClipboardHostService()
           if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
@@ -1969,7 +1965,7 @@ export class PluginModule extends BaseModule {
         await openValidatedExternalUrl(url, {
           opener: async (target) => await shell.openExternal(target)
         }),
-      network: Object.freeze({
+      network: Object.freeze<PluginBusinessNetworkService>({
         requestPinned: async (options, policy) =>
           await getNetworkService().requestPinnedNoRedirect(options, policy),
         resolveAddresses: async (hostname) =>
@@ -2026,7 +2022,7 @@ export class PluginModule extends BaseModule {
         ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
       resolveHostGeneration: (activation) =>
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
-      service: Object.freeze({
+      service: Object.freeze<PluginVoiceHostService>({
         dictate: async (payload, signal, caller) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           const result = await voiceService.dictate(payload, undefined, signal, caller)
@@ -2501,36 +2497,18 @@ export class PluginModule extends BaseModule {
         await this.pluginBusinessCapabilities?.closeActivation(activation)
       }
     })
-    TouchPlugin.setSnipasteProcessCapabilityFactory((activation) =>
-      createSnipasteProcessCapability(activation)
-    )
-    TouchPlugin.setSystemActionCapabilityFactory((activation) =>
-      createSystemActionCapability(activation)
-    )
-    TouchPlugin.setBrowserOpenCapabilityFactory((activation) =>
-      createBrowserOpenCapability(activation)
-    )
-    TouchPlugin.setBrowserDataCapabilityFactory((activation) =>
-      createBrowserDataCapability(activation)
-    )
-    TouchPlugin.setTranslationCapabilityFactory((activation) =>
-      createTranslationCapability(activation)
-    )
-    TouchPlugin.setIntelligenceContextCapabilityFactory((activation) =>
-      createIntelligenceContextCapability(activation)
-    )
-    TouchPlugin.setWindowManagerCapabilityFactory((activation) =>
-      createWindowManagerCapability(activation)
-    )
-    TouchPlugin.setWindowPresetCapabilityFactory((activation) =>
-      createWindowPresetCapability(activation)
-    )
-    TouchPlugin.setWorkspaceScriptCapabilityFactory((activation) =>
-      createWorkspaceScriptCapability(activation)
-    )
-    TouchPlugin.setRuntimeService(
-      shouldInstallPluginRuntimeServiceByDefault() ? this.runtimeService : null
-    )
+    TouchPlugin.setCapabilities({
+      snipasteProcess: (activation) => createSnipasteProcessCapability(activation),
+      systemAction: (activation) => createSystemActionCapability(activation),
+      browserOpen: (activation) => createBrowserOpenCapability(activation),
+      browserData: (activation) => createBrowserDataCapability(activation),
+      translation: (activation) => createTranslationCapability(activation),
+      intelligenceContext: (activation) => createIntelligenceContextCapability(activation),
+      windowManager: (activation) => createWindowManagerCapability(activation),
+      windowPreset: (activation) => createWindowPresetCapability(activation),
+      workspaceScript: (activation) => createWorkspaceScriptCapability(activation),
+      runtimeService: shouldInstallPluginRuntimeServiceByDefault() ? this.runtimeService : null
+    })
     this.storageTeardownDisposer?.()
     this.storageTeardownDisposer = registerPluginStorageTeardown(async (pluginName) => {
       const results = await Promise.allSettled([
@@ -2666,16 +2644,7 @@ export class PluginModule extends BaseModule {
       cleanupErrors.push(error)
     }
 
-    runCleanup(() => TouchPlugin.setSnipasteProcessCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setSystemActionCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setBrowserOpenCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setBrowserDataCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setTranslationCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setIntelligenceContextCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setWindowManagerCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setWindowPresetCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setWorkspaceScriptCapabilityFactory(null))
-    runCleanup(() => TouchPlugin.setRuntimeService(null))
+    runCleanup(() => TouchPlugin.setCapabilities(null))
     runCleanup(() => TouchPlugin.setTransport(null))
     this.transport = null
     try {

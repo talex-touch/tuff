@@ -808,7 +808,7 @@ export function createPluginIntelligenceCapabilities(
   }
 
   const definition: PluginHostCapabilityDefinition<IntelligenceRequest, IntelligenceResult> =
-    Object.freeze({
+    Object.freeze<PluginHostCapabilityDefinition<IntelligenceRequest, IntelligenceResult>>({
       id: 'intelligence.invoke',
       permission: 'intelligence.basic',
       timeoutMs: 30_000,

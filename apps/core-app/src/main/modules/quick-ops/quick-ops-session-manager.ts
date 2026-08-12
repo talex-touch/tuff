@@ -2,6 +2,7 @@ import type { BrowserWindow as ElectronBrowserWindow, Rectangle } from 'electron
 import type { NotificationRequest } from '@talex-touch/utils/transport/events/types'
 import { BrowserWindow, powerSaveBlocker, screen } from 'electron'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { buildWindowWebPreferences } from '../../core/window-security-profile'
 import { notificationModule } from '../notification'
 
 export type QuickOpsSessionKind =
@@ -674,11 +675,7 @@ function createScreenCleanWindow(
     minimizable: false,
     maximizable: false,
     backgroundColor: palette.windowBackground,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildWindowWebPreferences('app')
   })
 
   window.setAlwaysOnTop(true, 'screen-saver')

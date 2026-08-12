@@ -40,6 +40,7 @@
 //   as `(...) => VNode & { __ctx?: { expose(exposed: E): void, ... } }`, so the
 //   argument of that `expose` method is the exact `defineExpose` payload.
 
+import type { TxConversationStream, TxConversationStreamInstance } from './src/conversation-stream/index'
 import type { TxVirtualList, TxVirtualListInstance } from './src/virtual-list/index'
 
 // Pull the `defineExpose` payload type out of a component's vue-tsc signature.
@@ -93,4 +94,31 @@ export type VirtualListInstanceDriftContract = [
   _ExposeIsNotAny,
   _NoStaleMethodInInterface,
   _NoUndocumentedExpose,
+]
+
+// ---------------------------------------------------------------------------
+// TxConversationStream — same generic-SFC constraint, same drift guard.
+// ---------------------------------------------------------------------------
+
+type ConversationStreamExposed = ExposedOf<typeof TxConversationStream>
+
+type _ConversationStreamExposeIsNotAny = Assert<Not<IsAny<ConversationStreamExposed>>>
+// Same two directions as the virtual-list block above. `keyof` runs first on
+// purpose: whole-object comparison against a generic SFC's expose payload is
+// sensitive to conditional-type instantiation order, and forcing the key set
+// to resolve makes the structural checks deterministic.
+type _ConversationStreamKeysComplete = Assert<Extends<keyof TxConversationStreamInstance, keyof ConversationStreamExposed>>
+type _ConversationStreamKeysExact = Assert<Extends<keyof ConversationStreamExposed, keyof TxConversationStreamInstance>>
+type _ConversationStreamNoStaleMethodInInterface = Assert<Extends<ConversationStreamExposed, TxConversationStreamInstance>>
+type _ConversationStreamNoUndocumentedExpose = Assert<Extends<TxConversationStreamInstance, ConversationStreamExposed>>
+
+// @ts-expect-error — a bogus shape is deliberately not assignable to the interface
+type _ConversationStreamNegativeControl = Assert<Extends<{ __drift_probe__: () => void }, TxConversationStreamInstance>>
+
+export type ConversationStreamInstanceDriftContract = [
+  _ConversationStreamExposeIsNotAny,
+  _ConversationStreamKeysComplete,
+  _ConversationStreamKeysExact,
+  _ConversationStreamNoStaleMethodInInterface,
+  _ConversationStreamNoUndocumentedExpose,
 ]

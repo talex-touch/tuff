@@ -1,9 +1,9 @@
-import path from 'node:path'
 import type { ScannedAppInfo } from './app-types'
 import { normalizeStringList } from './app-utils'
+import { createAppCatalogNeedleMatcher } from './app-catalog-matching'
 import { resolveAppToolSourceAliases } from './app-tool-source-catalog'
 
-export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 3
+export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 4
 
 export interface AppSemanticAliasInput {
   name?: string | null
@@ -652,48 +652,13 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
   }
 ]
 
-function normalizeForMatch(value: string | null | undefined): string {
-  return value?.trim().toLowerCase() ?? ''
-}
-
-function basenameWithoutExtension(value: string | null | undefined): string {
-  const normalized = value?.trim()
-  if (!normalized) return ''
-
-  const baseName = normalized.split(/[\\/]/).filter(Boolean).pop() ?? normalized
-  return baseName.replace(/\.(app|exe|lnk|desktop)$/i, '')
-}
-
-function collectSearchText(app: AppSemanticAliasInput): string {
-  return normalizeForMatch(
-    [
-      app.name,
-      app.displayName,
-      app.fileName,
-      ...(app.alternateNames ?? []),
-      app.bundleId,
-      app.uniqueId,
-      app.stableId,
-      app.appIdentity,
-      app.path,
-      app.launchTarget,
-      app.displayPath,
-      app.description,
-      basenameWithoutExtension(app.path),
-      basenameWithoutExtension(app.launchTarget),
-      app.path ? path.basename(app.path) : '',
-      app.launchTarget ? path.basename(app.launchTarget) : ''
-    ].join(' ')
-  )
-}
-
 export function resolveAppSemanticAliases(app: AppSemanticAliasInput): string[] {
-  const searchText = collectSearchText(app)
-  if (!searchText) return []
+  const matcher = createAppCatalogNeedleMatcher(app)
+  if (!matcher.hasIdentity) return []
 
   const aliases: string[] = []
   for (const entry of APP_SEMANTIC_CATALOG) {
-    if (entry.match.some((needle) => searchText.includes(needle.toLowerCase()))) {
+    if (matcher.matchesAny(entry.match)) {
       aliases.push(...entry.aliases)
     }
   }

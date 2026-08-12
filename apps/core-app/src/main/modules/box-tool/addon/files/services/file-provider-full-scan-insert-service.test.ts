@@ -28,7 +28,7 @@ describe('file-provider-full-scan-insert-service', () => {
       }
     ]
     const inserted = records.map((record, index) => ({ ...record, id: index + 1 }))
-    const upsertFiles = vi.fn(async (chunk) =>
+    const upsertFiles = vi.fn(async (chunk: Array<{ path: string }>) =>
       inserted.filter((record) => chunk.some((item) => item.path === record.path))
     )
     const emitRecordBatch = vi.fn(async () => {})

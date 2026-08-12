@@ -123,13 +123,13 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `tag` | `string` | `span` | 外层渲染标签 |
+| `tag` | `string` | `span` | 包裹默认插槽的根元素标签；行内文本保持 `span`，卡片/图片容器改 `div`。 |
 | `active` | `boolean` | `true` | 是否启用扫光 |
 | `repeat` | `boolean` | `true` | 是否循环 |
 | `durationMs` | `number` | `2000` | 动画时长(ms) |
 | `delayMs` | `number` | `0` | 延迟(ms) |
-| `angle` | `number` | `20` | 扫光角度(deg) |
-| `bandSize` | `number` | `38` | 高光带宽度(%) |
+| `angle` | `number` | `20` | 扫光渐变角度（度）；接近 `0` 为水平掠过，增大则倾斜。 |
+| `bandSize` | `number` | `38` | 高光带宽度占渐变的百分比；调小得到更锐的窄光，调大更柔和。 |
 | `color` | `string` | `rgba(255, 255, 255, 0.9)` | 高光颜色 |
 | `opacity` | `number` | `0.75` | 高光不透明度 |
 | `blendMode` | `string` | - | 自定义 CSS `mix-blend-mode`；未传时 `adaptive` 会优先使用 `plus-lighter`，不支持时回退到 `screen`。 |

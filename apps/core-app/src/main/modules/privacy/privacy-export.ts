@@ -487,7 +487,7 @@ function makeWriter(
   category: { records: number; bytes: number },
   categoryName: PrivacyDataCategory
 ): PrivacyOwnerExportWriter {
-  return Object.freeze({
+  return Object.freeze<PrivacyOwnerExportWriter>({
     write: async (record) => {
       const normalized = normalizeOwnerRecord(categoryName, record)
       const measuredBytes = measureJsonBytes(normalized, limits.maxRecordBytes)
@@ -844,7 +844,7 @@ export function createPrivacyCategoryExporter(
       }
   const limits = normalizeLimits(values.limits)
 
-  return Object.freeze({
+  return Object.freeze<PrivacyCategoryExporter>({
     exportCategories: async (rawRequest, providedSignal) => {
       const request = normalizeExportRequest(rawRequest)
       const signal = providedSignal ?? request.signal ?? new AbortController().signal

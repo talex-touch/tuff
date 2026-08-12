@@ -5,13 +5,13 @@
 ## Current order
 
 1. **Close verified release and runtime blockers.** Complete the active OTA, macOS release-evidence, and application-icon acceptance work according to their task-local PRDs. The OTA parent remains concurrently owned; this document does not restate its volatile child status.
-2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the default-off [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). The split flag must remain off until its child task has direct flag-on app-run evidence for every writer.
+2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). Reconcile the migration task's stale default-off/flag-on wording with the current runtime topology so task evidence does not contradict the roadmap.
 3. **Continue remaining independently-owned active tasks** in the order recorded here only after the preceding blocker lane is resolved; task-local PRDs define implementation order and acceptance.
 
 ## Non-negotiable safety gates
 
-- `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` defaults **off**. Enabling it before all named 2d/2e writes migrate causes provider writes to land in `database.db` while reads use `search-index.db`: **silent data loss**.
-- A flag-on app run, not typecheck alone, must prove first-launch reindex, matching app/file counts, correct results, populated `search-index.db`, healthy indexing, and flag-off rollback before the split can be enabled.
+- `TUFF_DB_SEARCH_SPLIT_ENABLED` defaults **on** since `cd39bdbf6` (2026-08-05). The 2d.3 write-path migration landed with it, so `database.db` and `search-index.db` each have exactly one writer connection and the half-migrated failure mode this gate used to guard against no longer exists. Setting it to `0` is the emergency revert to the shared-file topology, not the safe default.
+- That flip was proved by three app runs, not by typecheck: schema parity plus a first-launch bootstrap reindex of 4678 items, a second boot that correctly skipped it, and a V2 run with zero `SQLITE_BUSY`, zero cross-home FK failures and zero retry exhaustion. Any future change to the split topology owes the same class of evidence.
 - Historical reports prove only their recorded environment. Packaged and production claims require exact observed artifacts or deployed surfaces; they are never inferred from source state.
 
 ## Task-state rules
@@ -28,7 +28,7 @@
 - Nexus: [TODO-nexus.md](./TODO-nexus.md)
 - Long-term debt: [docs/TODO-BACKLOG-LONG-TERM.md](./TODO-BACKLOG-LONG-TERM.md)
 - Historical completion facts: [01-project/CHANGES.md](./01-project/CHANGES.md)
-- 2026-08-04 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-04.md).
+- 2026-08-12 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-12.md).
 
 ## Topical guardrails
 

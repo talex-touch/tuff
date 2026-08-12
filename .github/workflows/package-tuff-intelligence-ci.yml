@@ -2,9 +2,6 @@ name: Tuff Intelligence Package CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - master
     paths:
       - "packages/tuff-intelligence/**"
       - "packages/utils/**"

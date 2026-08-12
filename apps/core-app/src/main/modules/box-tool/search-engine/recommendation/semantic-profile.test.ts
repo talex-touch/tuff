@@ -63,6 +63,45 @@ describe('recommendation semantic profile', () => {
     )
   })
 
+  it('keeps non-ASCII app names as tokens instead of erasing them', () => {
+    // splitIdentifier used to strip everything outside [a-zA-Z0-9], so each of
+    // these collapsed to the same profile — only the ASCII path segment survived
+    // and 'app' is a stop token. They then scored identically for every context
+    // under calculateLocalSemanticScore (#661).
+    const wechat = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: '/Applications/微信.app',
+      sourceType: 'app'
+    })
+    const netease = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: '/Applications/网易云音乐.app',
+      sourceType: 'app'
+    })
+
+    expect(wechat.text).toContain('微信')
+    expect(netease.text).toContain('网易云音乐')
+    expect(wechat.text).not.toBe(netease.text)
+  })
+
+  it('tokenises Cyrillic and accented Latin names too', () => {
+    const cyrillic = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Телеграм.app',
+      sourceType: 'app'
+    })
+    const accented = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Café Résumé.app',
+      sourceType: 'app'
+    })
+
+    expect(cyrillic.text).toContain('телеграм')
+    // The accent must survive rather than splitting 'café' into 'caf'.
+    expect(accented.text).toContain('café')
+    expect(accented.text).toContain('résumé')
+  })
+
   it('does not include raw private network, location, or timezone values in profile text', () => {
     const contextProfile = buildRecommendationSemanticProfile(devFocusContext)
 

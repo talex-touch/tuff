@@ -1,4 +1,4 @@
-import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { ITuffTransport } from '../../transport/index'
 import { Terminal } from './terminal'
 
 export class EnvDetector {

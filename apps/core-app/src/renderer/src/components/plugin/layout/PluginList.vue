@@ -86,12 +86,41 @@ watch(
     </PluginListModule>
 
     <div class="PluginList-Add transition-cubic fake-background">
-      <div id="newPluginBtn" class="new-plus" @click="() => emits('add-plugin')" />
+      <!--
+        A real button, not a div: the plus is drawn entirely in CSS, so there is no text node
+        for a screen reader to announce and nothing made it focusable (#506). The accessible
+        name comes from aria-label because adding visible text would change the control from a
+        round icon into a labelled one.
+      -->
+      <button
+        id="newPluginBtn"
+        type="button"
+        class="new-plus"
+        :aria-label="t('plugin.add')"
+        @click="() => emits('add-plugin')"
+      />
     </div>
   </TxScroll>
 </template>
 
 <style lang="scss" scoped>
+.new-plus {
+  // The control was a div, so it inherited no native chrome. Reset it back to that so promoting
+  // it to a button is an accessibility change only, not a visual one.
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 2px;
+    border-radius: 50%;
+  }
+}
+
 .PluginList-Add {
   &:before {
     filter: invert(0.25);

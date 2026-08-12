@@ -1,12 +1,8 @@
 <script name="InteractiveTerminal" setup>
 import { onMounted, onUnmounted, ref } from 'vue'
-import { Terminal } from 'xterm'
-import { FitAddon } from 'xterm-addon-fit'
-import 'xterm/css/xterm.css'
-import 'xterm/lib/xterm.js'
-// import * as TerminalFit from "xterm-addon-fit";
-
-// Terminal.applyAddon(TerminalFit);
+import { FitAddon } from '@xterm/addon-fit'
+import { Terminal } from '@xterm/xterm'
+import '@xterm/xterm/css/xterm.css'
 
 const terminal = ref()
 const term = new Terminal({

@@ -263,18 +263,12 @@ export class IpcManager {
         coreBoxManager.trigger(true)
       })
     )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.ui.show, () => {
-        coreBoxManager.trigger(true)
-      })
-    )
 
     const handleHide = (payload?: CoreBoxHideRequest | void) => {
       coreBoxManager.trigger(false, { immediate: payload?.immediate === true })
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.ui.hide, handleHide))
-    this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.ui.hide, handleHide))
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.getVisibility, () => {
@@ -300,11 +294,6 @@ export class IpcManager {
         this.handleExpandRequest(payload as ExpandOptions | number)
       })
     )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.ui.expand, (payload) => {
-        this.handleExpandRequest(payload as ExpandOptions | number)
-      })
-    )
 
     const handleFocusWindow = () => {
       const window = getCoreBoxWindow()
@@ -315,9 +304,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.ui.focusWindow, handleFocusWindow))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.ui.focusWindow, handleFocusWindow)
-    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.search.query, async ({ query, activations, surface }, context) => {
@@ -401,7 +387,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.get, handleGetInput))
-    this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.input.get, handleGetInput))
 
     this.transportDisposers.push(
       transport.on(coreBoxImageTranslateEvent, async (request) => {
@@ -426,7 +411,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.set, handleSetInput))
-    this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.input.set, handleSetInput))
 
     const handleSetQuery = async (request: SetQueryRequest) => {
       const value = typeof request?.value === 'string' ? request.value : ''
@@ -437,9 +421,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.setQuery, handleSetQuery))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.input.setQuery, handleSetQuery)
-    )
 
     const handleClearInput = async () => {
       await this.sendInputValueToRenderer({ value: '' })
@@ -447,9 +428,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.clear, handleClearInput))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.input.clear, handleClearInput)
-    )
 
     const handleSetInputVisibility = async (request: SetInputVisibilityRequest) => {
       await this.setInputVisibility(Boolean(request?.visible))
@@ -457,9 +435,6 @@ export class IpcManager {
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.input.setVisibility, handleSetInputVisibility)
-    )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.input.setVisibility, handleSetInputVisibility)
     )
 
     const handleDeactivateProvider = async (request: DeactivateProviderRequest) => {
@@ -515,31 +490,17 @@ export class IpcManager {
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.deactivate, handleDeactivateProvider)
     )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.provider.deactivate, handleDeactivateProvider)
-    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.deactivateAll, handleDeactivateAllProviders)
-    )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.provider.deactivateAll, handleDeactivateAllProviders)
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.getActivated, async () => this.getActiveProvidersState())
     )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.provider.getActivated, async () =>
-        this.getActiveProvidersState()
-      )
-    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
-    )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
     )
 
     const handleDetachUIMode = async (
@@ -571,9 +532,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.exit, handleExitUIMode))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.uiMode.exit, handleExitUIMode)
-    )
 
     const handleAllowClipboard = (request: AllowClipboardRequest) => {
       const types = request?.types ?? 0
@@ -582,9 +540,6 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.clipboard.allow, handleAllowClipboard))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.clipboard.allow, handleAllowClipboard)
-    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.inputMonitoring.allow, () => {
@@ -601,30 +556,9 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.ui.hideInput, async () => {
-        await this.setInputVisibility(false)
-        return { hidden: true }
-      })
-    )
-
-    this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.showInput, async () => {
         await this.setInputVisibility(true)
         return { shown: true }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.ui.showInput, async () => {
-        await this.setInputVisibility(true)
-        return { shown: true }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.inputMonitoring.allow, () => {
-        windowManager.enableInputMonitoring()
-        return { enabled: true }
       })
     )
 
@@ -659,20 +593,11 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.layout.setHeight, handleSetHeight))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.layout.setHeight, handleSetHeight)
-    )
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.layout.getBounds, handleGetBounds))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.layout.getBounds, handleGetBounds)
-    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.layout.setPositionOffset, handleSetPositionOffset)
-    )
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.layout.setPositionOffset, handleSetPositionOffset)
     )
 
     this.transportDisposers.push(

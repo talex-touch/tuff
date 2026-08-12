@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-05-search-audit-remediation/research/realtime-chain-diagnosis.md", "reason": "Authoritative design. Sections 2-3 map the app and file watch chains stage by stage; section 5 gives F1-F6 with file:line anchors; the parameter table at the end fixes the constant values."}
+{"file": ".trellis/tasks/08-05-realtime-index-freshness/prd.md", "reason": "R1-R7, including the resource envelope that rules out inline backoff on the watch route and any idle-state polling."}
+{"file": ".trellis/tasks/08-05-realtime-index-freshness/implement.md", "reason": "Step order (F5+F3, F2, F1, F4, F6, gates) and the gate command."}
+{"file": ".trellis/tasks/08-05-search-audit-remediation/research/audit-findings-digest.md", "reason": "Prior findings this task inherits: A-M6 downgraded as unrelated to the realtime chain, A-M7 same failure class as F1, A-M8 and F-M5 left for another task."}

@@ -766,6 +766,16 @@ describe('official simple Prelude isolation regression', () => {
       { text: '' },
       { id: 'quick-action-lock-screen' }
     ]).promise
+    // A dynamic quick-action-* feature publishes an item; the action runs from onItemAction on
+    // an explicit selection (#817). onFeatureTriggered is re-entered on every input change, so
+    // executing there fired lock-screen on each keystroke. What this test is about — the second
+    // generation works while the first is closed — is unchanged.
+    expect(second.state.systemActions).toEqual([])
+    const secondLockItem = actionItem(second.state.items, 'run-action')
+    await expect(
+      second.runtime.callLifecycle('onItemAction', [secondLockItem, { actionId: 'run-action' }])
+        .promise
+    ).resolves.toMatchObject({ status: 'started', success: true })
     expect(second.state.systemActions).toEqual(['lock-screen'])
     await expect(first.runtime.callLifecycle('onItemAction', [lockItem]).promise).rejects.toEqual(
       new PluginHostChildError('PLUGIN_HOST_CHILD_CLOSED')
@@ -986,7 +996,9 @@ describe('official simple Prelude isolation regression', () => {
     ).resolves.toBe(true)
     expect(first.state.windowPresetStatusCalls).toBe(1)
     const devPreset = first.state.items.find(
-      (item) => item.actions?.[0]?.payload?.actionId === 'preset-dev-split'
+      (item) =>
+        (item.actions as Array<{ payload?: { actionId?: string } }> | undefined)?.[0]?.payload
+          ?.actionId === 'preset-dev-split'
     )
     expect(devPreset).toBeDefined()
 
@@ -1010,7 +1022,9 @@ describe('official simple Prelude isolation regression', () => {
       { id: 'window-presets' }
     ]).promise
     const clearPreset = second.state.items.find(
-      (item) => item.actions?.[0]?.payload?.actionId === 'preset-clear-topmost'
+      (item) =>
+        (item.actions as Array<{ payload?: { actionId?: string } }> | undefined)?.[0]?.payload
+          ?.actionId === 'preset-clear-topmost'
     )
     await expect(
       second.runtime.callLifecycle('onItemAction', [clearPreset, { actionId: 'run-action' }])

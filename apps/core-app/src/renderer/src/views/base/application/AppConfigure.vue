@@ -65,36 +65,39 @@ function handleHelp(): void {
     <div class="AppConfigure-Content">
       <TxScroll>
         <div class="AppConfigure-Content-Inner">
-          <t-group-block :name="t('appConfigure.action')" description="" icon="auction">
-            <t-block-slot :title="t('appConfigure.launch')" description="" icon="external-link">
+          <TuffGroupBlock :name="t('appConfigure.action')" default-icon="i-ri-auction-line">
+            <TuffBlockSlot :title="t('appConfigure.launch')" default-icon="i-ri-external-link-line">
               <TxButton variant="flat" @click="handleLaunch">
                 {{ t('appConfigure.launchBtn') }}
               </TxButton>
-            </t-block-slot>
-            <t-block-switch
+            </TuffBlockSlot>
+            <TuffBlockSwitch
               guidance
               :model-value="false"
               :title="t('appConfigure.help')"
               :description="t('appConfigure.helpDesc')"
-              icon="search-2"
+              default-icon="i-ri-search-2-line"
               @click="handleHelp"
             />
-          </t-group-block>
+          </TuffGroupBlock>
 
-          <t-group-block :name="t('appConfigure.stats')" description="" icon="dashboard-horizontal">
-            <t-block-line :title="t('appConfigure.name')">
+          <TuffGroupBlock
+            :name="t('appConfigure.stats')"
+            default-icon="i-ri-dashboard-horizontal-line"
+          >
+            <TuffBlockLine :title="t('appConfigure.name')">
               <template #description>
                 {{ data.names }}
               </template>
-            </t-block-line>
-            <t-block-line :title="t('appConfigure.type')" :description="data.type" />
-            <t-block-line :title="t('appConfigure.value')" :description="data.value" />
-            <t-block-line :title="t('appConfigure.keywords')">
+            </TuffBlockLine>
+            <TuffBlockLine :title="t('appConfigure.type')" :description="data.type" />
+            <TuffBlockLine :title="t('appConfigure.value')" :description="data.value" />
+            <TuffBlockLine :title="t('appConfigure.keywords')">
               <template #description>
                 {{ data.keyWords }}
               </template>
-            </t-block-line>
-          </t-group-block>
+            </TuffBlockLine>
+          </TuffGroupBlock>
         </div>
       </TxScroll>
     </div>

@@ -186,6 +186,36 @@ describe('clipboard-autopaste-automation', () => {
     expect(mocks.sendPlatformShortcut).not.toHaveBeenCalled()
   })
 
+  it('文件格式写在 clipboard.write() 之后,否则会被它整体清掉', async () => {
+    // clipboard.write() replaces the whole clipboard. Writing the file URL formats before it
+    // discarded all three, so a paste into Finder or Explorer produced a plain string instead of
+    // the files (#782).
+    const fileItem: IClipboardItem = {
+      id: 2,
+      type: 'files',
+      content: JSON.stringify(['/tmp/a.txt', '/tmp/b.txt']),
+      rawContent: ''
+    }
+    const options = createOptions({ getItemById: vi.fn(async () => fileItem) })
+    const automation = new ClipboardAutopasteAutomation(options)
+
+    await automation.handleApplyRequest({ id: 2, autoPaste: false }, createContext())
+
+    expect(mocks.clipboardWrite).toHaveBeenCalled()
+    expect(mocks.clipboardWriteBuffer).toHaveBeenCalled()
+
+    const writeOrder = mocks.clipboardWrite.mock.invocationCallOrder[0]
+    const bufferOrders = mocks.clipboardWriteBuffer.mock.invocationCallOrder
+
+    // Every file format must land after the wholesale write, or it does not survive.
+    for (const order of bufferOrders) {
+      expect(order).toBeGreaterThan(writeOrder)
+    }
+    expect(
+      mocks.clipboardWriteBuffer.mock.calls.map((call: unknown[]) => call[0] as string)
+    ).toEqual(['public.file-url', 'public.file-url-multiple', 'text/uri-list'])
+  })
+
   it('returns explicit failures for unavailable database and missing item', async () => {
     const noDb = new ClipboardAutopasteAutomation(createOptions({ hasDatabase: () => false }))
     await expect(noDb.handleApplyRequest({ id: 1 }, createContext())).resolves.toEqual({
