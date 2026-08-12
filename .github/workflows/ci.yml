@@ -166,6 +166,22 @@ jobs:
       - name: Check for orphan test files
         run: pnpm check:orphan-tests && pnpm check:orphan-tests:self-test
 
+      # The maintenance-audit reports are hand-written, one per day, and #1107 exists because a
+      # bullet was being carried forward instead of re-derived -- the same sentence about a flag
+      # default appeared in eight consecutive reports, three days after the default was inverted.
+      #
+      # The 2026-08-12 report named `07-26-install-launch-v2-4-13-beta-23` as an in-progress task
+      # missing metadata. No such directory exists, active or archived. That is a directory lookup
+      # to catch, and a report naming a task nobody can open is the cheapest possible evidence that
+      # its author did not query the tree.
+      #
+      # Only task existence is checked. Counts and prose are not: parsing "至少 X 项" out of two
+      # languages fails in ways nobody can act on, and the field-presence claim is already
+      # docs:verify's DOC-TASK-META rule. Reports dated on or before the gate date are history and
+      # exempt, which is #1107's own fourth acceptance criterion.
+      - name: Check maintenance-audit report claims
+        run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
+
       - name: Run plugin suites
         run: pnpm test:plugins && pnpm test:plugins:self-test
 

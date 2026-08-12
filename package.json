@@ -48,6 +48,8 @@
     "plugins:validate": "tsx scripts/validate-plugin-package-policy.ts && node scripts/validate-plugins.mjs",
     "plugins:validate:self-test": "node scripts/validate-plugins.mjs --self-test",
     "test:plugins": "node scripts/test-plugins.mjs",
+    "check:audit-report-claims": "node scripts/check-audit-report-claims.mjs",
+    "check:audit-report-claims:self-test": "node scripts/check-audit-report-claims.mjs --self-test",
     "check:orphan-tests": "node scripts/check-orphan-tests.mjs",
     "check:orphan-tests:self-test": "node scripts/check-orphan-tests.mjs --self-test",
     "test:plugins:self-test": "node scripts/test-plugins.mjs --self-test",
