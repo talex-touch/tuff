@@ -29,7 +29,7 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * ever added them, and `--diff-filter=D` finds no snapshot deletion at all. The chain was
  * never complete, so there is no lost history to recover before deciding what to do.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 25
+export const KNOWN_MISSING_SNAPSHOTS = 24
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))
