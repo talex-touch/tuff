@@ -650,9 +650,16 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          set -uo pipefail
+          # -e is on so a failed apt-get stops here. Without it the step would carry on and the
+          # launch would exit for a provisioning reason -- a missing xvfb-run gives an exit code
+          # with no output, which classifies as unknown-exit and is reported as a *product*
+          # failure. Misattributing CI breakage to the app is the one outcome this check must not
+          # produce. Found by CodeRabbit on #1736.
+          set -euo pipefail
           sudo apt-get update -qq
+          # t64 names are the 24.04 spelling; the fallback covers an older image if the runner moves.
           sudo apt-get install -y -qq xvfb libgbm1 libnss3 libasound2t64 libgtk-3-0t64 || sudo apt-get install -y -qq xvfb libgbm1 libnss3 libasound2 libgtk-3-0
+          command -v xvfb-run >/dev/null || { echo "xvfb-run missing after install"; exit 1; }
 
           APPIMAGE=$(find apps/core-app/dist -name "*.AppImage" -type f | head -1)
           if [ -z "$APPIMAGE" ]; then
