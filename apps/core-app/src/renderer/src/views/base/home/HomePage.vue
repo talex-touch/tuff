@@ -37,6 +37,11 @@ import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toMessageSegments } from '~/modules/conversation/chain-steps'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
 import {
+  deriveRestoredTitle,
+  generateConversationTitle,
+  shouldGenerateTitle
+} from '~/modules/conversation/conversation-title'
+import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 } from '~/modules/conversation/conversation-error-display'
@@ -106,13 +111,20 @@ const modelLabel = computed(() => selectedModel.value ?? t('home.modelName'))
 const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
 
 /**
- * Working title until R2 generates one: the opening message is what the user themselves called the
- * conversation. Deliberately not truncated here — the top bar ellipsises on overflow, and a title
- * cut in the data layer would stay cut once R2 persists it.
+ * The opening message is the working title until the model summarises one (#969).
+ *
+ * Generation is once per conversation, after the first settled turn, and every failure keeps the
+ * working title silently — the label is never worth an error surface. `generatedTitle` also carries
+ * a stored custom title across restore, so the top bar agrees with the sidebar after a reload.
  */
-const conversationTitle = computed(
+const generatedTitle = ref<string | null>(null)
+let titleInFlight = false
+const titleSequence = createLatestOnly()
+
+const firstUserContent = computed(
   () => messages.value.find((message) => message.role === 'user')?.content
 )
+const conversationTitle = computed(() => generatedTitle.value ?? firstUserContent.value)
 
 /**
  * Auto Context has no composer control any more: it and the old tools pill read as the same
@@ -1105,6 +1117,7 @@ watch(
       const composerEl = composerRef.value
       const first = composerEl?.getBoundingClientRect()
       conversation.reset()
+      generatedTitle.value = null
       await nextTick()
       if (composerEl && first && !prefersReducedMotion()) {
         const dy = first.top - composerEl.getBoundingClientRect().top
@@ -1124,7 +1137,14 @@ watch(
     // of teleporting. Thread-to-thread hops measure ~0 and stay still.
     const composerEl = composerRef.value
     const first = composerEl?.getBoundingClientRect()
-    conversation.restore(restored)
+    conversation.restore(restored.messages)
+    // A stored title that differs from the opening message is a real one; the working-title
+    // persist writes the opening message back, and treating that as custom would block
+    // generation forever.
+    generatedTitle.value = deriveRestoredTitle(
+      restored.title,
+      restored.messages.find((message) => message.role === 'user')?.content
+    )
     // Wholesale replacement doesn't trip the stream's prepend anchoring, and keep-alive
     // reuses this instance — landing at the latest message needs an explicit call.
     await nextTick()
@@ -1136,6 +1156,49 @@ watch(
   },
   { immediate: true }
 )
+
+/**
+ * Fire-and-forget: the settled-turn persist above already wrote the working title, so the thread is
+ * durable before the summary call even starts, and a second persist upgrades the label when the
+ * call lands. Claimed against `titleSequence` so switching threads mid-call drops the result
+ * instead of stamping it onto the wrong conversation.
+ */
+function maybeGenerateTitle(): void {
+  const firstAssistant = messages.value.find(
+    (message) => message.role === 'assistant' && message.status === 'complete'
+  )?.content
+  if (
+    !shouldGenerateTitle({
+      generatedTitle: generatedTitle.value,
+      inFlight: titleInFlight,
+      firstUserContent: firstUserContent.value,
+      firstAssistantContent: firstAssistant
+    })
+  ) {
+    return
+  }
+  const idAtStart = conversationId.value
+  if (!idAtStart) return
+  const isCurrent = titleSequence.claim()
+  titleInFlight = true
+  void (async () => {
+    try {
+      const title = await generateConversationTitle(
+        intelligenceSdk,
+        firstUserContent.value ?? '',
+        firstAssistant ?? ''
+      )
+      if (!title || !isCurrent() || conversationId.value !== idAtStart) return
+      generatedTitle.value = title
+      await history.persist(idAtStart, title, messages.value)
+    } catch (error) {
+      // The working title is already on screen and persisted; a label upgrade may fail silently.
+      homeLog.warn('Conversation title generation failed', String(error))
+    } finally {
+      titleInFlight = false
+    }
+  })()
+}
 
 /**
  * Writes after every settled turn.
@@ -1153,6 +1216,7 @@ watch(
       if (route.params.id !== conversationId.value) {
         await router.replace(`/home/c/${conversationId.value}`)
       }
+      maybeGenerateTitle()
     } catch (error) {
       // A watcher rejection is an unhandled promise nobody sees, and losing a thread silently is
       // worse than losing it loudly — the conversation stays on screen either way.
