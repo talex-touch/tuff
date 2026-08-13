@@ -1,5 +1,8 @@
 <script lang="ts" name="HomeTopBar" setup>
+import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConversation'
 import { useI18n } from 'vue-i18n'
+import HomeModelMenu from './HomeModelMenu.vue'
+import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
  * The conversation top bar, from artboards `JVvAr` / `lbZ9a` (untitled) and `LI40e` / `zdhVu`
@@ -12,13 +15,13 @@ const props = defineProps<{
   modelName: string
   /** Whether the right panel is open, so the toggle can describe what it will do. */
   panelOpen?: boolean
-  menuOpen?: boolean
+  /** Metadata of the last settled turn, read by the `⋯` float panel. */
+  turn?: ConversationTurnMeta
+  messageCount: number
 }>()
 
 defineEmits<{
-  (event: 'select-model'): void
   (event: 'toggle-panel'): void
-  (event: 'open-menu'): void
 }>()
 
 const { t } = useI18n()
@@ -36,19 +39,20 @@ const { t } = useI18n()
       </h1>
 
       <div class="HomeTopBar-ModeSlot">
-        <button
-          class="HomeTopBar-ModePill"
-          :class="{ 'is-secondary': Boolean(props.title) }"
-          type="button"
-          data-model-pill
-          :aria-label="t('home.model')"
-          :aria-expanded="Boolean(props.menuOpen)"
-          @click="$emit('select-model')"
-        >
-          <span class="HomeTopBar-ModeLabel">{{ props.modelName }}</span>
-          <span class="i-ri-arrow-down-s-line HomeTopBar-ModeChevron" />
-        </button>
-        <slot name="menu" />
+        <HomeModelMenu placement="bottom-start">
+          <template #trigger="{ open }">
+            <button
+              class="HomeTopBar-ModePill"
+              :class="{ 'is-secondary': Boolean(props.title) }"
+              type="button"
+              :aria-label="t('home.model')"
+              :aria-expanded="open"
+            >
+              <span class="HomeTopBar-ModeLabel">{{ props.modelName }}</span>
+              <span class="i-ri-arrow-down-s-line HomeTopBar-ModeChevron" />
+            </button>
+          </template>
+        </HomeModelMenu>
       </div>
     </div>
 
@@ -64,15 +68,23 @@ const { t } = useI18n()
         <!-- Remix has no `panel-right-open`; `layout-right` is its equivalent right-panel glyph. -->
         <span class="i-ri-layout-right-line" />
       </button>
-      <button
-        class="HomeTopBar-IconBtn"
-        type="button"
-        :aria-label="t('home.moreActions')"
-        :title="t('home.moreActions')"
-        @click="$emit('open-menu')"
-      >
-        <span class="i-ri-more-line" />
-      </button>
+      <!-- The bar is a drag region; the button and the panel it opens must stay clickable. -->
+      <div class="HomeTopBar-MenuSlot">
+        <HomeTurnInfoMenu :turn="props.turn" :message-count="props.messageCount">
+          <template #trigger="{ open }">
+            <button
+              class="HomeTopBar-IconBtn"
+              type="button"
+              aria-haspopup="menu"
+              :aria-expanded="open"
+              :aria-label="t('home.moreActions')"
+              :title="t('home.moreActions')"
+            >
+              <span class="i-ri-more-line" />
+            </button>
+          </template>
+        </HomeTurnInfoMenu>
+      </div>
     </div>
   </div>
 </template>
@@ -110,9 +122,8 @@ const { t } = useI18n()
   font-weight: 500;
 }
 
-/** Anchors the model menu to the pill; the bar itself is a drag region and cannot host it. */
+/** The bar is a drag region; the pill (and the menu it opens) must stay clickable. */
 .HomeTopBar-ModeSlot {
-  position: relative;
   flex: none;
   -webkit-app-region: no-drag;
 }
@@ -169,6 +180,13 @@ const { t } = useI18n()
   flex: none;
   gap: 2px;
   align-items: center;
+}
+
+/** Same exemption the mode pill needs: the bar drags, its controls must not. */
+.HomeTopBar-MenuSlot {
+  display: inline-flex;
+  flex: none;
+  -webkit-app-region: no-drag;
 }
 
 .HomeTopBar-IconBtn {

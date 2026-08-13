@@ -77,8 +77,12 @@ const fullStyleImportBudgets = [
 // -old number.
 const LIMITS = {
   baseCssBytes: 32 * 1024,
-  fullCssBytes: 448 * 1024,
-  componentCssBytes: 64 * 1024,
+  // 448 -> 488 and 64 -> 96 on 2026-08-13, re-baselined for the app-shell-v2 convergence (#1742):
+  // CI measured full CSS at 481.6 KiB and stream-markdown at 92.0 KiB after that branch's
+  // conversation/markdown product styles landed. Same contract as the note above -- today's size
+  // plus minimal headroom, growth from here fails, and #1555 still owns whether it should shrink.
+  fullCssBytes: 488 * 1024,
+  componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   emptyStateAliasCssBytes: 128,
 }

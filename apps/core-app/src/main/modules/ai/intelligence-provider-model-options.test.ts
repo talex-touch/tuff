@@ -18,6 +18,23 @@ import { IntelligenceProvider } from './runtime/base-provider'
 
 const storageMocks = getStorageMocks()
 
+const piMocks = vi.hoisted(() => ({
+  executable: undefined as string | null | undefined,
+  patterns: [] as string[]
+}))
+
+// The subject reads pi's executable probe and catalogue files — both
+// environmental. `isPiCliProviderConfig` stays real so the pi branch is
+// selected exactly the way production selects it.
+vi.mock('./providers/pi-cli-runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./providers/pi-cli-runtime')>()),
+  getResolvedPiExecutable: () => piMocks.executable
+}))
+
+vi.mock('./providers/pi-model-catalog', () => ({
+  listPiCliModels: () => piMocks.patterns
+}))
+
 class ProviderModelOptionsManager extends FakeProviderManager {
   registerFromConfig() {
     return undefined as never
@@ -618,5 +635,124 @@ describe('coreApp intelligence provider model options', () => {
         available: true
       }
     ])
+  })
+})
+
+describe('pi provider model sourcing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    piMocks.executable = '/usr/local/bin/pi'
+    piMocks.patterns = ['anthropic/claude-x', 'Custom/model-a']
+
+    intelligenceCapabilityRegistry.clear()
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat',
+      supportedProviders: [IntelligenceProviderType.LOCAL, IntelligenceProviderType.OPENAI]
+    })
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'pi-cli-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Pi (local CLI)',
+          enabled: true,
+          capabilities: ['text.chat'],
+          metadata: { internal: true, origin: 'pi-cli' }
+        },
+        {
+          id: 'openai-chat',
+          type: IntelligenceProviderType.OPENAI,
+          name: 'OpenAI',
+          enabled: true,
+          apiKey: 'sk-test',
+          capabilities: ['text.chat']
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          providers: [
+            { providerId: 'pi-cli-default', priority: 1, enabled: true },
+            { providerId: 'openai-chat', priority: 2, enabled: true }
+          ]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+    setIntelligenceProviderManager(
+      new ProviderModelOptionsManager([
+        createChatProvider(
+          {
+            id: 'pi-cli-default',
+            type: IntelligenceProviderType.LOCAL,
+            name: 'Pi (local CLI)',
+            capabilities: ['text.chat'],
+            metadata: { internal: true, origin: 'pi-cli' }
+          },
+          vi.fn()
+        ),
+        createChatProvider(
+          {
+            id: 'openai-chat',
+            type: IntelligenceProviderType.OPENAI,
+            name: 'OpenAI',
+            apiKey: 'sk-test',
+            defaultModel: 'gpt-4.1-mini',
+            models: ['gpt-4.1-mini'],
+            capabilities: ['text.chat']
+          },
+          vi.fn()
+        )
+      ])
+    )
+  })
+
+  it('fills the pi row from the CLI catalogue', () => {
+    const pi = getProviderModelOptions('text.chat').find(
+      (option) => option.providerId === 'pi-cli-default'
+    )
+
+    expect(pi).toMatchObject({
+      models: ['anthropic/claude-x', 'Custom/model-a'],
+      available: true
+    })
+  })
+
+  it('drops the pi row on a machine probed to have no CLI, keeping the rest', () => {
+    piMocks.executable = null
+
+    const options = getProviderModelOptions('text.chat')
+
+    expect(options.some((option) => option.providerId === 'pi-cli-default')).toBe(false)
+    expect(options.some((option) => option.providerId === 'openai-chat')).toBe(true)
+  })
+
+  it('keeps the pi row while the probe has not settled yet', () => {
+    // Unprobed is not absent: config assembly documents the same distinction.
+    piMocks.executable = undefined
+
+    const pi = getProviderModelOptions('text.chat').find(
+      (option) => option.providerId === 'pi-cli-default'
+    )
+
+    expect(pi?.models).toEqual(['anthropic/claude-x', 'Custom/model-a'])
+  })
+
+  it('lists nothing for pi when its catalogue is empty', () => {
+    piMocks.patterns = []
+
+    expect(
+      getProviderModelOptions('text.chat').some((option) => option.providerId === 'pi-cli-default')
+    ).toBe(false)
   })
 })

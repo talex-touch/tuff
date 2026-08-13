@@ -10,6 +10,8 @@ import {
   getEffectiveCapabilityRoutingConfig
 } from './intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from './intelligence-sdk'
+import { getResolvedPiExecutable, isPiCliProviderConfig } from './providers/pi-cli-runtime'
+import { listPiCliModels } from './providers/pi-model-catalog'
 
 const CAPABILITY_FALLBACK_MODELS: Record<
   string,
@@ -60,6 +62,14 @@ function resolveDeclaredModels(
   capabilityId: string,
   defaultModel: string | null
 ): string[] {
+  // The auto-registered pi provider declares no models; its list lives in the
+  // CLI's own catalogue files. Only a probed-absent executable (`null`) empties
+  // the row — an unprobed machine (`undefined`) must not read as one without
+  // the CLI, mirroring the config-assembly stance in pi-cli-runtime.
+  if (isPiCliProviderConfig(provider)) {
+    return getResolvedPiExecutable() === null ? [] : listPiCliModels()
+  }
+
   const fallbackModels = resolveCapabilityFallbackModels(capabilityId, provider.type)
   if (fallbackModels.length > 0) {
     return fallbackModels

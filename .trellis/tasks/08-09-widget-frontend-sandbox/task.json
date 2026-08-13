@@ -1,0 +1,30 @@
+{
+  "id": "widget-frontend-sandbox",
+  "name": "widget-frontend-sandbox",
+  "title": "AI 自写 widget 的纯前端沙箱方案",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-09-home-panel-layering-v2",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "就 design.md 中仍未决的隔离原语、网络出口、通信契约、工具权限对齐、尺寸协商、崩溃兜底、持久化与降级路径给出结论,并请用户确认方案。",
+    "blocker": "待用户确认方案后才进入实现(prd.md 末条验收标准);另有一条平台能力断言(srcdoc iframe 的死循环是否冻住主线程)按 prd.md 需以阶段 0 实验回答,尚未做。",
+    "evidence": "prd.md 14 条验收标准已勾选 5 条,勾选的 5 条都是关于 design.md 本身的产出要求,并记明本任务未产出任何实现代码;目录内有 design.md 与 research/。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

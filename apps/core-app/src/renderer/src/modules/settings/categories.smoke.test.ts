@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { SETTING_CATEGORIES, groupedSettingCategories, SETTING_GROUP_ORDER } from './categories'
+import {
+  SETTING_CATEGORIES,
+  groupedSettingCategories,
+  SETTING_GROUP_ORDER,
+  settingCategoryChildren
+} from './categories'
 
 /**
  * The settings IA is described in three places that can drift apart: this table, the router's
@@ -11,6 +16,7 @@ import { SETTING_CATEGORIES, groupedSettingCategories, SETTING_GROUP_ORDER } fro
  * into a half-booted renderer. Whether a page actually renders still needs a human.
  */
 const PAGE_MODULES = import.meta.glob('../../views/base/settings/categories/*.vue')
+const INTELLIGENCE_PAGE_MODULES = import.meta.glob('../../views/base/intelligence/*.vue')
 
 /** `storage-usage` is the one key whose page file is not a direct transliteration. */
 function pageStem(key: string): string {
@@ -69,6 +75,52 @@ describe('settings category table', () => {
     )
     const expected = new Set(SETTING_CATEGORIES.map((category) => pageStem(category.key)))
 
+    expect(stems.filter((stem) => !expected.has(stem))).toEqual([])
+  })
+})
+
+/**
+ * Sub-pages repeat the same three-way drift risk as categories — table, router loader map, files
+ * on disk — with one extra way to go wrong: they are registered as sibling routes, so a path that
+ * does not extend its category's path lands outside it and drops the sidebar's selected state.
+ */
+describe('settings sub-page table', () => {
+  /** `workflows` is the one key whose page file is singular. */
+  function subPageStem(key: string): string {
+    if (key === 'workflows') return 'IntelligenceWorkflowPage'
+    return `Intelligence${key.charAt(0).toUpperCase()}${key.slice(1)}Page`
+  }
+
+  it('nests every sub-page path under its category', () => {
+    for (const category of SETTING_CATEGORIES) {
+      for (const child of category.children ?? []) {
+        expect(child.path).toBe(`${category.path}/${child.key}`)
+        expect(child.labelKey).toBeTruthy()
+        expect(child.descriptionKey).toBeTruthy()
+      }
+    }
+  })
+
+  it('has a unique key and path across all sub-pages', () => {
+    const children = SETTING_CATEGORIES.flatMap((category) => category.children ?? [])
+    const paths = children.map((child) => child.path)
+
+    expect(children).toHaveLength(6)
+    expect(new Set(paths).size).toBe(paths.length)
+  })
+
+  it('has a page file for every intelligence sub-page, and no page file without one', () => {
+    const children = settingCategoryChildren('intelligence')
+    const expected = new Set(children.map((child) => subPageStem(child.key)))
+
+    for (const stem of expected) {
+      const path = `../../views/base/intelligence/${stem}.vue`
+      expect(INTELLIGENCE_PAGE_MODULES[path], `no page file for ${stem}.vue`).toBeTypeOf('function')
+    }
+
+    const stems = Object.keys(INTELLIGENCE_PAGE_MODULES).map((path) =>
+      path.split('/').pop()!.replace('.vue', '')
+    )
     expect(stems.filter((stem) => !expected.has(stem))).toEqual([])
   })
 })

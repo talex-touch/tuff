@@ -267,6 +267,13 @@
       "when": 1785628800000,
       "tag": "0037_item_usage_stats_ordering_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1785715200000,
+      "tag": "0038_conversation_messages_composite_pk",
+      "breakpoints": true
     }
   ]
 }

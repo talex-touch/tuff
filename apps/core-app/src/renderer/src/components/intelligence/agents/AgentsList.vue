@@ -1,6 +1,6 @@
 <script lang="ts" name="AgentsList" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxRowSkeleton, TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AgentItem from './AgentItem.vue'
@@ -17,13 +17,32 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
+/** Placeholder rows while the first agent list is in flight. */
+const SKELETON_ITEMS = 4
+
 const enabledAgents = computed(() => props.agents.filter((a) => a.enabled !== false))
 const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === false))
 </script>
 
 <template>
   <div class="agents-list">
-    <TxSkeleton v-if="loading" :lines="4" />
+    <!--
+      `:lines="4"` used to stand in here, but four equal bars are shorter than the
+      real rows and carry none of their structure, so the list still jumped when
+      the agents landed. `AgentItem` is exactly the shape `TxRowSkeleton` models —
+      leading icon, title over description, trailing badge — so the primitive is
+      reused and only the two metrics that differ from its defaults are pinned.
+      The group header is reused as-is; it renders before the fetch either way.
+    -->
+    <div v-if="loading" class="agent-group is-skeleton" aria-hidden="true">
+      <div class="group-header">
+        <TxSkeleton variant="rect" :width="12" :height="12" :radius="3" />
+        <TxSkeleton :width="64" :height="10" :radius="3" />
+      </div>
+      <div class="group-items">
+        <TxRowSkeleton :rows="SKELETON_ITEMS" leading description trailing />
+      </div>
+    </div>
 
     <template v-else-if="agents.length > 0">
       <!-- Enabled Agents -->
@@ -102,6 +121,16 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+/*
+ * `TxRowSkeleton` defaults to `SettingRow`'s metrics; `AgentItem` is tighter on
+ * both axes. Only the two that differ are pinned, so the rest keeps tracking the
+ * primitive.
+ */
+.agent-group.is-skeleton .group-items {
+  --tx-skeleton-row-padding-inline: 0.75rem;
+  --tx-skeleton-row-gap: 0.75rem;
 }
 
 .agent-count-badge {

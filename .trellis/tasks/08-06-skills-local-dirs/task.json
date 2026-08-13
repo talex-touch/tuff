@@ -1,0 +1,30 @@
+{
+  "id": "skills-local-dirs",
+  "name": "skills-local-dirs",
+  "title": "技能本地目录源（链接语义，不拷贝）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-ai-toolchain-suite",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "补齐 prd.md 的 3 条验收标准:扫描/解析/越界拒绝等单测、放置 SKILL.md 的手动链路验证,以及两侧 typecheck 与 lint。",
+    "blocker": "记录中无阻塞项;手动链路一条需要在可运行的应用上完成。",
+    "evidence": "prd.md 的 3 条验收标准均未勾选;目录内有 design.md、implement.md 与 research/。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "id": "full-repo-governance-audit",
+  "name": "full-repo-governance-audit",
+  "title": "Full-repo governance audit → GitHub issues",
+  "description": "Parent task for a whole-repository governance audit (structure, code, framework, architecture, compatibility, Rust/native, docs & docs site, best practices, potential defects). Owns the verified findings as requirement source; each verified finding is filed as an individual GitHub issue labeled 'audit'. Verification bar: real problems only, no padding; report the true filed count.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "research/audit-summary.md",
+    "research/findings.jsonl",
+    "research/filed.jsonl",
+    "research/filing-notes.md",
+    "scripts/audit-file-issues.mjs",
+    "scripts/consolidate.mjs"
+  ],
+  "notes": "Filed 454 verified findings as individual GitHub issues (+#838 exploit-chain tracking) under the `audit` label; range #484-#958; 20 near-dups closed. 10 low-confidence flagged `question`. See research/audit-summary.md. No product code changed.",
+  "meta": {
+    "nextAction": "逐条对照 research/filed.jsonl 与 research/audit-summary.md 核实 prd.md 的 6 条验收标准并回填勾选。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 的 6 条验收标准均未勾选;目录内留有 research/findings.jsonl、research/filed.jsonl、research/audit-summary.md 与 scripts/audit-file-issues.mjs 等产出物,以及 design.md / implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

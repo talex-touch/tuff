@@ -100,18 +100,67 @@
 @mixin button-base {
   @include flex-center;
   @include transition;
-  
+
   cursor: pointer;
   user-select: none;
   border-radius: var(--tx-border-radius-base);
   font-size: var(--tx-font-size-base);
-  
+
   &:focus-visible {
     @include focus-ring;
   }
-  
+
   &:disabled,
   &.is-disabled {
     @include disabled;
+  }
+}
+
+// Skeleton placeholders
+//
+// Every skeleton component paints the same shimmering bar, so the gradient, the
+// timing and the reduced-motion guard live here instead of being re-declared in
+// each component. `skeleton-keyframes` is a separate mixin because `@keyframes`
+// cannot be nested inside a rule: a component emits it once at the top level of
+// its style block, then applies `skeleton-surface` to each placeholder element.
+//
+// The keyframes are deliberately emitted per component rather than pulled from
+// the global stylesheet — consumers import components by subpath and only get
+// that component's CSS, so a shared global definition would leave the animation
+// undefined for anyone who does not also load `base.css`.
+$skeleton-shimmer-duration: 1.2s !default;
+
+@mixin skeleton-keyframes {
+  @keyframes tx-skeleton-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
+  }
+}
+
+// Resolution order, widest override first:
+//   --tx-skeleton-base-color  a consumer pinning the bar to its own surface
+//   --tx-skeleton-color       the theme's own skeleton tone, tuned per light/dark
+//   --tx-fill-color           generic fill, for themes that define neither
+@mixin skeleton-surface($delay: 0s) {
+  $bar: var(--tx-skeleton-base-color, var(--tx-skeleton-color, var(--tx-fill-color, #f0f2f5)));
+
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, #{$bar} 70%, transparent) 0%,
+    color-mix(in srgb, #{$bar} 95%, transparent) 50%,
+    color-mix(in srgb, #{$bar} 70%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: tx-skeleton-shimmer $skeleton-shimmer-duration ease-in-out $delay infinite;
+
+  // Keep the placeholder — it is what holds the layout steady — and drop only
+  // the motion for users who asked for less of it.
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
   }
 }
