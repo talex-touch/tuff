@@ -1391,7 +1391,9 @@ onMounted(async () => {
   letter-spacing: 0.08em;
 }
 
-input,
+// Checkboxes are excluded: Chromium honours `width` on them, so the shared rule below was
+// stretching all seven of this page's checkboxes into wide rectangles.
+input:not([type='checkbox']),
 select,
 textarea {
   width: 100%;

@@ -1,0 +1,32 @@
+{
+  "id": "home-chat-pipeline-fixes",
+  "name": "home-chat-pipeline-fixes",
+  "title": "Home chat pipeline & rendering fixes v2.5",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-06-stream-virtual-layout",
+    "08-06-chain-visibility",
+    "08-06-pi-context-adaptation",
+    "08-06-web-search-tool",
+    "08-06-send-motion-polish"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

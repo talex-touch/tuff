@@ -1,7 +1,4 @@
 <script lang="ts" name="SectionItem" setup>
-import { useRouter } from 'vue-router'
-import { createThemeDetailRoute } from './section-route'
-
 const props = defineProps<{
   title: string
   label?: string
@@ -11,18 +8,18 @@ const props = defineProps<{
 
 const value = defineModel<string>('modelValue')
 
-const router = useRouter()
-
+/**
+ * Both halves of the tile select, because both look like they should.
+ *
+ * The label row renders a radio, but it used to `router.push` to `/styles/theme` instead —
+ * a route whose component has no outlet to render into, so clicking the radio replaced the
+ * settings page with the standalone styles page and never showed the detail it promised.
+ * Whether that detail page gets finished or dropped is open; either way the radio selects.
+ */
 function handleClick() {
   if (props.disabled) return
 
   value.value = props.title
-}
-
-function goRouter() {
-  if (props.disabled) return
-
-  router.push(createThemeDetailRoute(props.title))
 }
 </script>
 
@@ -38,7 +35,13 @@ function goRouter() {
     >
       <span v-shared-element:[`theme-preference-${title}-img`] />
     </button>
-    <button type="button" class="SectionItem-Bar" :disabled="disabled" @click="goRouter">
+    <button
+      type="button"
+      class="SectionItem-Bar"
+      :disabled="disabled"
+      :aria-pressed="value === title"
+      @click="handleClick"
+    >
       <span class="SectionItem-Radio" />
       <span v-shared-element:[`theme-preference-${title}`]>
         {{ label ?? title }}

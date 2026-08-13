@@ -6,6 +6,7 @@ import { TxSlider } from '@talex-touch/tuffex/slider'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { WALLPAPER_IMAGE_EXTENSIONS } from '@talex-touch/utils/common/wallpaper'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -43,6 +44,17 @@ import { getWallpaperSourceHintKey } from './wallpaper-display-state'
 import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
+const appSdk = useAppSdk()
+
+/**
+ * Where the theme-help row goes. Its description has always promised the official GitHub
+ * Discussions, but the row emitted `click` into nothing, so it read as a link and did nothing.
+ */
+const THEME_HELP_URL = 'https://github.com/talex-touch/tuff/discussions'
+
+function openThemeHelp(): void {
+  void appSdk.openExternal(THEME_HELP_URL)
+}
 
 /**
  * Mounted inside `SettingsPage` when it backs the appearance category, which already supplies the
@@ -798,6 +810,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           :model-value="false"
           :title="t('themeStyle.themeHelp')"
           :description="t('themeStyle.themeHelpDesc')"
+          @click="openThemeHelp"
         />
       </TuffGroupBlock>
 
@@ -980,7 +993,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--shell-scrim);
   backdrop-filter: blur(2px);
 }
 
@@ -990,9 +1003,10 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
   gap: 10px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: var(--tx-fill-color);
-  color: var(--tx-text-color-primary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  font-size: 13px;
+  background: var(--shell-bg);
+  color: var(--shell-text-primary);
+  border: 1px solid var(--shell-border);
+  box-shadow: 0 8px 24px var(--shell-shadow);
+  font-size: var(--shell-fs-body);
 }
 </style>

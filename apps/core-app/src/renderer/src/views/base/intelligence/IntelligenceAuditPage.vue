@@ -47,7 +47,6 @@ function handleCacheExpirationBlur() {
       default-icon="i-carbon-analytics"
       active-icon="i-carbon-analytics"
       memory-name="intelligence-usage-stats"
-      :default-expanded="true"
     >
       <IntelligenceUsageStats />
     </TuffGroupBlock>
@@ -59,7 +58,6 @@ function handleCacheExpirationBlur() {
       default-icon="i-carbon-chart-line"
       active-icon="i-carbon-chart-line"
       memory-name="intelligence-usage-chart"
-      :default-expanded="true"
     >
       <IntelligenceUsageChart :days="14" />
     </TuffGroupBlock>
@@ -71,7 +69,6 @@ function handleCacheExpirationBlur() {
       default-icon="i-carbon-policy"
       active-icon="i-carbon-policy"
       memory-name="intelligence-memory-review"
-      :default-expanded="true"
     >
       <IntelligenceMemoryReview />
     </TuffGroupBlock>
@@ -84,7 +81,6 @@ function handleCacheExpirationBlur() {
       default-icon="i-carbon-document-view"
       active-icon="i-carbon-document-view"
       memory-name="intelligence-audit-logs"
-      :default-expanded="true"
     >
       <IntelligenceAuditLogs />
     </TuffGroupBlock>

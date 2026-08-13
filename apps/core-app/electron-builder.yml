@@ -56,6 +56,10 @@ files:
   - '!**/node_modules/mathjs/**'
 extraFiles: []
 extraResources:
+  # Tuff's pi tool forwarder, loaded per spawn via `-e` (see pi-cli-provider);
+  # never installed into the user's own pi setup.
+  - from: ../../packages/pi-extension-tuff/index.ts
+    to: pi-extension-tuff/index.ts
   - from: resources/icon.png
     to: resources/icon.png
   - from: resources/TrayIconTemplate.png
