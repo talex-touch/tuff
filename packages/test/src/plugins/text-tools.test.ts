@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
@@ -149,7 +150,7 @@ describe('touch-text-tools actions', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
       message: '缺少 clipboard.write 权限',
     })
   })
