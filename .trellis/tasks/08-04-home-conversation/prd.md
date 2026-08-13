@@ -23,7 +23,13 @@
 | R1 | 首页就地对话：发送 → 内置 AI 通道流式回复 → 增量渲染 → 可停止 → 错误可读。**不落库、不加路由** | 通路已完成，缺可用 provider |
 | R1.5 | 本地 `pi` CLI provider + 未配置引导：让首页在零凭据下真能出字 | 进行中 |
 | R2 | 数据层与持久化：两张表 + 迁移 + 对话 transport + `/home/c/:id` | 已交付 |
-| R3 | 侧栏历史分桶 + TopBar ModePill 接真实模型列表 | 部分：分桶未做 |
+| R3 | 侧栏历史分桶 + TopBar ModePill 接真实模型列表 | 部分：**侧栏历史整体未接入**（不只是分桶） |
+
+> R3 状态更正（2026-08-13，#969）。「分桶未做」读起来像「列表已在、只差分组」，实际不是：
+> `useConversationHistory` 的 `refresh()` 在整个渲染进程里**从未被调用**，`conversations` 也从未被读取——
+> `HomePage.vue` 只用了 `history.load` 和 `history.persist`。`ShellSidebar.vue:132` 的
+> `<slot name="conversations" />` 有注释说由本任务填充，但没有任何组件填过它。
+> 所以剩余工作是「渲染列表，再分组」，不是「给已有列表加分组」，工作量与验收面都不同。
 
 R1 的产物必须是可弃的最小面：消息只在内存里，刷新即丢。R2 接手时把内存 store 换成 transport，不重写 UI。
 
