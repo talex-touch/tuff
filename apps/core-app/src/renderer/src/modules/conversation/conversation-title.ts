@@ -35,8 +35,19 @@ export const CONVERSATION_TITLE_MAX_CODEPOINTS = 24
 /** How much of each side of the exchange the summariser sees. Enough for topic, not the essay. */
 const EXCERPT_CODEPOINTS = 320
 
-const TITLE_PROMPT =
-  '用不超过 8 个字概括这段对话的主题。只输出标题本身——不要引号、书名号、句号,不要任何解释。'
+/**
+ * The instruction and transcript labels, supplied by the caller from the renderer catalog.
+ *
+ * Model-facing text is still locale text: a hardcoded Chinese prompt asks an English-locale user's
+ * model for a Chinese label, and "≤8 个字" is not even the right unit outside CJK — the English
+ * catalog asks for words. Keeping the module free of vue-i18n keeps it pure and testable; the
+ * lookup happens once at the call site.
+ */
+export interface TitlePromptStrings {
+  prompt: string
+  userLabel: string
+  assistantLabel: string
+}
 
 function clip(value: string, max: number): string {
   const points = [...value]
@@ -134,16 +145,17 @@ export function deriveRestoredTitle(
 export async function generateConversationTitle(
   sdk: TitleChatSdk,
   firstUserContent: string,
-  firstAssistantContent: string
+  firstAssistantContent: string,
+  strings: TitlePromptStrings
 ): Promise<string | null> {
   try {
     const result = await sdk.text.chat(
       {
         messages: [
-          { role: 'system', content: TITLE_PROMPT },
+          { role: 'system', content: strings.prompt },
           {
             role: 'user',
-            content: `用户：${clip(firstUserContent, EXCERPT_CODEPOINTS)}\n助手：${clip(firstAssistantContent, EXCERPT_CODEPOINTS)}`
+            content: `${strings.userLabel}：${clip(firstUserContent, EXCERPT_CODEPOINTS)}\n${strings.assistantLabel}：${clip(firstAssistantContent, EXCERPT_CODEPOINTS)}`
           }
         ],
         temperature: 0.2,

@@ -118,8 +118,28 @@ const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.val
  * a stored custom title across restore, so the top bar agrees with the sidebar after a reload.
  */
 const generatedTitle = ref<string | null>(null)
-let titleInFlight = false
+/**
+ * Which conversation has a title call in flight — an id, not a boolean. This component instance is
+ * reused across thread switches, so a flat flag set by conversation A would make conversation B's
+ * settled turn skip its own generation window.
+ */
+let titleInFlightFor: string | null = null
 const titleSequence = createLatestOnly()
+
+/**
+ * Every conversation-store write goes through here, in order.
+ *
+ * The settled-turn watcher and the title upgrade both persist, and the SDK does not promise write
+ * ordering — a title upgrade holding an older message snapshot could land after a newer settled
+ * turn and shrink the stored thread. Chaining makes the order the call order, and each writer
+ * re-reads live state inside its queued turn so nothing stale is captured.
+ */
+let persistChain: Promise<void> = Promise.resolve()
+function enqueuePersist(write: () => Promise<void>): Promise<void> {
+  const next = persistChain.then(write, write)
+  persistChain = next.catch(() => {})
+  return next
+}
 
 const firstUserContent = computed(
   () => messages.value.find((message) => message.role === 'user')?.content
@@ -1167,35 +1187,45 @@ function maybeGenerateTitle(): void {
   const firstAssistant = messages.value.find(
     (message) => message.role === 'assistant' && message.status === 'complete'
   )?.content
+  const idAtStart = conversationId.value
+  if (!idAtStart) return
   if (
     !shouldGenerateTitle({
       generatedTitle: generatedTitle.value,
-      inFlight: titleInFlight,
+      inFlight: titleInFlightFor === idAtStart,
       firstUserContent: firstUserContent.value,
       firstAssistantContent: firstAssistant
     })
   ) {
     return
   }
-  const idAtStart = conversationId.value
-  if (!idAtStart) return
   const isCurrent = titleSequence.claim()
-  titleInFlight = true
+  titleInFlightFor = idAtStart
   void (async () => {
     try {
       const title = await generateConversationTitle(
         intelligenceSdk,
         firstUserContent.value ?? '',
-        firstAssistant ?? ''
+        firstAssistant ?? '',
+        {
+          prompt: t('home.titleGen.prompt'),
+          userLabel: t('home.titleGen.userLabel'),
+          assistantLabel: t('home.titleGen.assistantLabel')
+        }
       )
       if (!title || !isCurrent() || conversationId.value !== idAtStart) return
       generatedTitle.value = title
-      await history.persist(idAtStart, title, messages.value)
+      // Queued behind any settled-turn write, and the messages are read inside the queued turn:
+      // however late this lands, it stores the thread as it is then, never a shrunken snapshot.
+      await enqueuePersist(async () => {
+        if (conversationId.value !== idAtStart) return
+        await history.persist(idAtStart, title, messages.value)
+      })
     } catch (error) {
       // The working title is already on screen and persisted; a label upgrade may fail silently.
       homeLog.warn('Conversation title generation failed', String(error))
     } finally {
-      titleInFlight = false
+      if (titleInFlightFor === idAtStart) titleInFlightFor = null
     }
   })()
 }
@@ -1211,7 +1241,10 @@ watch(
   async (streaming, wasStreaming) => {
     if (streaming || !wasStreaming || !conversationId.value) return
     try {
-      await history.persist(conversationId.value, conversationTitle.value ?? '', messages.value)
+      await enqueuePersist(async () => {
+        if (!conversationId.value) return
+        await history.persist(conversationId.value, conversationTitle.value ?? '', messages.value)
+      })
       // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
       if (route.params.id !== conversationId.value) {
         await router.replace(`/home/c/${conversationId.value}`)

@@ -9,6 +9,12 @@ import {
   shouldGenerateTitle
 } from './conversation-title'
 
+const STRINGS = {
+  prompt: '用不超过 8 个字概括这段对话的主题。只输出标题本身。',
+  userLabel: '用户',
+  assistantLabel: '助手'
+}
+
 function chatResult(result: string): IntelligenceInvokeResult<string> {
   return {
     result,
@@ -107,7 +113,12 @@ describe('deriveRestoredTitle', () => {
 describe('generateConversationTitle', () => {
   it('sends one low-stakes chat call and normalizes the answer', async () => {
     const chat = vi.fn<TitleChatSdk['text']['chat']>(async () => chatResult('「整理下载目录」'))
-    const title = await generateConversationTitle({ text: { chat } }, '帮我整理下载目录', '好的…')
+    const title = await generateConversationTitle(
+      { text: { chat } },
+      '帮我整理下载目录',
+      '好的…',
+      STRINGS
+    )
     expect(title).toBe('整理下载目录')
     expect(chat).toHaveBeenCalledTimes(1)
     const [payload, options] = chat.mock.calls[0]!
@@ -119,7 +130,12 @@ describe('generateConversationTitle', () => {
 
   it('clips long transcripts before they reach the prompt', async () => {
     const chat = vi.fn<TitleChatSdk['text']['chat']>(async () => chatResult('长文摘要'))
-    await generateConversationTitle({ text: { chat } }, '长'.repeat(2000), '答'.repeat(2000))
+    await generateConversationTitle(
+      { text: { chat } },
+      '长'.repeat(2000),
+      '答'.repeat(2000),
+      STRINGS
+    )
     const [payload] = chat.mock.calls[0]!
     const sent = String(payload.messages[1]?.content ?? '')
     expect([...sent].length).toBeLessThan(800)
@@ -130,13 +146,17 @@ describe('generateConversationTitle', () => {
     const chat = vi.fn(async () => {
       throw new Error('provider down')
     })
-    await expect(generateConversationTitle({ text: { chat } }, 'u', 'a')).resolves.toBeNull()
+    await expect(
+      generateConversationTitle({ text: { chat } }, 'u', 'a', STRINGS)
+    ).resolves.toBeNull()
   })
 
   it('resolves null when the answer is unusable', async () => {
     const chat = vi.fn(async () =>
       chatResult('这不是一个标题,而是一段没有守住字数约束的完整解释性文字。')
     )
-    await expect(generateConversationTitle({ text: { chat } }, 'u', 'a')).resolves.toBeNull()
+    await expect(
+      generateConversationTitle({ text: { chat } }, 'u', 'a', STRINGS)
+    ).resolves.toBeNull()
   })
 })
