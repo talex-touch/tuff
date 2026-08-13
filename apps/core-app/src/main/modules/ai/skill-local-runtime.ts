@@ -13,7 +13,7 @@
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { LocalSkillConfig } from './skill-local-sources'
 import { StorageList } from '@talex-touch/utils'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { createLogger } from '../../utils/logger'
 import { getMainConfig, saveMainConfigDurable } from '../storage'
 import {
@@ -46,17 +46,22 @@ export interface LocalSkillSnapshotView {
  * Mirrored in `SettingSkillsMcp.vue`. Four calls with flat payloads did not
  * justify a transport domain of their own; edit both copies or neither.
  */
-const skillLocalListEvent = defineRawEvent<void, LocalSkillSnapshotView>('ai:skill-local:list')
-const skillLocalAddDirEvent = defineRawEvent<{ path: string }, LocalSkillSnapshotView>(
-  'ai:skill-local:add-dir'
-)
-const skillLocalRemoveDirEvent = defineRawEvent<{ path: string }, LocalSkillSnapshotView>(
-  'ai:skill-local:remove-dir'
-)
-const skillLocalSetEnabledEvent = defineRawEvent<
-  { id: string; enabled: boolean },
-  LocalSkillSnapshotView
->('ai:skill-local:set-enabled')
+const skillLocalListEvent = defineEvent('ai')
+  .module('skill-local')
+  .event('list')
+  .define<void, LocalSkillSnapshotView>()
+const skillLocalAddDirEvent = defineEvent('ai')
+  .module('skill-local')
+  .event('add-dir')
+  .define<{ path: string }, LocalSkillSnapshotView>()
+const skillLocalRemoveDirEvent = defineEvent('ai')
+  .module('skill-local')
+  .event('remove-dir')
+  .define<{ path: string }, LocalSkillSnapshotView>()
+const skillLocalSetEnabledEvent = defineEvent('ai')
+  .module('skill-local')
+  .event('set-enabled')
+  .define<{ id: string; enabled: boolean }, LocalSkillSnapshotView>()
 
 /**
  * Reading a linked file and browsing the user's disk are the host's own
