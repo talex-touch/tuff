@@ -344,6 +344,8 @@ describe('txConversationStream', () => {
 
     expect(intersectionCallbacks.length).toBeGreaterThan(0)
     wrapper.unmount()
+  })
+
   it('hands every rendered window item to the ResizeObserver', async () => {
     // Regression guard for the estimate-forever failure mode: a rendered row
     // that is never observed keeps its 96px estimate and overlaps its taller

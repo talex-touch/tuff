@@ -1,3 +1,8 @@
+import type {
+  AppDiscoveryKind,
+  AppExtensionSyncOptions,
+  AppFileWriteDb
+} from './app-index-metadata'
 import type { TimingLogLevel, TimingMeta, TimingOptions } from '@talex-touch/utils'
 import type {
   IndexedSourceDelta,
@@ -110,17 +115,15 @@ import {
 } from './display-name-sync-utils'
 import {
   APP_ALTERNATE_NAMES_EXTENSION_KEY,
-  APP_DISPLAY_PATH_EXTENSION_KEY,
   APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY,
   APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY,
+  APP_DISPLAY_PATH_EXTENSION_KEY,
   APP_ENTRY_SOURCE_EXTENSION_KEY,
   APP_ENTRY_SOURCE_MANUAL,
   APP_IDENTIFIER_EXTENSION_KEYS,
   APP_IDENTITY_KIND_EXTENSION_KEY,
   APP_LAUNCH_KIND_EXTENSION_KEY,
   APP_LAUNCH_TARGET_EXTENSION_KEY,
-  APP_SCANNED_OPTIONAL_EXTENSION_KEYS,
-  buildAppExtensions,
   buildManagedEntryExtensions,
   isAppEntryEnabledExtensionMap,
   isManagedEntryExtensionMap,
@@ -129,7 +132,9 @@ import {
   readAppIdentityKind,
   resolveAppItemId,
   resolveAppItemIds,
-  shouldScanMdlsDisplayName
+  shouldScanMdlsDisplayName,
+  syncScannedAppExtensions,
+  upsertAppExtensions
 } from './app-index-metadata'
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { resolveExistingVersionedAppIconCachePath } from './app-icon-cache'
@@ -137,8 +142,7 @@ import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagno
 import {
   hasAppIconDrift,
   hasAppLaunchMetadataDrift,
-  hasStringListDrift,
-  resolveMissingScannedExtensionKeys
+  hasStringListDrift
 } from './app-provider-metadata-sync'
 import {
   expandWindowsEnvironmentVariables,
@@ -213,7 +217,6 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
-type AppFileWriteDb = Pick<CoreDatabase, 'insert' | 'delete'>
 type AppFileMutationDb = Pick<CoreDatabase, 'insert' | 'update' | 'delete'>
 type AppDbBatchItem = Parameters<CoreDatabase['batch']>[0][number]
 type AppIndexSyncStats = {
@@ -418,22 +421,6 @@ const APP_PROVIDER_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000
 const APP_ADDITION_COMMIT_CHUNK_SIZE = 50
 const EMPTY_APP_EXTENSION_MAP: Readonly<Record<string, string | null>> = {}
 
-/**
- * Epoch milliseconds of when this machine first got the app, as an integer string.
- *
- * Written once and never refreshed, so recommendation ranking can tell a fresh install from an
- * in-place update. Deliberately absent from `APP_SCANNED_OPTIONAL_EXTENSION_KEYS`: that list drives
- * the stale-key sweep, and a scan that cannot re-derive the value must not delete it.
- */
-export const APP_INSTALLED_AT_EXTENSION_KEY = 'installedAt'
-
-/**
- * How an app path reached the index. `watch` means a filesystem event surfaced it while Touch was
- * running, which is itself evidence of an install; `scan` covers full syncs and backfills, where a
- * row can be years old.
- */
-export type AppDiscoveryKind = 'watch' | 'scan'
-
 interface PendingDeletionEntry {
   id: number
   path: string
@@ -453,12 +440,6 @@ interface AppResolutionDeadLetterEntry {
   managedEntry: boolean
   sweeps: number
   lastError: string
-}
-
-interface AppExtensionSyncOptions {
-  discovery?: AppDiscoveryKind
-  /** True only when the caller knows this pass created the `files` row. */
-  insertedRow?: boolean
 }
 
 interface ScannedAppMetadataUpdate {
@@ -1451,122 +1432,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private async upsertAppExtensions(
-    writer: AppFileWriteDb | undefined,
-    extensions: Array<{ fileId: number; key: string; value: string }>
-  ): Promise<void> {
-    if (extensions.length === 0) return
-    if (!writer) {
-      await this.dbUtils!.addFileExtensions(extensions)
-      return
-    }
-    await writer
-      .insert(fileExtensions)
-      .values(extensions)
-      .onConflictDoUpdate({
-        target: [fileExtensions.fileId, fileExtensions.key],
-        set: { value: sql`excluded.value` }
-      })
-  }
-
   /**
-   * Inserts extension rows that must never clobber what is already stored.
-   *
-   * `upsertAppExtensions` overwrites on conflict, which is right for metadata a scan re-derives
-   * every pass. The install time is the opposite: the first value is the true one, and the callers
-   * cannot tell an insert from an update anyway — `persistScannedAppAdditions` upserts on
-   * `files.path` and hands every row `EMPTY_APP_EXTENSION_MAP`, so the write itself has to be the
-   * thing that refuses to overwrite.
+   * Thin seam over the free function in `app-index-metadata`. The batch tests stub this instance
+   * method to count invocations; calling the module import directly would leave those mocks inert
+   * (a binding that moves takes its mocks with it), so the indirection is the point, not overhead.
    */
-  private async insertMissingAppExtensions(
-    writer: AppFileWriteDb | undefined,
-    extensions: Array<{ fileId: number; key: string; value: string }>
-  ): Promise<void> {
-    if (extensions.length === 0) return
-    const insertWriter = writer ?? this.dbUtils!.getDb()
-    await insertWriter
-      .insert(fileExtensions)
-      .values(extensions)
-      .onConflictDoNothing({ target: [fileExtensions.fileId, fileExtensions.key] })
-  }
-
-  /**
-   * Resolves the install time to record for a scanned app, or null when nothing trustworthy is
-   * available. Scanners only report a birth time their filesystem actually vouches for, so an
-   * absent one on a watch-discovered row means "the event is the best evidence we have".
-   */
-  private resolveScannedInstalledAt(
-    app: Pick<ScannedAppInfo, 'createdAt'>,
-    options?: AppExtensionSyncOptions
-  ): number | null {
-    const createdAtMs = app.createdAt?.getTime()
-    if (typeof createdAtMs === 'number' && Number.isFinite(createdAtMs) && createdAtMs > 0) {
-      return createdAtMs
-    }
-
-    // Only for a row this pass created: a `change` event on an app that has been installed for
-    // months must not restart its freshness window.
-    if (options?.discovery === 'watch' && options.insertedRow === true) {
-      return Date.now()
-    }
-
-    return null
-  }
-
-  private async syncScannedAppExtensions(
+  private syncScannedAppExtensions(
     fileId: number,
-    app: Pick<
-      ScannedAppInfo,
-      | 'bundleId'
-      | 'icon'
-      | 'stableId'
-      | 'uniqueId'
-      | 'launchKind'
-      | 'launchTarget'
-      | 'launchArgs'
-      | 'workingDirectory'
-      | 'displayPath'
-      | 'description'
-      | 'alternateNames'
-      | 'identityKind'
-      | 'displayNameSource'
-      | 'displayNameQuality'
-      | 'createdAt'
-    >,
+    app: Parameters<typeof syncScannedAppExtensions>[1],
     writer?: AppFileWriteDb,
     existingExtensions?: Readonly<Record<string, string | null>>,
     options?: AppExtensionSyncOptions
   ): Promise<void> {
-    const extensions = buildAppExtensions(fileId, app)
-    await this.upsertAppExtensions(writer, extensions)
-
-    // A known-stored install time short-circuits the write; an empty map only means the caller
-    // could not tell, which the conflict clause below settles.
-    if (!existingExtensions?.[APP_INSTALLED_AT_EXTENSION_KEY]) {
-      const installedAt = this.resolveScannedInstalledAt(app, options)
-      if (installedAt !== null) {
-        await this.insertMissingAppExtensions(writer, [
-          { fileId, key: APP_INSTALLED_AT_EXTENSION_KEY, value: String(installedAt) }
-        ])
-      }
-    }
-
-    const missingExtensionKeys = resolveMissingScannedExtensionKeys(
-      extensions,
-      APP_SCANNED_OPTIONAL_EXTENSION_KEYS
-    )
-    const staleExtensionKeys = existingExtensions
-      ? missingExtensionKeys.filter((key) => Object.hasOwn(existingExtensions, key))
-      : missingExtensionKeys
-
-    if (staleExtensionKeys.length > 0) {
-      const deleteWriter = writer ?? this.dbUtils!.getDb()
-      await deleteWriter
-        .delete(fileExtensions)
-        .where(
-          and(eq(fileExtensions.fileId, fileId), inArray(fileExtensions.key, staleExtensionKeys))
-        )
-    }
+    return syncScannedAppExtensions(fileId, app, this.dbUtils!, writer, existingExtensions, options)
   }
 
   private async repairPersistedAppIconPointers(apps: DbAppWithExtensions[]): Promise<void> {
@@ -1601,7 +1479,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (typeof db.batch !== 'function') {
         await this.runAppTransaction(db, async (tx, extensionWriter) => {
           const writer = extensionWriter ?? tx
-          await this.upsertAppExtensions(writer, iconUpserts)
+          await upsertAppExtensions(writer, this.dbUtils!, iconUpserts)
           if (staleIconFileIds.length > 0) {
             await writer
               .delete(fileExtensions)
@@ -1667,7 +1545,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const db = this.dbUtils!.getDb()
       if (typeof db.batch !== 'function') {
         await this.runAppTransaction(db, async (tx, extensionWriter) => {
-          await this.upsertAppExtensions(extensionWriter ?? tx, extensions)
+          await upsertAppExtensions(extensionWriter ?? tx, this.dbUtils!, extensions)
         })
         return
       }
@@ -3121,8 +2999,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await this.runAppTransaction(db, async (tx, extensionWriter) => {
             await tx.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
             if (options.managedEntry === true) {
-              await this.upsertAppExtensions(
+              await upsertAppExtensions(
                 extensionWriter,
+                this.dbUtils!,
                 buildManagedEntryExtensions(existingFile.id, appInfo, true)
               )
             } else {
@@ -3164,8 +3043,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           if (inserted) {
             if (options.managedEntry === true) {
-              await this.upsertAppExtensions(
+              await upsertAppExtensions(
                 extensionWriter,
+                this.dbUtils!,
                 buildManagedEntryExtensions(inserted.id, appInfo, true)
               )
             } else {

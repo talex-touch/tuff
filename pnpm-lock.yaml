@@ -537,6 +537,9 @@ importers:
       openai:
         specifier: ^6.26.0
         version: 6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
+      sass:
+        specifier: ^1.101.0
+        version: 1.101.0
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
