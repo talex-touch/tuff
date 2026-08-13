@@ -1113,6 +1113,11 @@
       "failed": "This widget could not start."
     },
     "modelName": "Tuff Auto",
+    "titleGen": {
+      "prompt": "Summarize the topic of this conversation in at most 4 words. Output only the title itself — no quotes, no trailing period, no explanation.",
+      "userLabel": "User",
+      "assistantLabel": "Assistant"
+    },
     "effortHigh": "High",
     "attach": "Add attachment",
     "attachRemove": "Remove attachment",
@@ -1134,7 +1139,11 @@
     "chartRemove": "Remove row",
     "chartLabel": "Label",
     "chartAddPlaceholder": "New point label",
-    "chartView": {"line": "Line", "bar": "Bar", "area": "Area"},
+    "chartView": {
+      "line": "Line",
+      "bar": "Bar",
+      "area": "Area"
+    },
     "toolPayload": "Payload",
     "toolInterrupted": "This call never returned; the turn ended.",
     "formSubmit": "Submit",
@@ -3800,10 +3809,6 @@
       "capabilityPromptSectionDesc": "System prompt appended when the capability is invoked.",
       "testCapability": "Run test",
       "selectProvider": "Select channel",
-      "userMessageLabel": "User message",
-      "userMessagePlaceholder": "Hello, can you summarize this...",
-      "promptVariablesLabel": "Prompt variables (JSON)",
-      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}",
       "manageModels": "Manage models",
       "editPrompt": "Edit prompt",
       "latestTestResult": "Latest test result",
@@ -4122,7 +4127,10 @@
           "notRetryable": "This error requires manual diagnosis before retrying."
         },
         "phases": {
-          "idle": { "label": "Idle", "description": "No update attempt is active." },
+          "idle": {
+            "label": "Idle",
+            "description": "No update attempt is active."
+          },
           "checking": {
             "label": "Checking for updates",
             "description": "The update service is checking the selected channel."
@@ -4454,36 +4462,36 @@
       "unofficial": "Current version has not passed official build verification, may be unsafe"
     }
   },
-    "widgetFrame": {
-      "compileFailed": "Widget compile failed",
-      "loading": "Loading widget",
-      "rendererMissing": "Widget renderer missing",
-      "rendererUnregistered": "Widget renderer not registered",
-      "missingRendererId": "Missing rendererId",
-      "renderFailed": "Widget failed to render"
-    },
-    "fileIndex": {
-      "failTitle": "File index initialization failed",
-      "failMessage": "The file index failed to initialize, so search may not work correctly.",
-      "viewErrorDetails": "View error details",
-      "rebuilding": "Rebuilding…",
-      "rebuildIndex": "Rebuild index",
-      "later": "Later",
-      "dontRemindAgain": "Don't remind me again"
-    },
-    "previewHistory": {
-      "copyResult": "Copy result",
-      "resultLabel": "Result",
-      "recentTitle": "Recent",
-      "countSummary": "{count} total",
-      "noRecords": "No records yet"
-    },
-    "boxTag": {
-      "image": "Image",
-      "imageCount": "{count} images",
-      "charCount": "{count} chars total",
-      "preparingFiles": "Preparing files…"
-    },
+  "widgetFrame": {
+    "compileFailed": "Widget compile failed",
+    "loading": "Loading widget",
+    "rendererMissing": "Widget renderer missing",
+    "rendererUnregistered": "Widget renderer not registered",
+    "missingRendererId": "Missing rendererId",
+    "renderFailed": "Widget failed to render"
+  },
+  "fileIndex": {
+    "failTitle": "File index initialization failed",
+    "failMessage": "The file index failed to initialize, so search may not work correctly.",
+    "viewErrorDetails": "View error details",
+    "rebuilding": "Rebuilding…",
+    "rebuildIndex": "Rebuild index",
+    "later": "Later",
+    "dontRemindAgain": "Don't remind me again"
+  },
+  "previewHistory": {
+    "copyResult": "Copy result",
+    "resultLabel": "Result",
+    "recentTitle": "Recent",
+    "countSummary": "{count} total",
+    "noRecords": "No records yet"
+  },
+  "boxTag": {
+    "image": "Image",
+    "imageCount": "{count} images",
+    "charCount": "{count} chars total",
+    "preparingFiles": "Preparing files…"
+  },
   "common": {
     "imagePreviewAlt": "Image preview",
     "wallpaperPreviewAlt": "Custom background preview",
@@ -5043,7 +5051,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",

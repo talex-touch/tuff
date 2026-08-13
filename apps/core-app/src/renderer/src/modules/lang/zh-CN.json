@@ -1113,6 +1113,11 @@
       "failed": "这个组件没能运行起来。"
     },
     "modelName": "Tuff 智能",
+    "titleGen": {
+      "prompt": "用不超过 8 个字概括这段对话的主题。只输出标题本身——不要引号、书名号、句号,不要任何解释。",
+      "userLabel": "用户",
+      "assistantLabel": "助手"
+    },
     "effortHigh": "高",
     "attach": "添加附件",
     "attachRemove": "移除附件",
@@ -1134,7 +1139,11 @@
     "chartRemove": "删除此行",
     "chartLabel": "标签",
     "chartAddPlaceholder": "新数据点标签",
-    "chartView": {"line": "线", "bar": "柱", "area": "面"},
+    "chartView": {
+      "line": "线",
+      "bar": "柱",
+      "area": "面"
+    },
     "toolPayload": "参数",
     "toolInterrupted": "该调用未返回，回合已结束",
     "formSubmit": "提交",
@@ -2205,26 +2214,50 @@
         "withIssue": "{preview} · 捕获提示：{issue}"
       },
       "actions": {
-        "quickReview": { "title": "QuickReview", "description": "检查缺陷、安全风险和最佳实践" },
-        "translate": { "title": "翻译", "description": "使用现有 Translation 插件翻译选中文本" },
-        "summarize": { "title": "总结", "description": "提取选中文本的主要结论" },
-        "polish": { "title": "润色", "description": "优化表达、语法和专业度" },
-        "rewrite": { "title": "改写", "description": "以更简洁自然的方式重写" },
+        "quickReview": {
+          "title": "QuickReview",
+          "description": "检查缺陷、安全风险和最佳实践"
+        },
+        "translate": {
+          "title": "翻译",
+          "description": "使用现有 Translation 插件翻译选中文本"
+        },
+        "summarize": {
+          "title": "总结",
+          "description": "提取选中文本的主要结论"
+        },
+        "polish": {
+          "title": "润色",
+          "description": "优化表达、语法和专业度"
+        },
+        "rewrite": {
+          "title": "改写",
+          "description": "以更简洁自然的方式重写"
+        },
         "saveSnippet": {
           "title": "保存为 Snippet",
           "description": "交给 Snippets 插件保存当前文本"
         },
-        "webSearch": { "title": "网页搜索", "description": "在系统默认浏览器中搜索选中文本" },
+        "webSearch": {
+          "title": "网页搜索",
+          "description": "在系统默认浏览器中搜索选中文本"
+        },
         "devTools": {
           "title": "开发工具",
           "description": "使用现有 JSON、Base64、URL/JWT 等本地工具"
         },
-        "ocr": { "title": "OCR 识别", "description": "使用系统 OCR 提取图片文字" },
+        "ocr": {
+          "title": "OCR 识别",
+          "description": "使用系统 OCR 提取图片文字"
+        },
         "translateImageText": {
           "title": "翻译图片文字",
           "description": "先 OCR，再翻译识别出的文字"
         },
-        "explainImage": { "title": "AI 解释图片", "description": "使用视觉能力解释图片主要内容" }
+        "explainImage": {
+          "title": "AI 解释图片",
+          "description": "使用视觉能力解释图片主要内容"
+        }
       },
       "results": {
         "quickReview": "QuickReview 已完成",
@@ -4094,14 +4127,26 @@
           "notRetryable": "重试前需要先进行人工诊断。"
         },
         "phases": {
-          "idle": { "label": "空闲", "description": "当前没有进行中的更新尝试。" },
-          "checking": { "label": "正在检查更新", "description": "更新服务正在检查所选渠道。" },
-          "available": { "label": "发现可用更新", "description": "已发现可下载的新版本。" },
+          "idle": {
+            "label": "空闲",
+            "description": "当前没有进行中的更新尝试。"
+          },
+          "checking": {
+            "label": "正在检查更新",
+            "description": "更新服务正在检查所选渠道。"
+          },
+          "available": {
+            "label": "发现可用更新",
+            "description": "已发现可下载的新版本。"
+          },
           "downloading": {
             "label": "正在下载更新",
             "description": "正在下载当前平台对应的安装包。"
           },
-          "verifying": { "label": "正在验证更新", "description": "正在验证完整性和发布元数据。" },
+          "verifying": {
+            "label": "正在验证更新",
+            "description": "正在验证完整性和发布元数据。"
+          },
           "ready": {
             "label": "可以安装",
             "description": "安装包已通过验证，可以由用户明确触发安装。"
@@ -4118,7 +4163,10 @@
             "label": "等待健康确认",
             "description": "更新后的应用已启动，仍需报告健康状态。"
           },
-          "healthy": { "label": "更新运行正常", "description": "已安装版本通过生命周期健康确认。" },
+          "healthy": {
+            "label": "更新运行正常",
+            "description": "已安装版本通过生命周期健康确认。"
+          },
           "recovery-required": {
             "label": "需要恢复",
             "description": "更新未能进入健康状态，请先检查恢复元数据。"
@@ -4414,36 +4462,36 @@
       "unofficial": "当前版本未通过官方构建验证，可能不安全"
     }
   },
-    "widgetFrame": {
-      "compileFailed": "Widget 编译失败",
-      "loading": "Widget 加载中",
-      "rendererMissing": "Widget renderer 缺失",
-      "rendererUnregistered": "Widget renderer 未注册",
-      "missingRendererId": "缺少 rendererId",
-      "renderFailed": "Widget 渲染失败"
-    },
-    "fileIndex": {
-      "failTitle": "文件索引初始化失败",
-      "failMessage": "文件索引初始化失败，可能导致搜索功能无法正常使用。",
-      "viewErrorDetails": "查看错误详情",
-      "rebuilding": "重建中...",
-      "rebuildIndex": "重新建立索引",
-      "later": "稍后处理",
-      "dontRemindAgain": "不再提醒"
-    },
-    "previewHistory": {
-      "copyResult": "复制结果",
-      "resultLabel": "结果",
-      "recentTitle": "最近处理",
-      "countSummary": "共 {count} 条",
-      "noRecords": "暂无记录"
-    },
-    "boxTag": {
-      "image": "图像",
-      "imageCount": "{count} 张图像",
-      "charCount": "共 {count} 字",
-      "preparingFiles": "文件准备中..."
-    },
+  "widgetFrame": {
+    "compileFailed": "Widget 编译失败",
+    "loading": "Widget 加载中",
+    "rendererMissing": "Widget renderer 缺失",
+    "rendererUnregistered": "Widget renderer 未注册",
+    "missingRendererId": "缺少 rendererId",
+    "renderFailed": "Widget 渲染失败"
+  },
+  "fileIndex": {
+    "failTitle": "文件索引初始化失败",
+    "failMessage": "文件索引初始化失败，可能导致搜索功能无法正常使用。",
+    "viewErrorDetails": "查看错误详情",
+    "rebuilding": "重建中...",
+    "rebuildIndex": "重新建立索引",
+    "later": "稍后处理",
+    "dontRemindAgain": "不再提醒"
+  },
+  "previewHistory": {
+    "copyResult": "复制结果",
+    "resultLabel": "结果",
+    "recentTitle": "最近处理",
+    "countSummary": "共 {count} 条",
+    "noRecords": "暂无记录"
+  },
+  "boxTag": {
+    "image": "图像",
+    "imageCount": "{count} 张图像",
+    "charCount": "共 {count} 字",
+    "preparingFiles": "文件准备中..."
+  },
   "common": {
     "imagePreviewAlt": "图片预览",
     "wallpaperPreviewAlt": "自定义背景预览",
@@ -5003,7 +5051,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "memoryReview": {
       "title": "记忆审核",

@@ -37,6 +37,11 @@ import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toMessageSegments } from '~/modules/conversation/chain-steps'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
 import {
+  deriveRestoredTitle,
+  generateConversationTitle,
+  shouldGenerateTitle
+} from '~/modules/conversation/conversation-title'
+import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
 } from '~/modules/conversation/conversation-error-display'
@@ -106,13 +111,40 @@ const modelLabel = computed(() => selectedModel.value ?? t('home.modelName'))
 const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
 
 /**
- * Working title until R2 generates one: the opening message is what the user themselves called the
- * conversation. Deliberately not truncated here — the top bar ellipsises on overflow, and a title
- * cut in the data layer would stay cut once R2 persists it.
+ * The opening message is the working title until the model summarises one (#969).
+ *
+ * Generation is once per conversation, after the first settled turn, and every failure keeps the
+ * working title silently — the label is never worth an error surface. `generatedTitle` also carries
+ * a stored custom title across restore, so the top bar agrees with the sidebar after a reload.
  */
-const conversationTitle = computed(
+const generatedTitle = ref<string | null>(null)
+/**
+ * Which conversation has a title call in flight — an id, not a boolean. This component instance is
+ * reused across thread switches, so a flat flag set by conversation A would make conversation B's
+ * settled turn skip its own generation window.
+ */
+let titleInFlightFor: string | null = null
+const titleSequence = createLatestOnly()
+
+/**
+ * Every conversation-store write goes through here, in order.
+ *
+ * The settled-turn watcher and the title upgrade both persist, and the SDK does not promise write
+ * ordering — a title upgrade holding an older message snapshot could land after a newer settled
+ * turn and shrink the stored thread. Chaining makes the order the call order, and each writer
+ * re-reads live state inside its queued turn so nothing stale is captured.
+ */
+let persistChain: Promise<void> = Promise.resolve()
+function enqueuePersist(write: () => Promise<void>): Promise<void> {
+  const next = persistChain.then(write, write)
+  persistChain = next.catch(() => {})
+  return next
+}
+
+const firstUserContent = computed(
   () => messages.value.find((message) => message.role === 'user')?.content
 )
+const conversationTitle = computed(() => generatedTitle.value ?? firstUserContent.value)
 
 /**
  * Auto Context has no composer control any more: it and the old tools pill read as the same
@@ -1105,6 +1137,7 @@ watch(
       const composerEl = composerRef.value
       const first = composerEl?.getBoundingClientRect()
       conversation.reset()
+      generatedTitle.value = null
       await nextTick()
       if (composerEl && first && !prefersReducedMotion()) {
         const dy = first.top - composerEl.getBoundingClientRect().top
@@ -1124,7 +1157,14 @@ watch(
     // of teleporting. Thread-to-thread hops measure ~0 and stay still.
     const composerEl = composerRef.value
     const first = composerEl?.getBoundingClientRect()
-    conversation.restore(restored)
+    conversation.restore(restored.messages)
+    // A stored title that differs from the opening message is a real one; the working-title
+    // persist writes the opening message back, and treating that as custom would block
+    // generation forever.
+    generatedTitle.value = deriveRestoredTitle(
+      restored.title,
+      restored.messages.find((message) => message.role === 'user')?.content
+    )
     // Wholesale replacement doesn't trip the stream's prepend anchoring, and keep-alive
     // reuses this instance — landing at the latest message needs an explicit call.
     await nextTick()
@@ -1138,6 +1178,59 @@ watch(
 )
 
 /**
+ * Fire-and-forget: the settled-turn persist above already wrote the working title, so the thread is
+ * durable before the summary call even starts, and a second persist upgrades the label when the
+ * call lands. Claimed against `titleSequence` so switching threads mid-call drops the result
+ * instead of stamping it onto the wrong conversation.
+ */
+function maybeGenerateTitle(): void {
+  const firstAssistant = messages.value.find(
+    (message) => message.role === 'assistant' && message.status === 'complete'
+  )?.content
+  const idAtStart = conversationId.value
+  if (!idAtStart) return
+  if (
+    !shouldGenerateTitle({
+      generatedTitle: generatedTitle.value,
+      inFlight: titleInFlightFor === idAtStart,
+      firstUserContent: firstUserContent.value,
+      firstAssistantContent: firstAssistant
+    })
+  ) {
+    return
+  }
+  const isCurrent = titleSequence.claim()
+  titleInFlightFor = idAtStart
+  void (async () => {
+    try {
+      const title = await generateConversationTitle(
+        intelligenceSdk,
+        firstUserContent.value ?? '',
+        firstAssistant ?? '',
+        {
+          prompt: t('home.titleGen.prompt'),
+          userLabel: t('home.titleGen.userLabel'),
+          assistantLabel: t('home.titleGen.assistantLabel')
+        }
+      )
+      if (!title || !isCurrent() || conversationId.value !== idAtStart) return
+      generatedTitle.value = title
+      // Queued behind any settled-turn write, and the messages are read inside the queued turn:
+      // however late this lands, it stores the thread as it is then, never a shrunken snapshot.
+      await enqueuePersist(async () => {
+        if (conversationId.value !== idAtStart) return
+        await history.persist(idAtStart, title, messages.value)
+      })
+    } catch (error) {
+      // The working title is already on screen and persisted; a label upgrade may fail silently.
+      homeLog.warn('Conversation title generation failed', String(error))
+    } finally {
+      if (titleInFlightFor === idAtStart) titleInFlightFor = null
+    }
+  })()
+}
+
+/**
  * Writes after every settled turn.
  *
  * Keyed on the streaming flag rather than on content: saving per delta would issue a full-thread
@@ -1148,11 +1241,15 @@ watch(
   async (streaming, wasStreaming) => {
     if (streaming || !wasStreaming || !conversationId.value) return
     try {
-      await history.persist(conversationId.value, conversationTitle.value ?? '', messages.value)
+      await enqueuePersist(async () => {
+        if (!conversationId.value) return
+        await history.persist(conversationId.value, conversationTitle.value ?? '', messages.value)
+      })
       // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
       if (route.params.id !== conversationId.value) {
         await router.replace(`/home/c/${conversationId.value}`)
       }
+      maybeGenerateTitle()
     } catch (error) {
       // A watcher rejection is an unhandled promise nobody sees, and losing a thread silently is
       // worse than losing it loudly — the conversation stays on screen either way.
