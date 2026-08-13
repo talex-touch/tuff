@@ -76,7 +76,7 @@ test('platform crates are exact-pinned and target-scoped', () => {
   }
   const xcap = screenshot.dependencies.find(dependency => dependency.name === 'xcap')
   assert.ok(xcap)
-  assert.equal(xcap.req, '=0.9.4')
+  assert.equal(xcap.req, '=0.9.8')
   assert.equal(xcap.target, 'cfg(any(target_os = "windows", target_os = "linux"))')
   assert.match(buildScript, /mis-aligned LINKEDIT string pool/)
   assert.match(buildScript, /linkedit-align-pad/)
