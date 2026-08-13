@@ -887,21 +887,40 @@ describe('SearchEngineCore facade contracts', () => {
 
     // Exactly two, because two entries were in the cache. Counted by entries dropped rather than
     // by calls -- a per-call implementation reports 1 here.
-    expect(snapshot.invalidations['index-commit']).toBe(2)
-    expect(snapshot.entriesDropped).toBe(2)
+    // One entry was superseded and dropped at its own lookup; the other was never asked for.
+    expect(snapshot.entriesDropped).toBe(1)
 
     /*
-     * And this is the finding. `revision-mismatch` is unreachable from here: `markCommitted` bumps
-     * the revision and notifies listeners synchronously, and this facade's listener clears the
-     * whole cache before returning. By the time any lookup compares revisions the entry is already
-     * gone, so the miss is `absent`.
+     * The attribution #346 turns on, and the reason this test exists.
      *
-     * That matters for the report #346 asks for. A repeat denied by a commit is filed under the
-     * same reason as a query nobody repeated, so the distribution understates the cache's value
-     * and cannot carry the keep/remove decision as it stands.
+     * `revision-mismatch` used to be unreachable: the commit listener cleared the whole cache
+     * before returning, so by the time a lookup compared revisions the entry was gone and the miss
+     * was filed as `absent` — the same bucket as a query nobody repeated. A report built on that
+     * distribution reads "nobody repeats queries, remove the cache" when the truth may be the
+     * opposite.
+     *
+     * Entries now survive the commit and are rejected — and dropped — at lookup, so the reason is
+     * counted where it happens.
      */
-    expect(snapshot.misses['revision-mismatch']).toBe(0)
-    expect(snapshot.misses.absent).toBe(3)
+    expect(snapshot.misses['revision-mismatch']).toBe(1)
+    expect(snapshot.misses.absent).toBe(2)
+    expect(snapshot.invalidations['index-commit']).toBe(1)
+
+    /*
+     * Asking again hits, because the miss that reported `revision-mismatch` re-ran the search and
+     * re-cached it at the new revision. One `revision-mismatch` per commit per query, not one per
+     * lookup — which is the behaviour the report wants, and it is asserted because the alternative
+     * (the stale entry surviving and mismatching forever) would inflate the count.
+     *
+     * Note this cannot observe the `searchCache.delete` itself: the re-cache overwrites the same
+     * key either way. The delete is kept for the paths that do not re-cache — an aborted or failed
+     * search — where the superseded entry would otherwise hold its slot until the TTL.
+     */
+    await run('cache telemetry alpha', 'telemetry-after-drop')
+    const afterDrop = core.getSearchCacheTelemetry()
+    expect(afterDrop.misses['revision-mismatch']).toBe(1)
+    expect(afterDrop.misses.absent).toBe(2)
+    expect(afterDrop.hits).toBe(2)
   })
 
   /**
@@ -940,6 +959,45 @@ describe('SearchEngineCore facade contracts', () => {
     const after = await handler!()
     expect(after.lookups).toBe(1)
   })
+
+  /**
+   * The one real cost of not clearing on commit, measured rather than asserted in prose (#346).
+   *
+   * Superseded entries stay until something drops them, so the question is whether they can
+   * accumulate. They cannot: the cache is bounded at SEARCH_CACHE_MAX_SIZE and eviction picks the
+   * oldest timestamp, which after a commit is a stale entry — so it drains stale-first, one per
+   * insert, and no stale entry is ever served because the outcome is computed before the hit
+   * branch.
+   */
+  it('stays bounded after a commit and never serves a superseded entry', async () => {
+    const search = vi.fn(
+      async () => ({ items: [buildItem('bound-item', 'bound-provider', 'Bounded')] }) as never
+    )
+    core.registerProvider(buildProvider('bound-provider', search) as never)
+    core.activateProviders([{ id: 'bound-provider' }] as IProviderActivate[])
+
+    const run = async (text: string): Promise<void> => {
+      const session = core.startSearch({ inputs: [], text } as TuffQuery, {
+        caller: { kind: 'core-box', id: `bound-${text}` }
+      })
+      await session.result
+      await session.completed
+    }
+
+    // Fill past the bound, then supersede everything at once.
+    for (let index = 0; index < 120; index += 1) await run(`bounded query ${index}`)
+    searchIndexCommitHub.markCommitted(['bound-provider'])
+
+    // Drain with fresh keys; each insert evicts one, oldest first.
+    for (let index = 0; index < 40; index += 1) await run(`drained query ${index}`)
+
+    const snapshot = core.getSearchCacheTelemetry()
+    // Never served: every lookup was either absent or a revision mismatch, no hit on a stale entry.
+    expect(snapshot.hits).toBe(0)
+    expect(snapshot.misses['revision-mismatch']).toBe(0)
+    // The bound held: evictions happened, which is only possible if the cache stayed at its cap.
+    expect(snapshot.invalidations['lru-evict']).toBeGreaterThan(0)
+  }, 60_000)
 
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
