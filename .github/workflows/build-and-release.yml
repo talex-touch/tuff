@@ -681,13 +681,67 @@ jobs:
           # shape here: a launcher that is alive after 45s started. Any other code means it exited.
           if [ "$CODE" -eq 124 ]; then STATE=alive; else STATE=dead; fi
           echo "exit=$CODE state=$STATE"
-          node scripts/classify-linux-launch.mjs /tmp/launch.log "$CODE" "$STATE"
+          node scripts/classify-app-launch.mjs /tmp/launch.log "$CODE" "$STATE"
 
       - name: Upload Linux launch log
         if: always() && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v7
         with:
           name: linux-launch-log-${{ github.run_id }}
+          path: /tmp/launch.log
+          if-no-files-found: ignore
+
+      # The Linux half of this landed as #1736 and the reasoning is identical here: the verification
+      # step above counts artifacts, and a file that exists and a file that runs are different
+      # claims. macOS had one thing Linux did not -- a signing check -- which verifies the bundle is
+      # signed correctly and says nothing about whether it starts.
+      #
+      # The binary is launched directly out of Contents/MacOS rather than through `open`, because
+      # `open` returns as soon as LaunchServices accepts the request and would report success for a
+      # bundle that died a second later. A locally built bundle carries no quarantine attribute, so
+      # this is not sidestepping Gatekeeper -- there is nothing to sidestep.
+      - name: "Smoke: launch the packaged macOS app"
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find apps/core-app/dist -type d -name "*.app" -prune -print | head -1)
+          if [ -z "$APP" ]; then
+            echo "No .app bundle to launch. The verification step above should already have failed."
+            exit 1
+          fi
+          BIN="$APP/Contents/MacOS/$(basename "$APP" .app)"
+          if [ ! -x "$BIN" ]; then
+            echo "Expected an executable at $BIN"
+            ls -la "$APP/Contents/MacOS" || true
+            exit 1
+          fi
+          echo "Launching $BIN"
+
+          set +e
+          # No coreutils `timeout` on the macOS runner. A background process plus a poll does the
+          # same job and, unlike `timeout`, distinguishes "still running" from "exited with 124".
+          "$BIN" > /tmp/launch.log 2>&1 &
+          PID=$!
+          sleep 45
+          if kill -0 "$PID" 2>/dev/null; then
+            STATE=alive
+            CODE=0
+            kill "$PID" 2>/dev/null || true
+          else
+            wait "$PID"
+            CODE=$?
+            STATE=dead
+          fi
+          set -e
+          echo "exit=$CODE state=$STATE"
+          node scripts/classify-app-launch.mjs /tmp/launch.log "$CODE" "$STATE"
+
+      - name: Upload macOS launch log
+        if: always() && matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-launch-log-${{ github.run_id }}
           path: /tmp/launch.log
           if-no-files-found: ignore
 
