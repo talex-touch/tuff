@@ -13,6 +13,11 @@ export default antfu(
       '.husky/**',
       '.kiro/**',
       '.serena/**',
+      // Task-local tooling and research probes live under .trellis (same class as .kiro/.serena:
+      // agent records, not product code). Master never had lintable JS there; the app-shell-v2
+      // convergence carried audit scripts and an iframe probe in, and 86 root-config errors in
+      // one-off scripts nobody ships is noise, not signal.
+      '.trellis/**',
       '.spec-workflow/**',
       '**/.nuxt/**',
       '**/.output/**',
