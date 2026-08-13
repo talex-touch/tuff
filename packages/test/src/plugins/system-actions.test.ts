@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
@@ -239,13 +240,13 @@ describe('isolated system actions Prelude', () => {
     harness.state.result = {
       actionId: 'lock-screen',
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     }
     await expect(
       harness.module.onItemAction(itemForAction(harness.state.items, 'lock-screen')),
     ).resolves.toMatchObject({
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
       success: false,
     })
   })

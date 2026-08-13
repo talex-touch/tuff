@@ -182,6 +182,16 @@ jobs:
       - name: Check maintenance-audit report claims
         run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
 
+      # 34 distinct blocked reasons live across plugins/ and 20 of them belong to exactly one
+      # plugin, so the vocabulary is open and a closed union would be the wrong contract. Only the
+      # permission family is enforced: a plugin writing permission_denied is claiming to speak a
+      # shared language and getting it wrong, and it fails silently on both sides -- a reason nobody
+      # handles is indistinguishable from a handler for a reason nobody emits. Plugin Preludes take
+      # everything from globalThis and contain no imports at all, so this check is what #1711 asked
+      # an import to provide.
+      - name: Check plugin blocked reasons
+        run: pnpm check:plugin-blocked-reasons && pnpm check:plugin-blocked-reasons:self-test
+
       # plugin.ts was ~3,060 lines when #339 asked for it to be split. Three extraction PRs landed
       # and each reported real progress -- 4,069 to 3,947 to 3,872 to 3,844 -- against a baseline
       # that had already grown a thousand lines since the issue was written. Extraction removed 225
