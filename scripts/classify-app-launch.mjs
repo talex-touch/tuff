@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Says why the packaged Linux app did not start, from what it printed (#213).
+ * Says why a packaged app did not start, from what it printed (#213, #308).
  *
  * #213 has been open since 2025-11-14. The reporter answered three times -- "还没兼容吗" -- and never
  * sent the one diagnostic bit the thread was waiting on. Nine months of waiting on a person is a
@@ -55,6 +55,22 @@ const NO_DISPLAY_PATTERNS = [
   /Unable to open X display/i,
 ]
 
+/**
+ * macOS refusing to run the bundle at all (#308).
+ *
+ * A CI build is ad-hoc or Developer ID signed and never notarized, so Gatekeeper has an opinion.
+ * Launching `Contents/MacOS/<binary>` directly sidesteps the quarantine attribute -- a locally
+ * built bundle was never downloaded, so it has none -- but a *broken* signature still refuses, and
+ * that is a real product failure rather than a CI one. Kept separate from the sandbox family so a
+ * red build does not blame the wrong subsystem.
+ */
+const CODE_SIGNATURE_PATTERNS = [
+  /code signature[^\n]*not valid/i,
+  /cannot be opened because the developer cannot be verified/i,
+  /Library not loaded[\s\S]{0,200}code signature/i,
+  /killed: 9/i,
+]
+
 export function classifyLaunch({ output, exitCode, stayedAlive }) {
   const text = String(output ?? '')
 
@@ -63,6 +79,9 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
   // false pass this whole check exists to remove.
   if (SANDBOX_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'sandbox-denied', product: true }
+
+  if (CODE_SIGNATURE_PATTERNS.some(pattern => pattern.test(text)))
+    return { verdict: 'code-signature', product: true }
 
   if (NO_DISPLAY_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'no-display', product: false }
@@ -88,6 +107,9 @@ const DESCRIPTIONS = {
     + 'not a product defect -- add the package rather than changing the app.',
   'unknown-exit': 'The app exited without printing anything this recognises. The captured output '
     + 'is the only evidence; read it rather than assuming a cause.',
+  'code-signature': 'macOS refused the bundle. The signature is broken or the binary was killed '
+    + 'by the kernel (SIGKILL 9 is what an invalid signature looks like from the shell), which is a '
+    + 'packaging defect rather than a runner gap.',
   'ok': 'The packaged app started and was still running when the window opened.',
 }
 
@@ -97,7 +119,7 @@ function main(argv) {
   const stayedAlive = argv[2] === 'alive'
 
   if (!outputPath || !fs.existsSync(outputPath)) {
-    console.error(`classify-linux-launch: no captured output at ${outputPath ?? '<missing>'}.`)
+    console.error(`classify-app-launch: no captured output at ${outputPath ?? '<missing>'}.`)
     console.error('Refusing to report a verdict with nothing to read -- an empty log is not a pass.')
     return 1
   }
@@ -221,7 +243,13 @@ function selfTest() {
     { name: 'empty output with a dead process is not ok', actual: classifyLaunch({ output: '', exitCode: 1, stayedAlive: false }).verdict, expected: 'unknown-exit' },
     { name: 'null output does not throw', actual: classifyLaunch({ output: null, exitCode: 0, stayedAlive: true }).verdict, expected: 'ok' },
     { name: 'matching is case-insensitive', actual: classifyLaunch({ output: 'NO USABLE SANDBOX', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
-    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 5 },
+    // macOS half (#308). Kept distinct from sandbox-denied so a red build names the right subsystem.
+    { name: 'an invalid signature is its own verdict', actual: classifyLaunch({ output: 'code signature in (...) not valid for use in process', exitCode: 1, stayedAlive: false }).verdict, expected: 'code-signature' },
+    { name: 'SIGKILL is what an invalid signature looks like from a shell', actual: classifyLaunch({ output: 'Killed: 9', exitCode: 137, stayedAlive: false }).verdict, expected: 'code-signature' },
+    { name: 'an unverified developer is the same verdict', actual: classifyLaunch({ output: 'cannot be opened because the developer cannot be verified', exitCode: 1, stayedAlive: false }).verdict, expected: 'code-signature' },
+    { name: 'a signature refusal is a product problem', actual: classifyLaunch({ output: 'Killed: 9', exitCode: 137, stayedAlive: false }).product, expected: true },
+    { name: 'a sandbox refusal still outranks a signature one', actual: classifyLaunch({ output: 'Killed: 9\nNo usable sandbox!', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
+    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 6 },
   ]
 
   let failed = 0
@@ -233,8 +261,8 @@ function selfTest() {
   }
   console.log(
     failed === 0
-      ? `classify-linux-launch --self-test: ${cases.length} cases passed`
-      : `classify-linux-launch --self-test: ${failed} of ${cases.length} cases failed`,
+      ? `classify-app-launch --self-test: ${cases.length} cases passed`
+      : `classify-app-launch --self-test: ${failed} of ${cases.length} cases failed`,
   )
   return failed
 }
