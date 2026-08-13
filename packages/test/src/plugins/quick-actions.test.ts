@@ -159,7 +159,15 @@ describe('quick actions isolated Prelude', () => {
       reason: 'confirmation-denied',
     })
 
-    await expect(state.module.onFeatureTriggered('quick-action-shutdown', { text: '' })).resolves.toMatchObject({
+    // A dynamic quick-action-* feature only publishes its item; the action runs from the explicit
+    // selection (#817). Triggering used to run it, so every keystroke re-raised the destructive
+    // confirmation. The denial contract below is unchanged — only where it is observed.
+    await state.module.onFeatureTriggered('quick-action-shutdown', { text: '' })
+    expect(state.systemCalls).toEqual([])
+
+    const item = actionItem(state.items, 'shutdown')
+    expect(item).toBeTruthy()
+    await expect(state.module.onItemAction(item!, { actionId: 'run-action' })).resolves.toMatchObject({
       status: 'blocked',
       reason: 'confirmation-denied',
       success: false,
@@ -169,7 +177,7 @@ describe('quick actions isolated Prelude', () => {
 
   it('redacts capability failures and never attempts a generic command fallback', async () => {
     const system = { runAction: vi.fn(async () => Promise.reject(new Error('/private/path'))) }
-    const state = harness()
+    const published: Array<Record<string, unknown>> = []
     const isolated = loadPluginModule<QuickActionsPrelude>(
       quickActionsUrl,
       createPluginGlobals({
@@ -177,16 +185,33 @@ describe('quick actions isolated Prelude', () => {
         TuffItemBuilder: FakeBuilder,
         features: { addFeature: async () => true },
         system,
-        plugin: { feature: { clearItems: async () => undefined, pushItems: async () => undefined } },
+        plugin: {
+          feature: {
+            clearItems: async () => {
+              published.length = 0
+            },
+            pushItems: async (next: Array<Record<string, unknown>>) => {
+              published.push(...next)
+            },
+          },
+        },
       }),
     )
 
-    await expect(isolated.onFeatureTriggered('quick-action-lock-screen', { text: '' })).resolves.toMatchObject({
+    await isolated.onFeatureTriggered('quick-action-lock-screen', { text: '' })
+    const item = actionItem(published, 'lock-screen')
+    expect(item).toBeTruthy()
+
+    const result = await isolated.onItemAction(item!, { actionId: 'run-action' })
+
+    expect(result).toMatchObject({
       status: 'failed',
       reason: 'system-action-failed',
       message: '系统动作执行失败',
     })
     expect(system.runAction).toHaveBeenCalledExactlyOnceWith('lock-screen')
-    expect(JSON.stringify(state)).not.toContain('/private/path')
+    // The rejected error's message is a path. Neither the published item nor the returned result
+    // may carry it. This previously stringified an unrelated harness, so it could not have failed.
+    expect(JSON.stringify({ published, result })).not.toContain('/private/path')
   })
 })

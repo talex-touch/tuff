@@ -10,8 +10,13 @@ const { loadExtensionMock, removeExtensionMock } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   session: {
     defaultSession: {
-      loadExtension: loadExtensionMock,
-      removeExtension: removeExtensionMock
+      // Electron 41 moved these onto session.extensions and deprecated the flat ones (#596).
+      // Mocking only the nested shape means a revert to the flat call fails here rather than
+      // silently exercising a method the mock still happens to expose.
+      extensions: {
+        loadExtension: loadExtensionMock,
+        removeExtension: removeExtensionMock
+      }
     }
   }
 }))

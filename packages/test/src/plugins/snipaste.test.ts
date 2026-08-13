@@ -1,3 +1,4 @@
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
@@ -87,7 +88,7 @@ describe('snipaste isolated Prelude boundary', () => {
     const fixture = harness({
       actionId: 'snip',
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
     await fixture.pluginModule.onFeatureTriggered('snipaste-quick', { text: '截图' })
 
@@ -98,7 +99,7 @@ describe('snipaste isolated Prelude boundary', () => {
     expect(result).toMatchObject({
       status: 'blocked',
       success: false,
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
       message: '缺少 system.shell 权限',
     })
     expect(JSON.stringify(result)).not.toMatch(/Applications|Program Files|private/)

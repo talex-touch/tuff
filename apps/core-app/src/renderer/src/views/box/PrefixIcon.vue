@@ -32,7 +32,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="PrefixIcon transition-cubic">
-    <img class="transition-cubic" :src="AppIcon" />
+    <img class="transition-cubic" :src="AppIcon" alt="" />
     <svg
       v-if="isIndexing"
       class="ProgressRing op-50"

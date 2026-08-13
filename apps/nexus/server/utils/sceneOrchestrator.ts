@@ -114,6 +114,13 @@ export interface SceneRunInput {
   capability?: unknown
   providerId?: unknown
   dryRun?: unknown
+  /**
+   * Who the run belongs to, recorded with every asset it uploads so the download endpoint has
+   * something to authorize against. Both callers authenticate; neither used to keep the result,
+   * so a run had no owner and the assets it produced were readable by any authenticated
+   * caller who had the key (#898).
+   */
+  ownerId?: string
 }
 
 export interface SceneAdapterContext {
@@ -1356,6 +1363,7 @@ function replaceSceneAssetOutput(
 async function uploadSceneAdapterAssets(input: {
   event: H3Event
   runId: string
+  ownerId?: string
   sceneId: string
   providerId: string
   capability: string
@@ -1410,6 +1418,7 @@ async function uploadSceneAdapterAssets(input: {
       const stored = await uploadSceneAsset(input.event, assetContext.key, data, contentType, {
         governanceResourceId: assetContext.governanceResourceId,
         resourceType: assetContext.resourceType,
+        ownerId: input.ownerId,
       })
       await completeUploadGovernance(input.event, uploadAttempt, {
         resourceId: assetContext.governanceResourceId,
@@ -1931,6 +1940,7 @@ export async function runSceneOrchestrator(
         const assetResult = await uploadSceneAdapterAssets({
           event,
           runId,
+          ownerId: request.ownerId,
           sceneId: scene.id,
           providerId: provider.id,
           capability: plan.capability,

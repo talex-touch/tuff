@@ -2,8 +2,11 @@
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import { TxIcon } from '../../icon'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({ name: 'TxCommandPalette' })
 
@@ -20,9 +23,21 @@ const props = withDefaults(defineProps<CommandPaletteProps>(), {
 const emit = defineEmits<CommandPaletteEmits>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
-const query = ref('')
+const overlayRef = ref<HTMLElement | null>(null)
+const query = ref(props.query ?? '')
+
+// `update:query` was emitted with no matching prop, so v-model:query could only
+// ever be write-only. Accepting the prop closes the pair; leaving it undefined
+// keeps the palette uncontrolled.
+watch(
+  () => props.query,
+  (next) => {
+    if (next !== undefined && next !== query.value)
+      query.value = next
+  },
+)
 const activeIndex = ref(0)
-const zIndex = ref(getZIndex())
+const zIndex = ref(zIndexAllocator.get())
 const composing = ref(false)
 
 const visible = computed({
@@ -81,7 +96,7 @@ watch(
   () => props.modelValue,
   async (v, oldValue) => {
     if (v) {
-      zIndex.value = nextZIndex()
+      zIndex.value = zIndexAllocator.next()
       emit('open')
       activeIndex.value = firstEnabledIndex()
       await nextTick()
@@ -118,6 +133,44 @@ function selectItem(item: CommandPaletteItem) {
   emit('select', item)
   if (props.closeOnSelect)
     close()
+}
+
+/**
+ * aria-modal="true" promises the background is inert, so Tab must cycle inside
+ * the dialog. Mirrors TxModal/TxDrawer, which both implement this already.
+ */
+function trapFocus(event: KeyboardEvent): void {
+  const root = overlayRef.value
+  if (!root)
+    return
+
+  const focusable = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]',
+    ),
+    // The options are real <button>s held out of the tab order with
+    // tabindex="-1", so the selector alone is not enough — a tag-based match
+    // would hand Tab straight back to them.
+  ).filter(el => el.tabIndex >= 0)
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (!first || !last) {
+    event.preventDefault()
+    inputRef.value?.focus()
+    return
+  }
+
+  const active = document.activeElement
+  if (event.shiftKey) {
+    if (active === first || active === root) {
+      event.preventDefault()
+      last.focus()
+    }
+  }
+  else if (active === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 function onInput(value: string) {
@@ -244,10 +297,12 @@ function onKeydown(e: KeyboardEvent) {
         class="tx-command-palette__overlay"
         :class="overlayClass"
         :style="{ zIndex }"
+        ref="overlayRef"
         role="dialog"
         aria-modal="true"
         :aria-label="ariaLabel"
         @click.self="close"
+        @keydown.tab="trapFocus"
       >
         <div
           class="tx-command-palette__panel"
@@ -285,7 +340,7 @@ function onKeydown(e: KeyboardEvent) {
               role="option"
               :aria-selected="index === activeIndex"
               :aria-disabled="cmd.disabled || undefined"
-              :tabindex="cmd.disabled ? -1 : 0"
+              tabindex="-1"
               :class="{
                 'is-active': index === activeIndex,
                 'is-disabled': cmd.disabled,

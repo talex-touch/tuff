@@ -260,9 +260,30 @@ const pluginLifecycle = {
   },
 
   async onFeatureTriggered(featureId, query) {
+    // A dynamic quick-action-* feature publishes an item; it does not run the action.
+    //
+    // onFeatureTriggered is re-entered on every input change — the host calls both
+    // triggerFeature and triggerInputChanged — so running the action here fired it on every
+    // keystroke. For lock-screen and mute-toggle the host requires no confirmation, so
+    // activating the feature locked the screen and each following keystroke locked it again;
+    // for shutdown and restart the destructive confirmation was re-raised each time (#817).
+    //
+    // touch-system-actions already does it this way: publish, then run from onItemAction on
+    // an explicit selection.
     const directActionId = dynamicActionId(featureId)
-    if (directActionId)
-      return await runAction(directActionId)
+    if (directActionId) {
+      const directAction = resolveActions().find(action => action.id === directActionId)
+      await publishItems([
+        buildItem({
+          id: `${featureId}-direct`,
+          featureId,
+          title: directAction?.name || directActionId,
+          subtitle: directAction?.description || '',
+          actionId: directActionId,
+        }),
+      ])
+      return true
+    }
     if (featureId !== FEATURE_ID)
       return false
 

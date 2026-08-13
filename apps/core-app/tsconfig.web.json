@@ -1,6 +1,12 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
   "compilerOptions": {
+    // @electron-toolkit/tsconfig sets noImplicitAny: false alongside strict: true, and an
+    // explicit flag beats the strict-family default -- so every untyped parameter in the
+    // renderer was silently any, and a renamed field on a caller reached runtime with no
+    // compile error (#548). The renderer needed two files fixed to satisfy this; the main
+    // process needs 227 and is tracked on the issue.
+    "noImplicitAny": true,
     "composite": true,
     "baseUrl": ".",
     "paths": {

@@ -191,6 +191,41 @@ describe("renderer storage transport bootstrap", () => {
     );
   });
 
+  // TouchStorage is published and instantiated by external plugins. It used to print three
+  // unconditional console.debug lines per hydrate/save, each probing `background.source` -- a
+  // field belonging to one specific app store. Consumers could neither disable nor interpret
+  // them (#883).
+  it("does not print debug noise during a normal hydrate and save", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    try {
+      const transport = createTransportMock({
+        "quiet-save.ini": { data: {}, version: 1 },
+      });
+      transport.send.mockImplementation(
+        async (event: unknown, payload?: { key?: string }) => {
+          if (event === StorageEvents.app.save) {
+            return { success: true, version: 2 };
+          }
+          if (payload?.key) {
+            return { data: {}, version: 1 };
+          }
+          return null;
+        },
+      );
+
+      initializeRendererStorage(transport as any);
+      const storage = new TouchStorage("quiet-save.ini", { value: "initial" });
+
+      await storage.whenHydrated();
+      storage.data.value = "changed";
+      await storage.saveToRemote({ force: true });
+
+      expect(debugSpy).not.toHaveBeenCalled();
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
+
   it("reloads and retries without rejecting when save detects a version conflict", async () => {
     const transport = createTransportMock();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

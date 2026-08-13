@@ -485,12 +485,19 @@ export class NotificationModule extends BaseModule {
     })
 
     notification.on('close', () => {
+      // Replacing a notification reuses its id: dismissSystemNotification closes the old toast
+      // and the new one registers under the same key, so the OS can deliver the old toast's
+      // 'close' after that (#775). Deleting by id alone untracked the replacement, leaving it on
+      // screen with no way to dismiss it programmatically.
+      if (this.systemNotifications.get(id) !== notification) return
       this.systemNotifications.delete(id)
       this.systemRequests.delete(id)
     })
 
-    notification.show()
+    // Registered before show() so a synchronous 'close' during show cannot leave a closed
+    // notification tracked forever.
     this.systemNotifications.set(id, notification)
+    notification.show()
   }
 
   private dismissSystemNotification(id: string): void {

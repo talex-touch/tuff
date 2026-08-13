@@ -116,6 +116,8 @@ vi.mock('../../database', () => ({
 }))
 vi.mock('../../plugin/adapters/plugin-features-adapter', () => ({
   default: {
+    // search-core calls this as it registers the provider (#523).
+    attach: vi.fn(),
     id: 'plugin-features',
     onSearch: vi.fn(),
     supportedInputTypes: ['text'],
@@ -148,6 +150,9 @@ vi.mock('../../storage', () => ({
   }
 }))
 vi.mock('../addon/apps/app-provider', () => ({
+  // search-core.ts imports this alongside appProvider; a factory mock has to carry every
+  // binding the importer names or vitest throws at import time, before any test runs.
+  setAppExecutionRecorder: vi.fn(),
   appProvider: {
     id: 'app-provider',
     onSearch: vi.fn(),
@@ -411,6 +416,28 @@ describe('SearchEngineCore facade contracts', () => {
     if (!lifecycle.destroying) await core.destroy()
   })
 
+  it('releases first-result metrics even when telemetry is disabled', () => {
+    // getSentryService is mocked with isTelemetryEnabled() === false, which is
+    // the privacy default. The delete used to sit after that early return, so
+    // the entry survived every execute on a privacy-default install (#669).
+    const internals = core as unknown as {
+      searchFirstResultMetrics: Map<string, unknown>
+      queueExecuteTelemetry: (sessionId: string, item: unknown, startedAt?: number) => void
+    }
+
+    internals.searchFirstResultMetrics.set('session-1', { sessionId: 'session-1' })
+    expect(internals.searchFirstResultMetrics.has('session-1')).toBe(true)
+
+    internals.queueExecuteTelemetry('session-1', {
+      id: 'item-1',
+      kind: 'app',
+      source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+      render: { mode: 'default', basic: { title: 'Demo' } }
+    })
+
+    expect(internals.searchFirstResultMetrics.has('session-1')).toBe(false)
+  })
+
   it('injects the App runtime delegate through SearchCore initialization', () => {
     expect(state.appProviderRuntimeDelegate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -529,12 +556,14 @@ describe('SearchEngineCore facade contracts', () => {
 
     await core.recordExecute('session-usage-1', item)
 
+    // Log, stats and trend rows all key on the provider id; only the separate
+    // source_type column carries the type.
     expect(state.addUsageLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'execute',
         itemId: 'executed-item',
         sessionId: 'session-usage-1',
-        source: 'application'
+        source: 'usage-provider'
       })
     )
     expect(state.incrementUsageSummary).toHaveBeenCalledWith('executed-item')
@@ -673,6 +702,103 @@ describe('SearchEngineCore facade contracts', () => {
     expect(snapshots.map((result) => result.sessionId)).toEqual([first.sessionId, second.sessionId])
   })
 
+  it('caches what the session ended with so a repeat query keeps the deferred batch', async () => {
+    const fastSearch = vi.fn(
+      async () => ({ items: [buildItem('fast-item', 'fast-provider', 'accumulated')] }) as never
+    )
+    const deferredSearch = vi.fn(
+      async () =>
+        ({ items: [buildItem('deferred-item', 'deferred-provider', 'accumulated file')] }) as never
+    )
+    const query = { inputs: [], text: 'accumulated cache contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('fast-provider', fastSearch) as never)
+    core.registerProvider({
+      ...buildProvider('deferred-provider', deferredSearch),
+      priority: 'deferred',
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'fast-provider' },
+      { id: 'deferred-provider' }
+    ] as IProviderActivate[])
+
+    const first = core.startSearch(query, { caller: { kind: 'core-box', id: 'accumulated-first' } })
+    await first.result
+    await first.completed
+
+    const snapshots: TuffSearchResult[] = []
+    const second = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'accumulated-second' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        }
+      }
+    })
+    await second.result
+    await second.completed
+
+    expect(deferredSearch).toHaveBeenCalledTimes(1)
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0].items.map((item) => item.id).sort()).toEqual(['deferred-item', 'fast-item'])
+  })
+
+  it('publishes each gather batch once with its enrichment already applied', async () => {
+    const fastSearch = vi.fn(
+      async () => ({ items: [buildItem('single-fast', 'fast-provider', 'single push')] }) as never
+    )
+    const deferredSearch = vi.fn(
+      async () =>
+        ({
+          items: [buildItem('single-deferred', 'deferred-provider', 'single push file')]
+        }) as never
+    )
+    const query = { inputs: [], text: 'single publish contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('fast-provider', fastSearch) as never)
+    core.registerProvider({
+      ...buildProvider('deferred-provider', deferredSearch),
+      priority: 'deferred',
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'fast-provider' },
+      { id: 'deferred-provider' }
+    ] as IProviderActivate[])
+    state.getAllPinnedItems.mockResolvedValue([
+      {
+        itemId: 'single-deferred',
+        order: 0,
+        pinnedAt: new Date(),
+        sourceId: 'deferred-provider',
+        sourceType: 'file'
+      }
+    ])
+
+    const snapshots: TuffSearchResult[] = []
+    const updates: TuffItem[][] = []
+    const execution = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'single-publish' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        },
+        update: (payload) => {
+          updates.push(payload.items)
+        }
+      }
+    })
+    await execution.result
+    await execution.completed
+
+    expect(snapshots).toHaveLength(1)
+    expect(updates).toHaveLength(1)
+    expect(updates[0].map((item) => item.id)).toEqual(['single-deferred'])
+    expect(updates[0][0].scoring).toMatchObject({ pinned: true, final: expect.any(Number) })
+    expect(snapshots[0].items[0].scoring?.final).toEqual(expect.any(Number))
+  })
+
   it('does not cache a result that completed after its search revision was superseded', () => {
     const harness = core as unknown as {
       cacheSearchResult: (cacheKey: string, result: TuffSearchResult, revision: number) => void
@@ -712,6 +838,176 @@ describe('SearchEngineCore facade contracts', () => {
     await second.completed
 
     expect(search).toHaveBeenCalledTimes(2)
+  })
+
+  /**
+   * The first end-to-end read of the cache counters (#346).
+   *
+   * `search-cache-telemetry.test.ts` covers the counter object thoroughly, and
+   * `getSearchCacheTelemetry` had exactly one reference in the repository -- its own declaration.
+   * So every `recordHit` / `recordMiss` / `recordInvalidation` call site in search-core was
+   * unverified: the counters incremented into a snapshot nobody obtained, which reads the same as
+   * counters that were never wired at all.
+   *
+   * The reason distribution is the part #346 turns on. A miss attributed to `absent` says "nobody
+   * repeated this query", which argues for removing the cache; one attributed to
+   * `revision-mismatch` says "the index denied a repeat that would otherwise have hit", which
+   * argues the opposite. This records which reason an index commit actually produces.
+   */
+  it('attributes a repeat denied by an index commit, and pins which reason it used', async () => {
+    const search = vi.fn(
+      async () =>
+        ({ items: [buildItem('telemetry-item', 'telemetry-provider', 'Telemetry')] }) as never
+    )
+    core.registerProvider(buildProvider('telemetry-provider', search) as never)
+    core.activateProviders([{ id: 'telemetry-provider' }] as IProviderActivate[])
+
+    const run = async (text: string, id: string): Promise<void> => {
+      const session = core.startSearch({ inputs: [], text } as TuffQuery, {
+        caller: { kind: 'core-box', id }
+      })
+      await session.result
+      await session.completed
+    }
+
+    // Two distinct queries, so the commit drops two entries. One entry cannot tell "counted per
+    // entry dropped" from "counted per call", and both readings are one line apart in the source.
+    await run('cache telemetry alpha', 'telemetry-alpha-cold')
+    await run('cache telemetry beta', 'telemetry-beta-cold')
+    await run('cache telemetry alpha', 'telemetry-alpha-warm')
+    searchIndexCommitHub.markCommitted(['telemetry-provider'])
+    await run('cache telemetry alpha', 'telemetry-alpha-after-commit')
+
+    const snapshot = core.getSearchCacheTelemetry()
+
+    // The counters reach the snapshot at all: four lookups, and the third one served.
+    expect(snapshot.lookups).toBe(4)
+    expect(snapshot.hits).toBe(1)
+    expect(snapshot.hitRate).toBeCloseTo(1 / 4, 5)
+
+    // Exactly two, because two entries were in the cache. Counted by entries dropped rather than
+    // by calls -- a per-call implementation reports 1 here.
+    // One entry was superseded and dropped at its own lookup; the other was never asked for.
+    expect(snapshot.entriesDropped).toBe(1)
+
+    /*
+     * The attribution #346 turns on, and the reason this test exists.
+     *
+     * `revision-mismatch` used to be unreachable: the commit listener cleared the whole cache
+     * before returning, so by the time a lookup compared revisions the entry was gone and the miss
+     * was filed as `absent` — the same bucket as a query nobody repeated. A report built on that
+     * distribution reads "nobody repeats queries, remove the cache" when the truth may be the
+     * opposite.
+     *
+     * Entries now survive the commit and are rejected — and dropped — at lookup, so the reason is
+     * counted where it happens.
+     */
+    expect(snapshot.misses['revision-mismatch']).toBe(1)
+    expect(snapshot.misses.absent).toBe(2)
+    expect(snapshot.invalidations['index-commit']).toBe(1)
+
+    /*
+     * Asking again hits, because the miss that reported `revision-mismatch` re-ran the search and
+     * re-cached it at the new revision. One `revision-mismatch` per commit per query, not one per
+     * lookup — which is the behaviour the report wants, and it is asserted because the alternative
+     * (the stale entry surviving and mismatching forever) would inflate the count.
+     *
+     * Note this cannot observe the `searchCache.delete` itself: the re-cache overwrites the same
+     * key either way. The delete is kept for the paths that do not re-cache — an aborted or failed
+     * search — where the superseded entry would otherwise hold its slot until the TTL.
+     */
+    await run('cache telemetry alpha', 'telemetry-after-drop')
+    const afterDrop = core.getSearchCacheTelemetry()
+    expect(afterDrop.misses['revision-mismatch']).toBe(1)
+    expect(afterDrop.misses.absent).toBe(2)
+    expect(afterDrop.hits).toBe(2)
+  })
+
+  /**
+   * The counters are readable from outside the process now (#346).
+   *
+   * `getSearchCacheTelemetry` had one reference — its own declaration — so the report that issue
+   * asks for could not be produced from a real session. This asserts the transport handler is
+   * registered and returns the live snapshot, not a fresh one.
+   */
+  it('exposes the cache counters over the transport', async () => {
+    const search = vi.fn(
+      async () => ({ items: [buildItem('tel-item', 'tel-provider', 'Telemetry')] }) as never
+    )
+    core.registerProvider(buildProvider('tel-provider', search) as never)
+    core.activateProviders([{ id: 'tel-provider' }] as IProviderActivate[])
+
+    const handler = [...state.transportHandlers.entries()].find(([event]) => {
+      const transportEvent = event as { toEventName?: () => string }
+      return transportEvent.toEventName?.() === CoreBoxEvents.search.cacheTelemetry.toEventName()
+    })?.[1] as (() => Promise<{ lookups: number; hits: number }>) | undefined
+
+    expect(handler, 'cacheTelemetry handler is registered').toBeTypeOf('function')
+
+    const before = await handler!()
+    expect(before.lookups).toBe(0)
+
+    const session = core.startSearch(
+      { inputs: [], text: 'telemetry over transport' } as TuffQuery,
+      {
+        caller: { kind: 'core-box', id: 'tel-1' }
+      }
+    )
+    await session.result
+    await session.completed
+
+    const after = await handler!()
+    expect(after.lookups).toBe(1)
+  })
+
+  /**
+   * The one real cost of not clearing on commit, measured rather than asserted in prose (#346).
+   *
+   * Superseded entries stay until something drops them, so the question is whether they can
+   * accumulate. They cannot: the cache is bounded at SEARCH_CACHE_MAX_SIZE and eviction picks the
+   * oldest timestamp, which after a commit is a stale entry — so it drains stale-first, one per
+   * insert, and no stale entry is ever served because the outcome is computed before the hit
+   * branch.
+   */
+  it('stays bounded after a commit and never serves a superseded entry', async () => {
+    const search = vi.fn(
+      async () => ({ items: [buildItem('bound-item', 'bound-provider', 'Bounded')] }) as never
+    )
+    core.registerProvider(buildProvider('bound-provider', search) as never)
+    core.activateProviders([{ id: 'bound-provider' }] as IProviderActivate[])
+
+    const run = async (text: string): Promise<void> => {
+      const session = core.startSearch({ inputs: [], text } as TuffQuery, {
+        caller: { kind: 'core-box', id: `bound-${text}` }
+      })
+      await session.result
+      await session.completed
+    }
+
+    // Fill past the bound, then supersede everything at once.
+    for (let index = 0; index < 120; index += 1) await run(`bounded query ${index}`)
+    searchIndexCommitHub.markCommitted(['bound-provider'])
+
+    // Drain with fresh keys; each insert evicts one, oldest first.
+    for (let index = 0; index < 40; index += 1) await run(`drained query ${index}`)
+
+    const snapshot = core.getSearchCacheTelemetry()
+    // Never served: every lookup was either absent or a revision mismatch, no hit on a stale entry.
+    expect(snapshot.hits).toBe(0)
+    expect(snapshot.misses['revision-mismatch']).toBe(0)
+    // The bound held: evictions happened, which is only possible if the cache stayed at its cap.
+    expect(snapshot.invalidations['lru-evict']).toBeGreaterThan(0)
+  }, 60_000)
+
+  it('invalidates the recommendation ranking on an app index commit but not a file one', () => {
+    // A newly installed app has to be recommendable before the 30-minute
+    // ranking cache expires; file commits fire throughout indexing and never
+    // change the recommendation grid, which excludes files.
+    searchIndexCommitHub.markCommitted(['file-provider'])
+    expect(state.invalidateRecommendationCache).not.toHaveBeenCalled()
+
+    searchIndexCommitHub.markCommitted(['app-provider'])
+    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
   })
 
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {

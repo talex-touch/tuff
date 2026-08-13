@@ -7,6 +7,7 @@ import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { app } from 'electron'
 import { getSecureStoreValue, isSecureStoreAvailable } from '../../utils/secure-store'
 import { createLogger } from '../../utils/logger'
+import { createMcpFailure } from './intelligence-mcp-failure'
 
 const mcpLog = createLogger('Intelligence').child('McpRegistry')
 
@@ -203,7 +204,8 @@ export class IntelligenceMcpRegistry {
 
   async callTool(profileId: string, toolName: string, input: unknown): Promise<unknown> {
     const profile = this.getProfile(profileId)
-    if (!profile) throw new Error(`MCP profile ${profileId} is not available`)
+    if (!profile)
+      throw createMcpFailure('server-unavailable', `MCP profile ${profileId} is not available`)
 
     const session = await this.connectProfile(profile)
     const result = await this.withSessionRpc(profileId, session, () =>
@@ -214,7 +216,10 @@ export class IntelligenceMcpRegistry {
     )
 
     if (result.isError) {
-      throw new Error(normalizeTextContent(result.content ?? []) || `MCP tool ${toolName} failed`)
+      throw createMcpFailure(
+        'tool-failed',
+        normalizeTextContent(result.content ?? []) || `MCP tool ${toolName} failed`
+      )
     }
 
     if (result.structuredContent) return result.structuredContent
@@ -306,15 +311,32 @@ export class IntelligenceMcpRegistry {
           })
 
     let session: ConnectedMcpSession | null = null
+    // A close can arrive while connect() is still awaiting, before there is a session object to
+    // mark. Recording it is what stops the object built below from being returned and cached
+    // with closed: false, leaving the registry serving a dead transport (#777).
+    let closedBeforeSessionExisted = false
     client.onerror = (error) => {
       mcpLog.warn(`MCP profile ${profile.id} transport error`, { error })
     }
     client.onclose = () => {
-      if (session) this.removeSession(profile.id, session)
+      if (session) {
+        this.removeSession(profile.id, session)
+      } else {
+        closedBeforeSessionExisted = true
+      }
       mcpLog.info(`MCP profile ${profile.id} disconnected`)
     }
 
     await client.connect(transport)
+    if (closedBeforeSessionExisted) {
+      // Nothing to remove -- this session was never added to this.sessions. connectProfile
+      // propagates the throw and clears its pending entry in the finally, so the next caller
+      // starts a fresh connect rather than awaiting a dead one.
+      throw createMcpFailure(
+        'server-unavailable',
+        `MCP profile ${profile.id} closed during connect`
+      )
+    }
     session = {
       client,
       transport,
@@ -331,7 +353,8 @@ export class IntelligenceMcpRegistry {
     session: ConnectedMcpSession,
     operation: () => Promise<T>
   ): Promise<T> {
-    if (session.closed) throw new Error(`MCP profile ${profileId} is disconnected`)
+    if (session.closed)
+      throw createMcpFailure('server-unavailable', `MCP profile ${profileId} is disconnected`)
     session.rpcCount += 1
     clearTimeout(session.idleTimer ?? undefined)
     session.idleTimer = null

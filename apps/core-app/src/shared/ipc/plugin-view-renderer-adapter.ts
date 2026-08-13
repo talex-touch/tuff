@@ -5,5 +5,7 @@ export const pluginViewRendererIpcAdapter = Object.freeze({
     ipcRenderer.on(channelName, listener),
   removeListener: (channelName: string, listener: (event: unknown, payload: unknown) => void) =>
     ipcRenderer.removeListener(channelName, listener),
-  send: (channelName: string, payload: unknown) => ipcRenderer.send(channelName, payload)
+  send: (channelName: string, payload: unknown) => ipcRenderer.send(channelName, payload),
+  sendSync: (channelName: string, payload?: unknown) =>
+    ipcRenderer.sendSync(channelName, payload) as unknown
 })

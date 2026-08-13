@@ -1,0 +1,76 @@
+---
+title: Sources
+description: 可折叠的引用来源列表，链接是否跳转完全由宿主决定。
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, sources, citation]
+syncStatus: reviewed
+verified: true
+---
+# Sources
+
+`TxSources` 把支撑一次回答的引用收进折叠区：折叠时只显示条数，展开后是带序号、站点图标与域名的有序列表。
+
+已人工核对 `packages/tuffex/packages/components/src/sources/src/TxSources.vue`。
+
+## 基础用法
+
+### Sources
+::::TuffDemoWrapper{demo="SourcesSourcesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const sources = [
+    { id: 's1', url: 'https://vuejs.org/guide/introduction.html', title: 'Introduction', favicon: 'https://vuejs.org/logo.svg' },
+    { id: 's2', url: 'https://developer.mozilla.org/en-US/docs/Web/API/Clipboard' },
+  ]
+
+  function openSource(source: { url: string }) {
+    window.open(source.url, '_blank', 'noopener')
+  }
+  </script>
+
+  <template>
+    <TxSources :sources="sources" @open="openSource" />
+  </template>
+---
+::::
+
+## 交互契约
+
+- **链接不会自己跳转。** 点击时组件调用 `preventDefault()` 并派发 `open`，是否打开、在哪打开由宿主决定——这对沙箱环境（如 Electron 渲染进程）是刻意设计。
+- `href` 仍然写在 `<a>` 上，所以「在新标签页打开」「复制链接地址」等浏览器原生右键菜单依旧可用。
+- 展开态由组件自己持有，初值取 `defaultOpen`；这是非受控组件，后续改 `defaultOpen` 不生效。
+- 折叠标题默认是 `Used N source(s)`，会按单复数变形；`labelFormatter` 可整体接管。
+- 标题回退到域名：`title` 为空时显示 `url` 的 hostname（去掉 `www.`）；`url` 无法被 `URL` 解析时，原样显示 `url` 本身。
+- 站点图标加载失败会被永久记下并停止重试该条，不会反复请求坏图。
+- 图标标了 `alt=""` 与 `aria-hidden`，可访问名称由标题与域名文本承载。
+- 列表是 `<ol>`，序号来自渲染顺序而非数据字段——重排 `sources` 就会重排编号。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `sources` | `AiSourceItem[]` | — | 引用列表；`AiSourceItem` 为 `{ id, url, title?, favicon? }`。必填。 |
+| `labelFormatter` | `(count: number) => string` | — | 自定义折叠标题；未设时回退到 `Used N source(s)`。 |
+| `defaultOpen` | `boolean` | `false` | 初始是否展开。仅在挂载时读取一次。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open` | `(source: AiSourceItem)` | 点击某条引用时派发。默认跳转已被阻止，导航需宿主自行完成。 |
+
+## Slots
+
+`TxSources` 不暴露插槽。条目结构固定为序号 + 图标 + 标题 + 域名。
+
+## 最佳实践
+
+- 必须监听 `open`，否则点击引用不会有任何反应。
+- 桌面端在外部浏览器打开，并带上 `noopener`；不要在应用窗口里直接导航走。
+- `id` 用稳定标识：图标失败记录是按 `id` 存的，`id` 变化会让坏图重新尝试加载。
+- 中文界面记得覆盖 `labelFormatter`，默认文案是英文且带英文复数规则。

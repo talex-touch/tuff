@@ -57,7 +57,7 @@ function getModuleName(module: DownloadModule): string {
 }
 
 function getStatusText(status: DownloadStatus): string {
-  const statusTexts = {
+  const statusTexts: Partial<Record<DownloadStatus, string>> = {
     [DownloadStatus.COMPLETED]: t('download.status_completed'),
     [DownloadStatus.FAILED]: t('download.status_failed'),
     [DownloadStatus.CANCELLED]: t('download.status_cancelled')
@@ -113,15 +113,15 @@ function formatSize(bytes: number): string {
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) {
-    return `${Math.round(seconds)}${t('download.seconds')}`
+    return `${Math.round(seconds)}${t('common.seconds')}`
   } else if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60)
     const secs = Math.round(seconds % 60)
-    return `${minutes}${t('download.minutes')}${secs}${t('download.seconds')}`
+    return `${minutes}${t('common.minutes')}${secs}${t('common.seconds')}`
   } else {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
-    return `${hours}${t('download.hours')}${minutes}${t('download.minutes')}`
+    return `${hours}${t('common.hours')}${minutes}${t('common.minutes')}`
   }
 }
 

@@ -11,6 +11,7 @@ import GitHub from 'next-auth/providers/github'
 import { createD1Adapter } from '../../utils/authAdapter'
 import {
   consumeLoginToken,
+  evaluatePasswordSignInRateLimit,
   getUserByAccount,
   getUserByEmail,
   logLoginAttempt,
@@ -20,6 +21,7 @@ import {
 import { readCloudflareBindings } from '../../utils/cloudflare'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
+import { oauthEmailProvesMailboxControl, selectVerifiedGitHubEmail } from '../../utils/oauthEmailTrust'
 import {
   assertRuntimeCredential,
   isLocalDevelopmentRuntime,
@@ -484,11 +486,30 @@ function getAuthOptions(authSecret: string): AuthOptions {
           return null
         }
 
+        // Failures were written to the login history and never read back, so the guess budget
+        // was unbounded (#897). Resolved before verifying rather than after, so a locked-out
+        // account costs an attacker a lookup instead of a PBKDF2 verification — and so the
+        // refusal does not depend on the password happening to be wrong.
+        const knownUser = await getUserByEmail(authEvent, email)
+        const activeKnownUserId = knownUser?.status === 'active' ? knownUser.id : null
+        const rateLimit = await evaluatePasswordSignInRateLimit(authEvent, {
+          userId: activeKnownUserId,
+        })
+        if (!rateLimit.allowed) {
+          await logLoginAttempt(authEvent, {
+            userId: activeKnownUserId,
+            deviceId: null,
+            success: false,
+            reason: 'rate_limited',
+            clientType: 'web',
+          })
+          return null
+        }
+
         const user = await verifyUserPassword(authEvent, email, password)
         if (!user) {
-          const attemptedUser = await getUserByEmail(authEvent, email)
           await logLoginAttempt(authEvent, {
-            userId: attemptedUser?.status === 'active' ? attemptedUser.id : null,
+            userId: activeKnownUserId,
             deviceId: null,
             success: false,
             reason: 'invalid_password',
@@ -575,24 +596,19 @@ function getAuthOptions(authSecret: string): AuthOptions {
               if (emailResponse.status >= 200 && emailResponse.status < 300) {
                 const emails = Array.isArray(emailResponse.data) ? emailResponse.data : []
                 if (Array.isArray(emails)) {
-                  const primary =
-                    emails.find(item => {
-                      return (
-                        item &&
-                        typeof item.email === 'string' &&
-                        item.email.length > 0 &&
-                        item.verified === true &&
-                        item.primary === true
-                      )
-                    }) ??
-                    emails.find(item => {
-                      return item && typeof item.email === 'string' && item.email.length > 0 && item.verified === true
-                    }) ??
-                    emails.find(item => {
-                      return item && typeof item.email === 'string' && item.email.length > 0
-                    })
-
-                  if (primary && typeof primary.email === 'string') profile.email = primary.email
+                  // Verified addresses only. There used to be a further branch taking any
+                  // address at all when neither matched, and GitHub returns addresses a user
+                  // has merely *added* (`verified: false`), so it could hand back one the
+                  // signer never proved they own (#917).
+                  //
+                  // This matters more than it looks: oauthEmailProvesMailboxControl trusts
+                  // 'github' unconditionally, and the reason it may is precisely that this
+                  // selection yields verified addresses only. The fallback contradicted the
+                  // premise the rest of the account-linking rule rests on. Left unset when
+                  // nothing is verified — sign-in still works, it just cannot resolve to a
+                  // pre-existing account, which is the outcome worth protecting.
+                  const selected = selectVerifiedGitHubEmail(emails)
+                  if (selected) profile.email = selected
                 }
               }
             }
@@ -614,9 +630,14 @@ function getAuthOptions(authSecret: string): AuthOptions {
       type: 'oauth',
       clientId: linuxdoClientId,
       clientSecret: linuxdoClientSecret,
-      // Keep LinuxDO behavior consistent with GitHub: when OAuth email matches an existing
-      // local account, allow linking instead of returning without creating provider linkage.
-      allowDangerousEmailAccountLinking: true,
+      // GitHub resolves its email through /user/emails and keeps only entries the issuer
+      // marks `verified === true`, so an email from GitHub is proof of mailbox control.
+      // LinuxDO's /api/user carries no equivalent claim: the address is whatever the account
+      // has set. Auto-linking on it let anyone who set a victim's address at the issuer sign
+      // straight into the victim's Nexus account, admin included (#916). Linking to a
+      // pre-existing local account is therefore off here, and the signIn callback below
+      // refuses to adopt one unless the profile carries an explicit `email_verified` claim.
+      allowDangerousEmailAccountLinking: false,
       authorization: {
         url: `${linuxdoIssuer}/oauth2/authorize`,
         params: { scope: 'profile email' },
@@ -699,6 +720,11 @@ function getAuthOptions(authSecret: string): AuthOptions {
           if (!email) return true
           const existing = await getUserByEmail(authEvent, email)
           if (!existing) return true
+          // Checked before restoreForInteractiveSignIn, not after: that call un-deletes an
+          // account inside its pending-deletion window, so letting an untrusted email reach
+          // it would let a stranger resurrect someone else's account even when the sign-in
+          // that follows is refused.
+          if (!oauthEmailProvesMailboxControl(account.provider, profile)) return false
           return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         if (account.provider === 'email') {

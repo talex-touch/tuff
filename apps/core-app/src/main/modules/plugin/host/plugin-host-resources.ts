@@ -362,14 +362,15 @@ export class PluginHostResourceRegistry
       await Promise.all([...pending].map((record) => this.dropRecord(record)))
       pending.clear()
     }
-    const resources: PluginHostCapabilityResourceContext = Object.freeze({
-      register: (kind, dispose) => {
-        if (!active) throw new PluginHostResourceError('PLUGIN_HOST_RESOURCE_CLOSED')
-        const record = this.createRecord(invocationOptions, kind, dispose)
-        pending.add(record)
-        return record.handle
-      }
-    })
+    const resources: PluginHostCapabilityResourceContext =
+      Object.freeze<PluginHostCapabilityResourceContext>({
+        register: (kind, dispose) => {
+          if (!active) throw new PluginHostResourceError('PLUGIN_HOST_RESOURCE_CLOSED')
+          const record = this.createRecord(invocationOptions, kind, dispose)
+          pending.add(record)
+          return record.handle
+        }
+      })
     return Object.freeze({
       resources,
       owns: (value: unknown) =>

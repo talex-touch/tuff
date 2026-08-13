@@ -5,6 +5,7 @@ import { TxRadio, TxRadioGroup, type TxRadioValue } from '@talex-touch/tuffex/ra
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import { hasWindow } from '@talex-touch/utils/env'
+import { registerPushServiceWorker } from '~/utils/push-service-worker'
 import { requestJson } from '~/utils/request'
 
 const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
@@ -231,7 +232,7 @@ async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration
     throw new Error(t('dashboard.notifications.browser.errors.serviceWorkerUnsupported', '当前浏览器不支持 Service Worker。'))
   if (!('PushManager' in window))
     throw new Error(t('dashboard.notifications.browser.errors.pushUnsupported', '当前浏览器不支持 Web Push。'))
-  return await navigator.serviceWorker.register('/notification-sw.js')
+  return await registerPushServiceWorker(navigator.serviceWorker)
 }
 
 async function loadBrowserPushSubscriptions() {

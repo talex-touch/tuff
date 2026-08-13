@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { PickerColumn, PickerEmits, PickerProps, PickerValue } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+
+// Resolved in setup: inject is only valid here, while allocation happens later.
+const zIndexAllocator = useZIndexAllocator()
 
 defineOptions({ name: 'TxPicker' })
 
@@ -29,7 +32,7 @@ const open = computed({
 })
 
 const mountedOnce = ref(false)
-const popupZIndex = ref(getZIndex())
+const popupZIndex = ref(zIndexAllocator.get())
 
 const columns = computed<PickerColumn[]>(() => props.columns ?? [])
 
@@ -302,7 +305,7 @@ watch(
   async (v) => {
     if (v) {
       if (props.popup)
-        popupZIndex.value = nextZIndex()
+        popupZIndex.value = zIndexAllocator.next()
       emit('open')
       mountedOnce.value = true
       await syncScrollPositions('auto')

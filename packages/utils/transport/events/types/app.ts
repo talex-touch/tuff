@@ -470,3 +470,21 @@ export type {
   TrackDurationPayload,
   TrackEventPayload,
 } from '../../../analytics'
+
+/**
+ * A report-only Content-Security-Policy violation, forwarded from the renderer (#689).
+ *
+ * The report-only policy exists to produce a runtime inventory of what the renderer actually
+ * reaches, so that `default-src` and `connect-src` can stop being wildcards. That inventory was
+ * unreachable: the renderer logger writes to the renderer console and nowhere else, so the
+ * findings only existed in devtools nobody has open during real use.
+ */
+export interface CspViolationReport {
+  /** The directive that would have blocked the request. */
+  effectiveDirective: string;
+  /** The blocked URI, or an empty string for inline sources. */
+  blockedURI: string;
+  documentURI: string;
+  sourceFile?: string;
+  lineNumber?: number;
+}

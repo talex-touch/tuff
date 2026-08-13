@@ -98,3 +98,65 @@ describe('ViewCacheManager ownership transfer', () => {
     expect(cachedView.webContents.close).not.toHaveBeenCalled()
   })
 })
+
+describe('ViewCacheManager capacity enforcement', () => {
+  const manager = ViewCacheManager.getInstance()
+  const plugin = (name: string) => ({ name }) as never
+  const feature = { id: 'demo-feature' } as never
+
+  beforeEach(() => {
+    manager.clear()
+    manager.updateConfig({ maxCachedViews: 4, hotCacheDurationMs: 120_000 })
+    vi.clearAllMocks()
+  })
+
+  const fill = (count: number) =>
+    Array.from({ length: count }, (_, i) => {
+      const view = createView(200 + i)
+      manager.set(plugin(`plugin-${i}`), view, `plugin://plugin-${i}/index.html`, feature)
+      return view
+    })
+
+  it('evicts down to a lowered cap instead of only changing the number', () => {
+    const views = fill(4)
+    expect(manager.get(plugin('plugin-3'), feature)).not.toBeNull()
+
+    manager.updateConfig({ maxCachedViews: 1 })
+
+    // Three of the four live WebContentsViews must actually be closed — the
+    // whole point of lowering the setting is reclaiming those processes (#673).
+    const closed = views.filter(
+      (view) =>
+        (view.webContents.close as never as { mock: { calls: unknown[] } }).mock.calls.length > 0
+    )
+    expect(closed).toHaveLength(3)
+  })
+
+  it('caches nothing at all when the cap is zero', () => {
+    manager.updateConfig({ maxCachedViews: 0 })
+
+    const view = createView(300)
+    manager.set(plugin('plugin-zero'), view, 'plugin://plugin-zero/index.html', feature)
+
+    // The stale-cleanup task is unregistered at this cap, so anything admitted
+    // here would never be drained.
+    expect(manager.get(plugin('plugin-zero'), feature)).toBeNull()
+  })
+
+  it('drops every resident view when the cap is lowered to zero', () => {
+    const views = fill(3)
+
+    manager.updateConfig({ maxCachedViews: 0 })
+
+    for (const view of views) {
+      expect(view.webContents.close).toHaveBeenCalled()
+    }
+  })
+
+  it('still keeps the cache filled to a normal cap', () => {
+    fill(4)
+
+    expect(manager.get(plugin('plugin-1'), feature)).not.toBeNull()
+    expect(manager.get(plugin('plugin-3'), feature)).not.toBeNull()
+  })
+})

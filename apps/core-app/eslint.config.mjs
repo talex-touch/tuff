@@ -260,7 +260,13 @@ export default tseslint.config(
   },
   {
     files: ['src/preload/**/*.{ts,mts,tsx,js,mjs,cjs}'],
-    ignores: ['src/preload/index.ts', '**/*.{test,spec}.{ts,mts,tsx,js,mjs,cjs}'],
+    // index.d.ts declares the same bridge boundary index.ts implements, so it names
+    // `ipcRenderer` for the same reason and belongs on the same side of the rule (#693).
+    ignores: [
+      'src/preload/index.ts',
+      'src/preload/index.d.ts',
+      '**/*.{test,spec}.{ts,mts,tsx,js,mjs,cjs}'
+    ],
     rules: {
       'no-restricted-syntax': ['error', ...baseRestrictedSyntax, ...preloadRuntimeRestrictedSyntax]
     }

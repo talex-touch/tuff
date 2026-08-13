@@ -3,7 +3,21 @@ import {
   ShortcutTriggerKind,
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+
+// global-shortcon.ts computes `isMacPlatform` at module scope, so the Option/Alt
+// spelling is fixed the moment it is imported -- a beforeAll pin would be too
+// late. Hoisted so it runs before the import graph; the suite covers migration
+// of a persisted default, and only the token spelling is platform-specific.
+const originalPlatform = vi.hoisted(() => {
+  const previous = process.platform
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  return previous
+})
+
+afterAll(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+})
 
 const electronMocks = vi.hoisted(() => ({
   register: vi.fn(() => true),
@@ -170,6 +184,74 @@ afterEach(() => {
   electronMocks.getAllWindows.mockClear()
   mainStorageMocks.getConfig.mockReset()
   mainStorageMocks.saveConfig.mockReset()
+})
+
+describe('ShortcutModule survives a malformed shortcut record', () => {
+  /**
+   * Shortcut.meta is typed as required, but this module guards it with `?.` in a dozen places
+   * because older schemas and partial writes produce records without one (#776). The
+   * classification loop then wrote through the guarded value and threw -- after
+   * globalShortcut.unregisterAll() had already run, so nothing was re-registered.
+   *
+   * Two separate properties, because either half of the fix alone makes a single
+   * "does everything still register" assertion pass: normalising meta stops the throw, and the
+   * try/catch hides it. They are asserted independently so each mutation is detectable.
+   */
+  function seedTrigger(module: ShortcutModuleHarness, storage: InMemoryShortcutStorage): void {
+    module.registerMainTrigger('core.test.trigger', ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS, {
+      enabled: true,
+      onStateChange: vi.fn(),
+      owner: 'test'
+    })
+    storage.addShortcut({
+      id: 'core.test.trigger',
+      accelerator: ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS,
+      type: ShortcutType.TRIGGER
+    } as unknown as Shortcut)
+  }
+
+  it('缺少 meta 的记录会被补齐,而不是被判为无效', () => {
+    const { module, storage } = createModule()
+    seedTrigger(module, storage)
+
+    module.reregisterAllShortcuts?.()
+
+    const stored = storage.getShortcutById('core.test.trigger')
+    expect(stored?.meta).toBeDefined()
+    expect(stored?.meta?.triggerKind).toBe(ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS)
+    expect(module.shortcutStatusMap?.get('core.test.trigger')?.state).toBe('active')
+
+    module.onDestroy()
+  })
+
+  it('单条记录抛错不会让其它快捷键失去注册', () => {
+    const { module } = createModule()
+
+    // Both must be registered through registerMainShortcut, otherwise the classification loop
+    // skips them at the mainCallbackRegistry check and never reaches the fault.
+    module.registerMainShortcut('core.test.main', 'CommandOrControl+Shift+K', vi.fn())
+    module.registerMainShortcut('core.test.broken', 'CommandOrControl+Shift+J', vi.fn())
+
+    // A per-record fault, standing in for anything the classification loop can hit on one
+    // shortcut. Injected after registration so setup does not trip over it.
+    const internals = module as unknown as {
+      normalizeAccelerator: (accelerator: string) => string | null
+    }
+    const originalNormalize = internals.normalizeAccelerator.bind(module)
+    internals.normalizeAccelerator = (accelerator: string): string | null => {
+      if (accelerator === 'CommandOrControl+Shift+J') throw new Error('malformed record')
+      return originalNormalize(accelerator)
+    }
+
+    electronMocks.register.mockClear()
+    expect(() => module.reregisterAllShortcuts?.()).not.toThrow()
+    expect(electronMocks.register).toHaveBeenCalledWith(
+      'CommandOrControl+Shift+K',
+      expect.any(Function)
+    )
+
+    module.onDestroy()
+  })
 })
 
 describe('ShortcutModule retired shortcut migration', () => {

@@ -10,11 +10,17 @@ const props = withDefaults(
     modelValue?: boolean
     disabled?: boolean
     size?: 'small' | 'default' | 'large'
+    /** Accessible name. Prefer `ariaLabelledby` when a visible label already exists. */
+    ariaLabel?: string
+    /** Id of a visible label element that names this switch. */
+    ariaLabelledby?: string
   }>(),
   {
     modelValue: false,
     disabled: false,
     size: 'default',
+    ariaLabel: 'Toggle',
+    ariaLabelledby: undefined,
   },
 )
 
@@ -43,6 +49,8 @@ function toggle() {
     role="switch"
     :aria-checked="isActive"
     :aria-disabled="disabled"
+    :aria-label="ariaLabelledby ? undefined : ariaLabel"
+    :aria-labelledby="ariaLabelledby"
     :disabled="disabled"
     class="tuff-switch" :class="[
       {

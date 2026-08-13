@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Core Application Development
 - `pnpm core:dev` - Start development server for the main Electron app
-- `pnpm core:build` - Build the main application for production
-- `pnpm core:build:beta` - Build beta version
-- `pnpm core:build:snapshot` - Build snapshot version
-- `pnpm core:build:release` - Build release version
+- `pnpm build` - Build the main application for production
+- `pnpm build:beta` - Build beta version
+- `pnpm build:snapshot` - Build snapshot version
+- `pnpm build:release` - Build release version
 
 ### Platform-Specific Builds
-- `pnpm core:build:snapshot:win` - Build Windows snapshot
-- `pnpm core:build:snapshot:mac` - Build macOS snapshot
-- `pnpm core:build:snapshot:linux` - Build Linux snapshot
+- `pnpm build:snapshot:win` - Build Windows snapshot
+- `pnpm build:snapshot:mac` - Build macOS snapshot
+- `pnpm build:snapshot:linux` - Build Linux snapshot
 
 ### Type Checking (within apps/core-app/)
 - `npm run typecheck` - TypeScript validation for both main and renderer processes
@@ -25,14 +25,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run db:generate` - Generate Drizzle ORM migrations
 - `npm run db:migrate` - Run database migrations
 
-### Documentation
-- `pnpm docs:dev` - Start documentation development server
-- `pnpm docs:build` - Build documentation
+### Documentation (Nexus site)
+- `pnpm nexus:dev` - Start the docs / ecosystem site dev server
+- `pnpm nexus:build` - Build the docs / ecosystem site
 
 ### Code Quality
 - `pnpm lint` - Run ESLint on all code
 - `pnpm lint:fix` - Run ESLint with auto-fix
-- `pnpm utils:test` - Run tests for utility packages
+- `pnpm utils:test` - Run the `packages/test` integration suite once and exit (despite the name, this is not `packages/utils`)
 
 ### Publishing
 - `pnpm utils:publish` - Publish @talex-touch/utils package to npm
@@ -40,16 +40,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Monorepo Structure
-This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, extracted plugins in `plugins/` (7 independent plugin packages), and documentation in `apps/docs/`.
+This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, plugins in `plugins/` (24 plugin packages), and the documentation & ecosystem site in `apps/nexus/`.
 
 ### Technology Stack
-- **Electron**: 40.0.0+ with Node.js 22.16.0+
-- **Vue**: 3.5.27+ with Vue Router 4.6.4 and Pinia 3.0.4
+- **Electron**: 41.10.1+ with Node.js 24.15.0+
+- **Vue**: 3.5.39+ with Vue Router 4.6.4 and Pinia 3.0.4
 - **TypeScript**: 5.9.3
-- **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.1, Electron-Builder 26.4.0
-- **UI**: Tuffex, UnoCSS 66.6.0, SASS 1.97.2
-- **Database**: Drizzle ORM 0.44.7 with LibSQL 0.15.15
-- **Utilities**: VueUse 14.1.0, Dayjs 1.11.19, @talex-touch/tuff-native (native OCR), XTerm 5.3.0
+- **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.6, Electron-Builder 26.15.3
+- **UI**: Tuffex, UnoCSS 66.7.5, SASS 1.101.0
+- **Database**: Drizzle ORM 0.45.2 with LibSQL 0.17.4
+- **Utilities**: VueUse 14.3.0, Dayjs 1.11.21, @talex-touch/tuff-native (native OCR), XTerm 5.3.0
 - **Logging**: log4js 6.9.1
 
 ### Core Application Architecture (apps/core-app/)
@@ -70,8 +70,17 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **OCR** ([modules/ocr/](apps/core-app/src/main/modules/ocr/)): Native OCR via @talex-touch/tuff-native (Apple Vision / Windows OCR) with AI-provider fallback
 - **Clipboard** ([modules/clipboard/](apps/core-app/src/main/modules/clipboard/)): System clipboard operations
 
-**Module Loading Order** (sequential after Electron ready):
-1. DatabaseModule → 2. StorageModule → 3. ShortcutModule → 4. ExtensionLoaderModule → 5. CommonChannelModule → 6. PluginModule → 7. PluginLogModule → 8. CoreBoxModule → 9. TrayHolderModule → 10. AddonOpenerModule → 11. ClipboardModule → 12. TuffDashboardModule → 13. FileSystemWatcher → 14. FileProtocolModule → 15. TerminalModule
+**Module Loading Order**
+
+The order is defined by `foregroundModulesToLoad` and `deferredModulesToLoad` in [src/main/index.ts](apps/core-app/src/main/index.ts) — read those arrays rather than a list here, which goes stale as modules are added. Currently 39 foreground and 2 deferred.
+
+What the arrays alone don't tell you:
+
+- **Two phases.** Foreground modules load sequentially once Electron is ready. Deferred modules (`extensionLoaderModule`, `FileSystemWatcher`) are scheduled via `setImmediate` after the first window is up, so they must not be depended on during startup.
+- **Optional modules.** Members of `optionalModulesToLoad` (currently `trayManagerModule`) log a warning and let startup continue if they fail. Every other module failing to load aborts startup.
+- **Ordering constraints that are load-bearing**, and are marked as such in the array: `permissionModule` must precede `pluginModule`, and `flowBusModule` must follow it. `databaseModule` is first because storage and everything downstream reads through it.
+
+When inserting a module, place it by the dependency you actually have — the array position is the whole contract, and getting it wrong reproduces only at startup.
 
 **Renderer Process (src/renderer/):**
 - Vue 3 application with TypeScript
@@ -88,14 +97,36 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 4. **Stop**: Module deactivation (optional)
 5. **Destroy**: Cleanup and resource release (required)
 
-**Base Module Interface:**
+**Base Module Interface** ([abstract-base-module.ts](apps/core-app/src/main/modules/abstract-base-module.ts)):
 ```typescript
-abstract class BaseModule {
-  abstract onInit(ctx: ModuleInitContext): MaybePromise<void>
-  abstract onDestroy(ctx: ModuleDestroyContext): MaybePromise<void>
-  created?(ctx: ModuleCreateContext): MaybePromise<void>
-  start?(ctx: ModuleStartContext): MaybePromise<void>
-  stop?(ctx: ModuleStopContext): MaybePromise<void>
+abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<E> {
+  readonly name: ModuleKey        // = symbol; the singleton id ModuleManager registers under
+  readonly file?: ModuleFileConfig
+  readonly env?: ModuleEnvFlag
+  filePath?: string               // set by init() from ctx.file.dirPath
+
+  protected constructor(key: ModuleKey, file?: ModuleFileConfig, env?: ModuleEnvFlag)
+
+  abstract onInit(ctx: ModuleInitContext<E>): MaybePromise<void>
+  abstract onDestroy(ctx: ModuleDestroyContext<E>): MaybePromise<void>
+  created?(ctx: ModuleCreateContext<E>): MaybePromise<void>
+  start?(ctx: ModuleStartContext<E>): MaybePromise<void>
+  stop?(ctx: ModuleStopContext<E>): MaybePromise<void>
+}
+```
+
+`init` and `destroy` are concrete wrappers — override `onInit` / `onDestroy`, never those. The constructor argument is what gives a module its identity, so a subclass that omits it has no key to be registered under:
+
+```typescript
+export class MyModule extends BaseModule {
+  static key: symbol = Symbol.for('my-module')
+
+  constructor() {
+    super(MyModule.key, { create: false })
+  }
+
+  onInit(): void {}
+  onDestroy(): void {}
 }
 ```
 
@@ -114,7 +145,7 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
 - `touch-window-presets` - Window presets
 - `touch-workspace-scripts` - Workspace scripts (split from dev toolbox)
 - `touch-system-actions` - System actions
-- `touch-intelligence-actions` - AI intelligence actions
+- `touch-intelligence` - AI intelligence actions
 
 **Plugin Three-Layer Architecture**:
 
@@ -139,6 +170,8 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
   "id": "com.example.plugin",
   "name": "plugin-name",
   "version": "1.0.0",
+  "sdkapi": 260713,
+  "category": "utilities",
   "features": [
     {
       "id": "feature-id",
@@ -239,25 +272,35 @@ The application uses a custom channel system abstracting Electron IPC:
 - `ChannelType.MAIN`: Main process ↔ renderer communication
 - `ChannelType.PLUGIN`: Plugin-specific isolated communication
 
-**Key APIs:**
+**Key APIs** — two classes, not one surface. Every main-process call carries a `ChannelType`; no renderer call does.
+
+Main process ([core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)):
 ```typescript
-// Register handlers
-regChannel(type: ChannelType, eventName: string, callback): () => void
+regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void
 
-// Send messages
-send(eventName: string, arg?: any): Promise<any>
-sendTo(window: BrowserWindow, eventName: string, arg?: any): Promise<any>
-sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+send(type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
+sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: unknown): Promise<unknown>
+sendPlugin(pluginName: string, eventName: string, arg?: unknown): Promise<unknown>
 
-// Key management (encryption for plugin isolation)
-requestKey(name: string): string
+// Key management (per-activation capability tokens for plugin isolation)
+requestKey(name: string, activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>): string
 revokeKey(key: string): boolean
 ```
+
+Renderer ([modules/channel/channel-core.ts](apps/core-app/src/renderer/src/modules/channel/channel-core.ts)) — the whole surface is three methods; there is no `sendTo`, `sendPlugin`, `requestKey` or `revokeKey`:
+```typescript
+regChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): () => void
+unRegChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): boolean
+
+send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): Promise<TResponse>
+```
+
+The two `regChannel` signatures are the trap: passing a `ChannelType` to the renderer's registers a handler under that value as the event name, which type-checks and then never fires.
 
 **Implementation Notes:**
 - Uses IPC listeners on `@main-process-message` and `@plugin-process-message`
 - Supports both sync and async request-response patterns
-- Plugin channels use encrypted keys for additional security
+- Plugin channels are addressed by a per-activation random capability token, not by plugin name
 
 ### Window Management
 - **Main Window**: Primary application interface with Vibrancy (macOS) or Mica (Windows) effects
@@ -270,15 +313,16 @@ revokeKey(key: string): boolean
 **TouchEventBus** provides application-wide event dispatching:
 
 ```typescript
+// String enum — 33 members total (apps/core-app/src/main/core/eventbus/touch-event.ts)
 enum TalexEvents {
-  APP_READY,
-  APP_START,
-  APP_SECONDARY_LAUNCH,
-  ALL_MODULES_LOADED,
-  BEFORE_APP_QUIT,
-  WILL_QUIT,
-  WINDOW_ALL_CLOSED,
-  PLUGIN_STORAGE_UPDATED
+  BEFORE_APP_START = 'before-app-start',
+  APP_START = 'app-start',
+  APP_READY = 'app-ready',
+  ALL_MODULES_LOADED = 'all-modules-loaded',
+  BEFORE_MODULES_UNLOAD = 'before-modules-unload',
+  // …plugin, search-engine/*, and permission/* lifecycle events…
+  PERMISSION_GRANTED = 'permission/granted',
+  PERMISSION_REVOKED = 'permission/revoked',
 }
 ```
 
@@ -299,12 +343,12 @@ Modules subscribe to events: `touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, (
 - Update broadcast system for reactive UI updates across windows
 
 **Channel Integration:**
-- Main process: `storage:get`, `storage:save`, `storage:delete`
-- Plugin process: `plugin:storage:get-item`, `plugin:storage:set-item`
+- Main process: `storage:sqlite:query`, `storage:plugin:file`, `storage:plugin:secret`
+- Plugin process: `plugin:storage:get-file`, `plugin:storage:set-file`, `plugin:storage:get-secret`, `plugin:storage:set-secret`
 
 ### Shared Utilities Package
 
-**`@talex-touch/utils`** (npm package v1.0.23) provides shared types and utilities:
+**`@talex-touch/utils`** (npm package v1.0.50) provides shared types and utilities:
 
 ```
 packages/utils/
@@ -370,7 +414,7 @@ await accountSDK.hasPrioritySupport()     // Priority support
 
 ## Development Notes
 
-- Node.js version: 22.16.0+ (enforced by pnpm preinstall hook and Volta)
+- Node.js version: 24.15.0+ (enforced by the `engines` field and Volta; the `preinstall` hook only enforces pnpm as the package manager, not the Node version)
 - Uses Electron 40.0.0+ with Vue 3.5.27+
 - Development uses hot-reloading with process cleanup via DevProcessManager
 - Plugin development supports live reloading when Manifest (`manifest.json`) or Prelude (`index.js`) files change
@@ -384,7 +428,7 @@ await accountSDK.hasPrioritySupport()     // Priority support
 
 1. **Module Directory Pattern**: Each module requests an isolated directory for persistent storage without knowing the root path
 
-2. **Encryption for Plugin Isolation**: Plugin channels use encrypted keys instead of direct names for additional security
+2. **Capability Tokens for Plugin Isolation**: Plugin channels are addressed by a 16-byte random token minted per activation, not by plugin name. Nothing is encrypted — the token is a bearer capability, and its security comes from being unguessable, from rotating when a plugin re-activates, and from being revoked on disable, crash and failed activation.
 
 3. **Broadcast Storage Updates**: Storage module broadcasts updates to all windows to keep UI in sync across multiple renderer instances
 
@@ -401,12 +445,12 @@ await accountSDK.hasPrioritySupport()     // Priority support
 ## Key File Locations
 
 - Main entry: [apps/core-app/src/main/index.ts](apps/core-app/src/main/index.ts)
-- Core app logic: [apps/core-app/src/main/core/touch-core.ts](apps/core-app/src/main/core/touch-core.ts)
+- Core app logic: [apps/core-app/src/main/core/touch-app.ts](apps/core-app/src/main/core/touch-app.ts)
 - Module manager: [apps/core-app/src/main/core/module-manager.ts](apps/core-app/src/main/core/module-manager.ts)
-- Plugin system: [apps/core-app/src/main/modules/plugin/plugin-provider.ts](apps/core-app/src/main/modules/plugin/plugin-provider.ts)
-- CoreBox launcher: [apps/core-app/src/main/modules/box-tool/core-box.ts](apps/core-app/src/main/modules/box-tool/core-box.ts)
+- Plugin system: [apps/core-app/src/main/modules/plugin/index.ts](apps/core-app/src/main/modules/plugin/index.ts)
+- CoreBox launcher: [apps/core-app/src/main/modules/box-tool/core-box/index.ts](apps/core-app/src/main/modules/box-tool/core-box/index.ts)
 - Channel system: [apps/core-app/src/main/core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)
-- Storage module: [apps/core-app/src/main/modules/storage/storage-provider.ts](apps/core-app/src/main/modules/storage/storage-provider.ts)
+- Storage module: [apps/core-app/src/main/modules/storage/index.ts](apps/core-app/src/main/modules/storage/index.ts)
 - Permission module: [apps/core-app/src/main/modules/permission/](apps/core-app/src/main/modules/permission/)
 - Transport SDKs: [packages/utils/transport/](packages/utils/transport/)
 - Extracted plugins: [plugins/](plugins/)

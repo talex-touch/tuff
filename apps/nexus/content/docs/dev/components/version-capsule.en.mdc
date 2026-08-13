@@ -215,8 +215,8 @@ opens a full-screen release-history overlay instead.
 | Member | Type | Description |
 |------|------|------|
 | `close` | `() => void` | Closes the open panel and returns focus to the segment that opened it. Also passed into both panel slots. |
-| `downloadRef` | `Ref<HTMLButtonElement>` | The left (download) segment button element. |
-| `historyRef` | `Ref<HTMLButtonElement>` | The right (history) segment button element. |
+| `downloadRef` | `Ref<HTMLButtonElement \| null>` | The left (download) segment button element. |
+| `historyRef` | `Ref<HTMLButtonElement \| null>` | The right (history) segment button element. |
 
 ## Interaction Contract
 

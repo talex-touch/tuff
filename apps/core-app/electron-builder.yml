@@ -51,11 +51,12 @@ files:
   - '!**/*.rmeta'
   # Keep js-tiktoken ESM runtime files: @langchain/core imports js-tiktoken/lite via ESM,
   # which resolves to dist/lite.js from the package exports map in packaged builds.
-  # mathjs is bundled into out/main/index.js (not externalized) to enable tree-shaking.
-  # Only mathjs/number subset (~2MB) gets bundled; the full ~13MB mathjs package in node_modules is unused.
-  - '!**/node_modules/mathjs/**'
 extraFiles: []
 extraResources:
+  # Tuff's pi tool forwarder, loaded per spawn via `-e` (see pi-cli-provider);
+  # never installed into the user's own pi setup.
+  - from: ../../packages/pi-extension-tuff/index.ts
+    to: pi-extension-tuff/index.ts
   - from: resources/icon.png
     to: resources/icon.png
   - from: resources/TrayIconTemplate.png
@@ -115,16 +116,36 @@ mac:
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
     NSDesktopFolderUsageDescription: Application requests access to the user's Desktop folder.
-  notarize: false
+  # The release workflow already refuses to build a macOS release without Developer ID and an
+  # App Store Connect key (build-and-release.yml, "macOS signing required"), and writes the .p8
+  # for notarytool itself. This was the one place still saying no (#786).
+  notarize: true
   gatekeeperAssess: false
+  # `dir` produces an unpackaged .app: nothing a user can download and install, and nothing the
+  # updater can consume (#594). dmg is what people install from; zip is what electron-updater
+  # reads on macOS, so dropping it would ship an app that cannot update itself.
   target:
-    - target: dir
-      arch: arm64
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
   icon: build/icon.icns
   category: public.app-category.productivity
+  # Deliberately left off. The release job hard-errors when credentials are missing, so the gate
+  # exists where it matters; turning this on would only break local builds for developers who
+  # have no certificate and are not producing releases.
   forceCodeSigning: false
   hardenedRuntime: true
-  artifactName: ${productName}-${version}.${ext}
+  # Both parts are load-bearing. ${arch}: without it the arm64 and x64 builds resolve to the same
+  # filename and one silently overwrites the other. `macos`: inferCoreArtifactIdentity recognises
+  # a mac artifact by `macos`/`darwin` in the name or a `.dmg`/`.app.zip` suffix, so a plain
+  # `-arm64.zip` counted as a core package it could not identify, and manifest validation rejects
+  # an artifact whose platform cannot be inferred (#311).
+  artifactName: ${productName}-${version}-macos-${arch}.${ext}
 dmg:
 linux:
   target:
@@ -132,22 +153,6 @@ linux:
     - deb
   maintainer: tagzxia.com
   category: Utility
-snap:
-  confinement: strict
-  grade: stable
-  summary: A powerful productivity launcher and automation tool
-  description: |
-    Talex Touch is a modern productivity launcher that helps you quickly access applications,
-    files, and perform various automation tasks with a clean, efficient interface.
-  plugs:
-    - home
-    - network
-    - removable-media
-  environment:
-    DISABLE_WAYLAND: '1'
-  # 修复 app-builder 执行问题
-  useTemplateApp: false
-  desktop:
 appImage:
   artifactName: ${productName}-${version}.${ext}
   category: Utility

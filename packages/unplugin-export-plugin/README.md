@@ -27,7 +27,7 @@ import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
 
 export default defineConfig({
   plugins: [
-    ....,
+    // ...your other plugins
     TouchPluginExport()
   ],
 })

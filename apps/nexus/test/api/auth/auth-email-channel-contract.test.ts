@@ -16,7 +16,11 @@ describe('auth email notification channel contract', () => {
     for (const handler of handlers)
       expect(handler).toContain('}, event)')
 
-    expect(readAuthHandler('[...].ts')).toContain('}, tryCreateAuthEvent())')
+    // Whitespace-tolerant: the handler now spreads sendEmail's arguments over
+    // several lines, so the literal '}, tryCreateAuthEvent())' no longer
+    // appears even though the event is still passed as the second argument.
+    // The three '}, event)' checks above are exposed to the same reformatting.
+    expect(readAuthHandler('[...].ts')).toMatch(/\}\s*,\s*tryCreateAuthEvent\(\)\s*,?\s*\)/)
   })
 
   it('tags auth email actions for notification channel routing', () => {

@@ -130,6 +130,120 @@ describe('search provider registry', () => {
     vi.useRealTimers()
   })
 
+  it('contains provider-load failures behind the allowed decision and retries with backoff', async () => {
+    // Regression (V1 2026-08-04): a search-index worker init failure during
+    // the all-modules-loaded trigger escaped the fire-and-forget event
+    // listener as an UNHANDLED_REJECTION with no retry. The allowed branch
+    // must resolve with the decision, warn, and arm the backoff retry instead.
+    vi.useFakeTimers()
+    onboardingGateMock.waitForDecision.mockResolvedValueOnce({ state: 'allowed' })
+    let attempts = 0
+    const beforeProvidersLoad = vi.fn(async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('search-index worker init failed')
+    })
+    const onProvidersReady = vi.fn(async () => undefined)
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad,
+      onProvidersReady,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+
+    await expect(registry.loadWhenOnboardingAllows('all-modules-loaded')).resolves.toEqual({
+      state: 'allowed'
+    })
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(1)
+    expect(onProvidersReady).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(2)
+    expect(onProvidersReady).toHaveBeenCalledTimes(1)
+
+    registry.destroy()
+    vi.useRealTimers()
+  })
+
+  /**
+   * `destroy()` fired provider teardown without awaiting it (#334).
+   *
+   * `ISearchProvider` has no disposal member at all, so the registry reaches for `onDestroy`
+   * structurally through a local type that declared it `() => void`. `AppProvider`'s is
+   * `async onDestroy(): Promise<void>` and awaits `prepareForSearchIndexShutdown()` -- so the
+   * registry resolved while the search index was still shutting down, and the `void` declaration
+   * meant TypeScript saw no floating promise to complain about.
+   */
+  it('waits for an async provider teardown before resolving', async () => {
+    let released!: () => void
+    const teardownFinished = vi.fn()
+    const provider = {
+      id: 'slow-teardown',
+      type: 'app' as never,
+      onSearch: vi.fn(async () => ({ items: [] })) as never,
+      onDestroy: vi.fn(async () => {
+        await new Promise<void>((resolve) => {
+          released = resolve
+        })
+        teardownFinished()
+      })
+    }
+
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad: async () => undefined,
+      onProvidersReady: async () => undefined,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+    registry.register(provider as never)
+
+    const destroyed = registry.destroy()
+    let settled = false
+    void destroyed.then(() => {
+      settled = true
+    })
+
+    // The teardown has started and has not finished, so destroy() must not have resolved either.
+    await Promise.resolve()
+    expect(provider.onDestroy).toHaveBeenCalledTimes(1)
+    expect(teardownFinished).not.toHaveBeenCalled()
+    expect(settled).toBe(false)
+
+    released()
+    await destroyed
+    expect(teardownFinished).toHaveBeenCalledTimes(1)
+  })
+
+  /** A rejecting teardown is logged and the remaining providers are still torn down. */
+  it('keeps tearing down after one provider rejects', async () => {
+    const second = vi.fn(async () => undefined)
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad: async () => undefined,
+      onProvidersReady: async () => undefined,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+    registry.register({
+      id: 'rejects',
+      type: 'app' as never,
+      onSearch: vi.fn(async () => ({ items: [] })) as never,
+      onDestroy: async () => {
+        throw new Error('teardown failed')
+      }
+    } as never)
+    registry.register({
+      id: 'after',
+      type: 'app' as never,
+      onSearch: vi.fn(async () => ({ items: [] })) as never,
+      onDestroy: second
+    } as never)
+
+    await expect(registry.destroy()).resolves.toBeUndefined()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
   it('combines indexed sources and plugin search providers for settings config', () => {
     const snapshot = buildSearchProviderRegistrySnapshot({
       indexedSources: [createIndexedSource('file-provider')],

@@ -29,7 +29,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
-import { getStartupAnalytics } from '.'
+import { getStartupAnalytics } from './startup-analytics'
 import { setIpcTracer } from '../../core/channel-core'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -138,7 +138,10 @@ export class AnalyticsModule extends BaseModule {
 
     this.dbStore = new DbStore({
       auxDb: databaseModule.getAuxDb(),
-      coreDb: databaseModule.getDb()
+      coreDb: databaseModule.getDb(),
+      // Live resolution: AnalyticsModule.onInit runs during module loading,
+      // i.e. before the background aux init has completed (R3 stale capture).
+      resolveAuxDb: () => ({ db: databaseModule.getAuxDb(), isAux: databaseModule.isAuxReady() })
     })
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
     this.disposers.push(

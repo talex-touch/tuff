@@ -63,7 +63,16 @@ describe('resolveChannelCallerIdentity', () => {
     expect(result.pluginIdentity).toBeUndefined()
   })
 
-  it('routes an unregistered valid-key holder as unverified plugin', () => {
+  it('gives an unregistered sender no plugin name, however valid its key', () => {
+    // Previously this returned { pluginName: 'plugin-a' } and was called "unverified plugin" —
+    // pluginIdentity stayed empty, so main-transport's strict check still rejected. But the name
+    // alone routes the message onto the PLUGIN channel and lands in `data.plugin`, which is what
+    // storage namespacing, quota accounting and permission lookups read. "Unverified" was the
+    // wrong frame: a name nobody can verify is an impersonation, not a weaker credential (#698).
+    //
+    // Nothing legitimate lands here. Both production registration sites register the webContents
+    // immediately after creating it and before loading content, so a real plugin surface is never
+    // unregistered while it can still send.
     const result = resolveChannelCallerIdentity({
       senderId: 74,
       senderDestroyed: false,
@@ -71,7 +80,19 @@ describe('resolveChannelCallerIdentity', () => {
       resolveIdentity: () => activation(2)
     })
 
-    expect(result).toEqual({ pluginName: 'plugin-a' })
+    expect(result).toEqual({})
+  })
+
+  it('still refuses an unregistered sender whose key resolves to nothing', () => {
+    // Control for the case above: it must fail closed for the same reason, not for a different one.
+    const result = resolveChannelCallerIdentity({
+      senderId: 76,
+      senderDestroyed: false,
+      declaredKey: 'unknown-key',
+      resolveIdentity: () => undefined
+    })
+
+    expect(result).toEqual({})
   })
 
   it('does not let a stolen key replace the registered plugin identity', () => {

@@ -4,7 +4,7 @@
 ---
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/master/LICENSE)
   [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?include_prereleases&style=flat-square)](https://github.com/talex-touch/tuff/releases)
   <br>
   English | [简体中文](./README.zh-CN.md)
@@ -16,9 +16,17 @@ Tuff (formerly TalexTouch) is a local-first, AI-native, extensible desktop comma
 
 ## Release and platform status
 
-The repository's stable baseline is `2.4.13`, resolved from the matching [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json). Consult [GitHub Releases](https://github.com/talex-touch/tuff/releases) for published artifacts.
+The repository's latest stable release is `2.4.13` (see [GitHub Releases](https://github.com/talex-touch/tuff/releases)); the in-development version declared in the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) is `2.4.14-beta.2`.
 
 Preview artifacts are produced for macOS, Windows, and Linux. A stable source version does not imply identical capability maturity or complete OTA acceptance across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
+
+On Ubuntu 24.04 and later, install from the `.deb` rather than the AppImage. 24.04 restricts
+unprivileged user namespaces by default, which Electron's sandbox needs; the `.deb` registers an
+AppArmor profile granting `userns` during installation, and an AppImage has no install step in
+which to do that. If you must use the AppImage, either allow it for that session with
+`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or use the `.deb`. Tracked in
+[#213](https://github.com/talex-touch/tuff/issues/213), which is still waiting on a report that
+says which of the two was used.
 
 ## Highlights
 
@@ -54,6 +62,11 @@ Tuff integrates a variety of practical functions to make your desktop smarter an
 - **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
 - **Unified Download Center:** Centralized download management with progress tracking and resume support.
 
+### Plugin management policy
+
+- Plugins installed from the official marketplace have the `dev` entry in their manifest disabled during installation, so they cannot accidentally connect to a development server.
+- Every plugin's origin is recorded in the database, and uninstalling removes the plugin directory and its cached data along with it.
+
 ## 🍀 Simple and Easy-to-Use Operations
 
 The operation of Tuff is very simple and user-friendly, allowing users to easily complete various tasks. You only need to open the required function through the menu or shortcut keys to enjoy the convenience brought by Tuff.
@@ -74,7 +87,7 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 
 ## 🤝 License
 
-This project is open-sourced under the **MIT License**.
+This project is open-sourced under the **Mozilla Public License 2.0 (MPL-2.0)** — see [`LICENSE`](./LICENSE).
 
 ## ⁉️ Issue
 

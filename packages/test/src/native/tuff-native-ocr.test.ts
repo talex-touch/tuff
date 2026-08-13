@@ -7,6 +7,17 @@ import { describe, expect, it } from 'vitest'
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_OCR'
 
+/**
+ * Set by `native-protocol.yml`, which builds the addon, to forbid the early return below.
+ *
+ * Without it a green run cannot be told apart from a run that never touched OCR: the fixture
+ * assertion returns when support is absent, and support is legitimately absent in the
+ * integration suite, which does not build Rust. That is the same shape as the gap #1517 was
+ * filed for — a path nothing exercised, reporting success — so the fix for it must not be
+ * verifiable only by a result that skipping produces too.
+ */
+const REQUIRE_OCR = process.env.TUFF_NATIVE_OCR_REQUIRED === '1'
+
 describe('tuff-native ocr smoke & contract', () => {
   it('exports required ocr functions', () => {
     expect(typeof nativeOcr.getNativeOcrSupport).toBe('function')
@@ -64,10 +75,24 @@ describe('tuff-native ocr smoke & contract', () => {
   it('recognizes visible text from project fixture image', async () => {
     const support = nativeOcr.getNativeOcrSupport()
     if (!support.supported) {
+      expect(
+        REQUIRE_OCR,
+        `native OCR reported unsupported on ${process.platform} (${support.reason}) while ${
+          'TUFF_NATIVE_OCR_REQUIRED'
+        } is set — this assertion would otherwise have been skipped silently`,
+      ).toBe(false)
       return
     }
 
-    const fixturePath = fileURLToPath(new URL('../../../../shots/LogoBanner.png', import.meta.url))
+    // shots/LogoBanner.png was deleted in bd4a98bf1 (media migration) and not replaced,
+    // so this asserted its own fixture into existence and failed on the first line --
+    // on CI as well, since shots/ is not gitignored.
+    //
+    // Replaced with a fixture that lives next to the test: 3.6KB of generated block
+    // letters rather than a 7.8MB marketing asset that a docs cleanup can remove.
+    // Apple Vision reads it as exactly "TUFF". Regenerate with
+    // scripts/make-ocr-fixture.cjs if it ever needs to change.
+    const fixturePath = fileURLToPath(new URL('./fixtures/tuff-ocr-fixture.png', import.meta.url))
     expect(existsSync(fixturePath)).toBe(true)
 
     const image = readFileSync(fixturePath)
@@ -84,5 +109,36 @@ describe('tuff-native ocr smoke & contract', () => {
     expect(normalizedText).toContain('tuff')
     expect(Array.isArray(result.blocks)).toBe(true)
     expect((result.blocks || []).length).toBeGreaterThan(0)
+  })
+
+  it('survives repeated and concurrent calls on reused threads', async () => {
+    const support = nativeOcr.getNativeOcrSupport()
+    if (!support.supported) {
+      expect(
+        REQUIRE_OCR,
+        `native OCR reported unsupported on ${process.platform} (${support.reason})`,
+      ).toBe(false)
+      return
+    }
+
+    // Windows initialises a COM apartment per call. It used to do so with nothing paired to it,
+    // so every reused N-API worker thread accumulated a reference (#344). One call cannot show
+    // that; a sequence on the same pool can, and the concurrent round additionally lands calls on
+    // threads another call already initialised -- the RPC_E_CHANGED_MODE path.
+    const fixturePath = fileURLToPath(new URL('./fixtures/tuff-ocr-fixture.png', import.meta.url))
+    const image = readFileSync(fixturePath)
+    const recognize = async (): Promise<string> => {
+      const result = await nativeOcr.recognizeImageText({ image })
+      return result.text.toLowerCase()
+    }
+
+    for (let index = 0; index < 5; index += 1) {
+      expect(await recognize()).toContain('tuff')
+    }
+
+    const concurrent = await Promise.all(Array.from({ length: 4 }, () => recognize()))
+    for (const text of concurrent) {
+      expect(text).toContain('tuff')
+    }
   })
 })

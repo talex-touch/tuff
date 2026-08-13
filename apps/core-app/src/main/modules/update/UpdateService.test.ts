@@ -282,7 +282,9 @@ vi.mock('./update-system', () => ({
     updateConfig = mocks.updateSystem.updateConfig
     scheduleRendererOverride = mocks.updateSystem.scheduleRendererOverride
     disableRendererOverride = mocks.updateSystem.disableRendererOverride
-  }
+  },
+  // Reads `TUFF_ENABLE_RENDERER_OVERRIDE`; the facade only forwards it to the settings payload.
+  isRendererOverrideAvailable: () => false
 }))
 
 function release(tag_name = 'v1.1.0'): GitHubRelease {

@@ -86,19 +86,19 @@ code: |
 | Component | Description | Source |
 |-----------|-------------|--------|
 | `TuffButton` | Interactive button with tactile feedback | `button/` |
-| `TuffFlatButton` | Flat button with hover effects and loading | `base/button/FlatButton` |
-| `TuffSwitch` | Toggle switch with smooth animations | `base/switch/TSwitch` |
-| `TuffInput` | Input with clearable and textarea support | `base/input/FlatInput` |
-| `TuffCheckbox` | Checkbox with SVG tick animation | `base/checkbox/TCheckbox` |
-| `TuffSelect` | Dropdown select with floating positioning | `base/select/TSelect` |
-| `TuffSelectItem` | Select option item | `base/select/TSelectItem` |
-| `TuffProgress` | Progress bar with indeterminate mode | `base/ProgressBar` |
+| `TuffFlatButton` | Flat button with hover effects and loading | `flat-button/` |
+| `TuffSwitch` | Toggle switch with smooth animations | `switch/` |
+| `TuffInput` | Input with clearable and textarea support | `flat-input/` |
+| `TuffCheckbox` | Checkbox with SVG tick animation | `checkbox/` |
+| `TuffSelect` | Dropdown select with floating positioning | `select/` |
+| `TuffSelectItem` | Select option item | `select/` |
+| `TuffProgress` | Progress bar with indeterminate mode | `progress/` |
 
 **Planned**
 
 | Component | Description | Source |
 |-----------|-------------|--------|
-| `TuffModal` | Modal dialog with entrance animations | `base/dialog/` |
+| `TuffModal` | Modal dialog with entrance animations | `modal/` |
 | `TxScroll` | Custom scrollbar with native feel | `@talex-touch/tuffex` |
 | `TuffTabs` | Tab navigation with indicator animations | `tabs/` |
 | `TuffMenu` | Menu component | `menu/` |

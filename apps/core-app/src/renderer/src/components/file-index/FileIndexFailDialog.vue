@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import TBottomDialog from '../base/dialog/TBottomDialog.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: boolean
@@ -53,17 +56,19 @@ defineExpose({ updateProgress })
 <template>
   <TBottomDialog
     v-model="visible"
-    title="文件索引初始化失败"
+    :title="t('fileIndex.failTitle', '文件索引初始化失败')"
     class="file-index-fail-dialog"
     :close="handleLater"
   >
     <div class="dialog-content">
       <div class="error-icon">⚠️</div>
 
-      <p class="error-message">文件索引初始化失败，可能导致搜索功能无法正常使用。</p>
+      <p class="error-message">
+        {{ t('fileIndex.failMessage', '文件索引初始化失败，可能导致搜索功能无法正常使用。') }}
+      </p>
 
       <details v-if="errorDetail" class="error-detail">
-        <summary>查看错误详情</summary>
+        <summary>{{ t('fileIndex.viewErrorDetails', '查看错误详情') }}</summary>
         <pre>{{ errorDetail }}</pre>
       </details>
 
@@ -76,14 +81,20 @@ defineExpose({ updateProgress })
 
       <div class="actions">
         <TxButton variant="bare" class="btn-rebuild" :disabled="rebuilding" @click="handleRebuild">
-          {{ rebuilding ? '重建中...' : '重新建立索引' }}
+          {{
+            rebuilding
+              ? t('fileIndex.rebuilding', '重建中...')
+              : t('fileIndex.rebuildIndex', '重新建立索引')
+          }}
         </TxButton>
 
-        <TxButton variant="bare" class="btn-later" @click="handleLater"> 稍后处理 </TxButton>
+        <TxButton variant="bare" class="btn-later" @click="handleLater">
+          {{ t('fileIndex.later', '稍后处理') }}
+        </TxButton>
 
         <label class="checkbox-label">
           <input v-model="dontRemindAgain" type="checkbox" />
-          <span>不再提醒</span>
+          <span>{{ t('fileIndex.dontRemindAgain', '不再提醒') }}</span>
         </label>
       </div>
     </div>

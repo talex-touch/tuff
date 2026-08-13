@@ -13,12 +13,11 @@ import {
 } from './intelligence-config'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
 import { getProviderModelOptions } from './intelligence-provider-model-options'
-import { createCustomProvider } from './provider-factory'
+import { createCustomProvider, createLocalProvider } from './provider-factory'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
-import { LocalProvider } from './providers/local-provider'
 import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
@@ -68,7 +67,7 @@ export function initIntelligenceSdkService(): void {
     IntelligenceProviderType.SILICONFLOW,
     (config) => new SiliconflowProvider(config)
   )
-  manager.registerFactory(IntelligenceProviderType.LOCAL, (config) => new LocalProvider(config))
+  manager.registerFactory(IntelligenceProviderType.LOCAL, createLocalProvider)
   manager.registerFactory(
     IntelligenceProviderType.ANTHROPIC,
     (config) => new AnthropicProvider(config)

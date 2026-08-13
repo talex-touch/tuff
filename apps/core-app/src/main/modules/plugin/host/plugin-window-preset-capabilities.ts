@@ -4,6 +4,7 @@ import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/secur
 import path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { types as utilTypes } from 'node:util'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
@@ -747,7 +748,7 @@ export function createPluginWindowPresetCapabilities(
     invalid()
   }
   const expectedActivation = snapshotActivation(options.activation)
-  if (expectedActivation.name !== 'touch-window-presets') invalid()
+  if (!isPrivilegedPluginFor('windowPresets', expectedActivation.name)) invalid()
   const platform = options.platform as NodeJS.Platform
   const resolveCurrentActivation =
     options.resolveCurrentActivation as PluginWindowPresetCapabilitiesOptions['resolveCurrentActivation']
@@ -929,7 +930,7 @@ export function createPluginWindowPresetCapabilities(
     return parseWindows(stdout)
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.window-presets',
     permission: 'system.shell',
     timeoutMs: PLUGIN_WINDOW_PRESET_TIMEOUT_MS,

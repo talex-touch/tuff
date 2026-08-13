@@ -169,7 +169,12 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   __handle_main(e: IpcRendererEvent, _arg: any): any {
-    const arg = JSON.parse(_arg);
+    // The main process sends a plain object on this channel, and so does send() below - only some
+    // senders use a JSON string. Parsing unconditionally threw straight out of the IPC listener,
+    // where nothing can catch it.
+    const arg = this.__decode_payload(_arg);
+    if (arg === undefined) return;
+
     const rawData = this.__parse_raw_data(e, arg);
     if (!rawData) return;
 
@@ -194,10 +199,42 @@ class TouchChannel implements ITouchClientChannel {
 
       const res = func(handInData);
 
-      if (res && res instanceof Promise) return;
+      // An async handler used to return here and never reply at all, leaving the caller to wait
+      // out its full timeout.
+      if (res instanceof Promise) {
+        res.then(
+          (resolved) => handInData.reply(DataCode.SUCCESS, resolved),
+          (error: unknown) => {
+            channelLog.error(`Handler for \"${rawData.name}\" rejected`, { error });
+            handInData.reply(
+              DataCode.ERROR,
+              error instanceof Error ? error.message : String(error),
+            );
+          },
+        );
+        return;
+      }
 
       handInData.reply(DataCode.SUCCESS, res);
     });
+  }
+
+  /**
+   * Accepts either a JSON string or an already-decoded object, and returns undefined for anything
+   * that cannot be read - a malformed message must not take down the listener for every other one.
+   */
+  __decode_payload(payload: unknown): any {
+    if (typeof payload !== "string") return payload;
+
+    try {
+      return JSON.parse(payload);
+    } catch (error) {
+      channelLog.error("Discarded unparseable channel payload", {
+        meta: { payloadPreview: formatPayloadPreview(payload) },
+        error,
+      });
+      return undefined;
+    }
   }
 
   __parse_sender(
@@ -219,7 +256,8 @@ class TouchChannel implements ITouchClientChannel {
           },
       name: rawData.name,
       header: {
-        event: rawData.header.event,
+        // header.event holds the live IpcRendererEvent, which carries sender and ports and cannot
+        // survive structured clone. Copying it here made every reply throw inside ipcRenderer.send.
         status: "reply",
         type: rawData.header.type,
         _originData: rawData.header._originData,

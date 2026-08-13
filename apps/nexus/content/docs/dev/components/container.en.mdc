@@ -156,7 +156,7 @@ code: |
 
   <style scoped>
   .col-content {
-    background: var(--tx-color-surface);
+    background: var(--tx-bg-color-overlay, #fff);
     padding: 16px;
     text-align: center;
     border-radius: 8px;

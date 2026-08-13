@@ -1,0 +1,30 @@
+{
+  "id": "composer-permission-selector",
+  "name": "composer-permission-selector",
+  "title": "CoreBox composer 权限选择器与 Auto Context 归位",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "逐条验证 prd.md 的 9 条验收标准:权限三档行为、切档不追溯、重启后档位保持、旧 agentTools 用户迁移、中英文案,以及 core-app typecheck 与相关既有单测。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 的 9 条验收标准均未勾选;目录内有 design.md 与 implement.md。合并提交 de14ee9 的说明记载它在 agentToolsMode 上重新应用了 createRollbackSync,该改动未纳入本任务的验收记录。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

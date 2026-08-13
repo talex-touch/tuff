@@ -289,6 +289,24 @@ describe('baseAnchorLiquid: bead pinch', () => {
     expect(closeVelocity).toBeGreaterThan(0)
   })
 
+  it('reports no speed at all rather than a non-finite one', () => {
+    // The guard in liquidVelocityAt exists but nothing exercised it (#1565, AC15). A NaN
+    // reaching beadPinchRatio would come back out of clamp01 as NaN, and a NaN width lands
+    // in an SVG attribute -- the sheet vanishes for the rest of the animation instead of
+    // failing where the bad number was produced.
+    const broken = () => Number.NaN
+    expect(liquidVelocityAt(0.3, 0.3, broken)).toBe(0)
+    expect(beadPinchRatio(liquidVelocityAt(0.3, 0.3, broken))).toBe(0)
+
+    const unbounded = (t: number) => (t === 0 ? 0 : Number.POSITIVE_INFINITY)
+    expect(liquidVelocityAt(0.3, 0.3, unbounded)).toBe(0)
+
+    // The direction of travel must not change the answer: the sheet necks the same on the
+    // way in and on the way out, so the speed it reports is a magnitude.
+    const descending = (t: number) => 1 - t
+    expect(liquidVelocityAt(0.3, 0.3, descending)).toBeGreaterThan(0)
+  })
+
   it('peaks the pinch at speed and decays it to nothing at rest', () => {
     expect(beadPinchRatio(0)).toBe(0)
     expect(beadPinchRatio(BEAD_VELOCITY_REF)).toBe(1)

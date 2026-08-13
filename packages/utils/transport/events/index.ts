@@ -112,6 +112,7 @@ import type {
   CoreBoxGetBoundsResponse,
   CoreBoxHideRequest,
   CoreBoxIndexingDiagnosticsResponse,
+  CoreBoxSearchCacheTelemetryResponse,
   CoreBoxInputChangeRequest,
   CoreBoxInputVisibilityResponse,
   CoreBoxIsPinnedRequest,
@@ -122,6 +123,7 @@ import type {
   CoreBoxMetaOverlayItemActionPayload,
   CoreBoxNoResultsPayload,
   CoreBoxPreviewCopyRequest,
+  CoreBoxRecommendationExposureRequest,
   CoreBoxRecommendationRequest,
   CoreBoxRecommendationResponse,
   CoreBoxSearchEndPayload,
@@ -516,6 +518,9 @@ import type {
   PluginStorageGetRequest,
   PluginStorageSetRequest,
   StorageDeleteRequest,
+  StorageCleanupDownloadsRequest,
+  StorageCleanupFileIndexRequest,
+  StorageCleanupResponse,
   StorageGetRequest,
   StorageGetVersionedResponse,
   StorageSaveRequest,
@@ -1158,6 +1163,23 @@ export const CoreBoxEvents = {
       .module('search')
       .event('indexing-diagnostics')
       .define<void, CoreBoxIndexingDiagnosticsResponse>(),
+
+    /**
+     * Read the query cache counters (#346).
+     *
+     * `SearchCore.getSearchCacheTelemetry()` existed with exactly one reference -- its own
+     * declaration. The counters incremented into a snapshot nobody could obtain, which reads the
+     * same as counters that were never wired, and it is why the measurement that issue is named
+     * for could not be taken.
+     *
+     * Host-only, like `indexingDiagnostics`: neither is in `plugin-facing-events.ts`, so a plugin
+     * surface cannot read it. The payload is counts and durations only -- no query text, no cache
+     * key, no item content.
+     */
+    cacheTelemetry: defineEvent('core-box')
+      .module('search')
+      .event('cache-telemetry')
+      .define<void, CoreBoxSearchCacheTelemetryResponse>(),
   },
 
   /**
@@ -1358,6 +1380,15 @@ export const CoreBoxEvents = {
       .module('recommendation')
       .event('is-pinned')
       .define<CoreBoxIsPinnedRequest, CoreBoxIsPinnedResponse>(),
+
+    /**
+     * Report which recommendation items a surface rendered (local hit-rate@k
+     * accounting). Fire-and-forget: the renderer does not wait for a result.
+     */
+    reportExposure: defineEvent('core-box')
+      .module('recommendation')
+      .event('report-exposure')
+      .define<CoreBoxRecommendationExposureRequest, void>(),
   },
 
   /**
@@ -1524,6 +1555,33 @@ export const StorageEvents = {
      * Delete a value from plugin storage.
      */
     delete: defineEvent('storage').module('plugin').event('delete').define<PluginStorageDeleteRequest, void>(),
+  },
+
+  /**
+   * Per-domain storage cleanup, one event per button the storage view offers.
+   *
+   * Typed rather than raw: a three-segment name fits the builder, and
+   * transport-event-boundary.test.ts rejects `defineRawEvent` for those — the first wiring of
+   * these used raw definitions and broke that rule for every PR touching utils (#527).
+   */
+  cleanup: {
+    /** Clears file-index tables; the caller decides whether to also clear and rebuild search. */
+    fileIndex: defineEvent('storage')
+      .module('cleanup')
+      .event('file-index')
+      .define<StorageCleanupFileIndexRequest, StorageCleanupResponse>(),
+
+    /** Deletes download bookkeeping rows, all of them or those older than `beforeDays`. */
+    downloads: defineEvent('storage')
+      .module('cleanup')
+      .event('downloads')
+      .define<StorageCleanupDownloadsRequest, StorageCleanupResponse>(),
+
+    /** Deletes the update history records. */
+    updates: defineEvent('storage')
+      .module('cleanup')
+      .event('updates')
+      .define<void, StorageCleanupResponse>(),
   },
 } as const
 

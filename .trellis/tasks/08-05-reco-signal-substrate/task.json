@@ -1,0 +1,29 @@
+{
+  "id": "reco-signal-substrate",
+  "name": "reco-signal-substrate",
+  "title": "Recommendation signal substrate",
+  "description": "R3a: unified signal collector registry (descriptor: id/settingKey/ttl/collect, event-driven + snapshot, unavailable tracking) so 20+ signals stay maintainable; migrate existing 8 signals onto it; replace dead bluetooth with audio-route signal (headphones -> music/meeting). After R2.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-search-audit-remediation",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "Deferred by docs/plan-prd/TODO.md:9 -- remaining independently-owned active tasks continue only after the preceding blocker lane resolves. As of 2026-08-13 lane 1 (release/runtime blockers: #326 OTA, #482 release notes) and lane 2 (search and cross-platform remediation: #334, #351) are both open.",
+    "nextAction": "Release condition: reopen when lanes 1 and 2 close. No bounded child is named yet because the ordering, not the scope, is what is blocking (#309)."
+  }
+}

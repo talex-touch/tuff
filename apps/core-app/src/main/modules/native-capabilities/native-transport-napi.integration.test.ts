@@ -3,6 +3,7 @@ import type {
   NativeProtocolBinding
 } from '@talex-touch/tuff-native/protocol'
 import { Buffer } from 'node:buffer'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -17,15 +18,34 @@ const protocolModule = require('@talex-touch/tuff-native/protocol') as {
   }) => NapiCarrierInstance
 }
 
-function loadFixtureBinding(): NativeProtocolBinding {
-  const fixturePath = path.resolve(
-    process.cwd(),
-    '../../packages/tuff-native/build/fixtures/tuff_native_protocol_fixture.node'
+const FIXTURE_PATH = path.resolve(
+  process.cwd(),
+  '../../packages/tuff-native/build/fixtures/tuff_native_protocol_fixture.node'
+)
+
+// This is an integration test against a compiled Rust addon. It is run for real
+// by .github/workflows/native-protocol.yml, which builds the fixture
+// (`pnpm -C packages/tuff-native run build:protocol-fixture`) and then invokes
+// this exact file. The general App-suites job builds nothing native, so without
+// this guard the suite fails on a missing artifact rather than on behaviour.
+//
+// Skipped loudly rather than silently: the reason and the build command are
+// printed, so an absent fixture cannot be mistaken for passing coverage.
+const fixtureAvailable = existsSync(FIXTURE_PATH)
+
+if (!fixtureAvailable) {
+  console.warn(
+    `[native-transport-napi] skipped: fixture missing at ${FIXTURE_PATH}. ` +
+      'Build it with `pnpm -C packages/tuff-native run build:protocol-fixture`; ' +
+      'CI covers this file in .github/workflows/native-protocol.yml.'
   )
-  return require(fixturePath) as NativeProtocolBinding
 }
 
-describe('NativeTransport real N-API integration', () => {
+function loadFixtureBinding(): NativeProtocolBinding {
+  return require(FIXTURE_PATH) as NativeProtocolBinding
+}
+
+describe.skipIf(!fixtureAvailable)('NativeTransport real N-API integration', () => {
   it('runs unary attachments and credit-bounded streams through all three layers', async () => {
     const carrier = new protocolModule.NapiCarrier({
       id: 'fixture-napi',

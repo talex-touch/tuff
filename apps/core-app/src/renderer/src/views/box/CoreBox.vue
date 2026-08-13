@@ -904,7 +904,11 @@ const customCss = computed(() => {
             >
               <TuffIcon :icon="{ type: 'class', value: 'i-ri-terminal-box-line' }" />
             </button>
-            <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+            <TuffIcon
+              :icon="pinIcon"
+              :alt="t('corebox.pin', '固定 CoreBox')"
+              @click="handleTogglePin"
+            />
           </template>
         </div>
       </template>
@@ -1095,7 +1099,7 @@ const customCss = computed(() => {
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-full .BoxInput-Wrapper input {
-  border: 1px solid var(--tx-border-color-lighter);
+  border: none;
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-none .BoxInput-Wrapper input {

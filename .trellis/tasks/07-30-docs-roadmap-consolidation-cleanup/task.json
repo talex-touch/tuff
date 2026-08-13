@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Act on the three inventories, or close the task if the cleanup is no longer wanted. Nothing has been changed yet - the inventory itself says it is read-only analysis.",
+    "blocker": "None recorded.",
+    "evidence": "Three research artefacts exist and are substantive: research/docs-inventory.md is a full sweep of 125 markdown files under docs/ with per-file last-commit dates and an explicit note that docs/design/ holds no markdown at all; plus roadmap-factcheck.md and root-clutter.md. The inventory states it modified no docs file."
+  }
 }

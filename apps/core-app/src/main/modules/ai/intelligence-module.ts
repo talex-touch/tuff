@@ -61,10 +61,13 @@ import {
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
 import { contextHygieneService } from './intelligence-context-hygiene'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
+import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
+import { registerMcpServerAdminChannels } from './mcp-server-admin-runtime'
+import { registerSkillLocalChannels } from './skill-local-runtime'
 import { getProviderModelOptions } from './intelligence-provider-model-options'
 import {
   setIntelligenceAutonomousRuntimeAdapter,
@@ -73,7 +76,8 @@ import {
 } from './intelligence-sdk'
 import { intelligenceTtsService } from './intelligence-tts-service'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
-import { createCustomProvider } from './provider-factory'
+import { createCustomProvider, createLocalProvider } from './provider-factory'
+import { probePiCliAvailability } from './providers/pi-cli-runtime'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
 import {
@@ -84,7 +88,6 @@ import {
 } from './provider-credential-runtime'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
-import { LocalProvider } from './providers/local-provider'
 import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
@@ -612,6 +615,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private manager: IntelligenceProviderManager | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private agentChannelsCleanup: (() => void) | null = null
+  private mcpServerAdminCleanup: (() => void) | null = null
+  private skillLocalCleanup: (() => void) | null = null
   private agentRuntimePromise: Promise<void> | null = null
 
   constructor() {
@@ -656,6 +661,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // 打印配置文件内容（调试用）
     debugPrintConfig()
 
+    // 必须在首次应用配置之前 settle：provider 列表的组装是同步的，探测未完成时 pi provider 会被
+    // 当成不存在而整轮缺席，直到下一次配置变更才补上。
+    await this.probePiCliProvider()
+
     // 新 manager 必须先强制应用一次配置；后续订阅的当前值回放会被 signature 去重
     ensureIntelligenceConfigLoaded(true)
 
@@ -669,14 +678,29 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
   async onDestroy(): Promise<void> {
     intelligenceLog.info('Destroying Intelligence module')
-    try {
-      await this.waitForAgentRuntime()
-    } catch (error) {
-      intelligenceLog.warn('Intelligence agent runtime was not ready during destroy', { error })
+    // Only wait for a runtime that was actually started. waitForAgentRuntime() starts one on
+    // demand -- which is what the request paths at agent.run, workflow.execute and the agent
+    // channels rely on -- but at teardown that means registering builtin tools and agents and
+    // awaiting the orchestrator and agent manager just to shut them down again, stalling quit
+    // for as long as initialization takes (#765).
+    if (this.agentRuntimePromise) {
+      try {
+        await this.agentRuntimePromise
+      } catch (error) {
+        intelligenceLog.warn('Intelligence agent runtime was not ready during destroy', { error })
+      }
     }
     if (this.agentChannelsCleanup) {
       this.agentChannelsCleanup()
       this.agentChannelsCleanup = null
+    }
+    if (this.mcpServerAdminCleanup) {
+      this.mcpServerAdminCleanup()
+      this.mcpServerAdminCleanup = null
+    }
+    if (this.skillLocalCleanup) {
+      this.skillLocalCleanup()
+      this.skillLocalCleanup = null
     }
     await aiCliOrchestrator.shutdown()
     await intelligenceMcpRegistry.closeAll()
@@ -740,6 +764,24 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   /**
+   * 探测本机 `pi` CLI，决定是否把它作为零凭据的 `text.chat` provider 注入运行时配置。
+   *
+   * 探测失败不是错误：多数机器没装 `pi`，此时只是少一个 provider，不该拖垮整个模块的初始化。
+   */
+  private async probePiCliProvider(): Promise<void> {
+    try {
+      const available = await probePiCliAvailability()
+      if (available) {
+        intelligenceLog.success('Local pi CLI detected; registering as a text.chat provider')
+      } else {
+        intelligenceLog.info('Local pi CLI not found; skipping pi provider')
+      }
+    } catch (error) {
+      intelligenceLog.warn('Local pi CLI probe failed', { error })
+    }
+  }
+
+  /**
    * 注册内置 Provider Factories
    */
   private registerBuiltinProviders(): void {
@@ -763,10 +805,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       IntelligenceProviderType.SILICONFLOW,
       (config) => new SiliconflowProvider(config)
     )
-    this.manager.registerFactory(
-      IntelligenceProviderType.LOCAL,
-      (config) => new LocalProvider(config)
-    )
+    this.manager.registerFactory(IntelligenceProviderType.LOCAL, createLocalProvider)
 
     intelligenceLog.success('Builtin provider factories registered')
   }
@@ -1129,6 +1168,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
     this.registerAiCliOrchestratorChannels(registerSafe)
+    this.mcpServerAdminCleanup ??= registerMcpServerAdminChannels(this.transport)
+    this.skillLocalCleanup ??= registerSkillLocalChannels(this.transport)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerHostOnlySafe)
     this.registerWorkflowChannels(registerHostOnlySafe)
@@ -1238,10 +1279,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         if (capabilityId === 'agent.run' || capabilityId === 'workflow.execute') {
           await this.waitForAgentRuntime()
         }
+        // Also applied here, not only on the streaming path: the home conversation falls back to a
+        // plain invoke whenever the stream fails to start, and a fallback turn that silently loses
+        // the user's skills would answer differently from the turn it replaced.
+        const invokePayload = await applyHomeConversationInjection(
+          payload,
+          scopedOptions,
+          Boolean(context.plugin)
+        )
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
         let result: IntelligenceInvokeResult<unknown>
         try {
-          result = await tuffIntelligence.invoke(capabilityId, payload, scopedOptions)
+          result = await tuffIntelligence.invoke(capabilityId, invokePayload, scopedOptions)
         } catch (error) {
           throw normalizeCapabilityInvokeError(capabilityId, error)
         }
@@ -1265,9 +1314,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         const scopedOptions = bindPluginInvokeCaller(options, streamContext)
         await assertAutonomousIntelligencePermission(capabilityId, data, streamContext)
         ensureIntelligenceConfigLoaded()
+        const streamPayload = await applyHomeConversationInjection(
+          payload,
+          scopedOptions,
+          Boolean(streamContext.plugin)
+        )
         intelligenceLog.info(`Streaming capability: ${capabilityId}`)
         try {
-          for await (const event of tuffIntelligence.stream(capabilityId, payload, scopedOptions)) {
+          for await (const event of tuffIntelligence.stream(
+            capabilityId,
+            streamPayload,
+            scopedOptions
+          )) {
             if (streamContext.isCancelled()) break
             streamContext.emit(event)
           }
@@ -2217,7 +2275,6 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         let closed = false
         let doneSent = false
         let keepaliveTimer: ReturnType<typeof setInterval> | null = null
-        let cancelWatcher: ReturnType<typeof setInterval> | null = null
         let unsubscribe: () => void = () => {}
 
         const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
@@ -2240,16 +2297,44 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             clearInterval(keepaliveTimer)
             keepaliveTimer = null
           }
-          if (cancelWatcher) {
-            clearInterval(cancelWatcher)
-            cancelWatcher = null
-          }
           unsubscribe()
           try {
             streamContext.end()
           } catch {
             // Ignore stream close failures on disconnected clients.
           }
+        }
+
+        /**
+         * Resolves when this stream should stop: the client cancelled, or its renderer went away.
+         *
+         * The renderer half matters because handleCancel only runs on an explicit cancel message
+         * (#764). A reloaded, closed or crashed window never sends one, so the previous 250ms
+         * poll on isCancelled() never resolved and the keepalive timer, the poll itself and the
+         * trace subscription stayed live for the rest of the process -- one more set per reload.
+         *
+         * The poll is gone because it was only ever observing the same state as `signal`:
+         * handleCancel sets `cancelled` and calls `abortController.abort()` together, and
+         * `signal` is that controller's.
+         */
+        const waitForStreamRelease = (): Promise<void> => {
+          const sender = streamContext.sender
+          if (streamContext.isCancelled() || !sender || sender.isDestroyed()) {
+            return Promise.resolve()
+          }
+
+          return new Promise<void>((resolve) => {
+            const release = (): void => {
+              streamContext.signal.removeEventListener('abort', release)
+              sender.off('destroyed', release)
+              sender.off('render-process-gone', release)
+              resolve()
+            }
+
+            streamContext.signal.addEventListener('abort', release)
+            sender.once('destroyed', release)
+            sender.once('render-process-gone', release)
+          })
         }
 
         const replayTrace = async () => {
@@ -2358,14 +2443,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             })
           }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
 
-          await new Promise<void>((resolve) => {
-            cancelWatcher = setInterval(() => {
-              if (!streamContext.isCancelled()) {
-                return
-              }
-              resolve()
-            }, 250)
-          })
+          await waitForStreamRelease()
 
           await pauseOnDisconnect()
           if (!doneSent) {

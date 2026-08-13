@@ -16,6 +16,17 @@ interface PendingScan {
   error: Error | null
   wake: (() => void) | null
   startedAt: number
+  stats: FileScanRunStats | null
+}
+
+/**
+ * Per-run scan outcome. `errorCount > 0` means the scan could not see the whole
+ * tree (revoked permission, unplugged volume, renamed root) — consumers that
+ * delete rows for unseen paths MUST treat such a run as untrustworthy.
+ */
+export interface FileScanRunStats {
+  entryCount: number
+  errorCount: number
 }
 
 interface PendingMetrics {
@@ -25,7 +36,7 @@ interface PendingMetrics {
 
 type WorkerMessage =
   | { type: 'batch'; taskId: string; sequence: number; batch: ScannedFileInfo[] }
-  | { type: 'done'; taskId: string; scannedCount: number }
+  | { type: 'done'; taskId: string; scannedCount: number; errorCount?: number }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
 
@@ -40,30 +51,24 @@ export class FileScanWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private closed = false
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
     shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
     shutdown: () => this.terminateWorker()
   })
 
-  async scan(
-    paths: string[],
-    excludePaths?: Set<string>,
-    batchSize?: number,
-    signal?: AbortSignal
-  ): Promise<ScannedFileInfo[]> {
-    const results: ScannedFileInfo[] = []
-    for await (const batch of this.scanBatches(paths, excludePaths, batchSize, signal)) {
-      results.push(...batch)
-    }
-    return results
-  }
-
+  /**
+   * @param onStats Invoked once when the worker reports a completed run. It is
+   *   NOT called when the run aborts or fails — an absent callback means "this
+   *   scan produced no trustworthy stats".
+   */
   async *scanBatches(
     paths: string[],
     excludePaths?: Set<string>,
     batchSize?: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onStats?: (stats: FileScanRunStats) => void
   ): AsyncIterable<ScannedFileInfo[]> {
     const taskId = `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const worker = this.ensureWorker()
@@ -72,7 +77,8 @@ export class FileScanWorkerClient {
       done: false,
       error: null,
       wake: null,
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      stats: null
     }
     const abort = () => {
       const reason = signal?.reason
@@ -102,7 +108,10 @@ export class FileScanWorkerClient {
           continue
         }
         if (pending.error) throw pending.error
-        if (pending.done) return
+        if (pending.done) {
+          if (pending.stats) onStats?.(pending.stats)
+          return
+        }
         await new Promise<void>((resolve) => {
           pending.wake = resolve
         })
@@ -116,8 +125,15 @@ export class FileScanWorkerClient {
     }
   }
 
+  /**
+   * Observational: it never creates a worker and never extends worker liveness.
+   *
+   * Cancelling the idle timer here used to restart the whole window on every call, so a
+   * diagnostics panel polling faster than FILE_WORKER_IDLE_SHUTDOWN_MS kept the worker
+   * alive forever. An in-flight metrics request still defers shutdown, but through
+   * shouldShutdown() reading metricsPending — not by moving the deadline.
+   */
   async getStatus(): Promise<WorkerStatusSnapshot> {
-    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
@@ -135,11 +151,20 @@ export class FileScanWorkerClient {
   }
 
   shutdown(): void {
+    this.closed = true
     this.failPendingScans(new Error('FILE_SCAN_WORKER_CLOSED'))
+    // Metrics requests own a 300ms timer and an unsettled promise each. Terminating without
+    // them leaves getStatus() awaiting a worker that is already gone, and the timers fire
+    // afterwards to re-arm an idle deadline for nothing.
+    this.settlePendingMetrics()
     this.terminateWorker()
   }
 
   private ensureWorker(): Worker {
+    // A scan arriving during application teardown must not resurrect the worker.
+    if (this.closed) {
+      throw new Error('FILE_SCAN_WORKER_CLOSED')
+    }
     this.idleShutdown.cancel()
     if (this.worker) {
       return this.worker
@@ -187,6 +212,10 @@ export class FileScanWorkerClient {
 
     if (message.type === 'done') {
       pending.done = true
+      pending.stats = {
+        entryCount: message.scannedCount,
+        errorCount: message.errorCount ?? 0
+      }
       pending.wake?.()
       this.lastTask = {
         id: message.taskId,
@@ -232,6 +261,14 @@ export class FileScanWorkerClient {
       pending.done = true
       pending.wake?.()
     }
+  }
+
+  private settlePendingMetrics(): void {
+    for (const pending of this.metricsPending.values()) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+    }
+    this.metricsPending.clear()
   }
 
   private async requestMetrics(): Promise<WorkerMetricsPayload | null> {

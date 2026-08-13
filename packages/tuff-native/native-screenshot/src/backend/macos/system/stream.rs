@@ -116,6 +116,13 @@ pub struct MacStreamSession {
     output: Retained<StreamOutput>,
     _queue: DispatchRetained<DispatchQueue>,
     callbacks: Arc<CallbackState>,
+    /// Whether `stopCaptureWithCompletionHandler` has been issued.
+    ///
+    /// Separate from `callbacks.closed`, which is the *callback* latch: the frame-output callback
+    /// sets that on any extraction error, and while `stop()` and `Drop` shared it, a single
+    /// oversized frame made both of them skip the stop. ScreenCaptureKit then kept compositing for
+    /// the rest of the process lifetime with the screen-recording indicator lit (#837).
+    stopped: AtomicBool,
 }
 
 pub fn start_stream<Started, Frame, Failed>(
@@ -202,6 +209,7 @@ where
             output,
             _queue: queue,
             callbacks,
+            stopped: AtomicBool::new(false),
         })
     })
 }
@@ -211,10 +219,13 @@ impl MacStreamSession {
     where
         F: FnOnce(Result<(), MacSystemError>) + Send + 'static,
     {
-        if self.callbacks.closed.swap(true, Ordering::AcqRel) {
+        if self.stopped.swap(true, Ordering::AcqRel) {
             completion(Ok(()));
             return;
         }
+        // Latched here rather than used as the guard: it silences further frames and errors, and
+        // an extraction error may already have set it without any stop having been issued.
+        self.callbacks.closed.store(true, Ordering::Release);
         let output = ProtocolObject::from_ref(&*self.output);
         // SAFETY: The output was added to this exact stream and remains retained by the session.
         let remove_result = unsafe {
@@ -244,7 +255,8 @@ impl MacStreamSession {
 
 impl Drop for MacStreamSession {
     fn drop(&mut self) {
-        if !self.callbacks.closed.swap(true, Ordering::AcqRel) {
+        self.callbacks.closed.store(true, Ordering::Release);
+        if !self.stopped.swap(true, Ordering::AcqRel) {
             // SAFETY: Best-effort asynchronous stop; the stream retains internal state until stop.
             unsafe { self.stream.stopCaptureWithCompletionHandler(None) };
         }

@@ -1,0 +1,30 @@
+{
+  "id": "search-hotpath-quadratic-fix",
+  "name": "search-hotpath-quadratic-fix",
+  "title": "Search hot path: eliminate O(n^2) token dedup and per-keystroke recompute",
+  "description": "CoreBox app-search per-keystroke path does O(n^2) JSON.stringify dedup in addSearchToken and rebuilds semantic aliases + pinyin tokens per candidate per keystroke; replace with O(n) keyed dedup and memoized per-app token construction, behavior-identical.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Archive it, or say what is left. The implementation has landed and both suites AC1 names pass; AC3 needs a check that the published surface of @talex-touch/utils is unchanged, and AC2 is a throwaway benchmark the task itself says is not committed, so it cannot be evidenced after the fact - worth rewording rather than leaving as an open box forever.",
+    "blocker": "None.",
+    "evidence": "The O(n^2) dedup is gone: addSearchToken in packages/utils/search/search-token-builder.ts now keys off a Set held in a WeakMap per token list, which is the O(n) replacement the goal describes. AC1 measured 2026-08-11: search-processing-service.test.ts 16 passed; packages/utils 1340 passed / 185 files, with one unrelated flake - nexus-provider.test.ts walked a temp directory a concurrent run had just deleted, and passes on its own."
+  }
+}

@@ -1,7 +1,42 @@
-import { describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const textToolsUrl = new URL('../../../../plugins/touch-text-tools/index.js', import.meta.url)
+
+// The plugin's MD5 / SHA-1 items call globalThis.crypto.digest(algorithm, bytes) --
+// a host capability, not Web Crypto (whose digest lives on crypto.subtle and has no
+// MD5 anyway). Node's global crypto has no such method, so digestHex threw
+// CRYPTO_DIGEST_UNAVAILABLE. The hash items are not individually guarded, so the throw
+// escaped onFeatureTriggered and every test in this file received the generic
+// '加载失败' item rather than any real output -- four different assertions, one cause.
+//
+// It is installed here rather than through createPluginGlobals because the loader
+// restores overridden globals as soon as the module finishes compiling. Globals the
+// plugin destructures at module scope survive that; globalThis.crypto is read inside
+// digestHex at call time, long after the restore, so it has to be present for the
+// duration of the test. Backed by node:crypto so the hashes are genuine.
+const realCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    writable: true,
+    value: {
+      async digest(algorithm: string, data: Uint8Array) {
+        const hash = createHash(algorithm.toLowerCase().replace('-', ''))
+        hash.update(data)
+        return new Uint8Array(hash.digest()).buffer
+      },
+    },
+  })
+})
+
+afterAll(() => {
+  if (realCrypto)
+    Object.defineProperty(globalThis, 'crypto', realCrypto)
+})
 
 class FakeBuilder {
   item: Record<string, any>
@@ -73,22 +108,27 @@ describe('touch-text-tools actions', () => {
     })
   })
 
-  it('blocks copy action when clipboard.write permission is denied', async () => {
-    const hide = vi.fn()
-    const writeText = vi.fn()
-    const request = vi.fn(async () => false)
-    const pluginModule = loadPluginModule(textToolsUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: {
-        check: async () => false,
-        request,
-      },
+  // e37c92c8c moved the permission model host-side: this plugin no longer calls the
+  // permission SDK, it calls clipboard.writeText and reads the thrown error, where
+  // PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED means denied and anything else means the
+  // write failed (index.js:324-333). These drove permission.request, which nothing
+  // reads any more.
+  const HOST_DENIED = 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+
+  function copyItem(text: string) {
+    return {
+      meta: { defaultAction: 'copy' },
+      actions: [{ id: 'copy', type: 'plugin', payload: { text } }],
+    }
+  }
+
+  function moduleWithClipboard(clipboard: unknown) {
+    return loadPluginModule(textToolsUrl, createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      clipboard,
       plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-        },
-        box: { hide },
+        feature: { clearItems() {}, pushItems() {} },
+        box: { hide() {} },
         storage: {
           async getFile() {
             return null
@@ -97,90 +137,60 @@ describe('touch-text-tools actions', () => {
         },
       },
     }))
+  }
 
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: 'HELLO' }],
+  it('blocks copy action when the host denies clipboard.write', async () => {
+    const writeText = vi.fn(async () => {
+      throw Object.assign(new Error('/private/clipboard denied'), { code: HOST_DENIED })
     })
 
-    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制文本工具结果')
-    expect(writeText).not.toHaveBeenCalled()
-    expect(hide).not.toHaveBeenCalled()
+    const result = await moduleWithClipboard({ writeText }).onItemAction(copyItem('HELLO'))
+
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
+      message: '缺少 clipboard.write 权限',
     })
   })
 
-  it('blocks copy action when permission sdk is unavailable', async () => {
-    const hide = vi.fn()
-    const writeText = vi.fn()
-    const pluginModule = loadPluginModule(textToolsUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: withoutGlobal(),
-      plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-        },
-        box: { hide },
-        storage: {
-          async getFile() {
-            return null
-          },
-          async setFile() {},
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: 'HELLO' }],
+  it('separates a failed clipboard write from a denied one', async () => {
+    const writeText = vi.fn(async () => {
+      throw new Error('clipboard transport failed')
     })
 
-    expect(writeText).not.toHaveBeenCalled()
-    expect(hide).not.toHaveBeenCalled()
+    const result = await moduleWithClipboard({ writeText }).onItemAction(copyItem('HELLO'))
+
+    // Reporting a transport failure as a denial sends the user to a permission screen
+    // that has nothing to fix.
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: 'clipboard-write-failed',
+      message: '复制失败',
     })
   })
 
-  it('copies action payload after clipboard.write permission is granted', async () => {
-    const hide = vi.fn()
-    const writeText = vi.fn()
-    const pluginModule = loadPluginModule(textToolsUrl, createPluginGlobals({
-      clipboard: { writeText },
-      permission: {
-        check: async () => true,
-        request: vi.fn(),
-      },
-      plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-        },
-        box: { hide },
-        storage: {
-          async getFile() {
-            return null
-          },
-          async setFile() {},
-        },
-      },
-    }))
+  it('blocks copy action when the host exposes no clipboard', async () => {
+    const result = await moduleWithClipboard(withoutGlobal()).onItemAction(copyItem('HELLO'))
 
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: { text: 'HELLO' } }],
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'clipboard-unavailable',
+      message: '当前环境不支持写入剪贴板',
     })
+  })
 
-    expect(writeText).toHaveBeenCalledWith('HELLO')
-    expect(hide).toHaveBeenCalledTimes(1)
+  it('copies the payload text when the host allows it', async () => {
+    const writeText = vi.fn(async () => undefined)
+
+    const result = await moduleWithClipboard({ writeText }).onItemAction(copyItem('HELLO'))
+
     expect(result).toMatchObject({ externalAction: true, status: 'started' })
+    expect(writeText).toHaveBeenCalledWith('HELLO')
   })
 })

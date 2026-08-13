@@ -361,7 +361,7 @@ export class LocalAiCliModule extends BaseModule {
             access === 'workspace-write'
               ? { permissions: { allow: readTools, ask: ['Bash', 'Edit', 'Write'] } }
               : undefined,
-          canUseTool: async (toolName, input) => {
+          canUseTool: async (toolName: string, input: Record<string, unknown>) => {
             if (readTools.includes(toolName)) {
               return { behavior: 'allow' as const, updatedInput: input }
             }
@@ -775,23 +775,25 @@ export class LocalAiCliModule extends BaseModule {
         env: sanitizedChildEnv()
       }
     )
-    const dataSubscription = process.onData((data) => {
+    const dataSubscription = process.onData((data: string) => {
       if (sender.isDestroyed() || !this.transport) return
       void this.transport.sendTo(sender, LocalAiCliEvents.terminal.data, {
         sessionId,
         data: data.slice(0, LOCAL_AI_CLI_LIMITS.terminalChunkChars)
       })
     })
-    const exitSubscription = process.onExit(({ exitCode, signal }) => {
-      this.disposeTerminalSession(sessionId)
-      if (sender.isDestroyed() || !this.transport) return
-      const payload: LocalAiCliTerminalExit = {
-        sessionId,
-        exitCode,
-        ...(typeof signal === 'number' ? { signal } : {})
+    const exitSubscription = process.onExit(
+      ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
+        this.disposeTerminalSession(sessionId)
+        if (sender.isDestroyed() || !this.transport) return
+        const payload: LocalAiCliTerminalExit = {
+          sessionId,
+          exitCode,
+          ...(typeof signal === 'number' ? { signal } : {})
+        }
+        void this.transport.sendTo(sender, LocalAiCliEvents.terminal.exit, payload)
       }
-      void this.transport.sendTo(sender, LocalAiCliEvents.terminal.exit, payload)
-    })
+    )
     this.terminalSessions.set(sessionId, {
       ownerId,
       process,

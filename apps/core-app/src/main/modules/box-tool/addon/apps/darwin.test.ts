@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { execFileSafeMock, getElectronFileIconMock, writeDarwinAppIconMock } = vi.hoisted(() => ({
   execFileSafeMock: vi.fn(),
@@ -97,6 +97,21 @@ async function createTempAppBundle(
   return tmpRoot
 }
 
+// This suite covers the macOS app scanner, and the icon cache paths it asserts
+// come from app-icon-cache.ts, whose helpers default to process.platform. On a
+// Linux runner those resolve to a different directory and three tests fail as
+// if hydration broke. Pin the platform so the macOS behaviour is asserted
+// explicitly rather than inherited from whoever runs it.
+const originalPlatform = process.platform
+
+beforeAll(() => {
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+})
+
+afterAll(() => {
+  Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+})
+
 describe('darwin app info', () => {
   const tempRoots: string[] = []
   const cacheRoot = path.join(os.tmpdir(), 'darwin-app-icon-cache-test-user-data')
@@ -148,6 +163,20 @@ describe('darwin app info', () => {
       })
     )
     expect(execFileSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('reports the bundle birth time as the scanned install time', async () => {
+    const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp')
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'ChatApp.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    // Filesystems that cannot report a birth time hand back the epoch, and the scanner must leave
+    // `createdAt` unset there rather than persist 1970 as an install time.
+    const { birthtime } = await fs.stat(appPath)
+    expect(appInfo?.createdAt).toEqual(birthtime.getTime() > 0 ? birthtime : undefined)
   })
 
   it('prefers localized strings without calling mdls during fresh scan', async () => {

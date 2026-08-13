@@ -26,6 +26,8 @@ import { buildWindowWebPreferences } from '../../../core/window-security-profile
 import { useAliveTarget, useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
+import { installAppViewNavigationPolicy } from '../../../core/app-view-navigation-policy'
+import { getCoreBoxRendererUrl } from '../../../utils/renderer-url'
 
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 const resolveKeyManager = (channel: unknown): unknown =>
@@ -122,6 +124,12 @@ export class MetaOverlayManager {
     })
 
     this.metaView = new WebContentsView({ webPreferences })
+
+    // This view only ever shows the app's own renderer, and had no window-open handler and no
+    // navigation restriction at all (#793).
+    installAppViewNavigationPolicy(this.metaView.webContents, {
+      entryUrl: getCoreBoxRendererUrl()
+    })
 
     this.metaView.webContents.addListener('dom-ready', () => {
       metaOverlayLog.debug('MetaOverlay DOM ready')

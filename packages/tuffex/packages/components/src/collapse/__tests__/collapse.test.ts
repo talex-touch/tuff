@@ -83,7 +83,8 @@ describe('txCollapse', () => {
     await wrapper.findAll('.tx-collapse-item__header')[1].trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['second'])
-    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([[]])
+    // Accordion mode's model is a single name, so collapsing emits '' — not [].
+    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([''])
   })
 
   it('blocks disabled item activation', async () => {
@@ -164,5 +165,31 @@ describe('txCollapse', () => {
 
     expect(app.component).toHaveBeenCalledWith('TxCollapse', InstalledCollapse)
     expect(app.component).toHaveBeenCalledWith('TxCollapseItem', InstalledCollapseItem)
+  })
+
+  it('emits a string, not an array, when the accordion panel is collapsed', async () => {
+    const wrapper = mount(TxCollapse, {
+      props: {
+        modelValue: 'first',
+        accordion: true,
+      },
+      slots: {
+        default: `
+          <TxCollapseItem title="First" name="first">First content</TxCollapseItem>
+        `,
+      },
+      global: {
+        components: { TxCollapseItem },
+      },
+    })
+
+    // Collapse the only open panel: the model is a single name in accordion
+    // mode, so the emitted value must stay a string rather than becoming [].
+    await wrapper.find('.tx-collapse-item__header').trigger('click')
+
+    const emitted = wrapper.emitted('update:modelValue')?.[0]?.[0]
+    expect(emitted).toBe('')
+    expect(Array.isArray(emitted)).toBe(false)
+    expect(wrapper.emitted('change')?.[0]?.[0]).toBe('')
   })
 })

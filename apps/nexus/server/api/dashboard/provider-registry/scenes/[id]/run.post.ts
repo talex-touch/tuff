@@ -3,7 +3,7 @@ import { requireAdmin } from '../../../../../utils/auth'
 import { runSceneOrchestrator } from '../../../../../utils/sceneOrchestrator'
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event)
+  const { userId } = await requireAdmin(event)
   const id = String(getRouterParam(event, 'id') || '').trim()
 
   if (!id) {
@@ -16,6 +16,7 @@ export default defineEventHandler(async (event) => {
     capability: body?.capability,
     providerId: body?.providerId,
     dryRun: body?.dryRun,
+    ownerId: userId,
   })
 
   return { run }

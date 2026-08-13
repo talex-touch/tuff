@@ -261,7 +261,7 @@ code: |
 
 - 所有 Dialog 变体都会 teleport 到 `body`，通过共享 z-index manager 分配层级，并通过必填 `close()` 回调关闭。
 - Escape 会在离场动画后关闭当前 dialog；`TxBottomDialog`、`TxBlowDialog`、`TxPopperDialog` 与 `TxTouchTip` 卸载时恢复之前的焦点元素。
-- `TxBottomDialog` 与 `TxTouchTip` 使用实例级标题 / 描述 id；`TxBlowDialog` 与 `TxPopperDialog` 对默认标题 / 内容区域使用稳定内部 id。
+- `TxBottomDialog`、`TxTouchTip` 与 `TxBlowDialog` 都用 `useId()` 生成实例级标题 / 描述 id；`TxPopperDialog` 对默认标题 / 内容区域使用稳定内部 id。
 - 普通 `message` 按文本渲染并保留换行。只有调用方完成清洗并通过 `asTrustedDialogHtml()` 标记后，才使用 `messageHtml`。
 - `DialogButton.onClick()` / `TouchTipButton.onClick()` resolve `true` 时关闭，resolve `false` 时保持打开。
 

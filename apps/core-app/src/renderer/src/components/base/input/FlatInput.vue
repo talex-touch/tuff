@@ -28,7 +28,7 @@ const value = computed({
   set: (next: string) => emits('update:modelValue', next)
 })
 
-function onKeyDown(e) {
+function onKeyDown(e: KeyboardEvent) {
   if (!props.password) return
 
   const valueCapsLock = e.keyCode ? e.keyCode : e.which // 按键

@@ -258,3 +258,78 @@ impl fmt::Display for ProtocolError {
 }
 
 impl std::error::Error for ProtocolError {}
+
+/// Separates the human-readable prefix from the machine-readable envelope in an error reason.
+///
+/// `protocol.js` matches this literal; the two halves have to agree on one spelling.
+pub const ERROR_ENVELOPE_PREFIX: &str = "|protocol-error:";
+
+/// Renders a `ProtocolError` as a napi error reason that keeps its structure.
+///
+/// `napi::Status` is a fixed enum, so the protocol code cannot ride on `err.code` the way
+/// `QueueFull` does — the reason is the only channel with room for `category`, `retryable` and
+/// `details`. Flattening to `code: message` meant JS could not tell `NATIVE_BUSY` (retryable) from
+/// `CAPABILITY_NOT_FOUND` (not) without splitting the string and hardcoding a list (#849).
+///
+/// Lives here rather than in the napi crate so it can be tested: that crate is a cdylib whose
+/// napi symbols are supplied by the Node host, so its unit tests cannot link.
+pub fn format_error_reason(error: &ProtocolError) -> String {
+    match serde_json::to_string(error) {
+        Ok(envelope) => format!(
+            "{}: {} {}{}",
+            error.code, error.message, ERROR_ENVELOPE_PREFIX, envelope
+        ),
+        // Unreachable for this shape, but a panic here would cross the FFI boundary.
+        Err(_) => format!("{}: {}", error.code, error.message),
+    }
+}
+
+#[cfg(test)]
+mod reason_tests {
+    use super::*;
+
+    #[test]
+    fn reason_carries_the_structured_error() {
+        let mut details = BTreeMap::new();
+        details.insert(
+            "requestId".to_string(),
+            ErrorDetailValue::String("req-1".to_string()),
+        );
+        let error = ProtocolError {
+            code: "NATIVE_BUSY".to_string(),
+            category: ErrorCategory::Resource,
+            message: "runtime is busy".to_string(),
+            retryable: true,
+            details,
+        };
+
+        let reason = format_error_reason(&error);
+        let (prefix, envelope) = reason
+            .split_once(ERROR_ENVELOPE_PREFIX)
+            .expect("reason should carry the machine-readable envelope");
+
+        // The human-readable prefix is kept so a raw stack trace still reads as it did.
+        assert!(prefix.starts_with("NATIVE_BUSY: runtime is busy"));
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(envelope).expect("envelope should be valid JSON");
+        assert_eq!(parsed["code"], "NATIVE_BUSY");
+        assert_eq!(parsed["retryable"], true);
+        assert_eq!(parsed["category"], "resource");
+        assert_eq!(parsed["details"]["requestId"], "req-1");
+    }
+
+    #[test]
+    fn a_permanent_error_is_distinguishable_from_a_retryable_one() {
+        let busy = ProtocolError::new("NATIVE_BUSY", ErrorCategory::Resource, "busy", true);
+        let missing = ProtocolError::new(
+            "CAPABILITY_NOT_FOUND",
+            ErrorCategory::NotFound,
+            "no such capability",
+            false,
+        );
+
+        assert!(format_error_reason(&busy).contains("\"retryable\":true"));
+        assert!(format_error_reason(&missing).contains("\"retryable\":false"));
+    }
+}

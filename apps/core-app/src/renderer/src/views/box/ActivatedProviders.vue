@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { IProviderActivate, ITuffIcon } from '@talex-touch/utils'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
+import { useI18n } from 'vue-i18n'
 import type { IUseSearch } from '~/modules/box/adapter/types'
 import {
   normalizeCoreBoxIcon,
@@ -32,6 +33,17 @@ function getUniqueKey(provider: IProviderActivate): string {
 
 function hasVice(provider: IProviderActivate): boolean {
   return Boolean(provider.meta?.feature || props.closable)
+}
+
+const { t } = useI18n()
+
+/**
+ * The pill's close control is icon-only, so its name has to carry the provider too -- several
+ * pills can be on screen and "Remove" alone would announce all of them identically (#510).
+ */
+function getDeactivateLabel(provider: IProviderActivate): string {
+  const name = provider.name || provider.meta?.pluginName || provider.id
+  return `${t('common.remove')} ${name}`
 }
 
 function getProviderIconInput(provider: IProviderActivate): ProviderIconInput {
@@ -77,10 +89,18 @@ function getProviderIconStyle(provider: IProviderActivate): Record<string, strin
       </div>
       <div v-if="hasVice(provider)" class="Activated-Provider-PillVice">
         <span v-if="provider.meta?.feature">{{ provider.meta.feature.render?.basic?.title }}</span>
-        <div
+        <!--
+          A real button: the only content is a UnoCSS icon class, so there is no text node to
+          announce and nothing made it focusable (#510). Deactivating is an action, so button
+          is the honest role and it brings Enter/Space without hand-written handlers.
+        -->
+        <button
           v-if="props.closable"
+          type="button"
+          class="Activated-Provider-Deactivate"
           cursor-pointer
           i-carbon-close
+          :aria-label="getDeactivateLabel(provider)"
           @click="emit('deactivate-provider', getUniqueKey(provider))"
         />
       </div>
@@ -89,6 +109,23 @@ function getProviderIconStyle(provider: IProviderActivate): Record<string, strin
 </template>
 
 <style lang="scss" scoped>
+.Activated-Provider-Deactivate {
+  // Was a div, so it carried no native chrome. Reset it back so promoting the element to a
+  // button is an accessibility change only, not a visual one.
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+
+  // A focusable control that shows no focus is an invisible tab stop.
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
 .ActivatedProvidersContainer {
   display: flex;
   align-items: center;

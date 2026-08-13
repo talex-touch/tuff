@@ -1,7 +1,4 @@
 <script lang="ts" name="SectionItem" setup>
-import { useRouter } from 'vue-router'
-import { createThemeDetailRoute } from './section-route'
-
 const props = defineProps<{
   title: string
   label?: string
@@ -11,31 +8,23 @@ const props = defineProps<{
 
 const value = defineModel<string>('modelValue')
 
-const router = useRouter()
-
+/**
+ * Both halves of the tile select, because both look like they should.
+ *
+ * The label row renders a radio, but it used to `router.push` to `/styles/theme` instead —
+ * a route whose component has no outlet to render into, so clicking the radio replaced the
+ * settings page with the standalone styles page and never showed the detail it promised.
+ * Whether that detail page gets finished or dropped is open; either way the radio selects.
+ */
 function handleClick() {
   if (props.disabled) return
 
   value.value = props.title
 }
-
-function goRouter() {
-  if (props.disabled) return
-
-  router.push(createThemeDetailRoute(props.title))
-}
 </script>
 
 <template>
-  <div
-    relative
-    h-full
-    flex
-    items-center
-    justify-center
-    :class="{ disabled, active: value === title }"
-    class="SectionItem-Container transition-cubic"
-  >
+  <div :class="{ disabled, active: value === title }" class="SectionItem-Container">
     <button
       type="button"
       class="SectionItem-Display SectionItem-Action fake-background"
@@ -48,11 +37,12 @@ function goRouter() {
     </button>
     <button
       type="button"
-      class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2"
+      class="SectionItem-Bar"
       :disabled="disabled"
-      @click="goRouter"
+      :aria-pressed="value === title"
+      @click="handleClick"
     >
-      <div w-3 h-3 rounded-full class="bg-[var(--section-active-color)]" />
+      <span class="SectionItem-Radio" />
       <span v-shared-element:[`theme-preference-${title}`]>
         {{ label ?? title }}
       </span>
@@ -61,18 +51,53 @@ function goRouter() {
 </template>
 
 <style lang="scss" scoped>
+/**
+ * Artboard `E0C1Zz` · 窗口效果: the tile is a bare preview with the radio and label sitting
+ * underneath it, on the card surface — not a bordered box with a caption bar floating inside.
+ */
+.SectionItem-Container {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+
+  width: 100%;
+  min-width: 0;
+
+  user-select: none;
+
+  &.active {
+    cursor: default;
+  }
+
+  &.disabled {
+    cursor: not-allowed;
+
+    .SectionItem-Display {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+  }
+}
+
 .SectionItem-Display {
   position: relative;
 
   width: 100%;
-  height: 100%;
+  height: 150px;
 
   appearance: none;
+  overflow: hidden;
   padding: 0;
-  border: 0;
-  background: transparent;
+  /* 2px so the selected ring can swap the colour without shifting the preview. */
+  border: 2px solid var(--shell-border);
+  --fake-radius: var(--shell-radius-md);
+  border-radius: var(--shell-radius-md);
+  background: var(--shell-surface-2);
   color: inherit;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 
   &::before {
     z-index: 1;
@@ -90,61 +115,58 @@ function goRouter() {
   }
 }
 
-.SectionItem-Container {
-  &:hover {
-    border: 2px solid var(--tx-color-primary-light-3);
-  }
+.SectionItem-Container:not(.disabled):not(.active) .SectionItem-Display:hover {
+  border-color: var(--shell-border-strong);
+}
 
-  &.active {
-    cursor: default;
-    box-shadow: 0 0 8px 0 var(--tx-color-primary-light-5);
-    border: 2px solid var(--tx-color-primary);
-
-    --section-active-color: var(--tx-color-primary);
-  }
-
-  &.disabled {
-    .SectionItem-Display {
-      opacity: 0.25;
-      cursor: not-allowed;
-    }
-    cursor: not-allowed;
-    border: 2px solid var(--tx-color-danger-light-3);
-  }
-
-  width: 100%;
-  min-width: 0;
-  height: 11rem;
-
-  overflow: hidden;
-  user-select: none;
-  border-radius: 8px;
-  border: 2px solid var(--tx-border-color);
-  --section-active-color: var(--tx-color-info);
+.SectionItem-Container.active .SectionItem-Display {
+  border-color: var(--shell-primary);
 }
 
 .SectionItem-Action:focus-visible {
-  outline: 2px solid var(--tx-color-primary);
-  outline-offset: -3px;
+  outline: 2px solid var(--shell-primary);
+  outline-offset: 2px;
 }
 
 .SectionItem-Bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
   appearance: none;
-  padding: 0 0.5rem;
+  padding: 0;
   border: 0;
-  color: inherit;
+  border-radius: var(--shell-radius-sm);
+  color: var(--shell-text-secondary);
   background: transparent;
-  z-index: 100;
-  position: absolute;
-
-  bottom: 0;
-
-  height: 2rem;
-  width: 100%;
+  font-family: inherit;
+  font-size: var(--shell-fs-body);
+  cursor: pointer;
 
   &:focus-visible {
-    outline: 2px solid var(--tx-color-primary);
-    outline-offset: -2px;
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 3px;
   }
+}
+
+.SectionItem-Container.active .SectionItem-Bar {
+  color: var(--shell-text-primary);
+  font-weight: 500;
+}
+
+.SectionItem-Radio {
+  flex: 0 0 auto;
+
+  width: 12px;
+  height: 12px;
+
+  box-sizing: border-box;
+  border: 1px solid var(--shell-border-strong);
+  border-radius: var(--shell-radius-full);
+}
+
+.SectionItem-Container.active .SectionItem-Radio {
+  border-color: var(--shell-primary);
+  background: var(--shell-primary);
 }
 </style>

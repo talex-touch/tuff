@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { PropType } from 'vue'
-import { Comment, Fragment, computed, defineComponent, h, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { Comment, Fragment, computed, defineComponent, h, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import type { TabsAnimation, TabsProps } from './types'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
@@ -62,7 +63,7 @@ export default defineComponent({
   props: {
     modelValue: String,
     defaultValue: String,
-    placement: { type: String, default: 'left' },
+    placement: { type: String as PropType<TabsProps['placement']>, default: 'left' },
     offset: { type: Number, default: 0 },
     navMinWidth: { type: Number, default: 220 },
     navMaxWidth: { type: Number, default: 320 },
@@ -72,12 +73,12 @@ export default defineComponent({
     autoHeight: { type: Boolean, default: false },
     autoWidth: { type: Boolean, default: false },
     showIndicator: { type: Boolean, default: true },
-    indicatorVariant: { type: String, default: 'line' },
-    indicatorMotion: { type: String, default: 'stretch' },
+    indicatorVariant: { type: String as PropType<TabsProps['indicatorVariant']>, default: 'line' },
+    indicatorMotion: { type: String as PropType<TabsProps['indicatorMotion']>, default: 'stretch' },
     indicatorMotionStrength: { type: Number, default: 1 },
     autoHeightDurationMs: { type: Number, default: 250 },
     autoHeightEasing: { type: String, default: 'ease' },
-    animation: { type: Object as PropType<any>, default: undefined },
+    animation: { type: Object as PropType<TabsAnimation>, default: undefined },
   },
   emits: ['update:modelValue', 'change'],
   setup(props, { slots, emit, expose }) {
@@ -496,11 +497,78 @@ export default defineComponent({
         playPointerAnim(direction)
     }
 
+    const idScope = useId() ?? 'tx-tabs'
+    const panelDomId = `${idScope}-panel`
+
+    function tabDomId(name: string): string {
+      // Names are author-supplied, so encode rather than interpolate raw.
+      return `${idScope}-tab-${encodeURIComponent(name)}`
+    }
+
+    /**
+     * ARIA tablist: arrow keys move between tabs and activate them, wrapping at
+     * the ends. Paired with the roving tabindex in TxTabItem, which keeps the
+     * whole list to a single tab stop.
+     */
+    function handleTablistKeydown(event: KeyboardEvent): void {
+      const horizontalNext = isVertical.value ? 'ArrowDown' : 'ArrowRight'
+      const horizontalPrev = isVertical.value ? 'ArrowUp' : 'ArrowLeft'
+
+      const enabled = tabNodeCache.value.filter(node => !node?.props?.disabled)
+      if (!enabled.length)
+        return
+
+      const current = enabled.findIndex(node => getNodeName(node) === activeName.value)
+      let next = current
+
+      switch (event.key) {
+        case horizontalNext:
+          next = current < 0 ? 0 : (current + 1) % enabled.length
+          break
+        case horizontalPrev:
+          next = current < 0 ? enabled.length - 1 : (current - 1 + enabled.length) % enabled.length
+          break
+        case 'Home':
+          next = 0
+          break
+        case 'End':
+          next = enabled.length - 1
+          break
+        default:
+          return
+      }
+
+      event.preventDefault()
+      const target = enabled[next]
+      if (!target)
+        return
+
+      setActive(target)
+      void nextTick(() => {
+        const name = getNodeName(target)
+        const id = tabDomId(name)
+        // Match on the id property rather than building a `#id` selector: tab
+        // names are author-supplied, and `CSS.escape` is undefined outside a
+        // browser (jsdom, SSR), where it threw an unhandled rejection here.
+        const tabs = navInnerElRef.value?.querySelectorAll<HTMLElement>('[role="tab"]')
+        for (const el of tabs ?? []) {
+          if (el.id === id) {
+            el.focus()
+            break
+          }
+        }
+      })
+    }
+
     function createTab(vnode: any): any {
       const name = getNodeName(vnode)
       const tab = h(TxTabItem, {
         ...vnode.props,
         active: activeName.value === name,
+        // Tie each tab to the panel it controls; the panel points back with
+        // aria-labelledby so the pair is announced as a real tab relationship.
+        id: tabDomId(name),
+        'aria-controls': panelDomId,
         onClick: () => {
           if (vnode.props?.disabled)
             return
@@ -690,6 +758,8 @@ export default defineComponent({
           // Identify the active panel as a tabpanel so it is announced as the
           // content region controlled by the tablist above.
           role: 'tabpanel',
+          id: panelDomId,
+          'aria-labelledby': activeName.value ? tabDomId(activeName.value) : undefined,
         },
         renderContent(tabHeader, activeNode),
       )
@@ -746,6 +816,7 @@ export default defineComponent({
                   // tablist of tabs rather than an unlabelled group of buttons.
                   role: 'tablist',
                   'aria-orientation': isVertical.value ? 'vertical' : 'horizontal',
+                  onKeydown: handleTablistKeydown,
                 },
                 pointer ? [...tabs, pointer] : tabs,
               ),

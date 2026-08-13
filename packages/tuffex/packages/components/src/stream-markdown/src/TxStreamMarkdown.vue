@@ -1,0 +1,774 @@
+<script setup lang="ts">
+import type { StreamBlock, StreamMarkdownBlockRenderer, StreamMarkdownProps } from './types'
+import { Marked } from 'marked'
+import { computed, ref, shallowRef, toRaw, watch } from 'vue'
+import TxCodeBlock from './TxCodeBlock.vue'
+import TxMermaidBlock from './TxMermaidBlock.vue'
+import { completeInlineMarkup, completeTable } from './complete-inline-markup'
+import { hardenHtmlExtension } from './harden-html'
+import { tableToCsv } from './table-csv'
+import {
+  allowRemoteImageOnce,
+  allowRemoteImagesForSession,
+  remoteImagePolicyVersion
+} from './remote-image-policy'
+import { mathExtension } from './math-extension'
+import { createBlockStream } from './use-block-stream'
+import { createFreshChunks } from './use-fresh-chunks'
+import { useAutoTheme } from './use-auto-theme'
+
+defineOptions({ name: 'TxStreamMarkdown' })
+
+const props = withDefaults(defineProps<StreamMarkdownProps>(), {
+  streaming: false,
+  sanitize: true,
+  theme: 'auto',
+  blockRemoteImages: true,
+  blockedImageText: 'Remote image blocked',
+  loadImageOnceText: 'Load this image',
+  allowSessionImagesText: 'Allow for this conversation',
+  copyTableText: 'Copy CSV',
+  copiedTableText: 'Copied',
+})
+
+// Per-component parser, same reasoning as TxMarkdownView: mutating the global
+// `marked` singleton would reconfigure every other consumer app-wide.
+// A getter, not a snapshot: the renderer is built once but has to see the
+// current prop values and the live policy on every block it renders.
+const markedInstance = new Marked({ gfm: true, breaks: true })
+  .use(mathExtension())
+  .use(
+    hardenHtmlExtension(() => ({
+      blockRemoteImages: props.blockRemoteImages,
+      labels: {
+        blockedImage: props.blockedImageText,
+        loadOnce: props.loadImageOnceText,
+        allowSession: props.allowSessionImagesText,
+        copyTable: props.copyTableText,
+      },
+    })),
+  )
+
+/**
+ * Rendered blocks are cached HTML strings, so a policy change reaches nothing on
+ * its own. Dropping the cache and re-feeding the content is what turns a
+ * placeholder into an image.
+ */
+watch(remoteImagePolicyVersion, () => {
+  stream.reset()
+  blocks.value = stream.update(
+    props.streaming ? completeInlineMarkup(completeTable(props.content)) : props.content,
+  )
+})
+
+/**
+ * One delegated listener rather than per-placeholder handlers: the placeholders
+ * live inside `v-html`, where Vue never sees them and cannot bind anything.
+ */
+async function copyTable(button: HTMLElement): Promise<void> {
+  const table = button
+    .closest<HTMLElement>('.tx-stream-md__table-wrap')
+    ?.querySelector('table')
+  if (!table) return
+
+  try {
+    await navigator.clipboard.writeText(tableToCsv(table))
+  } catch {
+    // A denied clipboard is not worth an error state; the button simply does
+    // not confirm, which is the same signal as nothing happening.
+    return
+  }
+
+  // Confirmation has to live on the element itself: it is inside `v-html`, so
+  // there is no reactive binding to flip. Restored rather than left changed —
+  // a button reading "Copied" forever stops meaning anything.
+  const original = button.textContent
+  button.textContent = props.copiedTableText
+  window.setTimeout(() => {
+    if (button.isConnected) button.textContent = original
+  }, 1600)
+}
+
+function onBodyClick(event: MouseEvent): void {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return
+
+  const copy = target.closest<HTMLElement>('[data-tx-table-copy]')
+  if (copy) {
+    event.preventDefault()
+    void copyTable(copy)
+    return
+  }
+
+  const action = target.closest<HTMLElement>('[data-tx-image-action]')
+  if (!action) return
+  const holder = action.closest<HTMLElement>('[data-tx-blocked-image]')
+  const src = holder?.dataset.txBlockedImage
+  if (!src) return
+
+  event.preventDefault()
+  if (action.dataset.txImageAction === 'session') allowRemoteImagesForSession()
+  else allowRemoteImageOnce(src)
+}
+
+const sanitizer = ref<null | ((html: string) => string)>(null)
+const sanitizerReady = ref(false)
+let sanitizerLoading = false
+
+async function ensureSanitizer(): Promise<void> {
+  if (sanitizer.value || sanitizerLoading)
+    return
+
+  sanitizerLoading = true
+  try {
+    const mod = await import('dompurify')
+    const dp = mod.default
+    sanitizer.value = (html: string) => dp.sanitize(html)
+  }
+  catch {
+    sanitizer.value = null
+  }
+  finally {
+    sanitizerReady.value = true
+    sanitizerLoading = false
+  }
+}
+
+watch(
+  () => props.sanitize,
+  (next) => {
+    if (next)
+      ensureSanitizer()
+  },
+  { immediate: true },
+)
+
+const stream = createBlockStream({
+  marked: markedInstance,
+  // Reads the live sanitizer so the closure stays valid once it loads; the
+  // render gate below guarantees this never runs while it is missing.
+  sanitize: html => (props.sanitize ? (sanitizer.value ? sanitizer.value(html) : '') : html),
+})
+
+/** Nothing renders while sanitization is requested but the sanitizer isn't usable. */
+const canRender = computed(() => !props.sanitize || (sanitizerReady.value && !!sanitizer.value))
+
+const blocks = shallowRef<StreamBlock[]>([])
+
+watch(
+  [() => props.content, canRender, () => props.sanitize, () => props.streaming],
+  ([content, ok, sanitize, streaming], previous) => {
+    if (!ok) {
+      blocks.value = []
+      return
+    }
+    if (previous) {
+      // Either the gate just opened (cached entries predate the sanitizer) or
+      // sanitize flipped (cached HTML was produced under the other mode).
+      // `sanitize` has to be a dependency, not just a separate reset watcher:
+      // flipping it leaves content and canRender untouched, so nothing else
+      // would re-run the render and the stale HTML would stay on screen.
+      if (previous[1] === false || previous[2] !== sanitize)
+        stream.reset()
+    }
+    // Mid-stream the tail is usually caught inside a construct, and markdown
+    // renders an unclosed construct as its own punctuation — so the reply
+    // flickers between prose and asterisks for its whole arrival. Closing it
+    // speculatively costs nothing once the real closer lands, and is only ever
+    // applied while streaming: settled text says exactly what it says.
+    blocks.value = stream.update(
+      streaming ? completeInlineMarkup(completeTable(content)) : content
+    )
+  },
+  { immediate: true },
+)
+
+const resolvedTheme = useAutoTheme(() => props.theme ?? 'auto')
+
+/** Built-in fence dispatch; consumer renderers override per language. */
+const BUILT_IN_RENDERERS: Record<string, StreamMarkdownBlockRenderer> = {
+  mermaid: TxMermaidBlock,
+}
+
+function resolveRenderer(lang: string): StreamMarkdownBlockRenderer {
+  const renderer = props.renderers?.[lang]
+  // `toRaw` unwraps consumers who handed us a reactive-wrapped map — rendering
+  // a reactive component definition is pure overhead (and warns).
+  if (renderer)
+    return toRaw(renderer)
+  return BUILT_IN_RENDERERS[lang] ?? TxCodeBlock
+}
+
+/**
+ * A fence is safe to render in final form once it closed, once another block
+ * follows it, or once the stream settled — only the still-growing tail fence
+ * of a live stream stays provisional.
+ */
+function isBlockClosed(block: StreamBlock, index: number): boolean {
+  return block.fenceClosed || index < blocks.value.length - 1 || !props.streaming
+}
+
+const tailBlock = computed(() => blocks.value.at(-1) ?? null)
+
+// ---------------------------------------------------------------------------
+// Fresh-text materialisation: characters appended to the growing tail enter
+// through a resolving blur. Chunks are tracked by offset and re-wrapped after
+// every patch (see use-fresh-chunks) — `flush: 'post'` puts the wrap in the
+// same frame as the patch, before paint, so nothing ever flashes unwrapped.
+// ---------------------------------------------------------------------------
+
+const rootRef = ref<HTMLElement | null>(null)
+const fresh = createFreshChunks()
+
+const tailMarkupId = computed(() => {
+  const tail = tailBlock.value
+  return tail && tail.type === 'markup' ? tail.id : null
+})
+
+function motionless(): boolean {
+  return (
+    typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  )
+}
+
+watch(
+  [tailMarkupId, () => tailBlock.value?.html, () => props.streaming],
+  ([id, , streaming]) => {
+    const root = rootRef.value
+    if (!root)
+      return
+    if (!streaming || id == null || motionless()) {
+      // Settled (or the tail is a fence): strip wrappers, forget offsets.
+      fresh.finish(root)
+      return
+    }
+    const el = root.querySelector<HTMLElement>(`[data-stream-block="${id}"]`)
+    if (el)
+      fresh.update(el, id)
+  },
+  { flush: 'post' },
+)
+
+/**
+ * The cursor rides inline (::after) only when the tail block ends in an
+ * element whose last line is text; lists, tables and fences get a standalone
+ * block cursor instead of a stray glyph inside their markup.
+ */
+const INLINE_CURSOR_RE = /<\/(?:p|h[1-6]|blockquote)>\s*$/
+
+const inlineCursor = computed(() => {
+  const tail = tailBlock.value
+  return !!tail && tail.type === 'markup' && INLINE_CURSOR_RE.test(tail.html)
+})
+
+const showBlockCursor = computed(
+  () => props.streaming && blocks.value.length > 0 && !inlineCursor.value,
+)
+
+/**
+ * A bare fence with nothing in it renders as an empty framed box — all chrome,
+ * no content. Models emit these mid-stream (a ``` just arrived) and in
+ * fence-about-fences answers; both look broken, neither carries information.
+ */
+function isSuppressedFence(block: StreamBlock): boolean {
+  return !block.lang && !block.code.trim()
+}
+</script>
+
+<template>
+  <div
+    ref="rootRef"
+    class="tx-stream-md"
+    :class="[resolvedTheme, { 'is-streaming': streaming }]"
+    :data-theme="resolvedTheme"
+  >
+    <div class="markdown-body" @click="onBodyClick">
+      <template v-for="(block, index) in blocks" :key="block.id">
+        <template v-if="block.type === 'code'">
+          <component
+            :is="resolveRenderer(block.lang)"
+            v-if="!isSuppressedFence(block)"
+            class="tx-stream-md__block tx-stream-md__fence"
+            :class="{ 'tx-stream-md__block--last': index === blocks.length - 1 }"
+            :lang="block.lang"
+            :code="block.code"
+            :closed="isBlockClosed(block, index)"
+            :streaming="streaming"
+            :theme="resolvedTheme"
+          />
+        </template>
+        <div
+          v-else
+          class="tx-stream-md__block tx-stream-md__markup"
+          :class="{
+            'tx-stream-md__markup--tail': streaming && inlineCursor && index === blocks.length - 1,
+            'tx-stream-md__block--last': index === blocks.length - 1,
+          }"
+          :data-stream-block="block.id"
+          v-html="block.html"
+        />
+      </template>
+
+      <div v-if="showBlockCursor" class="tx-stream-md__cursor" aria-hidden="true" />
+    </div>
+  </div>
+</template>
+
+<style lang="scss">
+/**
+ * KaTeX's stylesheet is deliberately NOT imported here. It references two dozen
+ * font files by URL, and a library build inlines those URLs without emitting
+ * the fonts — every formula then renders in a fallback face, which is visibly
+ * wrong because KaTeX positions glyphs against its own metrics. The host app
+ * must include `katex/dist/katex.min.css` so its own bundler emits the fonts.
+ */
+
+@import '../../markdown-view/src/github-markdown.css';
+
+.tx-stream-md {
+  font-size: 14px;
+  line-height: 1.7;
+
+  // Streaming affordances --------------------------------------------------
+
+  // Blocks animate once, on insertion: settled blocks never remount, so they
+  // never replay this; the growing tail patches in place, so it doesn't either.
+  &.is-streaming .tx-stream-md__block {
+    animation: tx-stream-md-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  // The ChatGPT-style line reveal: while streaming, the tail block's bottom
+  // edge fades out, so each new line materialises dimmed and brightens as the
+  // next one pushes it up. One gentle stop and a 40% floor: anything heavier
+  // reads as disabled text, not as ink arriving. (A per-delta re-fade on the
+  // tail element was tried and retired — restarting on every chunk pins the
+  // whole growing element at its floor opacity for the entire stream.)
+  //
+  // The floor rides a registered custom property so it *transitions*: when the
+  // stream moves past a block, or settles entirely, its ink rises to full over
+  // half a second instead of snapping with the class flip. The mask stays
+  // applied through both hand-offs — `--last` outside streaming, every block
+  // during it — because a mask that disappears cannot fade. The dim zone is
+  // capped at a third of the block so a two-line answer never reads half
+  // disabled while it streams.
+  .tx-stream-md__block {
+    transition: --tx-stream-md-ink 0.5s ease;
+  }
+
+  // A whisper, not a grey-out: only the bottom of the very last line dips,
+  // and shallowly — a frosted-glass overlay and a deeper dim were both tried
+  // here and read as broken rendering, not as ink arriving.
+  .tx-stream-md__block--last,
+  &.is-streaming .tx-stream-md__block {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - min(1.4em, 40%)),
+      rgb(0 0 0 / var(--tx-stream-md-ink)) 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - min(1.4em, 40%)),
+      rgb(0 0 0 / var(--tx-stream-md-ink)) 100%
+    );
+  }
+
+  &.is-streaming .tx-stream-md__block--last {
+    --tx-stream-md-ink: 0.65;
+  }
+
+  // The caret is the brand's light-orb, not a terminal bar: a small gradient
+  // pearl breathing at the write head. Pure CSS so no asset ships with it.
+  .tx-stream-md__markup--tail > p:last-child::after,
+  .tx-stream-md__markup--tail > h1:last-child::after,
+  .tx-stream-md__markup--tail > h2:last-child::after,
+  .tx-stream-md__markup--tail > h3:last-child::after,
+  .tx-stream-md__markup--tail > h4:last-child::after,
+  .tx-stream-md__markup--tail > h5:last-child::after,
+  .tx-stream-md__markup--tail > h6:last-child::after,
+  .tx-stream-md__markup--tail > blockquote:last-child > p:last-child::after {
+    content: '';
+    display: inline-block;
+    width: 0.62em;
+    height: 0.62em;
+    margin-left: 4px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 32% 30%, #9ecbff 0%, #4f8dff 38%, #7a5cff 72%, #4c2ea8 100%);
+    box-shadow: 0 0 6px rgb(122 92 255 / 55%);
+    vertical-align: -0.02em;
+    animation: tx-stream-md-orb 1.4s ease-in-out infinite;
+  }
+
+  // Zero layout height: the orb overflows into the gap below the last
+  // block, so the standalone cursor never adds a phantom empty line between
+  // the text and whatever the host renders after it.
+  .tx-stream-md__cursor {
+    height: 0;
+    line-height: 1.2;
+
+    &::before {
+      content: '';
+      display: inline-block;
+      width: 0.62em;
+      height: 0.62em;
+      border-radius: 999px;
+      background: radial-gradient(circle at 32% 30%, #9ecbff 0%, #4f8dff 38%, #7a5cff 72%, #4c2ea8 100%);
+      box-shadow: 0 0 6px rgb(122 92 255 / 55%);
+      animation: tx-stream-md-orb 1.4s ease-in-out infinite;
+    }
+  }
+
+  // Freshly streamed characters, materialising. The span set is rebuilt after
+  // every patch with a negative delay (use-fresh-chunks), so the animation
+  // reads as one continuous resolve per chunk, never a restart.
+  .tx-stream-md__fresh {
+    animation: tx-stream-md-fresh 0.44s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  // Typography — modelled on ChatGPT web's reading rhythm: roomy line-height,
+  // one-em paragraph beats, quiet borders, no filled panels on prose.
+  .markdown-body {
+    line-height: 1.75;
+    word-break: break-word;
+
+    /* The direct children here are the block *wrappers* (divs with no margin
+       of their own); the elements carrying rhythm margins live one level in.
+       Zeroing must reach them, or every reply ends on a phantom 1em line. */
+    > :first-child,
+    > .tx-stream-md__block:first-child > :first-child {
+      margin-top: 0 !important;
+    }
+
+    > :last-child,
+    > .tx-stream-md__block:last-child > :last-child {
+      margin-bottom: 0 !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      margin: 1.6em 0 0.7em;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    h1 { font-size: 1.6em; }
+    h2 { font-size: 1.35em; }
+    h3 { font-size: 1.15em; }
+    h4, h5, h6 { font-size: 1em; }
+
+    p {
+      margin: 0 0 1em;
+    }
+
+    a {
+      color: var(--tx-color-primary, #409eff);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    strong {
+      font-weight: 600;
+    }
+
+    ul, ol {
+      margin: 0 0 1em;
+      padding-left: 1.6em;
+
+      li {
+        margin: 0.35em 0;
+
+        &::marker {
+          color: var(--tx-text-color-secondary, #6b7280);
+        }
+      }
+
+      // Nested lists sit inside a li's rhythm, not the block rhythm.
+      ul, ol {
+        margin: 0.35em 0 0;
+      }
+    }
+
+    pre {
+      margin: 0 0 1em;
+      padding: 14px 16px;
+      overflow-x: auto;
+      border: 1px solid var(--tx-border-color-light, #e4e7ed);
+      border-radius: 10px;
+      background-color: var(--tx-fill-color-darker, #f6f8fa);
+
+      code {
+        display: block;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        font-size: 0.85em;
+        line-height: 1.65;
+        white-space: pre;
+      }
+    }
+
+    code {
+      padding: 0.15em 0.4em;
+      border-radius: 5px;
+      background-color: var(--tx-fill-color, #f0f2f5);
+      font-size: 0.875em;
+    }
+
+    blockquote {
+      margin: 0 0 1em;
+      padding: 0.1em 0 0.1em 1em;
+      border-left: 2px solid var(--tx-border-color, #dcdfe6);
+      color: var(--tx-text-color-secondary, #606266);
+
+      p:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    /* Reads as a held-back thing, not as an error: nothing went wrong, the
+       reader simply has not said yes yet. Quiet surface, no danger colour. */
+    .tx-stream-md__blocked-image {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      max-width: 100%;
+      margin: 0.4em 0;
+      padding: 10px 12px;
+      border: 1px dashed var(--tx-border-color, #d0d3d9);
+      border-radius: 10px;
+      font-size: 0.92em;
+      line-height: 1.45;
+    }
+
+    .tx-stream-md__blocked-image-icon {
+      flex: none;
+      opacity: 0.6;
+      font-size: 1.05em;
+    }
+
+    .tx-stream-md__blocked-image-body {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .tx-stream-md__blocked-image-title {
+      font-weight: 500;
+    }
+
+    .tx-stream-md__blocked-image-alt {
+      opacity: 0.85;
+    }
+
+    /* The source is the whole basis for the decision, so it is shown in full
+       rather than truncated — but it wraps instead of stretching the column. */
+    .tx-stream-md__blocked-image-src {
+      font-family: var(--tx-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-size: 0.88em;
+      opacity: 0.55;
+      overflow-wrap: anywhere;
+    }
+
+    .tx-stream-md__blocked-image-actions {
+      display: flex;
+      flex: none;
+      flex-direction: column;
+      gap: 6px;
+
+      button {
+        padding: 4px 10px;
+        border: 1px solid var(--tx-border-color-light, #e4e7ed);
+        border-radius: 999px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 0.88em;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover {
+          background: var(--tx-fill-color-light, rgb(0 0 0 / 4%));
+        }
+      }
+    }
+
+    /* Hover reveals the copy button; the wrapper is the positioning context. */
+    .tx-stream-md__table-wrap {
+      position: relative;
+      margin: 0 0 1em;
+
+      &:hover .tx-stream-md__table-copy,
+      .tx-stream-md__table-copy:focus-visible {
+        opacity: 1;
+      }
+    }
+
+    /* The wrapper scrolls, not the table. A scrollable `table` would leave the
+       sticky header resolving against the transcript's scroller and floating
+       over the whole conversation; contained here it stays in its own message.
+       The height cap is what makes stickiness mean anything at all. */
+    .tx-stream-md__table-scroll {
+      max-width: 100%;
+      max-height: 420px;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    .tx-stream-md__table-copy {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      padding: 3px 9px;
+      border: 1px solid var(--tx-border-color-light, #e4e7ed);
+      border-radius: 999px;
+      background: var(--tx-bg-color, #fff);
+      color: inherit;
+      font: inherit;
+      font-size: 0.82em;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+
+      &:hover {
+        background: var(--tx-fill-color-light, rgb(0 0 0 / 4%));
+      }
+    }
+
+    table {
+      width: 100%;
+      margin: 0 0 1em;
+      border-collapse: collapse;
+      font-size: 0.95em;
+
+      /* Held while the body scrolls under it: a long table loses its column
+         names within a screen otherwise, and the reader has to scroll back. */
+      /* Needs its own opaque fill: a transparent sticky header lets the rows
+         it is holding back show straight through it. */
+      thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--tx-bg-color, #fff);
+      }
+
+      th, td {
+        padding: 8px 12px;
+        border: 1px solid var(--tx-border-color-light, #e4e7ed);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background-color: var(--tx-fill-color-light, #fafafa);
+        font-weight: 600;
+      }
+    }
+
+    hr {
+      margin: 1.8em 0;
+      border: none;
+      border-top: 1px solid var(--tx-border-color-light, #e4e7ed);
+    }
+
+    img {
+      max-width: 100%;
+      border-radius: 10px;
+    }
+  }
+
+  &.dark .markdown-body {
+    pre {
+      background-color: var(--tx-fill-color-darker, #1a1a1a);
+      border-color: var(--tx-border-color, #414243);
+    }
+
+    code {
+      background-color: var(--tx-fill-color, #2a2a2a);
+    }
+
+    blockquote {
+      border-left-color: var(--tx-border-color, #414243);
+    }
+
+    table {
+      th {
+        background-color: var(--tx-fill-color, #2a2a2a);
+      }
+
+      th, td {
+        border-color: var(--tx-border-color, #414243);
+      }
+    }
+  }
+}
+
+/* Interpolable mask floor — this registration is what makes the dim *settle*
+   rather than snap when a block leaves the streaming tail. */
+@property --tx-stream-md-ink {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+
+@keyframes tx-stream-md-reveal {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes tx-stream-md-fresh {
+  from {
+    opacity: 0.08;
+    filter: blur(5px);
+  }
+
+  55% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* A breath, not a square wave: the hard steps() blink read as a terminal
+   artefact next to prose that otherwise fades in softly. */
+@keyframes tx-stream-md-orb {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.75;
+  }
+
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-stream-md.is-streaming .tx-stream-md__block {
+    animation: none;
+  }
+
+  .tx-stream-md .tx-stream-md__markup--tail > :last-child::after,
+  .tx-stream-md .tx-stream-md__cursor::before,
+  .tx-stream-md .tx-stream-md__fresh {
+    animation: none;
+  }
+}
+</style>

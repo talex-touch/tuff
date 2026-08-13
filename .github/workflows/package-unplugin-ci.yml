@@ -2,9 +2,6 @@ name: Unplugin Export Plugin CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - master
     paths:
       - "packages/unplugin-export-plugin/**"
       - ".github/workflows/package-unplugin-ci.yml"

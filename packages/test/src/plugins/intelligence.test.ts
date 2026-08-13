@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { structuredStrictStringify } from '@talex-touch/utils'
+import { PLUGIN_BLOCKED_REASONS, structuredStrictStringify } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { instantiateCommandPreset } from '../../../../plugins/touch-intelligence/widgets/_shared/command-presets'
 import { renderPromptTemplatePreview } from '../../../../plugins/touch-intelligence/widgets/_shared/prompt-template-preview'
@@ -2155,7 +2155,7 @@ describe('intelligence plugin', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 
@@ -3344,7 +3344,7 @@ describe('intelligence plugin', () => {
         },
       },
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 
@@ -3411,7 +3411,7 @@ describe('intelligence plugin', () => {
       success: false,
       shouldActivate: true,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 
@@ -3439,7 +3439,7 @@ describe('intelligence plugin', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 
@@ -3506,7 +3506,7 @@ describe('intelligence plugin', () => {
       success: false,
       shouldActivate: true,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 

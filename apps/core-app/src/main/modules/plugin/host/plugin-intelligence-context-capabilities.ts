@@ -2,6 +2,7 @@ import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-tou
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   type PluginIntelligenceContextHostService,
   type PluginIntelligenceContextRequest,
@@ -116,7 +117,7 @@ export function createPluginIntelligenceContextCapabilities(
     ['activation', 'resolveCurrentActivation', 'resolveHostGeneration', 'service']
   )
   const activation = snapshotActivation(options.activation)
-  if (activation.name !== 'touch-intelligence') invalid()
+  if (!isPrivilegedPluginFor('intelligenceContext', activation.name)) invalid()
   if (
     typeof options.resolveCurrentActivation !== 'function' ||
     utilTypes.isProxy(options.resolveCurrentActivation) ||
@@ -173,7 +174,12 @@ export function createPluginIntelligenceContextCapabilities(
   const definition: PluginHostCapabilityDefinition<
     PluginIntelligenceContextRequest,
     PluginIntelligenceContextResult
-  > = Object.freeze({
+  > = Object.freeze<
+    PluginHostCapabilityDefinition<
+      PluginIntelligenceContextRequest,
+      PluginIntelligenceContextResult
+    >
+  >({
     id: 'intelligence.context.invoke',
     permission: 'intelligence.basic',
     timeoutMs: 60_000,

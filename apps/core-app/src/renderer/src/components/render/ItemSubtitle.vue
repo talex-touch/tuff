@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { FileType, TuffItem, TuffRender } from '@talex-touch/utils'
 import { getFileTypeFromPath } from '@talex-touch/utils'
+import { displayParentName } from '@talex-touch/utils/common/utils/safe-path'
 import dayjs from 'dayjs'
-import path from 'path-browserify'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
@@ -16,7 +16,7 @@ const sourceType = computed(() => props.item.source.type)
 
 const { t } = useI18n()
 
-function formatBytes(bytes, decimals = 2) {
+function formatBytes(bytes: number, decimals = 2) {
   if (bytes === 0) return '0 Bytes'
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals
@@ -25,7 +25,11 @@ function formatBytes(bytes, decimals = 2) {
   return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`
 }
 
-type FileInfo = { path: string; size?: number; modified_at?: string | number }
+interface FileInfo {
+  path: string
+  size?: number
+  modified_at?: string | number
+}
 
 const fileInfo = computed<FileInfo | null>(() => {
   if (sourceType.value !== 'file' && props.item.kind !== 'file') {
@@ -93,6 +97,8 @@ const badgeStyle = computed(() => {
       return 'bg-gray-500/10 text-gray-500'
     case 'trending':
       return 'bg-green-500/10 text-green-500'
+    case 'newly-installed':
+      return 'bg-violet-500/10 text-violet-500'
     default:
       return 'bg-primary-500/10 text-primary-500'
   }
@@ -118,7 +124,7 @@ const badgeStyle = computed(() => {
         <span class="opacity-50">&bull;</span>
         <span class="flex flex-1 items-center gap-1">
           <i class="i-carbon-folder" />
-          <span class="w-full truncate">{{ path.dirname(fileInfo.path).split('/').pop() }}</span>
+          <span class="w-full truncate">{{ displayParentName(fileInfo.path) }}</span>
         </span>
       </div>
     </template>

@@ -123,6 +123,10 @@ vi.mock('./embedding-service', () => ({
 
 vi.mock('./services/file-provider-watch-service', () => ({
   FileProviderWatchService: vi.fn().mockImplementation((deps) => ({
+    // Constructor deps stash: the provider singleton constructs its services
+    // once at import, and afterEach's vi.clearAllMocks() wipes the
+    // constructor's mock.calls — the instance field survives.
+    __deps: deps,
     getCurrentSettings: vi.fn(() => ({
       autoScanEnabled: true,
       autoScanIntervalMs: 86_400_000,
@@ -139,9 +143,7 @@ vi.mock('./services/file-provider-watch-service', () => ({
     ensureFileSystemWatchers: watchServiceEnsure,
     recordUserActivity: vi.fn(),
     shouldRunAutoIndexing: vi.fn(async () => ({ allowed: false, reason: 'test' })),
-    applyWatchPaths: vi.fn(),
-    handleFsAddedOrChanged: vi.fn(),
-    handleFsUnlinked: vi.fn()
+    applyWatchPaths: vi.fn()
   }))
 }))
 
@@ -225,6 +227,11 @@ interface MutableFileProvider {
   } | null
   setFilePersistencePort: (port: FilePersistencePort | null) => void
   setIndexedSourceRuntimeMutationDelegate: (delegate: unknown | null) => void
+  pathNormalizationScheduled: boolean
+  pathNormalizationAttempted: boolean
+  pathNormalizationTimer: NodeJS.Timeout | null
+  keywordBackfillScheduled: boolean
+  keywordBackfillTimer: NodeJS.Timeout | null
 }
 
 interface FileProviderShutdownTestApi extends MutableFileProvider {
@@ -540,6 +547,17 @@ function resetProviderState(provider: MutableFileProvider): void {
   provider.isInitializing = null
   provider.shuttingDown = false
   provider.openersChannelRegistered = false
+  // The NFC migration is once-per-boot, and the provider is a module singleton:
+  // without this every later startup test would inherit the first one's timer.
+  if (provider.pathNormalizationTimer) clearTimeout(provider.pathNormalizationTimer)
+  provider.pathNormalizationTimer = null
+  provider.pathNormalizationScheduled = false
+  // Also the reconciliation-deferral half of the same once-per-boot state.
+  provider.pathNormalizationAttempted = false
+  // The keyword backfill is once-per-boot for the same reason.
+  if (provider.keywordBackfillTimer) clearTimeout(provider.keywordBackfillTimer)
+  provider.keywordBackfillTimer = null
+  provider.keywordBackfillScheduled = false
 }
 
 beforeEach(() => {
@@ -780,6 +798,7 @@ describe('file-provider startup readiness', () => {
             }
           }
         }
+        getFileIndexReadDb?: () => unknown
       } | null
       streamIndexedSourceSnapshot: (request: {
         sourceId: string
@@ -816,14 +835,18 @@ describe('file-provider startup readiness', () => {
       .mockResolvedValueOnce(firstPage)
       .mockResolvedValueOnce(secondPage)
       .mockResolvedValueOnce([])
-    provider.dbUtils = {
-      getDb: () => ({
-        select: () => ({
-          from: () => ({
-            where: () => ({ orderBy: () => ({ limit }) })
-          })
+    const pagedHandle = {
+      select: () => ({
+        from: () => ({
+          where: () => ({ orderBy: () => ({ limit }) })
         })
       })
+    }
+    provider.dbUtils = {
+      getDb: () => pagedHandle,
+      // Migration streaming reads through the split-aware read home (same
+      // handle as the primary with the split off).
+      getFileIndexReadDb: () => pagedHandle
     }
 
     try {
@@ -873,7 +896,8 @@ describe('file-provider startup readiness', () => {
       for await (const batch of provider.scanDirectoryBatchesWithWorker('/tmp')) batches.push(batch)
 
       expect(batches).toEqual([[{ path: '/tmp/direct.txt' }]])
-      expect(direct).toHaveBeenCalledWith('/tmp', undefined, undefined)
+      // 4th arg is the scan-stats sink, forwarded to the fallback scanner.
+      expect(direct).toHaveBeenCalledWith('/tmp', undefined, undefined, undefined)
     } finally {
       provider.scanDirectoryBatchesDirectStream = originalDirect
       fileScanBatches.mockReset()
@@ -1277,7 +1301,9 @@ describe('file-provider startup readiness', () => {
       type: 'file',
       isDir: false
     }))
-    provider.dbUtils = { getDb: () => db }
+    // Split off in this harness: the file-index read home falls back to the
+    // primary handle (mirrors createDbUtils' flag-off behavior).
+    provider.dbUtils = { getDb: () => db, getFileIndexReadDb: () => db }
 
     try {
       await expect(
@@ -1342,6 +1368,47 @@ describe('file-provider startup readiness', () => {
       ).resolves.toEqual([])
     } finally {
       provider.isWithinWatchRoots = originalIsWithinWatchRoots
+    }
+  })
+
+  it('wires per-call split routing into the watch service for the failed-files cleanup task', async () => {
+    // Regression for the 2d.3 cross-home hazard: without these deps the
+    // cleanup task defaults to split-off and would read failed-file ids from
+    // the search home while deleting file_index_progress rows by those ids on
+    // the PRIMARY connection.
+    const watchDeps = (
+      fileProvider as unknown as {
+        watchService: {
+          __deps?: {
+            isSearchSplitEnabled?: () => boolean
+            execSearchIndexWrite?: (
+              statements: Array<{ sql: string; args: unknown[] }>,
+              mode?: 'single' | 'transaction'
+            ) => Promise<unknown>
+          }
+        }
+      }
+    ).watchService.__deps
+
+    expect(watchDeps).toBeDefined()
+    expect(typeof watchDeps?.isSearchSplitEnabled).toBe('function')
+    expect(typeof watchDeps?.execSearchIndexWrite).toBe('function')
+
+    // Per-call resolution (never constructor capture): the flag must follow
+    // the provider's LIVE initialization context.
+    const provider = fileProvider as unknown as { initializationContext: unknown }
+    const originalContext = provider.initializationContext
+    try {
+      provider.initializationContext = {
+        databaseManager: { isSearchSplitEnabled: () => true }
+      }
+      expect(watchDeps!.isSearchSplitEnabled!()).toBe(true)
+      provider.initializationContext = {
+        databaseManager: { isSearchSplitEnabled: () => false }
+      }
+      expect(watchDeps!.isSearchSplitEnabled!()).toBe(false)
+    } finally {
+      provider.initializationContext = originalContext
     }
   })
 
@@ -1438,7 +1505,11 @@ describe('file-provider startup readiness', () => {
     }))
     const cleanup = createDeferred<undefined>()
 
-    provider.dbUtils = { getDb: () => ({ select: selectMock }) }
+    const searchDbHandle = { select: selectMock }
+    provider.dbUtils = {
+      getDb: () => searchDbHandle,
+      getFileIndexReadDb: () => searchDbHandle
+    }
     provider.searchIndex = {
       lookupByKeywords: vi.fn(
         async () => new Map([['report', [{ itemId: stalePath, priority: 100 }]]])
@@ -1531,8 +1602,10 @@ describe('file-provider startup readiness', () => {
     ])
     const ftsSearchMock = vi.fn(async () => [{ itemId: ftsFile.path, score: 0.25 }])
 
+    const parallelReadHandle = { select: selectMock }
     provider.dbUtils = {
-      getDb: () => ({ select: selectMock })
+      getDb: () => parallelReadHandle,
+      getFileIndexReadDb: () => parallelReadHandle
     }
     provider.searchIndex = {
       lookupByKeywords: lookupByKeywordsMock,
@@ -1820,11 +1893,16 @@ describe('file-provider metadata update writer ownership (issue #476)', () => {
   function installDbUtils(provider: FileProviderUpdateExecutorTestApi) {
     const mainDbUpdate = vi.fn()
     const selectWhere = vi.fn()
+    // One shared handle for both accessors (split off ⇒ read home === primary):
+    // update-refresh reads go through getFileIndexReadDb, while mainDbUpdate
+    // proves no UPDATE ever runs on a main-thread connection via either handle.
+    const handle = {
+      select: () => ({ from: () => ({ where: selectWhere }) }),
+      update: mainDbUpdate
+    }
     provider.dbUtils = {
-      getDb: () => ({
-        select: () => ({ from: () => ({ where: selectWhere }) }),
-        update: mainDbUpdate
-      })
+      getDb: () => handle,
+      getFileIndexReadDb: () => handle
     }
     return { mainDbUpdate, selectWhere }
   }
@@ -1887,5 +1965,116 @@ describe('file-provider metadata update writer ownership (issue #476)', () => {
     expect(filePersistenceUpdateFileMetadata).not.toHaveBeenCalled()
     expect(mainDbUpdate).not.toHaveBeenCalled()
     expect(selectWhere).not.toHaveBeenCalled()
+  })
+})
+
+interface FileProviderStaleCandidateTestApi extends FileProviderIndexingLifecycleTestApi {
+  cleanupStaleSearchCandidates: (itemIds: string[]) => void
+  cleanupStaleFileResult: (file: { id: number; path: string }, reason: string) => void
+}
+
+describe('stale search candidate cleanup', () => {
+  it('removes only the candidates the filesystem confirms are gone', async () => {
+    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-candidates-'))
+    const livePath = path.join(dir, 'live.txt')
+    const missingPath = path.join(dir, 'gone.txt')
+    await fs.writeFile(livePath, 'x')
+
+    try {
+      provider.cleanupStaleSearchCandidates([livePath, missingPath])
+
+      await vi.waitFor(() => {
+        expect(filePersistenceRemoveFile).toHaveBeenCalled()
+      })
+      // The live file only missed the row lookup; deleting its index entry is
+      // the wrongful-deletion bug this guard exists for.
+      expect(filePersistenceRemoveFile).toHaveBeenCalledTimes(1)
+      expect(filePersistenceRemoveFile).toHaveBeenCalledWith(missingPath)
+      expect(runtimeApplyDelta).toHaveBeenCalledTimes(1)
+      expect(runtimeApplyDelta).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'delete', path: missingPath })
+      )
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('removes nothing when every candidate still exists on disk', async () => {
+    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-candidates-'))
+    const livePath = path.join(dir, 'live.txt')
+    await fs.writeFile(livePath, 'x')
+
+    try {
+      provider.cleanupStaleSearchCandidates([livePath])
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(filePersistenceRemoveFile).not.toHaveBeenCalled()
+      expect(runtimeApplyDelta).not.toHaveBeenCalled()
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the row when a search result only failed its renderable existence check', async () => {
+    // normalizeFileSearchItem drops an item whose file "does not exist" per
+    // existsSync — which is also what a revoked-permission directory looks
+    // like. The row may only go when the filesystem answers ENOENT.
+    const provider = fileProvider as unknown as FileProviderStaleCandidateTestApi
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-stale-results-'))
+    const livePath = path.join(dir, 'live.txt')
+    await fs.writeFile(livePath, 'x')
+
+    try {
+      provider.cleanupStaleFileResult({ id: 1, path: livePath }, 'search-result')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(filePersistenceRemoveFile).not.toHaveBeenCalled()
+      expect(runtimeApplyDelta).not.toHaveBeenCalled()
+
+      provider.cleanupStaleFileResult({ id: 2, path: path.join(dir, 'gone.txt') }, 'search-result')
+      await vi.waitFor(() => {
+        expect(filePersistenceRemoveFile).toHaveBeenCalledWith(path.join(dir, 'gone.txt'))
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('path normalization migration scheduling', () => {
+  it('arms the migration from the live startup path, and only on darwin', async () => {
+    // The gate is only worth anything on the entry point the app really runs:
+    // onLoad → background startup → schedule. Deferred, never inline, so the
+    // pass cannot join the startup write storm (write contracts §7). Off
+    // darwin the repair does not apply at all, so nothing is armed and
+    // reconciliation is never deferred.
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    resetProviderState(provider)
+    const armsMigration = process.platform === 'darwin'
+
+    await provider.onLoad(createContext())
+    await provider.backgroundStartupPromise
+
+    expect(provider.backgroundStartupReady).toBe(true)
+    expect(provider.pathNormalizationScheduled).toBe(armsMigration)
+    expect(provider.pathNormalizationTimer === null).toBe(!armsMigration)
+  })
+
+  it('queues the keyword backfill behind the path repair, off the same live path', async () => {
+    // Both passes walk the whole files table and the repair rewrites the very
+    // ids the backfill re-emits under, so they never run together: on darwin
+    // the backfill is armed by the repair's completion, and where the repair
+    // does not apply it is armed directly from the same startup path.
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    resetProviderState(provider)
+    const armsMigration = process.platform === 'darwin'
+
+    await provider.onLoad(createContext())
+    await provider.backgroundStartupPromise
+
+    expect(provider.keywordBackfillScheduled).toBe(!armsMigration)
+    expect(provider.keywordBackfillTimer === null).toBe(armsMigration)
   })
 })

@@ -1,5 +1,6 @@
 {
   "name": "@talex-touch/tuff",
+  "homepage": "https://tuff.tagzxia.com",
   "type": "module",
   "version": "2.4.14-beta.2",
   "packageManager": "pnpm@10.34.4",
@@ -10,7 +11,7 @@
     "node": ">=24.15.0"
   },
   "scripts": {
-    "prepare": "husky install",
+    "prepare": "husky",
     "preinstall": "npx only-allow pnpm",
     "postinstall": "node scripts/sync-core-package.mjs && node scripts/patch-nuxt-content-serialize.mjs",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
@@ -45,6 +46,23 @@
     "release:notes:prepare": "node scripts/release-notes-gateway.mjs prepare",
     "release:notes:verify": "node scripts/release-notes-gateway.mjs verify",
     "plugins:validate": "tsx scripts/validate-plugin-package-policy.ts && node scripts/validate-plugins.mjs",
+    "plugins:validate:self-test": "node scripts/validate-plugins.mjs --self-test",
+    "test:plugins": "node scripts/test-plugins.mjs",
+    "check:audit-report-claims": "node scripts/check-audit-report-claims.mjs",
+    "check:closing-keywords": "node scripts/check-closing-keywords.mjs",
+    "check:closing-keywords:self-test": "node scripts/check-closing-keywords.mjs --self-test",
+    "check:plugin-blocked-reasons": "node scripts/check-plugin-blocked-reasons.mjs",
+    "check:plugin-blocked-reasons:self-test": "node scripts/check-plugin-blocked-reasons.mjs --self-test",
+    "check:module-size-ratchet": "node scripts/check-module-size-ratchet.mjs",
+    "check:module-size-ratchet:self-test": "node scripts/check-module-size-ratchet.mjs --self-test",
+    "check:audit-report-claims:self-test": "node scripts/check-audit-report-claims.mjs --self-test",
+    "check:orphan-tests": "node scripts/check-orphan-tests.mjs",
+    "check:orphan-tests:self-test": "node scripts/check-orphan-tests.mjs --self-test",
+    "test:plugins:self-test": "node scripts/test-plugins.mjs --self-test",
+    "check:prod-audit": "node scripts/check-prod-audit.mjs",
+    "check:prod-audit:self-test": "node scripts/check-prod-audit.mjs --self-test",
+    "check:file-icon-guard": "node scripts/check-file-icon-guard.mjs",
+    "check:file-icon-guard:self-test": "node scripts/check-file-icon-guard.mjs --self-test",
     "plugins:release:audit": "tsx scripts/plugin-source-package-audit.ts",
     "publish:check": "node scripts/validate-publish-manifests.mjs",
     "publish:check:pack": "node scripts/validate-publish-manifests.mjs --pack",
@@ -52,22 +70,35 @@
     "evidence:transport-legacy-alias": "tsx scripts/transport-legacy-alias-evidence.ts",
     "privacy:inventory:verify": "node scripts/verify-sensitive-data-inventory.mjs",
     "test:targeted": "corepack pnpm -C \"packages/utils\" exec vitest run \"__tests__/plugin-sdk-lifecycle.test.ts\" \"__tests__/transport-domain-sdks.test.ts\" \"__tests__/transport/port-policy.test.ts\" && corepack pnpm -C \"apps/core-app\" exec vitest run \"src/renderer/src/modules/auth/sync-preferences.test.ts\" \"src/main/modules/plugin/plugin-loaders.test.ts\" \"src/main/channel/common.test.ts\" && corepack pnpm -C \"apps/nexus\" exec vitest run \"test/api/sync/sync-routes-410.test.ts\"",
+    "test:scripts": "vitest run --config vitest.workspace-scripts.config.mjs",
+    "test:release-acceptance": "vitest run --config vitest.release-acceptance.config.mjs",
     "quality:pr": "corepack pnpm release:notes:verify && corepack pnpm lint:changed && corepack pnpm test:targeted && corepack pnpm -C \"apps/core-app\" run typecheck",
     "quality:release": "pnpm lint && pnpm typecheck:all && pnpm test:targeted && pnpm -C apps/core-app exec electron-builder --version && pnpm -F @talex-touch/core-app run build",
-    "lint": "pnpm -r --no-bail --filter \"./apps/core-app\" --filter \"./apps/nexus\" --filter \"./apps/tuff-analyse\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"workers/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"plugins/{touch-window-manager,touch-window-presets,touch-dev-toolbox,touch-batch-rename,touch-browser-bookmarks,touch-browser-open,touch-system-actions,touch-text-snippets,touch-snipaste,touch-quick-actions,touch-code-snippets}/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
-    "lint:fix": "pnpm -r --no-bail --filter \"./apps/core-app\" --filter \"./apps/nexus\" --filter \"./apps/tuff-analyse\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"workers/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"plugins/{touch-window-manager,touch-window-presets,touch-dev-toolbox,touch-batch-rename,touch-browser-bookmarks,touch-browser-open,touch-system-actions,touch-text-snippets,touch-snipaste,touch-quick-actions,touch-code-snippets}/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
+    "lint": "pnpm -r --no-bail --filter \"./apps/core-app\" --filter \"./apps/nexus\" --filter \"./apps/tuff-analyse\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"plugins/{touch-window-manager,touch-window-presets,touch-dev-toolbox,touch-batch-rename,touch-browser-bookmarks,touch-browser-open,touch-system-actions,touch-text-snippets,touch-snipaste,touch-quick-actions,touch-code-snippets,touch-dictation}/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
+    "lint:fix": "pnpm -r --no-bail --filter \"./apps/core-app\" --filter \"./apps/nexus\" --filter \"./apps/tuff-analyse\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}\" \"plugins/{touch-window-manager,touch-window-presets,touch-dev-toolbox,touch-batch-rename,touch-browser-bookmarks,touch-browser-open,touch-system-actions,touch-text-snippets,touch-snipaste,touch-quick-actions,touch-code-snippets,touch-dictation}/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
     "lint:changed": "node scripts/run-eslint-changed.mjs",
-    "lint:staged": "lint-staged"
+    "lint:staged": "lint-staged",
+    "check:build-allowlist": "node scripts/check-build-allowlist.mjs",
+    "check:doc-metadata": "node scripts/check-doc-metadata.mjs",
+    "check:doc-metadata:self-test": "node scripts/check-doc-metadata.mjs --self-test",
+    "check:plugin-lint-coverage": "node scripts/check-plugin-lint-coverage.mjs",
+    "check:plugin-lint-coverage:self-test": "node scripts/check-plugin-lint-coverage.mjs --self-test",
+    "check:action-pins": "node scripts/check-action-pins.mjs",
+    "check:action-pins:self-test": "node scripts/check-action-pins.mjs --self-test",
+    "check:workflow-injection": "node scripts/check-workflow-injection.mjs",
+    "check:workflow-injection:self-test": "node scripts/check-workflow-injection.mjs --self-test"
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.9.1",
-    "electron": "^41.10.1",
+    "electron": "^41.10.4",
     "vite-plugin-electron": "^0.29.1"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.4.1",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
+    "@panva/hkdf": "1.2.1",
+    "@types/plist": "^3.0.5",
     "@typescript-eslint/parser": "^8.64.0",
     "@typescript-eslint/types": "^8.64.0",
     "bumpp": "^11.1.0",
@@ -75,45 +106,37 @@
     "eslint": "^9.39.4",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
-    "markdown-it": "14.1.0",
+    "markdown-it": "14.2.0",
     "markdownlint": "0.39.0",
-    "marked": "17.0.6",
+    "marked": "catalog:",
     "remark-mdc": "3.11.1",
     "remark-parse": "11.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "unified": "11.0.5",
     "vite": "^7.3.6",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "yaml": "^2.9.0"
   },
   "volta": {
     "node": "24.18.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@compodoc/compodoc",
       "@google/genai",
-      "@nestjs/core",
       "@parcel/watcher",
       "@sentry/cli",
-      "@swc/core",
       "@talex-touch/tuff-native",
       "better-sqlite3",
-      "browser-tabs-lock",
       "bufferutil",
-      "core-js",
       "electron",
       "electron-winstaller",
       "esbuild",
       "extract-file-icon",
       "ffmpeg-static",
-      "get-windows",
-      "msgpackr-extract",
       "node-pty",
       "protobufjs",
-      "puppeteer",
       "sharp",
-      "simple-git-hooks",
-      "tesseract.js",
       "typeit",
       "uiohook-napi",
       "unrs-resolver",
@@ -129,33 +152,31 @@
       "@nuxt/devtools": "catalog:build",
       "@nuxt/kit": "catalog:build",
       "@panva/hkdf": "1.2.1",
-      "@sentry/electron>@sentry/browser": "10.65.0",
-      "@sentry/electron>@sentry/core": "10.65.0",
-      "@sentry/electron>@sentry/node": "10.65.0",
       "@types/node": "24.13.2",
+      "@ungap/structured-clone": "1.3.1",
       "@xmldom/xmldom": "0.8.13",
       "ajv@^6.0.0": "6.15.0",
       "ajv@^8.0.0": "8.20.0",
-      "brace-expansion@^1.0.0": "1.1.15",
-      "brace-expansion@^2.0.0": "2.1.1",
-      "brace-expansion@^5.0.0": "5.0.7",
+      "brace-expansion@^1.0.0": "1.1.18",
+      "brace-expansion@^2.0.0": "2.1.4",
+      "brace-expansion@^5.0.0": "5.0.9",
       "cookie": "0.7.2",
       "defu": "6.1.7",
       "devalue": "5.8.1",
       "diff@^4.0.0": "4.0.4",
       "diff@^8.0.0": "8.0.4",
       "esbuild": "0.28.1",
-      "fast-uri": "3.1.2",
-      "fast-xml-parser": "5.9.3",
+      "fast-uri": "3.1.5",
+      "fast-xml-parser": "5.10.1",
       "flatted": "3.4.2",
       "follow-redirects": "1.16.0",
       "form-data": "4.0.6",
       "h3": "1.15.11",
-      "hono": "4.12.25",
+      "hono": "4.12.34",
       "immutable": "5.1.9",
-      "ip-address": "10.1.1",
+      "ip-address": "10.3.1",
       "js-cookie": "3.0.7",
-      "js-yaml": "4.2.0",
+      "js-yaml": "4.3.1",
       "langsmith": "0.6.0",
       "launch-editor": "2.14.1",
       "lodash": "4.18.1",
@@ -165,12 +186,13 @@
       "minimatch@^3.0.0": "3.1.5",
       "minimatch@^5.0.0": "5.1.9",
       "minimatch@^9.0.0": "9.0.9",
-      "node-forge": "1.4.0",
+      "nanoid@^3.0.0": "3.3.18",
       "nitropack": "2.13.4",
+      "node-forge": "1.4.0",
       "nuxt": "catalog:build",
       "picomatch@^2.0.0": "2.3.2",
       "picomatch@^4.0.0": "4.0.5",
-      "postcss": "8.5.16",
+      "postcss": "8.5.23",
       "preact": "10.29.6",
       "qs": "6.15.2",
       "rollup@^2.0.0": "2.80.0",
@@ -178,13 +200,14 @@
       "rollup@^4.0.0": "4.62.2",
       "semver@^7.0.0": "7.8.5",
       "serialize-javascript": "7.0.7",
-      "shell-quote": "1.8.4",
+      "shell-quote": "1.9.0",
       "simple-git": "3.36.0",
+      "socket.io-parser@^4.0.0": "4.2.7",
       "srvx": "0.11.21",
-      "svgo": "4.0.1",
-      "tar": "7.5.19",
-      "undici@^6.0.0": "6.27.0",
-      "undici@^7.0.0": "7.28.0",
+      "svgo": "4.0.2",
+      "tar": "7.5.21",
+      "undici@^6.0.0": "6.28.0",
+      "undici@^7.0.0": "7.29.0",
       "unhead": "2.1.15",
       "unplugin": "catalog:build",
       "uuid": "14.0.1",
@@ -206,14 +229,14 @@
         "citty": "^0.1.6 || ^0.2.0",
         "commander": "^13.1.0 || ^14.0.0",
         "nodemailer": "^6.6.5 || ^7.0.0",
-        "next-auth": "~4.21.1 || ~4.24.14",
+        "next-auth": "~4.24.15",
         "vue-tsc": "^2.1.10 || ^3.2.5"
       }
     }
   },
   "lint-staged": {
     "apps/core-app/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --no-warn-ignored"
+      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "apps/nexus/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"apps/nexus\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
@@ -221,11 +244,32 @@
     "apps/tuff-analyse/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"apps/tuff-analyse\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
+    "packages/intelligence-uikit/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/intelligence-uikit\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/pi-extension-tuff/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/pi-extension-tuff\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
     "packages/test/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/test\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/tuff-intelligence/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuff-intelligence\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-business/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-business\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-cli/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-cli\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-cli-core/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-cli-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-core/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuff-native/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-native\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/tuffex/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
@@ -235,6 +279,12 @@
     ],
     "packages/utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/utils\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "plugins/clipboard-history/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/clipboard-history\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "plugins/touch-dev-utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/touch-dev-utils\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "plugins/touch-image/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"plugins/touch-image\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
@@ -246,9 +296,6 @@
       "pnpm -C \"plugins/touch-translation\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
-      "eslint --cache --fix --max-warnings=0 --no-warn-ignored"
-    ],
-    "workers/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
       "eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ]
   }

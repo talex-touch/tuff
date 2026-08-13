@@ -14,7 +14,7 @@ This is the documentation site for the Tuff project, built with Nuxt and Nuxt Co
 pnpm run dev
 ```
 
-The site will be available at `http://localhost:3000`.
+The site will be available at `http://localhost:3200`.
 
 ## Docs SEO and prerender evidence
 

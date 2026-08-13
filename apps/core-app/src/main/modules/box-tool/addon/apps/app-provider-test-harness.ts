@@ -13,6 +13,12 @@ type HarnessLogger = {
   debug: Mock
 }
 
+/** Mirrors AppScanner's `AppScanResolution` without pinning the app-info shape tests build. */
+export type AppScanResolutionMockResult =
+  | { ok: true; appInfo: unknown }
+  | { ok: false; outcome: 'not-app' }
+  | { ok: false; outcome: 'failed'; error: unknown }
+
 const appProviderMocks = vi.hoisted(() => {
   // Loggers are memoized per namespace so a test can assert on the very instance the subject
   // captured at import time, which the `vi.resetModules()` reload between tests would otherwise
@@ -31,15 +37,27 @@ const appProviderMocks = vi.hoisted(() => {
     return created
   }
 
+  const getAppInfoByPathMock = vi.fn()
+  // Most tests only care whether a path resolves, so the classified variant defaults to the plain
+  // lookup and reports the terminal outcome for a miss. Failure-class tests override it directly.
+  const resolveAppInfoByPathMock = vi.fn<
+    (filePath: string) => Promise<AppScanResolutionMockResult>
+  >(async (filePath) => {
+    const appInfo = await getAppInfoByPathMock(filePath)
+    return appInfo ? { ok: true, appInfo } : { ok: false, outcome: 'not-app' }
+  })
+
   return {
     resolveLogger,
     addWatchPathMock: vi.fn(),
     getAppsMock: vi.fn(),
     getAppsBySourceMock: vi.fn(),
-    getAppInfoByPathMock: vi.fn(),
+    getAppInfoByPathMock,
+    resolveAppInfoByPathMock,
     ensureAppIconMock: vi.fn<() => Promise<string | null>>(async () => null),
     getLoggerMock: vi.fn((namespace: string) => resolveLogger(namespace)),
     getMainConfigMock: vi.fn(),
+    getStartupDegradeWindowRemainingMsMock: vi.fn((): number => 0),
     getWatchPathsMock: vi.fn((): string[] => []),
     registerPollingMock: vi.fn(),
     runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
@@ -82,9 +100,12 @@ export const addWatchPathMock = appProviderMocks.addWatchPathMock
 export const getAppsMock = appProviderMocks.getAppsMock
 export const getAppsBySourceMock = appProviderMocks.getAppsBySourceMock
 export const getAppInfoByPathMock = appProviderMocks.getAppInfoByPathMock
+export const resolveAppInfoByPathMock = appProviderMocks.resolveAppInfoByPathMock
 export const ensureAppIconMock = appProviderMocks.ensureAppIconMock
 export const getLoggerMock = appProviderMocks.getLoggerMock
 export const getMainConfigMock = appProviderMocks.getMainConfigMock
+export const getStartupDegradeWindowRemainingMsMock =
+  appProviderMocks.getStartupDegradeWindowRemainingMsMock
 export const getWatchPathsMock = appProviderMocks.getWatchPathsMock
 export const registerPollingMock = appProviderMocks.registerPollingMock
 export const runAdaptiveTaskQueueMock = appProviderMocks.runAdaptiveTaskQueueMock
@@ -216,6 +237,17 @@ vi.mock('../../../../db/sqlite-retry', () => ({
   withSqliteRetry: withSqliteRetryMock
 }))
 
+// Real uptime-based window checks are unusable under vitest (worker process
+// uptime is usually inside the 120s startup degrade window); default to
+// "window already over" so timing-sensitive tests keep their historic delays.
+vi.mock('../../../../db/runtime-flags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../db/runtime-flags')>()
+  return {
+    ...actual,
+    getStartupDegradeWindowRemainingMs: appProviderMocks.getStartupDegradeWindowRemainingMsMock
+  }
+})
+
 vi.mock('../../../../db/utils', () => ({
   createDbUtils: vi.fn(() => null)
 }))
@@ -270,17 +302,14 @@ vi.mock('../../file-system-watcher', () => ({
   }
 }))
 
-vi.mock('../../search-engine/search-core', () => ({
-  default: {
-    recordExecute: searchRecordExecuteMock
-  }
-}))
-
 vi.mock('./app-scanner', () => ({
   appScanner: {
     getApps: getAppsMock,
     getAppsBySource: getAppsBySourceMock,
     getAppInfoByPath: getAppInfoByPathMock,
+    // Defaults to the plain lookup so a test only has to drive `getAppInfoByPathMock`; reach for
+    // `resolveAppInfoByPathMock.mockResolvedValueOnce` when the failure class is the point.
+    resolveAppInfoByPath: resolveAppInfoByPathMock,
     getWatchPaths: getWatchPathsMock,
     runMdlsUpdateScan: runMdlsUpdateScanMock
   }
@@ -426,6 +455,9 @@ export async function withTimeout<T>(
 
 export async function loadSubject() {
   const subject = await import('./app-provider')
+  // app-provider no longer imports search-core (#712), so mocking that module would sit inert.
+  // The recorder is registered through the same seam search-core uses in production.
+  subject.setAppExecutionRecorder(searchRecordExecuteMock)
   subject.appProvider.setIndexedSourceRuntimeDelegate({
     scan: appRuntimeScanMock,
     reconcile: appRuntimeReconcileMock,
@@ -522,9 +554,11 @@ export type AppProviderPrivate = {
       identityKind?: string
       displayNameSource?: string
       displayNameQuality?: string
+      createdAt?: Date
     },
     writer?: unknown,
-    existingExtensions?: Readonly<Record<string, string | null>>
+    existingExtensions?: Readonly<Record<string, string | null>>,
+    options?: { discovery?: 'watch' | 'scan'; insertedRow?: boolean }
   ) => Promise<void>
   persistScannedAppAdditions: (
     label: string,
@@ -535,6 +569,7 @@ export type AppProviderPrivate = {
       launchKind: string
       launchTarget: string
       lastModified: Date
+      createdAt?: Date
     }>,
     signal?: AbortSignal
   ) => Promise<void>
@@ -581,10 +616,28 @@ export type AppProviderPrivate = {
   _syncSemanticAliasCatalogIfNeeded: () => Promise<void>
   _waitForItemStable: (path: string) => Promise<boolean>
   publishAppRuntimeUpsert: (appInfo: { path: string }, reason: string) => Promise<void>
-  processAppPath: (path: string) => Promise<{
+  appResolutionRetries: Map<
+    string,
+    { attempt: number; managedEntry: boolean; timer: NodeJS.Timeout | null }
+  >
+  appResolutionDeadLetters: Map<
+    string,
+    { managedEntry: boolean; sweeps: number; lastError: string }
+  >
+  appResolutionSweepTimer: NodeJS.Timeout | null
+  sweepAppResolutionDeadLetters: () => Promise<void>
+  processAppPath: (
+    path: string,
+    options?: {
+      managedEntry?: boolean
+      scheduleRetry?: boolean
+      discovery?: 'watch' | 'scan'
+    }
+  ) => Promise<{
     success: boolean
     status: string
     path?: string
+    reason?: string
     appInfo?: {
       name: string
       displayName?: string
@@ -676,10 +729,13 @@ export type AppProviderPrivate = {
   _ensureStartupIndexHealth: () => Promise<void>
   _runFullSyncIfDue: () => Promise<void>
   _shouldRunStartupBackfill: () => Promise<{ allowed: boolean; reason?: string }>
-  getAppSearchIndexHealth: () => Promise<{
+  _scheduleMdlsUpdateScan: () => void
+  isAppIndexWarming: () => Promise<boolean>
+  getAppSearchIndexHealth: (options?: { probeFilesystem?: boolean }) => Promise<{
     healthy: boolean
     appCount: number
     indexedItemCount: number
+    unindexedOnDisk?: number
   }>
   waitForAppIndexPipelineIdle: () => Promise<void>
   waitForStartupProducerDelay: (delayMs: number) => Promise<void>
@@ -691,6 +747,8 @@ export type AppProviderPrivate = {
   isInitializing: Promise<void> | null
   shuttingDown: boolean
   startupBackfillTask: Promise<void> | null
+  startupBackfillTimer: NodeJS.Timeout | null
+  startupBackfillWritesDeferred: boolean
   appIndexSettings: Partial<{
     startupBackfillEnabled: boolean
     startupBackfillRetryMax: number
@@ -699,6 +757,7 @@ export type AppProviderPrivate = {
   }> &
     Record<string, unknown>
   _getLastFullSyncTime: () => Promise<number | null>
+  _getLastScanTime: () => Promise<number | null>
   setIndexedSourceRuntimeDelegate: (
     delegate: {
       scan: (reason: string) => Promise<unknown>

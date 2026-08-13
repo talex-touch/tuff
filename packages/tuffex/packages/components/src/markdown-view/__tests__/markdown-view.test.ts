@@ -143,6 +143,28 @@ describe('txMarkdownView', () => {
     expect(wrapper.attributes('data-theme')).toBe('light')
   })
 
+  it('tracks auto theme when dark mode is toggled on <body>', async () => {
+    const wrapper = mount(TxMarkdownView, {
+      props: {
+        sanitize: false,
+        theme: 'auto',
+        content: 'auto',
+      },
+    })
+
+    await nextTick()
+    expect(wrapper.classes()).toContain('light')
+
+    // resolveAutoTheme reads <body> too, so the observer has to watch it as well.
+    document.body.classList.add('dark')
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await nextTick()
+
+    expect(wrapper.classes()).toContain('dark')
+    expect(wrapper.attributes('data-theme')).toBe('dark')
+  })
+
   it('does not mutate the shared global marked singleton', async () => {
     const setOptionsSpy = vi.spyOn(marked, 'setOptions')
 

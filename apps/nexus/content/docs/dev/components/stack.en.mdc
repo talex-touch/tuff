@@ -76,8 +76,8 @@ code: |
 |------|------|---------|-------------|
 | `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | Main axis direction. |
 | `gap` | `number \| string` | `12` | Gap between children. Numbers become px. |
-| `align` | `string` | `'stretch'` | CSS `align-items` value. |
-| `justify` | `string` | `'flex-start'` | CSS `justify-content` value. |
+| `align` | `string` | `'stretch'` | Cross-axis alignment; accepts any valid `align-items` value (`stretch` / `center` / `flex-start` / `flex-end` / `baseline`). Left as `string` rather than a union so newer values such as `safe center` still pass. |
+| `justify` | `string` | `'flex-start'` | Main-axis distribution; accepts any valid `justify-content` value (`flex-start` / `center` / `space-between` / `space-around` / `space-evenly`). Use `space-between` for edge-anchored rows, `center` for a centered group. |
 | `wrap` | `boolean` | `false` | Allow children to wrap onto multiple lines. |
 | `inline` | `boolean` | `false` | Use `inline-flex` instead of block-level `flex`. |
 

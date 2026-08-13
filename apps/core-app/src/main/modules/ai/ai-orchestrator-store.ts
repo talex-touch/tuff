@@ -4,7 +4,9 @@ import type {
   AiAutomationRunRecord,
   AiImportApplyResult,
   AiImportCandidate,
+  AiImportItemKind,
   AiImportScanResult,
+  AiImportSecretDescriptor,
   AiImportedConfigItem,
   AiOrchestratorEvent,
   AiOrchestratorRunListRequest,
@@ -15,7 +17,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { and, asc, desc, eq, gte, inArray, or } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../db/db-write'
 import {
   aiAgentProfiles,
   aiAutomationRuns,
@@ -35,6 +37,32 @@ import type { AiPreparedImportItem } from './ai-import-types'
 
 const DEFAULT_PROFILE_ID = 'default-pi'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
+
+/**
+ * Origin marker for items the user typed in rather than imported. It doubles as
+ * the source id so `listActiveImportCandidates`, which is only ever asked about
+ * scanned sources, can never sweep a hand-entered item into an import decision.
+ */
+const MANUAL_ORIGIN_ID = 'manual'
+/**
+ * An item row needs a revision, which needs a scan; a hand-entered server has
+ * neither. One synthetic pair anchors all of them — and must be excluded from
+ * any future scan retention pass, since both foreign keys cascade on delete.
+ */
+const MANUAL_SCAN_ID = 'manual'
+const MANUAL_REVISION_ID = 'manual'
+
+export interface ManualImportedItemInput {
+  /** Caller-allocated so secret references can be derived before the write. */
+  itemId: string
+  kind: AiImportItemKind
+  name: string
+  projection: Record<string, unknown>
+  /** Must already be redacted: this is persisted verbatim. */
+  snapshot: Record<string, unknown>
+  secrets: AiImportSecretDescriptor[]
+  fingerprint: string
+}
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback
@@ -210,7 +238,7 @@ export class AiOrchestratorStore {
 
     if (existing.length === 0) {
       const now = Date.now()
-      await dbWriteScheduler.schedule(
+      await scheduleDbWrite(
         'ai-orchestrator.profile.default',
         async () => {
           await db.insert(aiAgentProfiles).values({
@@ -297,7 +325,7 @@ export class AiOrchestratorStore {
       throw new Error('Profile id and name are required')
     }
 
-    await dbWriteScheduler.schedule('ai-orchestrator.profile.save', async () => {
+    await scheduleDbWrite('ai-orchestrator.profile.save', async () => {
       await databaseModule
         .getDb()
         .insert(aiAgentProfiles)
@@ -337,7 +365,7 @@ export class AiOrchestratorStore {
   }
 
   async saveImportScan(scan: AiImportScanResult): Promise<void> {
-    await dbWriteScheduler.schedule('ai-orchestrator.import.scan', async () => {
+    await scheduleDbWrite('ai-orchestrator.import.scan', async () => {
       const db = databaseModule.getDb()
       await db.transaction(async (tx) => {
         await tx.insert(aiImportScans).values({
@@ -410,7 +438,7 @@ export class AiOrchestratorStore {
     let currentByCandidate = new Map<string, typeof aiImportItems.$inferSelect>()
     let sourceMissingRows: Array<typeof aiImportItems.$inferSelect> = []
 
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.import.apply',
       async () => {
         let restoreSecretRefs: (() => Promise<void>) | undefined
@@ -678,7 +706,7 @@ export class AiOrchestratorStore {
   }
 
   async setImportedItemActive(itemId: string, active: boolean): Promise<AiImportedConfigItem> {
-    await dbWriteScheduler.schedule('ai-import.item.toggle', async () => {
+    await scheduleDbWrite('ai-import.item.toggle', async () => {
       await databaseModule
         .getDb()
         .update(aiImportItems)
@@ -687,6 +715,126 @@ export class AiOrchestratorStore {
     })
     const item = await this.getImportedItem(itemId)
     if (!item) throw new Error(`Imported item ${itemId} not found`)
+    return item
+  }
+
+  /**
+   * Writes a hand-entered item into the imported-item table, so enable/disable,
+   * delete, and the runtime's MCP reconcile pass treat it exactly like an
+   * imported one. Secret values are the caller's job; what lands here is the
+   * descriptor list, and any reference this write orphans is dropped from the
+   * secure store.
+   */
+  async upsertManualImportedItem(input: ManualImportedItemInput): Promise<AiImportedConfigItem> {
+    const name = input.name.trim()
+    if (!input.itemId || !name) throw new Error('Manual item id and name are required')
+    const db = databaseModule.getDb()
+    const now = Date.now()
+
+    await scheduleDbWrite(
+      'ai-import.item.upsert-manual',
+      async () => {
+        let restoreSecretRefs: (() => Promise<void>) | undefined
+        try {
+          await db.transaction(async (tx) => {
+            const rows = await tx
+              .select()
+              .from(aiImportItems)
+              .where(eq(aiImportItems.current, true))
+            const existing = rows.find((row) => row.id === input.itemId)
+            if (existing && existing.provider !== MANUAL_ORIGIN_ID)
+              throw new Error(`Imported item ${input.itemId} was not created by hand`)
+
+            const retainedAuthRefs = new Set(
+              [
+                ...rows
+                  .filter((row) => row.id !== input.itemId)
+                  .flatMap((row) => parseJson<AiImportSecretDescriptor[]>(row.secrets, [])),
+                ...input.secrets
+              ]
+                .map((secret) => secret.authRef)
+                .filter((authRef): authRef is string => Boolean(authRef))
+            )
+            const authRefsToRemove = parseJson<AiImportSecretDescriptor[]>(existing?.secrets, [])
+              .map((secret) => secret.authRef)
+              .filter(
+                (authRef): authRef is string =>
+                  typeof authRef === 'string' && !retainedAuthRefs.has(authRef)
+              )
+            restoreSecretRefs = await removeSecureStoreRefs(authRefsToRemove)
+
+            await tx
+              .insert(aiImportScans)
+              .values({
+                id: MANUAL_SCAN_ID,
+                cwd: '',
+                sources: '[]',
+                candidates: '[]',
+                createdAt: now
+              })
+              .onConflictDoNothing()
+            await tx
+              .insert(aiImportRevisions)
+              .values({
+                id: MANUAL_REVISION_ID,
+                scanId: MANUAL_SCAN_ID,
+                importedCount: 0,
+                unchangedCount: 0,
+                removedCount: 0,
+                createdAt: now
+              })
+              .onConflictDoNothing()
+            await tx
+              .insert(aiImportItems)
+              .values({
+                id: input.itemId,
+                candidateId: input.itemId,
+                sourceId: MANUAL_ORIGIN_ID,
+                provider: MANUAL_ORIGIN_ID,
+                scope: 'user',
+                targetScope: 'global',
+                workspaceRoot: null,
+                kind: input.kind,
+                name,
+                alias: null,
+                sourceKey: input.itemId,
+                path: '',
+                fingerprint: input.fingerprint,
+                snapshot: JSON.stringify(input.snapshot),
+                contentRef: null,
+                projection: JSON.stringify(input.projection),
+                secrets: JSON.stringify(input.secrets),
+                state: 'active',
+                revisionId: MANUAL_REVISION_ID,
+                current: true,
+                active: existing?.active ?? true,
+                createdAt: existing?.createdAt ?? now,
+                updatedAt: now
+              })
+              .onConflictDoUpdate({
+                target: aiImportItems.id,
+                set: {
+                  name,
+                  fingerprint: input.fingerprint,
+                  snapshot: JSON.stringify(input.snapshot),
+                  projection: JSON.stringify(input.projection),
+                  secrets: JSON.stringify(input.secrets),
+                  state: 'active',
+                  current: true,
+                  updatedAt: now
+                }
+              })
+          })
+        } catch (error) {
+          if (restoreSecretRefs) await restoreSecretRefs()
+          throw error
+        }
+      },
+      { priority: 'interactive' }
+    )
+
+    const item = await this.getImportedItem(input.itemId)
+    if (!item) throw new Error(`Manual item ${input.itemId} was not persisted`)
     return item
   }
 
@@ -727,7 +875,7 @@ export class AiOrchestratorStore {
     const requestedAlias = alias?.trim()
     const baseAlias = requestedAlias || `${source.alias || source.name} (Local)`
     let cloneAlias = ''
-    await dbWriteScheduler.schedule('ai-import.item.clone', async () => {
+    await scheduleDbWrite('ai-import.item.clone', async () => {
       await db.transaction(async (tx) => {
         const currentSource = await tx
           .select({ id: aiImportItems.id })
@@ -801,7 +949,7 @@ export class AiOrchestratorStore {
   async deleteImportedItem(itemId: string): Promise<boolean> {
     const db = databaseModule.getDb()
     let deleted = false
-    await dbWriteScheduler.schedule('ai-import.item.delete', async () => {
+    await scheduleDbWrite('ai-import.item.delete', async () => {
       let restoreSecretRefs: (() => Promise<void>) | undefined
       try {
         await db.transaction(async (tx) => {
@@ -855,7 +1003,7 @@ export class AiOrchestratorStore {
   }
 
   async createOrchestratorRun(run: AiOrchestratorRunRecord): Promise<void> {
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.run.create',
       async () => {
         await databaseModule
@@ -893,7 +1041,7 @@ export class AiOrchestratorStore {
     patch: Partial<Omit<AiOrchestratorRunRecord, 'id' | 'createdAt'>>
   ): Promise<void> {
     const now = Date.now()
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.run.update',
       async () => {
         await databaseModule
@@ -935,7 +1083,7 @@ export class AiOrchestratorStore {
     level: AiOrchestratorEvent['level'] = 'info'
   ): Promise<AiOrchestratorEvent> {
     let event: AiOrchestratorEvent | undefined
-    await dbWriteScheduler.schedule('ai-orchestrator.event.append', async () => {
+    await scheduleDbWrite('ai-orchestrator.event.append', async () => {
       let previousSeq = this.eventSeq.get(runId)
       if (previousSeq === undefined) {
         const rows = await databaseModule
@@ -1037,7 +1185,7 @@ export class AiOrchestratorStore {
       throw new Error('Automation id, name, and objective are required')
     }
 
-    await dbWriteScheduler.schedule('ai-orchestrator.automation.save', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation.save', async () => {
       await databaseModule
         .getDb()
         .insert(aiAutomations)
@@ -1107,14 +1255,14 @@ export class AiOrchestratorStore {
       .where(eq(aiAutomations.id, automationId))
       .limit(1)
     if (rows.length === 0) return false
-    await dbWriteScheduler.schedule('ai-orchestrator.automation.delete', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation.delete', async () => {
       await databaseModule.getDb().delete(aiAutomations).where(eq(aiAutomations.id, automationId))
     })
     return true
   }
 
   async createAutomationRun(run: AiAutomationRunRecord): Promise<void> {
-    await dbWriteScheduler.schedule('ai-orchestrator.automation-run.create', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation-run.create', async () => {
       await databaseModule
         .getDb()
         .insert(aiAutomationRuns)
@@ -1143,7 +1291,7 @@ export class AiOrchestratorStore {
     patch: Partial<Omit<AiAutomationRunRecord, 'id' | 'automationId' | 'createdAt'>>
   ): Promise<void> {
     const now = Date.now()
-    await dbWriteScheduler.schedule('ai-orchestrator.automation-run.update', async () => {
+    await scheduleDbWrite('ai-orchestrator.automation-run.update', async () => {
       await databaseModule
         .getDb()
         .update(aiAutomationRuns)
@@ -1206,7 +1354,7 @@ export class AiOrchestratorStore {
 
   private async markInterruptedRuns(): Promise<void> {
     const now = Date.now()
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       'ai-orchestrator.recovery.mark-interrupted',
       async () => {
         const db = databaseModule.getDb()

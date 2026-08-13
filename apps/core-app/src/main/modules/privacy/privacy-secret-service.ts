@@ -440,7 +440,10 @@ export function createMainPrivacySecretFileAdapter(
     values.showOpenDialog as MainPrivacySecretFileAdapterOptions['showOpenDialog']
   ).bind(options)
 
-  return Object.freeze({
+  // Same reason as data-owner.ts: Object.freeze infers its type parameter from the argument,
+  // so `: PrivacySecretFileAdapter` on the function above never reaches this literal and every
+  // callback parameter here defaulted to `any` (#548).
+  return Object.freeze<PrivacySecretFileAdapter>({
     writeBackup: async (envelope, signal) => {
       if (
         typeof envelope !== 'string' ||
@@ -835,7 +838,7 @@ export function createPrivacySecretService(
     return Object.freeze(entries)
   }
 
-  return Object.freeze({
+  return Object.freeze<PrivacySecretService>({
     backupPreview: (externalSignal) =>
       serialize(externalSignal, async (signal) => {
         try {

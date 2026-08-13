@@ -285,6 +285,37 @@ export interface CoreBoxNoResultsPayload {
   shouldShrink?: boolean
 }
 
+/**
+ * Query-cache counters for the CoreBox search cache (#346).
+ *
+ * Mirrors `SearchCacheTelemetrySnapshot` in the main process. The definition lives here because a
+ * shared package cannot import from the app, and the transport contract needs the shape.
+ *
+ * Counts and durations only -- no query text, no cache key, no item content -- so a report built
+ * from this cannot reconstruct what anyone searched for.
+ */
+export type CoreBoxSearchCacheMissReason = 'absent' | 'revision-mismatch' | 'expired'
+
+export type CoreBoxSearchCacheInvalidationReason =
+  | 'index-commit'
+  | 'privacy-cleanup'
+  | 'pin-toggle'
+  | 'lru-evict'
+
+export interface CoreBoxSearchCacheTelemetryResponse {
+  lookups: number
+  hits: number
+  misses: Record<CoreBoxSearchCacheMissReason, number>
+  invalidations: Record<CoreBoxSearchCacheInvalidationReason, number>
+  /** Entries dropped in total, so `invalidations` can be read as a distribution. */
+  entriesDropped: number
+  hitRate: number
+  /** Age of the entries that were served, in ms — says whether the 5s TTL is the binding limit. */
+  hitAgeMs: { p50: number | null, p95: number | null }
+  /** Wall time the served result originally took to produce, in ms: what a hit saved. */
+  savedLatencyMs: { p50: number | null, p95: number | null, total: number }
+}
+
 export type CoreBoxIndexingDiagnosticsResponse
   = IndexedSourceDiagnosticsSnapshot
 
@@ -424,6 +455,8 @@ export interface TuffMeta {
       | 'trending'
       | 'pinned'
       | 'context'
+      | 'cold-start'
+      | 'newly-installed'
     score?: number
   }
 
@@ -749,6 +782,16 @@ export interface CoreBoxRecommendationResponse {
   duration: number
   fromCache: boolean
   error?: string
+}
+
+/**
+ * Which recommendation items a surface actually rendered, in display order.
+ * Local evaluation input for hit-rate@k — ids only, fire-and-forget.
+ */
+export interface CoreBoxRecommendationExposureRequest {
+  /** `sourceId:itemId` per rendered item, in rendered order */
+  itemKeys: string[]
+  surface?: string
 }
 
 export interface CoreBoxAggregateTimeStatsResponse {
