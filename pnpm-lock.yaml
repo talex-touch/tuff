@@ -735,8 +735,8 @@ importers:
         specifier: ^3.5.39
         version: 3.5.39
       '@vueuse/core':
-        specifier: ^14.3.0
-        version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+        specifier: ^14.4.0
+        version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       baseline-browser-mapping:
         specifier: catalog:dev
         version: 2.10.43
@@ -1152,8 +1152,8 @@ importers:
         specifier: ^3.5.27
         version: 3.5.39
       '@vueuse/core':
-        specifier: ^14.3.0
-        version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+        specifier: ^14.4.0
+        version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       dompurify:
         specifier: ^3.4.13
         version: 3.4.13
@@ -1310,8 +1310,8 @@ importers:
   packages/utils:
     dependencies:
       '@vueuse/core':
-        specifier: ^14.3.0
-        version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+        specifier: ^14.4.0
+        version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1506,8 +1506,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/utils
       '@vueuse/core':
-        specifier: ^14.3.0
-        version: 14.3.0(vue@3.5.39(typescript@5.9.3))
+        specifier: ^14.4.0
+        version: 14.4.0(vue@3.5.39(typescript@5.9.3))
       vue:
         specifier: ^3.5.39
         version: 3.5.39(typescript@5.9.3)
@@ -1559,7 +1559,8 @@ importers:
         version: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
       unplugin-auto-import:
         specifier: ^20.3.0
-        version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.3.0(vue@3.5.39(typescript@5.9.3)))
+         version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3)))
+ 
       unplugin-vue-components:
         specifier: ^30.0.0
         version: 30.0.0(@babel/parser@7.29.7)(@nuxt/kit@4.4.8(magicast@0.5.4))(vue@3.5.39(typescript@5.9.3))
@@ -27911,18 +27912,8 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-  unplugin-auto-import@20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.3.0(vue@3.5.39(typescript@5.9.3))):
-    dependencies:
-      local-pkg: 1.2.1
-      magic-string: 0.30.21
-      picomatch: 4.0.5
-      unimport: 5.7.0
-      unplugin: 2.3.11
-      unplugin-utils: 0.3.1
-    optionalDependencies:
-      '@nuxt/kit': 4.4.8(magicast@0.5.4)
-      '@vueuse/core': 14.3.0(vue@3.5.39(typescript@5.9.3))
-
+         version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3)))
+ 
   unplugin-auto-import@20.3.0(@nuxt/kit@4.4.8(magicast@0.5.3))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3))):
     dependencies:
       local-pkg: 1.2.1
@@ -28320,7 +28311,7 @@ snapshots:
       '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3))
       '@vue/devtools-api': 8.1.5
       '@vue/shared': 3.5.39
-      '@vueuse/core': 14.3.0(vue@3.5.39(typescript@5.9.3))
+      '@vueuse/core': 14.4.0(vue@3.5.39(typescript@5.9.3))
       '@vueuse/integrations': 14.3.0(axios@1.18.1)(change-case@5.4.4)(focus-trap@8.2.2)(fuse.js@7.5.0)(vue@3.5.39(typescript@5.9.3))
       focus-trap: 8.2.2
       mark.js: 8.11.1
