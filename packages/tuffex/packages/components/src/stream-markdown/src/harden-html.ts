@@ -26,6 +26,22 @@ import { isRemoteImage, isRemoteImageAllowed } from './remote-image-policy'
  * this over the escaped ones turns `&quot;` into `&amp;quot;`, which the reader
  * sees verbatim.
  */
+/**
+ * Attribute-value escaping for text marked now hands over RAW.
+ *
+ * Under marked 12's positional renderers the alt/title arrived pre-escaped, and escaping again
+ * would have shown the reader a literal `&amp;quot;` — the old comment in the tests guards that
+ * double-escape. Marked 17's token API inverted the contract: `token.text` and `token.title` are
+ * the source text, so the renderer owns escaping now, exactly once, ampersand first.
+ */
+function escapeAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
 function escapeHref(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -111,7 +127,7 @@ export function hardenHtmlExtension(options: () => HardenHtmlOptions): MarkedExt
       link(token: Tokens.Link): string {
         const { href, title } = token
         const text = this.parser.parseInline(token.tokens)
-        const titleAttr = title ? ` title="${title}"` : ''
+        const titleAttr = title ? ` title="${escapeAttribute(title)}"` : ''
         // `noreferrer` implies `noopener`; both are named because that pair is
         // what a reviewer looks for, and one without the other is a common slip.
         return `<a href="${escapeHref(href)}"${titleAttr} rel="noopener noreferrer">${text}</a>`
@@ -119,12 +135,12 @@ export function hardenHtmlExtension(options: () => HardenHtmlOptions): MarkedExt
       image(token: Tokens.Image): string {
         const { href, title, text } = token
         const { blockRemoteImages, labels } = options()
-        const alt = text ?? ''
+        const alt = escapeAttribute(text ?? '')
         if (blockRemoteImages && isRemoteImage(href) && !isRemoteImageAllowed(href)) {
           return blockedImagePlaceholder(href, alt, labels)
         }
 
-        const titleAttr = title ? ` title="${title}"` : ''
+        const titleAttr = title ? ` title="${escapeAttribute(title)}"` : ''
         // `alt` is load-bearing, not decorative: a blocked or slow image leaves
         // the reader with nothing else to go on.
         const altAttr = ` alt="${alt}"`
