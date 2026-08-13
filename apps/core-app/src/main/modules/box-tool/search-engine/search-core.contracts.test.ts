@@ -904,6 +904,43 @@ describe('SearchEngineCore facade contracts', () => {
     expect(snapshot.misses.absent).toBe(3)
   })
 
+  /**
+   * The counters are readable from outside the process now (#346).
+   *
+   * `getSearchCacheTelemetry` had one reference — its own declaration — so the report that issue
+   * asks for could not be produced from a real session. This asserts the transport handler is
+   * registered and returns the live snapshot, not a fresh one.
+   */
+  it('exposes the cache counters over the transport', async () => {
+    const search = vi.fn(
+      async () => ({ items: [buildItem('tel-item', 'tel-provider', 'Telemetry')] }) as never
+    )
+    core.registerProvider(buildProvider('tel-provider', search) as never)
+    core.activateProviders([{ id: 'tel-provider' }] as IProviderActivate[])
+
+    const handler = [...state.transportHandlers.entries()].find(([event]) => {
+      const transportEvent = event as { toEventName?: () => string }
+      return transportEvent.toEventName?.() === CoreBoxEvents.search.cacheTelemetry.toEventName()
+    })?.[1] as (() => Promise<{ lookups: number; hits: number }>) | undefined
+
+    expect(handler, 'cacheTelemetry handler is registered').toBeTypeOf('function')
+
+    const before = await handler!()
+    expect(before.lookups).toBe(0)
+
+    const session = core.startSearch(
+      { inputs: [], text: 'telemetry over transport' } as TuffQuery,
+      {
+        caller: { kind: 'core-box', id: 'tel-1' }
+      }
+    )
+    await session.result
+    await session.completed
+
+    const after = await handler!()
+    expect(after.lookups).toBe(1)
+  })
+
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
     core.registerProvider({
