@@ -7,7 +7,8 @@ import { useUiPreference } from '~/modules/storage/ui-preference-storage'
 import { type IconValue, toIcon } from './tuff-icon-utils'
 const props = withDefaults(
   defineProps<{
-    name: string
+    /** Header title. When omitted the 56px header row is not rendered and the card body shows alone. */
+    name?: string
     description?: string
     defaultIcon?: IconValue
     activeIcon?: IconValue
@@ -18,6 +19,7 @@ const props = withDefaults(
     memoryName?: string
   }>(),
   {
+    name: '',
     description: '',
     iconSize: 22,
     collapsible: true,
@@ -170,6 +172,7 @@ onMounted(() => {
 <template>
   <div class="TGroupBlock-Container" :class="{ expand: expanded }">
     <div
+      v-if="name"
       class="TGroupBlock-Header fake-background index-fix"
       :class="{ 'is-static': !collapsible }"
       @click="toggle"

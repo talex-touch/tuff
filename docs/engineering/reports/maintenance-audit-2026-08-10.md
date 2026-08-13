@@ -13,6 +13,7 @@
 ## 数据库、跨平台与安全门禁
 
 - **搜索分库任务文档仍与当前拓扑矛盾** — `runtime-flags.ts` 明确将 `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认设为 `true`，`=0` 是应急回退，且当前 roadmap 已记录三次 app-run 证据；迁移任务 PRD 仍称其默认关闭并以 flag-on 作为未来验收前提。更新任务 PRD/元数据，使其与当前运行时和已记录证据一致，避免旧措辞误导后续发布判断。跟踪：[#1107](https://github.com/talex-touch/tuff/issues/1107)。
+- **搜索分库配置的文档与代码相互矛盾** — `runtime-flags.ts` 明确将 `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认设为 `true`，`=0` 是应急回退；`TODO.md` 与迁移任务 PRD 仍称其默认关闭。先统一当前模式、任务验收语言和发布断言，不能基于陈旧“flag-on/default-off”叙述判断安全性。跟踪：[#1107](https://github.com/talex-touch/tuff/issues/1107)。
 - **SQLite writer ownership 只覆盖 search-index 域** — #351 的 source guard 已覆盖该域；下载、推荐、应用索引、分析、更新、Sentry、剪贴板等可变域仍未形成 owner map、统一 admission/retry 规则或真实锁竞争、恢复与关机证据。跟踪：[#351](https://github.com/talex-touch/tuff/issues/351)。
 - **大目录 OOM 风险的结构修复缺量化闭环** — 生产路径已改为有界批处理，但仍缺百万条受控 fixture、显式内存预算、worker/client/reconciliation 三层峰值、取消/关机释放、打包应用响应性及批次边界正确性证据。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
 - **macOS 发行架构策略未决** — 当前 `darwin/arm64` 产物需要明确产品支持范围；arm64-only 必须在下载/OTA 明示拒绝不支持架构，x64/Universal 则需完整签名、公证、清单、选择逻辑与真机矩阵。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。

@@ -1857,6 +1857,33 @@ tuffex: found four audit scripts that no workflow ran (0 hits each against 9 for
 Two claims I made and then disproved myself. #1557: I reported pnpm consumers hitting TS2307 on an undeclared @vue/reactivity; a faithful install resolves it via pnpm's default hoist dir, and hoist=false resolves it too. My repro had hand-extracted the tarball into a layout no package manager produces. #1565: I judged AC9's opaque-panel requirement unimplemented and wrote the forcing logic, then found TxCard sits in the v-else-if and never renders under liquid, so the prop I was constraining is never read. Both retracted on the issues; the second's code was reverted.
 
 Also corrected the #1125 diagnosis: the 119 docs findings are not a rule/state-machine mismatch. All of them land on active planning/in_progress tasks, all created after the rule shipped, and task.py never writes the three fields it demands. Archiving is what drops the requirement -- that rule only applies to active tasks.
+## 2026-08-06 · 三线收官：feature 工具、附件进模型、pi 重试根修
+
+- **feature 工具**(9022c763e):list/invoke 成对落地(前任代理流超时,继任续写其投影层不推倒);首页工具面板至此九件套一门。
+- **附件进模型**(647fb3f2a+d9a25ed5f):双镜像类型→spill(MIME 白名单/10MB/0600/跳过不炸轮)→@files 位置参数;vision 冒烟真凭实据(模型读回生成图文字)。提示文案改「实发对比」显隐。spec 落 pi-provider-contracts.md。
+- **pi 重复/空回复根修**(cd018f946):诊断代理实盘 NDJSON 证据(单进程 4 轮重放、json 模式恒退出 0)→主会话复审发现原案工具轮过度回滚缺陷→定形 commit/rollback(delta=预览,message_end=提交点,auto_retry_start=回滚);实施代理三处有据偏离全采纳(显式 stopReason 才 commit、尾部预览保留+抛错只看已提交、播种与水位交互加 textLength)。
+- **边界测试 mock 陈旧根治**:手列导出两级过期(PRIVACY_DATA_CATEGORIES→PLUGIN_STORAGE_ERROR_CODES→域事件全面缺)→importOriginal+Proxy 自动桩,4/7 套件复绿;余 3 套 HEAD 逐字节一致仍败=actor-boundary 流既有漂移,立 08-06-intelligence-boundary-drift 交接(决定性证据:未改文件同样失败)。
+- 教训:手列 mock 是定时炸弹,partial mock(importOriginal)/Proxy 桩才是可持续形态——已写进提交信息与交接任务。
+
+## 2026-08-06 · A/B/C/D 四线全落库
+
+- **A 朗读**(737e5d79f,主会话自做):TxMessageActions 三态键+HomePage 播放宿主(单播/toggle/token 防合成中切走);ttsSpeak data URL。
+- **B 本地技能**(53b1ea472,代理干完 #4-#6 死于 529,主会话补 #7):链接语义全程贯彻——原位扫描/原位读取/零拷贝,编辑即生效;`local:` id 单跳 symlink 边界,关闭=不可读;注册表在 main 自有存储,渲染层不回写路径;真实 fs+symlink 测试 49 绿;spec 契约代理死前已更新。
+- **C 表单工具**(e982a2656):照图表家族三层复刻,提交以 key:value 回流为普通用户消息闭环;假勾教训兑现——PRD 真机项如实留白。
+- **D 边界漂移**(已归档):b6c7d8886 错误脱敏为引入提交,断言对齐且拦截语义由 untouched-service 承载;超时=测试体内动态 import 冷转换。
+- 多代理插曲:复活的初代 feature 代理停手取证零改动(模范),抓出我批量勾选的自相矛盾行;B 代理曾系统性外派自己子任务清单,纠偏令止血;两代理同分钟死于 529(服务端过载),接力优于重派。
+- 未归档挂账:A/B/C 三任务等用户重启后的真机项(朗读出声/本地技能编辑即生效/表单端到端),验完批量归档。
+
+
+## Session 51: Home chat pipeline fixes: virtual-list stability, chain visibility, pi date/compaction/budget, send motion
+
+**Date**: 2026-08-07
+**Task**: Home chat pipeline fixes: virtual-list stability, chain visibility, pi date/compaction/budget, send motion
+**Branch**: `TalexDreamSoul/app-shell-v2`
+
+### Summary
+
+Diagnosed and fixed the home chat pile-up (non-unique message ids poisoning the stream height cache; uuid ids + cache pruning + per-thread stream instance + legacy dup repair on load), chain-of-thought vanishing on completion (showChain rule, body truncation, durationMs), pi context gaps (date line at system-prompt tail, chunk-quantized cache-stable transcript budget after a user-flagged KV-cache regression, compaction events end-to-end), and reworked the send motion (overlay-clone flight, spring follower, animation-clock beats, no blur). web-search-tool child remains open pending backend selection; motion feel pass pending user. Tuffex 1111 tests green; typechecks clean; 3 pre-existing main AI test failures proven unrelated via HEAD-swap.
 
 ### Main Changes
 
@@ -1960,6 +1987,10 @@ Also corrected the #1125 diagnosis: the 119 docs findings are not a rule/state-m
 | `02b0884d5` | (see git log) |
 | `5e9370fc2` | (see git log) |
 | `07109069c` | (see git log) |
+| `4e5d8532a` | (see git log) |
+| `873ee51f2` | (see git log) |
+| `4b3c11bbb` | (see git log) |
+| `65911e1d9` | (see git log) |
 
 ### Testing
 

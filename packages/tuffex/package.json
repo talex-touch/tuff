@@ -93,6 +93,7 @@
     "@vueuse/core": "^14.3.0",
     "dompurify": "^3.4.13",
     "gsap": "^3.15.0",
+    "katex": "^0.16.45",
     "marked": "catalog:",
     "mermaid": "catalog:",
     "shiki": "^4.4.2",
@@ -102,6 +103,8 @@
   "devDependencies": {
     "@types/gulp": "^4.0.18",
     "@types/gulp-autoprefixer": "^0.0.37",
+    "@types/gulp-sass": "^5.0.4",
+    "@types/katex": "^0.16.8",
     "@types/node": "catalog:dev",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",

@@ -3405,3 +3405,21 @@ if (!stopped) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
 await replacePluginFiles()
 // Crash cleanup is terminal. A later generation starts only after cleanup succeeds.
 ```
+
+### 8. Fixed widget navigation paths are byte-checked contract constants
+
+`FIXED_WIDGET_NAVIGATION` in `src/main/modules/plugin/plugin-business-capabilities.ts` and the
+matching constant inside each official plugin (e.g. `plugins/touch-intelligence/index.js`) form a
+host↔plugin whitelist: the host **verifies** the plugin-declared `payload.path` against its own
+constant (`payload.path !== fixed.path → authorityInvalid()`), it does not rewrite it.
+
+- Never "migrate" such a path in-place when a renderer route moves. Changing only the host rejects
+  every widget item pushed by installed plugins; changing both host and plugin still rejects
+  **already-installed** plugin versions, because plugins load from the user data directory and do
+  not update with the app.
+- The correct move is to keep the constant stable forever and absorb route changes with a router
+  redirect (done 2026-08-06 for `/intelligence/channels` → `/setting/intelligence/channels`).
+- Renderer tests that assert these payloads (`useActionPanel.test.ts`) must keep asserting the
+  wire constant, not the current route, with a comment pointing here.
+- Retiring a constant for real requires a dedicated task covering host + plugin + the four
+  cross-package tests + a compatibility window for installed plugin versions.

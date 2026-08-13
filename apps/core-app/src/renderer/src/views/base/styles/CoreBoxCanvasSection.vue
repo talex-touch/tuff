@@ -1,6 +1,6 @@
 <script lang="ts" name="CoreBoxCanvasSection" setup>
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -26,22 +26,23 @@ function openEditor(event: MouseEvent): void {
 </script>
 
 <template>
-  <TuffGroupBlock
-    :name="t('layoutSection.customizeCoreBox', 'Customize CoreBox')"
-    :description="t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style')"
-  >
+  <TuffGroupBlock :name="t('layoutSection.coreBoxGroup')">
     <TuffBlockSlot
       :title="t('layoutSection.customizeCoreBox', 'Customize CoreBox')"
       :description="t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style')"
-      default-icon="i-ri-search-line"
-      active-icon="i-ri-search-fill"
       @click="openEditor"
     >
       <template #tags>
-        <TxStatusBadge text="Beta" status="warning" size="sm" />
+        <TxTag
+          label="Beta"
+          size="sm"
+          color="var(--shell-text-muted)"
+          background="var(--shell-surface-2)"
+          border="transparent"
+        />
       </template>
-      <TxButton variant="bare" @click="editorVisible = true">
-        <span class="i-ri-edit-2-line mr-1" />
+      <TxButton variant="bare" class="CoreBoxCanvasSection-Edit" @click="editorVisible = true">
+        <span class="i-ri-edit-2-line" />
         {{ t('common.edit', 'Edit') }}
       </TxButton>
     </TuffBlockSlot>
@@ -49,3 +50,18 @@ function openEditor(event: MouseEvent): void {
     <CoreBoxEditorOverlay v-model="editorVisible" :source="editorSource" />
   </TuffGroupBlock>
 </template>
+
+<style lang="scss" scoped>
+/** Artboard `E0C1Zz` · `Btn 编辑`: hairline-outlined, not a filled or accented button. */
+.CoreBoxCanvasSection-Edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--shell-border-strong);
+  border-radius: var(--shell-radius-sm);
+  color: var(--shell-text-regular);
+  font-size: var(--shell-fs-sm);
+  font-weight: 500;
+}
+</style>

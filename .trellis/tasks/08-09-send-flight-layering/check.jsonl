@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查阶段的质量基线"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查 SFC 改动是否符合组件约定"}

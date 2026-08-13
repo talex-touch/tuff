@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><body>
+<script>
+const MODE = new URLSearchParams(location.search).get('mode')
+window.__ticks = 0; window.__phase = 'idle'; window.__ran = false
+setInterval(() => { window.__ticks++ }, 10)
+setTimeout(() => {
+  window.__before = window.__ticks
+  // Register the end of the measurement window FIRST, so a synchronous block
+  // inside the window is actually inside it.
+  setTimeout(() => { window.__during = window.__ticks - window.__before; window.__phase = 'done' }, 2000)
+  if (MODE === 'parent') {
+    const t = Date.now(); while (Date.now() - t < 3000) {}
+    window.__ran = true
+  } else {
+    const f = document.createElement('iframe')
+    if (MODE === 'sandboxed') f.setAttribute('sandbox', 'allow-scripts')
+    f.srcdoc = '<script>const t=Date.now();while(Date.now()-t<3000){}parent.postMessage("ran","*")<\/script>'
+    addEventListener('message', (e) => { if (e.data === 'ran') window.__ran = true })
+    document.body.appendChild(f)
+  }
+}, 600)
+</script></body>

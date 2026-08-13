@@ -15,6 +15,7 @@
 import type { AdaptedStructuredTool } from '@talex-touch/tuff-intelligence'
 import type { AiImportedConfigItem } from '@talex-touch/utils/types/ai-orchestrator'
 import type { IntelligenceMcpProfile } from '../ai/intelligence-mcp-registry'
+import { LOCAL_SKILL_ID_PREFIX } from '../ai/skill-local-sources'
 
 /** The MCP-side risk scale, as `intelligence-mcp-registry` resolves it. */
 export type McpRiskLevel = 'low' | 'medium' | 'high' | 'critical'
@@ -34,7 +35,10 @@ export interface McpToolEntry {
 }
 
 export interface AgentContextSource {
-  /** Rejects anything that is not an active imported skill with managed content. */
+  /**
+   * Rejects anything that is not an active imported skill with managed content,
+   * or — for a `local:` id — a skill under a directory the user registered.
+   */
   readSkill: (skillId: string) => Promise<string>
   listMcpServers: () => Promise<McpServerEntry[]>
   listMcpTools: (serverId: string) => Promise<McpToolEntry[]>
@@ -48,6 +52,12 @@ export interface AgentContextSource {
 export interface AgentContextDeps {
   listImportedItems: () => Promise<AiImportedConfigItem[]>
   readContent: (contentRef: string) => Promise<string>
+  /**
+   * Reads a skill linked from a registered local directory. It enforces its own
+   * boundary — the id has to resolve to a directory still in the registry, and
+   * the file has to stay inside it.
+   */
+  readLocalSkill: (skillId: string) => Promise<string>
   registerMcpProfile: (profile: IntelligenceMcpProfile) => void
   listStructuredTools: (profileIds: string[]) => Promise<AdaptedStructuredTool[]>
   callMcpTool: (profileId: string, toolName: string, input: unknown) => Promise<unknown>
@@ -112,6 +122,10 @@ export function createAgentContextSource(deps: AgentContextDeps): AgentContextSo
   return {
     readSkill: async (skillId) => {
       const id = skillId.trim()
+      // A linked skill has no imported item behind it; its body is the file on
+      // disk, resolved by the same id-only rule the local registry enforces.
+      if (id.startsWith(LOCAL_SKILL_ID_PREFIX)) return await deps.readLocalSkill(id)
+
       const item = (await deps.listImportedItems()).find((candidate) => candidate.id === id)
       // The caller names a skill by id and nothing else: the file path comes
       // from the item the user imported, so no path the model invents is

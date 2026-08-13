@@ -16,7 +16,23 @@ Electron main-process (apps/core-app/src/main) coding contracts.
 - [database-write-contracts.md](database-write-contracts.md) — single-writer-per-file
   topology, `scheduleDbWrite`/`scheduleAuxWrite` call-site convention, scheduler
   busy-retry semantics (never sleep holding the queue), live home resolution,
-  search-split parity rules, boot-time maintenance write gating.
+  search-split parity rules, boot-time maintenance write gating; hand-written
+  migration authoring (snapshot chain dead at 0014, journal `when` must be max,
+  leaf-table rebuild pattern, renderer-assigned ids need parent-scoped PKs).
+- [channel-transport-contracts.md](channel-transport-contracts.md) — main→renderer
+  delivery modes: notification events must use `broadcastToWindow` (sendTo hangs a
+  60s pending timer whose WARN `.catch()` cannot suppress), delivery-target identity,
+  port allowlist, stable-mock test contract.
+- [app-semantic-catalog-contracts.md](app-semantic-catalog-contracts.md) — category
+  vocabulary: locale-structured alias groups (new language = locale key + rule),
+  automatic English pluralization + skip-table discipline, match-needle token
+  semantics (bare generic tokens leak), version bump ≠ instant refresh, lift-to-utils
+  constraints.
+- [recommendation-freshness-contracts.md](recommendation-freshness-contracts.md) —
+  `installedAt` extension (write-once via conflict-do-nothing, watch-now fallback),
+  double-gate freshness predicate, novelty→frecency handoff, the THREE
+  `recommendation.source` union files, cache-invalidation read-guard vs cleanup
+  deletion, exposure slice tag rules.
 - [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached

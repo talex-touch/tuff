@@ -2,10 +2,9 @@
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PluginNavTree from '~/components/plugin/PluginNavTree.vue'
-import SettingDivider from '~/components/settings/SettingDivider.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
-import SettingSection from '~/components/settings/SettingSection.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import SettingTools from '../SettingTools.vue'
 
 /**
@@ -30,31 +29,30 @@ const router = useRouter()
       have no other entry point since the sidebar collapsed to v2. The former "Entries" heading
       is dropped so the page reads as content rather than a menu.
     -->
-    <SettingSection>
+    <TuffGroupBlock>
       <SettingRow
         :title="t('settingsEntries.application')"
         :description="t('settingsEntries.applicationDesc')"
         navigable
         @activate="router.push('/application')"
       />
-      <SettingDivider />
       <SettingRow
         :title="t('settingsEntries.store')"
         :description="t('settingsEntries.storeDesc')"
         navigable
         @activate="router.push('/store/installed')"
       />
-    </SettingSection>
+    </TuffGroupBlock>
 
     <!--
       `PluginNavTree` is the primary way into `/plugin/:name`; it lost its sidebar slot when the
       shell collapsed to v2, so it lives here rather than being dropped.
     -->
-    <SettingSection :label="t('settingsEntries.installedPlugins')">
+    <TuffGroupBlock :name="t('settingsEntries.installedPlugins')">
       <div class="SettingPluginsPage-Tree">
         <PluginNavTree />
       </div>
-    </SettingSection>
+    </TuffGroupBlock>
   </SettingsPage>
 </template>
 

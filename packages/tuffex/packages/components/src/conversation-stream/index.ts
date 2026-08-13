@@ -35,6 +35,8 @@ export type {
 export interface TxConversationStreamInstance {
   scrollToBottom: (behavior?: ScrollBehavior) => void
   scrollToIndex: (index: number) => void
+  /** Fixed-duration glide to the bottom; resolves `false` if interrupted. */
+  tweenToBottom: (duration?: number) => Promise<boolean>
   atBottom: boolean
 }
 

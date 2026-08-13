@@ -10,15 +10,18 @@ import type {
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
-import { delimiter, dirname } from 'node:path'
+import { existsSync } from 'node:fs'
+import { delimiter, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments, spillAttachments } from './attachment-spill'
 import {
   buildPiArgs,
   buildPiPrompt,
+  isFailedStopReason,
   parsePiCliLine,
   PI_CLI_NOT_FOUND,
   PI_SESSION_PROTOCOL_VERSION,
@@ -52,10 +55,37 @@ export function setPiToolRuntimeResolver(
   resolveToolRuntime = resolver
 }
 
+/**
+ * Tuff's tool forwarder, handed to `pi` per spawn via `-e`. Nothing is ever
+ * installed into the user's own pi setup — the file rides along from the
+ * repo in development and from `extraResources` in a packaged build. `null`
+ * (cached) when neither exists: the run then degrades to tool-free, which the
+ * model can at least say out loud, instead of silently mangling the spawn.
+ */
+let tuffExtensionPath: string | null | undefined
+
+function resolveTuffExtensionPath(): string | null {
+  if (tuffExtensionPath !== undefined) return tuffExtensionPath
+  const candidates = app.isPackaged
+    ? [join(process.resourcesPath, 'pi-extension-tuff', 'index.ts')]
+    : [join(app.getAppPath(), '..', '..', 'packages', 'pi-extension-tuff', 'index.ts')]
+  tuffExtensionPath = candidates.find((candidate) => existsSync(candidate)) ?? null
+  if (!tuffExtensionPath) {
+    piCliLog.warn(
+      `Tuff pi extension not found (looked at: ${candidates.join(', ')}) — runs stay tool-free`
+    )
+  }
+  return tuffExtensionPath
+}
+
 interface PiRunState {
   provider?: string
   model?: string
   usage?: IntelligenceUsageInfo
+  /** How the most recent assistant message ended — the run's terminal state once stdout closes. */
+  stopReason?: string
+  /** The failure `pi` last reported, kept so a dead run can say why rather than just going quiet. */
+  failure?: string
 }
 
 /**
@@ -86,10 +116,13 @@ export class PiCliProvider extends IntelligenceProvider {
     }
 
     const toolRuntime = resolveToolRuntime?.() ?? null
+    const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
     const args = buildPiArgs(
-      buildPiPrompt(payload.messages),
+      buildPiPrompt(payload.messages, { toolsGranted }),
       this.resolveModel(options),
-      toolRuntime ? { tools: toolRuntime.tools } : undefined,
+      toolRuntime
+        ? { tools: toolRuntime.tools, extensionPath: resolveTuffExtensionPath() ?? undefined }
+        : undefined,
       attachmentPaths
     )
 
@@ -101,6 +134,12 @@ export class PiCliProvider extends IntelligenceProvider {
         // launch inherits a PATH that contains neither, so without this the shebang fails to resolve
         // even though the binary itself was found by absolute path.
         PATH: [dirname(executable), process.env.PATH].filter(Boolean).join(delimiter),
+        // Defence in depth against duplicated answers. The `pi-retry` extension aborts a stream
+        // that goes 90s without a token and hands the turn to pi's auto-retry — a watchdog built
+        // for the interactive TUI, where a "retrying" banner explains the pause. Here nobody sees
+        // it, so it only produces a second copy of the answer. The commit/rollback handling below
+        // survives a retry either way; this stops provoking them.
+        PI_RETRY_STALL_TIMEOUT_MS: '0',
         // The extension reads these to reach back into the app. Absent them it
         // registers nothing, so a stale `--tools` list can't grant anything.
         ...(toolRuntime
@@ -131,7 +170,11 @@ export class PiCliProvider extends IntelligenceProvider {
     }
 
     const state: PiRunState = {}
-    let emittedDelta = false
+    // Deltas are a preview until `pi` settles the message they belong to, so the run tracks two
+    // marks: everything streamed and still standing, and the part of it pi committed. A retry
+    // rolls the first back to the second; only the second counts as an answer.
+    let streamedLength = 0
+    let committedLength = 0
     let stderrTail = ''
 
     child.stderr.setEncoding('utf8')
@@ -179,19 +222,37 @@ export class PiCliProvider extends IntelligenceProvider {
         if (event.provider) state.provider = event.provider
         if (event.model) state.model = event.model
         if (event.usage) state.usage = event.usage
+        if (event.stopReason) state.stopReason = event.stopReason
+        if (event.failure) state.failure = event.failure
 
-        if (event.partEvent) {
+        if (event.retry) {
+          // The one record of how often pi retries behind the app's back — the diagnosis could pin
+          // the mechanism but not the frequency.
+          piCliLog.warn('pi is retrying the turn; dropping the text the failed attempt streamed', {
+            meta: {
+              attempt: event.retry.attempt,
+              maxAttempts: event.retry.maxAttempts,
+              delayMs: event.retry.delayMs
+            }
+          })
+        }
+
+        const partEvents = event.partEvents ?? (event.partEvent ? [event.partEvent] : [])
+        for (const partEvent of partEvents) {
+          if (partEvent.kind === 'message-commit') committedLength = streamedLength
+          else if (partEvent.kind === 'text-reset') streamedLength = committedLength
+
           yield {
             delta: '',
             done: false,
-            partEvent: event.partEvent,
+            partEvent,
             provider: state.provider,
             model: state.model
           }
         }
 
         if (event.delta) {
-          emittedDelta = true
+          streamedLength += event.delta.length
           yield {
             delta: event.delta,
             done: false,
@@ -202,9 +263,19 @@ export class PiCliProvider extends IntelligenceProvider {
       }
 
       const code = await exited
+      // `pi --mode json` exits 0 however the run went — the non-zero path exists only in text mode —
+      // so its own terminal state is the only trustworthy failure signal. Text that was never
+      // committed does not rescue the run: it belongs to an attempt pi discarded, which is exactly
+      // the case that used to surface as an unexplained empty bubble.
+      if (!committedLength && isFailedStopReason(state.stopReason)) {
+        throw new Error(
+          `[PiCliProvider] pi ended the run without an answer: ${state.failure ?? state.stopReason}`
+        )
+      }
+
       // Deltas already reached the user, so a late non-zero exit must not discard them; the stream
       // closes on what did arrive instead of turning a partial answer into an error.
-      if (code !== 0 && !emittedDelta) {
+      if (code !== 0 && !streamedLength) {
         throw new Error(
           `[PiCliProvider] pi exited with code ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`
         )
@@ -237,10 +308,15 @@ export class PiCliProvider extends IntelligenceProvider {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
     let content = ''
+    // Same commit/rollback bookkeeping the streaming surfaces do, so a retried turn returns the
+    // surviving answer rather than every attempt concatenated.
+    let committedLength = 0
     let usage: IntelligenceUsageInfo | undefined
     let model: string | undefined
 
     for await (const chunk of this.chatStream(payload, options)) {
+      if (chunk.partEvent?.kind === 'message-commit') committedLength = content.length
+      else if (chunk.partEvent?.kind === 'text-reset') content = content.slice(0, committedLength)
       if (chunk.delta) content += chunk.delta
       if (chunk.usage) usage = chunk.usage
       if (chunk.model) model = chunk.model

@@ -6,12 +6,15 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import SettingChip from '~/components/settings/SettingChip.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   type AppIndexEntryDiagnosticFilter,
@@ -42,6 +45,16 @@ const entries = ref<AppIndexManagedEntry[]>([])
 const pathInput = ref('')
 const loading = ref(false)
 const adding = ref(false)
+
+/** Placeholder entries while the managed index is first read. */
+const SKELETON_ENTRIES = 4
+
+/**
+ * First read only. `loading` also covers the reloads that follow adding or
+ * removing an entry, and those must leave the rendered list in place.
+ */
+const hasLoaded = ref(false)
+const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 const busyPath = ref<string | null>(null)
 const diagnosticMap = ref<Record<string, AppIndexDiagnoseResult>>({})
 const sourceFilter = ref<AppIndexEntrySourceFilter>('all')
@@ -115,6 +128,35 @@ function getEntryOriginLabel(entry: AppIndexManagedEntry): string {
     : t('settings.settingFileIndex.appIndexManagerOriginManual', 'Manual')
 }
 
+/**
+ * Scanning is how nearly every entry gets here, so it stays the quiet default and the hand-added
+ * ones take `info` — the same rule the source chip below follows.
+ */
+function getEntryOriginTone(entry: AppIndexManagedEntry): 'neutral' | 'info' {
+  return entry.source === 'scanned' ? 'neutral' : 'info'
+}
+
+/**
+ * Maps the display helpers' vocabulary onto the chip's.
+ *
+ * `success` and `warning` are diagnostic outcomes and keep their own hue — an entry the index
+ * cannot resolve is something to look at, not a failure, so it stays amber rather than red.
+ * Of the two source kinds only `system` gets colour: those are launch identities the OS owns
+ * (UWP, protocol handlers), which no amount of re-pointing a path here will repair.
+ */
+function chipTone(tone: string): 'neutral' | 'info' | 'success' | 'warning' {
+  switch (tone) {
+    case 'success':
+      return 'success'
+    case 'warning':
+      return 'warning'
+    case 'system':
+      return 'info'
+    default:
+      return 'neutral'
+  }
+}
+
 function setEntryDiagnostic(path: string, result: AppIndexDiagnoseResult): void {
   diagnosticMap.value = {
     ...diagnosticMap.value,
@@ -136,6 +178,7 @@ async function loadEntries(): Promise<void> {
     toast.error(t('settings.settingFileIndex.appIndexManagerLoadFailed'))
   } finally {
     loading.value = false
+    hasLoaded.value = true
   }
 }
 
@@ -302,233 +345,257 @@ onMounted(() => {
 
 <template>
   <section class="app-index-manager">
-    <div class="app-index-manager-heading">
-      <div>
-        <h4>{{ t('settings.settingFileIndex.appIndexManagerTitle') }}</h4>
-        <p>{{ t('settings.settingFileIndex.appIndexManagerDesc') }}</p>
-      </div>
-      <div class="app-index-manager-actions">
-        <TxButton variant="flat" size="sm" :disabled="adding" @click="selectAppFile">
-          <div class="i-carbon-document-add text-12px" />
-          <span>{{ t('settings.settingFileIndex.appIndexManagerSelectFile') }}</span>
-        </TxButton>
-        <TxButton variant="flat" size="sm" :disabled="loading" @click="loadEntries">
-          <div class="i-carbon-renew text-12px" />
-          <span>{{ t('common.refresh') }}</span>
-        </TxButton>
-      </div>
-    </div>
-
-    <div class="app-index-manager-add-row">
-      <TxInput
-        :model-value="pathInput"
-        :placeholder="t('settings.settingFileIndex.appIndexManagerPathPlaceholder')"
-        class="app-index-manager-input"
-        @update:model-value="pathInput = String($event ?? '')"
-        @keyup.enter="addPath(normalizeInput())"
-      />
-      <TxButton
-        variant="flat"
-        size="sm"
-        :disabled="adding || !normalizeInput()"
-        @click="addPath(normalizeInput())"
-      >
-        <div class="i-carbon-add text-12px" />
-        <span>{{ t('settings.settingFileIndex.appIndexManagerAddPath') }}</span>
-      </TxButton>
-    </div>
-
-    <div class="app-index-manager-summary">
-      <div class="app-index-manager-summary-item">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryTotal') }}</span>
-        <strong>{{ managerSummary.total }}</strong>
-      </div>
-      <div class="app-index-manager-summary-item is-attention">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryAttention') }}</span>
-        <strong>{{ managerSummary.attention }}</strong>
-      </div>
-      <div class="app-index-manager-summary-item is-found">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticFound') }}</span>
-        <strong>{{ managerSummary.found }}</strong>
-      </div>
-      <div class="app-index-manager-summary-item">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticNotRun') }}</span>
-        <strong>{{ managerSummary.notRun }}</strong>
-      </div>
-      <div class="app-index-manager-summary-item">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}</span>
-        <strong>{{ managerSummary.disabled }}</strong>
-      </div>
-    </div>
-
-    <div class="app-index-manager-filters">
-      <div class="app-index-manager-filter-group">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerFilterSource') }}</span>
-        <button
-          v-for="option in sourceFilterOptions"
-          :key="option.value"
-          type="button"
-          :class="['app-index-manager-filter-chip', { 'is-active': sourceFilter === option.value }]"
-          @click="sourceFilter = option.value"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-      <div class="app-index-manager-filter-group">
-        <span>{{ t('settings.settingFileIndex.appIndexManagerFilterDiagnostic') }}</span>
-        <button
-          v-for="option in diagnosticFilterOptions"
-          :key="option.value"
-          type="button"
-          :class="[
-            'app-index-manager-filter-chip',
-            { 'is-active': diagnosticFilter === option.value }
-          ]"
-          @click="diagnosticFilter = option.value"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-    </div>
-
-    <div
-      v-if="!hasEntries"
-      :class="['app-index-manager-empty', `is-${emptyState?.tone || 'neutral'}`]"
+    <TuffGroupBlock
+      class="app-index-manager-block"
+      :name="t('settings.settingFileIndex.appIndexManagerTitle')"
+      :description="t('settings.settingFileIndex.appIndexManagerDesc')"
     >
-      <template v-if="loading">
-        {{ t('common.loading') }}
+      <template #header-extra>
+        <div class="app-index-manager-actions">
+          <TxButton variant="flat" size="sm" :disabled="adding" @click="selectAppFile">
+            <div class="i-carbon-document-add text-12px" />
+            <span>{{ t('settings.settingFileIndex.appIndexManagerSelectFile') }}</span>
+          </TxButton>
+          <TxButton variant="flat" size="sm" :disabled="loading" @click="loadEntries">
+            <div class="i-carbon-renew text-12px" />
+            <span>{{ t('common.refresh') }}</span>
+          </TxButton>
+        </div>
       </template>
-      <template v-else-if="emptyState">
+
+      <div class="app-index-manager-row app-index-manager-add-row">
+        <TxInput
+          :model-value="pathInput"
+          :placeholder="t('settings.settingFileIndex.appIndexManagerPathPlaceholder')"
+          class="app-index-manager-input"
+          @update:model-value="pathInput = String($event ?? '')"
+          @keyup.enter="addPath(normalizeInput())"
+        />
+        <TxButton
+          variant="flat"
+          size="sm"
+          :disabled="adding || !normalizeInput()"
+          @click="addPath(normalizeInput())"
+        >
+          <div class="i-carbon-add text-12px" />
+          <span>{{ t('settings.settingFileIndex.appIndexManagerAddPath') }}</span>
+        </TxButton>
+      </div>
+
+      <div class="app-index-manager-row app-index-manager-summary">
+        <div class="app-index-manager-summary-item">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryTotal') }}</span>
+          <strong>{{ managerSummary.total }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item is-attention">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryAttention') }}</span>
+          <strong>{{ managerSummary.attention }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item is-found">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticFound') }}</span>
+          <strong>{{ managerSummary.found }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticNotRun') }}</span>
+          <strong>{{ managerSummary.notRun }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}</span>
+          <strong>{{ managerSummary.disabled }}</strong>
+        </div>
+      </div>
+
+      <div class="app-index-manager-row app-index-manager-filters">
+        <div class="app-index-manager-filter-group">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerFilterSource') }}</span>
+          <button
+            v-for="option in sourceFilterOptions"
+            :key="option.value"
+            type="button"
+            :class="[
+              'app-index-manager-filter-chip',
+              { 'is-active': sourceFilter === option.value }
+            ]"
+            @click="sourceFilter = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <div class="app-index-manager-filter-group">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerFilterDiagnostic') }}</span>
+          <button
+            v-for="option in diagnosticFilterOptions"
+            :key="option.value"
+            type="button"
+            :class="[
+              'app-index-manager-filter-chip',
+              { 'is-active': diagnosticFilter === option.value }
+            ]"
+            @click="diagnosticFilter = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
+    </TuffGroupBlock>
+
+    <!--
+      The entries are direct children of the card, which is what draws the hairline between them;
+      they used to be free-standing bordered cards inside a scrolling list.
+    -->
+    <TuffGroupBlock class="app-index-manager-block app-index-manager-entries">
+      <!--
+        Built from the entry's own classes rather than the centred empty box the loading text used
+        to share: an empty box and a stack of entries are very different heights, so the panel
+        jumped once the index arrived.
+      -->
+      <template v-if="showSkeleton">
+        <div v-for="i in SKELETON_ENTRIES" :key="i" class="app-index-entry" aria-hidden="true">
+          <div class="app-index-entry-main">
+            <div class="app-index-entry-title-row">
+              <TxSkeleton :width="164" :height="13" :radius="4" />
+              <TxSkeleton variant="rect" :width="52" :height="16" :radius="8" />
+              <TxSkeleton variant="rect" :width="64" :height="16" :radius="8" />
+            </div>
+            <TxSkeleton width="76%" :height="11" :radius="4" />
+          </div>
+        </div>
+      </template>
+
+      <div
+        v-else-if="!hasEntries"
+        class="app-index-manager-empty"
+        :class="emptyState ? `tone-${emptyState.tone}` : undefined"
+      >
+        <template v-if="loading">
+          <span>{{ t('common.loading') }}</span>
+        </template>
+        <template v-else-if="emptyState">
+          <strong>{{ emptyState.title }}</strong>
+          <span>{{ emptyState.detail }}</span>
+          <TxButton
+            v-if="emptyState.actionKind === 'add-entry'"
+            variant="flat"
+            size="sm"
+            :disabled="adding"
+            @click="selectAppFile"
+          >
+            {{ emptyState.actionLabel }}
+          </TxButton>
+        </template>
+      </div>
+
+      <div
+        v-else-if="!hasVisibleEntries && emptyState"
+        class="app-index-manager-empty"
+        :class="`tone-${emptyState.tone}`"
+      >
         <strong>{{ emptyState.title }}</strong>
         <span>{{ emptyState.detail }}</span>
         <TxButton
-          v-if="emptyState.actionKind === 'add-entry'"
+          v-if="emptyState.actionKind === 'clear-filters'"
           variant="flat"
           size="sm"
-          :disabled="adding"
-          @click="selectAppFile"
+          @click="clearFilters"
         >
           {{ emptyState.actionLabel }}
         </TxButton>
-      </template>
-    </div>
+      </div>
 
-    <div
-      v-else-if="!hasVisibleEntries && emptyState"
-      :class="['app-index-manager-empty', `is-${emptyState.tone}`]"
-    >
-      <strong>{{ emptyState.title }}</strong>
-      <span>{{ emptyState.detail }}</span>
-      <TxButton
-        v-if="emptyState.actionKind === 'clear-filters'"
-        variant="flat"
-        size="sm"
-        @click="clearFilters"
-      >
-        {{ emptyState.actionLabel }}
-      </TxButton>
-    </div>
+      <template v-else>
+        <div v-for="entry in visibleEntries" :key="entry.path" class="app-index-entry">
+          <div class="app-index-entry-main">
+            <div class="app-index-entry-title-row">
+              <strong>{{ getEntryTitle(entry) }}</strong>
+              <SettingChip :tone="entry.enabled ? 'success' : 'neutral'">
+                {{
+                  entry.enabled
+                    ? t('settings.settingFileIndex.appIndexManagerEntryEnabled')
+                    : t('settings.settingFileIndex.appIndexManagerEntryDisabled')
+                }}
+              </SettingChip>
+              <SettingChip :tone="chipTone(getEntrySource(entry).tone)">
+                {{ getEntrySource(entry).label }}
+              </SettingChip>
+              <SettingChip :tone="getEntryOriginTone(entry)">
+                {{ getEntryOriginLabel(entry) }}
+              </SettingChip>
+            </div>
+            <div class="app-index-entry-path">{{ entry.path }}</div>
+            <div class="app-index-entry-diagnostic-summary">
+              <SettingChip :tone="chipTone(getEntryDiagnosticSummary(entry).tone)">
+                {{ getEntryDiagnosticSummary(entry).label }}
+              </SettingChip>
+              <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
+            </div>
+            <div class="app-index-entry-grid">
+              <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
+              <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
+              <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
+              <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
+              <span>launchKind</span><strong>{{ entry.launchKind }}</strong>
+              <span>launchTarget</span><strong>{{ formatOptional(entry.launchTarget) }}</strong>
+              <span>launchArgs</span><strong>{{ formatOptional(entry.launchArgs) }}</strong>
+              <span>workingDirectory</span
+              ><strong>{{ formatOptional(entry.workingDirectory) }}</strong> <span>displayPath</span
+              ><strong>{{ formatOptional(entry.displayPath) }}</strong>
+            </div>
+            <pre v-if="diagnosticMap[entry.path]" class="app-index-entry-diagnostic">{{
+              JSON.stringify(diagnosticMap[entry.path], null, 2)
+            }}</pre>
+          </div>
 
-    <div v-else class="app-index-manager-list">
-      <div v-for="entry in visibleEntries" :key="entry.path" class="app-index-entry">
-        <div class="app-index-entry-main">
-          <div class="app-index-entry-title-row">
-            <strong>{{ getEntryTitle(entry) }}</strong>
-            <span :class="['app-index-entry-status', entry.enabled ? 'is-enabled' : 'is-disabled']">
+          <div class="app-index-entry-actions">
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="busyPath === entry.path"
+              @click="setEnabled(entry, !entry.enabled)"
+            >
               {{
                 entry.enabled
-                  ? t('settings.settingFileIndex.appIndexManagerEntryEnabled')
-                  : t('settings.settingFileIndex.appIndexManagerEntryDisabled')
+                  ? t('settings.settingFileIndex.appIndexManagerDisable')
+                  : t('settings.settingFileIndex.appIndexManagerEnable')
               }}
-            </span>
-            <span :class="['app-index-entry-source', `is-${getEntrySource(entry).tone}`]">
-              {{ getEntrySource(entry).label }}
-            </span>
-            <span
-              :class="[
-                'app-index-entry-origin',
-                entry.source === 'scanned' ? 'is-scanned' : 'is-manual'
-              ]"
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="busyPath === entry.path"
+              @click="reindexPath(entry.path, 'scan')"
             >
-              {{ getEntryOriginLabel(entry) }}
-            </span>
+              {{ t('settings.settingFileIndex.appIndexManagerRescan') }}
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="busyPath === entry.path"
+              @click="diagnosePath(entry.path)"
+            >
+              {{ t('settings.settingFileIndex.appIndexManagerDiagnose') }}
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="!diagnosticMap[entry.path]"
+              @click="copyDiagnostic(entry)"
+            >
+              {{ t('settings.settingFileIndex.appIndexManagerCopyJson') }}
+            </TxButton>
+            <TxButton
+              v-if="entry.removable !== false"
+              variant="flat"
+              size="sm"
+              type="danger"
+              :disabled="busyPath === entry.path"
+              @click="removeEntry(entry)"
+            >
+              {{ t('common.remove') }}
+            </TxButton>
           </div>
-          <div class="app-index-entry-path">{{ entry.path }}</div>
-          <div
-            :class="[
-              'app-index-entry-diagnostic-summary',
-              `is-${getEntryDiagnosticSummary(entry).tone}`
-            ]"
-          >
-            <strong>{{ getEntryDiagnosticSummary(entry).label }}</strong>
-            <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
-          </div>
-          <div class="app-index-entry-grid">
-            <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
-            <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
-            <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
-            <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
-            <span>launchKind</span><strong>{{ entry.launchKind }}</strong> <span>launchTarget</span
-            ><strong>{{ formatOptional(entry.launchTarget) }}</strong> <span>launchArgs</span
-            ><strong>{{ formatOptional(entry.launchArgs) }}</strong> <span>workingDirectory</span
-            ><strong>{{ formatOptional(entry.workingDirectory) }}</strong> <span>displayPath</span
-            ><strong>{{ formatOptional(entry.displayPath) }}</strong>
-          </div>
-          <pre v-if="diagnosticMap[entry.path]" class="app-index-entry-diagnostic">{{
-            JSON.stringify(diagnosticMap[entry.path], null, 2)
-          }}</pre>
         </div>
-
-        <div class="app-index-entry-actions">
-          <TxButton
-            variant="flat"
-            size="sm"
-            :disabled="busyPath === entry.path"
-            @click="setEnabled(entry, !entry.enabled)"
-          >
-            {{
-              entry.enabled
-                ? t('settings.settingFileIndex.appIndexManagerDisable')
-                : t('settings.settingFileIndex.appIndexManagerEnable')
-            }}
-          </TxButton>
-          <TxButton
-            variant="flat"
-            size="sm"
-            :disabled="busyPath === entry.path"
-            @click="reindexPath(entry.path, 'scan')"
-          >
-            {{ t('settings.settingFileIndex.appIndexManagerRescan') }}
-          </TxButton>
-          <TxButton
-            variant="flat"
-            size="sm"
-            :disabled="busyPath === entry.path"
-            @click="diagnosePath(entry.path)"
-          >
-            {{ t('settings.settingFileIndex.appIndexManagerDiagnose') }}
-          </TxButton>
-          <TxButton
-            variant="flat"
-            size="sm"
-            :disabled="!diagnosticMap[entry.path]"
-            @click="copyDiagnostic(entry)"
-          >
-            {{ t('settings.settingFileIndex.appIndexManagerCopyJson') }}
-          </TxButton>
-          <TxButton
-            v-if="entry.removable !== false"
-            variant="flat"
-            size="sm"
-            type="danger"
-            :disabled="busyPath === entry.path"
-            @click="removeEntry(entry)"
-          >
-            {{ t('common.remove') }}
-          </TxButton>
-        </div>
-      </div>
-    </div>
+      </template>
+    </TuffGroupBlock>
   </section>
 </template>
 
@@ -542,25 +609,36 @@ onMounted(() => {
   gap: 12px;
 }
 
-.app-index-manager-heading {
+/*
+ * The section spaces the two cards; the block's own bottom margin would add to that gap. Written
+ * as a compound with the block's own class so it outranks that margin on specificity rather than
+ * on which scoped sheet comes last.
+ */
+.app-index-manager-block.TGroupBlock-Container {
+  margin-bottom: 0;
+}
+
+/*
+ * The entry list scrolls inside its card rather than growing the dialog, which clips its
+ * overflow. Written against the card's own class so this beats `TGroupBlock-Main`'s
+ * `overflow: hidden` on specificity, not on which scoped sheet happens to come last.
+ */
+.app-index-manager-entries {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.app-index-manager-heading h4 {
-  margin: 0;
-  color: var(--tx-text-color-primary);
-  font-size: 15px;
-  font-weight: 650;
+.app-index-manager-entries.TGroupBlock-Container :deep(.TGroupBlock-Main) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
 }
 
-.app-index-manager-heading p {
-  margin: 4px 0 0;
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
+/* Row metrics from artboard `iqbKR`'s C2/Row. */
+.app-index-manager-row {
+  padding: 12px 16px;
 }
 
 .app-index-manager-actions,
@@ -581,34 +659,36 @@ onMounted(() => {
 .app-index-manager-empty {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 6px;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 22%, transparent);
-  border-radius: 8px;
-  color: var(--tx-text-color-secondary);
-  background: rgba(127, 127, 127, 0.06);
-  font-size: 12px;
-  text-align: right;
+  padding: 12px 16px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
 }
 
 .app-index-manager-empty strong {
-  color: var(--tx-text-color-primary);
-  font-size: 13px;
+  color: var(--shell-text-primary);
+  font-size: 13.5px;
+  font-weight: normal;
 }
 
 .app-index-manager-empty span {
   max-width: 460px;
+  line-height: 1.5;
 }
 
-.app-index-manager-empty.is-attention {
-  border-color: rgba(52, 199, 89, 0.3);
-  background: rgba(52, 199, 89, 0.08);
+/*
+ * Why the list is empty, as a tint across the row — the strip idiom the shell uses elsewhere,
+ * since these stopped being bordered boxes of their own. "Nothing needs attention" is the one
+ * that is good news, a filter hiding everything is an aside, and a first run stays plain. The
+ * titles say all of this in words; the tint only gets there first.
+ */
+.app-index-manager-empty.tone-attention {
+  background-color: var(--shell-success-soft);
 }
 
-.app-index-manager-empty.is-filtered {
-  border-color: rgba(50, 173, 230, 0.28);
-  background: rgba(50, 173, 230, 0.08);
+.app-index-manager-empty.tone-filtered {
+  background-color: var(--shell-info-soft);
 }
 
 .app-index-manager-summary {
@@ -619,41 +699,38 @@ onMounted(() => {
 
 .app-index-manager-summary-item {
   min-width: 0;
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 22%, transparent);
-  border-radius: 8px;
-  background: rgba(127, 127, 127, 0.06);
 }
 
 .app-index-manager-summary-item span {
   display: block;
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
 }
 
 .app-index-manager-summary-item strong {
   display: block;
   margin-top: 2px;
-  color: var(--tx-text-color-primary);
+  color: var(--shell-text-primary);
   font-size: 18px;
   line-height: 1.1;
 }
 
+/*
+ * The two counts worth colour: one the reader has to act on, one confirming a clean scan. Amber
+ * rather than red for the first — entries the index cannot resolve are a to-do list, not a fault.
+ */
 .app-index-manager-summary-item.is-attention strong {
-  color: #ff9500;
+  color: var(--shell-warning);
 }
 
 .app-index-manager-summary-item.is-found strong {
-  color: #34c759;
+  color: var(--shell-success);
 }
 
 .app-index-manager-filters {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px;
-  border-radius: 8px;
-  background: rgba(127, 127, 127, 0.06);
 }
 
 .app-index-manager-filter-group {
@@ -664,47 +741,35 @@ onMounted(() => {
 }
 
 .app-index-manager-filter-group > span {
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
 }
 
 .app-index-manager-filter-chip {
   height: 24px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 28%, transparent);
-  border-radius: 999px;
-  color: var(--tx-text-color-secondary);
-  background: transparent;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--shell-radius-full);
+  color: var(--shell-text-secondary);
+  background-color: var(--shell-surface-2);
+  font-family: inherit;
+  font-size: var(--shell-fs-caption);
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .app-index-manager-filter-chip.is-active {
-  border-color: rgba(50, 173, 230, 0.46);
-  color: #32ade6;
-  background: rgba(50, 173, 230, 0.12);
-}
-
-.app-index-manager-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  max-height: none;
-  flex: 1;
-  overflow: auto;
-  padding-right: 2px;
+  border-color: var(--shell-primary-border);
+  color: var(--shell-primary);
+  background-color: var(--shell-primary-soft);
 }
 
 .app-index-entry {
   display: flex;
   gap: 12px;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 26%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--tx-bg-color, #fff) 86%, transparent);
+  padding: 12px 16px;
 }
 
 .app-index-entry-main {
@@ -728,59 +793,15 @@ onMounted(() => {
   word-break: break-all;
 }
 
-.app-index-entry-status {
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.app-index-entry-source,
-.app-index-entry-origin {
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.app-index-entry-status.is-enabled {
-  color: #34c759;
-  background: rgba(52, 199, 89, 0.12);
-}
-
-.app-index-entry-status.is-disabled {
-  color: #ff9500;
-  background: rgba(255, 149, 0, 0.12);
-}
-
-.app-index-entry-source.is-system {
-  color: #32ade6;
-  background: rgba(50, 173, 230, 0.12);
-}
-
-.app-index-entry-source.is-managed {
-  color: #64d2ff;
-  background: rgba(100, 210, 255, 0.12);
-}
-
-.app-index-entry-source.is-warning {
-  color: #ff9500;
-  background: rgba(255, 149, 0, 0.12);
-}
-
-.app-index-entry-origin.is-manual {
-  color: #bf5af2;
-  background: rgba(191, 90, 242, 0.12);
-}
-
-.app-index-entry-origin.is-scanned {
-  color: #30d158;
-  background: rgba(48, 209, 88, 0.12);
+.app-index-entry-title-row strong {
+  color: var(--shell-text-primary);
+  font-size: 13.5px;
+  font-weight: normal;
 }
 
 .app-index-entry-path {
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
 }
 
 .app-index-entry-diagnostic-summary {
@@ -788,43 +809,23 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 8px;
-  font-size: 11px;
-}
-
-.app-index-entry-diagnostic-summary strong {
-  font-weight: 700;
-}
-
-.app-index-entry-diagnostic-summary.is-success {
-  color: #34c759;
-  background: rgba(52, 199, 89, 0.1);
-}
-
-.app-index-entry-diagnostic-summary.is-warning {
-  color: #ff9500;
-  background: rgba(255, 149, 0, 0.1);
-}
-
-.app-index-entry-diagnostic-summary.is-muted {
-  color: var(--tx-text-color-secondary);
-  background: rgba(127, 127, 127, 0.08);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
 }
 
 .app-index-entry-grid {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 10px;
-  font-size: 11px;
+  font-size: var(--shell-fs-caption);
 }
 
 .app-index-entry-grid span {
-  color: var(--tx-text-color-secondary);
+  color: var(--shell-text-secondary);
 }
 
 .app-index-entry-grid strong {
-  color: var(--tx-text-color-primary);
+  color: var(--shell-text-primary);
   font-weight: 500;
 }
 
@@ -838,18 +839,14 @@ onMounted(() => {
   max-height: 180px;
   overflow: auto;
   padding: 8px;
-  border-radius: 8px;
-  background: rgba(127, 127, 127, 0.1);
-  font-size: 11px;
+  border-radius: var(--shell-radius-sm);
+  background-color: var(--shell-surface-2);
+  font-size: var(--shell-fs-caption);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 @media (max-width: 760px) {
-  .app-index-manager-heading {
-    flex-direction: column;
-  }
-
   .app-index-manager-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

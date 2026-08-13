@@ -3,11 +3,13 @@ withDefaults(
   defineProps<{
     mono?: boolean
     /**
-     * Status colouring. `neutral` is the annotation chip (macOS / 可选 / Beta and any
-     * state that is simply unknown); `success` and `danger` are the only two the shell
-     * spends colour on, so a coloured chip always means a state the user can act on.
+     * Status colouring, all four hues soft-filled and inked in the same tone — the badge shape
+     * the board draws. `neutral` is the annotation chip (macOS / 可选 / Beta and the default
+     * member of any pair); `info` marks the notable-but-not-actionable one; `success`, `warning`
+     * and `danger` are outcomes, in ascending severity. Colour is always additive here: the chip
+     * label states the same thing in words.
      */
-    tone?: 'neutral' | 'success' | 'danger'
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
   }>(),
   { mono: false, tone: 'neutral' }
 )
@@ -32,11 +34,19 @@ withDefaults(
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   }
 
-  // `--shell-*` carries no success ramp — the shell only ever needed a failure colour — so the
-  // positive state borrows the `--tx-*` one and softens it the same way the shell tokens do.
+  &.tone-info {
+    background: var(--shell-info-soft);
+    color: var(--shell-info);
+  }
+
   &.tone-success {
-    background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
-    color: var(--tx-color-success);
+    background: var(--shell-success-soft);
+    color: var(--shell-success);
+  }
+
+  &.tone-warning {
+    background: var(--shell-warning-soft);
+    color: var(--shell-warning);
   }
 
   &.tone-danger {
