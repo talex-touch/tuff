@@ -71,6 +71,44 @@ const CODE_SIGNATURE_PATTERNS = [
   /killed: 9/i,
 ]
 
+/**
+ * Windows refusing to start the unpacked build (#308).
+ *
+ * Deliberately `product: true`, unlike `missing-library` on Linux, and the asymmetry is the point.
+ * A missing `.so` on a Linux runner means the *runner* lacks a system package -- the app is fine and
+ * the step should install it. A missing DLL under `win-unpacked` means electron-builder did not
+ * place it there: everything the app needs is supposed to ship inside that directory, so the same
+ * symptom is a packaging defect rather than an environment gap.
+ *
+ * `0xc0000135` is the NTSTATUS for DLL-not-found and is often *all* a GUI process leaves behind,
+ * since the message box it would otherwise show has nowhere to go on a CI runner.
+ */
+const WINDOWS_MISSING_DLL_PATTERNS = [
+  /The code execution cannot proceed because ([\w.-]+\.dll)/i,
+  /0xc0000135/i,
+  /STATUS_DLL_NOT_FOUND/i,
+  // Requires an actual `.dll`. Without it this matched any "X was not found ... reinstalling the
+  // program", which is the wording Windows also uses for a missing *application* file -- a
+  // different defect that would have been reported as a missing DLL. Found by CodeRabbit on #1739.
+  /([\w.-]+\.dll)[^\n]{0,40}was not found[^\n]{0,60}reinstalling the program/i,
+]
+
+/**
+ * `STATUS_DLL_NOT_FOUND` as an exit code, in both representations.
+ *
+ * This exists because the pattern list above could not reach the real case. The smoke step prints
+ * `exit=$code` with `Write-Host`, which goes to the *step* log -- never into `launch.log`, which is
+ * the only thing `output` ever contains. So a process that died with `0xc0000135` and printed
+ * nothing (the normal shape for a GUI process on a runner) arrived here with an empty `output` and
+ * was classified `unknown-exit`.
+ *
+ * The self-test did not catch it because the case passed the status code as *text*, which is a
+ * shape the real caller cannot produce. That is the second time in this file a case has asserted a
+ * path that does not exist -- the first was a gerund closing keyword -- and both times the test was
+ * green on a branch that could never fire.
+ */
+const DLL_NOT_FOUND_EXIT_CODES = new Set([0xC0000135, -1073741515])
+
 export function classifyLaunch({ output, exitCode, stayedAlive }) {
   const text = String(output ?? '')
 
@@ -82,6 +120,23 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
 
   if (CODE_SIGNATURE_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'code-signature', product: true }
+
+  for (const pattern of WINDOWS_MISSING_DLL_PATTERNS) {
+    const match = pattern.exec(text)
+    if (match)
+      return { verdict: 'missing-dll', product: true, detail: match[1] ?? 'unnamed' }
+  }
+
+  // Only when the process actually exited. A run still alive at the timeout reports exitCode 0 from
+  // the caller, and treating that as a status code would invent a failure.
+  if (!stayedAlive && DLL_NOT_FOUND_EXIT_CODES.has(Number(exitCode))) {
+    // "(no output)" only when there genuinely was none. The status code is reached whenever the
+    // patterns above did not match, which includes a run that printed diagnostics worth reading --
+    // telling someone there was no output while the log holds the answer sends them the wrong way.
+    // Found by CodeRabbit on #1739.
+    const detail = text.trim() ? '0xC0000135' : '0xC0000135 (no output)'
+    return { verdict: 'missing-dll', product: true, detail }
+  }
 
   if (NO_DISPLAY_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'no-display', product: false }
@@ -110,6 +165,9 @@ const DESCRIPTIONS = {
   'code-signature': 'macOS refused the bundle. The signature is broken or the binary was killed '
     + 'by the kernel (SIGKILL 9 is what an invalid signature looks like from the shell), which is a '
     + 'packaging defect rather than a runner gap.',
+  'missing-dll': 'A DLL under win-unpacked was not found. Unlike a missing .so on a Linux runner '
+    + 'this is a packaging defect, not an environment gap: everything the app needs is supposed to '
+    + 'ship inside that directory.',
   'ok': 'The packaged app started and was still running when the window opened.',
 }
 
@@ -249,7 +307,31 @@ function selfTest() {
     { name: 'an unverified developer is the same verdict', actual: classifyLaunch({ output: 'cannot be opened because the developer cannot be verified', exitCode: 1, stayedAlive: false }).verdict, expected: 'code-signature' },
     { name: 'a signature refusal is a product problem', actual: classifyLaunch({ output: 'Killed: 9', exitCode: 137, stayedAlive: false }).product, expected: true },
     { name: 'a sandbox refusal still outranks a signature one', actual: classifyLaunch({ output: 'Killed: 9\nNo usable sandbox!', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
-    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 6 },
+    // Windows half (#308). The asymmetry with missing-library is deliberate and asserted, because
+    // it is the one thing about this verdict a future reader is most likely to "correct".
+    { name: 'a named missing DLL is its own verdict', actual: classifyLaunch({ output: 'The code execution cannot proceed because VCRUNTIME140.dll was not found', exitCode: 1, stayedAlive: false }).verdict, expected: 'missing-dll' },
+    { name: 'the DLL is named', actual: classifyLaunch({ output: 'The code execution cannot proceed because VCRUNTIME140.dll was not found', exitCode: 1, stayedAlive: false }).detail, expected: 'VCRUNTIME140.dll' },
+    { name: 'the bare NTSTATUS in text is enough', actual: classifyLaunch({ output: 'exited with 0xc0000135', exitCode: 3221225781, stayedAlive: false }).verdict, expected: 'missing-dll' },
+    // The real shape, which the text-only version could not reach: a GUI process dies with the
+    // status code and prints nothing, because its message box has nowhere to go.
+    { name: 'the exit code alone, with no output, is enough', actual: classifyLaunch({ output: '', exitCode: 3221225781, stayedAlive: false }).verdict, expected: 'missing-dll' },
+    { name: 'the signed representation is recognised too', actual: classifyLaunch({ output: '', exitCode: -1073741515, stayedAlive: false }).verdict, expected: 'missing-dll' },
+    { name: 'the no-output case says so rather than naming a DLL it never saw', actual: classifyLaunch({ output: '', exitCode: 3221225781, stayedAlive: false }).detail, expected: '0xC0000135 (no output)' },
+    { name: 'a log with unmatched diagnostics is not called empty', actual: classifyLaunch({ output: 'some other error', exitCode: 3221225781, stayedAlive: false }).detail, expected: '0xC0000135' },
+    { name: 'whitespace-only output still counts as no output', actual: classifyLaunch({ output: '  \n ', exitCode: 3221225781, stayedAlive: false }).detail, expected: '0xC0000135 (no output)' },
+    // A live process reports exitCode 0 from the caller; reading that as a status code would invent
+    // a failure out of a successful start.
+    { name: 'a live process is never a DLL failure', actual: classifyLaunch({ output: '', exitCode: 3221225781, stayedAlive: true }).verdict, expected: 'ok' },
+    { name: 'an ordinary non-zero exit is still unknown-exit', actual: classifyLaunch({ output: '', exitCode: 1, stayedAlive: false }).verdict, expected: 'unknown-exit' },
+    // The fallback pattern needs a real .dll: Windows uses the same wording for a missing
+    // application file, which is a different defect.
+    { name: 'the fallback requires a dll name', actual: classifyLaunch({ output: 'config.json was not found. Try reinstalling the program.', exitCode: 1, stayedAlive: false }).verdict, expected: 'unknown-exit' },
+    { name: 'the fallback still fires with a dll name', actual: classifyLaunch({ output: 'ffmpeg.dll was not found. Try reinstalling the program.', exitCode: 1, stayedAlive: false }).detail, expected: 'ffmpeg.dll' },
+    { name: 'an unnamed DLL failure still reports', actual: classifyLaunch({ output: 'STATUS_DLL_NOT_FOUND', exitCode: 1, stayedAlive: false }).detail, expected: 'unnamed' },
+    { name: 'a missing DLL is a product problem, unlike a missing .so', actual: classifyLaunch({ output: '0xc0000135', exitCode: 1, stayedAlive: false }).product, expected: true },
+    { name: 'a missing .so is still not a product problem', actual: classifyLaunch({ output: 'error while loading shared libraries: libgbm.so.1', exitCode: 127, stayedAlive: false }).product, expected: false },
+    { name: 'a sandbox refusal still outranks a missing DLL', actual: classifyLaunch({ output: '0xc0000135\nNo usable sandbox!', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
+    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 7 },
   ]
 
   let failed = 0
