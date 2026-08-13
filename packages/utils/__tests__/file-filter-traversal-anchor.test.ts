@@ -85,3 +85,71 @@ describe('#1727 system-dir anchoring', () => {
     expect(reason('/Users/x/Pictures/Photos Library.photoslibrary')).toBe('bundle-internal')
   })
 })
+
+/**
+ * #1727's second acceptance criterion, which the root anchor above did not meet.
+ *
+ * `~/Library` and `%APPDATA%` are system locations under the user's home, not at the root, so
+ * anchoring the name list to the filesystem root stopped excluding them. The claim that
+ * `PATH_PATTERNS.SYSTEM_PATHS` still covered them was off by one separator: its macOS pattern is
+ * `/^\/Users\/[^\/]+\/Library\//`, which needs a slash after `Library` and therefore matches
+ * everything inside `~/Library` while missing `~/Library` itself.
+ *
+ * The leak is one directory level — on one Mac, all 111 subdirectories stayed excluded and six
+ * direct files did not — and it is reachable only through a custom scan root, since the six default
+ * roots never contain `~/Library`. Small, but it is a stated criterion and the comment asserting it
+ * was wrong.
+ */
+describe('#1727 home-anchored system dirs', () => {
+  const CANDIDATES = ['Library', 'AppData', 'LocalAppData']
+  const active = CANDIDATES.filter(name => SYSTEM_BLACKLISTED_DIRS.has(name))
+
+  it('gates on the platform list rather than a hardcoded name', () => {
+    // Pins the intent per platform, and keeps the loops below from passing by being empty.
+    const expected
+      = process.platform === 'darwin'
+        ? ['Library']
+        : process.platform === 'win32'
+          ? ['AppData', 'LocalAppData']
+          : []
+    expect(active).toEqual(expected)
+  })
+
+  it('excludes them one level under a home directory', () => {
+    for (const name of active) {
+      for (const home of ['/Users/someone', '/home/someone', 'C:/Users/someone'])
+        expect(reason(`${home}/${name}`), `${home}/${name}`).toBe('system-path')
+    }
+  })
+
+  /** The #1728 fix this must not undo: the same name deeper down is the user's own folder. */
+  it('still indexes the same name below the home level', () => {
+    for (const name of active) {
+      const deep = `/Users/someone/Documents/${name}`
+      expect(reason(deep), deep).not.toBe('system-path')
+    }
+  })
+
+  it('leaves names the platform does not claim alone', () => {
+    for (const name of CANDIDATES.filter(n => !SYSTEM_BLACKLISTED_DIRS.has(n)))
+      expect(reason(`/home/someone/${name}`), name).not.toBe('system-path')
+  })
+
+  /**
+   * The shape rule is three segments *and* a `Users`/`home` container. Without the second half any
+   * three-segment path would qualify. `/opt/...` is not usable as the counter-example here — it is
+   * already `system-path` through `PATH_PATTERNS.SYSTEM_PATHS`, which is correct and would have made
+   * this pass for the wrong reason.
+   */
+  it('does not treat an arbitrary three-segment path as a home child', () => {
+    for (const name of active) {
+      for (const p of [`/data/vendor/${name}`, `/Volumes/Ext/${name}`])
+        expect(reason(p), p).not.toBe('system-path')
+    }
+  })
+
+  it('keeps excluding what was already excluded inside them', () => {
+    if (process.platform === 'darwin')
+      expect(reason('/Users/x/Library/Caches')).toBe('system-path')
+  })
+})
