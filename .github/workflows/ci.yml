@@ -182,6 +182,24 @@ jobs:
       - name: Check maintenance-audit report claims
         run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
 
+      # GitHub's closing-keyword parser is a regex over `keyword #N` and ignores the words before
+      # it, so "It does not fix #213" marks #213 for closing exactly as "Fixes #213" does. That is
+      # not hypothetical: on 2026-08-13 it closed two user-facing issues within an hour -- #213 via
+      # "does not fix", #308 via "does not close" -- and both sentences existed specifically to stop
+      # a reader mistaking instrumentation for a fix. The second happened after the first was
+      # already understood, which is why this is a check and not a note. The body is passed through
+      # the environment rather than interpolated into the shell.
+      - name: Check for negated closing keywords in the PR body
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.md
+          node scripts/check-closing-keywords.mjs /tmp/pr-body.md
+
+      - name: Check closing-keyword guard self-test
+        run: pnpm check:closing-keywords:self-test
+
       # 34 distinct blocked reasons live across plugins/ and 20 of them belong to exactly one
       # plugin, so the vocabulary is open and a closed union would be the wrong contract. Only the
       # permission family is enforced: a plugin writing permission_denied is claiming to speak a
