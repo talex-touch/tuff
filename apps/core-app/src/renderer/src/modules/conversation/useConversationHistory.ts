@@ -12,7 +12,12 @@ export interface UseConversationHistoryReturn {
   conversations: Ref<ConversationRecord[]>
   loading: Ref<boolean>
   refresh: () => Promise<void>
-  load: (id: string) => Promise<ConversationMessage[] | null>
+  /**
+   * Title rides along because a stored custom title (#969) has to survive restore: HomePage
+   * recomputes the working title from the opening message, and without the stored one the top bar
+   * and the sidebar would disagree after a reload.
+   */
+  load: (id: string) => Promise<{ title: string; messages: ConversationMessage[] } | null>
   persist: (id: string, title: string, messages: ConversationMessage[]) => Promise<void>
   remove: (id: string) => Promise<void>
 }
@@ -110,7 +115,9 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     }
   }
 
-  async function load(id: string): Promise<ConversationMessage[] | null> {
+  async function load(
+    id: string
+  ): Promise<{ title: string; messages: ConversationMessage[] } | null> {
     let detail: Awaited<ReturnType<typeof sdk.get>>
     try {
       detail = await sdk.get(id)
@@ -128,7 +135,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     // duplicate corrupts the keyed diff — suffix survivors once on the way
     // in; the next persist then stores the repaired ids.
     const seen = new Set<string>()
-    return detail.messages.map((message) => {
+    const messages = detail.messages.map((message) => {
       let messageId = message.id
       while (seen.has(messageId)) messageId = `${messageId}-r`
       seen.add(messageId)
@@ -144,6 +151,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
         ...(Array.isArray(parts) && parts.length > 0 ? { parts } : {})
       }
     }) as ConversationMessage[]
+    return { title: detail.title ?? '', messages }
   }
 
   async function persist(

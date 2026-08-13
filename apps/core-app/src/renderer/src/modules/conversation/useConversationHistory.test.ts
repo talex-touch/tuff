@@ -111,8 +111,10 @@ describe('load', () => {
 
     const restored = await useConversationHistory().load('c1')
 
-    expect(restored?.map((entry) => entry.content)).toEqual(['hi', 'yo'])
-    expect(restored?.[1]?.meta).toEqual({ model: 'm' })
+    expect(restored?.messages.map((entry) => entry.content)).toEqual(['hi', 'yo'])
+    expect(restored?.messages[1]?.meta).toEqual({ model: 'm' })
+    // The stored title survives the trip out (#969): restore has to know whether it is custom.
+    expect(restored?.title).toBe('Title')
   })
 
   it('repairs duplicate ids stored by the old per-conversation counters', async () => {
@@ -140,10 +142,10 @@ describe('load', () => {
 
     const restored = await useConversationHistory().load('c1')
 
-    const ids = restored?.map((entry) => entry.id) ?? []
+    const ids = restored?.messages.map((entry) => entry.id) ?? []
     expect(new Set(ids).size).toBe(ids.length)
     // Order and content untouched; only the collision got a suffix.
-    expect(restored?.map((entry) => entry.content)).toEqual(['one', 'two', 'three'])
+    expect(restored?.messages.map((entry) => entry.content)).toEqual(['one', 'two', 'three'])
     expect(ids[0]).toBe('user-5')
     expect(ids[2]).not.toBe('user-5')
   })
@@ -221,9 +223,9 @@ describe('parts persistence', () => {
     })
 
     const restored = await history.load('c1')
-    expect(restored?.[0]?.parts).toHaveLength(3)
-    expect(restored?.[0]?.parts?.[1]).toMatchObject({ type: 'tool-call', output: 'data' })
-    expect(restored?.[0]?.meta).toEqual({ provider: 'pi', model: 'gpt' })
+    expect(restored?.messages[0]?.parts).toHaveLength(3)
+    expect(restored?.messages[0]?.parts?.[1]).toMatchObject({ type: 'tool-call', output: 'data' })
+    expect(restored?.messages[0]?.meta).toEqual({ provider: 'pi', model: 'gpt' })
   })
 
   it('truncates verbose tool output before storing', async () => {
@@ -308,9 +310,9 @@ describe('load survives a store failure', () => {
       messages: [{ id: 'm1', role: 'user', content: 'hi', status: 'complete', meta: {} }]
     })
 
-    await expect(useConversationHistory().load('c1')).resolves.toMatchObject([
-      { id: 'm1', role: 'user', content: 'hi' }
-    ])
+    await expect(useConversationHistory().load('c1')).resolves.toMatchObject({
+      messages: [{ id: 'm1', role: 'user', content: 'hi' }]
+    })
   })
 
   it('不存在的会话仍然返回 null', async () => {
