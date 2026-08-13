@@ -87,13 +87,13 @@
 
 ### ✅ 4b. 远程图片拦截（用户 2026-08-09 拍板：默认开启 + 可快速放行）
 
-`remote-image-policy.ts` + `harden-html.ts` 占位符 + `TxStreamMarkdown` 委托监听。
+`remote-image-policy.ts` + `harden-html.ts` 占位元素 + `TxStreamMarkdown` 委托监听。
 
 - **默认拦截**远程 `http(s)` 图源。`data:` / `blob:` / `tfile:` / 相对路径自带字节或在应用内解析，不拦（拦了纯属摩擦）。
-- 占位符给两条出路：**加载这张**（单 src）、**本次会话允许**（全放行），并**完整显示 alt 与源地址** —— 读者要判断该不该 fetch，凭据就是这两样。
+- 占位元素给两条出路：**加载这张**（单 src）、**本次会话允许**（全放行），并**完整显示 alt 与源地址** —— 读者要判断该不该 fetch，凭据就是这两样。
 - 状态放在**模块级**而不是组件级：一次对话里每条消息各渲染一个 `TxStreamMarkdown`，组件级状态会让第四条消息上的决定在第五条上再问一遍。
 - **换会话即清空**（`HomePage` watch `conversationId`）：授权是针对一次对话给的，带进下一个线程等于在读者不知情的情况下扩大它。
-- 占位符走 `v-html`，Vue 绑不上事件 → 在 `markdown-body` 上挂一个**委托监听**读 data 属性。
+- 占位元素走 `v-html`，Vue 绑不上事件 → 在 `markdown-body` 上挂一个**委托监听**读 data 属性。
 - 渲染结果是缓存的 HTML 字符串，策略变化本身不会让任何东西重渲 → `remoteImagePolicyVersion` 变化时 `stream.reset()` 重喂。
 - 文案按 tuffex 无 i18n 的约定走 props（默认英文），中文由 CoreApp 传（`home.image.*`）。
 

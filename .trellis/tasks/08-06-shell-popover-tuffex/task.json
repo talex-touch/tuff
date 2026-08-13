@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "逐条验证 prd.md 的 6 条验收标准:模型菜单双调用位行为、权限弹层三档与二步确认、键盘巡航、views/base/home/ 无手搓监听残留的 rg 断言、tuffex 与 core-app 两侧构建与测试,以及弹层视觉目验。",
+    "blocker": "记录中无阻塞项;末条为目验,需要在可运行的应用上完成。",
+    "evidence": "prd.md 的 6 条验收标准均未勾选;目录内有 design.md、implement.md 与 research/。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }

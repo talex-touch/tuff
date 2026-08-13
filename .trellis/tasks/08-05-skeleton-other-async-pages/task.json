@@ -22,5 +22,9 @@
   "parent": "08-05-skeleton-loading-default",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "逐项复核 StoreDetailOverlay 与 IntelligenceCapabilitiesPage 的骨架版式贴合度(AC4,唯一未勾选项)。",
+    "blocker": "记录中无阻塞项;AC4 是人工版式复核,需要在可运行的应用上完成。",
+    "evidence": "prd.md 5 条验收标准已勾选 4 条;AC4 由 prd.md 自述「尚未逐项复核版式贴合度」。目录内有 implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }

@@ -22,5 +22,9 @@
   "parent": "08-05-ai-toolchain-suite",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "重启应用后做端到端真机验证:模型生成 2 字段表单 → 卡片渲染 → 提交 → 模型基于提交值续答。",
+    "blocker": "待重启应用后的真机验证;prd.md 记明主进程工具需重启才加载。",
+    "evidence": "prd.md 4 条验收标准已勾选 3 条,未勾选的一条即上述端到端真机项;目录内有 design.md 与 implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }
