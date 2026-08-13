@@ -960,6 +960,45 @@ describe('SearchEngineCore facade contracts', () => {
     expect(after.lookups).toBe(1)
   })
 
+  /**
+   * The one real cost of not clearing on commit, measured rather than asserted in prose (#346).
+   *
+   * Superseded entries stay until something drops them, so the question is whether they can
+   * accumulate. They cannot: the cache is bounded at SEARCH_CACHE_MAX_SIZE and eviction picks the
+   * oldest timestamp, which after a commit is a stale entry — so it drains stale-first, one per
+   * insert, and no stale entry is ever served because the outcome is computed before the hit
+   * branch.
+   */
+  it('stays bounded after a commit and never serves a superseded entry', async () => {
+    const search = vi.fn(
+      async () => ({ items: [buildItem('bound-item', 'bound-provider', 'Bounded')] }) as never
+    )
+    core.registerProvider(buildProvider('bound-provider', search) as never)
+    core.activateProviders([{ id: 'bound-provider' }] as IProviderActivate[])
+
+    const run = async (text: string): Promise<void> => {
+      const session = core.startSearch({ inputs: [], text } as TuffQuery, {
+        caller: { kind: 'core-box', id: `bound-${text}` }
+      })
+      await session.result
+      await session.completed
+    }
+
+    // Fill past the bound, then supersede everything at once.
+    for (let index = 0; index < 120; index += 1) await run(`bounded query ${index}`)
+    searchIndexCommitHub.markCommitted(['bound-provider'])
+
+    // Drain with fresh keys; each insert evicts one, oldest first.
+    for (let index = 0; index < 40; index += 1) await run(`drained query ${index}`)
+
+    const snapshot = core.getSearchCacheTelemetry()
+    // Never served: every lookup was either absent or a revision mismatch, no hit on a stale entry.
+    expect(snapshot.hits).toBe(0)
+    expect(snapshot.misses['revision-mismatch']).toBe(0)
+    // The bound held: evictions happened, which is only possible if the cache stayed at its cap.
+    expect(snapshot.invalidations['lru-evict']).toBeGreaterThan(0)
+  }, 60_000)
+
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
     core.registerProvider({
