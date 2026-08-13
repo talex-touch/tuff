@@ -235,6 +235,8 @@ interface MutableEverythingProvider {
   }>
   refreshBackendState: (reason: 'startup' | 'manual-check' | 'toggle-enable') => Promise<boolean>
   registerChannels: (context: { touchApp: { channel: unknown } }) => void
+  onDestroy: () => void
+  channelDisposers: Array<() => void>
   onLoad: (context: { touchApp: { channel: unknown } }) => Promise<void>
   startupRefreshPromise: Promise<void> | null
 }
@@ -353,6 +355,55 @@ afterEach(() => {
 })
 
 describe('everything-provider fallback chain', () => {
+  // transportOn is a bare vi.fn() elsewhere, so it returns undefined and the provider collects
+  // nothing — which is why the pre-existing 51 cases pass either way. These two hand it a real
+  // disposer, which is the only shape in which the leak is observable.
+  it('releases every transport listener it registered when the provider is destroyed', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(false)
+      appTaskWaitForIdle.mockImplementation(() => new Promise(() => {}))
+      const disposers: Array<() => void> = []
+      transportOn.mockImplementation(() => {
+        const dispose = vi.fn()
+        disposers.push(dispose)
+        return dispose
+      })
+
+      await provider.onLoad({ touchApp: { channel: {} } })
+      expect(disposers).toHaveLength(6)
+      expect(provider.channelDisposers).toHaveLength(6)
+
+      provider.onDestroy()
+
+      for (const dispose of disposers) expect(dispose).toHaveBeenCalledTimes(1)
+      expect(provider.channelDisposers).toHaveLength(0)
+    })
+  })
+
+  // registerChannels runs from onLoad, and onLoad can run again on a provider reload. Without the
+  // release at the top of registerChannels the second pass would stack a second set of six on the
+  // same events, and the first set would be unreachable — a leak that only shows up after a reload.
+  it('does not stack listeners when channels are registered twice', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const disposers: Array<() => void> = []
+      transportOn.mockImplementation(() => {
+        const dispose = vi.fn()
+        disposers.push(dispose)
+        return dispose
+      })
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      provider.registerChannels({ touchApp: { channel: {} } })
+
+      expect(disposers).toHaveLength(12)
+      expect(provider.channelDisposers).toHaveLength(6)
+      for (const dispose of disposers.slice(0, 6)) expect(dispose).toHaveBeenCalledTimes(1)
+      for (const dispose of disposers.slice(6)) expect(dispose).not.toHaveBeenCalled()
+    })
+  })
+
   it('loads settings and channels without blocking on startup backend detection', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider

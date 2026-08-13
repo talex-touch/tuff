@@ -1,0 +1,80 @@
+name: Plugin SQLite Sandbox
+
+# The six sandbox cases in plugin-sqlite-worker.integration.test.ts need
+# out/main/plugin-sqlite-worker.js, which only `electron-vite build` produces. The core-app
+# suite does not build, so those cases have never run in CI -- they report `skipped` there and,
+# since #1604, say so deliberately rather than failing (#1607).
+#
+# They are not incidental coverage: worker-side SQL policy, browser-history copies staying
+# query-only, row and byte limits, a database symlink inserted after host path validation,
+# timed-out workers terminating without a late write, and the per-plugin database cap.
+#
+# Run here rather than inside App suites (core-app) because the build costs ~182s on this runner
+# against that job's 71s total. Paying that on every PR would more than triple the feedback loop
+# for changes that cannot affect this. Path-filtered, so it is paid only when the sandbox, its
+# worker, or the toolchain that builds it actually changes.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/plugin-sqlite-sandbox.yml'
+      - 'apps/core-app/src/main/modules/plugin/runtime/**'
+      - 'apps/core-app/electron.vite.config.ts'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/plugin-sqlite-sandbox.yml'
+      - 'apps/core-app/src/main/modules/plugin/runtime/**'
+      - 'apps/core-app/electron.vite.config.ts'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-sqlite-sandbox-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sandbox:
+    name: Plugin SQLite sandbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The renderer imports @talex-touch/tuffex/icon/style.css, and tuffex's exports map resolves
+      # only into dist/, so without this the build dies on module resolution rather than on
+      # anything real. App suites (nexus) carries the same step for the same reason.
+      - name: Build tuffex
+        run: pnpm -C packages/tuffex build
+
+      # electron-vite has --rendererOnly but no --mainOnly, and the worker is a rollup input in
+      # the main build, so there is no narrower way to produce just this artifact.
+      - name: Build the main process
+        run: pnpm -C apps/core-app exec electron-vite build
+
+      # Deliberately without TUFF_SKIP_SQLITE_WORKER_TESTS. The guard in this file fails when the
+      # artifact is missing, which is what makes this job meaningful: if the build stops emitting
+      # the worker, this reports it instead of skipping six security cases quietly.
+      - name: Run the plugin SQLite sandbox tests
+        run: >-
+          pnpm -C apps/core-app exec vitest run
+          src/main/modules/plugin/runtime/plugin-sqlite-worker.integration.test.ts

@@ -86,8 +86,48 @@ async function deliver(text) {
   return false
 }
 
+/**
+ * Map a host capability error to a reason the caller can act on (#821-style contract, #822).
+ *
+ * The catches here took no error binding, so a denied permission, an absent capability and a
+ * transport fault all came back as one message with no `reason` — and the message told the user to
+ * check microphone permissions even when the fault was neither. Shape follows touch-snipaste's
+ * stableFailure. The host's own text never reaches the result; only the code is read.
+ */
+function voiceFailure(error, fallbackReason, fallbackMessage) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    return failed('permission-denied', '缺少语音权限：请在系统设置中允许麦克风访问')
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return failed('permission-unavailable', '权限系统不可用')
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+    return failed('cancelled', '语音操作已取消', 'cancelled')
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+    return failed('timeout', '语音服务响应超时')
+  return failed(fallbackReason, fallbackMessage)
+}
+
+function failed(reason, message, status = 'failed') {
+  return {
+    externalAction: true,
+    success: false,
+    status,
+    reason,
+    message,
+  }
+}
+
 async function dictate() {
-  if (typeof plugin.voice?.asrStream !== 'function') {
+  // plugin.voice is undefined when the capability is not injected. The old guard read
+  // `plugin.voice?.asrStream`, which is satisfied by undefined, and the next line then
+  // dereferenced plugin.voice — a TypeError the bare catch reported as a microphone
+  // permission problem (#822).
+  if (!plugin.voice)
+    throw Object.assign(new Error('voice capability unavailable'), { code: 'TUFF_VOICE_UNAVAILABLE' })
+
+  if (typeof plugin.voice.asrStream !== 'function') {
+    if (typeof plugin.voice.dictate !== 'function')
+      throw Object.assign(new Error('voice capability unavailable'), { code: 'TUFF_VOICE_UNAVAILABLE' })
     const result = await plugin.voice.dictate({ cleanup: true })
     return String(result?.text ?? '').trim()
   }
@@ -126,13 +166,8 @@ async function onDictateAction() {
   await showRecording('🎙️ 录音中…', '请说话，停顿后自动结束')
   try {
     const text = truncate(await dictate(), 4000)
-    if (!text) {
-      return {
-        externalAction: true,
-        success: false,
-        message: '没有识别到语音，请靠近麦克风再试一次',
-      }
-    }
+    if (!text)
+      return failed('no-speech-detected', '没有识别到语音，请靠近麦克风再试一次')
     const delivered = await deliver(text)
     return {
       externalAction: true,
@@ -140,31 +175,34 @@ async function onDictateAction() {
       message: delivered ? `已听写并粘贴：${truncate(text)}` : truncate(text),
     }
   }
-  catch {
-    logger?.error?.('[touch-dictation] dictation failed')
-    return {
-      externalAction: true,
-      success: false,
-      message: '听写失败：请检查麦克风权限与语音服务配置后重试',
-    }
+  catch (error) {
+    const failure = error?.code === 'TUFF_VOICE_UNAVAILABLE'
+      ? failed('voice-capability-unavailable', '语音能力不可用：当前环境未提供语音服务')
+      : voiceFailure(error, 'dictation-failed', '听写失败：请检查麦克风权限与语音服务配置后重试')
+    logger?.error?.(`[touch-dictation] ${failure.reason}`)
+    return failure
   }
 }
 
 async function onSpeakAction(text) {
-  if (!text) {
-    return { externalAction: true, success: false, message: '没有可朗读的文字' }
+  if (!text)
+    return failed('no-text-to-speak', '没有可朗读的文字')
+
+  // Same unguarded dereference as dictate had: plugin.voice is undefined when the capability
+  // is not injected, and the bare catch below blamed the TTS configuration for it (#822).
+  if (typeof plugin.voice?.speak !== 'function') {
+    logger?.error?.('[touch-dictation] voice-capability-unavailable')
+    return failed('voice-capability-unavailable', '语音能力不可用：当前环境未提供语音服务')
   }
+
   try {
     await plugin.voice.speak({ text })
     return { externalAction: true, success: true, message: `正在朗读：${truncate(text)}` }
   }
-  catch {
-    logger?.error?.('[touch-dictation] speak failed')
-    return {
-      externalAction: true,
-      success: false,
-      message: '朗读失败：请检查语音合成(TTS)服务配置',
-    }
+  catch (error) {
+    const failure = voiceFailure(error, 'speak-failed', '朗读失败：请检查语音合成(TTS)服务配置')
+    logger?.error?.(`[touch-dictation] ${failure.reason}`)
+    return failure
   }
 }
 

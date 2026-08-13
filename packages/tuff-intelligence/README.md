@@ -66,8 +66,8 @@ async function run() {
 import { z } from "zod";
 import {
   createToolKit,
-  LangChainToolAdapter,
   defineTuffTool,
+  LangChainToolAdapter,
   toToolManifest,
 } from "@talex-touch/tuff-intelligence";
 
@@ -132,3 +132,15 @@ registry.registerTool(kit.get("text.uppercase")!);
 ## 运行时边界
 
 `buildGraphArtifacts()` 与 `invokeGraph()` 已提供真实的 LangGraph 顺序执行器，但只运行调用方注入的步骤；未传入步骤时使用 identity `noop`，不会隐式调用任何 AI provider。CoreApp 负责把 provider runtime、能力调用、配额/审计和 Agent 图组合起来；其他宿主也应在自己的 runtime 中注入对应步骤和存储实现。
+
+## `dist/` 不是消费面
+
+这个包**发布源码，不发布构建产物**。三条独立证据：
+
+- `package.json` 的 `files` 只有 `["src"]`，`dist/` 根本不会进发布包；
+- 四个 `exports` 条目全部指向 `./src/*.ts`，`main` / `module` / `types` 同理；
+- 仓内没有任何地方 import `tuff-intelligence/dist`，也没有任何 CI 作业调用 `build`（根 `build` 只跑 core-app）。
+
+所以本地 `dist/` 的时间戳落后 `src/` **不代表任何东西**——它是一个没人调的 tsup 脚本留下的残留物，既不发布也不被解析。#970 曾把它记为待办，那是基于「dist 是消费面」的假设，而这个假设不成立。
+
+如果将来要改成发布构建产物，`scripts/validate-publish-manifests.mjs` 已经覆盖本包（今天验证通过），入口指向未构建的输出会直接让校验失败——所以那次改动会被迫同时接上构建，不需要在这里再加一道守卫。

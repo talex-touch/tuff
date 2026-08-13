@@ -17,6 +17,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@talex-touch/tuff-cli": "workspace:^",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",
     "jsdom": "^26.1.0",

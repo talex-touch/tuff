@@ -6,7 +6,7 @@ import process from 'node:process'
  * This file describes the pre-core of the touch app.
  * Running necessary settings or environment params before startup the touch app.
  */
-import { app, crashReporter, powerMonitor } from 'electron'
+import { app, crashReporter, powerMonitor, session } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveRuntimeRootPath } from '../utils/app-root-path'
@@ -23,10 +23,12 @@ import {
   touchEventBus,
   WindowAllClosedEvent
 } from './eventbus/touch-event'
+import { installDefaultSessionPermissionPolicy } from './default-session-permissions'
 import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
 import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
+import { finalizeBeforeQuit } from './before-quit-finalize'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -192,8 +194,15 @@ log4js.configure({
 
 mainLog.success('Talex Touch bootstrap started')
 
-// Increase renderer process V8 heap limit (main process uses NODE_OPTIONS)
-const v8JsFlags = ['--max-old-space-size=512']
+// V8 flags handed to every child process, renderers and utility processes included.
+//
+// This list used to carry `--max-old-space-size=512` under a comment claiming it raised the
+// limit. On 64-bit platforms V8's default old-space is already far above that, so the flag
+// lowered the ceiling for every renderer instead - which is the opposite of what the commit
+// that added it set out to do, and touch-window.ts already reports RENDER_PROCESS_OOM (#795).
+// Nothing is set now, so renderers get V8's default. Per-process budgets that are deliberate,
+// like the plugin runtime's, are set at their own spawn sites.
+const v8JsFlags: string[] = []
 
 // Opt-in escape hatch for the macOS 26/27 (Tahoe) V8 JIT-page crash
 // (electron/electron#51351): `--jitless` removes the executable MAP_JIT pages
@@ -204,16 +213,21 @@ if (parseBooleanEnv(process.env.TUFF_V8_JITLESS)) {
   mainLog.warn('V8 JIT disabled via TUFF_V8_JITLESS (slower JS; Tahoe crash workaround)')
 }
 
-app.commandLine.appendSwitch('js-flags', v8JsFlags.join(' '))
+if (v8JsFlags.length > 0) {
+  app.commandLine.appendSwitch('js-flags', v8JsFlags.join(' '))
+}
 
-// Disable GPU Acceleration for Windows 7
-if (release().startsWith('6.1')) app.disableHardwareAcceleration()
+// Disable GPU Acceleration for Windows 7 (NT 6.1).
+// The platform guard is load-bearing: os.release() returns the kernel version on
+// Linux, and 6.1 is an LTS line (Debian 12), so without it every such machine
+// silently loses hardware acceleration on the strength of a Windows check.
+if (process.platform === 'win32' && release().startsWith('6.1')) app.disableHardwareAcceleration()
 
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
-setupSingleInstanceGuard({
+const hasSingleInstanceLock = setupSingleInstanceGuard({
   app,
   startupBenchmarkMode,
   emitSecondaryLaunch: (eventName, payload) => touchEventBus.emit(eventName, payload),
@@ -227,7 +241,30 @@ setupSingleInstanceGuard({
   }
 })
 
+/**
+ * True in a second launch, whose app.quit() was issued before Electron was ready.
+ *
+ * The quit does not take effect immediately -- the before-quit handler below used to
+ * preventDefault unconditionally and run an async shutdown -- so whenReady still fired and the
+ * duplicate began loading modules, including the database. Two processes opening the same libsql
+ * file is the failure this guards (#790).
+ */
+export function isDuplicateInstance(): boolean {
+  return !hasSingleInstanceLock
+}
+
 void app.whenReady().then(() => {
+  // Installed here rather than in a module: modules load after this, and some of
+  // them create windows. A window that loads before the handlers are attached
+  // would run under Electron's approve-by-default (#696).
+  installDefaultSessionPermissionPolicy(session.defaultSession, {
+    onDenied: (permission) => {
+      mainLog.warn('Denied a permission request on the default session', {
+        meta: { permission }
+      })
+    }
+  })
+
   powerMonitor.on('shutdown', () => {
     setQuitIntent('system-shutdown', 'power-monitor-shutdown')
     markAppQuitting('power-monitor-shutdown')
@@ -299,6 +336,13 @@ app.on('before-quit', (event) => {
     return
   }
 
+  // A duplicate instance has loaded no modules and holds no resources, so there is nothing for
+  // the shutdown flow to flush. Delaying its quit is what let it reach whenReady in the first
+  // place, so it is allowed to exit immediately.
+  if (intent.kind === 'duplicate-instance') {
+    return
+  }
+
   event.preventDefault()
   if (beforeQuitFlowPromise) {
     return
@@ -327,18 +371,27 @@ app.on('before-quit', (event) => {
     } catch (error) {
       mainLog.error('before-quit handlers failed, continue shutdown', { error })
     }
-    broadcastBeforeQuit()
     mainLog.info('App quit requested')
 
-    // Development mode: let DevProcessManager orchestrate shutdown steps.
-    if (!app.isPackaged && !devProcessManager.isShuttingDownProcess()) {
-      mainLog.debug('Development mode: delegating quit to DevProcessManager')
-      devProcessManager.triggerGracefulShutdown()
+    const finalized = finalizeBeforeQuit({
+      broadcast: broadcastBeforeQuit,
+      // Development mode: let DevProcessManager orchestrate shutdown steps.
+      shouldDelegateToDevManager: () =>
+        !app.isPackaged && !devProcessManager.isShuttingDownProcess(),
+      delegateToDevManager: () => {
+        mainLog.debug('Development mode: delegating quit to DevProcessManager')
+        devProcessManager.triggerGracefulShutdown()
+      },
+      quit: () => {
+        beforeQuitFlowDone = true
+        app.quit()
+      },
+      logError: (message, error) => mainLog.error(message, { error })
+    })
+
+    if (finalized.delegated) {
       return
     }
-
-    beforeQuitFlowDone = true
-    app.quit()
   })()
     .catch((error) => {
       mainLog.error('before-quit cleanup flow failed', { error })

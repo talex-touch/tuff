@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IndexingWatchDeltaQueueService } from "../../search";
 
 interface TestDeltaPayload {
@@ -229,5 +229,111 @@ describe("indexing-watch-delta-queue-service", () => {
         },
       ],
     ]);
+  });
+
+  describe("debounce window", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function createDebouncedService(debounceMs: number) {
+      const processEntries = vi.fn(async () => undefined);
+      const service = new IndexingWatchDeltaQueueService<TestDeltaPayload>({
+        normalizeKey: (rawPath) => rawPath.toLowerCase(),
+        shouldAccept: () => true,
+        prepareFlush: async () => true,
+        processEntries,
+        logError: vi.fn(),
+        coalesce: ({ next }) => next,
+        debounceMs,
+      });
+      return { processEntries, service };
+    }
+
+    it("merges an event burst for one key into a single flush", async () => {
+      const { processEntries, service } = createDebouncedService(400);
+
+      // Stands in for the ~16 watcher events one app install emits.
+      for (let index = 0; index < 16; index += 1) {
+        service.enqueue("/Applications/Probe.app", "change");
+      }
+      await settleTaskChain();
+
+      expect(processEntries).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(400);
+      await settleTaskChain();
+
+      expect(processEntries).toHaveBeenCalledTimes(1);
+      expect(processEntries).toHaveBeenCalledWith([
+        [
+          "/applications/probe.app",
+          { action: "change", rawPath: "/Applications/Probe.app" },
+        ],
+      ]);
+    });
+
+    it("holds one timer for the open window and releases it when the window closes", async () => {
+      const { service } = createDebouncedService(400);
+
+      service.enqueue("/tmp/a.txt", "add");
+      service.enqueue("/tmp/b.txt", "add");
+      expect(service.hasPendingWindow()).toBe(true);
+      expect(vi.getTimerCount()).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(400);
+      await settleTaskChain();
+
+      expect(service.hasPendingWindow()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(service.getPendingSize()).toBe(0);
+    });
+
+    it("opens no window while idle", () => {
+      const { service } = createDebouncedService(400);
+
+      expect(service.hasPendingWindow()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("flushes immediately when a caller bypasses the window", async () => {
+      const { processEntries, service } = createDebouncedService(400);
+
+      service.enqueue("/tmp/a.txt", "add");
+      service.flushSoon();
+      await settleTaskChain();
+
+      expect(processEntries).toHaveBeenCalledTimes(1);
+      expect(service.hasPendingWindow()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("drops the open window on dispose without losing pending entries", async () => {
+      const { processEntries, service } = createDebouncedService(400);
+
+      service.enqueue("/tmp/a.txt", "add");
+      service.dispose();
+
+      expect(vi.getTimerCount()).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(400);
+      await settleTaskChain();
+
+      expect(processEntries).not.toHaveBeenCalled();
+      expect(service.getPendingSize()).toBe(1);
+    });
+
+    it("flushes without waiting when no window is configured", async () => {
+      const { processEntries, service } = createDebouncedService(0);
+
+      service.enqueue("/tmp/a.txt", "add");
+      await settleTaskChain();
+
+      expect(processEntries).toHaveBeenCalledTimes(1);
+    });
   });
 });

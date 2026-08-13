@@ -31,6 +31,13 @@ import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
 import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
 
+const props = withDefaults(
+  defineProps<{
+    advancedOnly?: boolean
+  }>(),
+  { advancedOnly: false }
+)
+
 const { t } = useI18n()
 const transport = useTuffTransport()
 const { isMac } = useRendererPlatform()
@@ -45,7 +52,19 @@ const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const showAdvancedSettings = computed(() => props.advancedOnly)
+
+/**
+ * Same stored preference the home composer's Auto Context button writes, so the two never
+ * disagree. Defaults to on for configs saved before the key existed.
+ */
+const autoContextEnabled = computed({
+  get: () => appSetting.tools?.autoContext !== false,
+  set: (value: boolean) => {
+    if (appSetting.tools) appSetting.tools.autoContext = value
+  }
+})
+const showLegacySystemControls = computed(() => false)
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
@@ -61,8 +80,8 @@ const DEFAULT_RECOMMENDATION_CONTEXT_SOURCES = {
   time: true,
   foregroundApp: true,
   clipboard: true,
+  selection: true,
   network: true,
-  bluetooth: true,
   focus: true,
   power: true,
   location: true
@@ -103,18 +122,18 @@ const recommendationContextSourceItems: Array<{
     activeIcon: 'i-carbon-clipboard'
   },
   {
+    key: 'selection',
+    titleKey: 'settingTools.recommendationContextSelection',
+    descriptionKey: 'settingTools.recommendationContextSelectionDesc',
+    defaultIcon: 'i-carbon-text-selection',
+    activeIcon: 'i-carbon-text-selection'
+  },
+  {
     key: 'network',
     titleKey: 'settingTools.recommendationContextNetwork',
     descriptionKey: 'settingTools.recommendationContextNetworkDesc',
     defaultIcon: 'i-carbon-wifi',
     activeIcon: 'i-carbon-wifi'
-  },
-  {
-    key: 'bluetooth',
-    titleKey: 'settingTools.recommendationContextBluetooth',
-    descriptionKey: 'settingTools.recommendationContextBluetoothDesc',
-    defaultIcon: 'i-carbon-bluetooth',
-    activeIcon: 'i-carbon-bluetooth'
   },
   {
     key: 'focus',
@@ -220,6 +239,12 @@ function normalizeSelectNumber(
 function ensureClipboardPollingSettings(): void {
   if (!appSetting.tools || typeof appSetting.tools !== 'object') {
     appSetting.tools = {
+      autoContext: true,
+      // Off by default: a tool call reaches out and touches the user's machine,
+      // so it stays something they turned on deliberately.
+      agentTools: false,
+      // The same preference in the shape the composer's permission pill reads.
+      agentToolsMode: 'off',
       autoPaste: {
         enable: true,
         time: 5
@@ -752,21 +777,35 @@ watch(shortcutsDialogVisible, (visible) => {
   Displays utility settings in a structured layout with switches, slots, and selects.
 -->
 <template>
+  <!--
+    The destination for the composer's 「在设置中管理工具与权限」. Auto Context is the switch the
+    composer surfaces; enabling or disabling individual capabilities belongs here, which is why the
+    composer's popover carries no tool list of its own.
+  -->
+  <TuffGroupBlock
+    v-if="!props.advancedOnly"
+    :name="t('settingTools.autoContextGroupTitle')"
+    :description="t('settingTools.autoContextGroupDesc')"
+    :collapsible="false"
+  >
+    <TuffBlockSwitch
+      v-model="autoContextEnabled"
+      :title="t('settingTools.autoContext')"
+      :description="t('settingTools.autoContextDesc')"
+    />
+  </TuffGroupBlock>
+
   <!-- Utilities group block -->
   <TuffGroupBlock
     :name="t('settingTools.groupTitle')"
     :description="t('settingTools.groupDesc')"
-    default-icon="i-carbon-app-switcher"
-    active-icon="i-carbon-application"
-    memory-name="setting-tools"
+    :collapsible="false"
   >
     <!-- Custom CoreBox Placeholder -->
     <TuffBlockInput
       v-model="appSetting.coreBox.customPlaceholder"
       :title="t('settingTools.customPlaceholder')"
       :description="t('settingTools.customPlaceholderDesc')"
-      default-icon="i-carbon-text-short-paragraph"
-      active-icon="i-carbon-text-short-paragraph"
     >
       <template #control>
         <TxInput
@@ -784,10 +823,9 @@ watch(shortcutsDialogVisible, (visible) => {
       entirely while believing they were only turning off a tutorial.
     -->
     <TuffBlockSlot
+      v-if="!props.advancedOnly"
       :title="t('settingTools.usage')"
       :description="t('settingTools.usageDesc')"
-      default-icon="i-carbon-book"
-      active-icon="i-carbon-book"
     >
       <TxButton variant="flat" type="primary" @click.stop="rerunBeginnerGuide">
         {{ t('settingTools.usageAction') }}
@@ -798,8 +836,6 @@ watch(shortcutsDialogVisible, (visible) => {
     <TuffBlockSlot
       :title="t('settingTools.shortcutsTitle')"
       :description="t('settingTools.shortcutsDesc')"
-      default-icon="i-carbon-keyboard"
-      active-icon="i-carbon-keyboard"
       class="ShortcutEntry"
       :class="{ 'ShortcutEntry--hidden': shortcutsDialogVisible }"
     >
@@ -816,8 +852,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.omniPanel.mouseLongPressDurationMs"
       :title="t('settingTools.omniPanelMouseLongPressDuration')"
       :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
       :disabled="!omniPanelMouseTriggerEnabled"
     >
       <TxSelectItem
@@ -835,8 +869,6 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.tools.autoPaste.time"
       :title="t('settingTools.autoPaste')"
       :description="t('settingTools.autoPasteDesc')"
-      default-icon="i-carbon-copy"
-      active-icon="i-carbon-copy"
     >
       <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
@@ -858,12 +890,10 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Auto clear time selection -->
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
+      v-if="showLegacySystemControls"
       v-model="appSetting.tools.autoClear"
       :title="t('settingTools.autoClear')"
       :description="t('settingTools.autoClearDesc')"
-      default-icon="i-carbon-erase"
-      active-icon="i-carbon-erase"
     >
       <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
@@ -881,12 +911,10 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSelect>
 
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
+      v-if="showLegacySystemControls"
       v-model="appSetting.tools.clipboardPolling.interval"
       :title="t('settingTools.clipboardPollingInterval')"
       :description="t('settingTools.clipboardPollingIntervalDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
     >
       <TxSelectItem :value="1">1 {{ t('settingTools.sec') }}</TxSelectItem>
       <TxSelectItem :value="3">3 {{ t('settingTools.sec') }}</TxSelectItem>
@@ -896,21 +924,17 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
     </TuffBlockSelect>
 
-    <template v-if="showAdvancedSettings">
+    <template v-if="showLegacySystemControls">
       <TuffBlockSwitch
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
         :title="t('settingTools.clipboardPollingLowBattery')"
         :description="t('settingTools.clipboardPollingLowBatteryDesc')"
-        default-icon="i-carbon-battery-charging"
-        active-icon="i-carbon-battery-charging"
       />
 
       <TuffBlockSelect
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.interval"
         :title="t('settingTools.clipboardPollingLowBatteryInterval')"
         :description="t('settingTools.clipboardPollingLowBatteryIntervalDesc')"
-        default-icon="i-carbon-battery-empty"
-        active-icon="i-carbon-battery-empty"
         :disabled="clipboardPollingLowBatteryDisabled"
       >
         <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
@@ -924,44 +948,17 @@ watch(shortcutsDialogVisible, (visible) => {
       v-model="appSetting.tools.autoHide"
       :title="t('settingTools.autoHide')"
       :description="t('settingTools.autoHideDesc')"
-      default-icon="i-carbon-view-off"
-      active-icon="i-carbon-view-off"
     />
 
     <!-- Recommendation Enabled switch -->
     <TuffBlockSwitch
+      v-if="showLegacySystemControls"
       v-model="appSetting.recommendation.enabled"
       :title="t('settingTools.recommendationEnabled')"
       :description="t('settingTools.recommendationEnabledDesc')"
-      default-icon="i-carbon-star"
-      active-icon="i-carbon-star-filled"
     />
 
-    <!-- Recommendation Show Reason switch -->
-    <TuffBlockSwitch
-      v-model="appSetting.recommendation.showReason"
-      :title="t('settingTools.recommendationShowReason')"
-      :description="t('settingTools.recommendationShowReasonDesc')"
-      default-icon="i-carbon-information"
-      active-icon="i-carbon-information-filled"
-    />
-
-    <!-- Recommendation Max Items select -->
-    <TuffBlockSelect
-      v-if="showAdvancedSettings"
-      v-model="appSetting.recommendation.maxItems"
-      :title="t('settingTools.recommendationMaxItems')"
-      :description="t('settingTools.recommendationMaxItemsDesc')"
-      default-icon="i-carbon-list"
-      active-icon="i-carbon-list"
-    >
-      <TxSelectItem :value="5"> 5 </TxSelectItem>
-      <TxSelectItem :value="10"> 10 </TxSelectItem>
-      <TxSelectItem :value="15"> 15 </TxSelectItem>
-      <TxSelectItem :value="20"> 20 </TxSelectItem>
-    </TuffBlockSelect>
-
-    <template v-if="showAdvancedSettings">
+    <template v-if="showLegacySystemControls">
       <TuffBlockSwitch
         v-for="item in recommendationSemanticItems"
         :key="item.key"

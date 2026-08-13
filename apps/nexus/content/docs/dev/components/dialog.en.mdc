@@ -261,7 +261,7 @@ code: |
 
 - All dialog variants teleport to `body`, assign z-index through the shared z-index manager, and close through the required `close()` callback.
 - Escape closes the active dialog after its leave animation; `TxBottomDialog`, `TxBlowDialog`, `TxPopperDialog`, and `TxTouchTip` restore the previously focused element on unmount.
-- `TxBottomDialog` and `TxTouchTip` use instance-scoped title/description ids; `TxBlowDialog` and `TxPopperDialog` use stable internal ids for their default title/content regions.
+- `TxBottomDialog`, `TxTouchTip`, and `TxBlowDialog` all derive instance-level title/description ids via `useId()`; `TxPopperDialog` uses stable internal ids for its default title/content regions.
 - Plain `message` renders as text and preserves line breaks. Use `messageHtml` only with `asTrustedDialogHtml()` after sanitizing internal content.
 - `DialogButton.onClick()` / `TouchTipButton.onClick()` closes when it resolves `true` and keeps the dialog open when it resolves `false`.
 

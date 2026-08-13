@@ -1,18 +1,7 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
-import { createThemeDetailRoute } from './section-route'
+import { describe, expect, it } from 'vitest'
 import SectionItem from './SectionItem.vue'
-
-const state = vi.hoisted(() => ({
-  push: vi.fn()
-}))
-
-vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: state.push
-  })
-}))
 
 function mountSectionItem(disabled = false) {
   return mount(SectionItem, {
@@ -43,12 +32,17 @@ describe('SectionItem semantics', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['filter'])
   })
 
-  it('opens the detail route from the inner button', async () => {
+  // The label row renders a radio, so it has to select. It used to navigate to a detail route
+  // that renders nothing, which took the user off the settings page and showed them no detail.
+  it('selects from the label row as well as the preview', async () => {
     const wrapper = mountSectionItem()
+    const bar = wrapper.get('button.SectionItem-Bar')
 
-    await wrapper.get('button.SectionItem-Bar').trigger('click')
+    expect(bar.attributes('aria-pressed')).toBe('false')
 
-    expect(state.push).toHaveBeenCalledWith(createThemeDetailRoute('filter'))
+    await bar.trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['filter'])
   })
 
   it('does not allow disabled keyboard selection', async () => {

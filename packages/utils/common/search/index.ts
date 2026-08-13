@@ -1,4 +1,4 @@
-import type { ISearchProvider, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
+import type { ISearchProvider, TuffQuery, TuffSearchResult } from '../../core-box/tuff/tuff-dsl'
 import type { SearchPriorityLayer } from './gather'
 
 export * from './gather'

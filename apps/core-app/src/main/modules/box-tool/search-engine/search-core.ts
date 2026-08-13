@@ -36,7 +36,7 @@ import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
 import { OnboardingGateError, onboardingGate } from '../../storage'
-import { appProvider } from '../addon/apps/app-provider'
+import { appProvider, setAppExecutionRecorder } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
@@ -56,6 +56,7 @@ import { SearchIndexStoreAdapter } from './indexing-store-adapter'
 import { SqliteIndexingTaskStateStore } from './indexing-task-state-store'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
+import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
 import { SearchIndexService } from './search-index-service'
@@ -94,6 +95,8 @@ import {
   type SearchRequestContext,
   type SearchSession
 } from './search-session'
+import type { SearchCacheTelemetrySnapshot } from './search-cache-telemetry'
+import { classifySearchCacheLookup, SearchCacheTelemetry } from './search-cache-telemetry'
 
 interface SearchCacheEntry {
   result: CachedSearchResultSnapshot
@@ -104,6 +107,11 @@ interface SearchCacheEntry {
 const SEARCH_CACHE_TTL_MS = 5_000
 const SEARCH_CACHE_MAX_SIZE = 100
 const SEARCH_FRONTEND_ITEM_LIMIT = 80
+// Later batches (deferred file layer) are re-ranked against the earlier ones by
+// the renderer, so cutting them to the visible 80 here would drop items before
+// they can compete. This is a safety cap, not a display cap.
+const SEARCH_UPDATE_ITEM_LIMIT = 200
+const SEARCH_CACHE_ITEM_LIMIT = 200
 // Deferred semantic recall: only runs for text queries whose primary results are
 // sparse enough that surfacing semantically-related files adds value.
 const DEFERRED_SEMANTIC_MIN_QUERY_LENGTH = 3
@@ -178,6 +186,14 @@ export class SearchEngineCore
   private readonly maintenanceTaskId = 'search-engine.maintenance'
   private readonly providerHealthService = new ProviderHealthService()
   private searchCache = new Map<string, SearchCacheEntry>()
+  /**
+   * Counts what the cache actually does, so #346's keep-or-remove decision has a number.
+   *
+   * Nothing measured a lookup before this. The reason breakdown matters more than the hit rate:
+   * entries here are thrown away by any index commit, including from providers the query never
+   * reached, so a low hit rate may say more about the invalidation policy than about users.
+   */
+  private readonly cacheTelemetry = new SearchCacheTelemetry()
   private searchFirstResultMetrics = new Map<string, SearchFirstResultMetrics>()
   private readonly indexCommitStreams = new Set<StreamContext<CoreBoxSearchIndexCommitPayload>>()
   private indexCommitUnsubscribe: (() => void) | null = null
@@ -212,7 +228,10 @@ export class SearchEngineCore
           oldestKey = key
         }
       }
-      if (oldestKey) this.searchCache.delete(oldestKey)
+      if (oldestKey) {
+        this.searchCache.delete(oldestKey)
+        this.cacheTelemetry.recordInvalidation('lru-evict', 1)
+      }
     }
 
     this.searchCache.set(cacheKey, {
@@ -222,11 +241,38 @@ export class SearchEngineCore
     })
   }
 
-  private limitFrontendItems(items: TuffItem[]): TuffItem[] {
+  private limitFrontendItems(items: TuffItem[], limit = SEARCH_FRONTEND_ITEM_LIMIT): TuffItem[] {
     const visibleItems = fileFilterService.filterSearchItems(items)
-    return visibleItems.length > SEARCH_FRONTEND_ITEM_LIMIT
-      ? visibleItems.slice(0, SEARCH_FRONTEND_ITEM_LIMIT)
-      : visibleItems
+    return visibleItems.length > limit ? visibleItems.slice(0, limit) : visibleItems
+  }
+
+  /**
+   * Cache what the session actually ended with, not what its first batch looked
+   * like: a repeat query inside the TTL has to return the deferred (file) layer
+   * too, otherwise re-typing the same text within 5s silently loses results.
+   */
+  private cacheAccumulatedSearchResult(params: {
+    cacheKey: string
+    query: TuffQuery
+    items: TuffItem[]
+    signal: AbortSignal
+    duration: number
+    sources: TuffSearchResult['sources']
+    activate?: IProviderActivate[]
+    revision: number
+  }): void {
+    // An aborted session never reaches a trustworthy final state; a genuinely
+    // empty one still does, and caching it keeps repeat misses cheap.
+    if (params.signal.aborted) return
+
+    const { sortedItems } = this.sorter.sort(params.items, params.query, params.signal)
+    const result = new TuffSearchResultBuilder(params.query)
+      .setItems(sortedItems.slice(0, SEARCH_CACHE_ITEM_LIMIT))
+      .setDuration(params.duration)
+      .setSources(params.sources ?? [])
+      .build()
+    result.activate = params.activate
+    this.cacheSearchResult(params.cacheKey, result, params.revision)
   }
 
   private getSearchProviderConfigSignature(): string {
@@ -296,6 +342,7 @@ export class SearchEngineCore
     }
     this.registerProvider(fileProvider)
 
+    PluginFeaturesAdapter.attach(this)
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(previewProvider)
   }
@@ -376,8 +423,19 @@ export class SearchEngineCore
     await this.searchUsageService.flush()
   }
 
+  /**
+   * Read-only counters for the query cache (#346).
+   *
+   * Counts and durations only -- no query text, no cache key, no item content -- so a report
+   * built from this cannot reconstruct what anyone searched for.
+   */
+  public getSearchCacheTelemetry(): SearchCacheTelemetrySnapshot {
+    return this.cacheTelemetry.snapshot()
+  }
+
   public completePrivacyRetentionCleanup(): void {
     this.searchUsageService.invalidateRetentionCaches()
+    this.cacheTelemetry.recordInvalidation('privacy-cleanup', this.searchCache.size)
     this.searchCache.clear()
     this.recommendationEngine?.invalidateCache()
   }
@@ -394,8 +452,37 @@ export class SearchEngineCore
     )
   }
 
+  /**
+   * An index commit no longer clears the cache eagerly (#346).
+   *
+   * `classifySearchCacheLookup` already had a `revision-mismatch` outcome meaning "the entry was
+   * there but the index moved on" -- which the comment at the classify site calls the point of the
+   * whole taxonomy. Clearing here made that outcome unreachable: by the time any lookup compared
+   * revisions the entry was gone, so every repeat denied by a commit was counted as `absent`, the
+   * same bucket as a query nobody repeated.
+   *
+   * That is the distinction #346 exists to measure, and it read as its own opposite -- "nobody
+   * repeats queries, remove the cache" when the truth may be "repeats happen and the index keeps
+   * denying them".
+   *
+   * Entries now stay until a lookup rejects them on revision, which drops them there and counts
+   * the reason. Nothing stale is served: the outcome is computed before the hit branch. The cost
+   * is that a superseded entry holds its slot until it is looked up, expires at the 5s TTL, or is
+   * evicted by the existing LRU bound.
+   */
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
-    this.searchCache.clear()
+    // No searchCache.clear() here. #1729/#1730 removed it deliberately: cacheSearchResult
+    // already refuses a write whose revision the hub has moved past, so the clear was redundant --
+    // and while it was there, `revision-mismatch` could never be observed and the telemetry could
+    // not say why an entry went away. app-shell-v2 still had the clear because it branched before
+    // that; its recommendation invalidation below is the part worth keeping.
+    // The recommendation ranking is cached for 30 minutes, so an app installed
+    // or removed just now would otherwise stay invisible (or keep showing) for
+    // that long. Only app commits matter: file commits fire continuously while
+    // the index builds, and the recommendation grid never contains files.
+    if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
+      this.recommendationEngine?.invalidateCache()
+    }
     for (const context of this.indexCommitStreams) {
       if (context.isCancelled()) {
         this.indexCommitStreams.delete(context)
@@ -699,39 +786,6 @@ export class SearchEngineCore
     }
   }
 
-  private enrichAndPushSearchItems(
-    sessionId: string,
-    query: TuffQuery,
-    items: TuffItem[],
-    signal: AbortSignal,
-    sendUpdateToFrontend: (itemsToSend: TuffItem[]) => void
-  ): void {
-    if (items.length === 0 || signal.aborted) {
-      return
-    }
-
-    void this.mergeAndRankItems({
-      sessionId,
-      query,
-      items,
-      signal,
-      includeCompletion: true,
-      enrichmentMode: 'full'
-    })
-      .then(({ sortedItems }) => {
-        if (signal.aborted) {
-          return
-        }
-        sendUpdateToFrontend(sortedItems)
-      })
-      .catch((error) => {
-        searchEngineLog.debug('Search enrichment skipped', {
-          error,
-          meta: { sessionId, itemCount: items.length }
-        })
-      })
-  }
-
   /**
    * After first results render, asynchronously surface files that are
    * semantically related to the query but were missed by the keyword/FTS pass,
@@ -780,6 +834,13 @@ export class SearchEngineCore
   }
 
   startSearch(query: TuffQuery, context?: SearchRequestContext): SearchExecution {
+    // The CoreBox window outlives module teardown ordering, so a renderer search
+    // stream can arrive after destroy(). Without this it built a live session
+    // against dbUtils/indexWriter handles that were already closed (#678).
+    if (this.destroying) {
+      throw new Error('Search engine is shutting down')
+    }
+
     const onboardingDecision = onboardingGate.evaluate()
     if (onboardingDecision.state !== 'allowed') {
       throw new OnboardingGateError(onboardingDecision)
@@ -885,11 +946,30 @@ export class SearchEngineCore
 
     const searchRevision = searchIndexCommitHub.getRevision()
     const cachedEntry = this.searchCache.get(cacheKey)
-    if (
-      cachedEntry &&
-      cachedEntry.revision === searchRevision &&
-      Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS
-    ) {
+    const cacheCheckedAt = Date.now()
+    const cachedAgeMs = cachedEntry ? cacheCheckedAt - cachedEntry.timestamp : 0
+    // The reason is the point, not the hit rate: `revision-mismatch` means an index commit denied
+    // the entry, which is a different story from a query nobody repeated (#346).
+    const cacheOutcome = classifySearchCacheLookup({
+      entry: cachedEntry,
+      currentRevision: searchRevision,
+      now: cacheCheckedAt,
+      ttlMs: SEARCH_CACHE_TTL_MS
+    })
+    if (cacheOutcome !== 'hit') {
+      this.cacheTelemetry.recordMiss(cacheOutcome)
+      // Dropped here rather than at commit time, so the reason survives to be counted.
+      // An expired entry goes the same way: whoever asked has just paid for the miss.
+      if (cachedEntry && cacheOutcome !== 'absent') {
+        this.searchCache.delete(cacheKey)
+        this.cacheTelemetry.recordInvalidation(
+          cacheOutcome === 'revision-mismatch' ? 'index-commit' : 'lru-evict',
+          1
+        )
+      }
+    }
+    if (cacheOutcome === 'hit' && cachedEntry) {
+      this.cacheTelemetry.recordHit(cachedAgeMs, cachedEntry.result.duration)
       const cachedResult = materializeCachedSearchResult(cachedEntry.result, sessionId)
       cachedResult.items = fileFilterService.filterSearchItems(cachedResult.items ?? [])
       const cachedItems = cachedResult.items.length
@@ -1068,6 +1148,12 @@ export class SearchEngineCore
       let didResolveInitial = false
       let providersToSearch = this.getActiveProviders(session.activationMap)
       let gatherController: IGatherController | null = null
+      // Everything this session published, keyed by id, so completion can cache
+      // the accumulated set instead of the first batch alone.
+      const publishedItems = new Map<string, TuffItem>()
+      const trackPublishedItems = (items: TuffItem[]): void => {
+        for (const item of items) publishedItems.set(item.id, item)
+      }
 
       const finalizeWithError = (error: unknown): void => {
         searchEngineLog.error('Search gather pipeline failed', {
@@ -1084,6 +1170,11 @@ export class SearchEngineCore
         } catch {
           // ignore
         }
+
+        // A failed gather never reaches the normal completion path, so without
+        // this the session's entry stayed in the map for the process lifetime —
+        // one per keystroke for a provider that throws on every query (#669).
+        this.searchFirstResultMetrics.delete(sessionId)
 
         const totalDuration = Date.now() - startTime
         this.logSearchTrace({
@@ -1127,7 +1218,8 @@ export class SearchEngineCore
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         if (gatherController?.signal.aborted || session.signal.aborted) return
 
-        const frontendItems = this.limitFrontendItems(itemsToSend)
+        const frontendItems = this.limitFrontendItems(itemsToSend, SEARCH_UPDATE_ITEM_LIMIT)
+        trackPublishedItems(frontendItems)
         session.publishUpdate(frontendItems)
       }
 
@@ -1205,8 +1297,8 @@ export class SearchEngineCore
                   query,
                   items: initialItems,
                   signal: gatherController!.signal,
-                  includeCompletion: false,
-                  enrichmentMode: 'base'
+                  includeCompletion: true,
+                  enrichmentMode: 'full'
                 })
                 pipelineDurations.mergeRankDuration = mergeRankDuration
                 const sortedItems = this.appendCompatibilityNotice(
@@ -1226,6 +1318,7 @@ export class SearchEngineCore
                   .build()
                 initialResult.sessionId = sessionId
                 initialResult.activate = session.getActivationState() ?? undefined
+                trackPublishedItems(frontendItems)
 
                 this.searchFirstResultMetrics.set(sessionId, {
                   firstResultMs: totalDuration,
@@ -1239,13 +1332,6 @@ export class SearchEngineCore
                 this._recordSearchResults(sessionId, sortedItems).catch((error) => {
                   searchEngineLog.error('Failed to record search results', { error })
                 })
-                this.enrichAndPushSearchItems(
-                  sessionId,
-                  query,
-                  sortedItems,
-                  gatherController!.signal,
-                  sendUpdateToFrontend
-                )
                 this.scheduleDeferredSemanticRecall(
                   sessionId,
                   query,
@@ -1269,7 +1355,6 @@ export class SearchEngineCore
                   providerFilter
                 })
 
-                this.cacheSearchResult(cacheKey, initialResult, searchRevision)
                 resolve(initialResult)
               } else {
                 const totalDuration = Date.now() - startTime
@@ -1326,6 +1411,16 @@ export class SearchEngineCore
             })
             session.mergeActivations(update.newResults)
             const finalActivationState = session.getActivationState() ?? undefined
+            this.cacheAccumulatedSearchResult({
+              cacheKey,
+              query,
+              items: [...publishedItems.values()],
+              signal: gatherController!.signal,
+              duration: totalDuration,
+              sources: update.sourceStats ?? [],
+              activate: finalActivationState,
+              revision: searchRevision
+            })
             session.complete({
               activate: finalActivationState,
               sources: update.sourceStats
@@ -1352,8 +1447,8 @@ export class SearchEngineCore
               query,
               items: initialItems,
               signal: gatherController!.signal,
-              includeCompletion: false,
-              enrichmentMode: 'base'
+              includeCompletion: true,
+              enrichmentMode: 'full'
             })
             if (gatherController!.signal.aborted || session.signal.aborted) return
             pipelineDurations.mergeRankDuration = mergeRankDuration
@@ -1374,6 +1469,7 @@ export class SearchEngineCore
               .build()
             initialResult.sessionId = sessionId
             initialResult.activate = session.getActivationState() ?? undefined
+            trackPublishedItems(frontendItems)
 
             this.searchFirstResultMetrics.set(sessionId, {
               firstResultMs: totalDuration,
@@ -1388,13 +1484,6 @@ export class SearchEngineCore
             this._recordSearchResults(sessionId, sortedItems).catch((error) => {
               searchEngineLog.error('Failed to record search results', { error })
             })
-            this.enrichAndPushSearchItems(
-              sessionId,
-              query,
-              sortedItems,
-              gatherController!.signal,
-              sendUpdateToFrontend
-            )
             this.logSearchTrace({
               event: 'first.result',
               sessionId,
@@ -1410,7 +1499,6 @@ export class SearchEngineCore
               providerFilter
             })
 
-            this.cacheSearchResult(cacheKey, initialResult, searchRevision)
             resolve(initialResult)
             didResolveInitial = true
           } else if (update.newResults.length > 0) {
@@ -1422,19 +1510,12 @@ export class SearchEngineCore
               query,
               items: subsequentItems,
               signal: gatherController!.signal,
-              includeCompletion: false,
-              enrichmentMode: 'base'
+              includeCompletion: true,
+              enrichmentMode: 'full'
             })
             if (gatherController!.signal.aborted || session.signal.aborted) return
             session.mergeActivations(update.newResults)
             sendUpdateToFrontend(sortedItems)
-            this.enrichAndPushSearchItems(
-              sessionId,
-              query,
-              sortedItems,
-              gatherController!.signal,
-              sendUpdateToFrontend
-            )
           }
         } catch (error) {
           finalizeWithError(error)
@@ -1642,12 +1723,14 @@ export class SearchEngineCore
 
   private queueExecuteTelemetry(sessionId: string, item: TuffItem, startedAt?: number): void {
     try {
+      // Released before the telemetry check, not after: with telemetry off (the
+      // privacy default) the early return used to skip the cleanup entirely.
+      this.searchFirstResultMetrics.delete(sessionId)
+
       const sentryService = getSentryService()
       if (!sentryService.isTelemetryEnabled()) {
         return
       }
-
-      this.searchFirstResultMetrics.delete(sessionId)
 
       const meta = item.meta as Record<string, unknown> | undefined
       const metadata: Record<string, unknown> = {
@@ -1915,7 +1998,13 @@ export class SearchEngineCore
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.searchUsageService.initialize(db)
     searchEngineLog.debug('Initializing RecommendationEngine')
-    instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
+    // Second handle: app-catalog reads (primary db) for rebuilding app
+    // recommendation items — the app catalog does not move into the search
+    // file under the split. Split off → both handles read the primary.
+    instance.recommendationEngine = new RecommendationEngine(
+      instance.dbUtils,
+      createDbUtils(db, auxDb)
+    )
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
     instance.indexingRuntime = indexingRuntime
     registerCoreIndexedSources(instance.indexingRuntime)
@@ -1962,6 +2051,12 @@ export class SearchEngineCore
 
     transport.on(CoreBoxEvents.search.indexingDiagnostics, async () => {
       return await instance.indexingRuntime!.getDiagnostics()
+    })
+
+    // The counters had no reader at all: `getSearchCacheTelemetry` was referenced only by its own
+    // declaration, so the measurement #346 asks for could not be taken from a real session.
+    transport.on(CoreBoxEvents.search.cacheTelemetry, async () => {
+      return instance.getSearchCacheTelemetry()
     })
 
     transport.on(CoreBoxEvents.item.execute, async (payload) => {
@@ -2032,7 +2127,9 @@ export class SearchEngineCore
       }
 
       try {
-        await instance.timeStatsAggregator.aggregateTimeStats()
+        // Explicit, user-triggered repair: forced past the flag that keeps the
+        // destructive rebuild off the scheduled path.
+        await instance.timeStatsAggregator.aggregateTimeStats({ force: true })
         return { success: true }
       } catch (error) {
         searchEngineLog.error('Failed to aggregate time stats', { error })
@@ -2041,6 +2138,13 @@ export class SearchEngineCore
     }
 
     transport.on(CoreBoxEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
+
+    transport.on(CoreBoxEvents.recommendation.reportExposure, async (data) => {
+      recommendationExposureService.recordExposure({
+        itemKeys: data?.itemKeys ?? [],
+        surface: data?.surface
+      })
+    })
 
     transport.on(CoreBoxEvents.item.togglePin, async (data) => {
       if (!instance.dbUtils) {
@@ -2051,6 +2155,7 @@ export class SearchEngineCore
         const { sourceId, itemId, sourceType } = data
         const isPinned = await instance.dbUtils.togglePin(sourceId, itemId, sourceType)
         instance.invalidatePinnedCache()
+        instance.cacheTelemetry.recordInvalidation('pin-toggle', instance.searchCache.size)
         instance.searchCache.clear()
         instance.recommendationEngine?.invalidateCache()
         return { success: true, isPinned }
@@ -2095,7 +2200,7 @@ export class SearchEngineCore
     await this.sessionRegistry.destroy()
     this.usageSummaryService?.stop()
     this.stopMaintenance()
-    this.indexedSourceEventRouter.unsubscribe()
+    await this.indexedSourceEventRouter.unsubscribe()
     const drainFailures: Error[] = []
     const recordDrainFailure = (message: string, error: unknown): void => {
       searchEngineLog.error(message, { error })
@@ -2173,4 +2278,12 @@ export class SearchEngineCore
   }
 }
 
-export default SearchEngineCore.getInstance()
+const searchEngineCore = SearchEngineCore.getInstance()
+
+// app-provider used to import this module to report a launch, which closed a module-scope cycle
+// between the two (#712). The dependency is registered from this side instead, so app-provider
+// no longer needs to know search-core exists. Registered synchronously at module evaluation:
+// the recorder must run before the launch it precedes, not a microtask later.
+setAppExecutionRecorder((sessionId, item) => searchEngineCore.recordExecute(sessionId, item))
+
+export default searchEngineCore

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SliderEmits, SliderProps } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { clamp01, useTooltipMotion } from './use-tooltip-motion'
 
 defineOptions({
   name: 'TxSlider',
@@ -13,6 +14,7 @@ const props = withDefaults(defineProps<SliderProps>(), {
   step: 1,
   disabled: false,
   showValue: false,
+  thumbSurface: true,
   showTooltip: true,
   tooltipTrigger: 'drag',
   tooltipPlacement: 'top',
@@ -42,52 +44,53 @@ const mainRef = ref<HTMLDivElement | null>(null)
 const tooltipRef = ref<HTMLDivElement | null>(null)
 
 const mainWidth = ref(0)
-const thumbSizePx = ref(14)
+const thumbSizePx = ref(18)
 const tooltipWidth = ref(0)
 
 const dragging = ref(false)
 const hovering = ref(false)
+const focusVisible = ref(false)
+
+/** Value-space kinematics, fed by `input` events (covers keyboard and pointer alike). */
 const lastInputTs = ref<number | null>(null)
 const lastInputValue = ref<number | null>(null)
-const velocity = ref(0)
-const acceleration = ref(0)
+const inputVelocity = ref(0)
+const inputAcceleration = ref(0)
 
+/** Pointer-space kinematics, finer grained than `input` when the step is coarse. */
 const lastPointerTs = ref<number | null>(null)
 const lastPointerX = ref<number | null>(null)
 const pointerVelocity = ref(0)
 const pointerAcceleration = ref(0)
-const hadPointerMove = ref(false)
 
-const tooltipTiltDeg = ref(0)
-const tooltipOffsetX = ref(0)
-const tooltipTargetTiltDeg = ref(0)
-const tooltipTargetOffsetX = ref(0)
-const tooltipTiltVel = ref(0)
-const tooltipOffsetVel = ref(0)
-const tooltipFollowX = ref(0)
-const tooltipFollowVel = ref(0)
-const tooltipTargetFollowX = ref(0)
-const tooltipSquash = ref(0)
-const tooltipSkewDeg = ref(0)
-const tooltipJellyAmp = ref(0)
-const tooltipJellyPhase = ref(0)
-const tooltipJellyDir = ref(1)
-const tooltipJellyWobble = ref(0)
-let tooltipRafId: number | null = null
-let tooltipLastRafTs: number | null = null
 let resizeObserver: ResizeObserver | null = null
 let tooltipResizeObserver: ResizeObserver | null = null
 
+function clampToRange(value: number): number {
+  return Math.min(props.max, Math.max(props.min, value))
+}
+
 const clampedValue = computed(() => {
-  const v = Number.isFinite(props.modelValue) ? props.modelValue : props.min
-  return Math.min(props.max, Math.max(props.min, v))
+  const value = Number.isFinite(props.modelValue) ? props.modelValue : props.min
+  return clampToRange(value)
 })
+
+/**
+ * The value the slider paints from.
+ *
+ * The native thumb moves on the browser's own timeline, but `modelValue` only comes back
+ * after emit -> parent -> prop. A parent that persists on write (storage, IPC) takes long
+ * enough that the fill visibly trails the thumb mid-drag. Painting from the input's own
+ * value keeps the two locked together; a real `modelValue` change still overrides it, so a
+ * parent that clamps or rejects the input continues to win.
+ */
+const liveValue = ref(clampedValue.value)
 
 const percent = computed(() => {
   const range = props.max - props.min
   if (range <= 0)
     return 0
-  return ((clampedValue.value - props.min) / range) * 100
+  return ((liveValue.value - props.min) / range) * 100
 })
 
 const thumbCenterPx = computed(() => {
@@ -105,12 +108,12 @@ const fillWidthStyle = computed(() => {
 })
 
 const displayValue = computed(() => {
-  return props.formatValue ? props.formatValue(clampedValue.value) : String(clampedValue.value)
+  return props.formatValue ? props.formatValue(liveValue.value) : String(liveValue.value)
 })
 
 const tooltipText = computed(() => {
   if (props.tooltipFormatter)
-    return props.tooltipFormatter(clampedValue.value)
+    return props.tooltipFormatter(liveValue.value)
   return displayValue.value
 })
 
@@ -122,6 +125,8 @@ const valueText = computed(() => {
     return tooltipText.value
   return undefined
 })
+
+const isHovering = computed(() => hovering.value && !props.disabled)
 
 const shouldShowTooltip = computed(() => {
   if (!props.showTooltip)
@@ -135,28 +140,49 @@ const shouldShowTooltip = computed(() => {
   return dragging.value
 })
 
+const motion = useTooltipMotion({
+  isEnabled: () => props.tooltipTilt,
+  isActive: () => shouldShowTooltip.value,
+  target: () => thumbCenterPx.value,
+  config: () => ({
+    tiltMaxDeg: props.tooltipTiltMaxDeg,
+    offsetMaxPx: props.tooltipOffsetMaxPx,
+    springStiffness: props.tooltipSpringStiffness,
+    springDamping: props.tooltipSpringDamping,
+    distortSkewDeg: props.tooltipDistortSkewDeg,
+    jelly: props.tooltipJelly,
+    jellyFrequency: props.tooltipJellyFrequency,
+    jellyDecay: props.tooltipJellyDecay,
+  }),
+})
+
+/**
+ * `Transition` only manages CSS classes for the animated variants; `none` gets a
+ * name with no rules behind it so the tooltip swaps in and out on the same frame.
+ */
+const transitionName = computed(() =>
+  props.tooltipMotion === 'none' ? 'tx-slider-tooltip-none' : 'tx-slider-tooltip',
+)
+
 const tooltipTransitionStyle = computed<Record<string, string>>(() => {
-  const duration = Math.max(0, props.tooltipMotionDuration)
-  const blur = Math.max(0, props.tooltipMotionBlurPx)
   return {
-    '--tx-slider-tooltip-motion-duration': `${duration}ms`,
-    '--tx-slider-tooltip-motion-blur': `${blur}px`,
+    '--tx-slider-tooltip-motion-duration': `${Math.max(0, props.tooltipMotionDuration)}ms`,
+    '--tx-slider-tooltip-motion-blur': `${Math.max(0, props.tooltipMotionBlurPx)}px`,
   }
 })
 
 const tooltipStyle = computed(() => {
-  const baseX = props.tooltipTilt ? tooltipFollowX.value : thumbCenterPx.value
-  const offsetX = props.tooltipTilt ? tooltipOffsetX.value : 0
-  const baseRotate = props.tooltipTilt ? tooltipTiltDeg.value : 0
-  const baseSquash = props.tooltipTilt ? tooltipSquash.value : 0
-  const baseSkew = props.tooltipTilt ? tooltipSkewDeg.value : 0
+  const baseX = props.tooltipTilt ? motion.followX.value : thumbCenterPx.value
+  const offsetX = props.tooltipTilt ? motion.offsetX.value : 0
+  const baseRotate = props.tooltipTilt ? motion.tiltDeg.value : 0
+  const baseSquash = props.tooltipTilt ? motion.squash.value : 0
+  const baseSkew = props.tooltipTilt ? motion.skewDeg.value : 0
 
-  const wobble = props.tooltipTilt && props.tooltipJelly ? tooltipJellyWobble.value : 0
-  const wobbleDir = props.tooltipTilt && props.tooltipJelly ? tooltipJellyDir.value : 1
+  const wobble = props.tooltipTilt && props.tooltipJelly ? motion.wobble.value : 0
+  const wobbleDir = props.tooltipTilt && props.tooltipJelly ? motion.wobbleDir.value : 1
   const wobbleRotate = wobble * wobbleDir * Math.max(0, props.tooltipJellyRotateDeg)
   const wobbleSkew = wobble * wobbleDir * Math.max(0, props.tooltipJellySkewDeg)
-  const wobbleAbs = Math.abs(wobble)
-  const wobbleSquash = wobbleAbs * Math.max(0, props.tooltipJellySquash)
+  const wobbleSquash = Math.abs(wobble) * Math.max(0, props.tooltipJellySquash)
 
   const rotate = baseRotate + wobbleRotate
   const skew = baseSkew + wobbleSkew
@@ -187,137 +213,61 @@ const tooltipStyle = computed(() => {
   }
 })
 
-function refreshTooltipWidth() {
+function refreshTooltipWidth(): void {
   if (!tooltipRef.value)
     return
-  const w = tooltipRef.value.getBoundingClientRect().width
-  if (Number.isFinite(w) && w > 0)
-    tooltipWidth.value = w
+  const width = tooltipRef.value.getBoundingClientRect().width
+  if (Number.isFinite(width) && width > 0)
+    tooltipWidth.value = width
 }
 
-function clamp01(v: number) {
-  return Math.min(1, Math.max(0, v))
-}
-
-function resetTooltipMotion() {
-  tooltipLastRafTs = null
-  tooltipFollowX.value = thumbCenterPx.value
-  tooltipFollowVel.value = 0
-  tooltipTargetFollowX.value = thumbCenterPx.value
-
-  tooltipTiltDeg.value = 0
-  tooltipOffsetX.value = 0
-  tooltipTargetTiltDeg.value = 0
-  tooltipTargetOffsetX.value = 0
-  tooltipTiltVel.value = 0
-  tooltipOffsetVel.value = 0
-  tooltipSquash.value = 0
-  tooltipSkewDeg.value = 0
-
-  tooltipJellyAmp.value = 0
-  tooltipJellyPhase.value = 0
-  tooltipJellyDir.value = 1
-  tooltipJellyWobble.value = 0
-}
-
-function triggerJelly(kick: number, dir: number) {
-  if (!props.tooltipTilt)
+function refreshMetrics(): void {
+  if (!mainRef.value)
     return
-  if (!props.tooltipJelly)
-    return
-
-  const k = clamp01(kick)
-  if (k <= 0)
-    return
-
-  tooltipJellyDir.value = dir === 0 ? 1 : dir
-  tooltipJellyAmp.value = Math.min(1, tooltipJellyAmp.value + k)
-  if (tooltipJellyAmp.value === k)
-    tooltipJellyPhase.value = 0
+  mainWidth.value = mainRef.value.getBoundingClientRect().width
+  // Read the *geometric* thumb size only. It is deliberately constant across
+  // hover/drag — the visual growth rides `--tx-slider-thumb-scale`, so the fill
+  // and the native thumb can never drift out of alignment mid-interaction.
+  const size = Number.parseFloat(
+    getComputedStyle(mainRef.value).getPropertyValue('--tx-slider-thumb-size'),
+  )
+  if (Number.isFinite(size) && size > 0)
+    thumbSizePx.value = size
 }
 
-function ensureTooltipRaf() {
-  if (tooltipRafId != null)
-    return
+/**
+ * Translate a velocity/acceleration sample into tooltip motion: a steady lean plus,
+ * on a sharp reversal or hard flick, a wobble kick.
+ */
+function driveTooltipMotion(
+  velocity: number,
+  acceleration: number,
+  previousVelocity: number,
+  velocityScale: number,
+  accelerationScale: number,
+): void {
+  const direction = velocity >= 0 ? 1 : -1
+  const intensity = clamp01(
+    Math.abs(velocity) / velocityScale
+    + (Math.abs(acceleration) / accelerationScale) * props.tooltipAccelBoost,
+  )
+  motion.settle(direction, intensity)
 
-  tooltipLastRafTs = null
-  tooltipRafId = window.requestAnimationFrame(function loop(ts) {
-    if (!shouldShowTooltip.value || !props.tooltipTilt) {
-      tooltipRafId = null
-      tooltipLastRafTs = null
-      return
-    }
+  if (props.tooltipJelly) {
+    const kickFromAccel = clamp01(
+      Math.abs(acceleration) / Math.max(1, props.tooltipJellyTriggerAccel),
+    )
+    const reversed
+      = previousVelocity !== 0 && velocity !== 0 && Math.sign(previousVelocity) !== Math.sign(velocity)
+    const kick = reversed ? Math.max(0.55, kickFromAccel) : kickFromAccel
+    if (kick > 0.08)
+      motion.impulse(kick, direction)
+  }
 
-    const last = tooltipLastRafTs ?? ts
-    tooltipLastRafTs = ts
-    const dt = clamp01((ts - last) / 1000 / 0.032) * 0.032
-
-    tooltipTargetFollowX.value = thumbCenterPx.value
-
-    const k = Math.max(1, props.tooltipSpringStiffness)
-    const c = Math.max(0, props.tooltipSpringDamping)
-
-    {
-      const x = tooltipFollowX.value
-      const v = tooltipFollowVel.value
-      const a = -k * (x - tooltipTargetFollowX.value) - c * v
-      const nv = v + a * dt
-      const nx = x + nv * dt
-      tooltipFollowVel.value = nv
-      tooltipFollowX.value = nx
-    }
-
-    {
-      const x = tooltipOffsetX.value
-      const v = tooltipOffsetVel.value
-      const a = -k * 1.1 * (x - tooltipTargetOffsetX.value) - c * 0.95 * v
-      const nv = v + a * dt
-      const nx = x + nv * dt
-      tooltipOffsetVel.value = nv
-      tooltipOffsetX.value = nx
-    }
-
-    {
-      const x = tooltipTiltDeg.value
-      const v = tooltipTiltVel.value
-      const a = -k * 1.05 * (x - tooltipTargetTiltDeg.value) - c * 0.95 * v
-      const nv = v + a * dt
-      const nx = x + nv * dt
-      tooltipTiltVel.value = nv
-      tooltipTiltDeg.value = nx
-    }
-
-    const speed = Math.abs(tooltipFollowVel.value) * 0.9 + Math.abs(tooltipOffsetVel.value) * 0.35
-    tooltipSquash.value = clamp01(speed / 1600)
-
-    const maxSkew = Math.max(0, props.tooltipDistortSkewDeg)
-    const dir = tooltipFollowVel.value >= 0 ? 1 : -1
-    tooltipSkewDeg.value = -dir * tooltipSquash.value * maxSkew
-
-    if (props.tooltipJelly && tooltipJellyAmp.value > 0.0008) {
-      const freq = Math.max(0, props.tooltipJellyFrequency)
-      const decay = Math.max(0, props.tooltipJellyDecay)
-      const omega = 2 * Math.PI * freq
-      tooltipJellyPhase.value += omega * dt
-      tooltipJellyAmp.value *= Math.exp(-decay * dt)
-      tooltipJellyWobble.value = Math.sin(tooltipJellyPhase.value) * tooltipJellyAmp.value
-    }
-    else {
-      tooltipJellyAmp.value = 0
-      tooltipJellyWobble.value = 0
-    }
-
-    tooltipRafId = window.requestAnimationFrame(loop)
-  })
+  motion.start()
 }
 
-function setElasticTargets(dir: number, intensity: number) {
-  const t = clamp01(intensity)
-  tooltipTargetTiltDeg.value = -dir * t * props.tooltipTiltMaxDeg
-  tooltipTargetOffsetX.value = -dir * t * props.tooltipOffsetMaxPx
-}
-
-function onGlobalPointerMove(e: PointerEvent) {
+function onGlobalPointerMove(e: PointerEvent): void {
   if (!dragging.value || !props.tooltipTilt)
     return
 
@@ -328,29 +278,13 @@ function onGlobalPointerMove(e: PointerEvent) {
     const dtMs = now - lastPointerTs.value
     const dx = x - lastPointerX.value
     if (dtMs > 0 && dtMs < 100 && Math.abs(dx) > 1) {
-      hadPointerMove.value = true
-      const v = dx / (dtMs / 1000)
-      const prevV = pointerVelocity.value
-      pointerVelocity.value = v
-      pointerAcceleration.value = ((v - prevV) / dtMs) * 1000
+      const velocity = dx / (dtMs / 1000)
+      const previousVelocity = pointerVelocity.value
+      pointerVelocity.value = velocity
+      pointerAcceleration.value = ((velocity - previousVelocity) / dtMs) * 1000
 
-      const absV = Math.abs(v)
-      const absA = Math.abs(pointerAcceleration.value)
-      if (absV > 20 || absA > 200) {
-        const dir = v >= 0 ? 1 : -1
-        const intensity = clamp01(absV / 1200 + (absA / 12000) * props.tooltipAccelBoost)
-        setElasticTargets(dir, intensity)
-
-        if (props.tooltipJelly) {
-          const accelGate = Math.max(1, props.tooltipJellyTriggerAccel)
-          const kickA = clamp01(absA / accelGate)
-          const reversed = prevV !== 0 && v !== 0 && Math.sign(prevV) !== Math.sign(v)
-          const kick = reversed ? Math.max(0.55, kickA) : kickA
-          if (kick > 0.08)
-            triggerJelly(kick, dir)
-        }
-
-        ensureTooltipRaf()
+      if (Math.abs(velocity) > 20 || Math.abs(pointerAcceleration.value) > 200) {
+        driveTooltipMotion(velocity, pointerAcceleration.value, previousVelocity, 1200, 12000)
       }
     }
   }
@@ -359,26 +293,23 @@ function onGlobalPointerMove(e: PointerEvent) {
   lastPointerX.value = x
 }
 
-function updateValue(next: number) {
-  const v = Math.min(props.max, Math.max(props.min, next))
-  emit('update:modelValue', v)
+function updateValue(next: number): void {
+  emit('update:modelValue', clampToRange(next))
 }
 
-function onInput(e: Event) {
-  const el = e.target as HTMLInputElement
-  const next = Number(el.value)
+function onInput(e: Event): void {
+  const next = Number((e.target as HTMLInputElement).value)
+  // Paint first, tell the parent second — see `liveValue`.
+  liveValue.value = clampToRange(next)
   const now = performance.now()
-
-  const prevVelocity = velocity.value
+  const previousVelocity = inputVelocity.value
 
   if (lastInputTs.value != null && lastInputValue.value != null) {
     const dt = now - lastInputTs.value
-    const dv = next - lastInputValue.value
     if (dt > 0) {
-      const perSec = (dv / dt) * 1000
-      const prevV = velocity.value
-      velocity.value = perSec
-      acceleration.value = ((perSec - prevV) / dt) * 1000
+      const perSec = ((next - lastInputValue.value) / dt) * 1000
+      inputVelocity.value = perSec
+      inputAcceleration.value = ((perSec - previousVelocity) / dt) * 1000
     }
   }
   lastInputTs.value = now
@@ -386,62 +317,33 @@ function onInput(e: Event) {
   updateValue(next)
 
   if (dragging.value && props.tooltipTilt) {
-    const v = velocity.value
-    const a = acceleration.value
-    const dir = v >= 0 ? 1 : -1
-    const intensity = clamp01(Math.abs(v) / 260 + (Math.abs(a) / 2400) * props.tooltipAccelBoost)
-    setElasticTargets(dir, intensity)
-
-    if (props.tooltipJelly) {
-      const accelGate = Math.max(1, props.tooltipJellyTriggerAccel)
-      const absA = Math.abs(a)
-      const kickA = clamp01(absA / accelGate)
-      const reversed = prevVelocity !== 0 && v !== 0 && Math.sign(prevVelocity) !== Math.sign(v)
-      const kick = reversed ? Math.max(0.55, kickA) : kickA
-      if (kick > 0.08)
-        triggerJelly(kick, dir)
-    }
-
-    ensureTooltipRaf()
+    driveTooltipMotion(inputVelocity.value, inputAcceleration.value, previousVelocity, 260, 2400)
   }
 }
 
-function onChange(e: Event) {
-  const el = e.target as HTMLInputElement
-  emit('change', Number(el.value))
+function onChange(e: Event): void {
+  emit('change', clampToRange(Number((e.target as HTMLInputElement).value)))
 }
 
-function refreshMetrics() {
-  if (!mainRef.value)
-    return
-  const rect = mainRef.value.getBoundingClientRect()
-  mainWidth.value = rect.width
-  const raw = getComputedStyle(mainRef.value).getPropertyValue('--tx-slider-thumb-size')
-  const size = Number.parseFloat(raw)
-  if (Number.isFinite(size) && size > 0)
-    thumbSizePx.value = size
-}
-
-function startDragging(e: PointerEvent) {
+function startDragging(e: PointerEvent): void {
   if (props.disabled)
     return
   dragging.value = true
   refreshMetrics()
 
   if (props.tooltipTilt) {
-    resetTooltipMotion()
-    ensureTooltipRaf()
+    motion.reset()
+    motion.start()
   }
 
   lastPointerTs.value = performance.now()
   lastPointerX.value = e.clientX
   pointerVelocity.value = 0
   pointerAcceleration.value = 0
-  hadPointerMove.value = false
   window.addEventListener('pointermove', onGlobalPointerMove)
 }
 
-function stopDragging() {
+function stopDragging(): void {
   if (!dragging.value)
     return
   dragging.value = false
@@ -451,21 +353,45 @@ function stopDragging() {
   lastPointerX.value = null
   pointerVelocity.value = 0
   pointerAcceleration.value = 0
-  hadPointerMove.value = false
 
   if (props.tooltipTilt) {
-    setElasticTargets(1, 0)
-    ensureTooltipRaf()
+    // Release the lean; the spring carries the tooltip back over the thumb.
+    motion.settle(1, 0)
+    motion.start()
   }
 }
 
-function onGlobalPointerUp() {
+function onFocus(e: FocusEvent): void {
+  // `pointerdown` lands before `focus`, so a drag-initiated focus is already known
+  // here — it gets the drag treatment, not a keyboard ring.
+  if (dragging.value) {
+    focusVisible.value = false
+    return
+  }
+  const el = e.target as HTMLInputElement
+  try {
+    focusVisible.value = el.matches(':focus-visible')
+  }
+  catch {
+    // Environments without :focus-visible support (jsdom) simply get no ring.
+    focusVisible.value = false
+  }
+}
+
+function onBlur(): void {
+  focusVisible.value = false
+  // Safety net: if the window loses focus mid-drag the global pointerup never lands.
+  stopDragging()
+}
+
+function onGlobalPointerUp(): void {
   stopDragging()
 }
 
 watch(
   () => props.modelValue,
   () => {
+    liveValue.value = clampedValue.value
     if (inputRef.value) {
       inputRef.value.value = String(clampedValue.value)
     }
@@ -475,14 +401,11 @@ watch(
 
 watch(
   () => shouldShowTooltip.value,
-  async (v) => {
-    if (!v) {
+  async (visible) => {
+    if (!visible) {
       tooltipWidth.value = 0
-      if (tooltipRafId != null) {
-        cancelAnimationFrame(tooltipRafId)
-        tooltipRafId = null
-      }
-      resetTooltipMotion()
+      motion.stop()
+      motion.reset()
       if (tooltipResizeObserver && tooltipRef.value) {
         tooltipResizeObserver.unobserve(tooltipRef.value)
       }
@@ -491,8 +414,8 @@ watch(
     await nextTick()
     refreshTooltipWidth()
     if (props.tooltipTilt) {
-      resetTooltipMotion()
-      ensureTooltipRaf()
+      motion.reset()
+      motion.start()
     }
     if (tooltipResizeObserver && tooltipRef.value) {
       tooltipResizeObserver.observe(tooltipRef.value)
@@ -522,11 +445,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (tooltipRafId != null) {
-    cancelAnimationFrame(tooltipRafId)
-    tooltipRafId = null
-  }
-  tooltipLastRafTs = null
+  motion.stop()
   window.removeEventListener('pointerup', onGlobalPointerUp)
   window.removeEventListener('pointermove', onGlobalPointerMove)
 
@@ -543,7 +462,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="tx-slider" :class="{ 'is-disabled': disabled }">
+  <div
+    class="tx-slider"
+    :class="{
+      'is-disabled': disabled,
+      'is-hovering': isHovering,
+      'is-dragging': dragging,
+      'is-focused': focusVisible,
+      'has-surface': thumbSurface,
+    }"
+  >
     <div
       ref="mainRef"
       class="tx-slider__main"
@@ -554,7 +482,19 @@ onBeforeUnmount(() => {
         <div class="tx-slider__range" :style="fillWidthStyle" />
       </div>
 
-      <Transition v-if="props.tooltipMotion !== 'none'" name="tx-slider-tooltip">
+      <!--
+        Positioned with `left` rather than a transform: `transform` carries the state scale
+        and is transitioned, and folding the per-frame X into it would make the disc lag the
+        thumb by the transition duration.
+      -->
+      <div
+        v-if="thumbSurface"
+        class="tx-slider__surface"
+        aria-hidden="true"
+        :style="{ left: `${thumbCenterPx}px` }"
+      />
+
+      <Transition :name="transitionName">
         <div
           v-if="shouldShowTooltip"
           ref="tooltipRef"
@@ -565,16 +505,6 @@ onBeforeUnmount(() => {
           {{ tooltipText }}
         </div>
       </Transition>
-
-      <div
-        v-else-if="shouldShowTooltip"
-        ref="tooltipRef"
-        class="tx-slider__tooltip"
-        :data-motion="props.tooltipMotion"
-        :style="[tooltipStyle, tooltipTransitionStyle]"
-      >
-        {{ tooltipText }}
-      </div>
 
       <input
         ref="inputRef"
@@ -590,7 +520,8 @@ onBeforeUnmount(() => {
         :aria-valuetext="valueText"
         @pointerdown="startDragging"
         @pointercancel="stopDragging"
-        @blur="stopDragging"
+        @focus="onFocus"
+        @blur="onBlur"
         @input="onInput"
         @change="onChange"
       >
@@ -604,24 +535,91 @@ onBeforeUnmount(() => {
 
 <style lang="scss">
 .tx-slider {
+  /**
+   * Geometry — static on purpose. `TxSlider` measures `--tx-slider-thumb-size` to
+   * place the fill, so it must not change between states; the thumb grows through
+   * `--tx-slider-thumb-scale` instead.
+   */
   --tx-slider-height: 24px;
-  --tx-slider-track-height: 4px;
-  --tx-slider-thumb-size: 20px;
-  --tx-slider-thumb-shadow: 0 2px 10px color-mix(in srgb, #000 35%, transparent);
+  --tx-slider-thumb-size: 18px;
+
+  /** State surface — the four rows below are the whole visual language. */
+  --tx-slider-track-height: 6px;
+  --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 14%, transparent);
+  --tx-slider-thumb-scale: 1;
+  --tx-slider-thumb-ring: 0 0 0 0 transparent;
+  --tx-slider-thumb-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
+  /**
+   * Tracks the page surface, so in dark themes the thumb is dark-on-dark and reads
+   * as a hole rather than a knob — unlike `TxSwitch`, whose thumb inverts with the
+   * theme. Left as-is to avoid a silent restyle; override this to opt into a light
+   * thumb throughout.
+   */
+  --tx-slider-thumb-color: var(--tx-bg-color, #fff);
+
+  /** Refractive disc behind the thumb. */
+  --tx-slider-surface-size: 40px;
+  --tx-slider-surface-scale: 0.5;
+  --tx-slider-surface-opacity: 0;
+  --tx-slider-surface-blur: 0px;
+  --tx-slider-surface-saturate: 100%;
+  --tx-slider-surface-tint: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
+
+  /* Overshoots on purpose — the settle is what makes the state change read as physical. */
+  --tx-slider-ease: cubic-bezier(0.34, 1.5, 0.5, 1);
+  --tx-slider-state-duration: 260ms;
+  --tx-slider-press-duration: 460ms;
 
   display: inline-flex;
   align-items: center;
   gap: 10px;
   width: 100%;
 
-  &:hover {
-    --tx-slider-track-height: 6px;
-    --tx-slider-thumb-size: 22px;
+  &.is-hovering,
+  &.is-focused {
+    --tx-slider-track-height: 8px;
+    --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 20%, transparent);
+    --tx-slider-thumb-scale: 1.08;
+    --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
+    --tx-slider-surface-scale: 0.9;
+    --tx-slider-surface-opacity: 1;
+    --tx-slider-surface-blur: 6px;
+    --tx-slider-surface-saturate: 165%;
   }
 
-  &:active {
-    --tx-slider-track-height: 6px;
-    --tx-slider-thumb-size: 24px;
+  /**
+   * Dragging is deliberately loud: thicker track, darker rail, larger thumb and a swollen
+   * refractive disc, all at once. Driven by the `dragging` ref rather than `:active`,
+   * because the pointer routinely leaves the element mid-drag.
+   */
+  &.is-dragging {
+    --tx-slider-track-height: 10px;
+    --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 26%, transparent);
+    --tx-slider-thumb-scale: 1.16;
+    --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
+    --tx-slider-surface-scale: 1.18;
+    --tx-slider-surface-opacity: 1;
+    --tx-slider-surface-blur: 10px;
+    --tx-slider-surface-saturate: 190%;
+    --tx-slider-surface-tint: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+  }
+
+  /**
+   * With the disc on, an accent ring around the thumb would just be a second halo inside
+   * the first. Only sliders opting out of the surface fall back to rings to separate
+   * their states.
+   */
+  &:not(.has-surface).is-hovering {
+    --tx-slider-thumb-ring: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
+  }
+
+  &:not(.has-surface).is-dragging {
+    --tx-slider-thumb-ring: 0 0 0 6px color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent);
+  }
+
+  /* Keyboard focus keeps a crisp ring regardless — a soft disc is not an a11y affordance. */
+  &.is-focused:not(.is-dragging) {
+    --tx-slider-thumb-ring: 0 0 0 3px var(--tx-focus-ring-color, color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
   }
 
   &__main {
@@ -640,25 +638,47 @@ onBeforeUnmount(() => {
     top: 50%;
     transform: translateY(-50%);
     height: var(--tx-slider-track-height);
-    pointer-events: none;
-  }
-
-  &__track::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: var(--tx-slider-track-height);
     border-radius: 999px;
-    background: var(--tx-fill-color, #f0f2f5);
+    background: var(--tx-slider-track-color);
+    pointer-events: none;
+    transition:
+      height var(--tx-slider-state-duration) var(--tx-slider-ease),
+      background-color var(--tx-slider-state-duration) var(--tx-slider-ease);
   }
 
   &__range {
     position: absolute;
     left: 0;
-    height: var(--tx-slider-track-height);
-    border-radius: 999px;
+    top: 0;
+    height: 100%;
+    border-radius: inherit;
     background: var(--tx-color-primary, #409eff);
+    /* Width is driven per-frame from the pointer — never transition it. */
+    transition: background-color var(--tx-slider-state-duration) var(--tx-slider-ease);
+  }
+
+  &__surface {
+    position: absolute;
+    top: 50%;
+    width: var(--tx-slider-surface-size);
+    height: var(--tx-slider-surface-size);
+    border-radius: 999px;
+    background: var(--tx-slider-surface-tint);
+    backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
+    -webkit-backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
+    /*
+     * Rim, not decoration: on a flat card there is nothing behind the disc for the blur to
+     * refract, so without an edge the surface would read as a formless smudge.
+     */
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+    opacity: var(--tx-slider-surface-opacity);
+    transform: translate(-50%, -50%) scale(var(--tx-slider-surface-scale));
+    pointer-events: none;
+    /* `left` is deliberately absent — it must track the thumb frame-for-frame. */
+    transition:
+      opacity var(--tx-slider-state-duration) var(--tx-slider-ease),
+      transform var(--tx-slider-state-duration) var(--tx-slider-ease),
+      backdrop-filter var(--tx-slider-state-duration) var(--tx-slider-ease);
   }
 
   &__tooltip {
@@ -694,6 +714,12 @@ onBeforeUnmount(() => {
     opacity: 0;
   }
 
+  /* `tooltipMotion: 'none'` — present so the intent is legible, not inherited. */
+  .tx-slider-tooltip-none-enter-active,
+  .tx-slider-tooltip-none-leave-active {
+    transition: none;
+  }
+
   .tx-slider__tooltip[data-motion='blur'].tx-slider-tooltip-enter-from,
   .tx-slider__tooltip[data-motion='blur'].tx-slider-tooltip-leave-to {
     filter: blur(var(--tx-slider-tooltip-motion-blur, 10px));
@@ -727,16 +753,29 @@ onBeforeUnmount(() => {
       width: var(--tx-slider-thumb-size);
       height: var(--tx-slider-thumb-size);
       border-radius: 999px;
-      background: color-mix(in srgb, var(--tx-bg-color, #fff) 96%, transparent);
-      border: 1px solid color-mix(in srgb, #000 10%, transparent);
-      box-shadow: var(--tx-slider-thumb-shadow);
+      background: var(--tx-slider-thumb-color);
+      border: 1px solid color-mix(in srgb, #000 12%, transparent);
+      box-shadow: var(--tx-slider-thumb-ring), var(--tx-slider-thumb-shadow);
       margin-top: calc((var(--tx-slider-height) - var(--tx-slider-thumb-size)) / 2);
-      transition: width 0.16s ease, height 0.16s ease;
+      transform: scale(var(--tx-slider-thumb-scale));
+      transition:
+        transform var(--tx-slider-state-duration) var(--tx-slider-ease),
+        box-shadow var(--tx-slider-state-duration) var(--tx-slider-ease);
     }
+  }
 
-    &:active::-webkit-slider-thumb {
-      box-shadow: 0 10px 26px color-mix(in srgb, #000 45%, transparent);
-    }
+  /**
+   * Press bounce. Keyed off `is-dragging` rather than a JS timer: the class is added on
+   * every pointerdown and removed on release, so the keyframes restart per press for free.
+   * `animation-fill-mode` stays `none`, and the last keyframe equals the base transform, so
+   * it hands back to the transition without a jump when it finishes mid-drag.
+   */
+  &.is-dragging .tx-slider__input::-webkit-slider-thumb {
+    animation: tx-slider-thumb-press var(--tx-slider-press-duration) cubic-bezier(0.22, 1.2, 0.36, 1);
+  }
+
+  &.is-dragging .tx-slider__surface {
+    animation: tx-slider-surface-press var(--tx-slider-press-duration) cubic-bezier(0.22, 1.2, 0.36, 1);
   }
 
   &__value {
@@ -744,6 +783,7 @@ onBeforeUnmount(() => {
     color: var(--tx-text-color-secondary, #909399);
     min-width: 36px;
     text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   &.is-disabled {
@@ -756,6 +796,62 @@ onBeforeUnmount(() => {
     .tx-slider__range {
       background: var(--tx-text-color-placeholder, #a8abb2);
     }
+  }
+}
+
+@keyframes tx-slider-thumb-press {
+  0% {
+    transform: scale(1);
+  }
+
+  16% {
+    transform: scale(0.9);
+  }
+
+  46% {
+    transform: scale(1.32);
+  }
+
+  72% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(var(--tx-slider-thumb-scale));
+  }
+}
+
+@keyframes tx-slider-surface-press {
+  0% {
+    transform: translate(-50%, -50%) scale(0.72);
+    opacity: 0.4;
+  }
+
+  46% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 1;
+  }
+
+  72% {
+    transform: translate(-50%, -50%) scale(1.18);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(var(--tx-slider-surface-scale));
+    opacity: var(--tx-slider-surface-opacity);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-slider {
+    --tx-slider-state-duration: 0ms;
+    --tx-slider-press-duration: 0ms;
+  }
+
+  .tx-slider.is-dragging .tx-slider__input::-webkit-slider-thumb,
+  .tx-slider.is-dragging .tx-slider__surface {
+    animation: none;
   }
 }
 </style>

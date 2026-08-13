@@ -28,6 +28,67 @@ const createManager = () => {
   return new ModuleManager(app, channel, { modulesRoot })
 }
 
+describe('loadModule distinguishes not-loading from failing', () => {
+  /**
+   * loadModule returned false for three different things: already loaded, skipped by an env
+   * flag, and an actual lifecycle failure. loadStartupModules throws on any false for a required
+   * module and index.ts turns that into app.quit(), so the first module to declare an env flag
+   * would have quit the app on every machine where that variable was unset (#788).
+   */
+  class TrivialModule extends BaseModule {
+    static key: ModuleKey = Symbol.for('LoadOutcomeTrivial')
+    name: ModuleKey = TrivialModule.key
+    constructor() {
+      super(TrivialModule.key, { create: false })
+    }
+    onInit(): void {}
+    onDestroy(): void {}
+  }
+
+  class EnvGatedModule extends BaseModule {
+    static key: ModuleKey = Symbol.for('LoadOutcomeEnvGated')
+    name: ModuleKey = EnvGatedModule.key
+    constructor() {
+      super(EnvGatedModule.key, { create: false }, ['TUFF_DEFINITELY_UNSET_FLAG'])
+    }
+    onInit(): void {}
+    onDestroy(): void {}
+  }
+
+  class FailingModule extends BaseModule {
+    static key: ModuleKey = Symbol.for('LoadOutcomeFailing')
+    name: ModuleKey = FailingModule.key
+    constructor() {
+      super(FailingModule.key, { create: false })
+    }
+    onInit(): void {
+      throw new Error('init exploded')
+    }
+    onDestroy(): void {}
+  }
+
+  it('已经加载过时返回 true(与它自己的文档契约一致)', async () => {
+    const manager = createManager()
+
+    await expect(manager.loadModule(new TrivialModule())).resolves.toBe(true)
+    // Second call: the module is already in the map.
+    await expect(manager.loadModule(new TrivialModule())).resolves.toBe(true)
+  })
+
+  it('被 env flag 跳过时返回 true,而不是让启动器判定为致命', async () => {
+    const manager = createManager()
+    delete process.env.TUFF_DEFINITELY_UNSET_FLAG
+
+    await expect(manager.loadModule(new EnvGatedModule())).resolves.toBe(true)
+  })
+
+  it('生命周期真的失败时仍然返回 false', async () => {
+    const manager = createManager()
+
+    await expect(manager.loadModule(new FailingModule())).resolves.toBe(false)
+  })
+})
+
 describe('ModuleManager lifecycle isolation', () => {
   it('rolls back on created failure', async () => {
     const manager = createManager()

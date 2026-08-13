@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -71,6 +73,61 @@ const tuffIntelligenceAliases = [
   { find: /^@talex-touch\/tuff-intelligence$/, replacement: tuffIntelligenceRendererEntry }
 ]
 const utilsAliases = [{ find: /^@talex-touch\/utils\/renderer$/, replacement: utilsRendererEntry }]
+
+/**
+ * The arrow runtime is injected into the widget sandbox as *source text*, not
+ * imported as a module: the sandbox is a separate document with an opaque
+ * origin and cannot reach anything in this bundle.
+ *
+ * Resolved through Node rather than written as a path so a version bump does
+ * not silently point the alias at a file that no longer exists. No trailing `$`
+ * on the pattern — the `?raw` suffix has to survive the rewrite.
+ */
+const arrowPackagePath = createRequire(import.meta.url).resolve('@arrow-js/core/package.json')
+const arrowPackage = JSON.parse(readFileSync(arrowPackagePath, 'utf8')) as {
+  exports?: { '.'?: { import?: string } }
+  module?: string
+  main?: string
+}
+// Resolved off the package's own `import` entry, not with `require.resolve`:
+// @arrow-js/core is ESM-only, so its exports map has no `require` condition and
+// `require.resolve('@arrow-js/core')` fails outright with ERR_PACKAGE_PATH_NOT_EXPORTED.
+// `./package.json` is the one subpath the map does expose.
+const arrowEntry = arrowPackage.exports?.['.']?.import ?? arrowPackage.module ?? arrowPackage.main
+if (!arrowEntry) {
+  throw new Error('@arrow-js/core has no resolvable ESM entry for the widget sandbox runtime')
+}
+const arrowRuntimeEntry = path.join(path.dirname(arrowPackagePath), arrowEntry)
+
+const WIDGET_SANDBOX_RUNTIME_ID = 'virtual:widget-sandbox-runtime'
+
+/**
+ * Serves the arrow runtime's source text as a virtual module.
+ *
+ * An alias into node_modules was the obvious first try and is wrong: the dev
+ * server's dependency optimizer sees a node_modules path, tries to pre-bundle
+ * it, and the request dies with `504 (Outdated Optimize Dep)` — which takes the
+ * whole route down, because the importing chunk never loads. Production builds
+ * have no optimizer and hid this completely.
+ *
+ * A virtual id never reaches resolution against node_modules at all, so there
+ * is nothing for the optimizer to claim.
+ */
+function widgetSandboxRuntimePlugin(): Plugin {
+  return {
+    name: 'tuff:widget-sandbox-runtime',
+    resolveId(source) {
+      if (source !== WIDGET_SANDBOX_RUNTIME_ID) return null
+      // The `\0` marker is the convention that tells every other plugin, and
+      // the dev server's file watcher, that this id is not a real file.
+      return `\0${WIDGET_SANDBOX_RUNTIME_ID}`
+    },
+    load(id) {
+      if (id !== `\0${WIDGET_SANDBOX_RUNTIME_ID}`) return null
+      return `export default ${JSON.stringify(readFileSync(arrowRuntimeEntry, 'utf8'))}`
+    }
+  }
+}
 const tuffexDevPlugins: Plugin[] = isProduction
   ? []
   : [
@@ -179,7 +236,6 @@ export default defineConfig({
         exclude: [
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
-          'mathjs', // 打包进 bundle 以启用 tree-shaking (mathjs/number 剔除 matrix/calculus)
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
           '@earendil-works/pi-ai' // Pi provider bridge 与 agent-core 一并内联
         ]
@@ -325,6 +381,7 @@ export default defineConfig({
     },
     plugins: [
       ...tuffexDevPlugins,
+      widgetSandboxRuntimePlugin(),
       tuffexOnDemandStylePlugin({ enabled: isProduction }),
       generatorInformation(),
       vue(),

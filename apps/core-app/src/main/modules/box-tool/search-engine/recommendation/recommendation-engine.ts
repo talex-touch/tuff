@@ -8,21 +8,36 @@ import { createHash } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { and, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
+import { scheduleAuxWrite, scheduleDbWrite } from '../../../../db/db-write'
+import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import * as schema from '../../../../db/schema'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { getSentryService } from '../../../sentry'
-import { ContextProvider } from './context-provider'
+import { ContextProvider, hashContextContent } from './context-provider'
+import { toParsedItemTimeStats } from '../time-stats-aggregator'
 import { ItemRebuilder } from './item-rebuilder'
+import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
+import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
 import {
   DAY_MS,
   calculateTimeRelevanceScore,
   toDayBucket,
-  toErrorMeta
+  toErrorMeta,
+  toPrimitive,
+  type LogMeta
 } from './recommendation-utils'
+import {
+  UsageSourceIdentityMigration,
+  USAGE_SOURCE_IDENTITY_CONFIG_KEY,
+  type ItemTimeStatsKey,
+  type ItemTimeStatsMigrationPlan,
+  type ItemTimeStatsRow,
+  type UsageTrendKey,
+  type UsageTrendMigrationPlan,
+  type UsageTrendRow
+} from '../usage-source-identity-migration'
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
@@ -44,6 +59,38 @@ const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
+const USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS = 20_000
+const CONTEXT_MATCH_WEIGHT = 1e6
+const PLUGIN_PRIORITY_WEIGHT = 1e5
+/**
+ * A captured selection is the same privacy tier as the clipboard but a weaker
+ * intent signal — it is often minutes old and was captured for another action.
+ */
+const SELECTION_CONTEXT_WEIGHT = 0.6
+/** Cold-start items rank below anything with real usage but above nothing at all. */
+const COLD_START_BASE_SCORE = 1e3
+/**
+ * Novelty channel for freshly installed apps. Frecency scores a brand-new item
+ * at exactly zero, so without an explicit exploration channel an app the user
+ * just installed can never outrank their habits. 1e7 clears the frequency term
+ * (`executeCount * 1e4`) until ~1000 executes, and stays under the volatile
+ * context match (~1e8) on purpose: an explicit clipboard intent outranks news.
+ */
+const NOVELTY_WEIGHT = 1e7
+/** Full-strength window after install. */
+const NOVELTY_FULL_WINDOW_MS = 48 * 60 * 60 * 1000
+/** Novelty is gone past this age, and freshness gating uses the same horizon. */
+const NOVELTY_MAX_AGE_MS = 7 * DAY_MS
+/** Candidate slots reserved for the freshness dimension. */
+const NEWLY_INSTALLED_CANDIDATE_LIMIT = 10
+/**
+ * `file_extensions` key holding the app's filesystem creation time, written
+ * once by the app provider and never refreshed (a self-update rebuilds the
+ * bundle and would otherwise read as a fresh install).
+ */
+const INSTALLED_AT_EXTENSION_KEY = 'installedAt'
+/** Exposure slice tag for measuring the novelty channel separately. */
+const NEWLY_INSTALLED_EXPOSURE_TAG = 'newly-installed'
 const SEMANTIC_LOCAL_WEIGHT = 6e5
 const SEMANTIC_USAGE_PREFERENCE_WEIGHT = 3.5e5
 const SEMANTIC_USAGE_AVOIDANCE_WEIGHT = 5e5
@@ -60,6 +107,223 @@ const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS: RecommendationSemanticSettings =
 }
 const recommendationLog = createLogger('RecommendationEngine')
 
+/**
+ * Category tables for context matching. `names` exist because candidate ids are
+ * often absolute paths rather than bundle ids (see app-identity-match).
+ */
+const APP_MATCH_RULES = {
+  browser: {
+    bundleIds: [
+      'com.google.Chrome',
+      'com.apple.Safari',
+      'org.mozilla.firefox',
+      'com.microsoft.edgemac',
+      'com.brave.Browser',
+      'com.operasoftware.Opera'
+    ],
+    names: ['chrome', 'safari', 'firefox', 'microsoft edge', 'brave browser', 'opera', 'arc']
+  },
+  entertainment: {
+    bundleIds: [
+      'spotify',
+      'music',
+      'netease',
+      'qqmusic',
+      'youtube',
+      'netflix',
+      'discord',
+      'telegram',
+      'wechat',
+      'slack',
+      'twitter',
+      'x.com'
+    ],
+    names: [
+      'spotify',
+      'music',
+      '网易云音乐',
+      'qq音乐',
+      'youtube',
+      'netflix',
+      'discord',
+      'telegram',
+      'wechat',
+      '微信',
+      'slack'
+    ]
+  },
+  editor: {
+    bundleIds: [
+      'com.microsoft.VSCode',
+      'com.sublimetext',
+      'com.jetbrains',
+      'com.barebones.bbedit',
+      'com.vim',
+      'com.neovim',
+      'com.textmate'
+    ],
+    names: ['visual studio code', 'vscodium', 'cursor', 'sublime text', 'bbedit', 'textmate', 'zed']
+  },
+  image: {
+    bundleIds: [
+      'com.adobe.Photoshop',
+      'com.adobe.illustrator',
+      'com.adobe.AfterEffects',
+      'com.bohemiancoding.sketch',
+      'com.figma.Desktop',
+      'com.pixelmatorteam.pixelmator',
+      'com.apple.Preview',
+      'com.gimp',
+      'com.serif.affinity.photo',
+      'com.serif.affinity.designer',
+      'com.krita',
+      'com.procreate',
+      'com.canva'
+    ],
+    names: [
+      'photoshop',
+      'illustrator',
+      'after effects',
+      'sketch',
+      'figma',
+      'pixelmator',
+      'preview',
+      '预览',
+      'gimp',
+      'affinity',
+      'krita',
+      'canva'
+    ]
+  },
+  vscode: {
+    bundleIds: ['com.microsoft.VSCode', 'VSCodium'],
+    names: ['visual studio code', 'vscodium', 'code']
+  },
+  textEditor: {
+    bundleIds: [
+      'com.apple.TextEdit',
+      'com.sublimetext',
+      'com.barebones.bbedit',
+      'com.coteditor.CotEditor',
+      'com.typora'
+    ],
+    names: ['textedit', '文本编辑', 'sublime text', 'bbedit', 'coteditor', 'typora']
+  },
+  fileManager: {
+    bundleIds: ['com.apple.finder', 'com.coderforart.MWeb', 'com.agilebits'],
+    names: ['finder', '访达', 'mweb', 'forklift', 'path finder']
+  },
+  ide: {
+    bundleIds: [
+      'com.microsoft.VSCode',
+      'com.jetbrains',
+      'com.apple.dt.Xcode',
+      'com.android.studio'
+    ],
+    names: [
+      'visual studio code',
+      'vscodium',
+      'cursor',
+      'xcode',
+      'android studio',
+      'intellij',
+      'pycharm',
+      'webstorm',
+      'goland',
+      'rider',
+      'clion',
+      'rustrover',
+      'datagrip',
+      'phpstorm'
+    ]
+  },
+  terminal: {
+    bundleIds: [
+      'com.apple.Terminal',
+      'com.googlecode.iterm2',
+      'com.github.wez.wezterm',
+      'io.alacritty',
+      'net.kovidgoyal.kitty'
+    ],
+    names: ['terminal', '终端', 'iterm', 'wezterm', 'alacritty', 'kitty', 'warp', 'ghostty']
+  },
+  apiClient: {
+    bundleIds: ['postman', 'insomnia'],
+    names: ['postman', 'insomnia', 'apifox']
+  },
+  downloadTool: {
+    bundleIds: ['download', 'aria'],
+    names: ['downie', 'motrix', 'aria2', 'folx', 'free download manager', 'thunder', '迅雷']
+  }
+} as const satisfies Record<string, AppMatchRule>
+
+/**
+ * App candidates reach scoring with either source type: `item_usage_stats`
+ * stores `item.source.type` (`'application'` for the app provider), while
+ * plugin/builtin candidates and tests use the short `'app'`. Gating on one
+ * spelling silently disabled context matching for every real app row.
+ */
+function isAppSourceType(sourceType: string): boolean {
+  return sourceType === 'app' || sourceType === 'application'
+}
+
+/**
+ * Newest-first ordering for the cold-start catalog. The app provider's
+ * `installedAt` stamp is the real install moment; `ctime` (first indexed) and
+ * `mtime` only approximate it — on a first full scan every row shares one
+ * ctime batch, which made the cold-start order close to random.
+ */
+function resolveInstallTime(
+  app: { ctime?: Date | null; mtime?: Date | null },
+  installedAt?: number
+): number {
+  return installedAt ?? app.ctime?.getTime() ?? app.mtime?.getTime() ?? 0
+}
+
+/** Parse an `installedAt` extension value; anything unusable reads as absent. */
+function parseInstalledAt(value: string | null | undefined): number | null {
+  if (!value) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+/**
+ * Full strength for the first 48h, then a linear fade to zero at 7 days.
+ * Negative ages (clock skew) count as brand new rather than wrapping around.
+ */
+export function calculateNoveltyFactor(ageMs: number): number {
+  if (ageMs <= NOVELTY_FULL_WINDOW_MS) return 1
+  if (ageMs >= NOVELTY_MAX_AGE_MS) return 0
+  return 1 - (ageMs - NOVELTY_FULL_WINDOW_MS) / (NOVELTY_MAX_AGE_MS - NOVELTY_FULL_WINDOW_MS)
+}
+
+/**
+ * Exposure identity, mirroring what the renderer reports
+ * (`_originalSourceId:_originalItemId`, falling back to the rendered ids) so a
+ * tagged key matches the key the exposure service receives.
+ */
+function toExposureKey(item: TuffItem): string {
+  const meta = item.meta as Record<string, unknown> | undefined
+  const sourceId =
+    typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source?.id
+  const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
+  return `${sourceId}:${itemId}`
+}
+
+const JETBRAINS_MATCH_RULES: Record<string, AppMatchRule> = {
+  idea: { bundleIds: ['com.jetbrains.intellij'], names: ['intellij idea'] },
+  pycharm: { bundleIds: ['com.jetbrains.pycharm'], names: ['pycharm'] },
+  webstorm: { bundleIds: ['com.jetbrains.webstorm'], names: ['webstorm'] },
+  'android-studio': { bundleIds: ['com.google.android.studio'], names: ['android studio'] },
+  goland: { bundleIds: ['com.jetbrains.goland'], names: ['goland'] },
+  rider: { bundleIds: ['com.jetbrains.rider'], names: ['rider'] }
+}
+
+function toLogMeta(meta?: Record<string, unknown>): LogMeta | undefined {
+  if (!meta) return undefined
+  return Object.fromEntries(Object.entries(meta).map(([key, value]) => [key, toPrimitive(value)]))
+}
+
 export class RecommendationEngine {
   private contextProvider: ContextProvider
   private itemRebuilder: ItemRebuilder
@@ -71,6 +335,11 @@ export class RecommendationEngine {
     cacheKey: string
   } | null = null
 
+  /** Bumped by `invalidateCache`; in-flight `recommend()` calls compare against it. */
+  private cacheGeneration = 0
+  /** Persisted rows older than this were invalidated and must not be read back. */
+  private cacheInvalidatedAt = 0
+
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
   private readonly REFRESH_JITTER_MS = 15 * 1000
@@ -81,6 +350,16 @@ export class RecommendationEngine {
   private readonly telemetryTaskId = 'recommendation.telemetry-report'
   private trendBackfillQueue: number[] | null = null
   private trendBackfillCompleted = false
+  private usageIdentityMigrationTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * The jittered handle for the next background refresh.
+   *
+   * Tracked because the polling callback only *schedules* the refresh: stopBackgroundRefresh
+   * unregistered the polling task but left this pending, so a full recommendation pass could still
+   * run after shutdown, against a database the owner had already torn down (#652).
+   */
+  private refreshJitterTimer: NodeJS.Timeout | null = null
+  private usageIdentityMigrationScheduled = false
 
   /** Plugin-registered recommendation providers */
   private pluginProviders: Map<string, { pluginName: string; provider: RecommendProvider }> =
@@ -96,12 +375,267 @@ export class RecommendationEngine {
   private static readonly SEMANTIC_AI_FAILURE_THRESHOLD = 3
   private static readonly SEMANTIC_AI_COOLDOWN_MS = 5 * 60 * 1000
 
-  constructor(private dbUtils: DbUtils) {
+  /**
+   * `appCatalogDbUtils` is a primary-bound handle for rebuilding APP items:
+   * the app catalog stays on the primary db under the search split, while the
+   * split-aware `dbUtils` reads FILE rows from the worker-owned search file.
+   * Defaults to `dbUtils` (split off → identical).
+   */
+  constructor(
+    private dbUtils: DbUtils,
+    private appCatalogDbUtils: DbUtils = dbUtils
+  ) {
     this.contextProvider = new ContextProvider()
-    this.itemRebuilder = new ItemRebuilder(dbUtils)
+    this.itemRebuilder = new ItemRebuilder(dbUtils, appCatalogDbUtils)
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
+    this.scheduleUsageIdentityMigration()
+  }
+
+  /**
+   * Boot-time maintenance writer (database-write-contracts §7): the one-time
+   * source-identity repair waits out the startup degrade window so its writes
+   * never join the startup write storm. The pass is idempotent and self-gated
+   * on a config version, so a re-schedule is harmless.
+   *
+   * It may interleave with the trend backfill, which reads the same logs: the
+   * pass re-keys `usage_logs` before it touches `usage_trend_daily`, so a tick
+   * landing after that reads migrated rows, and a tick that finished before the
+   * trend plan is loaded writes legacy-keyed rows the plan then folds in. One
+   * tick can still straddle both (grouped its rows from pre-migration logs, and
+   * upserted after the plan was read): that day's row stays legacy-keyed and is
+   * simply never read again — `hasTrendDataForDay` stops it being rebuilt, and
+   * the version key is already recorded.
+   */
+  private scheduleUsageIdentityMigration(): void {
+    if (this.usageIdentityMigrationScheduled) return
+    this.usageIdentityMigrationScheduled = true
+
+    const delayMs = Math.max(
+      USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS,
+      getStartupDegradeWindowRemainingMs()
+    )
+    this.usageIdentityMigrationTimer = setTimeout(() => {
+      this.usageIdentityMigrationTimer = null
+      // Built inside the chain: `getDb()` is synchronous, and a throw here would
+      // otherwise escape the timer callback as an uncaught main-process error.
+      void Promise.resolve()
+        .then(() => this.createUsageIdentityMigration().run())
+        .then((result) => {
+          if (result.status === 'skipped') {
+            recommendationLog.debug('Usage source identity migration skipped', {
+              meta: { reason: result.reason }
+            })
+          }
+        })
+        .catch((error) => {
+          recommendationLog.warn('Usage source identity migration failed', {
+            meta: toErrorMeta(error)
+          })
+        })
+    }, delayMs)
+  }
+
+  private createUsageIdentityMigration(): UsageSourceIdentityMigration {
+    const db = this.dbUtils.getDb()
+
+    return new UsageSourceIdentityMigration({
+      getAppliedVersion: async () => {
+        const row = await db
+          .select({ value: schema.config.value })
+          .from(schema.config)
+          .where(eq(schema.config.key, USAGE_SOURCE_IDENTITY_CONFIG_KEY))
+          .get()
+        if (!row?.value) return null
+        const parsed = Number.parseInt(row.value, 10)
+        return Number.isNaN(parsed) ? null : parsed
+      },
+      setAppliedVersion: async (version) => {
+        await scheduleDbWrite(
+          'usage.source-identity.version',
+          async () => {
+            await db
+              .insert(schema.config)
+              .values({ key: USAGE_SOURCE_IDENTITY_CONFIG_KEY, value: String(version) })
+              .onConflictDoUpdate({
+                target: schema.config.key,
+                set: { value: String(version) }
+              })
+          },
+          { priority: 'background', dropPolicy: 'none' }
+        )
+      },
+      rewriteUsageLogSource: async (from, to) => {
+        await scheduleDbWrite(
+          'usage.source-identity.logs',
+          async () => {
+            await db
+              .update(schema.usageLogs)
+              .set({ source: to })
+              .where(eq(schema.usageLogs.source, from))
+          },
+          { priority: 'background', dropPolicy: 'none' }
+        )
+      },
+      loadLegacyTrendRows: async (legacySources) =>
+        await db
+          .select({
+            sourceId: schema.usageTrendDaily.sourceId,
+            itemId: schema.usageTrendDaily.itemId,
+            day: schema.usageTrendDaily.day,
+            executeCount: schema.usageTrendDaily.executeCount
+          })
+          .from(schema.usageTrendDaily)
+          .where(inArray(schema.usageTrendDaily.sourceId, legacySources)),
+      loadTrendRowsByKeys: (keys) => this.loadTrendRowsByKeys(keys),
+      applyTrendMigration: (plan) => this.applyTrendMigration(plan),
+      loadLegacyTimeStatsRows: async (legacySources) =>
+        await db
+          .select({
+            sourceId: schema.itemTimeStats.sourceId,
+            itemId: schema.itemTimeStats.itemId,
+            hourDistribution: schema.itemTimeStats.hourDistribution,
+            dayOfWeekDistribution: schema.itemTimeStats.dayOfWeekDistribution,
+            timeSlotDistribution: schema.itemTimeStats.timeSlotDistribution
+          })
+          .from(schema.itemTimeStats)
+          .where(inArray(schema.itemTimeStats.sourceId, legacySources)),
+      loadTimeStatsRowsByKeys: (keys) => this.loadTimeStatsRowsByKeys(keys),
+      applyTimeStatsMigration: (plan) => this.applyTimeStatsMigration(plan),
+      logInfo: (message, meta) => recommendationLog.info(message, { meta: toLogMeta(meta) }),
+      logWarn: (message, error, meta) =>
+        recommendationLog.warn(message, { meta: { ...toLogMeta(meta), ...toErrorMeta(error) } })
+    })
+  }
+
+  /**
+   * Target rows for the id-keyed twins of the legacy rows. The coarse
+   * source/item filter is narrowed to the exact triples in JS — SQLite has no
+   * tuple IN and the affected set is small.
+   */
+  private async loadTrendRowsByKeys(keys: UsageTrendKey[]): Promise<UsageTrendRow[]> {
+    if (keys.length === 0) return []
+    const db = this.dbUtils.getDb()
+    const wanted = new Set(keys.map((key) => `${key.sourceId} ${key.itemId} ${key.day}`))
+
+    const rows = await db
+      .select({
+        sourceId: schema.usageTrendDaily.sourceId,
+        itemId: schema.usageTrendDaily.itemId,
+        day: schema.usageTrendDaily.day,
+        executeCount: schema.usageTrendDaily.executeCount
+      })
+      .from(schema.usageTrendDaily)
+      .where(
+        and(
+          inArray(schema.usageTrendDaily.sourceId, [...new Set(keys.map((key) => key.sourceId))]),
+          inArray(schema.usageTrendDaily.itemId, [...new Set(keys.map((key) => key.itemId))])
+        )
+      )
+
+    return rows.filter((row) => wanted.has(`${row.sourceId} ${row.itemId} ${row.day}`))
+  }
+
+  private async loadTimeStatsRowsByKeys(keys: ItemTimeStatsKey[]): Promise<ItemTimeStatsRow[]> {
+    if (keys.length === 0) return []
+    const db = this.dbUtils.getDb()
+    const wanted = new Set(keys.map((key) => `${key.sourceId} ${key.itemId}`))
+
+    const rows = await db
+      .select({
+        sourceId: schema.itemTimeStats.sourceId,
+        itemId: schema.itemTimeStats.itemId,
+        hourDistribution: schema.itemTimeStats.hourDistribution,
+        dayOfWeekDistribution: schema.itemTimeStats.dayOfWeekDistribution,
+        timeSlotDistribution: schema.itemTimeStats.timeSlotDistribution
+      })
+      .from(schema.itemTimeStats)
+      .where(
+        and(
+          inArray(schema.itemTimeStats.sourceId, [...new Set(keys.map((key) => key.sourceId))]),
+          inArray(schema.itemTimeStats.itemId, [...new Set(keys.map((key) => key.itemId))])
+        )
+      )
+
+    return rows.filter((row) => wanted.has(`${row.sourceId} ${row.itemId}`))
+  }
+
+  private async applyTrendMigration(plan: UsageTrendMigrationPlan): Promise<void> {
+    if (plan.rewrites.length === 0 && plan.merges.length === 0) return
+    const db = this.dbUtils.getDb()
+
+    await scheduleDbWrite(
+      'usage.source-identity.trend',
+      () =>
+        db.transaction(async (tx) => {
+          // Rewrites first (plan contract): a merge may target the row an
+          // earlier rewrite creates, and no rewrite can collide with a legacy
+          // row because legacy keys are types and targets are ids.
+          for (const rewrite of plan.rewrites) {
+            await tx
+              .update(schema.usageTrendDaily)
+              .set({ sourceId: rewrite.toSourceId })
+              .where(this.trendRowFilter(rewrite.from))
+          }
+          for (const merge of plan.merges) {
+            await tx
+              .update(schema.usageTrendDaily)
+              .set({ executeCount: merge.executeCount })
+              .where(this.trendRowFilter(merge.into))
+            await tx.delete(schema.usageTrendDaily).where(this.trendRowFilter(merge.from))
+          }
+        }),
+      { priority: 'background', dropPolicy: 'none' }
+    )
+  }
+
+  private async applyTimeStatsMigration(plan: ItemTimeStatsMigrationPlan): Promise<void> {
+    if (plan.rewrites.length === 0 && plan.merges.length === 0) return
+    const db = this.dbUtils.getDb()
+    const now = new Date()
+
+    await scheduleDbWrite(
+      'usage.source-identity.time-stats',
+      () =>
+        db.transaction(async (tx) => {
+          // Rewrites first — same plan contract as the trend table.
+          for (const rewrite of plan.rewrites) {
+            await tx
+              .update(schema.itemTimeStats)
+              .set({ sourceId: rewrite.toSourceId })
+              .where(this.timeStatsRowFilter(rewrite.from))
+          }
+          for (const merge of plan.merges) {
+            await tx
+              .update(schema.itemTimeStats)
+              .set({
+                hourDistribution: merge.hourDistribution,
+                dayOfWeekDistribution: merge.dayOfWeekDistribution,
+                timeSlotDistribution: merge.timeSlotDistribution,
+                lastUpdated: now
+              })
+              .where(this.timeStatsRowFilter(merge.into))
+            await tx.delete(schema.itemTimeStats).where(this.timeStatsRowFilter(merge.from))
+          }
+        }),
+      { priority: 'background', dropPolicy: 'none' }
+    )
+  }
+
+  private trendRowFilter(key: UsageTrendKey) {
+    return and(
+      eq(schema.usageTrendDaily.sourceId, key.sourceId),
+      eq(schema.usageTrendDaily.itemId, key.itemId),
+      eq(schema.usageTrendDaily.day, key.day)
+    )
+  }
+
+  private timeStatsRowFilter(key: ItemTimeStatsKey) {
+    return and(
+      eq(schema.itemTimeStats.sourceId, key.sourceId),
+      eq(schema.itemTimeStats.itemId, key.itemId)
+    )
   }
 
   /** Start background refresh timer */
@@ -118,7 +652,8 @@ export class RecommendationEngine {
         }
         this.refreshInFlight = true
         const jitterMs = Math.floor(Math.random() * this.REFRESH_JITTER_MS)
-        setTimeout(() => {
+        this.refreshJitterTimer = setTimeout(() => {
+          this.refreshJitterTimer = null
           void this.runBackgroundRefresh()
         }, jitterMs)
       },
@@ -159,7 +694,6 @@ export class RecommendationEngine {
   }
 
   private recordRecommendationPerf(eventType: string, metadata: Record<string, unknown>): void {
-    const db = this.dbUtils.getAuxDb()
     const payload = {
       pluginName: RECOMMENDATION_PERF_PLUGIN,
       eventType,
@@ -167,21 +701,41 @@ export class RecommendationEngine {
       timestamp: Date.now()
     }
 
-    void dbWriteScheduler
-      .schedule(
-        'analytics.plugin',
-        () =>
-          withSqliteRetry(() => db.insert(schema.pluginAnalytics).values(payload), {
-            label: 'recommendation.perf'
-          }),
-        { priority: 'best_effort', dropPolicy: 'latest_wins', budgetKey: 'recommendation.perf' }
-      )
-      .catch((error) => {
-        recommendationLog.debug('Failed to record perf metrics', { meta: toErrorMeta(error) })
-      })
+    // plugin_analytics is aux-owned: resolve the handle at enqueue time instead
+    // of via dbUtils' construction-time aux capture (see db/db-write.ts).
+    void scheduleAuxWrite(
+      'analytics.plugin',
+      (db) => db.insert(schema.pluginAnalytics).values(payload),
+      { priority: 'best_effort', dropPolicy: 'latest_wins', budgetKey: 'recommendation.perf' }
+    ).catch((error) => {
+      recommendationLog.debug('Failed to record perf metrics', { meta: toErrorMeta(error) })
+    })
+  }
+
+  /**
+   * Local diagnostics counter for hit-rate@k. It lands in the same aux
+   * `plugin_analytics` table the other recommendation perf counters use — the
+   * numbers stay on the device (they are deliberately NOT part of the Sentry
+   * telemetry payload below).
+   */
+  private async recordExposureDiagnostics(): Promise<void> {
+    const buckets = await recommendationExposureService.getHitRate()
+    if (buckets.length === 0) return
+
+    this.recordRecommendationPerf('recommendation.exposure', {
+      windowDays: 7,
+      buckets: buckets.map((bucket) => ({
+        k: bucket.k,
+        impressions: bucket.impressions,
+        clicks: bucket.clicks,
+        hitRate: Number(bucket.hitRate.toFixed(4))
+      }))
+    })
   }
 
   private async reportRecommendationTelemetry(): Promise<void> {
+    await this.recordExposureDiagnostics()
+
     const sentryService = getSentryService()
     if (!sentryService.isTelemetryEnabled()) return
 
@@ -450,20 +1004,28 @@ export class RecommendationEngine {
     try {
       for (let i = 0; i < values.length; i += chunkSize) {
         const chunk = values.slice(i, i + chunkSize)
-        await db
-          .insert(schema.usageTrendDaily)
-          .values(chunk)
-          .onConflictDoUpdate({
-            target: [
-              schema.usageTrendDaily.sourceId,
-              schema.usageTrendDaily.itemId,
-              schema.usageTrendDaily.day
-            ],
-            set: {
-              executeCount: sql`excluded.execute_count`,
-              updatedAt: sql`excluded.updated_at`
-            }
-          })
+        // Every write to database.db goes through the single-writer scheduler
+        // (database-write-contracts §3); a direct insert here competed with it
+        // for the WAL writer lock.
+        await scheduleDbWrite(
+          'recommendation.trend-backfill',
+          () =>
+            db
+              .insert(schema.usageTrendDaily)
+              .values(chunk)
+              .onConflictDoUpdate({
+                target: [
+                  schema.usageTrendDaily.sourceId,
+                  schema.usageTrendDaily.itemId,
+                  schema.usageTrendDaily.day
+                ],
+                set: {
+                  executeCount: sql`excluded.execute_count`,
+                  updatedAt: sql`excluded.updated_at`
+                }
+              }),
+          { priority: 'background', dropPolicy: 'none' }
+        )
         // 分块写入间让出事件循环
         if (i + chunkSize < values.length) {
           await new Promise<void>((resolve) => setImmediate(resolve))
@@ -479,6 +1041,17 @@ export class RecommendationEngine {
     this.pollingService.unregister(this.refreshTaskId)
     this.pollingService.unregister(this.trendBackfillTaskId)
     this.pollingService.unregister(this.telemetryTaskId)
+    if (this.refreshJitterTimer) {
+      clearTimeout(this.refreshJitterTimer)
+      this.refreshJitterTimer = null
+    }
+    // Cleared so a stop during the jitter window does not leave the guard latched: the next
+    // startBackgroundRefresh would then schedule nothing at all.
+    this.refreshInFlight = false
+    if (this.usageIdentityMigrationTimer) {
+      clearTimeout(this.usageIdentityMigrationTimer)
+      this.usageIdentityMigrationTimer = null
+    }
   }
 
   /**
@@ -529,9 +1102,32 @@ export class RecommendationEngine {
     }
   }
 
-  /** Invalidate in-memory recommendation cache */
+  /**
+   * Drop every cached ranking, both layers.
+   *
+   * Clearing only the in-memory copy is not enough: `recommend()` falls through
+   * to `recommendation_cache`, whose rows live for 30 minutes, so the next call
+   * would read back the very list we just invalidated. The generation counter
+   * covers the other half of the race — a `recommend()` that started before
+   * this call must not write its now-stale result into either layer.
+   */
   public invalidateCache(): void {
     this.recommendationCache = null
+    this.cacheGeneration += 1
+    this.cacheInvalidatedAt = Date.now()
+
+    // Cleanup only — the read guard above is what makes invalidation immediate.
+    // This write is best-effort and droppable, and exists so invalidated rows
+    // do not outlive the process that invalidated them.
+    void scheduleAuxWrite(
+      'recommendation.cache.invalidate',
+      (db) => db.delete(schema.recommendationCache),
+      { priority: 'best_effort', dropPolicy: 'drop' }
+    ).catch((error) => {
+      recommendationLog.debug('Failed to clear persisted recommendation cache', {
+        meta: toErrorMeta(error)
+      })
+    })
   }
 
   /** Generate recommendation list */
@@ -542,6 +1138,9 @@ export class RecommendationEngine {
     }
 
     const startTime = performance.now()
+    // Snapshot taken before any read: an invalidation landing while this call
+    // computes means the result is already stale and must not be cached.
+    const cacheGeneration = this.cacheGeneration
     this.scheduleTrendBackfill()
 
     const contextStartedAt = performance.now()
@@ -571,43 +1170,44 @@ export class RecommendationEngine {
             itemCount: this.recommendationCache.items.length
           }
         })
+        const items = await this.applyVolatileContextRerank(
+          this.recommendationCache.items,
+          context,
+          options.limit || 10
+        )
         this.recordRecommendationPerf('recommendation.total', {
           cacheLayer: 'memory',
           durationMs: Math.round(performance.now() - startTime),
           contextMs: Math.round(contextDuration),
           pinnedMs: Math.round(pinnedDuration),
-          itemsCount: this.recommendationCache.items.length
+          itemsCount: items.length
         })
-        return {
-          items: this.recommendationCache.items,
-          context: this.recommendationCache.context,
-          duration: performance.now() - startTime,
-          fromCache: true,
-          containerLayout: this.buildContainerLayout(options, this.recommendationCache.items)
-        }
+        return this.finalizeResult(options, items, context, startTime, true)
       }
     }
 
-    const cached = await this.getCachedRecommendations(
-      context,
-      semanticSettings,
-      pinnedCacheSignature
-    )
-    if (cached && !options.forceRefresh) {
+    // Skipped outright on a forced refresh rather than read and discarded. The
+    // read is a cache-key build, a SELECT on recommendation_cache (which falls
+    // back to the primary db when the aux row is missing), a JSON.parse of up to
+    // 10 fully-rendered TuffItems and a dedupe pass — all of it thrown away. The
+    // 15-minute background refresh and every user-triggered refresh pay it (#675).
+    const cached = options.forceRefresh
+      ? null
+      : await this.getCachedRecommendations(context, semanticSettings, pinnedCacheSignature)
+    if (cached) {
+      const items = await this.applyVolatileContextRerank(
+        cached.items,
+        context,
+        options.limit || 10
+      )
       this.recordRecommendationPerf('recommendation.total', {
         cacheLayer: 'db',
         durationMs: Math.round(performance.now() - startTime),
         contextMs: Math.round(contextDuration),
         pinnedMs: Math.round(pinnedDuration),
-        itemsCount: cached.items.length
+        itemsCount: items.length
       })
-      return {
-        items: cached.items,
-        context,
-        duration: performance.now() - startTime,
-        fromCache: true,
-        containerLayout: this.buildContainerLayout(options, cached.items)
-      }
+      return this.finalizeResult(options, items, context, startTime, true)
     }
 
     let pinnedTuffItems = await this.itemRebuilder.rebuildItems(
@@ -629,23 +1229,24 @@ export class RecommendationEngine {
     const candidatesDuration = performance.now() - candidatesStartedAt
 
     if (candidates.length === 0) {
-      const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
+      const fallbackItems = await this.resolveFallbackItems(options.limit || 10)
       const pinnedKeys = new Set(pinnedTuffItems.map((item) => this.getItemIdentity(item)))
       const filteredFallback = this.dedupeItems(fallbackItems).filter(
         (item) => !pinnedKeys.has(this.getItemIdentity(item))
       )
-      const finalItems = this.combineRecommendedWithPinned(
+      const cachedItems = this.combineRecommendedWithPinned(
         filteredFallback,
         pinnedTuffItems,
         options.limit || 10
       )
 
-      this.recommendationCache = {
-        items: finalItems,
-        timestamp: Date.now(),
+      this.storeMemoryCache(cacheGeneration, cachedItems, context, contextCacheKey)
+
+      const finalItems = await this.applyVolatileContextRerank(
+        cachedItems,
         context,
-        cacheKey: contextCacheKey
-      }
+        options.limit || 10
+      )
 
       this.recordRecommendationPerf('recommendation.total', {
         cacheLayer: 'none',
@@ -662,13 +1263,7 @@ export class RecommendationEngine {
         trendingReady: candidatePerf.trendingReady
       })
 
-      return {
-        items: finalItems,
-        context,
-        duration: performance.now() - startTime,
-        fromCache: false,
-        containerLayout: this.buildContainerLayout(options, finalItems)
-      }
+      return this.finalizeResult(options, finalItems, context, startTime, false)
     }
 
     const scored = await this.scoreAndRank(candidates, context, semanticSettings)
@@ -677,19 +1272,20 @@ export class RecommendationEngine {
     const items = await this.itemRebuilder.rebuildItems(diversified)
 
     if (items.length === 0 && diversified.length > 0) {
-      const fallbackItems = await this.getFallbackRecommendations(limit)
+      const fallbackItems = await this.resolveFallbackItems(limit)
       const pinnedKeys = new Set(pinnedTuffItems.map((item) => this.getItemIdentity(item)))
       const filteredFallback = this.dedupeItems(fallbackItems).filter(
         (item) => !pinnedKeys.has(this.getItemIdentity(item))
       )
-      const finalItems = this.combineRecommendedWithPinned(filteredFallback, pinnedTuffItems, limit)
+      const cachedItems = this.combineRecommendedWithPinned(
+        filteredFallback,
+        pinnedTuffItems,
+        limit
+      )
 
-      this.recommendationCache = {
-        items: finalItems,
-        timestamp: Date.now(),
-        context,
-        cacheKey: contextCacheKey
-      }
+      this.storeMemoryCache(cacheGeneration, cachedItems, context, contextCacheKey)
+
+      const finalItems = await this.applyVolatileContextRerank(cachedItems, context, limit)
 
       this.recordRecommendationPerf('recommendation.total', {
         cacheLayer: 'none',
@@ -706,13 +1302,7 @@ export class RecommendationEngine {
         trendingReady: candidatePerf.trendingReady
       })
 
-      return {
-        items: finalItems,
-        context,
-        duration: performance.now() - startTime,
-        fromCache: false,
-        containerLayout: this.buildContainerLayout(options, finalItems)
-      }
+      return this.finalizeResult(options, finalItems, context, startTime, false)
     }
 
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
@@ -739,10 +1329,22 @@ export class RecommendationEngine {
 
     const combinedItems = this.combineRecommendedWithPinned(filteredItems, pinnedTuffItems, limit)
 
-    await this.cacheRecommendations(context, semanticSettings, pinnedCacheSignature, combinedItems)
+    // Both caches hold the STABLE ranking; the volatile stage runs on the way
+    // out here exactly as it does on a cache hit, so a warm and a cold request
+    // under the same context return the same order.
+    if (this.storeMemoryCache(cacheGeneration, combinedItems, context, contextCacheKey)) {
+      await this.cacheRecommendations(
+        context,
+        semanticSettings,
+        pinnedCacheSignature,
+        combinedItems
+      )
+    }
+
+    const finalItems = await this.applyVolatileContextRerank(combinedItems, context, limit)
     const duration = performance.now() - startTime
     recommendationLog.debug('Generated recommendations', {
-      meta: { durationMs: Math.round(duration), itemCount: combinedItems.length }
+      meta: { durationMs: Math.round(duration), itemCount: finalItems.length }
     })
 
     this.recordRecommendationPerf('recommendation.total', {
@@ -753,29 +1355,80 @@ export class RecommendationEngine {
       candidatesMs: Math.round(candidatesDuration),
       candidateCount: candidatePerf.totalCandidates,
       filteredCount: candidatePerf.filteredCount,
-      itemsCount: combinedItems.length,
+      itemsCount: finalItems.length,
       trendingMs: candidatePerf.trendingDurationMs,
       trendingRows: candidatePerf.trendingRows,
       trendingCandidates: candidatePerf.trendingCandidates,
       trendingReady: candidatePerf.trendingReady
     })
 
-    this.recommendationCache = {
-      items: combinedItems,
-      timestamp: Date.now(),
-      context,
-      cacheKey: contextCacheKey
-    }
+    return this.finalizeResult(options, finalItems, context, startTime, false)
+  }
 
-    const containerLayout = this.buildContainerLayout(options, combinedItems)
+  /**
+   * The single exit of `recommend()`: publishes the novelty exposure slice and
+   * wraps the result. Cached and freshly computed lists leave through here
+   * alike, so the slice is measured on every render, not only on cache misses.
+   */
+  private finalizeResult(
+    options: RecommendationOptions,
+    items: TuffItem[],
+    context: ContextSignal,
+    startTime: number,
+    fromCache: boolean
+  ): RecommendationResult {
+    this.publishNoveltyExposureTags(items)
 
     return {
-      items: combinedItems,
+      items,
       context,
-      duration,
-      fromCache: false,
-      containerLayout
+      duration: performance.now() - startTime,
+      fromCache,
+      containerLayout: this.buildContainerLayout(options, items)
     }
+  }
+
+  /**
+   * Flag the newly-installed ids in this result so exposures and clicks on them
+   * also land in a `<surface>:newly-installed` counter row. Keys stay in memory;
+   * only counts are persisted.
+   */
+  private publishNoveltyExposureTags(items: TuffItem[]): void {
+    const keys = items
+      .filter((item) => {
+        const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation
+        return (recommendation as { source?: string } | undefined)?.source === 'newly-installed'
+      })
+      .map((item) => toExposureKey(item))
+
+    recommendationExposureService.setTaggedKeys(NEWLY_INSTALLED_EXPOSURE_TAG, keys)
+  }
+
+  /**
+   * Publish a stable ranking to the memory cache, unless an invalidation landed
+   * while it was being computed. Returns whether the write happened, so the DB
+   * layer can skip the same stale result.
+   */
+  private storeMemoryCache(
+    generation: number,
+    items: TuffItem[],
+    context: ContextSignal,
+    cacheKey: string
+  ): boolean {
+    if (generation !== this.cacheGeneration) {
+      recommendationLog.debug('Discarded recommendation result invalidated mid-flight', {
+        meta: { itemCount: items.length }
+      })
+      return false
+    }
+
+    this.recommendationCache = {
+      items,
+      timestamp: Date.now(),
+      context,
+      cacheKey
+    }
+    return true
   }
 
   /** Build container layout: Recommend on top, Pinned at bottom (if exists) */
@@ -831,11 +1484,24 @@ export class RecommendationEngine {
 
     const visiblePinnedItems = this.dedupeItems(pinnedItems).slice(0, limit)
     const pinnedIdentityKeys = new Set(visiblePinnedItems.map((item) => this.getItemIdentity(item)))
-    const visibleRecommendItems = this.dedupeItems(recommendItems)
-      .filter((item) => !pinnedIdentityKeys.has(this.getItemIdentity(item)))
-      .slice(0, Math.max(0, limit - visiblePinnedItems.length))
+    // Pinned items claim their slots first; the rest of the budget goes to the
+    // highest-scored recommendations, so ordering must precede the slice or a
+    // top-scored item silently falls off whenever anything is pinned.
+    const visibleRecommendItems = this.orderByFinalScore(
+      this.dedupeItems(recommendItems).filter(
+        (item) => !pinnedIdentityKeys.has(this.getItemIdentity(item))
+      )
+    ).slice(0, Math.max(0, limit - visiblePinnedItems.length))
 
     return [...visibleRecommendItems, ...visiblePinnedItems]
+  }
+
+  /** Descending by `scoring.final` (written by the rebuilder), ties keep input order. */
+  private orderByFinalScore(items: TuffItem[]): TuffItem[] {
+    return items
+      .map((item, index) => ({ item, index, score: item.scoring?.final ?? 0 }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(({ item }) => item)
   }
 
   /**
@@ -921,6 +1587,139 @@ export class RecommendationEngine {
   }
 
   /**
+   * Usage-ranked fallback, or the cold-start catalog when there is no usage
+   * history at all. Before this, a fresh install answered the empty query with
+   * an empty grid: no usage rows meant no candidates, and the usage-ranked
+   * fallback was empty for the same reason.
+   */
+  private async resolveFallbackItems(limit: number): Promise<TuffItem[]> {
+    const fallbackItems = await this.getFallbackRecommendations(limit)
+    if (fallbackItems.length > 0) return fallbackItems
+    return await this.getColdStartRecommendations(limit)
+  }
+
+  /**
+   * Cold start: the installed-app catalog, most recently installed first.
+   * Files stay out — the recommendation grid excludes them everywhere else.
+   */
+  private async getColdStartRecommendations(limit: number): Promise<TuffItem[]> {
+    try {
+      const apps = await this.appCatalogDbUtils.getFilesByType('app')
+      if (apps.length === 0) {
+        recommendationLog.debug('Cold start found no apps in the catalog')
+        return []
+      }
+
+      const installedAtByFileId = await this.loadInstalledAtByFileId(apps)
+      const ranked = [...apps]
+        .sort(
+          (left, right) =>
+            resolveInstallTime(right, installedAtByFileId.get(right.id)) -
+            resolveInstallTime(left, installedAtByFileId.get(left.id))
+        )
+        .slice(0, limit * 2)
+
+      const items = await this.itemRebuilder.rebuildItems(
+        ranked.map((app, index) => ({
+          sourceId: 'app-provider',
+          itemId: app.path,
+          sourceType: 'application',
+          usageStats: EMPTY_USAGE_STATS,
+          source: 'cold-start' as const,
+          score: COLD_START_BASE_SCORE - index
+        }))
+      )
+
+      return items.slice(0, limit)
+    } catch (error) {
+      recommendationLog.warn('Cold start recommendation failed', { meta: toErrorMeta(error) })
+      return []
+    }
+  }
+
+  /**
+   * `installedAt` stamps for the given catalog rows, keyed by file id. The
+   * stamp is an optional refinement over `ctime`, so a failed read degrades to
+   * "no stamps" rather than failing the caller.
+   */
+  private async loadInstalledAtByFileId(apps: Array<{ id: number }>): Promise<Map<number, number>> {
+    const installedAt = new Map<number, number>()
+    if (apps.length === 0) return installedAt
+
+    try {
+      const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(
+        apps.map((app) => app.id),
+        [INSTALLED_AT_EXTENSION_KEY]
+      )
+      for (const extension of extensions) {
+        const parsed = parseInstalledAt(extension.value)
+        if (parsed !== null) installedAt.set(extension.fileId, parsed)
+      }
+    } catch (error) {
+      recommendationLog.debug('Failed to read app install stamps', { meta: toErrorMeta(error) })
+    }
+    return installedAt
+  }
+
+  /**
+   * Apps installed inside the novelty window (S1.1).
+   *
+   * Freshness is a DOUBLE gate — `installedAt` (filesystem creation time of the
+   * bundle) AND `ctime` (when this row first entered the index) must both be
+   * recent. Either one alone produces false positives that would flood the grid:
+   * an app that self-updated has a new bundle but an old row, and a first full
+   * scan on an old machine writes new rows for ancient apps.
+   */
+  private async getNewlyInstalledItems(limit: number): Promise<CandidateItem[]> {
+    try {
+      const now = Date.now()
+      const apps = await this.appCatalogDbUtils.getFilesByType('app')
+      // Gate 1 first: it is a plain field read and normally leaves nothing, so
+      // the extension query below is skipped entirely on a steady-state install.
+      const recentlyIndexed = apps.filter((app) => {
+        const indexedAt = app.ctime?.getTime()
+        return typeof indexedAt === 'number' && now - indexedAt <= NOVELTY_MAX_AGE_MS
+      })
+      if (recentlyIndexed.length === 0) return []
+
+      const installedAtByFileId = await this.loadInstalledAtByFileId(recentlyIndexed)
+      const fresh = recentlyIndexed
+        .flatMap((app) => {
+          const installedAt = installedAtByFileId.get(app.id)
+          if (installedAt === undefined) return []
+          // Gate 2. A future-dated stamp (clock skew) still counts as fresh.
+          if (now - installedAt > NOVELTY_MAX_AGE_MS) return []
+          return [{ app, installedAt }]
+        })
+        .sort((left, right) => right.installedAt - left.installedAt)
+        .slice(0, limit)
+      if (fresh.length === 0) return []
+
+      const usageStatsMap = new Map(
+        (
+          await this.dbUtils.getUsageStatsBatch(
+            fresh.map(({ app }) => ({ sourceId: 'app-provider', itemId: app.path }))
+          )
+        ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
+      )
+
+      return fresh.map(({ app, installedAt }) => ({
+        sourceId: 'app-provider',
+        itemId: app.path,
+        sourceType: 'application',
+        usageStats: usageStatsMap.get(`app-provider:${app.path}`) ?? EMPTY_USAGE_STATS,
+        source: 'newly-installed' as const,
+        installedAt
+      }))
+    } catch (error) {
+      recommendationLog.warn('Failed to collect newly installed candidates', {
+        meta: toErrorMeta(error)
+      })
+      return []
+    }
+  }
+
+  /**
    * 获取候选项目池
    */
   private async getCandidates(
@@ -989,9 +1788,17 @@ export class RecommendationEngine {
     })
     candidates.push(...pluginCandidates)
 
-    // 维度 6: 内置剪贴板 URL 推荐
-    const clipboardUrlCandidates = this.getClipboardUrlCandidates(context)
-    candidates.push(...clipboardUrlCandidates)
+    // 维度 6: 新安装的应用 (Top 10) —— 上面五个维度全部依赖使用历史，新装应用在其中
+    // 恒为零分，只有这条通道能让它被看见。
+    const newlyInstalled = await this.getNewlyInstalledItems(NEWLY_INSTALLED_CANDIDATE_LIMIT)
+    recommendationLog.debug('Loaded newly installed candidates', {
+      meta: { count: newlyInstalled.length }
+    })
+    candidates.push(...newlyInstalled)
+
+    // 内置剪贴板 URL 推荐不在这里注入：候选池的产物会进缓存，而缓存键已不含剪贴板
+    // (见 buildRecommendationCacheKey)，一旦入缓存，剪贴板换了之后旧的 URL 动作仍会
+    // 被命中返回，并与新建的那条并存。它由易变阶段 buildVolatileItems 每次请求现建。
 
     recommendationLog.debug('Collected candidates before dedupe', {
       meta: { count: candidates.length }
@@ -1101,14 +1908,10 @@ export class RecommendationEngine {
 
     for (let idx = 0; idx < allTimeStats.length; idx++) {
       const raw = allTimeStats[idx]
-      const parsed: ParsedItemTimeStats = {
-        sourceId: raw.sourceId,
-        itemId: raw.itemId,
-        hourDistribution: JSON.parse(raw.hourDistribution),
-        dayOfWeekDistribution: JSON.parse(raw.dayOfWeekDistribution),
-        timeSlotDistribution: JSON.parse(raw.timeSlotDistribution),
-        lastUpdated: raw.lastUpdated
-      }
+      // Shared with TimeStatsAggregator rather than parsed inline: these are plain TEXT columns,
+      // and a raw JSON.parse here aborted recommend() entirely for one malformed row — this loop
+      // sits inside the unguarded getCandidates chain (#649).
+      const parsed: ParsedItemTimeStats = toParsedItemTimeStats(raw)
 
       const timeScore = this.calculateTimeRelevance(parsed, timePattern)
       if (timeScore > 0) {
@@ -1147,52 +1950,69 @@ export class RecommendationEngine {
   private async getPluginCandidates(context: ContextSignal): Promise<CandidateItem[]> {
     if (this.pluginProviders.size === 0) return []
 
-    const candidates: CandidateItem[] = []
+    // Providers run concurrently. Awaiting them in a for-of made
+    // PLUGIN_PROVIDER_TIMEOUT_MS a per-provider budget rather than a shared one,
+    // so six slow plugins blocked the empty-query grid for 1.2s on every open
+    // (#674). Promise.all preserves order, so the candidate sequence is unchanged.
+    const settled = await Promise.all(
+      Array.from(this.pluginProviders.values(), async ({ provider }) => {
+        if (!provider.canProvide(context)) return []
 
-    for (const [_id, { provider }] of this.pluginProviders) {
-      try {
-        if (!provider.canProvide(context)) continue
+        // The timer is cleared when the provider wins. Left armed, each call
+        // leaked a pending 200ms timeout that kept the event loop awake.
+        let timer: ReturnType<typeof setTimeout> | undefined
+        try {
+          const result = await Promise.race([
+            Promise.resolve(provider.getCandidates(context)),
+            new Promise<PluginRecommendCandidate[]>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error(`Provider ${provider.id} timed out`)),
+                PLUGIN_PROVIDER_TIMEOUT_MS
+              )
+            })
+          ])
 
-        const result = await Promise.race([
-          Promise.resolve(provider.getCandidates(context)),
-          new Promise<PluginRecommendCandidate[]>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Provider ${provider.id} timed out`)),
-              PLUGIN_PROVIDER_TIMEOUT_MS
-            )
-          )
-        ])
-
-        for (const candidate of result) {
-          candidates.push({
+          return result.map((candidate) => ({
             sourceId: `plugin-recommend:${provider.id}`,
             itemId: candidate.id,
-            sourceType: 'plugin-recommend',
+            sourceType: 'plugin-recommend' as const,
             usageStats: EMPTY_USAGE_STATS,
-            source: 'plugin',
+            source: 'plugin' as const,
             pluginCandidate: {
               ...candidate,
               providerId: provider.id
             }
+          }))
+        } catch (error) {
+          recommendationLog.warn('Plugin recommendation provider failed', {
+            meta: { providerId: provider.id, ...toErrorMeta(error) }
           })
+          return []
+        } finally {
+          if (timer) clearTimeout(timer)
         }
-      } catch (error) {
-        recommendationLog.warn('Plugin recommendation provider failed', {
-          meta: { providerId: provider.id, ...toErrorMeta(error) }
-        })
-      }
-    }
+      })
+    )
 
-    return candidates
+    return settled.flat()
   }
 
   /**
    * 内置剪贴板 URL 推荐候选
    */
-  private getClipboardUrlCandidates(context: ContextSignal): CandidateItem[] {
+  private async getClipboardUrlCandidates(context: ContextSignal): Promise<CandidateItem[]> {
     if (!context.clipboard?.meta?.isUrl || !context.clipboard.content) return []
 
-    const url = context.clipboard.content
+    // context.clipboard.content is a privacy digest, not the URL — ContextProvider hashes every
+    // content field on purpose. Building the card from it produced a '打开 URL' entry whose
+    // subtitle, item id and open-url payload were all the hash (#648).
+    //
+    // Re-read rather than adding a raw field to the signal: the point of the digest is that raw
+    // content does not travel through the recommendation pipeline. The hash is then what proves
+    // the clipboard still holds the item this context was built from — if it has changed, the
+    // recommendation is stale and no card is better than the wrong one.
+    const url = await this.readClipboardUrlMatching(context.clipboard.content)
+    if (!url) return []
 
     return [
       {
@@ -1212,6 +2032,25 @@ export class RecommendationEngine {
         }
       }
     ]
+  }
+
+  /**
+   * Reads the current clipboard text, but only returns it if it still hashes to `expectedDigest`.
+   *
+   * Returning null on a mismatch is the point: between the context snapshot and this call the user
+   * may have copied something else, and opening that instead would be worse than showing nothing.
+   */
+  private async readClipboardUrlMatching(expectedDigest: string): Promise<string | null> {
+    try {
+      const { clipboardModule } = await import('../../../clipboard')
+      const latest = clipboardModule.getLatestItem()
+      const content = latest?.content
+
+      if (!content) return null
+      return hashContextContent(content) === expectedDigest ? content : null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -1396,33 +2235,41 @@ export class RecommendationEngine {
   ): Promise<number> {
     // Plugin candidates: use priority directly, skip usageStats-based calculation
     if (candidate.source === 'plugin' && candidate.pluginCandidate) {
-      return (candidate.pluginCandidate.priority ?? 50) * 1e5
+      return (candidate.pluginCandidate.priority ?? 50) * PLUGIN_PRIORITY_WEIGHT
     }
 
     // Built-in clipboard URL candidate: high priority contextual match
     if (candidate.sourceId === '__builtin_clipboard_url__' && candidate.pluginCandidate) {
-      return (candidate.pluginCandidate.priority ?? 95) * 1e5
+      return (candidate.pluginCandidate.priority ?? 95) * PLUGIN_PRIORITY_WEIGHT
     }
 
+    // NOTE: context match (clipboard / selection / foreground app / system
+    // state) is deliberately absent — it is the VOLATILE stage, applied after
+    // the cache in `applyVolatileContextRerank`. Only slow-moving components
+    // may land in a cached score.
     let score = 0
 
-    // 1. 上下文匹配度 (最高权重)
-    const contextMatch = this.calculateContextMatch(candidate, context)
-    score += contextMatch * 1e6
-
-    // 2. 时间相关性
+    // 时间相关性
     if (candidate.timeStats) {
       const timeRelevance = this.calculateTimeRelevance(candidate.timeStats, context.time)
       score += timeRelevance * 1e5
     }
 
-    // 3. 频率分数(带时间衰减)
+    // 频率分数(带时间衰减)
     const frequencyScore = this.calculateFrequencyScore(candidate.usageStats)
     score += frequencyScore * 1e4
 
-    // 4. 最近使用加成
+    // 最近使用加成
     const recencyBoost = this.calculateRecencyBoost(candidate.usageStats.lastExecuted)
     score += recencyBoost * 1e3
+
+    // Novelty: the exploration channel for freshly installed apps. It hands the
+    // item back to frecency the moment there is a real execute to rank on —
+    // the item stays in the pool through the frequent/recent dimensions, it
+    // just stops being news.
+    if (candidate.installedAt !== undefined && candidate.usageStats.executeCount === 0) {
+      score += calculateNoveltyFactor(Date.now() - candidate.installedAt) * NOVELTY_WEIGHT
+    }
 
     if (semanticSettings.localVectorEnabled && semanticProfile) {
       const candidateProfile = buildCandidateSemanticProfile(
@@ -1716,14 +2563,117 @@ export class RecommendationEngine {
   }
 
   /**
+   * Re-applies the volatile half of the ranking on top of a (possibly cached)
+   * item list and re-orders it.
+   *
+   * The cache key only carries slow-moving context (see
+   * `ContextProvider.generateCacheKey`), so a hit can carry a stable ranking
+   * computed under a completely different clipboard / foreground app. This
+   * stage restores those signals per request over the already-capped list, and
+   * injects the clipboard-URL action, which exists only while a URL is on the
+   * clipboard and therefore can never be part of a reusable cache entry.
+   */
+  private async applyVolatileContextRerank(
+    items: TuffItem[],
+    context: ContextSignal,
+    limit: number
+  ): Promise<TuffItem[]> {
+    if (limit <= 0) return []
+
+    const pinnedItems = items.filter((item) => item.meta?.pinned?.isPinned)
+    const recommendItems = items.filter((item) => !item.meta?.pinned?.isPinned)
+
+    const rescored = recommendItems.map((item) => {
+      const stableScore = this.readStableScore(item)
+      const volatileScore = this.calculateContextMatch(this.toVolatileCandidate(item), context)
+      return this.withScores(item, stableScore, volatileScore * CONTEXT_MATCH_WEIGHT)
+    })
+
+    const withVolatileCandidates = [...rescored, ...(await this.buildVolatileItems(context, items))]
+
+    return this.combineRecommendedWithPinned(withVolatileCandidates, pinnedItems, limit)
+  }
+
+  /**
+   * Context-only candidates, rebuilt per request. They never enter the cache,
+   * so they must be produced fresh whenever their signal is present.
+   */
+  private async buildVolatileItems(
+    context: ContextSignal,
+    existingItems: TuffItem[]
+  ): Promise<TuffItem[]> {
+    const candidates = await this.getClipboardUrlCandidates(context)
+    if (candidates.length === 0) return []
+
+    const existingKeys = new Set(existingItems.map((item) => this.getItemIdentity(item)))
+
+    try {
+      const rebuilt = await this.itemRebuilder.rebuildItems(
+        candidates.map((candidate) => ({
+          ...candidate,
+          score: (candidate.pluginCandidate?.priority ?? 95) * PLUGIN_PRIORITY_WEIGHT
+        }))
+      )
+      return rebuilt.filter((item) => !existingKeys.has(this.getItemIdentity(item)))
+    } catch (error) {
+      recommendationLog.debug('Failed to build volatile context items', {
+        meta: toErrorMeta(error)
+      })
+      return []
+    }
+  }
+
+  /**
+   * The pre-volatile score, kept on the item so repeated re-ranks (memory hit,
+   * then DB hit after a restart) stay idempotent instead of compounding.
+   */
+  private readStableScore(item: TuffItem): number {
+    const stableScore = item.meta?.recommendation?.stableScore
+    if (typeof stableScore === 'number') return stableScore
+    return item.scoring?.final ?? 0
+  }
+
+  private withScores(item: TuffItem, stableScore: number, volatileScore: number): TuffItem {
+    const recommendation = item.meta?.recommendation ?? { source: 'frequent' as const }
+
+    return {
+      ...item,
+      meta: {
+        ...item.meta,
+        recommendation: { ...recommendation, stableScore, volatileScore }
+      },
+      scoring: { ...item.scoring, final: stableScore + volatileScore }
+    }
+  }
+
+  private toVolatileCandidate(item: TuffItem): VolatileCandidate {
+    const meta = item.meta as Record<string, unknown> | undefined
+    const originalSourceId = meta?._originalSourceId
+    const originalItemId = meta?._originalItemId
+
+    return {
+      sourceId: typeof originalSourceId === 'string' ? originalSourceId : item.source.id,
+      itemId: typeof originalItemId === 'string' ? originalItemId : item.id,
+      sourceType: item.source.type
+    }
+  }
+
+  /**
    * 计算上下文匹配度
    */
-  private calculateContextMatch(candidate: CandidateItem, context: ContextSignal): number {
+  private calculateContextMatch(candidate: VolatileCandidate, context: ContextSignal): number {
     let score = 0
 
     // 剪贴板内容类型匹配
     if (context.clipboard) {
       score += this.matchClipboardContent(candidate, context.clipboard)
+    }
+
+    // 选中文本与剪贴板同档，权重略低：取词往往早于当前动作
+    if (context.selection) {
+      score +=
+        this.matchClipboardContent(candidate, { ...context.selection, type: 'text' }) *
+        SELECTION_CONTEXT_WEIGHT
     }
 
     // 前台应用关联匹配
@@ -1742,8 +2692,8 @@ export class RecommendationEngine {
    * 匹配剪贴板内容与候选项
    */
   private matchClipboardContent(
-    candidate: CandidateItem,
-    clipboard: NonNullable<ContextSignal['clipboard']>
+    candidate: VolatileCandidate,
+    clipboard: { type: string; contentType?: string; meta?: Record<string, unknown> }
   ): number {
     const { sourceType, itemId } = candidate
 
@@ -1753,47 +2703,50 @@ export class RecommendationEngine {
 
       // Java/Kotlin → JetBrains IDEA/Android Studio
       if (language === 'java' || language === 'kotlin') {
-        if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['idea', 'android-studio'])) {
+        if (
+          isAppSourceType(sourceType) &&
+          this.isJetBrainsIDE(itemId, ['idea', 'android-studio'])
+        ) {
           return 100
         }
       }
 
       // Python → PyCharm/VS Code
       if (language === 'python') {
-        if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['pycharm'])) {
+        if (isAppSourceType(sourceType) && this.isJetBrainsIDE(itemId, ['pycharm'])) {
           return 100
         }
-        if (sourceType === 'app' && this.isVSCode(itemId)) {
+        if (isAppSourceType(sourceType) && this.isVSCode(itemId)) {
           return 90
         }
       }
 
       // JavaScript/TypeScript → VS Code/WebStorm
       if (language === 'javascript' || language === 'typescript') {
-        if (sourceType === 'app' && this.isVSCode(itemId)) {
+        if (isAppSourceType(sourceType) && this.isVSCode(itemId)) {
           return 100
         }
-        if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['webstorm'])) {
+        if (isAppSourceType(sourceType) && this.isJetBrainsIDE(itemId, ['webstorm'])) {
           return 95
         }
       }
 
       // 通用代码文件 → 任何 IDE
-      if (sourceType === 'app' && this.isIDE(itemId)) {
+      if (isAppSourceType(sourceType) && this.isIDE(itemId)) {
         return 80
       }
     }
 
     // 文本文件 → 文本编辑器
     if (clipboard.meta?.fileType === 'text') {
-      if (sourceType === 'app' && this.isTextEditor(itemId)) {
+      if (isAppSourceType(sourceType) && this.isTextEditor(itemId)) {
         return 85
       }
     }
 
     // 图像文件 → 图像编轑器
     if (clipboard.meta?.fileType === 'image') {
-      if (sourceType === 'app' && this.isImageApp(itemId)) {
+      if (isAppSourceType(sourceType) && this.isImageApp(itemId)) {
         return 100
       }
     }
@@ -1805,27 +2758,27 @@ export class RecommendationEngine {
       // 文本剪贴板
       if (isUrl) {
         // 如果是链接,推荐浏览器相关
-        if (sourceType === 'app' && this.isBrowserApp(itemId)) {
+        if (isAppSourceType(sourceType) && this.isBrowserApp(itemId)) {
           return 100 // 强相关
         }
         // 下载工具
-        if (itemId.includes('download') || itemId.includes('aria')) {
+        if (isAppSourceType(sourceType) && matchesAppRule(itemId, APP_MATCH_RULES.downloadTool)) {
           return 80
         }
       } else {
         // 普通文本,推荐编辑器
-        if (sourceType === 'app' && this.isEditorApp(itemId)) {
+        if (isAppSourceType(sourceType) && this.isEditorApp(itemId)) {
           return 70
         }
       }
     } else if (clipboard.type === 'image') {
       // 图片剪贴板,推荐图片处理工具
-      if (sourceType === 'app' && this.isImageApp(itemId)) {
+      if (isAppSourceType(sourceType) && this.isImageApp(itemId)) {
         return 100
       }
     } else if (clipboard.type === 'files') {
       // 文件剪贴板,推荐文件管理工具
-      if (sourceType === 'app' && this.isFileManagerApp(itemId)) {
+      if (isAppSourceType(sourceType) && this.isFileManagerApp(itemId)) {
         return 80
       }
     }
@@ -1837,26 +2790,30 @@ export class RecommendationEngine {
    * 匹配前台应用与候选项
    */
   private matchForegroundApp(
-    candidate: CandidateItem,
+    candidate: VolatileCandidate,
     foregroundApp: NonNullable<ContextSignal['foregroundApp']>
   ): number {
     const { sourceType, itemId } = candidate
 
     // 如果候选项就是当前前台应用,降低推荐权重(避免重复推荐已打开的应用)
-    if (sourceType === 'app' && itemId.includes(foregroundApp.bundleId)) {
+    if (isAppSourceType(sourceType) && isSameAppIdentity(itemId, foregroundApp)) {
       return -50
     }
 
     // 根据前台应用推荐相关工具
     // IDE -> Terminal
-    if (this.isIDE(foregroundApp.bundleId) && sourceType === 'app' && this.isTerminalApp(itemId)) {
+    if (
+      this.isIDE(foregroundApp.bundleId) &&
+      isAppSourceType(sourceType) &&
+      this.isTerminalApp(itemId)
+    ) {
       return 60
     }
 
     // 浏览器 -> 开发工具
     if (
       this.isBrowserApp(foregroundApp.bundleId) &&
-      sourceType === 'app' &&
+      isAppSourceType(sourceType) &&
       this.isDeveloperTool(itemId)
     ) {
       return 50
@@ -1866,11 +2823,11 @@ export class RecommendationEngine {
   }
 
   private matchSystemState(
-    candidate: CandidateItem,
+    candidate: VolatileCandidate,
     systemState: NonNullable<ContextSignal['systemState']>
   ): number {
     const { sourceType, itemId } = candidate
-    if (sourceType !== 'app') return 0
+    if (!isAppSourceType(sourceType)) return 0
 
     let score = 0
     const isBatteryConstrained =
@@ -1878,7 +2835,7 @@ export class RecommendationEngine {
       (typeof systemState.batteryLevel !== 'number' || systemState.batteryLevel <= 25)
 
     if (systemState.isOnline === false) {
-      if (this.isBrowserApp(itemId) || itemId.includes('download') || itemId.includes('aria')) {
+      if (this.isBrowserApp(itemId) || matchesAppRule(itemId, APP_MATCH_RULES.downloadTool)) {
         score -= 25
       }
     }
@@ -1908,90 +2865,34 @@ export class RecommendationEngine {
    * 判断是否为浏览器应用
    */
   private isBrowserApp(identifier: string): boolean {
-    const browsers = [
-      'com.google.Chrome',
-      'com.apple.Safari',
-      'org.mozilla.firefox',
-      'com.microsoft.edgemac',
-      'com.brave.Browser',
-      'com.operasoftware.Opera'
-    ]
-    return browsers.some((browser) => identifier.includes(browser))
+    return matchesAppRule(identifier, APP_MATCH_RULES.browser)
   }
 
   private isEntertainmentOrSocialApp(identifier: string): boolean {
-    const lowered = identifier.toLowerCase()
-    const apps = [
-      'spotify',
-      'music',
-      'netease',
-      'qqmusic',
-      'youtube',
-      'netflix',
-      'discord',
-      'telegram',
-      'wechat',
-      'slack',
-      'twitter',
-      'x.com'
-    ]
-    return apps.some((app) => lowered.includes(app))
+    return matchesAppRule(identifier, APP_MATCH_RULES.entertainment)
   }
 
   /**
    * 判断是否为编辑器应用
    */
   private isEditorApp(identifier: string): boolean {
-    const editors = [
-      'com.microsoft.VSCode',
-      'com.sublimetext',
-      'com.jetbrains',
-      'com.barebones.bbedit',
-      'com.vim',
-      'com.neovim',
-      'com.textmate'
-    ]
-    return editors.some((editor) => identifier.includes(editor))
+    return matchesAppRule(identifier, APP_MATCH_RULES.editor)
   }
 
   /**
    * 判断是否为图片处理应用
    */
   private isImageApp(identifier: string): boolean {
-    const imageApps = [
-      'com.adobe.Photoshop',
-      'com.adobe.illustrator',
-      'com.adobe.AfterEffects',
-      'com.bohemiancoding.sketch',
-      'com.figma.Desktop',
-      'com.pixelmatorteam.pixelmator',
-      'com.apple.Preview',
-      'com.gimp',
-      'com.serif.affinity.photo', // Affinity Photo
-      'com.serif.affinity.designer', // Affinity Designer
-      'com.krita', // Krita
-      'com.procreate', // Procreate
-      'com.canva' // Canva
-    ]
-    return imageApps.some((app) => identifier.includes(app))
+    return matchesAppRule(identifier, APP_MATCH_RULES.image)
   }
 
   /**
    * 判断是否为 JetBrains IDE
    */
   private isJetBrainsIDE(identifier: string, products: string[]): boolean {
-    const jetbrainsApps: Record<string, string> = {
-      idea: 'com.jetbrains.intellij',
-      pycharm: 'com.jetbrains.pycharm',
-      webstorm: 'com.jetbrains.webstorm',
-      'android-studio': 'com.google.android.studio',
-      goland: 'com.jetbrains.goland',
-      rider: 'com.jetbrains.rider'
-    }
-
     return products.some((product) => {
-      const bundleId = jetbrainsApps[product]
-      return bundleId && identifier.includes(bundleId)
+      const rule = JETBRAINS_MATCH_RULES[product]
+      return rule ? matchesAppRule(identifier, rule) : false
     })
   }
 
@@ -1999,56 +2900,35 @@ export class RecommendationEngine {
    * 判断是否为 VS Code
    */
   private isVSCode(identifier: string): boolean {
-    return identifier.includes('com.microsoft.VSCode') || identifier.includes('VSCodium')
+    return matchesAppRule(identifier, APP_MATCH_RULES.vscode)
   }
 
   /**
    * 判断是否为文本编辑器
    */
   private isTextEditor(identifier: string): boolean {
-    const editors = [
-      'com.apple.TextEdit',
-      'com.sublimetext',
-      'com.barebones.bbedit',
-      'com.coteditor.CotEditor',
-      'com.typora'
-    ]
-    return editors.some((editor) => identifier.includes(editor))
+    return matchesAppRule(identifier, APP_MATCH_RULES.textEditor)
   }
 
   /**
    * 判断是否为文件管理工具
    */
   private isFileManagerApp(identifier: string): boolean {
-    const fileManagers = ['com.apple.finder', 'com.coderforart.MWeb', 'com.agilebits']
-    return fileManagers.some((fm) => identifier.includes(fm))
+    return matchesAppRule(identifier, APP_MATCH_RULES.fileManager)
   }
 
   /**
    * 判断是否为IDE
    */
   private isIDE(identifier: string): boolean {
-    const ides = [
-      'com.microsoft.VSCode',
-      'com.jetbrains',
-      'com.apple.dt.Xcode',
-      'com.android.studio'
-    ]
-    return ides.some((ide) => identifier.includes(ide))
+    return matchesAppRule(identifier, APP_MATCH_RULES.ide)
   }
 
   /**
    * 判断是否为终端应用
    */
   private isTerminalApp(identifier: string): boolean {
-    const terminals = [
-      'com.apple.Terminal',
-      'com.googlecode.iterm2',
-      'com.github.wez.wezterm',
-      'io.alacritty',
-      'net.kovidgoyal.kitty'
-    ]
-    return terminals.some((term) => identifier.includes(term))
+    return matchesAppRule(identifier, APP_MATCH_RULES.terminal)
   }
 
   /**
@@ -2058,8 +2938,7 @@ export class RecommendationEngine {
     return (
       this.isIDE(identifier) ||
       this.isTerminalApp(identifier) ||
-      identifier.includes('postman') ||
-      identifier.includes('insomnia')
+      matchesAppRule(identifier, APP_MATCH_RULES.apiClient)
     )
   }
 
@@ -2103,20 +2982,34 @@ export class RecommendationEngine {
   private applyDiversityFilter(scored: ScoredItem[], limit: number): ScoredItem[] {
     const result: ScoredItem[] = []
     const typeCount = new Map<string, number>()
+    const deferred: ScoredItem[] = []
+
+    // 同类型不超过总数的 40%
+    const maxPerType = Math.ceil(limit * 0.4)
 
     for (const item of scored) {
       if (result.length >= limit) break
 
       const currentCount = typeCount.get(item.sourceType) || 0
 
-      // 同类型不超过总数的 40%
-      const maxPerType = Math.ceil(limit * 0.4)
       if (currentCount >= maxPerType && result.length >= limit / 2) {
+        deferred.push(item)
         continue
       }
 
       result.push(item)
       typeCount.set(item.sourceType, currentCount + 1)
+    }
+
+    // The quota is a preference, not a hard ceiling. A homogeneous candidate pool
+    // — the normal case, since every app candidate carries sourceType
+    // 'application' and getCandidates already drops files — used to latch both
+    // conditions at once and return exactly limit/2 items, half an empty-query
+    // grid. Items skipped for diversity are put back in score order to fill the
+    // remaining slots rather than left on the floor (#672).
+    for (const item of deferred) {
+      if (result.length >= limit) break
+      result.push(item)
     }
 
     return result
@@ -2143,6 +3036,16 @@ export class RecommendationEngine {
       }
       if (candidate.source === 'time-based') {
         existing.source = 'time-based'
+      }
+      // A new app can also own a zero-execute usage row (it was searched but
+      // never launched), which puts it in an earlier dimension first. Keep the
+      // install stamp so the novelty boost still fires, and label it as the
+      // reason it actually ranks — but only while that boost is live.
+      if (existing.installedAt === undefined && candidate.installedAt !== undefined) {
+        existing.installedAt = candidate.installedAt
+        if (existing.usageStats.executeCount === 0) {
+          existing.source = 'newly-installed'
+        }
       }
     }
 
@@ -2208,6 +3111,11 @@ export class RecommendationEngine {
 
     // 检查是否过期
     if (cached.expiresAt.getTime() < Date.now()) return null
+
+    // Written before the last invalidation: the row predates whatever changed
+    // (a newly installed app, an unpinned item) and would resurrect the exact
+    // list that was just dropped from memory.
+    if (cached.createdAt.getTime() < this.cacheInvalidatedAt) return null
 
     try {
       const items = JSON.parse(cached.recommendedItems)
@@ -2311,11 +3219,33 @@ interface ItemCandidate {
   timeStats?: ParsedItemTimeStats
   /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
   pluginCandidate?: PluginRecommendCandidate
+  /** Epoch ms the app was installed on this machine; drives the novelty boost. */
+  installedAt?: number
+}
+
+/**
+ * Minimum identity a volatile-context matcher needs. Cached TuffItems are
+ * projected onto this shape so the same matchers serve both the fresh scoring
+ * pass and the post-cache re-rank.
+ */
+interface VolatileCandidate {
+  sourceId: string
+  itemId: string
+  sourceType: string
 }
 
 /** 候选项(带来源标记) */
 interface CandidateItem extends ItemCandidate {
-  source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'context' | 'pinned' | 'plugin'
+  source:
+    | 'frequent'
+    | 'recent'
+    | 'time-based'
+    | 'trending'
+    | 'context'
+    | 'pinned'
+    | 'plugin'
+    | 'newly-installed'
+    | 'cold-start'
 }
 
 /**

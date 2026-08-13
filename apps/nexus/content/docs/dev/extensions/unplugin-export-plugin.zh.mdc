@@ -398,12 +398,12 @@ code: |
 
 查看官方示例插件：
 
-- [touch-image](https://github.com/AkraTech/talex-touch/tree/main/plugins/touch-image) - 图片处理插件
-- [touch-translation](https://github.com/AkraTech/talex-touch/tree/main/plugins/touch-translation) - 翻译插件
-- [touch-music](https://github.com/AkraTech/talex-touch/tree/main/plugins/touch-music) - 音乐播放插件
+- [touch-image](https://github.com/talex-touch/tuff/tree/main/plugins/touch-image) - 图片处理插件
+- [touch-translation](https://github.com/talex-touch/tuff/tree/main/plugins/touch-translation) - 翻译插件
+- [touch-music](https://github.com/talex-touch/tuff/tree/main/plugins/touch-music) - 音乐播放插件
 
 ---
 
 ## 更新日志
 
-查看 [CHANGELOG.md](https://github.com/AkraTech/talex-touch/blob/main/packages/unplugin-export-plugin/CHANGELOG.md) 获取版本更新信息。
+查看 [CHANGELOG.md](https://github.com/talex-touch/tuff/blob/main/packages/unplugin-export-plugin/CHANGELOG.md) 获取版本更新信息。

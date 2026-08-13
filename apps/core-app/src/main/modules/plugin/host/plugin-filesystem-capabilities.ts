@@ -79,13 +79,14 @@ const WINDOWS_INVALID_TARGET_NAME = /[<>:"|?*]/
 const ALLOWED_REQUEST_KEYS = ['operation', 'entries'] as const
 const ALLOWED_ENTRY_KEYS = ['source', 'targetName'] as const
 
-const defaultFilesystem: PluginBatchRenameFilesystemAdapter = Object.freeze({
-  lstat: async (filePath) => await fsp.lstat(filePath),
-  realpath: async (filePath) => await fsp.realpath(filePath),
-  open: async (filePath, flags) => await fsp.open(filePath, flags),
-  link: async (existingPath, newPath) => await fsp.link(existingPath, newPath),
-  unlink: async (filePath) => await fsp.unlink(filePath)
-})
+const defaultFilesystem: PluginBatchRenameFilesystemAdapter =
+  Object.freeze<PluginBatchRenameFilesystemAdapter>({
+    lstat: async (filePath) => await fsp.lstat(filePath),
+    realpath: async (filePath) => await fsp.realpath(filePath),
+    open: async (filePath, flags) => await fsp.open(filePath, flags),
+    link: async (existingPath, newPath) => await fsp.link(existingPath, newPath),
+    unlink: async (filePath) => await fsp.unlink(filePath)
+  })
 
 function invalidRequest(): never {
   throw new TypeError('PLUGIN_FILESYSTEM_REQUEST_INVALID')
@@ -794,7 +795,7 @@ export function createPluginBatchRenameFilesystemCapability(
     }
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'filesystem.write',
     permission: 'fs.write',
     timeoutMs: 30_000,

@@ -22,6 +22,8 @@ export interface CommandPaletteProps {
   closeOnSelect?: boolean
   overlayClass?: CommandPaletteClassValue
   panelClass?: CommandPaletteClassValue
+  /** Search text. Completes the `v-model:query` pair; omit to leave the palette uncontrolled. */
+  query?: string
   /** Accessible name for the palette's `role="dialog"` and command listbox. @default 'Command palette' */
   ariaLabel?: string
 }

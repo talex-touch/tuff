@@ -38,6 +38,8 @@ import { getMainConfig } from '../storage'
 import defaultCoreBoxThemeCss from '../box-tool/core-box/theme/tuff-element.css?raw'
 import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
 import { windowPool } from './window-pool'
+import { installAppViewNavigationPolicy } from '../../core/app-view-navigation-policy'
+import { getCoreBoxRendererUrl } from '../../utils/renderer-url'
 
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
@@ -527,6 +529,10 @@ export class DivisionBoxSession {
     this.uiView = new WebContentsView({ webPreferences })
     if (navigationPolicy) {
       installPluginViewNavigationPolicy(this.uiView.webContents, navigationPolicy)
+    } else {
+      // No plugin means the app profile, which had no guards at all: no window-open handler and
+      // no navigation restriction (#793).
+      installAppViewNavigationPolicy(this.uiView.webContents, { entryUrl: getCoreBoxRendererUrl() })
     }
     if (plugin) {
       // Register this plugin surface so the channel layer can verify its origin.

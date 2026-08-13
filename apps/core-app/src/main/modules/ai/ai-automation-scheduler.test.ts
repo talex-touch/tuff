@@ -128,6 +128,46 @@ describe('aiAutomationScheduler', () => {
     expect(schedulerStoreMocks.saveAutomation).not.toHaveBeenCalled()
   })
 
+  it('接受 7 作为周日的标准写法', async () => {
+    const sunday = new Date(2026, 0, 4, 9, 0, 0) // 2026-01-04 is a Sunday
+    const monday = new Date(2026, 0, 5, 9, 0, 0)
+
+    expect(cronMatches('0 9 * * 7', sunday)).toBe(true)
+    expect(cronMatches('0 9 * * 7', monday)).toBe(false)
+    // 0 keeps working: 7 is an alias, not a replacement.
+    expect(cronMatches('0 9 * * 0', sunday)).toBe(true)
+
+    const scheduler = new AiAutomationScheduler()
+    scheduler.setExecutor(vi.fn(async () => completedOrchestratorRun()))
+    await expect(
+      scheduler.save(automation({ trigger: { type: 'cron', expression: '0 9 * * 7' } }))
+    ).resolves.toBeDefined()
+  })
+
+  it('两个日期字段都受限时取并集,而不是交集', async () => {
+    // '0 9 1 * 1' = the 1st, and every Monday.
+    const firstOfMonth = new Date(2026, 3, 1, 9, 0, 0) // 2026-04-01, a Wednesday
+    const anyMonday = new Date(2026, 3, 6, 9, 0, 0) // 2026-04-06, a Monday
+    const plainTuesday = new Date(2026, 3, 7, 9, 0, 0)
+
+    expect(cronMatches('0 9 1 * 1', firstOfMonth)).toBe(true)
+    expect(cronMatches('0 9 1 * 1', anyMonday)).toBe(true)
+    expect(cronMatches('0 9 1 * 1', plainTuesday)).toBe(false)
+  })
+
+  it('只有一个日期字段受限时仍然是交集', async () => {
+    const monday = new Date(2026, 3, 6, 9, 0, 0)
+    const tuesday = new Date(2026, 3, 7, 9, 0, 0)
+
+    // day-of-month is '*', so day-of-week alone decides.
+    expect(cronMatches('0 9 * * 1', monday)).toBe(true)
+    expect(cronMatches('0 9 * * 1', tuesday)).toBe(false)
+
+    // day-of-week is '*', so day-of-month alone decides.
+    expect(cronMatches('0 9 6 * *', monday)).toBe(true)
+    expect(cronMatches('0 9 6 * *', tuesday)).toBe(false)
+  })
+
   it('persists a manual run as pending approval and does not execute it until approved', async () => {
     const definition = automation()
     schedulerStoreMocks.state.definitions.set(definition.id, definition)

@@ -2,8 +2,6 @@ import { protocol } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { createLogger } from '../utils/logger'
 
-protocol.registerSchemesAsPrivileged([{ scheme: 'stream', privileges: { bypassCSP: true } }])
-
 const protocolLog = createLogger('ProtocolHandler')
 
 touchEventBus.on(TalexEvents.APP_READY, () => {

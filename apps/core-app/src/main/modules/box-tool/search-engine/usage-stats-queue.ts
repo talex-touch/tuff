@@ -1,13 +1,27 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../db/schema'
 import type { ScheduleOptions } from '../../../db/db-write-scheduler'
-import { sql } from 'drizzle-orm'
-import { dbWriteScheduler } from '../../../db/db-write-scheduler'
-import { itemUsageStats } from '../../../db/schema'
-import { withSqliteRetry } from '../../../db/sqlite-retry'
+import type { TimeBuckets } from './item-time-stats-buckets'
+import { and, eq, sql } from 'drizzle-orm'
+import { DbWriteDroppedError, dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../db/db-write'
+import { itemTimeStats, itemUsageStats } from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
+import {
+  addExecutionToBuckets,
+  cloneTimeBuckets,
+  createEmptyTimeBuckets,
+  isEmptyTimeBuckets,
+  mergeTimeBuckets,
+  parseStoredTimeBuckets,
+  serializeTimeBuckets
+} from './item-time-stats-buckets'
 
 const usageStatsQueueLog = createLogger('UsageStatsQueue')
+
+type UsageStatsTransaction = Parameters<
+  Parameters<LibSQLDatabase<typeof schema>['transaction']>[0]
+>[0]
 
 interface IncrementOperation {
   sourceId: string
@@ -27,6 +41,12 @@ interface AggregatedUsageRecord {
   lastSearched: Date | null
   lastExecuted: Date | null
   lastCancelled: Date | null
+  /**
+   * Hour/weekday/slot buckets for the executions in this batch, folded into
+   * `item_time_stats` additively on flush. Only executions contribute — the
+   * distributions describe when an item is actually used.
+   */
+  timeBuckets: TimeBuckets
 }
 
 export interface UsageStatsQueueOptions {
@@ -55,8 +75,9 @@ const DEFAULT_OPTIONS: Required<UsageStatsQueueOptions> = {
  * Batch write queue for usage stats to reduce database write operations
  * Aggregates increments in memory and writes them in lower-frequency batches.
  *
- * Uses DbWriteScheduler + withSqliteRetry to avoid SQLITE_BUSY contention
- * with the search-index worker thread.
+ * Uses the shared write queue (scheduleDbWrite) to avoid SQLITE_BUSY
+ * contention with the search-index worker thread; the scheduler itself owns
+ * busy retry via delayed re-enqueue.
  */
 export class UsageStatsQueue {
   private searchQueue = new Map<string, AggregatedUsageRecord>()
@@ -67,6 +88,19 @@ export class UsageStatsQueue {
   private pendingActionEvents = 0
   private searchFlushing = false
   private actionFlushing = false
+
+  /**
+   * Bumped by clear(). A flush captures it before awaiting and refuses to merge its snapshot back
+   * if it has changed since.
+   *
+   * The snapshot is taken out of the queue before the write, so a failing flush restores it. If a
+   * privacy or retention reset called clear() in that window, the restore put back exactly the
+   * rows the user asked to erase — and then scheduled a flush that persisted them (#657).
+   *
+   * A generation rather than clearing searchFlushing/actionFlushing: those guard against a second
+   * concurrent flush, and resetting them would let one start while the first is still in the air.
+   */
+  private clearGeneration = 0
   private readonly db: LibSQLDatabase<typeof schema>
   private readonly options: Required<UsageStatsQueueOptions>
 
@@ -121,7 +155,8 @@ export class UsageStatsQueue {
       cancelCount: 0,
       lastSearched: null,
       lastExecuted: null,
-      lastCancelled: null
+      lastCancelled: null,
+      timeBuckets: createEmptyTimeBuckets()
     }
 
     switch (operation.type) {
@@ -139,6 +174,7 @@ export class UsageStatsQueue {
           !aggregate.lastExecuted || operation.timestamp > aggregate.lastExecuted
             ? operation.timestamp
             : aggregate.lastExecuted
+        addExecutionToBuckets(aggregate.timeBuckets, operation.timestamp)
         this.pendingActionEvents += 1
         break
       case 'cancel':
@@ -237,7 +273,8 @@ export class UsageStatsQueue {
       ...record,
       lastSearched: record.lastSearched ? new Date(record.lastSearched) : null,
       lastExecuted: record.lastExecuted ? new Date(record.lastExecuted) : null,
-      lastCancelled: record.lastCancelled ? new Date(record.lastCancelled) : null
+      lastCancelled: record.lastCancelled ? new Date(record.lastCancelled) : null,
+      timeBuckets: cloneTimeBuckets(record.timeBuckets)
     }
   }
 
@@ -254,6 +291,7 @@ export class UsageStatsQueue {
       existing.searchCount += record.searchCount
       existing.executeCount += record.executeCount
       existing.cancelCount += record.cancelCount
+      mergeTimeBuckets(existing.timeBuckets, record.timeBuckets)
       if (
         record.lastSearched &&
         (!existing.lastSearched || record.lastSearched > existing.lastSearched)
@@ -293,60 +331,103 @@ export class UsageStatsQueue {
   ): Promise<void> {
     if (records.length === 0) return
 
-    await dbWriteScheduler.schedule(
+    await scheduleDbWrite(
       label,
       () =>
-        withSqliteRetry(
-          () =>
-            this.db.transaction(async (tx) => {
-              const now = new Date()
-              for (const record of records) {
-                const lastSearchedTs = UsageStatsQueue.toUnixTs(record.lastSearched)
-                const lastExecutedTs = UsageStatsQueue.toUnixTs(record.lastExecuted)
-                const lastCancelledTs = UsageStatsQueue.toUnixTs(record.lastCancelled)
+        this.db.transaction(async (tx) => {
+          const now = new Date()
+          for (const record of records) {
+            const lastSearchedTs = UsageStatsQueue.toUnixTs(record.lastSearched)
+            const lastExecutedTs = UsageStatsQueue.toUnixTs(record.lastExecuted)
+            const lastCancelledTs = UsageStatsQueue.toUnixTs(record.lastCancelled)
 
-                await tx
-                  .insert(itemUsageStats)
-                  .values({
-                    sourceId: record.sourceId,
-                    itemId: record.itemId,
-                    sourceType: record.sourceType,
-                    searchCount: record.searchCount,
-                    executeCount: record.executeCount,
-                    cancelCount: record.cancelCount,
-                    lastSearched: record.lastSearched,
-                    lastExecuted: record.lastExecuted,
-                    lastCancelled: record.lastCancelled,
-                    createdAt: now,
-                    updatedAt: now
-                  })
-                  .onConflictDoUpdate({
-                    target: [itemUsageStats.sourceId, itemUsageStats.itemId],
-                    set: {
-                      searchCount: sql`${itemUsageStats.searchCount} + ${record.searchCount}`,
-                      executeCount: sql`${itemUsageStats.executeCount} + ${record.executeCount}`,
-                      cancelCount: sql`${itemUsageStats.cancelCount} + ${record.cancelCount}`,
-                      lastSearched:
-                        lastSearchedTs == null
-                          ? sql`${itemUsageStats.lastSearched}`
-                          : sql<number>`MAX(COALESCE(${itemUsageStats.lastSearched}, 0), ${lastSearchedTs})`,
-                      lastExecuted:
-                        lastExecutedTs == null
-                          ? sql`${itemUsageStats.lastExecuted}`
-                          : sql<number>`MAX(COALESCE(${itemUsageStats.lastExecuted}, 0), ${lastExecutedTs})`,
-                      lastCancelled:
-                        lastCancelledTs == null
-                          ? sql`${itemUsageStats.lastCancelled}`
-                          : sql<number>`MAX(COALESCE(${itemUsageStats.lastCancelled}, 0), ${lastCancelledTs})`,
-                      updatedAt: now
-                    }
-                  })
-              }
-            }),
-          { label }
-        ),
+            await tx
+              .insert(itemUsageStats)
+              .values({
+                sourceId: record.sourceId,
+                itemId: record.itemId,
+                sourceType: record.sourceType,
+                searchCount: record.searchCount,
+                executeCount: record.executeCount,
+                cancelCount: record.cancelCount,
+                lastSearched: record.lastSearched,
+                lastExecuted: record.lastExecuted,
+                lastCancelled: record.lastCancelled,
+                createdAt: now,
+                updatedAt: now
+              })
+              .onConflictDoUpdate({
+                target: [itemUsageStats.sourceId, itemUsageStats.itemId],
+                set: {
+                  searchCount: sql`${itemUsageStats.searchCount} + ${record.searchCount}`,
+                  executeCount: sql`${itemUsageStats.executeCount} + ${record.executeCount}`,
+                  cancelCount: sql`${itemUsageStats.cancelCount} + ${record.cancelCount}`,
+                  lastSearched:
+                    lastSearchedTs == null
+                      ? sql`${itemUsageStats.lastSearched}`
+                      : sql<number>`MAX(COALESCE(${itemUsageStats.lastSearched}, 0), ${lastSearchedTs})`,
+                  lastExecuted:
+                    lastExecutedTs == null
+                      ? sql`${itemUsageStats.lastExecuted}`
+                      : sql<number>`MAX(COALESCE(${itemUsageStats.lastExecuted}, 0), ${lastExecutedTs})`,
+                  lastCancelled:
+                    lastCancelledTs == null
+                      ? sql`${itemUsageStats.lastCancelled}`
+                      : sql<number>`MAX(COALESCE(${itemUsageStats.lastCancelled}, 0), ${lastCancelledTs})`,
+                  updatedAt: now
+                }
+              })
+
+            await this.persistTimeBuckets(tx, record, now)
+          }
+        }),
       options
     )
+  }
+
+  /**
+   * Folds this batch's execution buckets into `item_time_stats`.
+   *
+   * Read-modify-write rather than SQL-side arithmetic: the distributions are
+   * JSON arrays, and the batch is small (one row per distinct item per flush).
+   * It runs inside the caller's transaction so a failure rolls back with the
+   * usage counts and the merged-back queue replays both together.
+   */
+  private async persistTimeBuckets(
+    tx: UsageStatsTransaction,
+    record: AggregatedUsageRecord,
+    now: Date
+  ): Promise<void> {
+    if (isEmptyTimeBuckets(record.timeBuckets)) return
+
+    const existing = await tx
+      .select({
+        hourDistribution: itemTimeStats.hourDistribution,
+        dayOfWeekDistribution: itemTimeStats.dayOfWeekDistribution,
+        timeSlotDistribution: itemTimeStats.timeSlotDistribution
+      })
+      .from(itemTimeStats)
+      .where(
+        and(eq(itemTimeStats.sourceId, record.sourceId), eq(itemTimeStats.itemId, record.itemId))
+      )
+      .get()
+
+    const merged = existing ? parseStoredTimeBuckets(existing) : createEmptyTimeBuckets()
+    mergeTimeBuckets(merged, record.timeBuckets)
+    const serialized = serializeTimeBuckets(merged)
+
+    await tx
+      .insert(itemTimeStats)
+      .values({
+        sourceId: record.sourceId,
+        itemId: record.itemId,
+        ...serialized,
+        lastUpdated: now
+      })
+      .onConflictDoUpdate({
+        target: [itemTimeStats.sourceId, itemTimeStats.itemId],
+        set: { ...serialized, lastUpdated: now }
+      })
   }
 
   async flushSearchQueue(): Promise<void> {
@@ -355,6 +436,7 @@ export class UsageStatsQueue {
     }
 
     this.searchFlushing = true
+    const generation = this.clearGeneration
     const records = Array.from(this.searchQueue.values()).map((record) =>
       this.cloneAggregate(record)
     )
@@ -371,7 +453,7 @@ export class UsageStatsQueue {
         meta: { eventCount, uniqueItems: records.length }
       })
     } catch (error) {
-      const isDropped = error instanceof Error && error.message.includes('dropped')
+      const isDropped = error instanceof DbWriteDroppedError
       if (isDropped) {
         usageStatsQueueLog.debug('Search flush dropped under queue pressure', {
           meta: {
@@ -379,6 +461,10 @@ export class UsageStatsQueue {
             uniqueItems: records.length,
             queuedWrites: dbWriteScheduler.getStats().queued
           }
+        })
+      } else if (generation !== this.clearGeneration) {
+        usageStatsQueueLog.debug('Search flush failed after a clear; snapshot discarded', {
+          meta: { eventCount, uniqueItems: records.length }
         })
       } else {
         this.mergeBack(records, true)
@@ -402,6 +488,7 @@ export class UsageStatsQueue {
     }
 
     this.actionFlushing = true
+    const generation = this.clearGeneration
     const records = Array.from(this.actionQueue.values()).map((record) =>
       this.cloneAggregate(record)
     )
@@ -417,6 +504,12 @@ export class UsageStatsQueue {
         meta: { eventCount, uniqueItems: records.length }
       })
     } catch (error) {
+      if (generation !== this.clearGeneration) {
+        usageStatsQueueLog.debug('Action flush failed after a clear; snapshot discarded', {
+          meta: { eventCount, uniqueItems: records.length }
+        })
+        return
+      }
       this.mergeBack(records, false)
       this.pendingActionEvents += this.sumEventCount(records)
       usageStatsQueueLog.error('Failed to flush action queue', {
@@ -461,5 +554,6 @@ export class UsageStatsQueue {
     this.actionQueue.clear()
     this.pendingSearchEvents = 0
     this.pendingActionEvents = 0
+    this.clearGeneration += 1
   }
 }

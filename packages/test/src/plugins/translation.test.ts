@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { loadPluginModule } from './plugin-loader'
 
@@ -245,7 +246,7 @@ describe('touch-translation isolated Prelude', () => {
     const deniedItem = actionItem(finalItems(denied.pushes))
     await expect(denied.module.onItemAction(deniedItem)).resolves.toMatchObject({
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
 
     const failed = createHarness({

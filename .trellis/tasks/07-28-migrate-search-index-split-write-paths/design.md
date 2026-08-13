@@ -2,7 +2,7 @@
 
 ## Safety invariant
 
-`database.db` and `search-index.db` each have one writer connection. `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` stays default **off** until every path below has flag-on application evidence. Turning it on earlier writes provider data to `database.db` while readers use `search-index.db`, causing **silent data loss**.
+`database.db` and `search-index.db` each have one writer connection. `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` defaults **on** since `cd39bdbf6` (2026-08-05); `=0` is the emergency rollback to the shared-file topology. The silent-data-loss mode this section originally guarded — providers writing `database.db` while readers use `search-index.db` — was the half-migrated state; the 2d.3 write-path migration landed with the flip, so the invariant now reads: every writer below must hold under the default split, and the `=0` path must stay intact as the way back.
 
 ## Existing boundary
 
@@ -49,4 +49,4 @@ Preferred design: in a split-enabled branch, forward each exact Drizzle query wi
 
 Run `TUFF_DB_SEARCH_SPLIT_ENABLED=true pnpm core:dev` against a disposable profile. Confirm `search-index.db` is created and populated, first launch reindexes, apps/files search correctly, counts match flag-off, `database.db-wal` stops growing from worker writes, and logs show no busy storm or event-loop stall. Toggle the flag off again and confirm CoreApp returns to `database.db`.
 
-Rollback is the default-off flag path. Do not enable the flag or delete primary tables until all migrations and app-run evidence pass.
+Rollback is a data-preserving state transition to the shared-file topology: quiesce every search-index writer, reconcile or rebuild worker-owned index data into `database.db` (or restore one consistent snapshot), set `TUFF_DB_SEARCH_SPLIT_ENABLED=0`, restart CoreApp, and compare application/file counts plus representative query results before unblocking release. If reconciliation or parity cannot be proved, restore the snapshot and keep the release blocked. Do not delete primary tables until all migrations and app-run evidence pass; the `=0` path is the way back and must stay intact.

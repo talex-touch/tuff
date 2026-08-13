@@ -171,7 +171,7 @@ export async function forTouchTip(
     if (activeDialog) return activeDialog
   }
 
-  const pending = new Promise<void>((resolve) => {
+  const pending = new Promise<void>((resolve, reject) => {
     const root = document.createElement('div')
     const dialogId = generateDialogId('touch-tip')
     const dialogManager = useDialogManager()
@@ -183,30 +183,46 @@ export async function forTouchTip(
 
     document.body.appendChild(root)
 
-    const { cleanup, id } = renderComponent(
-      TouchTip,
-      {
-        message,
-        title,
-        buttons,
-        close: async () => {
-          dialogManager.unregister(id)
-          cleanup()
-          document.body.removeChild(root)
-          if (atomicKey) {
-            activeAtomicDialogs.delete(atomicKey)
+    try {
+      const { cleanup, id } = renderComponent(
+        TouchTip,
+        {
+          message,
+          title,
+          buttons,
+          close: async () => {
+            dialogManager.unregister(id)
+            cleanup()
+            document.body.removeChild(root)
+            if (atomicKey) {
+              activeAtomicDialogs.delete(atomicKey)
+            }
+            resolve()
           }
-          resolve()
-        }
-      },
-      root,
-      dialogId,
-      true
-    )
+        },
+        root,
+        dialogId,
+        true
+      )
+    } catch (error) {
+      // renderComponent throws when no app context was ever captured. The host node is already in
+      // the document by this point, so it has to come back out or every failed attempt leaves one
+      // behind.
+      root.remove()
+      reject(error)
+    }
   })
 
   if (atomicKey) {
     activeAtomicDialogs.set(atomicKey, pending)
+    // The entry was only removed in the dialog's close callback, so a dialog that never rendered
+    // left its rejected promise under the key - and every later call with it returned that same
+    // rejection instead of showing a dialog (#834). A failure must not become the permanent answer.
+    void pending.catch(() => {
+      if (activeAtomicDialogs.get(atomicKey) === pending) {
+        activeAtomicDialogs.delete(atomicKey)
+      }
+    })
   }
 
   return pending

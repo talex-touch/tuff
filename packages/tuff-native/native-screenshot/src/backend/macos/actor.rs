@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -55,6 +55,17 @@ pub struct MacScreenActor {
 struct ActorInner {
     sender: SyncSender<Command>,
     closed: AtomicBool,
+    /// Streams whose StopFrames command the mailbox refused.
+    ///
+    /// ACTOR_QUEUE_CAPACITY is 16 and `try_send` drops rather than blocks, so a consumer
+    /// disconnecting while the actor thread sits in `wait_for_image` (up to SYSTEM_CALLBACK_TIMEOUT
+    /// = 5s) had its stop discarded. The caller was told the stream had stopped while
+    /// `ActorState::streams` still held the MacStreamSession, and ScreenCaptureKit kept capturing
+    /// until the whole actor shut down (#851).
+    ///
+    /// Recorded here instead, and drained by the actor loop, so a refused command is deferred
+    /// rather than lost.
+    pending_stops: Mutex<Vec<(u64, Arc<FrameControl>)>>,
 }
 
 enum Command {
@@ -155,21 +166,54 @@ impl BackendFrameSource for MacFrameSource {
             control: Arc::clone(&self.control),
         };
         if self.actor.sender.try_send(command).is_err() {
-            self.control.stopped.store(true, Ordering::Release);
-            self.control.stop_notify.notify_waiters();
+            if self.actor.closed.load(Ordering::Acquire) {
+                // Nothing will ever drain the queue, so the stream is as stopped as it can be.
+                self.control.stopped.store(true, Ordering::Release);
+                self.control.stop_notify.notify_waiters();
+                return;
+            }
+            // Deferred, not dropped. Marking it stopped here is what orphaned the session: the
+            // caller believed the stream was gone while the actor still held it (#851).
+            lock_pending_stops(&self.actor.pending_stops)
+                .push((self.stream_id, Arc::clone(&self.control)));
         }
     }
 
     fn stop(&self) -> BackendFuture<()> {
         self.request_stop();
-        let control = Arc::clone(&self.control);
-        Box::pin(async move {
-            while !control.stopped.load(Ordering::Acquire) {
-                control.stop_notify.notified().await;
-            }
-            Ok(())
-        })
+        await_stopped(Arc::clone(&self.control))
     }
+}
+
+/// Resolves once the actor thread has marked the stream stopped.
+///
+/// Extracted from `stop()` so it can be hammered against a bare `FrameControl` — `MacFrameSource`
+/// needs a live ScreenCaptureKit session, and the race below is not reachable without one
+/// otherwise (#839, #1541).
+///
+/// The `Notified` is registered before `stopped` is read. `notify_waiters()` reaches only waiters
+/// that are already registered, and the actor thread calls it exactly once per stream, so reading
+/// the flag first left a window where the store and the notify both landed before this future
+/// registered: `stop()` never resolved, the frames operation never emitted its terminal frame, and
+/// `finish_dispose()` timed out with the entry still in `NativeRuntime::streams`.
+///
+/// `native-core/src/stream.rs`, `native-core/src/runtime.rs` and `backend/mod.rs` all build the
+/// Notified before checking their state; this is the same shape, with `enable()` making the
+/// registration explicit rather than resting on when the future happens to be first polled.
+fn await_stopped(control: Arc<FrameControl>) -> BackendFuture<()> {
+    Box::pin(async move {
+        loop {
+            let notified = control.stop_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
+            if control.stopped.load(Ordering::Acquire) {
+                return Ok(());
+            }
+
+            notified.await;
+        }
+    })
 }
 
 impl MacScreenActor {
@@ -181,6 +225,7 @@ impl MacScreenActor {
         let inner = Arc::new(ActorInner {
             sender,
             closed: AtomicBool::new(false),
+            pending_stops: Mutex::new(Vec::new()),
         });
         let actor_inner = Arc::downgrade(&inner);
         thread::Builder::new()
@@ -296,12 +341,33 @@ fn actor_main(
     run_actor_loop(receiver, &mut state, actor_inner);
 }
 
+fn lock_pending_stops(
+    slot: &Mutex<Vec<(u64, Arc<FrameControl>)>>,
+) -> std::sync::MutexGuard<'_, Vec<(u64, Arc<FrameControl>)>> {
+    slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Tears down streams whose StopFrames the mailbox refused.
+///
+/// Drained before every command rather than on a timer: a refusal only happens when the queue is
+/// full, so there is always work behind it and the deferral is short (#851).
+fn drain_pending_stops(state: &mut ActorState, actor_inner: &Weak<ActorInner>) {
+    let Some(inner) = actor_inner.upgrade() else {
+        return;
+    };
+    let pending = std::mem::take(&mut *lock_pending_stops(&inner.pending_stops));
+    for (stream_id, control) in pending {
+        state.stop_frames(stream_id, &control);
+    }
+}
+
 fn run_actor_loop(
     receiver: Receiver<Command>,
     state: &mut ActorState,
     actor_inner: Weak<ActorInner>,
 ) {
     while let Ok(command) = receiver.recv() {
+        drain_pending_stops(state, &actor_inner);
         match command {
             Command::Refresh {
                 input,
@@ -413,6 +479,7 @@ impl ActorState {
             self_process_ids,
             input.self_context.bundle_ids,
             self_native_ids,
+            self.limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
         let selection_policy = WindowSelectionPolicy::new(
@@ -422,15 +489,25 @@ impl ActorState {
                 .iter()
                 .map(|value| (*value).to_string())
                 .collect(),
+            self.limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?;
+        // Counted rather than only discarded. GlobalDipRect::new rejects any non-positive
+        // dimension, so a window mid-creation or fully collapsed vanishes here -- it never reaches
+        // the snapshot, hit_test cannot return it, and a later capture fails with
+        // SCREENSHOT_WINDOW_NOT_FOUND with nothing explaining why (#853).
+        let mut dropped_windows: u64 = 0;
         let shareable_windows = system_windows
             .iter()
-            .filter_map(|window| shareable_window(window, generation_number).ok())
+            .filter_map(|window| {
+                shareable_window(window, generation_number, self.limits)
+                    .inspect_err(|_| dropped_windows += 1)
+                    .ok()
+            })
             .collect::<Vec<_>>();
         let cg_windows = cg_windows
             .iter()
-            .filter_map(|window| cg_window(window).ok())
+            .filter_map(|window| cg_window(window).inspect_err(|_| dropped_windows += 1).ok())
             .collect::<Vec<_>>();
         let windows = build_window_descriptors(
             shareable_windows,
@@ -441,6 +518,7 @@ impl ActorState {
         let snapshot_windows = windows.iter().map(snapshot_window).collect::<Vec<_>>();
         ensure_active(cancellation)?;
         let snapshot = ContentSnapshot {
+            dropped_windows,
             generation: generation.clone(),
             coordinate_space: CoordinateSpace::GlobalDipV1,
             captured_at_unix_ms: unix_time_ms()?,
@@ -492,7 +570,7 @@ impl ActorState {
         let windows = hit_test_windows(
             &current.windows,
             input.point,
-            WindowHitTestOptions::new(input.include_panels, input.max_candidates),
+            WindowHitTestOptions::new(input.include_panels, input.max_candidates, self.limits),
         );
         let candidates = windows
             .iter()
@@ -1249,6 +1327,7 @@ fn encode_png(image: &MacCapturedImage) -> Result<Vec<u8>, ProtocolError> {
 fn shareable_window(
     window: &MacSystemWindow,
     generation_number: u64,
+    limits: ScreenshotLimits,
 ) -> Result<ShareableWindow, ProtocolError> {
     ShareableWindow::new(
         descriptor(format!(
@@ -1260,6 +1339,7 @@ fn shareable_window(
             window.process_id,
             window.bundle_id.clone(),
             window.application_name.clone(),
+            limits,
         )
         .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())?,
         window.title.clone(),
@@ -1268,6 +1348,7 @@ fn shareable_window(
         window.on_screen,
         Some(window.active),
         true,
+        limits,
     )
     .map_err(|_| ScreenshotError::BackendFailed.to_protocol_error())
 }
@@ -1411,6 +1492,87 @@ mod tests {
         }
     }
 
+    fn frame_control() -> Arc<FrameControl> {
+        Arc::new(FrameControl {
+            slot: LatestFrameSlot::new(),
+            stopped: AtomicBool::new(false),
+            stop_requested: AtomicBool::new(false),
+            stop_notify: Notify::new(),
+        })
+    }
+
+    /// A stop landing while the waiter is registering must not be lost.
+    ///
+    /// The defect (#839): `stop()` read `stopped` and only then built the `Notified`, so a
+    /// `store(true)` + `notify_waiters()` pair landing in that window left the future parked with
+    /// nothing further coming.
+    ///
+    /// The load is what makes a window this narrow reachable. Eight waiters per iteration over
+    /// 60k iterations detects the restored defect on every run here; a single waiter and a few
+    /// thousand iterations does not, which is how a race test ends up unable to catch its own
+    /// defect (#1541).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn a_stop_racing_registration_is_never_lost() {
+        const WAITERS: usize = 8;
+        const ITERATIONS: usize = 60_000;
+
+        for _ in 0..ITERATIONS {
+            let control = frame_control();
+            let gate = Arc::new(tokio::sync::Barrier::new(WAITERS + 1));
+
+            let waiters = (0..WAITERS)
+                .map(|_| {
+                    let control = Arc::clone(&control);
+                    let gate = Arc::clone(&gate);
+                    tokio::spawn(async move {
+                        gate.wait().await;
+                        await_stopped(control).await
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            let stopper = {
+                let control = Arc::clone(&control);
+                let gate = Arc::clone(&gate);
+                tokio::spawn(async move {
+                    gate.wait().await;
+                    // Exactly what the actor thread does in stop_frames.
+                    control.stopped.store(true, Ordering::Release);
+                    control.stop_notify.notify_waiters();
+                })
+            };
+            stopper.await.expect("stopper completes");
+
+            for waiter in waiters {
+                tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
+                    .await
+                    .expect("a waiter parked after the stop")
+                    .expect("waiter completes")
+                    .expect("stop resolves");
+            }
+        }
+    }
+
+    /// It has to actually wait for the actor.
+    ///
+    /// Without this the race test above is satisfied by an `await_stopped` that returns
+    /// immediately — verified by mutating it to do exactly that (#1541).
+    #[tokio::test]
+    async fn await_stopped_stays_pending_until_the_actor_reports_stopped() {
+        let control = frame_control();
+        let waiter = tokio::spawn({
+            let control = Arc::clone(&control);
+            async move { await_stopped(control).await }
+        });
+
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), waiter)
+                .await
+                .is_err(),
+            "await_stopped resolved before the actor reported stopped",
+        );
+    }
+
     fn test_actor_state() -> ActorState {
         ActorState {
             limits: ScreenshotLimits::default(),
@@ -1426,6 +1588,7 @@ mod tests {
         let generation = DescriptorId::new(id).unwrap();
         GenerationState {
             snapshot: ContentSnapshot {
+                dropped_windows: 0,
                 generation: generation.clone(),
                 coordinate_space: CoordinateSpace::GlobalDipV1,
                 captured_at_unix_ms: 1,
@@ -1482,6 +1645,113 @@ mod tests {
         assert!(state.streams.is_empty());
     }
 
+    fn frame_control_for_stop() -> Arc<FrameControl> {
+        Arc::new(FrameControl {
+            slot: LatestFrameSlot::new(),
+            stopped: AtomicBool::new(false),
+            stop_requested: AtomicBool::new(false),
+            stop_notify: Notify::new(),
+        })
+    }
+
+    /// A StopFrames the mailbox refuses is deferred, not dropped.
+    ///
+    /// The defect (#851): `try_send` failing marked the control stopped and returned, so the caller
+    /// believed the stream was gone while `ActorState::streams` still held the MacStreamSession and
+    /// ScreenCaptureKit kept capturing until the whole actor shut down.
+    ///
+    /// Reporting stopped is the part that made it unrecoverable — nothing downstream ever asked
+    /// again. So the assertion is twofold: the request is recorded, *and* the control is still not
+    /// claiming to be stopped.
+    #[test]
+    fn a_refused_stop_is_recorded_rather_than_reported_as_stopped() {
+        let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let actor = MacScreenActor {
+            inner: Arc::new(ActorInner {
+                sender,
+                closed: AtomicBool::new(false),
+                pending_stops: Mutex::new(Vec::new()),
+            }),
+        };
+        for index in 0..ACTOR_QUEUE_CAPACITY {
+            actor.submit(refresh_command(index % 2 == 0)).unwrap();
+        }
+
+        let control = frame_control_for_stop();
+        let source = MacFrameSource {
+            stream_id: 77,
+            actor: Arc::clone(&actor.inner),
+            control: Arc::clone(&control),
+        };
+        source.request_stop();
+
+        let pending = lock_pending_stops(&actor.inner.pending_stops);
+        assert_eq!(pending.len(), 1, "the refused stop was dropped");
+        assert_eq!(pending[0].0, 77);
+        assert!(
+            !control.stopped.load(Ordering::Acquire),
+            "a deferred stop must not report the stream as stopped",
+        );
+        drop(receiver);
+    }
+
+    /// With no actor left to drain the queue, the stream is as stopped as it can be.
+    ///
+    /// Without this branch the deferral above would hang a caller awaiting `stop()` forever once
+    /// the actor is gone — which is worse than the leak it replaces.
+    /// The deferral only helps if something drains it.
+    ///
+    /// Without this, `a_refused_stop_is_recorded_rather_than_reported_as_stopped` is satisfied by
+    /// a queue nothing ever reads — which trades a leaked session for a caller that waits forever.
+    #[test]
+    fn draining_a_pending_stop_tears_the_stream_down() {
+        let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let inner = Arc::new(ActorInner {
+            sender,
+            closed: AtomicBool::new(false),
+            pending_stops: Mutex::new(Vec::new()),
+        });
+        let control = frame_control_for_stop();
+        lock_pending_stops(&inner.pending_stops).push((79, Arc::clone(&control)));
+
+        let mut state = test_actor_state();
+        drain_pending_stops(&mut state, &Arc::downgrade(&inner));
+
+        assert!(
+            control.stopped.load(Ordering::Acquire),
+            "the drain did not stop the stream",
+        );
+        assert!(lock_pending_stops(&inner.pending_stops).is_empty());
+        drop(receiver);
+    }
+
+    #[test]
+    fn a_refused_stop_on_a_closed_actor_still_completes() {
+        let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
+        let actor = MacScreenActor {
+            inner: Arc::new(ActorInner {
+                sender,
+                closed: AtomicBool::new(true),
+                pending_stops: Mutex::new(Vec::new()),
+            }),
+        };
+        for index in 0..ACTOR_QUEUE_CAPACITY {
+            let _ = actor.inner.sender.try_send(refresh_command(index % 2 == 0));
+        }
+
+        let control = frame_control_for_stop();
+        MacFrameSource {
+            stream_id: 78,
+            actor: Arc::clone(&actor.inner),
+            control: Arc::clone(&control),
+        }
+        .request_stop();
+
+        assert!(control.stopped.load(Ordering::Acquire));
+        assert!(lock_pending_stops(&actor.inner.pending_stops).is_empty());
+        drop(receiver);
+    }
+
     #[test]
     fn actor_mailbox_is_fifo_bounded_and_closed_state_fails_fast() {
         let (sender, receiver) = sync_channel(ACTOR_QUEUE_CAPACITY);
@@ -1489,6 +1759,7 @@ mod tests {
             inner: Arc::new(ActorInner {
                 sender,
                 closed: AtomicBool::new(false),
+                pending_stops: Mutex::new(Vec::new()),
             }),
         };
 

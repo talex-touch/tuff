@@ -1,5 +1,6 @@
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 import { recordTelemetryEvent } from '../../utils/telemetryStore'
+import { resolveTelemetryUserId } from '../../utils/telemetryIdentity'
 
 export default defineEventHandler(async (event) => {
   await guardTelemetryIp(event, { weight: 1, action: 'telemetry.record' })
@@ -12,7 +13,6 @@ export default defineEventHandler(async (event) => {
 
   const {
     eventType,
-    userId,
     clientId,
     deviceFingerprint,
     platform,
@@ -31,9 +31,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid event type' })
   }
 
+  // Deliberately not read from the body: this route is unauthenticated, so a body userId is a
+  // claim anyone can make about anyone (#901). Null here means the event is anonymous.
+  const resolvedUserId = await resolveTelemetryUserId(event)
+
   await recordTelemetryEvent(event, {
     eventType,
-    userId: userId || undefined,
+    userId: resolvedUserId || undefined,
     clientId: clientId || undefined,
     deviceFingerprint: deviceFingerprint || undefined,
     platform: platform || undefined,
@@ -45,7 +49,8 @@ export default defineEventHandler(async (event) => {
     providerTimings: providerTimings || undefined,
     inputTypes: Array.isArray(inputTypes) ? inputTypes : undefined,
     metadata: metadata || undefined,
-    isAnonymous: isAnonymous !== false,
+    // An event with no proven owner is anonymous whatever the body claims.
+    isAnonymous: resolvedUserId ? isAnonymous !== false : true,
   })
 
   return { success: true }

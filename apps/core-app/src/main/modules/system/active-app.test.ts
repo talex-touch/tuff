@@ -30,7 +30,8 @@ const {
 
 vi.mock('node:child_process', () => {
   const execFile = vi.fn()
-  execFile[Symbol.for('nodejs.util.promisify.custom')] = execFilePromiseMock
+  ;(execFile as unknown as Record<symbol, unknown>)[Symbol.for('nodejs.util.promisify.custom')] =
+    execFilePromiseMock
   return { execFile }
 })
 
@@ -42,6 +43,15 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('@talex-touch/utils/electron/env-tool', () => ({
   withOSAdapter: withOSAdapterMock
+}))
+
+// resolveActiveWindowLinux probes for xdotool before doing anything else, so
+// without this the Linux case depends on the runner having it installed and
+// returns null on CI. Spread the real module so only the probe is stubbed.
+vi.mock('./linux-desktop-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./linux-desktop-tools')>()),
+  ensureXdotoolAvailable: vi.fn(async () => {}),
+  isXdotoolAvailable: vi.fn(async () => true)
 }))
 
 vi.mock('electron', () => ({
@@ -295,6 +305,44 @@ ConvertTo-Json -Compress`),
       platform: 'linux',
       icon: null
     })
+  })
+
+  it('macOS osascript 带超时,卡住的调用不会永久占住 in-flight 去重', async () => {
+    // AppleScript's frontmost-process query blocks while the foreground app is beachballing or a
+    // TCC prompt is up. Without a timeout the promise never settles, macosResolveInFlight is
+    // never cleared, and every later lookup returns that same pending promise (#770).
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+
+    // Captured, not asserted inside the mock: the production code catches command failures, so
+    // an expect() that throws in there is swallowed and the test passes on the bug.
+    let observedOptions: { timeout?: number } | undefined
+    execFilePromiseMock.mockImplementationOnce(
+      async (_file: string, _args: string[], opts?: { timeout?: number }) => {
+        observedOptions = opts
+        throw Object.assign(new Error('osascript timed out'), { killed: true, signal: 'SIGTERM' })
+      }
+    )
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    // A hung osascript can only be escaped by a timeout, so the option itself is the contract.
+    expect(observedOptions?.timeout).toBeGreaterThan(0)
+
+    // A second lookup must actually run again rather than await the first, dead promise.
+    execFilePromiseMock.mockImplementationOnce(async () => ({
+      stdout: 'Safari||com.apple.Safari||321||Start Page\n',
+      stderr: ''
+    }))
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toMatchObject({ displayName: 'Safari', processId: 321 })
   })
 
   it('returns null when platform command output is malformed', async () => {

@@ -111,6 +111,7 @@ impl ScreenshotBackend for FakeBackend {
             state.retained_displays = HashSet::from([display_id]);
             state.retained_elements.clear();
             Ok(ContentSnapshot {
+                dropped_windows: 0,
                 generation: generation.try_into().unwrap(),
                 coordinate_space: CoordinateSpace::GlobalDipV1,
                 captured_at_unix_ms: u64::from(next_generation),

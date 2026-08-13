@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+  # Also on the default branch. Two PRs that each pass independently can break typecheck or a test
+  # in combination — a semantic conflict PR-level CI cannot see — and with no run on the merge
+  # commit the branch stays broken until the next PR, whose failure then looks like its own (#723).
+  push:
     branches:
       - main
       - master
@@ -10,6 +14,7 @@ permissions:
   contents: read
 
 concurrency:
+  # github.ref for a push, so a master run is not cancelled by an unrelated PR and vice versa.
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
@@ -17,9 +22,17 @@ jobs:
   job1:
     name: Check Not Allowed File Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      # On a push there is no filtering: the default branch gets the full run, which is the point of
+      # validating it at all. paths-filter is also PR-shaped here — it resolves the base through the
+      # API and this job has no checkout, so it cannot diff a push (#723).
+      release_acceptance: ${{ github.event_name == 'push' && 'true' || steps.filter_not_allowed.outputs.release_acceptance }}
+      nexus: ${{ github.event_name == 'push' && 'true' || steps.filter_not_allowed.outputs.nexus }}
     steps:
       - name: Check Not Allowed File Changes
-        uses: dorny/paths-filter@v4
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter_not_allowed
         with:
           list-files: json
@@ -27,9 +40,18 @@ jobs:
             change:
               - 'package-lock.json'
               - 'yarn.lock'
+            release_acceptance:
+              - 'scripts/**'
+              - 'vitest.release-acceptance.config.mjs'
+              - '.github/workflows/ci.yml'
+            nexus:
+              - 'apps/nexus/**'
+              - 'packages/tuffex/**'
+              - '.github/workflows/ci.yml'
 
+      # A contribution policy, so it only makes sense on the incoming change, not on the branch.
       - name: Fail on foreign lockfile changes
-        if: ${{ steps.filter_not_allowed.outputs.change == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && steps.filter_not_allowed.outputs.change == 'true' }}
         run: |
           echo "Foreign lockfile changes are not accepted in this PR workflow:"
           echo '${{ steps.filter_not_allowed.outputs.change_files }}'
@@ -38,18 +60,19 @@ jobs:
   docs_verify:
     name: Documentation Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
       - name: Setup mise
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         with:
           cache: true
           install: true
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -67,6 +90,7 @@ jobs:
   job_quality_pr:
     name: PR Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: job1
     steps:
       - name: Checkout Code
@@ -74,8 +98,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # actionlint comes from mise's [tools], the same way docs:verify's toolchain does. It runs
+      # here rather than in the Documentation Quality job because that one is red on every PR
+      # (#1254) -- a new check added there would report into a job nobody can read a signal from.
+      - name: Setup mise
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          cache: true
+          install: true
+
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -86,5 +119,434 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Needs a completed install: it reads the resolved tree to tell a stale allowlist
+      # entry apart from a live one.
+      - name: Verify build-script allowlist
+        run: pnpm check:build-allowlist
+
+      # Reads LICENSE and the manifests only, so it does not need the install above.
+      - name: Verify entry documentation metadata
+        run: pnpm check:doc-metadata && pnpm check:doc-metadata:self-test
+
+      # Source-level architecture guard: the search-index worker is the sole writer for
+      # files / file_extensions / keyword_mappings (#295, confirmed shipped in #331).
+      - name: Verify search-index writer ownership
+        run: pnpm -C apps/core-app check:search-index-writers && pnpm -C apps/core-app check:search-index-writers:self-test
+
+      # Runs here rather than as a core-app vitest file. That job was
+      # continue-on-error when this was written, so a test there could not fail a
+      # PR (#915); it blocks as of #1596, but this check needs no app install and
+      # is cheaper to keep here.
+      - name: Verify permission API mapping coverage
+        run: pnpm -C apps/core-app check:permission-api-mappings && pnpm -C apps/core-app check:permission-api-mappings:self-test
+
+      # The script existed but no workflow ran it (#555). ~1s: re-derives the sensitive-data
+      # inventory's 28 evidence anchors from the TypeScript AST, so it needs the root
+      # `typescript` dependency and nothing else.
+      - name: Verify sensitive-data inventory
+        run: pnpm privacy:inventory:verify
+
+      # Ran nowhere until now (#554). It also doubles as the resolution check for `tsx`: the
+      # binary was undeclared workspace-wide and survived only on `shamefully-hoist=true`
+      # until #1099 removed it (#1128). If the declaration this commit adds is wrong, this
+      # step is where it shows up rather than in whichever release script runs next.
+      - name: Validate plugin manifests and package policy
+        run: pnpm plugins:validate && pnpm plugins:validate:self-test
+
+      # The per-plugin index.test.cjs suites were passing long before anything ran them.
+      # plugins/* is in the pnpm workspace, but most of these directories ship no package.json,
+      # so pnpm -r never reaches them, and the App suites matrix is [core-app, nexus]. Commit
+      # 911fe1c6f cut 2,274 lines from seven plugin suites in packages/test while rewriting the
+      # preludes they covered, which is how that baseline went green (#330).
+      # Three times in a month someone found test files that no job executed -- 623 core-app and
+      # 180 nexus (#924), 16 plugin suites (#1629), 8 vitest files in two plugin packages (#1670).
+      # All of them had been passing throughout, which is why nothing complained: a test that never
+      # runs looks exactly like a test that always passes. This is a directory walk and a set
+      # difference, so it does not need to wait for the next person who thinks to count (#330).
+      - name: Check for orphan test files
+        run: pnpm check:orphan-tests && pnpm check:orphan-tests:self-test
+
+      # The maintenance-audit reports are hand-written, one per day, and #1107 exists because a
+      # bullet was being carried forward instead of re-derived -- the same sentence about a flag
+      # default appeared in eight consecutive reports, three days after the default was inverted.
+      #
+      # The 2026-08-12 report named `07-26-install-launch-v2-4-13-beta-23` as an in-progress task
+      # missing metadata. No such directory exists, active or archived. That is a directory lookup
+      # to catch, and a report naming a task nobody can open is the cheapest possible evidence that
+      # its author did not query the tree.
+      #
+      # Only task existence is checked. Counts and prose are not: parsing "至少 X 项" out of two
+      # languages fails in ways nobody can act on, and the field-presence claim is already
+      # docs:verify's DOC-TASK-META rule. Reports dated on or before the gate date are history and
+      # exempt, which is #1107's own fourth acceptance criterion.
+      - name: Check maintenance-audit report claims
+        run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
+
+      # GitHub's closing-keyword parser is a regex over `keyword #N` and ignores the words before
+      # it, so "It does not fix #213" marks #213 for closing exactly as "Fixes #213" does. That is
+      # not hypothetical: on 2026-08-13 it closed two user-facing issues within an hour -- #213 via
+      # "does not fix", #308 via "does not close" -- and both sentences existed specifically to stop
+      # a reader mistaking instrumentation for a fix. The second happened after the first was
+      # already understood, which is why this is a check and not a note. The body is passed through
+      # the environment rather than interpolated into the shell.
+      - name: Check for negated closing keywords in the PR body
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.md
+          node scripts/check-closing-keywords.mjs /tmp/pr-body.md
+
+      - name: Check closing-keyword guard self-test
+        run: pnpm check:closing-keywords:self-test
+
+      # 34 distinct blocked reasons live across plugins/ and 20 of them belong to exactly one
+      # plugin, so the vocabulary is open and a closed union would be the wrong contract. Only the
+      # permission family is enforced: a plugin writing permission_denied is claiming to speak a
+      # shared language and getting it wrong, and it fails silently on both sides -- a reason nobody
+      # handles is indistinguishable from a handler for a reason nobody emits. Plugin Preludes take
+      # everything from globalThis and contain no imports at all, so this check is what #1711 asked
+      # an import to provide.
+      - name: Check plugin blocked reasons
+        run: pnpm check:plugin-blocked-reasons && pnpm check:plugin-blocked-reasons:self-test
+
+      # plugin.ts was ~3,060 lines when #339 asked for it to be split. Three extraction PRs landed
+      # and each reported real progress -- 4,069 to 3,947 to 3,872 to 3,844 -- against a baseline
+      # that had already grown a thousand lines since the issue was written. Extraction removed 225
+      # lines while accretion added 1,009, and nothing said so, because each PR compared with the
+      # previous PR.
+      #
+      # This does not measure what #339 is about; that issue says "the concern is not line count by
+      # itself" and is right. It measures whether the split is losing, which is the question three
+      # PRs in a row could not answer. The ceiling falls and never rises, and a ceiling left too far
+      # above the file also fails -- a ratchet nobody tightens is a comment.
+      - name: Check module size ratchet
+        run: pnpm check:module-size-ratchet && pnpm check:module-size-ratchet:self-test
+
+      - name: Run plugin suites
+        run: pnpm test:plugins && pnpm test:plugins:self-test
+
+      # There was no production dependency gate at all. `pnpm audit --prod` sat in #328's
+      # Verification block and #325's acceptance criteria while nothing ran it, so the advisory
+      # count moved from 28 to 19 unobserved -- including a `sharp` High that was really `astro`
+      # filed under dependencies. A bare `--audit-level high` cannot be the gate: it is red on
+      # arrival and would be continue-on-error within a day. This ratchets against
+      # .github/prod-audit-allowlist.json, where an entry needs a reason, an owner and an expiry,
+      # and a stale entry fails too so the list cannot only grow (#325, #328).
+      - name: Production dependency audit
+        run: pnpm check:prod-audit && pnpm check:prod-audit:self-test
+
+      # On darwin, app.getFileIcon(path, { size: 'large' }) is the unsupported path behind the
+      # SIGTRAP / EXC_BREAKPOINT reports in #310. canUseElectronFileIcon refuses it -- but a
+      # wrapper only protects the callers that use it, and #310's "no unsupported large icon path
+      # occurs" was verified once by hand on a real Mac. This makes it a fact about the tree.
+      - name: macOS file-icon guard
+        run: pnpm check:file-icon-guard && pnpm check:file-icon-guard:self-test
+
+      # `pnpm lint` reaches plugins either as workspaces or through a hand-maintained brace
+      # list, and touch-dictation was in neither (#562). The list is the kind that drifts
+      # silently, so this asserts the two paths between them still cover every directory.
+      - name: Verify plugin lint coverage
+        run: pnpm check:plugin-lint-coverage && pnpm check:plugin-lint-coverage:self-test
+
+      # Third-party actions must be SHA-pinned (#546). dtolnay/rust-toolchain@stable was a
+      # *branch*, in workflows that also hold NPM_TOKEN, RELEASE_SIGNING_PRIVATE_KEY and the
+      # Apple notarization credentials — moving that ref is enough to run someone else's code
+      # next to the publishing keys. actions/* is exempt and the check says so.
+      - name: Verify action pins
+        run: pnpm check:action-pins && pnpm check:action-pins:self-test
+
+      # ${{ }} is substituted into a run: body before bash parses it, so a workflow_dispatch
+      # input containing $(…) executes — in the step that had also just written
+      # RELEASE_SIGNING_PRIVATE_KEY to disk (#539). Only caller-controlled contexts are
+      # policed; steps.*.outputs.* and github.sha are not, or the check would flag dozens of
+      # benign lines and get switched off.
+      - name: Verify no workflow script injection
+        run: pnpm check:workflow-injection && pnpm check:workflow-injection:self-test
+
+      # actionlint was named an "external acceptance gap" in #482 on the grounds that it was
+      # unavailable locally. It was not unavailable -- it was never wired: zero references outside
+      # .trellis task records, none in any workflow, script, or mise.toml.
+      #
+      # This starts green, but not on the first measurement: without shellcheck installed the run
+      # reported 0 findings, and with it (as on every GitHub runner) the same command reported 32,
+      # all in build-and-release.yml. 28 were unquoted `>> $GITHUB_OUTPUT`, fixed in this change;
+      # the other 4 are shellcheck's style tier, which -S info excludes. Both layers are
+      # mutation-checked -- an injected `${{ github.event.* }}` in a run block and an unquoted
+      # variable inside one each turn this step red.
+      - name: Lint workflows
+        run: mise run workflows:lint
+
+      # 17 test files under scripts/ — the release machinery — that no workflow ran (#1135).
+      # Three are excluded, each with its reason named in the config: one needs a prior build, and
+      # two exercise a macOS-only release-acceptance contract a Linux runner cannot satisfy, so
+      # they run in job_release_acceptance instead (#1139). The other 14 run here.
+      - name: Run repo-root tooling tests
+        run: pnpm test:scripts
+
       - name: Run PR quality gate
         run: pnpm quality:pr
+
+
+  job_typecheck_all:
+    name: Typecheck (workspace)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: job1
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # quality:pr only type-checks apps/core-app. typecheck:all covers the rest
+      # of the workspaces that declare a typecheck script; see #553.
+      - name: Run workspace typecheck
+        run: pnpm typecheck:all
+
+  # The release-acceptance contract only holds on an Apple-silicon Mac: update-downgrade
+  # evidence may claim `executionMode: runtime` for darwin/arm64 and nothing else
+  # (scripts/lib/update-downgrade-evidence.mjs:122). Those two files are therefore excluded
+  # from the Linux script-test gate, which left the contract untested anywhere (#1139).
+  #
+  # Gated on job1's path filter so unrelated pull requests spend no macOS minutes — the
+  # runner costs ~10x a Linux one, and these tests only matter when scripts/ moves.
+  job_release_acceptance:
+    name: Release acceptance (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    needs: job1
+    if: ${{ needs.job1.outputs.release_acceptance == 'true' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails loudly rather than passing vacuously if GitHub ever moves macos-latest back to
+      # Intel: the tests would then be skipped by the very rule they exist to enforce.
+      - name: Confirm the runner is the acceptance host
+        run: |
+          node -e "
+            const { platform, arch } = process
+            if (platform !== 'darwin' || arch !== 'arm64') {
+              console.error('release acceptance expects darwin/arm64, got ' + platform + '/' + arch)
+              process.exit(1)
+            }
+            console.log('acceptance host: ' + platform + '/' + arch)
+          "
+
+      - name: Run release-acceptance tests
+        run: pnpm test:release-acceptance
+
+  # apps/nexus is the production Cloudflare deployment, and its build and check:* gates ran
+  # nowhere (#552). Its `test` and `typecheck` are covered now — by job_app_tests since #924
+  # and by typecheck:all since #553 — but a PR could break the Nuxt build or the API route
+  # tree and nothing would notice.
+  #
+  # Path-filtered because the build is the expensive part: it builds tuffex first and asks for
+  # an 8GB heap, so it should not sit on every unrelated pull request.
+  #
+  # Two of the four check:* scripts are deliberately absent, because they are deployment-time
+  # checks rather than PR gates and both fail without their inputs:
+  #   check:preview-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN
+  #   check:runtime-evidence → exit 1, wants an output/playwright directory from a prior run
+  # They belong in the deploy pipeline, next to the secrets and artifacts they read.
+  job_nexus:
+    name: Nexus (build + checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: job1
+    if: ${{ needs.job1.outputs.nexus == 'true' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Both verified passing on a clean tree before being wired: the route-tree check exits 0
+      # with "server/api route tree verified", the fence check exits 0 silently.
+      - name: Verify server API route tree
+        run: pnpm -C apps/nexus check:api-routes
+
+      - name: Verify MDC fences
+        run: pnpm -C apps/nexus check:mdc-fences
+
+      # Blocking. It was briefly continue-on-error because wiring it up is what discovered
+      # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
+      # root node_modules path that only existed under shamefully-hoist (#1151, #1099
+      # fallout). That is fixed by declaring the package, so this goes back to being a gate:
+      # apps/nexus is the production Cloudflare deployment and a PR must not be able to
+      # break its build silently, which is the state #552 found it in.
+      - name: Build
+        run: pnpm -C apps/nexus build
+
+  job_app_tests:
+    name: App suites (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: job1
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [core-app, nexus]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The 623 core-app and 180 nexus test files ran in no workflow at all;
+      # only four hand-named core-app files were covered, inside a path-filtered
+      # native-protocol job. See #924.
+      #
+      # nexus is now BLOCKING: 180 files / 963 tests, zero failures (#327 closed).
+      # core-app blocks as of #1596. It was non-blocking while a baseline of real
+      # failures was worked down -- 20 files, then 2, then the ten cases #1596
+      # enumerated -- and the tolerance came off once that reached zero, the same
+      # route the integration suite took in #1255.
+      #
+      # The JUnit report below stays. It is how the ten were found: a
+      # continue-on-error step reports success whatever the tests do, so the only
+      # way to see the count was to download the artifact and parse it. Now that
+      # the step blocks, the report is for reading *which* test failed without
+      # scraping a 6000-line log.
+      # apps/nexus imports @talex-touch/tuffex/utils, whose exports map resolves
+      # only into dist/ — without a build those tests fail on module resolution
+      # rather than on anything they actually assert.
+      - name: Build tuffex
+        if: ${{ matrix.app == 'nexus' }}
+        run: pnpm -C packages/tuffex build
+
+      # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, and only
+      # electron-vite build produces it: the worker is a rollup input in the main-process build
+      # and the CLI has --rendererOnly but no --mainOnly, so this is the whole build. Their guard
+      # refuses to skip silently, so until now the job declared the skip and six sandbox cases
+      # had never run in CI (#1596, #1607).
+      #
+      # Main process only, via a config that takes `main` straight from electron.vite.config.ts
+      # -- derived rather than restated, so the two cannot drift. A full `electron-vite build`
+      # also does the renderer, which is what pulls in tuffex's dist and most of the time: 58s
+      # plus a 29s tuffex build on this runner, against 6s locally for main alone. Nothing here
+      # needs the renderer.
+      #
+      # The whole out/main is needed, not the one file -- the worker is code-split and loads
+      # siblings from out/main/chunks (50 of them). Copying only plugin-sqlite-worker.js fails
+      # all six with `Cannot find module './chunks/plugin-sqlite-worker-protocol-*.js'`, which
+      # reads exactly like a real defect.
+      - name: Build core-app main process
+        if: ${{ matrix.app == 'core-app' }}
+        run: pnpm -C apps/core-app exec electron-vite build -c electron.vite.ci-main.config.ts
+
+      - name: Run ${{ matrix.app }} suite
+        run: >-
+          pnpm -C "apps/${{ matrix.app }}" exec vitest run
+          --reporter=default
+          --reporter=junit
+          --outputFile.junit=../../test-reports/${{ matrix.app }}.junit.xml
+
+      # if: always() — the report is only interesting when the suite failed, and the
+      # step above now fails the job, so the upload must not be gated on success.
+      - name: Upload ${{ matrix.app }} test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-${{ matrix.app }}
+          path: test-reports/${{ matrix.app }}.junit.xml
+          retention-days: 7
+          if-no-files-found: warn
+
+  # packages/test is the cross-package integration suite and had no workflow at all — the
+  # only match for it under .github/workflows was native-protocol.yml, for a different path.
+  # #325 wants it as a release gate; it cannot be one yet, so it gets the same treatment #924
+  # gave core-app and nexus: run it, do not block on it, and publish the count so a regression
+  # against that baseline is visible.
+  #
+  # Separate job rather than a third matrix entry: the matrix keys on `apps/${{ matrix.app }}`
+  # and renaming it to carry a directory would rename the existing checks, which is not this
+  # change's business.
+  job_integration_tests:
+    name: Integration suite (packages/test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: job1
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # That baseline reached zero, so continue-on-error is gone and this job blocks (#1255).
+      # It went 72 → 4 → 0 failing tests; the last four were a plugin whose Prelude stopped
+      # running actions on trigger (#817), a manifest gap the resolver only started reporting
+      # after #1203, and a compiled Rust addon this job does not build — that one now runs
+      # under native-protocol.yml, which does.
+      #
+      # Note when reading a local run: the suite is platform-sensitive, and a worktree whose
+      # node_modules is symlinked to another checkout resolves @talex-touch/* to *that*
+      # checkout's source, not the branch. Both make local counts disagree with this runner.
+      - name: Run integration suite
+        run: >-
+          pnpm -C "packages/test" exec vitest run
+          --reporter=default
+          --reporter=junit
+          --outputFile.junit=../../test-reports/integration.junit.xml
+
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-integration
+          path: test-reports/integration.junit.xml
+          retention-days: 7
+          if-no-files-found: warn

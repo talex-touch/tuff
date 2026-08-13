@@ -153,7 +153,7 @@ code: |
 ## 审阅说明
 
 - **可访问性说明:** Host 是带标签的 `role="region"`，同时是 polite 的 `aria-live` 区域，焦点在别处时新 toast 也会被播报；`danger` toast 会升级为 `role="alert"`。关键失败或长任务仍建议用持久可见文案或页面级状态文本补充。
-- **计时器说明:** 复用 `id` 会替换 store item，但已有自动关闭定时器不会取消。基于 id 的常驻任务 toast 请使用 `duration: 0`；重复的短成功提示则使用唯一 id。
+- **计时器说明:** 复用 `id` 会替换 store item，并先取消该 id 上已有的自动关闭定时器（`clearDismissTimer`），替换后的 toast 按自己的 `duration` 重新计时。常驻任务 toast 用 `duration: 0`。
 - **实测覆盖:** `toast.test.ts` 覆盖 id 替换、返回 id、自动关闭、常驻 toast、dismiss/clear 辅助函数、host region 语义、variant class、标题/描述渲染、可访问关闭按钮，以及关闭按钮移除。
 
 ## Source

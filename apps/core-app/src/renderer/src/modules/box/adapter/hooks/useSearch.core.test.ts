@@ -29,6 +29,15 @@ const state = vi.hoisted(() => ({
   searchResultForRequest: null as
     | null
     | ((payload: unknown, requestIndex: number) => TuffSearchResult | Promise<TuffSearchResult>),
+  /**
+   * Emit the snapshot without merging the session id into the result. `sessionId` is optional on
+   * TuffSearchResult, and the harness used to inject it unconditionally - which is exactly why no
+   * existing test could reach #830.
+   */
+  snapshotOmitsSessionId: false,
+  /** Hold back `complete`/`onEnd` so a test can drive the updates that stream in before it. */
+  deferCompletion: false,
+  releaseCompletion: null as null | (() => void),
   streamCancel: vi.fn(),
   beforeUnmountCallbacks: [] as Array<() => void>,
   send: vi.fn(),
@@ -89,13 +98,21 @@ vi.mock('@talex-touch/utils/transport', () => ({
         state.searchResultForRequest?.(payload, requestIndex) ??
         createSearchResult(getSearchQueryText(payload), requestIndex)
       void Promise.resolve(result).then((snapshot) => {
+        // Genuinely removed, not merely left unmerged: createSearchResult bakes in its own
+        // `session-N`, so skipping the merge would hand the caller a *different* id rather than
+        // none - a test that then failed for the wrong reason.
+        const { sessionId: _omitted, ...withoutSessionId } = snapshot
         options.onData({
           type: 'snapshot',
           sessionId,
-          result: { ...snapshot, sessionId }
+          result: state.snapshotOmitsSessionId ? withoutSessionId : { ...snapshot, sessionId }
         })
-        options.onData({ type: 'complete', sessionId, sources: snapshot.sources })
-        options.onEnd?.()
+        const complete = (): void => {
+          options.onData({ type: 'complete', sessionId, sources: snapshot.sources })
+          options.onEnd?.()
+        }
+        if (state.deferCompletion) state.releaseCompletion = complete
+        else complete()
       })
       return controller
     },
@@ -244,6 +261,9 @@ describe('useSearch CoreBox reopen behavior', () => {
     state.streams.clear()
     state.searchRequests.length = 0
     state.searchResultForRequest = null
+    state.snapshotOmitsSessionId = false
+    state.deferCompletion = false
+    state.releaseCompletion = null
     state.streamCancel.mockClear()
     state.beforeUnmountCallbacks.length = 0
     state.boxItems = []
@@ -697,8 +717,86 @@ describe('useSearch CoreBox reopen behavior', () => {
       expect.objectContaining({ toEventName: expect.any(Function) }),
       { immediate: true, reason: 'execute' }
     )
-    expect(String(state.send.mock.calls[0][0])).toBe('core-box:ui:hide')
-    expect(String(state.send.mock.calls[1][0])).toBe('core-box:item:execute')
+    // Relative order, not fixed indices: unrelated fire-and-forget traffic
+    // (e.g. recommendation exposure reporting) may interleave.
+    const sentEvents = state.send.mock.calls.map(([event]) => String(event))
+    expect(sentEvents[0]).toBe('core-box:ui:hide')
+    expect(sentEvents.indexOf('core-box:item:execute')).toBeGreaterThan(
+      sentEvents.indexOf('core-box:ui:hide')
+    )
+  })
+
+  it('reports rendered recommendation ids for local hit-rate accounting', async () => {
+    state.searchResultForRequest = () => ({
+      items: [
+        {
+          id: 'rebuilt-app',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Rebuilt app' } },
+          // The engine keys usage by the original ids, so exposure must report
+          // those and not the rebuilt item id.
+          meta: {
+            _originalSourceId: 'app-provider',
+            _originalItemId: '/Applications/Rebuilt.app',
+            recommendation: { source: 'frequent' }
+          }
+        } as TuffItem,
+        {
+          id: 'pinned-app',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'Pinned app' } },
+          meta: { pinned: { isPinned: true } }
+        } as TuffItem
+      ],
+      query: { text: '', inputs: [] },
+      duration: 1,
+      sources: [],
+      sessionId: 'exposure-session'
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    const exposureCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:recommendation:report-exposure'
+    )
+
+    expect(exposureCall?.[1]).toEqual({
+      // Pinned items are user choices, not recommendations under evaluation.
+      itemKeys: ['app-provider:/Applications/Rebuilt.app'],
+      surface: 'core-box'
+    })
+  })
+
+  it('does not report an exposure when the recommendation list is empty', async () => {
+    state.searchResultForRequest = () => ({
+      items: [],
+      query: { text: '', inputs: [] },
+      duration: 1,
+      sources: [],
+      sessionId: 'empty-exposure-session'
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    expect(
+      state.send.mock.calls.filter(
+        ([event]) => String(event) === 'core-box:recommendation:report-exposure'
+      )
+    ).toHaveLength(0)
   })
 
   it('keeps the query visible when entering a plugin feature input session', async () => {
@@ -1214,5 +1312,86 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     expect(hook.res.value.map((item) => item.id)).toEqual(['item-100'])
+  })
+
+  /**
+   * The `session` chunk establishes the search identity and the snapshot handler already proves the
+   * ids match. The caller then reassigned `currentSearchId` from `initialResult.sessionId`, which is
+   * *optional* on TuffSearchResult — so a provider result without it downgraded the id to null, every
+   * later update/no-results/complete chunk failed its session guard, applySearchEnd never ran, and
+   * the spinner stayed up with the send button disabled until the box was closed (#830).
+   *
+   * No existing test could reach this: the harness merged `sessionId` into every snapshot result, and
+   * emitted `complete` synchronously — before the awaiting caller had even resumed to run the
+   * reassignment. Both are now opt-in flags.
+   */
+  describe('a snapshot without a session id does not strand the search', () => {
+    it('后续 complete 仍然被接受,loading 回到 false', async () => {
+      state.snapshotOmitsSessionId = true
+      state.deferCompletion = true
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+
+      hook.searchVal.value = 'stranded'
+      await nextTick()
+      await flushPromises()
+
+      // The snapshot has landed and the caller has resumed; completion is still outstanding.
+      expect(hook.loading.value).toBe(true)
+      state.releaseCompletion?.()
+      await flushPromises()
+
+      expect(hook.loading.value).toBe(false)
+    })
+
+    it('流中后到的 update 分片仍然会被合入结果', async () => {
+      state.snapshotOmitsSessionId = true
+      state.deferCompletion = true
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+
+      hook.searchVal.value = 'streamed'
+      await nextTick()
+      await flushPromises()
+
+      const before = hook.res.value.length
+      // Derived, not hardcoded: the hook issues its own requests before this one, so the stream
+      // counter is not necessarily 1.
+      const liveSessionId = `stream-session-${state.searchRequests.length}`
+      state.streams.get('core-box:search:session')?.onData({
+        type: 'update',
+        sessionId: liveSessionId,
+        items: [
+          {
+            id: 'late-item',
+            kind: 'app',
+            source: { id: 'test-source', type: 'system' },
+            render: { mode: 'default', basic: { title: 'late-item' } }
+          } as TuffItem
+        ]
+      })
+      await flushPromises()
+
+      expect(hook.res.value.length).toBeGreaterThan(before)
+      expect(hook.res.value.some((item) => item.id === 'late-item')).toBe(true)
+      state.releaseCompletion?.()
+      await flushPromises()
+    })
+
+    it('快照自带 sessionId 时行为不变(否则上面两条会掩盖"干脆不再赋值")', async () => {
+      state.deferCompletion = true
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+
+      hook.searchVal.value = 'with-id'
+      await nextTick()
+      await flushPromises()
+
+      expect(hook.loading.value).toBe(true)
+      state.releaseCompletion?.()
+      await flushPromises()
+
+      expect(hook.loading.value).toBe(false)
+    })
   })
 })

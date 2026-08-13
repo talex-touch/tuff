@@ -187,14 +187,23 @@ function buildRenamePlan(paths, rules, now = new Date()) {
   return { items }
 }
 
-async function hasPermission(permissionId) {
+/**
+ * Fail-closed either way, but say which way. A missing SDK and a thrown check used to collapse
+ * into the same `false` as a real denial, so a user whose permission host was absent was told to
+ * grant a permission they may already hold (#821). Shape matches touch-browser-data's
+ * ensurePermission.
+ */
+async function ensurePermission(permissionId) {
   if (!permission || typeof permission.check !== 'function')
-    return false
+    return { granted: false, reason: 'permission-sdk-unavailable', message: '权限系统不可用' }
   try {
-    return (await permission.check(permissionId)) === true
+    if ((await permission.check(permissionId)) === true)
+      return { granted: true, reason: '', message: '' }
+    return { granted: false, reason: 'permission-denied', message: `缺少 ${permissionId} 权限` }
   }
   catch {
-    return false
+    logger?.warn?.('[touch-batch-rename] Permission check failed')
+    return { granted: false, reason: 'permission-check-failed', message: '权限检查失败' }
   }
 }
 
@@ -285,13 +294,18 @@ const pluginLifecycle = {
         return true
       }
 
-      if (!(await hasPermission('fs.read'))) {
+      const readAccess = await ensurePermission('fs.read')
+      if (!readAccess.granted) {
+        // "请授予文件读取权限" is the wrong advice when the host is absent or the check threw --
+        // there is nothing for the user to grant. Only the denial says that (#821).
         await publishItems([
           buildItem({
             id: `${featureId}-no-permission`,
             featureId,
-            title: '缺少读取权限',
-            subtitle: '请授予文件读取权限',
+            title: readAccess.reason === 'permission-denied' ? '缺少读取权限' : readAccess.message,
+            subtitle: readAccess.reason === 'permission-denied'
+              ? '请授予文件读取权限'
+              : `无法确认文件读取权限 · ${readAccess.reason}`,
           }),
         ])
         return true
@@ -379,8 +393,9 @@ const pluginLifecycle = {
       const plan = previewCacheByFeature.get(featureId)
       if (!plan)
         return blocked('preview-missing', '请先生成重命名预览')
-      if (!(await hasPermission('fs.write')))
-        return blocked('permission-denied', '缺少 fs.write 权限')
+      const writeAccess = await ensurePermission('fs.write')
+      if (!writeAccess.granted)
+        return blocked(writeAccess.reason, writeAccess.message)
       try {
         const pending = plan.items.filter(entry => !entry.unchanged)
         if (pending.length > 0) {
@@ -403,8 +418,9 @@ const pluginLifecycle = {
     }
 
     if (actionId === 'undo') {
-      if (!(await hasPermission('fs.write')))
-        return blocked('permission-denied', '缺少 fs.write 权限')
+      const writeAccess = await ensurePermission('fs.write')
+      if (!writeAccess.granted)
+        return blocked(writeAccess.reason, writeAccess.message)
       try {
         const entries = normalizeUndoEntries(await plugin.storage.getFile(LAST_RENAME_FILE))
         if (entries.length === 0)

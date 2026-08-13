@@ -29,6 +29,7 @@ import { createLogger } from '../../../utils/logger'
 import { DivisionBoxManager } from '../../division-box/manager'
 import { getPermissionModule } from '../../permission'
 import { getMainConfig, subscribeMainConfig } from '../../storage'
+import { captureForegroundAppSnapshot } from '../../system/foreground-app-snapshot'
 import { WindowBoundsController } from './bounds-controller'
 import { CoreBoxFocusPolicy } from './focus-policy'
 import { isBlockedCoreBoxFunctionKey } from './key-event'
@@ -384,6 +385,9 @@ export class WindowManager {
         .catch((error) => coreBoxWindowLog.error('Failed to create CoreBox for show', { error }))
       return
     }
+    // Before anything below takes focus: the recommendation context wants the
+    // app the user was in, and every later query answers "Touch".
+    captureForegroundAppSnapshot()
     this.focusPolicy.clearPendingBlurHide()
     this.boundsController.stopAnimation()
     this.updatePosition(window)
@@ -404,10 +408,11 @@ export class WindowManager {
     // Native visibility can run renderer onShow before the canonical show event arrives.
     // Publish shortcut intent before exposing the window so AutoPaste sees the correct trigger.
     if (triggeredByShortcut) {
-      const transport = this.getTransport()
-      void transport
-        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-        .catch(() => {})
+      this.getTransport().broadcastToWindow(
+        window.window.id,
+        CoreBoxEvents.ui.shortcutTriggered,
+        undefined
+      )
     }
 
     if (shouldFocus) {
@@ -427,10 +432,11 @@ export class WindowManager {
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
 
     if (triggeredByShortcut) {
-      const transport = this.getTransport()
-      void transport
-        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-        .catch(() => {})
+      this.getTransport().broadcastToWindow(
+        window.window.id,
+        CoreBoxEvents.ui.shortcutTriggered,
+        undefined
+      )
     }
     setTimeout(() => {
       if (window.window.isDestroyed()) return
@@ -561,6 +567,7 @@ export class WindowManager {
         this.boundsController.animate(currentWindow.window, bounds, {
           minHeight: COREBOX_MIN_HEIGHT
         })
+        coreBoxWindowLog.debug('Shrunk window to compact mode')
       } else {
         this.boundsController.stopAnimation()
         const restoreResizable = this.boundsController.prepareTemporaryResize(currentWindow.window)
@@ -587,9 +594,8 @@ export class WindowManager {
         }
       }
     } else {
-      coreBoxWindowLog.error('No current window available for shrinking')
+      coreBoxWindowLog.debug('CoreBox window is not created yet, skipping shrink')
     }
-    coreBoxWindowLog.debug('Shrunk window to compact mode')
   }
 
   /**

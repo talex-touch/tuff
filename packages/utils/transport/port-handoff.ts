@@ -7,7 +7,30 @@ export const TRANSPORT_PORT_HANDOFF_MARKER = 'talex-touch:transport-port-handoff
 type TransportPortHandoffWindow = Pick<
   Window,
   'addEventListener' | 'postMessage' | 'removeEventListener'
->
+> & { location?: Pick<Location, 'origin' | 'protocol'> }
+
+/**
+ * targetOrigin for the port handoff.
+ *
+ * The port carries the privileged streaming transport, and it used to be posted
+ * with '*'. The receiver only checks `event.source === targetWindow`, which any
+ * script running in the page satisfies, so an injected script could take the port
+ * and keep it for the lifetime of the page (#694).
+ *
+ * An opaque origin serialises as the string 'null', for which postMessage has no usable
+ * specific value — file: pages get 'file://' and anything else falls back to '*'.
+ *
+ * The app preload used to share this rule, but sendPreloadEvent now skips the post instead of
+ * broadcasting it (#798). This one still widens to '*' because the two are not comparable: the
+ * preload drops a loading-state payload, while dropping here would leave the transport with no
+ * port and no session at all. Narrowing it is its own change, with its own fallback to design.
+ */
+function resolveHandoffTargetOrigin(targetWindow: TransportPortHandoffWindow): string {
+  const location = targetWindow.location
+  if (!location) return '*'
+  if (location.origin && location.origin !== 'null') return location.origin
+  return location.protocol === 'file:' ? 'file://' : '*'
+}
 
 interface TransportPortTransferEvent {
   ports?: readonly MessagePort[]
@@ -115,7 +138,7 @@ export function installTransportPortHandoff(
     try {
       targetWindow.postMessage(
         { marker: TRANSPORT_PORT_HANDOFF_MARKER, payload } satisfies TransportPortHandoffMessage,
-        '*',
+        resolveHandoffTargetOrigin(targetWindow),
         [port],
       )
     }

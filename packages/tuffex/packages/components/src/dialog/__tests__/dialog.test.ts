@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 import TxBottomDialog from '../src/TxBottomDialog.vue'
 import TxBlowDialog from '../src/TxBlowDialog.vue'
 import TxPopperDialog from '../src/TxPopperDialog.vue'
@@ -39,6 +40,60 @@ describe('dialog components', () => {
     expect(describedBy).toBeTruthy()
     expect(document.getElementById(labelledBy ?? '')?.textContent).toBe('Confirm')
     expect(document.getElementById(describedBy ?? '')?.textContent).toBe('Continue?')
+
+    wrapper.unmount()
+  })
+
+  it('links PopperDialog title and message with instance-scoped ids', () => {
+    const close = vi.fn()
+    const wrapper = mount(TxPopperDialog, {
+      props: {
+        title: 'Confirm',
+        message: 'Continue?',
+        close,
+      },
+      attachTo: document.body,
+    })
+
+    const dialog = document.body.querySelector<HTMLElement>('.tx-popper-dialog')
+    const labelledBy = dialog?.getAttribute('aria-labelledby')
+    const describedBy = dialog?.getAttribute('aria-describedby')
+
+    expect(labelledBy).toBeTruthy()
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(labelledBy ?? '')?.textContent?.trim()).toBe('Confirm')
+    expect(document.getElementById(describedBy ?? '')?.textContent?.trim()).toBe('Continue?')
+
+    wrapper.unmount()
+  })
+
+  it('keeps PopperDialog aria wiring correct when two dialogs coexist', () => {
+    const close = vi.fn()
+    // Both dialogs must live in ONE app: useId() is scoped per app instance, so
+    // two separate mount() calls would each restart the counter and collide for
+    // reasons unrelated to this component.
+    const Host = defineComponent({
+      setup: () => () => [
+        h(TxPopperDialog, { title: 'First', message: 'First body', close }),
+        h(TxPopperDialog, { title: 'Second', message: 'Second body', close }),
+      ],
+    })
+    const wrapper = mount(Host, { attachTo: document.body })
+
+    const dialogs = document.body.querySelectorAll<HTMLElement>('.tx-popper-dialog')
+    expect(dialogs.length).toBe(2)
+
+    const ids = Array.from(dialogs).map((d) => ({
+      labelledBy: d.getAttribute('aria-labelledby') ?? '',
+      describedBy: d.getAttribute('aria-describedby') ?? '',
+    }))
+
+    // Pre-fix both instances emitted the same literal ids, so getElementById
+    // resolved to the first dialog and the second was mislabelled.
+    expect(ids[0].labelledBy).not.toBe(ids[1].labelledBy)
+    expect(ids[0].describedBy).not.toBe(ids[1].describedBy)
+    expect(document.getElementById(ids[0].labelledBy)?.textContent?.trim()).toBe('First')
+    expect(document.getElementById(ids[1].labelledBy)?.textContent?.trim()).toBe('Second')
 
     wrapper.unmount()
   })

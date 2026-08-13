@@ -60,6 +60,46 @@ export interface ScannedFileInfo {
 }
 
 /**
+ * 读取当前运行时平台。浏览器/渲染端没有 process，这里按 env 模块同样的方式
+ * 从 globalThis 取，避免裸引用 process 在打包到 web 时炸掉。
+ */
+function resolveFsPlatform(): string {
+  const platform = (globalThis as { process?: { platform?: unknown } }).process?.platform;
+  return typeof platform === "string" ? platform : "";
+}
+
+const FS_PLATFORM = resolveFsPlatform();
+
+/**
+ * 文件索引唯一的路径归一入口。
+ *
+ * macOS 的 readdir 返回 NFD（分解式）Unicode，而剪贴板/配置/用户输入通常是 NFC。
+ * 同一个文件因此会以两种字节序列进入索引：DB 查不中、reconcile 判成「磁盘上没有」
+ * 然后删掉，重扫又插回来。所有进入文件索引的路径（扫描结果、watcher 事件、
+ * 配置的 extraPaths、手动添加）都必须先过这里，DB 比较才是同类相比。
+ *
+ * **只在 darwin 归一。** APFS/HFS+ 两种形式都能解析到同一个文件，所以改写 id 是安全的；
+ * ext4/NTFS 是字节精确的，把 NFD 文件按 NFC 存进索引会导致 stat 报 ENOENT
+ * → 被清理闸门删掉 → 重扫再加回来的抖动循环，归一后的 extraPaths 甚至可能 readdir 失败。
+ * 非 darwin 一律原样返回。
+ *
+ * 只做 Unicode 归一：不解析、不改大小写、不动分隔符。
+ *
+ * @param rawPath - 原始路径
+ * @param platform - 目标平台，默认当前运行时；测试与「已知来自 macOS 的历史数据」显式传入
+ * @since 1.0.0
+ */
+export function normalizeFsPath(
+  rawPath: string,
+  platform: string = FS_PLATFORM,
+): string {
+  if (typeof rawPath !== "string" || platform !== "darwin") {
+    return rawPath;
+  }
+  return rawPath.normalize("NFC");
+}
+
+/**
  * 检查文件是否可被索引
  *
  * @function isIndexableFile
@@ -185,13 +225,34 @@ export async function scanDirectory(
   // 选项只在入口合并一次，避免每层递归重复展开生成垃圾对象
   const opts = { ...DEFAULT_SCAN_OPTIONS, ...options };
   const files: ScannedFileInfo[] = [];
-  await scanDirectoryInto(dirPath, opts, excludePaths, 0, files);
+  await scanDirectoryInto(
+    dirPath,
+    opts,
+    excludePaths,
+    0,
+    files,
+    createScanDirectoryStats(),
+  );
   return files;
 }
 
 export interface ScanDirectoryBatchOptions {
   batchSize?: number;
   signal?: AbortSignal;
+}
+
+/**
+ * 一次扫描的产出计数。
+ *
+ * `errorCount > 0` 表示这次扫描「看不全」——目录读不动（TCC 撤权、卷被拔掉、
+ * 根目录被改名）或文件 stat 失败。调用方据此区分「目录真的空了」与
+ * 「我们读不到目录」，后者绝不能被当成删除依据。
+ */
+export interface ScanDirectoryStats {
+  /** 成功 stat 并产出的文件数 */
+  entryCount: number;
+  /** 读目录 + stat 文件的失败次数 */
+  errorCount: number;
 }
 
 interface ScanDirectoryBatchSink {
@@ -201,15 +262,20 @@ interface ScanDirectoryBatchSink {
   onBatch: (batch: ScannedFileInfo[]) => Promise<void>;
 }
 
+function createScanDirectoryStats(): ScanDirectoryStats {
+  return { entryCount: 0, errorCount: 0 };
+}
+
 export async function scanDirectoryBatches(
   dirPath: string,
   onBatch: (batch: ScannedFileInfo[]) => Promise<void>,
   options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
   excludePaths?: Set<string>,
   batchOptions: ScanDirectoryBatchOptions = {},
-): Promise<void> {
+): Promise<ScanDirectoryStats> {
   const opts = { ...DEFAULT_SCAN_OPTIONS, ...options };
   const pending: ScannedFileInfo[] = [];
+  const stats = createScanDirectoryStats();
   const sink: ScanDirectoryBatchSink = {
     batchSize: Math.max(1, Math.floor(batchOptions.batchSize ?? 500)),
     signal: batchOptions.signal,
@@ -217,7 +283,7 @@ export async function scanDirectoryBatches(
     onBatch,
   };
   sink.signal?.throwIfAborted();
-  await scanDirectoryInto(dirPath, opts, excludePaths, 0, pending, sink);
+  await scanDirectoryInto(dirPath, opts, excludePaths, 0, pending, stats, sink);
   if (pending.length > 0) {
     const batch = pending.splice(0, pending.length);
     sink.flushChain = sink.flushChain.then(
@@ -226,6 +292,7 @@ export async function scanDirectoryBatches(
   }
   await sink.flushChain;
   sink.signal?.throwIfAborted();
+  return stats;
 }
 
 // ---- scanDirectory 内部实现与工具 ----
@@ -289,6 +356,7 @@ async function scanDirectoryInto(
   excludePaths: Set<string> | undefined,
   depth: number,
   out: ScannedFileInfo[],
+  stats: ScanDirectoryStats,
   sink?: ScanDirectoryBatchSink,
 ): Promise<void> {
   sink?.signal?.throwIfAborted();
@@ -299,10 +367,15 @@ async function scanDirectoryInto(
   const fs = await getFsPromises();
 
   // Use a literal option at the call site so TypeScript retains the Dirent[] overload.
+  // 读不动的目录必须被计数：静默返回空列表会让上层把「没权限」当成「空目录」，
+  // 进而按空扫描结果删索引。
   const entries = await fs
     .readdir(dirPath, { withFileTypes: true })
     .catch(() => null);
-  if (!entries) return;
+  if (!entries) {
+    stats.errorCount += 1;
+    return;
+  }
 
   const subDirs: string[] = [];
   const fileEntries: Array<{
@@ -334,15 +407,18 @@ async function scanDirectoryInto(
     async ({ fullPath, fileName, extension }) => {
       sink?.signal?.throwIfAborted();
       try {
-        const stats = await fs.stat(fullPath);
+        const fileStats = await fs.stat(fullPath);
+        // 唯一的路径入库口径（见 normalizeFsPath）：stat 用原始路径，
+        // 入索引的一律是 NFC。
         out.push({
-          path: fullPath,
-          name: fileName,
+          path: normalizeFsPath(fullPath),
+          name: normalizeFsPath(fileName),
           extension,
-          size: stats.size,
-          ctime: stats.birthtime ?? stats.ctime,
-          mtime: stats.mtime,
+          size: fileStats.size,
+          ctime: fileStats.birthtime ?? fileStats.ctime,
+          mtime: fileStats.mtime,
         });
+        stats.entryCount += 1;
         if (sink && out.length >= sink.batchSize) {
           const batch = out.splice(0, sink.batchSize);
           sink.flushChain = sink.flushChain.then(
@@ -355,6 +431,7 @@ async function scanDirectoryInto(
         if (sink?.signal?.aborted) {
           throw sink.signal.reason ?? error;
         }
+        stats.errorCount += 1;
         console.error(
           `[FileScanUtils] Could not stat file ${fullPath}:`,
           error,
@@ -365,7 +442,15 @@ async function scanDirectoryInto(
 
   // Traverse serially to keep aggregate filesystem concurrency bounded.
   for (const subDir of subDirs) {
-    await scanDirectoryInto(subDir, opts, excludePaths, depth + 1, out, sink);
+    await scanDirectoryInto(
+      subDir,
+      opts,
+      excludePaths,
+      depth + 1,
+      out,
+      stats,
+      sink,
+    );
   }
 }
 

@@ -246,6 +246,34 @@
       "when": 1785369600000,
       "tag": "0034_privacy_retention_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785456000000,
+      "tag": "0035_home_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1785542400000,
+      "tag": "0036_recommendation_exposure_daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785628800000,
+      "tag": "0037_item_usage_stats_ordering_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1785715200000,
+      "tag": "0038_conversation_messages_composite_pk",
+      "breakpoints": true
     }
   ]
 }

@@ -45,12 +45,23 @@ describe('PluginInstallQueue permission confirmation', () => {
       discardPrepared: vi.fn().mockResolvedValue(undefined)
     } as unknown as PluginInstaller
 
+    // Permission confirmations, which is what these tests are about.
     const confirmRequests: PluginInstallConfirmRequest[] = []
+    // Source confirmations. These used to be skipped because the request carried
+    // `metadata.trusted`, which the renderer could forge (#902); the main process now always
+    // asks for a non-official plugin, so the harness answers on the user's behalf.
+    const sourceConfirmRequests: PluginInstallConfirmRequest[] = []
+    let queueRef: PluginInstallQueue | null = null
     const transport = {
       sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
-        if (event === PluginEvents.install.confirm) {
-          confirmRequests.push(payload as PluginInstallConfirmRequest)
+        if (event !== PluginEvents.install.confirm) return
+        const request = payload as PluginInstallConfirmRequest
+        if (request.kind === 'source') {
+          sourceConfirmRequests.push(request)
+          queueRef?.handleConfirmResponse({ taskId: request.taskId, decision: 'accept' })
+          return
         }
+        confirmRequests.push(request)
       })
     } as unknown as ITuffTransportMain
 
@@ -69,6 +80,7 @@ describe('PluginInstallQueue permission confirmation', () => {
       }),
       onPermissionConfirmed
     })
+    queueRef = queue
 
     return {
       queue,
@@ -76,6 +88,7 @@ describe('PluginInstallQueue permission confirmation', () => {
       installRequest,
       transport,
       confirmRequests,
+      sourceConfirmRequests,
       onPermissionConfirmed
     }
   }
@@ -310,8 +323,17 @@ describe('PluginInstallQueue permission confirmation', () => {
       discardPrepared: vi.fn().mockResolvedValue(undefined)
     } as unknown as PluginInstaller
 
+    // The source confirmation now runs for a non-official plugin (#902), so it has to be
+    // answered before the sdkapi check this test is actually about is reached.
+    let queueRef: PluginInstallQueue | null = null
     const transport = {
-      sendToWindow: vi.fn().mockResolvedValue(undefined)
+      sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
+        if (event !== PluginEvents.install.confirm) return
+        const request = payload as PluginInstallConfirmRequest
+        if (request.kind === 'source') {
+          queueRef?.handleConfirmResponse({ taskId: request.taskId, decision: 'accept' })
+        }
+      })
     } as unknown as ITuffTransportMain
 
     const queue = new PluginInstallQueue(installer, transport, 1, {
@@ -321,6 +343,7 @@ describe('PluginInstallQueue permission confirmation', () => {
         )
       }
     })
+    queueRef = queue
 
     const result = await queue.enqueue(installRequest)
 
@@ -330,5 +353,92 @@ describe('PluginInstallQueue permission confirmation', () => {
     }
     expect(installer.finalizeInstall).not.toHaveBeenCalled()
     expect(installer.discardPrepared).toHaveBeenCalledWith(prepared)
+  })
+})
+
+/**
+ * That renderer-supplied metadata cannot switch the consent prompt off (#902).
+ *
+ * `metadata.trusted` was read into a trustedHint and used to skip requestConfirmation, so any
+ * code running in the renderer could send `{trusted: true}` and install without a prompt.
+ * officialActual, the field next to it, was already recomputed in the main process — this one
+ * was the client-authoritative outlier.
+ */
+describe('install confirmation cannot be waived by the request', () => {
+  function createQueue(options: { official: boolean; metadata?: Record<string, unknown> }) {
+    const installRequest: PluginInstallRequest = {
+      source: 'https://example.com/plugin.tpex',
+      metadata: options.metadata
+    }
+
+    const prepared = {
+      request: installRequest,
+      providerResult: { provider: 'tpex', official: options.official, metadata: {} },
+      manifest: { name: 'touch-demo', version: '1.0.0' }
+    } as unknown as PreparedPluginInstall
+
+    const installer = {
+      prepareInstall: vi.fn().mockResolvedValue(prepared),
+      finalizeInstall: vi.fn().mockResolvedValue({
+        manifest: prepared.manifest,
+        providerResult: prepared.providerResult
+      }),
+      discardPrepared: vi.fn().mockResolvedValue(undefined)
+    } as unknown as PluginInstaller
+
+    const sourceConfirmRequests: PluginInstallConfirmRequest[] = []
+    let queueRef: PluginInstallQueue | null = null
+    const transport = {
+      sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
+        if (event !== PluginEvents.install.confirm) return
+        const request = payload as PluginInstallConfirmRequest
+        if (request.kind !== 'source') return
+        sourceConfirmRequests.push(request)
+        queueRef?.handleConfirmResponse({ taskId: request.taskId, decision: 'accept' })
+      })
+    } as unknown as ITuffTransportMain
+
+    const queue = new PluginInstallQueue(installer, transport, 1, {})
+    queueRef = queue
+    return { queue, installRequest, sourceConfirmRequests }
+  }
+
+  it('still asks when the request claims the user already trusted it', async () => {
+    // The regression: this installed with no prompt at all.
+    const { queue, installRequest, sourceConfirmRequests } = createQueue({
+      official: false,
+      metadata: { trusted: true }
+    })
+
+    const result = await queue.enqueue(installRequest)
+
+    expect(result.status).toBe('success')
+    expect(sourceConfirmRequests).toHaveLength(1)
+  })
+
+  it('asks for a plain untrusted request too', async () => {
+    const { queue, installRequest, sourceConfirmRequests } = createQueue({ official: false })
+    await queue.enqueue(installRequest)
+    expect(sourceConfirmRequests).toHaveLength(1)
+  })
+
+  it('does not ask when the main process itself established the plugin is official', async () => {
+    // Positive control, and the boundary that must not move: officialActual is recomputed from
+    // prepared.providerResult, not read from the request, so it is not forgeable the same way.
+    const { queue, installRequest, sourceConfirmRequests } = createQueue({ official: true })
+    await queue.enqueue(installRequest)
+    expect(sourceConfirmRequests).toHaveLength(0)
+  })
+
+  it('ignores a request claiming the plugin is official when the provider says otherwise', async () => {
+    // metadata.official is read into officialHint, which is a hint only; the skip is driven by
+    // officialActual. Asserted so that field cannot drift into being authoritative either.
+    const { queue, installRequest, sourceConfirmRequests } = createQueue({
+      official: false,
+      metadata: { official: true, trusted: true }
+    })
+
+    await queue.enqueue(installRequest)
+    expect(sourceConfirmRequests).toHaveLength(1)
   })
 })

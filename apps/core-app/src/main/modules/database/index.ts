@@ -17,6 +17,7 @@ import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { setAuxDbResolver } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   getSqliteBusyRetryCount,
@@ -480,12 +481,17 @@ export class DatabaseModule extends BaseModule {
   } | null {
     const stats = dbWriteScheduler.getStats()
     this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
-    if (stats.queued > 0 || stats.processing) {
+    // WAL checkpoints run against the PRIMARY file (database.db), so the busy
+    // gate consults the primary lane only: an aux-lane backlog writes a
+    // different file and must not skip a primary-file checkpoint (lane split,
+    // design D3/FR4).
+    const primaryLane = stats.lanes.primary
+    if (primaryLane.queued > 0 || primaryLane.processing) {
       return {
         reason: 'db-write-scheduler',
-        queued: stats.queued,
-        processing: stats.processing,
-        currentTaskLabel: stats.currentTaskLabel ?? undefined
+        queued: primaryLane.queued,
+        processing: primaryLane.processing,
+        currentTaskLabel: primaryLane.currentTaskLabel ?? undefined
       }
     }
     return null
@@ -653,7 +659,11 @@ export class DatabaseModule extends BaseModule {
       busyRetryCount,
       busyRetryDelta,
       schedulerBusyFailureDelta,
+      // Aggregate depth (sum across lanes) keeps the snapshot shape; per-lane
+      // depths locate which FILE a backlog belongs to (lane split).
       schedulerQueueDepth: scheduler.queued,
+      schedulerQueueDepthPrimary: scheduler.lanes.primary.queued,
+      schedulerQueueDepthAux: scheduler.lanes.aux.queued,
       schedulerQueuePeak: this.schedulerQueuePeak,
       writerPending: writer.pending,
       writerActive: writer.activeAdmissions,
@@ -705,11 +715,14 @@ export class DatabaseModule extends BaseModule {
     pollingService.register(
       DB_WAL_TRUNCATE_TASK_ID,
       async () => {
-        const queueDepth = dbWriteScheduler.getStats().queued
-        this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
-        if (queueDepth > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
+        const stats = dbWriteScheduler.getStats()
+        this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
+        // Primary-lane depth only: TRUNCATE checkpoints the primary file, and
+        // an aux-lane backlog must not defer it (lane split, design D3/FR4).
+        const primaryQueueDepth = stats.lanes.primary.queued
+        if (primaryQueueDepth > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
           dbLog.info('Skipping WAL TRUNCATE checkpoint due to active write backlog', {
-            meta: { schedulerQueueDepth: queueDepth }
+            meta: { schedulerQueueDepth: primaryQueueDepth }
           })
           return
         }
@@ -746,6 +759,22 @@ export class DatabaseModule extends BaseModule {
     const first = (rs.rows?.[0] ?? null) as Record<string, unknown> | null
     if (!first) return 0
     return this.parseCount(first.cnt ?? first['count(*)'])
+  }
+
+  /**
+   * Column names of `tableName`, in that database's physical order.
+   *
+   * The aux copy used to be `SELECT *`, which is positional. Physical order is set by the
+   * migration history, not by schema.ts: `ALTER TABLE ... ADD COLUMN` appends, so `next_retry_at`
+   * (0001), `plugin_version` (0007) and `retention_protected` (0008) sit last in the main
+   * database while the freshly written aux DDL places them mid-table. Copying positionally wrote
+   * those values into whichever column happened to share the index (#637).
+   */
+  private async getTableColumns(client: Client, tableName: string): Promise<string[]> {
+    const rs = await client.execute(`PRAGMA table_info(${tableName})`)
+    return (rs.rows ?? [])
+      .map((row) => (row as unknown as Record<string, unknown>).name)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
   }
 
   private async hasAuxMigrationMarker(): Promise<boolean> {
@@ -835,6 +864,16 @@ export class DatabaseModule extends BaseModule {
         expires_at integer NOT NULL
       )`,
       'CREATE INDEX IF NOT EXISTS idx_recommendation_cache_expires ON recommendation_cache (expires_at)',
+      `CREATE TABLE IF NOT EXISTS recommendation_exposure_daily (
+        day integer NOT NULL,
+        surface text NOT NULL,
+        k integer NOT NULL,
+        impressions integer NOT NULL DEFAULT 0,
+        clicks integer NOT NULL DEFAULT 0,
+        updated_at integer NOT NULL DEFAULT (strftime('%s', 'now')),
+        PRIMARY KEY (day, surface, k)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_recommendation_exposure_daily_day ON recommendation_exposure_daily (day)',
       `CREATE TABLE IF NOT EXISTS clipboard_history (
         id integer PRIMARY KEY AUTOINCREMENT,
         type text NOT NULL,
@@ -931,7 +970,32 @@ export class DatabaseModule extends BaseModule {
     await this.auxClient.execute(`ATTACH DATABASE '${escapedMainPath}' AS coredb`)
     try {
       for (const table of AUX_COPY_TABLES) {
-        await this.auxClient.execute(`INSERT OR IGNORE INTO ${table} SELECT * FROM coredb.${table}`)
+        // Copy by name, never positionally. Only columns the two schemas share are moved; one
+        // side having an extra column is survivable, silently shifting values is not.
+        const [targetColumns, sourceColumns] = await Promise.all([
+          this.getTableColumns(this.auxClient, table),
+          this.getTableColumns(this.auxClient, `coredb.${table}`)
+        ])
+        const shared = targetColumns.filter((column) => sourceColumns.includes(column))
+        if (shared.length === 0) {
+          dbLog.warn(`Aux migration found no shared columns for ${table}; skipping copy`, {
+            meta: { targetColumns, sourceColumns }
+          })
+          continue
+        }
+        if (shared.length !== targetColumns.length || shared.length !== sourceColumns.length) {
+          dbLog.warn(`Aux migration copying a column subset for ${table}`, {
+            meta: {
+              copied: shared.length,
+              targetOnly: targetColumns.filter((c) => !sourceColumns.includes(c)),
+              sourceOnly: sourceColumns.filter((c) => !targetColumns.includes(c))
+            }
+          })
+        }
+        const columnList = shared.map((column) => `"${column}"`).join(', ')
+        await this.auxClient.execute(
+          `INSERT OR IGNORE INTO ${table} (${columnList}) SELECT ${columnList} FROM coredb.${table}`
+        )
         const [sourceCount, targetCount] = await Promise.all([
           this.getTableCount(this.auxClient, `coredb.${table}`),
           this.getTableCount(this.auxClient, table)
@@ -964,14 +1028,36 @@ export class DatabaseModule extends BaseModule {
       await this.configureSqliteClient(this.searchClient, 'search')
       await this.ensureDatabaseIntegrity(this.searchDbPath, 'search', this.probeDbIntegrity)
       // Search/file-index tables are rebuildable — no data migration. Apply the
-      // same drizzle migrations to the dedicated file so the search-owned tables
-      // (files, file_extensions, search_index_meta, scan_progress, …) match the
-      // primary schema exactly; providers re-index on the next scan. Redundant
-      // main-domain tables created here stay empty and are harmless.
+      // same drizzle migrations to the dedicated file; providers re-index on
+      // the next scan. Redundant main-domain tables created here stay empty and
+      // are harmless.
       const searchDb = drizzle(this.searchClient!, { schema })
       const migrationsFolder = path.resolve(this.resolveMigrationsFolder())
       if (fse.existsSync(migrationsFolder)) {
         await migrate(searchDb, { migrationsFolder })
+      }
+      // Drizzle migrations alone do NOT produce primary-parity schema: the
+      // primary receives out-of-band fixups after migrate() (the
+      // keyword_mappings.provider_id column and the source-scoped scan_progress
+      // shape). Every out-of-band fixup a search-owned table depends on must
+      // run here too, or the worker fails on the fresh file (V1 2026-08-04:
+      // CREATE INDEX ... ON keyword_mappings(provider_id, keyword) →
+      // SQLITE_ERROR). Both fixups are fail-closed on this path: a failure
+      // aborts search init and the catch below falls back to the shared
+      // primary topology — exactly the flag-off behavior.
+      await this.applyKeywordMappingsProviderColumnFixup(this.searchClient!)
+      await this.applyScanProgressSourceScopeFixup(searchDb)
+      // Perf-index parity: embeddings are split-routed, so the worker's
+      // delete/select by (source_type, source_id) needs the same index the
+      // primary gets from ensureSearchPerformanceIndexes(). Best-effort like
+      // that primary path — a missing perf index must not abort the split
+      // (unlike the two correctness fixups above).
+      try {
+        await this.searchClient!.execute(
+          'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)'
+        )
+      } catch (error) {
+        dbLog.warn('Failed to ensure idx_embeddings_source on search database', { error })
       }
       if (this.destroying) return
       this.searchDb = searchDb
@@ -1091,6 +1177,13 @@ export class DatabaseModule extends BaseModule {
 
     this.db = drizzle(this.client, { schema })
 
+    // Register the enqueue-time aux resolver for scheduleAuxWrite (db/db-write.ts).
+    // db/ must not import modules/, so the wiring lives here. getAuxDb() falls
+    // back to the primary db until the background aux init completes; resolving
+    // per write (instead of capturing at store construction) is what keeps
+    // aux-owned writes off database.db once the aux file is ready.
+    setAuxDbResolver(() => ({ db: this.getAuxDb(), isAux: this.isAuxReady() }))
+
     // Configure SQLite for better concurrency
     try {
       await this.configureSqliteClient(this.client, 'primary')
@@ -1189,13 +1282,25 @@ export class DatabaseModule extends BaseModule {
     })
 
     try {
-      // Use resolved path for migration
-      await timing.cost(
-        async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }),
-        {
-          folder: migrationsFolderResolved
+      // Scoped to migrate() alone. The duplicate-column case below is tolerated, and when the
+      // five ensure* fixups shared this try they were skipped along with the rest of the block
+      // -- the app then ran with recommendation/analytics tables and hot-path indexes missing,
+      // which is exactly what those fixups exist to guarantee (#638).
+      try {
+        // Use resolved path for migration
+        await timing.cost(
+          async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }),
+          {
+            folder: migrationsFolderResolved
+          }
+        )
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error ?? '')
+        if (!message.includes('duplicate column name: provider_id')) {
+          throw error
         }
-      )
+        dbLog.warn('Migration warning: column `provider_id` already exists')
+      }
 
       await this.ensureKeywordMappingsProviderColumn()
       await this.ensureRecommendationTables()
@@ -1207,24 +1312,18 @@ export class DatabaseModule extends BaseModule {
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
       dbLog.info(`Migrations completed successfully in ${duration}ms`)
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error ?? '')
-      const duplicateColumn = message.includes('duplicate column name: provider_id')
+      // Reaching here is fatal: the tolerated duplicate-column case is absorbed above, so this
+      // is either a real migration failure or a failed fixup. Both leave the schema unusable.
+      dbLog.error('Migration failed', { error })
 
-      if (duplicateColumn) {
-        dbLog.warn('Migration warning: column `provider_id` already exists')
-      } else {
-        dbLog.error('Migration failed', { error })
+      const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
+      const errorInstance = error instanceof Error ? error : new Error(errorMessage)
+      await this.showDatabaseErrorDialog(
+        errorInstance,
+        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
+      )
 
-        const errorMessage =
-          error instanceof Error ? error.message : String(error ?? 'Unknown error')
-        const errorInstance = error instanceof Error ? error : new Error(errorMessage)
-        await this.showDatabaseErrorDialog(
-          errorInstance,
-          `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
-        )
-
-        process.exit(1)
-      }
+      process.exit(1)
     }
 
     // Give the search-index worker its own file (search-index.db) before any
@@ -1259,24 +1358,69 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
-  private async ensureKeywordMappingsProviderColumn(): Promise<void> {
-    if (!this.client) return
+  /**
+   * Add the out-of-band `keyword_mappings.provider_id` column on the given
+   * connection. The column exists in the drizzle schema but no generated
+   * migration creates it, so EVERY database file hosting keyword_mappings
+   * needs this fixup after migrate(). Throws on failure — callers own the
+   * degrade policy (primary: warn + continue; search file: abort split init
+   * and fall back to the primary topology).
+   */
+  private async applyKeywordMappingsProviderColumnFixup(client: Client): Promise<void> {
+    const check = await client.execute(
+      "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
+    )
+    if (check.rows.length > 0) {
+      return
+    }
+
+    dbLog.info('Adding missing column `keyword_mappings.provider_id`')
+    await client.execute(
+      "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
+    )
+  }
+
+  private async ensureKeywordMappingsProviderColumn(
+    client: Client | null = this.client
+  ): Promise<void> {
+    if (!client) return
 
     try {
-      const check = await this.client.execute(
-        "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
-      )
-      if (check.rows.length > 0) {
-        return
-      }
-
-      dbLog.info('Adding missing column `keyword_mappings.provider_id`')
-      await this.client.execute(
-        "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
-      )
+      await this.applyKeywordMappingsProviderColumnFixup(client)
     } catch (error) {
       dbLog.warn('Failed to set up `provider_id` column pre-migration', { error })
     }
+  }
+
+  /**
+   * Bring `scan_progress` on the SEARCH file to the source-scoped shape
+   * (PRIMARY KEY(source_id, path)) that the worker and file-provider write.
+   * The generated migration still creates the legacy path-only shape; the
+   * primary file is upgraded separately by
+   * ensureScanProgressSourceScopeMigration(). Plan-gated and idempotent
+   * (no-op once source-scoped). Throws on a 'blocked' plan or a failed run:
+   * proceeding would hand the worker a schema it cannot write, so search init
+   * must fail and fall back to the primary topology instead.
+   */
+  private async applyScanProgressSourceScopeFixup(
+    db: LibSQLDatabase<typeof schema>
+  ): Promise<void> {
+    const plan = await planScanProgressSourceScopeMigration(db, { sourceId: 'file-provider' })
+    if (plan.status === 'not-needed') {
+      return
+    }
+
+    if (plan.status === 'blocked') {
+      dbLog.warn('scan_progress source-scope migration blocked on search database', {
+        meta: { blockers: plan.blockers, existingRows: plan.existingRows }
+      })
+      throw new Error(`SEARCH_DB_SCAN_PROGRESS_MIGRATION_BLOCKED:${plan.blockers.join(',')}`)
+    }
+
+    const result = await runScanProgressSourceScopeMigration(db, { sourceId: 'file-provider' })
+    dbLog.info('scan_progress source-scope migration completed on search database', {
+      meta: { executed: result.executed, migratedRows: result.migratedRows }
+    })
   }
 
   private async ensureScanProgressSourceScopeMigration(): Promise<void> {

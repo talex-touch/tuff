@@ -1,0 +1,34 @@
+{
+  "id": "tuffex-ai-suite",
+  "name": "tuffex-ai-suite",
+  "title": "TuffEx AI 组件系列与主界面聊天融合",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-tuffex-ai-stream-markdown",
+    "08-05-tuffex-ai-conversation-stream",
+    "08-05-tuffex-ai-attachments-toolcards",
+    "08-05-home-chat-tuffex-ai-fusion"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "Deferred by docs/plan-prd/TODO.md:9 -- remaining independently-owned active tasks continue only after the preceding blocker lane resolves. As of 2026-08-13 lane 1 (release/runtime blockers: #326 OTA, #482 release notes) and lane 2 (search and cross-platform remediation: #334, #351) are both open. TODO.md:37 additionally names AI/Assistant/OmniPanel polish as paused until its execution lane is reached.",
+    "nextAction": "Release condition: reopen when lanes 1 and 2 close. No bounded child is named yet because the ordering, not the scope, is what is blocking (#309)."
+  }
+}

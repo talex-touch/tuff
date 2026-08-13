@@ -5,6 +5,7 @@ import type { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/s
 import type { StoreSourcesPayload } from '@talex-touch/utils/store'
 import type { NotificationInboxEntry } from '@talex-touch/utils/transport/events'
 import type { DeviceIdleSettings } from '../../service/device-idle-service'
+import type { LocalSkillConfig } from '../ai/skill-local-sources'
 import type { FileReportQueueItem } from '../analytics/startup-analytics'
 import type { StartupHistory } from '../analytics/types'
 import type { AppIndexSettings } from '../box-tool/addon/apps/app-provider'
@@ -18,6 +19,15 @@ import { openersOriginData } from '@talex-touch/utils/common/storage/entity/open
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 import { redactProviderConfigDocument } from '../ai/provider-credential-service'
+import { normalizeLocalSkillConfig } from '../ai/skill-local-sources'
+
+export const AUTH_REAUTHENTICATION_REQUIRED_FIELD = 'requiresReauthenticationOnNextStartup'
+export const LEGACY_AUTH_PROTECTION_FIELDS = [
+  'useSecureStorage',
+  'secureStorageUserOverridden',
+  'secureStorageReminderShown',
+  'secureStorageUnavailable'
+] as const
 
 export interface EverythingSettings {
   enabled?: boolean
@@ -68,6 +78,55 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function omitLegacyAuthProtectionFields(auth: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...auth }
+  for (const key of LEGACY_AUTH_PROTECTION_FIELDS) {
+    delete normalized[key]
+  }
+  return normalized
+}
+
+function getAuthSettings(value: unknown): Record<string, unknown> | null {
+  if (!isPlainObject(value) || !isPlainObject(value.auth)) {
+    return null
+  }
+  return value.auth
+}
+
+function isAuthReauthenticationRequired(value: unknown): boolean {
+  return getAuthSettings(value)?.[AUTH_REAUTHENTICATION_REQUIRED_FIELD] === true
+}
+
+/**
+ * Keep the recovery marker out of renderer and sync projections. It is only
+ * meaningful to the main-owned AuthModule and must never become a user setting.
+ */
+export function omitMainOwnedAuthSettings(value: object): object {
+  if (!isPlainObject(value)) return value
+  const auth = getAuthSettings(value)
+  if (!auth) return { ...value }
+
+  const projectedAuth = omitLegacyAuthProtectionFields(auth)
+  delete projectedAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD]
+  return { ...value, auth: projectedAuth }
+}
+
+/**
+ * Renderer and remote-sync settings writes retain the local marker. Only
+ * AuthModule can change the recovery decision through a durable main write.
+ */
+export function preserveMainOwnedAuthSettings(value: unknown, current: unknown): unknown {
+  if (!isPlainObject(value)) return value
+
+  const incomingAuth = getAuthSettings(value)
+  const nextAuth = incomingAuth ? omitLegacyAuthProtectionFields(incomingAuth) : {}
+  delete nextAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD]
+  if (isAuthReauthenticationRequired(current)) {
+    nextAuth[AUTH_REAUTHENTICATION_REQUIRED_FIELD] = true
+  }
+  return { ...value, auth: nextAuth }
+}
+
 function normalizeObject<T>(value: unknown, fallback: T): T {
   return isPlainObject(value) ? (value as T) : fallback
 }
@@ -105,9 +164,11 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   )
     ? (localAiCli.defaultProvider as AppSetting['localAiCli']['defaultProvider'])
     : fallback.localAiCli.defaultProvider
+  const auth = getAuthSettings(value)
 
   return {
     ...value,
+    ...(auth ? { auth: omitLegacyAuthProtectionFields(auth) } : {}),
     setup: {
       ...setup,
       hideDock: typeof setup.hideDock === 'boolean' ? setup.hideDock : fallback.setup.hideDock
@@ -262,6 +323,11 @@ export const mainStorageRegistry = {
     key: StorageList.TELEMETRY_CLIENT,
     defaultValue: { clientId: '' },
     normalize: normalizeTelemetryClient
+  }),
+  [StorageList.SKILL_LOCAL_SOURCES]: defineEntry<LocalSkillConfig>({
+    key: StorageList.SKILL_LOCAL_SOURCES,
+    defaultValue: () => ({ dirs: [], disabledIds: [] }),
+    normalize: normalizeLocalSkillConfig
   })
 } as const
 

@@ -82,14 +82,19 @@ vi.mock('@talex-touch/utils', async (importOriginal) => {
   }
 })
 
+// A stable object, because the thing being mocked is a singleton: common.ts resolves it once at
+// module scope, so a factory returning a fresh object per call makes every assertion land on an
+// instance the code under test never held.
+const pollingInstanceMock = vi.hoisted(() => ({
+  isRegistered: vi.fn(() => false),
+  register: vi.fn(),
+  start: vi.fn(),
+  unregister: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
-    getInstance: vi.fn(() => ({
-      isRegistered: vi.fn(() => false),
-      register: vi.fn(),
-      start: vi.fn(),
-      unregister: vi.fn()
-    }))
+    getInstance: vi.fn(() => pollingInstanceMock)
   }
 }))
 
@@ -121,7 +126,9 @@ vi.mock('node:fs', () => ({
 }))
 
 vi.mock('node:child_process', () => {
-  execFileMock[Symbol.for('nodejs.util.promisify.custom')] = (command: string, args: string[]) =>
+  ;(execFileMock as unknown as Record<symbol, unknown>)[
+    Symbol.for('nodejs.util.promisify.custom')
+  ] = (command: string, args: string[]) =>
     new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       execFileMock(command, args, {}, (error: Error | null, stdout = '', stderr = '') => {
         if (error) {
@@ -149,7 +156,8 @@ vi.mock('electron', () => ({
   },
   dialog: {
     showOpenDialog: vi.fn(),
-    showSaveDialog: vi.fn()
+    showSaveDialog: vi.fn(),
+    showMessageBox: vi.fn(async () => ({ response: 0 }))
   },
   screen: {
     getPrimaryDisplay: vi.fn(() => ({
@@ -159,7 +167,8 @@ vi.mock('electron', () => ({
     }))
   },
   powerMonitor: {
-    on: vi.fn()
+    on: vi.fn(),
+    off: vi.fn()
   },
   shell: {
     openExternal: vi.fn(),
@@ -431,20 +440,6 @@ vi.mock('../service/device-idle-service', () => ({
   }
 }))
 
-vi.mock('../service/storage-maintenance', () => ({
-  cleanupAnalytics: vi.fn(),
-  cleanupClipboard: vi.fn(),
-  cleanupConfig: vi.fn(),
-  cleanupDownloads: vi.fn(),
-  cleanupFileIndex: vi.fn(),
-  cleanupIntelligence: vi.fn(),
-  cleanupLogs: vi.fn(),
-  cleanupOcr: vi.fn(),
-  cleanupTemp: vi.fn(),
-  cleanupUpdates: vi.fn(),
-  cleanupUsage: vi.fn()
-}))
-
 vi.mock('../service/temp-file.service', () => ({
   tempFileService: {
     registerNamespace: tempFileRegisterNamespaceMock,
@@ -468,7 +463,8 @@ vi.mock('../utils/common-util', () => ({
 }))
 
 vi.mock('../utils/i18n-helper', () => ({
-  setLocale: setLocaleMock
+  setLocale: setLocaleMock,
+  t: vi.fn((key: string) => key)
 }))
 
 vi.mock('../utils/logger', () => ({
@@ -504,6 +500,8 @@ vi.mock('../utils/storage-usage', () => ({
   getStorageUsageReport: vi.fn(async () => ({}))
 }))
 
+import { dialog, powerMonitor, shell } from 'electron'
+import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { CommonChannelModule } from './common'
 
 type CommonChannelModuleTestInstance = {
@@ -516,6 +514,7 @@ type CommonChannelModuleTestInstance = {
     event: { toEventName: () => string },
     handler: (payload: unknown, context: unknown) => Promise<unknown> | unknown
   ) => unknown
+  createOpenUrlHandler: () => (url: string) => Promise<void>
   readSystemFile: (payload: { source?: string; allowMissing?: boolean }) => Promise<string>
   buildTraySettingsFromAppSettings: (
     appSettings: Record<string, unknown>,
@@ -677,7 +676,7 @@ describe('CommonChannelModule private helpers', () => {
       const module = new CommonChannelModule()
       await module.onInit({
         app: {
-          window: { window: {} },
+          window: { window: {}, onMaximizedChanged: () => () => {} },
           app: { addListener: vi.fn() }
         }
       } as never)
@@ -748,7 +747,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -787,7 +786,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -800,6 +799,59 @@ describe('CommonChannelModule private helpers', () => {
 
     openExternalHandler?.({ url: 'https://example.com/docs' }, {})
     expect(shell.openExternal).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
+  it('debug.openDevTools 拒绝插件调用,并在打包构建中拒绝一切调用', async () => {
+    const { app } = await import('electron')
+    const openDevTools = vi.fn()
+    const handlers = new Map<string, (payload: unknown, context: unknown) => unknown>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, openDevTools, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const handler = handlers.get(AppEvents.debug.openDevTools.toEventName())
+    expect(handler).toBeTypeOf('function')
+
+    // A plugin view must never reach it, packaged or not.
+    expect(() => handler?.(undefined, { plugin: { name: 'third-party' } })).toThrow(
+      'HOST_ONLY_HANDLER'
+    )
+    expect(openDevTools).not.toHaveBeenCalled()
+
+    // The host can still open DevTools during development.
+    handler?.(undefined, {})
+    expect(openDevTools).toHaveBeenCalledTimes(1)
+
+    // ...but not once the app is packaged. Electron types isPackaged read-only, so the mock is
+    // flipped through an explicitly writable view rather than by suppressing the error.
+    const packagedFlag = app as unknown as { isPackaged: boolean }
+    packagedFlag.isPackaged = true
+    try {
+      handler?.(undefined, {})
+      expect(openDevTools).toHaveBeenCalledTimes(1)
+    } finally {
+      packagedFlag.isPackaged = false
+    }
   })
 
   it('maps each supported desktop wallpaper backend output to a usable path', async () => {
@@ -822,7 +874,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -919,7 +971,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1066,7 +1118,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1140,7 +1192,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1200,7 +1252,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1242,7 +1294,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1346,7 +1398,7 @@ describe('CommonChannelModule private helpers', () => {
       const module = new CommonChannelModule()
       await module.onInit({
         app: {
-          window: { window: {} },
+          window: { window: {}, onMaximizedChanged: () => () => {} },
           app: { addListener: vi.fn() }
         }
       } as never)
@@ -1412,7 +1464,7 @@ describe('CommonChannelModule private helpers', () => {
       const module = new CommonChannelModule()
       await module.onInit({
         app: {
-          window: { window: {} },
+          window: { window: {}, onMaximizedChanged: () => () => {} },
           app: { addListener: vi.fn() }
         }
       } as never)
@@ -1481,7 +1533,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1641,7 +1693,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1742,7 +1794,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -1962,7 +2014,7 @@ describe('CommonChannelModule private helpers', () => {
     const module = new CommonChannelModule()
     await module.onInit({
       app: {
-        window: { window: {} },
+        window: { window: {}, onMaximizedChanged: () => () => {} },
         app: { addListener: vi.fn() }
       }
     } as never)
@@ -2103,5 +2155,157 @@ describe('CommonChannelModule private helpers', () => {
       (source) => source.descriptor.id === 'browser-bookmarks'
     )!
     expect(otherSource.health.lastError).toBe('raw other-source text')
+  })
+})
+
+/**
+ * What reaches shell.openExternal (#910).
+ *
+ * TouchWindow's will-navigate listener emits every blocked navigation as OPEN_EXTERNAL_URL,
+ * which lands here — so this receives renderer-controlled URLs. `file:` was decided as 'open'
+ * and handed straight to the OS, and the 'confirm' decision logged and then opened anyway, so
+ * nothing was ever actually confirmed.
+ */
+describe('createOpenUrlHandler', () => {
+  const openExternal = vi.mocked(shell.openExternal)
+  const showMessageBox = vi.mocked(dialog.showMessageBox)
+
+  function handler(): (url: string) => Promise<void> {
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    return module.createOpenUrlHandler()
+  }
+
+  function answer(open: boolean): void {
+    // buttons are [Cancel, Open], so index 1 is approval.
+    showMessageBox.mockResolvedValue({ response: open ? 1 : 0 } as never)
+  }
+
+  it('asks before opening a file: URL instead of handing it straight to the OS', async () => {
+    // The regression. shell.openExternal on file: launches whatever the OS has registered,
+    // an executable included.
+    answer(false)
+    await handler()('file:///etc/passwd')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('opens a file: URL once the prompt is accepted', async () => {
+    answer(true)
+    await handler()('file:///etc/passwd')
+    expect(openExternal).toHaveBeenCalledWith('file:///etc/passwd')
+  })
+
+  it('does not open an http URL that the user declined', async () => {
+    answer(false)
+    await handler()('https://evil.test/payload')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('opens an http URL the user approved', async () => {
+    answer(true)
+    await handler()('https://example.test/docs')
+    expect(openExternal).toHaveBeenCalledWith('https://example.test/docs')
+  })
+
+  it('refuses a scheme the external-url policy does not allow', async () => {
+    // #910 made the confirm branch actually confirm, but every remaining protocol
+    // still reached shell.openExternal once the user clicked through — and a dialog
+    // is a poor place to judge whether an unknown handler scheme is safe (#691).
+    answer(true)
+    await handler()('smb://attacker.example.com/share/payload.exe')
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('still prompts for file:, which is confirm-gated on purpose', async () => {
+    // Control. file: is absent from the allowlist, but #910 routed it to the prompt
+    // deliberately; the allowlist must not quietly turn that into a hard refusal.
+    answer(false)
+    await handler()('file:///etc/passwd')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+  })
+
+  it('still prompts for an ordinary https URL', async () => {
+    answer(false)
+    await handler()('https://example.com/docs')
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses when the confirmation dialog itself fails', async () => {
+    // Fail closed: a dialog that cannot be shown must not be read as approval.
+    showMessageBox.mockRejectedValue(new Error('no window'))
+    await handler()('https://evil.test/payload')
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('still skips the app and tfile schemes without prompting', async () => {
+    // Positive control on the other side: the fix must not start prompting for internal
+    // navigation, which would make the app unusable rather than safe.
+    answer(true)
+    // Read from the constants rather than hardcoded, so the assertion follows the schemes the
+    // app actually registers instead of drifting from them.
+    await handler()(`${APP_SCHEMA}://some/route`)
+    await handler()(`${FILE_SCHEMA}:///tmp/icon.png`)
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('still skips a relative path or fragment', async () => {
+    answer(true)
+    await handler()('/settings')
+    await handler()('#/settings')
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+})
+
+describe('CommonChannelModule battery broadcaster lifecycle', () => {
+  it('releases the powerMonitor listeners and the battery poll on destroy', async () => {
+    // #532: the handlers were registered with no disposer, so after teardown an 'on-battery'
+    // event still ran startPolling() and re-registered a task on the PollingService singleton —
+    // a destroyed module keeping a global timer alive, with nothing to show for it.
+    vi.mocked(powerMonitor.on).mockClear()
+    vi.mocked(powerMonitor.off).mockClear()
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    // Widened before comparing: powerMonitor.on is overloaded, so TS narrows the tuple to the
+    // first signature's event name and calls these comparisons unreachable.
+    const calls = vi.mocked(powerMonitor.on).mock.calls as unknown as Array<
+      [string, (...args: unknown[]) => void]
+    >
+    const registered = calls.filter(([event]) => event === 'on-ac' || event === 'on-battery')
+
+    // Positive control: without this the loop below would assert nothing on a module that never
+    // registered anything.
+    expect(registered.map(([event]) => event).sort()).toEqual(['on-ac', 'on-battery'])
+
+    await module.onDestroy()
+
+    for (const [event, handler] of registered)
+      expect(vi.mocked(powerMonitor.off)).toHaveBeenCalledWith(event, handler)
+  })
+
+  it('unregisters the battery poll task from the shared PollingService', async () => {
+    pollingInstanceMock.unregister.mockClear()
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    await module.onDestroy()
+
+    expect(pollingInstanceMock.unregister).toHaveBeenCalled()
   })
 })

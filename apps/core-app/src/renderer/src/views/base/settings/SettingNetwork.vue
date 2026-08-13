@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SettingNetwork">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -20,6 +21,13 @@ import {
   type NetworkSettingsForm
 } from './setting-network-form'
 
+const props = withDefaults(
+  defineProps<{
+    proxyOnly?: boolean
+  }>(),
+  { proxyOnly: false }
+)
+
 const { t } = useI18n()
 const networkSdk = useNetworkSdk()
 const settingNetworkLog = createRendererLogger('SettingNetwork')
@@ -36,6 +44,39 @@ const authRefLabel = computed(() =>
     ? t('settings.settingNetwork.proxyAuthConfigured')
     : t('settings.settingNetwork.proxyAuthNotConfigured')
 )
+
+/**
+ * The proxy dialog edits a copy so that closing it discards, which is what a cancel button has to
+ * mean. Only `applyProxyDialog` writes back into the live form.
+ */
+const proxyDialogVisible = ref(false)
+const draft = reactive<NetworkSettingsForm>(createDefaultNetworkSettingsForm())
+
+const hasCustomProxy = computed(() =>
+  Boolean(
+    form.httpProxy.trim() || form.socksProxy.trim() || form.pacUrl.trim() || form.bypassText.trim()
+  )
+)
+const customProxyLabel = computed(() =>
+  hasCustomProxy.value
+    ? t('settings.settingNetwork.proxyAuthConfigured')
+    : t('settings.settingNetwork.proxyAuthNotConfigured')
+)
+
+function openProxyDialog(): void {
+  Object.assign(draft, JSON.parse(JSON.stringify(form)) as NetworkSettingsForm)
+  proxyDialogVisible.value = true
+}
+
+function applyProxyDialog(): void {
+  form.httpProxy = draft.httpProxy
+  form.httpsProxy = draft.httpsProxy
+  form.socksProxy = draft.socksProxy
+  form.pacUrl = draft.pacUrl
+  form.bypassText = draft.bypassText
+  form.separateHttpsProxy = draft.separateHttpsProxy
+  proxyDialogVisible.value = false
+}
 
 function assignForm(next: NetworkSettingsForm): void {
   Object.assign(form, next)
@@ -91,16 +132,12 @@ onMounted(() => {
   <TuffGroupBlock
     :name="t('settings.settingNetwork.groupTitle')"
     :description="t('settings.settingNetwork.groupDesc')"
-    default-icon="i-carbon-network-3"
-    active-icon="i-carbon-network-3"
-    memory-name="setting-network"
+    :collapsible="false"
   >
     <TuffBlockSelect
       v-model="form.proxyMode"
       :title="t('settings.settingNetwork.proxyMode')"
       :description="t('settings.settingNetwork.proxyModeDesc')"
-      default-icon="i-carbon-network-enterprise"
-      active-icon="i-carbon-network-enterprise"
       :disabled="busy"
     >
       <TxSelectItem v-for="mode in proxyModeOptions" :key="mode" :value="mode">
@@ -108,132 +145,43 @@ onMounted(() => {
       </TxSelectItem>
     </TuffBlockSelect>
 
-    <TuffBlockInput
-      v-model="form.httpProxy"
-      :title="t('settings.settingNetwork.httpProxy')"
-      :description="t('settings.settingNetwork.httpProxyDesc')"
-      default-icon="i-carbon-http"
-      active-icon="i-carbon-http"
-      :disabled="busy || !customProxyEnabled"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <TxInput
-          :model-value="modelValue"
-          class="SettingNetwork-Input"
-          :placeholder="t('settings.settingNetwork.httpProxyPlaceholder')"
-          :disabled="disabled"
-          clearable
-          @update:model-value="update"
-          @focus="focus"
-          @blur="blur"
-        />
-      </template>
-    </TuffBlockInput>
-
-    <TuffBlockInput
-      v-model="form.httpsProxy"
-      :title="t('settings.settingNetwork.httpsProxy')"
-      :description="t('settings.settingNetwork.httpsProxyDesc')"
-      default-icon="i-carbon-locked"
-      active-icon="i-carbon-locked"
-      :disabled="busy || !customProxyEnabled"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <TxInput
-          :model-value="modelValue"
-          class="SettingNetwork-Input"
-          :placeholder="t('settings.settingNetwork.httpsProxyPlaceholder')"
-          :disabled="disabled"
-          clearable
-          @update:model-value="update"
-          @focus="focus"
-          @blur="blur"
-        />
-      </template>
-    </TuffBlockInput>
-
-    <TuffBlockInput
-      v-model="form.socksProxy"
-      :title="t('settings.settingNetwork.socksProxy')"
-      :description="t('settings.settingNetwork.socksProxyDesc')"
-      default-icon="i-carbon-connection-signal"
-      active-icon="i-carbon-connection-signal"
-      :disabled="busy || !customProxyEnabled"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <TxInput
-          :model-value="modelValue"
-          class="SettingNetwork-Input"
-          :placeholder="t('settings.settingNetwork.socksProxyPlaceholder')"
-          :disabled="disabled"
-          clearable
-          @update:model-value="update"
-          @focus="focus"
-          @blur="blur"
-        />
-      </template>
-    </TuffBlockInput>
-
-    <TuffBlockInput
-      v-model="form.pacUrl"
-      :title="t('settings.settingNetwork.pacUrl')"
-      :description="t('settings.settingNetwork.pacUrlDesc')"
-      default-icon="i-carbon-script"
-      active-icon="i-carbon-script"
-      :disabled="busy || !customProxyEnabled"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <TxInput
-          :model-value="modelValue"
-          class="SettingNetwork-Input"
-          :placeholder="t('settings.settingNetwork.pacUrlPlaceholder')"
-          :disabled="disabled"
-          clearable
-          @update:model-value="update"
-          @focus="focus"
-          @blur="blur"
-        />
-      </template>
-    </TuffBlockInput>
-
+    <!--
+      HTTP(S), SOCKS, PAC and the bypass list used to be five rows that sat greyed out in every
+      mode but `custom`. They are a form with cancel/save semantics, so they live in a dialog and
+      this row only reports whether anything is configured.
+    -->
     <TuffBlockSlot
-      :title="t('settings.settingNetwork.bypassRules')"
-      :description="t('settings.settingNetwork.bypassRulesDesc')"
-      default-icon="i-carbon-rule"
-      active-icon="i-carbon-rule"
-      :disabled="busy || !customProxyEnabled"
+      :title="t('settings.settingNetwork.customProxy')"
+      :description="t('settings.settingNetwork.customProxyDesc')"
     >
-      <textarea
-        v-model="form.bypassText"
-        class="SettingNetwork-Textarea"
-        :placeholder="t('settings.settingNetwork.bypassRulesPlaceholder')"
+      <span class="SettingNetwork-Status">{{ customProxyLabel }}</span>
+      <TxButton
+        variant="flat"
         :disabled="busy || !customProxyEnabled"
-      />
+        @click.stop="openProxyDialog"
+      >
+        {{ t('settings.settingNetwork.configure') }}
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
       :title="t('settings.settingNetwork.proxyAuth')"
       :description="t('settings.settingNetwork.proxyAuthDesc')"
-      default-icon="i-carbon-password"
-      active-icon="i-carbon-password"
     >
       <span class="SettingNetwork-Status">{{ authRefLabel }}</span>
     </TuffBlockSlot>
   </TuffGroupBlock>
 
   <TuffGroupBlock
+    v-if="!props.proxyOnly"
     :name="t('settings.settingNetwork.policyGroupTitle')"
     :description="t('settings.settingNetwork.policyGroupDesc')"
-    default-icon="i-carbon-meter"
-    active-icon="i-carbon-meter"
-    memory-name="setting-network-policy"
+    :collapsible="false"
   >
     <TuffBlockInput
       v-model="form.timeoutMs"
       :title="t('settings.settingNetwork.timeoutMs')"
       :description="t('settings.settingNetwork.timeoutMsDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
       :disabled="busy"
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
@@ -254,12 +202,15 @@ onMounted(() => {
       </template>
     </TuffBlockInput>
 
+    <!--
+      Backoff base/ceiling, the two retry-cause switches and the auto-reset flag were removed from
+      the UI, not from the config: they describe how a retry is paced, which is not something a
+      user can reason about. The count is the only part worth exposing.
+    -->
     <TuffBlockInput
       v-model="form.maxRetries"
       :title="t('settings.settingNetwork.maxRetries')"
       :description="t('settings.settingNetwork.maxRetriesDesc')"
-      default-icon="i-carbon-retry-failed"
-      active-icon="i-carbon-retry-failed"
       :disabled="busy"
     >
       <template #control="{ modelValue, update, focus, blur, disabled }">
@@ -277,139 +228,16 @@ onMounted(() => {
       </template>
     </TuffBlockInput>
 
-    <TuffBlockInput
-      v-model="form.baseDelayMs"
-      :title="t('settings.settingNetwork.baseDelayMs')"
-      :description="t('settings.settingNetwork.baseDelayMsDesc')"
-      default-icon="i-carbon-time"
-      active-icon="i-carbon-time"
-      :disabled="busy"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <div class="SettingNetwork-NumberRow">
-          <TxInput
-            :model-value="modelValue"
-            type="number"
-            min="0"
-            inputmode="numeric"
-            class="SettingNetwork-NumberInput"
-            :disabled="disabled"
-            @update:model-value="update(coerceNumberInput($event))"
-            @focus="focus"
-            @blur="blur"
-          />
-          <span>{{ t('settings.settingNetwork.unitMs') }}</span>
-        </div>
-      </template>
-    </TuffBlockInput>
-
-    <TuffBlockInput
-      v-model="form.maxDelayMs"
-      :title="t('settings.settingNetwork.maxDelayMs')"
-      :description="t('settings.settingNetwork.maxDelayMsDesc')"
-      default-icon="i-carbon-time-plot"
-      active-icon="i-carbon-time-plot"
-      :disabled="busy"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <div class="SettingNetwork-NumberRow">
-          <TxInput
-            :model-value="modelValue"
-            type="number"
-            min="0"
-            inputmode="numeric"
-            class="SettingNetwork-NumberInput"
-            :disabled="disabled"
-            @update:model-value="update(coerceNumberInput($event))"
-            @focus="focus"
-            @blur="blur"
-          />
-          <span>{{ t('settings.settingNetwork.unitMs') }}</span>
-        </div>
-      </template>
-    </TuffBlockInput>
-
     <TuffBlockSwitch
-      v-model="form.retryOnNetworkError"
-      :title="t('settings.settingNetwork.retryOnNetworkError')"
-      :description="t('settings.settingNetwork.retryOnNetworkErrorDesc')"
-      default-icon="i-carbon-wifi-off"
-      active-icon="i-carbon-wifi-off"
-      :loading="busy"
-    />
-
-    <TuffBlockSwitch
-      v-model="form.retryOnTimeout"
-      :title="t('settings.settingNetwork.retryOnTimeout')"
-      :description="t('settings.settingNetwork.retryOnTimeoutDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
-      :loading="busy"
-    />
-
-    <TuffBlockInput
-      v-model="form.failureThreshold"
-      :title="t('settings.settingNetwork.failureThreshold')"
-      :description="t('settings.settingNetwork.failureThresholdDesc')"
-      default-icon="i-carbon-warning"
-      active-icon="i-carbon-warning"
-      :disabled="busy"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <TxInput
-          :model-value="modelValue"
-          type="number"
-          min="1"
-          inputmode="numeric"
-          class="SettingNetwork-CompactNumberInput"
-          :disabled="disabled"
-          @update:model-value="update(coerceNumberInput($event))"
-          @focus="focus"
-          @blur="blur"
-        />
-      </template>
-    </TuffBlockInput>
-
-    <TuffBlockInput
-      v-model="form.cooldownMs"
-      :title="t('settings.settingNetwork.cooldownMs')"
-      :description="t('settings.settingNetwork.cooldownMsDesc')"
-      default-icon="i-carbon-hourglass"
-      active-icon="i-carbon-hourglass"
-      :disabled="busy"
-    >
-      <template #control="{ modelValue, update, focus, blur, disabled }">
-        <div class="SettingNetwork-NumberRow">
-          <TxInput
-            :model-value="modelValue"
-            type="number"
-            min="0"
-            inputmode="numeric"
-            class="SettingNetwork-NumberInput"
-            :disabled="disabled"
-            @update:model-value="update(coerceNumberInput($event))"
-            @focus="focus"
-            @blur="blur"
-          />
-          <span>{{ t('settings.settingNetwork.unitMs') }}</span>
-        </div>
-      </template>
-    </TuffBlockInput>
-
-    <TuffBlockSwitch
-      v-model="form.autoResetOnSuccess"
-      :title="t('settings.settingNetwork.autoResetOnSuccess')"
-      :description="t('settings.settingNetwork.autoResetOnSuccessDesc')"
-      default-icon="i-carbon-checkmark-outline"
-      active-icon="i-carbon-checkmark-filled"
+      v-model="form.pauseOnInstability"
+      :title="t('settings.settingNetwork.pauseOnInstability')"
+      :description="t('settings.settingNetwork.pauseOnInstabilityDesc')"
       :loading="busy"
     />
 
     <TuffBlockSlot
       :title="t('settings.settingNetwork.actions')"
       :description="t('settings.settingNetwork.actionsDesc')"
-      default-icon="i-carbon-save"
-      active-icon="i-carbon-save"
     >
       <div class="SettingNetwork-Actions">
         <TxButton variant="flat" :disabled="busy" @click.stop="restoreDefaults">
@@ -426,6 +254,86 @@ onMounted(() => {
       </div>
     </TuffBlockSlot>
   </TuffGroupBlock>
+
+  <TxModal
+    v-model="proxyDialogVisible"
+    :title="t('settings.settingNetwork.customProxy')"
+    width="560px"
+  >
+    <div class="SettingNetwork-Dialog">
+      <p class="SettingNetwork-DialogHint">{{ t('settings.settingNetwork.customProxyHint') }}</p>
+
+      <label class="SettingNetwork-Field">
+        <span class="SettingNetwork-FieldLabel">{{ t('settings.settingNetwork.httpProxy') }}</span>
+        <TxInput
+          v-model="draft.httpProxy"
+          :placeholder="t('settings.settingNetwork.httpProxyPlaceholder')"
+          clearable
+        />
+        <span class="SettingNetwork-FieldNote">
+          {{ t('settings.settingNetwork.httpProxyDesc') }}
+        </span>
+      </label>
+
+      <label class="SettingNetwork-Check">
+        <input v-model="draft.separateHttpsProxy" type="checkbox" />
+        <span>{{ t('settings.settingNetwork.separateHttps') }}</span>
+      </label>
+
+      <label v-if="draft.separateHttpsProxy" class="SettingNetwork-Field">
+        <span class="SettingNetwork-FieldLabel">{{ t('settings.settingNetwork.httpsProxy') }}</span>
+        <TxInput
+          v-model="draft.httpsProxy"
+          :placeholder="t('settings.settingNetwork.httpsProxyPlaceholder')"
+          clearable
+        />
+      </label>
+
+      <label class="SettingNetwork-Field">
+        <span class="SettingNetwork-FieldLabel">{{ t('settings.settingNetwork.socksProxy') }}</span>
+        <TxInput
+          v-model="draft.socksProxy"
+          :placeholder="t('settings.settingNetwork.socksProxyPlaceholder')"
+          clearable
+        />
+      </label>
+
+      <label class="SettingNetwork-Field">
+        <span class="SettingNetwork-FieldLabel">{{ t('settings.settingNetwork.pacUrl') }}</span>
+        <TxInput
+          v-model="draft.pacUrl"
+          :placeholder="t('settings.settingNetwork.pacUrlPlaceholder')"
+          clearable
+        />
+        <span class="SettingNetwork-FieldNote">{{ t('settings.settingNetwork.pacUrlDesc') }}</span>
+      </label>
+
+      <label class="SettingNetwork-Field">
+        <span class="SettingNetwork-FieldLabel">{{
+          t('settings.settingNetwork.bypassRules')
+        }}</span>
+        <textarea
+          v-model="draft.bypassText"
+          class="SettingNetwork-Textarea"
+          :placeholder="t('settings.settingNetwork.bypassRulesPlaceholder')"
+        />
+        <span class="SettingNetwork-FieldNote">
+          {{ t('settings.settingNetwork.bypassRulesDesc') }}
+        </span>
+      </label>
+    </div>
+
+    <template #footer>
+      <div class="SettingNetwork-Actions">
+        <TxButton variant="flat" @click.stop="proxyDialogVisible = false">
+          {{ t('settings.settingNetwork.cancel') }}
+        </TxButton>
+        <TxButton type="primary" @click.stop="applyProxyDialog">
+          {{ t('settings.settingNetwork.save') }}
+        </TxButton>
+      </div>
+    </template>
+  </TxModal>
 </template>
 
 <style scoped>

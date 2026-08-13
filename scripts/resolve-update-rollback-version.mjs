@@ -8,6 +8,27 @@ import {
   inferManifestChannel,
 } from './lib/update-rollback-contract.mjs'
 
+/**
+ * What a channel's first release names as its rollback target.
+ *
+ * "No predecessor" cannot be represented as an absent field: `prepare-release-assets.mjs`
+ * requires `--rollback-from-version`, `validateRollbackContract` requires a non-empty
+ * same-channel semver strictly older than the release, and — the one that decides it —
+ * `validateUpdateReleaseManifest` in every *already shipped* client rejects a manifest whose
+ * `rollbackFromVersion` is not a string. Making the field optional would mean the first
+ * release in a channel produced a manifest installed clients refuse, so they would never
+ * see the update at all.
+ *
+ * A channel-matched zero is the only shape the whole chain accepts, and it cannot mislead
+ * anyone: the client sets `rollbackCompatible` only when the manifest's rollback target
+ * equals the version the user is *currently running* (`update-system.ts`), and nobody is
+ * running 0.0.0. So a first release advertises no downgrade path rather than a false one.
+ */
+export const FIRST_RELEASE_ROLLBACK_VERSION = {
+  RELEASE: '0.0.0',
+  BETA: '0.0.0-beta.0',
+}
+
 function versionFromTag(tag) {
   return String(tag ?? '')
     .trim()
@@ -40,14 +61,24 @@ export function resolveSameChannelRollbackVersion({ tag, tags }) {
     })
 
   const previous = candidates[0]
-  if (!previous)
-    throw new Error(`No same-channel predecessor exists for ${tag}`)
+  if (!previous) {
+    // First release in this channel. Throwing here failed the release *after* all three
+    // platform builds had finished, with no way through short of editing the workflow (#559).
+    return {
+      channel,
+      rollbackFromVersion: FIRST_RELEASE_ROLLBACK_VERSION[channel],
+      rollbackTag: null,
+      targetVersion,
+      isFirstInChannel: true,
+    }
+  }
 
   return {
     channel,
     rollbackFromVersion: previous.version,
     rollbackTag: previous.tag,
     targetVersion,
+    isFirstInChannel: false,
   }
 }
 

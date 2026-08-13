@@ -95,10 +95,6 @@ vi.mock('@sentry/electron/main', () => ({
   captureException: vi.fn()
 }))
 
-vi.mock('../../core', () => ({
-  genTouchApp: () => ({ channel: null })
-}))
-
 vi.mock('../box-tool/core-box/window', () => ({
   windowManager: {
     getAttachedPlugin: vi.fn(() => null)
@@ -133,6 +129,10 @@ vi.mock('../ai/intelligence-sdk', () => ({
 import { ocrService } from './ocr-service'
 
 interface OcrServiceTestAccess {
+  processQueue: () => Promise<void>
+  processing: boolean
+  isQueueDisabled: () => Promise<boolean>
+  db: unknown
   runAgentJob: (jobId: number, job: Record<string, unknown>) => Promise<void>
   updateClipboardMeta: (...args: unknown[]) => Promise<void>
   normalizeSourceForAgent: (...args: unknown[]) => Promise<{
@@ -423,6 +423,121 @@ describe('OcrService runAgentJob local-first options', () => {
       } else {
         process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
       }
+    }
+  })
+})
+
+/**
+ * The start write must survive write-queue pressure (#645).
+ *
+ * It used to be skipped whenever the scheduler was backed up, which dropped the attempts
+ * increment. A job whose image crashes the native worker then comes back as pending/attempts=0 on
+ * the next launch, MAX_ATTEMPTS is never reached, and it is re-dispatched every poll forever.
+ */
+describe('ocr dispatch persists the attempt', () => {
+  type Dispatchable = {
+    db: unknown
+    processing: boolean
+    activeJobs: Map<number, Promise<void>>
+    processQueue: () => Promise<void>
+    runAgentJob: (jobId: number, job: unknown) => Promise<void>
+    upsertConfig: (key: string, value: unknown) => Promise<void>
+    isQueueDisabled: () => Promise<boolean>
+    withDbWrite: (label: string, op: unknown, options?: unknown) => Promise<unknown>
+  }
+
+  function readyJobDb(job: Record<string, unknown>) {
+    const builder = {
+      from: () => builder,
+      where: () => builder,
+      orderBy: () => builder,
+      limit: async () => [job]
+    }
+    return { select: () => builder }
+  }
+
+  it('schedules ocr.jobs.start as critical and undroppable, however deep the queue', async () => {
+    const service = ocrService as unknown as Dispatchable
+    const writes: Array<{ label: string; options?: { priority?: string; dropPolicy?: string } }> =
+      []
+
+    service.db = readyJobDb({ id: 42, clipboardId: 7, attempts: 0 })
+    service.processing = false
+    service.activeJobs = new Map()
+    service.isQueueDisabled = async () => false
+    service.upsertConfig = async () => {}
+    service.runAgentJob = async () => {}
+    service.withDbWrite = async (label, _op, options) => {
+      writes.push({ label, options: options as { priority?: string; dropPolicy?: string } })
+      return undefined
+    }
+
+    await service.processQueue()
+
+    const startWrite = writes.find((entry) => entry.label === 'ocr.jobs.start')
+
+    // Positive control: the dispatch path ran at all. Without it an early return would satisfy
+    // every assertion below by never writing anything.
+    expect(writes.length).toBeGreaterThan(0)
+
+    expect(startWrite, 'ocr.jobs.start was not scheduled').toBeDefined()
+    expect(startWrite?.options?.priority).toBe('critical')
+    expect(startWrite?.options?.dropPolicy).toBe('none')
+  })
+})
+
+describe('OcrService processQueue re-entrancy', () => {
+  it('lets only one concurrent caller past the guard', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const originalProcessing = service.processing
+    const originalDb = service.db
+    const originalIsQueueDisabled = service.isQueueDisabled
+
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const isQueueDisabled = vi.fn(async () => {
+      await gate
+      return true // stop before touching the database; the guard is what is under test
+    })
+
+    service.processing = false
+    service.db = {}
+    service.isQueueDisabled = isQueueDisabled
+
+    try {
+      // Both start before either can finish the config read.
+      const first = service.processQueue()
+      const second = service.processQueue()
+      release!()
+      await Promise.all([first, second])
+
+      // The defect: both callers reached the config read, so both went on to dispatch.
+      expect(isQueueDisabled).toHaveBeenCalledTimes(1)
+    } finally {
+      service.processing = originalProcessing
+      service.db = originalDb
+      service.isQueueDisabled = originalIsQueueDisabled
+    }
+  })
+
+  it('releases the guard even when the queue is disabled', async () => {
+    // The claim moved above an early return, so a missed finally would wedge the queue shut.
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const originalDb = service.db
+    const originalIsQueueDisabled = service.isQueueDisabled
+
+    service.processing = false
+    service.db = {}
+    service.isQueueDisabled = vi.fn(async () => true)
+
+    try {
+      await service.processQueue()
+      expect(service.processing).toBe(false)
+    } finally {
+      service.db = originalDb
+      service.isQueueDisabled = originalIsQueueDisabled
     }
   })
 })

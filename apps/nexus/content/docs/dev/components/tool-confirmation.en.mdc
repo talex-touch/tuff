@@ -1,0 +1,79 @@
+---
+title: Tool Confirmation
+description: An authorization card shown before a tool runs, with a risk level and a session-scoped remember option.
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [ai, tool, permission]
+syncStatus: reviewed
+verified: true
+---
+# Tool Confirmation
+
+`TxToolConfirmation` asks the user to authorize a tool call before it runs. It shows the tool name, a risk level, an optional summary and an input preview, and offers allow and deny.
+
+Manually verified against `packages/tuffex/packages/components/src/tool-confirmation/src/TxToolConfirmation.vue`.
+
+## Basic Usage
+
+### Tool Confirmation
+::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxToolConfirmation
+      tool-name="write_file"
+      risk="write"
+      summary="Will rewrite src/main.ts"
+      :input="JSON.stringify({ path: 'src/main.ts' }, null, 2)"
+      @approve="onApprove"
+      @deny="onDeny"
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The component runs nothing and remembers nothing. It reports a decision; executing and persisting it are the host's job.
+- Both `approve` and `deny` carry `{ remember: boolean }` — **deny included**, so "deny for the rest of this session" is expressible.
+- `remember` is internal state, starts `false`, and is **not reset after a decision**. The card is single-use: unmount it once a decision arrives.
+- `risk` has three levels, mirrored onto `data-risk`: `read` (default), `write` and `execute`. Anything other than `read` is treated as dangerous for emphasis.
+- Risk text defaults to `Read-only` / `Writes data` / `Executes`. `riskLabels` overrides them, and a partial override is allowed.
+- `summary` and `input` are both optional; each region is omitted entirely when unset.
+- `input` renders verbatim in a `<pre>` with **no processing beyond escaping** — truncate long payloads before passing them in.
+- The root is `role="group"` with an accessible name of `${toolName} confirmation`.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `toolName` | `string` | — | The tool being authorized; also used to build the accessible name. Required. |
+| `summary` | `string` | — | One line on what the tool will do. Not rendered when unset. |
+| `input` | `string` | — | Serialized input preview, shown preformatted. |
+| `risk` | `'read' \| 'write' \| 'execute'` | `'read'` | Risk level, mirrored onto `data-risk`. |
+| `allowLabel` | `string` | `'Allow'` | Label for the allow button. |
+| `denyLabel` | `string` | `'Deny'` | Label for the deny button. |
+| `rememberLabel` | `string` | `'Remember for this session'` | Label for the remember checkbox. |
+| `riskLabels` | `Partial<Record<'read' \| 'write' \| 'execute', string>>` | — | Overrides the risk text, per level; partial overrides are fine. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `approve` | `({ remember: boolean })` | Emitted when allow is clicked. |
+| `deny` | `({ remember: boolean })` | Emitted when deny is clicked, carrying `remember` as well. |
+
+## Slots
+
+`TxToolConfirmation` exposes no slots. Serialize richer input yourself and pass it through `input`.
+
+## Best Practices
+
+- Unmount the card as soon as a decision arrives rather than reusing it — `remember` does not reset itself.
+- Report `risk` honestly. Labelling a write as `read` removes both the visual emphasis and the user's basis for deciding.
+- Put only the decision-relevant fields in `input`, pre-truncated. It is the one place a user can see what will actually happen, and a full request body makes them skip it.
+- Override `allowLabel`, `denyLabel`, `rememberLabel` and `riskLabels` together for non-English surfaces.
+- When `remember` is true, scope the grant to the current session. Do not quietly promote it to a permanent one — the label promises otherwise.

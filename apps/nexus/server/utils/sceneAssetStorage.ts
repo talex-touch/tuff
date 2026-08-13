@@ -39,7 +39,7 @@ export async function uploadSceneAsset(
   key: string,
   data: Buffer,
   contentType?: string | null,
-  options: SceneAssetStorageOptions = {},
+  options: SceneAssetStorageOptions & { ownerId?: string | null } = {},
 ): Promise<SceneAssetUploadResult> {
   const bucket = getSceneAssetBucket(event)
   const governanceResourceId = options.governanceResourceId ?? buildSceneAssetGovernanceResourceId(key)
@@ -54,6 +54,7 @@ export async function uploadSceneAsset(
     governanceResourceId,
     resourceType: options.resourceType ?? 'scene-asset',
     defaultContentType: DEFAULT_CONTENT_TYPE,
+    ownerId: options.ownerId,
   })
 }
 
@@ -61,7 +62,7 @@ export async function getSceneAsset(
   event: H3Event,
   key: string,
   options: Pick<SceneAssetStorageOptions, 'governanceResourceId' | 'resourceType'> = {},
-): Promise<{ data: Buffer, contentType: string, sha256: string } | null> {
+): Promise<{ data: Buffer, contentType: string, sha256: string, ownerId?: string, storesOwnership: boolean } | null> {
   const bucket = getSceneAssetBucket(event)
   const governanceResourceId = options.governanceResourceId ?? buildSceneAssetGovernanceResourceId(key)
   const object = await getStorageObject({
@@ -74,7 +75,13 @@ export async function getSceneAsset(
     defaultContentType: DEFAULT_CONTENT_TYPE,
   })
   return object
-    ? { data: object.data, contentType: object.contentType, sha256: object.sha256 }
+    ? {
+        data: object.data,
+        contentType: object.contentType,
+        sha256: object.sha256,
+        ownerId: object.ownerId,
+        storesOwnership: object.storesOwnership,
+      }
     : null
 }
 
@@ -82,7 +89,7 @@ export async function requireSceneAsset(
   event: H3Event,
   key: string,
   options: Pick<SceneAssetStorageOptions, 'governanceResourceId' | 'resourceType'> = {},
-): Promise<{ data: Buffer, contentType: string, sha256: string }> {
+): Promise<{ data: Buffer, contentType: string, sha256: string, ownerId?: string, storesOwnership: boolean }> {
   const result = await getSceneAsset(event, key, options)
   if (!result)
     throw createError({ statusCode: 404, statusMessage: 'Scene asset not found.' })

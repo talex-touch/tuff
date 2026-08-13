@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { types as utilTypes } from 'node:util'
+import { isPrivilegedPluginFor } from '../privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
@@ -1139,7 +1140,7 @@ export function createPluginWindowManagerCapabilities(
     invalid()
   }
   const expectedActivation = snapshotActivation(options.activation)
-  if (expectedActivation.name !== 'touch-window-manager') invalid()
+  if (!isPrivilegedPluginFor('windowManager', expectedActivation.name)) invalid()
   const platform = options.platform as NodeJS.Platform
   const service = options.service as TrustedPluginWindowManagerService
   if (service.platform !== platform) invalid()
@@ -1384,7 +1385,7 @@ export function createPluginWindowManagerCapabilities(
   const actionsForWindow = (): readonly PluginWindowManagerActionId[] =>
     platform === 'darwin' ? MAC_WINDOW_ACTIONS : WINDOWS_ACTIONS
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'system.window-manager',
     permission: 'system.shell',
     timeoutMs: PLUGIN_WINDOW_MANAGER_TIMEOUT_MS,

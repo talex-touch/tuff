@@ -1,7 +1,7 @@
 import path from 'node:path'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
-import { app, BrowserWindow, dialog, screen } from 'electron'
+import { BrowserWindow, app, dialog, screen, shell } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
 import { getAnalyticsMessageStore } from '../modules/analytics/message-store'
@@ -308,18 +308,43 @@ export class TouchApp implements TalexTouch.TouchApp {
   private async showFileNotFoundDialog(filePath: string, triedPaths: string[]): Promise<void> {
     const window = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
 
-    const triedPathsText = triedPaths.join('\n')
-    const detail = `Cannot find renderer entry file:\n${filePath}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${triedPathsText}`
+    // The paths stay out of the dialog. Every one of them — app.getAppPath(), __dirname,
+    // process.resourcesPath and each candidate — is already written to the log by the caller, and
+    // they are actionable only for a developer. In the dialog they are something a user screenshots
+    // into a support request, disclosing their OS username and directory layout for nothing (#800).
+    const detail = [
+      'The application files appear to be incomplete or damaged.',
+      '',
+      'Reinstalling usually fixes this.',
+      '',
+      'If you are reporting the problem, please attach the log file.'
+    ].join('\n')
+    mainLog.error('Renderer entry missing, showing recovery dialog', {
+      meta: { filePath, triedPaths: triedPaths.join(', ') }
+    })
 
-    await dialog.showMessageBox(window || undefined, {
+    // A button rather than the path in the text. The user still gets to the log — which is the only
+    // reason to show them a path at all — without the folder location, and their OS username with
+    // it, ending up in a screenshot.
+    const { response } = await dialog.showMessageBox(window || undefined, {
       type: 'error',
       title: 'File Not Found',
       message: 'Cannot find this file.',
       detail,
-      buttons: ['OK'],
+      buttons: ['OK', 'Open Log Folder'],
       defaultId: 0,
+      cancelId: 0,
       noLink: true
     })
+
+    if (response === 1) {
+      const opened = await shell.openPath(app.getPath('logs'))
+      if (opened) {
+        mainLog.warn('Failed to open the log folder from the recovery dialog', {
+          meta: { reason: opened }
+        })
+      }
+    }
   }
 
   constructor(app: Electron.App, startupAppSettings: Record<string, unknown> = {}) {

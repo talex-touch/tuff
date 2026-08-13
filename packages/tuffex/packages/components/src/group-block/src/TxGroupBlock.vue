@@ -210,11 +210,11 @@ onMounted(() => {
 
 <template>
   <div
-    class="tx-group-block TGroupBlock-Container"
+    class="tx-group-block"
     :class="{ 'tx-group-block--expanded': expanded, 'expand': expanded }"
   >
     <div
-      class="tx-group-block__header TGroupBlock-Header fake-background index-fix"
+      class="tx-group-block__header fake-background index-fix"
       :class="{ 'tx-group-block__header--static': !collapsible, 'is-static': !collapsible }"
     >
       <button
@@ -227,11 +227,11 @@ onMounted(() => {
         @click="toggle"
       />
 
-      <div class="tx-group-block__content TGroupBlock-Content">
+      <div class="tx-group-block__content">
         <slot name="icon" :active="expanded">
           <TuffIcon v-if="headerIcon" :icon="headerIcon" :size="iconSize" />
         </slot>
-        <div class="tx-group-block__label TGroupBlock-Label">
+        <div class="tx-group-block__label">
           <h3 class="tx-group-block__name">
             {{ name }}
           </h3>
@@ -247,13 +247,13 @@ onMounted(() => {
 
       <div
         v-if="collapsible"
-        class="tx-group-block__toggle TGroupBlock-Mode i-carbon-chevron-down"
+        class="tx-group-block__toggle i-carbon-chevron-down"
         :class="{ 'is-expanded': expanded }"
         aria-hidden="true"
       />
     </div>
 
-    <div :id="contentId" ref="contentRef" class="tx-group-block__body TGroupBlock-Main">
+    <div :id="contentId" ref="contentRef" class="tx-group-block__body">
       <slot />
     </div>
   </div>
@@ -393,7 +393,6 @@ onMounted(() => {
     padding: 0;
     overflow: visible;
 
-    :deep(.TBlockSelection),
     :deep(.tx-block-slot),
     :deep(.tx-block-switch) {
       margin: 0;
@@ -401,11 +400,11 @@ onMounted(() => {
       --fake-radius: 0 !important;
       --fake-inner-opacity: 0.5;
 
-      .TBlockSelection-Content > * {
+      .tx-block-slot__content > * {
         font-size: 20px;
       }
 
-      .TBlockSelection-Func {
+      .tx-block-slot__slot {
         margin-right: 32px;
       }
     }
@@ -420,7 +419,6 @@ onMounted(() => {
   }
 }
 
-.touch-blur .tx-group-block__body :deep(.TBlockSelection),
 .touch-blur .tx-group-block__body :deep(.tx-block-slot),
 .touch-blur .tx-group-block__body :deep(.tx-block-switch) {
   &:hover {

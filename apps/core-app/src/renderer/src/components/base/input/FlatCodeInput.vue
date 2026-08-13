@@ -25,13 +25,25 @@ watch(codes, (val) => {
 
 <template>
   <div class="FlatCodeInput-Container">
-    <span
+    <!--
+      Buttons, not spans: each digit toggles in and out of the code, so it is an action and
+      needs to be focusable and Enter/Space-operable. aria-pressed carries the selected state
+      that was previously conveyed by the `active` class alone (#509).
+
+      The `disabled` class is deliberately NOT mapped to aria-disabled: inputCode ignores it and
+      the digit still toggles, so announcing "disabled" would describe behaviour the component
+      does not have.
+    -->
+    <button
       v-for="i in 9"
+      :key="i"
+      type="button"
       :class="{
         active: codes.includes(i),
         disabled: codes.length > 0 && codes[codes.length - 1] !== i
       }"
       class="FlatCodeInput-Item"
+      :aria-pressed="codes.includes(i)"
       @click="inputCode(i)"
       v-text="i"
     />
@@ -41,6 +53,19 @@ watch(codes, (val) => {
 <style lang="scss" scoped>
 .FlatCodeInput-Container {
   .FlatCodeInput-Item {
+    // Was a span, so it carried no native chrome. Reset it back so promoting these to buttons
+    // is an accessibility change only, not a visual one.
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary);
+      outline-offset: 2px;
+    }
+
     &.active {
       opacity: 0.5;
 

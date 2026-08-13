@@ -17,6 +17,7 @@ import type {
   BatteryStatusPayload,
   BuildVerificationStatus,
   CounterPayload,
+  CspViolationReport,
   DevToolsOptions,
   ExecuteCommandRequest,
   ExecuteCommandResponse,
@@ -142,6 +143,50 @@ export const AppEvents = {
       .module("window")
       .event("focus")
       .define<void, void>(),
+
+    /**
+     * Maximize the application window.
+     */
+    maximize: defineEvent("app")
+      .module("window")
+      .event("maximize")
+      .define<void, void>(),
+
+    /**
+     * Restore the application window from its maximized state.
+     */
+    unmaximize: defineEvent("app")
+      .module("window")
+      .event("unmaximize")
+      .define<void, void>(),
+
+    /**
+     * Toggle the maximized state, resolving to the state after the toggle.
+     */
+    toggleMaximize: defineEvent("app")
+      .module("window")
+      .event("toggle-maximize")
+      .define<void, boolean>(),
+
+    /**
+     * Query whether the application window is currently maximized.
+     */
+    isMaximized: defineEvent("app")
+      .module("window")
+      .event("is-maximized")
+      .define<void, boolean>(),
+
+    /**
+     * Broadcast of the maximized state, emitted by the main process.
+     *
+     * The renderer cannot derive this from its own requests alone: double-clicking the title
+     * bar, the OS keyboard shortcut and snapping the window to a screen edge all change the
+     * state without the renderer asking for it.
+     */
+    maximizedChanged: defineEvent("app")
+      .module("window")
+      .event("maximized-changed")
+      .define<boolean, void>(),
 
     /**
      * Request renderer to navigate.
@@ -585,6 +630,20 @@ export const AppEvents = {
       .module("debug")
       .event("open-devtools")
       .define<DevToolsOptions | void, void>(),
+  },
+
+  /**
+   * Security telemetry from the renderer.
+   */
+  security: {
+    /**
+     * Report a violation of the renderer's report-only CSP so it reaches the main process log
+     * (#689). Fire-and-forget: a dropped report must never disturb the page it came from.
+     */
+    reportCspViolation: defineEvent("app")
+      .module("security")
+      .event("report-csp-violation")
+      .define<CspViolationReport, void>(),
   },
 
   /**

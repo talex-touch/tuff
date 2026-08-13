@@ -44,7 +44,7 @@ code: |
   </script>
 
   <template>
-    <TxProgressBar :segments="segments" :segments-total="100" height="14px" show-text tooltip tooltip-content="多段进度" />
+    <TxProgressBar :segments="segments" :segments-total="100" height="14px" show-text tooltip tooltip-content="多段进度" indicator-effect="sparkle" mask-background="glass" />
   </template>
 ---
 :::

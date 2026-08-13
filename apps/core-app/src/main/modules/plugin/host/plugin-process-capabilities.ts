@@ -707,7 +707,7 @@ export function createPluginSnipasteProcessCapability(
     return record
   }
 
-  const definition: PluginHostCapabilityDefinition = Object.freeze({
+  const definition: PluginHostCapabilityDefinition = Object.freeze<PluginHostCapabilityDefinition>({
     id: 'process.spawn',
     permission: 'system.shell',
     timeoutMs: PLUGIN_SNIPASTE_PROCESS_TIMEOUT_MS,

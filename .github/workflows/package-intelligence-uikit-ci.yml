@@ -1,0 +1,39 @@
+# Its 2 test files and 6 cases ran in no workflow at all. Every other package under `packages/`
+# that has tests has one of these; this one was simply never written, and the suite passed the
+# whole time, which is why nothing said so (#330).
+name: Intelligence UIKit CI
+
+on:
+  pull_request:
+    paths:
+      - "packages/intelligence-uikit/**"
+      - "packages/utils/**"
+      - ".github/workflows/package-intelligence-uikit-ci.yml"
+      - ".github/workflows/package-ci.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "packages/intelligence-uikit/**"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: intelligence-uikit
+      package-path: packages/intelligence-uikit
+      run-typecheck: true
+      # tuffex's exports map resolves only into dist/, so without a build every
+      # `@talex-touch/tuffex/*` import is TS2307 -- the same reason ci.yml builds tuffex before the
+      # nexus suite. package-ci.yml runs typecheck first and has no pre-step hook, so the build
+      # goes in the command.
+      typecheck-command: pnpm -F @talex-touch/tuffex build && pnpm typecheck
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: true
+      test-command: pnpm test
+      run-build: false

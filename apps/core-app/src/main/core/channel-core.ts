@@ -3,6 +3,7 @@ import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
 import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
+import { PluginChannelKeyRegistry } from './plugin-channel-key-registry'
 import { performance } from 'node:perf_hooks'
 import { structuredStrictStringify } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -12,13 +13,35 @@ import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
-import { resolvePluginRegistrationByWebContents } from '../modules/plugin/runtime/plugin-view-registry'
+import {
+  maskPluginViewChannelKey,
+  resolvePluginKeyByViewNonce,
+  resolvePluginRegistrationByWebContents,
+  resolvePluginViewNonce
+} from '../modules/plugin/runtime/plugin-view-registry'
 import { resolveChannelCallerIdentity } from './channel-caller-identity'
 import {
+  PLUGIN_VIEW_NONCE_CHANNEL,
   RAW_MAIN_PROCESS_CHANNEL,
   RAW_PLUGIN_PROCESS_CHANNEL,
   resolveRawProcessChannel
 } from '../../shared/ipc/raw-channel'
+
+/**
+ * Rewrites the outbound channel key to the target surface's alias, in place (#697).
+ *
+ * Applied at every `webContents.send`, because a missed one is silent in both directions: the
+ * plugin view drops a message whose key it does not recognise, and a message that keeps the key
+ * hands the credential back to the surface this change took it away from.
+ */
+function maskOutboundChannelKey(webContents: Electron.WebContents, data: unknown): void {
+  if (!data || typeof data !== 'object') return
+  const header = (data as { header?: unknown }).header
+  if (!header || typeof header !== 'object') return
+  const current = (header as Record<string, unknown>).uniqueKey
+  if (typeof current !== 'string' || !current) return
+  ;(header as Record<string, unknown>).uniqueKey = maskPluginViewChannelKey(webContents.id, current)
+}
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const CHANNEL_PAYLOAD_WARN_BYTES = 256 * 1024
@@ -48,6 +71,14 @@ interface RawChannelHeaderData {
   type: ChannelType
   _originData?: unknown
   uniqueKey?: string
+  /**
+   * Exactly what the sender put on the wire, before the plugin-view alias was resolved (#697).
+   *
+   * `uniqueKey` above is the real channel key, because every downstream identity check compares
+   * against it. Replies have to echo this instead: the plugin view filters on the value it sent,
+   * and it never learns the key.
+   */
+  declaredKey?: string
   event?: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
   plugin?: string
 }
@@ -135,9 +166,11 @@ class TouchChannel {
 
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
 
-  keyToNameMap: Map<string, string> = new Map()
-  nameToKeyMap: Map<string, string> = new Map()
-  keyToIdentityMap: Map<string, PluginActivationIdentity> = new Map()
+  /**
+   * Extracted so the key lifecycle can be tested without standing up Electron (#929).
+   * TouchChannel keeps the public methods below as thin delegates.
+   */
+  private readonly keyRegistry = new PluginChannelKeyRegistry()
 
   app: TalexTouch.TouchApp
 
@@ -148,6 +181,12 @@ class TouchChannel {
 
     ipcMain.on(RAW_MAIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
     ipcMain.on(RAW_PLUGIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
+    ipcMain.on(PLUGIN_VIEW_NONCE_CHANNEL, (event) => {
+      // The alias belongs to the asking surface and nothing else, so it is looked up by sender id
+      // rather than accepted from the payload. An unregistered sender gets null, which the plugin
+      // view preload treats as fatal (#697).
+      event.returnValue = resolvePluginViewNonce(event.sender?.id) ?? null
+    })
 
     perfMonitor.start()
     if (!perfReportListenerRegistered) {
@@ -160,64 +199,27 @@ class TouchChannel {
     name: string,
     activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>
   ): string {
-    const existingKey = this.nameToKeyMap.get(name)
-    if (existingKey) {
-      const existingIdentity = this.keyToIdentityMap.get(existingKey)
-      const sameActivation =
-        existingIdentity &&
-        (!activation ||
-          (existingIdentity.pluginInstanceId === activation.pluginInstanceId &&
-            existingIdentity.activationGeneration === activation.activationGeneration))
-      if (sameActivation) {
-        return existingKey
-      }
-      this.keyToNameMap.delete(existingKey)
-      this.keyToIdentityMap.delete(existingKey)
-      this.nameToKeyMap.delete(name)
-    }
-
-    const key = randomBytes(16).toString('hex')
-    const identity: PluginActivationIdentity = {
-      name,
-      pluginInstanceId: activation?.pluginInstanceId ?? `legacy:${name}`,
-      activationGeneration: activation?.activationGeneration ?? 1,
-      key
-    }
-    this.keyToNameMap.set(key, name)
-    this.nameToKeyMap.set(name, key)
-    this.keyToIdentityMap.set(key, identity)
-
-    return key
+    return this.keyRegistry.requestKey(name, activation)
   }
 
   revokeKey(key: string): boolean {
-    const name = this.keyToNameMap.get(key)
-    if (!name) {
-      return false
-    }
-
-    this.keyToNameMap.delete(key)
-    this.nameToKeyMap.delete(name)
-    this.keyToIdentityMap.delete(key)
-
-    return true
+    return this.keyRegistry.revokeKey(key)
   }
 
   resolveKey(key: string): string | undefined {
-    return this.keyToNameMap.get(key)
+    return this.keyRegistry.resolveKey(key)
   }
 
   isValidKey(key: string): boolean {
-    return this.keyToIdentityMap.has(key)
+    return this.keyRegistry.isValidKey(key)
   }
 
   resolveIdentity(key: string): PluginActivationIdentity | undefined {
-    return this.keyToIdentityMap.get(key)
+    return this.keyRegistry.resolveIdentity(key)
   }
 
   resolveCurrentIdentity(name: string): PluginActivationIdentity | undefined {
-    const key = this.nameToKeyMap.get(name)
-    return key ? this.keyToIdentityMap.get(key) : undefined
+    return this.keyRegistry.resolveCurrentIdentity(name)
   }
 
   resolveSenderIdentity(sender: Electron.WebContents): PluginActivationIdentity | undefined {
@@ -239,7 +241,10 @@ class TouchChannel {
 
       if (header && typeof header === 'object' && header !== null) {
         const rawUniqueKey = (header as Record<string, unknown>).uniqueKey
-        const uniqueKey = typeof rawUniqueKey === 'string' ? rawUniqueKey : undefined
+        const declaredKey = typeof rawUniqueKey === 'string' ? rawUniqueKey : undefined
+        // A plugin view sends its per-surface alias; everything else — the app renderer, the
+        // plugin host process — still sends the key itself, and passes through untouched (#697).
+        const uniqueKey = resolvePluginKeyByViewNonce(declaredKey) ?? declaredKey
         let senderDestroyed = true
         try {
           senderDestroyed = e.sender.isDestroyed()
@@ -261,7 +266,8 @@ class TouchChannel {
             type: caller.pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
             event: e,
-            uniqueKey
+            uniqueKey,
+            declaredKey
           },
           sync: sync as RawChannelSyncData | undefined,
           code: code as DataCode,
@@ -286,7 +292,25 @@ class TouchChannel {
   }
 
   __handle_main(e: Electron.IpcMainEvent, arg: unknown) {
-    const rawData = this.__parse_raw_data(e, arg)
+    // ipcMain.on listeners run inside an EventEmitter, so anything thrown here becomes an
+    // uncaught main-process exception -- and the only uncaughtException handler in the tree
+    // (dev-process-manager) returns early when app.isPackaged. Before this guard, any renderer
+    // or plugin view could end the app with `ipcRenderer.send('@main-process-message', 'x')`
+    // (#784).
+    let rawData: RawStandardChannelData
+    try {
+      rawData = this.__parse_raw_data(e, arg)
+    } catch (error) {
+      channelLog.error('[Channel] Dropped an unparseable message', { error })
+      // A sendSync caller would otherwise block waiting for a value nobody sets. Guarded the
+      // same way as the returnValue assignment further down, which can throw on a gone sender.
+      try {
+        e.returnValue = null
+      } catch {
+        // The sender is already gone; there is nothing to unblock.
+      }
+      return
+    }
 
     if (rawData.header.status === 'reply' && rawData.sync) {
       const { id } = rawData.sync
@@ -328,7 +352,7 @@ class TouchChannel {
       )
       delete rData.header.event
       if (rawData.header.uniqueKey) {
-        rData.header.uniqueKey = rawData.header.uniqueKey
+        rData.header.uniqueKey = rawData.header.declaredKey ?? rawData.header.uniqueKey
       }
 
       let finalData: RawStandardChannelData
@@ -404,7 +428,7 @@ class TouchChannel {
           delete rData.header.event
 
           if (rawData.header.uniqueKey) {
-            rData.header.uniqueKey = rawData.header.uniqueKey
+            rData.header.uniqueKey = rawData.header.declaredKey ?? rawData.header.uniqueKey
           }
 
           let finalData: unknown
@@ -695,7 +719,20 @@ class TouchChannel {
     if (type === ChannelType.PLUGIN) {
       const argRecord = toRecord(arg)
       if (argRecord.plugin === void 0) {
-        throw new Error('Invalid plugin name!')
+        // Resolved, not thrown. This is the only path in a Promise-returning function that threw
+        // synchronously, so `_sendTo(...).catch(handler)` could not catch it: the exception left
+        // before the promise existed, and the main process has no production uncaughtException
+        // handler to stop it terminating (#808).
+        channelLog.error(`[Channel] Cannot send "${eventName}" without a plugin name.`)
+        traceIpc(eventName, startedAt, false)
+        return Promise.resolve({
+          code: DataCode.ERROR,
+          data: {
+            message: 'Invalid plugin name',
+            reason: 'invalid_plugin',
+            eventName
+          }
+        })
       }
       _channelCategory = RAW_PLUGIN_PROCESS_CHANNEL
       if (webContents.isDestroyed()) {
@@ -716,6 +753,7 @@ class TouchChannel {
           return
         }
 
+        maskOutboundChannelKey(webContents, finalData)
         webContents.send(_channelCategory, finalData)
 
         const timeoutMs = finalData.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
@@ -790,7 +828,7 @@ class TouchChannel {
       return Promise.resolve()
     }
 
-    const key = this.nameToKeyMap.get(pluginName)
+    const key = this.keyRegistry.keyForName(pluginName)
 
     const payload = { ...toRecord(arg), plugin: pluginName }
 
@@ -867,6 +905,7 @@ class TouchChannel {
     const channel = resolveRawProcessChannel(type)
 
     try {
+      maskOutboundChannelKey(webContents, finalData)
       webContents.send(channel, finalData)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -889,7 +928,7 @@ class TouchChannel {
     const uiView = WindowManager.getInstance().getUIView()
     if (!uiView) return
 
-    const key = this.nameToKeyMap.get(pluginName)
+    const key = this.keyRegistry.keyForName(pluginName)
     const webContents = getWebContents(uiView)
     if (!webContents || webContents.isDestroyed()) return
 
@@ -924,6 +963,7 @@ class TouchChannel {
     }
 
     try {
+      maskOutboundChannelKey(webContents, finalData)
       webContents.send(RAW_PLUGIN_PROCESS_CHANNEL, finalData)
     } catch {
       // Ignore send errors for broadcasts

@@ -24,7 +24,13 @@ defineOptions({
 })
 
 const normalizedMessages = computed(() =>
-  props.messages.filter(message => message.content?.trim() || message.status === 'pending' || message.status === 'streaming'),
+  props.messages.filter(message =>
+    message.content?.trim()
+    // A parts-only message carries real content even with an empty summary string.
+    || (message.parts?.length ?? 0) > 0
+    || message.status === 'pending'
+    || message.status === 'streaming',
+  ),
 )
 </script>
 
@@ -50,6 +56,12 @@ const normalizedMessages = computed(() =>
         </template>
         <template v-if="$slots.avatar" #avatar="slotProps">
           <slot name="avatar" v-bind="slotProps" />
+        </template>
+        <template v-if="$slots['markdown-renderer']" #markdown-renderer="slotProps">
+          <slot name="markdown-renderer" v-bind="slotProps" />
+        </template>
+        <template v-if="$slots['tool-result']" #tool-result="slotProps">
+          <slot name="tool-result" v-bind="slotProps" />
         </template>
       </TxAiMessage>
     </div>

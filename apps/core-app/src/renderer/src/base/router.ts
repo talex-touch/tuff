@@ -14,23 +14,26 @@
  * limitations under the License.
  */
 
-import { nextTick } from 'vue'
+import type { RouteLocationNormalizedLoaded, RouteRecordRaw } from 'vue-router'
 import { isDevEnv } from '@talex-touch/utils/env'
-import {
-  createRouter,
-  createWebHashHistory,
-  type RouteLocationNormalizedLoaded,
-  type RouteRecordRaw
-} from 'vue-router'
-import { appSetting } from '~/modules/storage/app-storage'
+import { nextTick } from 'vue'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
-import { createStylesRouteRecord } from './style-routes'
+import {
+  DEFAULT_SETTING_PATH,
+  LEGACY_SECTION_REDIRECTS,
+  SETTING_CATEGORIES,
+  settingCategoryChildren
+} from '~/modules/settings/categories'
+import { appSetting } from '~/modules/storage/app-storage'
 
 const ROUTE_NAVIGATE_WARN_MS = 200
 const ROUTE_RENDER_WARN_MS = 350
 const isDev = isDevEnv()
 const ROUTE_COMPONENT_LOAD_WARN_MS = 150
 const STORE_ROUTE_CACHE_KEY = 'store-shell'
+/** `/home` and `/home/c/:id` are one surface, so they share a cache entry. */
+const HOME_ROUTE_CACHE_KEY = 'home-shell'
 
 function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
   const last = Array.isArray(route?.matched) ? route.matched[route.matched.length - 1] : null
@@ -64,10 +67,150 @@ function withRouteComponentPerf<T>(label: string, loader: () => Promise<T>): () 
   }
 }
 
+/**
+ * One route per settings category plus one per declared sub-page, driven by the same table the
+ * sidebar renders from, so a category can never appear in the nav without a route behind it.
+ *
+ * Sub-pages are registered as siblings rather than as vue-router `children`: a sub-page replaces
+ * its category page instead of rendering inside it, and category pages carry no `<router-view>`.
+ * The sidebar still shows the parent as selected, because `ShellNavItem` matches by path prefix.
+ */
+function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): RouteRecordRaw[] {
+  const loaders: Record<string, () => Promise<unknown>> = {
+    overview: () => import('../views/base/settings/categories/SettingOverviewPage.vue'),
+    general: () => import('../views/base/settings/categories/SettingGeneralPage.vue'),
+    appearance: () => import('../views/base/settings/categories/SettingAppearancePage.vue'),
+    intelligence: () => import('../views/base/settings/categories/SettingIntelligencePage.vue'),
+    plugins: () => import('../views/base/settings/categories/SettingPluginsPage.vue'),
+    'file-index': () => import('../views/base/settings/categories/SettingFileIndexPage.vue'),
+    update: () => import('../views/base/settings/categories/SettingUpdatePage.vue'),
+    network: () => import('../views/base/settings/categories/SettingNetworkPage.vue'),
+    download: () => import('../views/base/settings/categories/SettingDownloadPage.vue'),
+    'storage-usage': () => import('../views/base/settings/categories/SettingStoragePage.vue'),
+    about: () => import('../views/base/settings/categories/SettingAboutPage.vue')
+  }
+
+  /** Keyed `<category>/<sub-page>`, and named after the routes they replaced. */
+  const childLoaders: Record<string, { name: string; load: () => Promise<unknown> }> = {
+    'intelligence/channels': {
+      name: '$I18n:router.intelligenceChannels',
+      load: () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
+    },
+    'intelligence/prompts': {
+      name: '$I18n:router.intelligencePrompts',
+      load: () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
+    },
+    'intelligence/agents': {
+      name: '$I18n:router.intelligenceAgents',
+      load: () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
+    },
+    'intelligence/workflows': {
+      name: '$I18n:router.intelligenceWorkflows',
+      load: () => import('../views/base/intelligence/IntelligenceWorkflowPage.vue')
+    },
+    'intelligence/audit': {
+      name: '$I18n:router.intelligenceAudit',
+      load: () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
+    },
+    'intelligence/capabilities': {
+      name: '$I18n:router.intelligenceCapabilities',
+      load: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
+    }
+  }
+
+  return SETTING_CATEGORIES.flatMap((category) => [
+    {
+      path: category.path,
+      name: `$I18n:router.appSettings.${category.key}`,
+      component: withPerf(
+        category.path,
+        loaders[category.key] as () => Promise<{ default: unknown }>
+      ),
+      meta: {
+        index: 1,
+        keepAlive: true,
+        // Per-category cache keys keep each page's scroll position across category switches.
+        keepAliveKey: `setting-${category.key}`
+      }
+    },
+    ...(category.children ?? []).map((child) => {
+      const loader = childLoaders[`${category.key}/${child.key}`]
+      return {
+        path: child.path,
+        name: loader.name,
+        component: withPerf(child.path, loader.load as () => Promise<{ default: unknown }>),
+        meta: {
+          index: 1,
+          keepAlive: true,
+          parentRoute: category.path,
+          // A cache entry of its own, so leaving and re-entering a sub-page keeps its selection
+          // and scroll rather than restarting the category page's.
+          keepAliveKey: `setting-${category.key}-${child.key}`
+        }
+      }
+    })
+  ]) as RouteRecordRaw[]
+}
+
+/**
+ * Intelligence used to be a top-level surface. Plugins ship its old paths inside navigate
+ * actions (`plugins/touch-intelligence` declares `/intelligence/channels`, and the host
+ * allow-list validates that exact string), and those copies live in the user data directory
+ * across app updates — so these redirects are permanent, not a migration window.
+ */
+function createLegacyIntelligenceRedirects(): RouteRecordRaw[] {
+  const children = settingCategoryChildren('intelligence')
+  return [
+    { path: '/intelligence', redirect: '/setting/intelligence' },
+    ...children.map((child) => ({
+      path: `/intelligence/${child.key}`,
+      redirect: child.path
+    }))
+  ]
+}
+
+/**
+ * One wrapper for both home records, not one each: KeepAlive caches by
+ * component *type* plus key, and the shell keys both routes to the same
+ * cache entry. Two wrappers would be two types — every `/home` ↔ `/home/c/:id`
+ * hop would then swap between two independently cached HomePage instances,
+ * which is exactly the teleport that killed the composer's undock FLIP.
+ */
+const HomePageRouteComponent = withRouteComponentPerf(
+  '/home',
+  () => import('../views/base/home/HomePage.vue')
+)
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/setting'
+    redirect: '/home'
+  },
+  {
+    path: '/home',
+    name: '$I18n:router.home',
+    component: HomePageRouteComponent,
+    meta: {
+      index: 0,
+      keepAlive: true,
+      keepAliveKey: HOME_ROUTE_CACHE_KEY
+    }
+  },
+  {
+    /**
+     * A stored conversation. The *same component definition* as `/home` and the same keep-alive
+     * key, so every hop between the blank home and any thread patches one live instance in place —
+     * the id is read from the route param rather than from a fresh mount, and in-place is what
+     * lets the composer keep focus and the undock FLIP measure a real before/after.
+     */
+    path: '/home/c/:id',
+    name: '$I18n:router.homeConversation',
+    component: HomePageRouteComponent,
+    meta: {
+      index: 0,
+      keepAlive: true,
+      keepAliveKey: HOME_ROUTE_CACHE_KEY
+    }
   },
   {
     path: '/store',
@@ -162,7 +305,17 @@ const routes: RouteRecordRaw[] = [
       requiresDashboard: true
     }
   },
-  createStylesRouteRecord(withRouteComponentPerf),
+  {
+    // Appearance lives under settings in the v2.5 IA, and `/styles` was the pre-shell top-level
+    // entry -- no longer linked from the sidebar, but kept as a redirect so any bookmark still
+    // lands somewhere, the way `/setting/advanced` and `/setting/storage` are (#1024).
+    //
+    // Its `/styles/theme` child went with it rather than getting a redirect of its own: it could
+    // match and change the URL but never render, because `ThemeStyle` has no `<router-view>` for
+    // it. Nothing user-visible is lost by dropping a route that displayed nothing.
+    path: '/styles',
+    redirect: '/setting/appearance'
+  },
   {
     path: '/application',
     name: '$I18n:router.application',
@@ -177,112 +330,23 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/setting',
-    name: '$I18n:router.appSettings',
-    component: withRouteComponentPerf(
-      '/setting',
-      () => import('../views/base/settings/AppSettings.vue')
-    ),
-    meta: {
-      index: 1,
-      keepAlive: true
-    }
+    redirect: DEFAULT_SETTING_PATH
+  },
+  ...createSettingCategoryRoutes(withRouteComponentPerf),
+  {
+    // The `advanced` category was dissolved: its proxy settings moved to `network`, the
+    // assistant block to `intelligence` and the tools block to `plugins`. Kept as a redirect
+    // so existing deep links (and `?section=` fallbacks) do not 404.
+    path: '/setting/advanced',
+    redirect: '/setting/network'
   },
   {
+    // Storage now lives on the `storage-usage` category route so the sidebar item lands straight
+    // on the report. Kept as a redirect for deep links that still use the old path.
     path: '/setting/storage',
-    name: '$I18n:router.storagable',
-    component: withRouteComponentPerf(
-      '/setting/storage',
-      () => import('../views/storage/Storagable.vue')
-    ),
-    meta: {
-      index: 1,
-      keepAlive: true
-    }
+    redirect: '/setting/storage-usage'
   },
-  {
-    path: '/intelligence',
-    name: '$I18n:router.intelligence',
-    component: withRouteComponentPerf(
-      '/intelligence',
-      () => import('../views/base/intelligence/IntelligencePage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/channels',
-    name: '$I18n:router.intelligenceChannels',
-    component: withRouteComponentPerf(
-      '/intelligence/channels',
-      () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/capabilities',
-    name: '$I18n:router.intelligenceCapabilities',
-    component: withRouteComponentPerf(
-      '/intelligence/capabilities',
-      () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/prompts',
-    name: '$I18n:router.intelligencePrompts',
-    component: withRouteComponentPerf(
-      '/intelligence/prompts',
-      () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/audit',
-    name: '$I18n:router.intelligenceAudit',
-    component: withRouteComponentPerf(
-      '/intelligence/audit',
-      () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/agents',
-    name: '$I18n:router.intelligenceAgents',
-    component: withRouteComponentPerf(
-      '/intelligence/agents',
-      () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/intelligence/workflows',
-    name: '$I18n:router.intelligenceWorkflows',
-    component: withRouteComponentPerf(
-      '/intelligence/workflows',
-      () => import('../views/base/intelligence/IntelligenceWorkflowPage.vue')
-    ),
-    meta: {
-      index: 8,
-      keepAlive: true
-    }
-  },
+  ...createLegacyIntelligenceRedirects(),
   {
     path: '/meta-overlay',
     name: '$I18n:router.metaOverlay',
@@ -299,6 +363,27 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+})
+
+/**
+ * Keeps `/setting?section=<id>` deep links working after settings moved from one long page to
+ * per-category routes. Those links are still emitted by notifications and other modules.
+ */
+router.beforeEach((to, _from, next) => {
+  const section = typeof to.query.section === 'string' ? to.query.section : ''
+  if (!section || !to.path.startsWith('/setting')) {
+    next()
+    return
+  }
+
+  const target = LEGACY_SECTION_REDIRECTS[section]
+  if (!target || to.path === target) {
+    next()
+    return
+  }
+
+  const { section: _dropped, ...rest } = to.query
+  next({ path: target, query: rest, replace: true })
 })
 
 router.beforeEach((to, _from, next) => {

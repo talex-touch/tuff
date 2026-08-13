@@ -179,4 +179,33 @@ describe('txImageUploader', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:one.png')
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:two.png')
   })
+
+  it('replaces the image and revokes its url when multiple is false', async () => {
+    const wrapper = mount(TxImageUploader, {
+      props: {
+        modelValue: [],
+        multiple: false,
+      },
+    })
+
+    const input = wrapper.find<HTMLInputElement>('input[type="file"]').element
+    setInputValue(input, 'fake-path')
+    setFiles(input, [createFile('first.png')])
+    await wrapper.find('input[type="file"]').trigger('change')
+
+    const first = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as Array<{ url: string }>
+    await wrapper.setProps({ modelValue: first })
+
+    setInputValue(input, 'fake-path')
+    setFiles(input, [createFile('second.png')])
+    await wrapper.find('input[type="file"]').trigger('change')
+
+    const second = wrapper.emitted('update:modelValue')?.at(-1)?.[0] as Array<{ name: string }>
+
+    // A single-image uploader owns one slot; it used to grow toward `max`.
+    expect(second).toHaveLength(1)
+    expect(second[0]?.name).toBe('second.png')
+    // The replaced preview's object URL must not leak.
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:first.png')
+  })
 })

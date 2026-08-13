@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use napi::bindgen_prelude::Buffer;
-use napi::{Error, Result};
+use napi::bindgen_prelude::{AsyncTask, Buffer};
+use napi::{Env, Error, Result, Task};
 use napi_derive::napi;
 
 /// Default hard cap on a capture session before it auto-stops.
@@ -17,8 +17,28 @@ const DEFAULT_MAX_DURATION_MS: u32 = 15_000;
 const DEFAULT_SILENCE_STOP_MS: u32 = 1_500;
 /// RMS level (0..1) above which an incoming chunk counts as speech, not silence.
 const SILENCE_RMS_THRESHOLD: f32 = 0.01;
-/// How often the capture thread re-checks its stop conditions.
+/// How often the capture thread re-checks the conditions nothing can signal:
+/// the max-duration cap and the trailing-silence window. A manual stop or cancel
+/// does not wait for this — it wakes the thread directly.
 const POLL_INTERVAL_MS: u64 = 50;
+/// Largest encoded input `play_audio` will look at. 64 MiB comfortably holds an
+/// uncompressed five-minute stereo WAV at 48 kHz (~57 MiB), which is far beyond
+/// any TTS response or notification sound this plays.
+const MAX_PLAYBACK_INPUT_BYTES: usize = 64 * 1024 * 1024;
+/// Largest decoded interleaved sample count `play_audio` will accumulate: five
+/// minutes of 48 kHz stereo, ~115 MiB as `f32`.
+///
+/// The byte limit above cannot stand in for this — a few megabytes of MP3 decode
+/// to hundreds of megabytes, which is the shape of the failure being bounded.
+const MAX_DECODED_SAMPLES: usize = 48_000 * 2 * 300;
+/// How long `stop_capture` / `cancel_capture` will wait for the capture thread to
+/// drop its cpal stream and return.
+///
+/// These run on the Electron main thread, so the wait has to be bounded: a wedged
+/// CoreAudio/WASAPI teardown would otherwise freeze the whole UI with no way out.
+/// Half a second is far longer than a healthy teardown (single-digit ms) and short
+/// enough to read as a hitch rather than a hang.
+const STOP_WAIT_BUDGET_MS: u64 = 500;
 
 #[napi(object)]
 pub struct NativeAudioSupport {
@@ -89,8 +109,7 @@ pub fn get_native_audio_support() -> NativeAudioSupport {
     )
 }
 
-#[napi]
-pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptureStart> {
+fn start_capture_blocking(options: Option<AudioCaptureOptions>) -> Result<String> {
     if !platform_supported() {
         return Err(Error::from_reason("platform-not-supported"));
     }
@@ -104,8 +123,7 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
     let silence_stop_ms = options.silence_stop_ms.unwrap_or(DEFAULT_SILENCE_STOP_MS);
     let requested_sample_rate = options.sample_rate;
 
-    let stop_flag = Arc::new(AtomicBool::new(false));
-    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let sync = Arc::new(StopSignal::default());
     let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
     let silence = Arc::new(SilenceState::new());
     let meta = Arc::new(Mutex::new(CaptureMeta::default()));
@@ -114,22 +132,20 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
 
     let (ready_tx, ready_rx) = mpsc::channel::<std::result::Result<(), String>>();
 
-    let thread_stop = stop_flag.clone();
-    let thread_cancel = cancel_flag.clone();
+    let thread_sync = sync.clone();
     let thread_samples = samples.clone();
     let thread_silence = silence.clone();
     let thread_meta = meta.clone();
 
     // cpal `Stream` is neither Send nor Sync, so it is created and owned entirely
     // on this dedicated OS thread. We communicate with it via Arc<Mutex<..>> for
-    // the sample buffer, atomic flags for stop/cancel, and an mpsc channel that
-    // reports whether the input stream actually started.
+    // the sample buffer, a StopSignal for stop/cancel and completion, and an mpsc
+    // channel that reports whether the input stream actually started.
     let join_handle = thread::Builder::new()
         .name("tuff-audio-capture".to_string())
         .spawn(move || {
             capture_thread_main(
-                thread_stop,
-                thread_cancel,
+                thread_sync,
                 thread_samples,
                 thread_silence,
                 thread_meta,
@@ -158,16 +174,60 @@ pub fn start_capture(options: Option<AudioCaptureOptions>) -> Result<AudioCaptur
 
     let session_id = next_session_id();
     let handle = SessionHandle {
-        stop_flag,
-        cancel_flag,
+        sync,
         samples,
+        snapshot: Arc::new(Mutex::new(SnapshotCache::default())),
         meta,
         join_handle,
         drain_cursor,
+        last_read: Mutex::new(Instant::now()),
     };
-    lock(sessions()).insert(session_id.clone(), handle);
+    {
+        // Reap here rather than on a timer: the map only grows when a session is
+        // started, so this is exactly where accumulation would happen, and it costs
+        // one pass over a map that is normally empty.
+        let mut map = lock(sessions());
+        let reaped = reap_abandoned_sessions(&mut map, Instant::now(), ABANDONED_SESSION_TTL);
+        if reaped > 0 {
+            eprintln!("[tuff-native-audio] reaped {reaped} abandoned capture session(s)");
+        }
+        map.insert(session_id.clone(), handle);
+    }
 
-    Ok(AudioCaptureStart { session_id })
+    Ok(session_id)
+}
+
+/// Runs the blocking half on the libuv pool instead of the JS thread.
+///
+/// The wait itself is deliberate -- `start_capture` reports device failures rather than handing
+/// back a session that never produces audio -- but it was being served on the Electron main
+/// thread. `default_input_device()`, `build_input_stream()` and `stream.play()` on CoreAudio take
+/// seconds while a Bluetooth input is (re)connecting, and on first use macOS raises the microphone
+/// consent sheet before the AudioUnit starts, which waits on a human. Nothing in this repo asks
+/// for that permission ahead of time -- `assertSupported()` in voice-service.ts only checks
+/// `getNativeAudioSupport()` -- so the very first dictation blocks for as long as the user takes
+/// to click. A `recv_timeout` short enough to protect the event loop would have to be short enough
+/// to fail that (#841).
+pub struct StartCaptureTask {
+    options: Option<AudioCaptureOptions>,
+}
+
+impl Task for StartCaptureTask {
+    type Output = String;
+    type JsValue = AudioCaptureStart;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        start_capture_blocking(self.options.take())
+    }
+
+    fn resolve(&mut self, _env: Env, session_id: Self::Output) -> Result<Self::JsValue> {
+        Ok(AudioCaptureStart { session_id })
+    }
+}
+
+#[napi]
+pub fn start_capture(options: Option<AudioCaptureOptions>) -> AsyncTask<StartCaptureTask> {
+    AsyncTask::new(StartCaptureTask { options })
 }
 
 #[napi]
@@ -176,8 +236,8 @@ pub fn stop_capture(session_id: String) -> Result<AudioCaptureResult> {
         .remove(&session_id)
         .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
 
-    handle.stop_flag.store(true, Ordering::Relaxed);
-    let _ = handle.join_handle.join();
+    handle.sync.request(StopRequest::Stop);
+    settle(handle.join_handle, &handle.sync, &session_id);
 
     let meta = lock(&handle.meta).clone();
     let interleaved = lock(&handle.samples).clone();
@@ -209,6 +269,7 @@ pub fn poll_capture(session_id: String) -> Result<AudioCaptureState> {
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
+        touch_session(handle);
         (handle.meta.clone(), handle.samples.clone())
     };
 
@@ -234,12 +295,17 @@ pub fn snapshot_capture(session_id: String) -> Result<AudioSnapshot> {
     // Non-destructive: encode a WAV of everything captured so far WITHOUT stopping
     // the stream or removing the session, so a caller can poll it repeatedly to
     // drive chunked-batch streaming ASR while capture continues.
-    let (meta_arc, samples_arc) = {
+    let (meta_arc, samples_arc, snapshot_arc) = {
         let guard = lock(sessions());
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
-        (handle.meta.clone(), handle.samples.clone())
+        touch_session(handle);
+        (
+            handle.meta.clone(),
+            handle.samples.clone(),
+            handle.snapshot.clone(),
+        )
     };
 
     let (sample_rate, channels) = {
@@ -247,13 +313,22 @@ pub fn snapshot_capture(session_id: String) -> Result<AudioSnapshot> {
         (meta.sample_rate, meta.channels)
     };
 
-    // Copy the accumulated PCM out under the same Mutex the capture thread appends
-    // through, so the snapshot can't tear against an in-flight write; encode the
-    // owned copy afterwards, off the lock.
-    let interleaved = lock(&samples_arc).clone();
-    let mono = downmix_to_mono(&interleaved, channels);
-    let audio = encode_wav_pcm16(&mono, sample_rate).map_err(Error::from_reason)?;
-    let duration_ms = mono_duration_ms(mono.len(), sample_rate);
+    // Downmix and encode only what has arrived since the last snapshot, appending
+    // to a cached PCM prefix. The caller polls this on an interval and needs the
+    // whole recording back each time, so the response is unavoidably O(n) — but
+    // the *work* no longer is, which is what made a 15 s session quadratic.
+    //
+    // The delta is taken under the same Mutex the capture thread appends through,
+    // so it can't tear against an in-flight write; the encode happens off the lock.
+    let mut snapshot = lock(&snapshot_arc);
+    let delta = {
+        let buffer = lock(&samples_arc);
+        buffer[snapshot_delta_range(snapshot.consumed, buffer.len(), channels)].to_vec()
+    };
+    extend_snapshot(&mut snapshot, &delta, channels);
+
+    let audio = wav_from_pcm16(&snapshot.pcm, sample_rate).map_err(Error::from_reason)?;
+    let duration_ms = mono_duration_ms(snapshot.pcm.len() / 2, sample_rate);
 
     Ok(AudioSnapshot {
         audio: Buffer::from(audio),
@@ -267,9 +342,8 @@ pub fn cancel_capture(session_id: String) -> Result<()> {
         .remove(&session_id)
         .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
 
-    handle.cancel_flag.store(true, Ordering::Relaxed);
-    handle.stop_flag.store(true, Ordering::Relaxed);
-    let _ = handle.join_handle.join();
+    handle.sync.request(StopRequest::Cancel);
+    settle(handle.join_handle, &handle.sync, &session_id);
 
     Ok(())
 }
@@ -284,6 +358,7 @@ pub fn drain_capture(session_id: String) -> Result<AudioPcmChunk> {
         let handle = guard
             .get(&session_id)
             .ok_or_else(|| Error::from_reason(format!("session-not-found: {session_id}")))?;
+        touch_session(handle);
         (
             handle.meta.clone(),
             handle.samples.clone(),
@@ -317,13 +392,16 @@ pub fn drain_capture(session_id: String) -> Result<AudioPcmChunk> {
     })
 }
 
-#[napi]
-pub fn play_audio(bytes: Buffer) -> Result<AudioPlaybackStart> {
-    // Decode on the calling thread so bad audio surfaces synchronously; playback
-    // itself runs on a dedicated thread (cpal `Stream` is not Send) and continues
-    // after this returns.
+fn play_audio_blocking(bytes: Vec<u8>) -> Result<String> {
+    if bytes.len() > MAX_PLAYBACK_INPUT_BYTES {
+        return Err(Error::from_reason(format!(
+            "audio-too-large: {} bytes exceeds {MAX_PLAYBACK_INPUT_BYTES}",
+            bytes.len()
+        )));
+    }
+
     let (interleaved, source_rate, source_channels) =
-        decode_audio(bytes.to_vec()).map_err(Error::from_reason)?;
+        decode_audio(bytes).map_err(Error::from_reason)?;
     let mono = downmix_to_mono(&interleaved, source_channels);
     if mono.is_empty() {
         return Err(Error::from_reason("no-audio-decoded"));
@@ -353,7 +431,38 @@ pub fn play_audio(bytes: Buffer) -> Result<AudioPlaybackStart> {
         )));
     }
 
-    Ok(AudioPlaybackStart { playback_id })
+    Ok(playback_id)
+}
+
+/// Runs the decode on the libuv pool instead of the JS thread.
+///
+/// Decoding on the calling thread was deliberate — it makes bad audio surface as a
+/// thrown error rather than a playback that silently never starts — but the calling
+/// thread is the Electron main thread, and symphonia walks every packet of an input
+/// nothing bounded. Returning a promise keeps the error attached to the call while
+/// taking the work off the event loop (#845, same shape as #841).
+pub struct PlayAudioTask {
+    bytes: Vec<u8>,
+}
+
+impl Task for PlayAudioTask {
+    type Output = String;
+    type JsValue = AudioPlaybackStart;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        play_audio_blocking(std::mem::take(&mut self.bytes))
+    }
+
+    fn resolve(&mut self, _env: Env, playback_id: Self::Output) -> Result<Self::JsValue> {
+        Ok(AudioPlaybackStart { playback_id })
+    }
+}
+
+#[napi]
+pub fn play_audio(bytes: Buffer) -> AsyncTask<PlayAudioTask> {
+    AsyncTask::new(PlayAudioTask {
+        bytes: bytes.to_vec(),
+    })
 }
 
 #[napi]
@@ -457,26 +566,235 @@ struct CaptureMeta {
     channels: u16,
     /// `None` while the capture thread is still running; `Some` once it stopped.
     stopped_reason: Option<StopReason>,
+    /// When the capture thread finished. Set alongside `stopped_reason`, and the
+    /// clock the reaper measures an abandoned session against.
+    stopped_at: Option<Instant>,
+}
+
+/// What a caller has asked the capture thread to do.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum StopRequest {
+    Stop,
+    Cancel,
+}
+
+/// The handshake between the JS thread and the capture thread, in both directions.
+///
+/// Both halves live under one mutex rather than in atomics because the capture
+/// thread has to *check* for a request and then *wait* for one, and an atomic set
+/// between those two steps is a lost wakeup — the thread would sleep out a whole
+/// poll interval with the stop already pending. Holding the guard across the wait
+/// closes that window; `Condvar::wait_timeout` releases it atomically.
+#[derive(Default)]
+struct StopSignal {
+    state: Mutex<StopState>,
+    changed: Condvar,
+}
+
+#[derive(Default, Clone, Copy)]
+struct StopState {
+    stop: bool,
+    cancel: bool,
+    /// Set by the capture thread after it has dropped the cpal stream and written
+    /// `meta.stopped_reason` — so observing it means the session is fully settled.
+    finished: bool,
+}
+
+impl StopSignal {
+    fn request(&self, request: StopRequest) {
+        {
+            let mut state = lock(&self.state);
+            match request {
+                // A cancel is also a stop: it ends the capture, it just discards it.
+                StopRequest::Cancel => {
+                    state.cancel = true;
+                    state.stop = true;
+                }
+                StopRequest::Stop => state.stop = true,
+            }
+        }
+        self.changed.notify_all();
+    }
+
+    fn mark_finished(&self) {
+        lock(&self.state).finished = true;
+        self.changed.notify_all();
+    }
+}
+
+/// Wait out one poll interval, returning early the moment a stop or cancel lands.
+///
+/// `None` means the budget expired with nothing requested, which is the capture
+/// thread's cue to re-check the conditions no one signals (max duration, silence).
+fn wait_for_stop_request(sync: &StopSignal, budget: Duration) -> Option<StopReason> {
+    let mut state = lock(&sync.state);
+    loop {
+        // Cancel outranks stop: a session that was cancelled is discarded even if a
+        // plain stop arrived first.
+        if state.cancel {
+            return Some(StopReason::Cancelled);
+        }
+        if state.stop {
+            return Some(StopReason::Manual);
+        }
+
+        let (next, timeout) = sync
+            .changed
+            .wait_timeout(state, budget)
+            .unwrap_or_else(|poison| poison.into_inner());
+        if timeout.timed_out() {
+            return None;
+        }
+        state = next;
+    }
+}
+
+/// Wait for the capture thread to report that it has finished, up to `budget`.
+/// Returns whether it did.
+fn wait_until_finished(sync: &StopSignal, budget: Duration) -> bool {
+    let deadline = Instant::now() + budget;
+    let mut state = lock(&sync.state);
+    loop {
+        if state.finished {
+            return true;
+        }
+        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+            return false;
+        };
+        let (next, _) = sync
+            .changed
+            .wait_timeout(state, remaining)
+            .unwrap_or_else(|poison| poison.into_inner());
+        state = next;
+    }
+}
+
+/// Give the capture thread a bounded window to finish, then stop waiting on it.
+///
+/// Joining only once it has reported `finished` keeps the join instant — the thread
+/// does nothing after that but unwind. If the window expires, the handle is dropped
+/// instead: the thread is detached, still owns its `Arc`s, and frees them whenever
+/// the stalled device teardown eventually returns. That costs nothing the caller can
+/// observe, and it is the only option that does not hand the Electron main thread an
+/// unbounded wait.
+fn settle(join_handle: JoinHandle<()>, sync: &StopSignal, session_id: &str) {
+    if wait_until_finished(sync, Duration::from_millis(STOP_WAIT_BUDGET_MS)) {
+        let _ = join_handle.join();
+        return;
+    }
+    eprintln!(
+        "[tuff-native-audio] capture thread for {session_id} did not stop within \
+         {STOP_WAIT_BUDGET_MS}ms; detaching"
+    );
 }
 
 /// Everything start_capture keeps so a later stop/cancel can join the thread and
 /// collect the recorded PCM. The cpal `Stream` is intentionally NOT stored here
 /// (it is not Send) — it lives and dies on the capture thread.
+/// The encoded prefix `snapshot_capture` keeps between polls, so each poll only
+/// has to encode what arrived since the last one.
+#[derive(Default)]
+struct SnapshotCache {
+    /// Mono 16-bit LE PCM for everything consumed so far, WITHOUT a WAV header.
+    pcm: Vec<u8>,
+    /// How many interleaved samples `pcm` accounts for. Always frame-aligned.
+    consumed: usize,
+}
+
+/// Which interleaved samples a snapshot has not folded in yet.
+///
+/// Never splits a frame: the cursor only ever advances to a frame boundary, so the
+/// downmix of each delta groups exactly as it would over the whole buffer. cpal
+/// delivers whole frames, so in practice this defers nothing.
+fn snapshot_delta_range(consumed: usize, len: usize, channels: u16) -> std::ops::Range<usize> {
+    let channel_count = channels.max(1) as usize;
+    let end = len - len % channel_count;
+    consumed.min(end)..end
+}
+
+/// Fold an already-taken delta into the cache. Kept separate from the range so the
+/// encode runs off the sample-buffer lock the capture callback appends through.
+fn extend_snapshot(cache: &mut SnapshotCache, delta: &[f32], channels: u16) {
+    cache.consumed += delta.len();
+    cache
+        .pcm
+        .extend_from_slice(&pcm16_le_bytes(&downmix_to_mono(delta, channels)));
+}
+
 struct SessionHandle {
-    stop_flag: Arc<AtomicBool>,
-    cancel_flag: Arc<AtomicBool>,
+    sync: Arc<StopSignal>,
     samples: Arc<Mutex<Vec<f32>>>,
+    snapshot: Arc<Mutex<SnapshotCache>>,
     meta: Arc<Mutex<CaptureMeta>>,
     join_handle: JoinHandle<()>,
     /// Interleaved-sample read cursor for `drain_capture` (delta streaming).
     drain_cursor: Arc<AtomicUsize>,
+    /// Last time any caller looked at this session. A caller polling towards its
+    /// own collection is not abandoning it, however long the recording runs.
+    last_read: Mutex<Instant>,
 }
+
+/// A session's id is the only handle to it: `SESSIONS` is keyed by id, every
+/// removal path needs one, and nothing enumerates the map. So a caller that loses
+/// an id -- a renderer that goes away mid-flight, a teardown that races an
+/// in-flight start (#1552) -- strands the interleaved buffer (15s x 48kHz x 2ch x
+/// 4B ~= 5.8MB) plus the snapshot cache for the life of the process.
+///
+/// Nothing can recover the id, so this recovers the memory instead: a session that
+/// has stopped and that nobody has looked at since is not coming back.
+///
+/// The window is deliberately generous. It only starts once the capture thread has
+/// finished, and any poll, snapshot or drain resets it, so a caller working towards
+/// its own collection is never reaped out from under itself.
+const ABANDONED_SESSION_TTL: Duration = Duration::from_secs(60);
 
 static SESSIONS: OnceLock<Mutex<HashMap<String, SessionHandle>>> = OnceLock::new();
 static SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn sessions() -> &'static Mutex<HashMap<String, SessionHandle>> {
     SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Whether a session can no longer be waiting for anyone.
+///
+/// A session still running is never abandoned, however long it has been going --
+/// the caller may simply be recording. Only one that has stopped, and that nobody
+/// has read since, qualifies.
+fn session_is_abandoned(
+    stopped_at: Option<Instant>,
+    last_read: Instant,
+    now: Instant,
+    ttl: Duration,
+) -> bool {
+    let Some(stopped_at) = stopped_at else {
+        return false;
+    };
+    now.saturating_duration_since(stopped_at.max(last_read)) >= ttl
+}
+
+/// Drop sessions nothing can reach any more. Returns how many went.
+///
+/// Dropping the `JoinHandle` detaches rather than joins, which is what we want:
+/// the thread has already returned (`stopped_at` is written on its way out), so
+/// there is nothing to wait for, and a join here would be a blocking call inside
+/// the sessions lock.
+fn reap_abandoned_sessions(
+    map: &mut HashMap<String, SessionHandle>,
+    now: Instant,
+    ttl: Duration,
+) -> usize {
+    let before = map.len();
+    map.retain(|_, handle| {
+        let stopped_at = lock(&handle.meta).stopped_at;
+        let last_read = *lock(&handle.last_read);
+        !session_is_abandoned(stopped_at, last_read, now, ttl)
+    });
+    before - map.len()
+}
+
+/// Note that a caller has looked at this session, so the reaper leaves it alone.
+fn touch_session(handle: &SessionHandle) {
+    *lock(&handle.last_read) = Instant::now();
 }
 
 /// Recover the guard even if a previous holder panicked; a poisoned sample
@@ -496,8 +814,7 @@ fn next_session_id() -> String {
 
 #[allow(clippy::too_many_arguments)]
 fn capture_thread_main(
-    stop_flag: Arc<AtomicBool>,
-    cancel_flag: Arc<AtomicBool>,
+    sync: Arc<StopSignal>,
     samples: Arc<Mutex<Vec<f32>>>,
     silence: Arc<SilenceState>,
     meta: Arc<Mutex<CaptureMeta>>,
@@ -563,13 +880,11 @@ fn capture_thread_main(
 
     // Auto-stop policy: end on manual/cancel signal, on the hard duration cap,
     // or on a trailing-silence window once speech has been detected.
+    //
+    // The duration and silence conditions have nothing to signal them, so they are
+    // still polled. A stop or cancel does: the wait below ends the moment one lands,
+    // rather than up to POLL_INTERVAL_MS later with the caller blocked on the join.
     let reason = loop {
-        if cancel_flag.load(Ordering::Relaxed) {
-            break StopReason::Cancelled;
-        }
-        if stop_flag.load(Ordering::Relaxed) {
-            break StopReason::Manual;
-        }
         let elapsed_ms = started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
         if elapsed_ms >= max_duration_ms as u64 {
             break StopReason::MaxDuration;
@@ -582,12 +897,30 @@ fn capture_thread_main(
         ) {
             break StopReason::Silence;
         }
-        thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+        if let Some(requested) =
+            wait_for_stop_request(&sync, Duration::from_millis(POLL_INTERVAL_MS))
+        {
+            break requested;
+        }
     };
 
     // Dropping the stream stops the OS capture; do it before recording the reason.
     drop(stream);
-    lock(&meta).stopped_reason = Some(reason);
+    finish_capture(reason, &meta, &sync);
+}
+
+/// Record why the session ended, then announce that it has.
+///
+/// The order is the contract: a caller that observes `finished` has to be able to
+/// rely on the reason and the sample buffer already being final, so the
+/// announcement goes last.
+fn finish_capture(reason: StopReason, meta: &Mutex<CaptureMeta>, sync: &StopSignal) {
+    {
+        let mut guard = lock(meta);
+        guard.stopped_reason = Some(reason);
+        guard.stopped_at = Some(Instant::now());
+    }
+    sync.mark_finished();
 }
 
 fn build_capture_stream(
@@ -769,6 +1102,33 @@ fn encode_wav_pcm16(mono: &[f32], sample_rate: u32) -> std::result::Result<Vec<u
     Ok(cursor.into_inner())
 }
 
+/// Wrap already-encoded mono 16-bit LE PCM in a WAV container.
+///
+/// The header comes from hound writing zero samples, with only the two length
+/// fields patched. Deriving it rather than hand-writing 44 bytes keeps hound the
+/// single source of the layout, so this cannot drift away from
+/// `encode_wav_pcm16` without the equivalence test noticing.
+fn wav_from_pcm16(pcm: &[u8], sample_rate: u32) -> std::result::Result<Vec<u8>, String> {
+    let mut header = encode_wav_pcm16(&[], sample_rate)?;
+    // Canonical WAV: RIFF size at 4..8 covers everything after it, data size at
+    // 40..44 covers the samples.
+    const RIFF_SIZE: std::ops::Range<usize> = 4..8;
+    const DATA_SIZE: std::ops::Range<usize> = 40..44;
+    if header.len() != DATA_SIZE.end {
+        return Err(format!("unexpected-wav-header-length: {}", header.len()));
+    }
+
+    let data_len = u32::try_from(pcm.len()).map_err(|_| "wav-data-too-large".to_string())?;
+    let riff_len = data_len
+        .checked_add(header.len() as u32 - RIFF_SIZE.end as u32)
+        .ok_or_else(|| "wav-data-too-large".to_string())?;
+    header[RIFF_SIZE].copy_from_slice(&riff_len.to_le_bytes());
+    header[DATA_SIZE].copy_from_slice(&data_len.to_le_bytes());
+
+    header.extend_from_slice(pcm);
+    Ok(header)
+}
+
 /// Convert mono float PCM to raw little-endian 16-bit signed PCM bytes.
 fn pcm16_le_bytes(mono: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(mono.len() * 2);
@@ -802,6 +1162,15 @@ fn resample_linear(input: &[f32], rate_in: u32, rate_out: u32) -> Vec<f32> {
 /// Decode WAV/MP3 (and any other enabled symphonia codec) bytes to interleaved
 /// f32 PCM, returning `(samples, sample_rate, channels)`.
 fn decode_audio(bytes: Vec<u8>) -> std::result::Result<(Vec<f32>, u32, u16), String> {
+    decode_audio_limited(bytes, MAX_DECODED_SAMPLES)
+}
+
+/// The limit is a parameter so the guard can be exercised without synthesising a
+/// five-minute file; `decode_audio` is the only caller that picks a real one.
+fn decode_audio_limited(
+    bytes: Vec<u8>,
+    max_samples: usize,
+) -> std::result::Result<(Vec<f32>, u32, u16), String> {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
     use symphonia::core::errors::Error as SymphoniaError;
@@ -858,6 +1227,15 @@ fn decode_audio(bytes: Vec<u8>) -> std::result::Result<(Vec<f32>, u32, u16), Str
                 let mut sample_buffer = SampleBuffer::<f32>::new(buffer.capacity() as u64, spec);
                 sample_buffer.copy_interleaved_ref(buffer);
                 samples.extend_from_slice(sample_buffer.samples());
+
+                // Checked here rather than up front: the input byte length bounds
+                // an uncompressed file, but says almost nothing about a compressed
+                // one. This bounds what actually gets allocated.
+                if samples.len() > max_samples {
+                    return Err(format!(
+                        "audio-too-long: decoded past {max_samples} samples"
+                    ));
+                }
             }
             Err(SymphoniaError::DecodeError(_)) => continue,
             Err(SymphoniaError::IoError(error))
@@ -1104,6 +1482,367 @@ mod tests {
     #[test]
     fn rms_of_constant_amplitude() {
         assert!((rms(&[0.5, -0.5, 0.5, -0.5]) - 0.5).abs() < 1e-6);
+    }
+
+    /// Long enough that a wait which actually blocks for it is unmistakable, so the
+    /// assertions below discriminate on "did it wake" rather than on wall-clock noise.
+    const NEVER: Duration = Duration::from_secs(30);
+    /// Generous ceiling for something that is meant to return at once.
+    const PROMPTLY: Duration = Duration::from_secs(5);
+
+    #[test]
+    fn a_stop_requested_before_the_wait_is_not_lost() {
+        // The lost wakeup the mutex exists to prevent: with a bare atomic, a request
+        // that lands before the thread waits is invisible until the next poll.
+        let sync = StopSignal::default();
+        sync.request(StopRequest::Stop);
+
+        let started = Instant::now();
+        assert_eq!(
+            wait_for_stop_request(&sync, NEVER),
+            Some(StopReason::Manual)
+        );
+        assert!(started.elapsed() < PROMPTLY);
+    }
+
+    #[test]
+    fn a_stop_requested_during_the_wait_ends_it_at_once() {
+        let sync = Arc::new(StopSignal::default());
+        let requester = Arc::clone(&sync);
+        let handle = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            requester.request(StopRequest::Cancel);
+        });
+
+        let started = Instant::now();
+        assert_eq!(
+            wait_for_stop_request(&sync, NEVER),
+            Some(StopReason::Cancelled)
+        );
+        assert!(started.elapsed() < PROMPTLY);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn an_expired_wait_reports_no_request() {
+        // Without this, a wait that returned Some unconditionally would pass the two
+        // tests above while ending every session the moment it started.
+        let sync = StopSignal::default();
+        assert_eq!(
+            wait_for_stop_request(&sync, Duration::from_millis(10)),
+            None
+        );
+    }
+
+    #[test]
+    fn cancel_outranks_a_stop_that_arrived_first() {
+        // Order matters: a cancelled session is discarded, a stopped one is kept.
+        let sync = StopSignal::default();
+        sync.request(StopRequest::Stop);
+        sync.request(StopRequest::Cancel);
+
+        assert_eq!(
+            wait_for_stop_request(&sync, NEVER),
+            Some(StopReason::Cancelled)
+        );
+    }
+
+    #[test]
+    fn waiting_on_a_thread_that_never_finishes_is_bounded() {
+        // The whole point: this runs on the Electron main thread, so a wedged device
+        // teardown has to cost a bounded hitch rather than the process.
+        let sync = StopSignal::default();
+
+        let started = Instant::now();
+        assert!(!wait_until_finished(&sync, Duration::from_millis(30)));
+        assert!(started.elapsed() < PROMPTLY);
+    }
+
+    #[test]
+    fn a_finish_signalled_before_the_wait_is_seen() {
+        // The same lost wakeup, in the other direction.
+        let sync = StopSignal::default();
+        sync.mark_finished();
+
+        let started = Instant::now();
+        assert!(wait_until_finished(&sync, NEVER));
+        assert!(started.elapsed() < PROMPTLY);
+    }
+
+    #[test]
+    fn a_finish_signalled_during_the_wait_ends_it_at_once() {
+        let sync = Arc::new(StopSignal::default());
+        let finisher = Arc::clone(&sync);
+        let handle = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            finisher.mark_finished();
+        });
+
+        let started = Instant::now();
+        assert!(wait_until_finished(&sync, NEVER));
+        assert!(started.elapsed() < PROMPTLY);
+        handle.join().unwrap();
+    }
+
+    /// Replays what `snapshot_capture` does across a sequence of polls, without
+    /// needing a capture device: feed the interleaved buffer in growing prefixes.
+    ///
+    /// Calls the same two functions the napi entry point does, so a mutation to
+    /// either is caught here rather than hidden behind a parallel implementation.
+    fn snapshot_prefixes(interleaved: &[f32], channels: u16, cuts: &[usize]) -> Vec<u8> {
+        let mut cache = SnapshotCache::default();
+        for &visible in cuts {
+            let range = snapshot_delta_range(cache.consumed, visible, channels);
+            extend_snapshot(&mut cache, &interleaved[range], channels);
+        }
+        cache.pcm
+    }
+
+    #[test]
+    fn a_decode_stops_once_it_passes_the_sample_limit() {
+        // Positive control first: the same file decodes fine under a limit it fits.
+        let wav = encode_wav_pcm16(&[0.1, -0.2, 0.3, -0.4, 0.5], 16_000).unwrap();
+        let (samples, rate, channels) = decode_audio_limited(wav.clone(), 1_000).unwrap();
+        assert_eq!(samples.len(), 5);
+        assert_eq!((rate, channels), (16_000, 1));
+
+        // And refuses once it would exceed one.
+        let error = decode_audio_limited(wav, 2).unwrap_err();
+        assert!(error.starts_with("audio-too-long"), "{error}");
+    }
+
+    #[test]
+    fn an_oversized_input_is_refused_before_it_is_decoded() {
+        // Bounds the uncompressed case. The sample limit above bounds the
+        // compressed one, which this cannot see.
+        let error = play_audio_blocking(vec![0u8; MAX_PLAYBACK_INPUT_BYTES + 1]).unwrap_err();
+        assert!(
+            error.reason.starts_with("audio-too-large"),
+            "{}",
+            error.reason
+        );
+    }
+
+    #[test]
+    fn the_shipped_limits_are_the_ones_the_docs_promise() {
+        // audio.d.ts tells callers 64 MiB and five minutes of 48 kHz stereo, and the
+        // rejection reasons are part of the API. Drifting either silently changes
+        // what the binding accepts.
+        assert_eq!(MAX_PLAYBACK_INPUT_BYTES, 67_108_864);
+        assert_eq!(MAX_DECODED_SAMPLES, 28_800_000);
+    }
+
+    #[test]
+    fn a_wav_built_from_cached_pcm_is_the_one_hound_would_have_written() {
+        // The property the whole cache rests on. If these ever diverge, snapshots
+        // silently become a differently-encoded file rather than failing.
+        for channels in [1u16, 2] {
+            for frames in [0usize, 1, 7, 512] {
+                let interleaved: Vec<f32> = (0..frames * channels as usize)
+                    .map(|index| ((index as f32) * 0.017).sin())
+                    .collect();
+                let mono = downmix_to_mono(&interleaved, channels);
+
+                let whole = encode_wav_pcm16(&mono, 48_000).unwrap();
+                let assembled = wav_from_pcm16(&pcm16_le_bytes(&mono), 48_000).unwrap();
+
+                assert_eq!(assembled, whole, "channels={channels} frames={frames}");
+            }
+        }
+    }
+
+    #[test]
+    fn encoding_in_pieces_matches_encoding_all_at_once() {
+        // Same recording, polled at different moments, has to reach the same bytes
+        // as a single encode of the finished buffer.
+        let channels = 2u16;
+        let interleaved: Vec<f32> = (0..2_000).map(|i| ((i as f32) * 0.013).cos()).collect();
+        let whole = pcm16_le_bytes(&downmix_to_mono(&interleaved, channels));
+
+        for cuts in [
+            vec![2_000],
+            vec![10, 2_000],
+            vec![10, 11, 12, 1_999, 2_000],
+            vec![400, 800, 1_200, 1_600, 2_000],
+        ] {
+            assert_eq!(
+                snapshot_prefixes(&interleaved, channels, &cuts),
+                whole,
+                "cuts={cuts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_snapshot_never_splits_a_frame() {
+        // An odd visible length on a stereo buffer must defer the half frame rather
+        // than downmix it against the wrong neighbour, which would shift every
+        // sample after it.
+        let interleaved: Vec<f32> = (0..8).map(|index| index as f32 / 8.0).collect();
+
+        // Poll after 3 samples (one and a half frames), then after all 8.
+        let staged = snapshot_prefixes(&interleaved, 2, &[3, 8]);
+        let whole = pcm16_le_bytes(&downmix_to_mono(&interleaved, 2));
+        assert_eq!(staged, whole);
+    }
+
+    /// A session handle whose thread has already exited, so the reaper can be
+    /// exercised without a capture device.
+    fn finished_session(stopped_at: Option<Instant>, last_read: Instant) -> SessionHandle {
+        SessionHandle {
+            sync: Arc::new(StopSignal::default()),
+            samples: Arc::new(Mutex::new(Vec::new())),
+            snapshot: Arc::new(Mutex::new(SnapshotCache::default())),
+            meta: Arc::new(Mutex::new(CaptureMeta {
+                sample_rate: 48_000,
+                channels: 1,
+                stopped_reason: stopped_at.map(|_| StopReason::MaxDuration),
+                stopped_at,
+            })),
+            join_handle: thread::spawn(|| {}),
+            drain_cursor: Arc::new(AtomicUsize::new(0)),
+            last_read: Mutex::new(last_read),
+        }
+    }
+
+    #[test]
+    fn a_running_session_is_never_abandoned() {
+        // However long it has been going: the caller may simply be recording.
+        let now = Instant::now();
+        let ancient = now - Duration::from_secs(3_600);
+        assert!(!session_is_abandoned(
+            None,
+            ancient,
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn a_stopped_session_survives_until_the_window_passes() {
+        let now = Instant::now();
+        let stopped = now - ABANDONED_SESSION_TTL + Duration::from_secs(1);
+        assert!(!session_is_abandoned(
+            Some(stopped),
+            stopped,
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+
+        let older = now - ABANDONED_SESSION_TTL;
+        assert!(session_is_abandoned(
+            Some(older),
+            older,
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn a_session_someone_is_still_reading_is_never_reaped() {
+        // The half that decides whether this is a safety net or a bug: a caller
+        // polling towards its own collection must not have the session pulled out
+        // from under it, however long ago the thread stopped.
+        let now = Instant::now();
+        let stopped_long_ago = now - Duration::from_secs(3_600);
+        assert!(!session_is_abandoned(
+            Some(stopped_long_ago),
+            now - Duration::from_secs(1),
+            now,
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn reaping_removes_only_the_unreachable_sessions() {
+        let now = Instant::now();
+        let stale = now - Duration::from_secs(3_600);
+        let mut map = HashMap::new();
+        map.insert(
+            "abandoned".to_string(),
+            finished_session(Some(stale), stale),
+        );
+        map.insert("running".to_string(), finished_session(None, stale));
+        map.insert(
+            "just-collected".to_string(),
+            finished_session(Some(stale), now),
+        );
+
+        let reaped = reap_abandoned_sessions(&mut map, now, ABANDONED_SESSION_TTL);
+
+        assert_eq!(reaped, 1);
+        let mut left: Vec<_> = map.keys().cloned().collect();
+        left.sort();
+        assert_eq!(
+            left,
+            vec!["just-collected".to_string(), "running".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_read_moves_a_session_out_of_the_reaper_s_reach() {
+        // touch_session is what the poll/snapshot/drain entry points call; without
+        // it every long-running collection would be a race against the TTL.
+        let now = Instant::now();
+        let stale = now - Duration::from_secs(3_600);
+        let handle = finished_session(Some(stale), stale);
+
+        touch_session(&handle);
+
+        let last_read = *lock(&handle.last_read);
+        assert!(!session_is_abandoned(
+            Some(stale),
+            last_read,
+            Instant::now(),
+            ABANDONED_SESSION_TTL
+        ));
+    }
+
+    #[test]
+    fn every_read_path_touches_the_session() {
+        // The mutation the tests above cannot see: dropping the call from *one* of
+        // the three entry points. `touch_session` stays alive for the other two, so
+        // there is no dead-code warning, and the only symptom is that a session read
+        // solely through that path gets reaped mid-collection.
+        let source = include_str!("lib.rs");
+
+        for entry in ["poll_capture", "snapshot_capture", "drain_capture"] {
+            let body = source
+                .split(&format!("pub fn {entry}("))
+                .nth(1)
+                .unwrap_or_else(|| panic!("{entry} not found"));
+            // Up to the next entry point, so this reads one function's body.
+            let body = body.split("\n#[napi]").next().unwrap();
+            assert!(
+                body.contains("touch_session(handle);"),
+                "{entry} does not mark the session as read"
+            );
+        }
+    }
+
+    #[test]
+    fn a_finished_capture_records_when_it_stopped() {
+        // The reaper's clock. Without it every stopped session looks equally old.
+        let meta = Mutex::new(CaptureMeta::default());
+        let sync = StopSignal::default();
+
+        finish_capture(StopReason::Silence, &meta, &sync);
+
+        assert!(lock(&meta).stopped_at.is_some());
+    }
+
+    #[test]
+    fn a_finished_capture_announces_itself_as_well_as_recording_why() {
+        // Recording the reason without announcing it is the quiet failure here: every
+        // stop would still work, just 500ms slower, which is exactly the kind of thing
+        // that survives review.
+        let meta = Mutex::new(CaptureMeta::default());
+        let sync = StopSignal::default();
+
+        finish_capture(StopReason::Silence, &meta, &sync);
+
+        assert_eq!(lock(&meta).stopped_reason, Some(StopReason::Silence));
+        assert!(wait_until_finished(&sync, NEVER));
     }
 
     #[test]

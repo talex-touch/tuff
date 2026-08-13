@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "质量基线；重点核对是否出现占位假数据"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "解析容错核对"}

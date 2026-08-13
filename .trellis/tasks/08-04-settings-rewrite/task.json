@@ -1,0 +1,30 @@
+{
+  "id": "settings-rewrite",
+  "name": "settings-rewrite",
+  "title": "18 个 Setting*.vue 按设计稿重写",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-03-app-shell-ai-redesign",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Reconcile with 08-04-settings-ia-primitives, which is in progress and already carries the route table and row primitives. This task narrowed its scope on 2026-08-05 by user confirmation, so what is left of it may already be covered there.",
+    "blocker": "None recorded.",
+    "evidence": "design.md exists, and the prd opens with a scope reduction dated 2026-08-05 marked as user confirmed - so the narrowing is a decision on record rather than drift."
+  }
+}

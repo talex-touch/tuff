@@ -1,3 +1,7 @@
+// Math rendering. Imported by the app rather than by TxStreamMarkdown so this
+// bundler emits KaTeX's font files; a library build inlines the URLs and drops
+// the fonts, leaving every formula in a fallback face.
+@use 'katex/dist/katex.min.css';
 
 html,
 body,

@@ -32,15 +32,9 @@ const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%
 </template>
 
 <style lang="scss" scoped>
-@keyframes tx-skeleton-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
+@use '../../../style/mixins.scss' as *;
+
+@include skeleton-keyframes;
 
 .tx-layout-skeleton {
   width: 100%;
@@ -97,8 +91,8 @@ const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: var(--tx-fill-color, #f0f2f5);
-  animation: tx-skeleton-pulse 1.5s ease-in-out infinite;
+
+  @include skeleton-surface;
 }
 
 .tx-layout-skeleton__sidebar-text {
@@ -123,7 +117,13 @@ const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%
 .tx-layout-skeleton__line {
   height: 100%;
   border-radius: 6px;
-  background: var(--tx-fill-color, #f0f2f5);
-  animation: tx-skeleton-pulse 1.5s ease-in-out infinite;
+
+  @include skeleton-surface;
 }
+
+/*
+ * No hand-written reduced-motion block here: `skeleton-surface` emits one per include, so every
+ * animated placeholder is already covered. The motion-contract test counts guards against
+ * animations exactly, and a duplicate reads as an uncovered third animation.
+ */
 </style>

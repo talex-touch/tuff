@@ -20,6 +20,7 @@ import { shortcutModule } from '../../global-shortcon'
 import { getMainConfig, onboardingGate } from '../../storage'
 import SearchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
+import { ipcManager } from './ipc'
 import { coreBoxManager } from './manager'
 import { COREBOX_MIN_HEIGHT, windowManager } from './window'
 
@@ -75,7 +76,7 @@ export class CoreBoxModule extends BaseModule {
     this.transport = runtime.transport
     this.registerTransportHandlers()
 
-    coreBoxManager.init()
+    ipcManager.register()
 
     shortcutModule.registerMainShortcut(
       'core.box.toggle',
@@ -156,6 +157,7 @@ export class CoreBoxModule extends BaseModule {
     this.transport = null
 
     searchLogger.destroy()
+    ipcManager.unregister()
     coreBoxManager.destroy()
     windowManager.stopAppSettingSubscription()
     clearRegisteredMainRuntime('core-box')

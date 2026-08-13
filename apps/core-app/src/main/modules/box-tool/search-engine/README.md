@@ -26,11 +26,16 @@ reconcile，并将记录写入 SQLite/FTS 搜索索引。
 
 ## Search DB split 边界
 
-`TUFF_DB_SEARCH_SPLIT_ENABLED` 当前默认关闭。启用后 search-index worker
-使用独立的 `search-index.db`，但目录中已经存在 split 相关适配并不表示
-所有写路径已经迁移完成，也不表示 flag-on 应用验收通过。在剩余 writer、
-首次全量重建、回滚和真实 app-run 证据完成前，不应把该开关描述为生产
-默认能力。
+`TUFF_DB_SEARCH_SPLIT_ENABLED` 自 `cd39bdbf6`（2026-08-05）起**默认开启**
+（`main/db/runtime-flags.ts:26`）。search-index worker 使用独立的
+`search-index.db`，`database.db` 与 `search-index.db` 各自只有一个 writer 连接。
+
+设为 `0` 是回退到共享文件拓扑的紧急开关，不是安全默认值——原本要防的
+「写路径迁移到一半」那个失败模式已经不存在了。
+
+这段先前写的是「当前默认关闭 …… 不应把该开关描述为生产默认能力」，那是
+翻转之前的状态。翻转时 `.trellis/spec/main-process/database-write-contracts.md`
+和 `docs/plan-prd/TODO.md` 都更新了,这里漏了。
 
 ## 维护中的文档
 

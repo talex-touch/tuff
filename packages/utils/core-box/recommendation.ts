@@ -33,6 +33,24 @@ export interface ContextSignal {
       language?: string
     }
   }
+  /**
+   * Latest captured text selection, same privacy tier as `clipboard`:
+   * content is hashed, only shape metadata travels.
+   */
+  selection?: {
+    /** Hashed content for privacy (not original text) */
+    content: string
+    timestamp: number
+    contentType?: 'url' | 'text' | 'code' | 'file'
+    meta?: {
+      isUrl?: boolean
+      urlDomain?: string
+      textLength?: number
+      fileExtension?: string
+      fileType?: 'code' | 'text' | 'image' | 'document' | 'other'
+      language?: string
+    }
+  }
   foregroundApp?: {
     bundleId: string
     name: string
@@ -41,8 +59,6 @@ export interface ContextSignal {
     isOnline: boolean
     networkType?: 'offline' | 'wired' | 'wifi' | 'cellular' | 'unknown'
     networkIdHash?: string
-    bluetoothAvailable?: boolean
-    bluetoothConnectedCount?: number
     batteryLevel?: number
     isCharging?: boolean
     isOnBattery?: boolean
@@ -51,6 +67,8 @@ export interface ContextSignal {
     powerMode?: 'charging' | 'battery' | 'unknown'
     locationBucket?: string
     timezone?: string
+    /** True within 48h of the system timezone changing (travel signal) */
+    timezoneChanged?: boolean
     unavailableSignals?: string[]
   }
 }
@@ -62,7 +80,17 @@ export interface ScoredItem {
   sourceId: string
   itemId: string
   score: number
-  source: 'frequent' | 'time-based' | 'recent' | 'trending' | 'context' | 'plugin'
+  source:
+    | 'frequent'
+    | 'time-based'
+    | 'recent'
+    | 'trending'
+    | 'context'
+    | 'plugin'
+    /** Installed within the novelty window and never executed yet */
+    | 'newly-installed'
+    /** Catalog ordering used when there is no usage history at all */
+    | 'cold-start'
   reason?: string
 }
 
@@ -109,7 +137,7 @@ export interface RecommendProvider {
 export interface RecommendationBadge {
   text: string
   icon: string
-  variant: 'frequent' | 'intelligent' | 'recent' | 'trending'
+  variant: 'frequent' | 'intelligent' | 'recent' | 'trending' | 'newly-installed'
 }
 
 /**

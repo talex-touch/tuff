@@ -1,9 +1,12 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
 import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { APP_SEMANTIC_ALIAS_CATALOG_VERSION } from './app-semantic-catalog'
+import { APP_TOOL_SOURCE_CATALOG_VERSION } from './app-tool-source-catalog'
 import {
   addWatchPathMock,
   appRuntimeApplyDeltaMock,
@@ -18,6 +21,7 @@ import {
   getAppsMock,
   getHarnessLogger,
   getMainConfigMock,
+  getStartupDegradeWindowRemainingMsMock,
   loadSubject,
   getWatchPathsMock,
   pinyinMock,
@@ -189,6 +193,7 @@ describe('appProvider rebuild maintenance', () => {
       deletedApps: []
     })
     getMainConfigMock.mockReturnValue(undefined)
+    getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
     pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
       if (options?.pattern === 'first') {
         return value === '聊天应用' ? 'WX' : value
@@ -261,7 +266,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
@@ -343,7 +349,9 @@ describe('appProvider rebuild maintenance', () => {
         occurredAt: 1700000000000
       })
 
-      expect(privateProvider.processAppPath).toHaveBeenCalledWith(shortcutPath)
+      expect(privateProvider.processAppPath).toHaveBeenCalledWith(shortcutPath, {
+        discovery: 'watch'
+      })
       expect(watchDeltas).toEqual([
         {
           sourceId: 'app-provider',
@@ -391,7 +399,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
@@ -455,7 +464,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
       const waitForItemStable = vi.fn(async () => true)
 
@@ -604,7 +614,8 @@ describe('appProvider rebuild maintenance', () => {
         ctime: appInfo.lastModified
       }
       const valuesMock = vi.fn(() => ({
-        returning: vi.fn(async () => [insertedFile])
+        returning: vi.fn(async () => [insertedFile]),
+        onConflictDoNothing: vi.fn(async () => undefined)
       }))
       const insertMock = vi.fn(() => ({
         values: valuesMock
@@ -672,6 +683,12 @@ describe('appProvider rebuild maintenance', () => {
     } as IExecuteArgs)
 
     expect(searchRecordExecuteMock).toHaveBeenCalledWith('search-session-42', item)
+    // "before" has to be asserted, not implied by the await: awaiting onExecute drains the
+    // microtask queue, so a recorder deferred by a Promise.resolve().then() still ends up
+    // called by the time these run. Invocation order is what actually pins it (#712).
+    expect(searchRecordExecuteMock.mock.invocationCallOrder[0]).toBeLessThan(
+      scheduleAppLaunchMock.mock.invocationCallOrder[0]
+    )
     expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
       name: 'Recorded App',
       path: '/Applications/Recorded.app',
@@ -681,6 +698,25 @@ describe('appProvider rebuild maintenance', () => {
       workingDirectory: undefined,
       sourceItemId: 'recorded-app'
     })
+  })
+
+  it('has search-core register the recorder, since nothing else can', async () => {
+    // The seam defaults to a no-op. If search-core stops registering, app launches simply stop
+    // being recorded -- no error, no failing assertion anywhere else, because every other test
+    // registers the mock itself. Read from source: importing search-core here would drag in the
+    // whole engine, and the thing worth pinning is that the call site exists at all (#712).
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const searchCore = await fs.readFile(
+      path.resolve(here, '../../search-engine/search-core.ts'),
+      'utf-8'
+    )
+
+    expect(searchCore).toContain('setAppExecutionRecorder(')
+    expect(searchCore).toMatch(/setAppExecutionRecorder\(\s*\(sessionId, item\) =>/)
+
+    // And app-provider must not reach back, or the cycle returns.
+    const provider = await fs.readFile(path.resolve(here, './app-provider.ts'), 'utf-8')
+    expect(provider).not.toMatch(/^import .*search-engine\/search-core/m)
   })
 
   it('requests a runtime reset for public rebuilds', async () => {
@@ -1154,7 +1190,7 @@ describe('appProvider rebuild maintenance', () => {
           status: 'ready',
           itemCount: 6,
           metadata: expect.objectContaining({
-            catalogVersion: 1,
+            catalogVersion: APP_TOOL_SOURCE_CATALOG_VERSION,
             sources: expect.arrayContaining([
               expect.objectContaining({ id: 'dev', appCount: 2 }),
               expect.objectContaining({ id: 'im', appCount: 3 }),
@@ -2211,7 +2247,9 @@ describe('appProvider rebuild maintenance', () => {
     await privateProvider._syncSemanticAliasCatalogIfNeeded()
 
     expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
-    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe('3')
+    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe(
+      String(APP_SEMANTIC_ALIAS_CATALOG_VERSION)
+    )
   })
 
   it('rejects managed launcher entries that collide with scanned apps', async () => {
@@ -2307,7 +2345,10 @@ describe('appProvider rebuild maintenance', () => {
                   mtime: appInfo.lastModified,
                   ctime: appInfo.lastModified
                 }
-              ])
+              ]),
+              // A watch-discovered insert also stamps the install time, which is the one extension
+              // write that must not overwrite what is already stored.
+              onConflictDoNothing: vi.fn(async () => undefined)
             }))
           })),
           delete: vi.fn(() => ({
@@ -2903,6 +2944,122 @@ describe('appProvider rebuild maintenance', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('defers the startup backfill timer past the DB startup degrade window', async () => {
+    vi.useFakeTimers()
+    try {
+      // Startup write-storm gate (R4): 105s of the 120s degrade window remain.
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(105_000)
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      privateProvider.dbUtils = {}
+      privateProvider.searchIndex = {}
+      privateProvider.appIndexSettings.startupBackfillEnabled = true
+      privateProvider._shouldRunStartupBackfill = vi.fn(async () => ({ allowed: true }))
+
+      privateProvider._scheduleStartupBackfill()
+
+      // The historic 15s initial delay must not fire inside the window…
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(appRuntimeScanMock).not.toHaveBeenCalled()
+
+      // …and the deferred one-shot fires once the window remainder elapses.
+      await vi.advanceTimersByTimeAsync(90_000)
+      await withTimeout(
+        privateProvider.startupBackfillTask ?? Promise.resolve(),
+        'deferred startup backfill'
+      )
+      expect(appRuntimeScanMock).toHaveBeenCalledTimes(1)
+    } finally {
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
+      vi.useRealTimers()
+    }
+  })
+
+  it('defers boot-path backfill writes inside the degrade window and arms the timer re-run', async () => {
+    // R4 boot-path gate: the Runtime initial app scan runs the backfill inline
+    // ~1-2s after boot (scanIndexedSource → _runStartupBackfill), bypassing
+    // the _scheduleStartupBackfill timer entirely. The inline run must skip
+    // the filesystem diff and every backfill DB write during the window and
+    // hand ownership to the window-gated timer.
+    vi.useFakeTimers()
+    let armedProvider: ReturnType<typeof asPrivateProvider> | null = null
+    try {
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(105_000)
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      armedProvider = privateProvider
+      const getFilesByType = vi.fn()
+      privateProvider.dbUtils = { getFilesByType }
+      privateProvider.searchIndex = {}
+      privateProvider.appIndexSettings.startupBackfillEnabled = true
+      privateProvider._getLastBackfillTime = vi.fn(async () => 1_700_000_000_000)
+
+      await privateProvider._performStartupBackfill()
+
+      expect(getAppsMock).not.toHaveBeenCalled()
+      expect(getFilesByType).not.toHaveBeenCalled()
+      expect(privateProvider.startupBackfillWritesDeferred).toBe(true)
+      // The deferred timer re-run is armed for the remaining window.
+      expect(privateProvider.startupBackfillTimer).not.toBeNull()
+    } finally {
+      if (armedProvider?.startupBackfillTimer) {
+        clearTimeout(armedProvider.startupBackfillTimer)
+        armedProvider.startupBackfillTimer = null
+      }
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
+      vi.useRealTimers()
+    }
+  })
+
+  it('still performs the first-launch backfill inside the degrade window', async () => {
+    // First launch (no completed backfill yet): initial population is what
+    // makes apps searchable, so the degrade window must not defer it.
+    getStartupDegradeWindowRemainingMsMock.mockReturnValue(105_000)
+    try {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      privateProvider.dbUtils = { getFilesByType: vi.fn().mockResolvedValue([]) }
+      privateProvider.searchIndex = {}
+      privateProvider.fetchExtensionsForFiles = vi.fn().mockResolvedValue([])
+      privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
+      privateProvider._getLastBackfillTime = vi.fn(async () => null)
+
+      await privateProvider._performStartupBackfill()
+
+      expect(getAppsMock).toHaveBeenCalledWith({ forceRefresh: true })
+      expect(privateProvider.startupBackfillWritesDeferred).toBe(false)
+    } finally {
+      getStartupDegradeWindowRemainingMsMock.mockReturnValue(0)
+    }
+  })
+
+  it('does not stamp the last-backfill timestamp when the backfill deferred its writes', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider._runStartupBackfill = vi.fn(async () => {
+      // Simulates the in-window deferral outcome of _performStartupBackfill.
+      privateProvider.startupBackfillWritesDeferred = true
+    })
+    const stamp = vi
+      .spyOn(privateProvider as never, '_setLastBackfillTime')
+      .mockResolvedValue(undefined as never)
+    privateProvider.buildIndexedSourceRecordBatches = vi.fn(async function* () {
+      yield { sourceId: 'app-provider', records: [] }
+    })
+
+    for await (const batch of appProvider.scanIndexedSource({
+      sourceId: 'app-provider',
+      reason: 'startup'
+    })) {
+      void batch
+    }
+
+    // The timer-driven re-run owns the stamp; stamping here would let the dev
+    // recent-backfill guard skip the deferred (write-performing) run.
+    expect(stamp).not.toHaveBeenCalled()
+    expect(privateProvider.startupBackfillWritesDeferred).toBe(false)
   })
 
   it('commits scanned app additions in bounded chunks', async () => {

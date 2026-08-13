@@ -1,6 +1,7 @@
 <script lang="ts" name="TouchMenuItem" setup>
 // Legacy navigation surface: new CoreApp code should use TuffEx navigation/menu primitives.
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
+import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -22,7 +23,7 @@ const props = defineProps({
   },
   doActive: {
     type: Function,
-    default: (route, $route) => {
+    default: (route: string, $route: RouteLocationNormalizedLoaded | undefined) => {
       if (!$route) return false
       // 精确匹配路由路径
       if ($route.path === route) return true
@@ -40,7 +41,7 @@ const active = computed(() => props.doActive(props.route, route))
 
 const changePointer = inject<(el: HTMLElement) => void>('changePointer')
 
-let removeGuard
+let removeGuard: (() => void) | undefined
 
 onMounted(() => {
   removeGuard = router.afterEach((to, _from) => {
@@ -66,7 +67,7 @@ onUnmounted(() => {
   }
 })
 
-function handleClick($event) {
+function handleClick($event: MouseEvent | KeyboardEvent) {
   if (props.disabled) return
 
   if (props.route) router.push(props.route)
@@ -79,15 +80,28 @@ function handleClick($event) {
 </script>
 
 <template>
+  <!--
+    Kept as a div rather than promoted to <button>: this routes, so `link` announces what it
+    actually does where a button would promise an action. Keeping the element means role,
+    tabindex and key handling all have to be supplied by hand -- a bare div was reachable only
+    by mouse (#505). Space is handled alongside Enter because the element is not a native
+    control, so nothing supplies either for free.
+  -->
   <div
     ref="dom"
     v-wave
+    role="link"
     :data-route="props.route"
+    :tabindex="disabled ? -1 : 0"
+    :aria-current="active ? 'page' : undefined"
+    :aria-disabled="disabled ? 'true' : undefined"
     class="TouchMenuItem-Container fake-background"
     flex
     items-center
     :class="{ active, disabled }"
     @click="handleClick"
+    @keydown.enter.prevent="handleClick"
+    @keydown.space.prevent="handleClick"
   >
     <slot>
       <span :class="icon" class="TouchMenu-Tab-Icon" />
@@ -98,6 +112,13 @@ function handleClick($event) {
 
 <style lang="scss" scoped>
 .TouchMenuItem-Container {
+  // Without this the item takes focus but shows nothing, which is worse than being unreachable:
+  // a keyboard user would be moving through invisible stops.
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: -2px;
+  }
+
   &:hover {
     --fake-inner-opacity: 0.5;
     --fake-color: var(--tx-fill-color-dark);

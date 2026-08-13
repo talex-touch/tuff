@@ -36,8 +36,7 @@ import type {
 } from '@talex-touch/utils/types/intelligence'
 import crypto from 'node:crypto'
 import process from 'node:process'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { withSqliteRetry } from '../../db/sqlite-retry'
+import { scheduleDbWrite } from '../../db/db-write'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
@@ -704,15 +703,17 @@ export class ContextHygieneService {
     return client
   }
 
+  // Option-bundling wrappers only: busy retry is scheduler-owned (delayed
+  // re-enqueue), so the operation is never wrapped in withSqliteRetry again.
   private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+    return scheduleDbWrite(label, operation, {
       priority: 'interactive',
       maxQueueWaitMs: 8_000
     })
   }
 
   private async withRetentionWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+    return scheduleDbWrite(label, operation, {
       priority: 'background',
       dropPolicy: 'none',
       maxQueueWaitMs: 15_000

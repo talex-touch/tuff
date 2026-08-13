@@ -225,7 +225,7 @@ watch(profileVisible, (visible) => {
           borderless
         >
           <TxTabItem name="overview" activation>
-            <template #name>{{ t('userProfile.overview', '概览') }}</template>
+            <template #name>{{ t('userProfile.overview') }}</template>
             <div class="UserProfile">
               <div class="UserProfile-TopCard">
                 <div class="UserProfile-TopIdentity">
@@ -397,23 +397,23 @@ watch(profileVisible, (visible) => {
             </div>
           </TxTabItem>
           <TxTabItem name="security">
-            <template #name>{{ t('userProfile.security', '安全与登录') }}</template>
+            <template #name>{{ t('userProfile.security') }}</template>
             <div class="UserProfileTabContent">
               <div class="UserProfile-SectionTitle">
-                {{ t('userProfile.securityActions', '登录与安全选项') }}
+                {{ t('userProfile.securityActions') }}
               </div>
               <div class="UserProfile-Actions">
                 <TxButton variant="flat" size="sm" @click="handleLoginMethods">
                   {{ t('userProfile.openEmailSettings', 'Manage email') }}
                 </TxButton>
                 <TxButton variant="flat" size="sm" @click="openSyncSecurity">
-                  {{ t('settingUser.syncSecurity', '同步安全') }}
+                  {{ t('settingUser.syncSecurity') }}
                 </TxButton>
                 <TxButton variant="flat" size="sm" @click="openDeviceManagement">
                   {{ t('userProfile.devices', 'Devices') }}
                 </TxButton>
                 <TxButton variant="flat" size="sm" @click="requestStepUp">
-                  {{ t('settingUser.stepUp', '二次验证') }}
+                  {{ t('settingUser.stepUp') }}
                 </TxButton>
               </div>
             </div>

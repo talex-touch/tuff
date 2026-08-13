@@ -10,6 +10,7 @@ import {
   mapIndexedWriteReconciliationDiskPayload,
   mapIndexedWriteReconciliationUpsertRecords,
   mapIndexedWriteWorkerFilePayload,
+  quantizeIndexedWriteTimestampToSeconds,
   resolveIndexedWriteReconciliationDiff,
   takeIndexedWriteRecordChunk,
   toIndexedWriteDate,
@@ -393,6 +394,8 @@ describe("IndexedWritePlanService", () => {
   });
 
   it("computes reconciliation diff with duplicate disk paths ignored", () => {
+    // Timestamps are whole seconds: the diff compares at the DB column's
+    // second precision, so sub-second fixtures would collapse into one second.
     const result = resolveIndexedWriteReconciliationDiff(
       [
         {
@@ -400,38 +403,38 @@ describe("IndexedWritePlanService", () => {
           name: "new.txt",
           extension: ".txt",
           size: 1,
-          mtime: 20,
-          ctime: 20,
+          mtime: 20_000,
+          ctime: 20_000,
         },
         {
           path: "/watch/update.txt",
           name: "update.txt",
           extension: ".txt",
           size: 1,
-          mtime: 30,
-          ctime: 30,
+          mtime: 30_000,
+          ctime: 30_000,
         },
         {
           path: "/watch/update.txt",
           name: "update.txt",
           extension: ".txt",
           size: 1,
-          mtime: 40,
-          ctime: 40,
+          mtime: 40_000,
+          ctime: 40_000,
         },
         {
           path: "/other/external.txt",
           name: "external.txt",
           extension: ".txt",
           size: 1,
-          mtime: 10,
-          ctime: 10,
+          mtime: 10_000,
+          ctime: 10_000,
         },
       ],
       [
-        { id: 1, path: "/watch/update.txt", mtime: 10 },
-        { id: 2, path: "/watch/delete.txt", mtime: 10 },
-        { id: 3, path: "/other/keep.txt", mtime: 10 },
+        { id: 1, path: "/watch/update.txt", mtime: 10_000 },
+        { id: 2, path: "/watch/delete.txt", mtime: 10_000 },
+        { id: 3, path: "/other/keep.txt", mtime: 10_000 },
       ],
       ["/watch"],
     );
@@ -442,16 +445,16 @@ describe("IndexedWritePlanService", () => {
         name: "new.txt",
         extension: ".txt",
         size: 1,
-        mtime: 20,
-        ctime: 20,
+        mtime: 20_000,
+        ctime: 20_000,
       },
       {
         path: "/other/external.txt",
         name: "external.txt",
         extension: ".txt",
         size: 1,
-        mtime: 10,
-        ctime: 10,
+        mtime: 10_000,
+        ctime: 10_000,
       },
     ]);
     expect(result.filesToUpdate).toEqual([
@@ -461,11 +464,55 @@ describe("IndexedWritePlanService", () => {
         name: "update.txt",
         extension: ".txt",
         size: 1,
-        mtime: 30,
-        ctime: 30,
+        mtime: 30_000,
+        ctime: 30_000,
       },
     ]);
     expect(result.deletedIds).toEqual([2]);
+  });
+
+  it("plans no update when only the sub-second part of the disk mtime differs", () => {
+    // files.mtime is a second-precision column, so the DB side reads back
+    // second-aligned while the disk keeps milliseconds. Before quantization
+    // every reconcile round re-updated the whole unchanged tree.
+    const dbSecond = 1_764_000_000_000;
+    const diskFiles = [
+      {
+        path: "/watch/unchanged.txt",
+        name: "unchanged.txt",
+        extension: ".txt",
+        size: 1,
+        mtime: dbSecond + 812,
+        ctime: dbSecond,
+      },
+    ];
+    const dbFiles = [{ id: 1, path: "/watch/unchanged.txt", mtime: dbSecond }];
+
+    const unchanged = resolveIndexedWriteReconciliationDiff(diskFiles, dbFiles, [
+      "/watch",
+    ]);
+    expect(unchanged.filesToUpdate).toEqual([]);
+    expect(unchanged.filesToAdd).toEqual([]);
+    expect(unchanged.deletedIds).toEqual([]);
+
+    // A real edit that crosses into the next second is still detected.
+    const changed = resolveIndexedWriteReconciliationDiff(
+      [{ ...diskFiles[0]!, mtime: dbSecond + 1_000 }],
+      dbFiles,
+      ["/watch"],
+    );
+    expect(changed.filesToUpdate).toHaveLength(1);
+  });
+
+  it("quantizes timestamps to whole seconds and passes non-finite values through", () => {
+    expect(quantizeIndexedWriteTimestampToSeconds(1_764_000_000_999)).toBe(
+      1_764_000_000_000,
+    );
+    expect(quantizeIndexedWriteTimestampToSeconds(1_764_000_000_000)).toBe(
+      1_764_000_000_000,
+    );
+    expect(quantizeIndexedWriteTimestampToSeconds(0)).toBe(0);
+    expect(quantizeIndexedWriteTimestampToSeconds(Number.NaN)).toBeNaN();
   });
 
   it("maps indexed worker file payloads with injected timestamp fallback", () => {

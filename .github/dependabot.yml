@@ -16,3 +16,18 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+  # packages/tuff-native is a five-member Cargo workspace with a tracked Cargo.lock, and its
+  # addons are compiled into the shipped Electron app. The dependency graph already indexes
+  # those crates, so advisories do surface as alerts — what was missing is the update side:
+  # without an ecosystem entry Dependabot opens no PR for them, security or otherwise.
+  - package-ecosystem: cargo
+    directory: /packages/tuff-native
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"

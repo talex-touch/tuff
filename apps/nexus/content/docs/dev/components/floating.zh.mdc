@@ -69,6 +69,9 @@ code: |
 - `disabled=false` 会重新启动监听与 RAF。
 - `TxFloatingElement` 挂载时注册，`depth` 变化时重新注册，卸载时注销。
 - 元素在 `TxFloating` 外部使用时仍会渲染，但不会动画。
+- 用户开启 `prefers-reduced-motion: reduce` 时组件停止全部视差运动。
+- `IntersectionObserver` 在容器移出视口时暂停 RAF 循环，重新进入时恢复。
+- 容器在 capture 阶段监听 window `scroll` 与 `resize`，以在页面滚动/缩放后重新测量原点。
 - 实现通过 `hasWindow()` 保护浏览器 API，避免 SSR 问题。
 
 ## API

@@ -1,15 +1,27 @@
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, loadPluginModuleWithSourceTransform, withoutGlobal } from './plugin-loader'
 
 const batchRenameUrl = new URL('../../../../plugins/touch-batch-rename/index.js', import.meta.url)
-const renamePlugin = loadPluginModule(batchRenameUrl)
-const { __test: renameTest } = renamePlugin
+
+// e37c92c8c removed the __test export. Both helpers still exist in the plugin and are
+// simply not exported, so they are re-exported at load time into this suite's copy of
+// the module rather than adding a test-only export back to the shipped file.
+const TEST_EXPORT_NAMES = ['parseRules', 'buildRenamePlan'] as const
+
+const renameTest = loadPluginModuleWithSourceTransform<{
+  __test: Record<(typeof TEST_EXPORT_NAMES)[number], (...args: any[]) => any>
+}>(
+  batchRenameUrl,
+  source => `${source}\nmodule.exports.__test={${TEST_EXPORT_NAMES.join(',')}}`,
+  createPluginGlobals(),
+).__test
 
 class FakeBuilder {
   item: Record<string, unknown>
 
   constructor(id: string) {
-    this.item = { id }
+    this.item = { id, meta: {}, actions: [] }
   }
 
   setSource() {
@@ -31,7 +43,14 @@ class FakeBuilder {
   }
 
   setMeta(meta: Record<string, unknown>) {
-    this.item.meta = meta
+    this.item.meta = { ...(this.item.meta as Record<string, unknown>), ...meta }
+    return this
+  }
+
+  // buildItem attaches the action id here (index.js:217-218), not to meta. Without
+  // this the items came back with no actions at all, so every lookup below missed.
+  createAndAddAction(id: string, type: string, title: string, payload?: unknown) {
+    ;(this.item.actions as unknown[]).push({ id, type, title, payload })
     return this
   }
 
@@ -60,20 +79,19 @@ describe('batch rename rules', () => {
     const now = new Date(2025, 0, 2)
     const plan = renameTest.buildRenamePlan(['/tmp/foo.txt', '/tmp/bar.txt'], rules, now)
 
-    expect(plan.items[0].nextName).toBe('IMG_foo_done_20250102_001.txt')
-    expect(plan.items[1].nextName).toBe('IMG_bar_done_20250102_002.txt')
+    // The plan item field is targetName; nextName was renamed in e37c92c8c.
+
+    expect(plan.items[0].targetName).toBe('IMG_foo_done_20250102_001.txt')
+    expect(plan.items[1].targetName).toBe('IMG_bar_done_20250102_002.txt')
   })
 
   it('blocks apply action when fs.write permission is denied', async () => {
-    const request = vi.fn(async () => false)
+    const check = vi.fn(async (permissionId: string) => permissionId === 'fs.read')
     const storageSetFile = vi.fn()
     const pushedItems: Array<Record<string, any>> = []
     const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
       TuffItemBuilder: FakeBuilder,
-      permission: {
-        check: async (permissionId: string) => permissionId === 'fs.read',
-        request,
-      },
+      permission: { check },
       plugin: {
         feature: {
           clearItems() {
@@ -99,16 +117,16 @@ describe('batch rename rules', () => {
       ],
     })
 
-    const applyItem = pushedItems.find(item => item.meta?.actionId === 'apply')
+    const applyItem = pushedItems.find(item => item.actions?.[0]?.id === 'apply')
     const result = await pluginModule.onItemAction(applyItem)
 
-    expect(request).toHaveBeenCalledWith('fs.write', '需要文件写入权限以执行重命名')
+    expect(check).toHaveBeenCalledWith('fs.write')
     expect(storageSetFile).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 
@@ -143,100 +161,28 @@ describe('batch rename rules', () => {
       ],
     })
 
-    const applyItem = pushedItems.find(item => item.meta?.actionId === 'apply')
+    const applyItem = pushedItems.find(item => item.actions?.[0]?.id === 'apply')
 
     expect(applyItem).toBeUndefined()
     expect(storageSetFile).not.toHaveBeenCalled()
+    // The SDK is absent, so there is nothing for the user to grant. Showing "请授予文件读取权限"
+    // here sent them after a permission they may already hold (#821); it is reserved for a
+    // real denial, which the test above covers.
     expect(pushedItems).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        title: '缺少读取权限',
-        subtitle: '请授予文件读取权限',
+        title: '权限系统不可用',
+        subtitle: '无法确认文件读取权限 · permission-sdk-unavailable',
       }),
     ]))
   })
 
-  it('blocks undo action when fs.write permission is denied', async () => {
-    const request = vi.fn(async () => false)
-    const storageGetFile = vi.fn()
-    const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
-      permission: {
-        check: async () => false,
-        request,
-      },
-      plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-        },
-        storage: {
-          getFile: storageGetFile,
-          async setFile() {},
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'batch-rename',
-        actionId: 'undo',
-        featureId: 'batch-rename',
-      },
-    })
-
-    expect(request).toHaveBeenCalledWith('fs.write', '需要文件写入权限以撤销重命名')
-    expect(storageGetFile).not.toHaveBeenCalled()
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-denied',
-    })
-  })
-
-  it('blocks undo action when permission sdk is unavailable', async () => {
-    const storageGetFile = vi.fn()
-    const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
-      permission: withoutGlobal(),
-      plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-        },
-        storage: {
-          getFile: storageGetFile,
-          async setFile() {},
-        },
-      },
-    }))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'batch-rename',
-        actionId: 'undo',
-        featureId: 'batch-rename',
-      },
-    })
-
-    expect(storageGetFile).not.toHaveBeenCalled()
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-sdk-unavailable',
-    })
-  })
-
-  it('blocks apply action when fs.write permission request fails', async () => {
-    const storageSetFile = vi.fn()
+  it('does tell the user to grant it when fs.read is genuinely denied', async () => {
+    // The other half of the branch above. Without this, moving the grant advice behind a
+    // condition could silently retire it for everyone.
     const pushedItems: Array<Record<string, any>> = []
     const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
       TuffItemBuilder: FakeBuilder,
-      permission: {
-        check: async (permissionId: string) => permissionId === 'fs.read',
-        request: async () => {
-          throw new Error('permission transport failed')
-        },
-      },
+      permission: { check: vi.fn(async () => false) },
       plugin: {
         feature: {
           clearItems() {
@@ -250,86 +196,135 @@ describe('batch rename rules', () => {
           async getFile() {
             return null
           },
-          setFile: storageSetFile,
+          async setFile() {},
         },
       },
     }))
 
-    await pluginModule.onFeatureTriggered('batch-rename-request-failed', {
+    await pluginModule.onFeatureTriggered('batch-rename', {
       text: 'prefix:NEW_',
       inputs: [
         { type: 'files', content: JSON.stringify(['/tmp/example.txt']) },
       ],
     })
 
-    const applyItem = pushedItems.find(item => item.meta?.actionId === 'apply')
-    const result = await pluginModule.onItemAction(applyItem)
+    expect(pushedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: '缺少读取权限',
+        subtitle: '请授予文件读取权限',
+      }),
+    ]))
+  })
 
-    expect(storageSetFile).not.toHaveBeenCalled()
+  // ensurePermission (index.js) calls permission.check only. There is no permission.request
+  // path left, so the assertions that one was called with a reason string were describing a
+  // gate that e37c92c8c removed.
+  //
+  // It used to collapse three distinct situations -- denied, SDK absent, check threw -- into a
+  // single false, so all three surfaced as 'permission-denied' and a user whose permission host
+  // was missing was told to grant a permission they may already hold. Fixed in #821; the three
+  // tests below now hold the reasons apart, which is what makes the fix checkable.
+  function undoModule(permissionOverride: unknown, storageGetFile = vi.fn()) {
+    return {
+      storageGetFile,
+      module: loadPluginModule(batchRenameUrl, createPluginGlobals({
+        permission: permissionOverride,
+        plugin: {
+          feature: {
+            clearItems() {},
+            pushItems() {},
+          },
+          storage: {
+            getFile: storageGetFile,
+            async setFile() {},
+          },
+        },
+      })),
+    }
+  }
+
+  const undoItem = {
+    meta: { defaultAction: 'batch-rename', featureId: 'batch-rename' },
+    actions: [{ id: 'undo' }],
+  }
+
+  it('blocks undo action when fs.write permission is denied', async () => {
+    const check = vi.fn(async () => false)
+    const harness = undoModule({ check })
+
+    const result = await harness.module.onItemAction(undoItem)
+
+    expect(check).toHaveBeenCalledWith('fs.write')
+    expect(harness.storageGetFile).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-request-failed',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
+      message: '缺少 fs.write 权限',
     })
   })
 
-  it('blocks undo action when fs.write permission request fails', async () => {
-    const storageGetFile = vi.fn()
-    const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
-      permission: {
-        check: async () => false,
-        request: async () => {
-          throw new Error('permission transport failed')
-        },
-      },
-      plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-        },
-        storage: {
-          getFile: storageGetFile,
-          async setFile() {},
-        },
-      },
-    }))
+  it('blocks undo action when the permission sdk is unavailable', async () => {
+    const harness = undoModule(withoutGlobal())
 
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'batch-rename',
-        actionId: 'undo',
-        featureId: 'batch-rename',
-      },
-    })
+    const result = await harness.module.onItemAction(undoItem)
 
-    expect(storageGetFile).not.toHaveBeenCalled()
+    expect(harness.storageGetFile).not.toHaveBeenCalled()
+    // Still fail-closed, but named as what it is. Telling this user to grant fs.write would
+    // send them after a permission they may already hold (#821).
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-request-failed',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_SDK_UNAVAILABLE,
+      message: '权限系统不可用',
     })
   })
 
-  it('keeps apply inert when no preview plan exists', async () => {
-    const request = vi.fn(async () => false)
+  it('blocks undo action when the permission check throws', async () => {
+    const check = vi.fn(async () => {
+      throw new Error('permission transport failed')
+    })
+    const harness = undoModule({ check })
+
+    const result = await harness.module.onItemAction(undoItem)
+
+    expect(check).toHaveBeenCalledWith('fs.write')
+    expect(harness.storageGetFile).not.toHaveBeenCalled()
+    // A transport fault is its own reason now, so it is diagnosable rather than looking like
+    // something the user did wrong.
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_CHECK_FAILED,
+      message: '权限检查失败',
+    })
+  })
+
+  it('refuses apply before a preview exists, without touching permissions', async () => {
+    const check = vi.fn(async () => true)
     const pluginModule = loadPluginModule(batchRenameUrl, createPluginGlobals({
-      permission: {
-        check: async () => false,
-        request,
-      },
+      permission: { check },
     }))
 
     const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'batch-rename',
-        actionId: 'apply',
-        featureId: 'missing-preview',
-      },
+      meta: { defaultAction: 'batch-rename', featureId: 'missing-preview' },
+      actions: [{ id: 'apply' }],
     })
 
-    expect(request).not.toHaveBeenCalled()
-    expect(result).toBeUndefined()
+    // The preview check runs before the permission gate (index.js:379-383), so a user
+    // with nothing staged is not asked for fs.write first. The old test asserted
+    // undefined, which it got only because the action id was passed where nothing read
+    // it -- the handler bailed before reaching any of this.
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'preview-missing',
+      message: '请先生成重命名预览',
+    })
+    expect(check).not.toHaveBeenCalled()
   })
 })

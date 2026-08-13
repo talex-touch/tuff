@@ -226,11 +226,24 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 
 export interface IFeatureCommand {
   type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
-  value: string | string[] | RegExp | FeatureCommandMatcher
+  /**
+   * Always a string pattern. Features are declared in `manifest.json` and cross IPC, so a
+   * `RegExp` or a matcher function cannot reach a consumer -- JSON degrades them to `{}` or
+   * drops them. The union used to admit both, which let the matcher cast unsoundly to `RegExp`
+   * and throw on the string a manifest actually carries (#885).
+   *
+   * For `type: 'regex'` this is the pattern source; the host compiles it.
+   */
+  value: string | string[]
   /** Optional trigger callback - not serialized over IPC */
   onTrigger?: () => void
 }
 
+/**
+ * @deprecated Never reachable. A feature command is declared in `manifest.json` and crosses
+ * IPC, so a function value cannot survive to the host. Nothing constructs one, and the
+ * `'function'` command type has no matcher branch. Kept only so existing imports still resolve.
+ */
 export type FeatureCommandMatcher = (queryText: string) => boolean
 
 export type OmniTransferTarget = 'plugin' | 'corebox' | 'system'
@@ -381,6 +394,13 @@ export interface IFeatureLifeCycle {
   /**
    * Called when user input changes within this feature’s input box.
    * For example, search text or commands typed.
+   *
+   * @deprecated Not invoked on a Prelude. `triggerInputChanged` calls {@link onFeatureTriggered}
+   * again and then the per-feature listeners registered as {@link ITargetFeatureLifeCycle}, which
+   * declares an identically named hook that *is* called. A Prelude implementing this one gets a
+   * handler that never runs (#823) — handle input changes in `onFeatureTriggered`, which is
+   * re-entered on every keystroke.
+   *
    * @param input - The new input value
    */
   onInputChanged?: (input: string) => void
@@ -728,6 +748,7 @@ export interface IManifest {
   }
 }
 
+export * from './blocked-reasons'
 export * from './install'
 export * from './package-policy'
 export * from './security-scan'

@@ -1,0 +1,30 @@
+{
+  "id": "tuffex-ai-attachments-toolcards",
+  "name": "tuffex-ai-attachments-toolcards",
+  "title": "附件与工具卡片（TxAttachmentTray + TxToolCallCard + arrow-js Widget 展面）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-tuffex-ai-suite",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Cover the two criteria with no tests: the composer dispatching attachment-add on paste and drop with the drop highlight and no Enter/IME regression, and TxToolCallCard walking all four states from a mock event sequence with a retry from the error state. The parts model and the attachment tray are already covered.",
+    "blocker": "None for the two open criteria - they need tests written, not a decision. The animation smoothness half of the tool-card criterion needs an eye.",
+    "evidence": "Measured 2026-08-11: attachment-tray plus ai-elements, 19 passed / 3 files. The parts model is covered - each part type rendered in order, only the last text part marked streaming, the legacy content path kept when parts are absent, parts-only messages with an empty content summary. The tray is covered - images split into thumbs and files into chips, the viewer opening at the clicked image, file chips emitting open, remove replaced by cancel with a progress ring while uploading, and a placeholder when a thumbnail fails."
+  }
+}

@@ -1,6 +1,10 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "compilerOptions": {
+    // Turned on rather than counted. The debt this replaces was 227 errors when #548 was filed;
+    // the ratchet that tracked it down to zero is deleted in the same change, because a ratchet
+    // is for debt that will never reach zero and this one has.
+    "noImplicitAny": true,
     "composite": true,
     "jsx": "preserve",
     // "target": "ES2020",
@@ -16,8 +20,7 @@
       "@talex-touch/tuff-native/*": ["packages/tuff-native/*"],
       "@talex-touch/tuff-intelligence": ["packages/tuff-intelligence/src/index.ts"],
       "@talex-touch/tuff-intelligence/*": ["packages/tuff-intelligence/src/*"],
-      "@/common/*": ["packages/utils/common/*"],
-      "@/typings/*": ["packages/typings/*"]
+      "@/common/*": ["packages/utils/common/*"]
     },
     "resolveJsonModule": true,
     "types": ["electron-vite/node"],

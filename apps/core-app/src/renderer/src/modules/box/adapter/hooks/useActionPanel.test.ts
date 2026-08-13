@@ -168,6 +168,14 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
 
+  /**
+   * The path stays `/intelligence/channels` even though the page now lives under
+   * `/setting/intelligence/channels`: it is an allow-listed constant that the host compares
+   * byte-for-byte against what the plugin declared (`plugin-business-capabilities.ts`
+   * `FIXED_WIDGET_NAVIGATION`), and plugins are installed into the user data directory, so older
+   * copies keep sending the old string. The router redirects it; the action panel forwards it
+   * untouched, which is what this asserts.
+   */
   it('routes the declared intelligence recovery action without executing the plugin item', async () => {
     const navigate = vi.fn()
     const actionPanel = useActionPanel({ navigate })

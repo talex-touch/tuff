@@ -3,11 +3,6 @@ import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type { LocalizedTextValue } from '@talex-touch/utils/i18n'
 import type {
-  NetworkMethod,
-  NetworkRequestOptions,
-  NetworkResponseType
-} from '@talex-touch/utils/network'
-import type {
   IFeatureLifeCycle,
   IPlatform,
   IPluginBuildInfo,
@@ -25,10 +20,9 @@ import type {
   PluginStandardChannelData
 } from '@talex-touch/utils/plugin/sdk/channel-client'
 import type { IndexedSourceDescriptor, SearchProviderDescriptor } from '@talex-touch/utils/search'
-import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { ITuffTransport, SendOptions, TuffEvent } from '@talex-touch/utils/transport'
 import type {
   ClipboardActionResult,
-  ClipboardCopyAndPasteRequest,
   QuickOpsAuditGetRequest,
   QuickOpsAuditGetResponse,
   QuickOpsBatteryStatusGetResponse,
@@ -133,7 +127,7 @@ import {
   PluginEvents,
   QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
-import { app, clipboard, dialog, shell } from 'electron'
+import { app } from 'electron'
 import fse from 'fs-extra'
 import {
   PluginLogAppendEvent,
@@ -143,7 +137,13 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { deviceIdleService } from '../../service/device-idle-service'
-import { validateExternalUrl } from '../../utils/external-url-policy'
+import {
+  createRemovedChannelError,
+  createSafePluginClipboardApi,
+  createSafePluginDialogApi,
+  createSafePluginOpenUrl,
+  withPluginSdkapiPayload
+} from './plugin-safe-api'
 import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getStyles } from '../../utils/plugin-injection'
@@ -153,8 +153,10 @@ import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
 import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-provider-config'
 import { getNetworkService } from '../network'
+import { createPluginHttpClient } from './plugin-http-client'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
+import { validatePluginFeatureAdmission } from './plugin-feature-admission'
 import { PluginFeature } from './plugin-feature'
 import {
   bundlePluginPreludeFromContent,
@@ -166,6 +168,7 @@ import {
 } from './runtime/plugin-prelude-resolver'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
+import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from './privileged-plugins'
 
 interface FeatureEventUtil {
   onFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
@@ -173,85 +176,6 @@ interface FeatureEventUtil {
 }
 
 type BoxItemWriteScope = 'root-results' | 'active-feature'
-
-type PluginCopyAndPasteOptions = Omit<ClipboardCopyAndPasteRequest, '_sdkapi'>
-
-type PluginClipboardApi = Pick<
-  Electron.Clipboard,
-  'readText' | 'writeText' | 'readImage' | 'writeImage' | 'clear' | 'has'
-> & {
-  copyAndPaste: (options: PluginCopyAndPasteOptions) => Promise<boolean>
-}
-
-function createSafePluginDialogApi() {
-  return {
-    showMessageBox: (...args: Parameters<typeof dialog.showMessageBox>) =>
-      dialog.showMessageBox(...args),
-    showOpenDialog: (...args: Parameters<typeof dialog.showOpenDialog>) =>
-      dialog.showOpenDialog(...args),
-    showSaveDialog: (...args: Parameters<typeof dialog.showSaveDialog>) =>
-      dialog.showSaveDialog(...args)
-  }
-}
-
-function createSafePluginClipboardApi(
-  copyAndPaste: PluginClipboardApi['copyAndPaste']
-): PluginClipboardApi {
-  return {
-    readText: (...args) => clipboard.readText(...args),
-    writeText: (...args) => clipboard.writeText(...args),
-    readImage: (...args) => clipboard.readImage(...args),
-    writeImage: (...args) => clipboard.writeImage(...args),
-    clear: (...args) => clipboard.clear(...args),
-    has: (...args) => clipboard.has(...args),
-    copyAndPaste
-  }
-}
-
-function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
-  return async (url: string): Promise<void> => {
-    const decision = validateExternalUrl(url)
-    if (!decision.allowed) {
-      const error = new Error(`PLUGIN_OPEN_URL_BLOCKED:${decision.reason}`)
-      logger.warn(`[Plugin ${pluginName}] openUrl blocked`, {
-        reason: decision.reason,
-        protocol: decision.protocol
-      })
-      throw error
-    }
-
-    try {
-      await shell.openExternal(decision.url)
-    } catch (error) {
-      logger.warn(`[Plugin ${pluginName}] openUrl failed`, {
-        error: error instanceof Error ? error.message : String(error)
-      })
-      throw error
-    }
-  }
-}
-
-function withPluginSdkapiPayload(payload: unknown, sdkapi?: number): unknown {
-  if (
-    !payload ||
-    typeof payload !== 'object' ||
-    Array.isArray(payload) ||
-    typeof sdkapi !== 'number'
-  ) {
-    return payload
-  }
-
-  return {
-    ...(payload as Record<string, unknown>),
-    _sdkapi: sdkapi
-  }
-}
-
-function createRemovedChannelError(capability: 'channel.raw'): Error {
-  return new Error(
-    `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
-  )
-}
 
 interface StorageTreeNode {
   name: string
@@ -269,31 +193,6 @@ interface PluginStorageRoot {
   name: string
   path: string
 }
-
-const disallowedArrays = [
-  '官方',
-  'touch',
-  'talex',
-  '第一',
-  '权利',
-  '权威性',
-  '官方认证',
-  '触控',
-  '联系',
-  '互动',
-  '互动式',
-  '触控技术',
-  '互动体验',
-  '互动设计',
-  '创意性',
-  '创造性',
-  '首发',
-  '首部',
-  '首款',
-  '首张',
-  '排行',
-  '排名系统'
-]
 
 const pluginSystemLog = createLogger('PluginSystem').child('Plugin')
 const TRANSIENT_ISSUE_CODES = new Set([
@@ -334,124 +233,6 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
 
-type PluginHttpResponseType = Extract<NetworkResponseType, 'json' | 'text'> | 'arraybuffer'
-interface PluginHttpRequestConfig {
-  url: string
-  method?: string
-  headers?: Record<string, string>
-  params?: Record<string, string | number | boolean | null | undefined>
-  data?: unknown
-  signal?: AbortSignal
-  timeout?: number
-  timeoutMs?: number
-  responseType?: PluginHttpResponseType
-}
-
-interface PluginHttpResponse<T = unknown> {
-  data: T
-  status: number
-  statusText: string
-  headers: Record<string, string>
-  config: PluginHttpRequestConfig
-  url: string
-}
-
-interface PluginHttpClient {
-  request: <T = unknown>(config: PluginHttpRequestConfig) => Promise<PluginHttpResponse<T>>
-  get: <T = unknown>(
-    url: string,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
-  ) => Promise<PluginHttpResponse<T>>
-  post: <T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
-  ) => Promise<PluginHttpResponse<T>>
-  put: <T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
-  ) => Promise<PluginHttpResponse<T>>
-  patch: <T = unknown>(
-    url: string,
-    data?: unknown,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
-  ) => Promise<PluginHttpResponse<T>>
-  delete: <T = unknown>(
-    url: string,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
-  ) => Promise<PluginHttpResponse<T>>
-}
-
-const ALLOWED_HTTP_METHODS = new Set<NetworkMethod>([
-  'GET',
-  'POST',
-  'PUT',
-  'PATCH',
-  'DELETE',
-  'HEAD',
-  'OPTIONS'
-])
-
-function normalizeNetworkMethod(method?: string): NetworkMethod {
-  const normalized = typeof method === 'string' ? method.trim().toUpperCase() : 'GET'
-  if (ALLOWED_HTTP_METHODS.has(normalized as NetworkMethod)) {
-    return normalized as NetworkMethod
-  }
-  return 'GET'
-}
-
-function normalizeResponseType(
-  responseType: PluginHttpResponseType | undefined
-): NetworkRequestOptions['responseType'] {
-  if (responseType === 'arraybuffer') {
-    return 'arrayBuffer'
-  }
-  return responseType
-}
-
-function createPluginHttpClient(): PluginHttpClient {
-  const networkService = getNetworkService()
-
-  const send = async <T>(config: PluginHttpRequestConfig): Promise<PluginHttpResponse<T>> => {
-    const method = normalizeNetworkMethod(config.method)
-    const timeoutMs =
-      typeof config.timeoutMs === 'number'
-        ? config.timeoutMs
-        : typeof config.timeout === 'number'
-          ? config.timeout
-          : undefined
-    const response = await networkService.request<T>({
-      method,
-      url: config.url,
-      headers: config.headers,
-      query: config.params,
-      body: config.data,
-      signal: config.signal,
-      timeoutMs,
-      responseType: normalizeResponseType(config.responseType)
-    })
-
-    return {
-      data: response.data,
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-      config,
-      url: response.url
-    }
-  }
-
-  return {
-    request: send,
-    get: (url, config = {}) => send({ ...config, url, method: 'GET' }),
-    post: (url, data, config = {}) => send({ ...config, url, method: 'POST', data }),
-    put: (url, data, config = {}) => send({ ...config, url, method: 'PUT', data }),
-    patch: (url, data, config = {}) => send({ ...config, url, method: 'PATCH', data }),
-    delete: (url, config = {}) => send({ ...config, url, method: 'DELETE' })
-  }
-}
-
 const TRANSLATION_RUNTIME_CAPABILITIES = Object.freeze([
   'feature.items.push',
   'feature.items.clear',
@@ -479,99 +260,76 @@ const INTELLIGENCE_RUNTIME_CAPABILITIES = Object.freeze([
 /**
  * Plugin implementation
  */
+/**
+ * Everything plugin-module installs on TouchPlugin for the lifetime of one module generation.
+ *
+ * Held in a single slot so install and teardown are one call each. Transport keeps its own
+ * slot: it is installed earlier in the module lifecycle than these are, and tests set it on
+ * its own in about twenty places.
+ */
+export interface TouchPluginRuntimeCapabilities {
+  runtimeService: PluginRuntimeService | null
+  snipasteProcess:
+    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
+    | null
+  systemAction: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
+  browserOpen: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
+  browserData: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
+  translation: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
+  intelligenceContext:
+    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
+    | null
+  windowManager: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
+  windowPreset: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
+  workspaceScript:
+    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
+    | null
+}
+/**
+ * A capability set with nothing installed.
+ *
+ * A base for callers that only need a subset — chiefly tests. The return type is the full
+ * interface, so an added capability is a compile error here rather than a silently missing key.
+ */
+export function emptyTouchPluginRuntimeCapabilities(): TouchPluginRuntimeCapabilities {
+  return {
+    runtimeService: null,
+    snipasteProcess: null,
+    systemAction: null,
+    browserOpen: null,
+    browserData: null,
+    translation: null,
+    intelligenceContext: null,
+    windowManager: null,
+    windowPreset: null,
+    workspaceScript: null
+  }
+}
+
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
-  private static _runtimeService: PluginRuntimeService | null = null
-  private static _snipasteProcessCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
-    | null = null
-  private static _systemActionCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities)
-    | null = null
-  private static _browserOpenCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities)
-    | null = null
-  private static _browserDataCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities)
-    | null = null
-  private static _translationCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities)
-    | null = null
-  private static _intelligenceContextCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
-    | null = null
-  private static _windowManagerCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities)
-    | null = null
-  private static _windowPresetCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities)
-    | null = null
-  private static _workspaceScriptCapabilityFactory:
-    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
-    | null = null
+  private static _capabilities: TouchPluginRuntimeCapabilities | null = null
 
   static setTransport(transport: ITuffTransportMain | null): void {
     TouchPlugin._transport = transport
   }
 
-  static setRuntimeService(runtimeService: PluginRuntimeService | null): void {
-    TouchPlugin._runtimeService = runtimeService
+  /**
+   * Install, or clear, everything plugin-module owns on this class for one module generation.
+   *
+   * One slot rather than ten, so init and destroy cannot fall out of step: every field is
+   * required, so adding an eleventh capability fails to compile at the install site until it is
+   * supplied, and teardown is `setCapabilities(null)` regardless of how many there are (#530).
+   */
+  static setCapabilities(capabilities: TouchPluginRuntimeCapabilities | null): void {
+    TouchPlugin._capabilities = capabilities
   }
 
-  static setSnipasteProcessCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability) | null
-  ): void {
-    TouchPlugin._snipasteProcessCapabilityFactory = factory
-  }
-
-  static setSystemActionCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
-  ): void {
-    TouchPlugin._systemActionCapabilityFactory = factory
-  }
-
-  static setBrowserOpenCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
-  ): void {
-    TouchPlugin._browserOpenCapabilityFactory = factory
-  }
-
-  static setBrowserDataCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
-  ): void {
-    TouchPlugin._browserDataCapabilityFactory = factory
-  }
-
-  static setTranslationCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
-  ): void {
-    TouchPlugin._translationCapabilityFactory = factory
-  }
-
-  static setIntelligenceContextCapabilityFactory(
-    factory:
-      | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
-      | null
-  ): void {
-    TouchPlugin._intelligenceContextCapabilityFactory = factory
-  }
-
-  static setWindowManagerCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
-  ): void {
-    TouchPlugin._windowManagerCapabilityFactory = factory
-  }
-
-  static setWindowPresetCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
-  ): void {
-    TouchPlugin._windowPresetCapabilityFactory = factory
-  }
-
-  static setWorkspaceScriptCapabilityFactory(
-    factory: ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities) | null
-  ): void {
-    TouchPlugin._workspaceScriptCapabilityFactory = factory
+  /** Read one installed capability, or null when no module generation is active. */
+  private static capability<K extends keyof TouchPluginRuntimeCapabilities>(
+    key: K
+  ): TouchPluginRuntimeCapabilities[K] | null {
+    return TouchPlugin._capabilities?.[key] ?? null
   }
 
   private get transport(): ITuffTransportMain | null {
@@ -838,24 +596,20 @@ export class TouchPlugin implements ITouchPlugin {
       return false
     }
 
-    const { id, name, desc, commands } = feature
-
-    const regex = /^[\w-]+$/
-    if (!regex.test(id)) {
-      pluginSystemLog.error(`[Plugin ${this.name}] Feature add error, id ${id} not valid.`)
+    const admission = validatePluginFeatureAdmission(feature)
+    if (!admission.admitted) {
+      if (admission.reason === 'invalid-id') {
+        pluginSystemLog.error(
+          `[Plugin ${this.name}] Feature add error, id ${feature.id} not valid.`
+        )
+      }
+      if (admission.reason === 'disallowed-words') {
+        pluginSystemLog.error(
+          `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`
+        )
+      }
       return false
     }
-
-    if (
-      disallowedArrays.filter((item: string) => name.includes(item) || desc.includes(item)).length
-    ) {
-      pluginSystemLog.error(
-        `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`
-      )
-      return false
-    }
-
-    if (commands.length < 1) return false
 
     const shouldInitializeIcon = !(feature instanceof PluginFeature)
     // 如果已经是 PluginFeature 实例，直接使用；否则创建新实例
@@ -1427,7 +1181,8 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private resolveRuntimeService(): PluginRuntimeService {
-    if (TouchPlugin._runtimeService) return TouchPlugin._runtimeService
+    const runtimeService = TouchPlugin.capability('runtimeService')
+    if (runtimeService) return runtimeService
     throw Object.assign(new Error('PLUGIN_RUNTIME_SERVICE_CLOSED'), {
       code: 'PLUGIN_RUNTIME_SERVICE_CLOSED'
     })
@@ -1989,7 +1744,21 @@ export class TouchPlugin implements ITouchPlugin {
 
   private async loadPreludeScript(): Promise<string> {
     const shouldBundlePrelude = this.dev.enable
-    if (this.dev.enable && this.dev.source && this.dev.address) {
+    // A packaged build never fetches its Prelude over the network, whatever the manifest says.
+    //
+    // Three shipped manifests carried dev.enable/source with a localhost address, so an
+    // installed app issued GET http://127.0.0.1:<port>/index.js and executed whatever came
+    // back as the plugin's Prelude — normally nothing is listening and the plugin simply
+    // fails to load, but any unrelated local process on that port owns the plugin (#809,
+    // #810, #811). The manifests are fixed too; this is the guard that makes the next one
+    // harmless, since nothing else on this path consulted isPackaged.
+    if (app.isPackaged && this.dev.enable && this.dev.source && this.dev.address) {
+      this.logger.warn(
+        'Ignoring dev.source in a packaged build; loading the bundled Prelude instead.',
+        { meta: { address: this.dev.address } }
+      )
+    }
+    if (!app.isPackaged && this.dev.enable && this.dev.source && this.dev.address) {
       const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
       this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
       const response = await getNetworkService().request<string>({
@@ -2039,7 +1808,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBatchRenameFilesystemCapability(
     activation: PluginActivationIdentity
   ): PluginBatchRenameFilesystemCapability | null {
-    if (this.name !== 'touch-batch-rename') return null
+    if (!isPrivilegedPluginFor('batchRenameFilesystem', this.name)) return null
     return createPluginBatchRenameFilesystemCapability({
       activation,
       platform: process.platform,
@@ -2067,8 +1836,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createSnipasteProcessCapability(
     activation: PluginActivationIdentity
   ): PluginSnipasteProcessCapability | null {
-    if (this.name !== 'touch-snipaste') return null
-    const factory = TouchPlugin._snipasteProcessCapabilityFactory
+    if (!isPrivilegedPluginFor('snipasteProcess', this.name)) return null
+    const factory = TouchPlugin.capability('snipasteProcess')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'
@@ -2080,8 +1849,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createSystemActionCapability(
     activation: PluginActivationIdentity
   ): PluginSystemActionCapabilities | null {
-    if (this.name !== 'touch-quick-actions' && this.name !== 'touch-system-actions') return null
-    const factory = TouchPlugin._systemActionCapabilityFactory
+    if (!SYSTEM_ACTION_PLUGIN_NAMES.includes(this.name)) return null
+    const factory = TouchPlugin.capability('systemAction')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'
@@ -2093,8 +1862,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createBrowserOpenCapability(
     activation: PluginActivationIdentity
   ): PluginBrowserOpenCapabilities | null {
-    if (this.name !== 'touch-browser-open') return null
-    const factory = TouchPlugin._browserOpenCapabilityFactory
+    if (!isPrivilegedPluginFor('browserOpen', this.name)) return null
+    const factory = TouchPlugin.capability('browserOpen')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'
@@ -2106,8 +1875,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createBrowserDataCapability(
     activation: PluginActivationIdentity
   ): PluginBrowserDataCapabilities | null {
-    if (this.name !== 'touch-browser-data') return null
-    const factory = TouchPlugin._browserDataCapabilityFactory
+    if (!isPrivilegedPluginFor('browserData', this.name)) return null
+    const factory = TouchPlugin.capability('browserData')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'
@@ -2119,8 +1888,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createTranslationCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceCapabilities | null {
-    if (this.name !== 'touch-translation') return null
-    const factory = TouchPlugin._translationCapabilityFactory
+    if (!isPrivilegedPluginFor('translation', this.name)) return null
+    const factory = TouchPlugin.capability('translation')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'
@@ -2132,8 +1901,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createIntelligenceContextCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceContextCapabilities | null {
-    if (this.name !== 'touch-intelligence') return null
-    const factory = TouchPlugin._intelligenceContextCapabilityFactory
+    if (!isPrivilegedPluginFor('intelligenceContext', this.name)) return null
+    const factory = TouchPlugin.capability('intelligenceContext')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'
@@ -2145,8 +1914,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createWindowManagerCapability(
     activation: PluginActivationIdentity
   ): PluginWindowManagerCapabilities | null {
-    if (this.name !== 'touch-window-manager') return null
-    const factory = TouchPlugin._windowManagerCapabilityFactory
+    if (!isPrivilegedPluginFor('windowManager', this.name)) return null
+    const factory = TouchPlugin.capability('windowManager')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'
@@ -2158,8 +1927,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createWindowPresetCapability(
     activation: PluginActivationIdentity
   ): PluginWindowPresetCapabilities | null {
-    if (this.name !== 'touch-window-presets') return null
-    const factory = TouchPlugin._windowPresetCapabilityFactory
+    if (!isPrivilegedPluginFor('windowPresets', this.name)) return null
+    const factory = TouchPlugin.capability('windowPreset')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'
@@ -2171,8 +1940,8 @@ export class TouchPlugin implements ITouchPlugin {
   private createWorkspaceScriptCapability(
     activation: PluginActivationIdentity
   ): PluginWorkspaceScriptCapabilities | null {
-    if (this.name !== 'touch-workspace-scripts') return null
-    const factory = TouchPlugin._workspaceScriptCapabilityFactory
+    if (!isPrivilegedPluginFor('workspaceScripts', this.name)) return null
+    const factory = TouchPlugin.capability('workspaceScript')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'), {
         code: 'PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'
@@ -2390,7 +2159,7 @@ export class TouchPlugin implements ITouchPlugin {
       const capabilityAllowlist =
         this.name === 'touch-translation'
           ? TRANSLATION_RUNTIME_CAPABILITIES
-          : this.name === 'touch-intelligence'
+          : isPrivilegedPluginFor('intelligenceContext', this.name)
             ? INTELLIGENCE_RUNTIME_CAPABILITIES
             : undefined
       const runtimeActivation = await activeRuntime.startActivation({
@@ -2469,7 +2238,9 @@ export class TouchPlugin implements ITouchPlugin {
     if (activation.key) {
       this.revokeActivationAuthority(activation)
       try {
-        await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
+        await TouchPlugin.capability('runtimeService')?.stopActivation(activation, {
+          runDestroy: true
+        })
       } catch {
         teardownFailed = true
         teardownIssueRecorded = true
@@ -3019,9 +2790,13 @@ export class TouchPlugin implements ITouchPlugin {
     }
     const pluginIntelligenceTransport: ITuffTransport = {
       ...pluginSdkTransport,
-      send: ((event, payload, options) =>
+      // The cast stays: ITuffTransport['send'] is an intersection of two generic signatures and
+      // no plain arrow satisfies it. But `as` applies to the finished function, so it never typed
+      // the parameters on the way in -- annotating them explicitly is what removes the implicit
+      // any without pretending the overload can be implemented directly (#548).
+      send: ((event: TuffEvent<unknown, unknown>, payload: unknown, options?: SendOptions) =>
         pluginSdkTransport.send(
-          event,
+          event as never,
           withPluginSdkapiPayload(payload, this.sdkapi) as never,
           options
         )) as ITuffTransport['send'],
@@ -3642,6 +3417,45 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 文件内容
    * @returns 保存结果
    */
+  /**
+   * Size and file count of the config directory as they would be after writing `targetPath`
+   * with `nextBytes`. `targetPath` is excluded from the walk because it is being replaced.
+   *
+   * The 10MB figure getStorageStats reports as `maxSize` is a per-plugin budget, but
+   * savePluginFile only ever compared the single payload against it, so a plugin could write
+   * 100 distinct 9MB files and occupy ~900MB while the stats reported usagePercent in the
+   * thousands (#774). This mirrors assertProjectedQuota in plugin-business-file-storage.
+   *
+   * Scoped to the config directory this API owns. getStorageRoots also covers logs and temp,
+   * and counting those here would let ordinary log growth lock a plugin out of its own storage.
+   */
+  private projectConfigStorage(
+    configPath: string,
+    targetPath: string,
+    nextBytes: number
+  ): { totalBytes: number; fileCount: number } {
+    let totalBytes = nextBytes
+    let fileCount = 1
+
+    const walk = (dirPath: string): void => {
+      for (const name of fse.readdirSync(dirPath)) {
+        const entryPath = path.join(dirPath, name)
+        const entry = fse.lstatSync(entryPath)
+        if (entry.isDirectory()) {
+          walk(entryPath)
+          continue
+        }
+        if (!entry.isFile() || entryPath === targetPath) continue
+        fileCount += 1
+        totalBytes += entry.size
+      }
+    }
+
+    if (fse.existsSync(configPath)) walk(configPath)
+
+    return { totalBytes, fileCount }
+  }
+
   savePluginFile(
     fileName: string,
     content: unknown,
@@ -3658,7 +3472,9 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
-    if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
+    const PLUGIN_CONFIG_MAX_FILES = 1_000
+    const nextBytes = Buffer.byteLength(configData, 'utf-8')
+    if (nextBytes > PLUGIN_CONFIG_MAX_SIZE) {
       return {
         success: false,
         error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`
@@ -3666,6 +3482,21 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const p = safePath.resolvedPath
+
+    const projected = this.projectConfigStorage(configPath, p, nextBytes)
+    if (
+      projected.totalBytes > PLUGIN_CONFIG_MAX_SIZE ||
+      projected.fileCount > PLUGIN_CONFIG_MAX_FILES
+    ) {
+      return {
+        success: false,
+        error:
+          `Storage quota exceeded for plugin ${this.name}: ` +
+          `${projected.fileCount} file(s), ${projected.totalBytes} bytes would exceed ` +
+          `${PLUGIN_CONFIG_MAX_FILES} files / ${PLUGIN_CONFIG_MAX_SIZE} bytes`
+      }
+    }
+
     fse.ensureDirSync(configPath)
     fse.writeFileSync(p, configData)
 

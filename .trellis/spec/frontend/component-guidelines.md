@@ -79,6 +79,52 @@ See `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`.
 - Prefer `@talex-touch/tuffex/base.css` plus component subpath styles in plugin UI; do not add a full `@talex-touch/tuffex/style.css` import unless working in an existing legacy full-style surface.
 - Avoid changing visual class contracts while fixing semantics.
 
+### Shell colour tokens
+
+The app shell has one palette, `--shell-*` in `apps/core-app/src/renderer/src/styles/shell-tokens.scss`, defined across four blocks: `:root`, `.dark`, `html.contrast`, `html.dark.contrast`. Shell surfaces read tokens only — a hex literal or `rgba()` in a renderer component is a bug, because it survives the theme swap and the high-contrast accessibility mode.
+
+- Four semantic hues exist — `primary`, `success`, `warning`, `danger`, `info` — each with a base ink, a `-soft` fill and a `-border`. A status chip is `-soft` fill plus same-hue base ink; that is the whole shape.
+- Both contrast blocks re-point every hue to the tuffex contrast ramp (`--tx-color-*` and its `-light-9`) and replace the alpha `-border` with the solid base: a 24 %-alpha hairline disappears at high contrast.
+- **Chip ink is measured against its own `-soft` fill, not against the page background** — that composite is the real reading surface and is what must clear AA 4.5:1. Two of the artboard's light-mode values missed it, so the palette carries darkened values with the measurement recorded in the file. Reproduce that check before adding or changing a hue, and record the number.
+- Colour is additive to a text label, never the sole carrier of state.
+- Reserve accent colour for primary buttons, switch-on, progress fill and selected state. An expected outcome does not get an error colour — a probe that runs and finds nothing is amber at most, because red on a routine result only teaches people to ignore red.
+
+---
+
+## Loading States
+
+A skeleton is the default loading state, not an optional polish pass. Ship it with the first version of a view; do not leave it as follow-up work.
+
+**When a skeleton applies**
+
+- First load of a page or region whose layout is known before the data arrives.
+- Not for a background refresh of already-rendered content: keep the content on screen. Replacing it with a skeleton is a regression, not a loading state.
+- Not for a small local action: use the control's own pending state instead.
+- Not when the layout depends on the data (unknown row counts, variable-shape results): use an empty state or a plain pending affordance.
+
+**Match the real layout**
+
+- The skeleton must mirror the loaded layout: same group count, same row count, same row height and spacing.
+- A skeleton that does not match still shifts the page when content lands, which is the one thing it exists to prevent. "The page shows a skeleton" is not the bar; "nothing moves when data arrives" is.
+- Build the skeleton from the same containers the loaded view uses, so the two cannot drift apart.
+
+**Reuse the primitives**
+
+- Settings-style rows: `TxRowSkeleton` from `@talex-touch/tuffex/skeleton`, with `rows`, `leading`, `description`, `trailing`, and `separated` describing the real row.
+- CoreApp settings pages: `SettingSkeleton` (`components/settings/SettingSkeleton.vue`), which composes `SettingSection` + `TxRowSkeleton` and declares the real group structure.
+- Free-form bars: `TxSkeleton`. App shell: `TxLayoutSkeleton`.
+- Do not hand-roll placeholder `div`s or a local `@keyframes`. The shimmer, its timing, and the reduced-motion guard live in the `skeleton-surface` / `skeleton-keyframes` mixins in `packages/tuffex/packages/components/style/mixins.scss`; a component emits the keyframes once and applies the surface per placeholder element.
+- Tune colour through `--tx-skeleton-base-color` rather than restyling the bars.
+
+**Do not let it flash**
+
+- Bind the skeleton through `useDeferredLoading` from `@talex-touch/tuffex/skeleton`. Data that arrives inside `delay` shows no skeleton at all, and a skeleton that does appear stays for `minDuration` instead of vanishing half-drawn.
+
+**Accessibility**
+
+- Skeletons are decorative: mark them `aria-hidden="true"` and keep focusable elements out of them.
+- Animation must respect `prefers-reduced-motion: reduce`. The shared mixin already drops the motion while keeping the placeholder, since the placeholder is what holds the layout steady.
+
 ---
 
 ## Accessibility
@@ -105,6 +151,23 @@ Current examples:
 - Plugins can use localized manifest metadata or their local i18n setup.
 - Do not directly access `window.$t` or `window.$i18n` in new CoreApp renderer code.
 - Use shared localized value helpers when resolving plugin manifest text, such as `packages/utils/i18n/localized.ts`.
+
+---
+
+## Virtual List Keys and Height Caches
+
+`TxConversationStream` (and any future dynamic-height virtual list) positions rows by a
+prefix-sum of measured heights keyed by `item-key`. Two contracts follow:
+
+- Item ids fed to a virtual list must be **globally unique across datasets**, not per-collection
+  counters. A keep-alive'd instance switching threads with `user-1`-style ids inherited another
+  thread's measured heights and stacked rows on top of each other (fixed 2026-08: uuid message
+  ids + `PositionCache.syncKeys` pruning + per-conversation `:key` on the stream).
+- Hosts that pad or prepend content above the transcript rely on the component's measured spacer
+  origin — never reintroduce "scrollTop is spacer-relative" assumptions.
+
+Regression guards live in `packages/tuffex/.../conversation-stream/__tests__/` (observe-coverage,
+prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after restore + drops).
 
 ---
 

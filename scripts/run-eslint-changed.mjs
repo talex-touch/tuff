@@ -85,15 +85,31 @@ function getDiffArgs() {
   return ['diff', '--name-only', '--diff-filter=ACMRTUXB', `${remoteBaseRef}...HEAD`]
 }
 
-function getChangedFiles() {
-  const result = spawnSync(
-    'git',
-    getDiffArgs(),
-    {
-      cwd: workspaceRoot,
-      encoding: 'utf8',
-    },
-  )
+export function parseFileList(stdout) {
+  return stdout
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map(file => file.replaceAll(path.sep, '/'))
+}
+
+/**
+ * Union of every list, keeping only lintable extensions and dropping duplicates. A file can
+ * legitimately appear in more than one list — `git status` reports a path as untracked right
+ * up until it is staged, and the two probes are taken separately.
+ */
+export function selectLintableFiles(...lists) {
+  const selected = new Set()
+  for (const list of lists) {
+    for (const file of list) {
+      if (lintExtensions.has(path.extname(file)))
+        selected.add(file)
+    }
+  }
+  return [...selected]
+}
+
+function gitLines(args) {
+  const result = spawnSync('git', args, { cwd: workspaceRoot, encoding: 'utf8' })
 
   if (result.status !== 0) {
     if (result.stderr)
@@ -101,17 +117,25 @@ function getChangedFiles() {
     process.exit(result.status ?? 1)
   }
 
-  return result.stdout
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map(file => file.replaceAll(path.sep, '/'))
-    .filter(file => lintExtensions.has(path.extname(file)))
+  return parseFileList(result.stdout)
 }
 
-function groupByWorkspace(files) {
+function getChangedFiles() {
+  // `git diff HEAD` reports tracked paths only, so a file that has never been `git add`ed is
+  // invisible to it. Inside CI that costs nothing — the three-dot diff against the base ref
+  // sees the file because the PR already committed it — but a developer running
+  // `pnpm lint:changed` before their first commit got "no changed files" and a green exit
+  // while the new file went entirely unlinted. #547.
+  const insideCi = Boolean(process.env.GITHUB_BASE_REF)
+  const tracked = gitLines(getDiffArgs())
+  const untracked = insideCi ? [] : gitLines(['ls-files', '--others', '--exclude-standard'])
+
+  return selectLintableFiles(tracked, untracked)
+}
+
+export function groupByWorkspace(files, workspaces = collectWorkspaceDirectories()) {
   const groups = new Map()
   const rootFiles = []
-  const workspaces = collectWorkspaceDirectories()
 
   for (const file of files) {
     const workspace = workspaces.find(prefix => file === prefix || file.startsWith(`${prefix}/`))
@@ -130,25 +154,36 @@ function groupByWorkspace(files) {
   return { groups, rootFiles }
 }
 
-function lintWorkspace(workspace, files) {
-  const args = [
+/**
+ * `--max-warnings=0` mirrors the root `lint` script. Without it this PR gate
+ * accepted warning-level violations that the release gate then rejected.
+ */
+export function buildWorkspaceArgs(workspace, files) {
+  return [
     'pnpm',
     '-C',
     workspace,
     'exec',
     'eslint',
     '--cache',
+    '--max-warnings=0',
     '--no-warn-ignored',
     ...files,
   ]
+}
+
+export function buildRootArgs(files) {
+  return ['pnpm', 'exec', 'eslint', '--cache', '--max-warnings=0', '--no-warn-ignored', ...files]
+}
+
+function lintWorkspace(workspace, files) {
   console.log(`[lint:changed] ${workspace}: ${files.length} file(s)`)
-  return run('corepack', args)
+  return run('corepack', buildWorkspaceArgs(workspace, files))
 }
 
 function lintRoot(files) {
-  const args = ['pnpm', 'exec', 'eslint', '--cache', '--no-warn-ignored', ...files]
   console.log(`[lint:changed] root: ${files.length} file(s)`)
-  return run('corepack', args)
+  return run('corepack', buildRootArgs(files))
 }
 
 function main() {
@@ -180,4 +215,7 @@ function main() {
   console.log('[lint:changed] OK')
 }
 
-main()
+// Guarded so the tests can import the pure helpers without running the gate.
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  main()
+}

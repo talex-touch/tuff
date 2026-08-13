@@ -1,0 +1,30 @@
+{
+  "id": "home-conversation",
+  "name": "home-conversation",
+  "title": "首页对话最小闭环",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-04",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-03-app-shell-ai-redesign",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "R3 剩余：先把侧栏历史列表接进 ShellSidebar 的 conversations 插槽（refresh() 目前全渲染进程无人调用，conversations 也无人读取），再做时间分桶（今天/昨天/近 7 天/更早）。跟踪在 #969。R2 不需要再动。",
+    "blocker": "无。此前的 blocker 是状态表把已交付的 R2 记成未开始，读起来像整条数据层还没起步。",
+    "evidence": "2026-08-13 核实：HomePage.vue 只用 history.load / history.persist;useConversationHistory.ts:93 的 conversations.value 只在 refresh() 内被赋值,而 refresh() 无调用方;ShellSidebar.vue:132 的插槽有「由本任务填充」的注释但无人填充。"
+  }
+}

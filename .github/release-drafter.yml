@@ -2,9 +2,20 @@ name-template: v$NEXT_PATCH_VERSION
 tag-template: v$NEXT_PATCH_VERSION
 change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
 no-changes-template: 未检测到需要发布的变更。
-filter-by-labels:
-  include:
-    - needs-release-note
+# There is deliberately no include-labels here.
+#
+# This file used to carry `filter-by-labels: include: [needs-release-note]`.
+# That key does not exist in release-drafter's schema (checked against the
+# pinned v7.7.0 SHA), and the schema does not set additionalProperties: false,
+# so it was accepted and silently ignored — the gate never ran (#726).
+#
+# Do not "fix" it to `include-labels: [needs-release-note]`. pr-flags.yml only
+# adds that label when a PR author ticks an opt-in checkbox, and 0 of the last
+# 60 merged PRs carry it. Turning the gate on would empty the release notes
+# rather than filter them.
+#
+# Changing to an opt-in changelog is a product decision; until it is made, every
+# merged PR is included and `skip-changelog` is the way to opt out.
 exclude-labels:
   - skip-changelog
 categories:

@@ -1,10 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { ScannedFileInfo } from "../common/file-scan-utils";
 import {
   createScanOptions,
   isIndexableFile,
+  normalizeFsPath,
   scanDirectory,
+  scanDirectoryBatches,
 } from "../common/file-scan-utils";
 
 // Disable the system/dev/cache/photos path heuristics so the test only exercises
@@ -86,6 +89,108 @@ describe("scanDirectory", () => {
       await rm(wideDir, { recursive: true, force: true });
     }
   });
+});
+
+describe("scan statistics", () => {
+  it("reports the produced entry count for a readable tree", async () => {
+    const batches: ScannedFileInfo[][] = [];
+    const stats = await scanDirectoryBatches(
+      root,
+      async (batch) => {
+        batches.push(batch);
+      },
+      scanOpts,
+    );
+
+    expect(stats.errorCount).toBe(0);
+    expect(stats.entryCount).toBe(batches.flat().length);
+    expect(stats.entryCount).toBe(4);
+  });
+
+  it("counts an unreadable root as an error instead of an empty directory", async () => {
+    const missing = path.join(root, "does-not-exist");
+    const batches: ScannedFileInfo[][] = [];
+    const stats = await scanDirectoryBatches(
+      missing,
+      async (batch) => {
+        batches.push(batch);
+      },
+      scanOpts,
+    );
+
+    // The distinction the reconcile deletion guard depends on: zero entries
+    // WITH an error is "we could not read it", not "it is empty".
+    expect(batches).toEqual([]);
+    expect(stats).toEqual({ entryCount: 0, errorCount: 1 });
+  });
+});
+
+describe("path normalization", () => {
+  // "café.txt" written decomposed (e + U+0301) — what macOS readdir hands back.
+  const DECOMPOSED_NAME = "cafe\u0301.txt";
+  const COMPOSED_NAME = DECOMPOSED_NAME.normalize("NFC");
+
+  it("composes on darwin and passes every other platform through", () => {
+    expect(COMPOSED_NAME).not.toBe(DECOMPOSED_NAME);
+    expect(normalizeFsPath(`/Users/me/${DECOMPOSED_NAME}`, "darwin")).toBe(
+      `/Users/me/${COMPOSED_NAME}`,
+    );
+    // ext4/NTFS are byte-exact: rewriting the id here would point at a file
+    // that does not exist, and the cleanup gate would then delete the row.
+    expect(normalizeFsPath(`/home/me/${DECOMPOSED_NAME}`, "linux")).toBe(
+      `/home/me/${DECOMPOSED_NAME}`,
+    );
+    expect(normalizeFsPath(`C:\\Users\\me\\${DECOMPOSED_NAME}`, "win32")).toBe(
+      `C:\\Users\\me\\${DECOMPOSED_NAME}`,
+    );
+    // Unknown/browser runtime resolves to "" — treat as byte-exact.
+    expect(normalizeFsPath(`/x/${DECOMPOSED_NAME}`, "")).toBe(
+      `/x/${DECOMPOSED_NAME}`,
+    );
+  });
+
+  it("only normalizes unicode form, never case or separators", () => {
+    expect(normalizeFsPath("/Users/X/Ab C.TXT", "darwin")).toBe(
+      "/Users/X/Ab C.TXT",
+    );
+    expect(normalizeFsPath("caf\u00e9", "darwin")).toBe("caf\u00e9");
+  });
+
+  it.runIf(process.platform === "darwin")(
+    "stores scanned darwin paths composed",
+    async () => {
+      const dir = await mkdtemp(path.join(process.cwd(), "scan-utils-nfc-"));
+      try {
+        await writeFile(path.join(dir, DECOMPOSED_NAME), "x");
+
+        const files = await scanDirectory(dir, scanOpts);
+        const scanned = files.find((file) => file.name.includes("caf"));
+        expect(scanned).toBeDefined();
+        expect(scanned!.name).toBe(COMPOSED_NAME);
+        expect(scanned!.path).toBe(path.join(dir, COMPOSED_NAME).normalize("NFC"));
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.runIf(process.platform !== "darwin")(
+    "keeps scanned paths byte-exact off darwin",
+    async () => {
+      const dir = await mkdtemp(path.join(process.cwd(), "scan-utils-nfd-"));
+      try {
+        await writeFile(path.join(dir, DECOMPOSED_NAME), "x");
+
+        const files = await scanDirectory(dir, scanOpts);
+        const scanned = files.find((file) => file.name.includes("caf"));
+        expect(scanned).toBeDefined();
+        expect(scanned!.name).toBe(DECOMPOSED_NAME);
+        expect(scanned!.path).toBe(path.join(dir, DECOMPOSED_NAME));
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("automatic metadata exclusion", () => {

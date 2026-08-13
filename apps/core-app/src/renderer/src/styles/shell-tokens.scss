@@ -1,0 +1,243 @@
+/**
+ * Shell design tokens.
+ *
+ * Values come from `docs/design/corebox/v2.5.0.pen` (themes axis `mode: light|dark`).
+ * They intentionally diverge from the Element-derived `--tx-*` palette: the shell uses an
+ * Apple-leaning neutral ramp (`#1D1D1F` / `#2B7FD9`) rather than `#303133` / `#409eff`.
+ * Aliasing `--tx-*` here would silently render the wrong colors.
+ *
+ * High-contrast mode is the exception: `html.contrast` is a user-toggleable accessibility
+ * addon (`themeStyle.theme.addon.contrast`), so the shell re-points to the purpose-built
+ * `--tx-*` contrast ramp instead of keeping the design values.
+ */
+
+:root {
+  --shell-bg: #ffffff;
+  --shell-surface: #f7f7f8;
+  --shell-surface-2: #efeff1;
+
+  --shell-border: #e5e5e5;
+  --shell-border-strong: #d2d2d4;
+
+  --shell-text-primary: #1d1d1f;
+  --shell-text-regular: #48484a;
+  --shell-text-secondary: #6e6e73;
+  --shell-text-muted: #8a8a8f;
+
+  --shell-primary: #2b7fd9;
+  --shell-primary-soft: #2b7fd91a;
+  --shell-primary-border: #2b7fd93d;
+  --shell-on-primary: #ffffff;
+
+  /**
+   * Semantic hues, from the board's `success` / `warning` / `info` ramps — with one deviation.
+   *
+   * The board drew these as fills; the shell also reads them as 11px chip ink, where the light
+   * values it specifies (`#2C8C5A`, `#B57A18`) land at 3.82:1 and 3.35:1 on their own `-soft`
+   * surface, under AA's 4.5:1 for normal text. `--shell-danger` (`#C4342B`, 4.81:1 on `-soft`)
+   * already sets the intended bar, so success and warning are darkened onto its luminance —
+   * same hue, one step deeper — reaching 4.80:1 and 4.73:1. `info` clears the bar unchanged at
+   * 4.61:1, as does every dark-mode value (4.54:1 at worst), so those stay exactly as drawn.
+   */
+  --shell-success: #26794e;
+  --shell-success-soft: #26794e14;
+  --shell-success-border: #26794e3d;
+
+  --shell-warning: #946210;
+  --shell-warning-soft: #94621014;
+  --shell-warning-border: #9462103d;
+
+  --shell-danger: #c4342b;
+  --shell-danger-soft: #c4342b14;
+  --shell-danger-border: #c4342b3d;
+
+  // Deliberately in the neutral ramp: `info` marks a fact the reader cannot act on, so giving it
+  // a hue of its own would make it compete with the three states that can be acted upon.
+  --shell-info: #6e6e73;
+  --shell-info-soft: #6e6e7314;
+  --shell-info-border: #6e6e733d;
+
+  --shell-shadow: #0000000f;
+
+  /**
+   * Veil behind a modal or a blocking overlay.
+   *
+   * Not derived from `--shell-shadow`: a shadow reads against the surface it falls on, a scrim
+   * has to dim a whole page, and 6% does neither. The dark value is heavier because the same
+   * black over a near-black page barely registers.
+   *
+   * Deliberately absent from the two contrast blocks, like every other surface token here —
+   * those blocks only re-point ink, borders and semantic hues.
+   */
+  --shell-scrim: #00000040;
+
+  --shell-radius-sm: 6px;
+  --shell-radius-md: 10px;
+  --shell-radius-lg: 14px;
+  --shell-radius-xl: 20px;
+  --shell-radius-2xl: 24px;
+  --shell-radius-full: 999px;
+
+  --shell-space-1: 4px;
+  --shell-space-2: 8px;
+  --shell-space-3: 12px;
+  --shell-space-4: 16px;
+  --shell-space-5: 24px;
+  --shell-space-6: 32px;
+  --shell-space-7: 48px;
+
+  --shell-fs-caption: 11px;
+  --shell-fs-sm: 12px;
+  --shell-fs-body: 13px;
+  --shell-fs-md: 14px;
+  --shell-fs-lg: 17px;
+  --shell-fs-title: 22px;
+  --shell-fs-h1: 26px;
+  --shell-fs-display: 30px;
+
+  // Starting width only. `AppShell` overrides this per render from the persisted sidebar width,
+  // so the sidebar still has a sane width during the first frames, before storage has loaded.
+  --shell-sidebar-width: 260px;
+
+  /**
+   * Horizontal room the floating window buttons occupy in the top-right corner.
+   *
+   * Zero on macOS, where the native traffic lights live in the sidebar instead. A page whose
+   * first row carries its own top-right controls should reserve this much `padding-right`,
+   * otherwise the buttons sit on top of it — the shell has no top bar to keep them apart.
+   */
+  --shell-window-controls-inset: 0px;
+
+  /** Vertical room the same buttons occupy. Use it to push a top-anchored block below them. */
+  --shell-window-controls-height: 0px;
+}
+
+.platform-win32,
+.platform-linux {
+  // 3 buttons x 32px + the control strip's own 4px padding on each side.
+  --shell-window-controls-inset: 104px;
+  --shell-window-controls-height: 36px;
+}
+
+/**
+ * Keeps a page's top-right controls clear of the floating window buttons.
+ *
+ * Put it on the trailing group of a first row that reaches the top of the main area — as a
+ * margin rather than container padding, so the row's own background and bottom border still
+ * span the full width. Collapses to nothing on macOS.
+ */
+.shell-chrome-safe-inline-end {
+  margin-right: var(--shell-window-controls-inset);
+}
+
+.dark {
+  --shell-bg: #141414;
+  --shell-surface: #1c1c1e;
+  --shell-surface-2: #2c2c2e;
+
+  --shell-border: #333335;
+  --shell-border-strong: #48484a;
+
+  --shell-text-primary: #f5f5f7;
+  --shell-text-regular: #d1d1d6;
+  --shell-text-secondary: #aeaeb2;
+  --shell-text-muted: #8a8a8e;
+
+  --shell-primary: #4e9ae6;
+  --shell-primary-soft: #4e9ae626;
+  --shell-primary-border: #4e9ae64d;
+  /**
+   * Dark mode lightens the accent, so it inherits the light `#ffffff` ink at 2.96:1 without
+   * this — below AA on every filled primary control. Material's dark-theme model applies:
+   * lighter accent, darker ink. This lands at 5.24:1, and 8.28:1 under `html.dark.contrast`,
+   * where `--shell-primary` re-points to the even lighter `--tx-color-primary`.
+   */
+  --shell-on-primary: #0a2540;
+
+  --shell-success: #46b57c;
+  --shell-success-soft: #46b57c26;
+  --shell-success-border: #46b57c4d;
+
+  --shell-warning: #d9a441;
+  --shell-warning-soft: #d9a44126;
+  --shell-warning-border: #d9a4414d;
+
+  --shell-danger: #e0655c;
+  --shell-danger-soft: #e0655c26;
+  --shell-danger-border: #e0655c4d;
+
+  --shell-info: #98989d;
+  --shell-info-soft: #98989d26;
+  --shell-info-border: #98989d4d;
+
+  --shell-shadow: #00000047;
+  --shell-scrim: #00000080;
+}
+
+html.contrast {
+  --shell-border: var(--tx-border-color);
+  --shell-border-strong: var(--tx-border-color);
+
+  --shell-text-primary: var(--tx-text-color-primary);
+  --shell-text-regular: var(--tx-text-color-regular);
+  --shell-text-secondary: var(--tx-text-color-secondary);
+  --shell-text-muted: var(--tx-text-color-placeholder);
+
+  --shell-primary: var(--tx-color-primary);
+  --shell-primary-soft: var(--tx-color-primary-light-9);
+  // Same reason as `--shell-danger-border` below, plus this one would otherwise keep the
+  // design-palette blue after `--shell-primary` has already re-pointed to the contrast ramp.
+  --shell-primary-border: var(--tx-color-primary);
+
+  --shell-success: var(--tx-color-success);
+  --shell-success-soft: var(--tx-color-success-light-9);
+  --shell-success-border: var(--tx-color-success);
+
+  --shell-warning: var(--tx-color-warning);
+  --shell-warning-soft: var(--tx-color-warning-light-9);
+  --shell-warning-border: var(--tx-color-warning);
+
+  --shell-danger: var(--tx-color-danger);
+  --shell-danger-soft: var(--tx-color-danger-light-9);
+  // A 24%-alpha hairline disappears at high contrast; the failure surface needs a real edge.
+  // The other three semantic borders above and below follow for the same reason.
+  --shell-danger-border: var(--tx-color-danger);
+
+  --shell-info: var(--tx-color-info);
+  --shell-info-soft: var(--tx-color-info-light-9);
+  --shell-info-border: var(--tx-color-info);
+}
+
+html.dark.contrast {
+  --shell-border: var(--tx-border-color);
+  --shell-border-strong: var(--tx-border-color);
+
+  --shell-text-primary: var(--tx-text-color-primary);
+  --shell-text-regular: var(--tx-text-color-regular);
+  --shell-text-secondary: var(--tx-text-color-secondary);
+  --shell-text-muted: var(--tx-text-color-placeholder);
+
+  --shell-primary: var(--tx-color-primary);
+  --shell-primary-soft: var(--tx-color-primary-dark-2);
+  --shell-primary-border: var(--tx-color-primary);
+  // `--shell-on-primary` deliberately falls through from `.dark`: the contrast ramp's
+  // `#7cc4ff` is lighter still, so the same dark ink reads at 8.28:1 here.
+
+  // The dark contrast ramp mixes its `-light-9` steps with black rather than white, so these
+  // stay the dark tints the soft surfaces need.
+  --shell-success: var(--tx-color-success);
+  --shell-success-soft: var(--tx-color-success-light-9);
+  --shell-success-border: var(--tx-color-success);
+
+  --shell-warning: var(--tx-color-warning);
+  --shell-warning-soft: var(--tx-color-warning-light-9);
+  --shell-warning-border: var(--tx-color-warning);
+
+  --shell-danger: var(--tx-color-danger);
+  --shell-danger-soft: var(--tx-color-danger-light-9);
+  --shell-danger-border: var(--tx-color-danger);
+
+  --shell-info: var(--tx-color-info);
+  --shell-info-soft: var(--tx-color-info-light-9);
+  --shell-info-border: var(--tx-color-info);
+}

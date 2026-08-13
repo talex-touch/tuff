@@ -1,0 +1,75 @@
+---
+title: Chain of Thought
+description: 多步推理与工具调用的时间线，进行中的步骤自动跟随输出。
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, reasoning, timeline]
+syncStatus: reviewed
+verified: true
+---
+# Chain of Thought
+
+`TxChainOfThought` 把一次回答里的思考与工具调用串成一条可折叠时间线，每步有自己的状态与可选正文。
+
+已人工核对 `packages/tuffex/packages/components/src/chain-of-thought/src/TxChainOfThought.vue`。
+
+## 基础用法
+
+### Chain of Thought
+::::TuffDemoWrapper{demo="ChainOfThoughtChainOfThoughtDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const steps = [
+    { id: '1', kind: 'thinking', title: '拆解需求', body: '先确认输入边界。', status: 'done' },
+    { id: '2', kind: 'tool', title: 'read_file(src/main.ts)', status: 'done' },
+    { id: '3', kind: 'thinking', title: '正在推导实现', body: '排序是瓶颈…', status: 'active' },
+  ]
+  </script>
+
+  <template>
+    <TxChainOfThought :steps="steps" streaming />
+  </template>
+---
+::::
+
+## 交互契约
+
+- 展开态由组件自己持有，初值取 `defaultOpen`（**默认 `true`**，与 `TxReasoningDisclosure` 相反）。同为非受控：之后改 `defaultOpen` 不生效。
+- 点击头部切换并派发 `toggle`，参数是切换**之后**的状态。
+- 头部图标只在 `streaming` 为真**且**存在 `status === 'active'` 的步骤时换成思考球；只设 `streaming` 而没有活跃步骤不会有动效。
+- 头部计数直接取 `steps.length`，不区分状态。
+- 每步按 `status` 呈现三种形态：`active`（旋转指示）、`done`、`error`。`kind` 区分 `thinking` 与 `tool`，用于图标与排版。
+- 任一步骤的 `body` 长度变化都会把活跃步骤的正文滚到底部——这是按正文长度串联监听的，所以流式追加文本时会持续跟随。
+- `body` 可选；未提供的步骤只显示标题，适合表达纯工具调用。
+- 头部是原生 `<button>`，带 `aria-expanded` 与 `aria-controls`；步骤列表是 `<ol>`，序号来自渲染顺序。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `steps` | `AiChainStep[]` | — | 步骤列表；`AiChainStep` 为 `{ id, kind: 'thinking' \| 'tool', title, body?, status: 'active' \| 'done' \| 'error' }`。必填。 |
+| `streaming` | `boolean` | `false` | 是否仍在输出；需与活跃步骤同时成立才会显示思考球。 |
+| `defaultOpen` | `boolean` | `true` | 初始是否展开。仅在挂载时读取一次。 |
+| `label` | `string` | `'Chain of thought'` | 头部文案。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `toggle` | `(open: boolean)` | 用户点击头部时派发，携带切换后的展开状态。 |
+
+## Slots
+
+`TxChainOfThought` 不暴露插槽。步骤的呈现由 `kind` 与 `status` 决定；需要自定义渲染时请自行组合 `TxReasoningDisclosure` 与 `TxToolCallCard`。
+
+## 最佳实践
+
+- `id` 用稳定标识而非数组下标，否则步骤追加时会整列重建、丢掉滚动位置。
+- 同一时刻最多保留一个 `active` 步骤。多个活跃步骤在视觉上无法区分先后，自动滚动也只会跟随其中之一。
+- 步骤结束时把 `status` 从 `active` 改成 `done` 或 `error`，否则即使流式已停，旋转指示仍会留在界面上。
+- 工具步骤的 `title` 写成可读的调用签名（`read_file(src/main.ts)`），比只写工具名更有信息量。
+- 中文界面记得覆盖 `label`。

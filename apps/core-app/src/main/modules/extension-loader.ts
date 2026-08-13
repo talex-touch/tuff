@@ -71,7 +71,7 @@ export class ExtensionLoaderModule extends BaseModule {
 
       const fullPath = path.join(extensionPath, extension)
       try {
-        const loaded = await session.defaultSession.loadExtension(fullPath)
+        const loaded = await session.defaultSession.extensions.loadExtension(fullPath)
         if (this.destroying) {
           this.removeLoadedExtension({
             id: loaded.id,
@@ -108,7 +108,7 @@ export class ExtensionLoaderModule extends BaseModule {
 
   private removeLoadedExtension(extension: LoadedExtensionRecord): void {
     try {
-      session.defaultSession.removeExtension(extension.id)
+      session.defaultSession.extensions.removeExtension(extension.id)
       extensionLoaderLog.info(`Unloaded extension: ${extension.name}`, {
         meta: { id: extension.id, path: extension.path }
       })

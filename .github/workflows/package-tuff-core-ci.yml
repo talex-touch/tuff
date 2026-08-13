@@ -1,0 +1,41 @@
+name: Tuff Core Package CI
+
+# @talex-touch/tuff-core is published to npm on push to master by
+# package-tuff-cli-publish.yml, but no CI workflow had packages/tuff-core in its
+# trigger paths — so lint and build first ran at publish time, on a commit that was
+# already being released (#734).
+#
+# Paths mirror the publish workflow's triggers, so anything that can cause a
+# publish also causes a check.
+
+on:
+  pull_request:
+    paths:
+      - "packages/tuff-core/**"
+      - ".github/workflows/package-tuff-core-ci.yml"
+      - ".github/workflows/package-ci.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "packages/tuff-core/**"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuff-core
+      package-path: packages/tuff-core
+      run-lint: true
+      lint-command: pnpm lint
+      # No test script in this package; enabling it would fail on arrival.
+      run-test: false
+      # Unlike utils, this package does have a build (tsup, emitting types via --dts),
+      # and the publish workflow already runs it at line 176. Running it here moves that
+      # from "discovered during release" to "discovered on the PR".
+      run-build: true
+      run-typecheck: false

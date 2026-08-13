@@ -34,7 +34,11 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the file has been stored.
      */
     setFile: async (fileName: string, content: any): Promise<{ success: boolean, error?: string }> => {
-      return transport.send(PluginEvents.storage.setFile, { pluginName, fileName, content: JSON.parse(JSON.stringify(content)) })
+      const serialized = serializeStorageContent(content)
+      if (!serialized.ok)
+        return { success: false, error: `Cannot store "${fileName}": ${serialized.reason}` }
+
+      return transport.send(PluginEvents.storage.setFile, { pluginName, fileName, content: serialized.value })
     },
 
     /**
@@ -97,19 +101,71 @@ export function usePluginStorage() {
 
     /**
      * Listens for changes to the storage.
+     *
+     * The broadcast carries only `{ name, fileName }`, so the new content is read back before the
+     * callback runs - the callback receives what `getFile` would return, or `null` once the file
+     * is gone.
+     *
+     * A broadcast with no `fileName` is `clearStorage()`, which empties every storage root. Every
+     * subscribed file really did change, so every subscriber is notified and each reads back
+     * `null`. Suppressing those would leave subscribers serving state for files that no longer
+     * exist.
+     *
      * @param fileName The file name to listen for changes
      * @param callback The function to call when the storage changes for the current plugin.
      * @returns A function to unsubscribe from the listener.
      */
     onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+      let latestTicket = 0
+
       const listener = (data: { name: string, fileName?: string }) => {
-        if (data.name === pluginName
-          && (data.fileName === fileName || data.fileName === undefined)) {
-          callback(data)
-        }
+        if (data.name !== pluginName)
+          return
+        if (data.fileName !== undefined && data.fileName !== fileName)
+          return
+
+        // Reading back is asynchronous, so two quick writes can resolve out of order. Only the
+        // most recently requested read is allowed to reach the callback.
+        const ticket = ++latestTicket
+        transport
+          .send(PluginEvents.storage.getFile, { pluginName, fileName })
+          .then((content: unknown) => {
+            if (ticket === latestTicket)
+              callback(content)
+          })
+          .catch((error: unknown) => {
+            console.error(`[Plugin Storage] Failed to read "${fileName}" after a change notification:`, error)
+          })
       }
 
       return transport.on(PluginEvents.storage.update, listener)
     },
   }
+}
+
+/**
+ * Round-trips content through JSON to drop the non-cloneables that would break structured clone
+ * on the way to the main process.
+ *
+ * The round trip itself has two failure modes and neither used to be caught: `JSON.stringify`
+ * throws on circular references and BigInt, and it *returns* `undefined` for a top-level
+ * `undefined`, function or symbol - which `JSON.parse` then reads as the string "undefined" and
+ * rejects. Both escaped as a synchronous throw from a method declared to resolve
+ * `{ success, error? }`.
+ */
+function serializeStorageContent(
+  content: unknown,
+): { ok: true, value: unknown } | { ok: false, reason: string } {
+  let json: string | undefined
+  try {
+    json = JSON.stringify(content)
+  }
+  catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+  }
+
+  if (json === undefined)
+    return { ok: false, reason: `content of type ${typeof content} has no JSON representation` }
+
+  return { ok: true, value: JSON.parse(json) }
 }

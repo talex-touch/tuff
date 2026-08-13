@@ -1,0 +1,30 @@
+{
+  "id": "semantic-catalog-token-boundary",
+  "name": "semantic-catalog-token-boundary",
+  "title": "Semantic catalog token-boundary matching",
+  "description": "Replace bare substring includes in app semantic/tool-source catalogs with token-boundary matching plus minimum needle length; kills Postgres-matched-as-Telegram class recall+ranking pollution (audit app-H1).",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-search-audit-remediation",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Confirm AC3 - that the diff stayed inside the two catalog files, the shared matcher util and the tests - and then archive. AC1 and AC2 are met.",
+    "blocker": "None.",
+    "evidence": "AC1 met: app-semantic-catalog.test.ts asserts \"requires token boundaries so short needles cannot attach through substrings\", and carries both fixtures the criterion names - Telegram with aliases im/telegram/tg, and Postgres with bundleId com.postgresapp.Postgres2. It also keeps ambiguous Illustrator away from the AI alias. AC2 measured 2026-08-11: addon/apps 188 passed / 18 files."
+  }
+}

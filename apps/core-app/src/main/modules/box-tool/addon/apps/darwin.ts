@@ -7,6 +7,7 @@ import { iconService } from '../../../../service/icon-service'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
+import { resolveScannedAppCreatedAt } from './app-types'
 import { readLocalizedStringsFile } from './localized-strings-parser'
 import { createLogger } from '../../../../utils/logger'
 
@@ -256,7 +257,8 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo | nul
     launchKind: 'path',
     launchTarget: appPath,
     displayPath: appPath,
-    lastModified: stats.mtime
+    lastModified: stats.mtime,
+    createdAt: resolveScannedAppCreatedAt(stats)
   }
 }
 

@@ -10,10 +10,19 @@ on:
       - "packages/utils/package.json"
       - ".github/workflows/package-tuff-intelligence-publish.yml"
 
+concurrency:
+  # npm publish is not resumable, so an in-flight run must never be cancelled — queue
+  # behind it instead. Without this, two pushes seconds apart both pass the `npm view`
+  # existence check, both build, and the loser falls back to the duplicate-publish
+  # grep further down this file. Keyed per workflow so the package publishes stay
+  # independent of each other.
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   publish:
     name: Publish - tuff-intelligence
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
 
@@ -24,7 +33,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -58,7 +67,17 @@ jobs:
             exit 0
           fi
 
-          previous_version=$(git show "${before_sha}:packages/tuff-intelligence/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
+          # A force-push (or any branch rewrite) leaves github.event.before pointing at a
+          # commit that is not in the fetched history. Under `set -e`/pipefail an
+          # unguarded `git show` then fails the whole version check, so a real version
+          # bump in that same push is silently never published. Treat an unreachable
+          # before-sha as "no previous version", matching package-tuff-cli-publish.yml.
+          if git cat-file -e "${before_sha}^{commit}" >/dev/null 2>&1; then
+            previous_version=$(git show "${before_sha}:packages/tuff-intelligence/package.json" 2>/dev/null | node -e "const fs=require('fs'); const input=fs.readFileSync(0,'utf8'); if(!input){process.exit(0)}; const pkg=JSON.parse(input); console.log(pkg.version)" || true)
+          else
+            echo "Previous commit ${before_sha} is unreachable (force-push?); treating as no previous version."
+            previous_version=""
+          fi
           echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
 
           if [ "${current_version}" != "${previous_version}" ] || [ "${npm_has_version}" != "true" ]; then

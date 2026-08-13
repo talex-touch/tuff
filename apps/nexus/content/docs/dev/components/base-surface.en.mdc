@@ -220,10 +220,10 @@ code: |
 | `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB channel offsets for spectral separation. |
 | `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | Sampling channels used by displacement maps. |
 | `mixBlendMode` | `string` | `'difference'` | Blend mode used in refraction rendering. |
-| `refractionStrength` | `number` | - | Unified refraction strength (0-100). |
-| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | - | Refraction style preset. |
+| `refractionStrength` | `number` | `62` | Unified refraction strength 0-100 (effective fallback when the refraction model is active). |
+| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | Refraction style preset (computed as `'filmic'` when not set explicitly). |
 | `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | Refraction tone preset (`vivid` is clearer, `mist` is softer). |
-| `refractionAngle` | `number` | - | Main dispersion angle in degrees. |
+| `refractionAngle` | `number` | `-24` | Main dispersion angle in degrees (computed as `-24` when not set explicitly). |
 | `refractionLightX` / `refractionLightY` | `number` | - | Light anchor coordinates (0-1). |
 | `refractionHaloOpacity` | `number` | - | Halo opacity override (0-1). If unset, uses the internal filmic model. |
 | `overlayOpacity` | `number` | `0` | Optional extra mask opacity for non-mask modes. |
@@ -267,6 +267,15 @@ None. Drive motion fallback with `moving` or `autoDetect`, and update visual sta
 | `--tx-surface-refraction-light-x` / `--tx-surface-refraction-light-y` | `refractionLightX` / `refractionLightY` or angle model | Refraction light anchor in percentages. |
 | `--tx-surface-refraction-strength` | `refractionStrength` model | Blended optical strength during rest, motion, and recovery. |
 | `--tx-surface-fake-index` | `fakeIndex` prop | z-index for fake pseudo-element rendering. |
+| `--tx-surface-fake-bg` | `color` prop or theme fallback | Background color of the fake-mode pseudo element. |
+| `--tx-surface-fake-opacity` | mask opacity model | Opacity of the fake-mode pseudo element. |
+| `--tx-surface-mask-opacity-percent` | mask opacity model | Percentage form of the mask opacity (internal interpolation output, do not override). |
+| `--tx-surface-motion-cover-opacity` | motion state model | Refraction motion-cover layer opacity (internal). |
+| `--tx-surface-refraction-edge-opacity` | optics model | Refraction edge highlight opacity (internal). |
+| `--tx-surface-refraction-streak-angle` | `refractionAngle` model | Refraction streak angle (angle model +92deg, internal). |
+| `--tx-surface-refraction-{filter,mask}-{base,primary,secondary,veil}-weight` / `--tx-surface-refraction-streak-weight` | profile/tone weight model | Blend-weight family for the optical layers (internal). |
+| `--tx-surface-refraction-*-gain` / `-boost` / `-base`, `--tx-surface-refraction-halo-opacity`, `--tx-surface-refraction-mask-effective-opacity` | profile/tone derived values | Derived optical interpolation outputs (internal). |
+| `--tx-surface-refraction-mask-color` | theming hook (consumed) | Base color of the refraction gradient layers; overridable in themes (falls back to `#fff`-family defaults). |
 
 ## Interaction Contract
 
@@ -275,6 +284,7 @@ None. Drive motion fallback with `moving` or `autoDetect`, and update visual sta
 - `blur` and `glass` degrade while `moving=true` or auto-detected transform motion is active. `fallbackMode='mask'` uses `fallbackMaskOpacity` when provided; `fallbackMode='pure'` renders no mask layer.
 - `glass` and `refraction` forward normalized geometry and optical props to `TxGlassSurface`; `brightness <= 3` is treated as a multiplier and converted to a percentage.
 - `refraction` renders glass, filter, mask, optional motion-cover, and edge layers, plus renderer/profile/tone classes and light/strength CSS variables.
+- Passing any of `refractionStrength` / `refractionAngle` / `refractionProfile` switches to the derived refraction model (`shouldUseRefractionModel`); unset ones fall back to `62` / `-24` / `'filmic'`.
 - `autoDetect` observes the root and ancestor `style` mutations plus `transitionstart`, `transitionend`, and `transitioncancel`; listeners and observers are removed on unmount.
 - `settleDelay` and `transitionDuration` both affect fallback recovery. The actual settle timer is at least the transition duration.
 - `refraction` keeps the refraction renderer active during motion, but blends optical parameters down while moving and back up during recovery.
@@ -291,7 +301,7 @@ None. Drive motion fallback with `moving` or `autoDetect`, and update visual sta
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`, `types.ts`, `base-surface-motion.ts`, `base-surface-math.ts`, and `style/index.scss`.
-- The CSS-variable table now reflects runtime variables actually emitted or consumed by the component, instead of stale blur-background documentation from an earlier implementation.
+- The CSS-variable table covers every runtime variable the component emits (rows marked internal are interpolation outputs, not override points) plus the consumed theming hook `--tx-surface-refraction-mask-color`.
 - Existing tests cover root tag/radius/color variables, mask opacity clamping, blur fallback, pure fallback, normalized `TxGlassSurface` props, refraction classes/light variables, and auto-detect teardown.
 - No events or exposed methods exist in source; visual state is controlled through props and CSS variables.
 

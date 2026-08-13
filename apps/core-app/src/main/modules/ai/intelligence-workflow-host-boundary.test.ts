@@ -16,7 +16,11 @@ const workflowServiceMocks = vi.hoisted(() => ({
 vi.mock('./intelligence-workflow-service', () => ({
   intelligenceWorkflowService: workflowServiceMocks
 }))
-vi.mock('@talex-touch/utils/transport/events/types', () => ({
+vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  // Real constants and guards (they're pure data), with only the error-code
+  // check stubbed — a hand-listed mock goes stale every time the module
+  // grows an export, which is exactly how this suite broke.
+  ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
 vi.mock('../sentry/sentry-service', () => {
@@ -33,6 +37,10 @@ vi.mock('../sentry/sentry-service', () => {
     setSentryServiceInstance: vi.fn()
   }
 })
+
+// safeApiHandler redacts every thrown message behind one public string, so the
+// rejection reason is carried by the untouched-service assertions, not the payload.
+const SAFE_PUBLIC_ERROR = 'The operation failed. Please retry.'
 
 type EventDefinition = { toEventName: () => string }
 type ApiResponse = { ok: boolean; result?: unknown; error?: string }
@@ -147,7 +155,7 @@ describe('intelligenceModule workflow control-plane host boundary', () => {
 
       await expect(getHandler(handlers, eventName)(payload, pluginContext())).resolves.toEqual({
         ok: false,
-        error: 'INTELLIGENCE_HOST_ONLY_CAPABILITY'
+        error: SAFE_PUBLIC_ERROR
       })
       expect(waitForAgentRuntime).not.toHaveBeenCalled()
       expectWorkflowServiceUntouched()
