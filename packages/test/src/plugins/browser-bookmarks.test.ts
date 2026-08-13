@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
@@ -119,7 +120,7 @@ describe('browser bookmarks plugin', () => {
       type: 'network',
       permission: 'network.internet',
       status: 'permission-missing',
-      reason: 'network-internet-permission-required',
+      reason: PLUGIN_BLOCKED_REASONS.NETWORK_INTERNET_PERMISSION_REQUIRED,
       audit: {
         pluginName: 'touch-browser-bookmarks',
         featureId: 'browser-bookmarks',
@@ -162,7 +163,7 @@ describe('browser bookmarks plugin', () => {
     expect(openItem?.subtitle).toContain('缺少 network.internet 权限')
     expect(actionPayload(openItem)?.capability).toMatchObject({
       status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_SDK_UNAVAILABLE,
       permission: 'network.internet',
     })
   })

@@ -1,129 +1,173 @@
+<script lang="ts">
+/**
+ * The one menu the two pills may hold open between them — the old `openMenu` state machine's
+ * invariant. Pointer flows keep it on their own (the primitive's outside-click closes the other
+ * copy on pointerdown), but a keyboard activation of the other pill fires no pointerdown, so the
+ * newly opening copy closes the previous one through this hand-off.
+ */
+let closeActiveModelMenu: (() => void) | null = null
+</script>
+
 <script lang="ts" name="HomeModelMenu" setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ModelChoice } from '~/modules/conversation/useModelOptions'
+import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
 
 /**
- * The picker behind both model pills. Anchored to whichever pill opened it, so one menu component
- * serves the top bar and the composer without either owning the list.
+ * The picker behind both model pills. Each caller hands its pill in through the trigger slot and
+ * this control owns the rest: anchoring, outside-click, Escape and arrow traversal all come from
+ * TxDropdownMenu, so the component is only the option content plus the shared selection state.
  */
-const props = defineProps<{ open: boolean; align?: 'left' | 'right' }>()
-const emit = defineEmits<{ (event: 'close'): void }>()
+const props = withDefaults(defineProps<{ placement?: 'bottom-start' | 'top-end' }>(), {
+  placement: 'bottom-start'
+})
 
 const { t } = useI18n()
 const { choices, loading, load, select, isSelected, selection } = useModelOptions()
 
-const rootRef = ref<HTMLElement | null>(null)
+const open = ref(false)
+const triggerWrapRef = ref<HTMLElement | null>(null)
+/**
+ * Focus goes back to the pill only when the menu closed from the keyboard or a selection —
+ * an outside click moved focus somewhere deliberate, and yanking it back would fight the user.
+ */
+let restoreFocusOnClose = false
 
-function choose(choice: Parameters<typeof select>[0]): void {
+interface ModelChoiceGroup {
+  providerId: string
+  providerName: string
+  items: ModelChoice[]
+}
+
+/**
+ * One group per provider, in the order the options arrived. The flat list
+ * repeated the provider under every row, which reads as noise once a single
+ * provider carries many models.
+ */
+const groups = computed<ModelChoiceGroup[]>(() => {
+  const byProvider = new Map<string, ModelChoiceGroup>()
+  for (const choice of choices.value) {
+    let group = byProvider.get(choice.providerId)
+    if (!group) {
+      group = { providerId: choice.providerId, providerName: choice.providerName, items: [] }
+      byProvider.set(choice.providerId, group)
+    }
+    group.items.push(choice)
+  }
+  return [...byProvider.values()]
+})
+
+function choose(choice: ModelChoice | null): void {
   select(choice)
-  emit('close')
+  restoreFocusOnClose = true
+  open.value = false
 }
 
-function handlePointerDown(event: PointerEvent): void {
-  const root = rootRef.value
-  // The pill that opened the menu sits outside this element, so a plain outside-click check would
-  // close on the very click that is about to toggle it back open. `closest` on the shared marker
-  // keeps the pill's own click for the pill.
-  if (!root || root.contains(event.target as Node)) return
-  if ((event.target as HTMLElement)?.closest?.('[data-model-pill]')) return
-  emit('close')
+/** The anchor closes on Escape by itself; this only marks that focus should return to the pill. */
+function onPanelKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') restoreFocusOnClose = true
 }
 
-function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') emit('close')
+function closeSelf(): void {
+  open.value = false
 }
 
-watch(
-  () => props.open,
-  (open) => {
-    if (open) void load()
-  },
-  { immediate: true }
-)
-
-onMounted(() => {
-  document.addEventListener('pointerdown', handlePointerDown, true)
-  document.addEventListener('keydown', handleKeydown)
+watch(open, (isOpen) => {
+  if (isOpen) {
+    if (closeActiveModelMenu !== null && closeActiveModelMenu !== closeSelf) closeActiveModelMenu()
+    closeActiveModelMenu = closeSelf
+    restoreFocusOnClose = false
+    void load()
+    return
+  }
+  if (closeActiveModelMenu === closeSelf) closeActiveModelMenu = null
+  if (restoreFocusOnClose) {
+    void nextTick(() => triggerWrapRef.value?.querySelector('button')?.focus())
+  }
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handlePointerDown, true)
-  document.removeEventListener('keydown', handleKeydown)
+  if (closeActiveModelMenu === closeSelf) closeActiveModelMenu = null
 })
 </script>
 
 <template>
-  <div
-    v-if="props.open"
-    ref="rootRef"
-    class="HomeModelMenu"
-    :class="props.align === 'right' ? 'is-right' : 'is-left'"
-    role="listbox"
-    :aria-label="t('home.model')"
+  <TxDropdownMenu
+    v-model="open"
+    :placement="props.placement"
+    :min-width="240"
+    :max-height="320"
+    :panel-radius="12"
+    :panel-padding="6"
+    panel-background="pure"
   >
-    <button
-      class="HomeModelMenu-Item"
-      type="button"
-      role="option"
-      :aria-selected="!selection.model"
-      @click="choose(null)"
-    >
-      <span class="HomeModelMenu-Label">{{ t('home.modelAuto') }}</span>
-      <span v-if="!selection.model" class="i-ri-check-line HomeModelMenu-Check" />
-    </button>
-
-    <div class="HomeModelMenu-Divider" />
-
-    <p v-if="loading" class="HomeModelMenu-Hint">{{ t('home.modelLoading') }}</p>
-    <!-- Not an error: a machine with no configured provider legitimately has nothing to list. -->
-    <p v-else-if="!choices.length" class="HomeModelMenu-Hint">{{ t('home.modelEmpty') }}</p>
-
-    <button
-      v-for="choice in choices"
-      :key="`${choice.providerId}:${choice.model}`"
-      class="HomeModelMenu-Item"
-      type="button"
-      role="option"
-      :aria-selected="isSelected(choice)"
-      @click="choose(choice)"
-    >
-      <span class="HomeModelMenu-Label">
-        <span class="HomeModelMenu-Model">{{ choice.model }}</span>
-        <span class="HomeModelMenu-Provider">{{ choice.providerName }}</span>
+    <template #trigger>
+      <!-- display: contents — the wrapper exists only so closing can find the pill to refocus. -->
+      <span ref="triggerWrapRef" class="HomeModelMenu-TriggerWrap">
+        <slot name="trigger" :open="open" />
       </span>
-      <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
-    </button>
-  </div>
+    </template>
+
+    <!-- `group` so the label is announced: on a bare div `aria-label` is ignored, and the
+         old listbox named itself. The radio rows also belong inside a group per ARIA menus. -->
+    <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
+      <button
+        class="HomeModelMenu-Item"
+        type="button"
+        role="menuitemradio"
+        :aria-checked="!selection.model"
+        @click="choose(null)"
+      >
+        <span class="HomeModelMenu-Label">{{ t('home.modelAuto') }}</span>
+        <span v-if="!selection.model" class="i-ri-check-line HomeModelMenu-Check" />
+      </button>
+
+      <div class="HomeModelMenu-Divider" />
+
+      <p v-if="loading" class="HomeModelMenu-Hint">{{ t('home.modelLoading') }}</p>
+      <!-- Not an error: a machine with no configured provider legitimately has nothing to list. -->
+      <p v-else-if="!choices.length" class="HomeModelMenu-Hint">{{ t('home.modelEmpty') }}</p>
+
+      <div
+        v-for="group in groups"
+        :key="group.providerId"
+        class="HomeModelMenu-Group"
+        role="group"
+        :aria-labelledby="`home-model-group-${group.providerId}`"
+      >
+        <p :id="`home-model-group-${group.providerId}`" class="HomeModelMenu-GroupLabel">
+          {{ group.providerName }}
+        </p>
+        <button
+          v-for="choice in group.items"
+          :key="`${choice.providerId}:${choice.model}`"
+          class="HomeModelMenu-Item"
+          type="button"
+          role="menuitemradio"
+          :aria-checked="isSelected(choice)"
+          @click="choose(choice)"
+        >
+          <span class="HomeModelMenu-Model">{{ choice.model }}</span>
+          <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
+        </button>
+      </div>
+    </div>
+  </TxDropdownMenu>
 </template>
 
 <style lang="scss" scoped>
+.HomeModelMenu-TriggerWrap {
+  display: contents;
+}
+
+/* Panel chrome (surface, border, shadow, placement) belongs to the primitive; this is content. */
 .HomeModelMenu {
-  position: absolute;
-  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  min-width: 240px;
   max-width: 320px;
-  // Tall lists scroll rather than running off the window; the pill can sit near either edge.
-  max-height: 320px;
-  padding: 6px;
-  overflow-y: auto;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-md);
-  background: var(--shell-bg);
-  box-shadow: 0 8px 28px var(--shell-shadow);
-
-  &.is-left {
-    top: calc(100% + 6px);
-    left: 0;
-  }
-
-  &.is-right {
-    right: 0;
-    bottom: calc(100% + 6px);
-  }
 }
 
 .HomeModelMenu-Item {
@@ -146,22 +190,26 @@ onBeforeUnmount(() => {
   }
 }
 
-.HomeModelMenu-Label {
+.HomeModelMenu-Group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  gap: 1px;
+}
+
+/* A label, not an option: the provider names the block so the rows can stay one line each. */
+.HomeModelMenu-GroupLabel {
+  margin: 0;
+  padding: 8px 9px 3px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
 }
 
 .HomeModelMenu-Model {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.HomeModelMenu-Provider {
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
 }
 
 .HomeModelMenu-Check {

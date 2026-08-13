@@ -243,6 +243,8 @@ function ensureClipboardPollingSettings(): void {
       // Off by default: a tool call reaches out and touches the user's machine,
       // so it stays something they turned on deliberately.
       agentTools: false,
+      // The same preference in the shape the composer's permission pill reads.
+      agentToolsMode: 'off',
       autoPaste: {
         enable: true,
         time: 5

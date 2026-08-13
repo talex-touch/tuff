@@ -1,3 +1,4 @@
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, loadPluginModuleWithSourceTransform, withoutGlobal } from './plugin-loader'
 
@@ -176,7 +177,7 @@ describe('touch-dev-utils helpers', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
       message: '缺少 clipboard.write 权限',
     })
   })

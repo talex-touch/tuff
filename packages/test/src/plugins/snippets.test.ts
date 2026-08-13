@@ -1,3 +1,4 @@
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
@@ -105,7 +106,7 @@ describe('code snippets', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 

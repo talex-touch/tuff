@@ -93,6 +93,29 @@ describe('skills and MCP tools', () => {
   })
 })
 
+describe('conversation widget tools', () => {
+  it('registers the form tool with the fields the validator requires', async () => {
+    const form = (await loadTools()).find(tool => tool.name === 'tuff_render_form')!
+
+    expect(form.parameters.required).toEqual(['fields'])
+    expect(Object.keys(form.parameters.properties ?? {})).toEqual([
+      'title',
+      'description',
+      'submitLabel',
+      'fields',
+    ])
+  })
+
+  it('tells the model the answers arrive as a later message', async () => {
+    const form = (await loadTools()).find(tool => tool.name === 'tuff_render_form')!
+
+    // Without this the model reads the successful render as an answered form
+    // and invents the values, or re-renders the card on every turn.
+    expect(form.description).toContain('never assume what was filled')
+    expect(form.description).toContain('do not re-render the same form')
+  })
+})
+
 describe('plugin feature tools', () => {
   it('pairs feature discovery with invocation', async () => {
     const tools = await loadTools()

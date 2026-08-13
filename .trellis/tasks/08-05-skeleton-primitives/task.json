@@ -1,0 +1,30 @@
+{
+  "id": "skeleton-primitives",
+  "name": "skeleton-primitives",
+  "title": "TuffEx 骨架原语基座与存量收敛",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-skeleton-loading-default",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "prd.md 的 7 条验收标准已全部勾选而 task.json 仍为 in_progress,由维护者复核后决定归档或补充剩余范围。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 7 条验收标准全部勾选;目录内有 design.md 与 implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

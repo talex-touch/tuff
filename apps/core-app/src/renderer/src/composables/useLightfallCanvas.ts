@@ -5,9 +5,10 @@ import { createRendererLogger } from '~/utils/renderer-log'
 /**
  * The "Lightfall" WebGL backdrop behind the Tuff identity.
  *
- * Extracted from `SettingHeader.vue` so the v2 identity band can carry the same effect without
- * a second copy of the shader. Behaviour is unchanged: capped at 30fps, paused while the route
- * is deactivated or the document is hidden, and fully torn down on unmount.
+ * Extracted from the v1 settings header so the v2 identity band could carry the same effect
+ * without a second copy of the shader; that header has since been deleted, leaving
+ * `SettingIdentityCard` as the sole consumer. Capped at 30fps, paused while the route is
+ * deactivated or the document is hidden, and fully torn down on unmount.
  */
 
 type RGB = [number, number, number]

@@ -882,8 +882,10 @@
     "randomRotation": "Random",
     "sequentialRotation": "Sequential",
     "minutes": "min",
-    "blur": "Blur",
-    "opacity": "Opacity",
+    "blur": "Window Blur",
+    "blurDesc": "Blur intensity of the home background.",
+    "opacity": "Window Opacity",
+    "opacityDesc": "Opacity of the home background.",
     "brightness": "Brightness",
     "contrast": "Contrast",
     "saturate": "Saturation",
@@ -901,6 +903,8 @@
     "folderRotationHint": "Random mode picks images from the folder. Sequential mode rotates by filename.",
     "folderRandomMode": "Folder wallpaper will rotate randomly.",
     "folderSequentialMode": "Folder wallpaper will rotate by filename.",
+    "wallpaperGroup": "Wallpaper",
+    "wallpaperGroupDesc": "Source details and display adjustments for the wallpaper.",
     "emphasis": "Emphasis",
     "emphasisDesc": "Different emphasis for different people. Avoid using clear colors randomly.",
     "coloring": "Coloring",
@@ -942,6 +946,7 @@
     },
     "customizeMain": "Customize Main Layout",
     "customizeMainDesc": "Adjust header, sidebar, view styles",
+    "coreBoxGroup": "CoreBox",
     "customizeCoreBox": "Customize CoreBox",
     "customizeCoreBoxDesc": "Adjust search box logo, input style",
     "atomEditorTitle": "Customize layout",
@@ -961,7 +966,7 @@
     "atomCustomCssTip": "Applied to app layout. Unsafe directives are blocked."
   },
   "windowSection": {
-    "title": "Window Preference",
+    "title": "Window Effects",
     "description": "Select the window effect that feels comfortable to you."
   },
   "base": {
@@ -1011,15 +1016,39 @@
     "minimizeWindow": "Minimize",
     "maximizeWindow": "Maximize",
     "restoreWindow": "Restore",
-    "closeWindow": "Close"
+    "closeWindow": "Close",
+    "history": {
+      "label": "Conversations",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Previous 7 days",
+      "earlier": "Earlier",
+      "untitled": "New chat",
+      "delete": "Delete conversation"
+    }
   },
   "home": {
     "greeting": "What shall we do today?",
     "placeholder": "Ask Tuff to do anything",
-    "autoContext": "Auto Context",
-    "autoContextHint": "Lets the model pull web, file, clipboard and related context on demand",
-    "agentTools": "Tools",
-    "agentToolsHint": "Let the assistant search, read and open files — every call asks first",
+    "permission": "Permissions",
+    "permissionMenu": "Tool permissions",
+    "permissionMode": {
+      "off": "Off",
+      "review": "Review each call",
+      "full": "Allow all"
+    },
+    "permissionHint": {
+      "off": "The assistant cannot run any tool",
+      "review": "The assistant may search, read and open files — every call asks you first",
+      "full": "Tools run without asking you — destructive MCP tools included"
+    },
+    "permissionFullConfirmTitle": "Switch to allow all?",
+    "permissionFullConfirmDesc": "From here on every tool call runs immediately without asking — writing files, running commands and destructive MCP tools included. You can switch back to reviewing each call at any time.",
+    "permissionFullConfirmCancel": "Cancel",
+    "permissionFullConfirmApply": "Allow all",
+    "permissionResetApprovals": "Reset remembered approvals",
+    "permissionResetDone": "Remembered approvals cleared",
+    "permissionResetFailed": "Could not reset remembered approvals",
     "chainOfThought": "Chain of thought",
     "chartFailed": "The chart could not be rendered.",
     "toolAllow": "Allow",
@@ -1031,7 +1060,7 @@
     "moreActions": "More actions",
     "modelAuto": "Auto",
     "modelLoading": "Loading available models…",
-    "modelEmpty": "No models available — configure an AI provider first",
+    "modelEmpty": "No models available — configure an AI provider or install the pi CLI",
     "configureProvider": "Configure",
     "panel": {
       "title": "Conversation info",
@@ -1041,11 +1070,54 @@
       "model": "Model",
       "tokens": "Tokens",
       "latency": "Latency",
-      "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here.",
-      "workLog": "Work log",
-      "workLogEmpty": "No tool calls or artifacts this turn. Tool calling and artifacts are not implemented yet; they will be recorded here once they are."
+      "compactions": "Context compactions",
+      "noTurn": "No reply yet. Send a message and the provider, model and usage for the turn appear here."
+    },
+    "preview": {
+      "artifacts": "Files",
+      "widgets": "Widgets",
+      "toolCalls": "Work log",
+      "sources": "Sources",
+      "artifactsCreated": "Created here",
+      "artifactsUploaded": "You uploaded",
+      "artifactsEmpty": "Nothing has been created or uploaded in this conversation yet.",
+      "widgetsEmpty": "No chart or form has appeared in this conversation yet.",
+      "toolCallsEmpty": "No tool has been called in this conversation yet.",
+      "sourcesEmpty": "No file has been read, searched or fetched over MCP yet.",
+      "chart": "Chart",
+      "form": "Form",
+      "sandboxWidget": "Model widget",
+      "untitled": "Untitled",
+      "locate": "Find it in the conversation",
+      "open": "Open",
+      "reveal": "Reveal in folder",
+      "openFailed": "Could not open this file",
+      "sourceFile": "Local file",
+      "sourceSearch": "Search hit",
+      "sourceMcp": "MCP",
+      "sourceWeb": "Web"
+    },
+    "table": {
+      "copyTable": "Copy CSV",
+      "copiedTable": "Copied"
+    },
+    "image": {
+      "blocked": "Remote image blocked",
+      "loadOnce": "Load this image",
+      "allowSession": "Allow for this conversation"
+    },
+    "widget": {
+      "generated": "Model-authored widget",
+      "sandboxed": "Sandboxed",
+      "loading": "Starting the widget…",
+      "failed": "This widget could not start."
     },
     "modelName": "Tuff Auto",
+    "titleGen": {
+      "prompt": "Summarize the topic of this conversation in at most 4 words. Output only the title itself — no quotes, no trailing period, no explanation.",
+      "userLabel": "User",
+      "assistantLabel": "Assistant"
+    },
     "effortHigh": "High",
     "attach": "Add attachment",
     "attachRemove": "Remove attachment",
@@ -1057,9 +1129,32 @@
     "stop": "Stop generating",
     "retry": "Retry",
     "thinking": "Thinking",
+    "compacting": "Compacting context…",
     "copy": "Copy",
     "copied": "Copied",
     "regenerate": "Regenerate",
+    "chartEdit": "Edit data",
+    "chartDone": "Done",
+    "chartAdd": "Add",
+    "chartRemove": "Remove row",
+    "chartLabel": "Label",
+    "chartAddPlaceholder": "New point label",
+    "chartView": {
+      "line": "Line",
+      "bar": "Bar",
+      "area": "Area"
+    },
+    "toolPayload": "Payload",
+    "toolInterrupted": "This call never returned; the turn ended.",
+    "formSubmit": "Submit",
+    "formReset": "Reset",
+    "formRequired": "This field is required",
+    "formDone": "Submitted",
+    "formSelect": "Select an option",
+    "formSubmitted": "Form submitted",
+    "speak": "Read aloud",
+    "speakStop": "Stop reading",
+    "speakFailed": "Read aloud failed — check your provider's speech capability",
     "error": {
       "noProvider": "No AI provider is available yet — configure one in Settings · AI and try again",
       "agentToolsSync": "Could not reach the tool gateway — agent tools stay off",
@@ -1096,16 +1191,29 @@
     }
   },
   "settingsOverview": {
-    "tagline": "The command bar, reimagined for makers",
-    "account": "Account",
-    "general": "General"
+    "tagline": "The command bar, reimagined for makers"
+  },
+  "settingsIntelligenceHub": {
+    "label": "Intelligence Center",
+    "back": "Back to Intelligence",
+    "channels": "Channels",
+    "channelsDesc": "Model providers, credentials and connectivity tests.",
+    "prompts": "Prompts",
+    "promptsDesc": "Prompt library, variables and versions.",
+    "agents": "Agents",
+    "agentsDesc": "Agent definitions and the tools they may use.",
+    "workflows": "Workflows",
+    "workflowsDesc": "Multi-step automations built on agents.",
+    "audit": "Audit",
+    "auditDesc": "Usage, logs, memory review and global limits.",
+    "capabilities": "Capabilities",
+    "capabilitiesDesc": "Bind capabilities to providers and models."
   },
   "settingsEntries": {
     "installedPlugins": "Installed Plugins",
     "downloadCenter": "Download Center",
     "downloadCenterDesc": "Track download tasks and history.",
     "open": "Open",
-    "intelligenceDesc": "Model channels, capabilities, prompts and audit.",
     "application": "Applications",
     "applicationDesc": "Browse and manage installed applications.",
     "store": "Plugin Store",
@@ -2717,6 +2825,26 @@
         "viewAllTitle": "View all skills",
         "viewAllDesc": "More skills and import management on the Intelligence page"
       },
+      "localDirs": {
+        "label": "Local skill directories",
+        "linked": "Linked",
+        "noDescription": "(no description)",
+        "dirDesc": "{count} skills found · removing unlinks it, nothing is deleted",
+        "remove": "Remove",
+        "rescan": "Rescan",
+        "addTitle": "Link a local directory",
+        "addAction": "Choose directory",
+        "addDesc": "Scans SKILL.md under the directory; edits apply on the next turn",
+        "addDescEmpty": "No local directories yet — pick one holding SKILL.md, linked in place, never copied",
+        "pickTitle": "Choose a skill directory",
+        "pickConfirm": "Link",
+        "showAllTitle": "Show every skill",
+        "showAllDesc": "{count} more local skills",
+        "loadFailed": "Failed to read the local skill directories",
+        "addFailed": "Failed to link the directory",
+        "removeFailed": "Failed to remove the directory",
+        "toggleFailed": "Failed to toggle the local skill"
+      },
       "dialog": {
         "createTitle": "Add MCP server",
         "editTitle": "Edit MCP server",
@@ -3999,7 +4127,10 @@
           "notRetryable": "This error requires manual diagnosis before retrying."
         },
         "phases": {
-          "idle": { "label": "Idle", "description": "No update attempt is active." },
+          "idle": {
+            "label": "Idle",
+            "description": "No update attempt is active."
+          },
           "checking": {
             "label": "Checking for updates",
             "description": "The update service is checking the selected channel."
@@ -4331,36 +4462,36 @@
       "unofficial": "Current version has not passed official build verification, may be unsafe"
     }
   },
-    "widgetFrame": {
-      "compileFailed": "Widget compile failed",
-      "loading": "Loading widget",
-      "rendererMissing": "Widget renderer missing",
-      "rendererUnregistered": "Widget renderer not registered",
-      "missingRendererId": "Missing rendererId",
-      "renderFailed": "Widget failed to render"
-    },
-    "fileIndex": {
-      "failTitle": "File index initialization failed",
-      "failMessage": "The file index failed to initialize, so search may not work correctly.",
-      "viewErrorDetails": "View error details",
-      "rebuilding": "Rebuilding…",
-      "rebuildIndex": "Rebuild index",
-      "later": "Later",
-      "dontRemindAgain": "Don't remind me again"
-    },
-    "previewHistory": {
-      "copyResult": "Copy result",
-      "resultLabel": "Result",
-      "recentTitle": "Recent",
-      "countSummary": "{count} total",
-      "noRecords": "No records yet"
-    },
-    "boxTag": {
-      "image": "Image",
-      "imageCount": "{count} images",
-      "charCount": "{count} chars total",
-      "preparingFiles": "Preparing files…"
-    },
+  "widgetFrame": {
+    "compileFailed": "Widget compile failed",
+    "loading": "Loading widget",
+    "rendererMissing": "Widget renderer missing",
+    "rendererUnregistered": "Widget renderer not registered",
+    "missingRendererId": "Missing rendererId",
+    "renderFailed": "Widget failed to render"
+  },
+  "fileIndex": {
+    "failTitle": "File index initialization failed",
+    "failMessage": "The file index failed to initialize, so search may not work correctly.",
+    "viewErrorDetails": "View error details",
+    "rebuilding": "Rebuilding…",
+    "rebuildIndex": "Rebuild index",
+    "later": "Later",
+    "dontRemindAgain": "Don't remind me again"
+  },
+  "previewHistory": {
+    "copyResult": "Copy result",
+    "resultLabel": "Result",
+    "recentTitle": "Recent",
+    "countSummary": "{count} total",
+    "noRecords": "No records yet"
+  },
+  "boxTag": {
+    "image": "Image",
+    "imageCount": "{count} images",
+    "charCount": "{count} chars total",
+    "preparingFiles": "Preparing files…"
+  },
   "common": {
     "imagePreviewAlt": "Image preview",
     "wallpaperPreviewAlt": "Custom background preview",
@@ -4778,7 +4909,8 @@
     "customCompatible": "Custom (OpenAI Compatible)",
     "compatible": "Compatible",
     "search": {
-      "placeholder": "Search providers..."
+      "placeholder": "Search providers...",
+      "clear": "Clear search"
     },
     "list": {
       "enabled": "Enabled Providers",
@@ -4919,7 +5051,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",

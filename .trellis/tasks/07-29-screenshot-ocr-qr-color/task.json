@@ -22,5 +22,8 @@
   "parent": "07-28-rust-screenshot-mvp",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Deferred by docs/plan-prd/TODO.md:9 -- remaining independently-owned active tasks continue only after the preceding blocker lane resolves. As of 2026-08-13 lane 1 (release/runtime blockers: #326 OTA, #482 release notes) and lane 2 (search and cross-platform remediation: #334, #351) are both open.",
+    "nextAction": "Release condition: reopen when lanes 1 and 2 close. No bounded child is named yet because the ordering, not the scope, is what is blocking (#309)."
+  }
 }

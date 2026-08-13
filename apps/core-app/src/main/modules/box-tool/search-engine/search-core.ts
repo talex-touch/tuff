@@ -452,9 +452,37 @@ export class SearchEngineCore
     )
   }
 
+  /**
+   * An index commit no longer clears the cache eagerly (#346).
+   *
+   * `classifySearchCacheLookup` already had a `revision-mismatch` outcome meaning "the entry was
+   * there but the index moved on" -- which the comment at the classify site calls the point of the
+   * whole taxonomy. Clearing here made that outcome unreachable: by the time any lookup compared
+   * revisions the entry was gone, so every repeat denied by a commit was counted as `absent`, the
+   * same bucket as a query nobody repeated.
+   *
+   * That is the distinction #346 exists to measure, and it read as its own opposite -- "nobody
+   * repeats queries, remove the cache" when the truth may be "repeats happen and the index keeps
+   * denying them".
+   *
+   * Entries now stay until a lookup rejects them on revision, which drops them there and counts
+   * the reason. Nothing stale is served: the outcome is computed before the hit branch. The cost
+   * is that a superseded entry holds its slot until it is looked up, expires at the 5s TTL, or is
+   * evicted by the existing LRU bound.
+   */
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
-    this.cacheTelemetry.recordInvalidation('index-commit', this.searchCache.size)
-    this.searchCache.clear()
+    // No searchCache.clear() here. #1729/#1730 removed it deliberately: cacheSearchResult
+    // already refuses a write whose revision the hub has moved past, so the clear was redundant --
+    // and while it was there, `revision-mismatch` could never be observed and the telemetry could
+    // not say why an entry went away. app-shell-v2 still had the clear because it branched before
+    // that; its recommendation invalidation below is the part worth keeping.
+    // The recommendation ranking is cached for 30 minutes, so an app installed
+    // or removed just now would otherwise stay invisible (or keep showing) for
+    // that long. Only app commits matter: file commits fire continuously while
+    // the index builds, and the recommendation grid never contains files.
+    if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
+      this.recommendationEngine?.invalidateCache()
+    }
     for (const context of this.indexCommitStreams) {
       if (context.isCancelled()) {
         this.indexCommitStreams.delete(context)
@@ -928,7 +956,18 @@ export class SearchEngineCore
       now: cacheCheckedAt,
       ttlMs: SEARCH_CACHE_TTL_MS
     })
-    if (cacheOutcome !== 'hit') this.cacheTelemetry.recordMiss(cacheOutcome)
+    if (cacheOutcome !== 'hit') {
+      this.cacheTelemetry.recordMiss(cacheOutcome)
+      // Dropped here rather than at commit time, so the reason survives to be counted.
+      // An expired entry goes the same way: whoever asked has just paid for the miss.
+      if (cachedEntry && cacheOutcome !== 'absent') {
+        this.searchCache.delete(cacheKey)
+        this.cacheTelemetry.recordInvalidation(
+          cacheOutcome === 'revision-mismatch' ? 'index-commit' : 'lru-evict',
+          1
+        )
+      }
+    }
     if (cacheOutcome === 'hit' && cachedEntry) {
       this.cacheTelemetry.recordHit(cachedAgeMs, cachedEntry.result.duration)
       const cachedResult = materializeCachedSearchResult(cachedEntry.result, sessionId)
@@ -2012,6 +2051,12 @@ export class SearchEngineCore
 
     transport.on(CoreBoxEvents.search.indexingDiagnostics, async () => {
       return await instance.indexingRuntime!.getDiagnostics()
+    })
+
+    // The counters had no reader at all: `getSearchCacheTelemetry` was referenced only by its own
+    // declaration, so the measurement #346 asks for could not be taken from a real session.
+    transport.on(CoreBoxEvents.search.cacheTelemetry, async () => {
+      return instance.getSearchCacheTelemetry()
     })
 
     transport.on(CoreBoxEvents.item.execute, async (payload) => {

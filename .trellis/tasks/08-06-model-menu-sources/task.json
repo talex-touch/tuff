@@ -1,0 +1,30 @@
+{
+  "id": "model-menu-sources",
+  "name": "model-menu-sources",
+  "title": "模型菜单接入 pi 目录与应用内提供方模型",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "逐条验证 prd.md 的 7 条验收标准:装有与未装 pi 两种机器上的菜单表现、应用内提供方模型合并、apiKey 不泄漏断言、pi 目录损坏时的静默降级、空态分层,以及 typecheck 与新增解析/合并逻辑的 vitest 覆盖。",
+    "blocker": "记录中无阻塞项;其中两条验收标准分别需要装有 pi 与未装 pi 的机器。",
+    "evidence": "prd.md 的 7 条验收标准均未勾选;目录内有 design.md、implement.md 与 research/。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

@@ -22,8 +22,13 @@
 |---|---|---|
 | R1 | 首页就地对话：发送 → 内置 AI 通道流式回复 → 增量渲染 → 可停止 → 错误可读。**不落库、不加路由** | 通路已完成，缺可用 provider |
 | R1.5 | 本地 `pi` CLI provider + 未配置引导：让首页在零凭据下真能出字 | 进行中 |
-| R2 | 数据层与持久化：两张表 + 迁移 + 对话 transport + `/home/c/:id` | 已交付 |
-| R3 | 侧栏历史分桶 + TopBar ModePill 接真实模型列表 | 部分：分桶未做 |
+| R2 | 数据层与持久化：两张表 + 迁移 + 对话 transport + `/home/c/:id` | 已完成（`fe581a6be` 落地，`903bcf129` 修 PK 作用域） |
+| R3 | 侧栏历史分桶 + TopBar ModePill 接真实模型列表 | 侧栏历史已完成（2026-08-06）；ModePill 半项由 08-06-model-menu-sources 承接——设计已把模型选择移进 composer 弹层，TopBar 不再放 ModePill |
+> R3 记录更正（2026-08-13）。合并 app-shell-v2 时核实：`ShellSidebar.vue` 渲染
+> `ShellConversationList`，后者用 `bucketConversations` 做「今天 / 昨天 / 近 7 天 / 更早」分桶并带骨架屏，
+> 所以「侧栏历史已完成」这一行是准确的。我先前在 #969 上说「侧栏历史整体未接入」是**只查了 master**
+> 得出的结论——那条分支上插槽确实空着——把分支现状写成了产品现状。
+
 
 R1 的产物必须是可弃的最小面：消息只在内存里，刷新即丢。R2 接手时把内存 store 换成 transport，不重写 UI。
 

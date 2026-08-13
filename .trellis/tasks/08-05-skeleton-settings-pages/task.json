@@ -1,0 +1,30 @@
+{
+  "id": "skeleton-settings-pages",
+  "name": "skeleton-settings-pages",
+  "title": "设置页接入骨架加载态",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-05",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-skeleton-loading-default",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "按 prd.md 的 AC1–AC6 逐页核对 13 个设置页的骨架呈现与布局跳变并留下逐页记录,再跑 lint、typecheck 与设置页既有单测。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 的 AC1–AC6 均未勾选;目录内有 design.md 与 implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

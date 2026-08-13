@@ -748,6 +748,7 @@ export interface IManifest {
   }
 }
 
+export * from './blocked-reasons'
 export * from './install'
 export * from './package-policy'
 export * from './security-scan'

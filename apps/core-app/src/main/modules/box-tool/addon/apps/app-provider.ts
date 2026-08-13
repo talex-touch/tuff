@@ -1,3 +1,8 @@
+import type {
+  AppDiscoveryKind,
+  AppExtensionSyncOptions,
+  AppFileWriteDb
+} from './app-index-metadata'
 import type { TimingLogLevel, TimingMeta, TimingOptions } from '@talex-touch/utils'
 import type {
   IndexedSourceDelta,
@@ -110,17 +115,15 @@ import {
 } from './display-name-sync-utils'
 import {
   APP_ALTERNATE_NAMES_EXTENSION_KEY,
-  APP_DISPLAY_PATH_EXTENSION_KEY,
   APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY,
   APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY,
+  APP_DISPLAY_PATH_EXTENSION_KEY,
   APP_ENTRY_SOURCE_EXTENSION_KEY,
   APP_ENTRY_SOURCE_MANUAL,
   APP_IDENTIFIER_EXTENSION_KEYS,
   APP_IDENTITY_KIND_EXTENSION_KEY,
   APP_LAUNCH_KIND_EXTENSION_KEY,
   APP_LAUNCH_TARGET_EXTENSION_KEY,
-  APP_SCANNED_OPTIONAL_EXTENSION_KEYS,
-  buildAppExtensions,
   buildManagedEntryExtensions,
   isAppEntryEnabledExtensionMap,
   isManagedEntryExtensionMap,
@@ -129,7 +132,9 @@ import {
   readAppIdentityKind,
   resolveAppItemId,
   resolveAppItemIds,
-  shouldScanMdlsDisplayName
+  shouldScanMdlsDisplayName,
+  syncScannedAppExtensions,
+  upsertAppExtensions
 } from './app-index-metadata'
 import { matchNoisySystemAppRule } from './app-noise-filter'
 import { resolveExistingVersionedAppIconCachePath } from './app-icon-cache'
@@ -137,8 +142,7 @@ import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagno
 import {
   hasAppIconDrift,
   hasAppLaunchMetadataDrift,
-  hasStringListDrift,
-  resolveMissingScannedExtensionKeys
+  hasStringListDrift
 } from './app-provider-metadata-sync'
 import {
   expandWindowsEnvironmentVariables,
@@ -213,7 +217,6 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
-type AppFileWriteDb = Pick<CoreDatabase, 'insert' | 'delete'>
 type AppFileMutationDb = Pick<CoreDatabase, 'insert' | 'update' | 'delete'>
 type AppDbBatchItem = Parameters<CoreDatabase['batch']>[0][number]
 type AppIndexSyncStats = {
@@ -613,6 +616,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               .returning()
 
             if (insertedFile) {
+              // The upsert above turns into an UPDATE for a path already indexed, so neither the
+              // row nor this empty map says whether the app is new here. The install time therefore
+              // relies on the write refusing to overwrite (see `insertMissingAppExtensions`), and
+              // this path never falls back to "now".
               await this.syncScannedAppExtensions(
                 insertedFile.id,
                 appInfo,
@@ -1181,7 +1188,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return []
     }
 
-    const result = await this.processAppPath(appPath)
+    const result = await this.processAppPath(appPath, { discovery: 'watch' })
     if (!result.success || !result.appInfo) {
       return []
     }
@@ -1425,65 +1432,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private async upsertAppExtensions(
-    writer: AppFileWriteDb | undefined,
-    extensions: Array<{ fileId: number; key: string; value: string }>
-  ): Promise<void> {
-    if (extensions.length === 0) return
-    if (!writer) {
-      await this.dbUtils!.addFileExtensions(extensions)
-      return
-    }
-    await writer
-      .insert(fileExtensions)
-      .values(extensions)
-      .onConflictDoUpdate({
-        target: [fileExtensions.fileId, fileExtensions.key],
-        set: { value: sql`excluded.value` }
-      })
-  }
-
-  private async syncScannedAppExtensions(
+  /**
+   * Thin seam over the free function in `app-index-metadata`. The batch tests stub this instance
+   * method to count invocations; calling the module import directly would leave those mocks inert
+   * (a binding that moves takes its mocks with it), so the indirection is the point, not overhead.
+   */
+  private syncScannedAppExtensions(
     fileId: number,
-    app: Pick<
-      ScannedAppInfo,
-      | 'bundleId'
-      | 'icon'
-      | 'stableId'
-      | 'uniqueId'
-      | 'launchKind'
-      | 'launchTarget'
-      | 'launchArgs'
-      | 'workingDirectory'
-      | 'displayPath'
-      | 'description'
-      | 'alternateNames'
-      | 'identityKind'
-      | 'displayNameSource'
-      | 'displayNameQuality'
-    >,
+    app: Parameters<typeof syncScannedAppExtensions>[1],
     writer?: AppFileWriteDb,
-    existingExtensions?: Readonly<Record<string, string | null>>
+    existingExtensions?: Readonly<Record<string, string | null>>,
+    options?: AppExtensionSyncOptions
   ): Promise<void> {
-    const extensions = buildAppExtensions(fileId, app)
-    await this.upsertAppExtensions(writer, extensions)
-
-    const missingExtensionKeys = resolveMissingScannedExtensionKeys(
-      extensions,
-      APP_SCANNED_OPTIONAL_EXTENSION_KEYS
-    )
-    const staleExtensionKeys = existingExtensions
-      ? missingExtensionKeys.filter((key) => Object.hasOwn(existingExtensions, key))
-      : missingExtensionKeys
-
-    if (staleExtensionKeys.length > 0) {
-      const deleteWriter = writer ?? this.dbUtils!.getDb()
-      await deleteWriter
-        .delete(fileExtensions)
-        .where(
-          and(eq(fileExtensions.fileId, fileId), inArray(fileExtensions.key, staleExtensionKeys))
-        )
-    }
+    return syncScannedAppExtensions(fileId, app, this.dbUtils!, writer, existingExtensions, options)
   }
 
   private async repairPersistedAppIconPointers(apps: DbAppWithExtensions[]): Promise<void> {
@@ -1518,7 +1479,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (typeof db.batch !== 'function') {
         await this.runAppTransaction(db, async (tx, extensionWriter) => {
           const writer = extensionWriter ?? tx
-          await this.upsertAppExtensions(writer, iconUpserts)
+          await upsertAppExtensions(writer, this.dbUtils!, iconUpserts)
           if (staleIconFileIds.length > 0) {
             await writer
               .delete(fileExtensions)
@@ -1584,7 +1545,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const db = this.dbUtils!.getDb()
       if (typeof db.batch !== 'function') {
         await this.runAppTransaction(db, async (tx, extensionWriter) => {
-          await this.upsertAppExtensions(extensionWriter ?? tx, extensions)
+          await upsertAppExtensions(extensionWriter ?? tx, this.dbUtils!, extensions)
         })
         return
       }
@@ -3003,7 +2964,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async upsertAppInfo(
     appInfo: ScannedAppInfo,
-    options: { managedEntry?: boolean } = {}
+    options: { managedEntry?: boolean; discovery?: AppDiscoveryKind } = {}
   ): Promise<'added' | 'updated'> {
     const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
     const db = this.dbUtils!.getDb()
@@ -3038,8 +2999,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await this.runAppTransaction(db, async (tx, extensionWriter) => {
             await tx.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
             if (options.managedEntry === true) {
-              await this.upsertAppExtensions(
+              await upsertAppExtensions(
                 extensionWriter,
+                this.dbUtils!,
                 buildManagedEntryExtensions(existingFile.id, appInfo, true)
               )
             } else {
@@ -3047,7 +3009,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
                 existingFile.id,
                 appInfo,
                 extensionWriter,
-                existingExtensions
+                existingExtensions,
+                { discovery: options.discovery, insertedRow: false }
               )
             }
           })
@@ -3080,8 +3043,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           if (inserted) {
             if (options.managedEntry === true) {
-              await this.upsertAppExtensions(
+              await upsertAppExtensions(
                 extensionWriter,
+                this.dbUtils!,
                 buildManagedEntryExtensions(inserted.id, appInfo, true)
               )
             } else {
@@ -3089,7 +3053,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
                 inserted.id,
                 appInfo,
                 extensionWriter,
-                EMPTY_APP_EXTENSION_MAP
+                EMPTY_APP_EXTENSION_MAP,
+                { discovery: options.discovery, insertedRow: true }
               )
             }
           }
@@ -3108,7 +3073,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async processAppPath(
     appPath: string,
-    options: { managedEntry?: boolean; scheduleRetry?: boolean } = {}
+    options: {
+      managedEntry?: boolean
+      scheduleRetry?: boolean
+      /** Defaults to `scan`; the retry ladder and dead-letter sweep inherit that default. */
+      discovery?: AppDiscoveryKind
+    } = {}
   ): Promise<AppIndexProcessPathResult> {
     if (this.processingPaths.has(appPath)) {
       return { success: false, status: 'invalid', reason: 'processing' }
@@ -3144,7 +3114,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
 
       const appInfo = resolution.appInfo
-      const status = await this.upsertAppInfo(appInfo, options)
+      const status = await this.upsertAppInfo(appInfo, {
+        managedEntry: options.managedEntry,
+        discovery: options.discovery ?? 'scan'
+      })
       this.scheduleAppIconHydration([appInfo])
       this.forgetAppResolutionFailure(appPath)
       return { success: true, status, path: appInfo.path, appInfo }

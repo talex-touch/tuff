@@ -166,6 +166,63 @@ jobs:
       - name: Check for orphan test files
         run: pnpm check:orphan-tests && pnpm check:orphan-tests:self-test
 
+      # The maintenance-audit reports are hand-written, one per day, and #1107 exists because a
+      # bullet was being carried forward instead of re-derived -- the same sentence about a flag
+      # default appeared in eight consecutive reports, three days after the default was inverted.
+      #
+      # The 2026-08-12 report named `07-26-install-launch-v2-4-13-beta-23` as an in-progress task
+      # missing metadata. No such directory exists, active or archived. That is a directory lookup
+      # to catch, and a report naming a task nobody can open is the cheapest possible evidence that
+      # its author did not query the tree.
+      #
+      # Only task existence is checked. Counts and prose are not: parsing "至少 X 项" out of two
+      # languages fails in ways nobody can act on, and the field-presence claim is already
+      # docs:verify's DOC-TASK-META rule. Reports dated on or before the gate date are history and
+      # exempt, which is #1107's own fourth acceptance criterion.
+      - name: Check maintenance-audit report claims
+        run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
+
+      # GitHub's closing-keyword parser is a regex over `keyword #N` and ignores the words before
+      # it, so "It does not fix #213" marks #213 for closing exactly as "Fixes #213" does. That is
+      # not hypothetical: on 2026-08-13 it closed two user-facing issues within an hour -- #213 via
+      # "does not fix", #308 via "does not close" -- and both sentences existed specifically to stop
+      # a reader mistaking instrumentation for a fix. The second happened after the first was
+      # already understood, which is why this is a check and not a note. The body is passed through
+      # the environment rather than interpolated into the shell.
+      - name: Check for negated closing keywords in the PR body
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.md
+          node scripts/check-closing-keywords.mjs /tmp/pr-body.md
+
+      - name: Check closing-keyword guard self-test
+        run: pnpm check:closing-keywords:self-test
+
+      # 34 distinct blocked reasons live across plugins/ and 20 of them belong to exactly one
+      # plugin, so the vocabulary is open and a closed union would be the wrong contract. Only the
+      # permission family is enforced: a plugin writing permission_denied is claiming to speak a
+      # shared language and getting it wrong, and it fails silently on both sides -- a reason nobody
+      # handles is indistinguishable from a handler for a reason nobody emits. Plugin Preludes take
+      # everything from globalThis and contain no imports at all, so this check is what #1711 asked
+      # an import to provide.
+      - name: Check plugin blocked reasons
+        run: pnpm check:plugin-blocked-reasons && pnpm check:plugin-blocked-reasons:self-test
+
+      # plugin.ts was ~3,060 lines when #339 asked for it to be split. Three extraction PRs landed
+      # and each reported real progress -- 4,069 to 3,947 to 3,872 to 3,844 -- against a baseline
+      # that had already grown a thousand lines since the issue was written. Extraction removed 225
+      # lines while accretion added 1,009, and nothing said so, because each PR compared with the
+      # previous PR.
+      #
+      # This does not measure what #339 is about; that issue says "the concern is not line count by
+      # itself" and is right. It measures whether the split is losing, which is the question three
+      # PRs in a row could not answer. The ceiling falls and never rises, and a ceiling left too far
+      # above the file also fails -- a ratchet nobody tightens is a comment.
+      - name: Check module size ratchet
+        run: pnpm check:module-size-ratchet && pnpm check:module-size-ratchet:self-test
+
       - name: Run plugin suites
         run: pnpm test:plugins && pnpm test:plugins:self-test
 

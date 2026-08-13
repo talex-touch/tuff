@@ -70,8 +70,64 @@ const ext = attachment.name?.split('.').pop()
 const ext = MIME_TO_EXT[mime]
 ```
 
-## 6. Stream consumption (pending)
+## 6. Stream consumption: commit/rollback (landed, cd018f946)
 
-The delta/commit/rollback semantics for pi's auto-retry (research:
-`08-05-home-tool-loop/research/pi-duplicate-reply-diagnosis.md` §八) land
-here once implemented.
+**Deltas are preview; an assistant `message_end` with an explicitly healthy
+`stopReason` is a commit point; `auto_retry_start` rolls back to the last
+commit.** pi replays failed attempts into the same stdout — treat the NDJSON
+stream as a session log, never as one monotonic text buffer.
+
+- Part events (dual-mirrored): `{ kind: 'message-commit' }`,
+  `{ kind: 'text-reset' }`.
+- Commit requires an explicit non-error/aborted `stopReason` on
+  `message_end` — absence is not success (message_start's pending state and
+  zero-usage message_end keep their existing null contract).
+- Every accumulating layer keeps a high-water mark and rolls back to it:
+  provider (`streamedLength`/`committedLength`), router (`accumulated`),
+  renderer parts assembly (`committed = {contentLength, partsLength,
+  textLength}` — textLength exists because deltas merge into the tail text
+  part, so partsLength alone can't rewind it).
+- Final user-visible text = committed + un-rolled-back tail preview; the
+  **error decision** uses committed-only: EOF with nothing committed and a
+  failed final state throws pi's `auto_retry_end.finalError`. Exit codes are
+  meaningless (`--mode json` exits 0 even when every attempt failed).
+- Spawn env pins `PI_RETRY_STALL_TIMEOUT_MS: '0'` — the pi-retry extension's
+  90s stall watchdog only amplifies replays in a headless host.
+- Retries log `attempt/maxAttempts/delayMs` (evidence trail for retry-count
+  anomalies).
+
+Guard tests: tool-turn rollback (text₁ commit → tool cards → text₂ reset →
+text₂′ commit ⇒ text₁+text₂′ with cards intact); 4-attempt NDJSON fixture
+accumulates one copy; all-failed run throws `finalError`.
+
+## 7. Model catalogue reads (landed, task 08-06-model-menu-sources)
+
+**The model menu's pi row is filled from pi's own catalogue files; credentials
+never leave the reader.** `pi-model-catalog.ts` reads exactly two files under
+`PI_CODING_AGENT_DIR` (default `~/.pi/agent`): `models.json` (user-defined
+providers — carries plaintext `apiKey`s) and `models-store.json` (the built-in
+catalogue `pi update` maintains). `auth.json` is never opened.
+
+- **Secret boundary is the return type**: `listPiCliModels(): string[]` of
+  `<provider>/<id>` patterns — nothing else escapes, so no caller can log or
+  ship a key by accident. Warn lines carry a fixed reason string, never a
+  caught error: V8's `JSON.parse` message quotes source text, which here is
+  credential-bearing.
+- **Sync on purpose**: `getProviderModelOptions` feeds the plugin host through
+  a frozen sync dependency (`plugin-intelligence-host-service.ts`), so the
+  reader stays `readFileSync` + an mtime/size-signature cache instead of going
+  async and rippling through that surface.
+- **Defensive parse, silent degrade**: these files are pi internals, not a
+  contract. Unrecognised shapes skip entries; a corrupt file empties that
+  source and warns once per run; a missing file is silent (that is what "no
+  catalogue" looks like).
+- **Probed-absent vs unprobed**: only `getResolvedPiExecutable() === null`
+  (probed, absent) drops the pi row from model options; `undefined` (not yet
+  probed) must be treated as present — the same stance config assembly takes.
+  Custom `models.json` patterns win dedup collisions against the store.
+
+Guard tests: `pi-model-catalog.test.ts` (real temp dirs; asserts a fixture
+credential appears in neither patterns nor warnings, warn-once across cache
+invalidations); `intelligence-provider-model-options.test.ts` pi block (row
+filled from catalogue, probed-absent removal, unprobed retention, empty
+catalogue removal).

@@ -6,6 +6,7 @@ import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { iconService } from '../../../../service/icon-service'
 import { shell } from 'electron'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
+import { resolveScannedAppCreatedAt } from './app-types'
 import { reportAppScanError } from './app-error-reporter'
 import { getSteamApps } from './steam-provider'
 import { expandWindowsEnvironmentVariables } from './app-provider-path-utils'
@@ -472,6 +473,7 @@ async function buildUwpAppInfo(
   options: {
     fallbackName: string
     lastModified: Date
+    createdAt?: Date
     record?: StartAppRecord
   }
 ): Promise<AppInfo> {
@@ -517,7 +519,8 @@ async function buildUwpAppInfo(
       [manifestMetadata?.displayName, packageFamilyName, appId, buildUwpShellPath(appId)],
       displayNameMeta.displayName
     ),
-    lastModified: options.lastModified
+    lastModified: options.lastModified,
+    createdAt: options.createdAt
   }
 }
 
@@ -662,7 +665,8 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
     launchTarget: targetPath,
     displayPath: targetPath,
     alternateNames: normalizeAlternateNames([fileName, targetPath], displayName),
-    lastModified: stats.mtime
+    lastModified: stats.mtime,
+    createdAt: resolveScannedAppCreatedAt(stats)
   }
 }
 
@@ -755,7 +759,8 @@ async function buildAppPathRegistryAppInfo(record: AppPathRegistryRecord): Promi
       [rawName, fileName, targetPath, pathValue],
       displayName
     ),
-    lastModified: stats.mtime
+    lastModified: stats.mtime,
+    createdAt: resolveScannedAppCreatedAt(stats)
   }
 }
 
@@ -785,7 +790,10 @@ async function buildDesktopAppInfo(
   if (uwpAppId) {
     return await buildUwpAppInfo(uwpAppId, {
       fallbackName: path.basename(fileName, path.extname(fileName)),
-      lastModified: stats.mtime
+      lastModified: stats.mtime,
+      // A Store app has no bundle of its own to date; the Start Menu shortcut the installer wrote
+      // is the closest thing to an install time this scan can see.
+      createdAt: resolveScannedAppCreatedAt(stats)
     })
   }
 
@@ -846,7 +854,11 @@ async function buildDesktopAppInfo(
       ],
       displayNameMeta.displayName
     ),
-    lastModified: targetStats.mtime
+    lastModified: targetStats.mtime,
+    // Deliberately the discovered entry rather than the launch target: an in-place update replaces
+    // the executable but usually leaves the Start Menu shortcut alone, so the shortcut keeps the
+    // original install time.
+    createdAt: resolveScannedAppCreatedAt(stats)
   }
 }
 
