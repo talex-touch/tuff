@@ -10,7 +10,7 @@
 
 ## 数据库、跨平台与发布门禁
 
-- **search-index 分库任务记录仍与当前运行事实相反** — `TODO.md` 明确 `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认开启、`=0` 为应急回退；`07-28-migrate-search-index-split-write-paths` 的 PRD 与 `meta.blocker` 仍称默认关闭且要求保持关闭。先统一 task PRD/meta 与运行事实，再以隔离 CoreApp 实跑证明首启重建、app/file 计数与查询一致、`search-index.db` 填充、无 WAL/busy 风暴、`=0` 回退有效。未核验 writer 仍是静默数据偏移风险。跟踪：[#1107](https://github.com/talex-touch/tuff/issues/1107) 已关闭历史报告错误；当前迁移任务需完成自身事实同步。
+- **search-index 分库任务记录仍与当前运行事实相反** — `TODO.md` 明确 `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认开启、`=0` 为应急回退；`07-28-migrate-search-index-split-write-paths` 的 PRD 与 `meta.blocker` 仍称默认关闭且要求保持关闭。先统一 task PRD/meta 与运行事实，再以隔离 CoreApp 实跑证明首启重建、app/file 计数与查询一致、`search-index.db` 填充、无 WAL/busy 风暴、`=0` 回退有效。未核验 writer 仍是静默数据偏移风险。跟踪：[#1745](https://github.com/talex-touch/tuff/issues/1745)；[#1107](https://github.com/talex-touch/tuff/issues/1107) 仅记录已关闭的历史报告错误。
 - **SQLite 写入所有权仍只覆盖一个小域** — 当前 source guard 覆盖 `files`、`fileExtensions`、`keywordMappings` 三表；71 张 schema 表中 59 张在 main 有写入点，剩余 owner registry、admission/retry 合同、锁竞争与关机恢复证据未收敛。跟踪：[#351](https://github.com/talex-touch/tuff/issues/351)。
 - **大目录索引仍有条件性单目录 fan-out 峰值** — 流式批处理、背压、分页和临时 seen-path 表已取代旧的全量三份复制；但单目录 `readdir` 仍按目录大小物化，100k 条目实测峰值约 95.7 MiB。默认根目录下当前不可触及该量级，风险会在用户增加大扁平目录或放宽 `node_modules`/`target` 过滤时重新变成运行问题；#318 尚缺 assembled-pipeline persistence/backpressure 与分页/取消的完整证据。跟踪：[#318](https://github.com/talex-touch/tuff/issues/318)。
 
