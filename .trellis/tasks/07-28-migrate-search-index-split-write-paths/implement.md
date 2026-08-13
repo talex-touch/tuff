@@ -33,4 +33,4 @@
 
 ## Rollback
 
-Keep the flag default-off. Revert the migration commit if any named writer or application acceptance check fails; do not enable the flag or delete primary moved tables as a workaround.
+Rollback is `TUFF_DB_SEARCH_SPLIT_ENABLED=0`, back to the shared-file topology — not re-inverting the default. If a named writer or application acceptance check fails, set `=0`, revert the offending change, and re-prove; never delete primary moved tables as a workaround.
