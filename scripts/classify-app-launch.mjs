@@ -129,8 +129,14 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
 
   // Only when the process actually exited. A run still alive at the timeout reports exitCode 0 from
   // the caller, and treating that as a status code would invent a failure.
-  if (!stayedAlive && DLL_NOT_FOUND_EXIT_CODES.has(Number(exitCode)))
-    return { verdict: 'missing-dll', product: true, detail: '0xC0000135 (no output)' }
+  if (!stayedAlive && DLL_NOT_FOUND_EXIT_CODES.has(Number(exitCode))) {
+    // "(no output)" only when there genuinely was none. The status code is reached whenever the
+    // patterns above did not match, which includes a run that printed diagnostics worth reading --
+    // telling someone there was no output while the log holds the answer sends them the wrong way.
+    // Found by CodeRabbit on #1739.
+    const detail = text.trim() ? '0xC0000135' : '0xC0000135 (no output)'
+    return { verdict: 'missing-dll', product: true, detail }
+  }
 
   if (NO_DISPLAY_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'no-display', product: false }
@@ -311,6 +317,8 @@ function selfTest() {
     { name: 'the exit code alone, with no output, is enough', actual: classifyLaunch({ output: '', exitCode: 3221225781, stayedAlive: false }).verdict, expected: 'missing-dll' },
     { name: 'the signed representation is recognised too', actual: classifyLaunch({ output: '', exitCode: -1073741515, stayedAlive: false }).verdict, expected: 'missing-dll' },
     { name: 'the no-output case says so rather than naming a DLL it never saw', actual: classifyLaunch({ output: '', exitCode: 3221225781, stayedAlive: false }).detail, expected: '0xC0000135 (no output)' },
+    { name: 'a log with unmatched diagnostics is not called empty', actual: classifyLaunch({ output: 'some other error', exitCode: 3221225781, stayedAlive: false }).detail, expected: '0xC0000135' },
+    { name: 'whitespace-only output still counts as no output', actual: classifyLaunch({ output: '  \n ', exitCode: 3221225781, stayedAlive: false }).detail, expected: '0xC0000135 (no output)' },
     // A live process reports exitCode 0 from the caller; reading that as a status code would invent
     // a failure out of a successful start.
     { name: 'a live process is never a DLL failure', actual: classifyLaunch({ output: '', exitCode: 3221225781, stayedAlive: true }).verdict, expected: 'ok' },
