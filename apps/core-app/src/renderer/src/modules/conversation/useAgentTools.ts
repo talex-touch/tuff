@@ -1,4 +1,7 @@
-import type { AgentToolConfirmRequest } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type {
+  AgentToolConfirmRequest,
+  AgentToolPermissionMode
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { Ref } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -9,6 +12,12 @@ import {
 import { getCurrentScope, onScopeDispose, ref } from 'vue'
 
 const agentToolsLog = createRendererLogger('AgentTools')
+/**
+ * What the composer's permission pill offers: the gate's two behaviours, plus
+ * "no tools at all". `off` is not a gate mode — it closes the gateway — so it
+ * only exists on this side of the transport.
+ */
+export type AgentToolsMode = 'off' | AgentToolPermissionMode
 
 export interface UseAgentToolsReturn {
   /** The confirmation the user is being asked about, or null when idle. */
@@ -17,8 +26,8 @@ export interface UseAgentToolsReturn {
   queued: Ref<AgentToolConfirmRequest[]>
   approve: (remember: boolean) => Promise<void>
   deny: (remember: boolean) => Promise<void>
-  /** Turns the agent's tool access on or off; returns the granted tool names. */
-  setEnabled: (enabled: boolean) => Promise<string[]>
+  /** Applies a permission mode; returns the granted tool names, empty when off. */
+  setMode: (mode: AgentToolsMode) => Promise<string[]>
   /** Forgets remembered approvals — called when the thread changes. */
   resetApprovals: () => Promise<void>
 }
@@ -83,8 +92,10 @@ export function useAgentTools(): UseAgentToolsReturn {
     queued,
     approve: (remember) => settle(true, remember),
     deny: (remember) => settle(false, remember),
-    setEnabled: async (enabled) => {
-      const result = await sdk.setEnabled(enabled)
+    setMode: async (mode) => {
+      // `off` sends no mode at all: the gate behaviour is meaningless with the
+      // gateway shut, and omitting it keeps the payload honest about that.
+      const result = await sdk.setEnabled(mode !== 'off', mode === 'off' ? undefined : mode)
       return result?.tools ?? []
     },
     resetApprovals: async () => {

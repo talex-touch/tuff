@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "四个预览组件 + tab 容器；含加载/空状态约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "preview-index.ts 与四个组件的落位"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "解析工具输出必须有运行时守卫，不能靠断言"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "buildPreviewIndex 的 computed 缓存与作用域"}

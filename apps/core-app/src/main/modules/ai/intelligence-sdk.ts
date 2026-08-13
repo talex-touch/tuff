@@ -928,6 +928,10 @@ export class TuffIntelligenceSDK {
         let finalModel = configuredModel
         let finalLatency: number | undefined
         let accumulated = ''
+        // How much of `accumulated` the provider has committed. Deltas are provisional: a provider
+        // whose agent retries a message rolls back to this mark, and `end.result` has to be the
+        // surviving text rather than every attempt in a row.
+        let committedLength = 0
         let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
         yield {
@@ -969,6 +973,10 @@ export class TuffIntelligenceSDK {
             }
           }
           if (chunk.partEvent) {
+            if (chunk.partEvent.kind === 'message-commit') committedLength = accumulated.length
+            else if (chunk.partEvent.kind === 'text-reset') {
+              accumulated = accumulated.slice(0, committedLength)
+            }
             yield {
               type: 'part',
               capabilityId,

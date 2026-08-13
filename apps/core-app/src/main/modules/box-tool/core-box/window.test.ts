@@ -7,6 +7,14 @@ const mocks = vi.hoisted(() => {
     workArea: { x: 0, y: 0, width: 1920, height: 1040 }
   }
 
+  const childLogger = {
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    success: vi.fn()
+  }
+
   return {
     display,
     captureForegroundAppSnapshot: vi.fn(),
@@ -20,19 +28,19 @@ const mocks = vi.hoisted(() => {
     enforcePermission: vi.fn(),
     relinquishCachedView: vi.fn(),
     restoreCachedView: vi.fn(),
+    transport: {
+      broadcastToWindow: vi.fn(),
+      sendTo: vi.fn(async () => undefined),
+      sendToPlugin: vi.fn()
+    },
+    childLogger,
     logger: {
       warn: vi.fn(),
       error: vi.fn(),
       info: vi.fn(),
       debug: vi.fn(),
       success: vi.fn(),
-      child: vi.fn(() => ({
-        warn: vi.fn(),
-        error: vi.fn(),
-        info: vi.fn(),
-        debug: vi.fn(),
-        success: vi.fn()
-      }))
+      child: vi.fn(() => childLogger)
     }
   }
 })
@@ -92,11 +100,7 @@ vi.mock('@talex-touch/utils/plugin', () => ({
 }))
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
-  getTuffTransportMain: vi.fn(() => ({
-    broadcastToWindow: vi.fn(),
-    sendTo: vi.fn(async () => undefined),
-    sendToPlugin: vi.fn()
-  }))
+  getTuffTransportMain: vi.fn(() => mocks.transport)
 }))
 
 vi.mock('@talex-touch/utils/transport/events', () => ({
@@ -246,6 +250,8 @@ import { COREBOX_MIN_HEIGHT, COREBOX_WIDTH, WindowManager } from './window'
 describe('WindowManager CoreBox compact bounds', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.transport.broadcastToWindow.mockReset()
+    mocks.transport.sendTo.mockReset()
     mocks.getMainConfig.mockReturnValue({})
     mocks.createSessionWithoutUI.mockResolvedValue({
       sessionId: 'division-session',
@@ -294,6 +300,20 @@ describe('WindowManager CoreBox compact bounds', () => {
     expect(browserWindow.setResizable).toHaveBeenLastCalledWith(false)
   })
 
+  it('reports a skipped shrink as debug when the CoreBox window is not created yet', () => {
+    const manager = new WindowManager()
+    manager.windows = []
+    mocks.childLogger.error.mockClear()
+    mocks.childLogger.debug.mockClear()
+
+    manager.shrink()
+
+    expect(mocks.childLogger.error).not.toHaveBeenCalled()
+    expect(mocks.childLogger.debug).toHaveBeenCalledWith(
+      'CoreBox window is not created yet, skipping shrink'
+    )
+  })
+
   it('snapshots the foreground app before the shortcut show steals focus', () => {
     vi.useFakeTimers()
     try {
@@ -328,6 +348,58 @@ describe('WindowManager CoreBox compact bounds', () => {
       manager.show(true)
 
       expect(order).toEqual(['snapshot', 'app-focus', 'show'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('broadcasts the shortcut intent instead of waiting for a renderer reply', () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const order: string[] = []
+      mocks.transport.broadcastToWindow.mockImplementation((_windowId: number, event: string) => {
+        order.push(event)
+      })
+      const browserWindow = {
+        id: 7,
+        webContents: { id: 8 },
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
+        isResizable: vi.fn(() => false),
+        setResizable: vi.fn(),
+        getBounds: vi.fn(() => ({ x: 600, y: 260, width: 720, height: 240 })),
+        getSize: vi.fn(() => [720, 240]),
+        setMinimumSize: vi.fn(),
+        setBounds: vi.fn(),
+        getMinimumSize: vi.fn(() => [720, COREBOX_MIN_HEIGHT]),
+        show: vi.fn(() => order.push('show')),
+        showInactive: vi.fn(() => order.push('show-inactive')),
+        moveTop: vi.fn(),
+        focus: vi.fn()
+      }
+
+      manager.windows = [
+        {
+          window: browserWindow
+        } as unknown as WindowManager['windows'][number]
+      ]
+
+      manager.show(true)
+
+      expect(order).toEqual([
+        'core-box:ui:shortcut-triggered',
+        'show',
+        'core-box:ui:trigger',
+        'core-box:ui:shortcut-triggered'
+      ])
+      expect(mocks.transport.broadcastToWindow).toHaveBeenNthCalledWith(
+        1,
+        7,
+        'core-box:ui:shortcut-triggered',
+        undefined
+      )
+      expect(mocks.transport.sendTo).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

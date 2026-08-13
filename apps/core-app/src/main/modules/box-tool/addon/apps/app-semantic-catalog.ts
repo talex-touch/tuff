@@ -3,7 +3,110 @@ import { normalizeStringList } from './app-utils'
 import { createAppCatalogNeedleMatcher } from './app-catalog-matching'
 import { resolveAppToolSourceAliases } from './app-tool-source-catalog'
 
-export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 4
+export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 5
+
+/**
+ * Adding a language: append its tag here, add a rule to LOCALE_ALIAS_EXPANSIONS, then add the
+ * key to the category groups that need it.
+ */
+const SEMANTIC_ALIAS_LOCALES = ['en', 'zh'] as const
+
+type SemanticAliasLocale = (typeof SEMANTIC_ALIAS_LOCALES)[number]
+
+type LocalizedAliasGroup = Partial<Record<SemanticAliasLocale, readonly string[]>>
+
+const ASCII_WORD_REGEX = /^[a-z]+$/
+const SIBILANT_SUFFIX_REGEX = /(?:x|z|ch|sh)$/
+const CONSONANT_Y_SUFFIX_REGEX = /[^aeiou]y$/
+
+/**
+ * Words whose naive plural is not something a user would ever type. Aliases of two characters
+ * or fewer ('im', 'ai', 'db', 'pm', 'vm'), aliases carrying digits ('2fa', 'k8s'), multi-word
+ * phrases and words already ending in 's' are skipped structurally and stay out of this table.
+ */
+const NON_PLURALIZABLE_ALIASES = new Set([
+  // Acronyms and clipped forms: 'apis' / 'infras' are not words.
+  'api',
+  'auth',
+  'cli',
+  'ftp',
+  'http',
+  'ide',
+  'infra',
+  'llm',
+  'ocr',
+  'rdp',
+  'rest',
+  'sftp',
+  'sql',
+  'ssh',
+  'vpn',
+  // Verbs, gerunds and adjectives: the plural would be a conjugation, not a noun.
+  'capture',
+  'coding',
+  'creative',
+  'develop',
+  'extract',
+  'meet',
+  'remote',
+  'sync',
+  'virtual',
+  // Uncountable here, or the plural shifts meaning ('codes', 'securities', 'works', 'terms').
+  'audio',
+  'cloud',
+  'code',
+  'internet',
+  'kanban',
+  'mail',
+  'media',
+  'music',
+  'office',
+  'security',
+  'storage',
+  'term',
+  'virtualization',
+  'web',
+  'work',
+  // Product and file format names.
+  'docker',
+  'git',
+  'github',
+  'zip'
+])
+
+/** Naive English pluralisation for catalog words. Exported so the rules can be tested directly. */
+export function expandEnglishPlural(alias: string): readonly string[] {
+  // Catalog words are lowercase ASCII by convention; phrases ('edit video'), digit-bearing
+  // tokens ('k8s') and CJK never reach a plural rule.
+  if (!ASCII_WORD_REGEX.test(alias)) return [alias]
+  if (alias.length <= 2) return [alias]
+  if (alias.endsWith('s')) return [alias]
+  if (NON_PLURALIZABLE_ALIASES.has(alias)) return [alias]
+
+  // Words already ending in 's' returned above, so the sibilant rule covers the rest.
+  if (SIBILANT_SUFFIX_REGEX.test(alias)) return [alias, `${alias}es`]
+  if (CONSONANT_Y_SUFFIX_REGEX.test(alias)) return [alias, `${alias.slice(0, -1)}ies`]
+  return [alias, `${alias}s`]
+}
+
+const LOCALE_ALIAS_EXPANSIONS: Record<SemanticAliasLocale, (alias: string) => readonly string[]> = {
+  en: expandEnglishPlural,
+  zh: (alias) => [alias]
+}
+
+function compileAliasGroup(group: LocalizedAliasGroup): readonly string[] {
+  const expanded: string[] = []
+
+  for (const locale of SEMANTIC_ALIAS_LOCALES) {
+    const aliases = group[locale]
+    if (!aliases) continue
+
+    const expand = LOCALE_ALIAS_EXPANSIONS[locale]
+    for (const alias of aliases) expanded.push(...expand(alias))
+  }
+
+  return normalizeStringList(expanded)
+}
 
 export interface AppSemanticAliasInput {
   name?: string | null
@@ -25,60 +128,110 @@ interface AppSemanticCatalogEntry {
   aliases: readonly string[]
 }
 
-const IM_ALIASES = ['im', 'chat', 'messenger', 'message', 'messages', '即时通讯', '聊天', '通讯']
-
-const DESIGN_ALIASES = ['design', 'designer', 'creative', 'graphics', 'image', '设计', '作图']
-const DEV_ALIASES = ['dev', 'develop', 'developer', 'code', 'coding', 'ide', '开发', '编程']
-const OFFICE_ALIASES = ['office', 'work', 'document', 'docs', '办公', '文档']
-const BROWSER_ALIASES = ['browser', 'web', 'internet', '浏览器', '网页']
-const TERMINAL_ALIASES = ['terminal', 'shell', 'cli', 'console', 'term', '终端', '命令行']
-const NOTES_ALIASES = ['notes', 'note', 'memo', '笔记', '备忘录']
-const MEETING_ALIASES = ['meeting', 'meet', 'conference', 'video meeting', '会议', '视频会议']
-const CLOUD_ALIASES = ['cloud', 'drive', 'sync', 'storage', '云盘', '网盘', '同步']
-const AI_ALIASES = ['ai', 'agent', 'chatbot', 'llm', 'assistant', '智能', '助手']
-const TASK_ALIASES = ['pm', 'task', 'todo', 'kanban', 'project', '项目', '任务', '待办']
-const DATABASE_ALIASES = ['db', 'database', 'sql', '数据库']
-const API_ALIASES = ['api', 'http', 'request', 'rest', '接口', '调试']
-const DEVOPS_ALIASES = [
-  'devops',
-  'infra',
-  'container',
-  'docker',
-  'k8s',
-  'kubernetes',
-  '运维',
-  '容器'
-]
-const GIT_ALIASES = ['git', 'repo', 'repository', 'github', '代码仓库', '仓库']
-const SCREENSHOT_ALIASES = [
-  'screenshot',
-  'capture',
-  'ocr',
-  'screen',
-  'recording',
-  '截图',
-  '录屏',
-  '识别'
-]
-const MEDIA_ALIASES = [
-  'video',
-  'audio',
-  'music',
-  'player',
-  'media',
-  'edit video',
-  '视频',
-  '音频',
-  '音乐',
-  '播放器'
-]
-const ARCHIVE_ALIASES = ['zip', 'archive', 'compress', 'extract', '压缩', '解压']
-const TRANSFER_ALIASES = ['ftp', 'sftp', 'transfer', 'file transfer', '传输', '文件传输']
-const SECURITY_ALIASES = ['password', 'secret', '2fa', 'auth', 'security', '密码', '验证器', '安全']
-const NETWORK_ALIASES = ['vpn', 'proxy', 'network', '网络', '代理']
-const REMOTE_ALIASES = ['remote', 'ssh', 'rdp', '远程']
-const VIRTUALIZATION_ALIASES = ['vm', 'virtual', 'virtualization', '虚拟机']
-const PRODUCT_DESIGN_ALIASES = ['prototype', 'wireframe', 'product design', '产品设计', '原型']
+const IM_ALIASES = compileAliasGroup({
+  en: ['im', 'chat', 'messenger', 'message', 'messages'],
+  zh: ['即时通讯', '聊天', '通讯']
+})
+const DESIGN_ALIASES = compileAliasGroup({
+  en: ['design', 'designer', 'creative', 'graphics', 'image'],
+  zh: ['设计', '作图']
+})
+const DEV_ALIASES = compileAliasGroup({
+  en: ['dev', 'develop', 'developer', 'code', 'coding', 'ide'],
+  zh: ['开发', '编程']
+})
+const OFFICE_ALIASES = compileAliasGroup({
+  en: ['office', 'work', 'document', 'docs'],
+  zh: ['办公', '文档']
+})
+const BROWSER_ALIASES = compileAliasGroup({
+  en: ['browser', 'web', 'internet'],
+  zh: ['浏览器', '网页', '上网']
+})
+const TERMINAL_ALIASES = compileAliasGroup({
+  en: ['terminal', 'shell', 'cli', 'console', 'term', 'command line'],
+  zh: ['终端', '命令行']
+})
+const NOTES_ALIASES = compileAliasGroup({
+  en: ['notes', 'note', 'memo'],
+  zh: ['笔记', '备忘录']
+})
+const MEETING_ALIASES = compileAliasGroup({
+  en: ['meeting', 'meet', 'conference', 'video meeting'],
+  zh: ['会议', '视频会议', '开会']
+})
+const CLOUD_ALIASES = compileAliasGroup({
+  en: ['cloud', 'drive', 'sync', 'storage'],
+  zh: ['云盘', '网盘', '同步']
+})
+const AI_ALIASES = compileAliasGroup({
+  en: ['ai', 'agent', 'chatbot', 'llm', 'assistant'],
+  zh: ['智能', '助手']
+})
+const TASK_ALIASES = compileAliasGroup({
+  en: ['pm', 'task', 'todo', 'kanban', 'project'],
+  zh: ['项目', '任务', '待办']
+})
+const DATABASE_ALIASES = compileAliasGroup({
+  en: ['db', 'database', 'sql'],
+  zh: ['数据库']
+})
+const API_ALIASES = compileAliasGroup({
+  en: ['api', 'http', 'request', 'rest'],
+  zh: ['接口', '调试']
+})
+const DEVOPS_ALIASES = compileAliasGroup({
+  en: ['devops', 'infra', 'container', 'docker', 'k8s', 'kubernetes'],
+  zh: ['运维', '容器']
+})
+const GIT_ALIASES = compileAliasGroup({
+  en: ['git', 'repo', 'repository', 'github'],
+  zh: ['代码仓库', '仓库']
+})
+const SCREENSHOT_ALIASES = compileAliasGroup({
+  en: ['screenshot', 'capture', 'ocr', 'screen', 'recording'],
+  zh: ['截图', '录屏', '识别']
+})
+const MEDIA_ALIASES = compileAliasGroup({
+  en: ['video', 'audio', 'music', 'player', 'media', 'movie', 'edit video'],
+  zh: ['视频', '音频', '音乐', '播放器', '电影']
+})
+const ARCHIVE_ALIASES = compileAliasGroup({
+  en: ['zip', 'archive', 'compress', 'extract'],
+  zh: ['压缩', '解压']
+})
+const TRANSFER_ALIASES = compileAliasGroup({
+  en: ['ftp', 'sftp', 'transfer', 'file transfer'],
+  zh: ['传输', '文件传输']
+})
+const SECURITY_ALIASES = compileAliasGroup({
+  en: ['password', 'secret', '2fa', 'auth', 'security'],
+  zh: ['密码', '验证器', '安全']
+})
+const NETWORK_ALIASES = compileAliasGroup({
+  en: ['vpn', 'proxy', 'network'],
+  zh: ['网络', '代理']
+})
+const REMOTE_ALIASES = compileAliasGroup({
+  en: ['remote', 'ssh', 'rdp'],
+  zh: ['远程']
+})
+const VIRTUALIZATION_ALIASES = compileAliasGroup({
+  en: ['vm', 'virtual', 'virtualization'],
+  zh: ['虚拟机']
+})
+const PRODUCT_DESIGN_ALIASES = compileAliasGroup({
+  en: ['prototype', 'wireframe', 'product design'],
+  zh: ['产品设计', '原型']
+})
+const EMAIL_ALIASES = compileAliasGroup({
+  en: ['email', 'mail', 'inbox'],
+  zh: ['邮件', '邮箱']
+})
+const DOWNLOAD_ALIASES = compileAliasGroup({
+  en: ['download', 'downloader'],
+  zh: ['下载', '下载器']
+})
 
 const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
   {
@@ -649,6 +802,57 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
   {
     match: ['utm.app', 'utm virtual'],
     aliases: [...VIRTUALIZATION_ALIASES, 'utm']
+  },
+  {
+    match: ['com.apple.mail'],
+    aliases: [...EMAIL_ALIASES, 'apple mail']
+  },
+  {
+    // Basename fallback for scans without a bundle id. A bare 'mail' needle would attach to any
+    // app whose name tokenises to 'mail', so the '.app' suffix carries the identity here.
+    match: ['mail.app'],
+    aliases: [...EMAIL_ALIASES]
+  },
+  {
+    match: ['outlook', 'com.microsoft.outlook'],
+    aliases: [...EMAIL_ALIASES, 'outlook']
+  },
+  {
+    match: ['thunderbird'],
+    aliases: [...EMAIL_ALIASES, 'thunderbird']
+  },
+  {
+    // Bare 'spark' collides with Apache Spark and Spark AR.
+    match: ['spark mail', 'spark desktop', 'com.readdle.smartemail'],
+    aliases: [...EMAIL_ALIASES, 'spark']
+  },
+  {
+    match: ['foxmail'],
+    aliases: [...EMAIL_ALIASES, 'foxmail']
+  },
+  {
+    match: ['mailmaster', '网易邮箱大师', '邮箱大师'],
+    aliases: [...EMAIL_ALIASES, 'mailmaster', '网易邮箱大师']
+  },
+  {
+    match: ['motrix'],
+    aliases: [...DOWNLOAD_ALIASES, 'motrix']
+  },
+  {
+    match: ['aria2'],
+    aliases: [...DOWNLOAD_ALIASES, 'aria2']
+  },
+  {
+    match: ['迅雷', 'thunder', 'com.xunlei'],
+    aliases: [...DOWNLOAD_ALIASES, 'thunder', '迅雷']
+  },
+  {
+    match: ['free download manager'],
+    aliases: [...DOWNLOAD_ALIASES, 'free download manager']
+  },
+  {
+    match: ['folx'],
+    aliases: [...DOWNLOAD_ALIASES, 'folx']
   }
 ]
 

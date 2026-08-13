@@ -49,46 +49,29 @@ const discoveryMocks = vi.hoisted(() => ({
   ])
 }))
 const intelligenceEventMocks = vi.hoisted(() => {
-  const event = (name: string) => ({ toEventName: () => name })
+  // Any member the module registers resolves to a stub with an internally
+  // consistent name. The previous hand-kept lists went stale every time the
+  // domain grew an event — which is exactly how this suite kept breaking.
+  const events = (group: string) => {
+    const cache: Record<string, { toEventName: () => string }> = {}
+    return new Proxy(cache, {
+      get: (_target, key: string) => (cache[key] ??= { toEventName: () => `${group}:${key}` })
+    })
+  }
   return {
-    intelligenceApiEvents: {
-      testProvider: event('intelligence:api:test-provider'),
-      getCapabilityTestMeta: event('intelligence:api:get-capability-test-meta'),
-      getCapabilityStatus: event('intelligence:api:get-capability-status'),
-      getProviderModelOptions: event('intelligence:api:get-provider-model-options'),
-      testCapability: event('intelligence:api:test-capability'),
-      fetchModels: event('intelligence:api:fetch-models'),
-      getAuditLogs: event('intelligence:api:get-audit-logs'),
-      getTodayStats: event('intelligence:api:get-today-stats'),
-      getMonthStats: event('intelligence:api:get-month-stats'),
-      getUsageStats: event('intelligence:api:get-usage-stats'),
-      getLocalEnvironment: event('intelligence:api:get-local-environment')
-    }
+    intelligenceApiEvents: events('intelligence:api'),
+    intelligenceContextEvents: events('intelligence:context'),
+    intelligenceKnowledgeEvents: events('intelligence:knowledge')
   }
 })
 
-// Spread the real module rather than hand-listing namespaces: the context and
-// knowledge events were stubbed as `{}`, so every handler the module registers
-// from them called `undefined.toEventName()`. Only the api events are
-// overridden, which is all this suite looks up.
-vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@talex-touch/utils/transport/sdk/domains/intelligence')>()
-  return {
-    ...actual,
-    // Merged, not replaced. The hand-written list covers the events this suite
-    // looks up; replacing the namespace outright dropped the rest, and
-    // registerCapabilityChannels then called saveProviderConfig.toEventName()
-    // on undefined.
-    intelligenceApiEvents: {
-      ...actual.intelligenceApiEvents,
-      ...intelligenceEventMocks.intelligenceApiEvents
-    }
-  }
-})
-// Spread the real module: a full replacement drops every export the
-// module later gains, which is how PRIVACY_DATA_CATEGORIES broke this.
+vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
+  ...intelligenceEventMocks
+}))
 vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  // Real constants and guards (they're pure data), with only the error-code
+  // check stubbed — a hand-listed mock goes stale every time the module
+  // grows an export, which is exactly how this suite broke.
   ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))
@@ -116,7 +99,11 @@ vi.mock('./intelligence-provider-model-options', () => ({
 
 type AdminHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
 
-type AdminEventKey = keyof typeof intelligenceEventMocks.intelligenceApiEvents
+// Keyed off the real events object, not the mock. app-shell-v2 replaced the hand-listed mock with a
+// Proxy -- which is the right call, since a hand-listed one goes stale as the module grows -- but a
+// Proxy over Record<string, …> makes this keyof `string`, and `string` cannot index the typed
+// object `getHandler` actually reads. Taking the type from the source is both correct and stricter.
+type AdminEventKey = keyof typeof intelligenceApiEvents
 
 interface AdminChannelRegistrar {
   registerCapabilityChannels: (register: unknown) => void
