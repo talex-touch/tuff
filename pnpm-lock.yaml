@@ -1559,8 +1559,7 @@ importers:
         version: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4))(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
       unplugin-auto-import:
         specifier: ^20.3.0
-         version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3)))
- 
+        version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3)))
       unplugin-vue-components:
         specifier: ^30.0.0
         version: 30.0.0(@babel/parser@7.29.7)(@nuxt/kit@4.4.8(magicast@0.5.4))(vue@3.5.39(typescript@5.9.3))
@@ -10280,8 +10279,8 @@ packages:
     resolution: {integrity: sha512-ISQTe55T2ao7XtlAStud6qwYPZjE4GK1S/BeVPus4jrq6JuOnQ00YKQC581RWhR122W7msZV263KzVeLoqidyQ==}
     engines: {node: '>=12'}
 
-  magic-string@1.1.1:
-    resolution: {integrity: sha512-qFemKPzc3ttrYVaMmnSkGtGc5nE6Ncl4bj7c9IE6C9OUIRXjf6PzJ+UZ1xhVIjYc7dolHq3qKzpAJPZUbvNj+A==}
+  magic-string@1.2.0:
+    resolution: {integrity: sha512-ptco+HFxTLgjafSLim2LojBSwfg5feBjd+SqyiwdGkzC38UPdZy3zgrHMI2CoTf5fJL38tbHMYWVzIH8BxGqJw==}
 
   magicast@0.3.5:
     resolution: {integrity: sha512-L0WhttDl+2BOsybvEOLK7fW3UA0OQ0IQ2d6Zl2x/a6vVRs3bAY0ECOSHHeL5jD+SbOpOCUEi0y1DgHEn9Qn1AQ==}
@@ -24137,7 +24136,7 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  magic-string@1.1.1:
+  magic-string@1.2.0:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
@@ -27912,9 +27911,7 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-         version: 20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3)))
- 
-  unplugin-auto-import@20.3.0(@nuxt/kit@4.4.8(magicast@0.5.3))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3))):
+  unplugin-auto-import@20.3.0(@nuxt/kit@4.4.8(magicast@0.5.4))(@vueuse/core@14.4.0(vue@3.5.39(typescript@5.9.3))):
     dependencies:
       local-pkg: 1.2.1
       magic-string: 0.30.21
@@ -27923,7 +27920,7 @@ snapshots:
       unplugin: 2.3.11
       unplugin-utils: 0.3.1
     optionalDependencies:
-      '@nuxt/kit': 4.4.8(magicast@0.5.3)
+      '@nuxt/kit': 4.4.8(magicast@0.5.4)
       '@vueuse/core': 14.4.0(vue@3.5.39(typescript@5.9.3))
 
   unplugin-utils@0.3.1:
@@ -28271,7 +28268,7 @@ snapshots:
     dependencies:
       estree-walker: 3.0.3
       exsolve: 1.1.1
-      magic-string: 1.1.1
+      magic-string: 1.2.0
       pathe: 2.0.3
       source-map-js: 1.2.1
       vite: 7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
