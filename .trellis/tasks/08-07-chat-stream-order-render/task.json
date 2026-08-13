@@ -22,5 +22,9 @@
   "parent": "08-07-home-chain-and-native-search",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "逐条验证 prd.md 的 12 条验收标准:多段 reasoning 分块、工具调用不入思考块、parts 顺序一致、超长回答重载完整、流式态只留在尾段、widget 工具形态,以及 chain-steps.test.ts 更新与 CoreApp typecheck / lint delta。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 的 12 条验收标准均未勾选;目录内有 design.md 与 implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }

@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "完成 prd.md 剩余 4 条:$…$ 与 $$…$$ 公式渲染、表格流式期间不露竖线、外链带 rel=noopener 且走系统浏览器,收尾时重跑 tuffex 与 CoreApp 两侧 lint / typecheck。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 7 条验收标准已勾选 3 条;prd.md 记载远程图片拦截一节写有 12 条拦截测试与 3 条组件级测试并做过正控,该记载未在本次收敛中复跑。目录内只有 prd.md 与两份 jsonl 上下文清单。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }

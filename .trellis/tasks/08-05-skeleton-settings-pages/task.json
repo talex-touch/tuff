@@ -22,5 +22,9 @@
   "parent": "08-05-skeleton-loading-default",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "按 prd.md 的 AC1–AC6 逐页核对 13 个设置页的骨架呈现与布局跳变并留下逐页记录,再跑 lint、typecheck 与设置页既有单测。",
+    "blocker": "记录中无阻塞项。",
+    "evidence": "prd.md 的 AC1–AC6 均未勾选;目录内有 design.md 与 implement.md。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }

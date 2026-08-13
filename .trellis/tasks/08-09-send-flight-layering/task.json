@@ -22,5 +22,9 @@
   "parent": "08-09-home-panel-layering-v2",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "完成两条人工走查:空会话与已有会话下气泡自输入框背后升起且全程不遮挡输入框;开启「减少动态效果」后发送仍正常落位。",
+    "blocker": "记录中无阻塞项;两条剩余项都是人工走查,需要在可运行的应用上完成。",
+    "evidence": "prd.md 7 条验收标准已勾选 5 条,未勾选的两条都是人工走查;目录内只有 prd.md 与两份 jsonl 上下文清单。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
 }
