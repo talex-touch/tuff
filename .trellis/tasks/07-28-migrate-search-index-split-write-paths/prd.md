@@ -45,7 +45,7 @@ Verify every search-index write path against the worker-owned `search-index.db` 
 - [ ] Provider-specific `displayName`, conflict semantics, and extensions remain intact; no migration substitutes incomplete `upsertFiles` behavior.
 - [ ] The embedding, first-launch reindex, and orphan-cleanup decisions are implemented and covered by focused evidence.
 - [ ] An isolated-profile CoreApp run proves populated `search-index.db`, complete app/file results, matching counts, healthy indexing, and the `=0` rollback path — each assertion mapped to that run, never inferred from typecheck.
-- [ ] The writer-inventory and startup-ordering work stays release-blocking until the preceding criteria have direct app-run evidence; the default stays on, and any regression rolls back via `=0` rather than by re-inverting the default.
+- [ ] The writer-inventory and startup-ordering work stays release-blocking until the preceding criteria have direct app-run evidence; the default stays on. Any rollback stays release-blocked until all writers are quiesced, worker-owned data is reconciled/rebuilt into the primary database or restored from a consistent snapshot, CoreApp restarts with `=0`, and post-restart application/file counts plus representative queries prove parity.
 
 ## Constraints
 
