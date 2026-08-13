@@ -131,10 +131,17 @@ export function findFlagClaims(reports, flagDefaults, readReport) {
         const short = flag.startsWith('TUFF_') ? flag.slice(5) : flag
         if (!line.includes(flag) && !line.includes(short))
           continue
-        for (const claim of DEFAULT_CLAIMS) {
-          if (claim.pattern.test(line) && claim.asserts !== actual)
-            wrong.push({ report, line: index + 1, flag, claimed: claim.asserts, actual })
-        }
+        const hits = DEFAULT_CLAIMS.filter(claim => claim.pattern.test(line))
+        if (hits.length === 0)
+          continue
+        // A line may quote the stale wording while stating the truth beside it -- the live catch
+        // that forced this rule was a finding: "TODO.md 明确…默认开启…PRD 仍称默认关闭". Flagging it
+        // would rewrite a correct report. One matching claim proves the author re-derived; only a
+        // line whose every claim contradicts the source is a carried falsehood.
+        if (hits.some(claim => claim.asserts === actual))
+          continue
+        for (const claim of hits)
+          wrong.push({ report, line: index + 1, flag, claimed: claim.asserts, actual })
       }
     }
   }
@@ -340,6 +347,10 @@ function selfTest() {
     { name: 'a default claim with no flag is left alone', actual: claim('the search split 默认关闭').length, expected: 0 },
     // Line granularity: a flag in one bullet must not pair with a claim in the next.
     { name: 'a claim on a different line does not pair', actual: claim('- `TUFF_LEGACY` needs work\n- something else 默认开启').length, expected: 0 },
+    // The quoting-a-finding shape, from the first live catch: correct assertion + quoted stale
+    // wording on one line must pass, while a line carrying only the stale wording still fails.
+    { name: 'quoting the stale claim beside the truth passes', actual: claim('`TUFF_DB_SEARCH_SPLIT_ENABLED` 默认开启;某记录仍写默认关闭').length, expected: 0 },
+    { name: 'the stale claim alone still fails', actual: claim('某记录说 `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认关闭').length, expected: 1 },
     { name: 'the line number is reported', actual: claim('x\n`TUFF_LEGACY` 默认开启')[0]?.line, expected: 2 },
     { name: 'what was claimed and what is true are both reported', actual: `${claim('`TUFF_LEGACY` 默认开启')[0]?.claimed}/${claim('`TUFF_LEGACY` 默认开启')[0]?.actual}`, expected: 'true/false' },
     { name: 'an empty source yields an empty map', actual: parseFlagDefaults('nothing here').size, expected: 0 },
