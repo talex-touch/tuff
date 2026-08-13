@@ -33,4 +33,4 @@
 
 ## Rollback
 
-Keep the flag default-off. Revert the migration commit if any named writer or application acceptance check fails; do not enable the flag or delete primary moved tables as a workaround.
+Rollback is a data-preserving transition to the shared-file topology, not merely a flag flip: quiesce every search-index writer, reconcile or rebuild the worker-owned index into the primary database (or restore one consistent snapshot), then set `TUFF_DB_SEARCH_SPLIT_ENABLED=0` and restart CoreApp. Before release resumes, compare application/file counts and representative query results across the two homes and prove the shared-file path has parity. If reconciliation, restart, or parity fails, restore the snapshot and keep the release blocked; never delete primary moved tables as a workaround.
