@@ -21,10 +21,10 @@
   "children": [],
   "parent": "07-13-search-crossplatform-audit",
   "relatedFiles": [],
-  "notes": "Migrated from root todo.md; the original default-off and silent-data-loss safety contract is now owned by this task.",
+  "notes": "Migrated from root todo.md, where the pre-flip contract was default-off with a silent-data-loss warning; cd39bdbf6 (2026-08-05) inverted the default and #1745 reconciled this task's artifacts to the default-on runtime on 2026-08-13.",
   "meta": {
-    "nextAction": "Inventory every named 2d/2e writer and map it to an exact worker-owned persistence path before changing implementation code.",
-    "blocker": "DB_SEARCH_SPLIT_ENABLED must remain off until every writer and first-launch behavior has direct flag-on application evidence.",
-    "evidence": "prd.md and design.md preserve the root migration inventory, worker API constraints, flag-on application acceptance, and rollback contract."
+    "nextAction": "Reconcile the 2d/2e writer inventory against the live default-on topology, then map each release assertion (first-launch reindex, matching counts, populated search-index.db, no WAL/busy storms, =0 rollback) to one isolated-profile CoreApp run.",
+    "blocker": "Release-readiness only: the split defaults on since cd39bdbf6 (runtime-flags.ts:26) and =0 is the rollback; what blocks release claims is the absence of direct runtime evidence, not the flag direction. (#1745 corrected the inverted wording that stood here for eight days.)",
+    "evidence": "2026-08-13: prd/design/implement rewritten against runtime-flags.ts:26 and docs/plan-prd/TODO.md; no artifact in this task calls the split default-off or frames enabling it as future work."
   }
 }

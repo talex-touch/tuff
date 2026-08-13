@@ -1,2 +1,2 @@
-{"file":".trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md","reason":"Defines default-off safety invariant, required write migration, and flag-on application acceptance."}
+{"file": ".trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md", "reason": "Defines the default-on safety invariant (=0 is the rollback), the required writer verification, and application acceptance mapped to isolated runs (rewritten 2026-08-13, #1745)."}
 {"file":".trellis/tasks/07-28-migrate-search-index-split-write-paths/design.md","reason":"Maps every 2d/2e write site, worker API limitation, runtime test, and rollback boundary."}
