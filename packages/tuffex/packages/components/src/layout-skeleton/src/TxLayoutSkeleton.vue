@@ -121,10 +121,9 @@ const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%
   @include skeleton-surface;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tx-layout-skeleton__block,
-  .tx-layout-skeleton__line {
-    animation: none;
-  }
-}
+/*
+ * No hand-written reduced-motion block here: `skeleton-surface` emits one per include, so every
+ * animated placeholder is already covered. The motion-contract test counts guards against
+ * animations exactly, and a duplicate reads as an uncovered third animation.
+ */
 </style>

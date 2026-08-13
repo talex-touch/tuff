@@ -66,9 +66,9 @@ describe('image hardening', () => {
   })
 
   it('escapes a quote in the alt text exactly once', () => {
-    // Marked hands the alt already escaped. Escaping it again would render a
-    // visible `&amp;quot;` to the reader — the double-escape this asymmetry
-    // invites, and the reason the href is the only value put through escapeHref.
+    // Marked 17 hands the alt RAW (12 pre-escaped it), so the renderer escapes it — exactly
+    // once. The second assertion is the double-escape guard: it failed under 12 if you escaped
+    // what was already escaped, and fails under 17 if escaping ever runs twice.
     const html = render('![say "hi"](https://x.dev/i.png)')
     expect(html).toContain('alt="say &quot;hi&quot;"')
     expect(html).not.toContain('&amp;quot;')
@@ -93,10 +93,12 @@ describe('image hardening', () => {
 })
 
 describe('marked renderer signature', () => {
-  it('is the positional form this file was written against', () => {
-    // Marked 13 replaced these with token objects. If a bump lands and this
-    // assertion still passes on the old shape, the hardening would silently
-    // stop applying — every link would lose its rel and every image its lazy.
+  it('is the token form this file is written against', () => {
+    // This canary exists to fail loudly on a marked major. It did its job once: pinned to the
+    // positional (href, title, text) signature of marked 12, it caught the workspace catalog
+    // landing on 17, where renderers receive one token and hand alt/title over RAW — which is why
+    // the renderer now owns attribute escaping. Re-pinned to the token shape; if a future major
+    // changes the contract again, this is the test that should go red first.
     let observed: unknown[] = []
     const marked = new Marked({ gfm: true })
     marked.use({
@@ -108,7 +110,8 @@ describe('marked renderer signature', () => {
       }
     })
     marked.parse('[a](https://x.dev "t")')
-    expect(observed).toEqual(['https://x.dev', 't', 'a'])
+    expect(observed).toHaveLength(1)
+    expect(observed[0]).toMatchObject({ type: 'link', href: 'https://x.dev', title: 't', text: 'a' })
   })
 })
 
