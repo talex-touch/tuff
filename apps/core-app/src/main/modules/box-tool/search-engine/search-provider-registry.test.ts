@@ -165,6 +165,85 @@ describe('search provider registry', () => {
     vi.useRealTimers()
   })
 
+  /**
+   * `destroy()` fired provider teardown without awaiting it (#334).
+   *
+   * `ISearchProvider` has no disposal member at all, so the registry reaches for `onDestroy`
+   * structurally through a local type that declared it `() => void`. `AppProvider`'s is
+   * `async onDestroy(): Promise<void>` and awaits `prepareForSearchIndexShutdown()` -- so the
+   * registry resolved while the search index was still shutting down, and the `void` declaration
+   * meant TypeScript saw no floating promise to complain about.
+   */
+  it('waits for an async provider teardown before resolving', async () => {
+    let released!: () => void
+    const teardownFinished = vi.fn()
+    const provider = {
+      id: 'slow-teardown',
+      type: 'app' as never,
+      onSearch: vi.fn(async () => ({ items: [] })) as never,
+      onDestroy: vi.fn(async () => {
+        await new Promise<void>((resolve) => {
+          released = resolve
+        })
+        teardownFinished()
+      })
+    }
+
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad: async () => undefined,
+      onProvidersReady: async () => undefined,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+    registry.register(provider as never)
+
+    const destroyed = registry.destroy()
+    let settled = false
+    void destroyed.then(() => {
+      settled = true
+    })
+
+    // The teardown has started and has not finished, so destroy() must not have resolved either.
+    await Promise.resolve()
+    expect(provider.onDestroy).toHaveBeenCalledTimes(1)
+    expect(teardownFinished).not.toHaveBeenCalled()
+    expect(settled).toBe(false)
+
+    released()
+    await destroyed
+    expect(teardownFinished).toHaveBeenCalledTimes(1)
+  })
+
+  /** A rejecting teardown is logged and the remaining providers are still torn down. */
+  it('keeps tearing down after one provider rejects', async () => {
+    const second = vi.fn(async () => undefined)
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad: async () => undefined,
+      onProvidersReady: async () => undefined,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+    registry.register({
+      id: 'rejects',
+      type: 'app' as never,
+      onSearch: vi.fn(async () => ({ items: [] })) as never,
+      onDestroy: async () => {
+        throw new Error('teardown failed')
+      }
+    } as never)
+    registry.register({
+      id: 'after',
+      type: 'app' as never,
+      onSearch: vi.fn(async () => ({ items: [] })) as never,
+      onDestroy: second
+    } as never)
+
+    await expect(registry.destroy()).resolves.toBeUndefined()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
   it('combines indexed sources and plugin search providers for settings config', () => {
     const snapshot = buildSearchProviderRegistrySnapshot({
       indexedSources: [createIndexedSource('file-provider')],

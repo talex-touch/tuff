@@ -1,5 +1,20 @@
 import type { LoadingEvent, LoadingMode, StartupContext } from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
+/**
+ * Installs the IPC bridge `@sentry/electron/renderer` looks for on `window.__SENTRY_IPC__` (#1718).
+ *
+ * Imported for the side effect, which is the whole module. Without it the renderer SDK takes a
+ * documented fallback -- `fetch('sentry-ipc://envelope/…')` per envelope, plus a
+ * `window.__SENTRY_RENDERER_ID__` global -- and announces the switch through a `debug.log` nobody
+ * reads. The fallback works here (`preInitBeforeReady()` runs at `main/index.ts:252`, ahead of
+ * `app.whenReady()` at 257, so the SDK's `registerSchemesAsPrivileged` lands in time), so this is
+ * not a rescue. It is picking the intended path deliberately instead of arriving at the other one
+ * by omission.
+ *
+ * `preload-sentry-bridge.test.ts` asserts this import, because losing it is silent: the SDK falls
+ * back rather than failing, and the call site cannot tell the difference.
+ */
+import '@sentry/electron/preload'
 import { hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import { isCoreBox, isMainWindow } from '@talex-touch/utils/renderer/hooks/arg-mapper'

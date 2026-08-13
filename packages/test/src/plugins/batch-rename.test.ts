@@ -1,3 +1,4 @@
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, loadPluginModuleWithSourceTransform, withoutGlobal } from './plugin-loader'
 
@@ -125,7 +126,7 @@ describe('batch rename rules', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 
@@ -259,7 +260,7 @@ describe('batch rename rules', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
       message: '缺少 fs.write 权限',
     })
   })
@@ -276,7 +277,7 @@ describe('batch rename rules', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-sdk-unavailable',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_SDK_UNAVAILABLE,
       message: '权限系统不可用',
     })
   })
@@ -297,7 +298,7 @@ describe('batch rename rules', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: 'permission-check-failed',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_CHECK_FAILED,
       message: '权限检查失败',
     })
   })

@@ -1,0 +1,43 @@
+{
+  "$comment": [
+    "Ceilings for scripts/check-module-size-ratchet.mjs. A ceiling may fall and may not rise:",
+    "the check compares each value here against the same file in the PR base revision, so lowering",
+    "one is part of the change that shrinks the file and raising one fails the build.",
+    "Only the files #339 and #343 name -- two each. This is not a general file-size policy.",
+    "2026-08-12: extended to #343 for the same reason as #339. Both issues say line count is not",
+    "the point and both are right; both also grew while asking to be split -- plugin.ts +784,",
+    "app-provider.ts +377, file-provider.ts +694. Nothing measured that, because every report",
+    "compared against the previous PR rather than against the issue.",
+    "2026-08-12 (later): ceilings are CODE lines now -- comments and blanks excluded -- and were",
+    "lowered accordingly. Counting raw lines made this a check against writing things down: of",
+    "app-provider.ts's +377 since #343 was filed, +131 was comments. A ceiling that fails the next",
+    "person who explains a decision, in files whose problem is unexplained decisions, is worse than",
+    "no ceiling."
+  ],
+  "files": [
+    {
+      "file": "apps/core-app/src/main/modules/plugin/plugin.ts",
+      "ceiling": 3249,
+      "issue": "#339",
+      "note": "~3,060 when #339 was filed; peaked at 4,069 while three extraction PRs were landing."
+    },
+    {
+      "file": "apps/core-app/src/main/modules/quick-ops/index.ts",
+      "ceiling": 2594,
+      "issue": "#339",
+      "note": "~2,999 when #339 was filed. Down 124 since, and this holds that."
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
+      "ceiling": 3950,
+      "issue": "#343",
+      "note": "~4,223 when #343 was filed, which is exactly the number that issue cites. +377 since."
+    },
+    {
+      "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
+      "ceiling": 3703,
+      "issue": "#343",
+      "note": "~3,604 when #343 was filed. +694 since — the largest growth of the four files here."
+    }
+  ]
+}

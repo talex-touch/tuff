@@ -159,9 +159,21 @@ describe('isolated browser-open capability', () => {
         }
       ]
     })
-    expect(JSON.stringify(result)).not.toMatch(
-      /Applications|Google Chrome\.app|path|executable|dev|ino/i
-    )
+    /*
+     * The token is masked out before the leak scan (#1714).
+     *
+     * `dev` and `ino` are three-character substrings matched case-insensitively, and the payload
+     * carries a 32-character random token. Over 2,000,000 generated tokens they collide 0.190% of
+     * the time -- about one CI run in 528 -- and one did: `bo_d3KUpqKSWdevwwQmuyCRtbewgZxrjzxJ`
+     * failed a PR whose only change was in another module.
+     *
+     * Masking rather than loosening the pattern: the token's shape is already asserted above by
+     * `toEqual`, so nothing is lost by taking its bytes out of a scan that is looking for
+     * filesystem paths and `fs.Stats` fields, which a token cannot be.
+     */
+    const withoutTokens = JSON.stringify(result).replace(/bo_[A-Za-z0-9_-]{32}/g, 'bo_<token>')
+
+    expect(withoutTokens).not.toMatch(/Applications|Google Chrome\.app|path|executable|dev|ino/i)
     expect(harness.spawn).not.toHaveBeenCalled()
   })
 

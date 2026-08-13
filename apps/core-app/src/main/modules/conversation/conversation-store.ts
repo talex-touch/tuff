@@ -102,8 +102,8 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
 
   const [existing] = await db.select().from(conversations).where(eq(conversations.id, input.id))
 
-  // One scheduled unit: the delete and the re-insert must not be separated by another writer, or a
-  // concurrent read would see the thread with its messages already gone.
+  // One scheduled unit so no other writer interleaves; one transaction so a failed insert rolls
+  // the delete back — otherwise an insert error leaves the thread wiped with nothing written.
   await scheduleDbWrite('conversation.save', async () => {
     // Transactional because this is a replace-all: the DELETE below removes every message row
     // before the INSERT puts them back. Without a rollback boundary a failing insert -- a

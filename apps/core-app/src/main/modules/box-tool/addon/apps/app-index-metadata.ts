@@ -1,3 +1,7 @@
+import { and, eq, inArray, sql } from 'drizzle-orm'
+import type { CoreDatabase, DbUtils } from '../../../../db/utils'
+import { resolveMissingScannedExtensionKeys } from './app-provider-metadata-sync'
+import { fileExtensions } from '../../../../db/schema'
 import type { AppDisplayNameQuality, AppIdentityKind, ScannedAppInfo } from './app-types'
 import { normalizeStringList, parseStringList, serializeStringList } from './app-utils'
 
@@ -10,6 +14,29 @@ export const APP_LAUNCH_TARGET_EXTENSION_KEY = 'launchTarget'
 export const APP_LAUNCH_ARGS_EXTENSION_KEY = 'launchArgs'
 export const APP_WORKING_DIRECTORY_EXTENSION_KEY = 'workingDirectory'
 export const APP_DISPLAY_PATH_EXTENSION_KEY = 'displayPath'
+
+/**
+ * Epoch milliseconds of when this machine first got the app, as an integer string.
+ *
+ * Written once and never refreshed, so recommendation ranking can tell a fresh install from an
+ * in-place update. Deliberately absent from `APP_SCANNED_OPTIONAL_EXTENSION_KEYS`: that list drives
+ * the stale-key sweep, and a scan that cannot re-derive the value must not delete it.
+ */
+export const APP_INSTALLED_AT_EXTENSION_KEY = 'installedAt'
+
+/**
+ * How an app path reached the index. `watch` means a filesystem event surfaced it while Touch was
+ * running, which is itself evidence of an install; `scan` covers full syncs and backfills, where a
+ * row can be years old.
+ */
+export type AppDiscoveryKind = 'watch' | 'scan'
+
+/** Options for a pass that syncs extension rows for one app path. */
+export interface AppExtensionSyncOptions {
+  discovery?: AppDiscoveryKind
+  /** True only when the caller knows this pass created the `files` row. */
+  insertedRow?: boolean
+}
 export const APP_DESCRIPTION_EXTENSION_KEY = 'description'
 export const APP_ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
 export const APP_IDENTITY_KIND_EXTENSION_KEY = 'identityKind'
@@ -186,4 +213,128 @@ export function readAppIdentityKind(value: string | null | undefined): AppIdenti
 
 export function readAlternateNames(extensions: AppExtensionMap): string[] {
   return parseStringList(extensions[APP_ALTERNATE_NAMES_EXTENSION_KEY])
+}
+
+/**
+ * Inserts extension rows that must never clobber what is already stored.
+ *
+ * `upsertAppExtensions` overwrites on conflict, which is right for metadata a scan re-derives
+ * every pass. The install time is the opposite: the first value is the true one, and the callers
+ * cannot tell an insert from an update anyway — `persistScannedAppAdditions` upserts on
+ * `files.path` and hands every row `EMPTY_APP_EXTENSION_MAP`, so the write itself has to be the
+ * thing that refuses to overwrite.
+ */
+/** The narrow write surface these helpers need; the provider re-exports its wider variants from here. */
+export type AppFileWriteDb = Pick<CoreDatabase, 'insert' | 'delete'>
+
+export async function insertMissingAppExtensions(
+  writer: AppFileWriteDb | undefined,
+  fallbackDb: () => AppFileWriteDb,
+  extensions: Array<{ fileId: number; key: string; value: string }>
+): Promise<void> {
+  if (extensions.length === 0) return
+  const insertWriter = writer ?? fallbackDb()
+  await insertWriter
+    .insert(fileExtensions)
+    .values(extensions)
+    .onConflictDoNothing({ target: [fileExtensions.fileId, fileExtensions.key] })
+}
+
+/**
+ * Resolves the install time to record for a scanned app, or null when nothing trustworthy is
+ * available. Scanners only report a birth time their filesystem actually vouches for, so an
+ * absent one on a watch-discovered row means "the event is the best evidence we have".
+ */
+export function resolveScannedInstalledAt(
+  app: Pick<ScannedAppInfo, 'createdAt'>,
+  options?: AppExtensionSyncOptions
+): number | null {
+  const createdAtMs = app.createdAt?.getTime()
+  if (typeof createdAtMs === 'number' && Number.isFinite(createdAtMs) && createdAtMs > 0) {
+    return createdAtMs
+  }
+
+  // Only for a row this pass created: a `change` event on an app that has been installed for
+  // months must not restart its freshness window.
+  if (options?.discovery === 'watch' && options.insertedRow === true) {
+    return Date.now()
+  }
+
+  return null
+}
+
+export async function upsertAppExtensions(
+  writer: AppFileWriteDb | undefined,
+  dbUtils: Pick<DbUtils, 'addFileExtensions'>,
+  extensions: Array<{ fileId: number; key: string; value: string }>
+): Promise<void> {
+  if (extensions.length === 0) return
+  if (!writer) {
+    await dbUtils.addFileExtensions(extensions)
+    return
+  }
+  await writer
+    .insert(fileExtensions)
+    .values(extensions)
+    .onConflictDoUpdate({
+      target: [fileExtensions.fileId, fileExtensions.key],
+      set: { value: sql`excluded.value` }
+    })
+}
+
+export async function syncScannedAppExtensions(
+  fileId: number,
+  app: Pick<
+    ScannedAppInfo,
+    | 'bundleId'
+    | 'icon'
+    | 'stableId'
+    | 'uniqueId'
+    | 'launchKind'
+    | 'launchTarget'
+    | 'launchArgs'
+    | 'workingDirectory'
+    | 'displayPath'
+    | 'description'
+    | 'alternateNames'
+    | 'identityKind'
+    | 'displayNameSource'
+    | 'displayNameQuality'
+    | 'createdAt'
+  >,
+  dbUtils: Pick<DbUtils, 'getDb' | 'addFileExtensions'>,
+  writer?: AppFileWriteDb,
+  existingExtensions?: Readonly<Record<string, string | null>>,
+  options?: AppExtensionSyncOptions
+): Promise<void> {
+  const extensions = buildAppExtensions(fileId, app)
+  await upsertAppExtensions(writer, dbUtils, extensions)
+
+  // A known-stored install time short-circuits the write; an empty map only means the caller
+  // could not tell, which the conflict clause below settles.
+  if (!existingExtensions?.[APP_INSTALLED_AT_EXTENSION_KEY]) {
+    const installedAt = resolveScannedInstalledAt(app, options)
+    if (installedAt !== null) {
+      await insertMissingAppExtensions(writer, () => dbUtils.getDb(), [
+        { fileId, key: APP_INSTALLED_AT_EXTENSION_KEY, value: String(installedAt) }
+      ])
+    }
+  }
+
+  const missingExtensionKeys = resolveMissingScannedExtensionKeys(
+    extensions,
+    APP_SCANNED_OPTIONAL_EXTENSION_KEYS
+  )
+  const staleExtensionKeys = existingExtensions
+    ? missingExtensionKeys.filter((key) => Object.hasOwn(existingExtensions, key))
+    : missingExtensionKeys
+
+  if (staleExtensionKeys.length > 0) {
+    const deleteWriter = writer ?? dbUtils.getDb()
+    await deleteWriter
+      .delete(fileExtensions)
+      .where(
+        and(eq(fileExtensions.fileId, fileId), inArray(fileExtensions.key, staleExtensionKeys))
+      )
+  }
 }

@@ -29,11 +29,11 @@ const props = withDefaults(
  * for primary buttons, switch-on, progress and selection.
  */
 const toneMap: Record<StatusTone, { color: string; icon: string }> = {
-  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-filled' },
-  warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-warning' },
-  danger: { color: 'var(--tx-color-error)', icon: 'i-carbon-close-outline' },
-  info: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--tx-text-color-placeholder)', icon: 'i-carbon-minimize' }
+  success: { color: 'var(--shell-success)', icon: 'i-carbon-checkmark-filled' },
+  warning: { color: 'var(--shell-warning)', icon: 'i-carbon-warning' },
+  danger: { color: 'var(--shell-danger)', icon: 'i-carbon-close-outline' },
+  info: { color: 'var(--shell-info)', icon: 'i-carbon-information' },
+  muted: { color: 'var(--shell-text-muted)', icon: 'i-carbon-minimize' }
 }
 
 const resolvedTone = computed<StatusTone>(() => {

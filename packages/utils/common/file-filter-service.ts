@@ -54,6 +54,19 @@ const LOWERCASE_INTERNAL_DATABASE_EXTENSIONS = lowerCaseSet(
 );
 const LOWERCASE_SYSTEM_DIRS = lowerCaseSet(SYSTEM_BLACKLISTED_DIRS);
 const LOWERCASE_TEMP_DIRS = lowerCaseSet(TEMP_BLACKLISTED_DIRS);
+
+/**
+ * The system names that sit under a home directory instead of the filesystem root.
+ *
+ * Intersected with the platform's own list rather than written out, so a Linux user's
+ * `/home/me/Library` stays indexed -- `Library` is only a system location where the platform says
+ * it is. On Linux the intersection is empty, which is the correct answer, not a gap.
+ */
+const HOME_ANCHORED_SYSTEM_DIRS = new Set(
+  ["library", "appdata", "localappdata"].filter((name) =>
+    LOWERCASE_SYSTEM_DIRS.has(name),
+  ),
+);
 const LOWERCASE_SYSTEM_METADATA_NAMES = lowerCaseSet(
   SYSTEM_METADATA_FILE_NAMES,
 );
@@ -71,6 +84,67 @@ function normalizePath(value: string): string {
 
 function pathSegments(value: string): string[] {
   return normalizePath(value).split("/").filter(Boolean);
+}
+
+/**
+ * Whether `segments` names a directory sitting directly at the filesystem root (#1727).
+ *
+ * `SYSTEM_BLACKLISTED_DIRS` is a list of OS locations -- `usr`, `var`, `tmp`, `private`, `dev`,
+ * `Library`, `Windows.old` -- and every one of them is also an ordinary word someone may name a
+ * folder. Matched on the leaf name alone it excluded `~/Documents/tmp`, `~/Pictures/private` and
+ * `~/Documents/Library`, silently: the check runs before `readdir`, so nothing errors, nothing is
+ * counted, and the file simply never appears in search.
+ *
+ * Measured on one default install: six of 545 directories under the default roots, five of them
+ * real user content.
+ *
+ * POSIX roots are one segment *and* a leading `/` -- the separator is what distinguishes `/usr`
+ * from a relative `usr`, which `pathSegments` renders identically. Windows roots are two segments,
+ * because the drive is one (`C:/Windows`); `C:Library` is drive-relative, stays a single segment
+ * and is therefore not a root.
+ *
+ * `~/Library` and `%APPDATA%` are the exception #1727 called out: system locations that live under
+ * the user's home rather than at the root, so the root anchor above cannot reach them. The first
+ * version of this comment claimed `PATH_PATTERNS.SYSTEM_PATHS` covered them, and that was off by
+ * one separator -- `/^\/Users\/[^/]+\/Library\//` needs a slash *after* `Library`, so it excludes
+ * everything inside `~/Library` but not `~/Library` itself. Measured on one Mac: all 111
+ * subdirectories were still excluded, and six direct files were not. `isHomeDirectoryChild` closes
+ * that level.
+ */
+function isFilesystemRootChild(
+  normalizedPath: string,
+  segments: readonly string[],
+): boolean {
+  // `pathSegments` drops the separators, so the segment count alone cannot tell `/usr` from a
+  // relative `usr` -- both are one segment. The original path has to carry the root marker.
+  if (segments.length === 1) return normalizedPath.startsWith("/");
+  return segments.length === 2 && /^[a-z]:$/i.test(segments[0] ?? "");
+}
+
+/**
+ * `/Users/<user>/X`, `/home/<user>/X` or `C:/Users/<user>/X` -- one level below a home directory.
+ *
+ * The home container is matched by name because this module has no filesystem and no `os.homedir`;
+ * it is a pure path classifier, and `file-scan-utils` only reaches for `node:fs` lazily precisely
+ * because some hosts do not have it. That makes this a shape rule, not a resolved-home check: a
+ * literal directory named `Users` two levels up is enough. The names it gates are drawn from the
+ * platform's own system list, so the false positive is confined to a folder named `Library` sitting
+ * directly under a folder named `Users` on macOS.
+ */
+function isHomeDirectoryChild(
+  normalizedPath: string,
+  segments: readonly string[],
+): boolean {
+  if (segments.length === 3) {
+    return (
+      normalizedPath.startsWith("/") && /^(?:users|home)$/i.test(segments[0] ?? "")
+    );
+  }
+  return (
+    segments.length === 4 &&
+    /^[a-z]:$/i.test(segments[0] ?? "") &&
+    /^users$/i.test(segments[1] ?? "")
+  );
 }
 
 function basename(value: string): string {
@@ -177,7 +251,15 @@ export class FileFilterService {
     if (options.customBlacklistedDirs?.has(directoryName))
       return "excluded-path";
     if (LOWERCASE_DEV_DIRS.has(lowerDirectoryName)) return "development-path";
-    if (LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName)) return "system-path";
+    const normalized = normalizePath(path);
+    if (
+      (isFilesystemRootChild(normalized, segments) &&
+        LOWERCASE_SYSTEM_DIRS.has(lowerDirectoryName)) ||
+      (isHomeDirectoryChild(normalized, segments) &&
+        HOME_ANCHORED_SYSTEM_DIRS.has(lowerDirectoryName))
+    ) {
+      return "system-path";
+    }
     if (LOWERCASE_TEMP_DIRS.has(lowerDirectoryName)) return "cache-path";
 
     if (

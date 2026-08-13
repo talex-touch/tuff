@@ -1,3 +1,4 @@
+import { PLUGIN_BLOCKED_REASONS } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
@@ -190,7 +191,8 @@ describe('workspace scripts isolated Prelude', () => {
     expect(items).toEqual([
       expect.objectContaining({
         title: 'Workspace Scripts Unavailable',
-        subtitle: 'capability-unavailable',
+        // The same contract, surfaced as UI text rather than as a blocked result.
+        subtitle: PLUGIN_BLOCKED_REASONS.CAPABILITY_UNAVAILABLE,
       }),
     ])
   })
@@ -219,6 +221,6 @@ describe('workspace scripts isolated Prelude', () => {
         },
         { actionId: 'run-script' },
       ),
-    ).resolves.toMatchObject({ status: 'blocked', reason: 'capability-unavailable' })
+    ).resolves.toMatchObject({ status: 'blocked', reason: PLUGIN_BLOCKED_REASONS.CAPABILITY_UNAVAILABLE })
   })
 })

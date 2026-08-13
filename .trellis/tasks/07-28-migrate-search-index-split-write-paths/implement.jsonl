@@ -1,2 +1,2 @@
-{"file":".trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md","reason":"Owned migration contract preserving the pre-migration default-off flag, silent-data-loss warning, write inventory, runtime acceptance, and rollback boundary."}
+{"file": ".trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md", "reason": "Owned migration contract, rewritten 2026-08-13 (#1745) against the default-on runtime: write inventory, runtime acceptance mapped to isolated app runs, and the =0 rollback boundary."}
 {"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Parent audit backlog and child-task ownership boundary for the search-index split migration."}

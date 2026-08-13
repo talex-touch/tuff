@@ -111,8 +111,43 @@ describe('load', () => {
 
     const restored = await useConversationHistory().load('c1')
 
-    expect(restored?.map((entry) => entry.content)).toEqual(['hi', 'yo'])
-    expect(restored?.[1]?.meta).toEqual({ model: 'm' })
+    expect(restored?.messages.map((entry) => entry.content)).toEqual(['hi', 'yo'])
+    expect(restored?.messages[1]?.meta).toEqual({ model: 'm' })
+    // The stored title survives the trip out (#969): restore has to know whether it is custom.
+    expect(restored?.title).toBe('Title')
+  })
+
+  it('repairs duplicate ids stored by the old per-conversation counters', async () => {
+    // Threads persisted while ids were `user-N` counters can carry real
+    // duplicates; loaded as-is they corrupt the stream's keyed diff and
+    // height cache (the message pile-up bug).
+    send.mockResolvedValueOnce({
+      id: 'c1',
+      title: 'Title',
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [
+        { id: 'user-5', role: 'user', content: 'one', status: 'complete', seq: 0, createdAt: 1 },
+        {
+          id: 'assistant-6',
+          role: 'assistant',
+          content: 'two',
+          status: 'complete',
+          seq: 1,
+          createdAt: 2
+        },
+        { id: 'user-5', role: 'user', content: 'three', status: 'complete', seq: 2, createdAt: 3 }
+      ]
+    })
+
+    const restored = await useConversationHistory().load('c1')
+
+    const ids = restored?.messages.map((entry) => entry.id) ?? []
+    expect(new Set(ids).size).toBe(ids.length)
+    // Order and content untouched; only the collision got a suffix.
+    expect(restored?.messages.map((entry) => entry.content)).toEqual(['one', 'two', 'three'])
+    expect(ids[0]).toBe('user-5')
+    expect(ids[2]).not.toBe('user-5')
   })
 })
 
@@ -123,6 +158,19 @@ describe('refresh', () => {
     const history = useConversationHistory()
     await history.refresh()
     expect(history.conversations.value).toEqual([])
+  })
+})
+
+describe('shared list', () => {
+  it('shares one list across instances so the sidebar sees a persist made elsewhere', async () => {
+    // HomePage owns persist, ShellConversationList owns rendering; a per-call
+    // ref would leave the sidebar stale after every send.
+    const rows = [{ id: 'c1', title: 'T', createdAt: 1, updatedAt: 2 }]
+    send.mockResolvedValue(rows)
+    const sidebar = useConversationHistory()
+    const home = useConversationHistory()
+    await home.refresh()
+    expect(sidebar.conversations.value).toEqual(rows)
   })
 })
 
@@ -175,9 +223,9 @@ describe('parts persistence', () => {
     })
 
     const restored = await history.load('c1')
-    expect(restored?.[0]?.parts).toHaveLength(3)
-    expect(restored?.[0]?.parts?.[1]).toMatchObject({ type: 'tool-call', output: 'data' })
-    expect(restored?.[0]?.meta).toEqual({ provider: 'pi', model: 'gpt' })
+    expect(restored?.messages[0]?.parts).toHaveLength(3)
+    expect(restored?.messages[0]?.parts?.[1]).toMatchObject({ type: 'tool-call', output: 'data' })
+    expect(restored?.messages[0]?.meta).toEqual({ provider: 'pi', model: 'gpt' })
   })
 
   it('truncates verbose tool output before storing', async () => {
@@ -194,6 +242,35 @@ describe('parts persistence', () => {
     const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
     expect(stored.output.length).toBeLessThanOrEqual(8 * 1024 + 1)
     expect(stored.output.endsWith('…')).toBe(true)
+  })
+
+  it('stores a long answer whole, because the body renders prose from the parts', async () => {
+    // Capping this would reload a long reply visibly cut off; the cap is for
+    // trail material, not for the answer itself.
+    const history = useConversationHistory()
+    const huge = 'x'.repeat(10 * 1024)
+    await history.persist('c1', 'Title', [
+      message({ id: 'a1', role: 'assistant', parts: [{ type: 'text', text: huge }] })
+    ])
+
+    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
+    expect(stored.text).toBe(huge)
+  })
+
+  it('still caps a runaway reasoning span, which is trail material', async () => {
+    const history = useConversationHistory()
+    const huge = 'x'.repeat(10 * 1024)
+    await history.persist('c1', 'Title', [
+      message({
+        id: 'a1',
+        role: 'assistant',
+        parts: [{ type: 'reasoning', text: huge, done: true }]
+      })
+    ])
+
+    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
+    expect(stored.text.length).toBeLessThanOrEqual(8 * 1024 + 1)
+    expect(stored.text.endsWith('…')).toBe(true)
   })
 
   it('stores no meta at all for plain messages', async () => {
@@ -233,9 +310,9 @@ describe('load survives a store failure', () => {
       messages: [{ id: 'm1', role: 'user', content: 'hi', status: 'complete', meta: {} }]
     })
 
-    await expect(useConversationHistory().load('c1')).resolves.toMatchObject([
-      { id: 'm1', role: 'user', content: 'hi' }
-    ])
+    await expect(useConversationHistory().load('c1')).resolves.toMatchObject({
+      messages: [{ id: 'm1', role: 'user', content: 'hi' }]
+    })
   })
 
   it('不存在的会话仍然返回 null', async () => {

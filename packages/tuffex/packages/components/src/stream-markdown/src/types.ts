@@ -48,4 +48,19 @@ export interface StreamMarkdownProps {
   theme?: 'light' | 'dark' | 'auto'
   /** Per-instance fenced-block renderers keyed by language, e.g. `{ mermaid: TxMermaidBlock }`. */
   renderers?: Record<string, StreamMarkdownBlockRenderer>
+  /**
+   * Holds back remote images until the reader asks for them. On by default: an
+   * image fetches without a click, so an unreviewed `src` reports the reader's
+   * IP to whoever wrote the markdown.
+   */
+  blockRemoteImages?: boolean
+  /**
+   * Placeholder wording. TuffEx carries no i18n, so the host passes localized
+   * strings and these English defaults are the fallback.
+   */
+  blockedImageText?: string
+  loadImageOnceText?: string
+  allowSessionImagesText?: string
+  copyTableText?: string
+  copiedTableText?: string
 }

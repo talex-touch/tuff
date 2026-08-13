@@ -52,11 +52,14 @@ function close() {
   open.value = false
 }
 
+// ARIA menus also hold radio/checkbox items; arrow navigation must not skip them.
+const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'
+
 function getEnabledItems(): HTMLElement[] {
   if (!panelRef.value)
     return []
 
-  return Array.from(panelRef.value.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+  return Array.from(panelRef.value.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR))
     .filter(item => item.closest('[role="menu"]') === panelRef.value)
     .filter(item => item.getAttribute('aria-disabled') !== 'true')
 }
@@ -78,7 +81,7 @@ function handleKeydown(event: KeyboardEvent) {
     return
 
   event.preventDefault()
-  const targetItem = eventTarget?.closest<HTMLElement>('[role="menuitem"]')
+  const targetItem = eventTarget?.closest<HTMLElement>(MENU_ITEM_SELECTOR)
   const activeItem = targetItem
     ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
   const activeIndex = activeItem ? items.indexOf(activeItem) : -1

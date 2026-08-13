@@ -12,7 +12,12 @@ export interface UseConversationHistoryReturn {
   conversations: Ref<ConversationRecord[]>
   loading: Ref<boolean>
   refresh: () => Promise<void>
-  load: (id: string) => Promise<ConversationMessage[] | null>
+  /**
+   * Title rides along because a stored custom title (#969) has to survive restore: HomePage
+   * recomputes the working title from the opening message, and without the stored one the top bar
+   * and the sidebar would disagree after a reload.
+   */
+  load: (id: string) => Promise<{ title: string; messages: ConversationMessage[] } | null>
   persist: (id: string, title: string, messages: ConversationMessage[]) => Promise<void>
   remove: (id: string) => Promise<void>
 }
@@ -36,7 +41,12 @@ function toStoredParts(parts: ConversationMessage['parts']): unknown[] | undefin
   if (!parts || parts.length === 0) return undefined
   const plain = JSON.parse(JSON.stringify(parts)) as Array<Record<string, unknown>>
   for (const part of plain) {
-    for (const key of ['text', 'output', 'logs', 'input', 'error'] as const) {
+    // A text part *is* the answer — the body renders prose from these, so a cap
+    // here would reload a long reply visibly cut off at 8KB. Reasoning spans and
+    // tool payloads are still trail material, and stay capped.
+    const keys =
+      part.type === 'text' ? ([] as const) : (['text', 'output', 'logs', 'input', 'error'] as const)
+    for (const key of keys) {
       const value = part[key]
       if (typeof value === 'string' && value.length > STORED_PART_TEXT_LIMIT) {
         part[key] = `${value.slice(0, STORED_PART_TEXT_LIMIT)}…`
@@ -82,10 +92,16 @@ function toSaveRequest(
   }
 }
 
+/**
+ * Module-scoped on purpose: HomePage persists while ShellConversationList
+ * renders, and both must read the same list — per-call refs would leave the
+ * sidebar stale after every send, since `persist` refreshes only its own copy.
+ */
+const conversations = ref<ConversationRecord[]>([])
+const loading = ref(false)
+
 export function useConversationHistory(): UseConversationHistoryReturn {
   const sdk = createConversationSdk(useTuffTransport())
-  const conversations = ref<ConversationRecord[]>([])
-  const loading = ref(false)
 
   async function refresh(): Promise<void> {
     loading.value = true
@@ -99,7 +115,9 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     }
   }
 
-  async function load(id: string): Promise<ConversationMessage[] | null> {
+  async function load(
+    id: string
+  ): Promise<{ title: string; messages: ConversationMessage[] } | null> {
     let detail: Awaited<ReturnType<typeof sdk.get>>
     try {
       detail = await sdk.get(id)
@@ -111,12 +129,21 @@ export function useConversationHistory(): UseConversationHistoryReturn {
       return null
     }
     if (!detail) return null
-    return detail.messages.map((message) => {
+    // Threads stored while ids were per-conversation counters can carry
+    // duplicates (a dropped turn plus the restore-time reseed re-minted an
+    // id). Ids key the stream's `v-for` and its height cache, where a
+    // duplicate corrupts the keyed diff — suffix survivors once on the way
+    // in; the next persist then stores the repaired ids.
+    const seen = new Set<string>()
+    const messages = detail.messages.map((message) => {
+      let messageId = message.id
+      while (seen.has(messageId)) messageId = `${messageId}-r`
+      seen.add(messageId)
       // Parts ride inside meta for storage; pull them back out so the meta the
       // side panel reads stays the plain turn metadata it always was.
       const { parts, ...meta } = (message.meta ?? {}) as Record<string, unknown>
       return {
-        id: message.id,
+        id: messageId,
         role: message.role,
         content: message.content,
         status: message.status,
@@ -124,6 +151,7 @@ export function useConversationHistory(): UseConversationHistoryReturn {
         ...(Array.isArray(parts) && parts.length > 0 ? { parts } : {})
       }
     }) as ConversationMessage[]
+    return { title: detail.title ?? '', messages }
   }
 
   async function persist(

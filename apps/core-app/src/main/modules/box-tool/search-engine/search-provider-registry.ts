@@ -54,8 +54,17 @@ export interface SearchProviderRegistrySnapshot {
   issues: SearchProviderRegistryIssue[]
 }
 
+/**
+ * `onDestroy` is not on `ISearchProvider` (#334), so the registry reaches for it structurally.
+ *
+ * It returns `void | Promise<void>` because implementations already return both: `AppProvider`'s is
+ * `async onDestroy(): Promise<void>` and awaits `prepareForSearchIndexShutdown()`, while
+ * `EverythingProvider`'s and `FileSystemWatcher`'s are synchronous. Declaring it `() => void` made
+ * the async one look settled at the call site, so `destroy()` resolved before the search index had
+ * finished shutting down, and TypeScript could not see the floating promise.
+ */
 type DestroyableSearchProvider = ISearchProvider<ProviderContext> & {
-  onDestroy?: () => void
+  onDestroy?: () => void | Promise<void>
 }
 
 const SEARCH_PROVIDER_ISSUE_CODES: Record<SearchProviderRegistryIssue['code'], true> = {
@@ -405,10 +414,12 @@ export class SearchProviderRegistry {
     this.clearOnboardingSubscription()
     const activeLoads = [...this.ensureLoadedOperations]
     if (activeLoads.length > 0) await Promise.allSettled(activeLoads)
+    // Sequential rather than Promise.all: teardown touches the shared index and the writer, and one
+    // that rejects must not abort the rest -- which is why the catch is inside the loop.
     for (const provider of this.providers.values()) {
       try {
         const destroyableProvider = provider as DestroyableSearchProvider
-        if (destroyableProvider.onDestroy) destroyableProvider.onDestroy()
+        if (destroyableProvider.onDestroy) await destroyableProvider.onDestroy()
         else provider.onDeactivate?.()
       } catch (error) {
         log.warn(`Provider '${provider.id}' cleanup failed`, { error })

@@ -635,6 +635,169 @@ jobs:
           echo ""
           echo "✓ Build completed successfully"
 
+      # #213 has been open since 2025-11-14 on "Ubuntu 24.04 启动不了". The step above counts
+      # .AppImage and .deb files and asserts the count is non-zero -- but a file that exists and a
+      # file that runs are different claims, and only the first was ever checked. Nothing in this
+      # repository has ever started the Linux artifact, which is why the thread spent nine months
+      # asking the reporter for logs nobody here could produce.
+      #
+      # The runner is already ubuntu-24.04, pinned in the matrix: the reproduction environment was
+      # here the whole time. This launches the AppImage under a virtual X server and reads why it
+      # stopped, if it stopped. AppImage rather than .deb on purpose -- electron-builder ships a
+      # .deb with an AppArmor profile that exempts it from the 24.04 userns restriction, and an
+      # AppImage cannot carry one, so the AppImage is the artifact the report is most likely about.
+      - name: "Smoke: launch the packaged Linux app"
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # -e is on so a failed apt-get stops here. Without it the step would carry on and the
+          # launch would exit for a provisioning reason -- a missing xvfb-run gives an exit code
+          # with no output, which classifies as unknown-exit and is reported as a *product*
+          # failure. Misattributing CI breakage to the app is the one outcome this check must not
+          # produce. Found by CodeRabbit on #1736.
+          set -euo pipefail
+          sudo apt-get update -qq
+          # t64 names are the 24.04 spelling; the fallback covers an older image if the runner moves.
+          sudo apt-get install -y -qq xvfb libgbm1 libnss3 libasound2t64 libgtk-3-0t64 || sudo apt-get install -y -qq xvfb libgbm1 libnss3 libasound2 libgtk-3-0
+          command -v xvfb-run >/dev/null || { echo "xvfb-run missing after install"; exit 1; }
+
+          APPIMAGE=$(find apps/core-app/dist -name "*.AppImage" -type f | head -1)
+          if [ -z "$APPIMAGE" ]; then
+            echo "No .AppImage to launch. The verification step above should already have failed."
+            exit 1
+          fi
+          chmod +x "$APPIMAGE"
+          echo "Launching $APPIMAGE"
+
+          # --appimage-extract-and-run avoids needing FUSE, which the runner does not have. It
+          # changes how the file is mounted, not how the app sandboxes, so the thing #213 is about
+          # is still exercised.
+          set +e
+          timeout --signal=TERM 45s xvfb-run -a --server-args="-screen 0 1280x1024x24" "$APPIMAGE" --appimage-extract-and-run --disable-gpu > /tmp/launch.log 2>&1
+          CODE=$?
+          set -e
+
+          # 124 is timeout's own code for "still running when I killed it", which is the success
+          # shape here: a launcher that is alive after 45s started. Any other code means it exited.
+          if [ "$CODE" -eq 124 ]; then STATE=alive; else STATE=dead; fi
+          echo "exit=$CODE state=$STATE"
+          node scripts/classify-app-launch.mjs /tmp/launch.log "$CODE" "$STATE"
+
+      - name: Upload Linux launch log
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-launch-log-${{ github.run_id }}
+          path: /tmp/launch.log
+          if-no-files-found: ignore
+
+      # The Linux half of this landed as #1736 and the reasoning is identical here: the verification
+      # step above counts artifacts, and a file that exists and a file that runs are different
+      # claims. macOS had one thing Linux did not -- a signing check -- which verifies the bundle is
+      # signed correctly and says nothing about whether it starts.
+      #
+      # The binary is launched directly out of Contents/MacOS rather than through `open`, because
+      # `open` returns as soon as LaunchServices accepts the request and would report success for a
+      # bundle that died a second later. A locally built bundle carries no quarantine attribute, so
+      # this is not sidestepping Gatekeeper -- there is nothing to sidestep.
+      # The third platform. Linux landed as #1736, macOS as #1737, and Windows was the one left
+      # counting .exe files -- which made the coverage asymmetric, and asymmetric verification reads
+      # as uniform to anyone who does not go and check.
+      #
+      # win-unpacked rather than the NSIS installer: it is the same binary the installer places, and
+      # launching it directly skips a silent-install round trip that could fail for reasons having
+      # nothing to do with whether the app runs. The pre-build "Clean Windows Build Artifacts" step
+      # removes win-unpacked from a previous run, so what is there now came from this build.
+      - name: "Smoke: launch the packaged Windows app"
+        if: matrix.os == 'windows-2022'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem -Path "apps/core-app/dist/win-unpacked" -Filter "*.exe" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike "__uninstaller-*" } | Select-Object -First 1
+          if (-not $exe) {
+            Write-Host "No executable under win-unpacked. The verification step above should already have failed."
+            Get-ChildItem -Path "apps/core-app/dist" -Recurse -Depth 1 -ErrorAction SilentlyContinue | Select-Object -First 20 | Format-Table Name
+            exit 1
+          }
+          Write-Host "Launching $($exe.FullName)"
+
+          $out = "$env:RUNNER_TEMP\launch.out"
+          $err = "$env:RUNNER_TEMP\launch.err"
+          $proc = Start-Process -FilePath $exe.FullName -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          Start-Sleep -Seconds 45
+
+          if ($proc.HasExited) {
+            $state = "dead"
+            $code = $proc.ExitCode
+          } else {
+            $state = "alive"
+            $code = 0
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host "exit=$code state=$state"
+
+          # One file for the classifier; a GUI process on Windows splits little between the two and
+          # the interesting line can land on either.
+          $log = "$env:RUNNER_TEMP\launch.log"
+          Get-Content $out, $err -ErrorAction SilentlyContinue | Set-Content $log
+          if (-not (Test-Path $log)) { New-Item -ItemType File -Path $log | Out-Null }
+          node scripts/classify-app-launch.mjs $log $code $state
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows launch log
+        if: always() && matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-launch-log-${{ github.run_id }}
+          path: ${{ runner.temp }}/launch.log
+          if-no-files-found: ignore
+
+      - name: "Smoke: launch the packaged macOS app"
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find apps/core-app/dist -type d -name "*.app" -prune -print | head -1)
+          if [ -z "$APP" ]; then
+            echo "No .app bundle to launch. The verification step above should already have failed."
+            exit 1
+          fi
+          BIN="$APP/Contents/MacOS/$(basename "$APP" .app)"
+          if [ ! -x "$BIN" ]; then
+            echo "Expected an executable at $BIN"
+            ls -la "$APP/Contents/MacOS" || true
+            exit 1
+          fi
+          echo "Launching $BIN"
+
+          set +e
+          # No coreutils `timeout` on the macOS runner. A background process plus a poll does the
+          # same job and, unlike `timeout`, distinguishes "still running" from "exited with 124".
+          "$BIN" > /tmp/launch.log 2>&1 &
+          PID=$!
+          sleep 45
+          if kill -0 "$PID" 2>/dev/null; then
+            STATE=alive
+            CODE=0
+            kill "$PID" 2>/dev/null || true
+          else
+            wait "$PID"
+            CODE=$?
+            STATE=dead
+          fi
+          set -e
+          echo "exit=$CODE state=$STATE"
+          node scripts/classify-app-launch.mjs /tmp/launch.log "$CODE" "$STATE"
+
+      - name: Upload macOS launch log
+        if: always() && matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-launch-log-${{ github.run_id }}
+          path: /tmp/launch.log
+          if-no-files-found: ignore
+
       - name: Verify macOS Release Signing
         if: matrix.os == 'macos-latest'
         shell: bash
