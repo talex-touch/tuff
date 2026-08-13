@@ -33,7 +33,12 @@ function toStoredParts(parts: ConversationMessage['parts']): unknown[] | undefin
   if (!parts || parts.length === 0) return undefined
   const plain = JSON.parse(JSON.stringify(parts)) as Array<Record<string, unknown>>
   for (const part of plain) {
-    for (const key of ['text', 'output', 'logs', 'input', 'error'] as const) {
+    // A text part *is* the answer — the body renders prose from these, so a cap
+    // here would reload a long reply visibly cut off at 8KB. Reasoning spans and
+    // tool payloads are still trail material, and stay capped.
+    const keys =
+      part.type === 'text' ? ([] as const) : (['text', 'output', 'logs', 'input', 'error'] as const)
+    for (const key of keys) {
       const value = part[key]
       if (typeof value === 'string' && value.length > STORED_PART_TEXT_LIMIT) {
         part[key] = `${value.slice(0, STORED_PART_TEXT_LIMIT)}…`

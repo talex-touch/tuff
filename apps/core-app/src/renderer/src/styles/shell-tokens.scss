@@ -59,6 +59,18 @@
 
   --shell-shadow: #0000000f;
 
+  /**
+   * Veil behind a modal or a blocking overlay.
+   *
+   * Not derived from `--shell-shadow`: a shadow reads against the surface it falls on, a scrim
+   * has to dim a whole page, and 6% does neither. The dark value is heavier because the same
+   * black over a near-black page barely registers.
+   *
+   * Deliberately absent from the two contrast blocks, like every other surface token here —
+   * those blocks only re-point ink, borders and semantic hues.
+   */
+  --shell-scrim: #00000040;
+
   --shell-radius-sm: 6px;
   --shell-radius-md: 10px;
   --shell-radius-lg: 14px;
@@ -159,6 +171,7 @@
   --shell-info-border: #98989d4d;
 
   --shell-shadow: #00000047;
+  --shell-scrim: #00000080;
 }
 
 html.contrast {

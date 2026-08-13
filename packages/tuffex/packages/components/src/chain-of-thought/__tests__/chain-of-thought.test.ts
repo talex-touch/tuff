@@ -27,6 +27,15 @@ describe('txChainOfThought', () => {
     expect(wrapper.find('.tx-chain-of-thought__count').text()).toBe('3')
   })
 
+  it('drops the count on a single step, whose label already names it', () => {
+    const wrapper = mount(TxChainOfThought, {
+      props: { steps: steps().slice(0, 1), label: 'Considering the request' },
+    })
+
+    expect(wrapper.findAll('.tx-chain-of-thought__step')).toHaveLength(1)
+    expect(wrapper.find('.tx-chain-of-thought__count').exists()).toBe(false)
+  })
+
   it('shimmers only while streaming with an active step', async () => {
     const wrapper = mount(TxChainOfThought, {
       props: { steps: steps(), streaming: true },

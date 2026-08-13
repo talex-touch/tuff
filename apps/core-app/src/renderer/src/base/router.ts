@@ -170,6 +170,18 @@ function createLegacyIntelligenceRedirects(): RouteRecordRaw[] {
   ]
 }
 
+/**
+ * One wrapper for both home records, not one each: KeepAlive caches by
+ * component *type* plus key, and the shell keys both routes to the same
+ * cache entry. Two wrappers would be two types — every `/home` ↔ `/home/c/:id`
+ * hop would then swap between two independently cached HomePage instances,
+ * which is exactly the teleport that killed the composer's undock FLIP.
+ */
+const HomePageRouteComponent = withRouteComponentPerf(
+  '/home',
+  () => import('../views/base/home/HomePage.vue')
+)
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -178,7 +190,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: '$I18n:router.home',
-    component: withRouteComponentPerf('/home', () => import('../views/base/home/HomePage.vue')),
+    component: HomePageRouteComponent,
     meta: {
       index: 0,
       keepAlive: true,
@@ -187,13 +199,14 @@ const routes: RouteRecordRaw[] = [
   },
   {
     /**
-     * A stored conversation. Same component as `/home` and the same keep-alive key, so switching
-     * threads reuses one instance and the composer keeps focus — the id is read from the route
-     * param rather than from a fresh mount.
+     * A stored conversation. The *same component definition* as `/home` and the same keep-alive
+     * key, so every hop between the blank home and any thread patches one live instance in place —
+     * the id is read from the route param rather than from a fresh mount, and in-place is what
+     * lets the composer keep focus and the undock FLIP measure a real before/after.
      */
     path: '/home/c/:id',
     name: '$I18n:router.homeConversation',
-    component: withRouteComponentPerf('/home/c', () => import('../views/base/home/HomePage.vue')),
+    component: HomePageRouteComponent,
     meta: {
       index: 0,
       keepAlive: true,

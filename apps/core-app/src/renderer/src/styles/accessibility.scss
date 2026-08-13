@@ -53,6 +53,17 @@
   box-shadow: 0 0 0 var(--focus-ring-total) var(--focus-ring-contrast);
 }
 
+/*
+ * Composite inputs (tuffex TxInput and kin) indicate focus on their wrapper —
+ * border accent plus ring via `:focus-within`. The global two-band ring landing
+ * on the *inner* native control as well framed every form field in a heavy
+ * dark halo. The wrapper's indicator satisfies SC 2.4.11 on its own.
+ */
+.tx-input__inner:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 /* The app's own high-contrast toggle, plus the OS-level preference. */
 html.contrast,
 html.dark.contrast {

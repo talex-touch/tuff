@@ -3,7 +3,10 @@ import type { ToolGatewayHandle } from './gateway-server'
 import type { PluginFeatureSource } from './plugin-feature-source'
 import type { ToolDefinition } from './tool-registry'
 import { Buffer } from 'node:buffer'
+import { readFile, rm } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startToolGateway } from './gateway-server'
@@ -80,11 +83,9 @@ function call(
   })
 }
 
-async function invoke(
-  gateway: ToolGatewayHandle,
-  body: unknown,
-  token = gateway.token
-): Promise<{ status: number; json: any }> {
+// Return type inferred rather than annotated: `JSON.parse` gives `any` either way, and writing it
+// out makes it an *explicit* any, which `pnpm lint` rejects at `--max-warnings=0`.
+async function invoke(gateway: ToolGatewayHandle, body: unknown, token = gateway.token) {
   const response = await call(gateway.url, { token, body })
   return {
     status: response.status,
@@ -282,6 +283,49 @@ describe('tool registry', () => {
     expect(registry.get('tuff_search_files')?.risk).toBe('read')
     expect(registry.get('tuff_read_file')?.risk).toBe('read')
     expect(registry.get('tuff_open_path')?.risk).toBe('execute')
+    // Write risk: confirmed per call, never rememberable.
+    expect(registry.get('tuff_write_file')?.risk).toBe('write')
+  })
+
+  it('creates files but never clobbers, invents directories, or writes binaries', async () => {
+    const write = registry.get('tuff_write_file')!
+    const path = join(
+      tmpdir(),
+      `tuff-write-test-${process.pid}-${Math.random().toString(36).slice(2)}.md`
+    )
+
+    try {
+      const created = await write.execute({ path, content: '# 随记\n' })
+      expect(created).toMatchObject({ isError: false })
+      expect(await readFile(path, 'utf8')).toBe('# 随记\n')
+
+      // The same path again must bounce — `wx` semantics, no overwrites ever.
+      const again = await write.execute({ path, content: 'other' })
+      expect(again.isError).toBe(true)
+      expect(again.output).toContain('never overwrites')
+    } finally {
+      await rm(path, { force: true })
+    }
+
+    const orphan = await write.execute({
+      path: join(tmpdir(), 'tuff-no-such-dir-9f8a7', 'note.md'),
+      content: 'x'
+    })
+    expect(orphan.isError).toBe(true)
+    expect(orphan.output).toContain('directory')
+
+    const binary = await write.execute({ path: join(tmpdir(), 'evil.exe'), content: 'x' })
+    expect(binary.isError).toBe(true)
+
+    const oversized = await write.execute({
+      path: join(tmpdir(), `tuff-big-${process.pid}.txt`),
+      content: 'x'.repeat(1024 * 1024 + 1)
+    })
+    expect(oversized.isError).toBe(true)
+    expect(oversized.output).toContain('limit')
+
+    expect(await write.execute({ path: '', content: 'x' })).toMatchObject({ isError: true })
+    expect(await write.execute({ path: join(tmpdir(), 'a.txt') })).toMatchObject({ isError: true })
   })
 
   it('refuses binaries and oversized reads', async () => {

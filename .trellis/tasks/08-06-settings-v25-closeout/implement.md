@@ -88,3 +88,24 @@
 - [x] **深色可信度以证据替代目检**(自定义 TxSelect 弹层不入无障碍树,合成点击无法切主题):① 本任务 38 个 `.vue` 全量扫描**零 hex / 零 rgba**,颜色全部经 token;② `.dark` 块三色相九值已核对写入;③ 深色墨色实测最低 4.54:1 全部过 AA;④ 深浅仅换 CSS 变量、DOM 与几何同构,故布局溢出不可能只在深色出现。**剩余风险仅为主观观感,建议用户在设置·外观切「深色」扫一眼**
 - [x] 更新 `08-04-settings-rewrite` 范围注记(智能 + 文件索引由本任务接手、TuffGroupBlock 终局口径、死件清单移交)
 - [x] spec 更新:`plugin-runtime-security.md` §8 固定 widget 路径为逐字节校验契约;`component-guidelines.md` 新增「Shell colour tokens」(四色相形状、对比块重指向、**chip 墨色对自身 soft 底测 AA**、颜色不作状态唯一载体、预期结果不用错误色)
+
+## 遗留项已转 GitHub issue(2026-08-06)
+
+本任务全部「遗留 / 不在本轮 / 未做 / 待定夺」条目已逐条**对现场复核后**立 issue,归档于 `talex-touch/tuff`。复核剔除了三处仅为同名假阳性的「疑似存活引用」(`main.ts` 的 `waitForInitialAppSettingsHydration`、`IntelligenceInfo.vue` 对 `IntelligenceProviderHeader.vue` 的别名导入、tuff 组件沿用的 `TBlockSlot-*` 类名)。
+
+| # | 主题 | 来源 |
+|---|---|---|
+| [#1018](https://github.com/talex-touch/tuff/issues/1018) | 6 个死件设置页(AppSettings/SettingHeader/Messages/Permission/Window/Sentry) | design §3 |
+| [#1019](https://github.com/talex-touch/tuff/issues/1019) | `/styles/theme` 子路由已注册但父页无 `<router-view>` → 空白页 | design §2 |
+| [#1020](https://github.com/talex-touch/tuff/issues/1020) | 6 个智能 landing 分区组件成孤儿 | Step 5 |
+| [#1021](https://github.com/talex-touch/tuff/issues/1021) | `IntelligenceAuditPage` 拼错 `:default-expanded` | Step 1 |
+| [#1022](https://github.com/talex-touch/tuff/issues/1022) | 外观页主题帮助开关恒关且无监听(空壳交互) | Step 2 |
+| [#1023](https://github.com/talex-touch/tuff/issues/1023) | Workflow 页 checkbox 被 `width:100%` 拉宽 + 窄列溢出窗口 | Step 8 |
+| [#1024](https://github.com/talex-touch/tuff/issues/1024) | `/styles` 与 `/setting/appearance` 双入口挂同一 ThemeStyle | 审计文档 |
+| [#1025](https://github.com/talex-touch/tuff/issues/1025) | ThemeStyle loading 遮罩仍用 `--tx` + 裸 rgba | Step 2 |
+| [#1026](https://github.com/talex-touch/tuff/issues/1026) | 3 个闲置 i18n 键 + 12 个零引用 en-only 键 | Steps 3/5/8 |
+| [#1027](https://github.com/talex-touch/tuff/issues/1027) | CoreBox widget 仍硬编码 `/intelligence/channels`(跨包逐字节契约) | design §4.2 |
+| [#1029](https://github.com/talex-touch/tuff/issues/1029) | 对话框内 22 个 `dialog-section` + CanvasGridEditor 仍手写卡 | design §3 |
+| [#1030](https://github.com/talex-touch/tuff/issues/1030) | `components/base/{group,select,switch}` 10 个同名旧组件无引用 | design §1.4 |
+| [#1031](https://github.com/talex-touch/tuff/issues/1031) | **待拍板**:诊断阶段 miss 红→琥珀(查史证实原本即红,非被压平) | Step 8 |
+| [#1032](https://github.com/talex-touch/tuff/issues/1032) | **待拍板**:动效组 3 个 Beta chip 是否经 `#tags` 重新引入 | Steps 2/8 |

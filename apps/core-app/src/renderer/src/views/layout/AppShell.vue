@@ -163,13 +163,19 @@ onMounted(() => {
     <main class="AppShell-Main fake-background">
       <div class="AppShell-View">
         <router-view v-slot="{ Component, route }">
+          <!-- `out-in`, not the default overlap: overlapped route swaps leave
+               both pages mounted for the transition window, and an interrupted
+               leave (rapid navigation, HMR mid-flight) strands the old page in
+               the DOM for good — observed as ghost cached views stacking up.
+               Sequential swap closes that window entirely. -->
           <transition
             :name="routeTransitionName"
+            mode="out-in"
             appear
             @before-enter="() => onRouteEnterStart(route.fullPath)"
             @after-enter="() => onRouteEnterEnd(route.fullPath)"
           >
-            <KeepAlive v-if="Component && isKeepAliveRoute(route)">
+            <KeepAlive v-if="Component && isKeepAliveRoute(route)" :max="10">
               <component :is="Component" :key="resolveRouteCacheKey(route)" />
             </KeepAlive>
             <component :is="Component" v-else-if="Component" :key="route.fullPath" />
@@ -205,10 +211,12 @@ onMounted(() => {
   inset: 0 !important;
   width: 100%;
   height: 100%;
+  /* Half the overlap era's duration: with `out-in` the two halves run in
+     sequence, so the old 0.35s would stretch a swap to 0.7s of waiting. */
   transition:
-    opacity 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
-    transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
-    filter 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity 0.22s cubic-bezier(0.25, 0.8, 0.25, 1),
+    transform 0.22s cubic-bezier(0.25, 0.8, 0.25, 1),
+    filter 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
   will-change: transform, opacity;
 }
 

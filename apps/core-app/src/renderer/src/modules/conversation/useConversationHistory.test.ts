@@ -242,6 +242,35 @@ describe('parts persistence', () => {
     expect(stored.output.endsWith('…')).toBe(true)
   })
 
+  it('stores a long answer whole, because the body renders prose from the parts', async () => {
+    // Capping this would reload a long reply visibly cut off; the cap is for
+    // trail material, not for the answer itself.
+    const history = useConversationHistory()
+    const huge = 'x'.repeat(10 * 1024)
+    await history.persist('c1', 'Title', [
+      message({ id: 'a1', role: 'assistant', parts: [{ type: 'text', text: huge }] })
+    ])
+
+    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
+    expect(stored.text).toBe(huge)
+  })
+
+  it('still caps a runaway reasoning span, which is trail material', async () => {
+    const history = useConversationHistory()
+    const huge = 'x'.repeat(10 * 1024)
+    await history.persist('c1', 'Title', [
+      message({
+        id: 'a1',
+        role: 'assistant',
+        parts: [{ type: 'reasoning', text: huge, done: true }]
+      })
+    ])
+
+    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
+    expect(stored.text.length).toBeLessThanOrEqual(8 * 1024 + 1)
+    expect(stored.text.endsWith('…')).toBe(true)
+  })
+
   it('stores no meta at all for plain messages', async () => {
     const history = useConversationHistory()
     await history.persist('c1', 'Title', [message({ id: 'u1' })])

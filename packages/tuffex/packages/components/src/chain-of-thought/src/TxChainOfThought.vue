@@ -116,7 +116,8 @@ watch(
         </svg>
       </span>
       <span class="tx-chain-of-thought__label">{{ label }}</span>
-      <span class="tx-chain-of-thought__count">{{ steps.length }}</span>
+      <!-- A count of one is noise: the label already names the single step. -->
+      <span v-if="steps.length > 1" class="tx-chain-of-thought__count">{{ steps.length }}</span>
       <span class="tx-chain-of-thought__chevron" :class="{ 'is-open': open }" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m6 9 6 6 6-6" />
