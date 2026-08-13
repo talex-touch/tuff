@@ -49,6 +49,8 @@
     "plugins:validate:self-test": "node scripts/validate-plugins.mjs --self-test",
     "test:plugins": "node scripts/test-plugins.mjs",
     "check:audit-report-claims": "node scripts/check-audit-report-claims.mjs",
+    "check:closing-keywords": "node scripts/check-closing-keywords.mjs",
+    "check:closing-keywords:self-test": "node scripts/check-closing-keywords.mjs --self-test",
     "check:plugin-blocked-reasons": "node scripts/check-plugin-blocked-reasons.mjs",
     "check:plugin-blocked-reasons:self-test": "node scripts/check-plugin-blocked-reasons.mjs --self-test",
     "check:module-size-ratchet": "node scripts/check-module-size-ratchet.mjs",
