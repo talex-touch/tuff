@@ -2014,6 +2014,12 @@ export class SearchEngineCore
       return await instance.indexingRuntime!.getDiagnostics()
     })
 
+    // The counters had no reader at all: `getSearchCacheTelemetry` was referenced only by its own
+    // declaration, so the measurement #346 asks for could not be taken from a real session.
+    transport.on(CoreBoxEvents.search.cacheTelemetry, async () => {
+      return instance.getSearchCacheTelemetry()
+    })
+
     transport.on(CoreBoxEvents.item.execute, async (payload) => {
       const { item, searchResult, actionId } = payload as {
         item: TuffItem

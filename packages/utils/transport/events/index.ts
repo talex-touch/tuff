@@ -112,6 +112,7 @@ import type {
   CoreBoxGetBoundsResponse,
   CoreBoxHideRequest,
   CoreBoxIndexingDiagnosticsResponse,
+  CoreBoxSearchCacheTelemetryResponse,
   CoreBoxInputChangeRequest,
   CoreBoxInputVisibilityResponse,
   CoreBoxIsPinnedRequest,
@@ -1162,6 +1163,23 @@ export const CoreBoxEvents = {
       .module('search')
       .event('indexing-diagnostics')
       .define<void, CoreBoxIndexingDiagnosticsResponse>(),
+
+    /**
+     * Read the query cache counters (#346).
+     *
+     * `SearchCore.getSearchCacheTelemetry()` existed with exactly one reference -- its own
+     * declaration. The counters incremented into a snapshot nobody could obtain, which reads the
+     * same as counters that were never wired, and it is why the measurement that issue is named
+     * for could not be taken.
+     *
+     * Host-only, like `indexingDiagnostics`: neither is in `plugin-facing-events.ts`, so a plugin
+     * surface cannot read it. The payload is counts and durations only -- no query text, no cache
+     * key, no item content.
+     */
+    cacheTelemetry: defineEvent('core-box')
+      .module('search')
+      .event('cache-telemetry')
+      .define<void, CoreBoxSearchCacheTelemetryResponse>(),
   },
 
   /**
