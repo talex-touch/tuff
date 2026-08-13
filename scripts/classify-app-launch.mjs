@@ -71,6 +71,25 @@ const CODE_SIGNATURE_PATTERNS = [
   /killed: 9/i,
 ]
 
+/**
+ * Windows refusing to start the unpacked build (#308).
+ *
+ * Deliberately `product: true`, unlike `missing-library` on Linux, and the asymmetry is the point.
+ * A missing `.so` on a Linux runner means the *runner* lacks a system package -- the app is fine and
+ * the step should install it. A missing DLL under `win-unpacked` means electron-builder did not
+ * place it there: everything the app needs is supposed to ship inside that directory, so the same
+ * symptom is a packaging defect rather than an environment gap.
+ *
+ * `0xc0000135` is the NTSTATUS for DLL-not-found and is often all a GUI process leaves behind, since
+ * the message box it would otherwise show has nowhere to go on a CI runner.
+ */
+const WINDOWS_MISSING_DLL_PATTERNS = [
+  /The code execution cannot proceed because ([\w.-]+\.dll)/i,
+  /0xc0000135/i,
+  /STATUS_DLL_NOT_FOUND/i,
+  /was not found[^\n]{0,40}reinstalling the program/i,
+]
+
 export function classifyLaunch({ output, exitCode, stayedAlive }) {
   const text = String(output ?? '')
 
@@ -82,6 +101,12 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
 
   if (CODE_SIGNATURE_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'code-signature', product: true }
+
+  for (const pattern of WINDOWS_MISSING_DLL_PATTERNS) {
+    const match = pattern.exec(text)
+    if (match)
+      return { verdict: 'missing-dll', product: true, detail: match[1] ?? 'unnamed' }
+  }
 
   if (NO_DISPLAY_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'no-display', product: false }
@@ -110,6 +135,9 @@ const DESCRIPTIONS = {
   'code-signature': 'macOS refused the bundle. The signature is broken or the binary was killed '
     + 'by the kernel (SIGKILL 9 is what an invalid signature looks like from the shell), which is a '
     + 'packaging defect rather than a runner gap.',
+  'missing-dll': 'A DLL under win-unpacked was not found. Unlike a missing .so on a Linux runner '
+    + 'this is a packaging defect, not an environment gap: everything the app needs is supposed to '
+    + 'ship inside that directory.',
   'ok': 'The packaged app started and was still running when the window opened.',
 }
 
@@ -249,7 +277,16 @@ function selfTest() {
     { name: 'an unverified developer is the same verdict', actual: classifyLaunch({ output: 'cannot be opened because the developer cannot be verified', exitCode: 1, stayedAlive: false }).verdict, expected: 'code-signature' },
     { name: 'a signature refusal is a product problem', actual: classifyLaunch({ output: 'Killed: 9', exitCode: 137, stayedAlive: false }).product, expected: true },
     { name: 'a sandbox refusal still outranks a signature one', actual: classifyLaunch({ output: 'Killed: 9\nNo usable sandbox!', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
-    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 6 },
+    // Windows half (#308). The asymmetry with missing-library is deliberate and asserted, because
+    // it is the one thing about this verdict a future reader is most likely to "correct".
+    { name: 'a named missing DLL is its own verdict', actual: classifyLaunch({ output: 'The code execution cannot proceed because VCRUNTIME140.dll was not found', exitCode: 1, stayedAlive: false }).verdict, expected: 'missing-dll' },
+    { name: 'the DLL is named', actual: classifyLaunch({ output: 'The code execution cannot proceed because VCRUNTIME140.dll was not found', exitCode: 1, stayedAlive: false }).detail, expected: 'VCRUNTIME140.dll' },
+    { name: 'the bare NTSTATUS is enough', actual: classifyLaunch({ output: 'exited with 0xc0000135', exitCode: 3221225781, stayedAlive: false }).verdict, expected: 'missing-dll' },
+    { name: 'an unnamed DLL failure still reports', actual: classifyLaunch({ output: 'STATUS_DLL_NOT_FOUND', exitCode: 1, stayedAlive: false }).detail, expected: 'unnamed' },
+    { name: 'a missing DLL is a product problem, unlike a missing .so', actual: classifyLaunch({ output: '0xc0000135', exitCode: 1, stayedAlive: false }).product, expected: true },
+    { name: 'a missing .so is still not a product problem', actual: classifyLaunch({ output: 'error while loading shared libraries: libgbm.so.1', exitCode: 127, stayedAlive: false }).product, expected: false },
+    { name: 'a sandbox refusal still outranks a missing DLL', actual: classifyLaunch({ output: '0xc0000135\nNo usable sandbox!', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
+    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 7 },
   ]
 
   let failed = 0
