@@ -1,9 +1,21 @@
+import type {
+  FormField,
+  FormFieldType,
+  FormFieldValue,
+  FormSpec,
+  WidgetSpec
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import type { PluginFeatureSource } from './plugin-feature-source'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
-import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import {
+  CHART_RESULT_PREFIX,
+  FORM_RESULT_PREFIX,
+  WIDGET_RESULT_PREFIX,
+  WIDGET_SOURCE_MAX_CHARS
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 
 /**
  * How much damage a tool can do, which decides whether a session-level
@@ -63,6 +75,8 @@ export function resolveUserPath(input: string): string {
 
 /** Reading more than this into a model's context is never the intent. */
 const MAX_READ_BYTES = 256 * 1024
+/** Creation cap — a note or a document, not an asset pipeline. */
+const MAX_WRITE_BYTES = 1024 * 1024
 
 const BINARY_EXTENSIONS = new Set([
   '.png',
@@ -227,6 +241,116 @@ function stringifyMcpResult(value: unknown): string {
   }
 }
 
+const FORM_FIELD_TYPES = new Set<FormFieldType>([
+  'text',
+  'textarea',
+  'number',
+  'select',
+  'checkbox'
+])
+/** A card in a conversation, not a survey builder: past this nobody answers it. */
+const MAX_FORM_FIELDS = 20
+
+/**
+ * Keeps a default the field can actually hold and drops anything else, so one
+ * mistyped default never costs the user the whole form.
+ */
+function parseFormDefault(
+  type: FormFieldType,
+  value: unknown,
+  options: string[]
+): { default?: FormFieldValue } {
+  if (value === undefined || value === null) return {}
+  if (type === 'checkbox') return typeof value === 'boolean' ? { default: value } : {}
+  if (type === 'number') {
+    const numeric = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(numeric) ? { default: numeric } : {}
+  }
+  const text = String(value)
+  if (type === 'select') return options.includes(text) ? { default: text } : {}
+  return { default: text }
+}
+
+/**
+ * Validates a model-proposed form into a fixed shape.
+ *
+ * Same reasoning as `parseChartSpec`: the renderer assembles inputs from named
+ * fields, so the model describes what to ask rather than how to draw it. Errors
+ * name the offending field — the model gets one back and fixes that field
+ * instead of guessing at the whole spec.
+ */
+/**
+ * Accepts a model-authored widget.
+ *
+ * Deliberately thin. The chart and form parsers validate every field because
+ * their output drives fixed renderers; this one cannot — `source` is arbitrary
+ * JS, and no parser here can decide whether it is safe. Pretending to validate
+ * it would be worse than not validating it, because the reader would trust the
+ * result. The real boundary is the renderer's origin-isolated sandbox; the only
+ * jobs here are refusing what is obviously unusable and capping the size.
+ */
+export function parseWidgetSpec(args: Record<string, unknown>): WidgetSpec | string {
+  const source = typeof args.source === 'string' ? args.source : ''
+  if (!source.trim()) return 'source is required'
+  if (source.length > WIDGET_SOURCE_MAX_CHARS) {
+    return `source is over the ${WIDGET_SOURCE_MAX_CHARS / 1024}KB limit`
+  }
+
+  const title = typeof args.title === 'string' ? args.title.trim() : ''
+  return title ? { title, source } : { source }
+}
+
+export function parseFormSpec(args: Record<string, unknown>): FormSpec | string {
+  const rawFields = Array.isArray(args.fields) ? args.fields : []
+  if (rawFields.length === 0) return 'fields must be a non-empty array'
+  if (rawFields.length > MAX_FORM_FIELDS) return `fields is limited to ${MAX_FORM_FIELDS} entries`
+
+  const fields: FormField[] = []
+  const keys = new Set<string>()
+  for (const [index, entry] of rawFields.entries()) {
+    const record = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null
+    const key = typeof record?.key === 'string' ? record.key.trim() : ''
+    if (!key) return `fields[${index}].key is required`
+    // Submitted values are keyed by this, so a repeat would silently drop one
+    // of the two answers.
+    if (keys.has(key)) return `fields[${index}].key "${key}" is already used`
+    keys.add(key)
+
+    const type = String(record?.type ?? '')
+      .trim()
+      .toLowerCase() as FormFieldType
+    if (!FORM_FIELD_TYPES.has(type)) {
+      return `field "${key}": type must be one of ${[...FORM_FIELD_TYPES].join(', ')}`
+    }
+
+    const options = Array.isArray(record?.options)
+      ? record.options.map((option) => String(option))
+      : []
+    if (type === 'select' && options.length === 0) {
+      return `field "${key}": select needs a non-empty options array`
+    }
+
+    const label = typeof record?.label === 'string' ? record.label.trim() : ''
+    fields.push({
+      key,
+      // A raw key reads worse than a sentence but better than a rejected form.
+      label: label || key,
+      type,
+      ...(type === 'select' ? { options } : {}),
+      ...(record?.required === true ? { required: true } : {}),
+      ...(typeof record?.placeholder === 'string' ? { placeholder: record.placeholder } : {}),
+      ...parseFormDefault(type, record?.default, options)
+    })
+  }
+
+  return {
+    ...(typeof args.title === 'string' ? { title: args.title } : {}),
+    ...(typeof args.description === 'string' ? { description: args.description } : {}),
+    ...(typeof args.submitLabel === 'string' ? { submitLabel: args.submitLabel } : {}),
+    fields
+  }
+}
+
 export interface ToolRegistryOptions {
   /** Injected so the gateway can be tested without the search subsystem. */
   searchFiles: (query: string, limit: number) => Promise<Array<{ name: string; path: string }>>
@@ -298,6 +422,49 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
           return { output: await readFile(path, 'utf8'), isError: false }
         } catch (error) {
           return { output: `Could not read file: ${(error as Error).message}`, isError: true }
+        }
+      }
+    },
+    {
+      name: 'tuff_write_file',
+      risk: 'write',
+      summarize: (args) => `Write ${readStringArg(args, 'path')}`,
+      execute: async (args) => {
+        const path = resolveUserPath(readStringArg(args, 'path'))
+        if (!path) return { output: 'path is required', isError: true }
+        const content = typeof args.content === 'string' ? args.content : null
+        if (content === null) return { output: 'content is required', isError: true }
+        if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES) {
+          return {
+            output: `Content is over the ${MAX_WRITE_BYTES / 1024}KB write limit.`,
+            isError: true
+          }
+        }
+        if (looksBinary(path)) {
+          return { output: 'Refusing to write a binary extension.', isError: true }
+        }
+
+        try {
+          // `wx` is the whole safety story: this tool creates, never clobbers.
+          // Overwriting would let one hallucinated path destroy a real file;
+          // the model can pick a fresh name when the write bounces.
+          await writeFile(path, content, { encoding: 'utf8', flag: 'wx' })
+          return { output: `Created ${path}`, isError: false }
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code
+          if (code === 'EEXIST') {
+            return {
+              output: 'File already exists — this tool never overwrites. Pick a new name.',
+              isError: true
+            }
+          }
+          if (code === 'ENOENT') {
+            return {
+              output: 'Parent directory does not exist — this tool does not create directories.',
+              isError: true
+            }
+          }
+          return { output: `Could not write file: ${(error as Error).message}`, isError: true }
         }
       }
     },
@@ -506,6 +673,37 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         } catch (error) {
           return { output: `Feature invocation failed: ${(error as Error).message}`, isError: true }
         }
+      }
+    },
+    {
+      name: 'tuff_render_form',
+      // Reads like tuff_render_chart: putting a form on screen touches nothing
+      // on the machine, and filling it in is the user's own deliberate action.
+      risk: 'read',
+      summarize: (args) => {
+        const title = readStringArg(args, 'title').trim()
+        return title ? `Show the form "${title}"` : 'Show a form in the conversation'
+      },
+      execute: async (args) => {
+        const spec = parseFormSpec(args)
+        if (typeof spec === 'string') return { output: `Invalid form: ${spec}`, isError: true }
+        return { output: `${FORM_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
+      }
+    },
+    {
+      name: 'tuff_render_widget',
+      // Still `read`: the code runs in an origin-isolated frame with no network
+      // and no host capabilities, so putting one on screen touches nothing.
+      // This will need revisiting the day the sandbox is granted capabilities.
+      risk: 'read',
+      summarize: (args) => {
+        const title = readStringArg(args, 'title').trim()
+        return title ? `Render the widget "${title}"` : 'Render a custom widget'
+      },
+      execute: async (args) => {
+        const spec = parseWidgetSpec(args)
+        if (typeof spec === 'string') return { output: `Invalid widget: ${spec}`, isError: true }
+        return { output: `${WIDGET_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
     }
   ]

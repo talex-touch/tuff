@@ -1,0 +1,29 @@
+{
+  "id": "home-chain-and-native-search",
+  "name": "home-chain-and-native-search",
+  "title": "首页对话：思考块分段与原生联网搜索",
+  "description": "拆分两个可独立验收的交付：消息体按流顺序渲染（工具移出思考块）、接入 provider 原生 server-side 联网搜索",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-07",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-07-chat-stream-order-render",
+    "08-07-native-web-search"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

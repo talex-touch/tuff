@@ -1,0 +1,30 @@
+{
+  "id": "message-read-aloud",
+  "name": "message-read-aloud",
+  "title": "消息朗读（ttsSpeak 接操作栏）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-06",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/app-shell-v2",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-05-ai-toolchain-suite",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "重启后真机验证朗读:点击出声、再点停止、连点两条只响后者。",
+    "blocker": "待重启后的真机验证;prd.md 记明真实声音无法由单测覆盖。",
+    "evidence": "prd.md 3 条验收标准已勾选 2 条,未勾选的一条即上述真机项;目录内只有 prd.md 与两份 jsonl 上下文清单。随 app-shell-v2 收敛带入 converge/all-to-master(合并提交 de14ee9,PR #1743 尚未合入),收敛过程未重跑本任务的任何验证。"
+  }
+}

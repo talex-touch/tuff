@@ -22,7 +22,7 @@ function mountSectionItem(disabled = false) {
 describe('SectionItem semantics', () => {
   it('uses a native button for card selection', async () => {
     const wrapper = mountSectionItem()
-    const action = wrapper.get('button.SectionItem-Display')
+    const action = wrapper.get('button.SectionItem-Action')
 
     expect(action.attributes('type')).toBe('button')
     expect(action.attributes('aria-pressed')).toBe('false')
@@ -32,10 +32,9 @@ describe('SectionItem semantics', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['filter'])
   })
 
-  // The label row used to router.push to /styles/theme, which swapped the settings page
-  // for a blank one. Both halves of the tile select now, so this asserts selection and
-  // needs no vue-router mock.
-  it('selects from the label row rather than navigating', async () => {
+  // The label row renders a radio, so it has to select. It used to navigate to a detail route
+  // that renders nothing, which took the user off the settings page and showed them no detail.
+  it('selects from the label row as well as the preview', async () => {
     const wrapper = mountSectionItem()
     const bar = wrapper.get('button.SectionItem-Bar')
 
@@ -48,7 +47,7 @@ describe('SectionItem semantics', () => {
 
   it('does not allow disabled keyboard selection', async () => {
     const wrapper = mountSectionItem(true)
-    const action = wrapper.get('button.SectionItem-Display')
+    const action = wrapper.get('button.SectionItem-Action')
 
     expect(action.attributes('disabled')).toBeDefined()
     expect(wrapper.get('button.SectionItem-Bar').attributes('disabled')).toBeDefined()

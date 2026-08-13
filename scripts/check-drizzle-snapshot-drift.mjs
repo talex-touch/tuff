@@ -28,8 +28,18 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * `0011` and `0012` are not a later deletion — `git log --diff-filter=A` finds no commit that
  * ever added them, and `--diff-filter=D` finds no snapshot deletion at all. The chain was
  * never complete, so there is no lost history to recover before deciding what to do.
+ *
+ * Raised 24 → 25 on 2026-08-13, deliberately, which is the escape hatch this check offers rather
+ * than a way around it. Both `master` and `app-shell-v2` had added a migration numbered `0037`;
+ * merging them meant keeping both, so `0037_conversation_messages_composite_pk` was renumbered to
+ * `0038`. `app-shell-v2` never carried a snapshot for it — its `meta/` stops at `0014` — so the
+ * renumber did not lose one, it moved a gap that already existed.
+ *
+ * The right repair is `db:generate` against the merged schema, which rebuilds the chain rather
+ * than shifting the pin again. That is a separate change: doing it inside a 38-file merge would
+ * mix a schema-tooling run with conflict resolutions nobody could review apart.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 24
+export const KNOWN_MISSING_SNAPSHOTS = 25
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

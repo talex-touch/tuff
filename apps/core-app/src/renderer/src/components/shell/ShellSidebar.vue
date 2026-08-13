@@ -10,6 +10,7 @@ import { groupedSettingCategories } from '~/modules/settings/categories'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import ShellBackRow from './ShellBackRow.vue'
 import ShellChromeBar from './ShellChromeBar.vue'
+import ShellConversationList from './ShellConversationList.vue'
 import ShellNavGroup from './ShellNavGroup.vue'
 import ShellNavItem from './ShellNavItem.vue'
 import ShellSearchEntry from './ShellSearchEntry.vue'
@@ -123,13 +124,13 @@ function openCoreBox(): void {
           <ShellNavItem icon="i-ri-edit-box-line" :label="t('shell.newChat')" to="/home" />
           <!--
             Intelligence moved under 「设置 · 智能」: it is configuration, not a place you switch to
-            alongside conversations and the store. `/intelligence` is reached from that page.
+            alongside conversations and the store. Its six pages are sub-routes of that category,
+            which `ShellNavItem` keeps selected by path prefix.
           -->
           <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store" />
         </nav>
 
-        <!-- Conversation history buckets are filled by 08-04-home-conversation. -->
-        <slot name="conversations" />
+        <ShellConversationList />
 
         <div class="ShellSidebar-Spacer" />
 

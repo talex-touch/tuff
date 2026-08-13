@@ -39,16 +39,10 @@ const MISSING_FROM_BOTH = [
   'download.view_logs',
   'intelligence.info.configurationPanel',
   'intelligence.item.selectProvider',
-  'intelligence.search.clear',
-  'settingMessages.desc',
-  'settingMessages.empty',
-  'settingMessages.loading',
-  'settingMessages.markAllRead',
-  'settingMessages.markRead',
-  'settingMessages.refresh',
-  'settingMessages.title',
-  'settingMessages.unread',
-  'settingMessages.unreadTag',
+  // 10 entries left this baseline on 2026-08-13: the app-shell-v2 convergence deleted
+  // SettingMessages.vue and the intelligence search clear affordance, taking their unresolved
+  // keys' only call sites with them. A baseline may only shrink; carrying them would let 10 new
+  // dead keys in unnoticed.
   'store.official',
   'system.unknownError',
   'systemPermission.requiredPermission'

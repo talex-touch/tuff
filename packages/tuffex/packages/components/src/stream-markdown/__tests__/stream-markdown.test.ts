@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
 import TxStreamMarkdown from '../src/TxStreamMarkdown.vue'
 
@@ -264,5 +264,133 @@ describe('txStreamMarkdown', () => {
     expect(wrapper.attributes('data-theme')).toBe('dark')
 
     document.body.classList.remove('dark')
+  })
+})
+
+describe('TxStreamMarkdown inline completion', () => {
+  it('hides unterminated emphasis while streaming', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'the **important', streaming: true },
+    })
+    await flushSanitizer()
+    // Structural, not textual: the reveal animation wraps every fresh run in a
+    // span, so `<strong>important</strong>` never appears as a literal string.
+    expect(wrapper.find('strong').exists()).toBe(true)
+    expect(wrapper.find('strong').text()).toBe('important')
+    // The regression: asterisks reaching the reader for a few hundred ms.
+    expect(wrapper.text()).not.toContain('**')
+    expect(wrapper.text()).toContain('the important')
+  })
+
+  it('leaves the same text literal once the turn has settled', async () => {
+    // Not styling: a finished reply that really does contain `**` said so.
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'the **important', streaming: false },
+    })
+    await flushSanitizer()
+    expect(wrapper.find('strong').exists()).toBe(false)
+    expect(wrapper.text()).toContain('**important')
+  })
+
+  it('drops the speculative closer when streaming ends', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'a `cod', streaming: true },
+    })
+    await flushSanitizer()
+    expect(wrapper.find('code').text()).toBe('cod')
+
+    await wrapper.setProps({ content: 'a `code` b', streaming: false })
+    await flushSanitizer()
+    expect(wrapper.find('code').text()).toBe('code')
+    expect(wrapper.text()).toContain('a code b')
+  })
+})
+
+describe('TxStreamMarkdown remote images', () => {
+  afterEach(async () => {
+    const { resetRemoteImagePolicy } = await import('../src/remote-image-policy')
+    resetRemoteImagePolicy()
+  })
+
+  it('blocks a remote image by default and offers the two ways out', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: '![a cat](https://evil.example/p.gif)' },
+    })
+    await flushSanitizer()
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.find('[data-tx-image-action="once"]').exists()).toBe(true)
+    expect(wrapper.find('[data-tx-image-action="session"]').exists()).toBe(true)
+  })
+
+  it('loads the image when the reader clicks through', async () => {
+    // The placeholder lives inside v-html, so this also proves the delegated
+    // listener and the cache invalidation both work — neither is observable
+    // from the policy module alone.
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: '![a cat](https://evil.example/p.gif)' },
+      attachTo: document.body,
+    })
+    await flushSanitizer()
+    await wrapper.find('[data-tx-image-action="once"]').trigger('click')
+    await flushSanitizer()
+    expect(wrapper.find('img').attributes('src')).toBe('https://evil.example/p.gif')
+    wrapper.unmount()
+  })
+
+  it('renders remote images directly when the host disables blocking', async () => {
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: '![a](https://x.dev/i.png)', blockRemoteImages: false },
+    })
+    await flushSanitizer()
+    expect(wrapper.find('img').exists()).toBe(true)
+  })
+})
+
+describe('TxStreamMarkdown table copy', () => {
+  it('writes the table to the clipboard as CSV and confirms on the button', async () => {
+    const written: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async (text: string) => { written.push(text) } },
+      configurable: true,
+    })
+
+    const wrapper = mount(TxStreamMarkdown, {
+      props: {
+        content: '| name | note |\n| --- | --- |\n| x | a, b |',
+        copyTableText: 'Copy CSV',
+        copiedTableText: 'Copied',
+      },
+      attachTo: document.body,
+    })
+    await flushSanitizer()
+
+    const button = wrapper.find('[data-tx-table-copy]')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    await flushPromises()
+
+    // Quoting is the part that silently corrupts a spreadsheet if it is missing.
+    expect(written).toEqual(['name,note\r\nx,"a, b"'])
+    expect(button.element.textContent).toBe('Copied')
+    wrapper.unmount()
+  })
+
+  it('does not confirm when the clipboard refuses', async () => {
+    // A denied clipboard is not an error state, but it must not claim success.
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async () => { throw new Error('denied') } },
+      configurable: true,
+    })
+
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: '| a |\n| --- |\n| 1 |', copyTableText: 'Copy CSV', copiedTableText: 'Copied' },
+      attachTo: document.body,
+    })
+    await flushSanitizer()
+    const button = wrapper.find('[data-tx-table-copy]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(button.element.textContent).toBe('Copy CSV')
+    wrapper.unmount()
   })
 })

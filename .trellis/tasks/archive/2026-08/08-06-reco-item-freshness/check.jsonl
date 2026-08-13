@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-06-reco-item-freshness/design.md", "reason": "对照检查实现是否遵守数据契约(installedAt 永不覆盖、双门判定)与文件所有权分块"}
+{"file": ".trellis/tasks/08-06-reco-scenario-playbook/research/scenario-matrix.md", "reason": "验收口径来自场景卡:top3、48h/7d 窗口、执行后交棒、卸载即时消失、曝光切片"}
+{"file": ".trellis/tasks/08-05-search-audit-remediation/research/reco-signals-audit.md", "reason": "检查不违背稳定层/易变层缓存约定与三原则;不回退 R1/R2 已修的 bug(排序丢失、sourceId 口径)"}

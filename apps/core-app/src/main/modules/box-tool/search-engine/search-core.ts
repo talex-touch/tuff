@@ -471,6 +471,18 @@ export class SearchEngineCore
    * evicted by the existing LRU bound.
    */
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
+    // No searchCache.clear() here. #1729/#1730 removed it deliberately: cacheSearchResult
+    // already refuses a write whose revision the hub has moved past, so the clear was redundant --
+    // and while it was there, `revision-mismatch` could never be observed and the telemetry could
+    // not say why an entry went away. app-shell-v2 still had the clear because it branched before
+    // that; its recommendation invalidation below is the part worth keeping.
+    // The recommendation ranking is cached for 30 minutes, so an app installed
+    // or removed just now would otherwise stay invisible (or keep showing) for
+    // that long. Only app commits matter: file commits fire continuously while
+    // the index builds, and the recommendation grid never contains files.
+    if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
+      this.recommendationEngine?.invalidateCache()
+    }
     for (const context of this.indexCommitStreams) {
       if (context.isCancelled()) {
         this.indexCommitStreams.delete(context)

@@ -186,5 +186,10 @@ const recommendationBadgeIcon = computed(() => {
     background: rgba(116, 185, 255, 0.15);
     color: #74b9ff;
   }
+
+  &.badge-newly-installed {
+    background: rgba(162, 155, 254, 0.15);
+    color: #a29bfe;
+  }
 }
 </style>

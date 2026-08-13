@@ -40,9 +40,10 @@ vi.mock('./intelligence-workflow-service', () => ({
 vi.mock('./ai-cli-orchestrator', () => ({
   aiCliOrchestrator: orchestratorMocks
 }))
-// Spread the real module: a full replacement drops every export the
-// module later gains, which is how PRIVACY_DATA_CATEGORIES broke this.
 vi.mock('@talex-touch/utils/transport/events/types', async (importOriginal) => ({
+  // Real constants and guards (they're pure data), with only the error-code
+  // check stubbed — a hand-listed mock goes stale every time the module
+  // grows an export, which is exactly how this suite broke.
   ...(await importOriginal<typeof import('@talex-touch/utils/transport/events/types')>()),
   isIntelligenceErrorCode: vi.fn(() => false)
 }))

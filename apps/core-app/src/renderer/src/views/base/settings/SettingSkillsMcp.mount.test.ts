@@ -50,6 +50,25 @@ vi.mock('@talex-touch/utils/renderer', () => ({
   })
 }))
 
+const localSnapshot = {
+  dirs: ['/Users/dev/tuff-skills'],
+  skills: [
+    {
+      id: 'local:abc123def456',
+      name: 'triage',
+      description: 'Sort the inbox',
+      path: '/Users/dev/tuff-skills/triage',
+      sourceDir: '/Users/dev/tuff-skills',
+      enabled: true
+    }
+  ]
+}
+
+const send = vi.fn(async (event: { toEventName: () => string }) =>
+  event.toEventName() === 'ai:skill-local:list' ? localSnapshot : undefined
+)
+
+vi.mock('@talex-touch/utils/transport', () => ({ useTuffTransport: () => ({ send }) }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -62,7 +81,7 @@ vi.mock('vue-sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 import SettingSkillsMcp from './SettingSkillsMcp.vue'
 
 describe('settingSkillsMcp mounts standalone', () => {
-  it('renders both sections from the store items without throwing', async () => {
+  it('renders every section from the store items without throwing', async () => {
     const wrapper = mount(SettingSkillsMcp)
     await flushPromises()
 
@@ -73,5 +92,18 @@ describe('settingSkillsMcp mounts standalone', () => {
     expect(text).toContain('fs')
     expect(text).toContain('notes')
     expect(text).toContain('legacy-server')
+  })
+
+  it('lists linked directories and their skills from the local snapshot', async () => {
+    const wrapper = mount(SettingSkillsMcp)
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('settings.skillsMcp.localDirs.label')
+    expect(text).toContain('/Users/dev/tuff-skills')
+    expect(text).toContain('triage')
+    expect(text).toContain('Sort the inbox')
+    // One skill under the one directory, reported back to the row.
+    expect(text).toContain('settings.skillsMcp.localDirs.dirDesc:{"count":1}')
   })
 })
