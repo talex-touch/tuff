@@ -139,7 +139,7 @@
   - 2026-08-03 深度运行复核：canonical macOS arm64 包在隔离 profile 运行 50+ 分钟、完成 145 次搜索并等待 Worker 空闲关闭后，主进程仍有 775 个 numeric FDs，其中 294 个指向 `database.db`、36 个指向 `database-aux.db`，最高 FD 1032，超过 `database/index.ts` 的 `DB_OPEN_FD_WARN_THRESHOLD = 256`。15 秒四次 `lsof` 采样保持平台且搜索无失败，本轮确认的是高句柄压力，不直接定性为线性泄漏；后续 R9 必须把 libSQL client/session owner registry 与 statement 生命周期纳入验收。
   - 2026-08-04 修复闭环证据：同一 146-app fresh-profile mdls 运行后，provider-level reconcile batching 将 `database.db` numeric FDs 从 148 降到 11；自然 mdls tick、搜索压力与隐藏回收后，全进程 numeric FDs 为 167，低于 `DB_OPEN_FD_WARN_THRESHOLD = 256`，且未使用 forced GC。CoreApp 保留 Windows/Linux 的 Chokidar 4 后端，仅在 macOS 选择 Chokidar 3.6 package alias 的原生 FSEvents 后端；canonical packaged 启动无模块解析错误，应用目录树仅保留 4 个 watcher descriptors。
   - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
-  - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths`: the flag remains default-off until every 2d/2e writer and provider-before-`searchIndexWriter` readiness ordering have focused plus flag-on app evidence.
+  - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths`: the split has defaulted on since `cd39bdbf6`; `=0` is the emergency rollback. Every remaining 2d/2e writer and provider-before-`searchIndexWriter` readiness assertion still needs focused verification and isolated-profile runtime evidence.
 
 ### 🟢 低危清理
 
@@ -162,7 +162,7 @@
 | `07-13-fix-ranking-dead-features`              | B1 + B2                                                                                                   | ✅ done（typecheck 0 err，46 相关用例通过）                       |
 | `07-16-fix-usage-statistics-double-counting`   | B3                                                                                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
 | `07-16-unify-file-filtering-service`           | B4                                                                                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
-| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-off, readiness-order, and flag-on app gates | planning                                                          |
+| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-on topology, readiness-order, isolated-profile evidence, and `=0` rollback gate | planning
 | (待建)                                         | R1 打包验证 / R2 mac 签名 / R3 流式落库 …                                                                 | backlog                                                           |
 
 ### 遗留 carve-out（B1 派生，未做）
