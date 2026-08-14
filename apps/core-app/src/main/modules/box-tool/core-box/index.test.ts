@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     showCoreBox: false,
     isCollapsed: false,
     coreBoxManagerTrigger: vi.fn(),
+    ensureCreated: vi.fn(async (): Promise<void> => {}),
     getCurScreen: vi.fn(() => ({ id: 1 })),
     updatePosition: vi.fn(),
     setHeight: vi.fn(),
@@ -171,6 +172,7 @@ vi.mock('./window', () => ({
   COREBOX_MIN_HEIGHT: 56,
   windowManager: {
     create: vi.fn(),
+    ensureCreated: mocks.ensureCreated,
     getCurScreen: mocks.getCurScreen,
     updatePosition: mocks.updatePosition,
     setHeight: mocks.setHeight,
@@ -201,6 +203,48 @@ describe('CoreBoxModule', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('waits for the hidden CoreBox renderer before registering its shortcut', async () => {
+    let resolveCreation!: () => void
+    let markEnsureStarted!: () => void
+    const ensureStarted = new Promise<void>((resolve) => {
+      markEnsureStarted = resolve
+    })
+    const creation = new Promise<void>((resolve) => {
+      resolveCreation = resolve
+    })
+    mocks.ensureCreated.mockImplementationOnce(() => {
+      markEnsureStarted()
+      return creation
+    })
+
+    const module = new CoreBoxModule()
+    const initialization = module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+    let initializationCompleted = false
+    void initialization.then(() => {
+      initializationCompleted = true
+    })
+
+    const nextStage = await Promise.race([
+      ensureStarted.then(() => 'ensure-started' as const),
+      initialization.then(() => 'initialization-completed' as const)
+    ])
+
+    expect(nextStage).toBe('ensure-started')
+    expect(mocks.ensureCreated).toHaveBeenCalledTimes(1)
+    expect(initializationCompleted).toBe(false)
+    expect(mocks.registerMainShortcut).not.toHaveBeenCalled()
+
+    resolveCreation()
+    await initialization
+
+    expect(initializationCompleted).toBe(true)
+    expect(mocks.ensureCreated).toHaveBeenCalledTimes(1)
+    expect(mocks.registerMainShortcut).toHaveBeenCalledTimes(1)
   })
 
   it('registers only core.box.toggle as enabled by default', async () => {

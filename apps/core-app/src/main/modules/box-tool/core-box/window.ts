@@ -51,7 +51,6 @@ const COREBOX_BLUR_HIDE_CONFIRM_MS = 120
 const COREBOX_SHORTCUT_FOCUS_GRACE_MS = 1500
 const COREBOX_DEFAULT_FOCUS_GRACE_MS = 500
 
-const COREBOX_IDLE_DESTROY_MS = 60_000
 const windowAnimation = useWindowAnimation()
 
 /**
@@ -85,7 +84,6 @@ export class WindowManager {
   private readonly focusPolicy = new CoreBoxFocusPolicy()
   private appSettingUnsubscribe: (() => void) | null = null
   private creationPromise: Promise<TouchWindow> | null = null
-  private idleDestroyTimer: NodeJS.Timeout | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -192,35 +190,6 @@ export class WindowManager {
     } finally {
       if (this.creationPromise === creation) this.creationPromise = null
     }
-  }
-
-  private cancelIdleDestroy(): void {
-    if (!this.idleDestroyTimer) return
-    clearTimeout(this.idleDestroyTimer)
-    this.idleDestroyTimer = null
-  }
-
-  private scheduleIdleDestroy(): void {
-    this.cancelIdleDestroy()
-    const timer = setTimeout(() => {
-      if (this.idleDestroyTimer !== timer) return
-      this.idleDestroyTimer = null
-      const current = this.current
-      if (!current || current.window.isDestroyed()) return
-      if (
-        current.window.isVisible() ||
-        coreBoxManager.showCoreBox ||
-        coreBoxManager.isUIMode ||
-        this.pluginViewController.hasView()
-      ) {
-        return
-      }
-      metaOverlayManager.destroy()
-      current.window.destroy()
-      coreBoxWindowLog.info('Destroyed hidden CoreBox after idle timeout')
-    }, COREBOX_IDLE_DESTROY_MS)
-    timer.unref?.()
-    this.idleDestroyTimer = timer
   }
 
   /**
@@ -371,7 +340,6 @@ export class WindowManager {
    * @param triggeredByShortcut - Whether this show was triggered by keyboard shortcut
    */
   public show(triggeredByShortcut: boolean = false): void {
-    this.cancelIdleDestroy()
     if (this.creationPromise) {
       void this.creationPromise
         .then(() => this.show(triggeredByShortcut))
@@ -461,7 +429,6 @@ export class WindowManager {
 
     if (options.immediate === true) {
       window.window.hide()
-      this.scheduleIdleDestroy()
       return
     }
 
@@ -476,7 +443,6 @@ export class WindowManager {
     setTimeout(() => {
       if (window.window.isDestroyed()) return
       window.window.hide()
-      this.scheduleIdleDestroy()
     }, 100)
   }
 
@@ -743,7 +709,6 @@ export class WindowManager {
   }
 
   public destroy(): void {
-    this.cancelIdleDestroy()
     metaOverlayManager.destroy()
     for (const window of this.windows) {
       if (!window.window.isDestroyed()) window.window.destroy()
