@@ -18,12 +18,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const HOME = process.platform === 'win32' ? 'C:\\Users\\tester' : '/home/tester'
 const USER_DATA = path.join(HOME, '.config', 'tuff-userdata')
+const CACHE = path.join(HOME, '.cache', 'tuff-cache')
 
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn((name: string) => {
       if (name === 'home') return HOME
       if (name === 'userData') return USER_DATA
+      if (name === 'cache') return CACHE
       if (name === 'temp') return os.tmpdir()
       throw new Error(`unexpected path ${name}`)
     })
@@ -44,7 +46,8 @@ describe('getAllowedLocalFileRoots', () => {
     expect(roots).not.toContain(path.normalize(HOME))
   })
 
-  it('keeps userData and temp, which are the roots the protocol actually serves from', () => {
+  it('keeps app icons, userData and temp, which are the roots the protocol serves from', () => {
+    expect(roots).toContain(path.join(CACHE, 'app-icons'))
     expect(roots).toContain(path.normalize(USER_DATA))
     expect(roots).toContain(path.normalize(os.tmpdir()))
   })
@@ -86,7 +89,11 @@ describe('isAllowedLocalFilePath against the narrowed roots', () => {
     expect(isAllowedLocalFilePath(icon, roots)).toBe(true)
   })
 
-  it('still serves from userData', () => {
+  it('serves generated app icons but rejects adjacent cache directories', () => {
+    expect(isAllowedLocalFilePath(path.join(CACHE, 'app-icons', 'darwin', 'icon.png'), roots)).toBe(
+      true
+    )
+    expect(isAllowedLocalFilePath(path.join(CACHE, 'app-icons-old', 'icon.png'), roots)).toBe(false)
     expect(isAllowedLocalFilePath(path.join(USER_DATA, 'cache', 'icon.png'), roots)).toBe(true)
   })
 

@@ -13,6 +13,6 @@ const { t } = useI18n()
 
 <template>
   <SettingsPage :title="t('settingsNav.category.appearance')">
-    <ThemeStyle />
+    <ThemeStyle embedded />
   </SettingsPage>
 </template>

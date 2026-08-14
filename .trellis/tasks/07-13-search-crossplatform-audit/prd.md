@@ -85,6 +85,7 @@
   - 架构修复：Darwin `.icns -> sips` 后使用 tuff-native AppKit main-thread helper；公开 Promise 先 `setImmediate` 让出事件循环，私有同步 N-API 断言主线程，在 `@autoreleasepool` 内调用 `NSWorkspace iconForFile:` 并原子写 PNG。completion 仅返回 path/尺寸；图片字节不经过 Node worker、IPC、MessagePort 或 preload。
   - 协议约束：`tfile` 是新本地资源的规范 data plane，并在 allowlist 后用 `bypassCustomProtocolHandlers` 流式转发 built-in `file:`；`atom` 仅 legacy；当前无 handler 的 `stream` scheme 不得成为隐式 blob tunnel。typed transport stream 只承载有界结构化 control/chunk metadata。
   - 验收：隔离 Electron profile 实际水合 227 icons 并存活 2m29s，无新 `.ips`；5 个独立 native 进程各处理 125 个真实 app（625/625）；descriptor 非 Buffer；107 focused tests、native build、node typecheck、scoped ESLint 通过；icon-only hydration 的 search-index delta=0。
+  - 2026-08-13 回归闭环：`v2.4.14-beta.7` 的安全白名单收窄只保留应用扫描根、`userData` 与 temp，却漏掉 `IconService` 当前写入的 `app.getPath('cache')/app-icons`；文件存在且映射为 `tfile`，渲染请求仍统一返回 403，最终全部退化成 `EmptyAppPlaceholder.svg`。修复仅放行精确 `app-icons` 子目录，未重新开放 home/cache；策略与协议 21 个 focused tests、node/web typecheck 通过，隔离 CoreBox 7/7 图标均为 256px 且空占位数为 0。
 
 ### 🟠 高危工程风险
 
