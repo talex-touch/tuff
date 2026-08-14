@@ -168,6 +168,75 @@ describe('update release manifest validator', () => {
     )
   })
 
+  it('accepts electron-builder macOS DMGs for both supported architectures', () => {
+    const manifestPath = writeManifest({
+      schemaVersion: 2,
+      release: {
+        version: '2.4.14-beta.6',
+        channel: 'BETA',
+        tag: 'v2.4.14-beta.6',
+        rollbackFromVersion: '2.4.14-beta.5',
+        rollbackCompatible: false,
+      },
+      artifacts: [
+        {
+          component: 'core',
+          name: 'macos-latest-beta-tuff-2.4.14-beta.6-macos-arm64.dmg',
+          platform: 'darwin',
+          arch: 'arm64',
+          sha256: '1'.repeat(64),
+          signature: 'macos-latest-beta-tuff-2.4.14-beta.6-macos-arm64.dmg.sig',
+        },
+        {
+          component: 'core',
+          name: 'macos-latest-beta-tuff-2.4.14-beta.6-macos-x64.dmg',
+          platform: 'darwin',
+          arch: 'x64',
+          sha256: '2'.repeat(64),
+          signature: 'macos-latest-beta-tuff-2.4.14-beta.6-macos-x64.dmg.sig',
+        },
+      ],
+    })
+
+    assert.match(runValidator(manifestPath), /Validation passed/)
+  })
+
+  it('rejects workflow macOS names with mismatched platform and architecture metadata', () => {
+    const manifestPath = writeManifest({
+      schemaVersion: 2,
+      release: {
+        version: '2.4.14-beta.6',
+        channel: 'BETA',
+        tag: 'v2.4.14-beta.6',
+        rollbackFromVersion: '2.4.14-beta.5',
+        rollbackCompatible: false,
+      },
+      artifacts: [
+        {
+          component: 'core',
+          name: 'macos-latest-beta-tuff-2.4.14-beta.6-macos-x64.dmg',
+          platform: 'linux',
+          arch: 'arm64',
+          sha256: '3'.repeat(64),
+          signature: 'macos-latest-beta-tuff-2.4.14-beta.6-macos-x64.dmg.sig',
+        },
+      ],
+    })
+
+    assert.throws(
+      () => runValidator(manifestPath),
+      (error) => {
+        const output = `${error.stdout ?? ''}\n${error.stderr ?? ''}`
+        assert.match(
+          output,
+          /artifacts\[0\]\.platform does not match artifact name/,
+        )
+        assert.match(output, /artifacts\[0\]\.arch does not match artifact name/)
+        return true
+      },
+    )
+  })
+
   it('rejects platform metadata that disagrees with the asset filename', () => {
     const manifestPath = writeManifest({
       schemaVersion: 2,
