@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createLivePrivacyDatabaseClient,
   createPrivacyProductionOwnerRegistry,
   resolvePrivacyCoreLogDirectory
 } from './privacy-module'
@@ -105,5 +106,58 @@ describe('privacy production owner wiring', () => {
     expect(calls.length).toBeGreaterThan(0)
     expect(calls.every((call) => call.startsWith('aux:'))).toBe(true)
     expect(diagnostics.itemCount).toBe(1)
+  })
+
+  it('resolves the live database client for every privacy operation', async () => {
+    const calls: string[] = []
+    const primary = {
+      execute: vi.fn(async () => {
+        calls.push('primary:execute')
+        return {} as ResultSet
+      }),
+      batch: vi.fn(async () => {
+        calls.push('primary:batch')
+        return []
+      })
+    } satisfies Pick<Client, 'execute' | 'batch'>
+    const auxiliary = {
+      execute: vi.fn(async () => {
+        calls.push('auxiliary:execute')
+        return {} as ResultSet
+      }),
+      batch: vi.fn(async () => {
+        calls.push('auxiliary:batch')
+        return []
+      })
+    } satisfies Pick<Client, 'execute' | 'batch'>
+    let current: Pick<Client, 'execute' | 'batch'> | null = primary
+    const database = createLivePrivacyDatabaseClient(() => current)
+
+    await database.execute('SELECT primary_execute')
+    current = auxiliary
+    await database.execute('SELECT auxiliary_execute')
+    await database.batch(['SELECT auxiliary_batch'])
+    current = primary
+    await database.batch(['SELECT primary_batch'])
+    expect(calls).toEqual([
+      'primary:execute',
+      'auxiliary:execute',
+      'auxiliary:batch',
+      'primary:batch'
+    ])
+
+    current = null
+    await expect(
+      Promise.resolve().then(() => database.execute('SELECT unavailable'))
+    ).rejects.toThrow('PRIVACY_DATABASE_UNAVAILABLE')
+    await expect(
+      Promise.resolve().then(() => database.batch(['SELECT unavailable']))
+    ).rejects.toThrow('PRIVACY_DATABASE_UNAVAILABLE')
+    expect(calls).toEqual([
+      'primary:execute',
+      'auxiliary:execute',
+      'auxiliary:batch',
+      'primary:batch'
+    ])
   })
 })

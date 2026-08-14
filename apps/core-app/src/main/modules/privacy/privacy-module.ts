@@ -1,7 +1,8 @@
-import type { Client } from '@libsql/client'
+import type { Client, InArgs, InStatement } from '@libsql/client'
 import type { ModuleDestroyContext, ModuleInitContext } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { TempFileService } from '../../service/temp-file.service'
+import type { DatabaseModule } from '../database'
 import type { ClipboardImagePersistenceAdapter } from './owners/clipboard-retention-owner'
 import type { DiagnosticsTelemetryRetentionLifecycle } from './owners/diagnostics-retention-owner'
 import type {
@@ -49,9 +50,11 @@ export interface PrivacyLifecycleModuleDependencies {
   readonly createCoordinator: (service: PrivacyLifecycleService) => PrivacyRetentionCoordinator
 }
 
+type PrivacyDatabaseClient = Pick<Client, 'execute' | 'batch'>
+
 export interface PrivacyProductionOwnerDependencies {
-  readonly coreClient: Pick<Client, 'execute' | 'batch'>
-  readonly auxiliaryClient: Pick<Client, 'execute' | 'batch'>
+  readonly coreClient: PrivacyDatabaseClient
+  readonly auxiliaryClient: PrivacyDatabaseClient
   readonly tempFileService: TempFileService
   readonly clipboardImagePersistence: ClipboardImagePersistenceAdapter
   readonly onClipboardDeleted: (ids: readonly number[]) => void
@@ -61,6 +64,24 @@ export interface PrivacyProductionOwnerDependencies {
   readonly contextLifecycle: IntelligenceContextRetentionLifecycle
   readonly telemetryLifecycle: DiagnosticsTelemetryRetentionLifecycle
   readonly logDirectory: string
+}
+
+export function createLivePrivacyDatabaseClient(
+  resolveClient: () => PrivacyDatabaseClient | null
+): PrivacyDatabaseClient {
+  const requireClient = (): PrivacyDatabaseClient => {
+    const client = resolveClient()
+    if (!client) throw new Error('PRIVACY_DATABASE_UNAVAILABLE')
+    return client
+  }
+  const execute: Client['execute'] = (statement: InStatement, args?: InArgs) => {
+    const client = requireClient()
+    return typeof statement === 'string'
+      ? client.execute(statement, args)
+      : client.execute(statement)
+  }
+  const batch: Client['batch'] = (statements, mode) => requireClient().batch(statements, mode)
+  return Object.freeze({ execute, batch })
 }
 
 export function resolvePrivacyCoreLogDirectory(innerRootPath: string): string {
@@ -102,10 +123,12 @@ export function createPrivacyProductionOwnerRegistry(
   ])
 }
 
-function requireDatabaseClients(databaseModule: typeof import('../database').databaseModule) {
+function requireDatabaseClients(databaseModule: DatabaseModule) {
   const coreClient = databaseModule.getClient()
-  const auxiliaryClient = databaseModule.getAuxClient()
-  if (!coreClient || !auxiliaryClient) throw new Error('PRIVACY_DATABASE_UNAVAILABLE')
+  if (!coreClient) throw new Error('PRIVACY_DATABASE_UNAVAILABLE')
+  const auxiliaryClient = createLivePrivacyDatabaseClient(
+    () => databaseModule.getAuxClient() ?? databaseModule.getClient()
+  )
   return { coreClient, auxiliaryClient }
 }
 
