@@ -7,7 +7,6 @@
 - **`v2.4.14-beta.8` 未发布** — GitHub release run `31778105595` 的 macOS 打包在签名和公证成功后，`dmgbuild` 无法卸载 `disk32`（`Resource busy`）而失败；Create Release 与 Nexus sync 随后跳过。CI、Windows、Linux、文档、typecheck 与 code-quality job 通过不构成 release 成功。维护者须在干净的 macOS runner/环境重跑并取得 DMG 与 release/sync job 成功记录。
 - **Windows Everything 的打包交互验收未采集** — 仍须在 Windows 打包 CoreBox 采集普通、`@file`、结构化筛选以及结果、空态、降级态，再用 manifest 严格校验；无输入 JSON 的失败是边界检查，不是已采集证据的回归。跟踪：[#308](https://github.com/talex-touch/tuff/issues/308)。
 - **OTA 与发布 UI 的真实宿主证据未齐** — Windows/Linux 仍缺真实安装 handoff、启动 health/recovery；release-notes 仍缺运行中的 CoreApp 桌面与窄窗口截图。静态检查、hosted CI 与 macOS 的自动化路径不能替代这些证据。跟踪：[#326](https://github.com/talex-touch/tuff/issues/326)、[#482](https://github.com/talex-touch/tuff/issues/482)。
-- **本机 `docs:verify` 无法启动** — 依赖解析仍寻找不存在的 `/Users/talexdreamsoul/Workspace/talex-touch/node_modules/vitest/vitest.mjs`，未进入文档诊断。先修复本机 workspace/共享 shim 拓扑，再恢复总文档门禁；独立链接审计只能补充覆盖。跟踪：[#1564](https://github.com/talex-touch/tuff/issues/1564)。
 
 ## 数据库、安全与发布门禁
 
