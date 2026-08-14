@@ -35,7 +35,7 @@ test('publishes immutable Everything, SDK, and CLI assets for every supported ar
         filename: 'Everything-SDK.zip',
         url: 'https://www.voidtools.com/Everything-SDK.zip',
         sha256:
-          '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+          'f5716d9513cce6b462b5170a0a2e7e081e191d9bcac6774f5decc061497df443',
       },
     )
 

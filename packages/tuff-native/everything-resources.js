@@ -2,6 +2,10 @@
 
 const process = require('node:process')
 
+// The official SDK URL is unversioned; update this pin only after verifying the archive contents.
+const EVERYTHING_SDK_SHA256
+  = 'f5716d9513cce6b462b5170a0a2e7e081e191d9bcac6774f5decc061497df443'
+
 const EVERYTHING_INSTALL_RESOURCES = Object.freeze({
   x64: Object.freeze([
     Object.freeze({
@@ -15,8 +19,7 @@ const EVERYTHING_INSTALL_RESOURCES = Object.freeze({
       type: 'sdk',
       filename: 'Everything-SDK.zip',
       url: 'https://www.voidtools.com/Everything-SDK.zip',
-      sha256:
-        '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+      sha256: EVERYTHING_SDK_SHA256,
     }),
     Object.freeze({
       type: 'cli',
@@ -38,8 +41,7 @@ const EVERYTHING_INSTALL_RESOURCES = Object.freeze({
       type: 'sdk',
       filename: 'Everything-SDK.zip',
       url: 'https://www.voidtools.com/Everything-SDK.zip',
-      sha256:
-        '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+      sha256: EVERYTHING_SDK_SHA256,
     }),
     Object.freeze({
       type: 'cli',
@@ -61,8 +63,7 @@ const EVERYTHING_INSTALL_RESOURCES = Object.freeze({
       type: 'sdk',
       filename: 'Everything-SDK.zip',
       url: 'https://www.voidtools.com/Everything-SDK.zip',
-      sha256:
-        '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+      sha256: EVERYTHING_SDK_SHA256,
     }),
     Object.freeze({
       type: 'cli',
