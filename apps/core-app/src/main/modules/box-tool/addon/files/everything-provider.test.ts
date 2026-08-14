@@ -994,7 +994,7 @@ describe('everything-provider fallback chain', () => {
       const expectedHashes: Record<string, string> = {
         'Everything-1.4.1.1032.x64.zip':
           '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c',
-        'Everything-SDK.zip': '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+        'Everything-SDK.zip': 'f5716d9513cce6b462b5170a0a2e7e081e191d9bcac6774f5decc061497df443',
         'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
       }
       vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
@@ -1119,7 +1119,7 @@ describe('everything-provider fallback chain', () => {
       const expectedHashes: Record<string, string> = {
         'Everything-1.4.1.1032.x64.zip':
           '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c',
-        'Everything-SDK.zip': '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+        'Everything-SDK.zip': 'f5716d9513cce6b462b5170a0a2e7e081e191d9bcac6774f5decc061497df443',
         'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
       }
       vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
@@ -1340,7 +1340,7 @@ describe('everything-provider fallback chain', () => {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
         if (String(filePath).includes('Everything-SDK.zip')) {
-          return '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343'
+          return 'f5716d9513cce6b462b5170a0a2e7e081e191d9bcac6774f5decc061497df443'
         }
         return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
       })
@@ -1381,7 +1381,7 @@ describe('everything-provider fallback chain', () => {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
         if (String(filePath).includes('Everything-SDK.zip')) {
-          return '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343'
+          return 'f5716d9513cce6b462b5170a0a2e7e081e191d9bcac6774f5decc061497df443'
         }
         return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
       })
