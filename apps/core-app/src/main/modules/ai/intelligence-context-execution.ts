@@ -278,7 +278,7 @@ export class ContextMessageAssembler {
 export class IntelligenceContextExecutionService {
   constructor(
     private readonly hygiene: ContextExecutionHygiene = contextHygieneService,
-    private readonly runtime: ContextExecutionRuntime = tuffIntelligence,
+    private readonly runtime?: ContextExecutionRuntime,
     private readonly assembler = new ContextMessageAssembler()
   ) {}
 
@@ -513,7 +513,7 @@ export class IntelligenceContextExecutionService {
         ? await this.prepareEphemeral(request, actor, signal)
         : await this.prepare(request, actor, signal)
     throwIfContextCancelled(signal)
-    const invocation = await this.runtime.invoke<T>(
+    const invocation = await (this.runtime ?? tuffIntelligence).invoke<T>(
       request.capabilityId,
       execution.payload,
       execution.options
@@ -540,7 +540,7 @@ export class IntelligenceContextExecutionService {
     throwIfContextCancelled(signal)
     const execution = await this.prepare(request, actor, signal)
     throwIfContextCancelled(signal)
-    const iterable = this.runtime.stream<T>(
+    const iterable = (this.runtime ?? tuffIntelligence).stream<T>(
       request.capabilityId,
       execution.payload,
       execution.options

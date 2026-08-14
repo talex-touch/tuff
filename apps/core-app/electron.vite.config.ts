@@ -231,9 +231,11 @@ export default defineConfig({
           // dependencies，不外部化就会被 rollup 打包，进而把各平台 .node 摊平成顶层无条件 require
           // （darwin 上会先误加载 win32 的 .node，报 "slice is not valid mach-o file" 而回退到轮询）。
           // 外部化后交由 node_modules 里的运行时按平台加载正确的二进制。
-          '@crosscopy/clipboard'
+          '@crosscopy/clipboard',
+          'extract-file-icon'
         ],
         exclude: [
+          'chalk', // Chalk 5 为 ESM-only，主进程 CJS 必须内联以保留 default export
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
           '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联

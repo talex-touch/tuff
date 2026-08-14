@@ -471,6 +471,18 @@ importers:
       '@electron/asar':
         specifier: ^3.4.1
         version: 3.4.1
+      '@iconify-json/carbon':
+        specifier: ^1.2.24
+        version: 1.2.24
+      '@iconify-json/ri':
+        specifier: ^1.2.10
+        version: 1.2.10
+      '@iconify-json/simple-icons':
+        specifier: ^1.2.90
+        version: 1.2.90
+      '@iconify/types':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@intlify/unplugin-vue-i18n':
         specifier: ^11.1.2
         version: 11.1.2(eslint@9.39.4(jiti@2.7.0))(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue-i18n@11.4.0(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
