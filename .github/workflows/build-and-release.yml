@@ -807,15 +807,20 @@ jobs:
           while IFS= read -r app_bundle; do
             app_bundles+=("${app_bundle}")
           done < <(find apps/core-app/dist -type d -name "*.app" -prune -print | sort)
-          if [ "${#app_bundles[@]}" -ne 1 ]; then
-            echo "Expected exactly one macOS app bundle, found ${#app_bundles[@]}."
+          if [ "${#app_bundles[@]}" -ne 2 ]; then
+            echo "Expected exactly two macOS app bundles, found ${#app_bundles[@]}."
             printf '  %s\n' "${app_bundles[@]}"
             exit 1
           fi
 
+          app_bundle_args=()
+          for app_bundle in "${app_bundles[@]}"; do
+            app_bundle_args+=(--app-bundle "${app_bundle}")
+          done
+
           node apps/core-app/scripts/verify-macos-release-signing.mjs \
             --mode "${TUFF_MAC_NATIVE_SIGNING_MODE:-developer-id}" \
-            --app-bundle "${app_bundles[0]}" \
+            "${app_bundle_args[@]}" \
             --output apps/core-app/dist/release-signing-evidence.json
 
       - name: Cleanup macOS Notarization Credential File
