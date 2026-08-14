@@ -21,20 +21,18 @@ Darwin application icons use the package-owned native path writer:
 
 ```ts
 export interface DarwinAppIconWriteOptions {
-  sourcePath: string;
-  outputPath: string;
-  size: number;
+  sourcePath: string
+  outputPath: string
+  size: number
 }
 
 export interface DarwinAppIconWriteResult {
-  path: string;
-  width: number;
-  height: number;
+  path: string
+  width: number
+  height: number
 }
 
-export declare function writeDarwinAppIcon(
-  options: DarwinAppIconWriteOptions,
-): Promise<DarwinAppIconWriteResult>;
+export declare function writeDarwinAppIcon(options: DarwinAppIconWriteOptions): Promise<DarwinAppIconWriteResult>
 ```
 
 The caller supplies an absolute application path, an absolute deterministic cache target, and an integer size in the supported range `16..1024`. The production app-icon target is currently 256 px.
@@ -45,12 +43,18 @@ Renderer-facing local resources use the existing URL projection:
 toTfileUrl(absolutePath: string): `tfile://${string}`
 ```
 
+The local-file policy must expose the current generated icon root without reopening the user's
+home directory: `getAllowedLocalFileRoots()` includes exactly
+`path.join(app.getPath('cache'), 'app-icons')` alongside its existing user-data/temp roots.
+Electron's current type declaration omits the runtime-supported `cache` name, so this call uses
+the same narrow cast as the cache-path owner rather than deriving a different directory.
+
 The `tfile` handler validates the canonical path and allowlist, then forwards to Electron's built-in file handler:
 
 ```ts
 net.fetch(pathToFileURL(absolutePath).toString(), {
   bypassCustomProtocolHandlers: true,
-});
+})
 ```
 
 ## 3. Contracts
@@ -93,6 +97,10 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 - A lightweight control-plane invalidation MAY tell a visible consumer to re-resolve its item. It must not include the resource bytes and must not mutate FTS solely to refresh an icon.
 - Search/recommendation mapping resolves a valid path to `tfile://`; renderer code displays that URL and never reads the native path or database directly.
 - `tfile` path normalization and allowlist validation remain the authorization boundary. Adding a native producer does not broaden renderer filesystem access.
+- The current generated application-icon root is `path.join(app.getPath('cache'), 'app-icons')`.
+  Any security narrowing of `tfile` roots must preserve that exact directory while continuing to
+  deny the rest of the user's home. Allowing only scan roots or `userData` makes every valid
+  current-cache icon fail with HTTP 403 and drives `TxIcon` to `EmptyAppPlaceholder.svg`.
 
 ## 4. Validation & Error Matrix
 
@@ -112,6 +120,8 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 | Allowed file missing/read failure                                                  | Return HTTP 404                                                                                            |
 | Allowed file exists                                                                | Return Electron's streaming built-in `file:` response                                                      |
 | Native/cache persistence succeeds but DB pointer write is busy                     | Keep the derived cache usable; retry bounded persistence without retransmitting bytes                      |
+| Current `app.getPath('cache')/app-icons` file                                      | Admit it through `tfile`; the renderer image completes with non-zero natural dimensions                    |
+| Arbitrary sibling under the cache directory or another home path                   | Return HTTP 403; adding the icon root must not widen access to the whole cache/home                        |
 | Visible result needs refresh                                                       | Send metadata-only invalidation or wait for the next query; never send the PNG or rewrite FTS for the icon |
 
 ## 5. Good / Base / Bad Cases
@@ -119,6 +129,9 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 - Good: a screenshot addon returns PNG as a validated Rust-to-main attachment; main writes/promotes it to an allowlisted owned resource and returns only its typed descriptor or `tfile://` URL across TuffTransport.
 - Good: a credit-window-1 stream publishes one data frame, stalls, resumes after consumer ACK, publishes one terminal, and accepts the final data ACK through a bounded completed-stream tombstone.
 - Good: an asset-catalog-only `.app` is resolved by `NSWorkspace`, atomically written to the versioned cache, completed as `{ path, width, height }`, mapped to `tfile://`, and streamed by the renderer with zero image-byte IPC copies.
+- Good: a security hardening removes the broad home root, keeps only the exact current
+  `cache/app-icons` directory, and CoreBox loads distinct 256 px application images with zero
+  `TxIcon` empty fallbacks.
 - Good: a bundle with standalone `.icns` uses `sips`, persists the same deterministic cache pointer, and follows the same `tfile` consumer path.
 - Base: no icon can be resolved; the app remains searchable and uses `i-ri-apps-line` without retry storms.
 - Base: a small transport event carries `{ appPath, cacheVersion }` to invalidate a view; the view re-resolves the `tfile` URL.
@@ -126,6 +139,9 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 - Bad: native code returns a PNG `Buffer`, a worker posts that Buffer, preload forwards it, and renderer creates a data URL.
 - Bad: `app.getFileIcon(..., { size: 'large' })` is used on macOS or a Darwin cache miss is sprayed across Chromium/libuv worker threads.
 - Bad: a new resource consumer uses `atom:` or invents `stream:` semantics instead of the allowlisted `tfile` owner.
+- Bad: `IconService` writes under Electron's cache path while `getAllowedLocalFileRoots()` only
+  retains application scan roots, `userData`, and temp; files exist and recommendation mapping
+  emits `tfile`, but every renderer request receives 403 and all cards display the same placeholder.
 - Bad: icon hydration calls `publishAppRuntimeUpsert` even though the search-index mapping drops icon data.
 
 ## 6. Tests Required
@@ -137,6 +153,11 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 - Darwin integration asserts the JS callback yields one event-loop turn, the native binding rejects non-main-thread use, AppKit runs inside an autorelease pool, and failure leaves no temporary/partial target.
 - IconService tests cover cache reuse, `.icns -> sips`, AppKit fallback, single-flight, serial distinct requests, class fallback, and the absence of Darwin Electron `large` calls.
 - Protocol tests cover canonical Darwin/Windows/UNC paths, repeated encoding, HTTP 400/403/404, allowlisted success, `bypassCustomProtocolHandlers: true`, and a streaming response body.
+- Local-file policy coverage must mock Electron `home`, `userData`, `temp`, and `cache`; assert the
+  exact `cache/app-icons/<platform>/<hash>.png` path is admitted while `.ssh`, `.aws`, Documents,
+  cache siblings, and root-prefix siblings remain denied.
+- A CoreBox runtime smoke must inspect rendered application cards: every current-cache `tfile`
+  image completes with `naturalWidth > 0`, and `.tuff-icon__empty` count is zero.
 - AppProvider tests assert 200 icon-only hydration results produce bounded icon persistence and zero search-index `applyDelta` calls.
 - Static/transport assertions verify Darwin native results and worker/IPC messages contain no `Buffer`, `ArrayBuffer`, base64, or image byte field.
 - Real smoke uses at least 125 cache misses and five consecutive cold starts; it asserts no new `.ips`, `SIGTRAP`, or `EXC_BREAKPOINT`, one extraction per cache key, and later requests served through `tfile`.
@@ -151,20 +172,20 @@ Apply this subsection to `NativeScreenshotService`, `NativeEvents.screenshot.*`,
 
 ```ts
 interface NativeScreenshotCaptureRequest {
-  target?: "cursor-display" | "display" | "region";
-  displayId?: string;
-  cursorPoint?: { x: number; y: number };
-  region?: { x: number; y: number; width: number; height: number };
-  writeClipboard?: boolean;
+  target?: 'cursor-display' | 'display' | 'region'
+  displayId?: string
+  cursorPoint?: { x: number; y: number }
+  region?: { x: number; y: number; width: number; height: number }
+  writeClipboard?: boolean
 }
 
 interface NativeScreenshotCaptureResult {
-  tfileUrl: string; // required managed resource
-  mimeType: string;
-  width: number;
-  height: number;
-  sizeBytes: number;
-  wroteClipboard: boolean;
+  tfileUrl: string // required managed resource
+  mimeType: string
+  width: number
+  height: number
+  sizeBytes: number
+  wroteClipboard: boolean
   // bounded display/geometry/duration metadata only
 }
 ```
@@ -181,15 +202,15 @@ There is no public output selector and no public `path`, `dataUrl`, base64, Buff
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Legacy `output` property is present | `ERR_NATIVE_SCREENSHOT_OUTPUT_UNSUPPORTED` |
-| Resource is not `tfile://`, escapes temp base, or escapes `native/screenshots` | `ERR_NATIVE_SCREENSHOT_RESOURCE_INVALID` |
-| Plugin lacks verified identity / `window.capture` | Reject before service invocation |
-| Plugin requests clipboard mutation without `clipboard.write` | Reject before service invocation |
-| Generation/display/element is stale or unknown | Stable screenshot protocol error; never capture another target |
-| xcap region intersects zero or multiple displays | `SCREENSHOT_INVALID_REGION` |
-| Backend does not implement requested advanced feature | `SCREENSHOT_UNSUPPORTED` and feature omitted from handshake |
+| Condition                                                                      | Required result                                                |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| Legacy `output` property is present                                            | `ERR_NATIVE_SCREENSHOT_OUTPUT_UNSUPPORTED`                     |
+| Resource is not `tfile://`, escapes temp base, or escapes `native/screenshots` | `ERR_NATIVE_SCREENSHOT_RESOURCE_INVALID`                       |
+| Plugin lacks verified identity / `window.capture`                              | Reject before service invocation                               |
+| Plugin requests clipboard mutation without `clipboard.write`                   | Reject before service invocation                               |
+| Generation/display/element is stale or unknown                                 | Stable screenshot protocol error; never capture another target |
+| xcap region intersects zero or multiple displays                               | `SCREENSHOT_INVALID_REGION`                                    |
+| Backend does not implement requested advanced feature                          | `SCREENSHOT_UNSUPPORTED` and feature omitted from handshake    |
 
 ### 5. Good / Base / Bad Cases
 
@@ -209,25 +230,24 @@ There is no public output selector and no public `path`, `dataUrl`, base64, Buff
 
 ```ts
 // Wrong: binary JSON and a clipboard permission bypass.
-await screenshot.capture({ output: "data-url", writeClipboard: true });
+await screenshot.capture({ output: 'data-url', writeClipboard: true })
 
 // Correct: host-owned resource; clipboard mutation has its own grant.
 const capture = await screenshot.capture({
-  target: "display",
+  target: 'display',
   displayId,
   writeClipboard: hasClipboardWriteGrant,
-});
-preview.src = capture.tfileUrl;
+})
+preview.src = capture.tfileUrl
 ```
-
 
 ### Wrong
 
 ```ts
-const image = await app.getFileIcon(appPath, { size: "large" });
-const png = image.toPNG({ scaleFactor: 2 });
-worker.postMessage({ appPath, png });
-ipcMain.handle("app-icon", () => png);
+const image = await app.getFileIcon(appPath, { size: 'large' })
+const png = image.toPNG({ scaleFactor: 2 })
+worker.postMessage({ appPath, png })
+ipcMain.handle('app-icon', () => png)
 ```
 
 This uses an unsupported macOS enum and copies resource bytes through native, worker, and IPC boundaries.
@@ -239,13 +259,13 @@ const result = await writeDarwinAppIcon({
   sourcePath: appPath,
   outputPath: cachePath,
   size: 256,
-});
+})
 
 return {
-  type: "url",
+  type: 'url',
   value: toTfileUrl(result.path),
   colorful: true,
-};
+}
 ```
 
 Native code owns AppKit and atomic persistence. TypeScript owns cache identity and bounded metadata. The protocol owns byte streaming.

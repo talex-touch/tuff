@@ -4,11 +4,11 @@ import process from 'node:process'
 import { app } from 'electron'
 import { normalizeAbsolutePath, resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 
-type AppPathName = 'home' | 'userData' | 'temp'
+type AppPathName = 'home' | 'userData' | 'temp' | 'cache'
 
 function appPathSafe(name: AppPathName): string {
   try {
-    return app.getPath(name)
+    return app.getPath(name as Parameters<typeof app.getPath>[0])
   } catch {
     return name === 'temp' ? os.tmpdir() : process.cwd()
   }
@@ -24,7 +24,8 @@ function appPathSafe(name: AppPathName): string {
  *
  * Everything here is a scan root the app already uses to find installed applications and
  * their icons, taken from app-scanner's WATCH_PATHS and the Steam provider. Nothing else
- * under home was ever needed: userData and temp are separate roots below, and they stay.
+ * under home was ever needed: userData, the exact app-icon cache root, and temp are separate
+ * least-privilege roots below, and they stay.
  */
 function getAllowedHomeSubRoots(): string[] {
   const home = appPathSafe('home')
@@ -59,6 +60,7 @@ export function getAllowedLocalFileRoots(options: { includeCwd?: boolean } = {})
   const candidates = [
     options.includeCwd ? process.cwd() : null,
     ...getAllowedHomeSubRoots(),
+    path.join(appPathSafe('cache'), 'app-icons'),
     appPathSafe('userData'),
     appPathSafe('temp'),
     os.tmpdir(),
