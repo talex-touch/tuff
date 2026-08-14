@@ -198,9 +198,14 @@ for (const [index, artifact] of artifacts.entries()) {
         `^(windows-(?:latest|2022)|macos-latest|ubuntu-latest)-(beta|snapshot|release)-tuff-(?:${escapedVersion}|${workflowVersion})(?:-(?:x64|arm64|universal))?(?:\\.app)?(?:-setup)?\\.(exe|dmg|AppImage|deb|snap|zip)$`,
         'i',
       )
+      const releaseWorkflowMacArtifactPattern = new RegExp(
+        `^macos-latest-(?:beta|snapshot|release)-tuff-(?:${escapedVersion}|${workflowVersion})-macos-(?:x64|arm64|universal)\\.(?:dmg|zip)$`,
+        'i',
+      )
       requireField(
         canonicalCorePattern.test(name)
-        || releaseWorkflowCorePattern.test(name),
+        || releaseWorkflowCorePattern.test(name)
+        || releaseWorkflowMacArtifactPattern.test(name),
         `${label}.name does not match core naming spec`,
       )
     }
