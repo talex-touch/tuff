@@ -48,7 +48,7 @@ function parseCodeSignDetails(output) {
   }
 }
 
-export async function verifyMacosReleaseSigning({ appBundle, outputPath, mode = 'developer-id' }) {
+function inspectMacosReleaseSigning({ appBundle, mode = 'developer-id' }) {
   if (process.platform !== 'darwin')
     throw new Error('macOS release signing verification must run on a macOS host')
   if (mode !== 'waived' && mode !== 'developer-id')
@@ -87,7 +87,7 @@ export async function verifyMacosReleaseSigning({ appBundle, outputPath, mode = 
     .filter(([, passed]) => !passed)
     .map(([name]) => name)
 
-  const evidence = {
+  return {
     schemaVersion: 1,
     checkedAt: new Date().toISOString(),
     appBundle: basename(appPath),
@@ -101,33 +101,139 @@ export async function verifyMacosReleaseSigning({ appBundle, outputPath, mode = 
     checks,
     failures
   }
+}
 
+export function aggregateMacosReleaseSigningEvidence(evidences, mode = 'developer-id') {
+  if (!Array.isArray(evidences) || evidences.length === 0)
+    throw new Error('At least one macOS app signing evidence entry is required')
+  if (mode !== 'waived' && mode !== 'developer-id')
+    throw new Error(`Unsupported macOS native signing mode: ${mode}`)
+
+  const checkNames = ['codesign', 'gatekeeper', 'notarization']
+  const checks = Object.fromEntries(
+    checkNames.map((name) => [
+      name,
+      evidences.every((evidence) => evidence.checks?.[name] === true)
+    ])
+  )
+  const failures = new Set()
+  const appBundles = evidences.map((evidence) => ({ ...evidence }))
+
+  if (mode === 'developer-id') {
+    for (const evidence of evidences) {
+      for (const name of checkNames) {
+        if (evidence.checks?.[name] !== true) failures.add(`${evidence.appBundle}:${name}`)
+      }
+      if (evidence.status !== 'pass') failures.add(`${evidence.appBundle}:status`)
+      if (evidence.signingKind !== 'developer-id') failures.add(`${evidence.appBundle}:signingKind`)
+      if (typeof evidence.teamIdentifier !== 'string' || !evidence.teamIdentifier.trim())
+        failures.add(`${evidence.appBundle}:teamIdentifier`)
+    }
+  }
+
+  const teamIdentifiers = new Set(
+    evidences
+      .map((evidence) => evidence.teamIdentifier)
+      .filter((value) => typeof value === 'string' && value.trim())
+  )
+  if (mode === 'developer-id' && teamIdentifiers.size > 1) {
+    for (const evidence of evidences) failures.add(`${evidence.appBundle}:teamIdentifier-mismatch`)
+  }
+
+  const passed = Object.values(checks).every(Boolean) && failures.size === 0
+  const teamIdentifier = teamIdentifiers.size === 1 ? [...teamIdentifiers][0] : null
+
+  return {
+    schemaVersion: 1,
+    checkedAt: new Date().toISOString(),
+    appBundle: evidences.length === 1 ? evidences[0].appBundle : null,
+    appBundles,
+    mode,
+    status: mode === 'waived' ? 'waived' : passed ? 'pass' : 'fail',
+    policyReason: mode === 'waived' ? 'apple-developer-not-configured' : null,
+    signingKind: mode === 'developer-id' && passed ? 'developer-id' : 'ad-hoc-or-missing',
+    teamIdentifier,
+    authorities: [...new Set(evidences.flatMap((evidence) => evidence.authorities ?? []))],
+    checks,
+    failures: [...failures]
+  }
+}
+
+async function writeEvidence(outputPath, evidence) {
   await mkdir(dirname(outputPath), { recursive: true })
   await writeFile(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
+}
+
+export async function verifyMacosReleaseSigning({ appBundle, outputPath, mode = 'developer-id' }) {
+  const evidence = inspectMacosReleaseSigning({ appBundle, mode })
+  await writeEvidence(outputPath, evidence)
 
   if (mode === 'developer-id' && evidence.status !== 'pass') {
-    throw new Error(`macOS release signing verification failed: ${failures.join(', ')}`)
+    throw new Error(`macOS release signing verification failed: ${evidence.failures.join(', ')}`)
   }
 
   return evidence
 }
 
+export async function verifyMacosReleaseSignings({
+  appBundles,
+  outputPath,
+  mode = 'developer-id'
+}) {
+  if (!Array.isArray(appBundles) || appBundles.length === 0)
+    throw new Error('At least one macOS app bundle is required')
+  if (new Set(appBundles).size !== appBundles.length)
+    throw new Error('macOS app bundle paths must be unique')
+
+  const evidence = aggregateMacosReleaseSigningEvidence(
+    appBundles.map((appBundle) => inspectMacosReleaseSigning({ appBundle, mode })),
+    mode
+  )
+  await writeEvidence(outputPath, evidence)
+
+  if (mode === 'developer-id' && evidence.status !== 'pass') {
+    throw new Error(`macOS release signing verification failed: ${evidence.failures.join(', ')}`)
+  }
+
+  return evidence
+}
+
+function getArgValues(argv, name) {
+  const values = []
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === name && typeof argv[index + 1] === 'string') {
+      values.push(argv[index + 1])
+      index += 1
+    } else if (argv[index].startsWith(`${name}=`)) {
+      values.push(argv[index].slice(name.length + 1))
+    }
+  }
+  return values.filter(Boolean)
+}
+
 async function main() {
   const argv = process.argv.slice(2)
-  const appBundle = getArgValue(argv, '--app-bundle')
+  const appBundles = getArgValues(argv, '--app-bundle')
   const mode = getArgValue(argv, '--mode', 'developer-id')
   const outputPath = resolve(getArgValue(argv, '--output', 'dist/release-signing-evidence.json'))
-  if (!appBundle) {
+  if (appBundles.length === 0) {
     throw new Error(
-      'Usage: node scripts/verify-macos-release-signing.mjs --mode <waived|developer-id> --app-bundle <path.app> [--output <json>]'
+      'Usage: node scripts/verify-macos-release-signing.mjs --mode <waived|developer-id> --app-bundle <path.app> [--app-bundle <path.app> ...] [--output <json>]'
     )
   }
 
-  const evidence = await verifyMacosReleaseSigning({
-    appBundle,
-    outputPath,
-    mode
-  })
+  const evidence =
+    appBundles.length === 1
+      ? await verifyMacosReleaseSigning({
+          appBundle: appBundles[0],
+          outputPath,
+          mode
+        })
+      : await verifyMacosReleaseSignings({
+          appBundles,
+          outputPath,
+          mode
+        })
   console.log(JSON.stringify(evidence, null, 2))
 }
 
