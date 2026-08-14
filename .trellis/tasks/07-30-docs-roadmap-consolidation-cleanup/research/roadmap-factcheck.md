@@ -107,7 +107,7 @@ CHANGES.md 最新一节为 **2026-07-27**（文首「更新时间：2026-07-27�
 
 | 声明摘要 | ROADMAP 所述 | 仓库事实 | 判定 | 修正建议 |
 |---|---|---|---|---|
-| DB_SEARCH_SPLIT flag | 默认 off，开启导致 silent data loss，待 evidence | TODO.md safety gates 原话一致；迁移任务 prd 同述 | ✅ 准确 | — |
+| DB_SEARCH_SPLIT flag | 默认开启；`=0` 是应急回退；仍待隔离 profile runtime evidence | `runtime-flags.ts:26`、TODO.md safety gates 与迁移任务 PRD 一致 | ✅ 已于 2026-08-14 对账 | 保留运行证据门，不再描述为默认 off 或未来开启 |
 | B1 语义搜索接而未用 | 🟠 已审计，**待修** | 审计 prd L52：B1 **✅ 已修**（07-13-fix-ranking-dead-features，延迟召回二段推送）；仅余「B1 派生 carve-out 未做」 | ❌ 已过时 | 改为「B1 已修（延迟召回二段推送），余 1 项派生 carve-out 开放」 |
 | B2 completion 加权被 sorter 绕过 | 🟠 已审计，**待修** | 审计 prd L58/L145：B2 **✅ 已修**（同任务，46 相关用例通过） | ❌ 已过时 | 改为「已修」或删除该行 |
 | R1 Rust screenshot 未接入构建 | 🟠 已审计 | 审计 prd L91 仍为 `[ ]` 开放 | ✅ 准确 | — |
@@ -135,6 +135,7 @@ CHANGES.md 最新一节为 **2026-07-27**（文首「更新时间：2026-07-27�
 8. **里程碑 07-27 行内容张冠李戴**：实际为 Everything 证据/app-icon/beta.19 Gate E/OTA lifecycle；BaseAnchor、双语日志、插件审计均不在 CHANGES。
 9. **里程碑 07-17 行**：OTA lifecycle 实际属 07-27；07-17 仅 storage hydration gate。
 10. **风险表 B1/B2**：均已修复（07-13-fix-ranking-dead-features），非「待修」。
+11. **DB_SEARCH_SPLIT flag**：默认 off 的表述已失效；当前默认开启，`=0` 是应急回退，剩余问题仅为隔离 profile runtime evidence。
 
 **建议修正项（提升准确性）**
 11. R2 风险描述收窄：签名/公证已闭环，残余为 Universal/dir-updater 冲突（#311）。
