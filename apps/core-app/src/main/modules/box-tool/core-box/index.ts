@@ -78,6 +78,9 @@ export class CoreBoxModule extends BaseModule {
 
     ipcManager.register()
 
+    // CoreBox is latency-critical; keep its hidden renderer prewarmed during startup.
+    await windowManager.ensureCreated()
+
     shortcutModule.registerMainShortcut(
       'core.box.toggle',
       'CommandOrControl+E',
