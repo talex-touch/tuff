@@ -23,7 +23,6 @@ const policyMarkdown = readFileSync(new URL('../../composables/usePolicyMarkdown
 const legacySearch = readFileSync(new URL('../../components/Search.vue', import.meta.url), 'utf8')
 const docEngagementTracker = readFileSync(new URL('../../composables/useDocEngagementTracker.ts', import.meta.url), 'utf8')
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
-const languageToggleMenu = readFileSync(new URL('../../components/LanguageToggleMenu.vue', import.meta.url), 'utf8')
 const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', import.meta.url), 'utf8')
 const iconComposer = readFileSync(new URL('../../components/icon/IconComposer.vue', import.meta.url), 'utf8')
 const backToTop = readFileSync(new URL('../../components/ui/BackToTop.vue', import.meta.url), 'utf8')
@@ -428,24 +427,19 @@ describe('docs page performance boundaries', () => {
     expect.soft(headerControls).not.toContain('@talex-touch/tuffex/button')
     expect.soft(headerControls).not.toContain('<TxButton')
     expect.soft(headerControls).not.toContain('<TxDivider')
-    expect.soft(headerControls).toContain('class="HeaderControls-IconButton"')
     expect.soft(headerControls).toContain('class="HeaderControls-Divider"')
 
-    expect.soft(languageToggle).not.toContain('@talex-touch/tuffex/icon-button')
-    expect.soft(languageToggle).not.toContain('<TxIconButton')
-    expect.soft(languageToggle).toContain('class="LanguageToggle-Trigger"')
+    // The three header chrome controls (search, language, theme) are a deliberate
+    // exception to this boundary: they were migrated onto TuffEx dropdowns so the
+    // header stops being three hand-rolled implementations of the same control.
+    // That trades docs first-paint weight for one shared implementation — the rest
+    // of the docs chrome below still has to stay off TuffEx.
+    expect.soft(headerControls).toContain('@talex-touch/tuffex/icon-button')
+    expect.soft(languageToggle).toContain('@talex-touch/tuffex/dropdown-menu')
     expect.soft(languageToggle).not.toContain('@floating-ui/vue')
     expect.soft(languageToggle).not.toContain("import Icon from './icon/Icon.vue'")
-    expect.soft(languageToggle).toContain("defineAsyncComponent(() => import('./LanguageToggleMenu.vue'))")
-    expect.soft(languageToggle).toContain('<LazyLanguageToggleMenu')
-    expect.soft(languageToggle).toContain('v-if="isMenuRequested"')
-    expect.soft(languageToggle).toContain('function requestMenu()')
-    expect.soft(languageToggle).toContain('function handleTriggerClick()')
-    expect.soft(languageToggle).toContain('@focus="requestMenu"')
-    expect.soft(languageToggleMenu).toContain('@floating-ui/vue')
-
-    expect.soft(darkToggle).not.toContain('@talex-touch/tuffex/icon-button')
-    expect.soft(darkToggle).not.toContain('<TxIconButton')
+    expect.soft(darkToggle).toContain('@talex-touch/tuffex/dropdown-menu')
+    expect.soft(darkToggle).not.toContain('@floating-ui/vue')
     expect.soft(darkToggle).toContain('class="DarkToggle"')
 
     expect.soft(iconComposer).not.toContain('fonts.googleapis.com')

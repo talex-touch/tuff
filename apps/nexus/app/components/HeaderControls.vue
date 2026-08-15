@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxIconButton } from '@talex-touch/tuffex/icon-button'
 import { computed } from 'vue'
 import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 
@@ -34,16 +35,15 @@ async function onSearchClick(event: MouseEvent) {
       v-if="props.showSearchButton"
       class="relative"
     >
-      <button
-        type="button"
-        class="HeaderControls-IconButton"
-        :aria-label="searchButtonAriaLabel"
+      <TxIconButton
+        icon="i-carbon-search"
+        :label="searchButtonAriaLabel"
         :title="searchButtonLabel"
+        size="sm"
+        shape="circle"
         data-role="global-search-trigger"
         @click="onSearchClick"
-      >
-        <span class="i-carbon-search" aria-hidden="true" />
-      </button>
+      />
     </div>
 
     <div class="relative flex shrink-0 items-center gap-1 sm:ml-auto">
@@ -70,32 +70,6 @@ async function onSearchClick(event: MouseEvent) {
 </template>
 
 <style scoped>
-.HeaderControls-IconButton {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(20, 22, 24, 0.72);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.HeaderControls-IconButton:hover,
-.HeaderControls-IconButton:focus-visible {
-  background: rgba(20, 22, 24, 0.06);
-  color: rgba(20, 22, 24, 0.92);
-  outline: none;
-}
-
 .HeaderControls-Divider {
   display: inline-block;
   width: 1px;
@@ -103,16 +77,6 @@ async function onSearchClick(event: MouseEvent) {
   min-height: 20px;
   margin: 0 10px 0 8px;
   background: rgba(0, 0, 0, 0.1);
-}
-
-.dark .HeaderControls-IconButton {
-  color: rgba(248, 250, 247, 0.72);
-}
-
-.dark .HeaderControls-IconButton:hover,
-.dark .HeaderControls-IconButton:focus-visible {
-  background: rgba(248, 250, 247, 0.09);
-  color: rgba(248, 250, 247, 0.92);
 }
 
 .dark .HeaderControls-Divider {
