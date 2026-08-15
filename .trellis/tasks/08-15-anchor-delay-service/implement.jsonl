@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端层 spec 索引，先读它再按需展开具体条目"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "本任务改的是 TxBaseAnchor/TxTooltip/TxPopover 三个组件的公共 props，组件约定是硬约束"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "新增 BaseAnchorAnimationOptions.closeType/exit 与整套服务类型，需符合类型安全约定"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "延迟服务是跨组件共享状态，实例作用域必须 per-app 而非模块单例（SSR 跨请求泄漏）"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "本任务本质是消除 TxTooltip/TxPopover 中逐字重复的定时器逻辑，复用判据要对齐"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "改动跨 tuffex 包与 nexus/core-app 两个下游，跨层影响需按该指南评估"}
+{"file": ".trellis/tasks/08-15-anchor-delay-service/research/baseline.md", "reason": "阶段 0 记录的门禁基线，判断 audit:size 是否新增回归的唯一依据"}
