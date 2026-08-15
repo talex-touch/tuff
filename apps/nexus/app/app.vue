@@ -516,6 +516,14 @@ watchEffect(() => {
 </template>
 
 <style>
+:root {
+  --nexus-frame-max: 66rem;
+  /* The header pill's scrolled width, and the docs reading column — one value so
+     the two provably stay equal instead of being tuned in two places. */
+  --nexus-frame-compact: 840px;
+  --nexus-frame-gutter: 1rem;
+}
+
 html,
 body,
 #__nuxt {
