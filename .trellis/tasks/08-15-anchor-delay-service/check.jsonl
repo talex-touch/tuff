@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "验收阶段的质量判据基准"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端层 spec 索引，按需展开具体条目核对"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对三个组件的公共 props 改动是否守住向后兼容与组件约定"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核对新增类型与可选字段回落是否符合类型安全约定"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "本任务多条验收依赖测试守卫（抢占、祖先豁免、动画等价性），守卫是否真能失败要按该指南判"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "核对 tuffex → nexus / core-app 两个下游的连带影响是否已全部覆盖"}
+{"file": ".trellis/tasks/08-15-anchor-delay-service/research/baseline.md", "reason": "audit:size 与测试数只比增量，基线是唯一比对依据"}
