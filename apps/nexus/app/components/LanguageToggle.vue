@@ -1,25 +1,40 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, ref } from 'vue'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxIconButton } from '@talex-touch/tuffex/icon-button'
+import { computed, onBeforeUnmount, ref } from 'vue'
+
+type SupportedLocale = 'zh' | 'en'
+
+interface LanguageOption {
+  code: SupportedLocale | 'fr' | 'ru' | 'ja' | 'vi'
+  label: string
+}
+
+const languageOptions: LanguageOption[] = [
+  { code: 'zh', label: '简体中文' },
+  { code: 'en', label: 'English' },
+  { code: 'fr', label: 'Français' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'ja', label: '日本語' },
+  { code: 'vi', label: 'Tiếng Việt' },
+]
 
 const { locale, t } = useI18n()
-const LazyLanguageToggleMenu = defineAsyncComponent(() => import('./LanguageToggleMenu.vue'))
-
-const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
-const ariaLabel = computed(() =>
-  t(nextLocale.value === 'zh' ? 'ui.languageToggle.switchToZh' : 'ui.languageToggle.switchToEn'),
-)
-const tooltipLabel = computed(() =>
-  t(nextLocale.value === 'zh' ? 'ui.languageToggle.zhLabel' : 'ui.languageToggle.enLabel'),
-)
-
-const reference = ref<HTMLElement | null>(null)
+const { setManualLocale } = useLocaleOrchestrator()
 const isOpen = ref(false)
-const isMenuRequested = ref(false)
 
-// Hover-out is forgiving: keep the menu around for 600ms so the pointer can
-// travel into it (or come back) before it dissolves away.
+// Hover-out is forgiving: keep the menu around long enough for the pointer to
+// travel into the teleported panel (or come back) before it dissolves away.
 const CLOSE_DELAY = 600
 let closeTimer: ReturnType<typeof setTimeout> | null = null
+
+const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
+const triggerAriaLabel = computed(() =>
+  t(nextLocale.value === 'zh' ? 'ui.languageToggle.switchToZh' : 'ui.languageToggle.switchToEn'),
+)
+const triggerTitle = computed(() =>
+  t(nextLocale.value === 'zh' ? 'ui.languageToggle.zhLabel' : 'ui.languageToggle.enLabel'),
+)
 
 function clearCloseTimer() {
   if (closeTimer != null) {
@@ -30,12 +45,7 @@ function clearCloseTimer() {
 
 function openMenu() {
   clearCloseTimer()
-  isMenuRequested.value = true
   isOpen.value = true
-}
-
-function requestMenu() {
-  isMenuRequested.value = true
 }
 
 function closeMenu() {
@@ -45,101 +55,71 @@ function closeMenu() {
   }, CLOSE_DELAY)
 }
 
-// Selecting a language should dismiss immediately — no lingering delay.
-function closeMenuNow() {
-  clearCloseTimer()
-  isOpen.value = false
-}
-
-function handleTriggerClick() {
-  clearCloseTimer()
-  isMenuRequested.value = true
-  isOpen.value = true
+async function selectLocale(option: LanguageOption) {
+  if (option.code === 'zh' || option.code === 'en')
+    await setManualLocale(option.code)
 }
 
 onBeforeUnmount(clearCloseTimer)
 </script>
 
 <template>
-  <div class="LanguageToggle relative" @mouseenter="openMenu" @mouseleave="closeMenu">
-    <span ref="reference" class="LanguageToggle-Reference">
-      <button
-        type="button"
-        :title="tooltipLabel"
-        :aria-pressed="isOpen"
-        :aria-expanded="isOpen"
-        :aria-label="ariaLabel"
-        class="LanguageToggle-Trigger"
-        @click="handleTriggerClick"
-        @focus="requestMenu"
-      >
-        <span class="LanguageToggle-Icon i-carbon-language" aria-hidden="true" />
-        <span class="LanguageToggle-Chevron i-carbon-chevron-down" :class="{ 'rotate-180': isOpen }" aria-hidden="true" />
-      </button>
-    </span>
-    <ClientOnly>
-      <LazyLanguageToggleMenu
-        v-if="isMenuRequested"
-        :open="isOpen"
-        :reference-el="reference"
-        @open="openMenu"
-        @close="closeMenu"
-        @selected="closeMenuNow"
-      />
-    </ClientOnly>
+  <div class="LanguageToggle" @mouseenter="openMenu" @mouseleave="closeMenu">
+    <TxDropdownMenu
+      v-model="isOpen"
+      placement="bottom-end"
+      :offset="10"
+      :min-width="150"
+      :panel-padding="0"
+    >
+      <template #trigger>
+        <TxIconButton
+          icon="i-carbon-language"
+          :label="triggerAriaLabel"
+          :title="triggerTitle"
+          size="sm"
+          shape="circle"
+          class="LanguageToggle-Trigger"
+          aria-haspopup="menu"
+          :aria-expanded="isOpen"
+        />
+      </template>
+
+      <div class="LanguageToggle-Options" @mouseenter="openMenu" @mouseleave="closeMenu">
+        <TxDropdownItem
+          v-for="option in languageOptions"
+          :key="option.code"
+          role="menuitemradio"
+          :aria-checked="locale === option.code"
+          @click="selectLocale(option)"
+        >
+          {{ option.label }}
+
+          <template v-if="locale === option.code" #right>
+            <span class="i-carbon-checkmark LanguageToggle-Check" aria-hidden="true" />
+          </template>
+        </TxDropdownItem>
+      </div>
+    </TxDropdownMenu>
   </div>
 </template>
 
 <style scoped>
-.LanguageToggle-Reference {
+.LanguageToggle {
   display: inline-flex;
-}
-
-.LanguageToggle-Trigger {
-  display: inline-flex;
-  min-width: 56px;
-  height: 34px;
   align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(20, 22, 24, 0.92);
-  cursor: pointer;
-  font: inherit;
-  line-height: 1;
-  padding: 0 12px;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
 }
 
-.LanguageToggle-Trigger:hover,
-.LanguageToggle-Trigger:focus-visible,
-.LanguageToggle-Trigger[aria-expanded='true'] {
-  background: rgba(20, 22, 24, 0.06);
-  outline: none;
+/* Reproduces .tx-dropdown__panel's own layout: the wrapper only exists so the
+   teleported panel can re-assert hover while the pointer is inside it. */
+.LanguageToggle-Options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.dark .LanguageToggle-Trigger {
-  color: rgba(248, 250, 247, 0.92);
-}
-
-.dark .LanguageToggle-Trigger:hover,
-.dark .LanguageToggle-Trigger:focus-visible,
-.dark .LanguageToggle-Trigger[aria-expanded='true'] {
-  background: rgba(248, 250, 247, 0.09);
-  outline: none;
-}
-
-.LanguageToggle-Icon {
-  font-size: 1.15rem;
-}
-
-.LanguageToggle-Chevron {
-  font-size: 0.82rem;
-  transition: transform 160ms ease;
+.LanguageToggle-Check {
+  font-size: 0.95rem;
+  opacity: 0.85;
 }
 </style>

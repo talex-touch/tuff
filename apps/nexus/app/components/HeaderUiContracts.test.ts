@@ -16,6 +16,20 @@ function blockBetween(source: string, start: string, end: string) {
   return source.slice(startIndex, endIndex)
 }
 
+/**
+ * Slot syntax puts nested `<template #slot>` tags inside the root template, so
+ * the first `</template>` closes a slot rather than the block — take the last.
+ */
+function templateBlock(source: string) {
+  const startIndex = source.indexOf('<template>')
+  expect(startIndex).toBeGreaterThanOrEqual(0)
+
+  const endIndex = source.lastIndexOf('</template>')
+  expect(endIndex).toBeGreaterThan(startIndex)
+
+  return source.slice(startIndex, endIndex)
+}
+
 describe('public header UI contracts', () => {
   it('renders theme selection as a dropdown of dark, light, and auto radio menu options', () => {
     const themeOptions = blockBetween(darkToggle, 'const themeOptions: ThemeOption[] = [\n', '\n]\n\nconst { color')
@@ -23,9 +37,11 @@ describe('public header UI contracts', () => {
     expect(themeOptions).toContain("{ value: 'light', labelKey: 'ui.themeToggle.light' }")
     expect(themeOptions).toContain("{ value: 'auto', labelKey: 'ui.themeToggle.auto' }")
 
-    const template = blockBetween(darkToggle, '<template>', '</template>')
+    const template = templateBlock(darkToggle)
     expect(template).toContain('aria-haspopup="menu"')
-    expect(template).toContain('role="menu"')
+    // The `role="menu"` container is TxDropdownMenu's own panel (covered by its
+    // package test); what this file still owns is the radio semantics per item.
+    expect(template).toContain('<TxDropdownMenu')
     expect(template).toContain('v-for="option in themeOptions"')
     expect(template).toContain('role="menuitemradio"')
     expect(template).toContain(':aria-checked="selectedMode === option.value"')
@@ -35,7 +51,9 @@ describe('public header UI contracts', () => {
     const selectTheme = blockBetween(darkToggle, 'function selectTheme(mode: ThemeMode, event: MouseEvent) {', '}')
     expect(selectTheme).toContain('toggleDark(mode, event)')
 
-    const template = blockBetween(darkToggle, '<template>', '</template>')
+    // Read off the native click rather than TxDropdownItem's payload-less
+    // `select`, because toggleDark needs the coordinates for its ripple origin.
+    const template = templateBlock(darkToggle)
     expect(template).toContain('@click="selectTheme(option.value, $event)"')
   })
 
