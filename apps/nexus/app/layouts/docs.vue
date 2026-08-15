@@ -421,15 +421,15 @@ onBeforeUnmount(() => {
       <div class="docs-edge-blur docs-edge-blur--top" aria-hidden="true" />
       <div class="docs-edge-blur docs-edge-blur--bottom" aria-hidden="true" />
       <TheHeader title="Tuff Docs" class="z-30" />
-      <div class="docs-layout-foreground relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
-        <div class="min-w-0 max-w-[88rem] w-full flex gap-6 lg:gap-8">
+      <div class="docs-layout-foreground relative flex flex-1 justify-center pb-20 pt-20">
+        <div class="docs-layout-frame min-w-0 w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[230px] shrink-0 xl:block">
             <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
               <DocsSidebar />
             </div>
           </aside>
           <main class="min-w-0 flex-1">
-            <div class="mx-auto min-w-0 max-w-[53rem] w-full space-y-10">
+            <div class="docs-content-column mx-auto min-w-0 w-full space-y-10">
               <div class="flex items-center gap-2 xl:hidden">
                 <button type="button" class="docs-mobile-action" @click="openSidebarDrawer">
                   <span class="i-carbon-menu text-base" />
@@ -565,6 +565,37 @@ onBeforeUnmount(() => {
 
 .docs-layout-foreground {
   z-index: 2;
+  padding-inline: var(--nexus-frame-gutter);
+}
+
+/*
+ * The reading column — not the outer frame — is what matches the header pill,
+ * and it matches the pill's *scrolled* width (`--nexus-frame-compact`), not its
+ * resting one: the header shrinks on scroll, so pinning to the resting width
+ * would only line up at the top of the page. The asides keep their own widths
+ * and live outside the column, which is why the frame below has to grow by
+ * exactly the aside + gap widths that are actually visible at each breakpoint.
+ */
+.docs-content-column {
+  max-width: var(--nexus-frame-compact);
+}
+
+.docs-layout-frame {
+  max-width: var(--nexus-frame-compact);
+}
+
+/* lg: the 240px outline aside joins the row (gap-8 = 2rem). */
+@media (min-width: 1024px) {
+  .docs-layout-frame {
+    max-width: calc(var(--nexus-frame-compact) + 240px + 2rem);
+  }
+}
+
+/* xl: the 230px sidebar joins as well. */
+@media (min-width: 1280px) {
+  .docs-layout-frame {
+    max-width: calc(var(--nexus-frame-compact) + 230px + 240px + 4rem);
+  }
 }
 
 .docs-layout-footer {

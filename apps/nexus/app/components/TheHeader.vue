@@ -249,8 +249,8 @@ onUnmounted(() => {
   right: 0;
   margin-inline: auto;
 
-  width: min(1056px, calc(100vw - 2rem));
-  max-width: calc(100vw - 2rem);
+  width: min(var(--nexus-frame-max), calc(100vw - var(--nexus-frame-gutter) - var(--nexus-frame-gutter)));
+  max-width: calc(100vw - var(--nexus-frame-gutter) - var(--nexus-frame-gutter));
 
   border-radius: 24px;
   border-color: var(--header-border-color);
@@ -273,7 +273,7 @@ onUnmounted(() => {
 }
 
 .TuffHeader-Main--scrolled {
-  width: min(840px, calc(100vw - 2rem));
+  width: min(var(--nexus-frame-compact), calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
   border-color: rgba(0, 0, 0, 0.1);
   background-color: rgba(255, 255, 255, 0.58);
@@ -368,8 +368,8 @@ nav :deep(a) {
 
 @media (max-width: 960px) {
   .TuffHeader-Main {
-    left: 1rem;
-    right: 1rem;
+    left: var(--nexus-frame-gutter);
+    right: var(--nexus-frame-gutter);
     width: auto;
     max-width: none;
     margin-inline: 0;
