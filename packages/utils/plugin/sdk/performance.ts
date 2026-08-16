@@ -121,7 +121,7 @@ export function createPerformanceSDK(channel: PluginChannelClient): PerformanceS
       totalSize: 0,
       fileCount: 0,
       dirCount: 0,
-      maxSize: 10 * 1024 * 1024,
+      maxSize: 100 * 1024 * 1024,
       usagePercent: 0,
     }
   }

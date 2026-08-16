@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { rmSync } from 'node:fs'
 import {
   listPluginBusinessFiles,
+  MAX_FILE_BYTES,
+  MAX_TOTAL_BYTES,
   readPluginBusinessFile,
   removePluginBusinessFile,
   writePluginBusinessFile
@@ -66,8 +68,11 @@ describe('plugin business file storage', () => {
 
   it('enforces the aggregate activation-independent storage quota', () => {
     const config = createConfigRoot()
-    const payload = 'x'.repeat(1024 * 1024 - 2)
-    for (let index = 0; index < 10; index += 1) {
+    // Fill the quota with max-sized files derived from the constants: a hard-coded count stops
+    // reaching the ceiling the moment the quota is raised, and the test then passes vacuously.
+    const payload = 'x'.repeat(MAX_FILE_BYTES - 2)
+    const fileCount = Math.ceil(MAX_TOTAL_BYTES / MAX_FILE_BYTES)
+    for (let index = 0; index < fileCount; index += 1) {
       writePluginBusinessFile(config, `state-${index}.json`, payload)
     }
 

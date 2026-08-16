@@ -76,10 +76,10 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
       border-b="1 solid [var(--tx-border-color-lighter)]"
       p="x-4 y-2"
       bg="[var(--tx-bg-color-page)]"
-      class="fake-background"
+      class="StoreHeader-TopRow fake-background"
       style="--fake-opacity: 0.5"
     >
-      <TxRadioGroup v-model="tabs" glass>
+      <TxRadioGroup v-model="tabs" class="StoreHeader-Tabs" glass>
         <TxRadio value="store" :label="t('store.market')" />
         <TxRadio value="installed" :label="t('store.installed')" />
         <TxRadio v-if="showPublisherTab" value="publisher" :label="t('store.publisher.tab')" />
@@ -87,7 +87,13 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
         <TxRadio v-if="showCliTab" value="cli" :label="t('store.cli')" />
       </TxRadioGroup>
 
-      <div v-if="tabs === 'store'" flex items-center gap-2 class="shell-chrome-safe-inline-end">
+      <div
+        v-if="tabs === 'store'"
+        flex
+        items-center
+        gap-2
+        class="StoreHeader-TopActions shell-chrome-safe-inline-end"
+      >
         <div flex items-center gap-2 text-xs>
           <span op-60 whitespace-nowrap text="[var(--tx-text-color-regular)]">
             {{ sourcesCount }} {{ t('store.sources') }}
@@ -213,6 +219,21 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
 </template>
 
 <style scoped lang="scss">
+/**
+ * The store page reaches the top of the main area, so this row is the only drag handle the window
+ * has on that side: `.AppShell-View` turns dragging off for the whole view, and `ShellChromeBar`
+ * covers the sidebar column alone. Same role `HomeTopBar` plays on the home page.
+ */
+.StoreHeader-TopRow {
+  -webkit-app-region: drag;
+}
+
+/** The row drags; the tabs and the source controls sitting on it must stay clickable. */
+.StoreHeader-Tabs,
+.StoreHeader-TopActions {
+  -webkit-app-region: no-drag;
+}
+
 .search-input :deep(.FlatInput-Container) {
   width: 280px;
   margin: 0;

@@ -36,7 +36,21 @@ export interface PluginSecurityScanFile {
 
 export interface PluginSecurityScanWaiver {
   id: string
-  artifactSha256: string
+  /**
+   * Scope the waiver to one packaged artifact.
+   *
+   * Optional since the `.tpex` digest changes on every rebuild — a plugin that is built more
+   * than once can never satisfy an artifact-scoped waiver. Prefer {@link fileSha256} for
+   * findings that live in a specific bundled file.
+   */
+  artifactSha256?: string
+  /**
+   * Scope the waiver to the exact contents of the file the finding points at.
+   *
+   * Survives unrelated rebuilds, and stops applying the moment the waived file itself changes,
+   * which is the property an artifact digest was meant to provide but cannot.
+   */
+  fileSha256?: string
   ruleId: PluginSecurityFindingCode
   owner: string
   reason: string
@@ -356,6 +370,31 @@ function scanText(path: string, text: string, permissions: Set<string>): RuleMat
   return matches
 }
 
+/**
+ * A waiver has to name what it covers.
+ *
+ * Declaring neither scope matches nothing rather than everything: a blanket waiver is the one
+ * shape this mechanism must never be able to express, and an empty object is exactly what a
+ * hand-edited waiver file degrades into. When both scopes are present both must match.
+ */
+function scopeMatches(
+  candidate: PluginSecurityScanWaiver,
+  artifactSha256: string,
+  finding: PluginSecurityFinding,
+): boolean {
+  const artifactScope = candidate.artifactSha256?.trim()
+  const fileScope = candidate.fileSha256?.trim()
+
+  if (!artifactScope && !fileScope)
+    return false
+  if (artifactScope && artifactScope !== artifactSha256)
+    return false
+  if (fileScope && fileScope !== finding.fileSha256)
+    return false
+
+  return true
+}
+
 function validWaiver(
   waivers: readonly PluginSecurityScanWaiver[],
   artifactSha256: string,
@@ -365,7 +404,7 @@ function validWaiver(
   if (finding.severity === 'critical')
     return undefined
   const waiver = waivers.find(candidate =>
-    candidate.artifactSha256 === artifactSha256
+    scopeMatches(candidate, artifactSha256, finding)
     && candidate.ruleId === finding.ruleId
     && Boolean(candidate.id.trim())
     && Boolean(candidate.owner.trim())

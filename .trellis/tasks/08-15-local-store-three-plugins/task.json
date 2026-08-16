@@ -1,0 +1,31 @@
+{
+  "id": "local-store-three-plugins",
+  "name": "local-store-three-plugins",
+  "title": "三插件本地市场端到端打通",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-15",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-15-local-nexus-publish-path",
+    "08-15-json-formatter-onboarding",
+    "08-15-clipboard-history-local-verify",
+    "08-15-touch-translation-local-verify"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

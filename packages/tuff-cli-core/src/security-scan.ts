@@ -18,7 +18,122 @@ export interface ScanBuiltPluginPackageOptions {
 export interface SecurityScanCliOptions {
   root: string
   packagePath?: string
+  waiversPath?: string
   json: boolean
+}
+
+/**
+ * Conventional waiver file, looked up in the plugin root when `--waivers` is not given.
+ */
+export const SECURITY_WAIVERS_FILENAME = 'security-waivers.json'
+
+const WAIVER_REQUIRED_FIELDS = [
+  'id',
+  'ruleId',
+  'owner',
+  'reason',
+  'createdAt',
+  'expiresAt',
+] as const
+
+/** At least one of these must be present; a waiver with no scope would cover everything. */
+const WAIVER_SCOPE_FIELDS = ['artifactSha256', 'fileSha256'] as const
+
+function describeWaiverLocation(filePath: string, index: number): string {
+  return `${filePath} [${index}]`
+}
+
+/**
+ * Reads and validates a waiver file.
+ *
+ * Every entry must be complete. A malformed entry is a hard error rather than a skipped one:
+ * silently dropping it would surface as "the finding is still blocked" with no hint that the
+ * waiver itself was the problem, which is exactly when someone reaches for a blanket bypass.
+ */
+export function loadSecurityScanWaivers(filePath: string): PluginSecurityScanWaiver[] {
+  if (!fs.pathExistsSync(filePath))
+    throw new Error(`Security waiver file not found: ${filePath}`)
+
+  let parsed: unknown
+  try {
+    parsed = fs.readJsonSync(filePath)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Security waiver file is not valid JSON (${filePath}): ${message}`)
+  }
+
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as { waivers?: unknown })?.waivers)
+      ? (parsed as { waivers: unknown[] }).waivers
+      : undefined
+
+  if (!entries)
+    throw new Error(`Security waiver file must be an array or { "waivers": [...] }: ${filePath}`)
+
+  return entries.map((entry, index) => {
+    if (!entry || typeof entry !== 'object')
+      throw new Error(`Security waiver must be an object: ${describeWaiverLocation(filePath, index)}`)
+
+    const record = entry as Record<string, unknown>
+    for (const field of WAIVER_REQUIRED_FIELDS) {
+      const value = record[field]
+      if (typeof value !== 'string' || !value.trim()) {
+        throw new Error(
+          `Security waiver is missing "${field}": ${describeWaiverLocation(filePath, index)}`,
+        )
+      }
+    }
+
+    for (const field of ['createdAt', 'expiresAt'] as const) {
+      if (!Number.isFinite(Date.parse(String(record[field])))) {
+        throw new TypeError(
+          `Security waiver has an invalid "${field}" timestamp: ${describeWaiverLocation(filePath, index)}`,
+        )
+      }
+    }
+
+    const scopes = WAIVER_SCOPE_FIELDS.filter(
+      field => typeof record[field] === 'string' && String(record[field]).trim(),
+    )
+    if (!scopes.length) {
+      throw new Error(
+        `Security waiver needs "fileSha256" or "artifactSha256": ${describeWaiverLocation(filePath, index)}`,
+      )
+    }
+
+    return {
+      id: String(record.id),
+      ruleId: String(record.ruleId),
+      owner: String(record.owner),
+      reason: String(record.reason),
+      createdAt: String(record.createdAt),
+      expiresAt: String(record.expiresAt),
+      ...(scopes.includes('artifactSha256')
+        ? { artifactSha256: String(record.artifactSha256) }
+        : {}),
+      ...(scopes.includes('fileSha256') ? { fileSha256: String(record.fileSha256) } : {}),
+      ...(typeof record.ticket === 'string' && record.ticket.trim()
+        ? { ticket: record.ticket }
+        : {}),
+    } as PluginSecurityScanWaiver
+  })
+}
+
+/**
+ * Resolves waivers for a build: the explicit path when given, otherwise the conventional file
+ * in the plugin root. Returns an empty list when neither exists — absence of waivers is normal.
+ */
+export function resolveSecurityScanWaivers(options: {
+  root: string
+  waiversPath?: string
+}): PluginSecurityScanWaiver[] {
+  if (options.waiversPath)
+    return loadSecurityScanWaivers(options.waiversPath)
+
+  const conventional = path.join(options.root, SECURITY_WAIVERS_FILENAME)
+  return fs.pathExistsSync(conventional) ? loadSecurityScanWaivers(conventional) : []
 }
 
 function resolveLatestTpex(root: string): string | undefined {
@@ -49,13 +164,39 @@ export function scanBuiltPluginPackage(
   })
 }
 
-export function assertPluginSecurityScan(report: PluginSecurityScanReport): void {
+export function assertPluginSecurityScan(
+  report: PluginSecurityScanReport,
+  waivers: readonly PluginSecurityScanWaiver[] = [],
+): void {
   if (report.decision === 'passed' || report.decision === 'review-required')
     return
-  const code = report.failure?.code
-    ?? report.findings.find(finding => !finding.waiver)?.code
-    ?? 'PLUGIN_SCAN_BLOCKED'
-  throw new Error(`Plugin security scan rejected package: ${code}`)
+  const blocking = report.findings.find(finding => !finding.waiver)
+  const code = report.failure?.code ?? blocking?.code ?? 'PLUGIN_SCAN_BLOCKED'
+
+  // An artifact-scoped waiver is bound to a digest that changes on every rebuild. Without this
+  // hint the second build after writing one fails identically to the first, and the obvious
+  // conclusion is that waivers do not work at all.
+  const staleArtifact = blocking && waivers.find(waiver =>
+    waiver.ruleId === blocking.ruleId
+    && waiver.artifactSha256
+    && waiver.artifactSha256 !== report.artifactSha256)
+  const staleFile = blocking && waivers.find(waiver =>
+    waiver.ruleId === blocking.ruleId
+    && waiver.fileSha256
+    && waiver.fileSha256 !== blocking.fileSha256)
+
+  let hint = ''
+  if (staleArtifact) {
+    hint = ` A waiver exists for ${blocking.ruleId} but targets a different artifact.`
+      + ` The .tpex digest changes on every rebuild — scope the waiver with fileSha256`
+      + ` ${blocking.fileSha256 ?? '(unavailable for this finding)'} instead.`
+  }
+  else if (staleFile) {
+    hint = ` A waiver exists for ${blocking.ruleId} but targets different file contents.`
+      + ` ${blocking.location.path} is now ${blocking.fileSha256}.`
+  }
+
+  throw new Error(`Plugin security scan rejected package: ${code}.${hint}`)
 }
 
 function requireValue(args: readonly string[], index: number, flag: string): string {
@@ -72,6 +213,7 @@ export function parseSecurityScanArgs(
 ): SecurityScanCliOptions {
   let root = cwd
   let packagePath: string | undefined
+  let waiversPath: string | undefined
   let json = false
 
   for (let index = 0; index < args.length; index += 1) {
@@ -87,6 +229,10 @@ export function parseSecurityScanArgs(
       packagePath = path.resolve(cwd, requireValue(args, index, arg))
       index += 1
     }
+    else if (arg === '--waivers') {
+      waiversPath = path.resolve(cwd, requireValue(args, index, arg))
+      index += 1
+    }
     else {
       throw new Error(`Unknown security scan option: ${arg}`)
     }
@@ -95,6 +241,7 @@ export function parseSecurityScanArgs(
   return {
     root,
     packagePath,
+    waiversPath,
     json,
   }
 }
@@ -120,10 +267,14 @@ export async function runSecurityScan(args: readonly string[]): Promise<PluginSe
   if (!packagePath || !fs.pathExistsSync(packagePath)) {
     throw new Error('No .tpex package found. Build the plugin or pass --package <path>.')
   }
-  const report = scanBuiltPluginPackage({ packagePath })
+  const waivers = resolveSecurityScanWaivers({
+    root: options.root,
+    waiversPath: options.waiversPath,
+  })
+  const report = scanBuiltPluginPackage({ packagePath, waivers })
   if (options.json)
     console.log(JSON.stringify(report))
   else printHumanReport(report)
-  assertPluginSecurityScan(report)
+  assertPluginSecurityScan(report, waivers)
   return report
 }

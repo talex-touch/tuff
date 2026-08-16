@@ -213,6 +213,7 @@ function printSecurityScanHelp() {
   console.log('Options:')
   console.log('  --root <path>       Plugin project root (default: current directory)')
   console.log('  --package <path>    .tpex path (default: latest package in dist)')
+  console.log('  --waivers <path>    Waiver file (default: security-waivers.json in root)')
   console.log('  --json              Emit the bounded machine-readable report')
   console.log('  --help, -h          Show this help message')
   console.log('')

@@ -25,3 +25,7 @@
 - `v2.4.14-beta.8` 的 Build and Release run `31778105595` 已全部成功，包括 macOS、Windows、Linux、Create Release 与 Nexus sync；2026-08-14 报告中的发布失败已失效。
 - 根 package 与 `apps/core-app` 的 version、description、author、homepage、license 一致；未发现同步器管理字段漂移。
 - 文档相对链接审计通过（680 文档、944 链接、0 finding）。
+
+## 推送回执基线
+
+- GitHub 在本次推送回执中报告默认分支有 16 个 Dependabot alerts（6 high、7 moderate、3 low）。这只是告警库存基线，不表示运行时可达性、可利用性或本次文档分支引入了漏洞；需要依赖安全负责人逐项分流与处置。

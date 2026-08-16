@@ -22,7 +22,7 @@ import { getCoreBoxWindow } from '../box-tool/core-box'
 import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
 import { PluginRuntimeHostError } from './host/plugin-runtime-host'
 import type { TouchPluginRuntimeCapabilities } from './plugin'
-import { emptyTouchPluginRuntimeCapabilities, TouchPlugin } from './plugin'
+import { emptyTouchPluginRuntimeCapabilities, PLUGIN_CONFIG_MAX_SIZE, TouchPlugin } from './plugin'
 import { widgetManager } from './widget/widget-manager'
 
 const permissionModuleMock = vi.hoisted(() => ({
@@ -3604,33 +3604,45 @@ describe('savePluginFile enforces the per-plugin storage quota', () => {
     const plugin = createPlugin('quota-single')
 
     expect(
-      plugin.savePluginFile('a.json', payloadOfSize(4 * 1024 * 1024), { broadcast: false })
+      plugin.savePluginFile('a.json', payloadOfSize(Math.floor(PLUGIN_CONFIG_MAX_SIZE / 2)), {
+        broadcast: false
+      })
     ).toEqual({
       success: true
     })
   })
 
-  it('多个各自合规的文件累计超出 10MB 时必须被拒绝', () => {
+  it('多个各自合规的文件累计超出配额时必须被拒绝', () => {
     const plugin = createPlugin('quota-total')
-    const fourMb = payloadOfSize(4 * 1024 * 1024)
+    // Sized off the quota so the run always ends one write short of the ceiling, whatever the
+    // quota is set to. A fixed payload count stops reaching it the moment the quota is raised.
+    // The 1KB slack absorbs the `{"blob":"…"}` wrapper: four exact quarters land a few dozen
+    // bytes over the limit and the fill itself would fail.
+    const chunkBytes = Math.floor(PLUGIN_CONFIG_MAX_SIZE / 4) - 1024
+    const chunk = payloadOfSize(chunkBytes)
 
-    expect(plugin.savePluginFile('a.json', fourMb, { broadcast: false }).success).toBe(true)
-    expect(plugin.savePluginFile('b.json', fourMb, { broadcast: false }).success).toBe(true)
+    for (let index = 0; index < 4; index += 1) {
+      expect(plugin.savePluginFile(`fill-${index}.json`, chunk, { broadcast: false }).success).toBe(
+        true
+      )
+    }
 
-    // Third 4MB file: each payload passes the per-file check, the directory total does not.
-    const third = plugin.savePluginFile('c.json', fourMb, { broadcast: false })
-    expect(third.success).toBe(false)
-    expect(third.error).toContain('Storage quota exceeded')
+    // Each payload passes the per-file check on its own; the directory total does not.
+    const overflow = plugin.savePluginFile('overflow.json', chunk, { broadcast: false })
+    expect(overflow.success).toBe(false)
+    expect(overflow.error).toContain('Storage quota exceeded')
 
-    expect(fse.existsSync(path.join(plugin.getConfigPath(), 'c.json'))).toBe(false)
+    expect(fse.existsSync(path.join(plugin.getConfigPath(), 'overflow.json'))).toBe(false)
   })
 
   it('覆写已存在的文件不会把旧内容重复计入', () => {
     const plugin = createPlugin('quota-replace')
-    const sixMb = payloadOfSize(6 * 1024 * 1024)
+    // Two thirds of the quota: one copy fits, two copies do not. Any payload comfortably under
+    // half the quota would pass whether or not the old copy is double-counted, which is the
+    // whole behaviour this test exists to pin.
+    const twoThirds = payloadOfSize(Math.floor((PLUGIN_CONFIG_MAX_SIZE / 3) * 2))
 
-    expect(plugin.savePluginFile('a.json', sixMb, { broadcast: false }).success).toBe(true)
-    // Replacing 6MB with 6MB stays at 6MB; counting the old copy too would wrongly reject.
-    expect(plugin.savePluginFile('a.json', sixMb, { broadcast: false }).success).toBe(true)
+    expect(plugin.savePluginFile('a.json', twoThirds, { broadcast: false }).success).toBe(true)
+    expect(plugin.savePluginFile('a.json', twoThirds, { broadcast: false }).success).toBe(true)
   })
 })

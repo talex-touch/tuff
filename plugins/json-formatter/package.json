@@ -1,0 +1,48 @@
+{
+  "name": "@talex-touch/json-formatter-plugin",
+  "type": "module",
+  "version": "1.0.5",
+  "private": true,
+  "packageManager": "pnpm@10.24.0",
+  "scripts": {
+    "build": "vite build && tuff builder",
+    "dev": "vite --port 5555",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@guolao/vue-monaco-editor": "^1.5.5",
+    "@monaco-editor/loader": "^1.6.1",
+    "@talex-touch/tuffex": "workspace:^",
+    "@talex-touch/unplugin-export-plugin": "workspace:^",
+    "@talex-touch/utils": "workspace:^",
+    "@vueuse/core": "^14.4.0",
+    "monaco-editor": "^0.55.0",
+    "nprogress": "^0.2.0",
+    "vue": "^3.5.39",
+    "vue-router": "^4.6.4",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^5.4.1",
+    "@iconify-json/carbon": "^1.2.24",
+    "@talex-touch/tuff-cli": "workspace:^",
+    "@types/node": "catalog:dev",
+    "@types/nprogress": "^0.2.3",
+    "@unocss/eslint-config": "^66.7.5",
+    "@unocss/reset": "^66.7.5",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "eslint": "^9.39.4",
+    "eslint-plugin-format": "^1.5.0",
+    "typescript": "^5.9.3",
+    "unocss": "^66.7.5",
+    "unplugin-auto-import": "^20.3.0",
+    "unplugin-vue-components": "^30.0.0",
+    "unplugin-vue-router": "^0.16.1",
+    "vite": "^7.3.6",
+    "vite-plugin-vue-devtools": "^8.0.5",
+    "vite-plugin-vue-layouts": "^0.11.0",
+    "vue-tsc": "^3.3.6"
+  }
+}
