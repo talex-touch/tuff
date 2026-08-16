@@ -1,4 +1,20 @@
 /**
+ * Fill recipe of a tag.
+ *
+ * - `outline`: 12% fill, 32% hairline, full-strength coloured text. The
+ *   original and still the default.
+ * - `soft`: 20% fill, 34% hairline, text pulled 92% toward the tag colour and
+ *   the rest toward ink — steadier to read at 11px on a coloured fill.
+ * - `plain`: neutral chrome that ignores `color` entirely, for overflow
+ *   counters (`+3`) and metadata that must not compete with real status.
+ *
+ * `background` / `border` still override whichever variant is chosen.
+ *
+ * @public
+ */
+export type TagVariant = 'outline' | 'soft' | 'plain'
+
+/**
  * Props interface for the TxTag component.
  *
  * @public
@@ -49,6 +65,28 @@ export interface TagProps {
    * @default false
    */
   pill?: boolean
+
+  /**
+   * @default 'outline'
+   */
+  variant?: TagVariant
+
+  /**
+   * Leading dot colour. Any CSS colour; omit to render no dot. Lets a tag carry
+   * a category hue while its text stays legible.
+   */
+  dot?: string
+
+  /**
+   * Dot diameter in pixels.
+   * @default 6
+   */
+  dotSize?: number
+
+  /**
+   * Trailing count badge. `0` renders; omit the prop to render nothing.
+   */
+  count?: number
 
 
   /**

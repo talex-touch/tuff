@@ -32,6 +32,8 @@ const props = withDefaults(defineProps<TagProps>(), {
   closeAriaLabel: 'Remove tag',
   disabled: false,
   pill: false,
+  variant: 'outline',
+  dotSize: 6,
 })
 
 const emit = defineEmits<TagEmits>()
@@ -51,13 +53,25 @@ const safeColor = computed(() => {
 })
 
 /**
+ * Fill / hairline / text strengths per variant. `plain` is neutral by design:
+ * an overflow counter that borrows a status hue reads as status.
+ */
+const VARIANT_MIX = {
+  outline: { bg: 12, border: 32, text: 100 },
+  soft: { bg: 20, border: 34, text: 92 },
+  plain: { bg: 0, border: 0, text: 100 },
+} as const
+
+/**
  * Computed property for the resolved background color.
  * Uses color-mix to create a semi-transparent background if not explicitly provided.
  */
 const resolvedBackground = computed(() => {
   if (props.background)
     return props.background
-  return `color-mix(in srgb, ${safeColor.value} 12%, transparent)`
+  if (props.variant === 'plain')
+    return 'var(--tx-fill-color-light, #f5f7fa)'
+  return `color-mix(in srgb, ${safeColor.value} ${VARIANT_MIX[props.variant].bg}%, transparent)`
 })
 
 /**
@@ -67,7 +81,22 @@ const resolvedBackground = computed(() => {
 const resolvedBorder = computed(() => {
   if (props.border)
     return props.border
-  return `color-mix(in srgb, ${safeColor.value} 32%, transparent)`
+  if (props.variant === 'plain')
+    return 'var(--tx-border-color-light, #e4e7ed)'
+  return `color-mix(in srgb, ${safeColor.value} ${VARIANT_MIX[props.variant].border}%, transparent)`
+})
+
+/**
+ * Text colour. Separate from `--tx-tag-color` so the dot, border, and fill can
+ * stay on the raw hue while the label is pulled toward ink for legibility.
+ */
+const resolvedText = computed(() => {
+  if (props.variant === 'plain')
+    return 'var(--tx-text-color-secondary, #909399)'
+  const mix = VARIANT_MIX[props.variant].text
+  if (mix >= 100)
+    return safeColor.value
+  return `color-mix(in srgb, ${safeColor.value} ${mix}%, var(--tx-text-color-primary, #303133))`
 })
 
 /**
@@ -77,6 +106,8 @@ const styleVars = computed(() => ({
   '--tx-tag-color': safeColor.value,
   '--tx-tag-bg': resolvedBackground.value,
   '--tx-tag-border': resolvedBorder.value,
+  '--tx-tag-text': resolvedText.value,
+  '--tx-tag-dot-size': `${props.dotSize}px`,
 }))
 
 /**
@@ -107,6 +138,7 @@ function handleClose(event: MouseEvent): void {
     class="tx-tag"
     :class="[
       `tx-tag--${size}`,
+      `tx-tag--${variant}`,
       {
         pill,
         'tx-tag--closable': closable,
@@ -116,10 +148,12 @@ function handleClose(event: MouseEvent): void {
     :style="styleVars"
     @click="handleClick"
   >
+    <span v-if="dot" class="tx-tag__dot" aria-hidden="true" :style="{ background: dot }" />
     <i v-if="icon" :class="icon" class="tx-tag__icon" aria-hidden="true" />
     <span class="tx-tag__content">
       <slot>{{ safeLabel }}</slot>
     </span>
+    <span v-if="count !== undefined" class="tx-tag__count">{{ count }}</span>
     <button
       v-if="closable"
       type="button"
@@ -149,7 +183,7 @@ function handleClose(event: MouseEvent): void {
   align-items: center;
   gap: 6px;
   border-radius: 8px;
-  color: var(--tx-tag-color, var(--tx-color-primary));
+  color: var(--tx-tag-text, var(--tx-tag-color, var(--tx-color-primary)));
   background: var(--tx-tag-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tx-tag-border, color-mix(in srgb, currentColor 32%, transparent));
   font-weight: 600;
@@ -168,6 +202,23 @@ function handleClose(event: MouseEvent): void {
   &__content {
     display: inline-flex;
     align-items: center;
+  }
+
+  &__dot {
+    flex: 0 0 auto;
+    width: var(--tx-tag-dot-size, 6px);
+    height: var(--tx-tag-dot-size, 6px);
+    margin-right: -1px;
+    border-radius: 50%;
+  }
+
+  &__count {
+    padding: 0 4px;
+    margin-right: -2px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    background: color-mix(in srgb, currentColor 12%, transparent);
   }
 
   &__close {

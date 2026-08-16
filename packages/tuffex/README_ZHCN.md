@@ -67,14 +67,14 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**126**。
+当前源码导出模块总数：**150**。
 
-- `基础与导航 (25)`: `alert`, `avatar`, `badge`, `base-anchor`, `base-surface`, `breadcrumb`, `button`, `copy-button`, `corner-overlay`, `divider`, `icon`, `icon-button`, `kbd`, `nav-bar`, `os-icon`, `outline-border`, `status-badge`, `tab-bar`, `tabs`, `tag`, `tooltip`, `popover`, `dropdown-menu`, `context-menu`, `version-capsule`
-- `表单与输入 (26)`: `cascader`, `checkbox`, `code-editor`, `date-picker`, `flat-button`, `flat-dropdown`, `flat-input`, `flat-radio`, `flat-select`, `form`, `input`, `markdown-editor`, `number-input`, `picker`, `radio`, `rating`, `search-input`, `search-select`, `segmented-slider`, `select`, `slider`, `switch`, `textarea`, `tag-input`, `tree-select`, `transfer`
+- `基础与导航 (27)`: `alert`, `avatar`, `badge`, `base-anchor`, `base-surface`, `breadcrumb`, `button`, `copy-button`, `corner-overlay`, `divider`, `icon`, `icon-button`, `kbd`, `nav-bar`, `os-icon`, `outline-border`, `status-badge`, `tab-bar`, `tabs`, `tag`, `tooltip`, `popover`, `dropdown-menu`, `context-menu`, `version-capsule`, `icon-chip`, `sidebar-nav`
+- `表单与输入 (29)`: `cascader`, `checkbox`, `code-editor`, `date-picker`, `flat-button`, `flat-dropdown`, `flat-input`, `flat-radio`, `flat-select`, `form`, `input`, `markdown-editor`, `number-input`, `picker`, `radio`, `rating`, `search-input`, `search-select`, `segmented-slider`, `select`, `slider`, `switch`, `textarea`, `tag-input`, `tree-select`, `transfer`, `scrub-field`, `fine-tune-card`, `search-panel`
 - `布局与结构 (13)`: `agents`, `auto-sizer`, `card-item`, `container`, `flex`, `grid`, `grid-layout`, `group-block`, `resize-box`, `scroll`, `splitter`, `stack`, `virtual-list`
-- `数据与状态 (22)`: `blank-slate`, `card`, `collapse`, `context-indicator`, `data-table`, `empty`, `empty-state`, `error-state`, `guide-state`, `layout-skeleton`, `loading-state`, `markdown-view`, `no-data`, `no-selection`, `offline-state`, `pagination`, `permission-state`, `search-empty`, `stat-card`, `steps`, `timeline`, `tree`
+- `数据与状态 (30)`: `blank-slate`, `card`, `collapse`, `context-indicator`, `data-table`, `empty`, `empty-state`, `error-state`, `guide-state`, `layout-skeleton`, `loading-state`, `markdown-view`, `no-data`, `no-selection`, `offline-state`, `pagination`, `permission-state`, `search-empty`, `stat-card`, `steps`, `timeline`, `tree`, `allocation-bar`, `cell-link`, `diff-table`, `dot-indicator`, `filter-chips`, `insight-cards`, `signal-meter`, `spark-chart`
 - `反馈与浮层 (12)`: `command-palette`, `dialog`, `drawer`, `flip-overlay`, `floating`, `loading-overlay`, `modal`, `progress`, `progress-bar`, `skeleton`, `spinner`, `toast`
-- `AI 与内容 (16)`: `ai-elements`, `attachment-tray`, `chain-of-thought`, `chat`, `conversation-stream`, `file-uploader`, `image-gallery`, `image-uploader`, `message-actions`, `reasoning-disclosure`, `sources`, `stream-markdown`, `suggestion-chips`, `thinking-orb`, `tool-call-card`, `tool-confirmation`
+- `AI 与内容 (27)`: `ai-elements`, `attachment-tray`, `chain-of-thought`, `chat`, `conversation-stream`, `file-uploader`, `image-gallery`, `image-uploader`, `message-actions`, `reasoning-disclosure`, `sources`, `stream-markdown`, `suggestion-chips`, `thinking-orb`, `tool-call-card`, `tool-confirmation`, `agent-trace`, `approval-card`, `code-stream`, `context-cards`, `inline-citation`, `prompt-bar`, `recommendation-card`, `selection-actions`, `task-rows`, `tool-chips`, `working-indicator`
 - `动效与视觉 (12)`: `edge-fade-mask`, `fusion`, `glass-surface`, `glow-text`, `gradient-border`, `gradual-blur`, `keyframe-stroke-text`, `sortable-list`, `stagger`, `text-transformer`, `transition`, `tuff-logo-stroke`
 
 参考来源：

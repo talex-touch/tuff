@@ -56,4 +56,54 @@ describe('txSources', () => {
     await favicon.trigger('error')
     expect(wrapper.find('.tx-sources__favicon').exists()).toBe(false)
   })
+
+  describe('stack variant', () => {
+    const stackable: AiSourceItem[] = [
+      { id: 'a', url: 'https://a.com', favicon: '/a.png' },
+      { id: 'b', url: 'https://b.com', favicon: '/b.png' },
+      { id: 'c', url: 'https://c.com', favicon: '/c.png' },
+      { id: 'd', url: 'https://d.com', favicon: '/d.png' },
+    ]
+
+    it('keeps the globe header by default', () => {
+      const wrapper = mount(TxSources, { props: { sources: stackable } })
+      expect(wrapper.find('.tx-sources__icon').exists()).toBe(true)
+      expect(wrapper.find('.tx-sources__stack').exists()).toBe(false)
+    })
+
+    it('swaps the globe for at most three overlapped heads', () => {
+      const wrapper = mount(TxSources, { props: { sources: stackable, variant: 'stack' } })
+      expect(wrapper.find('.tx-sources__icon').exists()).toBe(false)
+      expect(wrapper.findAll('.tx-sources__stack-icon')).toHaveLength(3)
+    })
+
+    it('falls back to the globe when no source can draw a head', () => {
+      const wrapper = mount(TxSources, {
+        props: { sources: [{ id: 'x', url: 'https://x.com' }], variant: 'stack' },
+      })
+      expect(wrapper.find('.tx-sources__stack').exists()).toBe(false)
+      expect(wrapper.find('.tx-sources__icon').exists()).toBe(true)
+    })
+
+    it('drops a head whose favicon fails to load', async () => {
+      const wrapper = mount(TxSources, { props: { sources: stackable, variant: 'stack' } })
+      await wrapper.findAll('.tx-sources__stack-icon')[0]!.trigger('error')
+
+      // The fourth source takes the freed slot rather than leaving a gap.
+      const heads = wrapper.findAll('.tx-sources__stack-icon')
+      expect(heads).toHaveLength(3)
+      expect(heads[0]!.attributes('src')).toBe('/b.png')
+    })
+
+    it('leaves the label and the list untouched', async () => {
+      const wrapper = mount(TxSources, {
+        props: { sources: stackable, variant: 'stack', defaultOpen: true },
+      })
+      expect(wrapper.find('.tx-sources__label').text()).toBe('Used 4 sources')
+      expect(wrapper.findAll('.tx-sources__link')).toHaveLength(4)
+
+      await wrapper.findAll('.tx-sources__link')[0]!.trigger('click')
+      expect(wrapper.emitted('open')).toHaveLength(1)
+    })
+  })
 })

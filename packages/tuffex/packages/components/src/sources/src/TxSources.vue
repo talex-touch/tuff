@@ -10,9 +10,16 @@ const props = withDefaults(
     /** Builds the collapsed header text. @default (n) => `Used ${n} source(s)` */
     labelFormatter?: (count: number) => string
     defaultOpen?: boolean
+    /**
+     * `stack` swaps the header globe for the leading favicons, overlapped —
+     * the references read as a set before the list is ever opened.
+     * @default 'default'
+     */
+    variant?: 'default' | 'stack'
   }>(),
   {
     defaultOpen: false,
+    variant: 'default',
   },
 )
 
@@ -35,6 +42,11 @@ const failedIcons = ref(new Set<string>())
 function markFailed(id: string): void {
   failedIcons.value = new Set(failedIcons.value).add(id)
 }
+
+/** The heads the stack can actually draw — a stack of blanks is worse than none. */
+const stackedSources = computed(() =>
+  props.sources.filter(source => source.favicon && !failedIcons.value.has(source.id)).slice(0, 3),
+)
 
 function domainOf(source: AiSourceItem): string {
   try {
@@ -60,7 +72,21 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
       :aria-controls="bodyId"
       @click="open = !open"
     >
-      <span class="tx-sources__icon" aria-hidden="true">
+      <span
+        v-if="variant === 'stack' && stackedSources.length > 0"
+        class="tx-sources__stack"
+        aria-hidden="true"
+      >
+        <img
+          v-for="source in stackedSources"
+          :key="source.id"
+          class="tx-sources__stack-icon"
+          :src="source.favicon"
+          alt=""
+          @error="markFailed(source.id)"
+        >
+      </span>
+      <span v-else class="tx-sources__icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="9" />
           <path d="M3.5 12h17M12 3.5c2.6 2.4 4 5.3 4 8.5s-1.4 6.1-4 8.5c-2.6-2.4-4-5.3-4-8.5s1.4-6.1 4-8.5Z" />
@@ -118,6 +144,25 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
 
   .tx-sources__icon {
     display: inline-flex;
+  }
+
+  .tx-sources__stack {
+    display: inline-flex;
+  }
+
+  .tx-sources__stack-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--tx-fill-color-blank, #fff);
+    // Ringed in the colour behind the row so overlapping heads stay separate
+    // discs instead of merging into a blob. Point the variable at the real
+    // backdrop when the header sits on something other than the page.
+    box-shadow: 0 0 0 1.5px var(--tx-sources-stack-ring, var(--tx-bg-color, #fff));
+
+    & + .tx-sources__stack-icon {
+      margin-left: -4px;
+    }
   }
 
   .tx-sources__chevron {

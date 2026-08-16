@@ -92,6 +92,41 @@ describe('txCheckbox', () => {
 
   })
 
+  it('announces a partial selection as mixed and draws the dash', () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: false,
+        indeterminate: true,
+        ariaLabel: 'Select all',
+      },
+    })
+
+    // The dash is a visual claim; aria-checked="mixed" is what makes it true
+    // for a screen reader. Rendering one without the other is the upstream bug.
+    expect(wrapper.attributes('aria-checked')).toBe('mixed')
+    expect(wrapper.classes()).toContain('is-indeterminate')
+    expect(wrapper.find('.tx-checkbox__dash').exists()).toBe(true)
+  })
+
+  it('resolves a partial selection to checked when activated', async () => {
+    const wrapper = mount(TxCheckbox, {
+      props: { modelValue: true, indeterminate: true },
+    })
+
+    // Mixed means "some", so activating it must select all rather than flip the
+    // underlying boolean back to false.
+    await wrapper.trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([true])
+    expect(wrapper.emitted('change')?.[0]).toEqual([true])
+  })
+
+  it('keeps the plain boolean aria state when not indeterminate', () => {
+    const unchecked = mount(TxCheckbox, { props: { modelValue: false } })
+    expect(unchecked.attributes('aria-checked')).toBe('false')
+    expect(unchecked.classes()).not.toContain('is-indeterminate')
+    expect(unchecked.find('.tx-checkbox__dash').exists()).toBe(false)
+  })
+
   it('does not emit events when disabled', async () => {
     const wrapper = mount(TxCheckbox, {
       props: {

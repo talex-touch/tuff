@@ -1,4 +1,4 @@
-import type { TagEmits, TagProps } from './src/types'
+import type { TagEmits, TagProps, TagVariant } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxTag from './src/TxTag.vue'
 
@@ -18,7 +18,7 @@ import TxTag from './src/TxTag.vue'
 const Tag = withInstall(TxTag)
 
 export { Tag, TxTag }
-export type { TagEmits, TagProps }
+export type { TagEmits, TagProps, TagVariant }
 export type TxTagInstance = InstanceType<typeof TxTag>
 
 export default Tag
