@@ -17,7 +17,7 @@ const appBase = import.meta.env.BASE_URL || '/'
 const routerBase = appBase.startsWith('.') ? '/' : appBase
 
 const router = createRouter({
-  routes: setupLayouts(routes),
+  routes: setupLayouts([...routes]),
   history: createWebHashHistory(routerBase),
 })
 
