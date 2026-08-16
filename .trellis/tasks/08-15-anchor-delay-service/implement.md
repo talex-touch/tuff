@@ -130,3 +130,51 @@ cd ../.. && pnpm -C apps/core-app run typecheck  # tuffex 改动的第三个下�
 PRD 的 Q1（closeDelay 是否按 `interactive` 分叉）在**阶段 1.1 写预设表之前**需要答复。
 未答复则按 design.md 的预留实现（`hint` 与 `hintInteractive` 两条，默认只启用前者），
 接通只需一行，不阻塞。
+
+---
+
+## 执行状态 — 2026-08-15 停在阶段 4（并发冲突，主动让出）
+
+### 已完成且验证通过
+
+- **阶段 0** 基线（注意 `research/baseline.md` 里有一条自我更正：那不是 HEAD 基线）
+- **阶段 1** `packages/utils/anchor-delay.ts` + 26 条测试。已被 `TxTooltip`、
+  `TxFlatSelect`、`TxFlatDropdown` 三个组件采用（后两个是**别人**接上去的）
+- **阶段 2** `closeType` / `exit`，解析器按阶段查表。base-anchor 92/92 绿
+- **阶段 2 增补** 应要求把 boom→expand 组合提升为 **anchor 全局默认**；
+  `boom` 的 seed scale 由 1.08 改为 0.94（原先向内收缩，与「模糊出现 + 放大」相反）
+- **阶段 3** `TxTooltip` 接入服务；`TxDropdownMenu` 补 `trigger` 透传
+- **阶段 4 部分** nexus 头部删除手写 `CLOSE_DELAY = 600`，改 `trigger="hover"`；
+  面板参数回归 tuffex 默认；`base-anchor` 中英文档已补 `closeType` / `exit`
+
+### 阻塞：`TxPopover` 红，非本任务所改
+
+另一个并行 agent 在同一批文件上工作。一小时内在 `base-anchor-motion.ts` 发生三次符号级冲突
+（`LEGACY_→CLASSIC_CLOSE_DURATION_RATIO` 改名、`phaseTable` 签名收缩、`legacyEase` 参数删除）。
+
+决定性的一处：`TxPopover.vue` 中本任务的服务接线被**整体删除**，改为向 `TxBaseAnchor`
+传 `:open-delay` / `:close-delay` —— 但 `BaseAnchorProps` 里**没有这两个 prop**，因此被静默丢弃：
+
+```
+× txPopover > maps hover trigger to delayed open and non-outside-click close behavior
+× txPopover > keeps hover popover open while pointer is over floating content
+```
+
+这不是推翻，是**同一目标的两条实现路径在并行**：本任务把延迟放在 wrapper 层，
+对方在往 `TxBaseAnchor` 层搬 —— 那正是本任务 `design.md` §7 最初写的方案。
+
+**已决定（用户）：停手，等对方落完。** 不补 `TxBaseAnchor` 的 delay props
+（等于替对方把半成品做完），也不恢复 `TxPopover` 的接线（等于覆盖在途代码）。
+
+### 接手时先做
+
+1. 确认 `BaseAnchorProps` 是否已有 `openDelay` / `closeDelay` / `layer`。有则上述两条测试应自动转绿。
+2. `packages/tuffex` 全量测试，与本文件记录的 base-anchor 92/92 对比。
+3. 剩余文档：`tooltip` / `popover` / `dropdown-menu` 三篇 × 中英，
+   等 `TxPopover` 的 API 定型后再写 —— 现在写会立刻过期。
+
+### 未完成
+
+- [ ] 4.3 上述三篇文档同步（被阻塞）
+- [ ] 4.4 demo-registry（当前 nexus 2 条红全部来自**他人**新组件
+      `agent-trace` / `diff-table` / `icon-chip` / `signal-meter` / `working-indicator`，与本任务无关）
