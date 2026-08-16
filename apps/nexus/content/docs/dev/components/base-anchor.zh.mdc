@@ -1,6 +1,6 @@
 ---
 title: "BaseAnchor 锚点定位"
-description: "基于 Floating UI 与 GSAP 的锚点定位弹出层，支持位移、聚焦缩放、透明度与无动画模式。"
+description: "基于 Floating UI 与 GSAP 的锚点定位弹出层，默认琉光面板、弹簧展开，另有位移、聚焦缩放、透明度与液态模式。"
 category: Primitives
 status: beta
 since: 2.5.0
@@ -9,10 +9,6 @@ syncStatus: reviewed
 verified: true
 ---
 # BaseAnchor 锚点定位
-
-BaseAnchor 是 TuffEx 的底层锚点定位弹出层：由 Floating UI 负责 placement、碰撞处理、箭头定位与 reference 跟随，由 GSAP 负责打开/关闭动效。
-
-默认面板容器使用 `TxCard` 渲染，可通过 `panelBackground / panelShadow / panelRadius / panelPadding` 控制外观；也可以用 `useCard=false` 退回为纯内容包装层。
 
 ## 基础用法
 
@@ -42,7 +38,7 @@ code: |
 
 ### 位移动画
 
-`animation.type='transfer'` 是默认动画：内容从 placement 方向通过柔和边缘进入，关闭时原路回收。`show-arrow` 会让三角箭头跟随最终浮层方向与位置。
+`animation.type='transfer'`：内容从 placement 方向通过柔和边缘进入，关闭时原路回收。`show-arrow` 会让三角箭头跟随最终浮层方向与位置。
 
 #### 柔和边缘
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
@@ -125,7 +121,7 @@ code: |
 
 ### 动画模式
 
-通过一个 `animation` 对象统一配置动画。当前支持：`transfer`（默认位移动画）、`boom`（聚焦缩放：模糊 + 缩放 + 透明度）、`opacity`（透明度）、`none`（瞬时显示/隐藏）。
+通过一个 `animation` 对象统一配置：`expand`（弹簧展开，默认）、`transfer`（位移）、`boom`（聚焦缩放）、`opacity`（透明度）、`none`（无动画）；液态的 `drip` / `bead` 见下节。
 
 #### 多种动画
 :::TuffDemoWrapper{demo="BaseAnchorAnimationDemo" code-lang="vue"}
@@ -134,10 +130,11 @@ code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  type AnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+  type AnchorAnimationType = 'expand' | 'transfer' | 'boom' | 'opacity' | 'none'
 
-  const modes: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']
+  const modes: AnchorAnimationType[] = ['expand', 'transfer', 'boom', 'opacity', 'none']
   const open = ref<Record<AnchorAnimationType, boolean>>({
+    expand: false,
     transfer: false,
     boom: false,
     opacity: false,
@@ -145,6 +142,9 @@ code: |
   })
 
   function resolveAnimation(type: AnchorAnimationType) {
+    if (type === 'expand')
+      return { type }
+
     return {
       type,
       duration: type === 'none' ? 0 : 420,
@@ -311,7 +311,7 @@ code: |
 
 ### 交互式 Playground
 
-在一个面板里自由调整关键属性，重点观察 `pure / mask / blur / glass / refraction` 不同 surface 的材质表现，以及 `auto / manual / off` 三种运动适配策略。
+在一个面板里自由调整关键属性，重点观察 `pure / mask / blur / glass / refraction`（琉光）不同 surface 的材质表现，以及 `auto / manual / off` 三种运动适配策略。
 
 #### Surface Playground
 :::TuffDemoWrapper{demo="BaseAnchorSurfacePlaygroundDemo" code-lang="vue"}
@@ -342,12 +342,11 @@ code: |
 | `matchReferenceWidth` | `boolean` | `false` | `width=0` 时是否跟随 reference 宽度 |
 | `referenceClass` | `BaseAnchorClassValue` | `undefined` | 追加到 reference 包装层的 class，不会作用于浮层面板 |
 | `virtualReference` | `BaseAnchorVirtualReference` | `undefined` | 使用虚拟 reference（如鼠标坐标）进行定位；适合 ContextMenu / 画布节点 / 光标菜单 |
+| `disableFlip` | `boolean` | `false` | 关掉 `flip` 中间件，面板贴近视口边缘时不再翻到 `placement` 的对侧。`shift` 仍在，面板依然会被推回视口内。用于宿主自行测量的 `virtualReference`（划词工具条、光标条）——中途换边会被读成另一个控件 |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | 动画配置对象，统一控制动画类型、时长、缓动与效果参数 |
-| `duration` | `number` | `432` | 兼容旧用法的动画时长 (ms)，建议改用 `animation.duration` |
-| `ease` | `string` | `'back.out(2)'` | 兼容旧用法的打开缓动，建议改用 `animation.ease` |
 | `useCard` | `boolean` | `true` | 是否使用内置 `TxCard` 包裹浮层内容 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | `useCard=true` 时透传给 `TxCard` 的边框形态 |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background；`refraction` 即琉光） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
@@ -365,14 +364,16 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `type` | `'transfer' \| 'boom' \| 'opacity' \| 'none' \| 'drip' \| 'bead'` | `'transfer'` | 动画类型。`boom` 为聚焦缩放效果，不用于中文命名；`drip` 与 `bead` 共用一套引擎、自带时序表，不继承旧的 `duration` / `ease` prop |
-| `duration` | `number` | `432` | 打开动画时长 (ms) |
+| `closeType` | 同 `type` 的取值 | 同 `type` | 关闭阶段使用的动画类型。缺省时与 `type` 相同，因此不传即为对称播放。`drip` / `bead` 的两个方向共用同一套已测量的舞台（含模板读取的 `usesBeadMotion`），因此液态必须两端同型，混搭会回落为对称并在 dev 下告警 |
+| `duration` | `number` | 按类型（expand 400 / 经典 432 / 液态 260） | 打开动画时长 (ms) |
 | `closeDuration` | `number` | `duration * 0.45` | 关闭动画时长 (ms) |
-| `ease` | `string` | `'back.out(2)'` | 打开动画 GSAP 缓动 |
+| `ease` | `string` | 按类型（expand `spring(10, 0.6)` / 经典 `back.out(2)` / 液态 `linear`） | 打开缓动：GSAP 字符串、`cubic-bezier(...)` 或 `spring(omega, zeta)` |
 | `closeEase` | `string` | `'power3.in'` | 关闭动画 GSAP 缓动 |
 | `distance` | `number` | `30` | `transfer` 位移距离 (px) |
 | `scale` | `number` | `1.08` | `boom` 打开初始/关闭结束缩放 |
 | `blur` | `number` | `12` | `boom` 打开初始/关闭结束模糊半径 (px) |
 | `opacity` | `number` | `0` | `boom` / `opacity` 打开初始与关闭结束透明度 |
+| `exit` | `{ scale?, distance?, blur?, opacity? }` | 见说明 | 仅作用于关闭阶段的几何覆盖。逐字段回落：先取同名共享字段（调用方显式写过的值），再取 `closeType` 自己的默认表。之所以需要它，是因为 `scale` 在不同类型下语义相反 —— `boom` 从大于 1 收进来，`expand` 从小于 1 长出去，两阶段共享一个值必然有一端是错的 |
 | `gooBlur` | `number` | `4.5` | 仅 `drip` / `bead`。goo 滤镜的 `feGaussianBlur` stdDeviation，与 `gooThreshold` 共同决定颈部能撑过多宽的间隙 |
 | `gooThreshold` | `number` | `20` | 仅 `drip` / `bead`。alpha 阈值矩阵的斜率 |
 | `gooThresholdOffset` | `number` | `-9` | 仅 `drip` / `bead`。alpha 阈值矩阵的偏移 |

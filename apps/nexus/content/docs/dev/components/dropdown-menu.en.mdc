@@ -10,9 +10,6 @@ verified: true
 ---
 # DropdownMenu
 
-`TxDropdownMenu` renders a compact action menu from a trigger slot. It is controlled with `v-model` and uses `TxDropdownItem` for selectable menu rows.
-
-
 ## Basic Usage
 
 ### DropdownMenu
@@ -131,11 +128,11 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `modelValue` | `boolean` | `undefined` | Controls whether the dropdown is open (v-model). Omit it for uncontrolled open state, kept internally. |
+| `trigger` | `'click' \| 'hover'` | `'click'` | How the trigger opens the menu, forwarded to `TxPopover`. It owns hover handling for both the reference and the panel, so timing and mutual exclusion come from the shared delay service rather than a close timer in the host. |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
 | `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
 | `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Popover animation config forwarded to BaseAnchor; an empty object uses BaseAnchor's default animation. |
-| `duration` | `number` | `180` | Backward-compatible popover transition duration; prefer `animation.duration`. |
 | `minWidth` | `number` | `220` | Minimum panel width in pixels. The maximum panel width is fixed at 360px, with no prop to change it. |
 | `maxHeight` | `number` | `420` | Maximum scrollable panel height in pixels. |
 | `unlimitedHeight` | `boolean` | `false` | Disables the panel max-height constraint. |

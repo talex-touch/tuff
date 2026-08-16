@@ -10,11 +10,6 @@ verified: true
 ---
 # Popover 弹出层
 
-`TxPopover` 直接基于 `TxBaseAnchor` 建立触发语义，由 `TxBaseAnchor` 负责定位、碰撞处理、外部点击 / Escape 关闭与动效。
-
-Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板的边框、背景与阴影，并可通过 `keepAliveContent` 控制内容状态是否保留。
-
-
 ## 基础用法
 
 ### Popover
@@ -190,10 +185,9 @@ code: |
 | `showArrow` | `boolean` | `true` | 是否显示箭头 |
 | `arrowSize` | `number` | `12` | 箭头尺寸 |
 | `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式 |
-| `openDelay` | `number` | `120` | hover 模式打开延迟（ms） |
-| `closeDelay` | `number` | `100` | hover 模式关闭延迟（ms） |
-| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180, ease: 'power2.out' }` | 透传给 BaseAnchor 的锚点动画配置 |
-| `duration` | `number` | `180` | 兼容旧用法的动画时长，建议改用 `animation.duration` |
+| `openDelay` | `number` | 见 `menu` 预设（`120`） | hover 模式打开延迟（ms）。不传时由共享延迟服务供给 |
+| `closeDelay` | `number` | 见 `menu` 预设（`100`） | hover 模式关闭延迟（ms）。不传时由共享延迟服务供给 |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | 透传给 BaseAnchor 的锚点动画配置；默认弹簧展开，经典类型（`transfer` 等）才注入 `duration: 180`、`ease: 'power2.out'` |
 | `keepAliveContent` | `boolean` | `true` | 是否保留弹层内部状态 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 时是否切换开关 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
