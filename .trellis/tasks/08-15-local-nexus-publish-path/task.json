@@ -22,5 +22,9 @@
   "parent": "08-15-local-store-three-plugins",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Beta release is held: master CI must be green before tagging v2.4.14-beta.9.",
+    "evidence": "Local chain proven up to publish: API key + Ed25519 publisher key registered via the real dashboard APIs, clipboard-history/json-formatter .tpex built, CLI terms accepted.",
+    "nextAction": "Confirm master CI green, then run `node scripts/version-sync.mjs prerelease` from a clean master checkout to tag v2.4.14-beta.9."
+  }
 }
