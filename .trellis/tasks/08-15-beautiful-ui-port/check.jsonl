@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/design.md", "reason": "§4 横切硬约定逐条核对 + §7 验证矩阵命令"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/implement.md", "reason": "每组件 DoD 清单与各 Phase 勾选状态"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/style-bridge-and-conventions.md", "reason": "§4.2 README 审计规则、§4.3 文档 frontmatter/段名约定、§4.6 验证命令（nexus typecheck 必须走包装层）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "质量门槛"}

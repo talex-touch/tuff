@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/design.md", "reason": "总决策表+横切硬约定，所有实现的准绳"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/style-bridge-and-conventions.md", "reason": "token/mixin 桥接方案 + tuffex/nexus 仓库约定（目录范式/barrel/README 审计/文档 frontmatter/demo 注册/验证命令）"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/fusion-status-loading.md", "reason": "W1 簇：01/02/06/17 全量清单、API 草案、移植风险"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/fusion-chat.md", "reason": "W2 簇：03/07/08 全量清单、API 草案、移植风险"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/fusion-actions.md", "reason": "W3 簇：04/05/09/19 全量清单、API 草案、移植风险"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/fusion-tables.md", "reason": "W4 簇：11/12/13 全量清单、TxDataTable 缺口 G1-G14、共享原语 P1-P10、源码缺陷 D1-D8"}
+{"file": ".trellis/tasks/08-15-beautiful-ui-port/research/fusion-navcards.md", "reason": "W5 簇：10/14/15/16/18 全量清单、API 草案、共享模式"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范：样式模式/无障碍/加载态/i18n"}
