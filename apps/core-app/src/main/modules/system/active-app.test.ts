@@ -117,6 +117,27 @@ afterEach(() => {
       macosEbadfBackoffUntil: number
     }
   ).macosEbadfBackoffUntil = 0
+  ;(
+    activeAppService as unknown as {
+      macosTimeoutBackoffUntil: number
+      macosConsecutiveTimeouts: number
+      lastMacOSResolveFailureLogAt: number
+    }
+  ).macosTimeoutBackoffUntil = 0
+  ;(
+    activeAppService as unknown as {
+      macosTimeoutBackoffUntil: number
+      macosConsecutiveTimeouts: number
+      lastMacOSResolveFailureLogAt: number
+    }
+  ).macosConsecutiveTimeouts = 0
+  ;(
+    activeAppService as unknown as {
+      macosTimeoutBackoffUntil: number
+      macosConsecutiveTimeouts: number
+      lastMacOSResolveFailureLogAt: number
+    }
+  ).lastMacOSResolveFailureLogAt = 0
 })
 
 describe('active-app resolution', () => {
@@ -433,5 +454,95 @@ ConvertTo-Json -Compress`),
 
     expect(execFilePromiseMock).not.toHaveBeenCalled()
     expect(activeAppLoggerMock.warn).not.toHaveBeenCalled()
+  })
+})
+
+describe('active-app repeated macOS timeouts', () => {
+  function timeoutError() {
+    return Object.assign(new Error('Command failed: osascript -e'), {
+      killed: true,
+      signal: 'SIGTERM'
+    })
+  }
+
+  function useDarwin() {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+  }
+
+  it('stops spawning osascript once timeouts become persistent', async () => {
+    useDarwin()
+    execFilePromiseMock.mockImplementation(async () => {
+      throw timeoutError()
+    })
+
+    // The refresh poll fires every 1500ms and each attempt burns the full
+    // command timeout, so an endpoint that never answers produced a spawn every
+    // ~1.5s for the whole session (278 in the log this fix came from).
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(
+        activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+      ).resolves.toBeNull()
+    }
+    expect(execFilePromiseMock).toHaveBeenCalledTimes(3)
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(execFilePromiseMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('clears the timeout backoff after a successful resolve', async () => {
+    useDarwin()
+    execFilePromiseMock.mockImplementation(async () => {
+      throw timeoutError()
+    })
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    }
+
+    execFilePromiseMock.mockImplementation(async () => ({
+      stdout: 'Safari||com.apple.Safari||321||Start Page\n',
+      stderr: ''
+    }))
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toMatchObject({ displayName: 'Safari' })
+
+    // Counter reset, so the next isolated timeout must not trip the threshold.
+    execFilePromiseMock.mockImplementation(async () => {
+      throw timeoutError()
+    })
+    await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+
+    const state = activeAppService as unknown as {
+      macosTimeoutBackoffUntil: number
+      macosConsecutiveTimeouts: number
+    }
+    expect(state.macosConsecutiveTimeouts).toBe(1)
+    expect(state.macosTimeoutBackoffUntil).toBe(0)
+  })
+
+  it('throttles the generic resolution-failure log', async () => {
+    useDarwin()
+    execFilePromiseMock.mockImplementation(async () => {
+      throw new Error('osascript exploded')
+    })
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    }
+
+    // Each of these used to write a full stack trace embedding the AppleScript
+    // source to the log file.
+    expect(activeAppLoggerMock.error).toHaveBeenCalledTimes(1)
   })
 })

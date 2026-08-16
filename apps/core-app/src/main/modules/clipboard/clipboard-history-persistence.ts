@@ -12,7 +12,7 @@ import type { ClipboardHistoryQueryInput } from './clipboard-request-normalizer'
 import { performance } from 'node:perf_hooks'
 import { isHttpSource, resolveLocalFilePath } from '@talex-touch/utils/network'
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm'
-import { appTaskGate } from '../../service/app-task-gate'
+import { APP_TASK_GATE_STARTUP_WAIT_MS, appTaskGate } from '../../service/app-task-gate'
 import { normalizeRenderableSource } from '../../utils/local-renderable-assets'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
@@ -211,8 +211,12 @@ export class ClipboardHistoryPersistence {
     const phaseDurations: ClipboardPhaseDurations = {}
     try {
       if (waitForIdle) {
+        // Bounded, then hydrate regardless. This cache loads once; an unbounded
+        // wait on a gate held by a long app-index scan would leave clipboard
+        // history empty for that whole time rather than merely late. The phase
+        // timing below already exists to surface when this wait dominates.
         await trackPhaseAsync(phaseDurations, 'gate.waitForIdle', async () => {
-          await appTaskGate.waitForIdle()
+          await appTaskGate.waitForIdle(APP_TASK_GATE_STARTUP_WAIT_MS)
         })
       }
 

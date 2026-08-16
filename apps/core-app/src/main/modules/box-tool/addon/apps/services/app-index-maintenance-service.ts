@@ -1,6 +1,8 @@
 import { appTaskGate } from '../../../../../service/app-task-gate'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 
+const FULL_SYNC_TIMEOUT_MS = 10 * 60_000
+
 export interface AppIndexMaintenanceServiceOptions {
   runFullSyncIfDue: () => Promise<void>
 }
@@ -56,7 +58,11 @@ export class AppIndexMaintenanceService {
         lane: 'maintenance',
         backpressure: 'latest_wins',
         dedupeKey: 'app_provider_full_sync',
-        maxInFlight: 1
+        maxInFlight: 1,
+        // A full app-index sync legitimately runs longer than the default
+        // polling bound, so it gets its own. Still bounded rather than opted
+        // out: a wedged sync would otherwise hold a maintenance slot forever.
+        timeoutMs: FULL_SYNC_TIMEOUT_MS
       }
     )
     return true

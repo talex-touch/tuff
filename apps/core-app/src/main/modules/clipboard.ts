@@ -33,7 +33,7 @@ import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
 import { clipboardHistory } from '../db/schema'
-import { appTaskGate } from '../service/app-task-gate'
+import { APP_TASK_GATE_STARTUP_WAIT_MS, appTaskGate } from '../service/app-task-gate'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { createLogger, type LogOptions } from '../utils/logger'
 import { perfMonitor } from '../utils/perf-monitor'
@@ -94,6 +94,8 @@ const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 3000
 const CLIPBOARD_LAG_ADAPT_WINDOW_MS = 8000
 const CLIPBOARD_LAG_ADAPT_ERROR_MS = 1000
 const CLIPBOARD_LAG_SKIP_LOG_THROTTLE_MS = 5000
+/** Upper bound on how long a CoreBox-show capture waits for app tasks to drain. */
+const CLIPBOARD_APP_TASK_WAIT_MS = 200
 const pollingService = PollingService.getInstance()
 
 interface ClipboardMonitorOptions {
@@ -486,6 +488,21 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
+  /**
+   * Wait for app tasks to drain before running deferred one-shot startup work,
+   * but proceed anyway once the bound elapses. Skipping is not an option here:
+   * unlike the per-capture wait in checkClipboard, there is no next attempt.
+   */
+  private async waitForAppTasksBeforeStartupWork(label: string): Promise<void> {
+    const becameIdle = await appTaskGate.waitForIdle(APP_TASK_GATE_STARTUP_WAIT_MS)
+    if (becameIdle) {
+      return
+    }
+    clipboardLog.warn('Proceeding with deferred clipboard startup work before app tasks drained', {
+      meta: { label, waitedMs: APP_TASK_GATE_STARTUP_WAIT_MS }
+    })
+  }
+
   private isCoreBoxWindowVisible(): boolean {
     const coreBoxWindow = windowManager.current?.window
     return Boolean(coreBoxWindow && !coreBoxWindow.isDestroyed() && coreBoxWindow.isVisible())
@@ -497,8 +514,11 @@ export class ClipboardModule extends BaseModule {
     }
 
     this.coreBoxBaselineCaptureQueued = true
-    void appTaskGate
-      .waitForIdle()
+    // Bounded: the queued latch above is only cleared in the .then(), so an
+    // unbounded wait on a gate that never drains would leave it stuck true and
+    // no further baseline capture could ever be scheduled for the rest of the
+    // session.
+    void this.waitForAppTasksBeforeStartupWork('corebox-baseline-capture')
       .then(() => {
         this.coreBoxBaselineCaptureQueued = false
         if (this.isDestroyed || (!this.coreBoxVisible && !this.isCoreBoxWindowVisible())) {
@@ -922,8 +942,11 @@ export class ClipboardModule extends BaseModule {
     this.updateClipboardPolling(true)
     this.ensureActiveAppRefreshTask()
     this.scheduleActiveAppRefresh()
-    void appTaskGate
-      .waitForIdle()
+    // Bounded: shouldSkipUnchangedCapture only works while the native watcher is
+    // active, so a gate that never drains would leave every CoreBox-show
+    // baseline doing a synchronous Electron clipboard read on the main thread --
+    // the exact cost the watcher exists to avoid.
+    void this.waitForAppTasksBeforeStartupWork('native-clipboard-watcher')
       .then(async () => {
         await this.startNativeClipboardWatcher()
         this.syncCoreBoxVisibleBaselineAfterIdle()
@@ -1024,7 +1047,16 @@ export class ClipboardModule extends BaseModule {
       if (options.source !== 'corebox-show-baseline') {
         return
       }
-      await appTaskGate.waitForIdle()
+      // Bounded, because this is the one source that reaches here from the
+      // search path: every executeSearch awaits a clipboard refresh before it
+      // even builds the query, and waitForIdle() with no argument waits
+      // indefinitely. A long app-index scan would hold the search there for as
+      // long as it ran. Falling through to the same skip the other sources take
+      // costs a slightly stale clipboard; hanging costs the whole search.
+      const becameIdle = await appTaskGate.waitForIdle(CLIPBOARD_APP_TASK_WAIT_MS)
+      if (!becameIdle) {
+        return
+      }
       if (this.isDestroyed || !this.clipboardHelper || !this.db) {
         return
       }
@@ -1421,8 +1453,7 @@ export class ClipboardModule extends BaseModule {
       this.startClipboardMonitoring()
     })
     setImmediate(() => {
-      appTaskGate
-        .waitForIdle()
+      void this.waitForAppTasksBeforeStartupWork('ocr-service')
         .then(() => ocrService.start())
         .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
     })

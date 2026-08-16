@@ -28,9 +28,18 @@ vi.mock('node:os', async (importOriginal) => {
   }
 })
 
+const { getMainConfigMock, saveMainConfigMock } = vi.hoisted(() => ({
+  getMainConfigMock: vi.fn((_file?: unknown): unknown => ({
+    entries: [],
+    maxEntries: 10,
+    lastUpdated: Date.now()
+  })),
+  saveMainConfigMock: vi.fn((_file?: unknown, _value?: unknown): void => {})
+}))
+
 vi.mock('../storage', () => ({
-  getMainConfig: vi.fn(() => ({ entries: [], maxEntries: 10, lastUpdated: Date.now() })),
-  saveMainConfig: vi.fn()
+  getMainConfig: getMainConfigMock,
+  saveMainConfig: saveMainConfigMock
 }))
 
 vi.mock('../database', () => ({
@@ -50,9 +59,13 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
   }
 })
 
+const { networkRequestMock } = vi.hoisted(() => ({
+  networkRequestMock: vi.fn()
+}))
+
 vi.mock('../network', () => ({
   getNetworkService: () => ({
-    request: vi.fn().mockRejectedValue(new Error('network unavailable'))
+    request: networkRequestMock
   })
 }))
 
@@ -314,5 +327,69 @@ describe('StartupAnalytics total startup time', () => {
 
     expect(analytics.getCurrentMetrics()?.totalStartupTime).toBe(500)
     await internals.autoFinalizePromise
+  })
+})
+
+describe('StartupAnalytics outbox flush budget', () => {
+  const REPORT_QUEUE_FILE = StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
+
+  function makeQueueItem(index: number) {
+    return {
+      payload: {
+        metadata: { kind: 'startup' },
+        sessionId: `s-${index}`
+      },
+      endpoint: 'http://example.test/report',
+      createdAt: Date.now() - 1000 * (index + 1)
+    }
+  }
+
+  function seedQueue(count: number) {
+    const queue = Array.from({ length: count }, (_, index) => makeQueueItem(index))
+    getMainConfigMock.mockImplementation((file?: unknown) =>
+      file === REPORT_QUEUE_FILE ? queue : { entries: [], maxEntries: 10, lastUpdated: Date.now() }
+    )
+    return queue
+  }
+
+  afterEach(() => {
+    vi.clearAllMocks()
+    getMainConfigMock.mockImplementation(() => ({
+      entries: [],
+      maxEntries: 10,
+      lastUpdated: Date.now()
+    }))
+  })
+
+  it('stops the round after the first failure instead of one timeout per item', async () => {
+    const queue = seedQueue(8)
+    networkRequestMock.mockRejectedValue(new Error('network unavailable'))
+
+    const analytics = new StartupAnalytics()
+    await (
+      analytics as unknown as { flushQueuedReports: (endpoint: string) => Promise<void> }
+    ).flushQueuedReports('http://example.test/report')
+
+    // Every queued item used to be attempted, each costing a full 12s request
+    // timeout against an endpoint already known to be unreachable.
+    expect(networkRequestMock).toHaveBeenCalledTimes(1)
+    expect(queue.length).toBe(8)
+  })
+
+  it('carries every unattempted item back into the queue', async () => {
+    seedQueue(8)
+    networkRequestMock.mockRejectedValue(new Error('network unavailable'))
+
+    const analytics = new StartupAnalytics()
+    await (
+      analytics as unknown as { flushQueuedReports: (endpoint: string) => Promise<void> }
+    ).flushQueuedReports('http://example.test/report')
+
+    // saveReportQueue replaces the queue wholesale, so breaking out of the loop
+    // early must not silently drop the items the round never reached.
+    const saved = saveMainConfigMock.mock.calls.find(
+      ([file]) => file === REPORT_QUEUE_FILE
+    )?.[1] as unknown[] | undefined
+    expect(saved).toHaveLength(8)
   })
 })

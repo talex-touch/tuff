@@ -33,6 +33,21 @@ const DEFAULT_LANE_CONCURRENCY: Record<PollingTaskLane, number> = {
   serial: 1
 }
 
+/**
+ * Upper bound applied to any task registered without an explicit `timeoutMs`.
+ *
+ * Omitting the option used to mean "wait forever", which combined with the
+ * `serial` lane default (concurrency 1) let one long task park the whole lane:
+ * `temp-file.cleanup` ran 23-67s with 12 tasks queued behind it, and the
+ * network outbox flushes ran 46-638s. Every task observed running normally is
+ * far below this (the slowest were ~730ms), so the bound only ever fires on the
+ * pathological cases.
+ *
+ * Note this releases the lane slot; it does not cancel the callback. Work that
+ * must actually stop needs its own budget at the call site.
+ */
+export const DEFAULT_POLLING_TASK_TIMEOUT_MS = 30_000
+
 interface PollingTask {
   id: string
   callback: () => void | Promise<void>
@@ -165,6 +180,16 @@ export class PollingService {
     return 'serial'
   }
 
+  private sanitizeTimeoutMs(value: number | null | undefined): number | undefined {
+    if (value === undefined) {
+      return DEFAULT_POLLING_TASK_TIMEOUT_MS
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      return undefined
+    }
+    return Math.floor(value)
+  }
+
   private sanitizeBackpressure(value: unknown): PollingTaskBackpressure {
     if (value === 'latest_wins' || value === 'coalesce' || value === 'strict_fifo') {
       return value
@@ -288,7 +313,11 @@ export class PollingService {
       backpressure?: PollingTaskBackpressure
       dedupeKey?: string
       maxInFlight?: number
-      timeoutMs?: number
+      /**
+       * Per-run budget. Omit to get {@link DEFAULT_POLLING_TASK_TIMEOUT_MS};
+       * pass `null` (or a non-positive number) to opt out and wait unbounded.
+       */
+      timeoutMs?: number | null
       jitterMs?: number
     }
   ): void {
@@ -312,10 +341,11 @@ export class PollingService {
     const backpressure = this.sanitizeBackpressure(options.backpressure)
     const maxInFlight = Math.max(1, Math.floor(options.maxInFlight ?? 1))
     const jitterMs = Math.max(0, Math.floor(options.jitterMs ?? 0))
-    const timeoutMs =
-      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
-        ? Math.max(1, Math.floor(options.timeoutMs))
-        : undefined
+    // `undefined` (option omitted) takes the default bound; `null` and any
+    // non-positive number are the explicit opt-out. The old branch ran every
+    // value through `Math.max(1, ...)`, so a caller writing `timeoutMs: 0` to
+    // mean "no timeout" would have got a 1ms one instead.
+    const timeoutMs = this.sanitizeTimeoutMs(options.timeoutMs)
 
     const now = Date.now()
     const baseNextRunMs = options.runImmediately
@@ -655,7 +685,9 @@ export class PollingService {
     }
 
     const timeoutError = new Error(
-      `[PollingService] Task '${task.id}' timeout after ${task.timeoutMs}ms`
+      `[PollingService] Task '${task.id}' timeout after ${task.timeoutMs}ms `
+      + `(lane=${task.lane}, interval=${task.intervalMs}ms). `
+      + 'The lane slot is released; the callback keeps running.'
     )
 
     let timeoutHandle: NodeJS.Timeout | undefined

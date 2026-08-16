@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PollingService } from '../common/utils/polling'
+import { DEFAULT_POLLING_TASK_TIMEOUT_MS, PollingService } from '../common/utils/polling'
 
 type PollingServiceTestAccess = {
   stop: (reason?: string) => void
@@ -229,5 +229,98 @@ describe('PollingService lanes and backpressure', () => {
     service.clearGlobalPressure('unit-test-concurrency-cap')
     await vi.advanceTimersByTimeAsync(60)
     expect(peakInFlight).toBeGreaterThan(1)
+  })
+})
+
+describe('polling task default timeout', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetServiceState()
+  })
+
+  afterEach(() => {
+    resetServiceState()
+    vi.useRealTimers()
+  })
+
+  function registeredTimeout(id: string): number | undefined {
+    const task = getService().tasks.get(id) as { timeoutMs?: number } | undefined
+    return task?.timeoutMs
+  }
+
+  it('applies the default bound when timeoutMs is omitted', () => {
+    PollingService.getInstance().register('test.timeout.default', () => {}, {
+      interval: 10,
+      unit: 'milliseconds',
+    })
+
+    // Asserted against a literal, not against the imported constant: comparing
+    // the two would have been vacuous, since an omitted timeout used to store
+    // `undefined` and the constant would be `undefined` too on any build that
+    // lacks it.
+    expect(DEFAULT_POLLING_TASK_TIMEOUT_MS).toBe(30_000)
+    expect(registeredTimeout('test.timeout.default')).toBe(30_000)
+  })
+
+  it('treats null as an explicit opt-out', () => {
+    PollingService.getInstance().register('test.timeout.null', () => {}, {
+      interval: 10,
+      unit: 'milliseconds',
+      timeoutMs: null,
+    })
+
+    expect(registeredTimeout('test.timeout.null')).toBeUndefined()
+  })
+
+  it('treats a non-positive timeout as an opt-out rather than a 1ms budget', () => {
+    PollingService.getInstance().register('test.timeout.zero', () => {}, {
+      interval: 10,
+      unit: 'milliseconds',
+      timeoutMs: 0,
+    })
+
+    expect(registeredTimeout('test.timeout.zero')).toBeUndefined()
+  })
+
+  it('keeps an explicit positive timeout', () => {
+    PollingService.getInstance().register('test.timeout.explicit', () => {}, {
+      interval: 10,
+      unit: 'milliseconds',
+      timeoutMs: 2500,
+    })
+
+    expect(registeredTimeout('test.timeout.explicit')).toBe(2500)
+  })
+
+  it('releases the lane slot for a task that overruns the default bound', async () => {
+    const service = PollingService.getInstance()
+    let blockerRuns = 0
+    let followerRuns = 0
+
+    // Both land on the `serial` lane (concurrency 1) by default -- the exact
+    // shape that let temp-file.cleanup park 12 tasks behind it.
+    service.register(
+      'test.timeout.blocker',
+      async () => {
+        blockerRuns += 1
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, DEFAULT_POLLING_TASK_TIMEOUT_MS * 3)
+        })
+      },
+      { interval: 10, unit: 'milliseconds', runImmediately: true },
+    )
+    service.register('test.timeout.follower', () => {
+      followerRuns += 1
+    }, { interval: 10, unit: 'milliseconds', runImmediately: true })
+
+    service.start()
+
+    await vi.advanceTimersByTimeAsync(50)
+    expect(blockerRuns).toBe(1)
+    expect(followerRuns).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_POLLING_TASK_TIMEOUT_MS)
+    expect(followerRuns).toBeGreaterThan(0)
+    expect(getService().taskStats.get('test.timeout.blocker')?.timeoutCount).toBe(1)
   })
 })

@@ -8,6 +8,8 @@ import { app } from 'electron'
 import { createLogger } from '../utils/logger'
 
 const MAX_TEMP_FILE_BYTES = 64 * 1024 * 1024
+/** Above the default polling bound: a full sweep legitimately takes tens of seconds. */
+const TEMP_CLEANUP_TIMEOUT_MS = 60_000
 
 export interface TempNamespaceConfig {
   /**
@@ -359,7 +361,20 @@ export class TempFileService {
           })
         }
       },
-      { interval: this.cleanupIntervalMs, unit: 'milliseconds' }
+      {
+        // Was registered with interval alone, which meant the `serial` lane
+        // (concurrency 1) and no timeout. A sweep over a large temp dir ran
+        // 23-67s and left 12 tasks queued behind it on that lane, which is what
+        // the event-loop reports flagged as `polling_queue_backlog`. It is a
+        // plain IO sweep with its own error handling, so it does not need the
+        // serial lane's exclusivity.
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: this.cleanupTaskId,
+        interval: this.cleanupIntervalMs,
+        unit: 'milliseconds',
+        timeoutMs: TEMP_CLEANUP_TIMEOUT_MS
+      }
     )
     pollingService.start()
   }

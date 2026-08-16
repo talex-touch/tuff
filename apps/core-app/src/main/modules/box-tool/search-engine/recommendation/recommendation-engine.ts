@@ -98,6 +98,12 @@ const SEMANTIC_AI_EMBEDDING_WEIGHT = 4e5
 const SEMANTIC_AI_RERANK_WEIGHT = 3e5
 const SEMANTIC_AI_RERANK_ORDER_WEIGHT = 1e4
 const SEMANTIC_AI_TIMEOUT_MS = 800
+/**
+ * Kept under the renderer's 400ms recommendation give-up (SEARCH/recommendation
+ * timeout in useSearch) so yielding to app tasks can never be the reason the
+ * user is shown an empty CoreBox.
+ */
+const RECOMMENDATION_APP_TASK_WAIT_MS = 300
 const AI_EMBEDDING_CANDIDATE_LIMIT = 8
 const AI_RERANK_CANDIDATE_LIMIT = 12
 const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS: RecommendationSemanticSettings = {
@@ -1132,9 +1138,17 @@ export class RecommendationEngine {
 
   /** Generate recommendation list */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
-    // 启动期 appTaskGate 活跃时，先等待空闲再执行推荐计算，避免与启动任务竞争主线程
+    // 启动期 appTaskGate 活跃时，先等待空闲再执行推荐计算，避免与启动任务竞争主线程。
+    //
+    // 但这里是交互路径的入口：CoreBox 空查询每次打开都会走到（search-core 的
+    // empty-query 分支）。无参 waitForIdle() 会一直等，而渲染层 400ms 就放弃并清空
+    // 状态，结果是索引扫描期间打开 CoreBox 只能看到空列表。所以只让一小段，超时照常
+    // 算——让出主线程是优化，不是正确性前提。
+    //
+    // runBackgroundRefresh 是后台调用方，它在调用本方法前已经自己无界等过一次，
+    // 到这里 gate 通常已空闲，不受这个上界影响。
     if (appTaskGate.isActive()) {
-      await appTaskGate.waitForIdle()
+      await appTaskGate.waitForIdle(RECOMMENDATION_APP_TASK_WAIT_MS)
     }
 
     const startTime = performance.now()

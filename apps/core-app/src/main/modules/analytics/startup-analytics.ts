@@ -38,6 +38,11 @@ const STARTUP_OUTBOX_FLUSH_TASK_ID = 'startup-analytics.outbox.flush'
 const STARTUP_OUTBOX_FLUSH_INTERVAL_MS = 30_000
 const STARTUP_OUTBOX_FLUSH_STARTUP_GRACE_MS = 45_000
 const STARTUP_REPORT_REQUEST_TIMEOUT_MS = 12_000
+/**
+ * Wall-clock budget for one flush round, kept under the polling service's own
+ * bound so the task finishes on its own terms instead of being timed out.
+ */
+const STARTUP_FLUSH_BUDGET_MS = 20_000
 
 export interface FileReportQueueItem {
   payload: Record<string, unknown>
@@ -373,12 +378,16 @@ export class StartupAnalytics {
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(-REPORT_QUEUE_MAX_COUNT)
     const remaining: typeof freshQueue = []
+    const deadline = Date.now() + STARTUP_FLUSH_BUDGET_MS
     let attempted = 0
     let succeeded = 0
     let skipped = 0
     let firstError: string | null = null
 
-    for (const item of freshQueue) {
+    let index = 0
+    for (; index < freshQueue.length; index += 1) {
+      const item = freshQueue[index]
+
       if (!this.isStartupPayload(item.payload)) {
         remaining.push(item)
         continue
@@ -389,6 +398,11 @@ export class StartupAnalytics {
         remaining.push(item)
         continue
       }
+
+      // Per-request timeout alone left the round unbounded: an unreachable
+      // endpoint cost 12s per queued item, which is how this task was observed
+      // running 46s and, at its worst, 599s.
+      if (Date.now() >= deadline) break
 
       attempted += 1
       try {
@@ -409,8 +423,17 @@ export class StartupAnalytics {
           retryCount: (item.retryCount ?? 0) + 1,
           lastAttemptAt: Date.now()
         })
+        // One failure means this endpoint is down for the whole round; walking
+        // the rest of the queue only burns another timeout each. Leave them for
+        // the next flush interval.
+        index += 1
+        break
       }
     }
+
+    // Anything past the stopping point was never attempted, so it has to be
+    // carried over verbatim -- `remaining` is what replaces the queue wholesale.
+    if (index < freshQueue.length) remaining.push(...freshQueue.slice(index))
 
     this.saveReportQueue(remaining)
 
@@ -448,6 +471,7 @@ export class StartupAnalytics {
     const items = allItems.slice(-REPORT_QUEUE_MAX_COUNT)
     if (!items.length) return
 
+    const deadline = Date.now() + STARTUP_FLUSH_BUDGET_MS
     let attempted = 0
     let succeeded = 0
     let skipped = 0
@@ -462,6 +486,10 @@ export class StartupAnalytics {
         skipped += 1
         continue
       }
+
+      // Same round budget as the file-backed path above. Items are only removed
+      // on success, so stopping early carries the rest over untouched.
+      if (Date.now() >= deadline) break
 
       attempted += 1
       try {
@@ -479,6 +507,7 @@ export class StartupAnalytics {
         const errorMessage = error instanceof Error ? error.message : String(error)
         await store.markAttempt(item.id)
         firstError ||= errorMessage
+        break
       }
     }
 

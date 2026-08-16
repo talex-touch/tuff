@@ -80,6 +80,11 @@ const NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS = 30_000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS = 10 * 60_000
 const NEXUS_TELEMETRY_STARTUP_GRACE_MS = 45_000
 const NEXUS_TELEMETRY_REQUEST_TIMEOUT_MS = 15_000
+/**
+ * Wall-clock budget for one outbox drain, kept under the polling service's own
+ * bound so the task finishes on its own terms instead of being timed out.
+ */
+const NEXUS_TELEMETRY_FLUSH_BUDGET_MS = 20_000
 const SENTRY_SHUTDOWN_GRACE_MS = 1_500
 
 interface NexusTelemetryEvent {
@@ -1338,6 +1343,7 @@ export class SentryServiceModule extends BaseModule {
     const items = listed.slice(-NEXUS_TELEMETRY_OUTBOX_MAX_COUNT)
     if (!items.length) return
 
+    const deadline = Date.now() + NEXUS_TELEMETRY_FLUSH_BUDGET_MS
     for (const item of items) {
       const endpoint = resolveTelemetryBatchEndpoint()
       if (!this.isNexusBatchPayload(item.payload)) {
@@ -1346,6 +1352,12 @@ export class SentryServiceModule extends BaseModule {
       if (!this.isOutboxItemDue(item)) {
         continue
       }
+
+      // The per-request timeout bounded a single upload but not the round, so
+      // an unreachable endpoint cost one timeout per outbox item -- this task
+      // was observed holding its io slot for 638s. Items are only removed on
+      // success, so stopping early just defers them to the next interval.
+      if (Date.now() >= deadline) break
 
       try {
         const payload = item.payload as {
@@ -1409,6 +1421,10 @@ export class SentryServiceModule extends BaseModule {
           code: failureCode
         })
         await store.markAttempt(item.id, failureCode)
+        // The cooldown just set is only read on entry to the next round, so
+        // continuing here walked the rest of the outbox against an endpoint we
+        // had already given up on, one full timeout per item.
+        break
       }
     }
   }
