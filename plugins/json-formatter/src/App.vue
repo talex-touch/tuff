@@ -1,27 +1,10 @@
 <script setup lang="ts">
-// https://github.com/vueuse/head
-// you can use this to manipulate the document head in any components,
-// they will be rendered correctly in the html results with vite-ssg
-useHead({
-  title: 'Vitesse',
-  meta: [
-    {
-      name: 'description',
-      content: 'Opinionated Vite Starter Template',
-    },
-    {
-      name: 'theme-color',
-      content: () => isDark.value ? '#00aba9' : '#ffffff',
-    },
-  ],
-  link: [
-    {
-      rel: 'icon',
-      type: 'image/svg+xml',
-      href: () => preferredDark.value ? '/favicon-dark.svg' : '/favicon.svg',
-    },
-  ],
-})
+/**
+ * The Surface renders inside a plugin WebContents, so there is no document head worth managing:
+ * the host owns the window chrome and no favicon or theme-color is ever shown. The template's
+ * `useHead` block set all three to Vitesse defaults, and once `@unhead/vue` was dropped with the
+ * rest of the scaffolding `useHead` became an undefined global that would have thrown on mount.
+ */
 </script>
 
 <template>
