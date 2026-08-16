@@ -6,17 +6,20 @@ import { computed, ref } from 'vue'
 type SupportedLocale = 'zh' | 'en'
 
 interface LanguageOption {
-  code: SupportedLocale | 'fr' | 'ru' | 'ja' | 'vi'
+  /**
+   * Only locales that actually resolve belong here. The menu previously also
+   * listed fr/ru/ja/vi, which `selectLocale` silently dropped — there are no
+   * such locale bundles (`i18n/locales/` has en and zh only), so those rows
+   * looked selectable, announced themselves as `menuitemradio` options to a
+   * screen reader, and did nothing when clicked.
+   */
+  code: SupportedLocale
   label: string
 }
 
 const languageOptions: LanguageOption[] = [
   { code: 'zh', label: '简体中文' },
   { code: 'en', label: 'English' },
-  { code: 'fr', label: 'Français' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'ja', label: '日本語' },
-  { code: 'vi', label: 'Tiếng Việt' },
 ]
 
 const { locale, t } = useI18n()
@@ -32,8 +35,7 @@ const triggerTitle = computed(() =>
 )
 
 async function selectLocale(option: LanguageOption) {
-  if (option.code === 'zh' || option.code === 'en')
-    await setManualLocale(option.code)
+  await setManualLocale(option.code)
 }
 
 </script>
