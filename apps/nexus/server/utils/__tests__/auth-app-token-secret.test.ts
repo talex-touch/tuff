@@ -1,5 +1,14 @@
 import { Buffer } from 'node:buffer'
+import type { H3Event } from 'h3'
+import type { JWT } from 'next-auth/jwt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+interface SessionGetTokenOptions {
+  event: H3Event
+  secret: string
+  secureCookie: boolean
+}
+type SessionGetToken = (options: SessionGetTokenOptions) => Promise<JWT | null>
 
 const runtimeConfig = vi.hoisted(() => ({
   appAuthJwtSecret: undefined as string | undefined,
@@ -7,9 +16,15 @@ const runtimeConfig = vi.hoisted(() => ({
     secret: undefined as string | undefined,
   },
 }))
-const serverSession = vi.hoisted(() => ({
-  value: null as null | { user?: { id?: string; email?: string; name?: string }; issuedAt?: number },
-}))
+const browserSession = vi.hoisted(() => {
+  const state = {
+    value: null as JWT | null,
+  }
+  return {
+    state,
+    getToken: vi.fn<SessionGetToken>(async () => state.value),
+  }
+})
 
 const users = vi.hoisted(() => new Map<string, any>())
 const devices = vi.hoisted(() => new Map<string, any>())
@@ -19,7 +34,7 @@ vi.mock('#imports', () => ({
 }))
 
 vi.mock('#auth', () => ({
-  getServerSession: vi.fn(async () => serverSession.value),
+  getToken: browserSession.getToken,
 }))
 
 vi.mock('../authStore', () => ({
@@ -80,7 +95,7 @@ describe('app auth token secret resolution', () => {
   beforeEach(() => {
     runtimeConfig.appAuthJwtSecret = undefined
     runtimeConfig.auth.secret = undefined
-    serverSession.value = null
+    browserSession.state.value = null
     users.set('user-1', { id: 'user-1', status: 'active' })
     devices.clear()
     delete process.env.APP_AUTH_JWT_SECRET
@@ -179,9 +194,13 @@ describe('app auth token secret resolution', () => {
 
   it('issues long-term tokens for official app sign-in callbacks', async () => {
     const { issueAppSignInToken } = await import('../appAuthToken')
-    const event = createEvent({ APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456' })
-    serverSession.value = { user: { id: 'user-1' }, issuedAt: Math.floor(Date.now() / 1000) }
+    const event = createEvent({
+      APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456',
+      AUTH_SECRET: 'cloudflare-session-secret-123456',
+    })
+    browserSession.state.value = { userId: 'user-1', iat: Math.floor(Date.now() / 1000) }
     event.node.req.headers['x-device-id'] = 'device-1'
+    event.node.req.headers['x-forwarded-proto'] = 'https'
 
     const { appToken } = await issueAppSignInToken(event)
     const payload = readJwtPayload(appToken)
@@ -193,7 +212,11 @@ describe('app auth token secret resolution', () => {
   it('refreshes long-term app tokens as long-term tokens', async () => {
     const { createAppToken } = await import('../auth')
     const { issueAppSignInToken } = await import('../appAuthToken')
-    const event = createEvent({ APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456' })
+    const event = createEvent({
+      APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456',
+      AUTH_SECRET: 'cloudflare-session-secret-123456',
+    })
+    event.node.req.headers['x-forwarded-proto'] = 'https'
     const token = await createAppToken(event, 'user-1', {
       deviceId: 'device-1',
       grantType: 'long',

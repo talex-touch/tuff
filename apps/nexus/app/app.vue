@@ -18,11 +18,8 @@ const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const isAuthShellRoute = computed(() => {
   const path = route.path || '/'
   return path.startsWith('/sign-in')
-    || path.startsWith('/sign-up')
     || path.startsWith('/auth/')
     || path.startsWith('/verify')
-    || path.startsWith('/forgot-password')
-    || path.startsWith('/reset-password')
     || path.startsWith('/device-auth')
 })
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
@@ -190,6 +187,8 @@ function mountToastHost() {
 
 onMounted(() => {
   mounted.value = true
+  if (status.value === 'loading')
+    void getSession()
   closeSearch()
   window.addEventListener('keydown', handleGlobalSearchShortcut)
   window.addEventListener(toastHostRequestedEvent, mountToastHost)

@@ -17,7 +17,7 @@ import dashZh from '../../i18n/locales/route/zh/dashboard'
  *
  * `dashboard-i18n-coverage.test.ts` covers `notifications.vue` and `team.vue` by namespace (#682,
  * #683). This is the repo-wide rule the same defect kept producing: 27 keys were still missing
- * across device-auth, reset-password, verify, account, devices, assets and the dashboard nav.
+ * across device authorization, verification, account, devices, assets and the dashboard nav.
  *
  * **Scope, stated rather than implied.** This enforces keys whose fallback is *Chinese*. A key with
  * an English fallback is equally untranslatable — no locale can ever supply it — but it is not

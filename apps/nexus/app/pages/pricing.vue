@@ -50,7 +50,7 @@ const plans = computed<PricingPlan[]>(() => [
     features: [1, 2, 3, 4].map(n => t(`pricing.plans.free.feature${n}`)),
     ctaLabel: t('pricing.ctaFree'),
     tone: 'solid',
-    to: '/sign-up',
+    to: '/sign-in',
   },
   {
     id: 'plus',
@@ -62,7 +62,7 @@ const plans = computed<PricingPlan[]>(() => [
     features: [1, 2, 3, 4].map(n => t(`pricing.plans.plus.feature${n}`)),
     ctaLabel: t('pricing.ctaWaitlist'),
     tone: 'soft',
-    to: '/sign-up',
+    to: '/sign-in',
   },
   {
     id: 'pro',
@@ -74,7 +74,7 @@ const plans = computed<PricingPlan[]>(() => [
     features: [1, 2, 3, 4, 5].map(n => t(`pricing.plans.pro.feature${n}`)),
     ctaLabel: t('pricing.ctaWaitlist'),
     tone: 'primary',
-    to: '/sign-up',
+    to: '/sign-in',
   },
   {
     id: 'team',
@@ -86,7 +86,7 @@ const plans = computed<PricingPlan[]>(() => [
     features: [1, 2, 3, 4].map(n => t(`pricing.plans.team.feature${n}`)),
     ctaLabel: t('pricing.ctaWaitlist'),
     tone: 'soft',
-    to: '/sign-up',
+    to: '/sign-in',
   },
 ])
 

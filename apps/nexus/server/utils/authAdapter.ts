@@ -112,7 +112,14 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
     },
     async useVerificationToken({ identifier, token }: { identifier: string, token: string }) {
       const event = resolveEvent()
-      return useVerificationToken(event, identifier, token)
+      const verificationToken = await useVerificationToken(event, identifier, token)
+      if (!verificationToken)
+        return null
+      return {
+        identifier: verificationToken.identifier,
+        token: verificationToken.token,
+        expires: new Date(verificationToken.expiresAt),
+      }
     }
   } as any
 }

@@ -257,6 +257,16 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('function getCachedAuthHandler(event: H3Event)')
     expect(guardSource).toContain('cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions(resolveSessionAuthSecret(event)))')
     expect(guardSource).toContain('const authHandler = getCachedAuthHandler(event)')
+    expect(guardSource).toContain("const authUtilityPath = join(nexusRoot, 'server/utils/auth.ts')")
+    expect(guardSource).toContain("const sessionAuthSecretPath = join(nexusRoot, 'server/utils/sessionAuthSecret.ts')")
+    expect(guardSource).toContain("const sessionAuthSecretSource = readFileSync(sessionAuthSecretPath, 'utf8')")
+    expect(guardSource).toContain("import { getToken } from '#auth'")
+    expect(guardSource).toContain("import { resolveSessionAuthSecret } from './sessionAuthSecret'")
+    expect(guardSource).toContain('const token = await getToken({')
+    expect(guardSource).toContain('secureCookie: isSecureSessionCookieRequest(event)')
+    expect(guardSource).toContain("if (authUtilitySource.includes('getServerSession'))")
+    expect(guardSource).toContain('selectRuntimeCredential(bindings, bindings?.AUTH_SECRET')
+    expect(guardSource).toContain("assertRuntimeCredential('AUTH_SECRET', secret")
     expect(guardSource).toContain('NuxtAuthHandler(getAuthOptions(event))')
     expect(guardSource).toContain('nuxt-auth-app-side')
     expect(guardSource).toContain('useAuthState')
@@ -379,7 +389,7 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('auth initial assets')
   })
 
-  it('keeps public pricing and password-reset locale contracts complete', () => {
+  it('keeps public pricing locale contracts complete', () => {
     // The plan list is read off the locale rather than hardcoded, so a new plan
     // is covered the moment it is added. The previous version named free/plus/
     // team with flat `freeTitle`-style keys, which stopped matching the locale
@@ -389,13 +399,6 @@ describe('Nexus deploy asset budget', () => {
     expect(Object.keys(zhLocale.pricing.plans)).toEqual(planKeys)
 
     const shellKeys = ['eyebrow', 'title', 'subtitle', 'ctaFree', 'ctaWaitlist', 'perMonth'] as const
-    const authKeys = [
-      'forgotTitle',
-      'forgotSubtitle',
-      'sendReset',
-      'resetFailed',
-      'resetEmailSent',
-    ] as const
 
     for (const plan of planKeys) {
       const en = enLocale.pricing.plans[plan]
@@ -419,11 +422,6 @@ describe('Nexus deploy asset budget', () => {
       expect(enLocale.pricing[key], `en pricing.${key}`).toBeTruthy()
       expect(enLocale.pricing[key], `en pricing.${key} must not be Chinese`).not.toMatch(/\p{Script=Han}/u)
       expect(zhLocale.pricing[key], `zh pricing.${key}`).toBeTruthy()
-    }
-    for (const key of authKeys) {
-      expect(enLocale.auth[key]).toBeTruthy()
-      expect(enLocale.auth[key]).not.toMatch(/\p{Script=Han}/u)
-      expect(zhLocale.auth[key]).toBeTruthy()
     }
   })
 

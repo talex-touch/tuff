@@ -141,7 +141,7 @@ onUnmounted(() => {
         <div v-if="isHome" class="header-auth-divider" />
 
         <div class="TuffHeader-Auth flex shrink-0 items-center gap-2 sm:gap-3">
-          <template v-if="!isAuthenticated">
+          <template v-if="status === 'unauthenticated'">
             <NuxtLink
               :to="signInRoute"
               class="shrink-0 whitespace-nowrap border border-primary/20 rounded-full bg-transparent px-3 py-1 text-sm text-black font-medium leading-none transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
@@ -149,7 +149,7 @@ onUnmounted(() => {
               {{ t('nav.login') }}
             </NuxtLink>
           </template>
-          <template v-else>
+          <template v-else-if="isAuthenticated">
             <HeaderUserMenu />
           </template>
         </div>
@@ -200,14 +200,14 @@ onUnmounted(() => {
 
         <div class="mt-5">
           <NuxtLink
-            v-if="!isAuthenticated"
+            v-if="status === 'unauthenticated'"
             :to="signInRoute"
             class="block w-full whitespace-nowrap border border-primary/20 rounded-full bg-transparent px-4 py-2.5 text-center text-sm text-black font-medium leading-none transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
             @click="mobileMenuOpen = false"
           >
             {{ t('nav.login') }}
           </NuxtLink>
-          <div v-else class="flex justify-center">
+          <div v-else-if="isAuthenticated" class="flex justify-center">
             <HeaderUserMenu />
           </div>
         </div>

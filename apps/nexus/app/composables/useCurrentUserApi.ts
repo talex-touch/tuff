@@ -17,7 +17,6 @@ export interface CurrentUserProfile {
   emailState: 'verified' | 'unverified' | 'missing'
   isRestricted: boolean
   passkeyCount?: number
-  hasPassword?: boolean
   linkedProviders?: string[]
   linkedAccounts?: LinkedProviderAccount[]
   adminBootstrap?: {

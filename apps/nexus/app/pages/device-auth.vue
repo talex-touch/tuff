@@ -177,9 +177,9 @@ async function ensureSession(): Promise<boolean> {
 async function loadProfile() {
   const profile = await fetchCurrentUserProfile()
   const passkeyCount = profile?.passkeyCount ?? 0
-  const hasPassword = profile?.hasPassword ?? false
+  const hasEmailLink = profile?.emailState === 'verified'
   const linkedProviders = profile?.linkedProviders ?? []
-  longTermAvailable.value = passkeyCount > 0 || hasPassword || linkedProviders.length > 0
+  longTermAvailable.value = passkeyCount > 0 || hasEmailLink || linkedProviders.length > 0
   if (!longTermAvailable.value) {
     grantType.value = 'short'
   }
@@ -398,7 +398,7 @@ onUnmounted(() => {
           </TxButton>
         </div>
         <p v-if="longTermOptionEnabled" class="text-xs text-white/60">
-          {{ t('auth.deviceAuthLongHint', '长期授权需要二次验证（密码 / Passkey / OAuth）') }}
+          {{ t('auth.deviceAuthLongHint', '长期授权需要 Passkey 或 OAuth 二次验证') }}
         </p>
         <p v-else-if="longTermAvailable" class="text-xs text-yellow-200/90">
           {{ longTermReasonText }}

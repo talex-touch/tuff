@@ -11,22 +11,15 @@ import GitHub from 'next-auth/providers/github'
 import { createD1Adapter } from '../../utils/authAdapter'
 import {
   consumeLoginToken,
-  evaluatePasswordSignInRateLimit,
   getUserByAccount,
   getUserByEmail,
   logLoginAttempt,
   restorePendingDeletionIfWithinWindow,
-  verifyUserPassword,
 } from '../../utils/authStore'
-import { readCloudflareBindings } from '../../utils/cloudflare'
+import { resolveSessionAuthSecret } from '../../utils/sessionAuthSecret'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
 import { oauthEmailProvesMailboxControl, selectVerifiedGitHubEmail } from '../../utils/oauthEmailTrust'
-import {
-  assertRuntimeCredential,
-  isLocalDevelopmentRuntime,
-  selectRuntimeCredential,
-} from '../../utils/runtimeCredentialPolicy'
 
 const CredentialsProvider = (Credentials as any).default ?? Credentials
 const GitHubProvider = (GitHub as any).default ?? GitHub
@@ -46,12 +39,11 @@ interface EmailVerificationRequestContext {
   url: string
 }
 
-function createEmailProvider(server: string, from: string) {
-  return {
+function createEmailProvider(from: string): AuthOptions['providers'][number] {
+  const provider = {
     id: 'email',
     type: 'email',
     name: 'Email',
-    server,
     from,
     maxAge: 24 * 60 * 60,
     async sendVerificationRequest({ identifier, url }: EmailVerificationRequestContext) {
@@ -66,7 +58,10 @@ function createEmailProvider(server: string, from: string) {
         tryCreateAuthEvent(),
       )
     },
-  } as any
+  }
+
+  // Auth.js accepts this custom email provider shape, but its v4 union does not expose it.
+  return provider as unknown as AuthOptions['providers'][number]
 }
 
 function resolveAuthHeaders(
@@ -420,19 +415,8 @@ async function restoreForInteractiveSignIn(authEvent: H3Event, userId: string) {
   return user?.status === 'active' ? user : null
 }
 
-function resolveSessionAuthSecret(event: H3Event) {
-  const config = useRuntimeConfig(event)
-  const bindings = readCloudflareBindings(event)
-  const secret = selectRuntimeCredential(bindings, bindings?.AUTH_SECRET, [
-    config.auth?.secret,
-    process.env.AUTH_SECRET,
-  ])
-  return assertRuntimeCredential('AUTH_SECRET', secret, {
-    localDevelopment: isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings),
-  })
-}
 
-function getAuthOptions(authSecret: string): AuthOptions {
+export function getAuthOptions(authSecret: string): AuthOptions {
   const config = useRuntimeConfig()
   const configuredOrigin = normalizeAuthOrigin(config.auth?.origin)
   const trustForwardedHost = shouldTrustForwardedAuthHost(configuredOrigin)
@@ -443,10 +427,8 @@ function getAuthOptions(authSecret: string): AuthOptions {
   const linuxdoClientSecret = config.auth?.linuxdo?.clientSecret
   const providers: AuthOptions['providers'] = [
     CredentialsProvider({
-      name: 'Credentials',
+      name: 'Passkey',
       credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
         loginToken: { label: 'Login Token', type: 'text' },
       },
       async authorize(
@@ -454,88 +436,33 @@ function getAuthOptions(authSecret: string): AuthOptions {
         req: { headers?: Headers | AuthRequestHeaders } | Request | null,
       ) {
         const authEvent = createAuthEvent(resolveAuthHeaders(req))
-        const email = credentials?.email?.toString().trim().toLowerCase() ?? ''
-        const password = credentials?.password?.toString() ?? ''
         const loginToken = credentials?.loginToken?.toString() ?? ''
-
-        if (loginToken) {
-          const user = await consumeLoginToken(authEvent, loginToken)
-          if (user) {
-            const activeUser = await restoreForInteractiveSignIn(authEvent, user.id)
-            if (activeUser)
-              return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
-          }
+        if (!loginToken) {
           await logLoginAttempt(authEvent, {
             userId: null,
             deviceId: null,
             success: false,
-            reason: 'login_token_invalid',
+            reason: 'login_token_missing',
             clientType: 'web',
           })
           return null
         }
 
-        if (!email || !password) {
-          await logLoginAttempt(authEvent, {
-            userId: null,
-            deviceId: null,
-            success: false,
-            reason: 'missing_credentials',
-            clientType: 'web',
-          })
-          return null
+        const user = await consumeLoginToken(authEvent, loginToken)
+        if (user) {
+          const activeUser = await restoreForInteractiveSignIn(authEvent, user.id)
+          if (activeUser)
+            return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
         }
 
-        // Failures were written to the login history and never read back, so the guess budget
-        // was unbounded (#897). Resolved before verifying rather than after, so a locked-out
-        // account costs an attacker a lookup instead of a PBKDF2 verification — and so the
-        // refusal does not depend on the password happening to be wrong.
-        const knownUser = await getUserByEmail(authEvent, email)
-        const activeKnownUserId = knownUser?.status === 'active' ? knownUser.id : null
-        const rateLimit = await evaluatePasswordSignInRateLimit(authEvent, {
-          userId: activeKnownUserId,
-        })
-        if (!rateLimit.allowed) {
-          await logLoginAttempt(authEvent, {
-            userId: activeKnownUserId,
-            deviceId: null,
-            success: false,
-            reason: 'rate_limited',
-            clientType: 'web',
-          })
-          return null
-        }
-
-        const user = await verifyUserPassword(authEvent, email, password)
-        if (!user) {
-          await logLoginAttempt(authEvent, {
-            userId: activeKnownUserId,
-            deviceId: null,
-            success: false,
-            reason: 'invalid_password',
-            clientType: 'web',
-          })
-          return null
-        }
-        const activeUser = await restoreForInteractiveSignIn(authEvent, user.id)
-        if (!activeUser) {
-          await logLoginAttempt(authEvent, {
-            userId: null,
-            deviceId: null,
-            success: false,
-            reason: 'account_deletion_pending',
-            clientType: 'web',
-          })
-          return null
-        }
         await logLoginAttempt(authEvent, {
-          userId: activeUser.id,
+          userId: null,
           deviceId: null,
-          success: true,
-          reason: 'password',
+          success: false,
+          reason: 'login_token_invalid',
           clientType: 'web',
         })
-        return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
+        return null
       },
     }),
   ]
@@ -687,10 +614,9 @@ function getAuthOptions(authSecret: string): AuthOptions {
     providers.push(linuxdoProvider as any)
   }
 
-  const emailServer = config.auth?.email?.server
   const emailFrom = config.auth?.email?.from
-  if (emailServer && emailFrom) {
-    providers.push(createEmailProvider(emailServer, emailFrom))
+  if (emailFrom) {
+    providers.push(createEmailProvider(emailFrom))
   }
 
   return {
@@ -707,7 +633,7 @@ function getAuthOptions(authSecret: string): AuthOptions {
       async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
         return normalizeAuthRedirectUrl(url, baseUrl)
       },
-      async signIn({ user, account, profile }: { user: User; account: Account | null; profile?: Profile | undefined }) {
+      async signIn({ user, account, profile, email: emailContext }: { user: User; account: Account | null; profile?: Profile | undefined; email?: { verificationRequest?: boolean } }) {
         const authEvent = createRequestAuthEvent()
         if (!account) return false
         if (account.provider === 'credentials') return true
@@ -728,10 +654,14 @@ function getAuthOptions(authSecret: string): AuthOptions {
           return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         if (account.provider === 'email') {
-          const email = user?.email
-          if (!email) return false
-          const existing = await getUserByEmail(authEvent, email)
-          if (!existing) return false
+          const address = user?.email
+          if (!address) return false
+          const existing = await getUserByEmail(authEvent, address)
+          if (emailContext?.verificationRequest) {
+            return !existing || existing.status === 'active' || existing.status === 'deletion_pending'
+          }
+          // A consumed Magic Link proves mailbox control; Auth.js creates the user after this callback.
+          if (!existing) return true
           return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         return true

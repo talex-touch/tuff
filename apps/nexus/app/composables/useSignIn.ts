@@ -18,35 +18,40 @@ import { requestJson } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
-type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
-export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
-type TurnstileAction = 'login' | 'signup'
-type TurnstileState = 'idle' | 'loading' | 'ready' | 'error'
+type AuthStep = 'email' | 'bind-email' | 'passkey' | 'oauth' | 'success'
+export type LoginMethod = 'passkey' | 'magic' | 'github' | 'linuxdo'
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
-const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
-const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+const LOGIN_METHODS: LoginMethod[] = ['passkey', 'magic', 'github', 'linuxdo']
 const CALLBACK_FEEDBACK_MIN_MS = 800
 
-type TurnstileWidgetId = string | number
-interface TurnstileRenderOptions {
-  sitekey: string
-  theme?: 'light' | 'dark' | 'auto'
-  action?: string
-  callback?: (token: string) => void
-  'expired-callback'?: () => void
-  'error-callback'?: (errorCode?: string) => void
-}
-interface TurnstileApi {
-  render: (container: string | HTMLElement, options: TurnstileRenderOptions) => TurnstileWidgetId
-  reset: (widgetId?: TurnstileWidgetId) => void
-  remove?: (widgetId?: TurnstileWidgetId) => void
+interface PasskeyRequestOptionsResponse {
+  challenge: string
+  rpId?: string
+  timeout?: number
+  userVerification?: UserVerificationRequirement
+  allowCredentials?: Array<{
+    id: string
+    type: PublicKeyCredentialType
+    transports?: AuthenticatorTransport[]
+  }>
 }
 
-let turnstileScriptPromise: Promise<void> | null = null
 
-function resolveErrorMessage(error: any, fallback: string) {
-  return error?.data?.statusMessage || error?.message || fallback
+function resolveErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== 'object')
+    return fallback
+
+  if ('data' in error && error.data && typeof error.data === 'object' && 'statusMessage' in error.data) {
+    const statusMessage = error.data.statusMessage
+    if (typeof statusMessage === 'string' && statusMessage)
+      return statusMessage
+  }
+
+  if ('message' in error && typeof error.message === 'string' && error.message)
+    return error.message
+
+  return fallback
 }
 
 function isValidEmail(value: string) {
@@ -54,7 +59,9 @@ function isValidEmail(value: string) {
 }
 
 function waitForCallbackFeedback(ms: number) {
-  return new Promise<void>(resolve => setTimeout(resolve, ms))
+  const { promise, resolve } = Promise.withResolvers<void>()
+  setTimeout(resolve, ms)
+  return promise
 }
 
 async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, intervalMs = 250) {
@@ -89,17 +96,11 @@ export function useSignIn() {
   const route = useRoute()
   const router = useRouter()
   const { signIn, signOut, status, getSession } = useNexusAuth()
-  const runtimeConfig = useRuntimeConfig()
 
   const step = ref<AuthStep>('email')
   const email = ref('')
-  const password = ref('')
-  const confirmPassword = ref('')
   const bindEmail = ref('')
-  const loading = ref(false)
-  const signupLoading = ref(false)
   const passkeyLoading = ref(false)
-  const magicLoading = ref(false)
   const emailCheckLoading = ref(false)
   const bindLoading = ref(false)
   const oauthLoading = ref(false)
@@ -112,22 +113,16 @@ export function useSignIn() {
   const oauthSessionChecking = ref(false)
   const redirectSessionCheckDone = ref(false)
   const redirectSessionChecking = ref(false)
-  const redirectAutoNavigating = ref(false)
-  const magicSent = ref(false)
+  const redirectAutoNavigationStarted = ref(false)
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
   const reauthNotified = ref(false)
   const storedOauthContext = ref<OauthContext | null>(import.meta.client ? readOauthContext() : null)
   const passkeyPhase = ref<'idle' | 'prepare' | 'prompt' | 'verifying' | 'error' | 'success'>('idle')
   const passkeyError = ref('')
-  const turnstileToken = ref('')
-  const turnstileWidgetId = ref<TurnstileWidgetId | null>(null)
-  const turnstileAction = ref<TurnstileAction | null>(null)
-  const turnstileState = ref<TurnstileState>('idle')
 
   let passkeyTimer: ReturnType<typeof setTimeout> | null = null
   let successTimer: ReturnType<typeof setTimeout> | null = null
-  let turnstileRenderSeq = 0
 
   if (hasWindow()) {
     const storedMethod = window.localStorage.getItem(LAST_LOGIN_METHOD_KEY)
@@ -136,12 +131,6 @@ export function useSignIn() {
   }
 
   const canToast = import.meta.client
-  const turnstileSiteKey = computed(() => {
-    return typeof runtimeConfig.public?.turnstile?.siteKey === 'string'
-      ? runtimeConfig.public.turnstile.siteKey.trim()
-      : ''
-  })
-  const turnstileEnabled = computed(() => Boolean(turnstileSiteKey.value))
 
   function notify(type: 'error' | 'success' | 'warning', message: string) {
     if (!canToast)
@@ -154,282 +143,7 @@ export function useSignIn() {
       toast.warning(message)
   }
 
-  function resolveCredentialsSignInMessage(errorCode: string) {
-    const normalized = errorCode.trim()
-    if (normalized.includes('CredentialsSignin'))
-      return t('auth.credentialsInvalid', '邮箱或密码错误')
-    if (normalized.includes('AccessDenied'))
-      return t('auth.accountDisabled', '账号不可用')
-    return t('auth.loginFailed', '登录失败')
-  }
 
-  function getTurnstileApi() {
-    if (!hasWindow())
-      return null
-    return (window as any).turnstile as TurnstileApi | undefined
-  }
-
-  function getExpectedTurnstileAction(): TurnstileAction {
-    return step.value === 'signup' ? 'signup' : 'login'
-  }
-
-  function maskTurnstileSiteKey(siteKey: string) {
-    if (!siteKey)
-      return 'empty'
-    if (siteKey.length <= 8)
-      return siteKey
-    return `${siteKey.slice(0, 4)}...${siteKey.slice(-4)}`
-  }
-
-  function isStaleTurnstileRender(seq: number) {
-    return seq !== turnstileRenderSeq || !showTurnstile.value
-  }
-
-  function logTurnstileContext(stage: string, action?: TurnstileAction) {
-    if (!hasWindow())
-      return
-
-    console.info('[turnstile] context', {
-      stage,
-      action,
-      state: turnstileState.value,
-      hostname: window.location.hostname,
-      origin: window.location.origin,
-      siteKey: maskTurnstileSiteKey(turnstileSiteKey.value),
-      hasWidget: turnstileWidgetId.value !== null,
-    })
-  }
-
-  function markTurnstileError(stage: string, error?: unknown) {
-    turnstileRenderSeq += 1
-
-    logTurnstileContext(stage, turnstileAction.value || getExpectedTurnstileAction())
-    if (hasWindow())
-      console.error('[turnstile]', stage, error)
-
-    const turnstile = getTurnstileApi()
-    const widgetId = turnstileWidgetId.value
-    if (turnstile && widgetId !== null) {
-      try {
-        turnstile.remove?.(widgetId)
-      }
-      catch (removeError) {
-        if (hasWindow())
-          console.error('[turnstile]', 'remove_failed', removeError)
-      }
-    }
-
-    turnstileToken.value = ''
-    turnstileWidgetId.value = null
-    turnstileAction.value = null
-    turnstileState.value = 'error'
-  }
-
-  function removeTurnstileWidget() {
-    turnstileRenderSeq += 1
-
-    const turnstile = getTurnstileApi()
-    const widgetId = turnstileWidgetId.value
-    if (turnstile && widgetId !== null) {
-      try {
-        turnstile.remove?.(widgetId)
-      }
-      catch (error) {
-        if (hasWindow())
-          console.error('[turnstile]', 'remove_failed', error)
-      }
-    }
-
-    turnstileToken.value = ''
-    turnstileWidgetId.value = null
-    turnstileAction.value = null
-    turnstileState.value = 'idle'
-  }
-
-  async function loadTurnstileScript() {
-    if (!turnstileEnabled.value || !hasWindow())
-      return
-
-    if (getTurnstileApi())
-      return
-
-    if (!turnstileScriptPromise) {
-      turnstileScriptPromise = new Promise<void>((resolve, reject) => {
-        const script = window.document.createElement('script')
-        script.src = TURNSTILE_SCRIPT_SRC
-        script.async = true
-        script.defer = true
-        script.onload = () => resolve()
-        script.onerror = () => reject(new Error('Failed to load Turnstile script'))
-        window.document.head.appendChild(script)
-      }).catch((error) => {
-        turnstileScriptPromise = null
-        throw error
-      })
-    }
-
-    await turnstileScriptPromise
-  }
-
-  function resetTurnstileWidget() {
-    turnstileToken.value = ''
-
-    if (!turnstileEnabled.value || !showTurnstile.value)
-      return
-
-    const turnstile = getTurnstileApi()
-    const widgetId = turnstileWidgetId.value
-    if (!turnstile || widgetId === null || turnstileState.value === 'loading')
-      return
-
-    try {
-      turnstile.reset(widgetId)
-      turnstileState.value = 'ready'
-    }
-    catch (error) {
-      turnstileRenderSeq += 1
-      if (hasWindow())
-        console.error('[turnstile]', 'reset_failed', error)
-
-      try {
-        turnstile.remove?.(widgetId)
-      }
-      catch (removeError) {
-        if (hasWindow())
-          console.error('[turnstile]', 'remove_failed', removeError)
-      }
-
-      turnstileWidgetId.value = null
-      turnstileAction.value = null
-      turnstileState.value = 'error'
-    }
-  }
-
-  function requireTurnstileToken() {
-    if (!turnstileEnabled.value)
-      return true
-
-    if (turnstileToken.value)
-      return true
-
-    if (turnstileState.value === 'loading') {
-      notify('warning', t('auth.turnstileLoading', '安全验证准备中，请稍候'))
-      return false
-    }
-
-    if (turnstileState.value === 'error') {
-      notify('warning', t('auth.turnstilePending', '安全验证暂未就绪，请点击重试'))
-      return false
-    }
-
-    notify('error', t('auth.turnstileRequired', '请先完成人机验证'))
-    return false
-  }
-
-  async function ensureTurnstileWidget() {
-    if (!turnstileEnabled.value || !showTurnstile.value || !hasWindow())
-      return
-
-    const renderSeq = ++turnstileRenderSeq
-    turnstileState.value = 'loading'
-
-    try {
-      await loadTurnstileScript()
-    }
-    catch (error) {
-      if (isStaleTurnstileRender(renderSeq))
-        return
-      markTurnstileError('load_script_failed', error)
-      return
-    }
-
-    if (isStaleTurnstileRender(renderSeq))
-      return
-
-    await nextTick()
-
-    if (isStaleTurnstileRender(renderSeq))
-      return
-
-    const expectedAction = getExpectedTurnstileAction()
-    logTurnstileContext('before_render', expectedAction)
-
-    const container = window.document.getElementById('turnstile-container')
-    const turnstile = getTurnstileApi()
-    if (!container || !turnstile) {
-      markTurnstileError('container_or_api_missing')
-      return
-    }
-
-    if (turnstileWidgetId.value !== null) {
-      if (turnstileAction.value === expectedAction) {
-        turnstileState.value = 'ready'
-        return
-      }
-      try {
-        turnstile.remove?.(turnstileWidgetId.value)
-      }
-      catch (error) {
-        if (hasWindow())
-          console.error('[turnstile]', 'remove_failed', error)
-      }
-      turnstileWidgetId.value = null
-      turnstileToken.value = ''
-    }
-
-    try {
-      turnstileWidgetId.value = turnstile.render(container, {
-        sitekey: turnstileSiteKey.value,
-        theme: 'dark',
-        action: expectedAction,
-        callback: (token: string) => {
-          if (isStaleTurnstileRender(renderSeq))
-            return
-          turnstileToken.value = token
-          turnstileState.value = 'ready'
-        },
-        'expired-callback': () => {
-          if (isStaleTurnstileRender(renderSeq))
-            return
-          turnstileToken.value = ''
-          turnstileState.value = 'ready'
-        },
-        'error-callback': (errorCode?: string) => {
-          if (isStaleTurnstileRender(renderSeq))
-            return
-          markTurnstileError('widget_error', errorCode)
-        },
-      })
-
-      if (isStaleTurnstileRender(renderSeq)) {
-        const widgetId = turnstileWidgetId.value
-        if (widgetId !== null) {
-          try {
-            turnstile.remove?.(widgetId)
-          }
-          catch (error) {
-            if (hasWindow())
-              console.error('[turnstile]', 'remove_failed', error)
-          }
-        }
-        return
-      }
-
-      turnstileAction.value = expectedAction
-      turnstileState.value = 'ready'
-      logTurnstileContext('render_ok', expectedAction)
-    }
-    catch (error) {
-      markTurnstileError('render_failed', error)
-    }
-  }
-
-  async function retryTurnstile() {
-    if (!showTurnstile.value)
-      return
-    removeTurnstileWidget()
-    await ensureTurnstileWidget()
-  }
 
   function resolveOauthRouteErrorMessage() {
     const error = oauthErrorParam.value
@@ -599,7 +313,6 @@ export function useSignIn() {
     notify('warning', t('auth.sessionExpired', '登录信息已失效，请重新登录。'))
   })
 
-  const forgotUrl = computed(() => '/forgot-password')
 
   const oauthRelayRequested = computed(() => directOauthRelayParam.value === '1')
   const isOauthErrorCallback = computed(() => Boolean(directOauthErrorParam.value) && Boolean(storedOauthContext.value))
@@ -729,8 +442,6 @@ export function useSignIn() {
     switch (lastLoginMethod.value) {
       case 'passkey':
         return t('auth.loginMethodPasskey', 'Passkey')
-      case 'password':
-        return t('auth.loginMethodPassword', '密码')
       case 'magic':
         return t('auth.loginMethodMagic', 'Magic Link')
       case 'github':
@@ -753,8 +464,6 @@ export function useSignIn() {
   const stepTitle = computed(() => {
     if (step.value === 'email')
       return t('auth.emailStepTitle', 'Tuff')
-    if (step.value === 'signup')
-      return t('auth.signUpTitle', '创建账号')
     if (step.value === 'passkey')
       return t('auth.passkeyTitle', 'Passkey 登录')
     if (step.value === 'oauth') {
@@ -771,9 +480,7 @@ export function useSignIn() {
 
   const stepSubtitle = computed(() => {
     if (step.value === 'email')
-      return ''
-    if (step.value === 'signup')
-      return t('auth.signUpSubtitle', '使用邮箱创建账号，或选择 Passkey。')
+      return t('auth.emailLinkSubtitle', '输入邮箱，我们会发送一次性登录链接。')
     if (step.value === 'passkey')
       return t('auth.passkeySubtitle', '将调用系统 Passkey 完成验证。')
     if (step.value === 'oauth') {
@@ -789,12 +496,9 @@ export function useSignIn() {
       return t('auth.signInSuccessSubtitle', '正在跳转...')
     if (step.value === 'bind-email')
       return t('auth.bindEmailSubtitle', '补充邮箱完成账号配置，可稍后。')
-    return t('auth.loginStepSubtitle', '请输入密码或使用 Magic Link 登录。')
+    return ''
   })
 
-  const showTurnstile = computed(() => {
-    return turnstileEnabled.value && (step.value === 'login' || step.value === 'signup')
-  })
   const passkeyBusy = computed(() => {
     return passkeyPhase.value === 'prepare'
       || passkeyPhase.value === 'prompt'
@@ -802,10 +506,7 @@ export function useSignIn() {
       || passkeyPhase.value === 'success'
   })
   const { loading: authLoading } = useAuthLoadingState([
-    loading,
-    signupLoading,
     passkeyLoading,
-    magicLoading,
     emailCheckLoading,
     bindLoading,
     oauthLoading,
@@ -814,16 +515,8 @@ export function useSignIn() {
   ])
 
   watch(step, (value) => {
-    magicSent.value = false
     if (value !== 'passkey' && value !== 'success')
       resetPasskeyState()
-
-    if (value !== 'login' && value !== 'signup') {
-      removeTurnstileWidget()
-      return
-    }
-
-    void ensureTurnstileWidget()
   })
 
   onMounted(() => {
@@ -834,15 +527,11 @@ export function useSignIn() {
       clearOauthContext()
       storedOauthContext.value = null
     }
-
-    if (showTurnstile.value)
-      void ensureTurnstileWidget()
   })
 
   onBeforeUnmount(() => {
     clearPasskeyTimer()
     clearSuccessTimer()
-    removeTurnstileWidget()
   })
 
   async function clearOauthQuery() {
@@ -880,8 +569,8 @@ export function useSignIn() {
       await clearOauthQuery()
   }
 
-  function resolveOauthStartErrorMessage(error: any, provider: OauthProvider) {
-    const message = typeof error?.message === 'string' ? error.message : ''
+  function resolveOauthStartErrorMessage(error: unknown, provider: OauthProvider) {
+    const message = resolveErrorMessage(error, '')
     const [code, detail] = message.split(':')
 
     if (code === 'oauth_csrf_unavailable')
@@ -937,7 +626,7 @@ export function useSignIn() {
       }
       await navigateTo(authorizationUrl, { external: true })
     }
-    catch (error: any) {
+    catch (error: unknown) {
       await clearOauthRuntime(false)
       oauthPhase.value = 'error'
       oauthError.value = resolveOauthStartErrorMessage(error, provider)
@@ -1055,7 +744,7 @@ export function useSignIn() {
       await ensureCallbackProcessingFeedback(callbackStartedAt)
       await navigateTo(target)
     }
-    catch (error: any) {
+    catch (error: unknown) {
       await clearOauthRuntime()
       await ensureCallbackProcessingFeedback(callbackStartedAt)
       oauthPhase.value = 'error'
@@ -1207,43 +896,46 @@ export function useSignIn() {
       return
     if (status.value !== 'authenticated')
       return
-    if (redirectAutoNavigating.value)
+    if (redirectAutoNavigationStarted.value)
       return
 
     const target = sanitizeOauthRedirectTarget(redirectTarget.value, '/dashboard')
     if (isSignInTarget(target))
       return
 
-    redirectAutoNavigating.value = true
-    void (async () => {
-      try {
-        await navigateTo(target, { replace: true })
-      }
-      finally {
-        redirectAutoNavigating.value = false
-      }
-    })()
+    // Session refresh can finish while the sign-in route is still entering. Vue Router may
+    // update browser history but leave this component mounted as a same-route navigation.
+    // A document replace keeps the rendered route and URL atomic.
+    redirectAutoNavigationStarted.value = true
+    window.location.replace(target)
   })
 
   async function handleEmailNext() {
-    magicSent.value = false
     if (!emailPreview.value || !isValidEmail(emailPreview.value)) {
       notify('error', t('auth.invalidEmail', '请输入有效邮箱'))
       return
     }
+
     emailCheckLoading.value = true
     try {
-      const result = await requestJson<{ exists: boolean, status: string }>('/api/auth/email-status', {
-        query: { email: emailPreview.value },
+      const result = await signIn('email', {
+        email: emailPreview.value,
+        redirect: false,
+        callbackUrl: redirectTarget.value,
       })
-      if (result.status !== 'active') {
-        notify('error', t('auth.accountDisabled', '账号不可用'))
+      if (result?.error) {
+        notify('error', t('auth.magicLinkFailed', '发送登录链接失败'))
         return
       }
-      step.value = result.exists ? 'login' : 'signup'
+      recordLoginMethod('magic')
+      notify('success', t('auth.magicSent', '已发送登录链接'))
+      await navigateTo({
+        path: '/verify-waiting',
+        query: { email: emailPreview.value },
+      })
     }
-    catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.loginFailed', 'Login failed')))
+    catch (error: unknown) {
+      notify('error', resolveErrorMessage(error, t('auth.magicLinkFailed', '发送登录链接失败')))
     }
     finally {
       emailCheckLoading.value = false
@@ -1254,120 +946,11 @@ export function useSignIn() {
     await clearOauthRuntime()
     resetOauthState()
     step.value = 'email'
-    password.value = ''
-    confirmPassword.value = ''
     bindEmail.value = ''
-    magicSent.value = false
   }
 
-  async function handlePasswordSignIn() {
-    if (!requireTurnstileToken())
-      return
 
-    const token = turnstileToken.value
-    magicSent.value = false
-    loading.value = true
-    try {
-      const result = await signIn('credentials', {
-        email: emailPreview.value,
-        password: password.value,
-        turnstileToken: token,
-        redirect: false,
-      })
-      if (result?.error) {
-        if (hasWindow())
-          console.warn('[auth]', 'credentials_signin_failed', result.error)
-        notify('error', resolveCredentialsSignInMessage(result.error))
-        return
-      }
-      recordLoginMethod('password')
-      await navigateTo(redirectTarget.value)
-    }
-    catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.loginFailed', 'Login failed')))
-    }
-    finally {
-      loading.value = false
-      resetTurnstileWidget()
-    }
-  }
 
-  async function handleMagicLink() {
-    magicSent.value = false
-    if (!emailPreview.value || !isValidEmail(emailPreview.value)) {
-      notify('error', t('auth.invalidEmail', '请输入有效邮箱'))
-      return
-    }
-    recordLoginMethod('magic')
-    magicLoading.value = true
-    try {
-      const result = await signIn('email', {
-        email: emailPreview.value,
-        redirect: false,
-        callbackUrl: redirectTarget.value,
-      })
-      if (result?.error) {
-        notify('error', result.error)
-        return
-      }
-      magicSent.value = true
-      notify('success', t('auth.magicSent', '已发送 Magic Link'))
-      await navigateTo({
-        path: '/verify-waiting',
-        query: {
-          email: emailPreview.value,
-        },
-      })
-    }
-    catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.magicLinkFailed', 'Failed to send magic link')))
-    }
-    finally {
-      magicLoading.value = false
-    }
-  }
-
-  async function handleRegister() {
-    if (!emailPreview.value || !isValidEmail(emailPreview.value)) {
-      notify('error', t('auth.invalidEmail', '请输入有效邮箱'))
-      return
-    }
-    if (password.value.length < 8) {
-      notify('error', t('auth.passwordTooShort', '密码至少 8 位'))
-      return
-    }
-    if (password.value !== confirmPassword.value) {
-      notify('error', t('auth.passwordMismatch', '两次密码不一致'))
-      return
-    }
-    if (!requireTurnstileToken())
-      return
-
-    const token = turnstileToken.value
-
-    signupLoading.value = true
-    try {
-      await requestJson('/api/auth/register', {
-        method: 'POST',
-        body: {
-          email: emailPreview.value,
-          password: password.value,
-          turnstileToken: token,
-        },
-      })
-      await navigateTo({
-        path: '/verify-waiting',
-        query: { email: emailPreview.value },
-      })
-    }
-    catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.registerFailed', '注册失败')))
-    }
-    finally {
-      signupLoading.value = false
-      resetTurnstileWidget()
-    }
-  }
 
   async function handleBindEmail() {
     if (!bindEmail.value || !isValidEmail(bindEmail.value)) {
@@ -1384,7 +967,7 @@ export function useSignIn() {
       })
       await navigateTo(redirectTarget.value)
     }
-    catch (error: any) {
+    catch (error: unknown) {
       notify('error', resolveErrorMessage(error, t('auth.loginFailed', 'Login failed')))
     }
     finally {
@@ -1403,7 +986,7 @@ export function useSignIn() {
       })
       await navigateTo(redirectTarget.value)
     }
-    catch (error: any) {
+    catch (error: unknown) {
       notify('error', resolveErrorMessage(error, t('auth.loginFailed', 'Login failed')))
     }
     finally {
@@ -1484,16 +1067,14 @@ export function useSignIn() {
     passkeyPhase.value = 'verifying'
 
     try {
-      const options = await requestJson<any>(
+      const options = await requestJson<PasskeyRequestOptionsResponse>(
         '/api/passkeys/options',
         emailPreview.value ? { query: { email: emailPreview.value } } : undefined,
       )
-      const allowCredentials = Array.isArray(options.allowCredentials)
-        ? options.allowCredentials.map((cred: any) => ({
-            ...cred,
-            id: base64UrlToBuffer(cred.id),
-          }))
-        : undefined
+      const allowCredentials = options.allowCredentials?.map(credential => ({
+        ...credential,
+        id: base64UrlToBuffer(credential.id),
+      }))
       const publicKey: PublicKeyCredentialRequestOptions = {
         challenge: base64UrlToBuffer(options.challenge),
         rpId: options.rpId,
@@ -1531,7 +1112,7 @@ export function useSignIn() {
         void navigateTo(redirectTarget.value)
       }, 700)
     }
-    catch (error: any) {
+    catch (error: unknown) {
       const message = resolveErrorMessage(error, t('auth.passkeyFailed', 'Passkey login failed'))
       passkeyError.value = message
       passkeyPhase.value = 'error'
@@ -1546,16 +1127,10 @@ export function useSignIn() {
     t,
     step,
     email,
-    password,
-    confirmPassword,
     bindEmail,
-    loading,
-    signupLoading,
     passkeyLoading,
-    magicLoading,
     emailCheckLoading,
     bindLoading,
-    magicSent,
     supportsPasskey,
     passkeyPhase,
     passkeyError,
@@ -1570,15 +1145,8 @@ export function useSignIn() {
     emailPreview,
     stepTitle,
     stepSubtitle,
-    showTurnstile,
-    turnstileState,
-    forgotUrl,
-    retryTurnstile,
     handleEmailNext,
     resetToEmailStep,
-    handlePasswordSignIn,
-    handleMagicLink,
-    handleRegister,
     handleBindEmail,
     handleSkipBind,
     handleGithubSignIn,

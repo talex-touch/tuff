@@ -416,7 +416,7 @@ describe('notificationDispatcher', () => {
         providerType: 'resend',
         credentialRef: authRef,
         from: 'Tuff Auth <auth@example.com>',
-        events: ['auth.password.reset'],
+        events: ['auth.email.magic_link'],
       },
     }, 'admin')
     credentialMocks.notificationCredentialExists.mockResolvedValueOnce(true)
@@ -424,10 +424,10 @@ describe('notificationDispatcher', () => {
 
     await sendEmail({
       to: 'owner@example.com',
-      subject: 'Reset your password',
-      text: `Use reset token auth-reset-token-${marker}`,
-      html: `<p>reset auth-reset-token-${marker}</p><a href="https://tuff.local/reset?token=auth-reset-token-${marker}&email=owner%40example.com">reset</a>`,
-      action: 'auth.password.reset',
+      subject: 'Sign in to Tuff',
+      text: `Use sign-in token auth-login-token-${marker}`,
+      html: `<p>sign in auth-login-token-${marker}</p><a href="https://tuff.local/api/auth/callback/email?token=auth-login-token-${marker}&email=owner%40example.com">sign in</a>`,
+      action: 'auth.email.magic_link',
       resourceType: 'auth_user',
       resourceId: `user-${marker}`,
     }, h3Event)
@@ -441,9 +441,9 @@ describe('notificationDispatcher', () => {
       body: expect.objectContaining({
         from: 'Tuff Auth <auth@example.com>',
         to: ['owner@example.com'],
-        subject: 'Reset your password',
-        text: `Use reset token auth-reset-token-${marker}`,
-        html: `<p>reset auth-reset-token-${marker}</p><a href="https://tuff.local/reset?token=auth-reset-token-${marker}&email=owner%40example.com">reset</a>`,
+        subject: 'Sign in to Tuff',
+        text: `Use sign-in token auth-login-token-${marker}`,
+        html: `<p>sign in auth-login-token-${marker}</p><a href="https://tuff.local/api/auth/callback/email?token=auth-login-token-${marker}&email=owner%40example.com">sign in</a>`,
       }),
     }))
 
@@ -456,12 +456,12 @@ describe('notificationDispatcher', () => {
     })
     const serialized = JSON.stringify(events)
     expect(serialized).toContain('delivery-sent')
-    expect(serialized).toContain('auth.password.reset')
+    expect(serialized).toContain('auth.email.magic_link')
     expect(serialized).not.toContain('owner@example.com')
     expect(serialized).not.toContain('owner%40example.com')
-    expect(serialized).not.toContain(`auth-reset-token-${marker}`)
-    expect(serialized).not.toContain('Reset your password')
-    expect(serialized).not.toContain('<p>reset')
+    expect(serialized).not.toContain(`auth-login-token-${marker}`)
+    expect(serialized).not.toContain('Sign in to Tuff')
+    expect(serialized).not.toContain('<p>sign in')
     expect(serialized).not.toContain('auth-email-secret')
     expect(serialized).not.toContain(authRef)
   })

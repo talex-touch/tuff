@@ -3,16 +3,13 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
-import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
 import { normalizeLocaleCode, type SupportedLocaleCode } from './locale'
 import { resolveRequestGeo } from './requestGeo'
 
 const USERS_TABLE = 'auth_users'
-const CREDENTIALS_TABLE = 'auth_credentials'
 const ACCOUNTS_TABLE = 'auth_accounts'
 const VERIFICATION_TABLE = 'auth_verification_tokens'
 const LOGIN_TOKEN_TABLE = 'auth_login_tokens'
-const PASSWORD_RESET_TABLE = 'auth_password_reset_tokens'
 const PASSKEYS_TABLE = 'auth_passkeys'
 const WEBAUTHN_CHALLENGE_TABLE = 'auth_webauthn_challenges'
 const DEVICES_TABLE = 'auth_devices'
@@ -92,15 +89,6 @@ async function ensureAuthSchema(db: D1Database) {
     );
   `).run()
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${CREDENTIALS_TABLE} (
-      user_id TEXT PRIMARY KEY,
-      password_hash TEXT NOT NULL,
-      password_salt TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
 
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${ACCOUNTS_TABLE} (
@@ -134,15 +122,6 @@ async function ensureAuthSchema(db: D1Database) {
     );
   `).run()
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PASSWORD_RESET_TABLE} (
-      token TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
-    );
-  `).run()
 
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${PASSKEYS_TABLE} (
@@ -766,7 +745,7 @@ export async function createUser(
     emailState,
     locale,
     status,
-    now
+    now,
   ).run()
   return {
     id,
@@ -788,7 +767,7 @@ export async function createUser(
     deletionTermsVersion: null,
     privacySettings: { ...DEFAULT_USER_PRIVACY_SETTINGS },
     allowCliIpMismatch: false,
-    createdAt: now
+    createdAt: now,
   }
 }
 
@@ -1049,38 +1028,6 @@ export async function restorePendingDeletionIfWithinWindow(
   return getUserById(event, userId)
 }
 
-export async function setUserPassword(event: H3Event, userId: string, password: string): Promise<void> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const salt = generatePasswordSalt()
-  const hash = await hashPassword(password, salt)
-  const now = new Date().toISOString()
-  await db.prepare(`
-    INSERT INTO ${CREDENTIALS_TABLE} (user_id, password_hash, password_salt, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET password_hash = excluded.password_hash, password_salt = excluded.password_salt, updated_at = excluded.updated_at
-  `).bind(userId, hash, salt, now).run()
-}
-
-export async function verifyUserPassword(event: H3Event, email: string, password: string): Promise<AuthUser | null> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const user = await getUserByEmail(event, email)
-  if (!user || (user.status !== 'active' && user.status !== 'deletion_pending'))
-    return null
-  const row = await db.prepare(`SELECT password_hash, password_salt FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(user.id).first()
-  if (!row)
-    return null
-  const ok = await verifyPassword(password, row.password_salt as string, row.password_hash as string)
-  return ok ? user : null
-}
-
-export async function hasUserPasswordCredential(event: H3Event, userId: string): Promise<boolean> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const row = await db.prepare(`SELECT user_id FROM ${CREDENTIALS_TABLE} WHERE user_id = ? LIMIT 1`).bind(userId).first()
-  return Boolean(row?.user_id)
-}
 
 function generateToken(bytes = 32): string {
   const data = new Uint8Array(bytes)
@@ -2006,43 +1953,6 @@ export async function consumeLoginToken(event: H3Event, token: string, reason?: 
   return getUserById(event, row.user_id as string)
 }
 
-export async function createPasswordResetToken(event: H3Event, userId: string, ttlMs: number): Promise<string> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const token = generateToken(32)
-  const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + ttlMs).toISOString()
-  await db.prepare(`
-    INSERT INTO ${PASSWORD_RESET_TABLE} (token, user_id, expires_at, created_at)
-    VALUES (?, ?, ?, ?)
-  `).bind(token, userId, expiresAt, now).run()
-  return token
-}
-
-export async function hasRecentPasswordResetToken(event: H3Event, userId: string, windowMs: number): Promise<boolean> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const since = new Date(Date.now() - windowMs).toISOString()
-  const row = await db.prepare(`
-    SELECT 1 FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ? AND created_at >= ? LIMIT 1
-  `).bind(userId, since).first()
-  return Boolean(row)
-}
-
-export async function consumePasswordResetToken(event: H3Event, token: string): Promise<string | null> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const row = await db.prepare(`
-    SELECT user_id, expires_at FROM ${PASSWORD_RESET_TABLE} WHERE token = ?
-  `).bind(token).first()
-  if (!row)
-    return null
-  const expires = Date.parse(row.expires_at as string)
-  if (Number.isNaN(expires) || expires <= Date.now())
-    return null
-  await db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE token = ?`).bind(token).run()
-  return row.user_id as string
-}
 
 export async function getUserByAccount(event: H3Event, provider: string, providerAccountId: string): Promise<AuthUser | null> {
   const db = requireDatabase(event)
@@ -2087,11 +1997,6 @@ export async function getUserAccountActivitySummary(event: H3Event, userId: stri
 
       UNION ALL
 
-      SELECT updated_at AS value
-      FROM ${CREDENTIALS_TABLE}
-      WHERE user_id = ?
-
-      UNION ALL
 
       SELECT created_at AS value
       FROM ${ACCOUNTS_TABLE}
@@ -2110,7 +2015,7 @@ export async function getUserAccountActivitySummary(event: H3Event, userId: stri
       WHERE user_id = ? AND last_used_at IS NOT NULL
     )
     WHERE value IS NOT NULL
-  `).bind(userId, userId, userId, userId, userId).first<{ updated_at?: string | null }>()
+  `).bind(userId, userId, userId, userId).first<{ updated_at?: string | null }>()
 
   return {
     updatedAt: row?.updated_at ?? null,
@@ -2303,13 +2208,6 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
 
   const statements: D1PreparedStatement[] = [
     db.prepare(`
-    INSERT OR IGNORE INTO ${CREDENTIALS_TABLE} (user_id, password_hash, password_salt, updated_at)
-    SELECT ?, password_hash, password_salt, updated_at
-    FROM ${CREDENTIALS_TABLE}
-    WHERE user_id = ?
-  `).bind(input.targetUserId, input.sourceUserId),
-    db.prepare(`DELETE FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
-    db.prepare(`
     UPDATE ${ACCOUNTS_TABLE}
     SET user_id = ?
     WHERE user_id = ?
@@ -2330,7 +2228,6 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
     WHERE user_id = ?
   `).bind(input.targetUserId, input.sourceUserId),
     db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
-    db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
     db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
   ]
 
@@ -2800,7 +2697,6 @@ export async function clearUserAuthEphemeralTokens(event: H3Event, userId: strin
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   await db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE user_id = ?`).bind(userId).run()
-  await db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(userId).run()
   await db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(userId).run()
   await db.prepare(`DELETE FROM ${DEVICE_AUTH_TABLE} WHERE user_id = ?`).bind(userId).run()
   await db.prepare(`DELETE FROM ${OAUTH_CODE_TABLE} WHERE user_id = ? AND consumed_at IS NULL`).bind(userId).run()
@@ -2817,78 +2713,6 @@ export async function setDeviceTrusted(event: H3Event, userId: string, deviceId:
   return getDevice(event, userId, deviceId)
 }
 
-/** Failed password attempts tolerated per account, then per IP, inside the window. */
-const PASSWORD_SIGNIN_WINDOW_MS = 15 * 60 * 1000
-const PASSWORD_SIGNIN_MAX_BY_USER = 10
-const PASSWORD_SIGNIN_MAX_BY_IP = 30
-
-export interface PasswordSignInRateLimitDecision {
-  allowed: boolean
-  scope?: 'user' | 'ip'
-  retryAfterMs?: number
-}
-
-async function countRecentLoginFailures(
-  db: D1Database,
-  whereSql: string,
-  params: Array<string | number | null>,
-): Promise<number> {
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS total
-    FROM ${LOGIN_HISTORY_TABLE}
-    WHERE success = 0 AND ${whereSql}
-  `).bind(...params).first<{ total?: number | string }>()
-  return toSafeInteger(row?.total)
-}
-
-/**
- * Bounds password guessing.
- *
- * Every failure was already written to the login history and never read back, so the attempt
- * budget was unbounded: a loop against the credentials callback with one victim email and a
- * password list ran until it succeeded (#897). PBKDF2 at 210k iterations raises the cost of
- * each guess; it does not limit how many there are.
- *
- * Counted per account and per IP because neither alone is enough. A userId is only known when
- * the email matches an active account, so per-user counting misses guessing against addresses
- * that do not exist — and per-IP counting alone would let a distributed attempt through while
- * one shared NAT locked out innocent users. Only failures count, so signing in successfully
- * never spends anyone's budget.
- */
-export async function evaluatePasswordSignInRateLimit(event: H3Event, payload: {
-  userId?: string | null
-}): Promise<PasswordSignInRateLimitDecision> {
-  const db = requireDatabase(event)
-  await ensureAuthSchema(db)
-  const since = new Date(Date.now() - PASSWORD_SIGNIN_WINDOW_MS).toISOString()
-  const ip = getRequestIp(event)
-
-  const checks: Array<{ scope: 'user' | 'ip', limit: number, whereSql: string, params: Array<string | number | null> }> = []
-  if (payload.userId) {
-    checks.push({
-      scope: 'user',
-      limit: PASSWORD_SIGNIN_MAX_BY_USER,
-      whereSql: 'user_id = ? AND created_at >= ?',
-      params: [payload.userId, since],
-    })
-  }
-  if (ip) {
-    checks.push({
-      scope: 'ip',
-      limit: PASSWORD_SIGNIN_MAX_BY_IP,
-      whereSql: 'ip = ? AND created_at >= ?',
-      params: [ip, since],
-    })
-  }
-
-  for (const check of checks) {
-    const count = await countRecentLoginFailures(db, check.whereSql, check.params)
-    if (count >= check.limit)
-      return { allowed: false, scope: check.scope, retryAfterMs: PASSWORD_SIGNIN_WINDOW_MS }
-  }
-
-  return { allowed: true }
-}
 
 export async function logLoginAttempt(event: H3Event, payload: {
   userId?: string | null

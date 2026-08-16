@@ -68,7 +68,6 @@ export function useLocalePreference() {
       '/dashboard',
       '/device-auth',
       '/docs',
-      '/forgot-password',
       '/license',
       '/pricing',
       '/privacy',

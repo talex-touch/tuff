@@ -10,7 +10,6 @@ export const publicPrerenderRoutes = [
   '/store',
   '/login',
   '/sign-in',
-  '/forgot-password',
   '/verify-waiting',
   '/device-auth',
 ]

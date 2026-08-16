@@ -1,7 +1,6 @@
 import { requireAuth } from '../../../utils/auth'
 import {
   getUserById,
-  hasUserPasswordCredential,
   listPasskeys,
   listUserLinkedAccounts,
   unlinkAccount,
@@ -25,17 +24,16 @@ export default defineEventHandler(async (event) => {
 
   const remainingOauthCount = linkedAccounts.filter(account => account.provider !== provider).length
   const passkeys = await listPasskeys(event, userId)
-  const hasPassword = await hasUserPasswordCredential(event, userId)
   const user = await getUserById(event, userId)
 
   const config = useRuntimeConfig()
-  const emailProviderEnabled = Boolean(config.auth?.email?.server && config.auth?.email?.from)
+  const emailProviderEnabled = Boolean(config.auth?.email?.from)
   const hasEmailFallback = Boolean(emailProviderEnabled && user?.emailState !== 'missing')
 
-  if (!hasPassword && !hasEmailFallback && passkeys.length === 0 && remainingOauthCount === 0) {
+  if (!hasEmailFallback && passkeys.length === 0 && remainingOauthCount === 0) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Cannot unbind last sign-in method. Please add password, email, passkey, or another OAuth provider first.',
+      statusMessage: 'Cannot unbind last sign-in method. Please add email, passkey, or another OAuth provider first.',
     })
   }
 

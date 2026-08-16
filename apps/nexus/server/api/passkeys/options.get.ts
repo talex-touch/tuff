@@ -6,9 +6,8 @@ import { resolveRequestIp } from '../../utils/ipSecurityStore'
 import { createWebAuthnChallenge, getUserByEmail, listPasskeys } from '../../utils/authStore'
 
 /**
- * Same account-existence oracle as /api/auth/email-status: passing an email returns 404 when no
- * active account has it, so this is enumerable too (#921 names both). Also pre-auth by nature,
- * so it gets the same throttle rather than a guard.
+ * Passing an email returns 404 when no active account has it, so this pre-auth endpoint remains
+ * enumerable by nature. Throttle the email-carrying form rather than pretending it can require auth.
  */
 const PASSKEY_OPTIONS_RATE_LIMIT = { limit: 20, windowMs: 10 * 60_000 } as const
 

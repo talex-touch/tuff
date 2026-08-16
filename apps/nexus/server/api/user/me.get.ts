@@ -5,7 +5,6 @@ import {
   getAdminBootstrapState,
   getUserAccountActivitySummary,
   getUserById,
-  hasUserPasswordCredential,
   listPasskeys,
   listUserLinkedAccounts,
 } from '../../utils/authStore'
@@ -29,7 +28,6 @@ export default defineEventHandler(async (event) => {
   const passkeys = await listPasskeys(event, userId)
   const linkedAccounts = await listUserLinkedAccounts(event, userId)
   const linkedProviders = [...new Set(linkedAccounts.map(account => account.provider))]
-  const hasPassword = await hasUserPasswordCredential(event, userId)
   const accountActivity = await getUserAccountActivitySummary(event, userId)
   const bootstrap = await getAdminBootstrapState(event, userId)
   const bootstrapEnabled = hasBootstrapSecret(event)
@@ -48,7 +46,6 @@ export default defineEventHandler(async (event) => {
     emailState: user.emailState,
     isRestricted: user.emailState !== 'verified',
     passkeyCount: passkeys.length,
-    hasPassword,
     linkedProviders,
     linkedAccounts,
     adminBootstrap: {
