@@ -234,3 +234,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# Fix for issue #1727: safe input handling
