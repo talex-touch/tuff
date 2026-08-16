@@ -1,0 +1,32 @@
+{
+  "$comment": "Waivers are scoped to file contents, so each entry stops applying the moment that file changes. Regenerate the sha256 with `tuff scan --json` after any change to the waived file.",
+  "waivers": [
+    {
+      "id": "json-formatter-monaco-editor-core-size",
+      "fileSha256": "1286fcb9561f383398bc561796e456fa65d74cf419fa3f18b97356c9d175f257",
+      "ruleId": "PLUGIN_SCAN_FILE_LIMIT_EXCEEDED",
+      "owner": "TalexTouch Team",
+      "reason": "Monaco 编辑器核心包 3.7MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，内容由 monaco-editor 0.55.1 锁定。",
+      "createdAt": "2026-08-15T00:00:00.000Z",
+      "expiresAt": "2026-11-15T00:00:00.000Z"
+    },
+    {
+      "id": "json-formatter-monaco-ts-worker-size",
+      "fileSha256": "b033291ac1f01f919bbe3fa3d424918dceb597afe86c7b7912946a0368590b68",
+      "ruleId": "PLUGIN_SCAN_FILE_LIMIT_EXCEEDED",
+      "owner": "TalexTouch Team",
+      "reason": "Monaco TypeScript 语言 worker 7MB，同样超过单文件扫描上限。第三方产物，随 monaco-editor 版本固定。",
+      "createdAt": "2026-08-15T00:00:00.000Z",
+      "expiresAt": "2026-11-15T00:00:00.000Z"
+    },
+    {
+      "id": "json-formatter-expression-query-eval",
+      "fileSha256": "cdf0bafc4846bcd8a889fc17f21f0f903febb4eedc3086bc09e79d87a79ea034",
+      "ruleId": "PLUGIN_SCAN_DYNAMIC_EXECUTION",
+      "owner": "TalexTouch Team",
+      "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。",
+      "createdAt": "2026-08-15T00:00:00.000Z",
+      "expiresAt": "2026-11-15T00:00:00.000Z"
+    }
+  ]
+}

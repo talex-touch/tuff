@@ -195,6 +195,16 @@ interface PluginStorageRoot {
 }
 
 const pluginSystemLog = createLogger('PluginSystem').child('Plugin')
+
+/**
+ * Per-plugin config storage quota. Caps both a single write and the directory total, so a plugin
+ * cannot get around it by splitting one oversized payload across many files.
+ *
+ * Exported so quota tests derive their fixtures from it; a hard-coded payload count stops
+ * reaching the ceiling the moment the quota moves and the test then passes without testing.
+ */
+export const PLUGIN_CONFIG_MAX_SIZE = 100 * 1024 * 1024
+export const PLUGIN_CONFIG_MAX_FILES = 1_000
 const TRANSIENT_ISSUE_CODES = new Set([
   'RUNTIME_ERROR',
   'AUTO_DISABLED_EXCESSIVE_ERRORS',
@@ -3471,8 +3481,6 @@ export class TouchPlugin implements ITouchPlugin {
       return { success: false, error: 'Invalid content' }
     }
 
-    const PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
-    const PLUGIN_CONFIG_MAX_FILES = 1_000
     const nextBytes = Buffer.byteLength(configData, 'utf-8')
     if (nextBytes > PLUGIN_CONFIG_MAX_SIZE) {
       return {
@@ -3557,7 +3565,7 @@ export class TouchPlugin implements ITouchPlugin {
     maxSize: number
     usagePercent: number
   } {
-    const maxSize = 10 * 1024 * 1024 // 10MB
+    const maxSize = 100 * 1024 * 1024 // 100MB
 
     let totalSize = 0
     let fileCount = 0

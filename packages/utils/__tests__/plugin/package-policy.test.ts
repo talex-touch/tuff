@@ -3,6 +3,7 @@ import {
   PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES,
   PLUGIN_PACKAGE_MAX_ENTRY_BYTES,
   PLUGIN_PACKAGE_MAX_ENTRY_COUNT,
+  PLUGIN_PACKAGE_MAX_EXPANDED_BYTES,
   PLUGIN_PACKAGE_POLICY_VERSION,
   validatePluginPackagePolicy,
   type PluginPackageEntry,
@@ -209,13 +210,22 @@ describe('plugin package policy', () => {
       manifest: stagedManifest(),
       entries: stagedEntries([{ path: 'large.js', type: 'file', size: PLUGIN_PACKAGE_MAX_ENTRY_BYTES + 1 }]),
     })
+    // Derived from the constants rather than a fixed pair of entries: the assertion is that
+    // enough max-sized entries break the expanded ceiling, which stays true whatever the two
+    // limits are set to. Hard-coding two entries silently stopped testing anything the moment
+    // the expanded ceiling was raised above 2x the per-entry cap.
+    const expandedEntryCount
+      = Math.floor(PLUGIN_PACKAGE_MAX_EXPANDED_BYTES / PLUGIN_PACKAGE_MAX_ENTRY_BYTES) + 1
     const expandedCodes = violationCodes({
       profile: 'staged-package',
       manifest: stagedManifest(),
-      entries: stagedEntries([
-        { path: 'large-a.js', type: 'file', size: PLUGIN_PACKAGE_MAX_ENTRY_BYTES },
-        { path: 'large-b.js', type: 'file', size: PLUGIN_PACKAGE_MAX_ENTRY_BYTES },
-      ]),
+      entries: stagedEntries(
+        Array.from({ length: expandedEntryCount }, (_, index) => ({
+          path: `large-${index}.js`,
+          type: 'file' as const,
+          size: PLUGIN_PACKAGE_MAX_ENTRY_BYTES,
+        })),
+      ),
     })
     const archiveCodes = violationCodes({
       profile: 'registry-admission',

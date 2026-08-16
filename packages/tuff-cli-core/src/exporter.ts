@@ -35,6 +35,7 @@ import { CompressLimit, TalexCompress } from './compress-util'
 import { collectPackageEntries } from './package-files'
 import {
   assertPluginSecurityScan,
+  resolveSecurityScanWaivers,
   scanBuiltPluginPackage,
 } from './security-scan'
 import { generateFilesSha256, generateSignature } from './security-util'
@@ -43,9 +44,9 @@ type Chalk = (typeof import('chalk'))['default']
 
 // Default configuration
 const DEFAULT_OPTIONS: Required<
-  Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>
+  Omit<Options, 'assets' | 'versionSync' | 'manifestPath' | 'securityWaivers'>
 >
-& Pick<Options, 'assets' | 'versionSync'> = {
+& Pick<Options, 'assets' | 'versionSync' | 'securityWaivers'> = {
   root: process.cwd(),
   manifest: './manifest.json',
   outDir: 'dist',
@@ -56,10 +57,12 @@ const DEFAULT_OPTIONS: Required<
   sourcemap: false,
   minify: true,
   external: ['electron'],
-  maxSizeMB: 10,
+  maxSizeMB: 200,
   includeExperimentalWidgets: false,
   assets: undefined,
   versionSync: undefined,
+  // Undefined means "use the conventional security-waivers.json in the plugin root, if any".
+  securityWaivers: undefined,
 }
 
 const GENERATED_PACKAGE_OUTPUT_DIRECTORIES = new Set(['out', 'build'])
@@ -175,8 +178,8 @@ function normalizeIndexConfig(
  */
 function resolveOptions(
   options?: Options,
-): Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>>
-  & Pick<Options, 'assets' | 'versionSync'> {
+): Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath' | 'securityWaivers'>>
+  & Pick<Options, 'assets' | 'versionSync' | 'securityWaivers'> {
   return {
     ...DEFAULT_OPTIONS,
     ...options,
@@ -1241,8 +1244,24 @@ export async function build(userOptions?: Options) {
     }),
     'archive size validation',
   )
-  const securityScan = scanBuiltPluginPackage({ packagePath: tpexPath })
-  assertPluginSecurityScan(securityScan)
+  const securityWaivers = resolveSecurityScanWaivers({
+    root: opts.root,
+    waiversPath: opts.securityWaivers,
+  })
+  const securityScan = scanBuiltPluginPackage({
+    packagePath: tpexPath,
+    waivers: securityWaivers,
+  })
+  assertPluginSecurityScan(securityScan, securityWaivers)
+  const waivedFindings = securityScan.findings.filter(finding => finding.waiver)
+  for (const finding of waivedFindings) {
+    // Waived findings must stay visible: a package that ships with accepted risk should say so
+    // on every build, not only in the file nobody opens.
+    console.warn(
+      `Security finding waived: ${finding.code} ${finding.location.path}`
+      + ` [by ${finding.waiver?.owner}, expires ${finding.waiver?.expiresAt}]`,
+    )
+  }
   if (securityScan.decision === 'review-required') {
     console.warn(
       `Plugin security scan requires review (${securityScan.findings.length} finding(s)).`,

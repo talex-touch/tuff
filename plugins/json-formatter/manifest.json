@@ -1,0 +1,51 @@
+{
+  "id": "com.tuffex.json-formatter",
+  "name": "json-formatter",
+  "version": "1.0.5",
+  "author": "TalexTouch Team",
+  "sdkapi": 260713,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "一款全平台 JSON 工具，支持格式化、压缩、校验、转换与对比。",
+  "dev": {
+    "enable": false,
+    "address": "http://localhost:5555/#/",
+    "source": true
+  },
+  "permissions": {
+    "required": ["clipboard.read", "network.internet"],
+    "optional": ["clipboard.write"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "读取剪贴板中的 JSON 文本作为格式化输入",
+    "clipboard.write": "将格式化后的结果复制回系统剪贴板",
+    "network.internet": "内置 Monaco 编辑器在解析 $schema 时会发起网络请求；插件自身逻辑不联网"
+  },
+  "features": [
+    {
+      "id": "json-formatter-format",
+      "name": "JSON格式化",
+      "desc": "格式化选中的JSON文本或剪贴板内容",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "acceptedInputTypes": ["text"],
+      "platform": { "win32": true, "darwin": true, "linux": true },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["json-formatter-format", "JSON格式化", "json", "格式化"]
+        }
+      ],
+      "interaction": {
+        "type": "webcontent",
+        "path": "/json",
+        "forceMax": true
+      }
+    }
+  ]
+}

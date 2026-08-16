@@ -209,6 +209,14 @@ export interface Options {
   includeExperimentalWidgets?: boolean
 
   /**
+   * Path to a security scan waiver file.
+   *
+   * Defaults to `security-waivers.json` in the plugin root when present. Waivers only cover the
+   * rules they name for the exact artifact hash they name; everything else still blocks.
+   */
+  securityWaivers?: string
+
+  /**
    * @deprecated Use `manifest` instead
    */
   manifestPath?: string

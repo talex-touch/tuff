@@ -63,7 +63,7 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 **Key Modules:**
 - **CoreBox** ([modules/box-tool/core-box.ts](apps/core-app/src/main/modules/box-tool/core-box.ts)): Main search/launcher interface with global shortcut (Cmd/Ctrl+E)
 - **PluginManager** ([modules/plugin/plugin-provider.ts](apps/core-app/src/main/modules/plugin/plugin-provider.ts)): Handles plugin loading, lifecycle, and feature registration
-- **Storage** ([modules/storage/](apps/core-app/src/main/modules/storage/)): Configuration and data persistence with 10MB per-plugin limits
+- **Storage** ([modules/storage/](apps/core-app/src/main/modules/storage/)): Configuration and data persistence with 100MB per-plugin limits
 - **Channel System** ([core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)): IPC communication between main/renderer/plugin processes
 - **Database** ([modules/database/](apps/core-app/src/main/modules/database/)): Drizzle ORM with LibSQL for structured data storage
 - **Terminal** ([modules/terminal/](apps/core-app/src/main/modules/terminal/)): Piped-stdio command runner (XTerm.js renderer UI; not a full PTY — no TTY semantics)
@@ -162,7 +162,7 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
 - Features can be triggered via CoreBox search interface
 - Plugins register search results dynamically via `pushItems()` API
 - Hot-reloading supported during development via file system watchers
-- Isolated storage (10MB limit per plugin)
+- Isolated storage (100MB limit per plugin)
 
 **Plugin Manifest Example:**
 ```json
@@ -338,7 +338,7 @@ Modules subscribe to events: `touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, (
 
 **Plugin Config:**
 - Isolated per-plugin storage under `<root>/config/plugins/`
-- 10MB size limit per plugin
+- 100MB size limit per plugin
 - Safe filename sanitization (prevents path traversal)
 - Update broadcast system for reactive UI updates across windows
 

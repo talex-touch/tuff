@@ -16,8 +16,9 @@ import {
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 
-const MAX_FILE_BYTES = 1024 * 1024
-const MAX_TOTAL_BYTES = 10 * 1024 * 1024
+/** Exported so quota tests can derive their fixtures instead of hard-coding a file count. */
+export const MAX_FILE_BYTES = 10 * 1024 * 1024
+export const MAX_TOTAL_BYTES = 100 * 1024 * 1024
 const MAX_FILES = 1_000
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 

@@ -9,10 +9,14 @@ import {
 } from '../permission'
 
 export const PLUGIN_PACKAGE_POLICY_VERSION = '1'
-export const PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES = 30 * 1024 * 1024
+export const PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
 export const PLUGIN_PACKAGE_MAX_ENTRY_COUNT = 4_096
 export const PLUGIN_PACKAGE_MAX_ENTRY_BYTES = 64 * 1024 * 1024
-export const PLUGIN_PACKAGE_MAX_EXPANDED_BYTES = 128 * 1024 * 1024
+/**
+ * Must stay above {@link PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES}: an archive that is accepted on upload
+ * but rejected on expansion just moves the failure to a later, more confusing step.
+ */
+export const PLUGIN_PACKAGE_MAX_EXPANDED_BYTES = 512 * 1024 * 1024
 
 export type PluginPackagePolicyProfile
   = | 'source-manifest'
