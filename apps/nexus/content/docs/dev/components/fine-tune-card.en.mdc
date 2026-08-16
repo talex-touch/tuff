@@ -1,0 +1,113 @@
+---
+title: "FineTuneCard"
+description: "A compact property panel: a layout segment, four scrubbable numbers and a type picker, over one value object."
+category: Form
+status: beta
+since: 2.5.0
+tags: [form, inspector, panel, ai]
+syncStatus: reviewed
+verified: true
+---
+# FineTuneCard
+
+## Basic Usage
+
+### FineTuneCard
+
+:::TuffDemoWrapper{demo="FineTuneCardFineTuneCardDemo" code-lang="vue" title="Property inspector" description="Edits land on the preview beside it, and the header flips from Adjust to Edited."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const DEFAULTS = { layout: 'row', width: 324, height: 96, radius: 28, opacity: 100, type: null }
+  const values = ref({ ...DEFAULTS })
+
+  const typeOptions = [
+    { value: 'seasonal', label: 'Seasonal' },
+    { value: 'classic', label: 'Classic' },
+  ]
+  </script>
+
+  <template>
+    <TxFineTuneCard
+      v-model:values="values"
+      :defaults="DEFAULTS"
+      :type-options="typeOptions"
+      title="Flavor card"
+    />
+  </template>
+---
+:::
+
+## One Value Object
+
+All six fields (`layout` / `width` / `height` / `radius` / `opacity` / `type`) travel in one `values` object bound with `v-model:values`, rather than six separate bindings. Any edit emits the whole new object and, alongside it, a `change` naming which key moved and to what — which is what an undo stack or an incremental save needs.
+
+`defaults` is the comparison baseline and decides two things: whether the header reads Adjust or Edited, and which numeric fields are tinted as changed. Upstream hard-codes `324/96/28/100` inside the component, so a different preset makes it lie; here it travels with the data. Pass `edited` to override the header outright.
+
+## What It Is Made Of
+
+The layout segment reuses **`TxFlatRadio`**, so it is a genuine `radiogroup`: the arrow keys move between the three options and the whole group is one tab stop. Upstream has three independent `aria-pressed` buttons there. The geometry (28px shell, 8px outer radius, 6px thumb) is overridden onto the BUI ladder through the `--tx-flat-radio-*` variables.
+
+The four numeric fields are **`TxScrubField`** — caption-as-handle, draggable, keyboard-steppable and typeable, documented on its own page.
+
+The type picker is a lightweight control internal to the card, not separately exported. It supplies every piece of accessibility upstream omits: `role="combobox"` with `aria-haspopup="listbox"`, `aria-expanded` / `aria-controls` / `aria-activedescendant`, a real `listbox` of `option`s, arrow-key roving that opens on the current selection rather than the first item, Home / End, Enter and Space to commit, Escape to close with focus restored to the trigger, outside-click close, and focus-out close.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `values` | `FineTuneValues` | — | The six-field value object, controlled. |
+| `defaults` | `Partial<FineTuneValues>` | — | Baseline driving the header state and per-field tinting. |
+| `edited` | `boolean` | — | Forces the header state, ignoring `defaults`. |
+| `title` | `string` | `'Fine-tune'` | Card title. |
+| `layoutLabel` / `typeLabel` | `string` | `'Layout'` / `'Type'` | Section headings. |
+| `typeOptions` | `FineTuneTypeOption[]` | `[]` | Type options, `{ value, label }`. |
+| `typePlaceholder` | `string` | `'Select type'` | Shown until something is picked. |
+| `adjustLabel` / `editedLabel` | `string` | `'Adjust'` / `'Edited'` | The header's two states. |
+| `fieldLabels` | `Partial<Record<FineTuneField, string>>` | `W / H / Radius / Opacity` | Captions for the four numeric fields. |
+| `ranges` | `Partial<Record<FineTuneField, FineTuneRange>>` | see below | Per-field bounds. |
+| `disabled` | `boolean` | `false` | Disables every control at once. |
+
+Default ranges: `width` 40–999, `height` 24–999, `radius` 0–64, `opacity` 0–100.
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:values` | `(values: FineTuneValues)` | The whole new object. |
+| `change` | `(key, value)` | Which key moved, and to what. |
+
+## Interaction Contract
+
+- The layout segment is a `radiogroup`; each option carries an `aria-label` (`row layout`) and `aria-checked`, and the glyphs are pure CSS dots hidden from assistive tech.
+- The type menu **opens upward** — an inspector usually sits at the bottom of a panel — with its `transform-origin` at the bottom right.
+- The header's two states are `v-if` / `v-else` nodes, so flipping mounts a fresh element and the entrance replays without an explicit `:key`.
+- The Adjust shimmer paints the text transparent and fills it through a gradient. Reduced motion does not merely stop the animation, it restores a solid colour — otherwise the label would be invisible. The tests pin that separately.
+- Nothing is emitted when a value would not change, and `disabled` propagates to the segment, all four fields and the picker.
+- The card's outline is a ring shadow (`--tx-bui-shadow-raised`) while the internal dividers are real borders — matching upstream, and avoiding a double line.
+
+## Best Practices
+
+- Pass `defaults` for the preset currently loaded, not a constant: swap it with the preset so the header and the tinting keep telling the truth.
+- Use `change` for the undo stack and `update:values` for state — both fire, so do not do the work twice in one handler.
+- Give the fields the real constraints (a `radius` no larger than half the short side, say) and let clamping keep invalid values away from the host.
+- The inspector is narrow (240px), so keep captions abbreviated; `fieldLabels` replaces the whole set for localisation.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/fine-tune-card/src/TxFineTuneCard.vue`, `TxFineTuneChipSelect.vue` (internal).
+- Types: `packages/tuffex/packages/components/src/fine-tune-card/src/types.ts`.
+- **Tested coverage:** `packages/tuffex/packages/components/src/fine-tune-card/__tests__/fine-tune-card.test.ts` (24 cases) covers the layout and four fields, both header states and the node rebuild, per-field tinting, the segment's aria and value round-trip, range overrides, localised copy, blanket disabling, and the type picker's full keyboard and dismissal paths; `fine-tune-card-motion.test.ts` (8 cases) asserts the reduced-motion contract against compiled CSS.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **How far `TxFlatRadio` reuse goes:** behaviour and semantics are usable as-is; the visuals need overriding. Geometry is variable-driven (clean), but the track fill, the thumb's fill, shadow and easing, and the option colours are hard-coded inside its scoped styles (`.tx-flat-radio[data-v-hash]`, specificity 0,2,0). Repeating the wrapper class here buys a deterministic 0,3,0 instead of reaching for `!important`. Give `TxFlatRadio` variables such as `--tx-flat-radio-track-bg` / `-indicator-bg` / `-indicator-shadow` later and this override block can go.
+- **The type picker is not exported:** it serves this card alone. A second use case is the point at which it should become its own component.
+- **The shimmer gradient is written out:** the shared `bui-shimmer-text` mixin sweeps the ink ramp while this sweeps the accent, so the gradient lives in the component even though the keyframes are shared.

@@ -370,7 +370,7 @@ const SECTION_ORDER: Record<string, string[]> = {
 }
 
 // Rendered as flat links above the groups, in this order, right after the index page.
-const COMPONENT_STANDALONE_PAGES = ['/docs/dev/components/foundations']
+const COMPONENT_STANDALONE_PAGES = ['/docs/dev/components/foundations', '/docs/dev/components/ai-suite']
 
 // Every remaining component page is grouped solely by its `category` frontmatter.
 // Keep these keys in sync with scripts/recategorize-component-docs.py.

@@ -10,8 +10,6 @@ verified: true
 ---
 # Checkbox
 
-`TxCheckbox` is a compact boolean control for settings, filters, and form rows. It exposes `role="checkbox"`, `aria-checked`, and disabled state, supports click / Enter / Space toggling, and only uses `aria-label` when no visible label or default slot is present.
-
 ## Basic Usage
 
 Click the box or its label to toggle the state. The checked state follows the selected visual variant with either fill or tick motion.
@@ -154,6 +152,7 @@ code: |
 | labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
 | variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'fill'` |
 | ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
+| indeterminate | Partial selection: some but not all of the governed items are checked. Renders the dash and reports `aria-checked="mixed"`; activating it resolves to checked rather than flipping the boolean, matching a native input's `indeterminate` behaviour. | `boolean` | `false` |
 
 ### Events
 

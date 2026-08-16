@@ -1,0 +1,127 @@
+---
+title: "CodeStream"
+description: "A code block with a filename header that reveals line by line, with copy and syntax highlighting built in."
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, code, streaming, highlight]
+syncStatus: reviewed
+verified: true
+---
+# CodeStream
+
+## Basic Usage
+
+### Line-by-Line Reveal
+
+The host advances `revealedLines`; the component owns the transition and the caret. The cadence (400ms before the first line, 240ms per line, a 3200ms hold) stays in the demo layer.
+
+:::TuffDemoWrapper{demo="CodeStreamStreamingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeStream
+      :code="code"
+      lang="ts"
+      filename="churn.ts"
+      lang-label="TypeScript"
+      :revealed-lines="revealed"
+      @complete="onComplete"
+    />
+  </template>
+---
+:::
+
+### Full Listing
+
+Omit `revealedLines` and the whole listing shows, with no caret drawn.
+
+:::TuffDemoWrapper{demo="CodeStreamStaticDemo" code-lang="vue" title="Full listing" description="The settled state: filename, language label, copy, and highlighting."}
+---
+code: |
+  <template>
+    <TxCodeStream
+      :code="code"
+      lang="ts"
+      filename="inventory.ts"
+      lang-label="TypeScript"
+    />
+  </template>
+---
+:::
+
+## Highlighting and Theming
+
+Highlighting runs through the repository's existing shiki runtime — the same lazy singleton `TxCodeBlock` uses — as a pure async enhancement: the plain-text rendering is always correct, and colour arrives when it arrives. With no `lang`, nothing is highlighted and shiki is never loaded.
+
+`theme` defaults to `'auto'` and follows the document root's `data-theme` or `.dark`. Upstream is a single-theme demo; hardcoding light would render dark-on-light inside a dark host.
+
+The component splits shiki's output back into lines and pairs each with a number and the reveal animation. **It checks the line count before splitting**: if the highlighted result does not have the same number of lines as the source, the whole block falls back to plain text rather than shifting every number by one.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `code` | `string` | — | The source. Required. |
+| `lang` | `string` | `''` | Shiki language id. Empty renders unhighlighted. |
+| `filename` | `string` | — | Header filename, in the mono face. |
+| `langLabel` | `string` | — | Language label beside the filename, e.g. `TypeScript`. |
+| `revealedLines` | `number` | — | How many lines are revealed. Omit or pass `-1` for all. |
+| `caret` | `boolean` | `true` | Draws the accent caret after the last revealed line. |
+| `lineNumbers` | `boolean` | `true` | Shows the line-number gutter. |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Highlight theme; `'auto'` follows the document root. |
+| `copyable` | `boolean` | `true` | Renders the copy button. |
+| `copyLabel` | `string` | `'Copy'` | Copy button text. |
+| `copiedLabel` | `string` | `'Copied'` | Text shown after a successful copy. |
+| `minHeight` | `number \| string` | — | Floor for the code area. Defaults to the full listing's height. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `copy` | `(code: string)` | Forwarded from `TxCopyButton` on a successful copy. |
+| `complete` | — | Emitted once when `revealedLines` reaches the last line. Not emitted if it starts complete. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|------|------|
+| `header` | — | Replaces the filename and language label pair. |
+| `actions` | — | Inserts custom controls before the copy button. |
+
+## Interaction Contract
+
+- `revealedLines` is clamped to `[0, total lines]`; out-of-range values are not an error.
+- The caret appears only **while revealing** (`0 < revealedLines < total`), at the end of the last revealed line. It is **still**: upstream reserves the blinking caret for streaming prose, and the code caret is a position marker.
+- `complete` fires once, on crossing the end. Mounting with the listing already complete is not a crossing, so nothing is emitted.
+- The copy control reuses `TxCopyButton`, so it inherits the `document.execCommand` fallback and the polite live region; only its chrome is restyled to match.
+- The gutter's `line-height: 1.86` against the code's `1.7` is deliberate: 10.5px × 1.86 and 11.5px × 1.7 both land near 19.5px, which is what puts a number on its line's baseline. Changing either side breaks the pairing.
+- The height floor reserves `lines × 1.7em + 20px`, so a reveal grows into space already held rather than pushing the page down. Upstream's hardcoded 137px is exactly six lines of its own sample.
+- The code area is a `<div>`, not a `<pre>`: Vue's compiler preserves template whitespace inside `<pre>`, so the markup's own indentation would render as code. `white-space: pre` per line says the same thing.
+- Under reduced motion the per-line entrance stops while the reveal itself continues.
+
+## Best Practices
+
+- Let the host advance `revealedLines` at the pace data arrives; do not put a timer inside the component.
+- When the language is uncertain, prefer omitting `lang`: plain text is always correct, and a wrong id only costs a wasted highlight pass.
+- Pair long listings with an outer scroll container. The code area scrolls horizontally on its own, but its height follows content.
+- Use `TxCodeBlock` when a fence should match `TxStreamMarkdown`; use this component when you need a filename header, a gutter, and a line-by-line reveal.
+- In non-English UIs, override `copyLabel` and `copiedLabel` together — changing only one leaves mixed-language copy.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`.
+- Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`.
+- Reused: `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue`, `packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`, and `.../use-auto-theme.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts` (22 cases) covers reveal clamping and reuse of already-revealed lines, caret conditions, `complete` firing once, header presence, splitting shiki output into lines, the plain-text fallback on a line-count mismatch, theme forwarding, and copy event forwarding.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **How it divides from `TxCodeBlock`:** `TxCodeBlock` is the internal renderer `TxStreamMarkdown` uses for each fence and serves the markdown path. This component is a standalone "the agent is writing code" surface, adding a filename header, a gutter, the reveal, and the caret.
+- **Known visual deviation:** upstream hand-writes a five-colour token model (`kw → --accent-ink`, `str → --green`, `dim → --ink-3`); this uses shiki instead, so colours are not a pixel match for the reference screenshots. design.md §8.2 accepts this trade — the hand model would require every host to tokenize its own code, which cannot be a public API. To close the gap, configure a custom shiki theme mapping those five scopes onto `--tx-bui-*`.
+- **Safety:** only shiki-generated markup reaches `v-html`, with the code text already escaped; the unhighlighted branch is ordinary interpolation.

@@ -1,0 +1,128 @@
+---
+title: "SearchPanel"
+description: "Inline command search: field, live results, and empty state in one card."
+category: Form
+status: beta
+since: 2.5.0
+tags: [search, filter, listbox, command]
+syncStatus: reviewed
+verified: true
+---
+# SearchPanel
+
+## Basic Usage
+
+### SearchPanel
+:::TuffDemoWrapper{demo="SearchPanelSearchPanelDemo" code-lang="vue" title="Live filtering and keyboard navigation" description="↑ ↓ to move, Enter to select, Esc to clear; the empty state waits for three characters."}
+---
+code: |
+  <template>
+    <TxSearchPanel v-model="query" :items="items" @select="run" />
+  </template>
+
+  <script setup lang="ts">
+  const items = [
+    { id: 'a', label: 'Forecast summer demand' },
+    { id: 'b', label: 'Find waffle cone suppliers', keywords: ['vendor'] },
+    { id: 'c', label: 'Retire low sellers', disabled: true },
+  ]
+  </script>
+---
+:::
+
+## Versus TxCommandPalette
+
+Both are "a field plus a result list", but their shapes are mutually exclusive:
+
+- `TxCommandPalette` is **modal** — teleported to body, full-screen overlay, `role="dialog" aria-modal="true"`, focus trap, z-index allocation. It takes over the page.
+- `TxSearchPanel` is **inline** — no overlay, no modal semantics, no focus trap. It can live inside a page, a sidebar, or a popover alongside other content.
+
+Use the palette for a globally invoked launcher; use the panel for a search area that stays on the page. Their keyboard contracts match, so users do not have to relearn one for the other.
+
+## Idle Results, the Empty State, and Its Threshold
+
+- With an empty query only the first `idleCount` items (default 5) are shown. A shortlist reads as a starting point; a full dump reads as a wall. Pass `0` to show everything.
+- The empty state waits until the query reaches `emptyThreshold` characters (default 3). One or two characters with no match leaves the list blank on purpose, so "no results" does not flash in and out mid-word. `minHeight` (default 248) holds the layout steady through it.
+- The empty state itself reuses `TxSearchEmpty`, retuned only through its public CSS variables for density and colour, with its animated 64px illustration replaced through the `icon` slot. None of its internal classes are touched.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | Query text (`v-model`). |
+| `items` | `SearchPanelItem[]` | `[]` | Candidate items. |
+| `placeholder` | `string` | `'Search'` | Field placeholder. |
+| `ariaLabel` | `string` | - | Accessible name for the field; falls back to the placeholder. |
+| `idleCount` | `number` | `5` | How many items to show with an empty query. `0` shows all. |
+| `emptyThreshold` | `number` | `3` | Shortest query that may render the empty state. |
+| `emptyTitle` | `string` | `'No results found'` | Empty-state title. |
+| `emptyDescription` | `string` | `'Adjust your search to try again'` | Empty-state description. |
+| `clearLabel` | `string` | `'Clear search'` | Accessible name for the clear button. |
+| `listLabel` | `string` | `'Search results'` | Accessible name for the result listbox. |
+| `minHeight` | `number \| string` | `248` | Reserved height, so the panel does not resize as results come and go. |
+| `filter` | `(items, query) => items` | - | Replaces the built-in match (case-insensitive `includes` over `label` and `keywords`). |
+| `clearable` | `boolean` | `true` | Whether to render the clear button. |
+| `disabled` | `boolean` | `false` | Disables the field. |
+
+### Types
+
+| Name | Description |
+|------|------|
+| `SearchPanelItem` | `{ id, label, keywords?, disabled? }`. `keywords` join the built-in match without being displayed. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `item` | Replaces a row's contents; scope is `{ item, active, query }`. |
+| `empty` | Replaces the empty state; scope is `{ query }`. |
+| `footer` | Appended below the list, inside the card. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `string` | The query changed. |
+| `queryChange` | `string` | The same value, for hosts not using `v-model`. |
+| `select` | `SearchPanelItem` | A result was clicked or chosen with Enter. |
+| `clear` | - | The field was emptied via the clear button or Escape. |
+
+### Exposed
+
+| Name | Description |
+|------|------|
+| `focus()` / `blur()` | Focus or blur the field. |
+| `clear()` | Empty the query and emit `clear`. |
+
+## Interaction Contract
+
+- **Keyboard navigation is an addition — upstream has none at all.** ↑ ↓ wrap at both ends and step over disabled rows, Home / End jump to the first and last enabled rows, Enter selects the highlighted row, and Escape clears when there is something to clear. Enter is ignored while an IME is composing (both the `isComposing` flag and the `compositionstart` / `compositionend` pair), so committing a candidate never doubles as a selection.
+- ARIA follows the combobox pattern: the field is `role="combobox"` with `aria-autocomplete="list"`, `aria-controls` and `aria-activedescendant`; the list is `role="listbox"`; each row is `role="option"` with `tabindex="-1"`. Focus stays in the field, so Tab leaves the whole widget instead of walking the rows.
+- The highlight is `is-active`, not `:hover` — hover alone would leave keyboard users with no visible cursor. Moving the mouse syncs the highlight to the row under the pointer.
+- **Selecting a result does not write its label back into the field.** Upstream does, to keep its demo self-contained; for a command list that turns "run the command" into "rename the query". The host decides what happens on `select`.
+
+## Best Practices
+
+- As a launcher, run the action in `select` and clear the query; as a filter, keep the query so the active condition stays visible.
+- For remote search pass `filter="items => items"` to disable the built-in match and debounce your own fetch on `queryChange`, or server results get filtered a second time.
+- Put synonyms in `keywords` rather than in `label`: they still match, and the title stays short.
+- Mark unavailable entries `disabled` instead of removing them from `items` — a greyed row tells the user the capability exists.
+- Set `minHeight` from your longest common result count; too small and it reintroduces the jumping it exists to prevent.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-panel/src/TxSearchPanel.vue`.
+- Types: `packages/tuffex/packages/components/src/search-panel/src/types.ts`.
+- Composes: `packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/search-panel/__tests__/search-panel.test.ts` verifies the idle shortlist and live filtering, `keywords` participating in the match, the `filter` override, the query emitting on both channels and clearing, the empty-state threshold, the full combobox/listbox ARIA surface, arrow wrapping plus Home/End, disabled rows being skipped and refused, Enter selecting without rewriting the field, Enter ignored during IME composition, Escape clearing only when non-empty, and the reserved height plus `focus()`.
+- Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Reuse decisions:** The empty state reuses `TxSearchEmpty`. The field does **not** reuse `TxSearchInput` — that one carries the `fake-background` class through `TuffInput`, which picks up a second inset ring under the colouring theme, and its 32px / 12px-radius / primary focus ring is a different visual language from this card's borderless 40px row.
+- **Divergences from upstream:** keyboard navigation and ARIA added; selecting no longer rewrites the field. The former is absent upstream, the latter is a demo device there.
+- **Accessibility:** Result rows are `<button>`s but held out of the tab order with `tabindex="-1"`. That is the combobox pattern's requirement, not an oversight.

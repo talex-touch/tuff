@@ -1,0 +1,127 @@
+---
+title: "CodeStream 流式代码块"
+description: "带文件名头部的代码块，按行显现，复制与语法高亮开箱可用。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, code, streaming, highlight]
+syncStatus: reviewed
+verified: true
+---
+# CodeStream 流式代码块
+
+## 基础用法
+
+### 逐行显现
+
+`revealedLines` 由宿主推进，组件负责过渡与光标。节奏（起播 400ms、每行 240ms、结尾停 3200ms）留在 demo 层。
+
+:::TuffDemoWrapper{demo="CodeStreamStreamingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeStream
+      :code="code"
+      lang="ts"
+      filename="churn.ts"
+      lang-label="TypeScript"
+      :revealed-lines="revealed"
+      @complete="onComplete"
+    />
+  </template>
+---
+:::
+
+### 完整清单
+
+不传 `revealedLines` 就是全量展示，此时不画光标。
+
+:::TuffDemoWrapper{demo="CodeStreamStaticDemo" code-lang="vue" title="完整清单" description="settled 态：文件名、语言标签、复制与高亮。"}
+---
+code: |
+  <template>
+    <TxCodeStream
+      :code="code"
+      lang="ts"
+      filename="inventory.ts"
+      lang-label="TypeScript"
+    />
+  </template>
+---
+:::
+
+## 高亮与主题
+
+高亮走仓库已有的 shiki 运行时（与 `TxCodeBlock` 同一个懒加载单例），是纯异步增强：纯文本渲染永远是对的，颜色到了再叠上去。不传 `lang` 就不高亮，也不会去加载 shiki。
+
+`theme` 默认 `'auto'`，跟着文档根的 `data-theme` 或 `.dark` 走。上游是单主题 demo，把默认写死成 light 会让暗色宿主里出现浅底深字。
+
+组件把 shiki 的输出按行拆开，再逐行配上行号与显现动画。**拆分前会核对行数**：如果高亮结果的行数与源码不一致，整体回退到纯文本，而不是让行号整体错位一行。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `code` | `string` | — | 源码。必填。 |
+| `lang` | `string` | `''` | shiki 语言 id。留空则不高亮。 |
+| `filename` | `string` | — | 头部文件名，等宽。 |
+| `langLabel` | `string` | — | 文件名旁的语言标签，例如 `TypeScript`。 |
+| `revealedLines` | `number` | — | 显现到第几行。省略或传 `-1` 表示全部。 |
+| `caret` | `boolean` | `true` | 是否在最后一行末尾画强调色光标。 |
+| `lineNumbers` | `boolean` | `true` | 是否显示行号。 |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 高亮主题，`'auto'` 跟随文档根。 |
+| `copyable` | `boolean` | `true` | 是否渲染复制按钮。 |
+| `copyLabel` | `string` | `'Copy'` | 复制按钮文案。 |
+| `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案。 |
+| `minHeight` | `number \| string` | — | 代码区高度下限。缺省时按完整清单的高度预留。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `copy` | `(code: string)` | 复制成功时透传自 `TxCopyButton`。 |
+| `complete` | — | `revealedLines` 抵达最后一行时派发一次。挂载即完整不派发。 |
+
+### Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `header` | — | 替换文件名与语言标签这一对。 |
+| `actions` | — | 在复制按钮之前插入自定义控件。 |
+
+## 交互契约
+
+- `revealedLines` 会被夹到 `[0, 总行数]`，越界不会报错。
+- 光标只在**正在显现**时出现（`0 < revealedLines < 总行数`），画在最后一行末尾。它是**静止**的：上游把闪烁光标留给流式散文，代码光标只是位置标记。
+- `complete` 只在跨越终点时派发一次。挂载时就是完整清单不算跨越，不会派发。
+- 复制按钮复用 `TxCopyButton`，因此带上了 `document.execCommand` 降级与礼貌实时区域；外观由本组件覆写成 BUI 的样子。
+- 行号 `line-height: 1.86` 与代码 `1.7` 的搭配是刻意的：10.5px×1.86 与 11.5px×1.7 都落在约 19.5px，行号才与代码同基线。改任何一边都会错位。
+- 高度下限按 `行数 × 1.7em + 20px` 预留，所以显现过程是长进已留好的空间里，而不是把页面往下推。上游写死的 137px 恰好是它那段样例六行的高度。
+- 代码区是 `<div>` 而不是 `<pre>`：Vue 编译器会保留 `<pre>` 内的模板缩进，标记自身的缩进会被当成代码渲染出来。逐行的 `white-space: pre` 表达同一件事。
+- 减弱动效下逐行入场动画停止，显现进度本身照常。
+
+## 最佳实践
+
+- 让宿主按数据到达节奏推进 `revealedLines`，不要在组件里放定时器。
+- 语言不确定时宁可不传 `lang`：纯文本渲染永远正确，错误的语言 id 只会白跑一次高亮。
+- 长代码建议配合外层滚动容器；代码区自身横向可滚，但纵向由内容决定。
+- 需要与 `TxStreamMarkdown` 的围栏统一观感时用 `TxCodeBlock`；需要文件名头部、行号与逐行显现时用本组件。
+- 非英文界面记得一起覆盖 `copyLabel` 与 `copiedLabel`，只改一个会中英混排。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`。
+- Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`。
+- Reused: `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue`、`packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`、`.../use-auto-theme.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts`（22 项）验证显现夹取与已显现行不重播、光标出现条件、`complete` 只派发一次、头部去留、shiki 输出按行拆分、行数不符时回退纯文本、主题透传与复制事件转发。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **与 `TxCodeBlock` 的分工:** `TxCodeBlock` 是 `TxStreamMarkdown` 渲染每个围栏的内部件，负责 markdown 场景；本组件是独立的「智能体在写代码」展示，多出文件名头部、行号、逐行显现与光标。
+- **已知偏差（视觉）:** 上游手写了一套五色 token 映射（`kw → --accent-ink`、`str → --green`、`dim → --ink-3`），这里换成 shiki，因此配色与截图基准不逐像素一致。这是 design.md §8.2 预先接受的取舍——手写模型要求每个宿主自己分词，不能作为公共 API。需要贴近时，可给 shiki 配自定义主题把那五个 scope 映到 `--tx-bui-*`。
+- **安全:** 只有 shiki 生成的标记会进 `v-html`，其中代码文本已被转义；未高亮分支走普通插值。

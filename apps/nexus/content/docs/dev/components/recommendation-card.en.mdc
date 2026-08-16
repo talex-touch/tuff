@@ -1,0 +1,140 @@
+---
+title: "RecommendationCard"
+description: "An agent suggestion with its confidence: rationale, alternatives drawer, and the action that confirms it — all without the card changing shape."
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, recommendation, confidence, decision]
+syncStatus: reviewed
+verified: true
+---
+# RecommendationCard
+
+## Basic Usage
+
+### A Suggestion and Its Alternatives
+
+The footer states confidence as a meter and as words. "Alternatives" opens the drawer, and picking one promotes it to the current recommendation.
+
+:::TuffDemoWrapper{demo="RecommendationCardConfidenceDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('high')
+  const options = [
+    {
+      key: 'high',
+      short: 'Reorder from cone_king · 7-day lead',
+      confidence: 'high',
+      label: 'High confidence',
+      cta: 'Accept',
+      ctaTone: 'accent',
+    },
+    {
+      key: 'review',
+      short: 'Switch to vanilla_madagascar',
+      confidence: 'medium',
+      label: 'Needs review',
+      cta: 'Configure',
+    },
+  ]
+  </script>
+
+  <template>
+    <TxRecommendationCard
+      v-model="active"
+      title="Want me to place this restock order?"
+      :options="options"
+      @accept="run"
+    >
+      <template #body="{ option }">
+        Reorder waffle cones from <code>cone_king</code> with lead time <code>7_days</code>.
+      </template>
+    </TxRecommendationCard>
+  </template>
+---
+:::
+
+## How Confidence Maps
+
+`confidence` is the semantic entry point; the component derives the meter's fill and colour from it:
+
+| `confidence` | Segments | Default colour |
+|------|------|------|
+| `high` | 3 | `--tx-bui-green` |
+| `medium` | 2 | `--tx-bui-orange` |
+| `low` | 1 | `--tx-bui-red` |
+| `none` (default) | 0 | `--tx-bui-ink-3` |
+
+`signal` and `tone` are the escape hatches, overriding the count and the colour respectively. `label` is always required — colour cannot be the only carrier of state.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | — | Card heading, usually the question awaiting confirmation. Required. |
+| `options` | `RecommendationOption[]` | — | The options: `{ key, text?, short, confidence?, signal?, tone?, label, cta?, ctaTone? }`. Required. |
+| `modelValue` | `string` | first option's `key` | `v-model`, key of the promoted recommendation. |
+| `open` | `boolean` | — | `v-model:open`, the alternatives drawer. Omit to let the card own it. |
+| `accepted` | `boolean` | — | `v-model:accepted`, whether it was confirmed. |
+| `alternativesLabel` | `string` | `'Alternatives'` | Text of the drawer toggle. |
+| `otherOptionsLabel` | `string` | `'Other options'` | Heading inside the drawer. |
+| `acceptedLabel` | `string` | `'Accepted'` | Primary action text once confirmed. |
+| `acceptLabel` | `string` | `'Accept'` | Fallback text for an option without its own `cta`. |
+
+### Events
+
+| Event | Arguments | Description |
+|------|------|-------------|
+| `update:modelValue` | `(key: string)` | The promoted option changed. |
+| `update:open` | `(open: boolean)` | The drawer opened or closed. |
+| `update:accepted` | `(accepted: boolean)` | The confirmed state changed. |
+| `accept` | `(option: RecommendationOption)` | The primary action was pressed, carrying the whole option. |
+| `select` | `(option: RecommendationOption)` | An alternative was picked in the drawer. |
+
+### Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `body` | `{ option }` | Replaces the rationale. Rich content — inline `code`, emphasis — goes here. |
+| `meter` | `{ option }` | Replaces a meter, used in the footer and in every drawer row. |
+| `footer-extra` | — | Inserted on the left of the footer, before the actions. |
+
+## Interaction Contract
+
+- **Picking promotes.** Choosing an alternative makes it the current recommendation, closes the drawer, and **clears the confirmed state** — a confirmation of the previous option must not carry over to a new one.
+- The drawer lists only the **other** options; the current recommendation never appears twice.
+- **The collapsed drawer is `inert`.** A `0fr` grid only squeezes the height to zero, leaving its buttons in the tab order; the component marks it `inert` to take them out of the accessibility tree and the focus order. This is a deliberate improvement over upstream.
+- `accepted` only swaps text and colour and has **no undo**. Real workflows usually need one, so it is a controlled prop and the host owns the retraction.
+- The rationale has a minimum height (48px by default) so the card does not jump as options of different lengths swap in. Line heights differ by script; tune it with `--tx-bui-recommendation-card-body-min-height`.
+- `<code>` inside the rationale is styled by the component: an accent tint by default, switched to the warning tone with the `is-warning` class. Filling the `body` slot with rich content needs no styling of its own.
+- `tone` takes a raw CSS colour string and **does not follow the theme**; prefer `confidence`.
+- The drawer eases more softly than the rest of this family (`cubic-bezier(0.16, 1, 0.3, 1)`). That difference is deliberate upstream and is preserved.
+
+## Best Practices
+
+- Write `short` so it reads on its own — inside the drawer it is the only information there is.
+- Pair `label` with the meter rather than relying on colour; colour drops out under high contrast and for colour-blind readers.
+- Use `ctaTone: 'danger'` for destructive actions so the primary button's weight matches the consequence.
+- Lift `accepted` into the host and set it true only after the request succeeds, or readers will believe the order was placed.
+- Keep alternatives to two or three; beyond that the choice belongs on a list page, not in a drawer.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/recommendation-card/src/TxRecommendationCard.vue`.
+- Types: `packages/tuffex/packages/components/src/recommendation-card/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/recommendation-card/__tests__/recommendation-card.test.ts` (14 cases) covers promoting the first option by default, the `confidence` to segments-and-colour mapping, `signal` / `tone` overrides, the drawer listing only alternatives, paired `aria-expanded` / `aria-controls`, `inert` while collapsed, promotion clearing the confirmed state, `ctaTone` mapping, controlled `modelValue` / `accepted` precedence, the `cta` fallback, an empty list rendering nothing, and rich content through the `body` slot.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **How it divides from `TxToolConfirmation`:** that is a binary authorisation (allow / deny plus a risk tier); this is a **multi-option suggestion with evidence** — an option list, a confidence level, and promotion semantics. Only the two footer buttons look alike.
+- **The meter is its own primitive:** the footer and every drawer row render `TxSignalMeter`, which can be used independently — see its own doc.
+- **Accessibility:** `inert` on the collapsed drawer corrects an upstream defect.
+- **Known deviation:** the primary button's `box-shadow` uses the same hardcoded `rgba(16,24,40,·)` values in both themes upstream. That is preserved to match the reference screenshots — it reads as a bevel on a solid fill rather than as a themed hairline.

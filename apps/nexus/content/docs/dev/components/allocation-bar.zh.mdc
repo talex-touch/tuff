@@ -1,0 +1,96 @@
+---
+title: "AllocationBar 占比条"
+description: "按份额分段的胶囊条 + 图例胶囊，选中哪段就检查哪段。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [data, allocation, segment, chart]
+syncStatus: reviewed
+verified: true
+---
+# AllocationBar 占比条
+
+## 基础用法
+
+### AllocationBar
+
+:::TuffDemoWrapper{demo="AllocationBarAllocationBarDemo" code-lang="vue" title="库存占比" description="分段条 + 图例 + 明细面板，选中项由宿主持有。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selected = ref('van')
+  const segments = [
+    { key: 'van', label: '香草', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: '当前库存价值的贡献快照。' },
+    { key: 'choc', label: '巧克力', short: 'CHOC', percent: 22.8, amount: '$16,278' },
+    { key: 'mint', label: '薄荷', short: 'MINT', percent: 4.7, amount: '$3,357' },
+  ]
+  </script>
+
+  <template>
+    <TxAllocationBar v-model="selected" :segments="segments" detail />
+  </template>
+---
+:::
+
+## 选中即检查
+
+分段条不是只读图表：点任意一段（或它的图例胶囊）就把检查对象换成那一段，条子本身不动。这是它与进度条的根本区别——它表达的是「整体由哪些部分构成」，而不是「完成了多少」。
+
+选中值完全受控。`modelValue` 不传时默认高亮第一段，但点击仍然只发事件、不自行改变——宿主要么绑 `v-model`，要么自己处理 `change`。
+
+`amount` 留在数据里但**条子不渲染它**：它属于卡片顶部的主数字，由宿主排版（见示例）。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `segments` | `AllocationSegment[]` | — | 分段数组，见下。 |
+| `modelValue` | `string` | — | 选中段的 `key`。省略时高亮第一段。 |
+| `legend` | `boolean` | `true` | 是否渲染下方图例胶囊。 |
+| `detail` | `boolean` | `false` | 是否渲染明细面板（当前段的名称 + 描述）。 |
+| `ariaLabel` | `string` | `'Allocation segments'` | 分段组的可访问名。 |
+| `percentFormatter` | `(percent: number) => string` | — | 覆盖默认的 `${percent}%`。 |
+
+`AllocationSegment` = `{ key, label, short?, percent, amount?, color?, description? }`。`short` 是图例里的短码（缺省用 `label`），`percent` 取 0–100。
+
+### Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(key: string)` | 选中另一段。 |
+| `change` | `(segment: AllocationSegment)` | 同上，带整个分段对象。 |
+
+## 交互契约
+
+- 分段与图例是**两组按钮控制同一个值**，都带 `aria-pressed`，分段另带 `aria-label="{label}: {percent}"`；容器是 `role="group"`。
+- 再次点击当前段不发事件——选中态没有「取消」语义。
+- 未指定 `color` 的分段按位置落到「强调色 → 渐次变浅的灰」阶梯，这是上游「主份额着色、其余留灰」的表达方式。
+- 分段宽度就是 `percent%`；总和略超 100% 时由 flex 等比收缩，不会裁切最后一段。
+- 选中段的高光是**类驱动**而非动画驱动：减弱动效下过渡被关掉，高光仍然立刻出现，不会留空白。
+- 缓动用的是 `cubic-bezier(0.16, 1, 0.3, 1)`（上游的 `--ease-link`），比这一族常用的 `--tx-ease-out-strong` 更「沉」，是刻意保留的差异。
+
+## 最佳实践
+
+- 分段数控制在 3–5 个，尾部合并成「其他」。宽度小于 ~2% 的段点不中，也读不出来。
+- 颜色只给主份额，其余交给默认灰阶——全部上色会让「谁是重点」这件事消失。
+- 颜色不是唯一载体：图例里始终带短码与百分比，明细面板带完整名称。
+- 需要主数字（如 `$51,785`）时由宿主渲染，跟随 `modelValue` 从 `segments` 里取——这样卡片高度不随选中变化。
+
+## Source
+
+- 组件源码：`packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`。
+- 类型：`packages/tuffex/packages/components/src/allocation-bar/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts`（13 项）覆盖宽度与可访问名、颜色阶梯回退、受控选中、重复点击静默、图例与分段同源、格式化器、明细面板开关，以及编译后 CSS 的减弱动效契约。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **与 `TxProgressBar` 的分工:** 进度条表达单一进度，这里表达构成。两者视觉相近但语义不同，不要互相替代。
+- **明细面板是加法:** 上游把面板写在卡片里而不是条子里；这里做成 `detail` 开关，默认关闭，保持「条 + 图例」这个最小可复用单元不变。
+- **减弱动效:** 唯一静止在 `opacity: 0` 的元素是选中高光，它由 `.is-active` 类点亮而不是靠动画填充——这是测试里单独锁住的一条。

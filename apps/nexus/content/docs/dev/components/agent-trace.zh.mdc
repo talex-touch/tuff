@@ -1,0 +1,133 @@
+---
+title: "AgentTrace 智能体轨迹"
+description: "可展开的智能体轨迹，覆盖步骤、推理、检索、工具四种形态。"
+category: Status
+status: beta
+since: 2.5.0
+tags: [ai, agent, trace, disclosure]
+syncStatus: reviewed
+verified: true
+---
+# AgentTrace 智能体轨迹
+
+## 基础用法
+
+### 步骤轨迹
+
+轨迹跑起来时自动展开，跑完后收起；行分两批出现。时间轴由 demo 持有，组件本身只吃 `rows` 与 `working`。
+
+:::TuffDemoWrapper{demo="AgentTraceStepsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAgentTrace
+      :rows="rows"
+      :working="working"
+      :default-open="open"
+      done-label="思考了 4 秒"
+    />
+  </template>
+---
+:::
+
+### 其他三种形态
+
+`reasoning` 是可换行的散文，`search` 带查询行与彩色来源点，`coding` 带等宽文件名与差分计数。
+
+:::TuffDemoWrapper{demo="AgentTraceVariantsDemo" code-lang="vue" title="推理 / 检索 / 工具" description="三种形态共用同一套头部与折叠语法，只换行的形态。"}
+---
+code: |
+  <template>
+    <TxAgentTrace variant="reasoning" :rows="reasoning" default-open />
+
+    <TxAgentTrace
+      variant="search"
+      :rows="sources"
+      query="最好的华夫蛋筒供应商"
+      more-label="还有 7 条"
+      default-open
+      @open="openInBrowser"
+    />
+
+    <TxAgentTrace variant="coding" :rows="tools" default-open />
+  </template>
+---
+:::
+
+## 展开状态的归属
+
+展开状态有三层，从高到低：`userOpen`（宿主持有）→ 组件内部的点击覆盖 → `defaultOpen` → `working`。
+
+只用组件本身时，轨迹会跟着 `working` 自动开合，用户点一次之后就由用户说了算。但流式宿主每个增量都在重渲染，分支对齐还可能重建实例——只存在实例里的覆盖会随之消失，表现为「点了没反应」。把 `toggle` 收上去再喂回 `userOpen`，读者的选择就能跨重建存活。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `rows` | `AgentTraceRow[]` | — | 轨迹行。必填。 |
+| `variant` | `'steps' \| 'reasoning' \| 'search' \| 'coding'` | `'steps'` | 行的形态与排版。 |
+| `query` | `string` | — | `search` 形态在结果上方回显的查询。 |
+| `working` | `boolean` | `false` | 是否仍在跑，决定微光与转圈。 |
+| `activeLabel` | `string` | 按形态 | 运行中的头部文案。 |
+| `doneLabel` | `string` | 按形态 | 结束后的头部文案。 |
+| `moreLabel` | `string` | — | 末尾的溢出说明，例如 `还有 7 条`。 |
+| `defaultOpen` | `boolean` | — | 交互前的展开状态。缺省时回落到 `working`。 |
+| `userOpen` | `boolean` | — | 宿主持有的覆盖值，跨重建存活。 |
+| `selectedId` | `string` | — | `coding` 形态当前选中的行 id。绑定即由宿主接管。 |
+
+`AgentTraceRow`：`{ id, primary, secondary?, mono?, added?, removed?, href?, status? }`，`status` 取 `'pending' \| 'active' \| 'done' \| 'error'`。
+
+各形态的默认文案：`steps` / `reasoning` 是 `Thinking` 与 `Thought`，`search` 是 `Searching the web` 与 `Searched the web`，`coding` 是 `Running tools` 与 `Ran tools`。带计数的文案（上游的「思考了 4 秒」「执行了 3 个工具」）只有宿主知道，请自行传 `doneLabel`。
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `toggle` | `(open: boolean)` | 点击头部时派发，携带切换后的状态。 |
+| `open` | `(row: AgentTraceRow)` | `search` 形态点击带链接的行时派发。组件不会自己跳转。 |
+| `select` | `(id: string \| null)` | `coding` 形态选中或取消选中时派发，取消为 `null`。 |
+
+### Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `icon` | `{ working }` | 替换头部的星芒图标。 |
+| `label` | `{ working }` | 替换头部文案。 |
+| `row` | `{ row, index }` | 整行内容替换，保留行容器与入场动画。 |
+
+## 交互契约
+
+- **链接不自行导航。** `search` 行仍渲染真实 `href`（可复制、可中键），但点击会 `preventDefault` 并派发 `open`，由宿主决定怎么打开。这在 Electron 渲染进程里是必须的。
+- 折叠区收起时带 `inert`：`0fr` 网格仍会把里面的行留在 Tab 序列里，必须一并移出。
+- 头部是 `button`，带 `aria-expanded` 与指向折叠区的 `aria-controls`。
+- `steps` 的图标优先看 `row.status`：`active` 转圈、`error` 画叉、其余打勾。**不传 `status` 时**回落到上游行为——`working` 期间只有最后一行转圈。
+- `coding` 行是 `button` + `aria-pressed`。不绑 `selectedId` 时选中态由组件自己持有；绑了就完全由宿主说了算。
+- 差分计数用的是 U+2212 减号（`−`）而不是连字符，宽度和字重才与加号成对。
+- 每行的入场延迟走 CSS 变量 `--tx-bui-agent-trace-index`，不是内联样式——减弱动效才能一条规则全部关掉。
+- 导轨是纯 CSS `::before`。上游用布局副作用测出行高再补间 500ms，这里省掉测量，折叠动画本身已经在裁剪它。
+
+## 最佳实践
+
+- 组件是受控原语：把时间轴留在宿主，`rows` 增长、`working` 翻转即可，别把播放脚本塞进组件。
+- `search` 场景务必接 `@open`，否则点击没有任何效果。
+- 长轨迹配 `moreLabel` 收口，不要把几十行全铺出来。
+- `reasoning` 用于成段散文，它会换行且不截断；单行标签用 `steps`。
+- 流式界面把 `toggle` 存到宿主再喂回 `userOpen`，避免重建时丢掉读者的展开选择。
+- 组件宽度自适应，上游的 380px 容器由宿主决定。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/agent-trace/src/TxAgentTrace.vue`。
+- Types: `packages/tuffex/packages/components/src/agent-trace/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/agent-trace/__tests__/agent-trace.test.ts`（23 项）验证三层展开优先级、收起态 `inert`、链接不导航、`coding` 受控与非受控选中、`steps` 图标回落规则、U+2212 与逐行 stagger 变量。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **与既有披露组件的分工:** `TxChainOfThought` 是带 markdown 正文的思考链，`TxReasoningDisclosure` 是单段推理，`TxSources` 是来源列表。本组件是紧凑的单行轨迹，带链接、差分与工具选中——数据形状不同，不要互相替代。
+- **可访问性:** 收起态加 `inert` 是有意超出上游的修正；上游的折叠区会把链接留在 Tab 序列里。
+- **已知偏差:** 导轨的 500ms 高度补间没有移植（见交互契约），静态终态与截图一致。

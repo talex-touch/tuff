@@ -1,0 +1,123 @@
+---
+title: "TaskRows"
+description: "Agent task status rows with a progress ring, status pills, and expandable execution detail."
+category: Status
+status: beta
+since: 2.5.0
+tags: [ai, agent, task, status]
+syncStatus: reviewed
+verified: true
+---
+# TaskRows
+
+## Basic Usage
+
+### Capsules
+
+Each row is its own card, and the corner radius tightens from 22px to 14px as it opens — the signature move of this variant. The status run's timeline belongs to the demo.
+
+:::TuffDemoWrapper{demo="TaskRowsCapsulesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTaskRows
+      :rows="rows"
+      :open-ids="openIds"
+      done-text="Completed"
+      error-text="Failed"
+      @update:open-ids="openIds = $event"
+    />
+  </template>
+---
+:::
+
+### List
+
+The same rows inside a single card, divided by hairlines, with the radius pinned at 0.
+
+:::TuffDemoWrapper{demo="TaskRowsListDemo" code-lang="vue" title="List variant" description="For panels already inside a card, so no second container is stacked on top."}
+---
+code: |
+  <template>
+    <TxTaskRows
+      variant="list"
+      :rows="rows"
+      :default-open-ids="['verify']"
+      done-text="Completed"
+      pending-text="Queued"
+    />
+  </template>
+---
+:::
+
+## Status Badges and Replay
+
+`done` and `error` draw a solid circular mark with a `pop-in` entrance; `running` and `pending` draw a 24px ring that can hold a step number. The running ring is a **constant 28% arc** that rotates as a whole — upstream's comment describes a sweep from 0 to 66%, but that sweep does not exist in the code, so do not implement it.
+
+Both the badge and the pill carry `:key="row.status"`. Vue reuses the same element otherwise, and a `both`-filled animation never replays on a reused element; changing the key forces a rebuild so the `pop-in` and `fade-in` actually run on a status change.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `rows` | `TaskRowItem[]` | — | The task rows. Required. |
+| `variant` | `'capsules' \| 'list'` | `'capsules'` | Container form. |
+| `defaultOpenIds` | `string[]` | — | Ids open before any interaction. Ignored while `openIds` is bound. |
+| `openIds` | `string[]` | — | Bind it and the host owns the open set; leave it unbound and the component keeps it. |
+| `doneText` | `string` | `'Completed'` | Pill text for `done` rows. |
+| `errorText` | `string` | `'Failed'` | Pill text for `error` rows. |
+| `runningText` | `string` | — | **No default:** a running row shows no pill, matching upstream. |
+| `pendingText` | `string` | — | **No default:** a queued row shows no pill. |
+
+`TaskRowItem` is `{ id, label, status, amount?, index?, statusText?, details?, retryable? }`. `status` is `'pending' | 'running' | 'done' | 'error'`, aligned with `AiToolCallPart`; `details` is `{ label, meta? }[]`.
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `toggle` | `(id: string, open: boolean)` | Emitted when a row is clicked, carrying its id and the state after the toggle. |
+| `update:openIds` | `(ids: string[])` | Emitted whenever the open set changes; usable as `v-model:open-ids`. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|------|------|
+| `badge` | `{ row }` | Replaces the badge area (mark or ring). |
+| `detail` | `{ row, detail, index }` | Replaces the rendering of one detail line. |
+| `trailing` | `{ row }` | Renders host controls **outside** the toggle button. |
+
+## Interaction Contract
+
+- The open set is controlled/uncontrolled dual-mode: unbound, the component keeps it; bound, the host owns it outright. `update:openIds` fires in both cases.
+- Every row's collapse has its own id, and the header button points at it with `aria-controls`. While closed it carries `inert`, taking the detail out of the tab order too.
+- `statusText` takes precedence over the four per-status text props.
+- The turning arrow on a failed row **indicates** that a retry is under way; it is not a control. It sits inside the toggle button, where a real button would be invalid nested interactive content. Turn it off with `retryable: false`. For an actual retry control use the `trailing` slot, which renders outside the toggle.
+- Detail entrance delay runs through `--tx-bui-task-rows-detail-index` and row entrance through `--tx-bui-task-rows-index`, neither as inline styles.
+- The collapse does not unmount its content: a closed row's details stay in the DOM at zero height.
+- Under reduced motion the radius morph, rotation, and entrances all stop, while status itself keeps advancing.
+
+## Best Practices
+
+- Use `capsules` for a task group floating on the page and `list` for panels already inside a card — the latter avoids stacking a second container shadow.
+- Leaving `running` and `pending` without pills is closer to upstream; pass `runningText` / `pendingText` only when you actually need them.
+- Use the ring's `index` to express "step N". Once a row finishes, the badge becomes a mark and the number goes away on its own.
+- Put a right-aligned quantity in `amount` ("12 suppliers"); it renders in tabular figures so it does not jitter as values stream in.
+- Use a detail's `meta` for ratios and counts in tabular figures, and say what happened in `label`.
+- The component sizes to its container; upstream's 440px frame is the host's decision.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/task-rows/src/TxTaskRows.vue`.
+- Types: `packages/tuffex/packages/components/src/task-rows/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/task-rows/__tests__/task-rows.test.ts` (21 cases) covers controlled and uncontrolled open sets, one-to-one `aria-controls`, `inert` while collapsed, the badge element genuinely being rebuilt on a status change, the constant 28% arc, pill defaulting, and `trailing` landing outside the button.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **How it divides from `TxToolCallCard`:** that one is a card for a single tool call, with input, logs, result, and retry. This is a multi-row task status list with progress rings, a radius morph, and detail lines. The data models differ; do not substitute one for the other.
+- **Status vocabulary:** uses `'error'` rather than upstream's `'failed'`, aligning with `AiToolCallPart.status`. The default pill text is still `Failed`.
+- **Accessibility:** the `inert` collapse and keeping the retry indicator out of nested-button territory are both deliberate improvements over upstream.

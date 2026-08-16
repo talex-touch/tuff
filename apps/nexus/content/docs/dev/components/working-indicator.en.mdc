@@ -1,0 +1,104 @@
+---
+title: "WorkingIndicator"
+description: "Inline indicator for long-running work: a pixel grid, a shimmering label, and a live elapsed clock."
+category: Status
+status: beta
+since: 2.5.0
+tags: [ai, loading, status, timer]
+syncStatus: reviewed
+verified: true
+---
+# WorkingIndicator
+
+## Basic Usage
+
+### WorkingIndicator
+
+:::TuffDemoWrapper{demo="WorkingIndicatorWorkingIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const startedAt = ref(Date.now())
+  </script>
+
+  <template>
+    <TxWorkingIndicator label="Churning" :started-at="startedAt" />
+  </template>
+---
+:::
+
+### Pixel Patterns
+
+`drive` and `dots` share one chevron wavefront on a 650ms cycle; `orbit` is a comet lapping the grid perimeter, and its centre cell never lights.
+
+:::TuffDemoWrapper{demo="WorkingIndicatorVariantsDemo" code-lang="vue" title="Pixel patterns" description="How drive, dots, and orbit differ in wavefront and cell shape."}
+---
+code: |
+  <template>
+    <TxWorkingIndicator variant="drive" label="Churning" />
+    <TxWorkingIndicator variant="dots" label="Sampling" />
+    <TxWorkingIndicator variant="orbit" label="Counting" />
+  </template>
+---
+:::
+
+## Timing and Remounts
+
+Without `startedAt` the clock counts from mount. A streaming host may rebuild this row on every delta, which resets it — passing a timestamp lets the reading survive a remount.
+
+The reading is always `Date.now() - startedAt` rather than a self-incrementing counter: a backgrounded tab throttles timers, and a counter that adds a fixed step per fire falls further behind wall clock the longer it stays hidden.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `label` | `string` | `'Working'` | The shimmering status text. |
+| `variant` | `'drive' \| 'dots' \| 'orbit'` | `'drive'` | Pixel-grid pattern. |
+| `startedAt` | `number` | — | Clock origin in epoch milliseconds. Omit to count from mount. |
+| `showElapsed` | `boolean` | `true` | Turning it off drops the readout and stops the interval. |
+| `elapsedFormatter` | `(ms: number) => string` | — | Overrides the default format (`12.3s` / `2m 3.0s`). |
+| `ariaLabel` | `string` | — | Accessible name for the status region. Omit to let the visible label be the announcement. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|------|------|
+| `label` | — | Replaces the shimmering label, for rich content. |
+
+## Interaction Contract
+
+- The component has no emits: it presents state and raises nothing.
+- The root is `role="status"`. **The readout carries `aria-hidden="true"`** — it changes ten times a second, and inside a live region every tick would be announced. The label alone is what gets spoken.
+- When `ariaLabel` is omitted no `aria-label` is written. Duplicating the visible text there gets it read twice.
+- The nine cells' animation delays live in SCSS `:nth-child()` rules, not inline styles. Inline styles outrank the reduced-motion rule and would quietly defeat it.
+- In `orbit`, the centre cell is `opacity: .07` and never animates; every other cell rests at `.15`.
+- Under reduced motion the grid freezes in its dim state (`animation: none`) and **the clock keeps ticking** — it reports real progress, so it is not decoration.
+- The directory also exports `useElapsed` and `formatElapsed` for hosts that want to lay the reading out themselves.
+
+## Best Practices
+
+- Use it for "something is running, and here is how long it has been running". Reach for `TxTypingIndicator` when someone is composing, and `TxSpinner` for a wait with no semantics.
+- Name the work in the label ("Indexing the repository") rather than writing "Working" — the readout already answers *how long*, so the label should answer *what*.
+- A readout is only worth showing past a few seconds; turn `showElapsed` off for instant operations and save both the interval and the visual noise.
+- Always pass `startedAt` in streaming surfaces, or the clock snaps back to zero whenever the component is rebuilt.
+- The component sizes to `fit-content`; the container is the host's decision.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/working-indicator/src/TxWorkingIndicator.vue`.
+- Composable: `packages/tuffex/packages/components/src/working-indicator/src/use-elapsed.ts` exports `useElapsed` and `formatElapsed`.
+- Types: `packages/tuffex/packages/components/src/working-indicator/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/working-indicator/__tests__/working-indicator.test.ts` (17 cases) covers formatting boundaries, `startedAt` re-basing, `showElapsed` stopping the interval, unmount cleanup, variant classes, and aria ownership.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Unrelated to `TxLoadingState`:** the similarly named `TxLoadingState` in this package is a page-level empty-state wrapper with entirely different semantics. Do not swap one for the other.
+- **Accessibility:** hiding the readout from assistive tech is a deliberate trade — ten announcements a second is not usable. When elapsed time genuinely matters to a screen-reader user, have the host announce the total once the task finishes.
+- **Reduced motion:** what stops is the tweening, not the state machine. The clock continuing to run matches upstream behaviour.

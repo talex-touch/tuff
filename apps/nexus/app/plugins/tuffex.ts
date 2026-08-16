@@ -18,8 +18,12 @@ function asyncTuffexComponent(loader: TuffexModuleLoader, exportName: string) {
   return component
 }
 
+const fromAgentTrace = () => import('@tuffex-components/agent-trace')
 const fromAgents = () => import('@tuffex-components/agents')
+const fromAiElements = () => import('@tuffex-components/ai-elements')
 const fromAlert = () => import('@tuffex-components/alert')
+const fromAllocationBar = () => import('@tuffex-components/allocation-bar')
+const fromApprovalCard = () => import('@tuffex-components/approval-card')
 const fromAutoSizer = () => import('@tuffex-components/auto-sizer')
 const fromAvatar = () => import('@tuffex-components/avatar')
 const fromBadge = () => import('@tuffex-components/badge')
@@ -31,18 +35,24 @@ const fromButton = () => import('@tuffex-components/button')
 const fromCard = () => import('@tuffex-components/card')
 const fromCardItem = () => import('@tuffex-components/card-item')
 const fromCascader = () => import('@tuffex-components/cascader')
+const fromCellLink = () => import('@tuffex-components/cell-link')
+const fromChainOfThought = () => import('@tuffex-components/chain-of-thought')
 const fromChat = () => import('@tuffex-components/chat')
 const fromCheckbox = () => import('@tuffex-components/checkbox')
 const fromCodeEditor = () => import('@tuffex-components/code-editor')
+const fromCodeStream = () => import('@tuffex-components/code-stream')
 const fromCollapse = () => import('@tuffex-components/collapse')
 const fromCommandPalette = () => import('@tuffex-components/command-palette')
 const fromContainer = () => import('@tuffex-components/container')
+const fromContextCards = () => import('@tuffex-components/context-cards')
 const fromContextMenu = () => import('@tuffex-components/context-menu')
 const fromCornerOverlay = () => import('@tuffex-components/corner-overlay')
 const fromDataTable = () => import('@tuffex-components/data-table')
 const fromDatePicker = () => import('@tuffex-components/date-picker')
 const fromDialog = () => import('@tuffex-components/dialog')
+const fromDiffTable = () => import('@tuffex-components/diff-table')
 const fromDivider = () => import('@tuffex-components/divider')
+const fromDotIndicator = () => import('@tuffex-components/dot-indicator')
 const fromDrawer = () => import('@tuffex-components/drawer')
 const fromDropdownMenu = () => import('@tuffex-components/dropdown-menu')
 const fromEdgeFadeMask = () => import('@tuffex-components/edge-fade-mask')
@@ -50,6 +60,8 @@ const fromEmpty = () => import('@tuffex-components/empty')
 const fromEmptyState = () => import('@tuffex-components/empty-state')
 const fromErrorState = () => import('@tuffex-components/error-state')
 const fromFileUploader = () => import('@tuffex-components/file-uploader')
+const fromFilterChips = () => import('@tuffex-components/filter-chips')
+const fromFineTuneCard = () => import('@tuffex-components/fine-tune-card')
 const fromFlatButton = () => import('@tuffex-components/flat-button')
 const fromFlatDropdown = () => import('@tuffex-components/flat-dropdown')
 const fromFlatRadio = () => import('@tuffex-components/flat-radio')
@@ -69,9 +81,12 @@ const fromGroupBlock = () => import('@tuffex-components/group-block')
 const fromGuideState = () => import('@tuffex-components/guide-state')
 const fromIcon = () => import('@tuffex-components/icon')
 const fromIconButton = () => import('@tuffex-components/icon-button')
+const fromIconChip = () => import('@tuffex-components/icon-chip')
 const fromImageGallery = () => import('@tuffex-components/image-gallery')
 const fromImageUploader = () => import('@tuffex-components/image-uploader')
+const fromInlineCitation = () => import('@tuffex-components/inline-citation')
 const fromInput = () => import('@tuffex-components/input')
+const fromInsightCards = () => import('@tuffex-components/insight-cards')
 const fromKeyframeStrokeText = () => import('@tuffex-components/keyframe-stroke-text')
 const fromLayoutSkeleton = () => import('@tuffex-components/layout-skeleton')
 const fromLoadingOverlay = () => import('@tuffex-components/loading-overlay')
@@ -90,18 +105,27 @@ const fromPicker = () => import('@tuffex-components/picker')
 const fromPopover = () => import('@tuffex-components/popover')
 const fromProgress = () => import('@tuffex-components/progress')
 const fromProgressBar = () => import('@tuffex-components/progress-bar')
+const fromPromptBar = () => import('@tuffex-components/prompt-bar')
 const fromRadio = () => import('@tuffex-components/radio')
 const fromRating = () => import('@tuffex-components/rating')
+const fromRecommendationCard = () => import('@tuffex-components/recommendation-card')
 const fromResizeBox = () => import('@tuffex-components/resize-box')
 const fromScroll = () => import('@tuffex-components/scroll')
+const fromScrubField = () => import('@tuffex-components/scrub-field')
 const fromSearchEmpty = () => import('@tuffex-components/search-empty')
 const fromSearchInput = () => import('@tuffex-components/search-input')
+const fromSearchPanel = () => import('@tuffex-components/search-panel')
 const fromSearchSelect = () => import('@tuffex-components/search-select')
 const fromSegmentedSlider = () => import('@tuffex-components/segmented-slider')
 const fromSelect = () => import('@tuffex-components/select')
+const fromSelectionActions = () => import('@tuffex-components/selection-actions')
+const fromSidebarNav = () => import('@tuffex-components/sidebar-nav')
+const fromSignalMeter = () => import('@tuffex-components/signal-meter')
 const fromSkeleton = () => import('@tuffex-components/skeleton')
 const fromSlider = () => import('@tuffex-components/slider')
 const fromSortableList = () => import('@tuffex-components/sortable-list')
+const fromSources = () => import('@tuffex-components/sources')
+const fromSparkChart = () => import('@tuffex-components/spark-chart')
 const fromSpinner = () => import('@tuffex-components/spinner')
 const fromSplitter = () => import('@tuffex-components/splitter')
 const fromStack = () => import('@tuffex-components/stack')
@@ -109,14 +133,17 @@ const fromStagger = () => import('@tuffex-components/stagger')
 const fromStatCard = () => import('@tuffex-components/stat-card')
 const fromStatusBadge = () => import('@tuffex-components/status-badge')
 const fromSteps = () => import('@tuffex-components/steps')
+const fromSuggestionChips = () => import('@tuffex-components/suggestion-chips')
 const fromSwitch = () => import('@tuffex-components/switch')
 const fromTabBar = () => import('@tuffex-components/tab-bar')
 const fromTabs = () => import('@tuffex-components/tabs')
 const fromTag = () => import('@tuffex-components/tag')
 const fromTagInput = () => import('@tuffex-components/tag-input')
+const fromTaskRows = () => import('@tuffex-components/task-rows')
 const fromTextTransformer = () => import('@tuffex-components/text-transformer')
 const fromTimeline = () => import('@tuffex-components/timeline')
 const fromToast = () => import('@tuffex-components/toast')
+const fromToolChips = () => import('@tuffex-components/tool-chips')
 const fromTooltip = () => import('@tuffex-components/tooltip')
 const fromTransfer = () => import('@tuffex-components/transfer')
 const fromTransition = () => import('@tuffex-components/transition')
@@ -125,6 +152,7 @@ const fromTreeSelect = () => import('@tuffex-components/tree-select')
 const fromTuffLogoStroke = () => import('@tuffex-components/tuff-logo-stroke')
 const fromVersionCapsule = () => import('@tuffex-components/version-capsule')
 const fromVirtualList = () => import('@tuffex-components/virtual-list')
+const fromWorkingIndicator = () => import('@tuffex-components/working-indicator')
 
 const GLOBAL_TUFFEX_COMPONENTS = {
   TuffFlatButton: asyncTuffexComponent(fromFlatButton, 'TuffFlatButton'),
@@ -134,8 +162,12 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TuffSelect: asyncTuffexComponent(fromSelect, 'TuffSelect'),
   TuffSelectItem: asyncTuffexComponent(fromSelect, 'TuffSelectItem'),
   TuffSwitch: asyncTuffexComponent(fromSwitch, 'TuffSwitch'),
+  TxAgentTrace: asyncTuffexComponent(fromAgentTrace, 'TxAgentTrace'),
   TxAgentsList: asyncTuffexComponent(fromAgents, 'TxAgentsList'),
+  TxAiMessage: asyncTuffexComponent(fromAiElements, 'TxAiMessage'),
   TxAlert: asyncTuffexComponent(fromAlert, 'TxAlert'),
+  TxAllocationBar: asyncTuffexComponent(fromAllocationBar, 'TxAllocationBar'),
+  TxApprovalCard: asyncTuffexComponent(fromApprovalCard, 'TxApprovalCard'),
   TxAutoSizer: asyncTuffexComponent(fromAutoSizer, 'TxAutoSizer'),
   TxAvatar: asyncTuffexComponent(fromAvatar, 'TxAvatar'),
   TxAvatarGroup: asyncTuffexComponent(fromAvatar, 'TxAvatarGroup'),
@@ -153,16 +185,22 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxCard: asyncTuffexComponent(fromCard, 'TxCard'),
   TxCardItem: asyncTuffexComponent(fromCardItem, 'TxCardItem'),
   TxCascader: asyncTuffexComponent(fromCascader, 'TxCascader'),
+  TxCellLink: asyncTuffexComponent(fromCellLink, 'TxCellLink'),
+  TxChainOfThought: asyncTuffexComponent(fromChainOfThought, 'TxChainOfThought'),
+  TxChartScrubber: asyncTuffexComponent(fromSparkChart, 'TxChartScrubber'),
   TxChatComposer: asyncTuffexComponent(fromChat, 'TxChatComposer'),
   TxChatList: asyncTuffexComponent(fromChat, 'TxChatList'),
   TxCheckbox: asyncTuffexComponent(fromCheckbox, 'TxCheckbox'),
   TxCodeEditor: asyncTuffexComponent(fromCodeEditor, 'TxCodeEditor'),
   TxCodeEditorToolbar: asyncTuffexComponent(fromCodeEditor, 'TxCodeEditorToolbar'),
+  TxCodeStream: asyncTuffexComponent(fromCodeStream, 'TxCodeStream'),
   TxCol: asyncTuffexComponent(fromContainer, 'TxCol'),
   TxCollapse: asyncTuffexComponent(fromCollapse, 'TxCollapse'),
   TxCollapseItem: asyncTuffexComponent(fromCollapse, 'TxCollapseItem'),
   TxCommandPalette: asyncTuffexComponent(fromCommandPalette, 'TxCommandPalette'),
   TxContainer: asyncTuffexComponent(fromContainer, 'TxContainer'),
+  TxContextCards: asyncTuffexComponent(fromContextCards, 'TxContextCards'),
+  TxContextChunk: asyncTuffexComponent(fromContextCards, 'TxContextChunk'),
   TxContextMenu: asyncTuffexComponent(fromContextMenu, 'TxContextMenu'),
   TxContextMenuDivider: asyncTuffexComponent(fromContextMenu, 'TxContextMenuDivider'),
   TxContextMenuItem: asyncTuffexComponent(fromContextMenu, 'TxContextMenuItem'),
@@ -170,7 +208,10 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxCornerOverlay: asyncTuffexComponent(fromCornerOverlay, 'TxCornerOverlay'),
   TxDataTable: asyncTuffexComponent(fromDataTable, 'TxDataTable'),
   TxDatePicker: asyncTuffexComponent(fromDatePicker, 'TxDatePicker'),
+  TxDiffChips: asyncTuffexComponent(fromToolChips, 'TxDiffChips'),
+  TxDiffTable: asyncTuffexComponent(fromDiffTable, 'TxDiffTable'),
   TxDivider: asyncTuffexComponent(fromDivider, 'TxDivider'),
+  TxDotIndicator: asyncTuffexComponent(fromDotIndicator, 'TxDotIndicator'),
   TxDrawer: asyncTuffexComponent(fromDrawer, 'TxDrawer'),
   TxDropdownItem: asyncTuffexComponent(fromDropdownMenu, 'TxDropdownItem'),
   TxDropdownMenu: asyncTuffexComponent(fromDropdownMenu, 'TxDropdownMenu'),
@@ -179,6 +220,8 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxEmptyState: asyncTuffexComponent(fromEmptyState, 'TxEmptyState'),
   TxErrorState: asyncTuffexComponent(fromErrorState, 'TxErrorState'),
   TxFileUploader: asyncTuffexComponent(fromFileUploader, 'TxFileUploader'),
+  TxFilterChips: asyncTuffexComponent(fromFilterChips, 'TxFilterChips'),
+  TxFineTuneCard: asyncTuffexComponent(fromFineTuneCard, 'TxFineTuneCard'),
   TxFlatDropdown: asyncTuffexComponent(fromFlatDropdown, 'TxFlatDropdown'),
   TxFlatRadio: asyncTuffexComponent(fromFlatRadio, 'TxFlatRadio'),
   TxFlatRadioItem: asyncTuffexComponent(fromFlatRadio, 'TxFlatRadioItem'),
@@ -202,8 +245,12 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxGuideState: asyncTuffexComponent(fromGuideState, 'TxGuideState'),
   TxIcon: asyncTuffexComponent(fromIcon, 'TxIcon'),
   TxIconButton: asyncTuffexComponent(fromIconButton, 'TxIconButton'),
+  TxIconChip: asyncTuffexComponent(fromIconChip, 'TxIconChip'),
   TxImageGallery: asyncTuffexComponent(fromImageGallery, 'TxImageGallery'),
   TxImageUploader: asyncTuffexComponent(fromImageUploader, 'TxImageUploader'),
+  TxInlineCitation: asyncTuffexComponent(fromInlineCitation, 'TxInlineCitation'),
+  TxInsightCards: asyncTuffexComponent(fromInsightCards, 'TxInsightCards'),
+  TxInsightMetric: asyncTuffexComponent(fromInsightCards, 'TxInsightMetric'),
   TxKeyframeStrokeText: asyncTuffexComponent(fromKeyframeStrokeText, 'TxKeyframeStrokeText'),
   TxLayoutSkeleton: asyncTuffexComponent(fromLayoutSkeleton, 'TxLayoutSkeleton'),
   TxLoadingOverlay: asyncTuffexComponent(fromLoadingOverlay, 'TxLoadingOverlay'),
@@ -222,19 +269,28 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxPopover: asyncTuffexComponent(fromPopover, 'TxPopover'),
   TxPopperDialog: asyncTuffexComponent(fromDialog, 'TxPopperDialog'),
   TxProgressBar: asyncTuffexComponent(fromProgressBar, 'TxProgressBar'),
+  TxPromptBar: asyncTuffexComponent(fromPromptBar, 'TxPromptBar'),
   TxRadio: asyncTuffexComponent(fromRadio, 'TxRadio'),
   TxRadioGroup: asyncTuffexComponent(fromRadio, 'TxRadioGroup'),
   TxRating: asyncTuffexComponent(fromRating, 'TxRating'),
+  TxRecommendationCard: asyncTuffexComponent(fromRecommendationCard, 'TxRecommendationCard'),
   TxResizeBox: asyncTuffexComponent(fromResizeBox, 'TxResizeBox'),
   TxRow: asyncTuffexComponent(fromContainer, 'TxRow'),
   TxScroll: asyncTuffexComponent(fromScroll, 'TxScroll'),
+  TxScrubField: asyncTuffexComponent(fromScrubField, 'TxScrubField'),
   TxSearchEmpty: asyncTuffexComponent(fromSearchEmpty, 'TxSearchEmpty'),
   TxSearchInput: asyncTuffexComponent(fromSearchInput, 'TxSearchInput'),
+  TxSearchPanel: asyncTuffexComponent(fromSearchPanel, 'TxSearchPanel'),
   TxSearchSelect: asyncTuffexComponent(fromSearchSelect, 'TxSearchSelect'),
   TxSegmentedSlider: asyncTuffexComponent(fromSegmentedSlider, 'TxSegmentedSlider'),
+  TxSelectionActions: asyncTuffexComponent(fromSelectionActions, 'TxSelectionActions'),
+  TxSidebarNav: asyncTuffexComponent(fromSidebarNav, 'TxSidebarNav'),
+  TxSignalMeter: asyncTuffexComponent(fromSignalMeter, 'TxSignalMeter'),
   TxSkeleton: asyncTuffexComponent(fromSkeleton, 'TxSkeleton'),
   TxSlider: asyncTuffexComponent(fromSlider, 'TxSlider'),
   TxSortableList: asyncTuffexComponent(fromSortableList, 'TxSortableList'),
+  TxSources: asyncTuffexComponent(fromSources, 'TxSources'),
+  TxSparkChart: asyncTuffexComponent(fromSparkChart, 'TxSparkChart'),
   TxSpinner: asyncTuffexComponent(fromSpinner, 'TxSpinner'),
   TxSplitButton: asyncTuffexComponent(fromButton, 'TxSplitButton'),
   TxSplitter: asyncTuffexComponent(fromSplitter, 'TxSplitter'),
@@ -245,6 +301,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxStatusIcon: asyncTuffexComponent(fromIcon, 'TxStatusIcon'),
   TxStep: asyncTuffexComponent(fromSteps, 'TxStep'),
   TxSteps: asyncTuffexComponent(fromSteps, 'TxSteps'),
+  TxSuggestionChips: asyncTuffexComponent(fromSuggestionChips, 'TxSuggestionChips'),
   TxSwitch: asyncTuffexComponent(fromSwitch, 'TuffSwitch'),
   TxTabBar: asyncTuffexComponent(fromTabBar, 'TxTabBar'),
   TxTabHeader: asyncTuffexComponent(fromTabs, 'TxTabHeader'),
@@ -252,10 +309,12 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxTabs: asyncTuffexComponent(fromTabs, 'TxTabs'),
   TxTag: asyncTuffexComponent(fromTag, 'TxTag'),
   TxTagInput: asyncTuffexComponent(fromTagInput, 'TxTagInput'),
+  TxTaskRows: asyncTuffexComponent(fromTaskRows, 'TxTaskRows'),
   TxTextTransformer: asyncTuffexComponent(fromTextTransformer, 'TxTextTransformer'),
   TxTimeline: asyncTuffexComponent(fromTimeline, 'TxTimeline'),
   TxTimelineItem: asyncTuffexComponent(fromTimeline, 'TxTimelineItem'),
   TxToastHost: asyncTuffexComponent(fromToast, 'TxToastHost'),
+  TxToolChips: asyncTuffexComponent(fromToolChips, 'TxToolChips'),
   TxTooltip: asyncTuffexComponent(fromTooltip, 'TxTooltip'),
   TxTouchTip: asyncTuffexComponent(fromDialog, 'TxTouchTip'),
   TxTransfer: asyncTuffexComponent(fromTransfer, 'TxTransfer'),
@@ -271,6 +330,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxVersionDownloadPanel: asyncTuffexComponent(fromVersionCapsule, 'TxVersionDownloadPanel'),
   TxVersionHistoryPanel: asyncTuffexComponent(fromVersionCapsule, 'TxVersionHistoryPanel'),
   TxVirtualList: asyncTuffexComponent(fromVirtualList, 'TxVirtualList'),
+  TxWorkingIndicator: asyncTuffexComponent(fromWorkingIndicator, 'TxWorkingIndicator'),
 } as const
 
 export default defineNuxtPlugin((nuxtApp) => {

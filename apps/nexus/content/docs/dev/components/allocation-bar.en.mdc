@@ -1,0 +1,96 @@
+---
+title: "AllocationBar"
+description: "A pill split by share, with legend chips — selecting a segment changes what you are inspecting."
+category: Data
+status: beta
+since: 2.5.0
+tags: [data, allocation, segment, chart]
+syncStatus: reviewed
+verified: true
+---
+# AllocationBar
+
+## Basic Usage
+
+### AllocationBar
+
+:::TuffDemoWrapper{demo="AllocationBarAllocationBarDemo" code-lang="vue" title="Inventory allocation" description="Segmented bar, legend and detail panel, with the selection held by the host."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selected = ref('van')
+  const segments = [
+    { key: 'van', label: 'Vanilla', short: 'VAN', percent: 72.5, amount: '$51,785', color: 'var(--tx-bui-orange)', description: 'Contribution snapshot across current inventory value.' },
+    { key: 'choc', label: 'Chocolate', short: 'CHOC', percent: 22.8, amount: '$16,278' },
+    { key: 'mint', label: 'Mint', short: 'MINT', percent: 4.7, amount: '$3,357' },
+  ]
+  </script>
+
+  <template>
+    <TxAllocationBar v-model="selected" :segments="segments" detail />
+  </template>
+---
+:::
+
+## Selecting Is Inspecting
+
+The bar is not a read-only chart: clicking a segment — or its legend chip — changes which one you are inspecting, without the bar itself moving. That is what separates it from a progress bar: it says what the whole is *made of*, not how far along it is.
+
+The selection is fully controlled. With no `modelValue` the first segment reads as active, but a click still only emits — the host either binds `v-model` or handles `change` itself.
+
+`amount` travels with the data but **the bar never paints it**: it belongs to the card's headline figure, laid out by the host (see the example).
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `segments` | `AllocationSegment[]` | — | The segments, described below. |
+| `modelValue` | `string` | — | Selected segment `key`. Omit and the first one reads as active. |
+| `legend` | `boolean` | `true` | Renders the legend chips underneath. |
+| `detail` | `boolean` | `false` | Renders the detail panel (active segment's label and description). |
+| `ariaLabel` | `string` | `'Allocation segments'` | Accessible name for the segment group. |
+| `percentFormatter` | `(percent: number) => string` | — | Overrides the default `${percent}%`. |
+
+`AllocationSegment` is `{ key, label, short?, percent, amount?, color?, description? }`. `short` is the legend code (falling back to `label`), and `percent` runs 0–100.
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:modelValue` | `(key: string)` | A different segment was selected. |
+| `change` | `(segment: AllocationSegment)` | The same move, carrying the whole segment. |
+
+## Interaction Contract
+
+- The segments and the legend are **two sets of buttons over one value**; both carry `aria-pressed`, the segments add `aria-label="{label}: {percent}"`, and the container is a `role="group"`.
+- Clicking the active segment again emits nothing — there is no "deselect" here.
+- A segment without `color` falls back through an accent-then-receding-greys ladder, which is how upstream expresses "colour the headline share, leave the rest grey".
+- Segment width is exactly `percent%`; if the shares overrun 100% slightly, flex shrinks them proportionally rather than clipping the last one.
+- The selected sheen is **class-driven, not animation-driven**: with motion reduced the transition is dropped and the sheen still appears immediately, with no blank gap.
+- The easing is `cubic-bezier(0.16, 1, 0.3, 1)` (upstream's `--ease-link`), heavier than this family's usual `--tx-ease-out-strong`. That difference is deliberate.
+
+## Best Practices
+
+- Keep it to three to five segments and fold the tail into an "other". Anything under ~2% is neither clickable nor readable.
+- Colour the headline share and let the rest take the default greys — colouring everything erases the point of the bar.
+- Colour is never the only carrier: the legend always shows the code and the percentage, and the detail panel names the segment in full.
+- Render the headline figure (`$51,785`) yourself, reading it off `segments` by `modelValue`, so the card's height does not change with the selection.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`.
+- Types: `packages/tuffex/packages/components/src/allocation-bar/src/types.ts`.
+- **Tested coverage:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts` (13 cases) covers widths and accessible names, the colour-ladder fallback, controlled selection, silence on a repeat click, legend/segment parity, the formatter, the detail panel switch, and the reduced-motion contract against compiled CSS.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Versus `TxProgressBar`:** a progress bar expresses one advancing quantity; this expresses composition. They look similar and mean different things, so they are not interchangeable.
+- **The detail panel is additive:** upstream puts that panel in the card rather than the bar. Here it is a `detail` switch, off by default, which keeps "bar plus legend" as the smallest reusable unit.
+- **Reduced motion:** the only element resting at `opacity: 0` is the selection sheen, and it is lit by the `.is-active` class rather than an animation fill — a contract the tests pin separately.

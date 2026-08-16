@@ -1,0 +1,177 @@
+---
+title: "SelectionActions"
+description: "A bar that floats beneath a text selection and hands the highlighted passage to an agent."
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [ai, selection, rewrite, floating]
+syncStatus: reviewed
+verified: true
+---
+# SelectionActions
+
+## Basic Usage
+
+### Rewriting a Selection
+
+Select a sentence in the paragraph and the bar appears beneath the selection's last line. Four states: `idle` → `thinking` → `streaming` → `result`.
+
+:::TuffDemoWrapper{demo="SelectionActionsRewriteDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+  import { ref } from 'vue'
+
+  const articleRef = ref(null)
+  const barRef = ref(null)
+  const state = ref('idle')
+
+  const { selection, clear } = useSelectionAnchor({
+    root: articleRef,
+    ignore: () => [document.querySelector('.tx-bui-selection-actions')],
+  })
+
+  function run(id) {
+    state.value = 'thinking'
+    // The host owns the request; call barRef.value.updatePosition() per delta while streaming.
+  }
+  </script>
+
+  <template>
+    <article ref="articleRef">
+      <p>Pistachio holds the top slot all weekend.</p>
+    </article>
+
+    <TxSelectionActions
+      ref="barRef"
+      :selection="selection"
+      :state="state"
+      @action="run($event.id)"
+      @keep="clear"
+      @discard="clear"
+    />
+  </template>
+---
+:::
+
+## Two Layers: Tracking and Presentation
+
+The component **only presents**: give it a `selection` snapshot and a `state`, and it handles positioning, the width morph, and the action row. Where the selection comes from is the host's business.
+
+`useSelectionAnchor()` is the matching tracking layer, built on `useTextSelection` from `@vueuse/core`, and suits ordinary document prose. For contenteditable, virtualised lists, or an iframe, construct a `SelectionPayload` yourself and feed it in.
+
+```ts
+import { resolveSelectionPayload, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+
+const { selection, clear } = useSelectionAnchor({
+  root: articleRef,        // track selections inside this subtree only
+  debounce: 120,           // selectionchange fires every frame while dragging
+  minLength: 1,            // a selection too short to be worth a bar
+  ignore: () => [barEl],   // focus landing on the bar is not a deselection
+})
+```
+
+`resolveSelectionPayload()` is the pure rule it uses internally, exported separately for testing or custom tracking.
+
+> `useSelectionAnchor` and `resolveSelectionPayload` are **runtime functions, not components**. `TxSelectionActions` is available as a global tag and can be written straight into a template, but these two must be imported explicitly from `@talex-touch/tuffex/selection-actions` as shown above — they are not in the global component registry.
+
+### useSelectionAnchor Options
+
+| Option | Type | Default | Description |
+|------|------|---------|-------------|
+| `root` | `Element \| null` | — | Confines tracking to one subtree; omit to watch the whole document. |
+| `debounce` | `number` | `120` | Settle time for `selectionchange`, in ms. It fires every frame while dragging. |
+| `minLength` | `number` | `1` | Minimum trimmed length. |
+| `disabled` | `boolean` | `false` | Stop reporting without unmounting. |
+| `ignore` | `Element[]` | `[]` | Focus landing inside these does not count as a deselection. |
+
+Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`, and `clear()` is called once the rewrite has been applied or dropped.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `selection` | `SelectionPayload \| null` | `null` | `{ text, rects, range? }`. Null retracts the bar. |
+| `state` | `'idle' \| 'thinking' \| 'streaming' \| 'result'` | `'idle'` | The host owns the machine; the component never calls a model. |
+| `actions` | `SelectionActionItem[]` | Explain / Improve plus folded Shorten / Tone / Grammar | The actions: `{ id, label, more?, busyLabel? }`. |
+| `activeActionId` | `string` | — | Id of the running action; picks the busy wording. |
+| `expanded` | `boolean` | — | `v-model:expanded`, the folded action group. |
+| `prompt` | `string` | — | `v-model:prompt`, the free-text instruction. |
+| `hidePrompt` | `boolean` | `false` | Hide the text field and its send control. |
+| `placeholder` | `string` | `'Describe edits'` | Field placeholder, reused as its accessible name. |
+| `ariaLabel` | `string` | `'Selection actions'` | Accessible name of the bar. |
+| `keepLabel` / `discardLabel` | `string` | `'Keep'` / `'Discard'` | The two result-state buttons. |
+| `retryLabel` | `string` | `'Try again'` | Accessible name of the retry control. |
+| `sendLabel` | `string` | `'Send edit instruction'` | Accessible name of the send control. |
+| `expandLabel` / `collapseLabel` | `string` | `'Show more actions'` / `'Show fewer actions'` | Accessible names of the chevron. |
+| `busyLabel` | `string` | `'Editing'` | Fallback busy wording for an action without its own. |
+| `offset` | `number` | `8` | Distance from the selection's last line, in px. |
+
+### Events
+
+| Event | Arguments | Description |
+|------|------|-------------|
+| `action` | `({ id, action, selection })` | A preset action was pressed, carrying the selection snapshot. |
+| `submit` | `({ prompt, selection })` | The field was submitted or send was pressed; `prompt` is trimmed. |
+| `keep` / `discard` | `()` | Keep or discard in the result state. |
+| `retry` | `()` | Retry in the result state. |
+| `update:expanded` | `(expanded: boolean)` | The folded group opened or closed. |
+| `update:prompt` | `(prompt: string)` | The field's content changed. |
+
+### Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `action-icon` | `{ action }` | Replaces an action's glyph. Required for a custom `id`. |
+| `busy` | `{ label }` | Replaces the busy readout. |
+| `result` | — | Replaces the keep / discard / retry cluster. |
+
+### Exposed
+
+| Method | Description |
+|------|-------------|
+| `updatePosition()` | Reposition against the current `selection.rects`. **A streaming host must call it — see below.** |
+| `focusInput()` | Focus the free-text field. |
+
+## Interaction Contract
+
+- **`updatePosition()` is a host responsibility, not an optional optimisation.** The bar is anchored to a virtual reference, so `floating-ui` has no element to observe and **will not** follow text reflow. Each delta of a streaming rewrite reflows the paragraph, so the host has to call `updatePosition()` after updating the text or the bar stays at the old position. Window resize and scroll are handled by the component itself.
+- **The anchor is the bottom of the selection's last line, centred on the whole selection.** For a selection spanning three lines the bar lands under where the reader stopped, not under the block's midpoint.
+- **The bar does not flip.** It passes `disableFlip` to `TxBaseAnchor`: near the bottom of the viewport it will not jump above the selection, because changing sides mid-rewrite reads as a different control. `shift` still applies, so it is pushed back horizontally.
+- **`selection` is a snapshot, not the live selection.** Focusing the bar's text field clears the browser selection; the component holds the payload it was given, so the action still has a target. That is also why `useSelectionAnchor` calls `range.cloneRange()`.
+- The bar's root swallows `pointerdown` (`preventDefault`), so pressing a button neither moves focus nor destroys the selection. The text field re-enables it explicitly, or it could never take focus.
+- Folded actions carry `tabindex="-1"` while collapsed and stay out of the tab order; so does the send control while `prompt` is empty.
+- The bar is `role="group"`, not `role="toolbar"`: it contains a text field, and the arrow keys belong to the caret.
+- `thinking` and `streaming` differ in exactly one way — the former's label shimmers, the latter's is plain text.
+- **The width morph runs through the Web Animations API**, which CSS media queries cannot reach, so the component reads `prefers-reduced-motion` in script and skips the tween. The state machine still advances; the width simply lands.
+- An empty `prompt` never emits `submit`.
+
+## Best Practices
+
+- Call `updatePosition()` right after the text update, in the same frame, rather than deferring it through `setTimeout`.
+- Always list the bar itself in `useSelectionAnchor`'s `ignore`, or the moment a reader clicks the field the selection collapses and the bar disappears.
+- Call `clear()` after `keep` or `discard`, or the snapshot lingers and the bar never retracts.
+- Give custom actions a `busyLabel` — "Improving…" is far more informative than the generic "Editing…".
+- Scope `root` to the article container instead of the whole document, or any selection anywhere on the page pops the bar.
+- Set `hidePrompt` on read-only surfaces and keep just the preset actions.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/selection-actions/src/TxSelectionActions.vue`.
+- Composable: `packages/tuffex/packages/components/src/selection-actions/src/use-selection-anchor.ts`.
+- Types: `packages/tuffex/packages/components/src/selection-actions/src/types.ts`.
+- **Verified coverage:** `selection-actions.test.ts` (21 cases) covers appearing with a selection, `role="group"`, the anchor taking the last line's bottom and the whole selection's horizontal span, `disableFlip`, the folded group's `tabindex` and `aria-expanded`, Explain emitting like every other action, the `prompt` gate and trimming, the busy wording and shimmer branch, all three result actions, and `pointerdown` being swallowed on the bar but not on the field. `selection-actions-position.test.ts` (2 cases) asserts end to end that `updatePosition()` reaches `floating-ui`'s `update`. `use-selection-anchor.test.ts` (9 cases) covers empty selections, the minimum length, collapsed ranges, `root` confinement, and zero-sized rect filtering.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Upstream has no real selection.** Its "selection" is a hardcoded highlighted `<span>`; `window.getSelection()` appears nowhere in the source. The tracking layer — `useSelectionAnchor`, the snapshot semantics, and the `pointerdown` focus guard — is a contract written for this port, not a restatement of upstream.
+- **How it divides from `TxMessageActions`:** that is the icon toolbar at the foot of a message (copy / regenerate / speak), with `role="toolbar"` and roving tabindex, no floating layer and no input. This is a rewrite entry point floating over a selection; the two do not share a focus model.
+- **Known deviation:** upstream drives the action groups' entrance with hand-tuned pixel widths (145 / 224 / 262 / 462 / 30). Those were measured against Inter at 13px and are wrong at any other face, so they are replaced by a measurement-free `grid-template-columns: 0fr↔1fr` collapse.
+- **Known deviation:** upstream's Explain is a dead button with no `onClick`; here it emits `action` like every other one.
+- **Not covered:** Safari and Firefox differ in caret behaviour after `pointerdown` is prevented. CI cannot exercise that, so verify on real browsers when integrating.

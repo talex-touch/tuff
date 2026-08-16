@@ -10,8 +10,6 @@ verified: true
 ---
 # Checkbox 复选框
 
-`TxCheckbox` 用于设置项、过滤条件和表单行等布尔选择场景。组件会暴露 `role="checkbox"`、`aria-checked` 与禁用状态，支持点击、Enter / Space 键切换；无可见文案或默认插槽时，请传入 `aria-label`。
-
 ## 基础用法
 
 点击复选框或文案即可切换状态，选中态会跟随视觉变体播放填充或勾选动画。
@@ -154,6 +152,7 @@ code: |
 | labelPlacement | 标签位置：`start` 为前置，`end` 为后置。 | `'start' \| 'end'` | `'end'` |
 | variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'fill'` |
 | ariaLabel | 无可见 `label` / 默认插槽时使用的可访问性标签。 | `string` | - |
+| indeterminate | 部分选中：所辖项目选中了一部分但不是全部。渲染横杠并上报 `aria-checked="mixed"`；此时点击会解析为「全选」而不是翻转布尔值，与原生 `indeterminate` 行为一致。 | `boolean` | `false` |
 
 ### Events
 

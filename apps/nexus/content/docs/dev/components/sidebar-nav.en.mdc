@@ -1,0 +1,141 @@
+---
+title: "SidebarNav"
+description: "Vertical workspace navigation: org switcher, quick search, primary action, and grouped destinations."
+category: Navigation
+status: beta
+since: 2.5.0
+tags: [navigation, sidebar, workspace, search]
+syncStatus: reviewed
+verified: true
+---
+# SidebarNav
+
+## Basic Usage
+
+### SidebarNav
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="Workspace navigation" description="The quick search works and `/` focuses it; the highlight travels with the pointer."}
+---
+code: |
+  <template>
+    <TxSidebarNav
+      v-model="active"
+      v-model:query="query"
+      :items="items"
+      :groups="groups"
+      :workspace="{ name: 'Creamery Ops', description: 'Production Workspace' }"
+      search-placeholder="Quick search"
+      search-hint="/"
+      action-label="New task"
+      @select="onSelect"
+      @action="onNewTask"
+    />
+  </template>
+---
+:::
+
+## How the Highlight Travels
+
+Selection is carried by the label's weight and its badge; the tinted plate is a **pointer**. Hovering any row pulls it off the selected item immediately, and leaving the list hands it back. Keyboard focus moves it too, because focus is pointer intent.
+
+It is one absolutely positioned element that moves by measuring the target row against its container, rather than each row painting its own background — that is what makes it read as a single object travelling. The measurement is factored into `useIndicatorBox`, exported alongside the component:
+
+```ts
+import { useIndicatorBox } from '@talex-touch/tuffex'
+```
+
+It reports all four edges (`top / left / width / height`), so a horizontal segmented control can reuse the same reading. Two things it adds over upstream: a `ResizeObserver` on both the container and the target (upstream measures only when hover/active changes, so the highlight is stranded after a container resize or a font swap), and a `revealed` flag so the first paint lands in place instead of sliding in from the container's top edge.
+
+## Quick Search and the `/` Shortcut
+
+**Both are additions — upstream ships them inert.** It renders the field but never uses the query, and binds no listener to `/` at all.
+
+- Typing filters live (case-insensitive `includes` on `label`), and a group that empties out drops its header with it. For remote search, pass `filter="items => items"` to disable the built-in match and swap `items` yourself in response to `update:query`.
+- One prop (`searchHint`) drives both the badge and the key, so you cannot end up with a `/` painted on screen that does nothing — which is exactly the upstream shape of the defect. The single-character binding, the multi-character glyph, and the stand-down rules are spelled out in Interaction Contract below.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `items` | `SidebarNavItem[]` | - | Navigation items. |
+| `groups` | `SidebarNavGroup[]` | - | Group definitions. Items matching no group lead the list under no header. |
+| `modelValue` | `string \| number` | - | Active item (`v-model`). |
+| `query` | `string` | - | Quick-search text (`v-model:query`). |
+| `workspace` | `SidebarNavWorkspace` | - | Workspace details; omit to drop the switcher row. |
+| `workspaceLabel` | `string` | `'Switch workspace'` | Accessible name for the switcher button. |
+| `searchPlaceholder` | `string` | - | Omit to drop the search row. |
+| `searchLabel` | `string` | - | Accessible name for the field; falls back to the placeholder. |
+| `searchHint` | `string` | - | Shortcut glyph at the end of the row, e.g. `/`. A single character also binds that key. |
+| `actionLabel` | `string` | - | Primary action label; omit to drop the button. |
+| `filter` | `(items, query) => items` | - | Replaces the built-in match. Pass `items => items` for remote results. |
+| `ariaLabel` | `string` | `'Workspace'` | Accessible name for the `<nav>` landmark. |
+| `indicatorDuration` | `number` | `220` | Travel time for the highlight, in ms. |
+
+### Types
+
+| Name | Description |
+|------|------|
+| `SidebarNavItem` | `{ value, label, group?, icon?, badge?, action?, disabled? }`. `icon` is an icon class; the `item-icon` slot wins over it. |
+| `SidebarNavGroup` | `{ key, label }`. Pass `label` in normal case — CSS uppercases it. |
+| `SidebarNavWorkspace` | `{ name, description?, initials? }`. `initials` defaults to the first character of `name`. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `workspace` | Replaces the whole workspace switcher row. |
+| `item-icon` | Replaces an item's leading glyph; scope is `{ item, active }`. |
+| `footer` | Appended below the item groups. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `SidebarNavValue` | The active item changed. |
+| `update:query` | `string` | The search text changed. |
+| `select` | `SidebarNavItem` | An item was activated (disabled items do not emit). |
+| `action` | - | The primary action button was pressed. |
+| `itemAction` | `SidebarNavItem` | A row's trailing quick action was pressed. |
+| `workspaceClick` | - | The workspace switcher was pressed. |
+
+### Exposed
+
+| Name | Description |
+|------|------|
+| `focusSearch()` | Focuses the search field, for hosts wiring their own shortcut. |
+| `refreshIndicator()` | Re-measures the highlight after a layout change the observers cannot see. |
+
+## Interaction Contract
+
+- The active row carries `aria-current="page"`. Disabled items render as genuinely `disabled` buttons and emit no `select`.
+- **The length of `searchHint` decides whether it is a key or a glyph.** A single character (`/`, `k`) is really bound to a `document` keydown: pressing it focuses the field and calls `preventDefault`, so the character is not also typed somewhere else. A multi-character hint (`⌘K`, `Ctrl K`) renders as a badge and **binds nothing** — those are symbols, not `KeyboardEvent.key` values, and guessing would bind the wrong key. Those hosts listen for the chord themselves and call `focusSearch()`. Either way one prop drives both the badge and the behaviour, so a hint can never be shown without working.
+- When the binding is live it still stands down: focus already in an input, textarea, select or contenteditable region; Meta, Ctrl or Alt held; the event already `preventDefault`ed by another handler; or no search row rendered. The listener is removed on unmount.
+- **The trailing quick action is its own `<button>`, a sibling of the row button rather than a child** — a button inside a button is invalid interactive nesting. Upstream uses a non-activatable `<span>`. On touch (`hover: none`) it stays visible, since hover is otherwise its only affordance.
+- Changing a badge value rebuilds the element so the pop-in replays; an unchanged value does not replay.
+- Group headers are tied to their list via `aria-labelledby`, with ids prefixed per component instance so two sidebars on one page cannot collide.
+
+## Best Practices
+
+- Pass icons as inline SVG through the `item-icon` slot; the component owns their size and stroke width.
+- Past a dozen items, reach for the search field rather than adding more groups.
+- With remote search, always pass `filter="items => items"` as well, or server results get filtered a second time by the built-in match.
+- Make the shortcut glyph either a single typeable character (which really binds) or a complete symbol such as `⌘K` handled via `focusSearch()`. A half-hint like `Ctrl` is neither.
+- Reserve badges for counts that need follow-up; decorative numbers cost the real ones their weight.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/sidebar-nav/src/TxSidebarNav.vue`.
+- Composable: `packages/tuffex/packages/components/src/sidebar-nav/src/use-indicator-box.ts`, re-exported from `sidebar-nav/index.ts`.
+- Types: `packages/tuffex/packages/components/src/sidebar-nav/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` verifies grouped rendering and `aria-current`, disabled items emitting nothing, query filtering with empty groups collapsing, the `filter` override, workspace and primary-action events, the trailing action being a named button that does not also navigate, badge rebuilding, ungrouped items leading, the highlight staying untransitioned until measured, and — with stubbed rects — the highlight actually moving from the active row to the hovered row and back. The shortcut tests cover focusing, standing down for typing targets / chords / already-consumed events, multi-character hints not claiming a key, and unbinding on unmount.
+- Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Naming:** Selection uses `modelValue` rather than `active`, matching every other component's primary binding in this library.
+- **Divergences from upstream:** search really filters, `/` is really bound, and the trailing action is a real button that survives on touch — three decorations turned into behaviour.
+- **Relationship to TxNavBar:** Similar name, unrelated semantics — that one is a mobile top app bar. tuffex had no vertical navigation component before this.
+- **Testing note:** The component binds a `document`-level shortcut listener, so enable `enableAutoUnmount(afterEach)` in tests. A wrapper left mounted keeps consuming keys and makes the next case look broken.

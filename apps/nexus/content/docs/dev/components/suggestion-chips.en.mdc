@@ -10,10 +10,6 @@ verified: true
 ---
 # Suggestion Chips
 
-`TxSuggestionChips` renders a set of suggestions as horizontally scrollable pill buttons and emits the one that was tapped. It is typically shown after an assistant turn to offer follow-up questions.
-
-Manually verified against `packages/tuffex/packages/components/src/suggestion-chips/src/TxSuggestionChips.vue`.
-
 ## Basic Usage
 
 ### Suggestion Chips
@@ -40,8 +36,25 @@ code: |
 ---
 ::::
 
+### Vertical Follow-up List
+
+`layout="list"` turns the chips into rule-separated rows led by a return arrow, each arriving a beat after the one above it. This is the shape a settled answer ends on: follow-ups as a list you can finish reading, rather than a rail you have to drag sideways.
+
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="Follow-ups in a streaming answer" description="Once the prose finishes, the stacked sources and the follow-up list become usable together."}
+---
+code: |
+  <template>
+    <p class="text-[12px] font-medium">Follow-ups</p>
+    <TxSuggestionChips :suggestions="followUps" layout="list" @select="ask" />
+  </template>
+---
+:::
+
 ## Interaction Contract
 
+- `layout="list"` changes the arrangement only. Data and events are untouched: `select` still carries the whole suggestion object.
+- Rows in the list layout stagger in by position, 90ms apart. Reduced motion drops the entrance entirely while the rows themselves still render.
+- The rule is drawn on each row's bottom border, including the last one — that matches upstream, and the screenshots.
 - Nothing renders when `suggestions` is empty, so there is no need to wrap the component in your own `v-if`.
 - Each chip is keyed by `suggestion.id`; keep ids unique within a set.
 - Clicking emits `select` with the whole suggestion object, not an index or an id.
@@ -56,6 +69,7 @@ code: |
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `suggestions` | `AiSuggestion[]` | — | The suggestions to render, where `AiSuggestion` is `{ id: string, text: string }`. Required. |
+| `layout` | `'wrap' \| 'list'` | `'wrap'` | `list` stacks them into rule-separated rows with a return glyph. |
 
 ### Events
 

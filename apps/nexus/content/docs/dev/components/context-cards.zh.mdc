@@ -1,0 +1,138 @@
+---
+title: "ContextCards 检索片段卡"
+description: "展示 RAG 检索回来的知识块及其来源出处。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [rag, context, chunk, source, retrieval]
+syncStatus: reviewed
+verified: true
+---
+# ContextCards 检索片段卡
+
+## 基础用法
+
+### ContextCards
+:::TuffDemoWrapper{demo="ContextCardsContextCardsDemo" code-lang="vue" title="知识块与来源" description="卡片依次浮现，来源胶囊延后解析出来；可重放。"}
+---
+code: |
+  <template>
+    <TxContextCards :chunks="chunks" :total="32" @open="openSource" />
+  </template>
+
+  <script setup lang="ts">
+  const chunks = [
+    {
+      id: 'c1',
+      title: 'Vendor onboarding rule',
+      chars: '290 characters',
+      body: 'Cold-chain certification must be verified before a new dairy can be added.',
+      source: { name: 'Dairy Onboarding SOP.pdf', badge: 'PDF', tone: 'red', href: 'https://example.com/sop.pdf' },
+    },
+  ]
+
+  function openSource({ chunk, source }) {
+    // 组件不自行跳转，由宿主决定怎么打开
+  }
+  </script>
+---
+:::
+
+## 单块使用：TxContextChunk
+
+`TxContextChunk` 单独导出，用于宿主自己排版列表的场景（RAG 调试面板、行内引用抽屉）。它承担整张卡片的渲染，父组件只负责表头与编排：
+
+```vue
+<TxContextChunk :chunk="chunk" :appear="false" @open="openSource" />
+```
+
+`enterDelay` 与 `chipDelay` 是绝对毫秒值，由调用方给定；`TxContextCards` 就是按 `staggerStep` / `chipStaggerStep` 换算后传下来的。单独使用时通常把 `appear` 设为 `false`，直接渲染稳定态。
+
+子件的插槽是 `title` / `body` / `source`；从父组件透传时对应 `chunk-title` / `chunk-body` / `chunk-source`。
+
+## 入场编排与减少动态效果
+
+时间轴是**宿主的**，不是组件的：`staggerStep`（卡片间隔）、`chipDelay`（来源胶囊起播）、`chipStaggerStep`（胶囊之间的错峰）都可以改，默认值沿用上游节奏（100 / 700 / 80 ms）。这段留白是刻意的——片段先落地，出处稍后解析出来。
+
+两条与上游不同的行为：
+
+- **开启「减少动态效果」时延迟被清零**，而不是只把时长压到近似 0。上游依赖一条全局规则压缩 `animation-duration`，`transition-delay` 原样保留，结果是来源胶囊仍然空等 700ms 才出现。这里连同延迟一起去掉，来源胶囊立即可见。
+- **挂载后才到达的片段不参与错峰**。否则一个流式追加到第 6 位的片段会按索引拿到 500ms 延迟，白白空白半秒。只有首屏那一批读起来是"一次到达"，才需要依次浮现。
+
+CSS 动画只在元素创建时播放，所以「重放」要靠重新挂载（demo 里用 `:key` 自增实现）。
+
+## API
+
+### TxContextCards Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `chunks` | `ContextChunk[]` | - | 片段列表。 |
+| `title` | `string` | `'All chunks'` | 表头标题。 |
+| `total` | `number \| string` | - | 表头计数胶囊。这是**语料库总量**，不是 `chunks.length`；不传则不渲染。 |
+| `appear` | `boolean` | `true` | 是否播放入场动画。频繁重渲染的列表建议关掉。 |
+| `staggerStep` | `number` | `100` | 卡片之间的入场间隔（ms）。 |
+| `chipDelay` | `number` | `700` | 第一枚来源胶囊的起播延迟（ms）。 |
+| `chipStaggerStep` | `number` | `80` | 来源胶囊之间的错峰（ms）。 |
+
+### TxContextChunk Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `chunk` | `ContextChunk` | - | 单个片段。 |
+| `appear` | `boolean` | `true` | 是否播放入场动画。 |
+| `enterDelay` | `number` | `0` | 卡片浮现延迟（ms，绝对值）。 |
+| `chipDelay` | `number` | `700` | 来源胶囊解析延迟（ms，绝对值）。 |
+
+### Types
+
+| 名称 | 说明 |
+|------|------|
+| `ContextChunk` | `{ id, title, body?, chars?, source? }`。`chars` 是**已格式化**的字符串（如 `290 characters`），数字格式化由宿主负责。 |
+| `ContextChunkSource` | `{ name, badge?, tone?, href? }`。`tone` 复用 `IconChipTone`。 |
+| `ContextChunkOpenPayload` | `{ chunk, source }`。 |
+
+### Slots
+
+| 名称 | 归属 | 说明 |
+|------|------|------|
+| `header` | ContextCards | 替换整个表头。 |
+| `chunk` | ContextCards | 替换整张卡片，作用域 `{ chunk, index }`。 |
+| `chunk-title` / `chunk-body` / `chunk-source` | ContextCards | 透传给子件的对应插槽。 |
+| `title` / `body` / `source` | ContextChunk | 分别替换标题文本、正文、整行来源。 |
+
+### Events
+
+| 事件名 | 载荷 | 说明 |
+|------|------|------|
+| `open` | `ContextChunkOpenPayload` | 来源行被激活。打开目标是宿主的事。 |
+
+## 交互契约
+
+- **来源链接从不自行跳转。** 带 `href` 时渲染成 `<a>` 并保留 `href`（便于悬停预览与复制链接），但点击会 `preventDefault` 并派发 `open`，与 `TxSources` 一致。Electron 渲染进程尤其不能就地导航。
+- **只有可激活的来源才有 hover 反馈。** 不带 `href` 的来源渲染成静态 `<span>`，不套 hover 底色——上游对每一行都上色，让不可点的行看起来可点。
+- `total` 与 `chunks.length` 无关，二者不会互相推导。
+- 卡片外框走发丝环阴影而非 `border`；表头与正文之间的那条线是内部分隔线，不是环。
+
+## 最佳实践
+
+- `total` 传语料库规模，`chunks` 传本次真正命中的片段，让"32 里选了 2 条"这件事一眼可见。
+- `chars` 在宿主侧格式化好再传，包括千分位；组件不做数字本地化。
+- 长列表把 `appear` 设为 `false`：逐条浮现在十几条以上时会变成拖沓而不是节奏。
+- 需要单块渲染时直接用 `TxContextChunk`，不要为了一张卡片套一层 `TxContextCards` 再隐藏表头。
+- `tone` 按文件格式固定映射（PDF 红、CSV 绿），全站保持一致，别按卡片顺序轮换。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/context-cards/src/TxContextCards.vue`、`TxContextChunk.vue`。
+- Types: `packages/tuffex/packages/components/src/context-cards/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/context-cards/__tests__/context-cards.test.ts` 验证表头计数与 `chunks.length` 解耦、入场错峰值、后到片段不参与错峰、`open` 事件与 `preventDefault`、无 `href` 时降级为静态 `span`、胶囊延迟落定与插槽覆盖；`context-cards-motion.test.ts` 编译样式块后断言减少动态效果下的守卫，并确认透明静置态被显式恢复为可见。
+- 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **类型独立:** 片段类型是本目录新增的，未复用也未污染 `ai-elements` 的 `AiSourceItem`——检索块带正文与字符数，与 URL 引用不是一回事。
+- **导出命名:** 子件只导出 `TxContextChunk`，不提供无前缀别名，避免与同名的 `ContextChunk` 数据类型在包根冲突。
+- **偏离上游:** hover 反馈按 `href` 判定、后到片段不错峰、减少动态效果下清零延迟，三处都是修正上游缺陷。

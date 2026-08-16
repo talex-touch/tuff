@@ -10,8 +10,6 @@ verified: true
 ---
 # DataTable 数据表格
 
-轻量数据表格组件，提供排序、行选择与自定义渲染能力。
-
 ## 基础用法
 
 ::TuffDemoWrapper{demo="DataTableDataTableDemo" code-lang="vue"}
@@ -88,6 +86,70 @@ code: |
 ---
 ::
 
+## Records 场景
+
+宽表 CRM 版式：表头吸顶、汇总行吸底、首列固定、部分选中三态、单元格原语组合。这些能力全部默认关闭，只有显式开启时才改变渲染。
+
+组成这套版式的关键点：
+
+- `maxHeight` 让表格自己成为滚动容器，表头与汇总行才有可吸附的参照；`scrollX` 负责横向。**不要把它塞进 `TxScroll` 默认模式**——那是 transform 位移滚动，会让内部所有 `position: sticky` 失效。
+- `stickyHeader` / `stickyFooter` 开启后，表格在 `.is-sticky-shell` 内部切到 `border-collapse: separate`。这不是风格选择：合并边框由表格绘制而非单元格绘制，吸顶的 `<th>` 一旦脱离就会丢掉自己的分隔线。切换只在该 class 内生效，`bordered` / `striped` 在别处观感不变。
+- 汇总行来自 `footer` 或 `footer-<key>` 插槽；不传插槽就完全不渲染 `<tfoot>`。
+- 全选框在部分选中时自动进入 `indeterminate`，向屏幕阅读器报告 `aria-checked="mixed"`。
+- 排序读时间戳字段，不要对「9 天前」这类可读文本做 `localeCompare`——那会把「1 年多前」排到「3 周前」和「9 天前」中间，还声称这是时间顺序。
+- `sortCycle="bi"` 让表格永不回到未排序态，适合始终需要一个明确顺序的记录列表。
+
+::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue" title="Records 记录表" description="吸顶表头与吸底汇总行、固定首列、选中高亮、三态全选，以及标签、圆点、链接三种单元格原语。"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="rows"
+      :sort="sort"
+      row-key="id"
+      selectable
+      highlight-selected
+      table-layout="fixed"
+      nowrap
+      sort-cycle="bi"
+      :max-height="380"
+      scroll-x
+      sticky-header
+      sticky-footer
+      @update:sort="sort = $event"
+    >
+      <template #cell-tags="{ value }">
+        <TxTag v-for="tag in value" :key="tag" :label="tag" :dot="TAG_COLORS[tag]" variant="soft" />
+      </template>
+      <template #cell-strength="{ row }">
+        <TxDotIndicator :color="STRENGTH_TONE[row.strength]" :label="STRENGTH_LABEL[row.strength]" />
+      </template>
+      <template #cell-website="{ value }">
+        <TxCellLink :href="`https://${value}`" :label="value" external @open="openSite" />
+      </template>
+
+      <template #footer-name>
+        <strong>{{ rows.length }}</strong> 条记录
+      </template>
+      <template #footer-website>
+        {{ linkCount }} 个链接
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+行悬停与选中底色都暴露为 CSS 变量，因此这类「纸面」表格可以换成中性灰，而不必加 prop 或 `!important`：
+
+```css
+.records-shell {
+  --tx-data-table-row-hover-bg: var(--tx-bui-hover);
+  --tx-data-table-row-selected-bg: color-mix(in srgb, var(--tx-bui-accent) 7%, var(--tx-bui-surface));
+}
+```
+
 ## API
 
 ### TxDataTable Props
@@ -105,10 +167,18 @@ code: |
 | `interactiveRows` | `boolean` | `false` | 让整行可聚焦（`tabindex="0"`）并支持 Enter/Space 触发 `rowClick`；绑定了 `rowClick` 监听时会自动开启 |
 | `selectable` | `boolean` | `false` | 是否可选择 |
 | `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
-| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 默认排序 |
+| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 非受控模式的初始排序，之后由组件自己持有。与 `sort` 互斥，二选一 |
+| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | 受控排序。传了它（包括传 `null` 表示未排序）组件就不再持有自身状态，只通过 `update:sort` 上报用户意图，并渲染父级回传的值。完全不传则走 `defaultSort` 的非受控模式 |
 | `sortOnClient` | `boolean` | `true` | 是否前端排序 |
+| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | 表头点击循环：`tri` 为升序→降序→取消排序，`bi` 为升序→降序→升序（永不取消） |
 | `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | 原生 table-layout 模式；列宽需要稳定时使用 `fixed` |
 | `nowrap` | `boolean` | `false` | 全局禁止表头与单元格内容换行 |
+| `maxHeight` | `string \| number` | - | 限制表格高度并让组件自己成为纵向滚动容器。除非外层已有滚动祖先，否则 `stickyHeader` / `stickyFooter` 需要它才有吸附对象 |
+| `scrollX` | `boolean` | `false` | 让表格在组件内部横向滚动，宽表配固定列时需要 |
+| `stickyHeader` | `boolean` | `false` | 表头吸顶 |
+| `stickyFooter` | `boolean` | `false` | 汇总行吸底 |
+| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | 按行追加 class，例如按状态给整行上色 |
+| `highlightSelected` | `boolean` | `false` | 给选中行加底色。默认关闭，既有表格的选中态仍只由复选框表达 |
 
 ### DataTableColumn
 
@@ -121,7 +191,7 @@ code: |
 | `minWidth` | `string \| number` | 列最小宽度 |
 | `maxWidth` | `string \| number` | 列最大宽度 |
 | `auto` | `boolean` | 强制列宽为 `auto` |
-| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'`。存在固定列时根元素从 `overflow: hidden` 切到 `overflow: visible`（并不设 `overflow-x: auto`），因此横向滚动必须由外层容器提供，否则 sticky 偏移无处附着。 |
+| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'`。未开启 `scrollX` / `maxHeight` 时，存在固定列会让根元素从 `overflow: hidden` 切到 `overflow: visible`，横向滚动需由外层容器提供，否则 sticky 偏移无处附着；开启 `scrollX` 后由组件自己承担这个滚动容器。 |
 | `nowrap` | `boolean` | 禁止当前列换行 |
 | `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
 | `sortable` | `boolean` | 是否可排序 |
@@ -137,14 +207,17 @@ code: |
 | `update:selectedKeys` | `(keys)` | 选中变化 |
 | `selectionChange` | `(keys)` | 选中变化 |
 | `sortChange` | `(sort)` | 排序变化 |
+| `update:sort` | `(sort)` | 排序变化；受控与非受控模式都会触发，配合 `sort` 使用 |
 | `rowClick` | `({ row, index })` | 行点击 |
 
 ### Slots
 
 | 名称 | 说明 |
 |------|------|
-| `header-<columnKey>` | 自定义表头；接收 `{ column }` |
+| `header-<columnKey>` | 自定义表头；接收 `{ column, sorted, order, toggle }`。`sorted` 表示该列是否为当前排序列，`order` 为方向（非当前列时为 `null`），`toggle` 按配置的循环推进该列 |
 | `cell-<columnKey>` | 自定义单元格；接收 `{ row, column, value, index }` |
+| `footer` | 汇总行的整行内容，由使用方自己提供 `<td>`，因此可以跨列合并。提供任一 footer 插槽才会渲染 `<tfoot>` |
+| `footer-<columnKey>` | 按列填充汇总单元格；接收 `{ column, data }`。与 `footer` 同时存在时以 `footer` 为准 |
 | `empty` | 无展示行且 `loading=false` 时渲染的空状态 |
 
 ## 最佳实践
@@ -153,7 +226,9 @@ code: |
 - 可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
 - `tableLayout="fixed"` 配合显式 `width` / `minWidth`，能避免运维表格在加载或排序时宽度跳动。
 - 固定列优先使用数值 px 的 `width` 或 `minWidth`；sticky 偏移会根据这些值计算。
-- `TxDataTable` 自身不产生横向滚动：用固定列时把表格包在自己的 `overflow-x: auto` 容器里，sticky 列才有可滚动的参照。
+- 横向滚动二选一：开 `scrollX` 让组件自己成为滚动容器，或者维持默认、把表格包进外层 `overflow-x: auto` 容器。两种方式都能给 sticky 列提供可滚动的参照，但不要两层都滚。
+- 需要吸顶表头或吸底汇总行时必须给 `maxHeight`（或确保外层已有滚动祖先），否则没有可吸附的对象；滚动容器不能是 transform 位移式的（如默认模式的 `TxScroll`），那会让 sticky 整体失效。
+- 排序请基于时间戳、序号这类可比较字段，不要对格式化后的相对时间文本排序。
 - 自定义单元格要保留可读文本或状态徽标文本，因为可排序表头会通过 `aria-sort` 暴露状态。
 
 ## 审阅说明

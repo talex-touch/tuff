@@ -10,10 +10,6 @@ verified: true
 ---
 # Tag
 
-`TxTag` renders a compact status-style label with optional icon, custom color tokens, removable close affordance, and click events for lightweight state toggles.
-
-Reviewed against `packages/tuffex/packages/components/src/tag/src/types.ts`, `TxTag.vue`, and `tag.test.ts`.
-
 ## Demo
 
 ### Tags
@@ -130,6 +126,20 @@ code: |
 | `closable` | `boolean` | `false` | Render the close button. |
 | `disabled` | `boolean` | `false` | Disable tag click and close interactions. |
 | `pill` | `boolean` | `false` | Use a fully rounded pill shape (adds `.pill` to the root); for filter chips and similar cases that should read differently in shape from square tags. |
+| `variant` | `'outline' \| 'soft' \| 'plain'` | `'outline'` | Fill recipe; see the table below. |
+| `dot` | `string` | - | Leading dot colour; omit to render no dot. Lets a tag carry a category hue while its text stays legible. |
+| `dotSize` | `number` | `6` | Dot diameter in pixels. |
+| `count` | `number` | - | Trailing count badge; `0` renders, omitting the prop renders nothing. |
+
+The three `variant` recipes:
+
+| Value | Fill | Hairline | Text | Use |
+|------|------|------|------|------|
+| `outline` | 12% | 32% | Full-strength hue | The default, byte-identical to existing tags |
+| `soft` | 20% | 34% | 92% hue mixed toward ink | Steadier for 11px text on a coloured fill |
+| `plain` | Neutral fill | Neutral hairline | Secondary ink | Ignores `color`; for overflow counters like `+3` and metadata that must not compete |
+
+An explicit `background` / `border` still overrides whichever variant is chosen.
 
 ### Events
 

@@ -1,0 +1,141 @@
+---
+title: "SidebarNav 侧边导航"
+description: "工作区级垂直导航：组织切换、快捷搜索、主操作与分组入口。"
+category: Navigation
+status: beta
+since: 2.5.0
+tags: [navigation, sidebar, workspace, search]
+syncStatus: reviewed
+verified: true
+---
+# SidebarNav 侧边导航
+
+## 基础用法
+
+### SidebarNav
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="工作区导航" description="快捷搜索可用，按 `/` 聚焦；悬停时高亮块会跟随移动。"}
+---
+code: |
+  <template>
+    <TxSidebarNav
+      v-model="active"
+      v-model:query="query"
+      :items="items"
+      :groups="groups"
+      :workspace="{ name: 'Creamery Ops', description: 'Production Workspace' }"
+      search-placeholder="Quick search"
+      search-hint="/"
+      action-label="New task"
+      @select="onSelect"
+      @action="onNewTask"
+    />
+  </template>
+---
+:::
+
+## 高亮块的移动与测量
+
+选中态由文字权重和徽标承担，那块浅色底是**指针**：鼠标移到任意一行，它立刻离开当前选中项跟过去；移出列表再回到选中行。键盘 Tab 同样会带动它，因为焦点也算作指针意图。
+
+它是一个绝对定位的元素，通过测量目标行相对容器的位置来移动，而不是每行各自画背景——这样才有"一个东西在移动"的观感。测量逻辑抽成了 `useIndicatorBox`，与组件一同导出：
+
+```ts
+import { useIndicatorBox } from '@talex-touch/tuffex'
+```
+
+它同时返回 `top / left / width / height` 四条边，水平方向的分段控件可以复用同一次测量。相比上游多了两点：容器与目标都挂了 `ResizeObserver`（上游只在悬停/选中变化时测一次，容器改变尺寸或字体加载完成后高亮块就错位了），以及一个 `revealed` 标志，让首帧直接落位而不是从容器顶部滑进来。
+
+## 快捷搜索与 `/` 快捷键
+
+**这两处都是补齐的功能，上游是纯装饰。** 上游渲染了输入框但从不使用查询值，也没有给 `/` 绑定任何监听。
+
+- 输入即过滤（对 `label` 做大小写无关的 `includes`），过滤后为空的分组会连标题一起收起。远端搜索传 `filter="items => items"` 关掉内建匹配，自己监听 `update:query` 换 `items`。
+- 角标与键位由同一个 prop（`searchHint`）决定，因此不会出现"画了一个 `/` 却按不动"——那正是上游的缺陷形态。具体的单字符绑定、多字符字形、以及让路规则见下方「交互契约」。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `items` | `SidebarNavItem[]` | - | 导航项。 |
+| `groups` | `SidebarNavGroup[]` | - | 分组定义。未匹配分组的项排在最前面且不带标题。 |
+| `modelValue` | `string \| number` | - | 当前选中项（`v-model`）。 |
+| `query` | `string` | - | 搜索文本（`v-model:query`）。 |
+| `workspace` | `SidebarNavWorkspace` | - | 工作区信息；不传则不渲染切换行。 |
+| `workspaceLabel` | `string` | `'Switch workspace'` | 切换按钮的可访问名。 |
+| `searchPlaceholder` | `string` | - | 不传则不渲染搜索行。 |
+| `searchLabel` | `string` | - | 搜索框的可访问名，回退到 placeholder。 |
+| `searchHint` | `string` | - | 行尾快捷键角标，如 `/`。单字符时同时绑定该键。 |
+| `actionLabel` | `string` | - | 主操作文案；不传则不渲染按钮。 |
+| `filter` | `(items, query) => items` | - | 覆盖内建匹配。远端场景传 `items => items`。 |
+| `ariaLabel` | `string` | `'Workspace'` | `<nav>` 地标的可访问名。 |
+| `indicatorDuration` | `number` | `220` | 高亮块的移动时长（ms）。 |
+
+### Types
+
+| 名称 | 说明 |
+|------|------|
+| `SidebarNavItem` | `{ value, label, group?, icon?, badge?, action?, disabled? }`。`icon` 是图标类名，`item-icon` 插槽优先级更高。 |
+| `SidebarNavGroup` | `{ key, label }`。`label` 传正常大小写，由 CSS 转大写。 |
+| `SidebarNavWorkspace` | `{ name, description?, initials? }`。`initials` 缺省取 `name` 首字符。 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `workspace` | 替换整个工作区切换行。 |
+| `item-icon` | 替换导航项前置图标，作用域 `{ item, active }`。 |
+| `footer` | 追加在分组下方。 |
+
+### Events
+
+| 事件名 | 载荷 | 说明 |
+|------|------|------|
+| `update:modelValue` | `SidebarNavValue` | 选中项变化。 |
+| `update:query` | `string` | 搜索文本变化。 |
+| `select` | `SidebarNavItem` | 导航项被激活（禁用项不派发）。 |
+| `action` | - | 主操作按钮被按下。 |
+| `itemAction` | `SidebarNavItem` | 行尾快捷操作被按下。 |
+| `workspaceClick` | - | 工作区切换行被按下。 |
+
+### Exposed
+
+| 名称 | 说明 |
+|------|------|
+| `focusSearch()` | 聚焦搜索框，供宿主绑定自定义快捷键。 |
+| `refreshIndicator()` | 在观察器覆盖不到的布局变化后重新测量高亮块。 |
+
+## 交互契约
+
+- 选中项带 `aria-current="page"`；禁用项渲染为真正的 `disabled` 按钮，点击不派发 `select`。
+- **`searchHint` 的长度决定它是键位还是字形。** 单字符（`/`、`k`）会真正绑定到 `document` 上的 keydown：按下即聚焦搜索框并 `preventDefault`，避免那个字符同时被输进别处。多字符（`⌘K`、`Ctrl K`）只作为角标渲染，**不绑定任何键**——它们是符号而不是 `KeyboardEvent.key` 的值，猜测反而会错绑。这类宿主自己监听组合键，再调用 `focusSearch()`。两种情况下角标与行为都由同一个 prop 决定，不会出现"显示了却按不动"。
+- 绑定生效时仍会主动让路：焦点已在输入框 / 文本域 / 下拉 / 可编辑区内，按下了 Meta、Ctrl 或 Alt，事件已被其他处理器 `preventDefault`，或未渲染搜索行。组件卸载时移除监听。
+- **行尾快捷操作是独立的 `<button>`，是行按钮的兄弟节点而非子节点**——按钮里嵌按钮属于非法的交互内容嵌套。上游用的是不可激活的 `<span>`。触屏（`hover: none`）下它常驻可见，否则唯一的触发途径消失。
+- 徽标数值变化时会重建元素以重放 pop-in；数值不变则不重放。
+- 分组标题通过 `aria-labelledby` 关联到自己的列表，id 带组件实例前缀，同页多个侧边栏不会冲突。
+
+## 最佳实践
+
+- 图标走 `item-icon` 插槽传内联 SVG，尺寸和描边宽度由组件统一控制。
+- 项数超过十几条时优先启用搜索，而不是继续加分组。
+- 远端搜索务必同时传 `filter="items => items"`，否则服务端返回的结果会被内建匹配再过滤一次。
+- 快捷键角标要么写单个可输入字符（真正绑定），要么写完整字形（如 `⌘K`）并自行调用 `focusSearch()`，不要写 `Ctrl` 这种半截提示。
+- 徽标只放需要跟进的计数；纯装饰的数字会让真正的待办失去分量。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/sidebar-nav/src/TxSidebarNav.vue`。
+- Composable: `packages/tuffex/packages/components/src/sidebar-nav/src/use-indicator-box.ts`，从 `sidebar-nav/index.ts` 一并导出。
+- Types: `packages/tuffex/packages/components/src/sidebar-nav/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` 验证分组渲染与 `aria-current`、禁用项不派发、查询过滤与空分组收起、`filter` 覆盖、工作区与主操作事件、行尾操作是具名按钮且不连带触发导航、徽标重建、无分组项前置、高亮块首帧不过渡、以及桩化尺寸后高亮块确实从选中行移到悬停行再移回；快捷键部分覆盖聚焦、输入区/组合键/已消费事件让路、多字符角标不占键位与卸载解绑。
+- 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **命名:** 选中态用 `modelValue` 而非 `active`，与库内其他组件的主绑定保持一致。
+- **偏离上游:** 搜索真的过滤、`/` 真的绑定、行尾操作是真按钮且触屏可见——三处都是把装饰变成功能。
+- **与 TxNavBar 的关系:** 名字相近但语义无关，后者是移动端顶部横向 app bar。tuffex 此前没有垂直导航组件。
+- **测试提示:** 组件在 `document` 上挂了快捷键监听，测试里请启用 `enableAutoUnmount(afterEach)`——未卸载的实例会继续消费按键，让下一个用例看起来失效。
