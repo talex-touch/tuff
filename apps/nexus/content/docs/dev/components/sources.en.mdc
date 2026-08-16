@@ -10,10 +10,6 @@ verified: true
 ---
 # Sources
 
-`TxSources` collapses the references behind an answer into a summary count, and expands into an ordered list with favicons and domains.
-
-Manually verified against `packages/tuffex/packages/components/src/sources/src/TxSources.vue`.
-
 ## Basic Usage
 
 ### Sources
@@ -37,8 +33,28 @@ code: |
 ---
 ::::
 
+### Stacked Sources
+
+`variant="stack"` swaps the header globe for the leading favicons, overlapped. The reader can see which sites back an answer while the list is still collapsed, so opening it becomes optional rather than necessary.
+
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="Stacked sources in a streaming answer" description="Once the answer settles, the stacked header appears alongside the vertical follow-up list."}
+---
+code: |
+  <template>
+    <TxSources
+      :sources="sources"
+      variant="stack"
+      :label-formatter="(n) => `${n} sources`"
+      @open="open"
+    />
+  </template>
+---
+:::
+
 ## Interaction Contract
 
+- `variant="stack"` draws at most the first three sources **that can actually render a head**, and falls back to the globe when none can rather than leaving a gap. A favicon that fails to load drops out of the stack and the next source takes its place.
+- The ring around each head comes from `--tx-sources-stack-ring`, defaulting to the page background. Its job is to punch a gap where the discs overlap, so repoint it when the header sits on anything other than the page colour.
 - **Links never navigate on their own.** A click calls `preventDefault()` and emits `open`; whether and where to open it is the host's decision. That is deliberate for sandboxed surfaces such as an Electron renderer.
 - The `href` is still present on the `<a>`, so the browser's own "open in new tab" and "copy link address" affordances keep working.
 - Open state is owned by the component and seeded from `defaultOpen`. It is uncontrolled — changing `defaultOpen` later has no effect.
@@ -57,6 +73,7 @@ code: |
 | `sources` | `AiSourceItem[]` | — | The citations to render, where `AiSourceItem` is `{ id, url, title?, favicon? }`. Required. |
 | `labelFormatter` | `(count: number) => string` | — | Replaces the collapsed header text. Falls back to `Used N source(s)`. |
 | `defaultOpen` | `boolean` | `false` | Initial open state. Read once, on mount. |
+| `variant` | `'default' \| 'stack'` | `'default'` | `stack` replaces the header globe with overlapped favicons. |
 
 ### Events
 

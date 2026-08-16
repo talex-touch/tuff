@@ -1,0 +1,133 @@
+---
+title: "AgentTrace"
+description: "An expandable agent trace covering step, reasoning, search, and tool forms."
+category: Status
+status: beta
+since: 2.5.0
+tags: [ai, agent, trace, disclosure]
+syncStatus: reviewed
+verified: true
+---
+# AgentTrace
+
+## Basic Usage
+
+### Step Trace
+
+The trace opens as it starts and folds once it settles; rows arrive in two batches. The timeline belongs to the demo — the component itself only consumes `rows` and `working`.
+
+:::TuffDemoWrapper{demo="AgentTraceStepsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAgentTrace
+      :rows="rows"
+      :working="working"
+      :default-open="open"
+      done-label="Thought for 4 seconds"
+    />
+  </template>
+---
+:::
+
+### The Other Three Forms
+
+`reasoning` is wrapping prose, `search` adds a query line and coloured source dots, and `coding` adds mono filenames with diff counters.
+
+:::TuffDemoWrapper{demo="AgentTraceVariantsDemo" code-lang="vue" title="Reasoning / search / coding" description="All three share one header and disclosure grammar; only the row form changes."}
+---
+code: |
+  <template>
+    <TxAgentTrace variant="reasoning" :rows="reasoning" default-open />
+
+    <TxAgentTrace
+      variant="search"
+      :rows="sources"
+      query="best waffle cone supplier"
+      more-label="+7 more"
+      default-open
+      @open="openInBrowser"
+    />
+
+    <TxAgentTrace variant="coding" :rows="tools" default-open />
+  </template>
+---
+:::
+
+## Ownership of the Open State
+
+Open resolves through three layers, highest first: `userOpen` (host-held) → the component's own click override → `defaultOpen` → `working`.
+
+Used standalone, the trace opens and folds with `working`, and the reader's first click takes over from then on. But a streaming host re-renders on every delta, and a branch realignment can recreate the instance — an override kept only in instance state dies with it, which reads as "clicking does nothing". Lift `toggle` into the host and feed it back through `userOpen` to make the reader's choice survive any rebuild.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `rows` | `AgentTraceRow[]` | — | The trace rows. Required. |
+| `variant` | `'steps' \| 'reasoning' \| 'search' \| 'coding'` | `'steps'` | Row form and typography. |
+| `query` | `string` | — | `search`: the query echoed above the results. |
+| `working` | `boolean` | `false` | Whether the trace is still running; drives the shimmer and the spinner. |
+| `activeLabel` | `string` | per variant | Header text while working. |
+| `doneLabel` | `string` | per variant | Header text once settled. |
+| `moreLabel` | `string` | — | Trailing overflow note, e.g. `+7 more`. |
+| `defaultOpen` | `boolean` | — | Open state before any interaction. Falls back to `working`. |
+| `userOpen` | `boolean` | — | Host-held override that survives a rebuild. |
+| `selectedId` | `string` | — | `coding`: the selected row id. Binding it hands ownership to the host. |
+
+`AgentTraceRow` is `{ id, primary, secondary?, mono?, added?, removed?, href?, status? }`, where `status` is `'pending' | 'active' | 'done' | 'error'`.
+
+Per-variant default copy: `steps` and `reasoning` use `Thinking` / `Thought`, `search` uses `Searching the web` / `Searched the web`, and `coding` uses `Running tools` / `Ran tools`. Counted copy (upstream's "Thought for 4 seconds", "Ran 3 tools") folds in a measurement only the host has — pass `doneLabel` for those.
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `toggle` | `(open: boolean)` | Emitted on header click, carrying the state after the toggle. |
+| `open` | `(row: AgentTraceRow)` | `search`: emitted when a linked row is clicked. The component never navigates. |
+| `select` | `(id: string \| null)` | `coding`: emitted on select or deselect; `null` when cleared. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|------|------|
+| `icon` | `{ working }` | Replaces the header starburst. |
+| `label` | `{ working }` | Replaces the header text. |
+| `row` | `{ row, index }` | Replaces the row content, keeping the row container and entrance. |
+
+## Interaction Contract
+
+- **Links never navigate on their own.** A `search` row still renders a real `href` (copyable, middle-clickable), but a click calls `preventDefault` and emits `open` so the host decides how to open it. This is required inside an Electron renderer.
+- The collapse carries `inert` while closed: a `0fr` grid still leaves its rows in the tab order, so they have to be taken out of it too.
+- The header is a `button` with `aria-expanded` and an `aria-controls` pointing at the collapse.
+- The `steps` glyph reads `row.status` first: `active` spins, `error` marks, anything else checks. **With no `status`** it falls back to upstream behaviour — only the last row spins while `working`.
+- `coding` rows are `button` elements with `aria-pressed`. Leave `selectedId` unbound and the component keeps the selection; bind it and the host owns it outright.
+- Diff counters use U+2212 MINUS SIGN (`−`), not a hyphen, so the pair matches the plus in width and weight.
+- Per-row entrance delay runs through the `--tx-bui-agent-trace-index` CSS variable rather than inline styles, so one rule turns it all off under reduced motion.
+- The rail is a pure CSS `::before`. Upstream measures the row stack in a layout effect and tweens its height over 500ms; dropping the measurement is safe because the collapse is already clipping it.
+
+## Best Practices
+
+- Treat it as a controlled primitive: keep the timeline in the host, grow `rows` and flip `working`, and leave playback scripts out of the component.
+- Always handle `@open` in search surfaces, or clicking a source does nothing at all.
+- Cap long traces with `moreLabel` instead of laying out dozens of rows.
+- Use `reasoning` for paragraph prose — it wraps and never truncates. Use `steps` for single-line labels.
+- In streaming UIs, store `toggle` in the host and feed it back through `userOpen` so a rebuild does not discard the reader's choice.
+- The component sizes to its container; upstream's 380px frame is the host's decision.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/agent-trace/src/TxAgentTrace.vue`.
+- Types: `packages/tuffex/packages/components/src/agent-trace/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/agent-trace/__tests__/agent-trace.test.ts` (23 cases) covers the three-layer open precedence, `inert` while collapsed, non-navigating links, controlled and uncontrolled `coding` selection, the `steps` glyph fallback, U+2212, and the per-row stagger variable.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **How it divides from the existing disclosures:** `TxChainOfThought` is a thinking chain with markdown bodies, `TxReasoningDisclosure` is a single reasoning passage, and `TxSources` is a source list. This component is a compact single-line trace carrying links, diffs, and tool selection — different data shapes, not interchangeable.
+- **Accessibility:** the `inert` collapse is a deliberate improvement over upstream, whose collapsed region leaves links in the tab order.
+- **Known deviation:** the rail's 500ms height tween was not ported (see the interaction contract); the static settled state matches the reference screenshots.

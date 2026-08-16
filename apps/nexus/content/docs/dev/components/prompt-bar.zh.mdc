@@ -1,0 +1,182 @@
+---
+title: "PromptBar 提示条"
+description: "紧凑的对话输入条：@ 数据源、/ 命令、模型选择、听写与附件都内联在输入框里。"
+category: Form
+status: beta
+since: 2.5.0
+tags: [ai, composer, prompt, mention, command]
+syncStatus: reviewed
+verified: true
+---
+# PromptBar 提示条
+
+## 基础用法
+
+### 完整输入条
+
+输入 `@` 打开数据源、输入 `/` 打开命令；↑↓ 移动、Enter 或 Tab 确认、Esc 收起。草稿变长时输入框会先长高，再整行上移到控件之上。
+
+:::TuffDemoWrapper{demo="PromptBarPromptBarDemo" code-lang="vue" title="提示条" description="数据源、命令、模型、听写、附件与 Rounded / Pill 两种形态。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const draft = ref('')
+  const model = ref('sprinkles')
+  const listening = ref(false)
+  const attachments = ref([])
+
+  const sources = [
+    { key: 'attach', name: 'Add photos & files', desc: 'Upload from your computer', attach: true },
+    { key: 'scoop', name: 'Scoop Data', desc: 'Sales & churn metrics' },
+    { key: 'gmail', name: 'Gmail', desc: 'Read and manage Gmail', connectable: true },
+  ]
+  const commands = [
+    { key: 'compare', name: '/compare', desc: 'Flavor vs. last summer' },
+    { key: 'restock', name: '/restock', desc: 'Build a reorder list' },
+  ]
+  const models = [
+    { key: 'sprinkles', name: 'Sprinkles 5', tag: 'Flagship' },
+    { key: 'vanilla', name: 'Vanilla 1', tag: 'Basic' },
+  ]
+  </script>
+
+  <template>
+    <TxPromptBar
+      v-model="draft"
+      v-model:model="model"
+      v-model:listening="listening"
+      :sources="sources"
+      :commands="commands"
+      :models="models"
+      :attachments="attachments"
+      dictatable
+      @attach="pickFiles"
+      @attachment-remove="removeAttachment"
+      @send="submit"
+    />
+  </template>
+---
+:::
+
+## 令牌菜单单独使用
+
+`@` / `/` 的解析与菜单状态机是纯逻辑，作为 `useTokenMenu` 单独导出——想给自己的输入框加提及、又不想换掉整条输入条时用它。它不碰 DOM，也不产生副作用。
+
+```ts
+import { parseToken, useTokenMenu } from '@talex-touch/tuffex/prompt-bar'
+
+const draft = ref('')
+const { menu, rows, activeIndex, engaged, move, engage, dismiss, insert } = useTokenMenu({
+  draft,
+  sources,
+  commands,
+})
+
+// 选中一行：把待定令牌替换成插入文本，返回新的草稿
+draft.value = insert(`@${row.name}`)
+```
+
+匹配策略两边不同：数据源按名称**子串**匹配，命令剥掉前导斜杠后按**前缀**匹配（输入 `/comp` 只留 `/compare`）。`parseToken` 也单独导出，只认词边界后的行尾令牌——`you@host` 不会被当成提及。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | — | 草稿文本。不绑定时组件自持，仍可正常输入。 |
+| `variant` | `'rounded' \| 'pill'` | `'rounded'` | 外壳与控件的圆角形态。 |
+| `placeholder` | `string` | `'Write a message…'` | 占位文案，同时兜底可访问名称。 |
+| `ariaLabel` | `string` | — | 输入框的可访问名称；缺省回落到 `placeholder`。 |
+| `disabled` | `boolean` | `false` | 禁用整条输入条。 |
+| `submitting` | `boolean` | `false` | 上一轮仍在进行：只拦发送，不拦输入。 |
+| `sources` | `PromptBarSource[]` | — | `@` 菜单的行。不传则同时隐藏 + 按钮。 |
+| `commands` | `PromptBarCommand[]` | — | `/` 菜单的行。`name` 自带前导斜杠。 |
+| `attachments` | `AiAttachment[]` | `[]` | 展示用附件；上传与增删由宿主持有。 |
+| `models` | `PromptBarModel[]` | `[]` | 模型列表。为空则不渲染模型按钮。 |
+| `model` | `string` | 第一项 | 选中的模型 key，配 `v-model:model`。 |
+| `dictatable` | `boolean` | `false` | 是否渲染听写按钮。 |
+| `listening` | `boolean` | — | 听写状态，配 `v-model:listening`。识别本身在宿主。 |
+| `listeningPlaceholder` | `string` | `'Listening…'` | 听写期间的占位文案。 |
+| `minHeight` | `number` | `28` | 输入框折叠高度（px）。 |
+| `maxHeight` | `number` | `100` | 生长上限（px），超过后输入框内部滚动。 |
+| `sendOnEnter` | `boolean` | `true` | Enter 发送、Shift+Enter 换行。 |
+| `allowEmptySend` | `boolean` | `false` | 允许无文本也无附件时发送。 |
+
+文案 props 全部为英文默认值，逐个可覆盖：`sourcesHintText`、`commandsHintText`、`emptyTextFormatter`、`connectText`、`connectedText`、`sendLabel`、`attachLabel`、`modelLabel`、`startDictationLabel`、`stopDictationLabel`、`attachmentFallbackLabel`、`removeAttachmentLabelFormatter`。
+
+`PromptBarSource` 为 `{ key, name, desc?, attach?, connectable?, connected? }`；`PromptBarCommand` 为 `{ key, name, desc? }`；`PromptBarModel` 为 `{ key, name, tag? }`。
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string)` | 草稿变化。 |
+| `update:model` | `(key: string)` | 选中模型变化。 |
+| `update:listening` | `(listening: boolean)` | 听写开关。 |
+| `send` | `({ text, attachments })` | 发送。组件清空文本，附件由宿主清。 |
+| `attach` | `()` | 选中「添加附件」行，宿主打开文件选择器。 |
+| `attachmentRemove` | `(id: string)` | 点击附件胶囊上的删除。 |
+| `attachmentAdd` | `(files: File[])` | 粘贴或拖放进来的文件。 |
+| `sourceSelect` | `(source: PromptBarSource)` | 提及插入完成后派发。 |
+| `commandSelect` | `(command: PromptBarCommand)` | 命令插入完成后派发。 |
+| `connectToggle` | `(source: PromptBarSource)` | 未连接的可连接行被激活时派发。 |
+| `paste` | `(event: ClipboardEvent)` | 原始粘贴事件，不阻止默认行为。 |
+| `focus` / `blur` | `(event: FocusEvent)` | 输入框焦点变化。 |
+
+### Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `source-icon` | `{ source }` | `@` 行的前置图标槽（22×22）。品牌 SVG 属于宿主资产，组件不内置。 |
+| `attachments` | `{ attachments }` | 整体替换附件胶囊区。 |
+| `actions` | `{ send, canSend }` | 在发送键之前插入自定义控件。 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `focus` | `() => void` | 聚焦输入框。 |
+| `insert` | `(text: string) => void` | 在草稿末尾插入文本并补齐分词空格。 |
+| `closeMenus` | `() => void` | 关掉 + 与模型两个菜单。 |
+| `menuOpen` | `boolean` | 是否有菜单展开。实例代理会解包 ref，读到的是布尔值。 |
+
+## 交互契约
+
+- **组合式输入优先。** Enter 在 IME 组字期间只用于确认候选词，既不发送也不选中菜单行——`isComposing`、`keyCode === 229` 与 `compositionstart/end` 三重判断。
+- 菜单行按 combobox 范式实现：输入框带 `role="combobox"`、`aria-autocomplete="list"`、`aria-controls` 与 `aria-activedescendant`，菜单是 `listbox`，行是 `option`。**没有可提及内容时不会声称自己是 combobox**，退化成普通多行文本框。
+- 高亮条只有在读者真正指向过某一行（悬停或按过方向键）之后才出现，避免「第一项已被选中」的误导；第一次按 ↑ / ↓ 落在列表两端，而不是从第 0 项再往下跳一格。
+- 菜单行按下时 `preventDefault`，焦点始终留在输入框——否则点完菜单光标就没了。
+- 可连接但未连接的行，激活即连接（派发 `connectToggle`）而不是插入提及；连接后再激活才插入。整行一个动作，键盘与指针能到达的范围一致。
+- 点击输入条以外的区域会关掉菜单，Esc 也会——且 Esc 只在确实关掉了什么时才吞掉事件，否则继续冒泡给宿主的对话框。
+- `@` 触发只认词边界之后的行尾令牌，`you@host` 这类邮箱不会误触发。
+- 发送键的底色是墨色而不是主题强调色：这是这套设计语言的签名，强调色留给听写激活与 Connect 链接。
+- 减弱动效下弹入与按压都停掉，但听写的三根条只是定格而不是消失——它是「正在听」的唯一可见信号。
+
+## 最佳实践
+
+- 附件是受控的：`send` 之后组件只清文本，附件请在宿主里一并清空。
+- 听写只呈现状态，识别与转写留在宿主；拿到结果用 `insert()` 或直接写 `v-model` 落回草稿。
+- 品牌图标走 `#source-icon` 插槽，不要把第三方 SVG 塞进组件——那是产品资产，不是组件资产。
+- 菜单是相对输入条绝对定位的，会被祖先的 `overflow: hidden` 裁掉，也不会在贴近视口边缘时翻转。把输入条放在会裁剪的滚动容器之外。
+- 只要块状输入框（多行草稿 + 下方按钮行）而不需要菜单时，用 `TxChatComposer`；两者并存，不是替代关系。
+- 中文界面记得覆盖文案 props，默认值全部是英文。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/prompt-bar/src/TxPromptBar.vue`。
+- Types: `packages/tuffex/packages/components/src/prompt-bar/src/types.ts`。
+- Composables: `use-token-menu.ts`（导出）与 `use-autosize.ts`（私有）。
+- **实测覆盖:** `prompt-bar.test.ts`（36 项）与 `token-menu.test.ts`（17 项）验证两个菜单的过滤策略、combobox 语义与 `aria-activedescendant` 的出现时机、IME 双向路径、连接行的激活语义、发送门控与 `submitting`、附件增删、模型菜单的指针与键盘路径、外部点击关闭、卸载时释放 document 监听。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **与 `TxChatComposer` 的分工:** 后者是块状 composer（多行输入 + 下方文字按钮），契约已定稿；本组件是控件内联进输入框的紧凑条，带 `@` / `/` 菜单、模型与听写。并行组件而非变体，是这个仓库既有的做法（`input` / `flat-input`、`select` / `flat-select`）。
+- **未移植:** 上游选中旗舰模型时的 WebGL 彩虹扫光彩蛋。它依赖 React-only 的 `glimm`，为一个一次性庆祝动画引入着色器管线，代价与收益不成比例。
+- **超出上游的修正:** combobox 语义（上游只有 `aria-expanded`）、外部点击关闭、IME 对菜单路径的保护、首次方向键的落点、以及可连接行不再嵌套第二个不可聚焦控件。
+- **已知限制:** 菜单用绝对定位而非浮层定位库，因此不翻转、会被祖先裁剪——见交互契约。

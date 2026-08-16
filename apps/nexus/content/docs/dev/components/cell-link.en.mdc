@@ -1,0 +1,93 @@
+---
+title: "CellLink"
+description: "A link for table cells that renders a real href but never navigates on its own — the host decides how to open it."
+category: Data
+status: beta
+since: 2.5.0
+tags: [link, table, cell, data]
+syncStatus: reviewed
+verified: true
+---
+# CellLink
+
+## Basic Usage
+
+### CellLink
+:::TuffDemoWrapper{demo="CellLinkCellLinkDemo" code-lang="vue" title="Two underline strategies" description="Clicking navigates nothing; it hands the host an open event."}
+---
+code: |
+  <script setup lang="ts">
+  function onOpen({ href }) {
+    // The component does not navigate. On the web a new tab is right; in the
+    // desktop shell this would go to the system browser instead.
+    window.open(href, '_blank', 'noopener,noreferrer')
+  }
+  </script>
+
+  <template>
+    <TxCellLink href="https://aurora-scoops.example" label="Aurora Scoops" muted @open="onOpen" />
+    <TxCellLink href="https://kumo-creamery.example" label="kumo-creamery.example" underline="always" @open="onOpen" />
+    <TxCellLink href="https://maple-orbit.example" label="maple-orbit.example" external @open="onOpen" />
+  </template>
+---
+:::
+
+## Why It Does Not Navigate
+
+The component renders a genuine `<a href>` — copy-link, hover preview, and the context menu all work — but calls `preventDefault()` on click and emits `open` instead.
+
+This is not fastidiousness. tuffex ships into both the browser and the Electron renderer, and inside the renderer a self-navigating link walks the application window away from itself, which is a real security and usability problem. Handing the decision to the host is what lets one component behave correctly in both. `TxSources` established this convention already, and this component follows it.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `href` | `string` | - | Target URL, written into the real `href` attribute |
+| `label` | `string` | `href` | Visible text; falls back to the `href` |
+| `external` | `boolean` | `false` | Appends the outbound arrow glyph |
+| `muted` | `boolean` | `false` | Uses the secondary ink instead of the link accent, for record-name columns |
+| `underline` | `'always' \| 'hover'` | `'hover'` | Underline strategy |
+| `ariaLabel` | `string` | - | Accessible name for when the visible text does not describe the destination |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `open` | `({ href, event })` | Fires on click; the component has already called `preventDefault()`, so navigation is the host's call |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `default` | Replaces the link text |
+
+## Interaction Contract
+
+- It renders a native `<a>`, so pressing Enter fires `open` too — no extra handling required.
+- `underline="hover"` shows the rule only on hover and `:focus-visible`, which suits columns whose text is the primary content anyway.
+- `underline="always"` keeps a permanent rule tinted to 35%, going solid on hover — right for a dedicated link column, where a full column of solid underlines turns into a block of rules.
+- The outbound arrow is `aria-hidden` and never announced; put the destination information in `ariaLabel`.
+- Long text truncates with an ellipsis, so a link cannot blow out its cell.
+
+## Best Practices
+
+- When the text is a bare domain, add an `ariaLabel` such as "Open the Aurora Scoops website" — otherwise a screen reader just spells out a hostname.
+- Use `muted` with `underline="hover"` for record-name columns, and the default colour with `underline="always"` for dedicated link columns.
+- In the Electron renderer, route the `open` event through the host's external-browser channel rather than opening a window in the renderer.
+- For a cell with no link, render a placeholder such as `—` rather than a `TxCellLink` with an empty `href`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/cell-link/src/TxCellLink.vue`.
+- Types: `packages/tuffex/packages/components/src/cell-link/src/types.ts` exports `CellLinkProps`, `CellLinkEmits`, and `CellLinkUnderline`.
+- **Test coverage:** `packages/tuffex/packages/components/src/cell-link/__tests__/cell-link.test.ts` has 6 cases covering the native anchor and its `href`, the label fallback, `open` emission after `preventDefault()` (asserting `defaultPrevented`), conditional rendering and `aria-hidden` on the arrow, the underline and muted state classes, and the accessible-name override.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- **Divergence from upstream:** Upstream uses a bare `<a target="_blank">` that navigates directly. This port switches to `preventDefault()` plus an `open` event, matching the existing `TxSources` convention — a hard requirement under an Electron host.
+- **Two underline strategies:** Upstream writes the record-name column and the link column two different ways; this component collapses that into one `underline` prop.

@@ -1,0 +1,143 @@
+---
+title: "SparkChart"
+description: "The static multi-series polyline inside a card: painted on canvas, with a DOM cursor and tooltip over it."
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, chart, canvas, data]
+syncStatus: reviewed
+verified: true
+---
+# SparkChart
+
+## Basic Usage
+
+### SparkChart + ChartScrubber
+
+:::TuffDemoWrapper{demo="SparkChartSparkChartDemo" code-lang="vue" title="A scrubbable trend snapshot" description="Two series, read by sweeping the pointer across them."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const mint = [-2.9, -3.4, -3.05, -3.86, -3.52, -4.1, -3.82, -4.41]
+    .map((value, index) => ({ time: index * 6, value }))
+
+  const series = [{ id: 'mint', data: mint, color: 'var(--tx-bui-orange)' }]
+  const hover = ref<number | null>(null)
+
+  const rows = computed(() => hover.value === null
+    ? []
+    : [{ label: 'Mint Chip', value: `${mint[hover.value].value}%`, color: 'var(--tx-bui-orange)' }])
+  </script>
+
+  <template>
+    <TxChartScrubber
+      :point-count="mint.length"
+      :rows="rows"
+      time-label="Today, 12:00"
+      @scrub="hover = $event"
+      @leave="hover = null"
+    >
+      <TxSparkChart :series="series" aria-label="Trend snapshot" />
+    </TxChartScrubber>
+  </template>
+---
+:::
+
+## Sizing and Theme
+
+The chart fills its container and takes its size from that **container** rather than a prop, so the wrapper needs a definite height (166px in the example). A `ResizeObserver` repaints it when that size changes.
+
+A canvas cannot read CSS variables, so a theme change has to trigger a repaint. `theme` defaults to `'auto'` and follows both the `data-theme` attribute and the `.dark` class, on `<html>` or `<body>` — the two switches the tuffex token layer keys off. The bitmap is scaled by `devicePixelRatio` (capped at 2) while all drawing maths stays in CSS pixels.
+
+## ChartScrubber
+
+The scrub layer is pure DOM and paints nothing into the canvas: that is what keeps the tooltip selectable and the cursor one pixel wide at any device pixel ratio. It is the outer element, and the chart goes in its default slot.
+
+Pointer position is resolved against the container's width into the nearest sample index. The tooltip anchor is clamped between 28% and 72%, so it never overhangs the stage at either end. With no `activeIndex` bound the index is owned internally — it is a pure interaction transient, and most hosts only need `@scrub`.
+
+The stage sets `touch-action: pan-y`: the horizontal axis belongs to the scrubber, the vertical one to the page.
+
+## API
+
+### SparkChart Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `series` | `SparkSeries[]` | — | Series list, `{ id, data, color?, label? }`. |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | `auto` follows `data-theme` or `.dark`. |
+| `grid` | `boolean` | `false` | Draws horizontal hairline gridlines. |
+| `gridLines` | `number` | `4` | Number of gridlines. |
+| `lineWidth` | `number` | `2.25` | Stroke width in CSS pixels. |
+| `padding` | `Partial<SparkChartPadding>` | `{ top: 24, right: 0, bottom: 22, left: 0 }` | Inner inset; omitted sides keep the default. |
+| `domain` | `[number, number]` | — | Fixed value range; omit to fit the data. |
+| `ariaLabel` | `string` | — | Accessible name for the canvas. Without it the canvas is hidden from assistive tech. |
+
+`SparkPoint` is `{ time: number, value: number }`; `time` only positions the sample horizontally and need not be a real timestamp.
+
+### SparkChart Exposed
+
+| Method | Description |
+|------|-------------|
+| `redraw()` | Repaints at once, for hosts that mutate series data in place. |
+
+### ChartScrubber Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `pointCount` | `number` | — | How many samples the pointer maps onto. |
+| `activeIndex` | `number \| null` | — | Controlled index. Omit to let the component own it. |
+| `rows` | `ChartTooltipRow[]` | — | Tooltip rows, `{ label, value, color? }`. |
+| `timeLabel` | `string` | — | Caption line above the rows. |
+| `tooltip` | `boolean` | `true` | Turn off for a bare cursor line. |
+| `anchorMin` / `anchorMax` | `number` | `28` / `72` | Clamp range for the tooltip anchor, in percent. |
+| `disabled` | `boolean` | `false` | Ignores the pointer. |
+
+### ChartScrubber Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `scrub` | `(index: number)` | The pointer reached a new sample. Never repeats for the same one. |
+| `leave` | — | Pointer left, lifted, or was cancelled. |
+| `update:activeIndex` | `(index: number \| null)` | Controlled write-back. |
+
+### ChartScrubber Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `default` | — | Stage content, normally `TxSparkChart`. |
+| `tooltip` | `{ index, rows }` | Replaces the whole tooltip. |
+
+## Interaction Contract
+
+- The chart draws **no axes, no legend and no value labels**: those belong to the card and are laid out by the host.
+- A series without `color` falls back through `--tx-bui-accent` / `-orange` / `-green` / `-red` by position. Upstream hard-codes those as dark-theme hex values, which read too bright in light mode; here they resolve through tokens.
+- All series share one value domain, and the x axis is derived from `time`; when every sample carries the same time it falls back to even index spacing. A single sample is centred and painted as a dot by the round line cap.
+- Empty data or a zero-sized container paints nothing and throws nothing. A host with no 2D context (jsdom, for instance) is skipped just as safely.
+- The scrub layer only emits when the index **changes**; upstream re-sets its state on every pointer move.
+- Neither component animates, so there is nothing for a reduced-motion guard to switch off.
+
+## Best Practices
+
+- Give the stage a definite height, or a zero-height container leaves the chart invisible.
+- Use `aria-label` to say what the chart claims; without it the canvas is marked `aria-hidden` so assistive tech does not announce an empty element. The numbers themselves should be readable in the tooltip or the surrounding copy.
+- Format tooltip values before passing them: the component does no number formatting, and a U+2212 minus (`−`) lines up under tabular figures where a hyphen does not.
+- To stream data, replace the `series` reference to trigger a repaint, or call `redraw()` after pushing in place.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`, `TxChartScrubber.vue`.
+- Projection and painting: `packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`, `draw.ts`.
+- Types: `packages/tuffex/packages/components/src/spark-chart/src/types.ts`.
+- **Tested coverage:** `packages/tuffex/packages/components/src/spark-chart/__tests__/spark-chart.test.ts` (27 cases) covers domain resolution, both time- and index-based x mapping, single-sample centring, anchor clamping, the draw-call sequence, scrub de-duplication and controlled mode.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **No upstream visual baseline:** the upstream screenshots show "No data to display" in the chart body — that build drew nothing there. The card frame, legend, headline figures and follow-up pill remain valid references, but **the chart itself is built to spec** (static multi-series polyline, 2.25 stroke, optional grid, 24/22 padding). Do not pixel-compare the chart area against those two PNGs.
+- **Why no chart library:** upstream uses `liveline`, which is React-only (`peerDependencies` lists react alone) and is switched into a fully static mode there (`paused`, `scrub={false}`, `pulse={false}`). Only that static slice is actually used, so it is implemented directly rather than pulled in as a dependency.
+- **No area fill:** the one verifiable upstream call passes `fill={false}` and the other cannot be checked, so no `fill` prop is offered.
+- Painting lives in `draw.ts` because jsdom returns `null` from `getContext('2d')`: kept inside the SFC it would be untestable.

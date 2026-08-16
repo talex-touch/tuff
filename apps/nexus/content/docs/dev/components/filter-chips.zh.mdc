@@ -1,0 +1,139 @@
+---
+title: "FilterChips 筛选胶囊"
+description: "带圆点与计数的单选筛选条，可作为工具栏或标签页语义使用。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [filter, chips, table, data]
+syncStatus: reviewed
+verified: true
+---
+# FilterChips 筛选胶囊
+
+## 基础用法
+
+### FilterChips
+:::TuffDemoWrapper{demo="FilterChipsFilterChipsDemo" code-lang="vue" title="状态筛选" description="计数由真实数据推导，不是写死的字面量。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const rows = [
+    { task: '补货芒果雪葩', status: 'todo' },
+    { task: '搅拌黑芝麻', status: 'progress' },
+    { task: '订购华夫蛋筒', status: 'done' },
+  ]
+
+  const filter = ref('all')
+
+  const items = computed(() => [
+    { value: 'all', label: '全部', count: rows.length },
+    { value: 'todo', label: '待办', dot: '#f09a2f', count: rows.filter(r => r.status === 'todo').length },
+    { value: 'progress', label: '进行中', dot: '#16a6c7', count: rows.filter(r => r.status === 'progress').length },
+    { value: 'done', label: '已完成', dot: '#25a878', count: rows.filter(r => r.status === 'done').length },
+  ])
+  </script>
+
+  <template>
+    <TxFilterChips v-model="filter" :items="items" aria-label="任务状态筛选" />
+  </template>
+---
+:::
+
+## 与表格组合
+
+筛选条只负责「选了哪一项」，过滤本身由宿主完成——这样计数、行数据与表格永远是同一份真相。
+
+:::TuffDemoWrapper{demo="FilterChipsFilterTableDemo" code-lang="vue" title="筛选 + 数据表格" description="计数从行数据推导；日期列按时间戳排序，而不是按渲染出来的月份文本。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const filter = ref('all')
+
+  const visibleRows = computed(() =>
+    filter.value === 'all' ? rows : rows.filter(row => row.status === filter.value),
+  )
+
+  const columns = [
+    { key: 'task', title: '任务名称', minWidth: 180 },
+    // 排序读时间戳字段，展示才做格式化
+    { key: 'dueAt', title: '日期', width: 110, sortable: true, sorter: (a, b) => a.dueAt - b.dueAt },
+    { key: 'status', title: '状态', width: 140 },
+  ]
+  </script>
+
+  <template>
+    <TxFilterChips v-model="filter" :items="items" />
+    <TxDataTable :columns="columns" :data="visibleRows" row-key="task" />
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string \| number` | - | 当前选中的 chip |
+| `items` | `FilterChipItem[]` | `[]` | chip 列表 |
+| `disabled` | `boolean` | `false` | 禁用整条筛选条 |
+| `role` | `'toolbar' \| 'tablist'` | `'toolbar'` | ARIA 语义，见「交互契约」 |
+| `ariaLabel` | `string` | `'Filters'` | 筛选条的可访问名 |
+
+### FilterChipItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `string \| number` | chip 唯一标识 |
+| `label` | `string` | chip 文案 |
+| `dot` | `string` | 前置圆点颜色；不传则不渲染圆点 |
+| `count` | `number` | 尾部计数徽标；不传则不渲染。**应当从数据推导** |
+| `disabled` | `boolean` | 单独禁用该 chip |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value)` | 选中变化 |
+| `change` | `(value)` | 选中变化（与上一条同时触发） |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `chip` | 替换 chip 内部内容；接收 `{ item, active }`。按钮外壳与键盘行为仍由组件保留 |
+
+## 交互契约
+
+- 整条筛选条只有一个 Tab 停靠点：焦点落在选中的 chip 上（没有选中项时落在第一个可用 chip），方向键在 chip 之间移动。
+- 方向键会绕回，并跳过禁用的 chip；`Home` / `End` 直达首尾。
+- `role="toolbar"`（默认）时 chip 是 `aria-pressed` 开关，**移动焦点不会改变筛选**，需要显式激活。
+- `role="tablist"` 时 chip 变成 `role="tab"` + `aria-selected`，**选中跟随焦点**；此时宿主应当同时渲染对应的 `role="tabpanel"` 区域。
+- 点击已选中的 chip 不会重复触发事件。
+- 计数由宿主传入，组件看不到数据，也不会自行推导。
+
+## 最佳实践
+
+- 计数一律用 `computed` 从行数据算出来。写死字面量的那一刻它就开始说谎——新增一行就对不上了。
+- 筛选逻辑放宿主：chip 只表达「选了哪一项」，被过滤掉的行应当真正从数据里移除，而不是靠 CSS 藏起来（藏起来的行仍在无障碍树和 Tab 序列里）。
+- 单纯的列表筛选保持默认 `role="toolbar"`；只有确实存在成组的互斥面板时才用 `tablist`。
+- 圆点是辅助信息，不要让颜色成为状态的唯一载体——`label` 必须自己说清楚。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/filter-chips/src/TxFilterChips.vue`。
+- Types: `packages/tuffex/packages/components/src/filter-chips/src/types.ts` 导出 `FilterChipsProps`、`FilterChipItem`、`FilterChipsRole`、`FilterChipValue`、`FilterChipsEmits`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/filter-chips/__tests__/filter-chips.test.ts` 共 11 例，覆盖 chip / 圆点 / 计数渲染、toolbar 与 tablist 两套 ARIA、v-model 与 change 发射、重复点击不发事件、roving tabindex 与无选中时的回退、方向键绕回与跳过禁用项、tablist 下选中跟随焦点、禁用态与 chip 插槽。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
+- **补齐的无障碍能力：** 上游只有 `aria-pressed`，没有任何键盘导航；本移植按仓库标准补上了 roving tabindex、方向键、`Home` / `End` 与 `tablist` 语义。
+- **修正的上游缺陷：** 上游把计数写成字面量常量，只是恰好与当时的行数对得上；本组件把 `count` 定义为宿主推导的值，并在文档与 demo 中一致地这么做。
+- **配色：** 悬停用中性的 `--tx-bui-hover`，不是主色调 tint——筛选条是纸面控件，不是强调元素。

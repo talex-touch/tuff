@@ -1,0 +1,150 @@
+---
+title: "ApprovalCard 澄清问卷卡"
+description: "智能体动手前的逐题走查：单选、多选、自由作答，带分页与提交态。"
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [ai, approval, questionnaire, human-in-the-loop]
+syncStatus: reviewed
+verified: true
+---
+# ApprovalCard 澄清问卷卡
+
+## 基础用法
+
+### 多题走查
+
+一次只显示一题。单选作答后 480ms 自动翻页，多选不会——多选要等用户自己按下一步。
+
+:::TuffDemoWrapper{demo="ApprovalCardWalkthroughDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const answers = ref({})
+  const questions = [
+    {
+      id: 'count',
+      question: '我们先上几个口味？',
+      type: 'radio',
+      options: [
+        { value: 'three', label: '三个（核心线）' },
+        { value: 'five', label: '五个（整箱）' },
+      ],
+    },
+    {
+      id: 'mixins',
+      question: '要备哪些配料？',
+      type: 'check',
+      options: [
+        { value: 'chips', label: '巧克力碎' },
+        { value: 'waffle', label: '华夫碎' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <TxApprovalCard
+      v-model="answers"
+      :questions="questions"
+      @submit="run"
+    />
+  </template>
+---
+:::
+
+## 它不是授权闸门
+
+`TxToolConfirmation` 是一次二元授权：某个工具调用允不允许，输出 approve / deny 和风险分级。本组件是**问卷**：智能体动手前先问清楚几件事，输出一组答案。两者的数据模型与输出契约没有交集，不要互相替代，也不要把问卷塞进授权卡。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `questions` | `ApprovalQuestion[]` | — | 题目列表：`{ id, question, type?, options, allowCustom?, customPlaceholder? }`。必填。 |
+| `modelValue` | `Record<string, ApprovalAnswer>` | — | `v-model`，按 `question.id` 索引的答案表。不传则组件自持。 |
+| `index` | `number` | — | `v-model:index`，当前题号。不传则组件自持。 |
+| `sent` | `boolean` | — | `v-model:sent`，是否已提交。 |
+| `open` | `boolean` | — | `v-model:open`，`false` 时整卡收成一颗重新打开的按钮。 |
+| `autoAdvance` | `boolean` | `true` | 单选作答后是否自动翻页。 |
+| `autoAdvanceDelay` | `number` | `480` | 自动翻页延时（ms）。 |
+| `dismissible` | `boolean` | `true` | 是否渲染关闭按钮。 |
+| `ariaLabel` | `string` | `'Approval questions'` | 整卡的无障碍名称。 |
+| `sendLabel` | `string` | `'Send answers'` | 末题时发送键的无障碍名。 |
+| `nextQuestionLabel` | `string` | `'Next question'` | 非末题时发送键的无障碍名。 |
+| `prevLabel` / `nextLabel` | `string` | `'Previous'` / `'Next'` | 分页左右箭头的无障碍名。 |
+| `dismissLabel` | `string` | `'Dismiss'` | 关闭按钮的无障碍名。 |
+| `reopenLabel` | `string` | `'Open approval'` | 收起后那颗按钮的文案。 |
+| `sentLabel` | `string` | `'Answers sent'` | 提交成功文案。 |
+| `startOverLabel` | `string` | `'Start over'` | 重新开始按钮文案。 |
+| `customPlaceholder` | `string` | `'Type something…'` | 自由作答输入框占位。可被单题覆盖。 |
+| `customLabel` | `string` | `'Custom answer'` | 自由作答输入框的无障碍名。 |
+| `pagerLabelFormatter` | `(position: number) => string` | `` n => `Go to question ${n}` `` | 分页圆点的无障碍名。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(answers: Record<string, ApprovalAnswer>)` | 答案表变化。 |
+| `update:index` | `(index: number)` | 翻页。 |
+| `update:sent` | `(sent: boolean)` | 提交态变化。 |
+| `update:open` | `(open: boolean)` | 收起 / 展开。 |
+| `answer` | `(answer: ApprovalAnswer)` | 单题作答即刻派发，便于宿主增量落库。 |
+| `submit` | `(answers: ApprovalAnswer[])` | 末题提交，按 `questions` 顺序给出已作答项。 |
+| `dismiss` | `()` | 卡片被关闭。 |
+| `reopen` | `()` | 卡片被重新打开。 |
+
+### Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `question` | `{ question, index }` | 覆盖题干渲染。 |
+| `sent` | `{ answers }` | 覆盖提交成功面板。 |
+| `footer-extra` | — | 插在页脚发送键之前。 |
+
+### Exposed
+
+| 方法 | 说明 |
+|------|------|
+| `next()` / `prev()` / `goTo(index)` | 翻页。 |
+| `submit()` | 等价于按下发送键，无答案时是空操作。 |
+| `reset()` | 清空答案、回到首题、退出提交态并重新打开。 |
+
+## 交互契约
+
+- **四个状态都是双模的。** `modelValue` / `index` / `sent` / `open` 任一传了就以 prop 为准，没传就由组件自持。流式宿主重建这张卡时，只有受控才不会丢页码和答案。
+- **答案按 `option.value` 存，不按下标。** 题目顺序变了答案也不会错位。
+- **单选与自由作答互斥。** 选中一项会清空该题的自由文本；反过来在自由框里打字会清空单选。多选不受影响，两者可以并存。
+- 发送键在「有选中项**或**自由文本非空」时才可用；它在末题是提交，在其他题是前进。
+- 分页圆点填充表示**该题已作答**，不是「已经过」。上游按 `i < 当前题` 判断，往回翻时会把已答的题显示成未答，这里做了修正。
+- **`prefers-reduced-motion: reduce` 下不自动翻页——这是有意偏离上游。** 上游照常翻页（它只有一条全局 `*` 规则压缩动效时长）。这里把该偏好当作「不要发生未经请求的上下文切换」来读：读屏正念到一半页面被换掉，正是这种切换。翻页不是进度机制而是上下文切换，所以它属于该偏好要抑制的一类，而不属于「只砍补间、不砍状态机」里的状态机。所有题仍可通过分页圆点与发送键抵达，功能没有任何损失。
+- 关闭后整卡换成一颗按钮，内部状态不清空；`reset()` 或 `startOver` 才会清。
+- 题目按钮是 `button` + `aria-pressed`，整组套 `role="group"` 并 `aria-labelledby` 指向题干，读屏能拿到题目上下文。
+
+## 最佳实践
+
+- 接 `answer` 做增量落库，别只等 `submit`——用户中途关掉卡片时前面几题的答案不该丢。
+- 题目控制在 3～5 个，超出就该换成表单页；分页圆点的可扫读性到七八个就崩了。
+- 用不到自由作答的题显式写 `allowCustom: false`，少一行空输入框能省掉一次误触。
+- 非英文界面把文案 props 一起覆盖，只改几个会出现中英混排。
+- `submit` 之后把 `sent` 提到宿主保存，否则重建卡片会退回未提交态。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/approval-card/src/TxApprovalCard.vue`。
+- Types: `packages/tuffex/packages/components/src/approval-card/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/approval-card/__tests__/approval-card.test.ts`（15 项）验证单选替换与多选累积、自由作答与单选互斥、发送键门控、分页禁用与圆点状态、受控 `index` / `modelValue` 优先、收起与重开、自动翻页在多选下不触发、reduced-motion 下被抑制，以及 `reset()` 清空全部状态。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **与 `TxToolConfirmation` 的分工:** 见上文「它不是授权闸门」。名字相近但语义正交，文档里必须一起读。
+- **可访问性:** `role="group"` + `aria-labelledby` 指向题干是有意超出上游的修正；上游只有裸的 `aria-pressed`，读屏拿不到题目上下文。
+- **已知偏差:** 上游的自动翻页在减少动效下照常触发（它只有一条全局 `*` 规则压缩时长）。这里改成抑制，理由写在交互契约里；若宿主需要上游行为，显式传 `autoAdvance` 并自行判断偏好。
+- **已知偏差:** 上游按数组下标存答案，本组件改用 `option.value`。

@@ -1,0 +1,151 @@
+---
+title: "InsightCards"
+description: "The 'Insights N ‹ ›' pager: one conclusion, one card, one follow-up, with the content supplied by slots."
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, insight, pager, data]
+syncStatus: reviewed
+verified: true
+---
+# InsightCards
+
+## Basic Usage
+
+### Full Composition
+
+:::TuffDemoWrapper{demo="InsightCardsInsightCardsDemo" code-lang="vue" title="Three insights" description="Paging plus a two-series chart, an anomaly chart, an allocation bar and the follow-up pill."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const page = ref(0)
+  const pages = [
+    { key: 'compare', prose: 'The worst performer is Rocky Road — down 6%.', suggestion: 'Should I rebalance flavors?' },
+    { key: 'allocation', prose: 'You are heavily invested in Vanilla — 72.5% of your case.', suggestion: 'What changes for seasonals?' },
+  ]
+  </script>
+
+  <template>
+    <TxInsightCards v-model:active-index="page" :pages="pages" @follow-up="ask($event)">
+      <template #default="{ page: current }">
+        <FlavourCard :key="current.key" />
+      </template>
+    </TxInsightCards>
+  </template>
+---
+:::
+
+## Where the Shell Ends
+
+This component is the shell only: the title and count, the step buttons, the conclusion line, the card slot and the follow-up pill. **Card content always comes from the host** — upstream's three are a two-series polyline, an anomaly chart with a metric switch, and an allocation bar, which in tuffex are `TxSparkChart` / `TxChartScrubber` / `TxAllocationBar`, composed through the default slot rather than wired into the shell.
+
+With no `activeIndex` bound the component pages itself; bind it and the host owns the page entirely. An out-of-range index is clamped into the valid range rather than blanking the body.
+
+Paging is a **hard cut**, with no transition. Upstream's comment promises a "blurred crossfade", but its inline style is a constant and `duration-250` is not a valid Tailwind step — it never ran. The autoplay that comment also mentions does not exist in the source either (there is no timer anywhere), so neither is offered here. If you want a transition, wrap the default slot's content in your own `<Transition>`.
+
+## InsightMetric
+
+`TxInsightMetric` is the figure block those cards are built from: a dotted label, a signed headline number, and a mono detail line. It is exported from the same directory and works on its own.
+
+When `value` goes through the default formatting, the minus is **U+2212 (`−`)** rather than an ASCII hyphen: a column of these sits under `tabular-nums`, and the hyphen is both narrower and set too high for that grid. `tone` is derived from the sign by default (positive green, negative red, zero neutral) and can be overridden; `detail` is passed through as written, so its minus is the host's to spell.
+
+:::TuffDemoWrapper{demo="InsightCardsInsightMetricDemo" code-lang="vue" title="Figure blocks" description="A reading in each direction, with its secondary line."}
+---
+code: |
+  <template>
+    <TxInsightMetric
+      label="Mint Chip"
+      color="var(--tx-bui-orange)"
+      :value="-4.41"
+      detail="−$2,377.66"
+    />
+    <TxInsightMetric
+      label="Pistachio"
+      color="var(--tx-bui-accent)"
+      :value="1.15"
+      detail="+$617.22"
+    />
+  </template>
+---
+:::
+
+## API
+
+### InsightCards Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `pages` | `InsightPage[]` | — | Page data, `{ key, prose?, suggestion? }`. |
+| `activeIndex` | `number` | — | Current page. Omit to let the component page itself. |
+| `title` | `string` | `'Insights'` | Header title. |
+| `showCount` | `boolean` | `true` | Shows the page count beside the title. |
+| `loop` | `boolean` | `true` | Wraps at both ends; turn off and the end buttons disable. |
+| `previousLabel` / `nextLabel` | `string` | `'Previous insight'` / `'Next insight'` | Accessible names for the step buttons. |
+
+### InsightCards Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:activeIndex` | `(index: number)` | The page moved. |
+| `change` | `(page, index)` | The same move, carrying the page. |
+| `followUp` | `(page)` | The follow-up pill was pressed. |
+
+### InsightCards Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `default` | `{ page, index }` | The card body. |
+| `prose` | `{ page, index }` | Rich conclusion copy, replacing `page.prose`. |
+| `follow-up` | `{ page, index }` | Replaces the follow-up pill. |
+
+### InsightCards Exposed
+
+| Method | Description |
+|------|-------------|
+| `previous()` / `next()` / `goTo(index)` | Imperative paging, down the same path as the buttons. |
+
+### InsightMetric Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string` | — | The caption. |
+| `color` | `string` | — | Swatch before the label; omit to drop the dot. |
+| `value` | `number` | — | Signed headline number, through the default formatting. |
+| `delta` | `string` | — | Pre-formatted headline; wins over `value`. |
+| `unit` | `string` | `'%'` | Appended by the default formatting. |
+| `precision` | `number` | `2` | Decimals for the default formatting. |
+| `detail` | `string` | — | Mono second line, passed through as written. |
+| `tone` | `'positive' \| 'negative' \| 'neutral'` | — | Overrides the tone derived from the sign. |
+| `formatter` | `(value: number) => string` | — | Takes over number formatting entirely. |
+
+## Interaction Contract
+
+- Both step buttons carry an `aria-label`; with `loop` off the end button is genuinely `disabled`, not merely greyed.
+- An empty `pages` renders the header alone with both buttons disabled, rather than an empty card.
+- A page without `suggestion` renders no pill, and `followUp` only fires when the pill is pressed.
+- Content changes by `page.key`: put a `:key` on the card inside the slot so paging really rebuilds it — which matters when a chart has to repaint.
+- Headline figures and the page count are `tabular-nums`, so digits do not change width as you page or refresh.
+
+## Best Practices
+
+- One point per page: a conclusion, a piece of evidence, and one actionable follow-up.
+- Entity mentions and inline figures belong in the `prose` slot; `page.prose` takes plain text only.
+- Let the card body hold its own height (upstream floors it at 278px), or the page jumps as you step through.
+- Word the follow-up the way a person would ask it, not as "Learn more".
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/insight-cards/src/TxInsightCards.vue`, `TxInsightMetric.vue`.
+- Types: `packages/tuffex/packages/components/src/insight-cards/src/types.ts`.
+- **Tested coverage:** `packages/tuffex/packages/components/src/insight-cards/__tests__/insight-cards.test.ts` (18 cases) covers controlled and uncontrolled paging, wrapping and end-disabling, out-of-range clamping, empty data, conditional pill rendering, slot scope, imperative paging, and for InsightMetric the sign-to-tone mapping, the U+2212 assertion, unit and precision, pre-formatted values and a custom formatter.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **No upstream visual baseline for the chart area:** the upstream screenshots read "No data to display" where the chart should be. The card frame, figure blocks and follow-up pill remain valid references; the chart is built to spec, as described in `SparkChart`'s review notes.
+- **Two features that exist only in upstream comments:** autoplay and the blurred paging crossfade. The first has no timer anywhere in the source, and the second's inline style is a constant. Neither is implemented here as a "restoration".
+- **U+2212 is a deliberate divergence:** upstream emits the ASCII hyphen `toFixed` gives it. This family standardises on U+2212 for signed figures, and `formatter` puts it back if you disagree.

@@ -1,0 +1,139 @@
+---
+title: "FilterChips"
+description: "A single-select filter row of chips with leading dots and counts, usable with toolbar or tablist semantics."
+category: Data
+status: beta
+since: 2.5.0
+tags: [filter, chips, table, data]
+syncStatus: reviewed
+verified: true
+---
+# FilterChips
+
+## Basic Usage
+
+### FilterChips
+:::TuffDemoWrapper{demo="FilterChipsFilterChipsDemo" code-lang="vue" title="Status filter" description="Counts are derived from real data rather than typed in as literals."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const rows = [
+    { task: 'Restock mango sorbet', status: 'todo' },
+    { task: 'Churn black sesame', status: 'progress' },
+    { task: 'Order waffle cones', status: 'done' },
+  ]
+
+  const filter = ref('all')
+
+  const items = computed(() => [
+    { value: 'all', label: 'All', count: rows.length },
+    { value: 'todo', label: 'To do', dot: '#f09a2f', count: rows.filter(r => r.status === 'todo').length },
+    { value: 'progress', label: 'In Progress', dot: '#16a6c7', count: rows.filter(r => r.status === 'progress').length },
+    { value: 'done', label: 'Completed', dot: '#25a878', count: rows.filter(r => r.status === 'done').length },
+  ])
+  </script>
+
+  <template>
+    <TxFilterChips v-model="filter" :items="items" aria-label="Task status filter" />
+  </template>
+---
+:::
+
+## Composing With A Table
+
+The chip row only reports which option is selected; the host does the filtering — which keeps the counts, the row data, and the table on one source of truth.
+
+:::TuffDemoWrapper{demo="FilterChipsFilterTableDemo" code-lang="vue" title="Filter chips with a data table" description="Counts derive from the row data, and the date column sorts by timestamp rather than by the rendered month text."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const filter = ref('all')
+
+  const visibleRows = computed(() =>
+    filter.value === 'all' ? rows : rows.filter(row => row.status === filter.value),
+  )
+
+  const columns = [
+    { key: 'task', title: 'Task name', minWidth: 180 },
+    // Sorting reads the timestamp; the column only formats it for display.
+    { key: 'dueAt', title: 'Date', width: 110, sortable: true, sorter: (a, b) => a.dueAt - b.dueAt },
+    { key: 'status', title: 'Status', width: 140 },
+  ]
+  </script>
+
+  <template>
+    <TxFilterChips v-model="filter" :items="items" />
+    <TxDataTable :columns="columns" :data="visibleRows" row-key="task" />
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `string \| number` | - | Currently selected chip |
+| `items` | `FilterChipItem[]` | `[]` | The chips |
+| `disabled` | `boolean` | `false` | Disables the whole row |
+| `role` | `'toolbar' \| 'tablist'` | `'toolbar'` | ARIA shape; see Interaction Contract |
+| `ariaLabel` | `string` | `'Filters'` | Accessible name for the chip row |
+
+### FilterChipItem
+
+| Field | Type | Description |
+|------|------|------|
+| `value` | `string \| number` | Chip identity |
+| `label` | `string` | Chip text |
+| `dot` | `string` | Leading dot colour; omit to render no dot |
+| `count` | `number` | Trailing count badge; omit to render none. **Derive it from your data** |
+| `disabled` | `boolean` | Disables this chip alone |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:modelValue` | `(value)` | Selection changed |
+| `change` | `(value)` | Selection changed, emitted alongside the above |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `chip` | Replaces a chip's inner content; receives `{ item, active }`. The button shell and keyboard behaviour stay with the component |
+
+## Interaction Contract
+
+- The row is a single tab stop: focus lands on the selected chip (or the first enabled one when nothing is selected), and arrow keys move between chips from there.
+- Arrow navigation wraps and skips disabled chips; `Home` and `End` jump to the ends.
+- With `role="toolbar"` (the default) chips are `aria-pressed` toggles and **moving focus does not change the filter** — activation is explicit.
+- With `role="tablist"` chips become `role="tab"` with `aria-selected` and **selection follows focus**; the host should render the matching `role="tabpanel"` region.
+- Clicking the already-selected chip emits nothing.
+- Counts come from the host: the component cannot see your data and never infers them.
+
+## Best Practices
+
+- Always compute counts from the row data. A hardcoded literal starts lying the moment a row is added.
+- Keep the filtering in the host: the chips only say which option is selected, and filtered-out rows should genuinely leave the data rather than being hidden with CSS — a hidden row is still in the accessibility tree and the tab order.
+- Keep the default `role="toolbar"` for plain list filtering; reach for `tablist` only when mutually exclusive panels actually exist.
+- Treat the dot as supplementary. Colour must never be the only carrier of state, so the `label` has to stand on its own.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/filter-chips/src/TxFilterChips.vue`.
+- Types: `packages/tuffex/packages/components/src/filter-chips/src/types.ts` exports `FilterChipsProps`, `FilterChipItem`, `FilterChipsRole`, `FilterChipValue`, and `FilterChipsEmits`.
+- **Test coverage:** `packages/tuffex/packages/components/src/filter-chips/__tests__/filter-chips.test.ts` has 11 cases covering chip / dot / count rendering, both ARIA shapes, `v-model` and `change` emission, silence on re-clicking the active chip, roving tabindex including the no-selection fallback, arrow wrapping and disabled skipping, selection-follows-focus in tablist mode, the disabled state, and the chip slot.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- **Accessibility added:** Upstream ships `aria-pressed` and no keyboard navigation whatsoever. This port adds roving tabindex, arrow keys, `Home` / `End`, and the tablist shape to meet the repository standard.
+- **Upstream defect fixed:** Upstream hardcodes the counts as literal constants that merely happened to match the row count at the time. Here `count` is defined as a host-derived value, and the docs and demos follow that consistently.
+- **Palette:** Hover uses the neutral `--tx-bui-hover` rather than an accent tint — a filter row is paper chrome, not an emphasis element.

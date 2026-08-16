@@ -10,10 +10,6 @@ verified: true
 ---
 # Tag 标签
 
-`TxTag` 渲染紧凑的状态式标签，支持前置图标、自定义颜色 token、可移除关闭按钮，以及轻量状态切换使用的点击事件。
-
-已人工核对 `packages/tuffex/packages/components/src/tag/src/types.ts`、`TxTag.vue` 与 `tag.test.ts`。
-
 ## Demo
 
 ### 标签
@@ -130,6 +126,20 @@ code: |
 | `closable` | `boolean` | `false` | 渲染关闭按钮。 |
 | `disabled` | `boolean` | `false` | 禁用标签点击与关闭交互。 |
 | `pill` | `boolean` | `false` | 使用全圆角胶囊外形（根节点加 `.pill` class）；用于筛选芯片等需要与方角标签在形状上区分的场景。 |
+| `variant` | `'outline' \| 'soft' \| 'plain'` | `'outline'` | 填充配方，见下表。 |
+| `dot` | `string` | - | 前置圆点颜色；不传则不渲染圆点。让标签在保持文字可读的同时携带分类色。 |
+| `dotSize` | `number` | `6` | 圆点直径（像素）。 |
+| `count` | `number` | - | 尾部计数徽标；传 `0` 会渲染，不传则不渲染。 |
+
+三种 `variant` 的配方：
+
+| 值 | 填充 | 发丝边 | 文字 | 适用 |
+|------|------|------|------|------|
+| `outline` | 12% | 32% | 原色 | 默认，与既有标签完全一致 |
+| `soft` | 20% | 34% | 92% 原色混入墨色 | 彩色底上的 11px 小字更稳 |
+| `plain` | 中性填充 | 中性发丝边 | 次级墨色 | 忽略 `color`，用于 `+3` 这类溢出计数与不该抢眼的元信息 |
+
+`background` / `border` 显式传值时仍然优先于任何 variant。
 
 ### Events
 

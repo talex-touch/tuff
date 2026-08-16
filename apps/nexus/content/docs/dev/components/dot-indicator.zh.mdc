@@ -1,0 +1,92 @@
+---
+title: "DotIndicator 圆点指示器"
+description: "裸圆点加文案的状态指示原语，用于表格单元格与汇总行。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [status, dot, table, data]
+syncStatus: reviewed
+verified: true
+---
+# DotIndicator 圆点指示器
+
+## 基础用法
+
+### DotIndicator
+:::TuffDemoWrapper{demo="DotIndicatorDotIndicatorDemo" code-lang="vue" title="关系强度" description="圆点承载颜色，文案承载含义；两者缺一不可。"}
+---
+code: |
+  <template>
+    <TxDotIndicator color="var(--tx-bui-green)" label="非常紧密" />
+    <TxDotIndicator color="var(--tx-bui-orange)" label="一般" />
+    <TxDotIndicator color="var(--tx-bui-red)" label="较弱" />
+    <TxDotIndicator color="var(--tx-bui-ink-3)" label="无往来" />
+
+    <TxDotIndicator color="var(--tx-bui-orange)">
+      <strong>44% 平均强度</strong>
+    </TxDotIndicator>
+  </template>
+---
+:::
+
+## 与 StatusBadge 的分工
+
+两者不是同一个东西，选错会得到一个尺寸和语义都不合适的控件。
+
+| | `TxDotIndicator` | `TxStatusBadge` |
+|------|------|------|
+| 形态 | 裸圆点 + 纯文字 | 带边框的胶囊 + 图标 |
+| 配色 | 任意颜色 | 固定五档语义 tone |
+| 用途 | 表格单元格、汇总行等高密度场景 | 独立的状态标记 |
+
+表格里一列几十行的状态，用胶囊会显得笨重且抢视线，这正是这个原语存在的原因。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `color` | `string` | `'currentColor'` | 圆点颜色，接受任意 CSS 颜色或变量 |
+| `label` | `string` | - | 圆点旁的文案 |
+| `size` | `number` | `8` | 圆点直径（像素） |
+| `ariaLabel` | `string` | - | 没有可见文案时的可访问名 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `default` | 替换圆点旁的文案 |
+
+## 交互契约
+
+组件按三种情况决定自己在无障碍树里的身份，避免朗读出一个空元素：
+
+| 传入 | 结果 |
+|------|------|
+| 有 `label` 或默认插槽 | 文案自己说明含义，不额外加 role 或 aria-label |
+| 只有 `ariaLabel` | 成为 `role="img"` 并带上该名称 |
+| 两者都没有 | 视为装饰，`aria-hidden="true"` |
+
+文案默认使用等宽数字（`tabular-nums`），因此百分比、比例在数值变化时不会左右跳动。
+
+## 最佳实践
+
+- 优先给 `label`。颜色不能是状态的唯一载体——色觉障碍用户与灰度截图都读不出红绿差别。
+- 只有当同一行里已经有别的文字说明含义时，才用 `ariaLabel` 的形态。
+- 颜色尽量走 `--tx-bui-*` 或 `--tx-color-*` 变量，硬编码 hex 在主题切换时不会跟随。
+- 汇总行里用默认插槽包一层 `<strong>`，可以在保持圆点对齐的同时强调数值。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/dot-indicator/src/TxDotIndicator.vue`。
+- Types: `packages/tuffex/packages/components/src/dot-indicator/src/types.ts` 导出 `DotIndicatorProps`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/dot-indicator/__tests__/dot-indicator.test.ts` 共 5 例，覆盖颜色与尺寸变量、三种无障碍身份（装饰 / `role="img"` / 由可见文案承担）以及默认插槽。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
+- **为什么不复用 `TxStatusBadge`：** 后者是锁定五档 tone、自带边框与图标的胶囊，接不了任意颜色，也不适合表格里的高密度场景。
+- **无障碍：** 上游是纯视觉的圆点，没有任何无障碍处理；本移植补上了三态身份判断。

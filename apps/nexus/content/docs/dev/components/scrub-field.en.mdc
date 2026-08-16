@@ -1,0 +1,108 @@
+---
+title: "ScrubField"
+description: "A compact numeric field whose caption is the drag handle: scrub it, step it, or type into it."
+category: Form
+status: beta
+since: 2.5.0
+tags: [form, number, drag, inspector]
+syncStatus: reviewed
+verified: true
+---
+# ScrubField
+
+## Basic Usage
+
+### ScrubField
+
+:::TuffDemoWrapper{demo="ScrubFieldScrubFieldDemo" code-lang="vue" title="Three quantities" description="An integer, a percentage and a half-step value, each reachable three ways."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const width = ref(324)
+  const opacity = ref(100)
+  </script>
+
+  <template>
+    <TxScrubField v-model="width" label="W" :min="40" :max="999" :active="width !== 324" />
+    <TxScrubField v-model="opacity" label="Opacity" :min="0" :max="100" suffix="%" />
+  </template>
+---
+:::
+
+## Three Ways In
+
+**Drag.** Press on the caption and move sideways: every `pixelsPerStep` (2 by default) advances one `step`. The travel is measured from where the gesture started rather than mapped onto a track — which is why there is no track, and why the drag is not bounded by the control's width and can run all the way to the limits.
+
+**Keyboard.** The handle is a focusable `role="slider"`. ↑ → increase, ↓ ← decrease, Shift multiplies by `shiftMultiplier` (10 by default), and Home / End jump to the bounds.
+
+**Typing.** The value is a real `<input>`. `clampOn` decides when it settles: `'input'` (the default, and upstream's behaviour) clamps on every keystroke, while `'blur'` keeps the text you are typing so that `5` on the way to `50` is not rewritten under you.
+
+Pressing **Escape during a drag abandons the gesture**, returning to the value the drag started from — not the last value the pointer happened to pass over.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `number` | — | The current value, controlled. |
+| `label` | `string` | — | Short caption, which doubles as the drag handle. |
+| `min` / `max` | `number` | — | Bounds, clamped on all three paths. |
+| `step` | `number` | `1` | Step size. A fractional step keeps its decimals. |
+| `suffix` | `string` | — | Unit after the value, such as `%`. |
+| `active` | `boolean` | `false` | Tints the field as changed. What counts as changed is the host's call. |
+| `disabled` | `boolean` | `false` | Disables all three paths. |
+| `pixelsPerStep` | `number` | `2` | Pointer travel that advances one step. |
+| `shiftMultiplier` | `number` | `10` | Arrow-key multiplier while Shift is held. |
+| `clampOn` | `'input' \| 'blur'` | `'input'` | When typed text settles. |
+| `ariaLabel` | `string` | — | Accessible name for the handle; falls back to `label`. |
+| `valueLabel` | `string` | `'{label} value'` | Accessible name for the input. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:modelValue` | `(value: number)` | The value changed. Never repeats an identical value. |
+| `change` | `(value: number)` | The same signal. |
+| `scrubStart` / `scrubEnd` | — | Start and end of a drag, cancellation included. |
+
+### Exposed
+
+| Method | Description |
+|------|-------------|
+| `focus()` | Focuses the drag handle. |
+| `focusInput()` | Focuses the number input. |
+
+## Interaction Contract
+
+- The handle is a `role="slider"` with `aria-valuenow` / `aria-valuemin` / `aria-valuemax` / `aria-orientation`, plus `aria-valuetext` (`100%`) when a suffix is set. The input is a **second** control with its own accessible name — that two-control shape is deliberate.
+- What gets quantised is the **travel**, not the result: `round(distance / pixelsPerStep) * step`. That is what makes fractional steps work and stops an off-grid starting value from being snapped onto the grid.
+- The drag runs under pointer capture, and both `pointercancel` and `lostpointercapture` end it. Upstream listens for neither, so a system gesture stealing the pointer leaves a live drag behind.
+- Unmounting removes the window key listener the drag installs.
+- The handle sets `touch-action: pan-y`: the horizontal axis belongs to the drag, the vertical one to the page.
+- The wrapper is a `<label>`, but the handle prevents its default forwarding and takes focus itself — otherwise every press on the handle would hand focus to the input.
+- There is no JS animation here, only one state transition (fill and ring), which is switched off under reduced motion.
+
+## Best Practices
+
+- Keep captions short (`W`, `H`, `Radius`): the caption *is* the handle, and a long one turns the drag target into the loudest thing in the row.
+- Let the host decide `active` — usually "current value differs from the preset", compared against data rather than a hard-coded constant.
+- Use `clampOn="blur"` in forms people type into, and the default `'input'` in inspectors with a live preview.
+- When you need "pick a value by position on a track", use `TxSlider`. Position mapping and travel accumulation are not interchangeable.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/scrub-field/src/TxScrubField.vue`.
+- Types: `packages/tuffex/packages/components/src/scrub-field/src/types.ts`.
+- **Tested coverage:** `packages/tuffex/packages/components/src/scrub-field/__tests__/scrub-field.test.ts` (18 cases) covers drag quantisation and its origin baseline, fractional steps, Escape cancellation, pointer cancel and lost capture, arrow keys with the Shift multiplier, Home/End, clamping on all three paths, both `clampOn` modes, Escape reverting typed text, the disabled state, the accessibility attributes and the exposed methods.
+- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Why not a `TxSlider` variant:** a slider maps pointer **position** onto a track; this accumulates pointer **travel** into steps and has no track at all. The maths and the DOM are both incompatible. `TxNumberInput` does not fit either — it is a 34px form control with stepper buttons and a different settling rule.
+- **Fixes over upstream:** `pointercancel` / `lostpointercapture` (without which a stolen pointer leaves a live drag), Escape cancellation, Home/End, `aria-orientation`, and quantising travel instead of rounding the result.
+- **Reduced motion:** this component runs no JS animation, so it needs no `matchMedia` guard; its one transition is switched off by the CSS media query.

@@ -10,10 +10,6 @@ verified: true
 ---
 # Sources
 
-`TxSources` 把支撑一次回答的引用收进折叠区：折叠时只显示条数，展开后是带序号、站点图标与域名的有序列表。
-
-已人工核对 `packages/tuffex/packages/components/src/sources/src/TxSources.vue`。
-
 ## 基础用法
 
 ### Sources
@@ -37,8 +33,28 @@ code: |
 ---
 ::::
 
+### 来源堆叠
+
+`variant="stack"` 把头部的地球图标换成前几条来源的站点图标，重叠排列。折叠状态下读者就能看出引用了哪些站点，展不展开都成立。
+
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="流式回答里的来源堆叠" description="答案定稿后，堆叠头部与纵向追问列表一起出现。"}
+---
+code: |
+  <template>
+    <TxSources
+      :sources="sources"
+      variant="stack"
+      :label-formatter="(n) => `${n} 个来源`"
+      @open="open"
+    />
+  </template>
+---
+:::
+
 ## 交互契约
 
+- `variant="stack"` 最多取前 3 条**能画出图标**的来源；一条都画不出时回落到地球图标，而不是留一片空白。图标加载失败后该条退出堆叠，后面的来源顶上来。
+- 堆叠图标的描边色走 `--tx-sources-stack-ring`（默认取页面底色）：它的作用是在重叠处挖出缝隙，头部放在非页面底色的容器上时需要改指向。
 - **链接不会自己跳转。** 点击时组件调用 `preventDefault()` 并派发 `open`，是否打开、在哪打开由宿主决定——这对沙箱环境（如 Electron 渲染进程）是刻意设计。
 - `href` 仍然写在 `<a>` 上，所以「在新标签页打开」「复制链接地址」等浏览器原生右键菜单依旧可用。
 - 展开态由组件自己持有，初值取 `defaultOpen`；这是非受控组件，后续改 `defaultOpen` 不生效。
@@ -57,6 +73,7 @@ code: |
 | `sources` | `AiSourceItem[]` | — | 引用列表；`AiSourceItem` 为 `{ id, url, title?, favicon? }`。必填。 |
 | `labelFormatter` | `(count: number) => string` | — | 自定义折叠标题；未设时回退到 `Used N source(s)`。 |
 | `defaultOpen` | `boolean` | `false` | 初始是否展开。仅在挂载时读取一次。 |
+| `variant` | `'default' \| 'stack'` | `'default'` | `stack` 用重叠的站点图标替代头部的地球图标。 |
 
 ### Events
 

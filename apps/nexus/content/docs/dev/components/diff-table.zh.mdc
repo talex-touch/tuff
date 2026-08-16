@@ -1,0 +1,148 @@
+---
+title: "DiffTable 变更表格"
+description: "以变更集语义呈现 AI 提议的改动，按阶段依次标红、展开新增行。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [table, diff, review, data]
+syncStatus: reviewed
+verified: true
+---
+# DiffTable 变更表格
+
+## 基础用法
+
+### DiffTable
+:::TuffDemoWrapper{demo="DiffTableDiffTableDemo" code-lang="vue" title="提议的菜单精简" description="挂载后自动播放一次，停在完成态；重新播放按钮走 reset() + play()。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const columns = [
+    { key: 'flavor', title: '口味', width: '34%' },
+    { key: 'category', title: '分类', width: '30%', tintText: false },
+    { key: 'supplier', title: '供应商', width: '36%', strikeOnRemove: true },
+  ]
+
+  const rows = [
+    { key: 'rocky-road', change: 'removed', data: { flavor: 'Rocky Road', category: '经典', supplier: 'aurora-scoops' } },
+    { key: 'mint-chip', data: { flavor: 'Mint Chip', category: '经典', supplier: 'maple-orbit' } },
+    { key: 'pistachio', change: 'added', data: { flavor: 'Pistachio', category: '季节限定', supplier: 'maple-orbit' } },
+  ]
+
+  const table = ref()
+  function replay() {
+    table.value?.reset()
+    table.value?.play()
+  }
+  </script>
+
+  <template>
+    <TxDiffTable ref="table" :columns="columns" :rows="rows" title="提议的菜单精简" />
+  </template>
+---
+:::
+
+## 阶段与播放模式
+
+`stageDelays` 是三段时长 `[停顿, 标红, 展开]`，默认 `[800, 1000, 1000]`。**第一段是刻意的阅读停顿**：在它和第二段走完之前（默认 1.8 秒）表格完全不动，让人先读清原始数据，再看到改动。
+
+| 阶段 | 画面 |
+|------|------|
+| 0–1 | 全部行保持原样 |
+| 2 | `removed` / `modified` 行染色、变色、加删除线 |
+| 3（终态） | `added` 行以 `0fr → 1fr` 展开 |
+
+`play` 决定谁来推进：`auto` 挂载即播一次并停在终态；`manual` 保持原样直到调用 `play()`；`settled` 直接渲染完成态且不注册任何定时器（文档站与测试用）。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `columns` | `DiffTableColumn[]` | `[]` | 列配置 |
+| `rows` | `DiffTableRow[]` | `[]` | 行配置，每行携带自己的变更类型 |
+| `title` | `string` | - | 卡片头文案；不传则整条头栏不渲染 |
+| `play` | `'auto' \| 'manual' \| 'settled'` | `'auto'` | 播放模式 |
+| `stageDelays` | `[number, number, number]` | `[800, 1000, 1000]` | 三段阶段时长（毫秒） |
+| `duration` | `number` | `400` | 染色与展开的补间时长（毫秒） |
+
+### DiffTableColumn
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `key` | `string` | 列 key，同时决定 `cell-<key>` 插槽名 |
+| `title` | `string` | 表头文本 |
+| `dataIndex` | `string` | 从 `row.data` 取值的字段名，默认取 `key` |
+| `width` | `string \| number` | 列宽；数字按 px，字符串原样透传（如 `'34%'`） |
+| `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
+| `strikeOnRemove` | `boolean` | 该列在 `removed` 行加删除线，用于被撤下的值 |
+| `tintText` | `boolean` | 该列文字是否跟随变更色，默认 `true`；自带颜色的徽标列应设为 `false` |
+| `format` | `(value, row, index) => string` | 默认文本格式化 |
+
+### DiffTableRow
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `key` | `string \| number` | 行唯一标识 |
+| `data` | `T` | 行数据 |
+| `change` | `'unchanged' \| 'added' \| 'removed' \| 'modified'` | 变更类型，默认 `'unchanged'`；`modified` 走警示色 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `stageChange` | `(stage: number)` | 每次阶段推进时触发 |
+| `settled` | `()` | 到达终态时触发一次，无论由哪条路径抵达 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `title` | 替换卡片头文案 |
+| `cell-<columnKey>` | 自定义单元格；接收 `{ row, column, value, change, index }`，`change` 让插槽内容自行响应变更态 |
+
+### Expose
+
+| 名称 | 说明 |
+|------|------|
+| `play()` | 从当前阶段继续推进 |
+| `reset()` | 回到原始表格并清掉待执行的阶段 |
+| `settle()` | 直接跳到完成态 |
+| `stage` | 当前阶段序号；完成态等于 `stageDelays.length` |
+
+## 交互契约
+
+- 阶段机是这个组件的语义本体，不是 demo 编排；宿主用 `play` 与 expose 控制节奏，用 `rows[].change` 描述改动。
+- 定时器在 `onBeforeUnmount` 清理；`play="settled"` 不注册任何定时器。
+- **减弱动效（`prefers-reduced-motion: reduce`）下只砍补间，不砍状态机**：阶段照常推进，只是不再有过渡动画。冻结状态机会让人看着一张永远不显示改动的表格。
+- 行染色由 class 驱动而非内联样式，因此被标红的行仍然有 hover 反馈。
+- 新增行折叠时带 `aria-hidden` 与 `inert`，不会被朗读，也不在 Tab 序列里。
+- 新增行的内层网格与 `<colgroup>` 都由 `columns` 推导，只有一份真相。
+
+## 最佳实践
+
+- 用 `change` 表达语义，不要靠自定义 class 硬涂颜色；配色、删除线与折叠都跟着它走。
+- 徽标、彩色 chip 所在列设 `tintText: false`，否则会被变更色整体重涂。
+- 列宽用百分比或固定 px，避免展开新增行时列错位。
+- 文档站、快照测试与不需要动画的场景用 `play="settled"`，可以直接拿到完成态。
+- 需要按钮触发时用 `play="manual"` 配合 `reset()` + `play()`，不要靠 `:key` 重挂整个组件。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`。
+- Types: `packages/tuffex/packages/components/src/diff-table/src/types.ts` 导出 `DiffTableProps`、`DiffTableColumn`、`DiffTableRow`、`DiffChangeKind`、`DiffTablePlay`、`DiffTableEmits`。
+- Instance: `packages/tuffex/packages/components/src/diff-table/index.ts` 手写 `TxDiffTableInstance`（泛型组件的 expose 面按解包类型声明，`stage` 是 `number` 而非 `Ref<number>`）。
+- **实测覆盖:** `packages/tuffex/packages/components/src/diff-table/__tests__/diff-table.test.ts` 共 15 例，用假定时器覆盖三段阶段时序、`stageChange` / `settled` 发射、三种播放模式、expose 三方法、逐列染色与删除线、网格与 colgroup 同源、折叠行的 `aria-hidden` / `inert`、卸载清理与 `play` 切换。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
+- **与上游的差异：** 新增行按其在 `rows` 中的位置渲染，而不是上游写死的「永远在最后」，因此顺序得以保留且支持多条新增行；`modified` 是本移植新增的变更类型，上游没有。
+- **修正的上游缺陷：** 上游用内联 `style.background` 给标红行上色，其优先级压过自身的 hover 规则，导致最该被检视的那几行反而没有悬停反馈；本组件改为 class 驱动。
+- **暗色适配：** 红/绿底色取 `--tx-bui-*-tint`（半透明叠加），不能用 `--tx-color-success-light-9` —— 后者在暗色下仍然混白。
+- **已知限制：** 高对比主题（`html[data-tx-contrast='high']`）下 `--tx-bui-*` 保持 BUI 原值，不参与高对比 ramp。

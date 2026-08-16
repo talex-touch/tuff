@@ -1,0 +1,317 @@
+---
+title: AI Suite Overview
+description: 19 AI-native interface component showcases adapted from Beautiful UI
+category: Foundations
+status: beta
+since: 2.5.0
+tags: [ai, showcase, beautiful-ui, agent, primitives]
+syncStatus: reviewed
+verified: true
+---
+
+## Source & License
+
+This suite is adapted from [Beautiful UI](https://www.beautifului.dev) (Turbo design studio / Shane Levine, © 2026, MIT license) — 19 component showcases for AI-native interfaces: chat, reasoning traces, human-in-the-loop approvals, agent task status and more. The port follows three principles: pixel-match the source visual language (a dedicated `--tx-bui-*` token layer, hairline ring shadows, the 13px density system); ship components as pure controlled primitives (demo timelines stay in the demo layer); and fuse with existing tuffex components instead of duplicating them — overlaps land as variants or compositions, and accessibility gaps are filled to tuffex standards. Every component source file carries the MIT attribution in its header.
+
+## Loading & Reasoning States
+
+### 01 · WorkingIndicator
+
+Pixel-grid loader + shimmer label + live elapsed timer for long-running work. See the [WorkingIndicator doc](/docs/dev/components/working-indicator).
+
+:::TuffDemoWrapper{demo="WorkingIndicatorVariantsDemo" code-lang="vue" title="Three wavefront variants" description="drive / dots / orbit"}
+---
+code: |
+  <template>
+    <TxWorkingIndicator label="Churning" variant="drive" />
+    <TxWorkingIndicator label="Churning" variant="dots" />
+    <TxWorkingIndicator label="Churning" variant="orbit" />
+  </template>
+---
+:::
+
+### 02 · AgentTrace
+
+Expandable thinking / search / coding traces; the header swaps between shimmer and settled states. See the [AgentTrace doc](/docs/dev/components/agent-trace).
+
+:::TuffDemoWrapper{demo="AgentTraceVariantsDemo" code-lang="vue" title="Four trace variants" description="steps / reasoning / search / coding"}
+---
+code: |
+  <template>
+    <TxAgentTrace variant="steps" :rows="rows" :working="working" />
+  </template>
+---
+:::
+
+### 06 · TaskRows
+
+Agent task status list: ring-numbered badges, status pills, collapsible details, capsule/list containers. See the [TaskRows doc](/docs/dev/components/task-rows).
+
+:::TuffDemoWrapper{demo="TaskRowsCapsulesDemo" code-lang="vue" title="Capsules variant" description="Radius morph on expand + badge replay"}
+---
+code: |
+  <template>
+    <TxTaskRows :rows="rows" variant="capsules" />
+  </template>
+---
+:::
+
+### 17 · CodeStream
+
+Agent-written code revealed line by line, with a filename header, shiki highlighting and copy. See the [CodeStream doc](/docs/dev/components/code-stream).
+
+:::TuffDemoWrapper{demo="CodeStreamStreamingDemo" code-lang="vue" title="Line-by-line streaming" description="Reveal controlled via revealedLines"}
+---
+code: |
+  <template>
+    <TxCodeStream :code="code" lang="ts" filename="churn.ts" :revealed-lines="revealed" />
+  </template>
+---
+:::
+
+## Streaming & Chat
+
+### 03 · Streaming Text
+
+A composition: `TxStreamMarkdown` word reveal + `TxInlineCitation` inline references + `TxSources` stacked favicons + `TxSuggestionChips` vertical follow-ups. See the [InlineCitation doc](/docs/dev/components/inline-citation).
+
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="Full streamed answer" description="Inline citations · source stack · follow-up list"}
+---
+code: |
+  <template>
+    <TxInlineCitation v-bind="cite" />
+    <TxSources :sources="sources" variant="stack" />
+    <TxSuggestionChips :suggestions="followUps" layout="list" />
+  </template>
+---
+:::
+
+### 07 · Chat
+
+A composition (no new component): `TxTabs` + `TxConversationStream` + `TxChainOfThought` + `TxChatComposer` recreate the upstream chat panel.
+
+:::TuffDemoWrapper{demo="AiSuiteChatShowcaseDemo" code-lang="vue" title="Tabbed chat panel" description="Reasoning replies + composer composition"}
+---
+code: |
+  <template>
+    <TxTabs v-model="tab">
+      <TxConversationStream :items="messages" />
+    </TxTabs>
+  </template>
+---
+:::
+
+### 08 · PromptBar
+
+@ sources, / commands, model picker, dictation state, rounded/pill shapes; the ink-colored send key (not brand blue) is this design language's signature. See the [PromptBar doc](/docs/dev/components/prompt-bar).
+
+:::TuffDemoWrapper{demo="PromptBarPromptBarDemo" code-lang="vue" title="Full composer" description="@ and / menus · model picker · dictation"}
+---
+code: |
+  <template>
+    <TxPromptBar v-model="draft" :sources="sources" :commands="commands" :models="models" />
+  </template>
+---
+:::
+
+## Approvals & Agent Actions
+
+### 04 · ApprovalCard
+
+Human-in-the-loop multi-question walkthrough: options + custom answer + pager dots. See the [ApprovalCard doc](/docs/dev/components/approval-card).
+
+:::TuffDemoWrapper{demo="ApprovalCardWalkthroughDemo" code-lang="vue" title="Multi-question walkthrough" description="Answer · skip · submit"}
+---
+code: |
+  <template>
+    <TxApprovalCard v-model="answers" :questions="questions" @submit="onSubmit" />
+  </template>
+---
+:::
+
+### 05 · ToolChips
+
+Tool calls and code edits as a compact expandable chip flow with a summary row. See the [ToolChips doc](/docs/dev/components/tool-chips).
+
+:::TuffDemoWrapper{demo="ToolChipsRunFlowDemo" code-lang="vue" title="Run flow" description="Summary → expand → diff chips"}
+---
+code: |
+  <template>
+    <TxToolChips :rows="rows" :diffs="diffs" summary="4 tool calls, 2 messages" />
+  </template>
+---
+:::
+
+### 09 · RecommendationCard
+
+Agent suggestion with a three-bar confidence meter (`TxSignalMeter`) and alternatives. See the [RecommendationCard doc](/docs/dev/components/recommendation-card).
+
+:::TuffDemoWrapper{demo="RecommendationCardConfidenceDemo" code-lang="vue" title="Confidence & alternatives" description="Accept / view alternatives"}
+---
+code: |
+  <template>
+    <TxRecommendationCard :title="title" :options="options" confidence="high" @accept="onAccept" />
+  </template>
+---
+:::
+
+### 19 · SelectionActions
+
+Select a passage and a floating toolbar hands it to the agent for rewriting; built on TxBaseAnchor virtual references. See the [SelectionActions doc](/docs/dev/components/selection-actions).
+
+:::TuffDemoWrapper{demo="SelectionActionsRewriteDemo" code-lang="vue" title="Selection rewrite" description="Explain / Improve / custom instruction"}
+---
+code: |
+  <template>
+    <TxSelectionActions :selection="selection" :actions="actions" @action="onAction" />
+  </template>
+---
+:::
+
+## Data Tables
+
+### 11 · DiffTable
+
+AI-proposed edits sweeping through a table: rows tint red, an added row expands; controllable via `play/reset/settle`. See the [DiffTable doc](/docs/dev/components/diff-table).
+
+:::TuffDemoWrapper{demo="DiffTableDiffTableDemo" code-lang="vue" title="Proposal sweep" description="Auto play + manual replay"}
+---
+code: |
+  <template>
+    <TxDiffTable :columns="columns" :rows="rows" title="Proposed menu cleanup" />
+  </template>
+---
+:::
+
+### 12 · Records
+
+A composition (no new component): the extended `TxDataTable` (sticky header / summary footer / selection highlight / tri-state select-all) + `TxTag` dot tags + `TxDotIndicator` + `TxCellLink`. See the [DataTable doc](/docs/dev/components/data-table).
+
+:::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue" title="CRM records grid" description="Sticky header/footer · connection strength · footer aggregates"}
+---
+code: |
+  <template>
+    <TxDataTable :columns="columns" :data="rows" selectable highlight-selected
+      :max-height="438" scroll-x sticky-header sticky-footer sort-cycle="bi" />
+  </template>
+---
+:::
+
+### 13 · FilterTable
+
+`TxFilterChips` status chips + `TxDataTable` composition; counts derive from the data. See the [FilterChips doc](/docs/dev/components/filter-chips).
+
+:::TuffDemoWrapper{demo="FilterChipsFilterTableDemo" code-lang="vue" title="Status filtering" description="Chips drive the row set"}
+---
+code: |
+  <template>
+    <TxFilterChips v-model="filter" :items="chips" />
+    <TxDataTable :columns="columns" :data="visibleRows" />
+  </template>
+---
+:::
+
+## Retrieval & Navigation
+
+### 10 · ContextCards
+
+RAG retrieval chunks: body text, character counts, source file rows; a single `TxContextChunk` works standalone. See the [ContextCards doc](/docs/dev/components/context-cards).
+
+:::TuffDemoWrapper{demo="ContextCardsContextCardsDemo" code-lang="vue" title="Retrieved chunk list" description="Entrance choreography + source rows"}
+---
+code: |
+  <template>
+    <TxContextCards :chunks="chunks" :total="32" @open="onOpen" />
+  </template>
+---
+:::
+
+### 14 · SidebarNav
+
+Workspace navigation: group labels, badges, quick search with a `/` focus shortcut (inert decoration upstream, wired up in the port). See the [SidebarNav doc](/docs/dev/components/sidebar-nav).
+
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="Workspace navigation" description="Filtering · shortcut · hover indicator"}
+---
+code: |
+  <template>
+    <TxSidebarNav v-model="active" :items="items" :groups="groups" search-hint="/" />
+  </template>
+---
+:::
+
+### 15 · SearchPanel
+
+Command search with live filtering and an empty state; keyboard navigation added to tuffex standards (upstream has none). See the [SearchPanel doc](/docs/dev/components/search-panel).
+
+:::TuffDemoWrapper{demo="SearchPanelSearchPanelDemo" code-lang="vue" title="Command search" description="Listbox keyboard nav + empty threshold"}
+---
+code: |
+  <template>
+    <TxSearchPanel v-model="query" :items="commands" @select="run" />
+  </template>
+---
+:::
+
+## Insights & Tuning
+
+### 16 · InsightCards
+
+Paged insights + a self-built canvas polyline (`TxSparkChart` + `TxChartScrubber`) + a share bar (`TxAllocationBar`) + metric rows (`TxInsightMetric`). See the [InsightCards doc](/docs/dev/components/insight-cards).
+
+:::TuffDemoWrapper{demo="InsightCardsInsightCardsDemo" code-lang="vue" title="Full insight card" description="Paging · scrubbable chart · follow-up"}
+---
+code: |
+  <template>
+    <TxInsightCards v-model:active-index="page" :pages="pages" @follow-up="ask">
+      <TxSparkChart :series="series" />
+    </TxInsightCards>
+  </template>
+---
+:::
+
+### 18 · FineTuneCard
+
+The agent adjusts design properties in an inspector: layout segment (reusing `TxFlatRadio`) + draggable `TxScrubField` values + a type select. See the [FineTuneCard doc](/docs/dev/components/fine-tune-card).
+
+:::TuffDemoWrapper{demo="FineTuneCardFineTuneCardDemo" code-lang="vue" title="Property inspector" description="Drag scrub · keyboard stepping · Edited state"}
+---
+code: |
+  <template>
+    <TxFineTuneCard v-model:values="values" :defaults="defaults" :type-options="types" />
+  </template>
+---
+:::
+
+## Component Index
+
+| BUI showcase | tuffex landing | Shape |
+|---|---|---|
+| 01 Loading State | [TxWorkingIndicator](/docs/dev/components/working-indicator) | New component |
+| 02 Thinking | [TxAgentTrace](/docs/dev/components/agent-trace) | New component |
+| 03 Streaming Text | [TxInlineCitation](/docs/dev/components/inline-citation) + [TxSources](/docs/dev/components/sources) `stack` + [TxSuggestionChips](/docs/dev/components/suggestion-chips) `list` | New leaf + existing-component variants |
+| 04 Approval Card | [TxApprovalCard](/docs/dev/components/approval-card) | New component |
+| 05 Tool Chips | [TxToolChips / TxDiffChips](/docs/dev/components/tool-chips) | New component |
+| 06 Task Rows | [TxTaskRows](/docs/dev/components/task-rows) | New component |
+| 07 Chat | Showcase demo on this page | Composition of existing components |
+| 08 Prompt Bar | [TxPromptBar](/docs/dev/components/prompt-bar) | New component |
+| 09 Recommendation Card | [TxRecommendationCard](/docs/dev/components/recommendation-card) + [TxSignalMeter](/docs/dev/components/signal-meter) | New component + new atom |
+| 10 Context Cards | [TxContextCards / TxContextChunk](/docs/dev/components/context-cards) | New component |
+| 11 Diff Table | [TxDiffTable](/docs/dev/components/diff-table) | New component |
+| 12 Records Table | [TxDataTable extensions](/docs/dev/components/data-table) + [TxTag](/docs/dev/components/tag) + [TxDotIndicator](/docs/dev/components/dot-indicator) + [TxCellLink](/docs/dev/components/cell-link) + tri-state [TxCheckbox](/docs/dev/components/checkbox) | Additive extensions + new primitives |
+| 13 Filter Table | [TxFilterChips](/docs/dev/components/filter-chips) + TxDataTable | New primitive + composition |
+| 14 Sidebar Nav | [TxSidebarNav](/docs/dev/components/sidebar-nav) | New component |
+| 15 Search | [TxSearchPanel](/docs/dev/components/search-panel) | Thin composition shell |
+| 16 Insight Cards | [TxInsightCards](/docs/dev/components/insight-cards) + [TxSparkChart](/docs/dev/components/spark-chart) + [TxAllocationBar](/docs/dev/components/allocation-bar) | New component family |
+| 17 Code Block | [TxCodeStream](/docs/dev/components/code-stream) | New component |
+| 18 Fine-tune Card | [TxFineTuneCard](/docs/dev/components/fine-tune-card) + [TxScrubField](/docs/dev/components/scrub-field) | New component + new primitive |
+| 19 Selection Actions | [TxSelectionActions](/docs/dev/components/selection-actions) | Composition-first new component |
+
+Shared primitive: [TxIconChip](/docs/dev/components/icon-chip) (icon badge shared by 10/14/16/18).
+
+## Review Notes
+
+- Upstream ships self-driving demos (hardcoded content + timer timelines); the ported components are fully controlled, and the timelines live only in this page's demos.
+- Reduced motion is implemented per component: tweens are cut, state machines keep running, and delays are zeroed together (a deliberate divergence from upstream's single global `*` rule).
+- Under the high-contrast theme (`data-tx-contrast='high'`) the `--tx-bui-*` tokens keep their standard values — a known limitation.
+- The upstream screenshots for 16's chart area render "No data to display"; the chart is built to spec with no upstream visual baseline.
+- Every component source file header carries the MIT attribution: Adapted from Beautiful UI, © 2026 Shane Levine, MIT.

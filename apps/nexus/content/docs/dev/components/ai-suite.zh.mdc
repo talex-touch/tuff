@@ -1,0 +1,317 @@
+---
+title: AI 套件总览
+description: 源自 Beautiful UI 的 19 个 AI 原生界面组件案例集
+category: Foundations
+status: beta
+since: 2.5.0
+tags: [ai, showcase, beautiful-ui, agent, primitives]
+syncStatus: reviewed
+verified: true
+---
+
+## 来源与授权
+
+本套件移植自 [Beautiful UI](https://www.beautifului.dev)（Turbo 设计工作室 / Shane Levine，© 2026，MIT 协议），共 19 个面向 AI 原生界面的组件案例：聊天、推理轨迹、human-in-the-loop 审批、agent 任务状态等。移植遵循三条原则：像素级还原其视觉语言（独立 `--tx-bui-*` token 层、发丝环阴影、13px 密度体系）；组件做成纯受控原语（演示时间轴留在 demo 层）；与 tuffex 现有组件融合而非重复造轮子——重叠处以变体或组合落地，无障碍缺口按 tuffex 标准补齐。每个组件源码文件头保留 MIT 署名。
+
+## 加载与推理状态
+
+### 01 · 工作指示器 WorkingIndicator
+
+像素网格加载器 + shimmer 标签 + 实时计时，用于长任务进行中。详见 [WorkingIndicator 文档](/docs/dev/components/working-indicator)。
+
+:::TuffDemoWrapper{demo="WorkingIndicatorVariantsDemo" code-lang="vue" title="三种波形变体" description="drive / dots / orbit"}
+---
+code: |
+  <template>
+    <TxWorkingIndicator label="Churning" variant="drive" />
+    <TxWorkingIndicator label="Churning" variant="dots" />
+    <TxWorkingIndicator label="Churning" variant="orbit" />
+  </template>
+---
+:::
+
+### 02 · 推理轨迹 AgentTrace
+
+可展开的思考/搜索/编码轨迹，头部 shimmer 与完成态自动切换。详见 [AgentTrace 文档](/docs/dev/components/agent-trace)。
+
+:::TuffDemoWrapper{demo="AgentTraceVariantsDemo" code-lang="vue" title="四种轨迹变体" description="steps / reasoning / search / coding"}
+---
+code: |
+  <template>
+    <TxAgentTrace variant="steps" :rows="rows" :working="working" />
+  </template>
+---
+:::
+
+### 06 · 任务行 TaskRows
+
+agent 任务状态列表：环形序号、状态药丸、明细折叠，胶囊/列表两种容器。详见 [TaskRows 文档](/docs/dev/components/task-rows)。
+
+:::TuffDemoWrapper{demo="TaskRowsCapsulesDemo" code-lang="vue" title="胶囊变体" description="展开圆角形变 + 状态徽章重放"}
+---
+code: |
+  <template>
+    <TxTaskRows :rows="rows" variant="capsules" />
+  </template>
+---
+:::
+
+### 17 · 流式代码块 CodeStream
+
+agent 写代码逐行显现，文件名头部 + shiki 高亮 + 复制。详见 [CodeStream 文档](/docs/dev/components/code-stream)。
+
+:::TuffDemoWrapper{demo="CodeStreamStreamingDemo" code-lang="vue" title="逐行流式" description="revealedLines 受控显现"}
+---
+code: |
+  <template>
+    <TxCodeStream :code="code" lang="ts" filename="churn.ts" :revealed-lines="revealed" />
+  </template>
+---
+:::
+
+## 流式输出与聊天
+
+### 03 · 流式回答 Streaming Text
+
+组合案例：`TxStreamMarkdown` 逐词显影 + `TxInlineCitation` 行内引用 + `TxSources` 堆叠来源 + `TxSuggestionChips` 纵向追问。详见 [InlineCitation 文档](/docs/dev/components/inline-citation)。
+
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="完整流式回答" description="内联引用 · 来源堆叠 · 追问列表"}
+---
+code: |
+  <template>
+    <TxInlineCitation v-bind="cite" />
+    <TxSources :sources="sources" variant="stack" />
+    <TxSuggestionChips :suggestions="followUps" layout="list" />
+  </template>
+---
+:::
+
+### 07 · 聊天面板 Chat
+
+组合案例（不新增组件）：`TxTabs` + `TxConversationStream` + `TxChainOfThought` + `TxChatComposer` 复刻上游聊天面板。
+
+:::TuffDemoWrapper{demo="AiSuiteChatShowcaseDemo" code-lang="vue" title="标签页聊天面板" description="推理回复 + 输入条组合"}
+---
+code: |
+  <template>
+    <TxTabs v-model="tab">
+      <TxConversationStream :items="messages" />
+    </TxTabs>
+  </template>
+---
+:::
+
+### 08 · 输入条 PromptBar
+
+@ 来源、/ 命令、模型选择器、听写状态，rounded/pill 双形态；发送键用墨色而非品牌蓝，是该设计语言的签名。详见 [PromptBar 文档](/docs/dev/components/prompt-bar)。
+
+:::TuffDemoWrapper{demo="PromptBarPromptBarDemo" code-lang="vue" title="完整输入条" description="@ 与 / 菜单 · 模型选择 · 听写"}
+---
+code: |
+  <template>
+    <TxPromptBar v-model="draft" :sources="sources" :commands="commands" :models="models" />
+  </template>
+---
+:::
+
+## 审批与智能动作
+
+### 04 · 审批卡 ApprovalCard
+
+human-in-the-loop 多问题走查：选项 + 自定义答案 + 分页圆点。详见 [ApprovalCard 文档](/docs/dev/components/approval-card)。
+
+:::TuffDemoWrapper{demo="ApprovalCardWalkthroughDemo" code-lang="vue" title="多问题走查" description="回答 · 跳过 · 汇总提交"}
+---
+code: |
+  <template>
+    <TxApprovalCard v-model="answers" :questions="questions" @submit="onSubmit" />
+  </template>
+---
+:::
+
+### 05 · 工具纸片 ToolChips
+
+工具调用与代码编辑的紧凑纸片流，摘要行可展开。详见 [ToolChips 文档](/docs/dev/components/tool-chips)。
+
+:::TuffDemoWrapper{demo="ToolChipsRunFlowDemo" code-lang="vue" title="运行流" description="摘要 → 展开 → 差分纸片"}
+---
+code: |
+  <template>
+    <TxToolChips :rows="rows" :diffs="diffs" summary="4 tool calls, 2 messages" />
+  </template>
+---
+:::
+
+### 09 · 建议卡 RecommendationCard
+
+agent 建议 + 三段置信度表（`TxSignalMeter`）+ 备选方案。详见 [RecommendationCard 文档](/docs/dev/components/recommendation-card)。
+
+:::TuffDemoWrapper{demo="RecommendationCardConfidenceDemo" code-lang="vue" title="置信度与备选" description="接受 / 查看备选"}
+---
+code: |
+  <template>
+    <TxRecommendationCard :title="title" :options="options" confidence="high" @accept="onAccept" />
+  </template>
+---
+:::
+
+### 19 · 划词动作 SelectionActions
+
+选中一段文字，浮出工具条交给 agent 改写；基于 TxBaseAnchor 虚拟锚点。详见 [SelectionActions 文档](/docs/dev/components/selection-actions)。
+
+:::TuffDemoWrapper{demo="SelectionActionsRewriteDemo" code-lang="vue" title="划词改写" description="Explain / Improve / 自定义指令"}
+---
+code: |
+  <template>
+    <TxSelectionActions :selection="selection" :actions="actions" @action="onAction" />
+  </template>
+---
+:::
+
+## 数据表格
+
+### 11 · 差分表 DiffTable
+
+AI 提案改动的扫掠动画：标红删除、展开新增，`play/reset/settle` 可控。详见 [DiffTable 文档](/docs/dev/components/diff-table)。
+
+:::TuffDemoWrapper{demo="DiffTableDiffTableDemo" code-lang="vue" title="提案扫掠" description="auto 播放 + 手动重放"}
+---
+code: |
+  <template>
+    <TxDiffTable :columns="columns" :rows="rows" title="Proposed menu cleanup" />
+  </template>
+---
+:::
+
+### 12 · 记录表 Records
+
+组合案例（不新增组件）：扩展后的 `TxDataTable`（吸顶表头 / 汇总页脚 / 选中高亮 / 三态全选）+ `TxTag` 圆点标签 + `TxDotIndicator` + `TxCellLink`。详见 [DataTable 文档](/docs/dev/components/data-table)。
+
+:::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue" title="CRM 记录表" description="sticky 表头页脚 · 关系强度 · 页脚聚合"}
+---
+code: |
+  <template>
+    <TxDataTable :columns="columns" :data="rows" selectable highlight-selected
+      :max-height="438" scroll-x sticky-header sticky-footer sort-cycle="bi" />
+  </template>
+---
+:::
+
+### 13 · 过滤表 FilterTable
+
+`TxFilterChips` 状态纸片 + `TxDataTable` 组合，计数由数据派生。详见 [FilterChips 文档](/docs/dev/components/filter-chips)。
+
+:::TuffDemoWrapper{demo="FilterChipsFilterTableDemo" code-lang="vue" title="状态过滤" description="chips 驱动行集"}
+---
+code: |
+  <template>
+    <TxFilterChips v-model="filter" :items="chips" />
+    <TxDataTable :columns="columns" :data="visibleRows" />
+  </template>
+---
+:::
+
+## 检索与导航
+
+### 10 · 上下文卡 ContextCards
+
+RAG 检索块：正文、字符数、来源文件行，单块 `TxContextChunk` 可独立使用。详见 [ContextCards 文档](/docs/dev/components/context-cards)。
+
+:::TuffDemoWrapper{demo="ContextCardsContextCardsDemo" code-lang="vue" title="检索块列表" description="入场编排 + 来源行"}
+---
+code: |
+  <template>
+    <TxContextCards :chunks="chunks" :total="32" @open="onOpen" />
+  </template>
+---
+:::
+
+### 14 · 侧边导航 SidebarNav
+
+工作区导航：组头、徽标、快捷搜索与 `/` 聚焦快捷键（上游为纯装饰，移植补齐为真功能）。详见 [SidebarNav 文档](/docs/dev/components/sidebar-nav)。
+
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="工作区导航" description="过滤 · 快捷键 · 悬浮指示器"}
+---
+code: |
+  <template>
+    <TxSidebarNav v-model="active" :items="items" :groups="groups" search-hint="/" />
+  </template>
+---
+:::
+
+### 15 · 搜索面板 SearchPanel
+
+命令搜索 + 实时过滤 + 空态；键盘导航按 tuffex 标准补齐（上游没有）。详见 [SearchPanel 文档](/docs/dev/components/search-panel)。
+
+:::TuffDemoWrapper{demo="SearchPanelSearchPanelDemo" code-lang="vue" title="命令搜索" description="listbox 键盘导航 + 空态阈值"}
+---
+code: |
+  <template>
+    <TxSearchPanel v-model="query" :items="commands" @select="run" />
+  </template>
+---
+:::
+
+## 洞察与调节
+
+### 16 · 洞察卡 InsightCards
+
+分页洞察 + 自研 canvas 折线（`TxSparkChart` + `TxChartScrubber`）+ 占比条（`TxAllocationBar`）+ 指标行（`TxInsightMetric`）。详见 [InsightCards 文档](/docs/dev/components/insight-cards)。
+
+:::TuffDemoWrapper{demo="InsightCardsInsightCardsDemo" code-lang="vue" title="完整洞察卡" description="翻页 · scrub 图表 · 追问"}
+---
+code: |
+  <template>
+    <TxInsightCards v-model:active-index="page" :pages="pages" @follow-up="ask">
+      <TxSparkChart :series="series" />
+    </TxInsightCards>
+  </template>
+---
+:::
+
+### 18 · 微调卡 FineTuneCard
+
+agent 在检查器里调整设计属性：布局分段（复用 `TxFlatRadio`）+ 可拖拽数值域 `TxScrubField` + 类型选择。详见 [FineTuneCard 文档](/docs/dev/components/fine-tune-card)。
+
+:::TuffDemoWrapper{demo="FineTuneCardFineTuneCardDemo" code-lang="vue" title="属性检查器" description="拖拽 scrub · 键盘步进 · Edited 态"}
+---
+code: |
+  <template>
+    <TxFineTuneCard v-model:values="values" :defaults="defaults" :type-options="types" />
+  </template>
+---
+:::
+
+## 组件索引
+
+| BUI 案例 | tuffex 落地 | 形态 |
+|---|---|---|
+| 01 Loading State | [TxWorkingIndicator](/docs/dev/components/working-indicator) | 新组件 |
+| 02 Thinking | [TxAgentTrace](/docs/dev/components/agent-trace) | 新组件 |
+| 03 Streaming Text | [TxInlineCitation](/docs/dev/components/inline-citation) + [TxSources](/docs/dev/components/sources) `stack` + [TxSuggestionChips](/docs/dev/components/suggestion-chips) `list` | 新叶子 + 现有组件变体 |
+| 04 Approval Card | [TxApprovalCard](/docs/dev/components/approval-card) | 新组件 |
+| 05 Tool Chips | [TxToolChips / TxDiffChips](/docs/dev/components/tool-chips) | 新组件 |
+| 06 Task Rows | [TxTaskRows](/docs/dev/components/task-rows) | 新组件 |
+| 07 Chat | 本页 showcase demo | 现有组件组合 |
+| 08 Prompt Bar | [TxPromptBar](/docs/dev/components/prompt-bar) | 新组件 |
+| 09 Recommendation Card | [TxRecommendationCard](/docs/dev/components/recommendation-card) + [TxSignalMeter](/docs/dev/components/signal-meter) | 新组件 + 新原子 |
+| 10 Context Cards | [TxContextCards / TxContextChunk](/docs/dev/components/context-cards) | 新组件 |
+| 11 Diff Table | [TxDiffTable](/docs/dev/components/diff-table) | 新组件 |
+| 12 Records Table | [TxDataTable 扩展](/docs/dev/components/data-table) + [TxTag](/docs/dev/components/tag) + [TxDotIndicator](/docs/dev/components/dot-indicator) + [TxCellLink](/docs/dev/components/cell-link) + [TxCheckbox](/docs/dev/components/checkbox) 三态 | 现有组件加法式扩展 + 新原语 |
+| 13 Filter Table | [TxFilterChips](/docs/dev/components/filter-chips) + TxDataTable | 新原语 + 组合 |
+| 14 Sidebar Nav | [TxSidebarNav](/docs/dev/components/sidebar-nav) | 新组件 |
+| 15 Search | [TxSearchPanel](/docs/dev/components/search-panel) | 组合薄壳 |
+| 16 Insight Cards | [TxInsightCards](/docs/dev/components/insight-cards) + [TxSparkChart](/docs/dev/components/spark-chart) + [TxAllocationBar](/docs/dev/components/allocation-bar) | 新组件族 |
+| 17 Code Block | [TxCodeStream](/docs/dev/components/code-stream) | 新组件 |
+| 18 Fine-tune Card | [TxFineTuneCard](/docs/dev/components/fine-tune-card) + [TxScrubField](/docs/dev/components/scrub-field) | 新组件 + 新原语 |
+| 19 Selection Actions | [TxSelectionActions](/docs/dev/components/selection-actions) | 组合优先新组件 |
+
+共享原语：[TxIconChip](/docs/dev/components/icon-chip)（10/14/16/18 共用图标角标）。
+
+## 审阅说明
+
+- 上游为自驱动 demo（内容硬编码 + 定时器时间轴）；移植后组件全部受控，时间轴仅存在于本页各 demo 内。
+- reduced-motion 逐组件显式实现：只砍补间不砍状态机，延迟一并归零（相对上游全局 `*` 规则的有意偏离）。
+- 高对比主题（`data-tx-contrast='high'`）下 `--tx-bui-*` 保持原值，为已知限制。
+- 16 的图表区上游截图渲染为 "No data to display"，图表按规格实现、无上游视觉基线。
+- 全部组件源码文件头携带 MIT 署名：Adapted from Beautiful UI, © 2026 Shane Levine, MIT。

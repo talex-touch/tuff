@@ -10,8 +10,6 @@ verified: true
 ---
 # DataTable
 
-Lightweight data table with sorting, row selection, and custom rendering.
-
 ## Basic Usage
 
 ::TuffDemoWrapper{demo="DataTableDataTableDemo" code-lang="vue"}
@@ -88,6 +86,70 @@ code: |
 ---
 ::
 
+## Records Composition
+
+The wide CRM layout: a pinned header, a pinned footer, a frozen first column, a three-state select-all, and composed cell primitives. Every one of these is off by default and changes nothing until it is switched on.
+
+What makes the layout work:
+
+- `maxHeight` turns the table into its own scroll container, which is what the header and footer stick against; `scrollX` handles the horizontal axis. **Do not put it inside `TxScroll` in its default mode** — that scrolls by transform, and a transformed ancestor kills every `position: sticky` inside it.
+- With `stickyHeader` / `stickyFooter` on, the table switches to `border-collapse: separate` inside `.is-sticky-shell`. This is not a style preference: collapsed borders are painted by the table rather than the cell, so a pinned `<th>` loses its rules the moment it detaches. The switch is scoped to that class, so `bordered` and `striped` look unchanged everywhere else.
+- The summary row comes from the `footer` or `footer-<key>` slots; with no footer slot, no `<tfoot>` is rendered at all.
+- The select-all box goes `indeterminate` on a partial selection and reports `aria-checked="mixed"`.
+- Sort on timestamp fields, never with `localeCompare` over readable text like "9 days ago" — that places "over 1 year ago" between "3 weeks ago" and "9 days ago" and calls it a chronology.
+- `sortCycle="bi"` keeps the table from ever returning to unsorted, which suits record lists that always need a definite order.
+
+::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue" title="Records table" description="Pinned header and footer, a frozen first column, selection highlighting, a three-state select-all, and the tag / dot / link cell primitives."}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="rows"
+      :sort="sort"
+      row-key="id"
+      selectable
+      highlight-selected
+      table-layout="fixed"
+      nowrap
+      sort-cycle="bi"
+      :max-height="380"
+      scroll-x
+      sticky-header
+      sticky-footer
+      @update:sort="sort = $event"
+    >
+      <template #cell-tags="{ value }">
+        <TxTag v-for="tag in value" :key="tag" :label="tag" :dot="TAG_COLORS[tag]" variant="soft" />
+      </template>
+      <template #cell-strength="{ row }">
+        <TxDotIndicator :color="STRENGTH_TONE[row.strength]" :label="STRENGTH_LABEL[row.strength]" />
+      </template>
+      <template #cell-website="{ value }">
+        <TxCellLink :href="`https://${value}`" :label="value" external @open="openSite" />
+      </template>
+
+      <template #footer-name>
+        <strong>{{ rows.length }}</strong> count
+      </template>
+      <template #footer-website>
+        {{ linkCount }} links
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+The row hover and selection fills are exposed as CSS variables, so a paper-like table can go neutral grey without a prop or an `!important`:
+
+```css
+.records-shell {
+  --tx-data-table-row-hover-bg: var(--tx-bui-hover);
+  --tx-data-table-row-selected-bg: color-mix(in srgb, var(--tx-bui-accent) 7%, var(--tx-bui-surface));
+}
+```
+
 ## API
 
 ### TxDataTable Props
@@ -105,10 +167,18 @@ code: |
 | `interactiveRows` | `boolean` | `false` | Makes rows focusable (`tabindex="0"`) so Enter/Space can trigger `rowClick`; automatically enabled when a `rowClick` listener is attached |
 | `selectable` | `boolean` | `false` | Selectable rows |
 | `selectedKeys` | `Array<string \| number>` | `[]` | Selected keys |
-| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Default sort |
+| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Initial sort for the uncontrolled mode, after which the component owns it. Mutually exclusive with `sort` — pass one or the other |
+| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | Controlled sort. Supply it (including as `null` for "unsorted") and the component stops holding its own state: it reports the user's intent through `update:sort` and renders whatever the parent sends back. Leave it out entirely for the uncontrolled mode driven by `defaultSort` |
 | `sortOnClient` | `boolean` | `true` | Client-side sort |
+| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | Header click cycle: `tri` is ascending → descending → unsorted, `bi` is ascending → descending → ascending and never unsorts |
 | `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | Native table layout mode. Use `fixed` when column widths must stay stable. |
 | `nowrap` | `boolean` | `false` | Prevent wrapping for all header and cell content. |
+| `maxHeight` | `string \| number` | - | Caps the height and makes the component its own vertical scroll container. `stickyHeader` / `stickyFooter` need this to have anything to stick to, unless an ancestor already scrolls |
+| `scrollX` | `boolean` | `false` | Lets the table scroll horizontally inside the component; needed by wide tables with fixed columns |
+| `stickyHeader` | `boolean` | `false` | Pins the header row while the body scrolls |
+| `stickyFooter` | `boolean` | `false` | Pins the footer row while the body scrolls |
+| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | Extra classes per row, e.g. to tint a row by its state |
+| `highlightSelected` | `boolean` | `false` | Tints selected rows. Off by default, so existing tables keep expressing selection through the checkbox alone |
 
 ### DataTableColumn
 
@@ -121,7 +191,7 @@ code: |
 | `minWidth` | `string \| number` | Minimum column width. |
 | `maxWidth` | `string \| number` | Maximum column width. |
 | `auto` | `boolean` | Force column width to `auto`. |
-| `fixed` | `boolean \| 'left' \| 'right'` | Sticky column side; `true` equals `'left'`. When any column is fixed the root switches from `overflow: hidden` to `overflow: visible` (it never sets `overflow-x: auto`), so horizontal scrolling must come from an outer container or the sticky offsets have nothing to stick against. |
+| `fixed` | `boolean \| 'left' \| 'right'` | Sticky column side; `true` equals `'left'`. Without `scrollX` / `maxHeight`, a fixed column switches the root from `overflow: hidden` to `overflow: visible`, so horizontal scrolling must come from an outer container or the sticky offsets have nothing to stick against; with `scrollX` the component becomes that scroll container itself. |
 | `nowrap` | `boolean` | Prevent wrapping for this column. |
 | `align` | `'left' \| 'center' \| 'right'` | Alignment |
 | `sortable` | `boolean` | Sortable |
@@ -137,14 +207,17 @@ code: |
 | `update:selectedKeys` | `(keys)` | Selection update |
 | `selectionChange` | `(keys)` | Selection change |
 | `sortChange` | `(sort)` | Sort change |
+| `update:sort` | `(sort)` | Sort change; emitted in both controlled and uncontrolled modes, and paired with the `sort` prop |
 | `rowClick` | `({ row, index })` | Row click |
 
 ### Slots
 
 | Name | Description |
 |------|------|
-| `header-<columnKey>` | Custom header; receives `{ column }`. |
+| `header-<columnKey>` | Custom header; receives `{ column, sorted, order, toggle }`. `sorted` says whether this column is the active sort, `order` is the direction (`null` when it is not), and `toggle` advances the column through the configured cycle. |
 | `cell-<columnKey>` | Custom cell; receives `{ row, column, value, index }`. |
+| `footer` | The whole summary row: you supply the `<td>`s yourself, so cells can span columns. A `<tfoot>` is rendered only when some footer slot is present. |
+| `footer-<columnKey>` | Fills one summary cell per column; receives `{ column, data }`. When `footer` is also present, `footer` wins. |
 | `empty` | Empty slot rendered when there are no display rows and `loading=false`. |
 
 ## Best Practices
@@ -153,7 +226,9 @@ code: |
 - Sortable columns support click, Enter, and Space. Use `sortOnClient=false` with `sortChange` for remote sorting.
 - `tableLayout="fixed"` plus explicit `width` / `minWidth` keeps dense operations tables from shifting during loading or sorting.
 - Fixed columns should use numeric px `width` or `minWidth`; sticky offsets are calculated from those values.
-- `TxDataTable` never scrolls horizontally on its own: with fixed columns, wrap the table in your own `overflow-x: auto` container so sticky columns have a scroll context to stick against.
+- Pick one horizontal scroller: either turn on `scrollX` and let the component be its own, or leave the default and wrap the table in an outer `overflow-x: auto` container. Both give sticky columns something to stick against — just do not nest two scrollers.
+- A pinned header or footer needs `maxHeight` (or an ancestor that already scrolls), otherwise there is nothing to stick to; and that scroll container must not scroll by transform, as `TxScroll` does in its default mode, which disables sticky entirely.
+- Sort on comparable fields such as timestamps or ranks, never on formatted relative-time text.
 - Custom cells should preserve readable text or status-badge labels because sortable headers expose state through `aria-sort`.
 
 ## Review Notes

@@ -10,10 +10,6 @@ verified: true
 ---
 # Suggestion Chips
 
-`TxSuggestionChips` 把一组建议渲染成可横向滚动的胶囊按钮，点击后抛出对应建议。常用于对话结束后的追问引导。
-
-已人工核对 `packages/tuffex/packages/components/src/suggestion-chips/src/TxSuggestionChips.vue`。
-
 ## 基础用法
 
 ### Suggestion Chips
@@ -40,8 +36,25 @@ code: |
 ---
 ::::
 
+### 纵向追问列表
+
+`layout="list"` 把胶囊改成带分隔线的纵向行，行首是一枚回车折返箭头，逐行错峰浮现。这是答案定稿后收尾的形态：追问是一份可以读完的清单，而不是一条需要横向拖动的轨道。
+
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" title="流式回答里的追问" description="正文流完后，来源堆叠与追问列表一起变为可用。"}
+---
+code: |
+  <template>
+    <p class="text-[12px] font-medium">追问</p>
+    <TxSuggestionChips :suggestions="followUps" layout="list" @select="ask" />
+  </template>
+---
+:::
+
 ## 交互契约
 
+- `layout="list"` 只改版式，不改数据与事件：`select` 仍然携带完整建议对象。
+- 列表形态下每行按位置错峰入场（每行 90ms）；减弱动效下入场直接关闭，行本身照常显示。
+- 行分隔线画在每行的下边框上，包括最后一行——这是上游的观感，与截图一致。
 - `suggestions` 为空数组时整个组件不渲染，无需在外层再包一层 `v-if`。
 - 每个胶囊以 `suggestion.id` 作为 `key`，请保证同一组内 `id` 唯一。
 - 点击派发 `select`，参数是被点中的完整建议对象，而不是索引或 id。
@@ -56,6 +69,7 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `suggestions` | `AiSuggestion[]` | — | 建议列表；`AiSuggestion` 为 `{ id: string, text: string }`。必填。 |
+| `layout` | `'wrap' \| 'list'` | `'wrap'` | `list` 改为带分隔线与折返箭头的纵向行。 |
 
 ### Events
 

@@ -1,0 +1,140 @@
+---
+title: "RecommendationCard 建议卡"
+description: "带置信度的智能体建议：正文、备选抽屉、确认动作，卡片尺寸不随内容跳动。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, recommendation, confidence, decision]
+syncStatus: reviewed
+verified: true
+---
+# RecommendationCard 建议卡
+
+## 基础用法
+
+### 建议与备选
+
+页脚的量表和文字一起表达置信度。按「其他方案」拉开抽屉，选中任一条即把它提升为当前建议。
+
+:::TuffDemoWrapper{demo="RecommendationCardConfidenceDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('high')
+  const options = [
+    {
+      key: 'high',
+      short: '从 cone_king 补货 · 7 天交期',
+      confidence: 'high',
+      label: '高置信',
+      cta: '接受',
+      ctaTone: 'accent',
+    },
+    {
+      key: 'review',
+      short: '换成 vanilla_madagascar',
+      confidence: 'medium',
+      label: '需要复核',
+      cta: '去配置',
+    },
+  ]
+  </script>
+
+  <template>
+    <TxRecommendationCard
+      v-model="active"
+      title="要我下这笔补货单吗？"
+      :options="options"
+      @accept="run"
+    >
+      <template #body="{ option }">
+        从 <code>cone_king</code> 补货华夫筒，交期 <code>7_days</code>。
+      </template>
+    </TxRecommendationCard>
+  </template>
+---
+:::
+
+## 置信度怎么映射
+
+`confidence` 是语义入口，组件据此推导量表格数与颜色：
+
+| `confidence` | 量表格数 | 默认颜色 |
+|------|------|------|
+| `high` | 3 | `--tx-bui-green` |
+| `medium` | 2 | `--tx-bui-orange` |
+| `low` | 1 | `--tx-bui-red` |
+| `none`（默认） | 0 | `--tx-bui-ink-3` |
+
+`signal` 与 `tone` 是逃生口，分别覆盖格数与颜色。`label` 始终必填——颜色不能是状态的唯一载体。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `title` | `string` | — | 卡片标题，通常是一句待确认的问句。必填。 |
+| `options` | `RecommendationOption[]` | — | 方案列表：`{ key, text?, short, confidence?, signal?, tone?, label, cta?, ctaTone? }`。必填。 |
+| `modelValue` | `string` | 首项的 `key` | `v-model`，当前被提升的方案 key。 |
+| `open` | `boolean` | — | `v-model:open`，备选抽屉。不传则组件自持。 |
+| `accepted` | `boolean` | — | `v-model:accepted`，是否已确认。 |
+| `alternativesLabel` | `string` | `'Alternatives'` | 抽屉触发按钮文案。 |
+| `otherOptionsLabel` | `string` | `'Other options'` | 抽屉内小标题。 |
+| `acceptedLabel` | `string` | `'Accepted'` | 已确认后的主按钮文案。 |
+| `acceptLabel` | `string` | `'Accept'` | 方案没写 `cta` 时的兜底文案。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(key: string)` | 当前方案变化。 |
+| `update:open` | `(open: boolean)` | 抽屉开合。 |
+| `update:accepted` | `(accepted: boolean)` | 确认态变化。 |
+| `accept` | `(option: RecommendationOption)` | 主按钮被按下，携带完整方案对象。 |
+| `select` | `(option: RecommendationOption)` | 抽屉里某条备选被选中。 |
+
+### Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `body` | `{ option }` | 覆盖正文。富文本（内联 `code`、强调）走这里。 |
+| `meter` | `{ option }` | 覆盖量表，页脚与抽屉每行都会用到。 |
+| `footer-extra` | — | 插在页脚左侧、动作按钮之前。 |
+
+## 交互契约
+
+- **选中即提升。** 在抽屉里点一条备选会把它设为当前建议、关闭抽屉，并**清空已确认态**——上一条的确认不该顺延到新方案上。
+- 抽屉只列**其他**方案，当前建议不会重复出现在里面。
+- **收起的抽屉带 `inert`。** `0fr` 网格只是把高度压成零，里面的按钮仍在 Tab 序列里；组件显式加 `inert` 把它们移出无障碍树与焦点顺序。这是有意超出上游的修正。
+- `accepted` 只切文案与配色，**没有撤销**。真实业务通常需要撤回，所以把它做成受控 prop，撤销权在宿主。
+- 正文有一个最小高度（默认 48px），用来防止不同长度的方案切换时卡片跳动。中文行高不同，可用 `--tx-bui-recommendation-card-body-min-height` 调。
+- 正文里的 `<code>` 由组件样式接管：默认是强调色 tint，加 `is-warning` 类切成警示色。用 `body` 插槽填富文本时不必自己写样式。
+- `tone` 收的是裸 CSS 颜色字符串，**不参与主题切换**；优先用 `confidence`。
+- 抽屉的缓动比这套组件的其他部分更柔（`cubic-bezier(0.16, 1, 0.3, 1)`），是上游刻意的差别，已原样保留。
+
+## 最佳实践
+
+- `short` 写成一句能独立读懂的话——抽屉里它是唯一的信息。
+- `label` 与量表配对出现，别只给颜色；高对比与色觉障碍下颜色会失效。
+- 高风险动作用 `ctaTone: 'danger'`，让主按钮的分量和后果匹配。
+- 把 `accepted` 提到宿主并在请求成功后再置 true，否则用户会以为已经下单。
+- 备选控制在两三条；超过就该换成列表页而不是抽屉。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/recommendation-card/src/TxRecommendationCard.vue`。
+- Types: `packages/tuffex/packages/components/src/recommendation-card/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/recommendation-card/__tests__/recommendation-card.test.ts`（14 项）验证默认提升首项、`confidence` → 格数与颜色的映射、`signal` / `tone` 覆盖、抽屉只列其他方案、`aria-expanded` / `aria-controls` 配对、收起态 `inert`、选中即提升并清空确认、`ctaTone` 映射、受控 `modelValue` / `accepted` 优先、`cta` 兜底、空列表不渲染，以及 `body` 插槽的富文本。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **与 `TxToolConfirmation` 的分工:** 那是二元授权（允许 / 拒绝 + 风险分级），本组件是**带证据的多选建议**：有方案列表、置信度与提升语义。只有页脚两颗按钮的外形相似。
+- **量表是独立原语:** 页脚与抽屉每行用的都是 `TxSignalMeter`，可以单独引入，见它自己的文档。
+- **可访问性:** 收起抽屉的 `inert` 是对上游缺陷的修正。
+- **已知偏差:** 主按钮的 `box-shadow` 在上游明暗两套主题里是同一组 `rgba(16,24,40,·)` 硬编码值。这里原样保留以对齐截图——它读起来是实心填充上的一层高光，而不是随主题走的发丝线。

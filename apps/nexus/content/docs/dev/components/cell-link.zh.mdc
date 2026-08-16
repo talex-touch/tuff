@@ -1,0 +1,92 @@
+---
+title: "CellLink 单元格链接"
+description: "表格单元格里的链接，渲染真实 href 但从不自行导航，由宿主决定如何打开。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [link, table, cell, data]
+syncStatus: reviewed
+verified: true
+---
+# CellLink 单元格链接
+
+## 基础用法
+
+### CellLink
+:::TuffDemoWrapper{demo="CellLinkCellLinkDemo" code-lang="vue" title="两种下划线策略" description="点击不会跳转，只会把 open 事件交给宿主。"}
+---
+code: |
+  <script setup lang="ts">
+  function onOpen({ href }) {
+    // 组件不导航，宿主决定：网页开新标签，桌面端交给系统浏览器
+    window.open(href, '_blank', 'noopener,noreferrer')
+  }
+  </script>
+
+  <template>
+    <TxCellLink href="https://aurora-scoops.example" label="Aurora Scoops" muted @open="onOpen" />
+    <TxCellLink href="https://kumo-creamery.example" label="kumo-creamery.example" underline="always" @open="onOpen" />
+    <TxCellLink href="https://maple-orbit.example" label="maple-orbit.example" external @open="onOpen" />
+  </template>
+---
+:::
+
+## 为什么不自行导航
+
+组件渲染的是真实的 `<a href>`——复制链接、悬停预览、右键菜单都能正常工作——但在点击时调用 `preventDefault()` 并抛出 `open` 事件。
+
+这不是洁癖。tuffex 同时服务浏览器与 Electron 渲染进程，在后者里让链接自行跳转会把应用窗口导航走，是一个实打实的安全与体验问题。把决定权交给宿主，同一个组件才能在两种环境里都正确工作。`TxSources` 早已确立了这一约定，此处保持一致。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `href` | `string` | - | 目标地址，会写进真实的 `href` 属性 |
+| `label` | `string` | `href` | 显示文案；不传则回退为 `href` |
+| `external` | `boolean` | `false` | 追加外链箭头图标 |
+| `muted` | `boolean` | `false` | 使用次级墨色而非链接色，适合记录名列 |
+| `underline` | `'always' \| 'hover'` | `'hover'` | 下划线策略 |
+| `ariaLabel` | `string` | - | 可见文案不足以说明去向时的可访问名 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open` | `({ href, event })` | 点击时触发；组件已调用 `preventDefault()`，导航由宿主决定 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `default` | 替换链接文案 |
+
+## 交互契约
+
+- 渲染为原生 `<a>`，因此键盘 Enter 同样触发 `open`，无需额外处理。
+- `underline="hover"` 只在悬停与 `:focus-visible` 时显示下划线，适合记录名这类本身就是主要文本的列。
+- `underline="always"` 常驻一条 35% 淡化的下划线，悬停时转为实色，适合专门的链接列——一整列实色下划线会糊成一片。
+- 外链箭头带 `aria-hidden`，不会被朗读；方向信息应当写进 `ariaLabel`。
+- 文案超出时省略号截断，链接不会撑破单元格。
+
+## 最佳实践
+
+- 文案是裸域名时补一个 `ariaLabel`，例如「打开 Aurora Scoops 官网」，否则屏幕阅读器只会念一串域名。
+- 记录名列用 `muted` + `underline="hover"`，专门的链接列用默认色 + `underline="always"`。
+- 在 Electron 渲染进程里，`open` 事件应当交给宿主的外部浏览器通道，不要在渲染进程内直接开窗。
+- 没有链接的单元格渲染一个占位符（如 `—`），不要渲染一个 `href` 为空的 `TxCellLink`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/cell-link/src/TxCellLink.vue`。
+- Types: `packages/tuffex/packages/components/src/cell-link/src/types.ts` 导出 `CellLinkProps`、`CellLinkEmits`、`CellLinkUnderline`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/cell-link/__tests__/cell-link.test.ts` 共 6 例，覆盖原生锚点与 `href`、文案回退、`preventDefault()` 后发 `open`（并断言 `defaultPrevented`）、外链箭头的条件渲染与 `aria-hidden`、下划线与 muted 状态类，以及可访问名覆盖。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
+- **与上游的差异：** 上游是裸 `<a target="_blank">`，直接导航；本移植改为 `preventDefault()` + `open` 事件，与 `TxSources` 的既有约定一致，这是 Electron 宿主下的硬性要求。
+- **两种下划线策略：** 上游在记录名列与链接列用了两套不同写法，本组件把它收敛成一个 `underline` prop。

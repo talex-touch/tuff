@@ -1,0 +1,128 @@
+---
+title: "SearchPanel 内联搜索面板"
+description: "卡片式内联搜索：输入框、实时结果与空态合为一体。"
+category: Form
+status: beta
+since: 2.5.0
+tags: [search, filter, listbox, command]
+syncStatus: reviewed
+verified: true
+---
+# SearchPanel 内联搜索面板
+
+## 基础用法
+
+### SearchPanel
+:::TuffDemoWrapper{demo="SearchPanelSearchPanelDemo" code-lang="vue" title="实时过滤与键盘导航" description="↑ ↓ 移动、Enter 选中、Esc 清空；三个字符起才显示空态。"}
+---
+code: |
+  <template>
+    <TxSearchPanel v-model="query" :items="items" @select="run" />
+  </template>
+
+  <script setup lang="ts">
+  const items = [
+    { id: 'a', label: 'Forecast summer demand' },
+    { id: 'b', label: 'Find waffle cone suppliers', keywords: ['vendor'] },
+    { id: 'c', label: 'Retire low sellers', disabled: true },
+  ]
+  </script>
+---
+:::
+
+## 与 TxCommandPalette 的分工
+
+两者都是"搜索 + 结果列表"，但形态是互斥的：
+
+- `TxCommandPalette` 是**模态**——Teleport 到 body、全屏遮罩、`role="dialog" aria-modal="true"`、焦点陷阱、z-index 分配。它接管整个页面。
+- `TxSearchPanel` 是**内联**——没有遮罩、没有模态语义、没有焦点陷阱。它可以放进页面、侧边栏或浮层里，与周围内容共存。
+
+需要全局唤起的命令面板用前者；需要在版面里长驻一块搜索区用后者。两者的键盘契约一致，用户不需要重新学。
+
+## 空查询、空态与阈值
+
+- 空查询时只展示前 `idleCount`（默认 5）条。短清单读起来是"起点"，整份倾倒读起来是"一堵墙"。传 `0` 展示全部。
+- 空态要等查询满 `emptyThreshold`（默认 3）个字符才出现。1–2 个字符且无匹配时列表保持空白——这是刻意的，避免打字途中"没有结果"来回闪烁。`minHeight`（默认 248）在此期间撑住版面。
+- 空态本身复用 `TxSearchEmpty`，只通过它公开的 CSS 变量调整密度与配色，并用 `icon` 插槽替换掉那张 64px 的动画插画，没有触碰它的内部类名。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 查询文本（`v-model`）。 |
+| `items` | `SearchPanelItem[]` | `[]` | 候选项。 |
+| `placeholder` | `string` | `'Search'` | 输入框占位符。 |
+| `ariaLabel` | `string` | - | 输入框可访问名，回退到 placeholder。 |
+| `idleCount` | `number` | `5` | 空查询时展示的条数，`0` 表示全部。 |
+| `emptyThreshold` | `number` | `3` | 允许渲染空态的最短查询长度。 |
+| `emptyTitle` | `string` | `'No results found'` | 空态标题。 |
+| `emptyDescription` | `string` | `'Adjust your search to try again'` | 空态说明。 |
+| `clearLabel` | `string` | `'Clear search'` | 清除按钮的可访问名。 |
+| `listLabel` | `string` | `'Search results'` | 结果列表的可访问名。 |
+| `minHeight` | `number \| string` | `248` | 预留高度，避免结果增减时版面跳动。 |
+| `filter` | `(items, query) => items` | - | 覆盖内建匹配（对 `label` 与 `keywords` 做大小写无关的 `includes`）。 |
+| `clearable` | `boolean` | `true` | 是否渲染清除按钮。 |
+| `disabled` | `boolean` | `false` | 禁用输入。 |
+
+### Types
+
+| 名称 | 说明 |
+|------|------|
+| `SearchPanelItem` | `{ id, label, keywords?, disabled? }`。`keywords` 参与内建匹配但不显示。 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `item` | 替换单行内容，作用域 `{ item, active, query }`。 |
+| `empty` | 替换空态，作用域 `{ query }`。 |
+| `footer` | 追加在列表下方、卡片内部。 |
+
+### Events
+
+| 事件名 | 载荷 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string` | 查询文本变化。 |
+| `queryChange` | `string` | 同上，供不使用 `v-model` 的宿主监听。 |
+| `select` | `SearchPanelItem` | 结果被点击或 Enter 选中。 |
+| `clear` | - | 通过清除按钮或 Esc 清空。 |
+
+### Exposed
+
+| 名称 | 说明 |
+|------|------|
+| `focus()` / `blur()` | 聚焦、失焦输入框。 |
+| `clear()` | 清空查询并派发 `clear`。 |
+
+## 交互契约
+
+- **键盘导航是补齐的能力，上游完全没有。** ↑ ↓ 在两端循环并跳过禁用项，Home / End 跳到首尾可用项，Enter 选中当前高亮项，Esc 在有内容时清空。输入法组合期间的 Enter 被忽略（同时判定 `isComposing` 与 `compositionstart` / `compositionend`），不会把候选词确认误当成选中。
+- ARIA 走 combobox 范式：输入框是 `role="combobox"` + `aria-autocomplete="list"` + `aria-controls` + `aria-activedescendant`，列表是 `role="listbox"`，每行是 `role="option"` 且 `tabindex="-1"`——焦点始终留在输入框，Tab 会离开整个部件而不是逐行穿过。
+- 高亮态是 `is-active` 而不是 `:hover`：只靠 hover 的话键盘用户看不到光标在哪。鼠标移动会把高亮同步到指针所在行。
+- **选中结果不会把文案写回输入框。** 上游会写回，那是为了让 demo 自洽；对命令列表而言，写回等于把"执行命令"变成了"重命名查询"。宿主收到 `select` 后自行决定。
+
+## 最佳实践
+
+- 用作命令面板时，`select` 里执行动作并清空查询；用作筛选器时保留查询，让用户看得见当前条件。
+- 远端搜索传 `filter="items => items"` 关掉内建匹配，监听 `queryChange` 自己防抖取数，否则服务端结果会被再过滤一次。
+- 把同义词放进 `keywords` 而不是塞进 `label`：既能命中又不会让标题变长。
+- 不可用的项传 `disabled` 而不是从 `items` 里删掉——保留它并置灰，用户才知道这个能力存在。
+- `minHeight` 按最长常见结果数设定；设得太小会退回它本要消除的跳动。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-panel/src/TxSearchPanel.vue`。
+- Types: `packages/tuffex/packages/components/src/search-panel/src/types.ts`。
+- Composes: `packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/search-panel/__tests__/search-panel.test.ts` 验证空查询短清单与实时过滤、`keywords` 参与匹配、`filter` 覆盖、双通道派发查询与清空、空态阈值、combobox/listbox 全套 ARIA、方向键两端循环与 Home/End、禁用项跳过且拒绝选中、Enter 选中且不回写输入框、输入法组合期忽略 Enter、Esc 仅在有内容时清空，以及预留高度与 `focus()`。
+- 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **复用判断:** 空态复用了 `TxSearchEmpty`；输入行没有复用 `TxSearchInput`——后者经由 `TuffInput` 携带 `fake-background` 类，会在着色主题下被套上第二层内环，且其 32px / 12px 圆角 / 主色聚焦环的观感与本卡片的无边框 40px 行相去甚远。
+- **偏离上游:** 补齐键盘导航与 ARIA，选中不回写输入框。前者上游为零，后者上游是 demo 手法。
+- **可访问性:** 结果行虽是 `<button>`，但以 `tabindex="-1"` 排除在 Tab 序列之外，这是 combobox 范式的要求，不是疏漏。

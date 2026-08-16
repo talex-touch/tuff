@@ -1,0 +1,148 @@
+---
+title: "DiffTable"
+description: "Presents an AI-proposed edit as a change set, tinting outgoing rows and expanding incoming ones stage by stage."
+category: Data
+status: beta
+since: 2.5.0
+tags: [table, diff, review, data]
+syncStatus: reviewed
+verified: true
+---
+# DiffTable
+
+## Basic Usage
+
+### DiffTable
+:::TuffDemoWrapper{demo="DiffTableDiffTableDemo" code-lang="vue" title="Proposed menu cleanup" description="Plays once on mount and rests on the completed diff; the replay button runs reset() + play()."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const columns = [
+    { key: 'flavor', title: 'Flavor', width: '34%' },
+    { key: 'category', title: 'Category', width: '30%', tintText: false },
+    { key: 'supplier', title: 'Supplier', width: '36%', strikeOnRemove: true },
+  ]
+
+  const rows = [
+    { key: 'rocky-road', change: 'removed', data: { flavor: 'Rocky Road', category: 'Classic', supplier: 'aurora-scoops' } },
+    { key: 'mint-chip', data: { flavor: 'Mint Chip', category: 'Classic', supplier: 'maple-orbit' } },
+    { key: 'pistachio', change: 'added', data: { flavor: 'Pistachio', category: 'Seasonal', supplier: 'maple-orbit' } },
+  ]
+
+  const table = ref()
+  function replay() {
+    table.value?.reset()
+    table.value?.play()
+  }
+  </script>
+
+  <template>
+    <TxDiffTable ref="table" :columns="columns" :rows="rows" title="Proposed menu cleanup" />
+  </template>
+---
+:::
+
+## Stages And Playback Modes
+
+`stageDelays` is a three-part timeline of `[hold, tint, expand]`, defaulting to `[800, 1000, 1000]`. **The first segment is a deliberate reading pause**: nothing moves until it and the second have elapsed (1.8s at the defaults), so a reader takes in the original data before the edit lands.
+
+| Stage | On screen |
+|------|------|
+| 0–1 | Every row plain |
+| 2 | `removed` / `modified` rows tint, recolour, and strike through |
+| 3 (terminal) | `added` rows expand from `0fr` to `1fr` |
+
+`play` decides who drives it: `auto` plays once on mount and rests on the completed diff; `manual` stays plain until `play()` is called; `settled` renders the finished state immediately and registers no timers at all (for docs and tests).
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `columns` | `DiffTableColumn[]` | `[]` | Column configuration |
+| `rows` | `DiffTableRow[]` | `[]` | Rows, each carrying its own change kind |
+| `title` | `string` | - | Card bar heading; omit it and the whole bar is dropped |
+| `play` | `'auto' \| 'manual' \| 'settled'` | `'auto'` | Playback mode |
+| `stageDelays` | `[number, number, number]` | `[800, 1000, 1000]` | The three stage lengths, in milliseconds |
+| `duration` | `number` | `400` | Tween length for the tint and the reveal, in milliseconds |
+
+### DiffTableColumn
+
+| Field | Type | Description |
+|------|------|------|
+| `key` | `string` | Column key; also names the `cell-<key>` slot |
+| `title` | `string` | Header text |
+| `dataIndex` | `string` | Field read from `row.data`; defaults to `key` |
+| `width` | `string \| number` | Track width; numbers are pixels, strings pass through (`'34%'`) |
+| `align` | `'left' \| 'center' \| 'right'` | Text alignment |
+| `strikeOnRemove` | `boolean` | Strikes this column through on removed rows — for the value being retired |
+| `tintText` | `boolean` | Whether the text follows the change tone; defaults to `true`. Set `false` on columns that carry their own colour |
+| `format` | `(value, row, index) => string` | Default text formatting |
+
+### DiffTableRow
+
+| Field | Type | Description |
+|------|------|------|
+| `key` | `string \| number` | Row identity |
+| `data` | `T` | The record itself |
+| `change` | `'unchanged' \| 'added' \| 'removed' \| 'modified'` | Change kind, defaulting to `'unchanged'`; `modified` uses the warning tone |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `stageChange` | `(stage: number)` | Fires on every stage transition |
+| `settled` | `()` | Fires once the final stage is reached, whatever route got it there |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `title` | Replaces the card bar heading |
+| `cell-<columnKey>` | Custom cell; receives `{ row, column, value, change, index }`, so the slot can react to the row's own state |
+
+### Expose
+
+| Name | Description |
+|------|------|
+| `play()` | Runs the sequence from wherever it currently rests |
+| `reset()` | Returns to the plain table and stops any pending stage |
+| `settle()` | Jumps straight to the completed diff |
+| `stage` | Current stage index; equals `stageDelays.length` once settled |
+
+## Interaction Contract
+
+- The stage machine is this component's semantics, not demo choreography: the host sets the pace through `play` and the exposed methods, and describes the edit through `rows[].change`.
+- Timers are cleared in `onBeforeUnmount`; `play="settled"` registers none at all.
+- **Reduced motion (`prefers-reduced-motion: reduce`) drops the tweens, never the state machine**: stages still advance, they simply stop animating. Freezing the machine would leave the reader looking at a table that never shows the edit.
+- Row tints are class-driven rather than inline, so a tinted row still gives hover feedback.
+- A collapsed appended row carries `aria-hidden` and `inert`, so it is neither announced nor in the tab order.
+- The appended row's inner grid and the `<colgroup>` are both derived from `columns` — one source of truth.
+
+## Best Practices
+
+- Express meaning through `change` rather than painting colours with custom classes; the tint, the strike-through, and the reveal all follow from it.
+- Set `tintText: false` on badge or coloured-chip columns, or the change tone repaints them wholesale.
+- Give columns percentage or fixed pixel widths so the appended row cannot drift out of alignment.
+- Use `play="settled"` for docs, snapshot tests, and anywhere the animation is unwanted — it hands you the finished state directly.
+- For button-triggered playback use `play="manual"` with `reset()` + `play()`; do not remount the component with a changing `:key`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`.
+- Types: `packages/tuffex/packages/components/src/diff-table/src/types.ts` exports `DiffTableProps`, `DiffTableColumn`, `DiffTableRow`, `DiffChangeKind`, `DiffTablePlay`, and `DiffTableEmits`.
+- Instance: `packages/tuffex/packages/components/src/diff-table/index.ts` writes `TxDiffTableInstance` out by hand — a generic component's expose surface is typed unwrapped, so `stage` is a `number` rather than a `Ref<number>`.
+- **Test coverage:** `packages/tuffex/packages/components/src/diff-table/__tests__/diff-table.test.ts` has 15 cases using fake timers, covering the three-stage timeline, `stageChange` / `settled` emissions, all three playback modes, the three exposed methods, per-column tint and strike, grid-and-colgroup agreement, the collapsed row's `aria-hidden` / `inert`, unmount cleanup, and `play` mode switching.
+
+<TuffDocSourceLink />
+
+## Review Notes
+
+- **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- **Divergence from upstream:** Added rows render at their position in `rows` rather than being pinned last as upstream hardcodes, which preserves diff ordering and supports more than one addition; `modified` is new to this port and has no upstream counterpart.
+- **Upstream defect fixed:** Upstream tints outgoing rows with an inline `style.background`, which outranks its own hover rule and leaves exactly the rows a reader wants to inspect without hover feedback. This port drives the tint from a class instead.
+- **Dark theme:** Red and green fills come from `--tx-bui-*-tint` (translucent overlays), never `--tx-color-success-light-9`, which still mixes toward white in dark mode.
+- **Known limitation:** Under high-contrast themes (`html[data-tx-contrast='high']`) the `--tx-bui-*` tokens keep their upstream values and do not join the high-contrast ramp.

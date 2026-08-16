@@ -1,0 +1,143 @@
+---
+title: "SparkChart 迷你折线图"
+description: "卡片里的静态多序列折线：canvas 绘制，配 DOM 层的游标与提示框。"
+category: Data
+status: beta
+since: 2.5.0
+tags: [ai, chart, canvas, data]
+syncStatus: reviewed
+verified: true
+---
+# SparkChart 迷你折线图
+
+## 基础用法
+
+### SparkChart + ChartScrubber
+
+:::TuffDemoWrapper{demo="SparkChartSparkChartDemo" code-lang="vue" title="可擦洗的趋势快照" description="双序列折线，指针横扫读值。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const mint = [-2.9, -3.4, -3.05, -3.86, -3.52, -4.1, -3.82, -4.41]
+    .map((value, index) => ({ time: index * 6, value }))
+
+  const series = [{ id: 'mint', data: mint, color: 'var(--tx-bui-orange)' }]
+  const hover = ref<number | null>(null)
+
+  const rows = computed(() => hover.value === null
+    ? []
+    : [{ label: '薄荷脆片', value: `${mint[hover.value].value}%`, color: 'var(--tx-bui-orange)' }])
+  </script>
+
+  <template>
+    <TxChartScrubber
+      :point-count="mint.length"
+      :rows="rows"
+      time-label="今天 12:00"
+      @scrub="hover = $event"
+      @leave="hover = null"
+    >
+      <TxSparkChart :series="series" aria-label="趋势快照" />
+    </TxChartScrubber>
+  </template>
+---
+:::
+
+## 尺寸与主题
+
+图表填满容器，尺寸从**容器**量出来而不是靠 prop 指定，宿主给多大就画多大——所以外层必须有确定的高度（示例里是 166px）。容器尺寸变化由 `ResizeObserver` 捕捉后重绘。
+
+canvas 读不到 CSS 变量，所以主题切换必须触发重绘。`theme` 默认 `'auto'`，同时认 `<html>`/`<body>` 上的 `data-theme` 属性与 `.dark` 类——这正是 tuffex token 层的两个开关。位图按 `devicePixelRatio`（上限 2）放大，绘制坐标仍是 CSS 像素。
+
+## ChartScrubber
+
+擦洗层是纯 DOM，不往 canvas 里画：提示框因此可以被选中，游标线在任何像素比下都是一像素。它是外层容器，图表放进它的默认插槽。
+
+指针位置按容器宽度折算成最近的采样点下标；提示框锚点被夹在 28%–72% 之间，贴边时不会溢出舞台。`activeIndex` 不传时下标由组件自持——它是纯交互瞬态，多数宿主只需要监听 `@scrub`。
+
+舞台上 `touch-action: pan-y`：横向归擦洗，纵向留给页面滚动。
+
+## API
+
+### SparkChart Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `series` | `SparkSeries[]` | — | 序列数组，`{ id, data, color?, label? }`。 |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | `auto` 跟随 `data-theme` 或 `.dark`。 |
+| `grid` | `boolean` | `false` | 是否画水平发丝网格线。 |
+| `gridLines` | `number` | `4` | 网格线条数。 |
+| `lineWidth` | `number` | `2.25` | 线宽（CSS 像素）。 |
+| `padding` | `Partial<SparkChartPadding>` | `{ top: 24, right: 0, bottom: 22, left: 0 }` | 内边距，缺省的边取默认值。 |
+| `domain` | `[number, number]` | — | 固定纵轴范围，省略则按数据自适应。 |
+| `ariaLabel` | `string` | — | canvas 的可访问名。不传则 canvas 对辅助技术隐藏。 |
+
+`SparkPoint` 是 `{ time: number, value: number }`；`time` 只用来定横向位置，不需要是真实时间戳。
+
+### SparkChart Exposed
+
+| 方法名 | 说明 |
+|------|------|
+| `redraw()` | 立即重绘，供原地修改序列数据的宿主调用。 |
+
+### ChartScrubber Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `pointCount` | `number` | — | 指针映射到的采样点总数。 |
+| `activeIndex` | `number \| null` | — | 受控下标。不传则由组件自持。 |
+| `rows` | `ChartTooltipRow[]` | — | 提示框行，`{ label, value, color? }`。 |
+| `timeLabel` | `string` | — | 提示框顶部的时间行。 |
+| `tooltip` | `boolean` | `true` | 关掉后只保留游标线。 |
+| `anchorMin` / `anchorMax` | `number` | `28` / `72` | 提示框锚点的夹取范围（百分比）。 |
+| `disabled` | `boolean` | `false` | 关掉指针响应。 |
+
+### ChartScrubber Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `scrub` | `(index: number)` | 指针落到新的采样点。同一点不会重复触发。 |
+| `leave` | — | 指针离开、抬起或被取消。 |
+| `update:activeIndex` | `(index: number \| null)` | 受控写回。 |
+
+### ChartScrubber Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `default` | — | 舞台内容，通常是 `TxSparkChart`。 |
+| `tooltip` | `{ index, rows }` | 整体替换提示框。 |
+
+## 交互契约
+
+- 图表**不画坐标轴、不画图例、不画数值标签**：这些都属于卡片，由宿主排版。
+- 序列不传 `color` 时按序落到 `--tx-bui-accent` / `-orange` / `-green` / `-red`。上游把这几个颜色写成了暗色主题的字面量，在亮色下偏亮，这里改读 token。
+- 所有序列共用一套纵轴范围，横轴按 `time` 折算；全部样本时间相同时退化为按下标均分。单点序列画在正中，靠圆头线帽显示成一个点。
+- 数据为空或容器尺寸为 0 时什么都不画，不会抛错。宿主拿不到 2D 上下文（如 jsdom）时同样安全跳过。
+- 擦洗层只在下标**变化**时发事件；上游是每次指针移动都重设一次状态。
+- 两个组件都没有动画，因此没有需要在减弱动效下关掉的东西。
+
+## 最佳实践
+
+- 给舞台一个确定高度，否则容器高度为 0 时图表不可见。
+- 用 `aria-label` 描述图表说明的是什么；不传时 canvas 会被标成 `aria-hidden`，避免辅助技术念出一个空元素。数值本身应该在提示框或旁边的文字里可读。
+- 提示框的数值请自己格式化好再传：组件不做数字格式化，负号建议用 U+2212（`−`）以对齐等宽数字。
+- 需要实时推数据时，改 `series` 引用即可触发重绘；原地 push 后调 `redraw()`。
+
+## Source
+
+- 组件源码：`packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`、`TxChartScrubber.vue`。
+- 投影与绘制：`packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`、`draw.ts`。
+- 类型：`packages/tuffex/packages/components/src/spark-chart/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/spark-chart/__tests__/spark-chart.test.ts`（27 项）覆盖定义域求解、时间/下标两种横轴映射、单点居中、锚点夹取、绘制调用序列、擦洗事件去重与受控模式。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **没有上游视觉基准:** 上游截图的图表区域显示的是「No data to display」——抓图那一版根本没画出线。卡片外框、图例、大数与追问 pill 的截图仍然有效，**图表本身按规格实现**（静态多序列折线、线宽 2.25、可选网格、内边距 24/22），不要拿那两张 PNG 对图表区域做像素比对。
+- **为什么不用图表库:** 上游用的 `liveline` 只有 React 版本（`peerDependencies` 仅 react），且把它的实时能力全关了（`paused`、`scrub={false}`、`pulse={false}`），实际只用到静态折线渲染这一小块。这里直接实现那一小块，不引入依赖。
+- **不做面积填充:** 上游唯一可验证的用法是 `fill={false}`，另一处无从核对，因此不提供 `fill`。
+- 绘制逻辑单独放在 `draw.ts`：jsdom 的 `getContext('2d')` 返回 `null`，写在 SFC 里就完全无法测试。

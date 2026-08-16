@@ -1,0 +1,108 @@
+---
+title: "ScrubField 拖拽数值域"
+description: "标签即手柄的紧凑数值输入：横向拖动、方向键步进、也能直接键入。"
+category: Form
+status: beta
+since: 2.5.0
+tags: [form, number, drag, inspector]
+syncStatus: reviewed
+verified: true
+---
+# ScrubField 拖拽数值域
+
+## 基础用法
+
+### ScrubField
+
+:::TuffDemoWrapper{demo="ScrubFieldScrubFieldDemo" code-lang="vue" title="三种量纲" description="整数、百分比、半步长；三条输入路径都可用。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const width = ref(324)
+  const opacity = ref(100)
+  </script>
+
+  <template>
+    <TxScrubField v-model="width" label="宽" :min="40" :max="999" :active="width !== 324" />
+    <TxScrubField v-model="opacity" label="不透明度" :min="0" :max="100" suffix="%" />
+  </template>
+---
+:::
+
+## 三条输入路径
+
+**拖动**：指针按在标签上横向移动，每 `pixelsPerStep`（默认 2）像素走一个 `step`。位移是相对起点算的，不是按轨道位置映射——所以它没有轨道，也不受控件宽度限制，可以一直拖下去直到边界。
+
+**键盘**：手柄是 `role="slider"` 且可聚焦。↑ → 加、↓ ← 减，按住 Shift 走 `shiftMultiplier`（默认 10）倍，Home / End 直达两端。
+
+**键入**：右侧是真实的 `<input>`。`clampOn` 决定何时收敛：默认 `'input'` 每次按键都夹取（与上游一致），`'blur'` 则保留输入中的文本，避免「想输 50，刚打完 5 就被改写成 5」。
+
+拖动过程中按 **Esc 放弃这次手势**，值回到按下时的样子——不是回到指针路过的最后一个值。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number` | — | 当前值，受控。 |
+| `label` | `string` | — | 短标签，同时是拖拽手柄。 |
+| `min` / `max` | `number` | — | 取值范围，三条路径都会夹取。 |
+| `step` | `number` | `1` | 步长。小数步长会保留对应小数位。 |
+| `suffix` | `string` | — | 值后面的单位，如 `%`。 |
+| `active` | `boolean` | `false` | 高亮成「已改动」。什么算改动由宿主判断。 |
+| `disabled` | `boolean` | `false` | 三条路径全部失效。 |
+| `pixelsPerStep` | `number` | `2` | 走一个步长所需的指针位移。 |
+| `shiftMultiplier` | `number` | `10` | 按住 Shift 时的方向键倍率。 |
+| `clampOn` | `'input' \| 'blur'` | `'input'` | 键入的收敛时机。 |
+| `ariaLabel` | `string` | — | 手柄的可访问名，缺省用 `label`。 |
+| `valueLabel` | `string` | `'{label} value'` | 输入框的可访问名。 |
+
+### Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: number)` | 值变化。相同值不会重复触发。 |
+| `change` | `(value: number)` | 同上。 |
+| `scrubStart` / `scrubEnd` | — | 拖拽手势的开始与结束（含取消）。 |
+
+### Exposed
+
+| 方法名 | 说明 |
+|------|------|
+| `focus()` | 聚焦拖拽手柄。 |
+| `focusInput()` | 聚焦数值输入框。 |
+
+## 交互契约
+
+- 手柄是 `role="slider"`，带 `aria-valuenow` / `aria-valuemin` / `aria-valuemax` / `aria-orientation`，有 `suffix` 时另带 `aria-valuetext`（如 `100%`）。数值输入框是**另一个**控件，有自己的可访问名——这是刻意的双控件设计。
+- 量化的是**位移**不是结果：`round(位移 / pixelsPerStep) * step`。这样小数步长成立，起始值不在步长网格上时也不会被吸附过去。
+- 拖动全程用指针捕获；`pointercancel` 与 `lostpointercapture` 同样结束手势（上游两者都没监听，被系统手势抢走指针后会留下一个悬空的拖拽态）。
+- 组件卸载会摘掉拖拽期挂在 window 上的按键监听。
+- 手柄上 `touch-action: pan-y`：横向归拖动，纵向留给页面滚动。
+- 外层是 `<label>`，但手柄会阻止 label 的默认转发并让自己拿到焦点——否则每次点手柄，焦点都会被交给输入框。
+- 组件内没有 JS 动画，只有一条状态过渡（底色与描边），已在减弱动效下关闭。
+
+## 最佳实践
+
+- 标签要短（`W`、`H`、`Radius`）：它是手柄，太长的标签会让拖动区域喧宾夺主。
+- `active` 交给宿主判断——通常是「当前值 ≠ 预设值」，比较对象应该跟着数据走，不要写死常量。
+- 输入频繁的表单用 `clampOn="blur"`，检查器这类即时预览场景用默认的 `'input'`。
+- 需要「按轨道位置取值」的场景请用 `TxSlider`：那是位置映射，这是位移累加，两者不能互换。
+
+## Source
+
+- 组件源码：`packages/tuffex/packages/components/src/scrub-field/src/TxScrubField.vue`。
+- 类型：`packages/tuffex/packages/components/src/scrub-field/src/types.ts`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/scrub-field/__tests__/scrub-field.test.ts`（18 项）覆盖拖动量化与起点基准、小数步长、Esc 取消、指针取消/失去捕获、方向键与 Shift 倍率、Home/End、三条路径的夹取、`clampOn` 两种模式、Esc 还原输入、禁用态、可访问性属性与 expose。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />
+
+## 审阅说明
+
+- **为什么不是 `TxSlider` 的变体:** 滑杆把指针**位置**映射到轨道上的值，这里把指针**位移**累加成步数，且没有轨道。两者的数学与 DOM 都不相容。`TxNumberInput` 也不合适：它是 34px 高、带加减按钮的表单控件，收敛时机也不同。
+- **相对上游的修正:** 补了 `pointercancel` / `lostpointercapture`（否则会留下悬空拖拽态）、Esc 取消、Home/End、`aria-orientation`，并把值的取整改成位移量化。
+- **减弱动效:** 这个组件没有 JS 动画，因此不需要 `matchMedia` 守卫；唯一的过渡由 CSS 媒体查询关闭。
