@@ -28,6 +28,7 @@ The goal is to keep credential values out of deployable configuration while prov
 - Local Pages simulator marker: `NEXUS_LOCAL_PAGES_PREVIEW=true`, injected by `pnpm -C apps/nexus run preview:cf`.
 - Local Nitro Cloudflare marker: `NUXT_USE_CLOUDFLARE_DEV=true`, set by the Nexus `dev` / `dev:cf` scripts and accepted only while `NODE_ENV !== 'production'`.
 - Local binding adapter: `readCloudflareBindings(event)` preserves platform bindings and overlays only its explicit credential allowlist from `process.env` when the local Nitro marker is active.
+- Browser-session secret resolver: `resolveSessionAuthSecret(event: H3Event): string`; both the Auth route and protected server APIs use this single binding-first owner.
 
 Required Preview Secrets are:
 
@@ -53,6 +54,9 @@ The catalog is the source of truth for feature-gated and optional credential nam
 - `nitro-cloudflare-dev` creates a platform binding object from `wrangler.toml`; app-scoped `.env` / `.env.local` credentials are not automatically present in that object. In explicit local Nitro mode, `readCloudflareBindings()` preserves D1/R2 and all other platform bindings, injects the local Pages marker into its returned view, and fills only allowlisted credential keys from `process.env` when the platform value is nullish.
 - Existing platform credential values remain authoritative in local Nitro mode, including empty or otherwise invalid explicit values. Arbitrary process environment keys must never become Cloudflare bindings.
 - App JWT may fall back from an absent `APP_AUTH_JWT_SECRET` to `AUTH_SECRET` only at its documented boundary. An explicitly present invalid primary value fails closed.
+- Cloudflare route chunks must not use Sidebase `getServerSession()`: it depends on module-local `NuxtAuthHandler` initialization, which another route chunk/isolate cannot establish reliably. Protected server APIs decode the signed browser JWT with `getToken({ event, secret: resolveSessionAuthSecret(event), secureCookie })`.
+- `secureCookie` follows the external request protocol, including the first normalized `x-forwarded-proto` value. Browser JWT identity is trimmed `userId`, then `sub`, with normalized email/name fallback; numeric `iat` is the session issue time.
+- Session authentication rejects App JWT issuer/audience/`typ: app` claims even when `APP_AUTH_JWT_SECRET` legitimately falls back to `AUTH_SECRET`; App tokens remain owned by `requireAppAuth` and its device/revocation checks.
 - POSIX native pnpm executables run directly; `.js/.cjs/.mjs` package-manager entries run through Node; Windows `.cmd/.bat` entries run through `ComSpec /d /s /c`.
 
 ### 4. Validation & Error Matrix
@@ -71,6 +75,9 @@ The catalog is the source of truth for feature-gated and optional credential nam
 - Local Nitro bindings exist but omit an allowlisted credential -> use the corresponding process value only when `NODE_ENV !== 'production'` and `NUXT_USE_CLOUDFLARE_DEV=true`; otherwise retain the non-local rejection.
 - Local Nitro platform binding contains an explicit value, including `''` -> keep the platform value; downstream validation decides whether to reject it.
 - Local Nitro process environment contains a non-allowlisted key -> omit it from the binding view.
+- Missing, malformed, or unverifiable browser JWT -> HTTP `401`; never expose the decoder error or raw token.
+- Active browser JWT resolves to a missing/disabled account -> existing email recovery or HTTP `403` policy applies; successful resolution still registers the request device once.
+- Protected API route executes before `/api/auth/*` in a fresh Worker isolate -> JWT verification succeeds without initializing an Auth handler in that module.
 
 ### 5. Good / Base / Bad Cases
 
@@ -97,6 +104,8 @@ The catalog is the source of truth for feature-gated and optional credential nam
 - Test Cloudflare binding precedence over Nuxt/process fallback in auth, app JWT, emergency token, pepper, and feature-gated encryption boundaries.
 - Test deployment ordering, second-preflight target identity, argument rejection, and POSIX native/JavaScript/Windows package-manager resolution.
 - Run focused Vitest, Nexus typecheck, scoped ESLint/Prettier, Node syntax checks, deterministic config scan, and `git diff --check`.
+- Test the server browser-session boundary with direct `userId`, `sub`, normalized email auto-provision, numeric `iat`, missing/invalid token, disabled account, device registration, forwarded HTTP/HTTPS cookie mode, and App JWT rejection.
+- The Worker bundle guard must reject production `getServerSession` usage and require `getToken`, the shared secret resolver, secure-cookie projection, and binding-first credential markers.
 - Final evidence requires a real Cloudflare Preview inventory preflight, a successful deployment whose environment is `Preview` and branch is `preview`, and remote auth/emergency boundary smoke. A disabled emergency route proves fail-closed wiring only; it does not prove enabled emergency operations.
 
 ### 7. Wrong vs Correct
@@ -116,6 +125,11 @@ execFileSync(process.execPath, [process.env.npm_execpath, 'run', 'build'])
 
 // Wrong: a local fix must not expose the whole process environment.
 event.context.cloudflare.env = { ...bindings, ...process.env }
+```
+
+```ts
+// Wrong: route-chunk module state is not a cross-isolate authentication contract.
+const session = await getServerSession(event)
 ```
 
 #### Correct
