@@ -16,7 +16,7 @@
 
 ## 任务记录、文档与路线图
 
-- **三个 in-progress Trellis 记录缺少继续条件。** `07-26-install-launch-v2-4-13-beta-23` 已约 20 天无任务产物更新且 `meta.nextAction`/`blocker`/`evidence` 全缺；`08-14-corebox-hide-focus` 与 `08-15-local-nexus-publish-path` 也缺同三字段。前者必须归档或补实际验收结论；后两者必须补当前动作和证据，避免活跃列表无法用于排程。跟踪：[#309](https://github.com/talex-touch/tuff/issues/309)。
+- **in-progress Trellis 记录缺少继续条件。** 本条原先点名的另外两个任务目录并不在仓库里（一个被 `.git/info/exclude` 显式排除，一个未跟踪），断言只在作者本机成立、任何人都打不开，`check:audit-report-claims` 因此拒绝该结论；此处不再复述其名称，否则同一条规则仍会命中。仓库内可验证的那一个 `08-15-local-nexus-publish-path` 当时确实缺 `meta.nextAction`/`blocker`/`evidence` 三字段，现已补齐真实内容并通过 `docs:verify`。若那两个任务确需跟进，应先让其进入仓库再重新下结论。跟踪：[#309](https://github.com/talex-touch/tuff/issues/309)。
 - **CatalogService 的文档收尾未完成。** `07-13-catalog-service-mvp` 已勾选前八项验收，唯一未勾的是 R8 PRD、执行计划、质量基线、changelog、任务工件与开发者文档的 completed/open 边界。路线图只写“暂停”不能替代该边界，需完成文档更新或明确实际未满足的条件。
 - **全仓治理审计已建 issue，PRD 未回填验收。** `08-05-full-repo-governance-audit` 记录已提交 454 项 verified finding（另有 #838 链路），但其 `prd.md` 六项验收仍未逐项和 `research/filed.jsonl` / `research/audit-summary.md` 对账。需做该对账或拆分未完成项，不能把「已 filing」当作任务完成。
 
