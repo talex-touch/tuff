@@ -89,13 +89,9 @@ function onOpen(payload: { source: { name: string, href?: string } }) {
     />
 
     <div class="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        class="rounded-md border border-[var(--tx-border-color)] px-2 py-1 text-xs"
-        @click="replay"
-      >
+      <TxButton size="small" variant="secondary" @click="replay">
         {{ copy.replay }}
-      </button>
+      </TxButton>
       <p class="text-xs text-[var(--tx-text-color-secondary)]">
         <template v-if="opened">
           {{ copy.opened }} <code>{{ opened }}</code>

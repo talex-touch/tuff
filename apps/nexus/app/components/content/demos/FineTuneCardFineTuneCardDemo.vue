@@ -102,9 +102,9 @@ const previewStyle = computed(() => ({
       <p v-if="lastChange" class="fine-tune-demo__log">
         {{ labels.changed }}<code>{{ lastChange }}</code>
       </p>
-      <button type="button" class="fine-tune-demo__reset" @click="reset">
+      <TxButton size="small" variant="secondary" @click="reset">
         {{ labels.reset }}
-      </button>
+      </TxButton>
     </div>
   </div>
 </template>
@@ -138,17 +138,6 @@ const previewStyle = computed(() => ({
 .fine-tune-demo__log code {
   font-family: var(--tx-bui-font-mono, ui-monospace, monospace);
   font-variant-numeric: tabular-nums;
-}
-
-.fine-tune-demo__reset {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: var(--tx-bui-ink, #1f2124);
-  cursor: pointer;
-  background: var(--tx-bui-surface, #fff);
-  border: 0;
-  border-radius: 999px;
-  box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
 }
 
 @media (prefers-reduced-motion: reduce) {
