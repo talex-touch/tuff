@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-type AnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+type AnchorAnimationType = 'transfer' | 'boom' | 'expand' | 'opacity' | 'none'
 
 const { locale } = useI18n()
 const open = ref<Record<AnchorAnimationType, boolean>>({
   transfer: false,
   boom: false,
+  expand: false,
   opacity: false,
   none: false,
 })
@@ -15,43 +16,52 @@ const labels = computed(() => {
   if (locale.value.startsWith('zh')) {
     return {
       title: '锚点定位动画',
-      desc: '同一个 animation 对象切换不同类型，保留 placement、箭头、碰撞处理等定位能力。',
+      desc: '同一个 animation 对象切换动画类型，定位能力不变。',
       modes: {
         transfer: '位移动画',
         boom: '聚焦缩放',
+        expand: '展开（默认）',
         opacity: '透明度',
         none: '无动画',
       },
       content: {
-        transfer: '当前位移动画：沿 placement 方向揭示与回收。',
-        boom: '聚焦缩放：带模糊、缩放和透明度变化。',
-        opacity: '透明度：只做淡入淡出。',
-        none: '无动画：立即显示与隐藏。',
+        transfer: '沿 placement 方向揭示与回收。',
+        boom: '模糊、缩放与透明度同步变化。',
+        expand: '从锚点角弹出，回弹落定。',
+        opacity: '只做淡入淡出。',
+        none: '立即显示与隐藏。',
       },
     }
   }
 
   return {
     title: 'Anchor positioning animations',
-    desc: 'Switch animation types through one animation object while keeping placement, arrow, and collision handling.',
+    desc: 'One animation object switches the motion; positioning stays put.',
     modes: {
       transfer: 'transfer',
       boom: 'focus scale',
+      expand: 'expand (default)',
       opacity: 'opacity',
       none: 'none',
     },
     content: {
-      transfer: 'Transfer keeps the current directional reveal and return motion.',
-      boom: 'Focus scale combines blur, scale, and opacity changes.',
-      opacity: 'Opacity only fades the panel in and out.',
-      none: 'None shows and hides immediately.',
+      transfer: 'Reveals and returns along the placement direction.',
+      boom: 'Blur, scale, and opacity move together.',
+      expand: 'Springs from the anchored corner and settles with a bounce.',
+      opacity: 'Fade only.',
+      none: 'Shows and hides instantly.',
     },
   }
 })
 
-const modes: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']
+const modes: AnchorAnimationType[] = ['expand', 'transfer', 'boom', 'opacity', 'none']
 
 function resolveAnimation(type: AnchorAnimationType) {
+  // expand ships its own tuned timing; overriding it here would flatten the
+  // motion being demonstrated.
+  if (type === 'expand')
+    return { type }
+
   return {
     type,
     duration: type === 'none' ? 0 : 420,
