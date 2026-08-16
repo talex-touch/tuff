@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxIconButton } from '@talex-touch/tuffex/icon-button'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 type SupportedLocale = 'zh' | 'en'
 
@@ -23,11 +23,6 @@ const { locale, t } = useI18n()
 const { setManualLocale } = useLocaleOrchestrator()
 const isOpen = ref(false)
 
-// Hover-out is forgiving: keep the menu around long enough for the pointer to
-// travel into the teleported panel (or come back) before it dissolves away.
-const CLOSE_DELAY = 600
-let closeTimer: ReturnType<typeof setTimeout> | null = null
-
 const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
 const triggerAriaLabel = computed(() =>
   t(nextLocale.value === 'zh' ? 'ui.languageToggle.switchToZh' : 'ui.languageToggle.switchToEn'),
@@ -36,41 +31,20 @@ const triggerTitle = computed(() =>
   t(nextLocale.value === 'zh' ? 'ui.languageToggle.zhLabel' : 'ui.languageToggle.enLabel'),
 )
 
-function clearCloseTimer() {
-  if (closeTimer != null) {
-    clearTimeout(closeTimer)
-    closeTimer = null
-  }
-}
-
-function openMenu() {
-  clearCloseTimer()
-  isOpen.value = true
-}
-
-function closeMenu() {
-  clearCloseTimer()
-  closeTimer = setTimeout(() => {
-    isOpen.value = false
-  }, CLOSE_DELAY)
-}
-
 async function selectLocale(option: LanguageOption) {
   if (option.code === 'zh' || option.code === 'en')
     await setManualLocale(option.code)
 }
 
-onBeforeUnmount(clearCloseTimer)
 </script>
 
 <template>
-  <div class="LanguageToggle" @mouseenter="openMenu" @mouseleave="closeMenu">
+  <div class="LanguageToggle">
     <TxDropdownMenu
       v-model="isOpen"
+      trigger="hover"
       placement="bottom-end"
       :offset="10"
-      :min-width="150"
-      :panel-padding="0"
     >
       <template #trigger>
         <TxIconButton
@@ -85,7 +59,6 @@ onBeforeUnmount(clearCloseTimer)
         />
       </template>
 
-      <div class="LanguageToggle-Options" @mouseenter="openMenu" @mouseleave="closeMenu">
         <TxDropdownItem
           v-for="option in languageOptions"
           :key="option.code"
@@ -99,7 +72,6 @@ onBeforeUnmount(clearCloseTimer)
             <span class="i-carbon-checkmark LanguageToggle-Check" aria-hidden="true" />
           </template>
         </TxDropdownItem>
-      </div>
     </TxDropdownMenu>
   </div>
 </template>
@@ -108,14 +80,6 @@ onBeforeUnmount(clearCloseTimer)
 .LanguageToggle {
   display: inline-flex;
   align-items: center;
-}
-
-/* Reproduces .tx-dropdown__panel's own layout: the wrapper only exists so the
-   teleported panel can re-assert hover while the pointer is inside it. */
-.LanguageToggle-Options {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .LanguageToggle-Check {

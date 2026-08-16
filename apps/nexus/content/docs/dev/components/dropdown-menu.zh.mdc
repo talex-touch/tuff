@@ -10,9 +10,6 @@ verified: true
 ---
 # DropdownMenu 下拉菜单
 
-`TxDropdownMenu` 从 trigger 插槽渲染紧凑的操作菜单，通过 `v-model` 控制开合，菜单行使用 `TxDropdownItem`。
-
-
 ## 基础用法
 
 ### DropdownMenu
@@ -131,11 +128,11 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `modelValue` | `boolean` | `undefined` | 是否打开（v-model）。省略时为非受控，开合状态由内部维护。 |
+| `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式，透传给 `TxPopover`。`hover` 由它统一处理触发器与面板两侧的悬停，因此延迟与互斥交给共享延迟服务，宿主不必自己写关闭定时器。 |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | 相对触发器的浮层位置。 |
 | `offset` | `number` | `6` | 触发器与面板之间的距离，单位 px。 |
 | `closeOnSelect` | `boolean` | `true` | 可用菜单项触发 `select` 后是否关闭父菜单。 |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 透传给 BaseAnchor/Popover 的锚点动画配置；为空对象时使用 BaseAnchor 的默认动画。 |
-| `duration` | `number` | `180` | 兼容旧用法的动画时长；优先使用 `animation.duration`。 |
 | `minWidth` | `number` | `220` | 面板最小宽度，单位 px。面板最大宽度固定为 360px，且没有对应 prop 可调整。 |
 | `maxHeight` | `number` | `420` | 面板最大可滚动高度，单位 px。 |
 | `unlimitedHeight` | `boolean` | `false` | 禁用面板最大高度限制。 |

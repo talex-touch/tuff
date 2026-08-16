@@ -11,14 +11,6 @@ verified: true
 
 # Tooltip
 
-> Small and lightweight hints that do not interrupt the flow.
-
-Tooltip is a semantic wrapper over `TxBaseAnchor`:
-- Tooltip handles trigger timing and hint content;
-- Anchor handles positioning, animation, and panel visuals;
-- use `anchor` to pass anchor-level configuration.
-- `TxPopover` reuses the same chain to keep overlay behavior consistent.
-
 ## Demo
 
 ### Hover Hint
@@ -111,8 +103,8 @@ code: |
 | `content` | `string` | `''` | Fallback tooltip text when the `content` slot is not provided. |
 | `disabled` | `boolean` | `false` | Blocks opening and closes the tooltip when it becomes disabled. |
 | `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | Trigger strategy for the reference wrapper. |
-| `openDelay` | `number` | `200` | Delay before opening in hover or focus mode, clamped to at least `0`. |
-| `closeDelay` | `number` | `120` | Delay before closing in hover or focus mode, clamped to at least `0`. |
+| `openDelay` | `number` | From the `layer` preset (`200` for `hint`) | Delay before opening in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
+| `closeDelay` | `number` | From the `layer` preset (`120` for `hint`) | Delay before closing in hover or focus mode, clamped to at least `0`. Left unset, the shared delay service supplies it from `layer`. |
 | `maxHeight` | `number` | `320` | Panel max height in pixels. `<= 0` disables the max height. Content slot defaults to no max height at `320`. |
 | `referenceFullWidth` | `boolean` | `false` | Makes the reference wrapper take `width: 100%`. |
 | `interactive` | `boolean` | `false` | Keeps hover tooltips open while the pointer is inside the floating panel. |
@@ -142,7 +134,7 @@ code: |
 - `disabled=true` clears pending timers and forces the resolved open state to `false`.
 - `interactive=true` only affects hover mode; entering the floating panel clears the close timer until the pointer leaves.
 - Tooltip sets `role="tooltip"` on the floating body and exposes `data-side` for placement-aware styling.
-- The default anchor animation is `{ type: 'transfer', duration: 432, ease: 'back.out(2)' }`, with legacy `anchor.duration` / `anchor.ease` merged as fallbacks.
+- The default anchor animation is `{ type: 'boom' }` (a symmetric focus zoom in and out); an `anchor.animation` override replaces it entirely.
 
 ## Best Practices
 
@@ -215,7 +207,7 @@ code: |
 
 - **Open-state contract:** `TxTooltip` is controlled when `modelValue` is boolean, otherwise it owns `internalOpen`. Opening/closing emits `update:modelValue` plus `open` or `close`, unless `disabled` prevents opening.
 - **Anchor contract:** Click trigger defaults `closeOnClickOutside` and `toggleOnReferenceClick` to `true`; other triggers leave those behaviors off unless props or `anchor` override them.
-- **Verified coverage:** `tooltip.test.ts` covers keep-alive defaults, default and legacy animation forwarding, content slot `side` context, and click outside override behavior.
+- **Verified coverage:** `tooltip.test.ts` covers keep-alive defaults, the boom default and animation forwarding, content slot `side` context, and click outside override behavior.
 
 ## Source
 

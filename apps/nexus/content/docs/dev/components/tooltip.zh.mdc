@@ -11,14 +11,6 @@ verified: true
 
 # Tooltip 提示
 
-> 小而轻的提示，不打断流程但能提供必要信息。
-
-Tooltip 是 `TxBaseAnchor` 的语义封装：
-- Tooltip 负责触发和提示内容；
-- Anchor 负责定位、动效和面板样式；
-- 通过 `anchor` 参数把配置透传给 Anchor。
-- `TxPopover` 也复用这条链路，统一触发与浮层行为。
-
 ## Demo
 ### Hover Hint
 
@@ -110,8 +102,8 @@ code: |
 | `content` | `string` | `''` | 未提供 `content` 插槽时使用的备用提示文本。 |
 | `disabled` | `boolean` | `false` | 阻止打开，并在变为禁用时关闭 tooltip。 |
 | `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | reference 包装层的触发方式。 |
-| `openDelay` | `number` | `200` | hover / focus 模式下的打开延迟，最小按 `0` 处理。 |
-| `closeDelay` | `number` | `120` | hover / focus 模式下的关闭延迟，最小按 `0` 处理。 |
+| `openDelay` | `number` | 见 `layer` 预设（`hint` 为 `200`） | hover / focus 模式下的打开延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
+| `closeDelay` | `number` | 见 `layer` 预设（`hint` 为 `120`） | hover / focus 模式下的关闭延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
 | `maxHeight` | `number` | `320` | 面板最大高度，单位 px；`<= 0` 时不限制高度。`content` 插槽在默认 `320` 时不限制高度。 |
 | `referenceFullWidth` | `boolean` | `false` | 让 reference 包装层占满 `width: 100%`。 |
 | `interactive` | `boolean` | `false` | hover 模式下，鼠标进入浮层时保持 tooltip 打开。 |
@@ -141,7 +133,7 @@ code: |
 - `disabled=true` 会清理等待中的 timer，并强制 resolved 打开状态为 `false`。
 - `interactive=true` 只影响 hover 模式；鼠标进入浮层会清理关闭 timer，离开后重新安排关闭。
 - Tooltip 在浮层内容上设置 `role="tooltip"`，并暴露 `data-side` 方便按方向写样式。
-- 默认 anchor 动画为 `{ type: 'transfer', duration: 432, ease: 'back.out(2)' }`，旧的 `anchor.duration` / `anchor.ease` 会作为 fallback 合并。
+- 默认 anchor 动画为 `{ type: 'boom' }`（对称的聚焦缩放开合）；通过 `anchor.animation` 覆盖后完全以覆盖值为准。
 
 ## 最佳实践
 
@@ -213,7 +205,7 @@ code: |
 
 - **打开状态契约:** 当 `modelValue` 是 boolean 时 `TxTooltip` 受控，否则使用内部 `internalOpen`。打开/关闭会派发 `update:modelValue` 加 `open` 或 `close`；`disabled` 会阻止打开。
 - **Anchor 契约:** click trigger 默认把 `closeOnClickOutside` 和 `toggleOnReferenceClick` 设为 `true`；其它 trigger 除非 props 或 `anchor` 覆盖，否则不启用这两个行为。
-- **实测覆盖:** `tooltip.test.ts` 覆盖 keep-alive 默认值、默认与 legacy animation 透传、content slot 的 `side` 上下文，以及点击外部关闭覆盖行为。
+- **实测覆盖:** `tooltip.test.ts` 覆盖 keep-alive 默认值、boom 默认与 animation 透传、content slot 的 `side` 上下文，以及点击外部关闭覆盖行为。
 
 ## Source
 

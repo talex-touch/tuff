@@ -10,11 +10,6 @@ verified: true
 ---
 # Popover
 
-`TxPopover` builds trigger semantics directly on `TxBaseAnchor`, which owns positioning, collision handling, outside click / Escape closing, and motion.
-
-Popover panels use `TxCard`; use `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` to control border, background, and shadow. `keepAliveContent` controls whether inner state is preserved after close.
-
-
 ## Basic Usage
 
 ### Popover
@@ -190,10 +185,9 @@ code: |
 | `showArrow` | `boolean` | `true` | Show arrow |
 | `arrowSize` | `number` | `12` | Arrow size |
 | `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode |
-| `openDelay` | `number` | `120` | Hover open delay (ms) |
-| `closeDelay` | `number` | `100` | Hover close delay (ms) |
-| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180, ease: 'power2.out' }` | Anchor animation config forwarded to BaseAnchor. |
-| `duration` | `number` | `180` | Backward-compatible animation duration; prefer `animation.duration`. |
+| `openDelay` | `number` | From the `menu` preset (`120`) | Hover open delay (ms). Left unset, the shared delay service supplies it. |
+| `closeDelay` | `number` | From the `menu` preset (`100`) | Hover close delay (ms). Left unset, the shared delay service supplies it. |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | Anchor animation config forwarded to BaseAnchor; spring expand by default — classic types (`transfer` etc.) get `duration: 180` / `ease: 'power2.out'` injected. |
 | `keepAliveContent` | `boolean` | `true` | Keep floating content mounted between open/close |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggle by clicking reference |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Card border variant |
