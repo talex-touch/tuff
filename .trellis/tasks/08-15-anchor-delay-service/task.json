@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "None known to the merging session — recorded by the BUI-port coordinator while unblocking the master docs:verify gate; owning session should overwrite with its real state.",
+    "evidence": "Anchor delay service commits landed on master via the 2026-08-16 merge (fe2554c6f tuffex shared delay service, 67e2b9ce2 nexus header menus); tuffex full gate chain green on the merged tip (1803 tests, typecheck, 4 audits).",
+    "nextAction": "Owning session resumes per this task's prd.md and updates meta with its own blocker/evidence/nextAction."
+  }
 }

@@ -7,8 +7,6 @@ verified: true
 
 # Tuffex Components
 
-> Component docs are now unified with `TuffDemoWrapper + standalone demo components`.
-
 ## Preview
 
 ::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
@@ -266,6 +264,35 @@ code: |
 - [TypingIndicator](./typing-indicator.en.mdc)
 - [MarkdownView](./markdown-view.en.mdc)
 - [ImageGallery](./image-gallery.en.mdc)
+
+## AI Suite (Beautiful UI)
+
+AI-native interface components adapted from [Beautiful UI](https://www.beautifului.dev) (MIT); see the [AI Suite Overview](./ai-suite.en.mdc) for the full showcase.
+
+- [WorkingIndicator](./working-indicator.en.mdc)
+- [AgentTrace](./agent-trace.en.mdc)
+- [TaskRows](./task-rows.en.mdc)
+- [CodeStream](./code-stream.en.mdc)
+- [InlineCitation](./inline-citation.en.mdc)
+- [PromptBar](./prompt-bar.en.mdc)
+- [ApprovalCard](./approval-card.en.mdc)
+- [ToolChips](./tool-chips.en.mdc)
+- [SignalMeter](./signal-meter.en.mdc)
+- [RecommendationCard](./recommendation-card.en.mdc)
+- [SelectionActions](./selection-actions.en.mdc)
+- [DiffTable](./diff-table.en.mdc)
+- [FilterChips](./filter-chips.en.mdc)
+- [DotIndicator](./dot-indicator.en.mdc)
+- [CellLink](./cell-link.en.mdc)
+- [ContextCards](./context-cards.en.mdc)
+- [SidebarNav](./sidebar-nav.en.mdc)
+- [SearchPanel](./search-panel.en.mdc)
+- [IconChip](./icon-chip.en.mdc)
+- [SparkChart](./spark-chart.en.mdc)
+- [AllocationBar](./allocation-bar.en.mdc)
+- [InsightCards](./insight-cards.en.mdc)
+- [ScrubField](./scrub-field.en.mdc)
+- [FineTuneCard](./fine-tune-card.en.mdc)
 
 ## Review Notes
 

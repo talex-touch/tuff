@@ -186,7 +186,7 @@ function disengage(): void {
   engaged.value = false
 }
 
-function isSourceRow(row: PromptBarSource | PromptBarCommand): row is PromptBarSource {
+function isSourceRow(_row: PromptBarSource | PromptBarCommand): _row is PromptBarSource {
   return menu.value === 'at'
 }
 
