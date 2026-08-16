@@ -134,7 +134,17 @@ describe('official plugin manifest trust boundary', () => {
     // touch-intelligence moved to the current marker in 7faea27bf -- so an empty list is
     // no longer the invariant. Listing the migrated plugins keeps this a review gate:
     // the next plugin to adopt the marker still has to be added here deliberately.
-    expect(currentMarkerPlugins).toEqual(['touch-intelligence'])
+    // clipboard-history, json-formatter and touch-translation joined the marker on
+    // 2026-08-16. 260713 gates one capability, the permission-scoped localization facade
+    // (`plugin-localization-channels.ts` checks `sdkapi >= LOCALIZATION_FACADE_MIN_VERSION`),
+    // and none of the three calls it -- the bump declares support, it does not migrate
+    // anything. Listed here so the next adopter still has to be added on purpose.
+    expect(currentMarkerPlugins).toEqual([
+      'clipboard-history',
+      'json-formatter',
+      'touch-intelligence',
+      'touch-translation',
+    ])
   })
 
   it('requires a permission reason for every declared plugin permission', () => {
@@ -228,6 +238,7 @@ describe('official plugin manifest trust boundary', () => {
     // should carry, not something the test should absorb quietly.
     expect(fullHeightSurfaces.sort()).toEqual([
       'clipboard-history:clipboard-history',
+      'json-formatter:json-formatter-format',
       'touch-intelligence:intelligence-ask',
       'touch-intelligence:intelligence-command-registry',
       'touch-intelligence:intelligence-explain',
