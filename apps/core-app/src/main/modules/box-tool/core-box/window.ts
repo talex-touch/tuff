@@ -365,7 +365,12 @@ export class WindowManager {
     this.focusPolicy.beginFocusGrace(
       triggeredByShortcut ? COREBOX_SHORTCUT_FOCUS_GRACE_MS : COREBOX_DEFAULT_FOCUS_GRACE_MS
     )
-    if (triggeredByShortcut) {
+    // The box window is an NSPanel (`type: 'panel'` in BoxWindowOption), which on macOS carries
+    // NSWindowStyleMaskNonactivatingPanel: `show()` + `focus()` below takes key focus — the box
+    // receives typing — without activating Tuff. Activating is what drags every other Tuff window
+    // in front of the app the user came from, so this path must never do it. Windows and Linux
+    // have no non-activating equivalent and still need the app-level focus to receive input.
+    if (triggeredByShortcut && process.platform !== 'darwin') {
       try {
         app.focus({ steal: true })
       } catch {
@@ -382,6 +387,8 @@ export class WindowManager {
         undefined
       )
     }
+
+    if (process.platform === 'darwin') this.applyMacPanelBehaviour(window)
 
     if (shouldFocus) {
       window.window.show()
@@ -415,6 +422,13 @@ export class WindowManager {
     }, 100)
   }
 
+  /**
+   * Hide the CoreBox window.
+   *
+   * Only the window is hidden, never the application: `show()` does not activate Tuff on macOS,
+   * so the app the user came from is still frontmost and gets the keyboard back on its own.
+   * Hiding the application here would instead un-hide every Tuff window on the next activation.
+   */
   public hide(options: { immediate?: boolean } = {}): void {
     const window = this.current
     if (!window) return
@@ -728,9 +742,19 @@ export class WindowManager {
    * When pinned: the search window is always-on-top across every Space so
    * the user can invoke CoreBox from anywhere without switching.
    * When unpinned: window follows its parent Space (default macOS behavior).
+   *
+   * macOS is the exception on the Space part: showing the box no longer activates Tuff, so macOS
+   * no longer switches the user to the box's Space either. Without joining every Space — the
+   * fullscreen ones included — an unpinned box summoned from a fullscreen app would open on a
+   * Space the user cannot see. Same collection behaviour the assistant windows already ask for.
    */
   private applyPinnedStateToWindow(window: TouchWindow, pinned: boolean): void {
     if (window.window.isDestroyed()) return
+
+    if (process.platform === 'darwin') {
+      this.applyMacPanelBehaviour(window)
+      return
+    }
 
     window.window.setVisibleOnAllWorkspaces(pinned)
     if (pinned) {
@@ -739,6 +763,21 @@ export class WindowManager {
     }
 
     window.window.setAlwaysOnTop(false)
+  }
+
+  /**
+   * The two macOS traits the box needs now that showing it no longer activates Tuff.
+   *
+   * Joining every Space keeps it reachable from a fullscreen app, and the floating level keeps it
+   * above the frontmost application's windows — an inactive app's window is otherwise ordered
+   * below them. Applied at creation and re-asserted on every show: the traits do survive
+   * hide/show on their own, but re-applying is idempotent and costs nothing next to a window that
+   * silently opens behind whatever the user is looking at.
+   */
+  private applyMacPanelBehaviour(window: TouchWindow): void {
+    if (window.window.isDestroyed()) return
+    window.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    window.window.setAlwaysOnTop(true, 'floating')
   }
 
   public setPinned(pinned: boolean): void {

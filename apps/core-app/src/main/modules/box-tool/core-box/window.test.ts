@@ -48,7 +48,8 @@ const mocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: {
     isPackaged: false,
-    focus: vi.fn()
+    focus: vi.fn(),
+    hide: vi.fn()
   },
   nativeTheme: {
     shouldUseDarkColors: false,
@@ -247,6 +248,52 @@ import { app } from 'electron'
 import { coreBoxManager } from './manager'
 import { COREBOX_MIN_HEIGHT, COREBOX_WIDTH, WindowManager } from './window'
 
+function createHiddenCoreBoxWindow() {
+  let visible = false
+  return {
+    id: 7,
+    webContents: { id: 8 },
+    isDestroyed: vi.fn(() => false),
+    isVisible: vi.fn(() => visible),
+    isResizable: vi.fn(() => false),
+    setResizable: vi.fn(),
+    getBounds: vi.fn(() => ({ x: 600, y: 260, width: 720, height: 240 })),
+    getSize: vi.fn(() => [720, 240]),
+    setMinimumSize: vi.fn(),
+    setBounds: vi.fn(),
+    getMinimumSize: vi.fn(() => [720, COREBOX_MIN_HEIGHT]),
+    show: vi.fn(() => {
+      visible = true
+    }),
+    showInactive: vi.fn(),
+    moveTop: vi.fn(),
+    focus: vi.fn(),
+    hide: vi.fn(() => {
+      visible = false
+    }),
+    setVisibleOnAllWorkspaces: vi.fn(),
+    setAlwaysOnTop: vi.fn(),
+    isVisibleOnAllWorkspaces: vi.fn(() => false),
+    isAlwaysOnTop: vi.fn(() => false),
+    isFocused: vi.fn(() => true),
+    isMinimized: vi.fn(() => false),
+    getOpacity: vi.fn(() => 1)
+  }
+}
+
+/** A visible box window that records the order of its show calls. */
+function createShowOrderWindow(order: string[]) {
+  const window = createHiddenCoreBoxWindow()
+  window.isVisible = vi.fn((): boolean => true)
+  window.show = vi.fn((): void => {
+    order.push('show')
+  })
+  window.showInactive = vi.fn((): void => {
+    order.push('show-inactive')
+  })
+  return window
+}
+
 describe('WindowManager CoreBox compact bounds', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -314,30 +361,46 @@ describe('WindowManager CoreBox compact bounds', () => {
     )
   })
 
-  it('snapshots the foreground app before the shortcut show steals focus', () => {
+  it('shows the box on macOS without activating the application', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     vi.useFakeTimers()
     try {
       const manager = new WindowManager()
       const order: string[] = []
       mocks.captureForegroundAppSnapshot.mockImplementation(() => order.push('snapshot'))
       vi.mocked(app.focus).mockImplementation(() => order.push('app-focus') as unknown as void)
-      const browserWindow = {
-        id: 7,
-        webContents: { id: 8 },
-        isDestroyed: vi.fn(() => false),
-        isVisible: vi.fn(() => true),
-        isResizable: vi.fn(() => false),
-        setResizable: vi.fn(),
-        getBounds: vi.fn(() => ({ x: 600, y: 260, width: 720, height: 240 })),
-        getSize: vi.fn(() => [720, 240]),
-        setMinimumSize: vi.fn(),
-        setBounds: vi.fn(),
-        getMinimumSize: vi.fn(() => [720, COREBOX_MIN_HEIGHT]),
-        show: vi.fn(() => order.push('show')),
-        showInactive: vi.fn(() => order.push('show-inactive')),
-        moveTop: vi.fn(),
-        focus: vi.fn()
-      }
+      const browserWindow = createShowOrderWindow(order)
+
+      manager.windows = [
+        {
+          window: browserWindow
+        } as unknown as WindowManager['windows'][number]
+      ]
+
+      manager.show(true)
+
+      // The box window is an NSPanel and takes key focus on its own. Activating the application
+      // would drag every other Tuff window in front of the app the user came from.
+      expect(order).toEqual(['snapshot', 'show'])
+      expect(app.focus).not.toHaveBeenCalled()
+      expect(browserWindow.focus).toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      vi.useRealTimers()
+    }
+  })
+
+  it('snapshots the foreground app before the shortcut show steals focus off macOS', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const order: string[] = []
+      mocks.captureForegroundAppSnapshot.mockImplementation(() => order.push('snapshot'))
+      vi.mocked(app.focus).mockImplementation(() => order.push('app-focus') as unknown as void)
+      const browserWindow = createShowOrderWindow(order)
 
       manager.windows = [
         {
@@ -348,8 +411,82 @@ describe('WindowManager CoreBox compact bounds', () => {
       manager.show(true)
 
       expect(order).toEqual(['snapshot', 'app-focus', 'show'])
+      expect(app.focus).toHaveBeenCalledWith({ steal: true })
     } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
       vi.useRealTimers()
+    }
+  })
+
+  it('hides only the box window, never the application, after a shortcut close', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const browserWindow = createHiddenCoreBoxWindow()
+      manager.windows = [
+        {
+          window: browserWindow
+        } as unknown as WindowManager['windows'][number]
+      ]
+
+      manager.show(true)
+      manager.hide()
+      vi.advanceTimersByTime(100)
+
+      // app.hide() would un-hide every Tuff window on the next activation, which is exactly the
+      // "summoning CoreBox summons everything" bug. The previous app keeps focus by itself.
+      expect(app.hide).not.toHaveBeenCalled()
+      expect(browserWindow.hide).toHaveBeenCalledOnce()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the unpinned box on every macOS Space, fullscreen ones included', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    try {
+      const manager = new WindowManager()
+      const browserWindow = {
+        isDestroyed: vi.fn(() => false),
+        setVisibleOnAllWorkspaces: vi.fn(),
+        setAlwaysOnTop: vi.fn()
+      }
+      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+      manager.setPinned(false)
+
+      // Showing the box no longer activates Tuff, so macOS neither switches Spaces for it nor
+      // orders it above the frontmost app. Both traits have to be asked for explicitly.
+      expect(browserWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
+        visibleOnFullScreen: true
+      })
+      expect(browserWindow.setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('leaves the unpinned box on its own workspace off macOS', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const manager = new WindowManager()
+      const browserWindow = {
+        isDestroyed: vi.fn(() => false),
+        setVisibleOnAllWorkspaces: vi.fn(),
+        setAlwaysOnTop: vi.fn()
+      }
+      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+      manager.setPinned(false)
+
+      expect(browserWindow.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(false)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
 
@@ -361,29 +498,9 @@ describe('WindowManager CoreBox compact bounds', () => {
       mocks.transport.broadcastToWindow.mockImplementation((_windowId: number, event: string) => {
         order.push(event)
       })
-      const browserWindow = {
-        id: 7,
-        webContents: { id: 8 },
-        isDestroyed: vi.fn(() => false),
-        isVisible: vi.fn(() => true),
-        isResizable: vi.fn(() => false),
-        setResizable: vi.fn(),
-        getBounds: vi.fn(() => ({ x: 600, y: 260, width: 720, height: 240 })),
-        getSize: vi.fn(() => [720, 240]),
-        setMinimumSize: vi.fn(),
-        setBounds: vi.fn(),
-        getMinimumSize: vi.fn(() => [720, COREBOX_MIN_HEIGHT]),
-        show: vi.fn(() => order.push('show')),
-        showInactive: vi.fn(() => order.push('show-inactive')),
-        moveTop: vi.fn(),
-        focus: vi.fn()
-      }
+      const browserWindow = createShowOrderWindow(order)
 
-      manager.windows = [
-        {
-          window: browserWindow
-        } as unknown as WindowManager['windows'][number]
-      ]
+      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
 
       manager.show(true)
 
