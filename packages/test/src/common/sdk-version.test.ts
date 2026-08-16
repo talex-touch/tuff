@@ -90,6 +90,14 @@ describe('sdk-version', () => {
       .sort()
 
     expect(unsupported).toEqual([])
-    expect(currentMarkerPlugins).toEqual(['touch-intelligence'])
+    // Same deliberate list as the manifest boundary gate: clipboard-history,
+    // json-formatter and touch-translation adopted the marker on 2026-08-16, which only
+    // declares support for the opt-in localization facade none of them calls.
+    expect(currentMarkerPlugins).toEqual([
+      'clipboard-history',
+      'json-formatter',
+      'touch-intelligence',
+      'touch-translation',
+    ])
   })
 })
