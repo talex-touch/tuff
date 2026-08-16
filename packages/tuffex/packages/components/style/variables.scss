@@ -224,6 +224,7 @@
   --tx-transition-duration: 0.3s;
   --tx-transition-duration-fast: 0.2s;
   --tx-transition-function: ease-in-out;
+  --tx-ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
 
   // Border Radius
   --tx-border-radius-base: 4px;

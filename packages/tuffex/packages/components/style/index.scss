@@ -1,6 +1,7 @@
 // TUFF UI Global Styles
 @use './variables.scss';
 @use './mixins.scss';
+@use './bui-tokens.scss';
 
 // Fake background utility (glassmorphism effect)
 .fake-background {
