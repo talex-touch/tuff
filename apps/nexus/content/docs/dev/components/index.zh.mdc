@@ -7,8 +7,6 @@ verified: true
 
 # Tuffex 组件
 
-> 组件文档已迁移到统一结构：`TuffDemoWrapper + 独立 Demo 组件`。
-
 ## 组件预览
 
 ::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
@@ -266,6 +264,35 @@ code: |
 - [TypingIndicator 打字中](./typing-indicator.zh.mdc)
 - [MarkdownView Markdown 渲染](./markdown-view.zh.mdc)
 - [ImageGallery 图片预览](./image-gallery.zh.mdc)
+
+## AI 套件（Beautiful UI）
+
+移植自 [Beautiful UI](https://www.beautifului.dev)（MIT）的 AI 原生界面组件族，完整案例见《[AI 套件总览](./ai-suite.zh.mdc)》。
+
+- [WorkingIndicator 工作指示器](./working-indicator.zh.mdc)
+- [AgentTrace 智能体轨迹](./agent-trace.zh.mdc)
+- [TaskRows 任务行](./task-rows.zh.mdc)
+- [CodeStream 流式代码块](./code-stream.zh.mdc)
+- [InlineCitation 行内引用](./inline-citation.zh.mdc)
+- [PromptBar 提示条](./prompt-bar.zh.mdc)
+- [ApprovalCard 澄清问卷卡](./approval-card.zh.mdc)
+- [ToolChips 工具调用流](./tool-chips.zh.mdc)
+- [SignalMeter 信号量表](./signal-meter.zh.mdc)
+- [RecommendationCard 建议卡](./recommendation-card.zh.mdc)
+- [SelectionActions 划词工具条](./selection-actions.zh.mdc)
+- [DiffTable 变更表格](./diff-table.zh.mdc)
+- [FilterChips 筛选胶囊](./filter-chips.zh.mdc)
+- [DotIndicator 圆点指示器](./dot-indicator.zh.mdc)
+- [CellLink 单元格链接](./cell-link.zh.mdc)
+- [ContextCards 检索片段卡](./context-cards.zh.mdc)
+- [SidebarNav 侧边导航](./sidebar-nav.zh.mdc)
+- [SearchPanel 内联搜索面板](./search-panel.zh.mdc)
+- [IconChip 图标角标](./icon-chip.zh.mdc)
+- [SparkChart 迷你折线图](./spark-chart.zh.mdc)
+- [AllocationBar 占比条](./allocation-bar.zh.mdc)
+- [InsightCards 洞察卡](./insight-cards.zh.mdc)
+- [ScrubField 拖拽数值域](./scrub-field.zh.mdc)
+- [FineTuneCard 属性检查器](./fine-tune-card.zh.mdc)
 
 ## 审阅说明
 
