@@ -76,3 +76,39 @@ Researched beautifului.dev (19 MIT AI-native primitives; archived sources/tokens
 ### Next Steps
 
 - None - task complete
+
+
+## Session 55: Anchor family: spring expand, layered chain, 琉光 veil
+
+**Date**: 2026-08-15
+**Task**: Anchor family: spring expand, layered chain, 琉光 veil
+**Branch**: `feat/nexus-header-controls-tuffex`
+
+### Summary
+
+Reverse-engineered the reference capture into the anchor family's motion system: spring expand (real box growth with height bounce, body-fade keeps the refraction glass live) as the symmetric untyped default, tooltip pinned to boom on its hint layer, transfer v2 (bled clip, 0.92 scale bounce, shadow suppressed then bloomed at settle), per-type arrow motion, and spring()/cubic-bezier() ease vocabulary. Restructured the family onto one spine (dropdown/context-menu → popover → tooltip → anchor), deleted the legacy duration/ease props repo-wide, migrated flat-dropdown/flat-select onto the shared anchor-delay service, made stacking open-order via the z-index allocator, replaced TxBaseSurface's near-solid motion cover with layered degradation, fixed its unmount timer leak, and rewired the anchor's dead maskOpacity intent to glassOverlayOpacity 0.38 (~0.42 veil). 琉光 confirmed as refraction's Chinese name. Code landed via shared-stream commits; docs/demos updated zh+en.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fe2554c6f` | (see git log) |
+| `67e2b9ce2` | (see git log) |
+| `87cf41afc` | (see git log) |
+| `bc6a545ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
