@@ -11,8 +11,6 @@ verified: true
 
 # Drawer 抽屉
 
-从屏幕边缘滑出的面板组件，常用于设置、表单与补充信息展示。
-
 ## 基础用法
 
 ### Basic Drawer

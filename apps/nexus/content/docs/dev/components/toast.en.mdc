@@ -11,8 +11,6 @@ verified: true
 
 # Toast
 
-Lightweight notifications (similar to shadcn/sonner). Mount a single `<TxToastHost />` at the app root, then call `toast()` anywhere.
-
 ## Basic Usage
 
 ### Toast

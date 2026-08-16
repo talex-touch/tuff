@@ -10,8 +10,6 @@ verified: true
 ---
 # Splitter
 
-`TxSplitter` divides a bounded container into two resizable panes. It exposes pane A's ratio through `v-model`, supports horizontal and vertical layouts, and applies the same clamp / snap contract to pointer and keyboard resizing.
-
 ## Basic Usage
 
 Give the splitter a real width and height through its parent. The component fills the available box and writes the current ratio into CSS grid variables.

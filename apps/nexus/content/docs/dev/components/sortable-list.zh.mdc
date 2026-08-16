@@ -10,10 +10,6 @@ verified: true
 ---
 # SortableList 拖拽排序
 
-`TxSortableList` 渲染有序列表，并在用户把一个条目拖到另一个条目上时发出重排后的数组。它适合小到中等规模、由用户管理顺序且可以接受原生 HTML5 Drag & Drop 的列表。
-
-已人工核对 `packages/tuffex/packages/components/src/sortable-list/src/types.ts`、`TxSortableList.vue` 与 `sortable-list.test.ts`。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}

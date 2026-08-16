@@ -10,10 +10,6 @@ verified: true
 ---
 # NoSelection 未选择
 
-`TxNoSelection` 是固定 `variant="no-selection"` 的轻量 `TxEmptyState` 封装。适合详情面板、检查器、分栏视图和仪表盘区域：当前区域本身有效，但需要用户先选择一行或一个对象。
-
-已人工核对 `packages/tuffex/packages/components/src/no-selection/src/TxNoSelection.vue`、`types.ts` 与 `no-selection.test.ts`。
-
 ## 基础用法
 
 ### NoSelection

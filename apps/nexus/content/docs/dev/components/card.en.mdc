@@ -10,8 +10,6 @@ verified: true
 ---
 # Card
 
-Surface container with slots, material backgrounds, loading, clickable, inertial, and refraction modes.
-
 ## Basic Usage
 
 ### Basic

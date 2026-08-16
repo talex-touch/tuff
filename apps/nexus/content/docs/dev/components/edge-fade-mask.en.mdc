@@ -10,8 +10,6 @@ verified: true
 ---
 # EdgeFadeMask
 
-`TxEdgeFadeMask` wraps scrollable content and adds a CSS `mask-image` fade at the leading and trailing edges only when more content is hidden. Use it to soften scroll containers without adding extra controls or fake shadows.
-
 ## Vertical Fade
 
 Keep borders and radius on an outer wrapper; the component owns the internal scroll viewport and mask.

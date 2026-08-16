@@ -10,8 +10,6 @@ verified: true
 ---
 # ChatComposer 消息输入
 
-`TxChatComposer` 渲染受控聊天 textarea，包含附件 chip、受保护的发送行为、键盘快捷键和可替换操作区。组件不负责传输：消息持久化、上传状态和提交副作用都由宿主处理。
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

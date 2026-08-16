@@ -10,10 +10,6 @@ verified: true
 ---
 # NavBar
 
-`TxNavBar` renders a compact application header with a centered title, optional safe-area spacer, left and right action zones, and a default back button.
-
-Reviewed against `packages/tuffex/packages/components/src/nav-bar/src/types.ts`, `TxNavBar.vue`, and `nav-bar.test.ts`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}

@@ -10,8 +10,6 @@ verified: true
 ---
 # TabBar 底部导航
 
-`TxTabBar` 根据 `items` 数组渲染 App 风格底部导航。它不绑定路由；调用方通过 `v-model` 和 `change` 决定选中值用于路由、筛选还是本地视图状态。
-
 ## 基础用法
 
 当 TabBar 位于预览框、弹层或自定义外壳内部时，关闭 `fixed`，避免定位到真实视口底部。

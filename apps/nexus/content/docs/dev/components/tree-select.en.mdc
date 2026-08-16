@@ -10,8 +10,6 @@ verified: true
 ---
 # TreeSelect
 
-`TxTreeSelect` wraps `TxTree` in a Popover-backed combobox. It supports single-value selection, multiple checked keys, searchable tree filtering, clear actions, custom node rendering, and imperative open/focus helpers.
-
 ## Basic Usage
 
 ### TreeSelect

@@ -10,8 +10,6 @@ verified: true
 ---
 # GroupBlock 分组块
 
-使用 GroupBlock 组织设置项、账号选项与紧凑的偏好行，统一图标、标签与控件布局。
-
 ## 基础用法
 
 ### GroupBlock

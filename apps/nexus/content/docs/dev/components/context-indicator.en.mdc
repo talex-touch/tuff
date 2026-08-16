@@ -10,10 +10,6 @@ verified: true
 ---
 # Context Indicator
 
-`TxContextIndicator` shows how much of the context window is consumed as a small ring plus a line of text, and shifts colour as it approaches the limit. It suits a composer toolbar or the edge of a conversation header.
-
-Manually verified against `packages/tuffex/packages/components/src/context-indicator/src/TxContextIndicator.vue`.
-
 ## Basic Usage
 
 ### Context Indicator

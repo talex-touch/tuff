@@ -10,8 +10,6 @@ verified: true
 ---
 # GradientBorder
 
-`TxGradientBorder` wraps arbitrary content with a rotating gradient border while leaving the inner layout fully controlled by the caller.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="GradientBorderGradientBorderDemo" code-lang="vue"}

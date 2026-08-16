@@ -10,8 +10,6 @@ verified: true
 ---
 # Spinner
 
-`TxSpinner` signals a short, indeterminate wait — the little spinning ring inside a button, an inline status row, or an overlay. Use `TxProgressBar` when you have a real percentage or staged progress and `TxLoadingState` for full first-load screens; reach for the spinner only when the wait is brief and no percentage is available.
-
 ## Basic Usage
 
 ### Spinner

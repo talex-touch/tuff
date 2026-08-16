@@ -11,8 +11,6 @@ verified: true
 
 # Input
 
-A lightweight single-line or `textarea` field for form rows, toolbars, and list filtering. Reach for `TxSearchInput` when Enter-to-search or debounced remote search is part of the contract, and `TxNumberInput` when the field needs stepper buttons for numeric entry.
-
 ## Basic Usage
 
 ### Basic Input

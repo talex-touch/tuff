@@ -10,10 +10,6 @@ verified: true
 ---
 # Reasoning Disclosure
 
-`TxReasoningDisclosure` tucks a model's thinking into a collapsible block: a thinking orb and "Thinking…" while it streams, a bulb icon and an elapsed time once it settles.
-
-Manually verified against `packages/tuffex/packages/components/src/reasoning-disclosure/src/TxReasoningDisclosure.vue`.
-
 ## Basic Usage
 
 ### Reasoning Disclosure

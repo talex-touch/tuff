@@ -10,8 +10,6 @@ verified: true
 ---
 # Slider 滑块
 
-用于在区间内选择数值的滑块组件。
-
 ## 基础用法
 
 ### Slider

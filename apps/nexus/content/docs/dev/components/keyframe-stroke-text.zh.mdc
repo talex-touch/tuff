@@ -10,8 +10,6 @@ verified: true
 ---
 # KeyframeStrokeText 关键帧描边
 
-`TxKeyframeStrokeText` 会把文本渲染为多层 SVG `<text>`：隐藏测量层、动画描边层和延迟填充层。适合用于短 Hero 文案、品牌字标、新手引导标题或庆祝状态标签。
-
 ## 基础用法
 
 使用短文本，并通过 props 调整描边和填充颜色。数字 `fontSize` 会转为 px。

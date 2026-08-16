@@ -10,8 +10,6 @@ verified: true
 ---
 # GlassSurface
 
-`TxGlassSurface` renders a bounded glass layer for translucent panels and optical distortion previews. It prefers the SVG displacement filter path, falls back to native `backdrop-filter` blur when SVG filters are unavailable, and finally uses a solid translucent surface when neither capability is supported.
-
 ## Basic Usage
 
 ### GlassSurface

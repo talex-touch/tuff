@@ -10,10 +10,6 @@ verified: true
 ---
 # ImageUploader
 
-`TxImageUploader` is a controlled image picker. It opens the native file input, creates local object URLs for selected images, renders preview tiles, and revokes owned object URLs when removed or unmounted.
-
-Reviewed against `packages/tuffex/packages/components/src/image-uploader/src/types.ts`, `TxImageUploader.vue`, and `image-uploader.test.ts`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}

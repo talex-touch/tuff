@@ -10,8 +10,6 @@ verified: true
 ---
 # Avatar Variants
 
-A recipe gallery that composes `TxAvatar`, `TxOutlineBorder`, and `TxCornerOverlay` into status, activity, platform, system, social, and contextual avatar badges.
-
 ## Gallery
 
 ### Avatar Variants Gallery

@@ -10,8 +10,6 @@ verified: false
 ---
 # FlatDropdown 扁平下拉
 
-锚定在触发器上的插槽驱动浮层面板。`TxFlatDropdown` 负责开合状态、定位与关闭规则，触发器和面板内容由你提供。它是 `TxDropdownMenu` 的扁平风格对应物，但对面板内容不做任何预设。
-
 ## 基础用法
 
 悬停触发器即可展开。指针离开后面板会保留 `closeDelay` 毫秒，方便你把指针移进去。`close-on-content-click` 让面板在内部任意点击后关闭。

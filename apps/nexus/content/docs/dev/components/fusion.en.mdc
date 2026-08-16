@@ -10,8 +10,6 @@ verified: true
 ---
 # Fusion
 
-`TxFusion` renders two overlapping slots through an SVG gooey filter. It can manage its own active state on hover or click, or be driven entirely by `v-model` in manual mode.
-
 ## Basic Usage
 
 ### Fusion

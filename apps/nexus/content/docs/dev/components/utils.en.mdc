@@ -11,8 +11,6 @@ verified: false
 
 # Utils
 
-TuffEx exports a set of component-agnostic helpers from `@talex-touch/tuffex/utils` (also re-exported from the root `@talex-touch/tuffex` entry), covering overlay stacking, environment guards, haptics, toasts, dialog orchestration, animation, and install helpers. They back the components internally and are safe to reuse directly in app code.
-
 ```ts
 import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
 ```

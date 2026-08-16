@@ -10,10 +10,6 @@ verified: true
 ---
 # Stream Markdown
 
-`TxStreamMarkdown` 渲染仍在生成中的 Markdown：把文档切成块以避免整篇重排，尾部显示光标，并允许按语言把围栏代码块交给自定义组件渲染。
-
-已人工核对 `packages/tuffex/packages/components/src/stream-markdown/src/TxStreamMarkdown.vue`。
-
 ## 基础用法
 
 ### Stream Markdown

@@ -10,10 +10,6 @@ verified: true
 ---
 # Empty 空状态
 
-`TxEmpty` 是常见空面板的紧凑快捷封装。它渲染 `TxEmptyState`，并固定使用 `variant="empty"`、`surface="card"`、`layout="vertical"`；实际尺寸由 `compact` 映射为 small/medium。
-
-已人工核对 `packages/tuffex/packages/components/src/empty/src/TxEmpty.vue`、`types.ts` 与 `empty.test.ts`。
-
 ## 基础用法
 
 ### Empty

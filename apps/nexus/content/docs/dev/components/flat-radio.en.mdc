@@ -10,8 +10,6 @@ verified: true
 ---
 # FlatRadio
 
-Inline flat selector for 2-5 options (`TxFlatRadio` + `TxFlatRadioItem`). More direct than dropdown selectors, more compact than Radio.
-
 ## Basic Usage
 
 The simplest flat selector, ideal for a small number of options.

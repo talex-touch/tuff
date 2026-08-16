@@ -10,8 +10,6 @@ verified: true
 ---
 # EmptyState 空态引导
 
-`TxEmptyState` 为页面、表格、详情面板和引导流程渲染紧凑的反馈面板。常见状态先选预设 `variant`，只有本地上下文需要更具体的文案时才覆盖文字、图标或操作。
-
 ## 基础用法
 
 ### EmptyState (variant)

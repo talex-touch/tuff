@@ -11,10 +11,6 @@ verified: true
 
 # FlatButton
 
-`TuffFlatButton` is a native `<button type="button">` with low-emphasis styling. It keeps button semantics, blocks clicks while disabled or loading, and is intentionally smaller in scope than `TxButton`.
-
-Reviewed against `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`, `index.ts`, and `flat-button.test.ts`.
-
 ## Basic Usage
 
 ### Flat Button

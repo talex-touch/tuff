@@ -10,10 +10,6 @@ verified: true
 ---
 # Avatar 头像
 
-`TxAvatar` 用于展示用户图片、品牌标识、名称首字母 fallback、图标 fallback 或自定义插槽内容。`TxAvatarGroup` 会叠放头像子节点，在需要时注入统一尺寸，并在 `max` 隐藏额外成员时渲染 `+N` 溢出头像。
-
-已人工核对 `packages/tuffex/packages/components/src/avatar/src/types.ts`、`TxAvatar.vue`、`TxAvatarGroup.vue` 与 `avatar.test.ts`。
-
 ## 基础用法
 
 ### Avatar

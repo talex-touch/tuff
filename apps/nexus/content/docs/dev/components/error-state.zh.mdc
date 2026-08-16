@@ -10,8 +10,6 @@ verified: true
 ---
 # ErrorState 错误状态
 
-`TxErrorState` 是 `TxEmptyState` 的快捷封装，自动设置 `variant="error"`，用于请求失败、系统异常等场景。
-
 ## 基础用法
 
 使用默认标题和描述，搭配操作按钮。

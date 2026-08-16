@@ -10,8 +10,6 @@ verified: true
 ---
 # Select 选择器
 
-`TuffSelect` 用于选择 `string | number` 原始值。默认是单选，也可以通过 `multiple` 切换为数组值和标签返显。选项既可以用 `TuffSelectItem` 声明，也可以通过 `options` 直接传入；下拉面板支持本地过滤、远程搜索、loading / empty 状态、分组、自助创建与自定义 footer。
-
 ## 基础选择
 
 默认模式适合紧凑表单和筛选器。触发器只读，点击展开，选择启用项后展示当前选项 label。
@@ -330,7 +328,6 @@ code: |
 | `contentPadding` | `number` | `8` | 下拉面板内部内容间距。 |
 | `optionPadding` | `number` | `0` | 选项水平缩进补偿。 |
 | `animation` | `BaseAnchorAnimationOptions` | - | 透传给 Popover / BaseAnchor 的动画配置。 |
-| `duration` | `number` | `120` | 下拉动画时长，单位 ms。 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover 面板表面样式。 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover 面板背景样式。 |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover 面板阴影强度。 |

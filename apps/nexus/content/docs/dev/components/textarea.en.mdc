@@ -10,10 +10,6 @@ verified: true
 ---
 # Textarea
 
-`TxTextarea` is the standalone multiline field. Use it when `TuffInput type="textarea"` is too broad and the host needs direct textarea props, count display, resize control, or exposed focus helpers.
-
-Reviewed against `packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` and `textarea.test.ts`.
-
 ## Basic Usage
 
 ### Textarea

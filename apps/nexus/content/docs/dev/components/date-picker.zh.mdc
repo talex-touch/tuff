@@ -10,8 +10,6 @@ verified: true
 ---
 # DatePicker 日期选择
 
-`TxDatePicker` 基于 `TxPicker` 封装年、月、日三列，并统一输出 `YYYY-MM-DD` 字符串模型。它支持移动优先的滚轮选择器，也支持桌面表单常用的字段日历和 `adaptive` 自适应变体。
-
 ## 基础用法
 
 ### 弹层、边界与内联模式

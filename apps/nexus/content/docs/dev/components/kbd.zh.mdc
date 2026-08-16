@@ -10,10 +10,6 @@ verified: true
 ---
 # Kbd
 
-`TxKbd` 使用语义化 `<kbd>` 元素渲染快捷键标签。组件刻意保持轻量：默认插槽提供键位文本，props 控制尺寸和视觉色调。
-
-已人工核对 `packages/tuffex/packages/components/src/kbd/src/TxKbd.vue` 与 `kbd.test.ts`。
-
 ## 基础用法
 
 ### Kbd

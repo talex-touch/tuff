@@ -10,10 +10,6 @@ verified: true
 ---
 # Message Actions
 
-`TxMessageActions` 是消息气泡下方的一行操作按钮，内置复制与重新生成，并按 ARIA toolbar 规范实现单一 Tab 停靠点加方向键漫游。
-
-已人工核对 `packages/tuffex/packages/components/src/message-actions/src/TxMessageActions.vue`。
-
 ## 基础用法
 
 ### Message Actions

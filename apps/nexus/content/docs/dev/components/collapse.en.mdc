@@ -10,10 +10,6 @@ verified: true
 ---
 # Collapse
 
-`TxCollapse` groups expandable panels and controls their active names through `v-model`. `TxCollapseItem` renders a semantic button header and an animated content region.
-
-Reviewed against `packages/tuffex/packages/components/src/collapse/src/types.ts`, `TxCollapse.vue`, `TxCollapseItem.vue`, and `collapse.test.ts`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}

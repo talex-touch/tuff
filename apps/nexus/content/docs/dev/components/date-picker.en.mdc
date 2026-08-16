@@ -10,8 +10,6 @@ verified: true
 ---
 # DatePicker
 
-`TxDatePicker` wraps `TxPicker` with year, month, and day columns and exposes a `YYYY-MM-DD` string model. It supports the mobile-first wheel picker, a desktop-friendly field calendar, and an `adaptive` variant that switches between both surfaces.
-
 ## Basic Usage
 
 ### Popup, Bounds, And Inline

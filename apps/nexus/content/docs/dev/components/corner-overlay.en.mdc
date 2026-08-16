@@ -10,8 +10,6 @@ verified: true
 ---
 # CornerOverlay
 
-`TxCornerOverlay` wraps inline content and renders an optional corner overlay layer. It is useful for avatar status dots, verification marks, unread badges, and thumbnail annotations.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}

@@ -10,10 +10,6 @@ verified: true
 ---
 # Conversation Stream
 
-`TxConversationStream` is the scroll container for a conversation: it virtualizes a long list, sticks to the bottom while output streams, and loads older messages when the user reaches the top. It owns layout and scrolling only — the messages themselves come from the `item` slot.
-
-Manually verified against `packages/tuffex/packages/components/src/conversation-stream/src/TxConversationStream.vue`.
-
 ## Basic Usage
 
 ### Conversation Stream

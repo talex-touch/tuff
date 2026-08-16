@@ -10,8 +10,6 @@ verified: true
 ---
 # FlatRadio 平铺选择器
 
-用于 2-5 个选项的平铺选择（`TxFlatRadio` + `TxFlatRadioItem`）。相比下拉选择器操作更直接，相比 Radio 更紧凑。
-
 ## 基础用法
 
 最简单的平铺选择器，适合少量选项的场景。

@@ -10,8 +10,6 @@ verified: true
 ---
 # CodeEditor 代码编辑器
 
-`TxCodeEditor` 是一个客户端加载的 CodeMirror 6 包装组件。它避免在服务端渲染阶段加载较重的编辑器运行时，暴露 `v-model` 字符串，并为 JSON/YAML 提供格式化和校验，同时支持 TOML、INI、JavaScript 高亮与基础编辑。
-
 ## 基础用法
 
 通过 `language` 选择 CodeMirror 语言能力。JSON 和 YAML 具备 formatter / linter；其它语言提供高亮和基础编辑体验。

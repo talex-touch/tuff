@@ -10,8 +10,6 @@ verified: true
 ---
 # TabBar
 
-`TxTabBar` renders app-style bottom navigation from an `items` array. It owns no router integration; callers bind `v-model`, react to `change`, and decide whether the selected value drives routing, filtering, or local view state.
-
 ## Basic Usage
 
 Disable `fixed` when the tab bar is rendered inside a preview frame, modal, or custom shell instead of the viewport.

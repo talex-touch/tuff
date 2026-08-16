@@ -10,8 +10,6 @@ verified: true
 ---
 # Transition
 
-`TxTransition` centralizes the motion presets used by Tuffex components. It wraps Vue `Transition` / `TransitionGroup`, maps timing props to CSS variables, and switches to `TxTransitionSmoothSize` for size-aware content changes.
-
 ## Content Switch (X)
 
 ### Transition Content

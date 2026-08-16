@@ -10,8 +10,6 @@ verified: false
 ---
 # FlatDropdown
 
-A slot-driven floating panel anchored to a trigger. `TxFlatDropdown` owns the open state, placement and dismissal rules; you supply the trigger and the panel body. It is the flat-styled counterpart to `TxDropdownMenu`, without any opinion about the panel's contents.
-
 ## Basic Usage
 
 Hover the trigger to open. The panel stays alive for `closeDelay` ms after the pointer leaves, so you can travel into it. `close-on-content-click` dismisses the panel after any click inside.

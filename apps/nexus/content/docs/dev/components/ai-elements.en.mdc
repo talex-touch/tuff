@@ -10,10 +10,6 @@ verified: true
 ---
 # AI Elements
 
-`TxAiConversation` and `TxAiMessage` render role-based AI transcripts. The components keep the data contract small: every message has an `id`, `role`, and `content`, with optional name, avatar, timestamp, and status metadata.
-
-Reviewed against `packages/tuffex/packages/components/src/ai-elements/src/types.ts`, `TxAiConversation.vue`, and `TxAiMessage.vue`.
-
 ## Conversation
 
 Use `TxAiConversation` when the host owns the message array and only needs a consistent transcript layout.

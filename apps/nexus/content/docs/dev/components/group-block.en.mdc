@@ -10,8 +10,6 @@ verified: true
 ---
 # GroupBlock
 
-Use GroupBlock to organize settings, account options, and compact preference rows with a consistent icon, label, and control layout.
-
 ## Basic Usage
 
 ### GroupBlock

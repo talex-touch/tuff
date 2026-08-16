@@ -10,8 +10,6 @@ verified: true
 ---
 # LoadingState
 
-`TxLoadingState` is a shortcut wrapper around `TxEmptyState` with `variant="loading"` pre-set. Use it for loading placeholders while data, plugins, or remote resources are being fetched.
-
 ## Basic Usage
 
 ### LoadingState

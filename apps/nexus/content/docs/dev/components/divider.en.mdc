@@ -11,8 +11,6 @@ verified: true
 
 # Divider
 
-`TxDivider` creates lightweight grouping between content blocks. It supports horizontal separators, text labels, dashed style, gradient fade separators, and inline vertical separation. Drawer also reuses it for built-in Header / Footer separators.
-
 ## Basic Usage
 
 ### Basic Divider

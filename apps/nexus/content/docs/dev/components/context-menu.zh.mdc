@@ -10,8 +10,6 @@ verified: true
 ---
 # ContextMenu 右键菜单
 
-`TxContextMenu` 是一个更通用的菜单浮层：既可以绑定原生右键，也可以用受控坐标打开；底层通过 `TxBaseAnchor` 的 virtual anchor 模式承载定位、碰撞处理、Card surface 与动画，并在连续右键时自动跟随最新鼠标位置。菜单内容也可以拆成 `TxContextMenuPanel` 嵌入到 `TxPopover` / 自定义浮层里复用。
-
 ## 基础用法
 
 ### ContextMenu
@@ -207,7 +205,6 @@ code: |
 | `showArrow` | `boolean` | `false` | 显示指向坐标点的箭头 |
 | `arrowSize` | `number` | `10` | 箭头尺寸 |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 打开/关闭动画，支持 `transfer` / `boom` / `opacity` / `none` |
-| `duration` | `number` | `160` | 兼容快捷动画时长；优先使用 `animation.duration` |
 | `keepAliveContent` | `boolean` | `true` | 关闭后保留内容状态 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框样式 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景效果 |

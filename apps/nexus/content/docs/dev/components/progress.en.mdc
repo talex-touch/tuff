@@ -10,10 +10,6 @@ verified: true
 ---
 # Progress
 
-`TuffProgress` is the lightweight compatibility entry for standard linear progress rows. It forwards a small prop set to `TxProgressBar` with outside text, plain mask styling, and `strokeWidth` mapped to bar height.
-
-Reviewed against `packages/tuffex/packages/components/src/progress/src/TxProgress.vue`, `progress.test.ts`, and `index.ts`.
-
 ## Demo
 
 ### Progress States

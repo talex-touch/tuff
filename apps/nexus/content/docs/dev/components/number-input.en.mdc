@@ -10,10 +10,6 @@ verified: true
 ---
 # NumberInput
 
-`TxNumberInput` wraps a native numeric input and optional step buttons. It normalizes values through `min`, `max`, and `precision`, then emits `number | null`.
-
-Reviewed against `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` and `number-input.test.ts`.
-
 ## Basic Usage
 
 ### NumberInput

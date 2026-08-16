@@ -10,8 +10,6 @@ verified: true
 ---
 # LoadingOverlay
 
-Use `LoadingOverlay` when content should stay visible but temporarily blocked during loading, saving, syncing, or long-running actions.
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

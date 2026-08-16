@@ -10,10 +10,6 @@ verified: true
 ---
 # Tool Call Card
 
-`TxToolCallCard` 展示一次工具调用的全过程：折叠时显示名称、状态与一句话摘要，展开后是入参、运行日志与结果，失败时可重试。
-
-已人工核对 `packages/tuffex/packages/components/src/tool-call-card/src/TxToolCallCard.vue`。
-
 ## 基础用法
 
 ### Tool Call Card

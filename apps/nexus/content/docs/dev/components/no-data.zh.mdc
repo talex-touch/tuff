@@ -10,10 +10,6 @@ verified: true
 ---
 # NoData 无数据
 
-`TxNoData` 是固定 `variant="no-data"` 的轻量 `TxEmptyState` 封装。适合列表、表格、图表、指标面板或查询结果没有记录可展示的场景。
-
-已人工核对 `packages/tuffex/packages/components/src/no-data/src/TxNoData.vue`、`types.ts` 与 `no-data.test.ts`。
-
 ## 基础用法
 
 ### NoData

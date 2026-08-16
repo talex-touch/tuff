@@ -10,10 +10,6 @@ verified: true
 ---
 # Stack 堆叠
 
-`TxStack` 是一维布局基础组件，适用于表单区块、按钮组、紧凑面板内容，以及简单的纵向或横向节奏控制。
-
-已人工核对 `packages/tuffex/packages/components/src/stack/src/types.ts`、`TxStack.vue` 与 `stack.test.ts`。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="StackStackDemo" code-lang="vue"}

@@ -10,10 +10,6 @@ verified: true
 ---
 # Message Actions
 
-`TxMessageActions` is the row of controls under a message bubble. It ships copy and regenerate, and follows the ARIA toolbar pattern: one tab stop for the bar, arrow keys between the controls.
-
-Manually verified against `packages/tuffex/packages/components/src/message-actions/src/TxMessageActions.vue`.
-
 ## Basic Usage
 
 ### Message Actions

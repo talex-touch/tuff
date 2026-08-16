@@ -11,8 +11,6 @@ verified: true
 
 # Icon
 
-TuffEx uses UnoCSS preset-icons to provide a rich icon set, with TuffIcon for unified rendering and control.
-
 ## Basic Usage
 
 ### UnoCSS icon classes

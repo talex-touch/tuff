@@ -11,10 +11,6 @@ verified: true
 
 # Alert
 
-`TxAlert` renders an inline `role="alert"` banner with semantic color, optional leading icon, title/body slots, and an optional close button.
-
-Reviewed against `packages/tuffex/packages/components/src/alert/src/types.ts`, `TxAlert.vue`, and `alert.test.ts`.
-
 ## Basic Usage
 
 ### Alert Variants

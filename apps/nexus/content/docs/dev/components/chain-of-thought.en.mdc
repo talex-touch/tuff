@@ -10,10 +10,6 @@ verified: true
 ---
 # Chain of Thought
 
-`TxChainOfThought` threads the thinking and tool calls behind one answer into a collapsible timeline, each step carrying its own status and optional body.
-
-Manually verified against `packages/tuffex/packages/components/src/chain-of-thought/src/TxChainOfThought.vue`.
-
 ## Basic Usage
 
 ### Chain of Thought

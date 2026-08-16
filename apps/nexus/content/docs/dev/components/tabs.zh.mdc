@@ -10,9 +10,6 @@ verified: true
 ---
 # Tabs 标签页
 
-使用 `TxTabs` 在相关产品分区之间切换，支持左、右、上、下导航。配合 `TxTabItem`、可选 `TxTabItemGroup` 与可选 `TxTabHeader`，可以为活动面板补充上下文头部。
-
-
 ## 基础用法
 
 ### Tabs

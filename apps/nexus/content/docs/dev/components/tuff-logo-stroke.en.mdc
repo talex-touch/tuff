@@ -10,8 +10,6 @@ verified: true
 ---
 # TuffLogoStroke
 
-`TxTuffLogoStroke` renders the current Tuff logo as an animated SVG. Use it for brand moments, empty-state accents, or onboarding surfaces where a static logo feels too quiet.
-
 ## Animation Modes
 
 `once` plays the draw-in sequence on mount. `breathe` and `loop` keep a subtle pulse after the draw-in sequence. `hover` waits until the user hovers the SVG.

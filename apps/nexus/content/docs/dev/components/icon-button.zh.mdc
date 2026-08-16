@@ -10,10 +10,6 @@ verified: true
 ---
 # IconButton
 
-`TxIconButton` 是用于紧凑图标操作的语义化 `<button>`。组件提供尺寸、形状、按下态、禁用态、原生 type，以及用于自定义图标内容的作用域插槽。
-
-已人工核对 `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`。
-
 ## 基础用法
 
 ### IconButton

@@ -10,10 +10,6 @@ verified: true
 ---
 # FlatInput 扁平输入框
 
-`FlatInput` 是旧版 TuffEx 界面中使用的紧凑低强调输入框。它支持 `v-model`、可选图标或前缀插槽、带 Caps Lock 检测的密码模式，以及多行 textarea 模式。
-
-已人工核对 `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`、`flat-input.test.ts` 与 `index.ts`。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}

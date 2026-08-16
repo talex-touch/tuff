@@ -10,8 +10,6 @@ verified: true
 ---
 # Steps
 
-`TxSteps` provides context for a sequence of `TxStep` children. Use it to show where the user is in a short workflow, setup flow, or release process. Steps can be keyed by child order, explicit numbers, or explicit strings.
-
 ## Basic Usage
 
 The common case uses numeric steps. Completed states are inferred when both `active` and step keys are numbers.

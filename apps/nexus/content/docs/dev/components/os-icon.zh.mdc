@@ -10,10 +10,6 @@ verified: true
 ---
 # OS Icon
 
-`TxOsIcon` 根据 `platform` / `os` 字符串渲染 macOS、Windows 或 Linux 图标。适合发布矩阵、设备列表和平台相关设置项。
-
-已人工核对 `packages/tuffex/packages/components/src/os-icon/src/TxOsIcon.vue`。
-
 ## 基础用法
 
 ### OS Icon

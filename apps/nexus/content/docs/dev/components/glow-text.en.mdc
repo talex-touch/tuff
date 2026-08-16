@@ -10,8 +10,6 @@ verified: true
 ---
 # GlowText
 
-`TxGlowText` adds a sweep highlight over text, badges, image previews, and compact surfaces. Use `mode="text-clip"` when the shine should be clipped to glyphs; keep the default `adaptive` mode for container-level shimmer.
-
 > `adaptive` is enabled by default (container-level shimmer, good for images/cards); for text use `mode="text-clip"` so shimmer clips to glyphs.
 >
 > `text-clip` currently sweeps right → left (aligned with the ShinyText reference).

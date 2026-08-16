@@ -10,10 +10,6 @@ verified: true
 ---
 # Empty
 
-`TxEmpty` is the compact convenience wrapper for common empty panels. It renders `TxEmptyState` with `variant="empty"`, `surface="card"`, `layout="vertical"`, and a small/medium size controlled by `compact`.
-
-Reviewed against `packages/tuffex/packages/components/src/empty/src/TxEmpty.vue`, `types.ts`, and `empty.test.ts`.
-
 ## Basic Usage
 
 ### Empty

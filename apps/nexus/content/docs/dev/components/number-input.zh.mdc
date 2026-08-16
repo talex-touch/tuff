@@ -10,10 +10,6 @@ verified: true
 ---
 # NumberInput
 
-`TxNumberInput` 包装原生数字输入和可选步进按钮。组件会根据 `min`、`max` 与 `precision` 归一化数值，然后发出 `number | null`。
-
-已人工核对 `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` 与 `number-input.test.ts`。
-
 ## 基础用法
 
 ### NumberInput

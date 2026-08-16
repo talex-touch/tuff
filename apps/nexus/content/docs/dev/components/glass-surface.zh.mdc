@@ -10,8 +10,6 @@ verified: true
 ---
 # GlassSurface 玻璃拟态
 
-`TxGlassSurface` 用于渲染有边界的玻璃层，适合透明面板和光学折射预览。组件优先使用 SVG displacement filter，SVG filter 不可用时降级到原生 `backdrop-filter` 模糊，两者都不可用时保留纯半透明兜底表面。
-
 ## 基础用法
 
 ### GlassSurface

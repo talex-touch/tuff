@@ -10,10 +10,6 @@ verified: true
 ---
 # Stagger
 
-`TxStagger` wraps Vue `TransitionGroup` and injects an index CSS variable into each rendered child so enter and leave animations can be delayed by item order.
-
-Reviewed against `packages/tuffex/packages/components/src/stagger/src/types.ts`, `TxStagger.vue`, and `stagger.test.ts`.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="StaggerStaggerDemo" code-lang="vue"}

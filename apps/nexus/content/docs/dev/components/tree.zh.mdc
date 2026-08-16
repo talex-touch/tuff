@@ -10,8 +10,6 @@ verified: true
 ---
 # Tree 树形
 
-`TxTree` 用于在稳定的层级结构中定位并选择一个范围——资源域、权限域、组织架构。它只负责导航与选择，不做父子级联或懒加载；需要在收起的输入框里选层级用 `TxTreeSelect`，需要批量授权用 `TxTransfer`。
-
 ## 基础用法
 
 ::TuffDemoWrapper{demo="TreeTreeDemo" code-lang="vue"}

@@ -10,10 +10,6 @@ verified: true
 ---
 # IconButton
 
-`TxIconButton` is a semantic `<button>` for compact icon actions. It exposes size, shape, pressed, disabled, native type, and a scoped slot for custom icon content.
-
-Reviewed against `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`.
-
 ## Basic Usage
 
 ### IconButton

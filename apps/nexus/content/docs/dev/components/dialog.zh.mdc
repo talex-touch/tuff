@@ -11,8 +11,6 @@ verified: true
 
 # Dialog 对话框
 
-用于显示重要信息与获取用户确认，包含 BottomDialog / BlowDialog / PopperDialog / TouchTip 等多种形态。
-
 ## BottomDialog 底部对话框
 
 底部定位的对话框，带有可自定义的按钮与动画效果。

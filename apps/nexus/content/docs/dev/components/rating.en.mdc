@@ -11,8 +11,6 @@ verified: true
 
 # Rating
 
-Star rating control for feedback input. It supports half-star precision, read-only display, custom colors, custom icons, sizing, and click animation.
-
 ## Basic Usage
 
 ### Half-star Rating

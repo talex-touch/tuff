@@ -10,8 +10,6 @@ verified: true
 ---
 # Cascader
 
-`TxCascader` selects a path from nested options. Single mode stores one path array, while multiple mode stores an array of path arrays. Search is local to the loaded option tree; async children are loaded through `load` when a non-leaf node without `children` is expanded.
-
 ## Basic Usage
 
 ### Cascader

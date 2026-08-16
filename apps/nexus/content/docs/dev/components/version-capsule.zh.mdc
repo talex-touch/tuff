@@ -10,9 +10,6 @@ verified: true
 ---
 # VersionCapsule 版本胶囊
 
-`TxVersionCapsule` 是一个分段式胶囊，包含两个相互独立的分段：左半下载当前构建，右半打开版本历史。每个分段会在自身正下方锚定一个面板——下载面板（`TxVersionDownloadPanel`）在构建列表上方先放一段信任提示，历史面板（`TxVersionHistoryPanel`）把最新版本作为卡片置于历史行之上。它取代了此前那个"点开即弹出全屏模态、并把警告藏在 hover 卡片里"的单一版本药丸。
-
-
 ## 基础用法
 
 ### VersionCapsule

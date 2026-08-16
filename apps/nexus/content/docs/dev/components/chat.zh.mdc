@@ -10,10 +10,6 @@ verified: true
 ---
 # Chat 消息列表
 
-`TxChatList` 根据 `ChatMessageModel[]` 渲染对话记录。组件把每一行交给 `TxChatMessage`，支持 Markdown 正文、懒加载图片缩略图、可选入场动画，并在附件缩略图点击时发出标准化 `imageClick` payload。
-
-已人工核对 `packages/tuffex/packages/components/src/chat/src/types.ts`、`TxChatList.vue`、`TxChatMessage.vue`、`TxChatComposer.vue`、`TxTypingIndicator.vue` 与 chat 组件测试。
-
 ## 基础用法
 
 ### ChatList

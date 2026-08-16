@@ -11,8 +11,6 @@ verified: true
 
 # FlipOverlay
 
-A 3D flip overlay that expands from a trigger element, ideal for detail views, previews, and transitions.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}

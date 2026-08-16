@@ -10,10 +10,6 @@ verified: true
 ---
 # StatusBadge 状态徽标
 
-`TxStatusBadge` 渲染紧凑状态文本、状态色图标、可选平台图标，并为权限或后端状态枚举提供标准化 `statusKey` 映射。
-
-已人工核对 `packages/tuffex/packages/components/src/status-badge/src/types.ts`、`TxStatusBadge.vue` 与 `status-badge.test.ts`。
-
 ## Demo
 
 ### 状态信号

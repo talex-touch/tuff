@@ -10,8 +10,6 @@ verified: true
 ---
 # Picker
 
-`TxPicker` renders one or more scrollable option columns. It can be used inline or as a bottom popup, normalizes missing values to the first enabled option in each column, and emits both live changes and toolbar confirm/cancel actions.
-
 ## Basic Usage
 
 ### Popup, Inline, And Dense Rows

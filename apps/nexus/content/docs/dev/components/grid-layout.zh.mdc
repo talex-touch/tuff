@@ -10,8 +10,6 @@ verified: true
 ---
 # GridLayout 网格布局
 
-`TxGridLayout` 用于把重复卡片或面板排成 auto-fit CSS Grid，并可为带 `.tx-grid-layout__item` 的子节点添加跟随鼠标的光斑效果。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="GridLayoutGridLayoutDemo" code-lang="vue"}

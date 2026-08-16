@@ -10,8 +10,6 @@ verified: true
 ---
 # Tree
 
-`TxTree` lets users locate and select one scope inside a stable hierarchy — resource domains, permission scopes, org charts. It handles navigation and selection only, not parent/child cascading or lazy loading; reach for `TxTreeSelect` to pick a level inside a collapsed input, and `TxTransfer` for batch permission grants.
-
 ## Basic Usage
 
 ::TuffDemoWrapper{demo="TreeTreeDemo" code-lang="vue"}

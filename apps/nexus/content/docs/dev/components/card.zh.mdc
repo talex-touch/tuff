@@ -10,8 +10,6 @@ verified: true
 ---
 # Card 卡片
 
-`TxCard` 是面向生产场景的 surface 容器，内置 header/body/footer/cover 插槽、材质背景、加载遮罩、可点击状态、惯性跟随和 refraction 光效。
-
 ## 基础用法
 
 ### Basic

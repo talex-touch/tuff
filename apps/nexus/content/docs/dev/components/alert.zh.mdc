@@ -11,10 +11,6 @@ verified: true
 
 # Alert 警告
 
-`TxAlert` 渲染内联 `role="alert"` 横幅，支持语义颜色、可选前置图标、标题/正文插槽，以及可选关闭按钮。
-
-已人工核对 `packages/tuffex/packages/components/src/alert/src/types.ts`、`TxAlert.vue` 与 `alert.test.ts`。
-
 ## 基础用法
 
 ### 提示类型

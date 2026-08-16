@@ -10,8 +10,6 @@ verified: true
 ---
 # GuideState 引导状态
 
-`TxGuideState` 是一个很薄的 `TxEmptyState` 包装，固定传入 `variant="guide"`。当页面需要解释第一步、介绍功能或引导用户完成设置时使用它，避免在各处重复书写通用空态的 guide 变体。
-
 ## 基础用法
 
 当外围页面已经说明上下文时，可以使用默认的 guide 标题和描述。

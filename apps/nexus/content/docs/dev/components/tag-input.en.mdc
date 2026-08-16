@@ -10,8 +10,6 @@ verified: true
 ---
 # TagInput
 
-`TxTagInput` manages a controlled string-array tag list with separator parsing, Enter confirmation, optional blur confirmation, duplicate suppression, and a hard `max` limit. Existing tags render as small closable `TxTag` chips.
-
 ## Basic Usage
 
 ::TuffDemoWrapper{demo="TagInputTagInputDemo" code-lang="vue"}

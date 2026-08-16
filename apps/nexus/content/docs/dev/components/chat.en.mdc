@@ -10,10 +10,6 @@ verified: true
 ---
 # Chat
 
-`TxChatList` renders a transcript from `ChatMessageModel[]`. It delegates each row to `TxChatMessage`, supports Markdown content, lazy image thumbnails, optional staggered entry animation, and emits a normalized `imageClick` payload when an attachment thumbnail is clicked.
-
-Reviewed against `packages/tuffex/packages/components/src/chat/src/types.ts`, `TxChatList.vue`, `TxChatMessage.vue`, `TxChatComposer.vue`, `TxTypingIndicator.vue`, and the chat component tests.
-
 ## Basic Usage
 
 ### ChatList

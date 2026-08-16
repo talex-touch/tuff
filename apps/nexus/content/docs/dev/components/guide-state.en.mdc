@@ -10,8 +10,6 @@ verified: true
 ---
 # GuideState
 
-`TxGuideState` is a thin `TxEmptyState` wrapper with `variant="guide"` fixed. Use it when a screen needs to explain a first step, introduce a feature, or guide users into setup without repeating the generic empty-state variant prop everywhere.
-
 ## Basic Usage
 
 Use the default guide title and description when the surrounding page already explains the context.

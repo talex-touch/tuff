@@ -10,8 +10,6 @@ verified: true
 ---
 # Radio 单选框
 
-`TxRadioGroup` 协调一组 `TxRadio`，只保存一个 `string | number` 原始值。按钮组适合紧凑分段选择，标准样式适合常规表单行，卡片样式适合需要解释文本的选项。
-
 ## 标准单选形式
 
 标准样式展示圆点指示器和标签。短选项可以使用 `direction="row"` 横向排列，长列表可以切回纵向。

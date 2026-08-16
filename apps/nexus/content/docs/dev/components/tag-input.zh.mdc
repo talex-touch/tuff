@@ -10,8 +10,6 @@ verified: true
 ---
 # TagInput 标签输入
 
-`TxTagInput` 管理受控的字符串数组标签列表，支持分隔符解析、Enter 确认、可选失焦确认、重复值抑制和硬性 `max` 上限。已有标签会渲染为可关闭的小尺寸 `TxTag`。
-
 ## 基础用法
 
 ::TuffDemoWrapper{demo="TagInputTagInputDemo" code-lang="vue"}

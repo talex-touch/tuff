@@ -10,8 +10,6 @@ verified: true
 ---
 # Agents
 
-`TxAgentsList` renders a grouped, selectable list for agent pickers and AI workflow entry points. It is presentation-only: it does not start runs, call APIs, or own routing. Disabled agents are grouped separately and never emit selection events.
-
 ## Basic Usage
 
 Bind `selectedId` in the caller and update it from `select`. Use custom group titles when the list is shown outside an English-only surface.
