@@ -15,6 +15,7 @@ const pluginsRoot = path.join(workspaceRoot, 'plugins')
  */
 const COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'clipboard-history',
+  'json-formatter',
   'touch-batch-rename',
   'touch-browser-bookmarks',
   'touch-browser-data',
@@ -66,12 +67,12 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('enables the production default only after all 22 manifested activations are compatible', () => {
+  it('enables the production default only after all 23 manifested activations are compatible', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
 
-    expect(official).toHaveLength(22)
+    expect(official).toHaveLength(23)
     // The inventory used to be compared against a hardcoded copy of itself here, which was
     // already a tautology when both lived in production. Now that the list is this file's own
     // constant, the meaningful direction is the other one: every plugin on disk must be in it,
