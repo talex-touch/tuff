@@ -38,3 +38,41 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 54: Beautiful UI port: 24-component BUI family into tuffex + nexus ai-suite docs
+
+**Date**: 2026-08-15
+**Task**: Beautiful UI port: 24-component BUI family into tuffex + nexus ai-suite docs
+**Branch**: `feat/nexus-header-controls-tuffex`
+
+### Summary
+
+Researched beautifului.dev (19 MIT AI-native primitives; archived sources/tokens/keyframes/38 shots), ran 6 parallel fusion analyses, then landed the port: --tx-bui-* token layer + bui mixins foundation; 24 new tuffex component dirs + additive extensions to data-table/checkbox/tag/sources/suggestion-chips (defaults byte-identical); 25 zh/en doc pairs + 33 demos + ai-suite standalone overview (/docs/dev/components/ai-suite); registration across barrel/READMEs/nexus plugin/demo-registry/DocsSidebar. Gates green: tuffex 1803 tests + 4 audits + typecheck, nexus wrapper typecheck + tests + mdc-fences, visual sweep of all 25 pages light+dark. Review round replaced 7 hand-rolled demo chrome buttons with TxButton. Deliberately withheld: base-anchor disableFlip (3 files + doc row) — mixed with the concurrent anchor-motion stream; commits sit on feat/nexus-header-controls-tuffex pending cherry-pick.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `63bfaa3c1` | (see git log) |
+| `3839b151b` | (see git log) |
+| `804b0b30c` | (see git log) |
+| `b206282e8` | (see git log) |
+| `ce4a588fb` | (see git log) |
+| `87cf41afc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
