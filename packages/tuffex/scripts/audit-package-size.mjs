@@ -76,12 +76,20 @@ const fullStyleImportBudgets = [
 // carries only 0.2 KiB of component styles, so it is not leaking -- it simply outgrew a two-month
 // -old number.
 const LIMITS = {
-  baseCssBytes: 32 * 1024,
+  // 32 -> 40 on 2026-08-15 for the Beautiful UI port (.trellis/tasks/08-15-beautiful-ui-port):
+  // base.css gains the `--tx-bui-*` token layer (33 tokens x 2 themes + shadow/radius/mono
+  // entries, ~2.7 KiB) against 2.4 KiB of headroom. Re-measure and trim the slack once the
+  // BUI component family lands.
+  baseCssBytes: 40 * 1024,
   // 448 -> 488 and 64 -> 96 on 2026-08-13, re-baselined for the app-shell-v2 convergence (#1742):
   // CI measured full CSS at 481.6 KiB and stream-markdown at 92.0 KiB after that branch's
   // conversation/markdown product styles landed. Same contract as the note above -- today's size
   // plus minimal headroom, growth from here fails, and #1555 still owns whether it should shrink.
-  fullCssBytes: 488 * 1024,
+  // 488 -> 640 on 2026-08-15: the Beautiful UI port adds 24 component directories. Measured
+  // 623.8 KiB after the full family landed (the BUI styles run well above the old 2.8 KiB
+  // median — pixel-matched surfaces are style-heavy), so this is actuals plus minimal
+  // headroom, same contract as the notes above: growth from here fails.
+  fullCssBytes: 640 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   emptyStateAliasCssBytes: 128,

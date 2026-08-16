@@ -164,3 +164,278 @@ $skeleton-shimmer-duration: 1.2s !default;
     animation: none;
   }
 }
+
+// Beautiful UI (BUI) primitives
+//
+// Shared surface and motion vocabulary for the component family adapted from
+// Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT license.
+// Colour/shadow/radius tokens live in bui-tokens.scss. Keyframes follow the
+// same per-component emission model as the skeleton mixins above: a component
+// emits `bui-keyframes-*` once at the top level of its style block, then
+// applies the matching surface mixin per element — subpath consumers only get
+// that component's CSS, so globally defined keyframes would be undefined for
+// anyone who does not also load `base.css`.
+
+// Local reset + 13px base. BUI layouts assume Tailwind preflight (zeroed
+// buttons/lists/headings, block svg); tuffex base.css ships no such reset, so
+// every BUI component includes this on its root instead of leaking one global.
+@mixin bui-scope {
+  box-sizing: border-box;
+  font-family: var(--tx-font-family, "Inter", "Helvetica Neue", Arial, sans-serif);
+  font-size: 13px;
+  color: var(--tx-bui-ink, #1f2124);
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button {
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 0;
+  }
+
+  ul,
+  ol {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  svg,
+  img {
+    display: block;
+  }
+}
+
+@mixin bui-keyframes-shimmer-text {
+  @keyframes tx-bui-shimmer-text {
+    0% {
+      background-position: 150%;
+    }
+
+    to {
+      background-position: -50%;
+    }
+  }
+}
+
+@mixin bui-keyframes-fade-up {
+  @keyframes tx-bui-fade-up {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@mixin bui-keyframes-fade-in {
+  @keyframes tx-bui-fade-in {
+    0% {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@mixin bui-keyframes-eq-bounce {
+  @keyframes tx-bui-eq-bounce {
+    0%,
+    to {
+      transform: scaleY(0.35);
+    }
+
+    50% {
+      transform: scaleY(1);
+    }
+  }
+}
+
+@mixin bui-keyframes-stream-in {
+  // Upstream ships `filter: blur()` — a Lightning CSS artefact of `blur(0)`
+  // that browsers drop as invalid, which happens to render correctly. Write
+  // the valid form here.
+  @keyframes tx-bui-stream-in {
+    0% {
+      opacity: 0;
+      filter: blur(4px);
+    }
+
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+}
+
+@mixin bui-keyframes-caret-blink {
+  @keyframes tx-bui-caret-blink {
+    0%,
+    to {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+@mixin bui-keyframes-pop-in {
+  @keyframes tx-bui-pop-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}
+
+@mixin bui-keyframes-spin {
+  @keyframes tx-bui-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+@mixin bui-keyframes-pixel-on {
+  @keyframes tx-bui-pixel-on {
+    0%,
+    to {
+      opacity: 0.15;
+    }
+
+    18%,
+    42% {
+      opacity: 1;
+    }
+
+    62% {
+      opacity: 0.15;
+    }
+  }
+}
+
+// Shimmering status label — pairs with bui-keyframes-shimmer-text.
+// Reduced motion swaps the transparent-text gradient for a plain readable tone.
+@mixin bui-shimmer-text($duration: 1.4s) {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--tx-bui-ink-3, #9a9da3) 35%,
+    var(--tx-bui-ink, #1f2124) 50%,
+    var(--tx-bui-ink-3, #9a9da3) 65%
+  );
+  background-clip: text;
+  background-size: 200% 100%;
+  animation: tx-bui-shimmer-text $duration linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    color: var(--tx-bui-ink-2, #62656b);
+    background: none;
+    animation: none;
+  }
+}
+
+// Entrance — pairs with bui-keyframes-fade-up.
+@mixin bui-fade-up($duration: 300ms, $delay: 0ms) {
+  animation: tx-bui-fade-up $duration var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) $delay both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+// Entrance — pairs with bui-keyframes-pop-in.
+@mixin bui-pop-in($duration: 300ms, $delay: 0ms) {
+  animation: tx-bui-pop-in $duration var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) $delay both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+// Disclosure grammar: 0fr↔1fr grid collapse driven by an `.is-open` class.
+// Apply to the collapsing wrapper; its direct child gets `overflow: hidden`.
+// Same handoff as TxToolCallCard / TxChainOfThought / TxSources — kept as a
+// mixin so those components' tested class contracts stay untouched.
+@mixin bui-disclosure-collapse($duration: 0.3s) {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows $duration var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
+    opacity $duration var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+
+  > * {
+    overflow: hidden;
+  }
+
+  &.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+// Numbers that must not jitter (timers, counters, diff stats).
+@mixin bui-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+// BUI card padding vocabulary (upstream `.primitive-card-bar` / `-pad`).
+@mixin bui-card-bar {
+  padding: 10px 12px;
+}
+
+@mixin bui-card-pad {
+  padding: 12px;
+}
+
+// Press feedback used across BUI controls.
+@mixin bui-press-scale($scale: 0.96) {
+  transition: transform 0.15s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+
+  &:active {
+    transform: scale($scale);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:active {
+      transform: none;
+    }
+  }
+}

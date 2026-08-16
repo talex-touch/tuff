@@ -1,0 +1,125 @@
+// Beautiful UI (BUI) token layer
+//
+// Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine,
+// MIT license. Values are the upstream originals on purpose: the BUI component
+// family is pixel-matched against the source site, so these tokens deliberately
+// do NOT resolve to the `--tx-*` semantic ramp (nearest-neighbour distances run
+// up to ΔRGB 96 in dark). A host that prefers brand colours over fidelity can
+// override any of these variables in its own scope.
+//
+// The `bui` name segment keeps the layer collision-free: upstream names like
+// `--line` / `--accent` are too generic to place in :root of a component
+// library that ships into Electron hosts and third-party plugin UIs.
+//
+// High-contrast themes (`html[data-tx-contrast='high']`) are intentionally not
+// covered — BUI has no high-contrast ramp, so these components keep their
+// standard palette there. Known limitation, documented in the ai-suite doc.
+
+:root {
+  // Background layers
+  --tx-bui-page: #fafafb;
+  --tx-bui-canvas: #f1f2f3;
+  --tx-bui-surface: #fff;
+  --tx-bui-inset: #f7f8f9;
+  --tx-bui-hover: #f4f5f6;
+  --tx-bui-hover-2: #e7e9eb;
+
+  // Text
+  --tx-bui-ink: #1f2124;
+  --tx-bui-ink-2: #62656b;
+  --tx-bui-ink-3: #9a9da3;
+
+  // Hairlines
+  --tx-bui-line: #ecedef;
+  --tx-bui-line-strong: #e0e2e5;
+
+  // Form field
+  --tx-bui-field: #f2f2f3;
+
+  // Page backdrop stripes
+  --tx-bui-stripe: #49494913;
+  --tx-bui-stripe-bg: #f5f5f5;
+
+  // Accent
+  --tx-bui-accent: #0285ff;
+  --tx-bui-accent-ink: #0170dd;
+  --tx-bui-accent-tint: #e9f3ff;
+
+  // Semantic
+  --tx-bui-green: #189a4d;
+  --tx-bui-green-tint: #e8f5ed;
+  --tx-bui-orange: #ef720c;
+  --tx-bui-orange-tint: #fdf1e5;
+  --tx-bui-red: #e3474c;
+  --tx-bui-red-tint: #fcecec;
+
+  // Tooltip (inverted surface in light mode)
+  --tx-bui-tooltip-bg: #25272b;
+  --tx-bui-tooltip-fg: #f6f7f8;
+  --tx-bui-tooltip-muted: #a5a8ad;
+  --tx-bui-tooltip-border: #3a3c40;
+
+  // Shadows — every tier opens with a 1px spread ring that stands in for a
+  // border without taking layout space. Components use the ring INSTEAD of
+  // `border`, never both (double-line trap).
+  --tx-bui-shadow-hairline: 0 0 0 1px var(--tx-bui-line);
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 0 1px 2px #1018280d;
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 0 1px 2px #1018280a, 0 2px 6px #10182808;
+  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 0 2px 10px #0000000b;
+  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line), 0 8px 28px #0001;
+  --tx-bui-shadow-inset-field: inset 0 1px 2px #0000001f;
+
+  // Radius ladder (chip / control / card) + mono face — theme-invariant
+  --tx-bui-radius-chip: 6px;
+  --tx-bui-radius-control: 8px;
+  --tx-bui-radius-card: 10px;
+  --tx-bui-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+[data-theme='dark'],
+.dark {
+  --tx-bui-page: #17181a;
+  --tx-bui-canvas: #1c1d1f;
+  --tx-bui-surface: #232427;
+  --tx-bui-inset: #1f2022;
+  --tx-bui-hover: #2a2b2e;
+  --tx-bui-hover-2: #313236;
+
+  --tx-bui-ink: #f2f3f4;
+  --tx-bui-ink-2: #a5a8ad;
+  --tx-bui-ink-3: #6c6f75;
+
+  --tx-bui-line: #2e3033;
+  --tx-bui-line-strong: #3a3c40;
+
+  --tx-bui-field: #2b2c2f;
+
+  --tx-bui-stripe: #ffffff0e;
+  --tx-bui-stripe-bg: #1b1c1e;
+
+  --tx-bui-accent: #3d9aff;
+  --tx-bui-accent-ink: #7ec0ff;
+  --tx-bui-accent-tint: #3d9aff29;
+
+  // Dark tints are translucent overlays (~14% alpha), not opaque pastels
+  --tx-bui-green: #3dbb72;
+  --tx-bui-green-tint: #3dbb7224;
+  --tx-bui-orange: #f68f3c;
+  --tx-bui-orange-tint: #f68f3c24;
+  --tx-bui-red: #ee5c61;
+  --tx-bui-red-tint: #ee5c6124;
+
+  --tx-bui-tooltip-bg: #111214;
+  --tx-bui-tooltip-fg: #f2f3f4;
+  --tx-bui-tooltip-muted: #a5a8ad;
+  --tx-bui-tooltip-border: #2e3033;
+
+  // Overlay swaps its ring to line-strong in dark — the one structural (not
+  // just numeric) light/dark difference in the shadow set. Keep it explicit.
+  --tx-bui-shadow-hairline: 0 0 0 1px var(--tx-bui-line);
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-bui-line-strong), 0 1px 2px #0000004d;
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-bui-line), 0 1px 2px #0003, 0 2px 6px #0003;
+  --tx-bui-shadow-raised: 0 0 0 1px var(--tx-bui-line), 0 2px 10px #00000038;
+  --tx-bui-shadow-overlay: 0 0 0 1px var(--tx-bui-line-strong), 0 8px 28px #00000057;
+  --tx-bui-shadow-inset-field: inset 0 1px 2px #0006;
+}
