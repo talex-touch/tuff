@@ -98,9 +98,9 @@ function replay(): void {
       </template>
     </TxDiffTable>
 
-    <button type="button" class="diff-table-demo__replay" @click="replay">
+    <TxButton size="small" variant="secondary" @click="replay">
       {{ copy.replay }}
-    </button>
+    </TxButton>
   </div>
 </template>
 
@@ -134,21 +134,4 @@ function replay(): void {
   border-radius: 50%;
 }
 
-.diff-table-demo__replay {
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--tx-bui-radius-control, 8px);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--tx-bui-ink-2, #62656b);
-  background: var(--tx-bui-surface, #fff);
-  box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
-  cursor: pointer;
-}
-
-.diff-table-demo__replay:hover {
-  color: var(--tx-bui-ink, #1f2124);
-  background: var(--tx-bui-hover, #f4f5f6);
-}
 </style>

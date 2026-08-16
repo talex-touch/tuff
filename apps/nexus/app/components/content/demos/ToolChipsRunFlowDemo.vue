@@ -168,13 +168,9 @@ onBeforeUnmount(stop)
     />
 
     <div>
-      <button
-        type="button"
-        class="rounded-lg border border-[var(--tx-border-color)] px-3 py-1 text-sm"
-        @click="replay"
-      >
+      <TxButton size="small" variant="secondary" @click="replay">
         {{ copy.replay }}
-      </button>
+      </TxButton>
     </div>
   </div>
 </template>

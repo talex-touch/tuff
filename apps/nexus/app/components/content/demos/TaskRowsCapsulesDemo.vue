@@ -135,13 +135,9 @@ onBeforeUnmount(stop)
 
 <template>
   <div class="flex flex-col gap-4">
-    <button
-      type="button"
-      class="self-start rounded-lg border border-[var(--tx-border-color)] px-3 py-1 text-sm"
-      @click="replay"
-    >
+    <TxButton class="self-start" size="small" variant="secondary" @click="replay">
       {{ copy.replay }}
-    </button>
+    </TxButton>
 
     <div class="max-w-[440px] min-h-[196px]">
       <TxTaskRows

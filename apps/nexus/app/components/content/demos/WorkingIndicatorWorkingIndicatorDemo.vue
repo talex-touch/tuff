@@ -18,13 +18,9 @@ const startedAt = ref(Date.now())
 
 <template>
   <div class="flex flex-col gap-4">
-    <button
-      type="button"
-      class="self-start rounded-lg border border-[var(--tx-border-color)] px-3 py-1 text-sm"
-      @click="startedAt = Date.now()"
-    >
+    <TxButton class="self-start" size="small" variant="secondary" @click="startedAt = Date.now()">
       {{ copy.restart }}
-    </button>
+    </TxButton>
 
     <TxWorkingIndicator :label="copy.label" :started-at="startedAt" />
   </div>
