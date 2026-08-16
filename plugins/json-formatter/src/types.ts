@@ -10,7 +10,7 @@ import type { Router, RouteRecordRaw } from 'vue-router'
 export interface PluginAppContext {
   app: App<Element>
   router: Router
-  routes: RouteRecordRaw[]
+  routes: readonly RouteRecordRaw[]
   isClient: boolean
 }
 
