@@ -13,12 +13,19 @@ const props = withDefaults(
     labelPlacement?: 'start' | 'end'
     variant?: 'fill' | 'checkmark'
     ariaLabel?: string
+    /**
+     * Partial selection — some but not all of the governed items are checked.
+     * Renders the dash and reports `aria-checked="mixed"`; activating it
+     * resolves to checked, matching a native input's `indeterminate` behaviour.
+     */
+    indeterminate?: boolean
   }>(),
   {
     modelValue: false,
     disabled: false,
     labelPlacement: 'end',
     variant: 'fill',
+    indeterminate: false,
   },
 )
 
@@ -43,10 +50,16 @@ const effectiveAriaLabel = computed(() => {
   return props.ariaLabel
 })
 
+// `mixed` is the only value that lets a screen reader announce a partial
+// selection; without it the dash is a purely visual claim the a11y tree denies.
+const ariaChecked = computed<'mixed' | boolean>(() =>
+  props.indeterminate ? 'mixed' : isChecked.value,
+)
+
 function toggle() {
   if (props.disabled)
     return
-  isChecked.value = !isChecked.value
+  isChecked.value = props.indeterminate ? true : !isChecked.value
 }
 </script>
 
@@ -54,13 +67,14 @@ function toggle() {
   <button
     type="button"
     role="checkbox"
-    :aria-checked="isChecked"
+    :aria-checked="ariaChecked"
     :aria-disabled="disabled"
     :aria-label="effectiveAriaLabel"
     :disabled="disabled"
     class="tx-checkbox" :class="[
       {
         'is-checked': isChecked,
+        'is-indeterminate': indeterminate,
         'is-disabled': disabled,
       },
       `tx-checkbox--${variant || 'fill'}`,
@@ -75,6 +89,7 @@ function toggle() {
     </span>
 
     <span class="tx-checkbox__box" aria-hidden="true">
+      <span v-if="indeterminate" class="tx-checkbox__dash" />
       <svg v-if="variant === 'checkmark'" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline
           fill="none"
@@ -150,6 +165,26 @@ function toggle() {
         stroke-dashoffset: 0;
         animation: tx-checkbox-tick 0.32s ease-out;
       }
+    }
+  }
+
+  &__dash {
+    width: 8px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: var(--tx-checkbox-checkmark-color, #fff);
+  }
+
+  &.is-indeterminate {
+    .tx-checkbox__box {
+      background-color: var(--tx-color-primary, #409eff);
+      border-color: var(--tx-color-primary, #409eff);
+    }
+
+    // A dash and a tick would read as two conflicting claims about the same
+    // control, so the tick stands down while the selection is partial.
+    .tx-checkbox__tick {
+      display: none;
     }
   }
 

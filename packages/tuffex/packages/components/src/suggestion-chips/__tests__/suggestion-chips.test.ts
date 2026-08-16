@@ -26,4 +26,32 @@ describe('txSuggestionChips', () => {
     const wrapper = mount(TxSuggestionChips, { props: { suggestions: [] } })
     expect(wrapper.find('.tx-suggestion-chips').exists()).toBe(false)
   })
+
+  describe('list layout', () => {
+    it('stays a plain chip row by default', () => {
+      const wrapper = mount(TxSuggestionChips, { props: { suggestions } })
+      expect(wrapper.find('.tx-suggestion-chips').classes()).not.toContain('is-list')
+      expect(wrapper.find('.tx-suggestion-chips__glyph').exists()).toBe(false)
+      expect(wrapper.find('.tx-suggestion-chips__chip').attributes('style')).toBeUndefined()
+    })
+
+    it('stacks the rows and leads each with the return glyph', () => {
+      const wrapper = mount(TxSuggestionChips, { props: { suggestions, layout: 'list' } })
+      expect(wrapper.find('.tx-suggestion-chips').classes()).toContain('is-list')
+      expect(wrapper.findAll('.tx-suggestion-chips__glyph')).toHaveLength(2)
+    })
+
+    it('staggers each row by its position', () => {
+      const wrapper = mount(TxSuggestionChips, { props: { suggestions, layout: 'list' } })
+      const chips = wrapper.findAll('.tx-suggestion-chips__chip')
+      expect(chips[0]!.attributes('style')).toContain('--tx-suggestion-chips-index: 0')
+      expect(chips[1]!.attributes('style')).toContain('--tx-suggestion-chips-index: 1')
+    })
+
+    it('still emits the full suggestion on select', async () => {
+      const wrapper = mount(TxSuggestionChips, { props: { suggestions, layout: 'list' } })
+      await wrapper.findAll('.tx-suggestion-chips__chip')[1]!.trigger('click')
+      expect(wrapper.emitted('select')).toEqual([[suggestions[1]]])
+    })
+  })
 })

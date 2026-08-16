@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { DataTableColumn, DataTableEmits, DataTableKey, DataTableProps, DataTableSortOrder, DataTableSortState } from './types'
-import { computed, getCurrentInstance, ref, watch } from 'vue'
+import type { DataTableColumn, DataTableEmits, DataTableHeaderSlotProps, DataTableKey, DataTableProps, DataTableSortOrder, DataTableSortState } from './types'
+import { computed, getCurrentInstance, ref, useSlots, watch } from 'vue'
 import { TxCheckbox } from '../../checkbox'
 import { TxEmptyState } from '../../empty-state'
 import { TxSpinner } from '../../spinner'
@@ -19,11 +19,18 @@ const props = withDefaults(defineProps<DataTableProps<any>>(), {
   selectable: false,
   selectedKeys: () => [],
   sortOnClient: true,
+  sortCycle: 'tri',
   tableLayout: 'auto',
   nowrap: false,
+  scrollX: false,
+  stickyHeader: false,
+  stickyFooter: false,
+  highlightSelected: false,
 })
 
 const emit = defineEmits<DataTableEmits<any>>()
+
+const slots = useSlots()
 
 // A row is keyboard-interactive when explicitly opted in, or whenever a rowClick
 // listener is attached — so the documented rowClick event is reachable by keyboard
@@ -68,7 +75,18 @@ const allSelected = computed(() => {
   return rowKeys.value.every(key => selectedSet.value.has(key))
 })
 
-const sortState = computed(() => localSort.value)
+// A partial selection: the select-all box reports `mixed` rather than claiming
+// "nothing is selected" while several rows plainly are.
+const someSelected = computed(() => {
+  if (allSelected.value)
+    return false
+  return rowKeys.value.some(key => selectedSet.value.has(key))
+})
+
+// Supplying `sort` — even as null — hands the state to the parent. `undefined`
+// keeps the component in the original uncontrolled mode seeded by defaultSort.
+const isSortControlled = computed(() => props.sort !== undefined)
+const sortState = computed(() => (isSortControlled.value ? props.sort ?? null : localSort.value))
 
 function normalizeSortOrder(order: DataTableSortOrder): DataTableSortOrder {
   if (order === 'asc' || order === 'desc')
@@ -77,7 +95,9 @@ function normalizeSortOrder(order: DataTableSortOrder): DataTableSortOrder {
 }
 
 function setSort(next: DataTableSortState | null) {
-  localSort.value = next
+  if (!isSortControlled.value)
+    localSort.value = next
+  emit('update:sort', next)
   emit('sortChange', next)
 }
 
@@ -93,9 +113,21 @@ function toggleSort(column: DataTableColumn) {
   if (order === 'asc')
     setSort({ key: column.key, order: 'desc' })
   else if (order === 'desc')
-    setSort(null)
+    setSort(props.sortCycle === 'bi' ? { key: column.key, order: 'asc' } : null)
   else
     setSort({ key: column.key, order: 'asc' })
+}
+
+function headerSlotProps(column: DataTableColumn): DataTableHeaderSlotProps {
+  const current = sortState.value
+  const active = current?.key === column.key
+  const order = active ? normalizeSortOrder(current!.order) : null
+  return {
+    column,
+    sorted: active && order !== null,
+    order,
+    toggle: () => toggleSort(column),
+  }
 }
 
 function getColumnAriaSort(column: DataTableColumn): 'ascending' | 'descending' | 'none' | undefined {
@@ -259,6 +291,35 @@ function columnClass(column: DataTableColumn, type: 'header' | 'cell') {
 
 const colspan = computed(() => props.columns.length + (props.selectable ? 1 : 0))
 
+// Plain functions, not computeds: slot presence is read at render time, so a
+// parent that starts passing a footer slot gets a footer without a key change.
+function hasFooter(): boolean {
+  return Boolean(slots.footer) || props.columns.some(column => Boolean(slots[`footer-${column.key}`]))
+}
+
+function rowClasses(row: any, index: number) {
+  return [
+    {
+      'is-interactive': rowInteractive.value,
+      'is-selected': selectedSet.value.has(getRowKey(row, index)),
+    },
+    props.rowClass?.(row, index),
+  ]
+}
+
+// Sticky cells need a scroll container, and a sticky <th> loses its borders
+// under `border-collapse: collapse`. Both switches ride on this one class so
+// tables that opt out render exactly as before.
+const isStickyShell = computed(() =>
+  props.stickyHeader || props.stickyFooter || props.maxHeight !== undefined,
+)
+
+const shellStyle = computed(() => {
+  if (props.maxHeight === undefined)
+    return undefined
+  return { maxHeight: toCssUnit(props.maxHeight) }
+})
+
 function emitRowClick(row: any, index: number) {
   emit('rowClick', { row, index })
 }
@@ -283,8 +344,14 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
       'is-hover': hover,
       'is-nowrap': nowrap,
       'has-fixed-columns': hasFixedColumns,
+      'is-scroll-x': scrollX,
+      'is-sticky-shell': isStickyShell,
+      'has-sticky-header': stickyHeader,
+      'has-sticky-footer': stickyFooter,
+      'is-highlight-selected': highlightSelected,
       [`is-layout-${tableLayout}`]: true,
     }"
+    :style="shellStyle"
   >
     <div v-if="loading" class="tx-data-table__loading" aria-live="polite">
       <TxSpinner :size="20" />
@@ -296,6 +363,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
           <th v-if="selectable" class="tx-data-table__th tx-data-table__th--select" scope="col">
             <TxCheckbox
               :model-value="allSelected"
+              :indeterminate="someSelected"
               aria-label="Select all"
               @update:model-value="toggleAll"
             />
@@ -316,7 +384,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
               :class="`is-align-${column.align || 'left'}`"
               @click="toggleSort(column)"
             >
-              <slot :name="`header-${column.key}`" :column="column">
+              <slot :name="`header-${column.key}`" v-bind="headerSlotProps(column)">
                 {{ column.title }}
               </slot>
               <span class="tx-data-table__sort" aria-hidden="true">
@@ -328,7 +396,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
                 </svg>
               </span>
             </button>
-            <slot v-else :name="`header-${column.key}`" :column="column">
+            <slot v-else :name="`header-${column.key}`" v-bind="headerSlotProps(column)">
               {{ column.title }}
             </slot>
           </th>
@@ -339,7 +407,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
           v-for="(row, index) in displayRows"
           :key="getRowKey(row, index)"
           class="tx-data-table__row"
-          :class="{ 'is-interactive': rowInteractive }"
+          :class="rowClasses(row, index)"
           :tabindex="rowInteractive ? 0 : undefined"
           @click="emitRowClick(row, index)"
           @keydown="handleRowKeydown($event, row, index)"
@@ -377,6 +445,25 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
           </td>
         </tr>
       </tbody>
+      <tfoot v-if="hasFooter()">
+        <tr class="tx-data-table__footer-row">
+          <!-- The `footer` slot supplies the cells itself, so a summary row can
+               span columns; `footer-<key>` fills one cell per column. -->
+          <slot v-if="$slots.footer" name="footer" :columns="columns" :data="data" :selected-keys="selectedKeys" />
+          <template v-else>
+            <td v-if="selectable" class="tx-data-table__footer-cell tx-data-table__footer-cell--select" />
+            <td
+              v-for="column in columns"
+              :key="column.key"
+              class="tx-data-table__footer-cell"
+              :class="columnClass(column, 'cell')"
+              :style="columnStyle(column)"
+            >
+              <slot :name="`footer-${column.key}`" :column="column" :data="data" />
+            </td>
+          </template>
+        </tr>
+      </tfoot>
     </table>
   </div>
 </template>
@@ -393,8 +480,19 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
     border-color: var(--tx-border-color-lighter, #ebeef5);
   }
 
-  &.has-fixed-columns {
+  // Without its own scroll container the component leans on an ancestor to
+  // scroll, and clipping would hide the fixed columns. Once it does scroll
+  // (scrollX / sticky shell) the overflow belongs here instead.
+  &.has-fixed-columns:not(.is-scroll-x):not(.is-sticky-shell) {
     overflow: visible;
+  }
+
+  &.is-scroll-x {
+    overflow-x: auto;
+  }
+
+  &.is-sticky-shell {
+    overflow: auto;
   }
 }
 
@@ -517,8 +615,24 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
   background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 60%, transparent);
 }
 
+// The fallback is the long-standing accent tint. The variable exists so a host
+// with a different table language (a neutral-grey BUI records table, say) can
+// repoint the hover without a prop or an override on `!important`.
 .tx-data-table.is-hover tbody tr:hover {
-  background: color-mix(in srgb, var(--tx-color-primary-light-9, #ecf5ff) 60%, transparent);
+  background: var(
+    --tx-data-table-row-hover-bg,
+    color-mix(in srgb, var(--tx-color-primary-light-9, #ecf5ff) 60%, transparent)
+  );
+}
+
+// Selection paints on the cells, not the row: a fixed column carries its own
+// opaque background to cover the scrolled content, which would otherwise sit on
+// top of any <tr> tint and leave the selected row looking half-highlighted.
+.tx-data-table.is-highlight-selected .tx-data-table__row.is-selected > .tx-data-table__cell {
+  background: var(
+    --tx-data-table-row-selected-bg,
+    color-mix(in srgb, var(--tx-color-primary, #409eff) 7%, var(--tx-bg-color, #fff))
+  );
 }
 
 .tx-data-table__row.is-interactive {
@@ -545,5 +659,58 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
   padding: 24px 12px;
   text-align: center;
   color: var(--tx-text-color-secondary, #909399);
+}
+
+/* Footer ------------------------------------------------------------------ */
+
+/* `:deep` because the `footer` slot's own <td>s are compiled in the consumer's
+   scope and would never match this component's scope id. */
+.tx-data-table__footer-row :deep(td),
+.tx-data-table__footer-row :deep(th) {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tx-text-color-regular, #606266);
+  background: var(--tx-fill-color-lighter, #fafafa);
+  border-top: 1px solid var(--tx-border-color-lighter, #ebeef5);
+}
+
+.tx-data-table__footer-cell--select {
+  width: 42px;
+  text-align: center;
+}
+
+/* Sticky shell ------------------------------------------------------------ */
+
+/* Collapsed borders are painted by the table, not the cell, so a sticky <th>
+   loses its rules the moment it detaches and scrolls. Separate borders keep
+   them — scoped to the shell so `bordered` / `striped` are untouched elsewhere. */
+.tx-data-table.is-sticky-shell .tx-data-table__table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tx-data-table.is-sticky-shell.has-sticky-header thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.tx-data-table.is-sticky-shell.has-sticky-footer .tx-data-table__footer-row :deep(td),
+.tx-data-table.is-sticky-shell.has-sticky-footer .tx-data-table__footer-row :deep(th) {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+}
+
+/* A cell that is pinned on both axes has to outrank whichever edge it crosses,
+   so the corners sit above their own row or column. */
+.tx-data-table.is-sticky-shell.has-sticky-header thead th.is-fixed {
+  z-index: 7;
+}
+
+.tx-data-table.is-sticky-shell.has-sticky-footer .tx-data-table__footer-row :deep(td.is-fixed) {
+  z-index: 6;
 }
 </style>
