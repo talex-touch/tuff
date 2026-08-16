@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 55
-- **Last Active**: 2026-08-15
+- **Total Sessions**: 57
+- **Last Active**: 2026-08-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~114 | Active |
+| `journal-2.md` | ~181 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,8 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 57 | 2026-08-16 | 主进程轮询与外部调用超时兜底（CoreBox 搜索延迟根因） | `109560387` | `feat/nexus-header-controls-tuffex` |
+| 56 | 2026-08-16 | BUI port closeout: merge to master, production deploy, CI gate fixes | `e89d7ea2e`, `1f3cacb51` | `feat/nexus-header-controls-tuffex` |
 | 55 | 2026-08-15 | Anchor family: spring expand, layered chain, 琉光 veil | `fe2554c6f`, `67e2b9ce2`, `87cf41afc`, `bc6a545ad` | `feat/nexus-header-controls-tuffex` |
 | 54 | 2026-08-15 | Beautiful UI port: 24-component BUI family into tuffex + nexus ai-suite docs | `63bfaa3c1`, `3839b151b`, `804b0b30c`, `b206282e8`, `ce4a588fb`, `87cf41afc` | `feat/nexus-header-controls-tuffex` |
 | 53 | 2026-08-15 | CoreBox macOS 唤起不再激活整个应用 | `fe1e1df06` | `feat/nexus-header-controls-tuffex` |
