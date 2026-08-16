@@ -7,7 +7,7 @@ type PanelVariant = 'solid' | 'plain' | 'dashed'
 type Shadow = 'none' | 'soft' | 'medium'
 type WidthMode = 'auto' | 'compact' | 'wide'
 type SurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
-type AnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+type AnchorAnimationType = 'expand' | 'transfer' | 'boom' | 'opacity' | 'drip' | 'bead' | 'none'
 
 const { locale } = useI18n()
 
@@ -18,7 +18,7 @@ const panelVariant = ref<PanelVariant>('plain')
 const panelShadow = ref<Shadow>('soft')
 const widthMode = ref<WidthMode>('auto')
 const surfaceMotionAdaptation = ref<SurfaceMotionAdaptation>('auto')
-const animationType = ref<AnchorAnimationType>('transfer')
+const animationType = ref<AnchorAnimationType>('expand')
 const showArrow = ref(true)
 const useCard = ref(true)
 const matchReferenceWidth = ref(false)
@@ -74,9 +74,12 @@ const labels = computed(() => {
         off: '关闭',
       },
       animationMode: {
+        expand: '弹簧展开',
         transfer: '位移动画',
         boom: '聚焦缩放',
         opacity: '透明度',
+        drip: '液滴下坠',
+        bead: '张力收腰',
         none: '无动画',
       },
       panel: {
@@ -129,9 +132,12 @@ const labels = computed(() => {
       off: 'off',
     },
     animationMode: {
+      expand: 'expand',
       transfer: 'transfer',
       boom: 'focus',
       opacity: 'opacity',
+      drip: 'drip',
+      bead: 'bead',
       none: 'none',
     },
     panel: {
@@ -150,7 +156,7 @@ const variantOptions: PanelVariant[] = ['plain', 'solid', 'dashed']
 const shadowOptions: Shadow[] = ['none', 'soft', 'medium']
 const widthOptions: WidthMode[] = ['auto', 'compact', 'wide']
 const adaptationOptions: SurfaceMotionAdaptation[] = ['auto', 'manual', 'off']
-const animationOptions: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']
+const animationOptions: AnchorAnimationType[] = ['expand', 'transfer', 'boom', 'opacity', 'drip', 'bead', 'none']
 const easeOptions = ['back.out(2)', 'power2.out', 'elastic.out(1, 0.45)']
 
 const resolvedWidth = computed(() => {
@@ -169,14 +175,21 @@ const resolvedMaxWidth = computed(() => {
   return 420
 })
 
-const anchorAnimation = computed(() => ({
-  type: animationType.value,
-  duration: duration.value,
-  ease: ease.value,
-  closeEase: animationType.value === 'transfer' ? 'power3.in' : 'power2.in',
-  scale: animationType.value === 'boom' ? 1.08 : undefined,
-  blur: animationType.value === 'boom' ? 14 : undefined,
-}))
+const anchorAnimation = computed(() => {
+  const type = animationType.value
+  // expand and the liquid types own their timing tables; the classic knobs
+  // below would flatten them.
+  if (type === 'expand' || type === 'drip' || type === 'bead')
+    return { type }
+
+  return {
+    type,
+    duration: duration.value,
+    ease: ease.value,
+    closeEase: type === 'transfer' ? 'power3.in' : 'power2.in',
+    blur: type === 'boom' ? 14 : undefined,
+  }
+})
 
 const panelCard = computed(() => ({
   maskOpacity: maskOpacity.value,

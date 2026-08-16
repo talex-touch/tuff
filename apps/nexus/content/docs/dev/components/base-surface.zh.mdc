@@ -10,10 +10,6 @@ verified: true
 ---
 # BaseSurface 基础表面层
 
-统一管理背景渲染策略的基础组件 — 支持 `pure`（纯色）、`mask`（透明遮罩）、`blur`（filter）、`glass`（glass）、`refraction`（glass+filter）五种模式，并通过运动降级机制自动解决 Chromium 已知的 `backdrop-filter` + `transform` 失效 bug。
-
-支持 `fake` 伪元素模式渲染（与现有 `.fake-background` 一致），暗色模式通过 CSS 变量体系自动切换。
-
 ## 与 TxCard 的关系
 
 - 需要业务层开箱即用（header/footer/loading/inertial/交互态）时，用 `TxCard`。
@@ -120,7 +116,7 @@ code: |
 
 当 `blur` 或 `glass` 模式的元素处于 CSS `transform` 运动中时，`backdrop-filter` 会失效（Chromium 已知 bug）。
 
-通过 `moving` prop 手动控制降级，或 `auto-detect` 自动检测 transform 变化，自动降级到 `fallbackMode`（默认 `mask`），运动结束后平滑恢复。
+通过 `moving` prop 手动控制降级，或 `auto-detect` 自动检测 transform 变化，自动降级到 `fallbackMode`（默认 `mask`），运动结束后平滑恢复。琉光（refraction）走分层降级：采样失效的 glass / blur 层各自淡出，半透明运动罩接住视觉重量，停止后交叉淡回 —— 全程没有近实心罩层。
 
 点击按钮后，blur 和 glass 卡片会真正进行 `transform` 位移，同时自动降级到 mask 模式。卡片内部内容可滚动。
 
