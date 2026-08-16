@@ -10,10 +10,6 @@ verified: true
 ---
 # Thinking Orb
 
-`TxThinkingOrb` paints a small animated orb on a canvas to say the model is thinking. It has nine forms and picks one at random per mount by default — one orb per thought.
-
-Manually verified against `packages/tuffex/packages/components/src/thinking-orb/src/TxThinkingOrb.vue`.
-
 ## Basic Usage
 
 ### Thinking Orb

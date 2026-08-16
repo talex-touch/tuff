@@ -10,10 +10,6 @@ verified: true
 ---
 # OS Icon
 
-`TxOsIcon` renders a macOS, Windows, or Linux glyph from `platform` / `os` strings. It is useful in release matrices, device lists, and platform-specific settings.
-
-Reviewed against `packages/tuffex/packages/components/src/os-icon/src/TxOsIcon.vue`.
-
 ## Basic Usage
 
 ### OS Icon

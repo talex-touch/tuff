@@ -11,8 +11,6 @@ verified: true
 
 # Grid 栅格
 
-栅格组件提供现代化的 CSS Grid 布局能力，支持响应式与灵活的网格配置。
-
 ## 基础用法
 
 ### Grid

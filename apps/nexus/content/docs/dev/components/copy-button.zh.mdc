@@ -10,10 +10,6 @@ verified: true
 ---
 # CopyButton
 
-`TxCopyButton` 将字符串写入剪贴板，并在成功后短暂切换按钮文案。组件优先使用 `navigator.clipboard.writeText`，不可用时回退到隐藏 textarea 与 `document.execCommand('copy')`。
-
-已人工核对 `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue` 与 `copy-button.test.ts`。
-
 ## 基础用法
 
 ### CopyButton

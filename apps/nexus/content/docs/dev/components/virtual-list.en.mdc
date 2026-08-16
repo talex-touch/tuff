@@ -10,10 +10,6 @@ verified: true
 ---
 # VirtualList
 
-`TxVirtualList` renders only the visible slice of a fixed-height list, plus overscan rows. It is optimized for long read-only or lightly interactive lists where every item has the same height.
-
-Reviewed against `packages/tuffex/packages/components/src/virtual-list/src/types.ts`, `TxVirtualList.vue`, and `virtual-list.test.ts`.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}

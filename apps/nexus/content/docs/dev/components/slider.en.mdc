@@ -10,8 +10,6 @@ verified: true
 ---
 # Slider
 
-Range input with value display and optional elastic tooltip feedback.
-
 ## Basic Usage
 
 ### Slider

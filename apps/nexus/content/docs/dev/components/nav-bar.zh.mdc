@@ -10,10 +10,6 @@ verified: true
 ---
 # NavBar 导航栏
 
-`TxNavBar` 渲染紧凑的应用顶部栏，提供居中标题、可选安全区占位、左右操作区，以及内置返回按钮。
-
-已人工核对 `packages/tuffex/packages/components/src/nav-bar/src/types.ts`、`TxNavBar.vue` 与 `nav-bar.test.ts`。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}

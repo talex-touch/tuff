@@ -11,8 +11,6 @@ verified: true
 
 # FlipOverlay 翻转遮罩
 
-从触发源翻转展开的 3D Overlay，适合卡片详情、图片预览与过渡式页面。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}

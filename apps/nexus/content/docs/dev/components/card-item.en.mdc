@@ -10,8 +10,6 @@ verified: true
 ---
 # CardItem
 
-`TxCardItem` is a compact row primitive for settings pages, command lists, and lightweight navigation. It renders optional media on the left, title/subtitle/description text in the middle, and a right-side action slot while keeping interactivity opt-in through `clickable`.
-
 ## Basic Usage
 
 Use the `right` slot for switches, chevrons, metadata, or secondary status. The row itself does not emit clicks unless `clickable` is enabled.

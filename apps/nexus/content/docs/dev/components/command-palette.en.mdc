@@ -10,8 +10,6 @@ verified: true
 ---
 # CommandPalette
 
-Command palette for global shortcuts, plugin entries, and search actions. Use it for Raycast / uTools-style keyboard-first launchers.
-
 ## Launcher Scenario
 
 ::TuffDemoWrapper{demo="CommandPaletteCommandPaletteDemo" code-lang="vue"}

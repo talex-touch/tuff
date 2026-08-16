@@ -10,8 +10,6 @@ verified: true
 ---
 # ImageGallery 图片预览
 
-`TxImageGallery` 渲染图片缩略图网格，点击缩略图后打开 `TxModal` 预览。它适合每张图片都可以直接渲染缩略图的小型图库。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}

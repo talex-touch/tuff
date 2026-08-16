@@ -10,8 +10,6 @@ verified: true
 ---
 # Scroll
 
-`TxScroll` is the current scroll container powered by `@better-scroll/scroll-bar`, with native-mode fallbacks for platform-specific scrolling behavior.
-
 ## Behavior Notes
 
 - **BetterScroll Mode**

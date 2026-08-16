@@ -10,10 +10,6 @@ verified: true
 ---
 # Breadcrumb
 
-`TxBreadcrumb` renders a semantic breadcrumb trail for hierarchical navigation. Items can be native links, manual click targets, disabled entries, or the current page.
-
-Reviewed against `packages/tuffex/packages/components/src/breadcrumb/src/types.ts`, `TxBreadcrumb.vue`, and `breadcrumb.test.ts`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}

@@ -10,8 +10,6 @@ verified: true
 ---
 # Select
 
-`TuffSelect` renders a Popover-backed dropdown for primitive `string | number` values. It defaults to single select, and `multiple` switches it to array values with tag rendering. Options can be declared with `TuffSelectItem` or passed directly through `options`; the dropdown supports local filtering, remote search, loading / empty states, grouping, inline creation, and custom footer content.
-
 ## Basic Selection
 
 Use the default mode for compact form fields and filters. The trigger is read-only, opens on click, and displays the selected item label after an enabled option is picked.
@@ -330,7 +328,6 @@ code: |
 | `contentPadding` | `number` | `8` | Inner dropdown content spacing. |
 | `optionPadding` | `number` | `0` | Horizontal option inset compensation. |
 | `animation` | `BaseAnchorAnimationOptions` | - | Animation configuration forwarded to Popover / BaseAnchor. |
-| `duration` | `number` | `120` | Dropdown animation duration in milliseconds. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover panel background style. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |

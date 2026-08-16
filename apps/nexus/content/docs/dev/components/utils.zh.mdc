@@ -11,8 +11,6 @@ verified: false
 
 # Utils 工具函数
 
-TuffEx 从 `@talex-touch/tuffex/utils`（同时并入根入口 `@talex-touch/tuffex`）导出一组与具体组件无关的工具函数，覆盖浮层层级、环境守卫、触感反馈、轻提示、对话框编排、动画与安装辅助。它们既是组件内部依赖，也可在业务代码中直接复用。
-
 ```ts
 import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
 ```

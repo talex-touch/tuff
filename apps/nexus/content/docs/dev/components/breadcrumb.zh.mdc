@@ -10,10 +10,6 @@ verified: true
 ---
 # Breadcrumb 面包屑
 
-`TxBreadcrumb` 渲染语义化面包屑路径，用于表达层级导航。条目可以是原生链接、手动点击目标、禁用项或当前页。
-
-已人工核对 `packages/tuffex/packages/components/src/breadcrumb/src/types.ts`、`TxBreadcrumb.vue` 与 `breadcrumb.test.ts`。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}

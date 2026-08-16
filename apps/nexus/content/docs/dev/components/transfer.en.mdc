@@ -11,8 +11,6 @@ verified: true
 
 # Transfer
 
-`TxTransfer` moves entries between a source list and a target list. It is useful for permission assignment, channel selection, and member grouping. The component is controlled, so the host keeps selected keys through `v-model`.
-
 ## Basic Usage
 
 ### Filterable transfer

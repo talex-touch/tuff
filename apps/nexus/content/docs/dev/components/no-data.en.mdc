@@ -10,10 +10,6 @@ verified: true
 ---
 # NoData
 
-`TxNoData` is a thin `TxEmptyState` wrapper with `variant="no-data"` fixed. Use it when a list, table, chart, metric panel, or query result has no records to render.
-
-Reviewed against `packages/tuffex/packages/components/src/no-data/src/TxNoData.vue`, `types.ts`, and `no-data.test.ts`.
-
 ## Basic Usage
 
 ### NoData

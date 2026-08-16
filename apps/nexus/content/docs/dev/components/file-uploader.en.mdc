@@ -10,10 +10,6 @@ verified: true
 ---
 # FileUploader
 
-`TxFileUploader` is a controlled file-selection component. It opens the native file picker, accepts drag-and-drop files, emits normalized file records, and renders a removable selected-file list.
-
-Reviewed against `packages/tuffex/packages/components/src/file-uploader/src/types.ts`, `TxFileUploader.vue`, and `file-uploader.test.ts`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}

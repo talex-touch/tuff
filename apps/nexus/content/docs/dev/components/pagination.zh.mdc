@@ -11,8 +11,6 @@ verified: true
 
 # Pagination 分页
 
-用于数据列表或表格的分页切换。
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

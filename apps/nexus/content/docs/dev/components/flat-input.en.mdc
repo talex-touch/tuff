@@ -10,10 +10,6 @@ verified: true
 ---
 # FlatInput
 
-`FlatInput` is a compact low-emphasis input used by legacy TuffEx surfaces. It supports `v-model`, optional icon or prefix slot content, password mode with Caps Lock detection, and textarea mode.
-
-Reviewed against `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`, `flat-input.test.ts`, and `index.ts`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}

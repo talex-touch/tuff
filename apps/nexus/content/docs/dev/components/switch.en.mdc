@@ -11,8 +11,6 @@ verified: true
 
 # Switch
 
-`TxSwitch` toggles a binary state that applies immediately (on/off, enabled/disabled). Use `TxCheckbox` when the form semantics are "tick now, submit later".
-
 ## Basic Usage
 :::TuffCodeBlock{lang="vue"}
 ---

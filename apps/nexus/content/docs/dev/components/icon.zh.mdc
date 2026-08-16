@@ -11,8 +11,6 @@ verified: true
 
 # Icon 图标
 
-TuffEx 使用 UnoCSS preset-icons 方案，提供丰富的图标支持，并通过 TuffIcon 统一渲染与管理。
-
 ## 基础用法
 
 ### UnoCSS 图标类名

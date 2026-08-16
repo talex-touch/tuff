@@ -10,8 +10,6 @@ verified: true
 ---
 # ErrorState
 
-`TxErrorState` is a shortcut wrapper around `TxEmptyState` with `variant="error"` pre-set. Use it for request failures, system errors, and similar scenarios.
-
 ## Basic Usage
 
 Uses default title and description with action buttons.

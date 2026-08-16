@@ -10,8 +10,6 @@ verified: true
 ---
 # OfflineState
 
-`TxOfflineState` is a thin `TxEmptyState` wrapper with `variant="offline"` fixed. Use it when the app is offline, a network-backed panel cannot load, or a retryable transport error should preserve the current user context.
-
 ## Basic Usage
 
 ### OfflineState

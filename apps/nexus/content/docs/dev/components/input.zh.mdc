@@ -11,8 +11,6 @@ verified: true
 
 # Input 输入
 
-轻量单行 / 多行文本输入，用于表单行、工具栏和列表筛选。需要 Enter 触发搜索或防抖远程搜索时改用 `TxSearchInput`；需要带步进按钮的数值录入时用 `TxNumberInput`。
-
 ## 基础用法
 
 ### 基础输入

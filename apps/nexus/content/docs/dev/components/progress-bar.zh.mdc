@@ -10,10 +10,6 @@ verified: true
 ---
 # ProgressBar 进度条
 
-`TxProgressBar` 覆盖已知百分比、未知时长加载、成功/错误完成文案、分段进度、tooltip 标签与可选动效。
-
-已人工核对 `packages/tuffex/packages/components/src/progress-bar/src/types.ts`、`TxProgressBar.vue` 与 `progress-bar.test.ts`。
-
 ## Demo
 
 ### 状态进度

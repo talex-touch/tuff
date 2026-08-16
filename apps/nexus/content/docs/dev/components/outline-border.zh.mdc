@@ -10,8 +10,6 @@ verified: true
 ---
 # OutlineBorder 描边容器
 
-`TxOutlineBorder` 用于给任意 slot 内容包一层可配置的 border 或 CSS ring。组件自身不渲染图片或头像；内容由调用方提供，内部裁切策略也由调用方选择。
-
 ## 基础用法
 
 头像类描边优先使用 `ring-offset`；希望描边参与布局尺寸时使用 `border`。

@@ -10,8 +10,6 @@ verified: true
 ---
 # ContextMenu
 
-`TxContextMenu` is a general menu overlay. It can bind to the native `contextmenu` event and open from controlled coordinates. Positioning, collision handling, Card surface, and motion are now hosted by `TxBaseAnchor` through virtual-anchor mode, so the menu follows the latest position when users right-click repeatedly. The visual/content part is also available as `TxContextMenuPanel`, so the same menu items can be embedded inside `TxPopover` or any custom overlay.
-
 ## Basic Usage
 
 ### ContextMenu
@@ -207,7 +205,6 @@ The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates
 | `showArrow` | `boolean` | `false` | Shows an arrow pointing to the coordinate anchor. |
 | `arrowSize` | `number` | `10` | Arrow size. |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Enter/leave animation. Supports `transfer`, `boom`, `opacity`, and `none`. |
-| `duration` | `number` | `160` | Backward-compatible animation duration; prefer `animation.duration`. |
 | `keepAliveContent` | `boolean` | `true` | Preserves content state after close. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background effect. |

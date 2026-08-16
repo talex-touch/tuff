@@ -10,8 +10,6 @@ verified: true
 ---
 # CodeEditor
 
-`TxCodeEditor` is a client-loaded CodeMirror 6 wrapper. It keeps the heavy runtime out of server rendering, exposes a `v-model` string, and provides JSON/YAML formatting and linting while still supporting TOML, INI, and JavaScript highlighting/basic editing.
-
 ## Basic Usage
 
 Use `language` to select the CodeMirror language package. JSON and YAML receive formatter and linter support; the other languages provide highlighting and editor behavior.

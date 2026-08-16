@@ -10,8 +10,6 @@ verified: true
 ---
 # TuffLogoStroke Logo 描边
 
-`TxTuffLogoStroke` 以动画 SVG 方式渲染当前 Tuff Logo。适合品牌露出、空态点缀和 onboarding 场景，让静态 logo 之外多一层轻量动态反馈。
-
 ## 动画模式
 
 `once` 在挂载时播放一次描边入场；`breathe` 和 `loop` 会在入场后保持轻微呼吸；`hover` 等用户悬停时才触发动画。

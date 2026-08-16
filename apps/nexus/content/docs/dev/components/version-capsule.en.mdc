@@ -10,9 +10,6 @@ verified: true
 ---
 # VersionCapsule
 
-`TxVersionCapsule` is a split pill with two independent segments: the left segment downloads the current build, the right segment opens release history. Each segment anchors its own panel below itself — the download panel (`TxVersionDownloadPanel`) leads with a trust notice above the build list, and the history panel (`TxVersionHistoryPanel`) features the latest release above older rows. It replaces the old single version pill that opened a full-screen modal and hid its warning behind a hover card.
-
-
 ## Basic Usage
 
 ### VersionCapsule

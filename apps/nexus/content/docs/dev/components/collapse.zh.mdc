@@ -10,10 +10,6 @@ verified: true
 ---
 # Collapse 折叠面板
 
-`TxCollapse` 通过 `v-model` 管理展开面板名称。`TxCollapseItem` 渲染语义化按钮标题和带过渡的内容区域。
-
-已人工核对 `packages/tuffex/packages/components/src/collapse/src/types.ts`、`TxCollapse.vue`、`TxCollapseItem.vue` 与 `collapse.test.ts`。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}

@@ -10,8 +10,6 @@ verified: true
 ---
 # MarkdownEditor
 
-`TxMarkdownEditor` edits Markdown in three modes: WYSIWYG, source, and preview. It renders Markdown with `marked`, sanitizes HTML through DOMPurify by default, and serializes rich editing content back to Markdown.
-
 ## Basic Usage
 
 ### MarkdownEditor

@@ -10,8 +10,6 @@ verified: true
 ---
 # KeyframeStrokeText
 
-`TxKeyframeStrokeText` renders text as layered SVG `<text>` nodes: one hidden measurement layer, one animated stroke layer, and one delayed fill layer. Use it for short hero words, brand marks, onboarding titles, or celebratory labels where the text itself is the visual object.
-
 ## Basic Usage
 
 Use short text and tune stroke/fill colors through props. Numeric `fontSize` values become pixels.

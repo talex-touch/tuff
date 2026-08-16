@@ -11,9 +11,6 @@ verified: true
 
 # Skeleton 骨架屏
 
-> 加载中结构提示，避免内容跳动。
-
-
 ## Demo
 ### Skeleton
 文本与头像混合占位

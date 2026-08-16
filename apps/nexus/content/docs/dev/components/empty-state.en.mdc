@@ -10,8 +10,6 @@ verified: true
 ---
 # EmptyState
 
-`TxEmptyState` renders a compact feedback panel for pages, tables, detail panes, and onboarding steps that do not have content to show yet. Use a preset `variant` for common states, then override the text, icon, or actions only when the local context needs more specific copy.
-
 ## Basic Usage
 
 ### EmptyState (variant)

@@ -10,10 +10,6 @@ verified: true
 ---
 # BaseSurface
 
-Unified background rendering component — supports `pure`, `mask`, `blur`, `glass`, and `refraction` modes, with a built-in motion degradation mechanism that automatically resolves the well-known Chromium `backdrop-filter` + `transform` invalidation bug.
-
-Supports `fake` pseudo-element rendering mode (consistent with the existing `.fake-background` utility). Dark mode switches automatically via the CSS variable system.
-
 ## Relationship with TxCard
 
 - Use `TxCard` for out-of-the-box product usage (header/footer/loading/inertial/interaction states).
@@ -120,7 +116,7 @@ code: |
 
 When `blur` or `glass` mode elements are in a CSS `transform` animation, `backdrop-filter` becomes invalidated (known Chromium bug).
 
-Use the `moving` prop for manual control, or `auto-detect` for automatic transform detection. The component degrades to `fallbackMode` (default `mask`) during motion and smoothly recovers afterward.
+Use the `moving` prop for manual control, or `auto-detect` for automatic transform detection. The component degrades to `fallbackMode` (default `mask`) during motion and smoothly recovers afterward. Refraction degrades per layer: the sampling-stale glass / blur layers fade themselves out while a translucent motion cover holds the visual weight, then cross-fade back on settle — nothing near-opaque ever covers the surface.
 
 Click the button to trigger real `transform` movement on both blur and glass cards. The cards contain scrollable content inside.
 

@@ -11,8 +11,6 @@ verified: true
 
 # Divider 分割线
 
-`TxDivider` 用于在内容之间建立轻量分组关系，支持水平分割、文字分割、虚线、渐变透明分割和行内垂直分隔。Drawer 内部 Header / Footer 分割线也复用该组件。
-
 ## 基础用法
 
 ### Basic Divider

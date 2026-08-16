@@ -11,8 +11,6 @@ verified: true
 
 # Toast 提示
 
-轻量通知提示（类似 shadcn/sonner）。需要在应用根部挂载一次 `<TxToastHost />`，然后在任意位置调用 `toast()`。
-
 ## 基础用法
 
 ### Toast

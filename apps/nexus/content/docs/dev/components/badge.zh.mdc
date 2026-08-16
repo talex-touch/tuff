@@ -11,10 +11,6 @@ verified: true
 
 # Badge 徽标
 
-`TxBadge` 渲染紧凑的内联 pill 或圆点提示。它不是目标元素包装型徽标；默认插槽会替换徽标内容，而不是把徽标定位到另一个元素周围。
-
-已人工核对 `packages/tuffex/packages/components/src/badge/src/types.ts`、`TxBadge.vue` 与 `badge.test.ts`。
-
 ## 基础用法
 
 ### 徽标样式

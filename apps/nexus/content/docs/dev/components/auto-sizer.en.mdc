@@ -10,13 +10,6 @@ verified: true
 ---
 # AutoSizer
 
-Automatically follows content width and height changes with resize and FLIP transitions.
-
-Typical scenarios:
-
-- Smooth outer height transitions when switching Tabs content
-- Smooth width transitions when a Button toggles `loading`
-
 > Built on `ResizeObserver`. When images/async rendering change size, it re-measures automatically.
 
 ## Basic Usage

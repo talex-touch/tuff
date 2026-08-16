@@ -10,8 +10,6 @@ verified: true
 ---
 # MarkdownView Markdown 渲染
 
-`TxMarkdownView` 通过 `marked` 渲染 GitHub-flavored Markdown。默认开启 sanitize：组件会等待 DOMPurify 就绪后再写入生成的 HTML；只有内容已经可信时才应设置 `sanitize=false`。
-
 ## 基础用法
 
 `content` 是唯一输入源字符串。组件内部已启用 GFM 与软换行。

@@ -10,10 +10,6 @@ verified: true
 ---
 # Stagger 依次进入
 
-`TxStagger` 包装 Vue `TransitionGroup`，并给每个渲染子节点注入 index CSS 变量，让 enter 和 leave 动画按项目顺序延迟。
-
-已人工核对 `packages/tuffex/packages/components/src/stagger/src/types.ts`、`TxStagger.vue` 与 `stagger.test.ts`。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="StaggerStaggerDemo" code-lang="vue"}

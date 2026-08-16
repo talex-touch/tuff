@@ -10,8 +10,6 @@ verified: true
 ---
 # ChatComposer
 
-`TxChatComposer` renders a controlled chat textarea with attachment chips, guarded send behavior, keyboard shortcuts, and customizable action rows. It is intentionally transport-agnostic: hosts own message persistence, upload state, and submit side effects.
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

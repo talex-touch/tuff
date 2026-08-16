@@ -10,10 +10,6 @@ verified: true
 ---
 # Form
 
-`TxForm` provides the validation context for form fields. `TxFormItem` registers itself with the nearest form, resolves field rules, renders the label/message layout, and exposes field-level validation through the parent form instance.
-
-Reviewed against `packages/tuffex/packages/components/src/form/src/types.ts`, `TxForm.vue`, `TxFormItem.vue`, `context.ts`, and `form.test.ts`.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}

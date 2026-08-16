@@ -10,8 +10,6 @@ verified: true
 ---
 # FlatSelect
 
-`TxFlatSelect` is for short, stable single-select lists (roughly 3–6 options) — the kind of dropdown you can take in at a glance on settings pages and toolbars. It expands ComboBox-style, overlaying the trigger with the current selection anchored in place, and deliberately skips search, remote data, and grouping; switch to `TxSelect` once you need those or the list grows.
-
 ## Basic Usage
 
 Click the trigger — the dropdown expands outward from the selected item position. The selected item displays a checkmark.

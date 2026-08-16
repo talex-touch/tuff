@@ -10,8 +10,6 @@ verified: true
 ---
 # Radio
 
-`TxRadioGroup` coordinates a set of `TxRadio` items for one primitive `string | number` value. Use the button style for compact segmented choices, the standard style for familiar form rows, and the card style when each option needs supporting copy.
-
 ## Standard Single-Select
 
 Standard radios render a dot indicator and label. `direction="row"` keeps short choices compact, while column direction remains available for longer lists.

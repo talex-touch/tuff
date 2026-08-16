@@ -10,8 +10,6 @@ verified: true
 ---
 # GradientBorder 渐变边框
 
-`TxGradientBorder` 会给任意内容包上一层旋转渐变边框，同时把内部布局完全交给调用方控制。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="GradientBorderGradientBorderDemo" code-lang="vue"}

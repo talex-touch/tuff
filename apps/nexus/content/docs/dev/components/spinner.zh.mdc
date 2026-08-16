@@ -10,8 +10,6 @@ verified: true
 ---
 # Spinner 加载
 
-`TxSpinner` 表示时长不确定的短等待——按钮、行内状态或遮罩里那一小圈转动。有确定的百分比或阶段进度时用 `TxProgressBar`，整块首屏加载用 `TxLoadingState`；只有等待短、又给不出百分比时才用它。
-
 ## 基础用法
 
 ### Spinner

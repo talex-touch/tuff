@@ -10,8 +10,6 @@ verified: true
 ---
 # Transition 动效
 
-`TxTransition` 统一了 Tuffex 组件使用的动效预设：它封装 Vue `Transition` / `TransitionGroup`，把时长与缓动映射为 CSS 变量，并在需要尺寸感知的内容变化时切换到 `TxTransitionSmoothSize`。
-
 ## 内容切换（X）
 
 ### Transition Content

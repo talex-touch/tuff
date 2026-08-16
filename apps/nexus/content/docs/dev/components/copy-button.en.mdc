@@ -10,10 +10,6 @@ verified: true
 ---
 # CopyButton
 
-`TxCopyButton` copies a string to the clipboard and temporarily switches its label after success. It uses `navigator.clipboard.writeText` when available and falls back to a hidden textarea plus `document.execCommand('copy')`.
-
-Reviewed against `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue` and `copy-button.test.ts`.
-
 ## Basic Usage
 
 ### CopyButton

@@ -10,8 +10,6 @@ verified: true
 ---
 # SegmentedSlider 分段滑块
 
-`TxSegmentedSlider` 把有限的取值列表铺在类似滑块的轨道上，适合取值离散、且希望在选择过程中始终可见的场景；连续数值用 `TxSlider`，选项过长或动态时用 `TxSelect`。
-
 ## 基础用法
 
 ### SegmentedSlider

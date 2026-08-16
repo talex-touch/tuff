@@ -10,9 +10,8 @@ verified: true
 ---
 # TypingIndicator
 
-`TxTypingIndicator` renders a polite status region with a compact animated indicator. Use `variant` to match the chat surface density and set `showText=false` when surrounding UI already labels the pending state.
-
 ### TypingIndicator
+
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---
 code: |

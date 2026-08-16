@@ -11,10 +11,6 @@ verified: true
 
 # Badge
 
-`TxBadge` renders a compact inline pill or dot indicator. It is intentionally not a target-wrapper badge; the default slot replaces the badge content instead of positioning the badge around another element.
-
-Reviewed against `packages/tuffex/packages/components/src/badge/src/types.ts`, `TxBadge.vue`, and `badge.test.ts`.
-
 ## Basic Usage
 
 ### Badge Variants

@@ -10,10 +10,6 @@ verified: true
 ---
 # PermissionState
 
-`TxPermissionState` is a thin `TxEmptyState` wrapper with `variant="permission"` fixed. Use it when the current user lacks permission, authorization, workspace membership, or a required entitlement for the requested content.
-
-Reviewed against `packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue`, `types.ts`, and `permission-state.test.ts`.
-
 ## Basic Usage
 
 ### PermissionState

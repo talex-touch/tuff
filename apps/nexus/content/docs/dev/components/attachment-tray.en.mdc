@@ -10,10 +10,6 @@ verified: true
 ---
 # Attachment Tray
 
-`TxAttachmentTray` renders the attachments on a message: images as a clickable grid, files as chips with sizes. It serves two surfaces — pending attachments in a composer, where they can be removed or their upload cancelled, and read-only attachments on a sent message.
-
-Manually verified against `packages/tuffex/packages/components/src/attachment-tray/src/TxAttachmentTray.vue`.
-
 ## Basic Usage
 
 ### Attachment Tray

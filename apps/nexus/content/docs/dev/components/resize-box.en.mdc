@@ -10,8 +10,6 @@ verified: true
 ---
 # ResizeBox
 
-`TxResizeBox` transitions its root element between explicit `width` and `height` targets. It is useful when the parent already knows both layout states and needs a predictable CSS size transition.
-
 > `TxResizeBox` does not measure slot content and does not use `ResizeObserver`. Use [`TxAutoSizer`](./auto-sizer.en.mdc) when content changes should be measured automatically.
 
 ## Basic Usage

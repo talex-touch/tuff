@@ -10,8 +10,6 @@ verified: true
 ---
 # ResizeBox 显式尺寸动画
 
-`TxResizeBox` 让根元素在显式 `width` 与 `height` 目标之间过渡。它适合父组件已经知道两种布局尺寸，并需要可预测 CSS 尺寸动画的场景。
-
 > `TxResizeBox` 不测量插槽内容，也不使用 `ResizeObserver`。内容变化需要自动测量时，请使用 [`TxAutoSizer`](./auto-sizer.zh.mdc)。
 
 ## 基础用法

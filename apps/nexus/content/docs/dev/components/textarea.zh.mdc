@@ -10,10 +10,6 @@ verified: true
 ---
 # Textarea
 
-`TxTextarea` 是独立多行输入。相比 `TuffInput type="textarea"`，它更适合需要直接控制 textarea 属性、字数统计、resize 行为或暴露聚焦方法的场景。
-
-已人工核对 `packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` 与 `textarea.test.ts`。
-
 ## 基础用法
 
 ### Textarea

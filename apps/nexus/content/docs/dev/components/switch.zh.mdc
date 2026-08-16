@@ -11,8 +11,6 @@ verified: true
 
 # Switch 开关
 
-`TxSwitch` 用于即时生效的二元状态切换（开/关、启用/停用）。需要「先勾选、后提交」的表单语义时用 `TxCheckbox`。
-
 ## 基础用法
 :::TuffCodeBlock{lang="vue"}
 ---

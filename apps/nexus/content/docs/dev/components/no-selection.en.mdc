@@ -10,10 +10,6 @@ verified: true
 ---
 # NoSelection
 
-`TxNoSelection` is a thin `TxEmptyState` wrapper with `variant="no-selection"` fixed. Use it for detail panels, inspectors, split views, and dashboards where the user must select a row or object before details can render.
-
-Reviewed against `packages/tuffex/packages/components/src/no-selection/src/TxNoSelection.vue`, `types.ts`, and `no-selection.test.ts`.
-
 ## Basic Usage
 
 ### NoSelection

@@ -10,8 +10,6 @@ verified: true
 ---
 # SearchEmpty
 
-`TxSearchEmpty` is a shortcut wrapper around `TxEmptyState` with `variant="search-empty"` pre-set. Use it when a query returns no results or filters exclude every item.
-
 ## Basic Usage
 
 ### SearchEmpty

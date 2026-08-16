@@ -10,10 +10,6 @@ verified: true
 ---
 # Form 表单
 
-`TxForm` 提供字段校验上下文。`TxFormItem` 会注册到最近的表单，解析字段规则，渲染 label / message 布局，并通过父表单实例暴露字段级校验能力。
-
-已人工核对 `packages/tuffex/packages/components/src/form/src/types.ts`、`TxForm.vue`、`TxFormItem.vue`、`context.ts` 与 `form.test.ts`。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}

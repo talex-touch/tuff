@@ -10,8 +10,6 @@ verified: true
 ---
 # GridLayout
 
-`TxGridLayout` arranges repeated cards or panels into an auto-fit CSS Grid and can add a cursor-following spotlight effect to children marked with `.tx-grid-layout__item`.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="GridLayoutGridLayoutDemo" code-lang="vue"}

@@ -10,10 +10,6 @@ verified: true
 ---
 # Tool Confirmation
 
-`TxToolConfirmation` 在模型执行工具前请求用户授权：展示工具名、风险等级、可选的摘要与入参预览，并给出允许 / 拒绝两个动作。
-
-已人工核对 `packages/tuffex/packages/components/src/tool-confirmation/src/TxToolConfirmation.vue`。
-
 ## 基础用法
 
 ### Tool Confirmation

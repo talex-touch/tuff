@@ -10,8 +10,6 @@ verified: true
 ---
 # MarkdownView Markdown
 
-`TxMarkdownView` renders GitHub-flavored Markdown through `marked`. Sanitization is enabled by default: the component waits for DOMPurify before writing generated HTML, and `sanitize=false` should be reserved for content that is already trusted.
-
 ## Basic Usage
 
 Use `content` as the single source string. `marked` is configured with GFM and soft line breaks enabled.

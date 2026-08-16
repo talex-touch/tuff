@@ -10,8 +10,6 @@ verified: true
 ---
 # GlowText 扫光
 
-`TxGlowText` 为文本、徽章、图片预览与紧凑表面叠加扫光高光。需要将高光裁切到字形时使用 `mode="text-clip"`；容器级微光则保持默认的 `adaptive` 模式。
-
 > 默认启用 `adaptive` 模式（容器级扫光，适合图片/卡片）；文本建议使用 `mode="text-clip"`，扫光会裁切到文字字形。
 >
 > `text-clip` 当前采用右 -> 左扫动方向（与 ShinyText 参考效果一致）。

@@ -10,9 +10,6 @@ verified: true
 ---
 # Tabs
 
-Use `TxTabs` to switch between related product sections with left, right, top, or bottom navigation. Pair it with `TxTabItem`, optional `TxTabItemGroup`, and optional `TxTabHeader` when the active panel needs contextual chrome.
-
-
 ## Basic Usage
 
 ### Tabs

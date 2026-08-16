@@ -10,10 +10,6 @@ verified: true
 ---
 # StatusBadge
 
-`TxStatusBadge` renders compact status text with a tone icon, optional platform icon, and a normalized `statusKey` mapping for permission or backend status enums.
-
-Reviewed against `packages/tuffex/packages/components/src/status-badge/src/types.ts`, `TxStatusBadge.vue`, and `status-badge.test.ts`.
-
 ## Demo
 
 ### Status Signals

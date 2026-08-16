@@ -10,8 +10,6 @@ verified: true
 ---
 # CommandPalette 命令面板
 
-用于全局快捷指令、插件入口和搜索动作的命令面板，适合构建 Raycast / uTools 风格的键盘优先启动器。
-
 ## 启动器场景
 
 ::TuffDemoWrapper{demo="CommandPaletteCommandPaletteDemo" code-lang="vue"}

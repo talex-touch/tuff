@@ -10,10 +10,6 @@ verified: true
 ---
 # Avatar
 
-`TxAvatar` displays a user image, brand mark, initials fallback, icon fallback, or custom slot content. `TxAvatarGroup` stacks avatar children, injects a shared size when needed, and renders a `+N` overflow avatar when `max` hides extra entries.
-
-Reviewed against `packages/tuffex/packages/components/src/avatar/src/types.ts`, `TxAvatar.vue`, `TxAvatarGroup.vue`, and `avatar.test.ts`.
-
 ## Basic Usage
 
 ### Avatar

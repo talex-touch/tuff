@@ -10,8 +10,6 @@ verified: true
 ---
 # SegmentedSlider
 
-`TxSegmentedSlider` maps a finite list of values onto a slider-like track. Use it when the values are discrete and should stay visible while the user changes selection; reach for `TxSlider` for continuous values and `TxSelect` for long or dynamic lists.
-
 ## Basic Usage
 
 ### SegmentedSlider

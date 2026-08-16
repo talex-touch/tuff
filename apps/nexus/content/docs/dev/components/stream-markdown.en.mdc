@@ -10,10 +10,6 @@ verified: true
 ---
 # Stream Markdown
 
-`TxStreamMarkdown` renders Markdown that is still being generated: it splits the document into blocks so appended text does not reflow the whole page, shows a cursor at the tail, and lets fenced code blocks be handed to custom components by language.
-
-Manually verified against `packages/tuffex/packages/components/src/stream-markdown/src/TxStreamMarkdown.vue`.
-
 ## Basic Usage
 
 ### Stream Markdown

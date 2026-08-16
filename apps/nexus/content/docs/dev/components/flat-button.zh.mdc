@@ -11,10 +11,6 @@ verified: true
 
 # FlatButton 扁平按钮
 
-`TuffFlatButton` 是带低强调样式的原生 `<button type="button">`。它保留按钮语义，在 disabled 或 loading 时阻断点击，范围也刻意小于 `TxButton`。
-
-已人工核对 `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`、`index.ts` 与 `flat-button.test.ts`。
-
 ## 基础用法
 
 ### 扁平按钮

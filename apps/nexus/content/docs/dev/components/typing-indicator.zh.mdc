@@ -10,9 +10,8 @@ verified: true
 ---
 # TypingIndicator 打字中
 
-`TxTypingIndicator` 渲染带 `aria-live="polite"` 的状态区域和紧凑动画指示器。通过 `variant` 匹配聊天界面密度；只有周边 UI 已经说明等待状态时才设置 `showText=false`。
-
 ### TypingIndicator
+
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---
 code: |

@@ -10,10 +10,6 @@ verified: true
 ---
 # Reasoning Disclosure
 
-`TxReasoningDisclosure` 把模型的思考过程收进一个可折叠区块：进行中显示思考球与「Thinking…」，结束后换成灯泡图标并给出耗时。
-
-已人工核对 `packages/tuffex/packages/components/src/reasoning-disclosure/src/TxReasoningDisclosure.vue`。
-
 ## 基础用法
 
 ### Reasoning Disclosure

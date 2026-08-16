@@ -11,8 +11,6 @@ verified: true
 
 # LayoutSkeleton
 
-`TxLayoutSkeleton` is a page/panel-level layout placeholder: the wrapper controls the size while the component fills it and renders a fixed header + sidebar + content-row scaffold. Use it for page-level loading where the final layout shape is stable; do not use it as a replacement for table rows.
-
 ## Basic Usage
 
 ### Layout Placeholder

@@ -10,10 +10,6 @@ verified: true
 ---
 # Context Indicator
 
-`TxContextIndicator` 用一个小环加一行文字表示上下文窗口已用比例，并在接近上限时改变配色。适合放在输入框旁或对话工具栏里。
-
-已人工核对 `packages/tuffex/packages/components/src/context-indicator/src/TxContextIndicator.vue`。
-
 ## 基础用法
 
 ### Context Indicator

@@ -10,8 +10,6 @@ verified: true
 ---
 # OutlineBorder
 
-`TxOutlineBorder` wraps arbitrary slot content with a configurable border or CSS ring. It does not render an image or avatar by itself; callers provide the content and choose whether the inner layer is clipped.
-
 ## Basic Usage
 
 Use `ring-offset` for avatar-style outlines and `border` when the outline should participate in layout.

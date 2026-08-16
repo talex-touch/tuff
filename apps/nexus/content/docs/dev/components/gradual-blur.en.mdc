@@ -10,8 +10,6 @@ verified: true
 ---
 # GradualBlur
 
-`TxGradualBlur` stacks masked `backdrop-filter` layers to create a directional edge fade. Presets provide common edge strengths, while explicit props override preset values for precise parent or page overlays.
-
 ## Basic Usage
 
 ### GradualBlur

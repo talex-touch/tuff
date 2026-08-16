@@ -10,10 +10,6 @@ verified: true
 ---
 # ImageUploader 图片上传
 
-`TxImageUploader` 是受控图片选择器。它打开原生文件 input，为本地选择图片创建 object URL，渲染预览块，并在删除或卸载时释放自己创建的 object URL。
-
-已人工核对 `packages/tuffex/packages/components/src/image-uploader/src/types.ts`、`TxImageUploader.vue` 与 `image-uploader.test.ts`。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}

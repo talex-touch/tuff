@@ -10,8 +10,6 @@ verified: true
 ---
 # MarkdownEditor
 
-`TxMarkdownEditor` 支持 WYSIWYG、source 与 preview 三种 Markdown 编辑模式。组件使用 `marked` 渲染 Markdown，默认通过 DOMPurify 净化 HTML，并能把富文本编辑区域序列化回 Markdown。
-
 ## 基础用法
 
 ### MarkdownEditor

@@ -10,8 +10,6 @@ verified: true
 ---
 # SearchInput 搜索输入框
 
-`TxSearchInput` 把搜索框常见的那套零件——搜索图标、清除按钮、Enter 触发 `search`、可选的防抖远程搜索——打包进一个输入框，省得你在裸 `TuffInput` 上逐个接线。只需要纯文本录入时用 `TuffInput`；需要结果落进可选择的下拉面板时用 `TxSearchSelect`。
-
 ## 基础用法
 
 ### SearchInput

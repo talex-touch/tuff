@@ -10,10 +10,6 @@ verified: true
 ---
 # Conversation Stream
 
-`TxConversationStream` 是会话消息的滚动容器：虚拟化长列表、流式输出时吸在底部、滚到顶部时向上加载更早的消息。它只管布局与滚动，消息本身由 `item` 插槽渲染。
-
-已人工核对 `packages/tuffex/packages/components/src/conversation-stream/src/TxConversationStream.vue`。
-
 ## 基础用法
 
 ### Conversation Stream

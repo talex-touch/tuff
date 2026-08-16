@@ -10,10 +10,6 @@ verified: true
 ---
 # SortableList
 
-`TxSortableList` renders an ordered list and emits a reordered array when the user drags one item onto another. Use it for small to medium user-managed lists where native HTML5 Drag & Drop is acceptable.
-
-Reviewed against `packages/tuffex/packages/components/src/sortable-list/src/types.ts`, `TxSortableList.vue`, and `sortable-list.test.ts`.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}

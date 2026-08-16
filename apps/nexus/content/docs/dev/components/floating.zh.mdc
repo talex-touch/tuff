@@ -10,8 +10,6 @@ verified: true
 ---
 # Floating 浮动层
 
-`TxFloating` 跟踪鼠标和触摸位置，并按容器中心计算相对坐标。`TxFloatingElement` 注册绝对定位图层，并根据每个图层的 `depth` 应用缓动的 `translate3d` 位移。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}

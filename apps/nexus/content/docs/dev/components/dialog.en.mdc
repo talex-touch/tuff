@@ -11,8 +11,6 @@ verified: true
 
 # Dialog
 
-Dialogs surface important information and confirmations, including BottomDialog / BlowDialog / PopperDialog / TouchTip variants.
-
 ## BottomDialog
 
 Bottom-aligned dialog with customizable buttons and motion.

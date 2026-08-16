@@ -10,10 +10,6 @@ verified: true
 ---
 # PermissionState 权限不足
 
-`TxPermissionState` 是固定 `variant="permission"` 的轻量 `TxEmptyState` 封装。适合当前用户缺少权限、授权、工作区成员身份或目标内容所需权益的场景。
-
-已人工核对 `packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue`、`types.ts` 与 `permission-state.test.ts`。
-
 ## 基础用法
 
 ### PermissionState

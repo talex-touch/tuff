@@ -10,8 +10,6 @@ verified: true
 ---
 # Modal
 
-`TxModal` renders a centered dialog in `body` through `Teleport`. Use it for short confirmations, compact forms, or decisions that must temporarily block the page behind it. `TModal` is a lightweight compatibility wrapper around the same implementation.
-
 ## Basic Usage
 
 Open the dialog from a button, keep the body concise, and close it by updating the bound model.

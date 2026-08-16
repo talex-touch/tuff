@@ -10,10 +10,6 @@ verified: true
 ---
 # Stack
 
-`TxStack` is a one-dimensional layout primitive for form sections, button groups, compact panel content, and simple vertical or horizontal rhythm.
-
-Reviewed against `packages/tuffex/packages/components/src/stack/src/types.ts`, `TxStack.vue`, and `stack.test.ts`.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="StackStackDemo" code-lang="vue"}

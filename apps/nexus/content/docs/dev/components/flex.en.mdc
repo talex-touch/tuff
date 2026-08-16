@@ -10,8 +10,6 @@ verified: true
 ---
 # Flex
 
-`TxFlex` is a thin Flexbox primitive for direct control over direction, alignment, wrapping, inline display, and gap. It maps props to CSS variables instead of adding behavior.
-
 ## Basic Usage
 
 :::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}

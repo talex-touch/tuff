@@ -10,10 +10,6 @@ verified: true
 ---
 # Tool Call Card
 
-`TxToolCallCard` shows a tool call end to end: name, status and a one-line summary when collapsed; input, streaming logs and the result when expanded, with a retry affordance on failure.
-
-Manually verified against `packages/tuffex/packages/components/src/tool-call-card/src/TxToolCallCard.vue`.
-
 ## Basic Usage
 
 ### Tool Call Card

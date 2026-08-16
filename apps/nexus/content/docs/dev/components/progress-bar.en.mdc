@@ -10,10 +10,6 @@ verified: true
 ---
 # ProgressBar
 
-`TxProgressBar` covers known percentages, unknown-duration loading, success/error completion labels, segmented progress, tooltip labels, and optional motion effects.
-
-Reviewed against `packages/tuffex/packages/components/src/progress-bar/src/types.ts`, `TxProgressBar.vue`, and `progress-bar.test.ts`.
-
 ## Demo
 
 ### Stateful Progress

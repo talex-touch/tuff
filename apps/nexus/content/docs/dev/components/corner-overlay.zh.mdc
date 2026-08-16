@@ -10,8 +10,6 @@ verified: true
 ---
 # CornerOverlay 角标覆盖层
 
-`TxCornerOverlay` 包裹一段行内内容，并在角落渲染可选覆盖层。它适合头像状态点、认证标记、未读角标和缩略图注记。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}

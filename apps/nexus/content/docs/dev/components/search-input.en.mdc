@@ -10,8 +10,6 @@ verified: true
 ---
 # SearchInput
 
-`TxSearchInput` packs the usual search-field parts — a search icon, a clear button, Enter-to-`search`, and optional debounced remote search — into one field so you don't wire them onto a bare `TuffInput` yourself. Use plain `TuffInput` when you only need text entry, and `TxSearchSelect` when matches should drop into a selectable result panel.
-
 ## Basic Usage
 
 ### SearchInput

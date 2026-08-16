@@ -10,10 +10,6 @@ verified: true
 ---
 # Tool Confirmation
 
-`TxToolConfirmation` asks the user to authorize a tool call before it runs. It shows the tool name, a risk level, an optional summary and an input preview, and offers allow and deny.
-
-Manually verified against `packages/tuffex/packages/components/src/tool-confirmation/src/TxToolConfirmation.vue`.
-
 ## Basic Usage
 
 ### Tool Confirmation

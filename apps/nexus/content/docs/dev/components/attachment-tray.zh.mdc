@@ -10,10 +10,6 @@ verified: true
 ---
 # Attachment Tray
 
-`TxAttachmentTray` 渲染一条消息携带的附件：图片排成可点开的网格，文件排成带大小的胶囊。它同时服务两个场景——输入框里的待发送附件（可移除、可取消上传）和已发出消息里的只读附件。
-
-已人工核对 `packages/tuffex/packages/components/src/attachment-tray/src/TxAttachmentTray.vue`。
-
 ## 基础用法
 
 ### Attachment Tray

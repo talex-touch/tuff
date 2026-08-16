@@ -10,10 +10,6 @@ verified: true
 ---
 # Thinking Orb
 
-`TxThinkingOrb` 用 canvas 画一颗微动的球，表示模型正在思考。它有 9 种形态，默认每次挂载随机取一种——「一次思考一颗球」。
-
-已人工核对 `packages/tuffex/packages/components/src/thinking-orb/src/TxThinkingOrb.vue`。
-
 ## 基础用法
 
 ### Thinking Orb

@@ -10,8 +10,6 @@ verified: true
 ---
 # Flex 弹性布局
 
-`TxFlex` 是轻量 Flexbox 基础组件，用于直接控制方向、对齐、换行、行内 display 和 gap。它把 props 映射为 CSS 变量，不额外添加行为。
-
 ## 基础用法
 
 :::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}

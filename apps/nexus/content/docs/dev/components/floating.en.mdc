@@ -10,8 +10,6 @@ verified: true
 ---
 # Floating
 
-`TxFloating` tracks mouse and touch position relative to its container. `TxFloatingElement` registers absolutely positioned layers and applies eased `translate3d` movement based on each layer's `depth`.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}

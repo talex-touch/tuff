@@ -10,8 +10,6 @@ verified: true
 ---
 # LoadingOverlay 加载遮罩
 
-当内容应保持可见，仅需在加载、保存、同步或长时间操作期间临时阻塞时，使用 `LoadingOverlay`。
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

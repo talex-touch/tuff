@@ -10,8 +10,6 @@ verified: true
 ---
 # ImageGallery
 
-`TxImageGallery` renders an image thumbnail grid and opens a `TxModal` preview when a thumbnail is clicked. It is best for small gallery sets where every image can be rendered as a thumbnail.
-
 ## Basic Usage
 
 ::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}

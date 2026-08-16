@@ -10,10 +10,6 @@ verified: true
 ---
 # Chain of Thought
 
-`TxChainOfThought` 把一次回答里的思考与工具调用串成一条可折叠时间线，每步有自己的状态与可选正文。
-
-已人工核对 `packages/tuffex/packages/components/src/chain-of-thought/src/TxChainOfThought.vue`。
-
 ## 基础用法
 
 ### Chain of Thought

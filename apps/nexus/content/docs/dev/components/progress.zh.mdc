@@ -10,10 +10,6 @@ verified: true
 ---
 # Progress 进度
 
-`TuffProgress` 是标准线性进度行的轻量兼容入口。它把较小的 prop 集转发给 `TxProgressBar`，固定使用外部文本、plain mask 样式，并把 `strokeWidth` 映射为进度条高度。
-
-已人工核对 `packages/tuffex/packages/components/src/progress/src/TxProgress.vue`、`progress.test.ts` 与 `index.ts`。
-
 ## Demo
 
 ### 进度状态

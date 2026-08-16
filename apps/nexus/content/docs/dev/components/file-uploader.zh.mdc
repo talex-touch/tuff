@@ -10,10 +10,6 @@ verified: true
 ---
 # FileUploader 文件上传
 
-`TxFileUploader` 是受控文件选择组件。它可以打开原生文件选择器、接收拖拽文件、发出标准化文件记录，并渲染可删除的已选文件列表。
-
-已人工核对 `packages/tuffex/packages/components/src/file-uploader/src/types.ts`、`TxFileUploader.vue` 与 `file-uploader.test.ts`。
-
 ## 基础用法
 
 ::::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}

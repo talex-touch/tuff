@@ -10,10 +10,6 @@ verified: true
 ---
 # AI Elements
 
-`TxAiConversation` 与 `TxAiMessage` 用于渲染按角色区分的 AI 对话记录。组件的数据契约很小：每条消息需要 `id`、`role` 和 `content`，可选补充名称、头像、时间戳与状态。
-
-已人工核对 `packages/tuffex/packages/components/src/ai-elements/src/types.ts`、`TxAiConversation.vue` 与 `TxAiMessage.vue`。
-
 ## 对话列表
 
 宿主已经维护消息数组，只需要统一的对话排版时使用 `TxAiConversation`。
