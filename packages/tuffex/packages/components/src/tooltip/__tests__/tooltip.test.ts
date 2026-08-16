@@ -38,27 +38,21 @@ describe('txTooltip', () => {
     expect(keepAliveWrapper.find('.tx-base-anchor-stub').attributes('data-keep-alive-content')).toBe('true')
   })
 
-  it('forwards default anchor animation as object config', () => {
-    const wrapper = mount(TxTooltip, {
+  it('zooms with boom by default and passes overrides through untouched', () => {
+    // True tooltips (hint layer) pin a symmetric boom; only the family members
+    // riding this component on other layers delegate to the anchor default.
+    const bare = mount(TxTooltip, {
       slots: { default: '<button>reference</button>' },
       global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
     })
+    expect(bare.findComponent(BaseAnchorStub).props('animation')).toEqual({ type: 'boom' })
 
-    expect(wrapper.findComponent(BaseAnchorStub).props('animation')).toEqual({
-      type: 'transfer',
-      duration: 432,
-      ease: 'back.out(2)',
-    })
-  })
-
-  it('merges legacy anchor duration and ease into animation fallback', () => {
-    const wrapper = mount(TxTooltip, {
-      props: { anchor: { duration: 260, ease: 'power2.out' } },
+    const custom = mount(TxTooltip, {
+      props: { anchor: { animation: { type: 'transfer', duration: 260, ease: 'power2.out' } } },
       slots: { default: '<button>reference</button>' },
       global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
     })
-
-    expect(wrapper.findComponent(BaseAnchorStub).props('animation')).toEqual({
+    expect(custom.findComponent(BaseAnchorStub).props('animation')).toEqual({
       type: 'transfer',
       duration: 260,
       ease: 'power2.out',

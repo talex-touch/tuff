@@ -118,7 +118,9 @@ const onDemandImportBudgets = [
   },
   {
     subpath: 'button',
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'popover', 'spinner'],
+    // `tooltip` rides in behind `popover`: TxPopover is now a TxTooltip
+    // specialisation, so anything reaching the popover reaches the tooltip too.
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'popover', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap', 'v-wave'],
   },
   {
@@ -127,7 +129,8 @@ const onDemandImportBudgets = [
   },
   {
     subpath: 'select',
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'glass-surface', 'input', 'popover', 'search-input', 'select', 'spinner'],
+    // `tooltip` rides in behind `popover` — see the button entry above.
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'glass-surface', 'input', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {

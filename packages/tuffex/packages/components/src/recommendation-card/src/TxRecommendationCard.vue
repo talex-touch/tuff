@@ -104,7 +104,9 @@ function accept(): void {
     <div class="tx-bui-recommendation-card__head">
       <span class="tx-bui-recommendation-card__title">{{ title }}</span>
       <p :key="active.key" class="tx-bui-recommendation-card__body">
-        <slot name="body" :option="active">{{ active.text }}</slot>
+        <slot name="body" :option="active">
+{{ active.text }}
+</slot>
       </p>
     </div>
 

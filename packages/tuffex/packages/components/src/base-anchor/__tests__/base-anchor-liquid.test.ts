@@ -5,6 +5,7 @@ import {
   beadSpanAt,
   createCubicBezier,
   createLiquidMetrics,
+  createSpringEase,
   DETACH_AT,
   easeOutCubic,
   easeSlopeAt,
@@ -16,6 +17,7 @@ import {
   NECK_CLIP_MIN,
   neckClipAt,
   parseCubicBezier,
+  parseSpringEase,
   peelAt,
   peelSlopeAt,
   resolveLiquidEase,
@@ -92,6 +94,62 @@ describe('baseAnchorLiquid: cubic-bezier', () => {
     // An explicit curve is still honoured.
     const curved = resolveLiquidEase('cubic-bezier(0.23, 1, 0.32, 1)', LIQUID_DEFAULTS.ease)
     expect(curved(0.5)).toBeCloseTo(createCubicBezier(0.23, 1, 0.32, 1)(0.5), 10)
+  })
+})
+
+describe('baseAnchorLiquid: spring', () => {
+  it('starts at rest, overshoots once, and lands on exactly 1', () => {
+    const ease = createSpringEase(10, 0.72)
+    expect(ease(0)).toBe(0)
+    expect(ease(1)).toBe(1)
+
+    const samples = Array.from({ length: 201 }, (_, i) => ease(i / 200))
+    const peak = Math.max(...samples)
+    const peakAt = samples.indexOf(peak) / 200
+
+    // One clean bounce: a few percent past the target, mid-timeline...
+    expect(peak).toBeGreaterThan(1.02)
+    expect(peak).toBeLessThan(1.12)
+    expect(peakAt).toBeGreaterThan(0.3)
+    expect(peakAt).toBeLessThan(0.6)
+
+    // ...then an exponential settle. The signal still oscillates through 1, so
+    // the deviation itself is not monotone — its ENVELOPE is: from any point
+    // past the peak, the worst deviation still to come never grows.
+    const start = Math.ceil(peakAt * 200)
+    const suffixMax: number[] = []
+    let worst = 0
+    for (let i = 200; i >= start; i -= 1) {
+      worst = Math.max(worst, Math.abs(samples[i]! - 1))
+      suffixMax[i] = worst
+    }
+    for (let i = start; i < 200; i += 1)
+      expect(suffixMax[i]!).toBeGreaterThanOrEqual(suffixMax[i + 1]! - 1e-9)
+    expect(Math.abs(ease(0.95) - 1)).toBeLessThan(0.01)
+  })
+
+  it('heavier damping trades bounce for glide', () => {
+    const bouncy = createSpringEase(10, 0.6)
+    const damped = createSpringEase(10, 0.95)
+    const peakOf = (ease: (t: number) => number) =>
+      Math.max(...Array.from({ length: 201 }, (_, i) => ease(i / 200)))
+    expect(peakOf(bouncy)).toBeGreaterThan(peakOf(damped))
+    expect(peakOf(damped)).toBeLessThan(1.01)
+  })
+
+  it('parses the spring vocabulary and nothing else', () => {
+    expect(parseSpringEase('spring')).toBeTypeOf('function')
+    expect(parseSpringEase('spring(10, 0.72)')).toBeTypeOf('function')
+    expect(parseSpringEase('SPRING(8)')).toBeTypeOf('function')
+
+    // Defaults flow in for the short forms.
+    expect(parseSpringEase('spring')!(0.45)).toBeCloseTo(createSpringEase()(0.45), 12)
+    expect(parseSpringEase('spring(10)')!(0.45)).toBeCloseTo(createSpringEase(10, 0.72)(0.45), 12)
+
+    expect(parseSpringEase('back.out(2)')).toBeNull()
+    expect(parseSpringEase('cubic-bezier(0.32, 0.72, 0, 1)')).toBeNull()
+    expect(parseSpringEase('spring()')).toBeNull()
+    expect(parseSpringEase(undefined)).toBeNull()
   })
 })
 

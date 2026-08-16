@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ContextMenuOpenTarget, ContextMenuPoint, ContextMenuProps } from './types'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { TxBaseAnchor } from '../../base-anchor'
+import TxPopover from '../../popover/src/TxPopover.vue'
 import TxContextMenuPanel from './TxContextMenuPanel.vue'
 
 defineOptions({ name: 'TxContextMenu' })
@@ -30,7 +30,6 @@ const props = withDefaults(defineProps<ContextMenuProps>(), {
   showArrow: false,
   arrowSize: 10,
   animation: () => ({}),
-  duration: 160,
   keepAliveContent: true,
   panelVariant: 'solid',
   panelBackground: 'refraction',
@@ -47,7 +46,7 @@ const emit = defineEmits<{
 
 const internalOpen = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
-const anchorRef = ref<InstanceType<typeof TxBaseAnchor> | null>(null)
+const anchorRef = ref<InstanceType<typeof TxPopover> | null>(null)
 const panelRef = ref<InstanceType<typeof TxContextMenuPanel> | null>(null)
 const point = ref<ContextMenuPoint>({ x: props.x, y: props.y })
 const lastOpenedAt = ref(0)
@@ -326,9 +325,10 @@ defineExpose({
     </slot>
   </div>
 
-  <TxBaseAnchor
+  <TxPopover
     ref="anchorRef"
     class="tx-context-menu"
+    trigger="manual"
     :model-value="open"
     :disabled="disabled"
     :eager="eager"
@@ -341,17 +341,15 @@ defineExpose({
     :max-height="maxHeight"
     :unlimited-height="unlimitedHeight"
     :match-reference-width="false"
+    :show-arrow="showArrow"
+    :arrow-size="arrowSize"
     :animation="animation"
-    :duration="duration"
-    :use-card="true"
     :panel-variant="panelVariant"
     :panel-background="panelBackground"
     :panel-shadow="panelShadow"
     :panel-radius="panelRadius"
     :panel-padding="panelPadding"
     :panel-card="panelCard"
-    :show-arrow="showArrow"
-    :arrow-size="arrowSize"
     :keep-alive-content="keepAliveContent"
     :close-on-click-outside="closeOnClickOutside"
     :close-on-esc="closeOnEsc"
@@ -374,7 +372,7 @@ defineExpose({
         <slot name="menu" />
       </TxContextMenuPanel>
     </template>
-  </TxBaseAnchor>
+  </TxPopover>
 </template>
 
 <style lang="scss" scoped>

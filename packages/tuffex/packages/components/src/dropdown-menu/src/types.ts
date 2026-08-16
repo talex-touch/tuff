@@ -13,10 +13,16 @@ export type DropdownPlacement
 export interface DropdownMenuProps {
   modelValue?: boolean
   placement?: DropdownPlacement
+  /**
+   * How the trigger opens the menu. Forwarded to TxPopover, which owns the
+   * hover handling for both the reference and the panel — so a hover dropdown
+   * gets the shared delay service's timing and preemption rather than needing
+   * the host to hand-roll a close timer.
+   */
+  trigger?: 'click' | 'hover'
   offset?: number
   closeOnSelect?: boolean
   animation?: BaseAnchorAnimationOptions
-  duration?: number
 
   minWidth?: number
   maxHeight?: number
