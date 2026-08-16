@@ -3,7 +3,7 @@
   "waivers": [
     {
       "id": "json-formatter-monaco-editor-core-size",
-      "fileSha256": "1286fcb9561f383398bc561796e456fa65d74cf419fa3f18b97356c9d175f257",
+      "fileSha256": "e10e09303e88721fda624196ce736eb4c94307f61f3905f252d05537d7cc7056",
       "ruleId": "PLUGIN_SCAN_FILE_LIMIT_EXCEEDED",
       "owner": "TalexTouch Team",
       "reason": "Monaco 编辑器核心包 3.7MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，内容由 monaco-editor 0.55.1 锁定。",
@@ -21,7 +21,7 @@
     },
     {
       "id": "json-formatter-expression-query-eval",
-      "fileSha256": "cdf0bafc4846bcd8a889fc17f21f0f903febb4eedc3086bc09e79d87a79ea034",
+      "fileSha256": "65bf704baabd8dcad9835ddec65d2bb12c7bb0257974ea69a866e2d6e24bc8cc",
       "ruleId": "PLUGIN_SCAN_DYNAMIC_EXECUTION",
       "owner": "TalexTouch Team",
       "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。",
