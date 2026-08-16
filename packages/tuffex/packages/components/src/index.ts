@@ -1,5 +1,6 @@
 import type { App, Plugin } from 'vue'
 import * as components from './components'
+import { provideAnchorDelayService } from '../../utils/anchor-delay'
 import { provideZIndexAllocator } from '../../utils/z-index-manager'
 import '../style/index.scss'
 
@@ -10,6 +11,11 @@ function install(app: App) {
   // One allocator per app. Vue SSR builds an app per request, so this is what
   // keeps overlay z-indexes from leaking across requests in a server process.
   provideZIndexAllocator(app)
+
+  // Same reasoning: the delay service's registry holds which overlays are open,
+  // so sharing one across requests would let a menu opened by one request
+  // suppress a tooltip in another.
+  provideAnchorDelayService(app)
 
   for (const key in components) {
     const candidate = (components as Record<string, unknown>)[key] as Plugin | undefined

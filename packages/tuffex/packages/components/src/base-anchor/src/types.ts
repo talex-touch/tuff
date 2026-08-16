@@ -8,15 +8,45 @@ export type BaseAnchorPlacement
 
 export type BaseAnchorSurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
 
-export type BaseAnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none' | 'drip' | 'bead'
+export type BaseAnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none' | 'drip' | 'bead' | 'expand'
+
+/**
+ * Exit-phase geometry. Each field falls back to the shared field of the same
+ * name when the caller set one, and to the close type's own table otherwise.
+ *
+ * This exists because `scale` means opposite things per type — `boom` starts
+ * above 1 and shrinks in, `expand` starts below 1 and grows out — so a composite
+ * that shared a single value would be wrong at one end by construction.
+ */
+export interface BaseAnchorExitGeometry {
+  scale?: number
+  distance?: number
+  blur?: number
+  opacity?: number
+}
 
 export interface BaseAnchorAnimationOptions {
   type?: BaseAnchorAnimationType
+  /**
+   * Type used while closing. Defaults to `type`, so omitting it keeps the run
+   * symmetric and is exactly the historical behaviour.
+   *
+   * `drip` / `bead` share prepare/apply frame state across both directions, so a
+   * half-liquid pair is rejected: the mismatched phase falls back to `type` and
+   * warns in dev rather than stranding the stage mid-run.
+   */
+  closeType?: BaseAnchorAnimationType
+  exit?: BaseAnchorExitGeometry
   duration?: number
   closeDuration?: number
   ease?: string
   closeEase?: string
   distance?: number
+  /**
+   * `boom`: start scale of the zoom (default 1.08, shrinks in).
+   * `expand`: start scale of the settle (default 0.97, grows out) — the panel
+   * finishes growing around the corner facing the reference.
+   */
   scale?: number
   blur?: number
   opacity?: number
@@ -94,11 +124,20 @@ export interface BaseAnchorProps {
   matchReferenceWidth?: boolean
   referenceClass?: BaseAnchorClassValue
   virtualReference?: BaseAnchorVirtualReference
+  /**
+   * Drop the `flip` middleware, so the panel keeps the side `placement` asks
+   * for instead of jumping to the opposite one near a viewport edge. `shift`
+   * still slides it back into view, so it stays on screen either way.
+   *
+   * Intended for a `virtualReference` the caller re-measures itself — a text
+   * selection or a caret, where a bar that changes sides mid-edit reads as a
+   * different control. Leave it off for ordinary triggers: flipping is the
+   * better default when the reference is a fixed element.
+   */
+  disableFlip?: boolean
 
   // animation
   animation?: BaseAnchorAnimationOptions
-  duration?: number
-  ease?: string
 
   // panel styling
   useCard?: boolean

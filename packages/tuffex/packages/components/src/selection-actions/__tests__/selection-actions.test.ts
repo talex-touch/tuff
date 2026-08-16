@@ -1,6 +1,6 @@
 import type { SelectionPayload } from '../src/types'
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import TxSelectionActions from '../src/TxSelectionActions.vue'
 
 function rect(top: number, bottom: number, left: number, right: number): DOMRect {

@@ -1,4 +1,4 @@
-import type { BaseAnchorAnimationOptions, BaseAnchorClassValue, BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+import type { BaseAnchorAnimationOptions, BaseAnchorClassValue, BaseAnchorPanelCardProps, BaseAnchorVirtualReference } from '../../base-anchor/src/types'
 
 export type PopoverPlacement
   = | 'top'
@@ -31,11 +31,15 @@ export interface PopoverProps {
   showArrow?: boolean
   arrowSize?: number
 
-  trigger?: 'click' | 'hover'
+  /** `manual` binds no reference interactions: the host drives `modelValue`. */
+  trigger?: 'click' | 'hover' | 'manual'
   openDelay?: number
   closeDelay?: number
   animation?: BaseAnchorAnimationOptions
-  duration?: number
+  /** Anchor to an arbitrary rect (pointer position, selection) instead of the reference slot. */
+  virtualReference?: BaseAnchorVirtualReference
+  /** Explicit override; when unset, panels with no fixed width match the reference. */
+  matchReferenceWidth?: boolean
   keepAliveContent?: boolean
   toggleOnReferenceClick?: boolean
 

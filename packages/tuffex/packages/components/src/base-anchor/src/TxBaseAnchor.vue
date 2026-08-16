@@ -29,9 +29,8 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   unlimitedHeight: false,
   matchReferenceWidth: false,
   virtualReference: undefined,
+  disableFlip: false,
   animation: () => ({}),
-  duration: 432,
-  ease: 'back.out(2)',
   useCard: true,
   panelVariant: 'plain',
   panelBackground: 'refraction',
@@ -127,51 +126,61 @@ let runId = 0
 /* ─── floating-ui ─── */
 const floatingReference = computed(() => props.virtualReference ?? referenceRef.value)
 
+/**
+ * A computed rather than a literal so `disableFlip` can be answered at runtime;
+ * floating-ui re-runs positioning when the list identity changes. Nothing else
+ * in here reads a reactive source during construction — `offset` is a getter,
+ * `size.apply` and `arrow.element` are both resolved inside the middleware run —
+ * so the only thing that can invalidate this list is `disableFlip` itself.
+ */
+const middleware = computed(() => [
+  offsetMw(() => props.offset),
+  ...(props.disableFlip ? [] : [flip({ padding: 8 })]),
+  shift({ padding: 8 }),
+  size({
+    padding: 8,
+    apply({ rects, availableHeight, elements }) {
+      const baseW = rects.reference.width
+      const minW = Math.max(0, props.minWidth ?? 0)
+
+      const style = elements.floating.style
+      style.width = ''
+      style.minWidth = ''
+
+      if (props.width > 0) {
+        style.width = `${props.width}px`
+      }
+      else if (props.matchReferenceWidth) {
+        style.width = `${Math.max(baseW, minW)}px`
+      }
+      else if (minW > 0) {
+        style.minWidth = `${minW}px`
+      }
+
+      // An explicit `width` is a deliberate override and must not be silently
+      // re-clamped by the default `maxWidth` (360): `:width="480"` should render
+      // 480, not 360. Only bound derived widths (reference-matched / min / intrinsic).
+      style.maxWidth = props.width > 0 ? '' : `${props.maxWidth}px`
+      if (isUnlimitedHeight.value) {
+        elements.floating.style.setProperty('--tx-ba-max-height', 'none')
+        return
+      }
+      const maxH = Math.max(0, Math.min(availableHeight, props.maxHeight))
+      elements.floating.style.setProperty('--tx-ba-max-height', `${maxH}px`)
+    },
+  }),
+  arrow({ element: arrowRef, padding: 6 }),
+])
+
 const { floatingStyles, middlewareData, placement, update } = useFloating(floatingReference as any, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
   transform: false,
-  middleware: [
-    offsetMw(() => props.offset),
-    flip({ padding: 8 }),
-    shift({ padding: 8 }),
-    size({
-      padding: 8,
-      apply({ rects, availableHeight, elements }) {
-        const baseW = rects.reference.width
-        const minW = Math.max(0, props.minWidth ?? 0)
-
-        const style = elements.floating.style
-        style.width = ''
-        style.minWidth = ''
-
-        if (props.width > 0) {
-          style.width = `${props.width}px`
-        }
-        else if (props.matchReferenceWidth) {
-          style.width = `${Math.max(baseW, minW)}px`
-        }
-        else if (minW > 0) {
-          style.minWidth = `${minW}px`
-        }
-
-        // An explicit `width` is a deliberate override and must not be silently
-        // re-clamped by the default `maxWidth` (360): `:width="480"` should render
-        // 480, not 360. Only bound derived widths (reference-matched / min / intrinsic).
-        style.maxWidth = props.width > 0 ? '' : `${props.maxWidth}px`
-        if (isUnlimitedHeight.value) {
-          elements.floating.style.setProperty('--tx-ba-max-height', 'none')
-          return
-        }
-        const maxH = Math.max(0, Math.min(availableHeight, props.maxHeight))
-        elements.floating.style.setProperty('--tx-ba-max-height', `${maxH}px`)
-      },
-    }),
-    arrow({ element: arrowRef, padding: 6 }),
-  ],
+  middleware,
 })
 
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
+const alignment = computed(() => (placement.value?.split('-')[1] ?? 'center') as 'start' | 'end' | 'center')
 const floatingClass = computed<BaseAnchorClassValue | undefined>(
   () => (attrs as Record<string, unknown>).class as BaseAnchorClassValue | undefined,
 )
@@ -193,10 +202,14 @@ const panelCardProps = computed<Partial<TxCardProps>>(() => {
     : props.surfaceMotionAdaptation === 'manual'
       ? props.panelCard?.surfaceMoving
       : false
+  // The refraction veil is driven by `glassOverlayOpacity` (via the surface's
+  // overlay-opacity input); `maskOpacity` never reaches refraction mode — the
+  // 0.78 this used to pass was dead intent, which left panels at a ~0.19 veil
+  // with barely any material body. 0.38 lands the frosted presence at ~0.42
+  // effective while the 琉光 displacement stays clearly visible through it.
   const refractionSurfaceDefaults = props.panelBackground === 'refraction'
     ? {
-        glassOverlayOpacity: 0.15,
-        maskOpacity: 0.78,
+        glassOverlayOpacity: 0.38,
       }
     : undefined
   return {
@@ -390,11 +403,10 @@ const {
   contentRef,
   arrowRef,
   side,
+  alignment,
   arrowSize: computed(() => props.arrowSize ?? 10),
   showArrow: computed(() => props.showArrow),
   animation: computed(() => props.animation),
-  duration: computed(() => props.duration),
-  ease: computed(() => props.ease),
   panelBackground: computed(() => props.panelBackground),
   useCard: computed(() => props.useCard),
   keepAliveContent: computed(() => props.keepAliveContent),
@@ -1069,7 +1081,15 @@ onBeforeUnmount(() => {
             class="tx-base-anchor__card"
             v-bind="panelCardProps"
           >
-            <slot :side="side" />
+            <!--
+              Fade layer for the expand motion: Chrome drops a backdrop-filter
+              for as long as any ancestor's opacity animates, so the panel fade
+              must happen INSIDE the card — the glass stays at full opacity and
+              is revealed by the growing box while only this layer fades.
+            -->
+            <div class="tx-base-anchor__body">
+              <slot :side="side" />
+            </div>
           </TxCard>
           <slot v-else :side="side" />
           <svg

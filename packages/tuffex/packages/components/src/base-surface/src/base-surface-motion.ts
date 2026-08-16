@@ -6,14 +6,23 @@ import { clamp, smoothstep01 } from './base-surface-math'
 
 export const SURFACE_MOTION_DURATION_MS = 299
 export const REFRACTION_PARAM_BLEND_DURATION_MS = 182
-export const REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS = 100
-export const REFRACTION_RECOVERY_DURATION_FACTOR = 0.7
+export const REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS = 60
+export const REFRACTION_RECOVERY_DURATION_FACTOR = 0.35
 export const REFRACTION_MASK_RELEASE_DURATION_MS = Math.round(650 * REFRACTION_RECOVERY_DURATION_FACTOR)
 export const REFRACTION_MASK_PEAK_OPACITY = 0.95
+/**
+ * Opacity of the dedicated motion cover while a refraction surface moves.
+ * Deliberately translucent: the sampling-stale filter layers fade themselves
+ * out (layered degradation), so the cover only has to hold the surface's
+ * visual weight — it no longer has to HIDE anything, which is what used to
+ * force it up to the near-opaque mask peak and made the recovery read as a
+ * solid colour slowly draining away.
+ */
+export const REFRACTION_MOTION_COVER_OPACITY = 0.55
 export const REFRACTION_MASK_PEAK_RAMP_DURATION_MS = 180
 export const REFRACTION_EDGE_REVEAL_DELAY_MS = 60
 export const REFRACTION_EDGE_REVEAL_DURATION_MS = 220
-export const REFRACTION_MASK_RELEASE_SLOWDOWN = 1.2
+export const REFRACTION_MASK_RELEASE_SLOWDOWN = 1
 export const REFRACTION_MOVING_PARAM_FLOOR = 0.28
 
 interface UseBaseSurfaceMotionOptions {
@@ -415,6 +424,17 @@ export function useBaseSurfaceMotion(options: UseBaseSurfaceMotionOptions) {
 
   onBeforeUnmount(() => {
     teardownAutoDetect()
+    // Every scheduled callback dies with the component: the settle timer and
+    // the three recovery loops all close over its refs, and firing after
+    // unmount means writing to a dead component (and, under test, calling
+    // requestAnimationFrame in an environment that no longer has one).
+    if (settleTimer !== undefined) {
+      clearTimeout(settleTimer)
+      settleTimer = undefined
+    }
+    stopRefractionEdgeReveal(false)
+    stopRefractionMaskPeakRamp(false)
+    stopRefractionRecovery(false)
   })
 
   return {

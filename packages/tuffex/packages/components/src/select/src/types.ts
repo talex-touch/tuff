@@ -45,7 +45,6 @@ export interface TxSelectProps {
   contentPadding?: number
   optionPadding?: number
   animation?: BaseAnchorAnimationOptions
-  duration?: number
   panelVariant?: 'solid' | 'dashed' | 'plain'
   panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
   panelShadow?: 'none' | 'soft' | 'medium'

@@ -38,7 +38,6 @@ const props = withDefaults(
     dropdownOffset: 6,
     contentPadding: 8,
     optionPadding: 0,
-    duration: 120,
     panelVariant: 'solid',
     panelBackground: 'refraction',
     panelShadow: 'soft',
@@ -670,7 +669,6 @@ onBeforeUnmount(() => {
       trigger="click"
       :toggle-on-reference-click="!isEditable && !isMultiInputEnabled"
       :animation="animation"
-      :duration="duration"
       :panel-variant="panelVariant"
       :panel-background="panelBackground"
       :panel-shadow="panelShadow"

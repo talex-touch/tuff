@@ -38,7 +38,6 @@ export interface ContextMenuProps {
   showArrow?: boolean
   arrowSize?: number
   animation?: BaseAnchorAnimationOptions
-  duration?: number
   keepAliveContent?: boolean
   panelVariant?: ContextMenuPanelVariant
   panelBackground?: ContextMenuPanelBackground

@@ -48,13 +48,15 @@ describe('txFlatDropdown', () => {
     })
   })
 
-  it('opens immediately on hover and reveals the panel', async () => {
+  it('opens on hover and reveals the panel', async () => {
     const wrapper = mountDropdown()
 
     await wrapper.trigger('mouseenter')
+    // The anchor-delay service defers uniformly: openDelay 0 opens on the
+    // next tick, never inside the handler that requested it.
+    vi.advanceTimersByTime(0)
     await wrapper.vm.$nextTick()
 
-    // openDelay 0 → no timer advance required.
     expect(wrapper.emitted('open')).toHaveLength(1)
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([true])
     const panel = wrapper.find('.tx-flat-dropdown__panel')
@@ -66,6 +68,7 @@ describe('txFlatDropdown', () => {
     const wrapper = mountDropdown({ closeDelay: 600 })
 
     await wrapper.trigger('mouseenter')
+    vi.advanceTimersByTime(0)
     await wrapper.vm.$nextTick()
     await wrapper.trigger('mouseleave')
 
@@ -85,6 +88,7 @@ describe('txFlatDropdown', () => {
     const wrapper = mountDropdown({ closeDelay: 100 })
 
     await wrapper.trigger('mouseenter')
+    vi.advanceTimersByTime(0)
     await wrapper.vm.$nextTick()
     await wrapper.trigger('mouseleave')
 
@@ -143,11 +147,13 @@ describe('txFlatDropdown', () => {
   it('does not open while disabled and closes when disabled mid-flight', async () => {
     const disabled = mountDropdown({ disabled: true })
     await disabled.trigger('mouseenter')
+    vi.advanceTimersByTime(0)
     await disabled.vm.$nextTick()
     expect(disabled.find('.tx-flat-dropdown__panel').exists()).toBe(false)
 
     const wrapper = mountDropdown()
     await wrapper.trigger('mouseenter')
+    vi.advanceTimersByTime(0)
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(true)
 

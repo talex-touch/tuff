@@ -88,7 +88,8 @@ describe('txPopover', () => {
       maxHeight: 420,
       unlimitedHeight: false,
       matchReferenceWidth: true,
-      animation: { type: 'transfer', duration: 180, ease: 'power2.out' },
+      // Full delegation: the anchor's own default (spring expand) rules.
+      animation: {},
       panelVariant: 'solid',
       panelBackground: 'refraction',
       panelShadow: 'soft',
@@ -101,6 +102,9 @@ describe('txPopover', () => {
       closeOnEsc: true,
       toggleOnReferenceClick: true,
     })
+
+    // toMatchObject is a subset check; prove nothing is injected at all.
+    expect(anchor.props('animation')).toEqual({})
   })
 
   it('derives offset from arrow settings and supports fixed width panels', () => {
@@ -121,7 +125,9 @@ describe('txPopover', () => {
       openDelay: 30,
       closeDelay: 40,
     })
-    const reference = wrapper.find('.tx-popover__reference')
+    // Hover handlers live on the tooltip layer's wrapper: in a real DOM the
+    // pointer enters it before the inner popover reference.
+    const reference = wrapper.find('.tx-tooltip__reference')
 
     await reference.trigger('mouseenter')
     expect(wrapper.emitted('open')).toBeUndefined()
@@ -149,13 +155,13 @@ describe('txPopover', () => {
       openDelay: 0,
       closeDelay: 20,
     })
-    const reference = wrapper.find('.tx-popover__reference')
+    const reference = wrapper.find('.tx-tooltip__reference')
 
     await reference.trigger('mouseenter')
     vi.runOnlyPendingTimers()
     await wrapper.vm.$nextTick()
 
-    const content = wrapper.find('.tx-popover__content')
+    const content = wrapper.find('[role="none"]')
     await reference.trigger('mouseleave')
     await content.trigger('mouseenter')
     vi.advanceTimersByTime(20)

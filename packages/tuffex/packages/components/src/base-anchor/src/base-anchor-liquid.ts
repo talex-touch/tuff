@@ -220,6 +220,68 @@ export function resolveLiquidEase(value: string | undefined, fallback: string): 
   return createCubicBezier(points[0], points[1], points[2], points[3])
 }
 
+/* ─── spring ─── */
+
+const SPRING_PATTERN = new RegExp(
+  `^spring\\(\\s*(${NUMBER_SOURCE})\\s*(?:,\\s*(${NUMBER_SOURCE})\\s*)?\\)$`,
+  'i',
+)
+
+/**
+ * Closed-form underdamped spring, normalised to the timeline: `omega` is the
+ * undamped angular frequency in radians across the whole duration, `zeta` the
+ * damping ratio. Starts from rest, crosses the target once, overshoots by
+ * roughly `e^(-zeta·omega·π/ωd)` and settles on an exponential tail.
+ *
+ * This exists because a bounce assembled from power segments (`back.out`) has
+ * corners in its velocity — the spring's derivative is smooth everywhere,
+ * which is the difference between 弹 and 弹得丝滑.
+ *
+ * Normalised by its own end value so the curve lands on exactly 1 regardless
+ * of the residual the exponential still carries at t = 1.
+ */
+export function createSpringEase(omega = 10, zeta = 0.72): (t: number) => number {
+  const w = Math.max(1, omega)
+  const z = Math.min(0.999, Math.max(0.05, zeta))
+  const wd = w * Math.sqrt(1 - z * z)
+  const decay = z * w
+  const raw = (x: number) =>
+    1 - Math.exp(-decay * x) * (Math.cos(wd * x) + (decay / wd) * Math.sin(wd * x))
+  const end = raw(1)
+  return (t: number) => {
+    const x = clamp01(t)
+    if (x === 0 || x === 1)
+      return x
+    return raw(x) / end
+  }
+}
+
+/**
+ * Parse `spring` / `spring(omega)` / `spring(omega, zeta)` into a timing
+ * function. Anything else returns null — notably gsap's own vocabulary, which
+ * must keep passing through as strings.
+ */
+export function parseSpringEase(value: string | undefined | null): ((t: number) => number) | null {
+  if (typeof value !== 'string')
+    return null
+
+  const raw = value.trim()
+  if (raw.toLowerCase() === 'spring')
+    return createSpringEase()
+
+  const match = SPRING_PATTERN.exec(raw)
+  if (!match)
+    return null
+
+  const omega = Number.parseFloat(match[1]!)
+  if (!Number.isFinite(omega))
+    return null
+  const zeta = match[2] != null ? Number.parseFloat(match[2]) : undefined
+  if (zeta != null && !Number.isFinite(zeta))
+    return null
+  return createSpringEase(omega, zeta)
+}
+
 /* ─── geometry ─── */
 
 /**

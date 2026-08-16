@@ -2,6 +2,8 @@
 import type { TxFlatDropdownContentSlotProps, TxFlatDropdownProps, TxFlatDropdownTriggerSlotProps } from './types'
 import { autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { useAnchorDelay } from '../../../../utils/anchor-delay'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxFlatDropdown' })
 
@@ -32,6 +34,11 @@ const emit = defineEmits<{
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
 const internalOpen = ref(false)
+
+// Stacking is open-order, not mount-order: every open takes the next z so a
+// later dropdown always covers an earlier one's closing animation.
+const zIndexAllocator = useZIndexAllocator()
+const panelZIndex = ref(zIndexAllocator.get())
 // Stable id so the trigger can advertise the panel it controls via aria-controls.
 const panelId = useId()
 
@@ -98,6 +105,7 @@ const panelStyle = computed(() => [
   floatingStyles.value,
   {
     transformOrigin: transformOrigin.value,
+    zIndex: panelZIndex.value,
     '--tx-fd-exit-duration': `${Math.max(0, props.exitDuration)}ms`,
   },
 ])
@@ -105,44 +113,44 @@ const panelStyle = computed(() => [
 const teleportTarget = computed(() => (typeof props.teleport === 'string' ? props.teleport : 'body'))
 const teleportDisabled = computed(() => props.teleport === false)
 
-/* ─── open / close timing ─── */
-let openTimer: ReturnType<typeof setTimeout> | null = null
-let closeTimer: ReturnType<typeof setTimeout> | null = null
+/* ─── open / close timing: shared anchor-delay service ─── */
+// Registering as a `menu` buys what per-component timers never could: opening
+// this dropdown dismisses tooltips and sibling menus, and other menus dismiss
+// it. The component's own openDelay/closeDelay defaults keep their values as
+// per-anchor overrides. The service defers uniformly (a 0 delay opens on the
+// next tick, not synchronously) — that is its documented scheduling model.
+const delay = useAnchorDelay({
+  layer: 'menu',
+  onOpen: () => { open.value = true },
+  onClose: () => { open.value = false },
+  openDelay: () => props.openDelay,
+  closeDelay: () => props.closeDelay,
+})
+
+// Keeps the registry honest when the state moves without the service:
+// v-model from the host, Escape, outside click, and the imperative API.
+watch(open, (value) => {
+  if (value) {
+    panelZIndex.value = zIndexAllocator.next()
+    delay.openNow()
+  }
+  else {
+    delay.closeNow()
+  }
+})
 
 function clearTimers() {
-  if (openTimer != null)
-    clearTimeout(openTimer)
-  if (closeTimer != null)
-    clearTimeout(closeTimer)
-  openTimer = null
-  closeTimer = null
+  delay.cancel()
 }
 
 function scheduleOpen() {
   if (props.disabled)
     return
-  clearTimers()
-  const delay = Math.max(0, props.openDelay)
-  // openDelay 0 → open synchronously so the panel appears the instant the pointer lands.
-  if (delay === 0) {
-    open.value = true
-    return
-  }
-  openTimer = setTimeout(() => {
-    open.value = true
-  }, delay)
+  delay.requestOpen()
 }
 
 function scheduleClose() {
-  clearTimers()
-  const delay = Math.max(0, props.closeDelay)
-  if (delay === 0) {
-    open.value = false
-    return
-  }
-  closeTimer = setTimeout(() => {
-    open.value = false
-  }, delay)
+  delay.requestClose()
 }
 
 /* ─── trigger interactions ─── */

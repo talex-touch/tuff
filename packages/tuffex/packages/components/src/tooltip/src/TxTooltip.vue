@@ -3,6 +3,7 @@ import type { Slots } from 'vue'
 import type { BaseAnchorProps } from '../../base-anchor/src/types'
 import type { TooltipProps } from './types'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import { useAnchorDelay } from '../../../../utils/anchor-delay'
 import { TxBaseAnchor } from '../../base-anchor'
 
 defineOptions({ name: 'TxTooltip' })
@@ -12,13 +13,18 @@ const props = withDefaults(defineProps<TooltipProps>(), {
   content: '',
   disabled: false,
   trigger: 'hover',
-  openDelay: 200,
-  closeDelay: 120,
+  // Left undefined so the shared `hint` preset supplies them; the preset is
+  // seeded from the 200/120 this component used to hardcode.
+  openDelay: undefined,
+  closeDelay: undefined,
   referenceFullWidth: false,
   interactive: false,
   keepAliveContent: false,
   closeOnClickOutside: undefined,
   toggleOnReferenceClick: undefined,
+  layer: 'hint',
+  role: 'tooltip',
+  unstyled: false,
   anchor: () => ({}),
 })
 
@@ -58,33 +64,44 @@ const open = computed({
   },
 })
 
-let openTimer: number | null = null
-let closeTimer: number | null = null
+/**
+ * Timing and mutual exclusion both live in the shared service now. The delay
+ * numbers are unchanged — the `hint` preset is seeded from what this component
+ * used to hardcode — but a second tooltip opening can close this one without
+ * waiting out its closeDelay, which a per-component timer could never do.
+ */
+const delay = useAnchorDelay({
+  layer: props.layer,
+  onOpen: () => { open.value = true },
+  onClose: () => { open.value = false },
+  openDelay: () => props.openDelay,
+  closeDelay: () => props.closeDelay,
+})
+
+// Keeps the registry honest when the state moves without going through the
+// service: v-model from the host, Escape, or an outside click.
+watch(open, (value) => {
+  if (value)
+    delay.openNow()
+  else
+    delay.closeNow()
+})
 
 function clearTimers() {
-  if (openTimer != null)
-    window.clearTimeout(openTimer)
-  if (closeTimer != null)
-    window.clearTimeout(closeTimer)
-  openTimer = null
-  closeTimer = null
+  delay.cancel()
 }
 
 function scheduleOpen() {
   if (props.disabled)
     return
-  clearTimers()
-  openTimer = window.setTimeout(() => {
-    open.value = true
-  }, Math.max(0, props.openDelay))
+  delay.requestOpen()
 }
 
 function scheduleClose() {
-  clearTimers()
-  closeTimer = window.setTimeout(() => {
-    open.value = false
-  }, Math.max(0, props.closeDelay))
+  delay.requestClose()
 }
+
+const isTooltipRole = computed(() => props.role === 'tooltip')
 
 function onEnter() {
   if (props.trigger !== 'hover')
@@ -143,12 +160,10 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
       ? anchor.toggleOnReferenceClick
       : props.trigger === 'click'
 
-  const animation = {
-    type: 'transfer' as const,
-    duration: anchor.animation?.duration ?? anchor.duration ?? 432,
-    ease: anchor.animation?.ease ?? anchor.ease ?? 'back.out(2)',
-    ...anchor.animation,
-  }
+  // True tooltips (hint layer) zoom in and out with `boom`; the family's
+  // other members riding this component (popover and above) delegate to the
+  // anchor's default expand. Hosts refine either through `anchor.animation`.
+  const animation = anchor.animation ?? (props.layer === 'hint' ? { type: 'boom' as const } : {})
 
   return {
     placement: 'top',
@@ -203,10 +218,17 @@ watch(
 onBeforeUnmount(() => {
   clearTimers()
 })
+
+const anchorRef = ref<InstanceType<typeof TxBaseAnchor> | null>(null)
+
+defineExpose({
+  updatePosition: () => anchorRef.value?.updatePosition?.(),
+})
 </script>
 
 <template>
   <TxBaseAnchor
+    ref="anchorRef"
     v-model="open"
     :disabled="props.disabled"
     v-bind="resolvedAnchorProps"
@@ -215,7 +237,7 @@ onBeforeUnmount(() => {
       <span
         class="tx-tooltip__reference"
         :class="{ 'is-full-width': props.referenceFullWidth }"
-        :aria-describedby="open ? tooltipId : undefined"
+        :aria-describedby="open && isTooltipRole ? tooltipId : undefined"
         @mouseenter="onEnter"
         @mouseleave="onLeave"
         @focusin="onFocusIn"
@@ -228,14 +250,19 @@ onBeforeUnmount(() => {
     <template #default="{ side }">
       <div
         :id="tooltipId"
-        class="tx-tooltip"
+        :class="props.unstyled ? undefined : 'tx-tooltip'"
         :data-side="side"
-        role="tooltip"
-        :style="tooltipVars"
+        :role="props.role"
+        :style="props.unstyled ? undefined : tooltipVars"
         @mouseenter="onFloatingEnter"
         @mouseleave="onFloatingLeave"
       >
-        <div class="tx-tooltip__content">
+        <template v-if="props.unstyled">
+          <slot name="content" :side="side">
+            {{ props.content }}
+          </slot>
+        </template>
+        <div v-else class="tx-tooltip__content">
           <slot name="content" :side="side">
             {{ props.content }}
           </slot>

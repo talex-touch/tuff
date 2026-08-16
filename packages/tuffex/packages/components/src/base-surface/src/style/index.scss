@@ -71,6 +71,29 @@
     opacity: var(--tx-surface-motion-cover-opacity, 0);
   }
 
+  // ---- Layered motion degradation (refraction) ----
+  // While the surface moves, the compositor samples backdrop-filter from a
+  // stale region, so the glass and blur layers fade THEMSELVES out — quickly,
+  // with no delay — and the translucent motion cover holds the weight. On
+  // settle they fade back after a short beat, giving the compositor one paint
+  // to resample; nothing near-opaque ever covers the surface.
+  &.tx-base-surface--refraction .tx-base-surface__layer--glass,
+  &.tx-base-surface--refraction .tx-base-surface__layer--filter {
+    transition:
+      opacity 220ms ease 80ms,
+      background var(--tx-surface-transition, 299ms) ease,
+      backdrop-filter var(--tx-surface-transition, 299ms) ease;
+  }
+
+  &.tx-base-surface--refraction-motion .tx-base-surface__layer--glass,
+  &.tx-base-surface--refraction-motion .tx-base-surface__layer--filter {
+    opacity: 0;
+    transition:
+      opacity 140ms ease,
+      background var(--tx-surface-transition, 299ms) ease,
+      backdrop-filter var(--tx-surface-transition, 299ms) ease;
+  }
+
   .tx-base-surface__content {
     position: relative;
     z-index: 5;

@@ -7,6 +7,7 @@ import { clamp, createSurfaceValueResolver, easeOutQuad, lerp, normalizeAngleDeg
 import {
   REFRACTION_MASK_PEAK_OPACITY,
   REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS,
+  REFRACTION_MOTION_COVER_OPACITY,
   REFRACTION_MASK_RELEASE_DURATION_MS,
   REFRACTION_MASK_RELEASE_SLOWDOWN,
   REFRACTION_MOVING_PARAM_FLOOR,
@@ -409,18 +410,10 @@ const refractionMaskReleaseProgress = computed(() => {
   return clamp(Math.min(timeProgress, effectProgress), 0, 1)
 })
 
-const refractionRestMaskOpacity = computed(() => {
-  const baseOpacity = baseRefractionMaskOpacity.value
-  if (!refractionRecovering.value) {
-    return baseOpacity
-  }
-  const releaseProgress = refractionMaskReleaseProgress.value
-  return lerp(
-    REFRACTION_MASK_PEAK_OPACITY,
-    baseOpacity,
-    releaseProgress ** REFRACTION_MASK_RELEASE_SLOWDOWN,
-  )
-})
+// The mask no longer peaks during motion: the stale filter layers fade
+// themselves out and the translucent motion cover holds the visual weight,
+// so the tint layer has nothing left to hide.
+const refractionRestMaskOpacity = computed(() => baseRefractionMaskOpacity.value)
 
 const refractionRestMotionCoverOpacity = computed(() => {
   if (!refractionRecovering.value) {
@@ -428,7 +421,7 @@ const refractionRestMotionCoverOpacity = computed(() => {
   }
   const releaseProgress = refractionMaskReleaseProgress.value
   return lerp(
-    REFRACTION_MASK_PEAK_OPACITY,
+    REFRACTION_MOTION_COVER_OPACITY,
     0,
     releaseProgress ** REFRACTION_MASK_RELEASE_SLOWDOWN,
   )
@@ -448,9 +441,6 @@ const layerMaskOpacity = computed(() => {
     return clamp(toFinite(props.opacity, 0.75, ['opacity']), 0, 1)
   }
   if (activeMode.value === 'refraction') {
-    if (isMoving.value) {
-      return lerp(refractionRestMaskOpacity.value, REFRACTION_MASK_PEAK_OPACITY, refractionMaskPeakRampProgress.value)
-    }
     return refractionRestMaskOpacity.value
   }
   return clamp(toFinite(props.overlayOpacity, 0, ['overlay-opacity', 'overlayOpacity']), 0, 1)
@@ -461,7 +451,7 @@ const refractionMotionCoverOpacity = computed(() => {
     return 0
   }
   if (isMoving.value) {
-    return lerp(refractionRestMotionCoverOpacity.value, REFRACTION_MASK_PEAK_OPACITY, refractionMaskPeakRampProgress.value)
+    return lerp(refractionRestMotionCoverOpacity.value, REFRACTION_MOTION_COVER_OPACITY, refractionMaskPeakRampProgress.value)
   }
   return refractionRestMotionCoverOpacity.value
 })
@@ -673,6 +663,12 @@ const rootClasses = computed(() => {
   }
   if (showLayerMotionCover.value) {
     classes.push('tx-base-surface--with-motion-cover')
+  }
+  // Layered degradation: while a refraction surface moves, its sampling-stale
+  // filter layers fade THEMSELVES out (see style/index.scss) instead of being
+  // buried under a near-opaque cover.
+  if (activeMode.value === 'refraction' && isMoving.value) {
+    classes.push('tx-base-surface--refraction-motion')
   }
   if (showLayerRefractionEdge.value) {
     classes.push('tx-base-surface--with-refraction-edge')

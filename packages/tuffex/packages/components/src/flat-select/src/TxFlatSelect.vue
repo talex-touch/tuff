@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, provide, ref, useId, watch } from 'vue'
+import { useAnchorDelay } from '../../../../utils/anchor-delay'
 import { FLAT_SELECT_KEY } from './types'
 import type { TxFlatSelectValue } from './types'
 
@@ -111,7 +112,27 @@ function calcClipClosed(): string {
 // instead of letting a stale timer slam the dropdown shut a beat later.
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
+// Mutual exclusion only: the select is click-driven, so it opens and closes
+// with no scheduling — registering as a `menu` is what lets it displace
+// tooltips and sibling menus (and be displaced by them). The settle timer
+// above is exit-animation bookkeeping, not scheduling, and stays local.
+const delay = useAnchorDelay({
+  layer: 'menu',
+  onOpen: () => performOpen(),
+  onClose: () => performClose(),
+})
+
 function open() {
+  if (props.disabled)
+    return
+  delay.openNow()
+}
+
+function close() {
+  delay.closeNow()
+}
+
+function performOpen() {
   if (props.disabled)
     return
   // Bail only when fully open; if a close is still settling (closeTimer pending) this
@@ -139,7 +160,7 @@ function open() {
   })
 }
 
-function close() {
+function performClose() {
   if (!isOpen.value || closeTimer != null) return
 
   isAnimating.value = true

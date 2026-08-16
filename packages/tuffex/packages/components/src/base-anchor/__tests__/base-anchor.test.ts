@@ -7,18 +7,27 @@ import { useBaseAnchorMotion } from '../src/base-anchor-motion'
 import TxBaseAnchor from '../src/TxBaseAnchor.vue'
 
 vi.mock('gsap', () => {
-  const timeline = () => ({
-    to: vi.fn().mockReturnThis(),
-    kill: vi.fn(),
-  })
+  const timelines: Array<{ to: ReturnType<typeof vi.fn>, kill: ReturnType<typeof vi.fn> }> = []
+  const timeline = () => {
+    const instance = { to: vi.fn().mockReturnThis(), kill: vi.fn() }
+    timelines.push(instance)
+    return instance
+  }
 
   return {
     default: {
       set: vi.fn(),
       timeline,
+      __timelines: timelines,
     },
   }
 })
+
+/** Tween recorder attached by the gsap mock above; lets tests inspect timeline.to payloads. */
+function lastTimeline() {
+  const timelines = (gsap as unknown as { __timelines: Array<{ to: ReturnType<typeof vi.fn> }> }).__timelines
+  return timelines.at(-1)
+}
 
 const CardStub = defineComponent({
   name: 'TxCard',
@@ -77,13 +86,10 @@ function createMotion(animation: BaseAnchorAnimationOptions, side: MotionSide = 
     contentRef: ref(null),
     arrowRef: ref(null),
     side: computed(() => side),
+    alignment: computed(() => 'center' as const),
     arrowSize: computed(() => 10),
     showArrow: computed(() => false),
     animation: computed(() => animation),
-    // The legacy props are always populated by withDefaults — that is exactly what
-    // liquid must not inherit.
-    duration: computed(() => 432),
-    ease: computed(() => 'back.out(2)'),
     panelBackground: computed(() => 'refraction'),
     useCard: computed(() => true),
     keepAliveContent: computed(() => false),
@@ -204,7 +210,7 @@ describe('txBaseAnchor', () => {
     expect(floating?.getAttribute('style')).toContain('color: red')
   })
 
-  it('supports animation object variants and legacy duration/ease fallbacks', async () => {
+  it('supports animation object variants', async () => {
     const boom = mountAnchor({
       props: {
         animation: { type: 'boom', duration: 360, scale: 1.12, blur: 18, opacity: 0.12 },
@@ -225,9 +231,7 @@ describe('txBaseAnchor', () => {
 
     const opacity = mountAnchor({
       props: {
-        animation: { type: 'opacity' },
-        duration: 280,
-        ease: 'power2.out',
+        animation: { type: 'opacity', duration: 280, ease: 'power2.out' },
       },
     })
 
@@ -314,6 +318,237 @@ describe('txBaseAnchor', () => {
     expect(floating.style.width).toBe('480px')
     // The default maxWidth (360) must not silently clamp the explicit 480 back down.
     expect(floating.style.maxWidth).toBe('')
+  })
+})
+
+describe('txBaseAnchor expand motion', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    cleanupAnchors()
+  })
+
+  it('is the untyped default, symmetric in both directions', () => {
+    // Decision 08-15: only the tooltip zooms with boom (it pins the type
+    // itself); everything untyped springs open AND closed as expand.
+    expect(createMotion({}).resolvedAnimation.value).toMatchObject({
+      type: 'expand',
+      closeType: 'expand',
+      closeDuration: 240,
+      closeEase: 'power2.in',
+    })
+  })
+
+  it('resolves its own timing when pinned explicitly', () => {
+    expect(createMotion({ type: 'expand' }).resolvedAnimation.value).toMatchObject({
+      type: 'expand',
+      duration: 400,
+      closeDuration: 240,
+      ease: 'spring(10, 0.6)',
+      closeEase: 'power2.in',
+      scale: 0.88,
+      distance: 12,
+    })
+  })
+
+  it('springs open and leaves on plain acceleration, faster than it arrived', () => {
+    const { resolvedAnimation } = createMotion({ type: 'expand' })
+    const { duration, closeDuration, ease, closeEase } = resolvedAnimation.value
+
+    // The bounce is the point: a damped spring on the open...
+    expect(ease).toMatch(/^spring\(/)
+    // ...and a non-overshooting exit that undercuts the entrance.
+    expect(closeEase.endsWith('.in')).toBe(true)
+    expect(closeDuration).toBeLessThan(duration)
+  })
+
+  it('honours explicit overrides and stays expand on every side', () => {
+    const { resolvedAnimation } = createMotion({ type: 'expand', duration: 300, scale: 0.9 })
+    expect(resolvedAnimation.value.duration).toBe(300)
+    expect(resolvedAnimation.value.scale).toBe(0.9)
+
+    // No degradation: the clip reveal is defined on all four sides.
+    for (const side of ['top', 'bottom', 'left', 'right'] as const)
+      expect(createMotion({ type: 'expand' }, side).effectiveAnimationType.value).toBe('expand')
+  })
+
+  it('seeds drift, settle scale, and a bled clip around the anchored corner', async () => {
+    const wrapper = mountAnchor({
+      props: {
+        animation: { type: 'expand' },
+        placement: 'bottom-end',
+      },
+    })
+
+    await wrapper.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+
+    // bottom-end: the panel hangs below the reference, right edges aligned —
+    // so it grows around its top-right corner, drifting down from -12px. The
+    // opacity seeds separately (on the fade layer, never with the transform).
+    expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({
+      x: 0,
+      y: -12,
+      scale: 0.88,
+      transformOrigin: '100% 0%',
+    }))
+    expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({ opacity: 0 }))
+
+    // Reveal edge at the bottom, shadow bleed on the other three sides. The
+    // timeline is mocked so this is the seed frame, untouched by onUpdate.
+    const clip = document.body.querySelector<HTMLElement>('.tx-base-anchor__clip')!
+    expect(clip.style.clipPath).toBe('inset(-40px -40px 100% -40px)')
+    expect(clip.style.overflow).toBe('visible')
+  })
+
+  it('resolves spring and bezier strings to functions; gsap vocabulary passes through', async () => {
+    // Default: spring(10, 0.72) is not gsap vocabulary — it must arrive as a
+    // function, and one that actually overshoots before landing on exactly 1.
+    const spring = mountAnchor({ props: { animation: { type: 'expand' } } })
+    await spring.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+
+    const springTo = lastTimeline()!.to
+    expect(springTo).toHaveBeenCalled()
+    for (const call of springTo.mock.calls) {
+      const vars = call[1] as { ease: unknown, duration: number }
+      expect(vars.duration).toBeCloseTo(0.4, 5)
+      const ease = vars.ease as (t: number) => number
+      expect(typeof ease).toBe('function')
+      expect(ease(0)).toBe(0)
+      expect(ease(1)).toBe(1)
+      const peak = Math.max(...Array.from({ length: 41 }, (_, i) => ease(i / 40)))
+      expect(peak).toBeGreaterThan(1.02)
+      expect(peak).toBeLessThan(1.12)
+    }
+
+    // gsap's own vocabulary is handed over untouched...
+    const native = mountAnchor({
+      props: { animation: { type: 'expand', ease: 'back.out(2)' } },
+    })
+    await native.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+
+    const nativeTo = lastTimeline()!.to
+    expect(nativeTo).toHaveBeenCalled()
+    for (const call of nativeTo.mock.calls)
+      expect((call[1] as { ease: unknown }).ease).toBe('back.out(2)')
+
+    // ...while CSS beziers resolve through the kernel's bezier engine.
+    const bezier = mountAnchor({
+      props: { animation: { type: 'expand', ease: 'cubic-bezier(0.32, 0.72, 0, 1)' } },
+    })
+    await bezier.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+
+    const bezierTo = lastTimeline()!.to
+    expect(bezierTo).toHaveBeenCalled()
+    for (const call of bezierTo.mock.calls) {
+      const ease = (call[1] as { ease: unknown }).ease as (t: number) => number
+      expect(typeof ease).toBe('function')
+      expect(ease(0)).toBe(0)
+      expect(ease(1)).toBe(1)
+      expect(ease(0.6)).toBeGreaterThan(0.85)
+    }
+  })
+
+  it('grows the real box when the panel height is measurable, so the height itself can bounce', async () => {
+    const wrapper = mountAnchor({ props: { eager: true, animation: { type: 'expand' } } })
+    const content = document.body.querySelector<HTMLElement>('.tx-base-anchor__content')!
+    Object.defineProperty(content, 'offsetHeight', { configurable: true, value: 146 })
+
+    await wrapper.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+
+    // Box mode: no clip window at all — the card crops and carries the edge.
+    // All overrides are inline so the motion cannot depend on a stylesheet
+    // having been delivered.
+    const clip = document.body.querySelector<HTMLElement>('.tx-base-anchor__clip')!
+    expect(clip.style.clipPath).toBe('none')
+    expect(clip.dataset.expandFullHeight).toBe('146')
+    expect(content.style.height).toBe('100%')
+    const card = document.body.querySelector<HTMLElement>('.tx-base-anchor__card')!
+    expect(card.style.height).toBe('100%')
+    expect(card.style.overflow).toBe('hidden')
+    // The hairline ring rides the card as an inset shadow while the outline
+    // svg sits out — same colour formula, so the settle swap has no seam.
+    expect(card.style.boxShadow).toContain('inset 0 0 0 1px')
+
+    // The fade lives INSIDE the card: the body seeds at opacity 0 while the
+    // content's transform seed carries no opacity at all — an animated
+    // opacity above the card would make Chrome drop its backdrop-filter.
+    const bodyEl = document.body.querySelector<HTMLElement>('.tx-base-anchor__body')!
+    expect(gsap.set).toHaveBeenCalledWith(bodyEl, expect.objectContaining({ opacity: 0 }))
+    const contentSeed = vi.mocked(gsap.set).mock.calls.find(call =>
+      call[0] === content && 'transformOrigin' in (call[1] as object))
+    expect(contentSeed).toBeTruthy()
+    expect('opacity' in (contentSeed![1] as object)).toBe(false)
+    // Seeded collapsed. The tween drives a PROGRESS proxy, not a pixel
+    // target: the box height is derived per frame from the body's natural
+    // height, so content that finishes rendering mid-flight moves the
+    // landing spot instead of causing a snap at reset.
+    expect(clip.style.height).toBe('0px')
+    const heightTween = lastTimeline()!.to.mock.calls
+      .find(call => call[0] !== content && 'p' in (call[1] as object))
+    expect(heightTween).toBeTruthy()
+    expect((heightTween![1] as { p: number }).p).toBe(1)
+
+    // Closing collapses the same box rather than re-clipping it.
+    await wrapper.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+    const closeTween = lastTimeline()!.to.mock.calls
+      .find(call => call[0] !== content && 'p' in (call[1] as object))
+    expect(closeTween).toBeTruthy()
+    expect((closeTween![1] as { p: number }).p).toBe(0)
+  })
+
+  it('pins the trigger-facing edge on top placements by pairing height with a translate', async () => {
+    const wrapper = mountAnchor({
+      props: { eager: true, placement: 'top', animation: { type: 'expand' } },
+    })
+    const content = document.body.querySelector<HTMLElement>('.tx-base-anchor__content')!
+    Object.defineProperty(content, 'offsetHeight', { configurable: true, value: 146 })
+
+    await wrapper.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+
+    const clip = document.body.querySelector<HTMLElement>('.tx-base-anchor__clip')!
+    // The panel sits above the trigger, so the box hangs from its bottom:
+    // height and translateY move in opposition and their sum stays put.
+    // This is the seed frame (progress 0): fully translated, zero height.
+    expect(clip.style.height).toBe('0px')
+    expect(clip.style.transform).toBe('translateY(146px)')
+    const tween = lastTimeline()!.to.mock.calls.find(call => 'p' in (call[1] as object))
+    expect(tween).toBeTruthy()
+    expect((tween![1] as { p: number }).p).toBe(1)
+  })
+
+  it('keeps the live glass in box mode and only swaps it on the fallback paths', async () => {
+    // Box mode (vertical + card): the glass never sits under an animated
+    // opacity, so the surface swap — and its solid-to-glass settle fade —
+    // must not engage. The mocked timeline never completes, so this is the
+    // mid-motion state.
+    const box = mountAnchor({ props: { animation: { type: 'expand' } } })
+    await box.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+    expect(box.findComponent(CardStub).props('surfaceMoving')).toBe(false)
+
+    // Horizontal placements fall back to the window reveal, which still fades
+    // the whole content — there the swap keeps protecting the backdrop.
+    const fallback = mountAnchor({
+      props: { placement: 'left', animation: { type: 'expand' } },
+    })
+    await fallback.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await vi.dynamicImportSettled()
+    expect(fallback.findComponent(CardStub).props('surfaceMoving')).toBe(true)
   })
 })
 

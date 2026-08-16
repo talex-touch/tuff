@@ -8,10 +8,10 @@ defineOptions({ name: 'TxDropdownMenu' })
 const props = withDefaults(defineProps<DropdownMenuProps>(), {
   modelValue: undefined,
   placement: 'bottom-start',
+  trigger: 'click',
   offset: 6,
   closeOnSelect: true,
   animation: () => ({}),
-  duration: 180,
 
   minWidth: 220,
   maxHeight: 420,
@@ -123,9 +123,9 @@ provide('txDropdownMenu', {
     v-model="open"
     class="tx-dropdown"
     :placement="placement"
+    :trigger="trigger"
     :offset="offset"
     :animation="animation"
-    :duration="duration"
     :width="0"
     :min-width="minWidth"
     :max-width="360"

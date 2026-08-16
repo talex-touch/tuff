@@ -1,3 +1,4 @@
+export * from './anchor-delay'
 export * from './animation/auto-resize'
 export * from './animation/flip'
 export * from './dialog-manager'
