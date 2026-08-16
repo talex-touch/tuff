@@ -12,6 +12,8 @@ const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
 const serviceWorkerPath = join(distRoot, 'sw.js')
 const authHandlerPath = join(nexusRoot, 'server/api/auth/[...].ts')
+const authUtilityPath = join(nexusRoot, 'server/utils/auth.ts')
+const sessionAuthSecretPath = join(nexusRoot, 'server/utils/sessionAuthSecret.ts')
 const oneMiB = 1024 * 1024
 const allowWorkerSourceMaps = isEnvFlagEnabled(process.env.NUXT_ENABLE_NITRO_SOURCEMAP)
 const distBudget = {
@@ -280,7 +282,7 @@ const htmlBoundaryChecks = [
   },
   {
     label: 'auth HTML pulled docs/store/dashboard/landing CSS',
-    routePattern: /^(?:login|sign-in|forgot-password|verify-waiting|device-auth)\/index\.html$/,
+    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\/index\.html$/,
     cssPattern: /docs\.|(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|TuffLanding|PluginMetaHeader/i,
   },
 ]
@@ -327,7 +329,7 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'auth initial assets',
-    routePattern: /^(?:login|sign-in|forgot-password|verify-waiting|device-auth)\/index\.html$/,
+    routePattern: /^(?:login|sign-in|verify-waiting|device-auth)\/index\.html$/,
     maxJsCount: 26,
     maxJsBytes: 720 * 1024,
     maxJsGzipBytes: 235 * 1024,
@@ -689,29 +691,61 @@ function checkAuthHandlerSingleton() {
   const findings = []
 
   if (!existsSync(authHandlerPath))
-    return ['server/api/auth/[...].ts is missing']
+    findings.push('server/api/auth/[...].ts is missing')
+  if (!existsSync(authUtilityPath))
+    findings.push('server/utils/auth.ts is missing')
+  if (!existsSync(sessionAuthSecretPath))
+    findings.push('server/utils/sessionAuthSecret.ts is missing')
+  if (findings.length)
+    return findings
 
-  const source = readFileSync(authHandlerPath, 'utf8')
-  const requiredSnippets = [
+  const authHandlerSource = readFileSync(authHandlerPath, 'utf8')
+  const authUtilitySource = readFileSync(authUtilityPath, 'utf8')
+  const sessionAuthSecretSource = readFileSync(sessionAuthSecretPath, 'utf8')
+  const requiredHandlerSnippets = [
     'const createRequestAuthEvent = () => createAuthEvent()',
+    "import { resolveSessionAuthSecret } from '../../utils/sessionAuthSecret'",
     'let cachedAuthHandler',
     'function getCachedAuthHandler(event: H3Event)',
     'cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions(resolveSessionAuthSecret(event)))',
     'const authHandler = getCachedAuthHandler(event)',
   ]
-  const forbiddenSnippets = [
+  const forbiddenHandlerSnippets = [
     'NuxtAuthHandler(getAuthOptions(event))',
     'function getAuthOptions(event',
   ]
+  const requiredAuthUtilitySnippets = [
+    "import { getToken } from '#auth'",
+    "import { resolveSessionAuthSecret } from './sessionAuthSecret'",
+    'const token = await getToken({',
+    'secureCookie: isSecureSessionCookieRequest(event)',
+  ]
+  const requiredSecretSnippets = [
+    'selectRuntimeCredential(bindings, bindings?.AUTH_SECRET',
+    "assertRuntimeCredential('AUTH_SECRET', secret",
+    'isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings)',
+  ]
 
-  for (const snippet of requiredSnippets) {
-    if (!source.includes(snippet))
+  for (const snippet of requiredHandlerSnippets) {
+    if (!authHandlerSource.includes(snippet))
       findings.push(`missing auth singleton source marker: ${snippet}`)
   }
 
-  for (const snippet of forbiddenSnippets) {
-    if (source.includes(snippet))
+  for (const snippet of forbiddenHandlerSnippets) {
+    if (authHandlerSource.includes(snippet))
       findings.push(`forbidden per-request auth handler marker found: ${snippet}`)
+  }
+
+  for (const snippet of requiredAuthUtilitySnippets) {
+    if (!authUtilitySource.includes(snippet))
+      findings.push(`missing stateless session auth marker: ${snippet}`)
+  }
+  if (authUtilitySource.includes('getServerSession'))
+    findings.push('forbidden handler-state session lookup found: getServerSession')
+
+  for (const snippet of requiredSecretSnippets) {
+    if (!sessionAuthSecretSource.includes(snippet))
+      findings.push(`missing shared AUTH_SECRET marker: ${snippet}`)
   }
 
   return findings

@@ -257,11 +257,7 @@ export default defineNuxtConfig({
       },
       email: {
         from: process.env.AUTH_EMAIL_FROM,
-        server: process.env.AUTH_EMAIL_SERVER,
       },
-    },
-    turnstile: {
-      secretKey: process.env.TURNSTILE_SECRETKEY || process.env.TURNSTILE_SECRET_KEY,
     },
     riskControl: {
       enabled: riskControlFeatureEnabled,
@@ -310,9 +306,6 @@ export default defineNuxtConfig({
       defaultDefenseMode: process.env.ADMIN_DEFAULT_DEFENSE_MODE || 'NORMAL',
     },
     public: {
-      turnstile: {
-        siteKey: process.env.TURNSTILE_SITEKEY || process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY,
-      },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
       },

@@ -115,7 +115,7 @@ export function useNexusAuth() {
   const lastRefreshedAt = useState<Date | undefined>('auth:lastRefreshedAt', () => undefined)
 
   const status = computed<NexusAuthStatus>(() => {
-    if (loading.value)
+    if (loading.value || data.value === undefined)
       return 'loading'
     return data.value ? 'authenticated' : 'unauthenticated'
   })

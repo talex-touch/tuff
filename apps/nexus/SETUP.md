@@ -159,7 +159,7 @@ pnpm preview:cf -- --port 8791
    - `ADMIN_EMERGENCY_JWT_SECRET`
    - `ADMIN_CONTROL_PLANE_PEPPER`
 
-   `shared/security/preview-secret-inventory.json` 还维护完整的 feature-gated 与 optional 凭据名称。它们在对应功能关闭时 may be absent，不阻塞基础 Preview 部署；但只要出现在 Preview 环境中，就 must use `secret_text`，不能使用 `plain_text`。目录覆盖 OAuth、Turnstile、admin bootstrap、OOB Cloudflare Access、SMTP URL、AI/Provider/Notification/Storage 加密密钥、插件签名私钥、汇率 API、Sentry 上传 token、文档/下载签名覆盖项与 legacy `RESEND_API_KEY`。公开 client ID、origin、site key、public key 和 key ID 不属于 Secret。
+   `shared/security/preview-secret-inventory.json` 还维护完整的 feature-gated 与 optional 凭据名称。它们在对应功能关闭时 may be absent，不阻塞基础 Preview 部署；但只要出现在 Preview 环境中，就 must use `secret_text`，不能使用 `plain_text`。目录覆盖 OAuth、admin bootstrap、OOB Cloudflare Access、AI/Provider/Notification/Storage 加密密钥、插件签名私钥、汇率 API、Sentry 上传 token 与文档/下载签名覆盖项。公开 client ID、origin、public key 和 key ID 不属于 Secret。
 
    在 Cloudflare Dashboard 中打开 **Workers & Pages → tuff → Settings → Variables and Secrets**，选择 **Preview** 环境，逐个添加上述名称，将类型设为 **Secret**，并在 Dashboard 中录入值。当前安装的 Wrangler `pages secret put` 没有 `--env` 选项，不能用它声称 Secret 已写入 Preview。
 
@@ -206,8 +206,8 @@ pnpm preview:cf -- --port 8791
 
 1. 使用 `@sidebase/nuxt-auth` + `@auth/core` 接管认证，部署仍在 Cloudflare Pages。
 2. 在项目根目录的未提交 `.env.local` 中配置 `AUTH_SECRET`、`AUTH_ORIGIN`、OAuth client id/secret 与邮件登录配置。凭据值必须由密码管理器或密码学安全生成器创建，不要使用文档占位值或 `preview:cf` 的 local-only 默认值。
-3. 远端 Cloudflare Pages 的 `AUTH_SECRET`、`APP_AUTH_JWT_SECRET`、OAuth client secret 及其他 credential 必须作为 **Secrets** 写入对应环境，不能作为普通变量或进入 `wrangler.toml`。`APP_AUTH_JWT_SECRET` 必须在同一环境的部署/isolates 间保持稳定，否则 CLI / App JWT 会出现刚签发即被其他 API 拒绝的情况。邮件发送统一走通知渠道配置：Resend 是 `notification_channel` 的 `providerType: "resend"`，API Key 需通过 `secure://notifications/*` 通知凭据保存，不再使用渠道外 `RESEND_API_KEY` 兜底。
-4. `/sign-in` 与 `/sign-up` 为自定义表单，支持邮箱密码、GitHub、Magic Link、Passkeys（仅 Web 端）。登录后可进入 `Dashboard` 管理账号与设备。
+3. 远端 Cloudflare Pages 的 `AUTH_SECRET`、`APP_AUTH_JWT_SECRET`、OAuth client secret 及其他 credential 必须作为 **Secrets** 写入对应环境，不能作为普通变量或进入 `wrangler.toml`。`APP_AUTH_JWT_SECRET` 必须在同一环境的部署/isolates 间保持稳定，否则 CLI / App JWT 会出现刚签发即被其他 API 拒绝的情况。邮件发送统一走通知渠道配置：Resend 是 `notification_channel` 的 `providerType: "resend"`，API Key 需通过 `secure://notifications/*` 通知凭据保存，不提供渠道外环境变量兜底。
+4. `/sign-in` 是唯一认证入口，支持 Magic Link、GitHub、LinuxDo 与 Passkeys（仅 Web 端）。首次认证会自动创建账号；登录后可进入 `Dashboard` 管理账号与设备。
 
 ## 11. Drizzle ORM 方案评估
 

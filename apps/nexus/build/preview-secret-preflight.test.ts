@@ -28,7 +28,6 @@ const EXPECTED_PREVIEW_CREDENTIALS = [
   'ADMIN_SECRET',
   'ADMINSECRET',
   'APP_AUTH_JWT_SECRET',
-  'AUTH_EMAIL_SERVER',
   'AUTH_SECRET',
   'EXCHANGE_RATE_API_KEY',
   'GITHUB_CLIENT_SECRET',
@@ -39,11 +38,8 @@ const EXPECTED_PREVIEW_CREDENTIALS = [
   'PLUGIN_ATTESTATION_PRIVATE_KEY_PEM',
   'PROVIDER_REGISTRY_SECURE_STORE_KEY',
   'RELEASE_DOWNLOAD_SIGNING_SECRET',
-  'RESEND_API_KEY',
   'SENTRY_AUTH_TOKEN',
   'STORAGE_SECURE_STORE_KEY',
-  'TURNSTILE_SECRET_KEY',
-  'TURNSTILE_SECRETKEY',
 ].sort()
 
 function projectPayload(previewEnvVars: Record<string, unknown>) {
@@ -77,7 +73,6 @@ describe('Preview Secret deployment preflight', () => {
       'NOTIFICATION_WEB_PUSH_PUBLIC_KEY',
       'PLUGIN_ATTESTATION_KEY_ID',
       'RELEASE_SIGNATURE_PUBLIC_KEY',
-      'TURNSTILE_SITEKEY',
     ]) {
       expect(PREVIEW_CREDENTIAL_NAMES).not.toContain(publicName)
     }
@@ -164,7 +159,7 @@ describe('Preview Secret deployment preflight', () => {
         ...Object.fromEntries(REQUIRED_PREVIEW_SECRETS.map(name => [name, { type: 'secret_text' }])),
         AUTH_SECRET: { type: 'plain_text', value: sensitiveValue },
         NUXT_INTELLIGENCE_ENCRYPT_KEY: plainCredential,
-        RESEND_API_KEY: { type: 'plain_text', value: sensitiveValue },
+        NUXT_DOC_TOKEN_SECRET: { type: 'plain_text', value: sensitiveValue },
       }),
     )
 
@@ -172,7 +167,7 @@ describe('Preview Secret deployment preflight', () => {
       expect.objectContaining({
         code: PREVIEW_SECRET_ERROR_CODES.invalidBindingType,
         exitCode: PREVIEW_SECRET_EXIT_CODES.invalidBindingType,
-        invalidTypeNames: ['AUTH_SECRET', 'NUXT_INTELLIGENCE_ENCRYPT_KEY', 'RESEND_API_KEY'],
+        invalidTypeNames: ['AUTH_SECRET', 'NUXT_DOC_TOKEN_SECRET', 'NUXT_INTELLIGENCE_ENCRYPT_KEY'],
       }),
     )
   })
@@ -182,7 +177,7 @@ describe('Preview Secret deployment preflight', () => {
       projectPayload({
         ...Object.fromEntries(REQUIRED_PREVIEW_SECRETS.map(name => [name, { type: 'secret_text' }])),
         NUXT_INTELLIGENCE_ENCRYPT_KEY: { type: 'secret_text' },
-        RESEND_API_KEY: { type: 'secret_text' },
+        NUXT_DOC_TOKEN_SECRET: { type: 'secret_text' },
         AUTH_ORIGIN: { type: 'plain_text', value: 'https://preview.example.test' },
         GITHUB_CLIENT_ID: { type: 'plain_text', value: 'public-client-id' },
       }),
@@ -191,7 +186,7 @@ describe('Preview Secret deployment preflight', () => {
     expect(assertPreviewCredentialBindings(bindings)).toEqual({
       required: REQUIRED_PREVIEW_SECRETS,
       featureGated: ['NUXT_INTELLIGENCE_ENCRYPT_KEY'],
-      optional: ['RESEND_API_KEY'],
+      optional: ['NUXT_DOC_TOKEN_SECRET'],
     })
 
     const requiredOnlyBindings = parsePreviewBindingMetadata(
@@ -315,7 +310,7 @@ describe('Preview Secret deployment preflight', () => {
     })
     const payload = projectPayload({
       ...Object.fromEntries(REQUIRED_PREVIEW_SECRETS.map(name => [name, { type: 'secret_text' }])),
-      AUTH_EMAIL_SERVER: optionalBinding,
+      NOTIFICATION_SECURE_STORE_KEY: optionalBinding,
     })
     const messages: string[] = []
     const logger = {
@@ -338,11 +333,11 @@ describe('Preview Secret deployment preflight', () => {
       }),
     ).rejects.toMatchObject({
       code: PREVIEW_SECRET_ERROR_CODES.invalidBindingType,
-      invalidTypeNames: ['AUTH_EMAIL_SERVER'],
+      invalidTypeNames: ['NOTIFICATION_SECURE_STORE_KEY'],
     })
 
     expect(messages).toEqual([
-      '[PREVIEW_SECRET_BINDING_TYPE_INVALID] Credential-bearing Preview bindings must use secret_text: AUTH_EMAIL_SERVER.',
+      '[PREVIEW_SECRET_BINDING_TYPE_INVALID] Credential-bearing Preview bindings must use secret_text: NOTIFICATION_SECURE_STORE_KEY.',
     ])
     expect(messages.join('\n')).not.toContain(sensitiveValue)
   })

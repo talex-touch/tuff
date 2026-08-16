@@ -49,11 +49,10 @@ These four names are the required group in the exact, name-only credential catal
 Feature-gated credential names may be absent while their owning feature is disabled, but every configured name must use `secret_text`:
 
 - OAuth and access control: `GITHUB_CLIENT_SECRET`, `LINUXDO_CLIENT_SECRET`, `ADMIN_CF_ACCESS_CLIENT_SECRET`, `ADMINSECRET`
-- Verification and email: `TURNSTILE_SECRETKEY`, `TURNSTILE_SECRET_KEY`, `AUTH_EMAIL_SERVER`
 - Encrypted stores: `NUXT_INTELLIGENCE_ENCRYPT_KEY`, `PROVIDER_REGISTRY_SECURE_STORE_KEY`, `NOTIFICATION_SECURE_STORE_KEY`, `STORAGE_SECURE_STORE_KEY` (`NUXT_INTELLIGENCE_ENCRYPT_KEY` is required before storing AI provider API keys)
 - Signing, integrations, and build upload: `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, `EXCHANGE_RATE_API_KEY`, `SENTRY_AUTH_TOKEN`
 
-Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, `RELEASE_DOWNLOAD_SIGNING_SECRET`, and the legacy `RESEND_API_KEY`. Public client IDs, origins, site keys, public keys, and key IDs are ordinary configuration and are not in this catalog.
+Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, and `RELEASE_DOWNLOAD_SIGNING_SECRET`. Public client IDs, origins, public keys, and key IDs are ordinary configuration and are not in this catalog.
 
 Provision the four names in Cloudflare Dashboard: open **Workers & Pages → tuff → Settings → Variables and Secrets**, select the **Preview** environment, add each name, choose **Secret** as the binding type, and enter the value there. The installed Wrangler `pages secret put` command has no `--env` option, so it must not be used to claim that a Secret was written to Preview.
 
@@ -80,17 +79,12 @@ Auth providers (optional):
 - `LINUXDO_CLIENT_SECRET`
 - `LINUXDO_ISSUER`
 
-Email login / Magic Link (optional gate):
+Email login / Magic Link:
 
 - `AUTH_EMAIL_FROM`
-- `AUTH_EMAIL_SERVER`
 
-Actual email sending is handled by notification channel configs and encrypted notification credentials. Resend is one email channel provider, not a standalone env fallback.
+Actual email sending is handled by notification channel configs and encrypted `secure://notifications/*` credentials. Resend is one supported email channel provider; there is no environment-variable fallback.
 
-Turnstile (optional):
-
-- `TURNSTILE_SITEKEY` or `NUXT_PUBLIC_TURNSTILE_SITE_KEY`
-- `TURNSTILE_SECRETKEY` or `TURNSTILE_SECRET_KEY`
 
 Cloudflare Pages runtime (optional unless you force Pages in non-prod):
 

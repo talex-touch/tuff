@@ -29,7 +29,7 @@ const emailValue = computed({
 })
 
 const lastMethod = computed(() => {
-  if (props.lastLoginMethod === 'password' || props.lastLoginMethod === 'magic')
+  if (props.lastLoginMethod === 'magic')
     return 'email'
   return props.lastLoginMethod
 })

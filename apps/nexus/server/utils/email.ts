@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { createError } from 'h3'
 import { dispatchNotificationEvent } from './notificationDispatcher'
 
 interface EmailPayload {
@@ -29,5 +30,5 @@ export async function sendEmail(payload: EmailPayload, event?: H3Event): Promise
   if (deliveries.some(delivery => delivery.channel === 'email' && delivery.status === 'sent'))
     return
 
-  console.warn('[email] No notification_channel email delivery was sent; configure an email channel such as providerType=resend.')
+  throw createError({ statusCode: 503, statusMessage: 'Email delivery is unavailable.' })
 }

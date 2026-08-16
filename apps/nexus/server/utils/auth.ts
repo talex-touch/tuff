@@ -1,9 +1,10 @@
 import type { H3Event } from 'h3'
+import type { JWT } from 'next-auth/jwt'
 import { Buffer } from 'node:buffer'
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
-import { getServerSession } from '#auth'
-import { createError, getHeader } from 'h3'
+import { getToken } from '#auth'
+import { createError, getHeader, getRequestProtocol } from 'h3'
 import {
   consumeLoginToken,
   createUser,
@@ -20,6 +21,7 @@ import { hasRequiredScope, isAdminOnlyApiKeyScope } from './apiKeyScopes'
 import { readCloudflareBindings } from './cloudflare'
 import { ensurePersonalTeam } from './creditsStore'
 import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
+import { resolveSessionAuthSecret } from './sessionAuthSecret'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
 const APP_TOKEN_AUDIENCE = 'tuff-app'
@@ -333,30 +335,80 @@ export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
   return await resolveAppTokenContext(event, payload)
 }
 
-export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
-  const session = await getServerSession(event)
-  const sessionUser = session?.user as { id?: string; email?: string; name?: string } | undefined
-  const sessionMeta = session as { issuedAt?: unknown } | null
-  const sessionIssuedAt = typeof sessionMeta?.issuedAt === 'number' ? sessionMeta.issuedAt : null
+function isSecureSessionCookieRequest(event: H3Event) {
+  const forwardedProtocol = getHeader(event, 'x-forwarded-proto')
+    ?.split(',', 1)[0]
+    ?.trim()
+    .toLowerCase()
 
-  const directUserId = typeof sessionUser?.id === 'string' ? sessionUser.id.trim() : ''
+  if (forwardedProtocol === 'https') return true
+  if (forwardedProtocol === 'http') return false
+  return getRequestProtocol(event) === 'https'
+}
+
+function readSessionTokenString(token: JWT, key: string) {
+  const value = token[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function isAppSessionToken(token: JWT) {
+  const audience = token.aud
+  return token.typ === 'app'
+    || token.iss === APP_TOKEN_ISSUER
+    || audience === APP_TOKEN_AUDIENCE
+    || (Array.isArray(audience) && audience.includes(APP_TOKEN_AUDIENCE))
+}
+
+async function resolveBrowserSessionToken(event: H3Event): Promise<JWT | null> {
+  const secret = resolveSessionAuthSecret(event)
+
+  try {
+    const token = await getToken({
+      event,
+      secret,
+      secureCookie: isSecureSessionCookieRequest(event),
+    })
+
+    if (!token) return null
+    if (isAppSessionToken(token)) {
+      logSessionDebug('app-token-rejected', event, {
+        hasAuthorization: Boolean(getHeader(event, 'authorization')),
+      })
+      return null
+    }
+    return token
+  }
+  catch {
+    logSessionDebug('invalid-session-token', event, {
+      hasAuthorization: Boolean(getHeader(event, 'authorization')),
+      hasCookie: Boolean(getHeader(event, 'cookie')),
+    })
+    return null
+  }
+}
+
+export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
+  const token = await resolveBrowserSessionToken(event)
+  const sessionIssuedAt = typeof token?.iat === 'number' ? token.iat : null
+  const directUserId = token
+    ? readSessionTokenString(token, 'userId') || readSessionTokenString(token, 'sub')
+    : ''
   let user = directUserId ? await getUserById(event, directUserId) : null
 
   if (!user) {
-    const email = typeof sessionUser?.email === 'string' ? sessionUser.email.trim().toLowerCase() : ''
+    const email = token ? readSessionTokenString(token, 'email').toLowerCase() : ''
     if (!email) {
       logSessionDebug('missing-session-user', event, {
-        hasSession: Boolean(session),
-        hasUser: Boolean(sessionUser),
-        hasUserId: Boolean(sessionUser?.id),
-        hasEmail: Boolean(sessionUser?.email),
+        hasToken: Boolean(token),
+        hasUserId: Boolean(directUserId),
+        hasEmail: Boolean(token && readSessionTokenString(token, 'email')),
         hasAuthorization: Boolean(getHeader(event, 'authorization')),
         hasCookie: Boolean(getHeader(event, 'cookie')),
       })
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
     }
 
-    const name = typeof sessionUser?.name === 'string' ? sessionUser.name.trim() : ''
+    const name = token ? readSessionTokenString(token, 'name') : ''
     user = await resolveSessionUserByEmail(event, email, name)
     if (!user) {
       logSessionDebug('email-not-found', event, { email })

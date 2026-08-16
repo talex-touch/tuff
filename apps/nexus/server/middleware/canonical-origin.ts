@@ -1,3 +1,5 @@
+import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../utils/authOrigin'
+
 export default defineEventHandler((event) => {
   if (import.meta.dev)
     return
@@ -14,17 +16,11 @@ export default defineEventHandler((event) => {
   if (accept && !accept.includes('text/html'))
     return
 
-  const configuredOrigin = (useRuntimeConfig(event).auth?.origin as string | undefined)?.trim()
-  if (!configuredOrigin)
+  const configuredOrigin = normalizeAuthOrigin(useRuntimeConfig(event).auth?.origin)
+  if (!configuredOrigin || shouldTrustForwardedAuthHost(configuredOrigin))
     return
 
-  let canonicalOrigin: URL
-  try {
-    canonicalOrigin = new URL(configuredOrigin)
-  }
-  catch {
-    return
-  }
+  const canonicalOrigin = new URL(configuredOrigin)
 
   const requestUrl = getRequestURL(event)
   if (requestUrl.host.toLowerCase() === canonicalOrigin.host.toLowerCase())

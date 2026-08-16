@@ -226,24 +226,26 @@ function normalizeCredentialPayload(
 
 function resolveConfiguredMasterKey(event: H3Event): string {
   const bindings = readCloudflareBindings(event)
-  const runtimeConfig = useRuntimeConfig(event) as {
-    notificationCredentials?: {
-      secureStoreKey?: string
+  const bindingKey = bindings?.NOTIFICATION_SECURE_STORE_KEY
+  if (typeof bindingKey === 'string' && bindingKey.trim())
+    return bindingKey.trim()
+
+  const environmentKey = process.env.NOTIFICATION_SECURE_STORE_KEY
+  if (typeof environmentKey === 'string' && environmentKey.trim())
+    return environmentKey.trim()
+
+  try {
+    const runtimeConfig = useRuntimeConfig(event) as {
+      notificationCredentials?: {
+        secureStoreKey?: string
+      }
     }
+    const runtimeKey = runtimeConfig.notificationCredentials?.secureStoreKey
+    return typeof runtimeKey === 'string' ? runtimeKey.trim() : ''
   }
-
-  const candidates = [
-    bindings?.NOTIFICATION_SECURE_STORE_KEY,
-    runtimeConfig.notificationCredentials?.secureStoreKey,
-    process.env.NOTIFICATION_SECURE_STORE_KEY,
-  ]
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim().length > 0)
-      return candidate.trim()
+  catch {
+    return ''
   }
-
-  return ''
 }
 
 function resolveMasterKey(event: H3Event): ResolvedMasterKey {
