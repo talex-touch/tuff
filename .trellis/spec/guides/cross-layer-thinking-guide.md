@@ -137,6 +137,15 @@ release policy -> post-package evidence -> signed build attestation
 
 The renderer consumes one typed verification status and derives `pass | unverified | not-applicable` in one pure projection. A platform name is never trust evidence. After retiring a sentinel or policy mode, search production code, localized copy, diagnostic schemas, tests, task constraints, and packaged probes for the old value before declaring the cutover complete.
 
+
+### Mistake 8: Treating Module Initialization As A Cross-Route Contract
+
+**Bad**: A protected Cloudflare route calls a helper whose correctness depends on an Auth handler having initialized module-level state in another route chunk. Unit tests or a warm local server pass because both paths share one module instance; a fresh Worker isolate fails before the protected handler can authenticate.
+
+**Good**: Trace the signed credential across the real boundary. Resolve the platform-owned secret through one shared helper, verify the request cookie/token directly in every protected route chunk, and keep the Auth handler responsible only for Auth endpoints. Add a cold-order regression where a protected API is the first request and a build guard that rejects the stateful helper from production server utilities.
+
+**Rule**: If correctness depends on “route A ran before route B,” treat it as an invalid cross-layer contract unless the ordering is durably represented outside process/module memory.
+
 ## Checklist for Cross-Layer Features
 
 Before implementation:

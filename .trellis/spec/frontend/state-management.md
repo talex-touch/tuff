@@ -191,6 +191,26 @@ Avoid hydration mismatches.
 - Browser-only state belongs behind `import.meta.client`, `ClientOnly`, or a client-only component.
 - Route-local i18n/chunk state should follow the existing route locale helpers.
 
+### Nexus Shared Auth Bootstrap
+
+`useNexusAuth()` owns one Nuxt-wide session state. Preserve the three-state contract: `undefined` means the browser session has not been reconciled yet (`loading`), `null` means the session endpoint confirmed `unauthenticated`, and a non-empty session object means `authenticated`.
+
+The app root owns the initial browser reconciliation; headers and other consumers read the shared status instead of starting independent session requests:
+
+```ts
+const { status, getSession } = useNexusAuth()
+
+onMounted(() => {
+  if (status.value === 'loading')
+    void getSession()
+})
+```
+
+- Keep the auth fields in `useState`, not component-local refs, so every consumer observes the same transition.
+- A protected-route retry may call `getSession()` after a confirmed unauthenticated result only behind the existing running/done guards.
+- Do not initialize the shared state as unauthenticated or wait for a header/menu consumer to fetch it. Both patterns can leave public navigation showing a login CTA for a valid browser session or cause premature protected-route redirects.
+- Regression coverage must assert a fresh composable reports `loading`, root mount requests `/api/auth/session` once, and a valid response becomes visible as `authenticated` to the original composable instance.
+
 ### Nexus Server Content Cache
 
 Cached Nexus content endpoints must fail loudly rather than serve a successful empty payload — a client cannot tell an outage apart from real data, so an empty list renders as "this section has no pages".

@@ -10,7 +10,7 @@
 
 ## 数据库与安全门禁
 
-- **默认开启的 search-index 分库仍无隔离 profile 运行证明。** `07-28-migrate-search-index-split-write-paths` 已与 default-on/`=0` rollback 合同同步，但其验收仍要求：首启重建、应用/文件结果和计数一致、`search-index.db` 已填充、无 WAL/busy 风暴，以及实际 `=0` 回退。未验证 writer 仍可能造成静默数据偏移；这是当前 release gate，不是待开启功能。
+- **默认开启的 search-index 分库仍无隔离 profile 运行证明。** [#1748](https://github.com/talex-touch/tuff/issues/1748) 追踪该 release gate；`07-28-migrate-search-index-split-write-paths` 已与 default-on/`=0` rollback 合同同步，但其验收仍要求：首启重建、应用/文件结果和计数一致、`search-index.db` 已填充、无 WAL/busy 风暴，以及实际 `=0` 回退。未验证 writer 仍可能造成静默数据偏移；这不是待开启功能。
 - **SQLite 写入所有权未覆盖完整可变域。** [#351](https://github.com/talex-touch/tuff/issues/351) 的 guard 目前只约束 search-index 三表；71 张 schema 表中已有写入的 59 张仍需完成 owner map、准入/退避合同和争用/关机恢复证据。先由架构 owner 定义多写入域的合法 owner，再扩展 guard；不能把现有写入点机械固化为契约。
 - **Renderer CSP 收紧仍待真实使用数据。** [#689](https://github.com/talex-touch/tuff/issues/689) 的 `script-src` wildcard 和 `unsafe-inline` 已移除；剩余强制策略的 `default-src`/`connect-src` wildcard 只能在 report-only 违规日志经真实使用（含 widget、Nexus、Sentry）无违规或得到明确 origin 清单后提升。`unsafe-eval` 仍由预编译 widget 的 `new Function` 路径依赖，不能作为 CSP 清理顺手删除。
 
