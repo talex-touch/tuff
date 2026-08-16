@@ -82,6 +82,7 @@
     "@unocss/eslint-config": "catalog:build",
     "@unocss/nuxt": "catalog:build",
     "@unocss/preset-typography": "catalog:build",
+    "@unocss/preset-web-fonts": "^66.7.5",
     "@vite-pwa/nuxt": "catalog:build",
     "@vue/compiler-sfc": "^3.5.39",
     "@vueuse/core": "^14.4.0",
