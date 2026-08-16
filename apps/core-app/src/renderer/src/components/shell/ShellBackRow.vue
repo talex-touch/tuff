@@ -29,6 +29,9 @@ function goHome(): void {
 <style lang="scss" scoped>
 .ShellBackRow {
   display: flex;
+  // Same reason as ShellSearchEntry: a fixed height in the sidebar's flex column needs
+  // `flex-shrink: 0`, or an overflowing settings list eats into the 28px.
+  flex: 0 0 auto;
   // Artboard: 232 x 28, icon at x=8, label at x=28 — a 14px glyph with a 6px gap after it.
   gap: 6px;
   align-items: center;

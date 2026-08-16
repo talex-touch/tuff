@@ -28,6 +28,11 @@ defineEmits<{ activate: [] }>()
 <style lang="scss" scoped>
 .ShellSearchEntry {
   display: flex;
+  // The sidebar column is a flex container whose history list is meant to be the only child
+  // that gives ground. Without this the entry keeps the default `flex-shrink: 1`, so a long
+  // conversation list takes a share of the overflow out of the 30px below and squashes the
+  // field down to its content height.
+  flex: 0 0 auto;
   gap: 8px;
   align-items: center;
   width: 100%;
