@@ -32,11 +32,15 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   }
 }))
 
+// Hoisted so tests can drive the gate: the engine resolves this singleton once,
+// and recommend() is the interactive empty-query entry point.
+const appTaskGateMock = vi.hoisted(() => ({
+  isActive: vi.fn(() => false),
+  waitForIdle: vi.fn(async (_timeoutMs?: number): Promise<boolean | undefined> => undefined)
+}))
+
 vi.mock('../../../../service/app-task-gate', () => ({
-  appTaskGate: {
-    isActive: vi.fn(() => false),
-    waitForIdle: vi.fn(async () => undefined)
-  }
+  appTaskGate: appTaskGateMock
 }))
 
 vi.mock('../../../../db/db-write-scheduler', () => ({
@@ -2177,5 +2181,58 @@ describe('RecommendationEngine', () => {
     expect(exposureServiceMock.setTaggedKeys).toHaveBeenLastCalledWith('newly-installed', [
       'app-provider:/Applications/Fresh.app'
     ])
+  })
+})
+
+describe('recommendation app-task gate wait', () => {
+  function createStubbedEngine() {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(1) }))
+    })
+    return engine
+  }
+
+  afterEach(() => {
+    appTaskGateMock.isActive.mockReturnValue(false)
+    // History too, not just the implementation: the `not.toHaveBeenCalled()`
+    // assertion below otherwise sees the previous test's call and fails.
+    appTaskGateMock.waitForIdle.mockReset()
+    appTaskGateMock.waitForIdle.mockResolvedValue(undefined)
+  })
+
+  it('bounds the wait and still produces a result when the gate never drains', async () => {
+    appTaskGateMock.isActive.mockReturnValue(true)
+    appTaskGateMock.waitForIdle.mockResolvedValue(false)
+
+    const result = await createStubbedEngine().recommend({ limit: 5 })
+
+    // recommend() is what search-core calls on the empty-query path, so an
+    // unbounded wait here meant opening CoreBox during an app-index scan hung
+    // past the renderer's 400ms give-up and showed nothing.
+    const [timeoutArg] = appTaskGateMock.waitForIdle.mock.calls.at(-1) ?? []
+    expect(typeof timeoutArg).toBe('number')
+    expect(timeoutArg).toBeGreaterThan(0)
+    expect(timeoutArg as number).toBeLessThan(400)
+
+    // Yielding is an optimization, not a precondition: a timed-out wait must
+    // still compute rather than return nothing.
+    expect(result).toBeTruthy()
+    expect(Array.isArray(result.items)).toBe(true)
+  })
+
+  it('does not wait at all when no app task is active', async () => {
+    appTaskGateMock.isActive.mockReturnValue(false)
+
+    await createStubbedEngine().recommend({ limit: 5 })
+
+    expect(appTaskGateMock.waitForIdle).not.toHaveBeenCalled()
   })
 })

@@ -13,6 +13,21 @@ const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
 const MACOS_PERMISSION_BACKOFF_MS = 60_000
 const MACOS_EBADF_BACKOFF_MS = 10_000
+/**
+ * Long enough to break the spawn storm: the refresh poll runs every 1500ms and
+ * each timed-out lookup costs a full ACTIVE_APP_COMMAND_TIMEOUT_MS, so without a
+ * backoff the process spawned a doomed `osascript` roughly every 1.5s
+ * indefinitely (278 failures in one session).
+ */
+const MACOS_TIMEOUT_BACKOFF_MS = 30_000
+/**
+ * Applied only after this many timeouts in a row. A single hang is transient --
+ * the foreground app was beachballing or a TCC prompt was up -- and #770 wants
+ * the very next lookup to retry rather than be suppressed. The storm this
+ * guards against is the persistent case, where every attempt times out.
+ */
+const MACOS_TIMEOUT_BACKOFF_THRESHOLD = 3
+const MACOS_RESOLVE_FAILURE_LOG_INTERVAL_MS = 60_000
 const MACOS_NO_FRONTMOST_LOG_INTERVAL_MS = 60_000
 const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
 
@@ -51,6 +66,19 @@ function isMacOSAutomationPermissionError(error: unknown): boolean {
 function isMacOSNoFrontmostAppError(error: unknown): boolean {
   const text = getErrorText(error)
   return text.includes('(-1719)') || /\b-1719\b/.test(text)
+}
+
+/**
+ * `execFile`'s own timeout kills the child rather than rejecting with a
+ * distinguishable code: the error carries `killed: true` and the kill signal,
+ * and stderr is empty. That made a timeout indistinguishable from a generic
+ * failure and it fell through to the un-backed-off branch below.
+ */
+function isCommandTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const node = error as { killed?: unknown; signal?: unknown; code?: unknown }
+  if (node.code === 'ETIMEDOUT') return true
+  return node.killed === true && (node.signal === 'SIGTERM' || node.signal === 'SIGKILL')
 }
 
 function toOptionalString(value: unknown): string | null {
@@ -146,7 +174,10 @@ class ActiveAppService {
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
   private macosPermissionBackoffUntil = 0
   private macosEbadfBackoffUntil = 0
+  private macosTimeoutBackoffUntil = 0
+  private macosConsecutiveTimeouts = 0
   private lastMacOSNoFrontmostLogAt = 0
+  private lastMacOSResolveFailureLogAt = 0
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -176,6 +207,44 @@ class ActiveAppService {
     }
     const { icon: _icon, ...cachedWithoutIcon } = cached
     return cachedWithoutIcon
+  }
+
+  private handleMacOSTimeout(error: unknown): null {
+    this.macosConsecutiveTimeouts += 1
+    if (this.macosConsecutiveTimeouts < MACOS_TIMEOUT_BACKOFF_THRESHOLD) {
+      activeAppLog.debug('macOS active-app lookup timed out', {
+        meta: {
+          consecutiveTimeouts: this.macosConsecutiveTimeouts,
+          timeoutMs: ACTIVE_APP_COMMAND_TIMEOUT_MS
+        }
+      })
+      return null
+    }
+
+    activeAppLog.warn('macOS active-app lookup keeps timing out, suspending briefly', {
+      meta: {
+        backoffMs: MACOS_TIMEOUT_BACKOFF_MS,
+        consecutiveTimeouts: this.macosConsecutiveTimeouts,
+        timeoutMs: ACTIVE_APP_COMMAND_TIMEOUT_MS,
+        message: getCompactCommandErrorMessage(error)
+      }
+    })
+    this.macosTimeoutBackoffUntil = Date.now() + MACOS_TIMEOUT_BACKOFF_MS
+    return null
+  }
+
+  /**
+   * Throttled: the un-backed-off version of this branch wrote 278 stack traces
+   * (each embedding the whole AppleScript source) to the log file in one
+   * session, which is its own IO cost on the main thread.
+   */
+  private logMacOSResolveFailure(error: unknown): void {
+    const now = Date.now()
+    if (now - this.lastMacOSResolveFailureLogAt < MACOS_RESOLVE_FAILURE_LOG_INTERVAL_MS) return
+    this.lastMacOSResolveFailureLogAt = now
+    activeAppLog.error('macOS resolution failed', {
+      meta: { message: getCompactCommandErrorMessage(error) }
+    })
   }
 
   private handleMacOSEbadf(error: unknown): null {
@@ -260,6 +329,9 @@ end tell`
     if (Date.now() < this.macosEbadfBackoffUntil) {
       return null
     }
+    if (Date.now() < this.macosTimeoutBackoffUntil) {
+      return null
+    }
 
     if (this.macosResolveInFlight) {
       return this.macosResolveInFlight
@@ -270,6 +342,8 @@ end tell`
         const result = await this.resolveActiveWindowMacOSOnce()
         this.macosPermissionBackoffUntil = 0
         this.macosEbadfBackoffUntil = 0
+        this.macosTimeoutBackoffUntil = 0
+        this.macosConsecutiveTimeouts = 0
         return result
       } catch (firstError) {
         if (isMacOSNoFrontmostAppError(firstError)) {
@@ -278,9 +352,12 @@ end tell`
         if (isMacOSAutomationPermissionError(firstError)) {
           return this.handleMacOSPermissionDenied(firstError)
         }
+        if (isCommandTimeoutError(firstError)) {
+          return this.handleMacOSTimeout(firstError)
+        }
 
         if (!isEbadfError(firstError)) {
-          activeAppLog.error('macOS resolution failed', { error: firstError })
+          this.logMacOSResolveFailure(firstError)
           return null
         }
 
@@ -295,6 +372,8 @@ end tell`
           const result = await this.resolveActiveWindowMacOSOnce()
           this.macosPermissionBackoffUntil = 0
           this.macosEbadfBackoffUntil = 0
+          this.macosTimeoutBackoffUntil = 0
+          this.macosConsecutiveTimeouts = 0
           return result
         } catch (retryError) {
           if (isMacOSNoFrontmostAppError(retryError)) {
@@ -303,11 +382,16 @@ end tell`
           if (isMacOSAutomationPermissionError(retryError)) {
             return this.handleMacOSPermissionDenied(retryError)
           }
+          if (isCommandTimeoutError(retryError)) {
+            return this.handleMacOSTimeout(retryError)
+          }
           if (isEbadfError(retryError)) {
             return this.handleMacOSEbadf(retryError)
           }
 
-          activeAppLog.error('macOS resolution failed after EBADF retry', { error: retryError })
+          activeAppLog.error('macOS resolution failed after EBADF retry', {
+            meta: { message: getCompactCommandErrorMessage(retryError) }
+          })
           return null
         }
       }

@@ -96,9 +96,10 @@ vi.mock('../../utils/perf-monitor', () => ({
 
 vi.mock('../../service/app-task-gate', () => ({
   appTaskGate: {
-    waitForIdle: vi.fn(async () => {}),
+    waitForIdle: vi.fn(async () => true),
     isActive: vi.fn(() => false)
-  }
+  },
+  APP_TASK_GATE_STARTUP_WAIT_MS: 10_000
 }))
 
 import {

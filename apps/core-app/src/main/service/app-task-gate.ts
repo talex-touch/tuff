@@ -1,5 +1,21 @@
 import { enterPerfContext } from '../utils/perf-context'
 
+/**
+ * Bound for deferred one-shot startup work that waits on this gate.
+ *
+ * `waitForIdle()` with no argument waits forever, and an app-index scan can hold
+ * the gate for minutes. For work that only ever runs once -- starting a watcher,
+ * hydrating a cache -- an unbounded wait does not merely delay it, it can mean
+ * the feature never initializes at all. Such callers should wait up to this
+ * bound and then proceed regardless: the gate is a courtesy, not a correctness
+ * requirement.
+ *
+ * Repeatable work on a hot path wants the opposite (a much shorter bound and a
+ * skip on timeout, since there will be another chance) -- see
+ * `CLIPBOARD_APP_TASK_WAIT_MS`.
+ */
+export const APP_TASK_GATE_STARTUP_WAIT_MS = 10_000
+
 type Waiter = () => void
 
 class AppTaskGate {

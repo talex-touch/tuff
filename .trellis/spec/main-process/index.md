@@ -37,6 +37,13 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached
   arrays are shared read-only references.
+- [background-task-timeout-contracts.md](background-task-timeout-contracts.md) —
+  main-thread liveness: PollingService defaults (30s bound when `timeoutMs` is
+  omitted, `null` = opt-out, omitted `lane` = serial/concurrency-1), timeout
+  releases the slot but never cancels the callback, outbox drains need a round
+  deadline + stop-on-first-failure + carry-back of unreached items, polled child
+  processes need consecutive-failure backoff and throttled logs, nothing on the
+  search path may `waitForIdle()` unbounded; how to read `[Perf:EventLoop]`.
 - [search-charset-and-identity-contracts.md](search-charset-and-identity-contracts.md)
   — charset rules import from search-charset only; SEARCH_KEYWORD_SCHEMA_VERSION
   bump semantics (app auto / file via bound backfill, never through the disk-reading

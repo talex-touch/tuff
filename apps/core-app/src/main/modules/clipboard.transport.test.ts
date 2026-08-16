@@ -38,7 +38,9 @@ const clipboardRuntimeMocks = vi.hoisted(() => ({
     stop: vi.fn()
   },
   appTaskGate: {
-    waitForIdle: vi.fn(async () => undefined),
+    // Signature mirrors the real gate: an optional bound, and `true`/`false` for
+    // drained-vs-timed-out. Tests assert on both.
+    waitForIdle: vi.fn(async (_timeoutMs?: number): Promise<boolean | undefined> => true),
     isActive: vi.fn(() => false)
   },
   coreBoxWindowVisible: false
@@ -279,7 +281,11 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
 }))
 
 vi.mock('../service/app-task-gate', () => ({
-  appTaskGate: clipboardRuntimeMocks.appTaskGate
+  appTaskGate: clipboardRuntimeMocks.appTaskGate,
+  // Must mirror every export the module under test imports. Omitting this made
+  // reading it throw inside the deferred-startup helper, where the chain's
+  // .catch() swallowed it -- so waitForIdle was simply never reached.
+  APP_TASK_GATE_STARTUP_WAIT_MS: 10_000
 }))
 
 vi.mock('@sentry/electron/main', () => ({
@@ -414,7 +420,7 @@ afterEach(() => {
   clipboardRuntimeMocks.transportOn.mockImplementation(() => () => {})
   clipboardRuntimeMocks.transportOnStream.mockImplementation(() => () => {})
   clipboardRuntimeMocks.pollingService.isRegistered.mockReturnValue(false)
-  clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(undefined)
+  clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(true)
   clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
   clipboardRuntimeMocks.coreBoxWindowVisible = false
 })
@@ -554,8 +560,9 @@ describe('ClipboardModule startup tasks', () => {
     module.runClipboardMonitor = runClipboardMonitor
 
     module.startClipboardMonitoring()
-
-    await flushMicrotasks(4)
+    // One extra turn than the sibling test above: the deferred baseline capture
+    // now awaits through waitForAppTasksBeforeStartupWork before its .then().
+    await flushMicrotasks(6)
 
     expect(module.coreBoxVisible).toBe(true)
     expect(runClipboardMonitor).toHaveBeenCalledWith({
@@ -791,5 +798,58 @@ describe('ClipboardModule skips redundant captures while native watch is active'
     await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
     await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
     expect(module.capturePipeline.process).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('ClipboardModule bounds the app-task wait on the search path', () => {
+  interface GateHandle {
+    clipboardHelper: unknown
+    db: unknown
+    capturePipeline: { process: ReturnType<typeof vi.fn> }
+    clipboardService: {
+      isNativeActive: ReturnType<typeof vi.fn>
+      getNativeChangeCount: ReturnType<typeof vi.fn>
+    }
+    checkClipboard: (options: { bypassCooldown?: boolean; source: string }) => Promise<void>
+  }
+
+  function createModule(): GateHandle {
+    const module = new ClipboardModule() as unknown as GateHandle
+    module.clipboardHelper = { bootstrap: vi.fn() }
+    module.db = {}
+    module.capturePipeline = { process: vi.fn(async () => undefined) }
+    module.clipboardService = {
+      // Inactive so shouldSkipUnchangedCapture cannot short-circuit before the gate.
+      isNativeActive: vi.fn(() => false),
+      getNativeChangeCount: vi.fn(() => 0)
+    } as unknown as GateHandle['clipboardService']
+    return module
+  }
+
+  it('waits with a bound rather than indefinitely', async () => {
+    const module = createModule()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(true)
+
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+
+    // Every executeSearch awaits a clipboard refresh before it builds the query,
+    // so an unbounded wait here stalls the whole search for as long as the
+    // app-index scan runs. The timeout argument is the contract.
+    const [timeoutArg] = clipboardRuntimeMocks.appTaskGate.waitForIdle.mock.calls.at(-1) ?? []
+    expect(typeof timeoutArg).toBe('number')
+    expect(timeoutArg).toBeGreaterThan(0)
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up the capture when the gate never drains', async () => {
+    const module = createModule()
+    clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(true)
+    clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(false)
+
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+
+    // A slightly stale clipboard beats hanging the search.
+    expect(module.capturePipeline.process).not.toHaveBeenCalled()
   })
 })
