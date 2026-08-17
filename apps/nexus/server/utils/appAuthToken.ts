@@ -1,11 +1,5 @@
 import { createError } from 'h3'
-import { createAppToken, requireAuth } from './auth'
-
-const LONG_TERM_APP_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30
-const LONG_TERM_APP_TOKEN_OPTIONS = {
-  ttlSeconds: LONG_TERM_APP_TOKEN_TTL_SECONDS,
-  grantType: 'long' as const,
-}
+import { createAppTokenPair, requireSessionAuth } from './auth'
 
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message)
@@ -15,49 +9,31 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export async function issueAppSignInToken(event: Parameters<typeof requireAuth>[0]) {
-  const { userId, deviceId, authSource, tokenGrantType } = await requireAuth(event)
-
-  if (authSource === 'app' && tokenGrantType === 'short') {
+export async function issueAppSignInToken(event: Parameters<typeof requireSessionAuth>[0]) {
+  const { userId, deviceId } = await requireSessionAuth(event)
+  if (!deviceId) {
     throw createError({
-      statusCode: 403,
-      statusMessage: 'Short-term app token cannot be refreshed. Please sign in again.',
+      statusCode: 400,
+      statusMessage: 'A device id is required for desktop sign-in.',
     })
   }
 
-  let appToken: string | null = null
-
   try {
-    if (deviceId !== undefined) {
-      appToken = await createAppToken(event, userId, {
-        deviceId,
-        ...LONG_TERM_APP_TOKEN_OPTIONS,
-      })
-    }
-    else {
-      appToken = await createAppToken(event, userId, LONG_TERM_APP_TOKEN_OPTIONS)
-    }
-  }
-  catch {
-  }
-
-  if (!appToken) {
-    try {
-      appToken = await createAppToken(event, userId, {
-        deviceId: null,
-        ...LONG_TERM_APP_TOKEN_OPTIONS,
-      })
-    }
-    catch (fallbackError) {
-      const detail = resolveErrorMessage(fallbackError, 'Failed to create app sign-in token.')
-      throw createError({
-        statusCode: 500,
-        statusMessage: detail,
-      })
+    const tokens = await createAppTokenPair(event, userId, {
+      deviceId,
+      grantType: 'long',
+    })
+    return {
+      ...tokens,
+      grantType: 'long' as const,
+      refreshable: true,
     }
   }
-
-  return {
-    appToken,
+  catch (error) {
+    const detail = resolveErrorMessage(error, 'Failed to create app sign-in tokens.')
+    throw createError({
+      statusCode: 500,
+      statusMessage: detail,
+    })
   }
 }

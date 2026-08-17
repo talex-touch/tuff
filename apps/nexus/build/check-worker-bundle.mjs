@@ -231,6 +231,10 @@ const requiredWorkerRouteChunks = [
     pattern: /^chunks\/routes\/api\/app-auth\/device\/poll\.get\.mjs$/,
   },
   {
+    route: '/api/app-auth/refresh',
+    pattern: /^chunks\/routes\/api\/app-auth\/refresh\.post\.mjs$/,
+  },
+  {
     route: '/api/app-auth/device/approve',
     pattern: /^chunks\/routes\/api\/app-auth\/device\/approve\.post\.mjs$/,
   },

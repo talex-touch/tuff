@@ -56,6 +56,9 @@ const longTermReasonText = computed(() => {
 const autoCloseRequested = ref(false)
 const reauthRedirecting = ref(false)
 const longTermOptionEnabled = computed(() => longTermAvailable.value && longTermAllowed.value)
+const grantDurationText = computed(() => grantType.value === 'long'
+  ? t('auth.deviceAuthLongDurationHint', '访问令牌会自动续期；刷新授权有效期为 180 天。')
+  : t('auth.deviceAuthShortDurationHint', '访问令牌会自动续期；刷新授权有效期为 30 天。'))
 const reauthRequired = computed(() => grantType.value === 'long' && longTermOptionEnabled.value)
 const reauthReady = computed(() => route.query.reauth === '1')
 const authParam = computed(() => route.query.auth === 'long')
@@ -397,6 +400,9 @@ onUnmounted(() => {
             {{ t('auth.deviceAuthLong', '长期授权') }}
           </TxButton>
         </div>
+        <p class="text-xs text-white/60">
+          {{ grantDurationText }}
+        </p>
         <p v-if="longTermOptionEnabled" class="text-xs text-white/60">
           {{ t('auth.deviceAuthLongHint', '长期授权需要 Passkey 或 OAuth 二次验证') }}
         </p>

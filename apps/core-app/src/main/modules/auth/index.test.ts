@@ -221,6 +221,7 @@ describe('forced auth credential persistence', () => {
   afterEach(async () => {
     const authModule = await importAuthModule()
     authModule.__test__.resetState()
+    networkRequestMock.mockReset()
     delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH
     delete process.env.TUFF_STARTUP_BENCHMARK_ONCE
     delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL
@@ -496,8 +497,8 @@ describe('forced auth credential persistence', () => {
     )
   })
 
-  it('restores an auth token from the protected local-secret store when it is healthy', async () => {
-    getSecureStoreValueStrictMock.mockResolvedValue('persisted-token')
+  it('reads a historical plain access token as a non-refreshable credential', async () => {
+    getSecureStoreValueStrictMock.mockResolvedValue('persisted-legacy-access-token')
 
     const authModule = await importAuthModule()
     authModule.__test__.resetState()
@@ -505,7 +506,11 @@ describe('forced auth credential persistence', () => {
 
     await authModule.__test__.loadAuthToken()
 
-    expect(authModule.getAuthToken()).toBe('persisted-token')
+    expect(authModule.__test__.getCredentialState()).toEqual({
+      accessToken: 'persisted-legacy-access-token',
+      refreshToken: null,
+      accessTokenExpiresAt: null
+    })
   })
 
   it('clears the protected persisted auth token on sign-out', async () => {
@@ -713,9 +718,197 @@ describe('forced auth credential persistence', () => {
       })
     )
   })
+  it('persists an access and refresh pair as an exact version-1 encrypted credential envelope', async () => {
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+    await authModule.__test__.setAuthToken('access-token-v1', {
+      refreshToken: 'refresh-token-v1',
+      ttlSeconds: 60 * 60
+    })
+
+    const credential = authModule.__test__.getCredentialState()
+    expect(credential.accessTokenExpiresAt).toBeGreaterThan(Date.now())
+    expect(setSecureStoreValueMock).toHaveBeenCalledWith(
+      '/tmp/tuff',
+      'auth.token',
+      JSON.stringify({
+        version: 1,
+        accessToken: 'access-token-v1',
+        refreshToken: 'refresh-token-v1',
+        accessTokenExpiresAt: credential.accessTokenExpiresAt
+      }),
+      'auth-token',
+      expect.any(Function)
+    )
+  })
+
+  it('coalesces a pre-expiry access refresh for concurrent Nexus requests', async () => {
+    const refreshResponse = Promise.withResolvers<unknown>()
+    networkRequestMock.mockReset()
+    networkRequestMock.mockImplementation(
+      (request: { url?: string; headers?: Record<string, string> }) => {
+        if (request.url === 'https://example.test/api/app-auth/refresh')
+          return refreshResponse.promise
+        return Promise.resolve({
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers(),
+          url: request.url ?? '',
+          data: 'business-ok',
+          ok: true
+        })
+      }
+    )
+
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setState({
+      appRootPath: '/tmp/tuff',
+      authToken: 'nearly-expired-access-token',
+      authRefreshToken: 'refresh-token-v1',
+      authAccessTokenExpiresAt: Date.now() + 1
+    })
+
+    const first = authModule.__test__.performNexusRequest({
+      method: 'GET',
+      path: '/api/business/first',
+      context: 'plugin-business'
+    })
+    const second = authModule.__test__.performNexusRequest({
+      method: 'GET',
+      path: '/api/business/second',
+      context: 'plugin-business'
+    })
+
+    const initialRequests = networkRequestMock.mock.calls.map(
+      ([request]) => request as { url?: string }
+    )
+    expect(
+      initialRequests.filter(
+        (request) => request.url === 'https://example.test/api/app-auth/refresh'
+      )
+    ).toHaveLength(1)
+    refreshResponse.resolve({
+      status: 200,
+      data: { appToken: 'refreshed-access-token', ttlSeconds: 60 * 60 }
+    })
+
+    const [firstResult, secondResult] = await Promise.all([first, second])
+    expect(firstResult).toMatchObject({ status: 200, body: 'business-ok' })
+    expect(secondResult).toMatchObject({ status: 200, body: 'business-ok' })
+
+    const requests = networkRequestMock.mock.calls.map(
+      ([request]) =>
+        request as {
+          url?: string
+          headers?: Record<string, string>
+        }
+    )
+    const businessRequests = requests.filter((request) =>
+      request.url?.startsWith('https://example.test/api/business/')
+    )
+    expect(businessRequests).toHaveLength(2)
+    expect(businessRequests.map((request) => request.headers?.authorization)).toEqual([
+      'Bearer refreshed-access-token',
+      'Bearer refreshed-access-token'
+    ])
+  })
+
+  it('refreshes once after a business 401 and retries with the renewed access token', async () => {
+    networkRequestMock.mockReset()
+    networkRequestMock
+      .mockResolvedValueOnce({
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: new Headers(),
+        url: 'https://example.test/api/business',
+        data: 'unauthorized',
+        ok: false
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { appToken: 'renewed-access-token', ttlSeconds: 60 * 60 }
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        url: 'https://example.test/api/business',
+        data: 'business-ok',
+        ok: true
+      })
+
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setState({
+      appRootPath: '/tmp/tuff',
+      authToken: 'access-token-before-refresh',
+      authRefreshToken: 'refresh-token-v1',
+      authAccessTokenExpiresAt: Date.now() + 60 * 60 * 1000
+    })
+
+    await expect(
+      authModule.__test__.performNexusRequest({
+        method: 'GET',
+        path: '/api/business',
+        context: 'plugin-business'
+      })
+    ).resolves.toMatchObject({ status: 200, body: 'business-ok' })
+
+    const requests = networkRequestMock.mock.calls.map(
+      ([request]) =>
+        request as {
+          url?: string
+          headers?: Record<string, string>
+        }
+    )
+    const businessRequests = requests.filter(
+      (request) => request.url === 'https://example.test/api/business'
+    )
+    const refreshRequests = requests.filter(
+      (request) => request.url === 'https://example.test/api/app-auth/refresh'
+    )
+
+    expect(businessRequests).toHaveLength(2)
+    expect(businessRequests.map((request) => request.headers?.authorization)).toEqual([
+      'Bearer access-token-before-refresh',
+      'Bearer renewed-access-token'
+    ])
+    expect(refreshRequests).toHaveLength(1)
+    expect(refreshRequests[0]?.headers).toEqual({ Authorization: 'Bearer refresh-token-v1' })
+  })
+
+  it('clears the complete credential bundle when the refresh credential is rejected', async () => {
+    networkRequestMock.mockReset()
+    networkRequestMock.mockResolvedValueOnce({ status: 401, data: null })
+
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setState({
+      appRootPath: '/tmp/tuff',
+      authToken: 'access-token-before-rejection',
+      authRefreshToken: 'rejected-refresh-token',
+      authAccessTokenExpiresAt: Date.now() + 60 * 60 * 1000
+    })
+
+    await expect(authModule.__test__.refreshAccessToken('test-rejection')).resolves.toEqual({
+      kind: 'unauthorized'
+    })
+    expect(authModule.__test__.getCredentialState()).toEqual({
+      accessToken: '',
+      refreshToken: null,
+      accessTokenExpiresAt: null
+    })
+    expect(authModule.getAuthToken()).toBeNull()
+  })
 })
 
 describe('tuff://auth/callback deep link', () => {
+  beforeEach(() => {
+    setSecureStoreValueMock.mockClear()
+  })
   it('refuses a callback when no login is in flight', async () => {
     // The drive-by case: a page navigates the user's browser to
     // tuff://auth/callback?token=… with nothing pending in the app (#695).

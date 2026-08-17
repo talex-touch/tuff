@@ -110,13 +110,17 @@ async function handleCallback() {
     if (devicePlatform)
       headers['x-device-platform'] = devicePlatform
 
-    const data = await requestJson<{ appToken?: string | null }>('/api/app-auth/sign-in-token', {
+    const data = await requestJson<{
+      appToken?: string | null
+      refreshToken?: string | null
+      ttlSeconds?: number | null
+    }>('/api/app-auth/sign-in-token', {
       method: 'POST',
       headers,
       credentials: 'include',
     })
 
-    if (!data?.appToken) {
+    if (!data?.appToken || !data.refreshToken) {
       await ensureCallbackProcessingFeedback(callbackStartedAt)
       errorMessage.value = t('auth.tokenFailed', 'Failed to get authentication token.')
       status.value = 'error'
@@ -124,13 +128,17 @@ async function handleCallback() {
     }
 
     const appToken = data.appToken
+    const refreshToken = data.refreshToken
     await ensureCallbackProcessingFeedback(callbackStartedAt)
     sessionToken.value = appToken
     status.value = 'success'
 
-    // Redirect to app with token
+    // Redirect to app with the access token and its refresh credential.
     const params = new URLSearchParams()
     params.set('app_token', appToken)
+    params.set('refresh_token', refreshToken)
+    if (typeof data.ttlSeconds === 'number' && Number.isFinite(data.ttlSeconds) && data.ttlSeconds > 0)
+      params.set('ttl_seconds', String(Math.floor(data.ttlSeconds)))
     const callbackUrl = `${APP_SCHEMA}://auth/callback?${params.toString()}`
     protocolAttempted.value = true
     window.location.href = callbackUrl
