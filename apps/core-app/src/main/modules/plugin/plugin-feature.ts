@@ -23,6 +23,24 @@ export function createBuilderWithPluginContext(pluginName: string): typeof TuffI
   }
 }
 
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
+
+export function snapshotLifecycleFeature(feature: IPluginFeature): IPluginFeature {
+  const serializer = (feature as IPluginFeature & { toJSONObject?: () => object }).toJSONObject
+  const source = typeof serializer === 'function' ? serializer.call(feature) : feature
+  const serialized = JSON.stringify(source)
+  if (!serialized) {
+    throw new Error('PLUGIN_FEATURE_SNAPSHOT_INVALID')
+  }
+  return JSON.parse(serialized) as IPluginFeature
+}
+
 /**
  * Plugin feature implementation
  */
