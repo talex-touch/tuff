@@ -105,9 +105,23 @@ function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem 
   })
 }
 
+function assertClipboardTransportSuccess(response: unknown): void {
+  if (!response || typeof response !== 'object') return
+  const isError = (
+    ('name' in response && response.name === 'Error')
+    || ('permissionId' in response && typeof response.permissionId === 'string')
+  )
+  if (!isError) return
+  const message = 'message' in response && typeof response.message === 'string'
+    ? response.message
+    : 'Clipboard request failed'
+  throw new Error(message)
+}
+
 function toClipboardHistoryResponse(
   response: ClipboardQueryResponse | null | undefined,
 ): PluginClipboardHistoryResponse {
+  assertClipboardTransportSuccess(response)
   const history = Array.isArray(response?.items)
     ? response.items
         .map(item => toPluginClipboardItem(item))

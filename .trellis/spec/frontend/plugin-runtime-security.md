@@ -3423,3 +3423,116 @@ constant (`payload.path !== fixed.path → authorityInvalid()`), it does not rew
   wire constant, not the current route, with a comment pointing here.
 - Retiring a constant for real requires a dedicated task covering host + plugin + the four
   cross-package tests + a compatibility window for installed plugin versions.
+
+## Scenario: Plugin Surface Network And Lifecycle DTO Boundary
+
+### 1. Scope / Trigger
+
+- Trigger: a trusted plugin Surface issues HTTP requests through its declared network permission,
+  or main invokes an isolated Prelude lifecycle with a host-owned `PluginFeature` instance.
+- This boundary spans the plugin SDK, trusted preload channel, legacy plugin-view IPC, typed main
+  transport, permission guard, NetworkService, lifecycle wire codec, and packaged Prelude resolver.
+
+### 2. Signatures
+
+```ts
+interface PluginNetworkSdk {
+  request<T>(request: PluginNetworkRequest): Promise<PluginNetworkResponse<T>>
+}
+
+NetworkModule.pluginViewBridge(
+  request: PluginNetworkRequest,
+  activation: PluginActivationIdentity,
+  sender: WebContents,
+): Promise<PluginNetworkResponse<unknown>>
+
+snapshotLifecycleFeature(feature: IPluginFeature): IPluginFeature
+
+type PreludeManifestContract =
+  | { main: string; build?: { index?: never } }
+  | { main?: never; build: { index: { entry: string } } }
+```
+
+### 3. Contracts
+
+- Plugin Surfaces import `usePluginNetwork()` from `@talex-touch/utils/plugin/sdk`. They never
+  import the CoreApp renderer SDK, raw transport, Electron, or the generic web `networkClient`.
+- The trusted preload keeps exposing only `$plugin`, `$config`, and `$channel`. Network requests
+  arriving on the raw plugin-view channel are accepted only with the current registered
+  `PluginActivationIdentity` and sender. Main then re-invokes `NetworkEvents.api.request` through
+  typed transport using `{ name, uniqueKey }`; the existing target classifier and
+  `network.local` / `network.internet` permission guard remain the sole authorization owner.
+- The plugin network SDK returns the typed `NetworkResponse<T>` envelope. A Surface compatibility
+  adapter may wrap a legacy channel reply that already contains the response body, but it must
+  recognize a real envelope by all stable fields before unwrapping or wrapping it.
+- Providers that consume JSON declare `responseType: 'json'`. A parsed body is never inferred from
+  headers or cast from an unvalidated string.
+- Before lifecycle invocation, host-owned feature classes are projected to bounded plain DTOs via
+  the canonical feature serializer. Sending a `PluginFeature` / `TuffIconImpl` instance directly
+  violates the host wire prototype contract.
+- A manifest declares exactly one Prelude owner. Source `index.js` copied unchanged into the
+  package uses `main`; source that compiles to canonical `dist/build/index.js` uses
+  `build.index.entry`. Declaring both is invalid, while naming packaged `index.js` as the build
+  source makes the resolver treat the real packaged artifact as missing or stale.
+- SDK permission failures must remain errors. Clipboard history, network, Secret, and similar
+  adapters must not normalize an error-shaped reply into an empty success state.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Plugin-view request lacks current activation identity or sender | `PLUGIN_NETWORK_REQUEST_INVALID`; no typed invoke |
+| Destination is local/public without matching permission | Stable permission denial before NetworkService work |
+| Surface imports raw transport / Electron / renderer runtime | Package scan blocks with raw-runtime escape |
+| JSON provider omits `responseType: 'json'` | Reject or handle explicit non-JSON response; never read `undefined.data` |
+| Lifecycle payload contains a host class/prototype | Project to plain DTO before wire encoding |
+| Manifest declares both `main` and `build.index.entry` | `PLUGIN_RUNTIME_PRELUDE_CONTRACT_INVALID` |
+| Build entry equals packaged root `index.js` but canonical build is absent | Use `main`; otherwise artifact missing/stale |
+| Permission error reply reaches Clipboard history SDK | Throw the stable message; renderer shows an error banner |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a verified Translation Surface calls MyMemory through `usePluginNetwork`; main reuses the
+  typed permission guard, parses JSON, and the Surface renders the real result. Its API key, when
+  present, round-trips through Secret SDK while ordinary plugin storage contains metadata only.
+- Base: a plugin has no network work and imports no network facade. Its Prelude receives a plain
+  feature DTO and an empty or explicit lifecycle result.
+- Bad: expose `$transport`, call browser `fetch` from a file Surface, fabricate plugin identity in
+  the payload, pass a `PluginFeature` instance over the host wire, declare both Prelude owners, or
+  turn permission denial into an empty list.
+
+### 6. Tests Required
+
+- Plugin Network SDK test asserts the exact typed `NetworkEvents.api.request` route.
+- NetworkModule test sends a raw plugin-view request with current activation/sender and asserts the
+  typed invoke context preserves `{ sender, name, uniqueKey }`; missing identity must not invoke.
+- Target-policy tests retain local/public classification and both permission gates.
+- TouchPlugin tests assert lifecycle receives a plain feature DTO with `Object.prototype`, not the
+  registered class instance. Prelude resolver tests cover `main`, build entry, both-fields invalid,
+  artifact missing, and stale build.
+- Provider tests assert JSON response type and source-language normalization. Real Electron smoke
+  installs the signed package, executes one real no-secret provider, and observes a translated
+  result through the Surface.
+- Clipboard SDK and renderer tests assert a permission error throws and renders explicit feedback
+  instead of the ordinary empty state.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+import { networkClient } from '@talex-touch/utils/network'
+const response = await networkClient.request({ url })
+await runtime.callLifecycle('onFeatureTriggered', [id, query, featureInstance])
+```
+
+#### Correct
+
+```ts
+const response = await usePluginNetwork().request({ url, responseType: 'json' })
+await typedTransport.invoke(NetworkEvents.api.request, request, {
+  sender,
+  plugin: { name: activation.name, uniqueKey: activation.key }
+})
+await runtime.callLifecycle('onFeatureTriggered', [id, query, snapshotLifecycleFeature(feature)])
+```

@@ -1484,6 +1484,8 @@ export function useSearch(
       await transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     }
 
+    let pluginFeatureShowsInput = true
+
     if (isPluginFeature) {
       ensureBoxData(boxOptions).feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
@@ -1502,6 +1504,7 @@ export function useSearch(
         typeof explicitShowInput === 'boolean'
           ? explicitShowInput
           : hasAcceptedInputTypes || allowInput
+      pluginFeatureShowsInput = shouldShowInput
 
       activeActivations.value = [
         {
@@ -1520,16 +1523,22 @@ export function useSearch(
 
     searchResults.value = []
 
-    const currentQueryText = isPluginFeature
-      ? searchVal.value
-      : typeof searchResult.value?.query?.text === 'string'
-        ? searchResult.value.query.text
-        : searchVal.value
+    const currentQueryText =
+      isPluginFeature && !pluginFeatureShowsInput
+        ? ''
+        : isPluginFeature
+          ? searchVal.value
+          : typeof searchResult.value?.query?.text === 'string'
+            ? searchResult.value.query.text
+            : searchVal.value
     await refreshClipboardBeforeInputBuild('explicit')
     const currentInputs = buildQueryInputs({
       queryText: currentQueryText,
       allowPendingTextClipboard: isPluginFeature
     })
+    if (isPluginFeature && !pluginFeatureShowsInput) {
+      searchVal.value = ''
+    }
     const usedFileModeAttachment =
       boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0
     const usedClipboardInput = currentInputs.length > 0 && !usedFileModeAttachment

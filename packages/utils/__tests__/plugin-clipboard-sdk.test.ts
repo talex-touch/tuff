@@ -92,4 +92,22 @@ describe('Plugin Clipboard SDK', () => {
       expect.objectContaining({ id: 42, autoPaste: true }),
     )
   })
+
+  it('throws permission failures instead of normalizing them into an empty history', async () => {
+    mocks.send.mockResolvedValueOnce({
+      name: 'Error',
+      message: 'Permission clipboard.read required',
+      code: 'PERMISSION_DENIED',
+      permissionId: 'clipboard.read',
+      pluginId: 'clipboard-history',
+    })
+
+    await expect(useClipboard().history.getHistory()).rejects.toThrow(
+      'Permission clipboard.read required',
+    )
+    expect(mocks.send).toHaveBeenCalledWith(
+      ClipboardEvents.getHistory,
+      expect.objectContaining({ type: 'all' }),
+    )
+  })
 })

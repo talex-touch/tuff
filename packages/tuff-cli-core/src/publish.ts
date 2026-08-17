@@ -324,8 +324,11 @@ function normalizeManifestIdToSlug(value: string): string {
 }
 
 function resolveDashboardSlug(manifest: ManifestInfo, pkg: PackageJsonInfo): string {
-  const source = manifest.id || manifest.name || pkg.name
-  const slug = normalizeManifestIdToSlug(source)
+  const manifestId = manifest.id?.trim()
+  if (manifestId)
+    return manifestId
+
+  const slug = normalizeManifestIdToSlug(manifest.name || pkg.name)
   if (!slug) {
     throw new Error('Cannot resolve Dashboard plugin identifier from manifest.id or manifest.name.')
   }

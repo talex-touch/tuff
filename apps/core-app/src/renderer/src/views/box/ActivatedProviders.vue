@@ -82,7 +82,11 @@ function getProviderIconStyle(provider: IProviderActivate): Record<string, strin
           :alt="provider.name || provider.meta?.pluginName"
           :colorful="shouldRenderProviderIconColorful(provider)"
           :style="getProviderIconStyle(provider)"
-        />
+        >
+          <template #empty>
+            <i class="Activated-Provider-FallbackIcon i-carbon-application" aria-hidden="true" />
+          </template>
+        </TuffIcon>
         <span class="Activated-Provider-PillMajor-Label text-sm truncate">{{
           provider.name || provider.meta?.pluginName || provider.id
         }}</span>
@@ -109,6 +113,14 @@ function getProviderIconStyle(provider: IProviderActivate): Record<string, strin
 </template>
 
 <style lang="scss" scoped>
+.Activated-Provider-FallbackIcon {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  color: var(--icon-color);
+}
+
 .Activated-Provider-Deactivate {
   // Was a div, so it carried no native chrome. Reset it back so promoting the element to a
   // button is an accessibility change only, not a visual one.
