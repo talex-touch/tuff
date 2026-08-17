@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Implementation and runtime verification have not started in this task.",
+    "evidence": "The PRD records the confirmed focus chain and five unchecked acceptance criteria.",
+    "nextAction": "Implement the macOS external-open close path, then run focused CoreBox tests and the main-process typecheck."
+  }
 }

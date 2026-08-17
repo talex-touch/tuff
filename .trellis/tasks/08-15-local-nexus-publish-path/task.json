@@ -23,7 +23,7 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "blocker": null,
+    "blocker": "None; local Nexus end-to-end verification is complete.",
     "evidence": "Local chain completed end to end: three signed RELEASE versions are approved, attested, eligible, publicly listed, installed, enabled, and functionally verified in an isolated CoreApp profile.",
     "nextAction": "Archive together with the parent task when the user requests the normal commit/archive workflow."
   }
