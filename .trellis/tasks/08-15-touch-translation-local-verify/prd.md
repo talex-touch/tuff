@@ -8,7 +8,7 @@
 
 ## Background
 
-仓库内已有该插件，v1.0.11，sdkapi 260615。权限面是三个里最大的：
+仓库内插件已从 v1.0.11 修复到 v1.0.17，sdkapi 260713。权限面是三个里最大的：
 `network.internet`、`intelligence.basic`、`storage.plugin`、`search.root-results` 为必需，
 `clipboard.write` 为可选，每项都写了 reason。manifest 里明确「隔离 Prelude 不直接联网」，
 联网只发生在设置 Surface，密钥由安全存储管理——这条设计约束必须在验证中确认仍然成立。
@@ -30,13 +30,13 @@
 
 ## Acceptance Criteria
 
-- [ ] `/api/store/plugins?compact=1` 中出现该插件，`latestVersion.channel === 'RELEASE'`。
-- [ ] 市场搜索「translation」「翻译」能命中。
-- [ ] 安装成功，出现在「已安装」列表且可启用。
-- [ ] 配置一个翻译源后，一段文本能被成功翻译并展示结果。
-- [ ] 在插件的普通 storage 文件中检索配置的密钥字符串，**搜不到明文**。
-- [ ] 拒绝 `network.internet` 或 `intelligence.basic` 时，翻译动作给出明确的权限拒绝反馈而不是超时或空结果。
-- [ ] `manifest.sdkapi === 260713`，且在该版本下上述功能、权限与密钥验收项全部重测通过。
+- [x] `/api/store/plugins?compact=1` 中出现该插件，`latestVersion.channel === 'RELEASE'`。
+- [x] 市场搜索「translation」「翻译」能命中。
+- [x] 安装成功，出现在「已安装」列表且可启用。
+- [x] 配置一个翻译源后，一段文本能被成功翻译并展示结果。
+- [x] 在插件的普通 storage 文件中检索配置的密钥字符串，**搜不到明文**。
+- [x] 拒绝 `network.internet` 或 `intelligence.basic` 时，翻译动作给出明确的权限拒绝反馈而不是超时或空结果。
+- [x] `manifest.sdkapi === 260713`，且在该版本下上述功能、权限与密钥验收项全部重测通过。
 
 ## Constraints
 

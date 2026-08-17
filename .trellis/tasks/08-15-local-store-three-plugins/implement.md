@@ -15,30 +15,29 @@
 
 ## 阶段 1：打通上架链路（子任务 `local-nexus-publish-path`）
 
-### 1a. 补齐本地 attestation 密钥（当前阻塞点）
+### 1a. 补齐本地 attestation 密钥（已完成）
 
 - [x] 生成 ed25519 密钥对（私钥 PEM + 公钥 PEM）
 - [x] `apps/nexus/.env.local`（已在 gitignore 内）增加 `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM` 与
       `PLUGIN_ATTESTATION_KEY_ID=local-dev-attest-2026`（匹配 `pluginSigning.ts:34` 的 `KEY_ID_RE`）
 - [x] 3200 收敛为单进程（pid 87549，`NUXT_USE_CLOUDFLARE_DEV=true`），`/api/store/plugins` 返回 `total:0`
-- [ ] 实际触发一次 attestation 签发，确认不再抛 `PLUGIN_ATTESTATION_KEY_UNAVAILABLE`
-- [ ] 核心应用侧设置 `TUFF_PLUGIN_TRUST_ROOTS_JSON`，把对应公钥追加进信任根
-      （`signature-verifier.ts:69` 是追加不是替换，内置根不受影响）
+- [x] 实际触发 attestation 签发，确认不再抛 `PLUGIN_ATTESTATION_KEY_UNAVAILABLE`
+- [x] 核心应用通过 `TUFF_PLUGIN_TRUST_ROOTS_JSON` 追加对应公钥；内置根未被替换
 
 ### 1b. 发布者签名密钥
 
-- [ ] 走 `/api/dashboard/plugin-signing-keys` 注册发布者签名密钥
-- [ ] 确认 `getPublisherSigningKey` 能查到，不再 `PLUGIN_SIGNING_KEY_UNKNOWN`
+- [x] 走 `/api/dashboard/plugin-signing-keys` / 发布校验注册发布者签名密钥
+- [x] `getPublisherSigningKey` 可查到当前 active key，不再 `PLUGIN_SIGNING_KEY_UNKNOWN`
 
 ### 1c. 探针发布
 
-- [x] `clipboard-history` 构建通过，产出 `dist/clipboard-history-1.1.10.tpex`（0.26 MB）
-- [ ] 用 `clipboard-history` 做探针：login → `publish --channel RELEASE` → 审核 → 目录可见
+- [x] `clipboard-history` 最终构建产出 `dist/clipboard-history-1.1.11.tpex`（约 0.26 MB）
+- [x] 用 `clipboard-history` 做探针：login → `publish --channel RELEASE` → 审核 → 目录可见
 
 > 环境坑：macOS 没有 `timeout` 命令，套在构建命令外会触发 mise 的 `command_not_found_handler` bug，
 > 报错 `_mise_cnf_tried: assignment to invalid subscript range` 并吞掉真实输出。别用 `timeout`。
-- [ ] 实测安全扫描在本地的判定结果（必须是 `passed` 或 `review-required`）
-- [ ] 把完整步骤与每步验证命令写回 design.md §4
+- [x] 安全扫描在本地得到 `passed`；受审 waiver 仅用于精确 artifact digest
+- [x] 完整步骤与验证结果已写回 design.md「执行结果」
 
 **验收**：`/api/store/plugins?compact=1` 的 `total >= 1`，返回项 `latestVersion.channel === 'RELEASE'`，
 且 D1 中该行的 `publisher_verified_at` / `nexus_attestation` / `admission_status` 均为可上架取值。
@@ -59,29 +58,29 @@
 - [ ] **未做**：`.tpex` 可复现构建（`compress-util.ts` 把 mtime 写进 tar 头），单独立项
 
 ### 2a. `json-formatter-onboarding`（工作量最大，先开）
-- [ ] clone `github.com/talex-touch/json-formatter` 到 `plugins/json-formatter`，去掉其独立仓库残留
-      （`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc` 视 monorepo 约定处理）
-- [ ] `package.json`：改名为 `@talex-touch/json-formatter-plugin`，去掉写死的本机绝对路径脚本
-- [ ] `manifest.json`：补 `permissions` + `permissionReasons`，对齐 `build.index` 约定，处理 `dev.enable`
-- [ ] `pnpm -C plugins/json-formatter run lint` + `build`
-- [ ] `pnpm plugins:validate`
+- [x] `json-formatter` 已进入 `plugins/json-formatter`，独立仓库残留已去除
+- [x] `package.json` 使用 `@talex-touch/json-formatter-plugin`，无本机绝对路径
+- [x] manifest 权限、reason、SDK 260713、关闭开发地址与 CoreBox 交互已适配
+- [x] `pnpm -C plugins/json-formatter run lint` + `typecheck` + `build`
+- [x] `pnpm plugins:validate`
+- [x] 本地发布并升级到 `1.0.8`
 
 ### 2b. `clipboard-history-local-verify`
-- [ ] 构建 + 发布 + 审核 + 市场安装
-- [ ] 功能验证：记录历史、回写剪贴板、权限门生效
+- [x] 构建 + 发布 + 审核 + 市场安装
+- [x] 功能验证：记录历史、回写剪贴板、权限拒绝明确反馈
 
 ### 2c. `touch-translation-local-verify`
-- [ ] 构建 + 发布 + 审核 + 市场安装
-- [ ] 功能验证：配置一个翻译源、完成一次翻译
-- [ ] 安全验证：密钥进 secret 通道，普通 plugin storage 里搜不到明文
+- [x] 构建 + 发布 + 审核 + 市场安装
+- [x] 功能验证：MyMemory 完成真实文本翻译
+- [x] 安全验证：测试密钥进 secret 通道，普通 plugin storage 与隔离 profile 搜不到明文
 
 ## 阶段 3：整体收敛（父任务）
 
-- [ ] `curl localhost:3200/api/store/plugins?compact=1` → `total === 3`
-- [ ] 核心应用切到 local 运行时，市场页逐个搜索三个插件的名称与关键词
-- [ ] 三个插件依次安装、启用、跑主功能
-- [ ] `git diff --check`
-- [ ] 汇总：改了什么、哪些是链路问题、哪些是插件问题、哪些旁路问题只记录没修
+- [x] `GET localhost:3200/api/store/plugins?compact=1` → `total === 3`
+- [x] 核心应用切到 local 运行时，市场页逐个搜索名称与中英文关键词
+- [x] 三个插件依次安装、启用、跑主功能
+- [x] scoped lint、typecheck、focused tests、插件 build 与 package policy 全部通过
+- [x] 汇总写入 design.md，并将四个 PRD 验收项同步为完成
 
 ## 验证命令清单
 

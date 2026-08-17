@@ -3,6 +3,72 @@
 > **修正记录（2026-08-15）**：本文档第一版的 §1.1 / §1.2 结论是错的，基于了一个**过期的 miniflare 状态目录**。
 > 错误内容与更正见 §0，保留是为了让后来者知道这个坑在哪。
 
+## 执行结果（2026-08-17）
+
+最终本地公开目录为三条真实 `RELEASE`：
+
+| slug | version | 结果 |
+|---|---:|---|
+| `com.tuffex.clipboard-history` | `1.1.11` | approved / available / eligible |
+| `com.tuffex.json-formatter` | `1.0.8` | approved / available / eligible |
+| `com.tuffex.translation` | `1.0.17` | approved / available / eligible |
+
+`/api/store/plugins?compact=1` 返回 `total: 3`。三个版本均由本次发布产生，具备
+publisher signature、publisher verified time、Nexus attestation、passed policy/scan 和
+eligible admission；没有直接写 D1 制造可见性。
+
+### 可复现上架步骤
+
+1. 确认 Nexus 使用仓库根 `.wrangler/state/v3`，备份活 D1；不要读取
+   `apps/nexus/.wrangler` 的过期数据。
+2. 在 `apps/nexus/.env.local` 配置本地 Ed25519 attestation 私钥和稳定 key id，启动
+   `NUXT_USE_CLOUDFLARE_DEV=true` 的 Nexus。核心应用用同一密钥对的公钥追加
+   `TUFF_PLUGIN_TRUST_ROOTS_JSON`，不替换内置信任根。
+3. 执行 `tuff --local login`。发布者 Ed25519 私钥只放在仓库外的 `0600` 文件，发布时设置：
+
+   ```bash
+   TUFF_PLUGIN_SIGNING_PRIVATE_KEY_FILE=<private.pem> \
+   TUFF_PLUGIN_SIGNING_KEY_ID=<stable-key-id> \
+   tuff --local publish --channel RELEASE
+   ```
+
+4. Dashboard slug 必须逐字等于 `.tpex` 内的 `manifest.id`。CLI 不得把合法连字符改成点；
+   否则服务端 Package Policy 会报 `PLUGIN_PACKAGE_EXPECTED_ID_MISMATCH`。
+5. 首次发布前在 Dashboard 创建同 slug 的插件元数据（图标、README、分类）。官方仓库插件
+   在本地标记 `isOfficial: true`；版本审核仍走真实管理员接口。
+6. `json-formatter` 的 Monaco / expression-query findings 使用管理员创建的、按本次
+   `artifactSha256` 限定且有到期时间的 server-owned waiver。不要关闭扫描器，也不要沿用
+   上一构建摘要。开发目录的 `security-waivers.json` 仍按具体文件摘要限制。
+7. 每个插件依次发布，遵守同一发布者五分钟提交冷却；再将 plugin/version 状态审核为
+   `approved`。审核时服务端签发 admission attestation。
+8. 核心应用隔离 profile 将 Runtime API server 切到 `http://localhost:3200`，搜索名称与
+   中英文关键词，安装、授予声明权限、启用并执行主功能。
+9. 更新大插件时，Surface 的 `plugin:install-source` 请求使用三分钟有界超时；安装进度和
+   非官方确认仍保留，不能把超时改成无限等待。
+
+### 本次发现并修复的链路缺陷
+
+| 缺陷 | 修复 |
+|---|---|
+| CLI 将 `manifest.id` 的 `-` 改成 `.` | manifest id 作为 Dashboard slug 原样保留 |
+| Store 路由组件是 fragment，外层 Transition 不渲染 | `Store.vue` 改为单根视图 |
+| 大包安装超过默认响应窗口后假失败 | Plugin SDK 安装请求使用三分钟有界超时 |
+| 插件视图网络 SDK 没有 raw-channel → typed transport 桥 | NetworkModule 以当前 activation/sender 重入 typed permission guard |
+| `PluginFeature` class 直接跨隔离 wire | 生命周期调用前转成 plain DTO |
+| Translation 同时声明 `main` 与 `build.index`，随后又把 packaged `index.js` 当 source | 最终只声明 `main: index.js` |
+| Clipboard 权限错误被 SDK 归一化为空历史 | 错误形响应直接抛出并在 Surface 显示 banner |
+
+### 功能验收摘要
+
+- `clipboard-history`：连续三条测试记录可见；选中记录可写回系统剪贴板；撤销
+  `clipboard.read` 后显示明确 permission-denied banner。
+- `json-formatter`：合法 JSON 自动格式化，非法 JSON 有错误反馈；激活后 CoreBox 输入收起、
+  左编辑器自动聚焦、前缀图标可见、Pin 靠右；双栏跟随滚动可开关。
+- `touch-translation`：MyMemory 通过 permission-gated host Network SDK 完成真实
+  `Hello world` → 中文翻译；Custom 测试密钥可从 Secret SDK 回读，普通 plugin storage 与
+  整个隔离 profile 均检索不到该明文标记。注入 `PERMISSION_DENIED` 的隔离 Prelude 探针返回
+  明确「翻译权限未授予」结果；Secret 批量写失败的 fail-closed 路径由现有测试覆盖。
+
 ## 〇、一个必须先讲的坑：两个 `.wrangler` 目录
 
 `apps/nexus/nuxt.config.ts:396` 把 miniflare 的 `persistDir` 指向**仓库根**：
