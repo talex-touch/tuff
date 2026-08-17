@@ -148,6 +148,7 @@ describe('browser session token authentication', () => {
     const { requireSessionAuth } = await import('../auth')
     await expect(requireSessionAuth(event)).resolves.toEqual({
       userId: 'direct-user',
+      deviceId: null,
       authSource: 'session',
       tokenGrantType: null,
       sessionIssuedAt: 1700000123,
