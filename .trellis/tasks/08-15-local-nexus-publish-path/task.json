@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "blocker": "Beta release is held: master CI must be green before tagging v2.4.14-beta.9.",
-    "evidence": "Local chain proven up to publish: API key + Ed25519 publisher key registered via the real dashboard APIs, clipboard-history/json-formatter .tpex built, CLI terms accepted.",
-    "nextAction": "Confirm master CI green, then run `node scripts/version-sync.mjs prerelease` from a clean master checkout to tag v2.4.14-beta.9."
+    "blocker": null,
+    "evidence": "Local chain completed end to end: three signed RELEASE versions are approved, attested, eligible, publicly listed, installed, enabled, and functionally verified in an isolated CoreApp profile.",
+    "nextAction": "Archive together with the parent task when the user requests the normal commit/archive workflow."
   }
 }

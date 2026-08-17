@@ -28,12 +28,12 @@
 
 ## Acceptance Criteria
 
-- [ ] `curl "http://localhost:3200/api/store/plugins?compact=1"` 返回的 `total >= 1`。
-- [ ] 返回项的 `latestVersion.channel === 'RELEASE'`，且该版本是本次真实发布产生的（不是旧行）。
-- [ ] D1 里该版本行的 `publisher_signature`、`publisher_verified_at`、`nexus_attestation`、
+- [x] `curl "http://localhost:3200/api/store/plugins?compact=1"` 返回的 `total >= 1`。
+- [x] 返回项的 `latestVersion.channel === 'RELEASE'`，且该版本是本次真实发布产生的（不是旧行）。
+- [x] D1 里该版本行的 `publisher_signature`、`publisher_verified_at`、`nexus_attestation`、
       `admission_status`、`policy_decision`、`security_scan_decision` 均为可上架取值，且由服务端写入。
-- [ ] 完整步骤已写入父任务 `design.md` 第二节。
-- [ ] 操作前已备份 `.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite`，且记录了 `auth_users.role` 的原值。
+- [x] 完整步骤已写入父任务 `design.md` 第二节。
+- [x] 操作前已备份 `.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite`，且记录了 `auth_users.role` 的原值。
 
 ## Constraints
 

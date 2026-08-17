@@ -9,9 +9,8 @@
 
 ## Background
 
-该插件**不在本仓库内**，只存在于独立 GitHub 仓库：v1.0.5，sdkapi 260615，TypeScript，
-最后更新 2026-06-19（约两个月未动）。本地 D1 里有它的 `com.tuffex.json.formatter` 记录
-（1.0.0 / 1.0.1，RELEASE，approved），属于旧门槛时期的遗留数据。
+该插件已引入本仓库并修复到 v1.0.8，sdkapi 260713，TypeScript；原独立仓库最后更新于
+2026-06-19。本地 D1 旧 1.0.0 / 1.0.1 RELEASE 记录仅作为历史数据，不作为本次验收证据。
 
 ## Requirements
 
@@ -34,13 +33,13 @@
 
 ## Acceptance Criteria
 
-- [ ] `plugins/json-formatter` 存在，`pnpm plugins:validate` 通过。
-- [ ] `pnpm -C plugins/json-formatter run lint` 与 `run build` 均通过。
-- [ ] manifest 声明了实际使用的全部权限，每项都有 reason；没有多余声明。
-- [ ] `package.json` 内不含任何本机绝对路径。
-- [ ] 本地发布后市场能搜到「json」「格式化」并命中该插件。
-- [ ] 安装启用后：合法 JSON 能格式化；非法 JSON 有明确错误反馈，不静默失败。
-- [ ] `manifest.sdkapi === 260713`，且在该版本下加载、权限门与格式化功能实测通过。
+- [x] `plugins/json-formatter` 存在，`pnpm plugins:validate` 通过。
+- [x] `pnpm -C plugins/json-formatter run lint` 与 `run build` 均通过。
+- [x] manifest 声明了实际使用的全部权限，每项都有 reason；没有多余声明。
+- [x] `package.json` 内不含任何本机绝对路径。
+- [x] 本地发布后市场能搜到「json」「格式化」并命中该插件。
+- [x] 安装启用后：合法 JSON 能格式化；非法 JSON 有明确错误反馈，不静默失败。
+- [x] `manifest.sdkapi === 260713`，且在该版本下加载、权限门与格式化功能实测通过。
 
 ## Constraints
 

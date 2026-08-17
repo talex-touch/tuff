@@ -47,15 +47,15 @@
 
 ## Acceptance Criteria
 
-- [ ] 本地 Nexus `/api/store/plugins?compact=1` 返回三个插件，`total === 3`。
-- [ ] 核心应用市场页搜索三个插件的名称与关键词，各自能命中。
-- [ ] 三个插件在核心应用内安装成功，安装后出现在「已安装」列表且可启用。
-- [ ] `clipboard-history`：能记录并回写剪贴板历史，权限门（`clipboard.read` / `clipboard.write`）按声明生效。
-- [ ] `touch-translation`：配置一个翻译源后能完成一次文本翻译，密钥走 secret 通道不落普通 storage。
-- [ ] `json-formatter`：能格式化一段 JSON，非法 JSON 有明确错误反馈。
-- [ ] 三个插件的 `manifest.sdkapi` 均为 `260713`，且在该版本下加载、权限门、主功能实测通过。
-- [ ] 上架链路步骤写进 `design.md`，可被第二个人照着复现，不依赖本会话上下文。
-- [ ] 四个子任务各自的验收标准独立成立，不靠其他子任务的产物证明自己通过。
+- [x] 本地 Nexus `/api/store/plugins?compact=1` 返回三个插件，`total === 3`。
+- [x] 核心应用市场页搜索三个插件的名称与关键词，各自能命中。
+- [x] 三个插件在核心应用内安装成功，安装后出现在「已安装」列表且可启用。
+- [x] `clipboard-history`：能记录并回写剪贴板历史，权限门（`clipboard.read` / `clipboard.write`）按声明生效。
+- [x] `touch-translation`：配置一个翻译源后能完成一次文本翻译，密钥走 secret 通道不落普通 storage。
+- [x] `json-formatter`：能格式化一段 JSON，非法 JSON 有明确错误反馈。
+- [x] 三个插件的 `manifest.sdkapi` 均为 `260713`，且在该版本下加载、权限门、主功能实测通过。
+- [x] 上架链路步骤写进 `design.md`，可被第二个人照着复现，不依赖本会话上下文。
+- [x] 四个子任务各自的验收标准独立成立，不靠其他子任务的产物证明自己通过。
 
 ## Constraints
 

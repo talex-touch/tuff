@@ -8,7 +8,7 @@
 
 ## Background
 
-仓库内已有该插件，v1.1.10，sdkapi 260615，manifest 规范度是三个里最高的：
+仓库内插件已从 v1.1.10 修复到 v1.1.11，sdkapi 260713，manifest 规范度是三个里最高的：
 `permissions.required` 为 `clipboard.read` / `clipboard.write` / `search.root-results`，每项都有 reason，
 且声明了 `searchProviders`。因此它适合作为上架链路的**探针插件**（见前置子任务）。
 
@@ -27,13 +27,13 @@
 
 ## Acceptance Criteria
 
-- [ ] `/api/store/plugins?compact=1` 中出现该插件，`latestVersion.channel === 'RELEASE'`。
-- [ ] 市场搜索「clipboard」「剪贴板」「历史」能命中。
-- [ ] 安装成功，出现在「已安装」列表且可启用。
-- [ ] 复制若干条内容后，插件能列出对应历史记录。
-- [ ] 选中一条历史能重新写回系统剪贴板（粘贴可验证）。
-- [ ] 拒绝 `clipboard.read` 权限时，插件给出明确的 `permission-denied` 类反馈，而不是空列表或静默失败。
-- [ ] `manifest.sdkapi === 260713`，且在该版本下上述功能与权限验收项全部重测通过。
+- [x] `/api/store/plugins?compact=1` 中出现该插件，`latestVersion.channel === 'RELEASE'`。
+- [x] 市场搜索「clipboard」「剪贴板」「历史」能命中。
+- [x] 安装成功，出现在「已安装」列表且可启用。
+- [x] 复制若干条内容后，插件能列出对应历史记录。
+- [x] 选中一条历史能重新写回系统剪贴板（粘贴可验证）。
+- [x] 拒绝 `clipboard.read` 权限时，插件给出明确的 `permission-denied` 类反馈，而不是空列表或静默失败。
+- [x] `manifest.sdkapi === 260713`，且在该版本下上述功能与权限验收项全部重测通过。
 
 ## Constraints
 
