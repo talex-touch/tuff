@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/json-formatter-plugin",
   "type": "module",
-  "version": "1.0.5",
+  "version": "1.0.8",
   "private": true,
   "packageManager": "pnpm@10.24.0",
   "scripts": {

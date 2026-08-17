@@ -34,10 +34,7 @@ function extractText(data: any): string {
 export function useCoreBoxInput(onInput: (text: string) => void) {
   onCoreBoxInputChange((data: any) => {
     try {
-      const text = extractText(data)
-      if (text) {
-        onInput(text)
-      }
+      onInput(extractText(data))
     }
     catch (e) {
       console.error('[useCoreBoxInput] Error:', e)

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { editor as MonacoEditorNamespace } from 'monaco-editor'
 import type { Component } from 'vue'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import { forceMaxCoreBox, useCoreBoxInput } from '~/composables/useCoreBoxInput'
@@ -42,12 +43,94 @@ const {
 // 监听 CoreBox 输入
 useCoreBoxInput((text) => {
   inputJson.value = text
+  focusInputEditor()
 })
 
 // Dark mode detection
 const isDark = useDark()
 const editorTheme = computed(() => isDark.value ? 'vs-dark' : 'vs')
 const MonacoEditor = shallowRef<Component | null>(null)
+const inputEditor = shallowRef<MonacoEditorNamespace.IStandaloneCodeEditor | null>(null)
+const outputEditor = shallowRef<MonacoEditorNamespace.IStandaloneCodeEditor | null>(null)
+const followScroll = ref(true)
+let focusTimer: number | undefined
+let scrollSyncFrame: number | undefined
+let syncingScroll = false
+let inputScrollDisposable: { dispose: () => void } | null = null
+let outputScrollDisposable: { dispose: () => void } | null = null
+
+function focusInputEditor(): void {
+  inputEditor.value?.focus()
+  void nextTick(() => {
+    if (focusTimer !== undefined) {
+      window.clearTimeout(focusTimer)
+    }
+    focusTimer = window.setTimeout(() => {
+      inputEditor.value?.focus()
+      focusTimer = undefined
+    }, 200)
+  })
+}
+
+function getScrollableHeight(editor: MonacoEditorNamespace.IStandaloneCodeEditor): number {
+  return Math.max(0, editor.getScrollHeight() - editor.getLayoutInfo().height)
+}
+
+function syncEditorScroll(
+  source: MonacoEditorNamespace.IStandaloneCodeEditor,
+  target: MonacoEditorNamespace.IStandaloneCodeEditor,
+): void {
+  if (!followScroll.value || syncingScroll)
+    return
+
+  const sourceScrollableHeight = getScrollableHeight(source)
+  const targetScrollableHeight = getScrollableHeight(target)
+  const ratio = sourceScrollableHeight > 0 ? source.getScrollTop() / sourceScrollableHeight : 0
+
+  syncingScroll = true
+  target.setScrollTop(ratio * targetScrollableHeight)
+  if (scrollSyncFrame !== undefined) {
+    window.cancelAnimationFrame(scrollSyncFrame)
+  }
+  scrollSyncFrame = window.requestAnimationFrame(() => {
+    syncingScroll = false
+    scrollSyncFrame = undefined
+  })
+}
+
+function bindEditorScrollSync(): void {
+  inputScrollDisposable?.dispose()
+  outputScrollDisposable?.dispose()
+  inputScrollDisposable = null
+  outputScrollDisposable = null
+
+  const input = inputEditor.value
+  const output = outputEditor.value
+  if (!input || !output)
+    return
+
+  inputScrollDisposable = input.onDidScrollChange((event) => {
+    if (event.scrollTopChanged)
+      syncEditorScroll(input, output)
+  })
+  outputScrollDisposable = output.onDidScrollChange((event) => {
+    if (event.scrollTopChanged)
+      syncEditorScroll(output, input)
+  })
+}
+
+function onOutputEditorMount(editor: MonacoEditorNamespace.IStandaloneCodeEditor): void {
+  outputEditor.value = editor
+  bindEditorScrollSync()
+  syncEditorScroll(inputEditor.value ?? editor, editor)
+}
+
+function toggleFollowScroll(): void {
+  followScroll.value = !followScroll.value
+  if (followScroll.value && inputEditor.value && outputEditor.value) {
+    syncEditorScroll(inputEditor.value, outputEditor.value)
+  }
+}
 
 if (!import.meta.env.SSR) {
   waitForMonacoReady()
@@ -73,7 +156,9 @@ const editorOptions = {
 }
 
 // Handle editor mount to ensure paste works
-function onEditorMount(editor: any) {
+function onEditorMount(editor: MonacoEditorNamespace.IStandaloneCodeEditor) {
+  inputEditor.value = editor
+  bindEditorScrollSync()
   // Focus the editor
   editor.focus()
 
@@ -91,6 +176,9 @@ function onEditorMount(editor: any) {
         // subject to the manifest's `clipboard.read` permission gate like every other path.
         const { text } = await clipboard.read()
         const selection = editor.getSelection()
+        if (!selection) {
+          return
+        }
         editor.executeEdits('paste', [
           {
             range: selection,
@@ -135,13 +223,24 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
-  void forceMaxCoreBox()
+  window.addEventListener('focus', focusInputEditor)
+  await forceMaxCoreBox()
+  focusInputEditor()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('focus', focusInputEditor)
+  inputScrollDisposable?.dispose()
+  outputScrollDisposable?.dispose()
+  if (focusTimer !== undefined) {
+    window.clearTimeout(focusTimer)
+  }
+  if (scrollSyncFrame !== undefined) {
+    window.cancelAnimationFrame(scrollSyncFrame)
+  }
 })
 </script>
 
@@ -213,6 +312,18 @@ onUnmounted(() => {
 
       <!-- Right: Output actions -->
       <div flex="~ items-center gap-0.5">
+        <button
+          class="toolbar-btn group"
+          :class="{ 'is-active': followScroll }"
+          :aria-pressed="followScroll"
+          :aria-label="followScroll ? '关闭跟随滚动' : '开启跟随滚动'"
+          :title="followScroll ? '关闭跟随滚动' : '开启跟随滚动'"
+          @click="toggleFollowScroll"
+        >
+          <div v-if="followScroll" i-carbon-link />
+          <div v-else i-carbon-unlink />
+          <span class="btn-text">跟随</span>
+        </button>
         <button class="toolbar-btn group" @click="copyOutput">
           <div i-carbon-copy />
           <span class="btn-text">复制</span>
@@ -254,6 +365,7 @@ onUnmounted(() => {
           :theme="editorTheme"
           :options="outputEditorOptions"
           class="h-full w-full"
+          @mount="onOutputEditorMount"
         />
 
         <!-- Floating Toast Notification -->
@@ -352,6 +464,11 @@ onUnmounted(() => {
   transition: all 0.2s ease;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.toolbar-btn.is-active {
+  background: rgba(59, 130, 246, 0.14);
+  color: #2563eb;
 }
 
 .toolbar-btn:hover {

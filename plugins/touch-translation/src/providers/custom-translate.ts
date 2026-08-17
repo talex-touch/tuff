@@ -1,5 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
-import { networkClient } from '@talex-touch/utils/network'
+import { getPluginNetworkClient } from './plugin-network-client'
 
 export class CustomTranslateProvider implements TranslationProvider {
   name = '自定义翻译'
@@ -31,8 +31,9 @@ export class CustomTranslateProvider implements TranslationProvider {
       const targetLanguageName = targetLanguageMap[targetLang] || '中文'
       const prompt = `请将以下文本翻译成${targetLanguageName}，只返回翻译结果，不要添加任何解释：\n\n${text}`
 
-      const response = await networkClient.request<any>({
+      const response = await getPluginNetworkClient().request<any>({
         method: 'POST',
+        responseType: 'json',
         url: this.config.apiUrl,
         headers: {
           'Content-Type': 'application/json',

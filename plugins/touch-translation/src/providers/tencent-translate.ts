@@ -1,5 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
-import { networkClient } from '@talex-touch/utils/network'
+import { getPluginNetworkClient } from './plugin-network-client'
 
 interface TencentConfig {
   secretId: string
@@ -87,7 +87,7 @@ export class TencentTranslateProvider implements TranslationProvider {
 
       const authorization = await this.generateSignature(payload, timestamp)
 
-      const response = await networkClient.request<any>({
+      const response = await getPluginNetworkClient().request<any>({
         method: 'POST',
         url: this.config.apiUrl,
         headers: {

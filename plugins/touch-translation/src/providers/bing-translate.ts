@@ -1,5 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
-import { networkClient } from '@talex-touch/utils/network'
+import { getPluginNetworkClient } from './plugin-network-client'
 
 export class BingTranslateProvider implements TranslationProvider {
   name = 'Bing 翻译'
@@ -24,8 +24,9 @@ export class BingTranslateProvider implements TranslationProvider {
         params.append('from', sourceLang)
       }
 
-      const response = await networkClient.request<any>({
+      const response = await getPluginNetworkClient().request<any>({
         method: 'POST',
+        responseType: 'json',
         url: `${this.config.apiUrl}?${params}`,
         headers: {
           'Ocp-Apim-Subscription-Key': this.config.apiKey,
