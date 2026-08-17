@@ -867,6 +867,58 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
   })
 
+  it('clears the command query when entering a plugin feature that hides CoreBox input', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = 'json'
+    await nextTick()
+    await flushPromises()
+
+    state.send.mockClear()
+    state.send.mockImplementation(async (event: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:item:execute') {
+        return { activeProviders: ['plugin-features:json-formatter'] }
+      }
+      if (eventName.includes('provider')) return []
+      return undefined
+    })
+
+    const featureItem = {
+      id: 'json-formatter/json-formatter-format',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: 'JSON格式化' } },
+      meta: {
+        pluginName: 'json-formatter',
+        featureId: 'json-formatter-format',
+        interaction: { type: 'webcontent', showInput: false },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    } as TuffItem
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    const executeCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:item:execute'
+    )
+    const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
+
+    expect(executePayload?.searchResult?.query.text).toBe('')
+    expect(hook.searchVal.value).toBe('')
+    expect(hook.activeActivations.value?.[0]).toMatchObject({
+      id: 'plugin-features',
+      showInput: false,
+      meta: {
+        pluginName: 'json-formatter',
+        featureId: 'json-formatter-format',
+        feature: expect.objectContaining({ id: 'json-formatter/json-formatter-format' })
+      }
+    })
+  })
+
   it('refreshes latest clipboard before executing a plugin feature with image input', async () => {
     state.latestClipboard = {
       id: 91,

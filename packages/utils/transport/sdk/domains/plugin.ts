@@ -100,6 +100,8 @@ export interface PluginSdk {
   installContent: (payload: PluginContentInstallRequest) => Promise<PluginContentInstallResponse>
 }
 
+const PLUGIN_INSTALL_TIMEOUT_MS = 3 * 60 * 1000
+
 export function createPluginSdk(transport: ITuffTransport): PluginSdk {
   return {
     list: async request => transport.send(PluginEvents.api.list, request ?? {}),
@@ -156,7 +158,8 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
       await transport.send(PluginEvents.install.confirmResponse, payload)
     },
 
-    installFromSource: async payload => transport.send(PluginEvents.install.source, payload),
+    installFromSource: async payload =>
+      transport.send(PluginEvents.install.source, payload, { timeout: PLUGIN_INSTALL_TIMEOUT_MS }),
     installContent: async payload => transport.send(PluginEvents.content.install, payload),
   }
 }

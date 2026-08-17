@@ -1006,7 +1006,9 @@ describe('touchPlugin.triggerFeature', () => {
         rendererFeatureId: 'shared-widget'
       }
     } as IPluginFeature
-    const onFeatureTriggered = vi.fn(() => true)
+    const onFeatureTriggered = vi.fn(
+      (_featureId: string, _query: unknown, _feature: IPluginFeature, _signal?: AbortSignal) => true
+    )
     const query = { text: 'summarize this', inputs: [] }
 
     expect(plugin.addFeature(sharedWidget)).toBe(true)
@@ -1026,9 +1028,15 @@ describe('touchPlugin.triggerFeature', () => {
     expect(onFeatureTriggered).toHaveBeenCalledWith(
       'dynamic-command',
       query,
-      registeredDynamicFeature,
+      expect.objectContaining({
+        id: 'dynamic-command',
+        icon: expect.objectContaining({ type: 'class', value: 'i-ri-magic-line' })
+      }),
       expect.any(AbortSignal)
     )
+    const lifecycleFeature = onFeatureTriggered.mock.calls[0]?.[2]
+    expect(lifecycleFeature).not.toBe(registeredDynamicFeature)
+    expect(Object.getPrototypeOf(lifecycleFeature)).toBe(Object.prototype)
   })
 
   it('fails closed when a dynamic widget renderer target is missing', async () => {

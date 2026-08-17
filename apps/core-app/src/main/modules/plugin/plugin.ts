@@ -227,6 +227,16 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   )
 }
 
+function snapshotLifecycleFeature(feature: IPluginFeature): IPluginFeature {
+  const serializer = (feature as IPluginFeature & { toJSONObject?: () => object }).toJSONObject
+  const source = typeof serializer === 'function' ? serializer.call(feature) : feature
+  const serialized = JSON.stringify(source)
+  if (!serialized) {
+    throw new Error('PLUGIN_FEATURE_SNAPSHOT_INVALID')
+  }
+  return JSON.parse(serialized) as IPluginFeature
+}
+
 export interface TouchPluginRuntimeContext {
   rootPath: string
   mainWindowId?: number
@@ -772,7 +782,7 @@ export class TouchPlugin implements ITouchPlugin {
       result = this.pluginLifecycle?.onFeatureTriggered(
         feature.id,
         query,
-        feature,
+        snapshotLifecycleFeature(feature),
         controller.signal
       )
       if (isPromiseLike(result)) {
@@ -805,7 +815,11 @@ export class TouchPlugin implements ITouchPlugin {
 
     try {
       await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
-      const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
+      const result = this.pluginLifecycle?.onFeatureTriggered(
+        feature.id,
+        query,
+        snapshotLifecycleFeature(feature)
+      )
       if (isPromiseLike(result)) {
         await result
       }
@@ -3383,7 +3397,7 @@ export class TouchPlugin implements ITouchPlugin {
     if (!feature) return
 
     try {
-      await this.pluginLifecycle?.onClose?.(feature)
+      await this.pluginLifecycle?.onClose?.(snapshotLifecycleFeature(feature))
     } catch (error) {
       await this.handleRuntimeError('onClose', error)
     }

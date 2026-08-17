@@ -861,12 +861,11 @@ const customCss = computed(() => {
         />
 
         <BoxInput
+          v-if="shouldShowInput"
           ref="boxInputRef"
           v-model="searchVal"
           :box-options="boxOptions"
           :style="getCanvasAreaStyle('input')"
-          :class="{ 'ui-mode-hidden': !shouldShowInput }"
-          :disabled="!shouldShowInput"
         >
           <template #completion>
             <div class="text-sm truncate">
@@ -882,7 +881,11 @@ const customCss = computed(() => {
           :style="getCanvasAreaStyle('tags')"
         />
 
-        <div class="CoreBox-Configure" :style="getCanvasAreaStyle('actions')">
+        <div
+          class="CoreBox-Configure"
+          :class="{ 'CoreBox-Configure--input-hidden': !shouldShowInput }"
+          :style="getCanvasAreaStyle('actions')"
+        >
           <button
             v-if="isSendModeActive"
             class="CoreBox-SendButton"
@@ -1163,6 +1166,10 @@ const customCss = computed(() => {
   cursor: pointer;
   font-size: 1.25em;
 
+  &.CoreBox-Configure--input-hidden {
+    margin-inline-start: auto;
+  }
+
   .CoreBox-SendButton {
     display: grid;
     width: 2rem;
@@ -1391,12 +1398,6 @@ div.CoreBox {
 
   opacity: 0.75;
   background-color: var(--tx-fill-color);
-}
-
-// Hide input in UI mode but keep layout
-.ui-mode-hidden {
-  opacity: 0 !important;
-  pointer-events: none !important;
 }
 
 // DivisionBox specific styles

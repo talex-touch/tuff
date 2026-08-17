@@ -284,86 +284,94 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="store-container">
-    <StoreHeader
-      v-model:tabs="tabs"
-      v-model:view-type="viewType"
-      v-model:install-filter="installFilter"
-      v-model:category-filter="categoryFilter"
-      :loading="loading"
-      :sources-count="sourcesCount"
-      :show-cli-tab="showCliTab"
-      :show-publisher-tab="showPublisherTab"
-      :categories="categoryTags"
-      :provider-stats="providerStatsComputed"
-      :provider-details="providerStats"
-      @refresh="loadStorePlugins(true)"
-      @open-source-editor="openSourceEditor"
-      @search="handleSearch"
-    />
-
-    <StoreGridView
-      v-show="tabs === 'store'"
-      :plugins="displayedPlugins"
-      :view-type="viewType"
-      :loading="loading"
-      :installed-names="installedPluginNames"
-      :installed-versions="installedPluginVersions"
-      @install="onInstall"
-      @open-detail="openPluginDetail"
-    />
-
-    <Transition name="store-tabs" mode="out-in">
-      <StorePublisher
-        v-if="tabs === 'publisher' && showPublisherTab"
-        key="publisher"
-        class="flex-1 min-h-0"
+  <div class="store-view-root">
+    <div class="store-container">
+      <StoreHeader
+        v-model:tabs="tabs"
+        v-model:view-type="viewType"
+        v-model:install-filter="installFilter"
+        v-model:category-filter="categoryFilter"
+        :loading="loading"
+        :sources-count="sourcesCount"
+        :show-cli-tab="showCliTab"
+        :show-publisher-tab="showPublisherTab"
+        :categories="categoryTags"
+        :provider-stats="providerStatsComputed"
+        :provider-details="providerStats"
+        @refresh="loadStorePlugins(true)"
+        @open-source-editor="openSourceEditor"
+        @search="handleSearch"
       />
-      <StoreDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
-      <StoreCliBeta v-else-if="tabs === 'cli'" key="cli" class="flex-1 min-h-0" />
-      <PluginInstalled v-else-if="tabs === 'installed'" key="installed" class="flex-1 min-h-0" />
-      <div v-else key="store-spacer" class="store-tab-spacer" aria-hidden="true" />
-    </Transition>
+
+      <StoreGridView
+        v-show="tabs === 'store'"
+        :plugins="displayedPlugins"
+        :view-type="viewType"
+        :loading="loading"
+        :installed-names="installedPluginNames"
+        :installed-versions="installedPluginVersions"
+        @install="onInstall"
+        @open-detail="openPluginDetail"
+      />
+
+      <Transition name="store-tabs" mode="out-in">
+        <StorePublisher
+          v-if="tabs === 'publisher' && showPublisherTab"
+          key="publisher"
+          class="flex-1 min-h-0"
+        />
+        <StoreDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
+        <StoreCliBeta v-else-if="tabs === 'cli'" key="cli" class="flex-1 min-h-0" />
+        <PluginInstalled v-else-if="tabs === 'installed'" key="installed" class="flex-1 min-h-0" />
+        <div v-else key="store-spacer" class="store-tab-spacer" aria-hidden="true" />
+      </Transition>
+    </div>
+
+    <StoreSourceEditor v-model="sourceEditorShow" :source="sourceEditorSource" />
+
+    <FlipDialog
+      v-model="detailVisible"
+      :reference="detailOverlaySource"
+      size="lg"
+      @closed="closePluginDetail"
+    >
+      <template #header-display>
+        <StorePluginMetaHeader v-if="activeDetailPlugin" :plugin="activeDetailPlugin" />
+        <div v-else class="StoreDetailOverlay-HeaderPlaceholder">
+          <p class="StoreDetailOverlay-HeaderTitle">
+            {{ selectedPluginId || 'Plugin Details' }}
+          </p>
+        </div>
+      </template>
+      <template #header-actions>
+        <StoreInstallButton
+          v-if="activeDetailPlugin"
+          :plugin-name="activeDetailPlugin.name"
+          :is-installed="activeDetailPluginStatus.isInstalled"
+          :has-upgrade="activeDetailPluginStatus.hasUpgrade"
+          :installed-version="activeDetailPluginStatus.installedVersion"
+          :store-version="activeDetailPluginStatus.storeVersion"
+          :install-task="activeDetailInstallTask"
+          :mini="false"
+          @install="onInstallActiveDetail"
+        />
+      </template>
+      <StoreDetailOverlay
+        :plugin-id="selectedPluginId"
+        :provider-id="selectedProviderId"
+        @close="closePluginDetail"
+      />
+    </FlipDialog>
   </div>
-
-  <StoreSourceEditor v-model="sourceEditorShow" :source="sourceEditorSource" />
-
-  <FlipDialog
-    v-model="detailVisible"
-    :reference="detailOverlaySource"
-    size="lg"
-    @closed="closePluginDetail"
-  >
-    <template #header-display>
-      <StorePluginMetaHeader v-if="activeDetailPlugin" :plugin="activeDetailPlugin" />
-      <div v-else class="StoreDetailOverlay-HeaderPlaceholder">
-        <p class="StoreDetailOverlay-HeaderTitle">
-          {{ selectedPluginId || 'Plugin Details' }}
-        </p>
-      </div>
-    </template>
-    <template #header-actions>
-      <StoreInstallButton
-        v-if="activeDetailPlugin"
-        :plugin-name="activeDetailPlugin.name"
-        :is-installed="activeDetailPluginStatus.isInstalled"
-        :has-upgrade="activeDetailPluginStatus.hasUpgrade"
-        :installed-version="activeDetailPluginStatus.installedVersion"
-        :store-version="activeDetailPluginStatus.storeVersion"
-        :install-task="activeDetailInstallTask"
-        :mini="false"
-        @install="onInstallActiveDetail"
-      />
-    </template>
-    <StoreDetailOverlay
-      :plugin-id="selectedPluginId"
-      :provider-id="selectedProviderId"
-      @close="closePluginDetail"
-    />
-  </FlipDialog>
 </template>
 
 <style lang="scss" scoped>
+.store-view-root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .store-container {
   display: flex;
   flex-direction: column;

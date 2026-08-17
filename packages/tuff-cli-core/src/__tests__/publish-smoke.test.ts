@@ -185,7 +185,7 @@ describe('publish', () => {
           plugins: [
             {
               id: 'plugin-1',
-              slug: 'com.tuffex.demo.plugin',
+              slug: 'com.tuffex.demo-plugin',
               name: 'demo-plugin',
             },
           ],
@@ -248,7 +248,7 @@ describe('publish', () => {
           plugins: [
             {
               id: 'plugin-1',
-              slug: 'com.tuffex.demo.plugin',
+              slug: 'com.tuffex.demo-plugin',
               name: 'demo-plugin',
             },
           ],
@@ -340,7 +340,7 @@ describe('publish', () => {
       if (options.method === 'GET' && options.url.includes('/api/dashboard/plugins')) {
         return textResponse(options, JSON.stringify({
           total: 1,
-          plugins: [{ id: 'plugin-1', slug: 'com.tuffex.demo.plugin' }],
+          plugins: [{ id: 'plugin-1', slug: 'com.tuffex.demo-plugin' }],
         }))
       }
 

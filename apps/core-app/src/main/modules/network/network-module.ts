@@ -5,17 +5,55 @@ import type {
   ModuleKey
 } from '@talex-touch/utils'
 import { NetworkEvents } from '@talex-touch/utils/transport/events'
+import type { NetworkRequest } from '@talex-touch/utils/transport/events/types'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { net, powerMonitor } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from './network-service'
-import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import type { HandlerContext, PluginActivationIdentity } from '@talex-touch/utils/transport/main'
 import { withPermission } from '../permission/channel-guard'
 import { classifyNetworkTarget } from '../../utils/network-target-policy'
 
 const NETWORK_STATUS_POLL_INTERVAL_MS = 5000
+
+interface PluginViewNetworkChannelData {
+  data?: unknown
+  pluginIdentity?: PluginActivationIdentity
+  header?: {
+    event?: {
+      sender?: HandlerContext['sender']
+    }
+  }
+}
+
+const NETWORK_RESPONSE_TYPES: Record<string, true> = {
+  json: true,
+  text: true,
+  arrayBuffer: true,
+  stream: true
+}
+
+function isPluginViewNetworkRequest(value: unknown): value is NetworkRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if (!('url' in value) || typeof value.url !== 'string' || !value.url.trim()) return false
+  if ('method' in value && typeof value.method !== 'string') return false
+  if (
+    'responseType' in value &&
+    (typeof value.responseType !== 'string' ||
+      !Object.hasOwn(NETWORK_RESPONSE_TYPES, value.responseType))
+  ) {
+    return false
+  }
+  if ('headers' in value) {
+    if (!value.headers || typeof value.headers !== 'object' || Array.isArray(value.headers)) {
+      return false
+    }
+    if (Object.values(value.headers).some((header) => typeof header !== 'string')) return false
+  }
+  return true
+}
 
 function resolveKeyManager(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
@@ -99,7 +137,27 @@ export class NetworkModule extends BaseModule {
       }
     }
 
+    const handlePluginViewNetworkRequest = async (event: PluginViewNetworkChannelData) => {
+      const identity = event.pluginIdentity
+      const sender = event.header?.event?.sender
+      if (!identity || !sender || !isPluginViewNetworkRequest(event.data)) {
+        throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
+      }
+      return await transport.invoke(NetworkEvents.api.request, event.data, {
+        sender,
+        plugin: {
+          name: identity.name,
+          uniqueKey: identity.key
+        }
+      })
+    }
+
     this.disposers.push(
+      runtime.channel.regChannel(
+        'plugin',
+        NetworkEvents.api.request.toEventName(),
+        handlePluginViewNetworkRequest
+      ),
       transport.on(
         NetworkEvents.api.request,
         guarded(

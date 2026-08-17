@@ -6,6 +6,7 @@ import { NetworkModule } from './network-module'
 
 const mocks = vi.hoisted(() => ({
   broadcast: vi.fn(),
+  rawHandlers: new Map<string, (payload?: unknown) => unknown>(),
   handlers: new Map<string, (payload?: unknown) => unknown>(),
   isOnline: vi.fn(() => true),
   off: vi.fn(),
@@ -15,6 +16,11 @@ const mocks = vi.hoisted(() => ({
     setOnlineStatus: vi.fn()
   },
   status: null as { changedAt: number; online: boolean; reason: string } | null,
+  transportInvoke: vi.fn(),
+  regChannel: vi.fn((_type: string, eventName: string, handler: (payload?: unknown) => unknown) => {
+    mocks.rawHandlers.set(eventName, handler)
+    return vi.fn()
+  }),
   transportOn: vi.fn((event, handler) => {
     mocks.handlers.set(event.toEventName(), handler)
     return vi.fn()
@@ -34,13 +40,16 @@ vi.mock('electron', () => ({
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     broadcast: mocks.broadcast,
-    on: mocks.transportOn
+    on: mocks.transportOn,
+    invoke: mocks.transportInvoke
   }))
 }))
 
 vi.mock('../../core/runtime-accessor', () => ({
   resolveMainRuntime: vi.fn(() => ({
-    channel: {}
+    channel: {
+      regChannel: mocks.regChannel
+    }
   }))
 }))
 
@@ -64,6 +73,7 @@ describe('NetworkModule lifecycle status', () => {
     vi.useFakeTimers()
     mocks.broadcast.mockClear()
     mocks.handlers.clear()
+    mocks.rawHandlers.clear()
     mocks.isOnline.mockReset()
     mocks.isOnline.mockReturnValue(true)
     mocks.off.mockClear()
@@ -80,6 +90,8 @@ describe('NetworkModule lifecycle status', () => {
       })
     }))
     mocks.transportOn.mockClear()
+    mocks.transportInvoke.mockReset()
+    mocks.regChannel.mockClear()
   })
 
   afterEach(() => {
@@ -124,6 +136,51 @@ describe('NetworkModule lifecycle status', () => {
       NetworkEvents.lifecycle.online,
       expect.objectContaining({ online: true, reason: 'resume' })
     )
+
+    module.onDestroy({} as never)
+  })
+
+  it('bridges verified plugin-view requests into the permission-gated network transport', async () => {
+    const module = new NetworkModule()
+    const response = {
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: { translatedText: '你好，世界' },
+      url: 'https://example.test/translate',
+      ok: true
+    }
+    const sender = { id: 42 }
+    const request = {
+      method: 'POST',
+      url: 'https://example.test/translate',
+      responseType: 'json',
+      body: { text: 'Hello world' }
+    }
+    mocks.transportInvoke.mockResolvedValueOnce(response)
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+    const handler = mocks.rawHandlers.get(NetworkEvents.api.request.toEventName())
+
+    await expect(
+      handler?.({
+        data: request,
+        pluginIdentity: {
+          name: 'touch-translation',
+          pluginInstanceId: 'translation-instance',
+          activationGeneration: 2,
+          key: 'translation-key'
+        },
+        header: { event: { sender } }
+      })
+    ).resolves.toEqual(response)
+    expect(mocks.transportInvoke).toHaveBeenCalledWith(NetworkEvents.api.request, request, {
+      sender,
+      plugin: {
+        name: 'touch-translation',
+        uniqueKey: 'translation-key'
+      }
+    })
 
     module.onDestroy({} as never)
   })
