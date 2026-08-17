@@ -20,7 +20,7 @@
 
 ## 任务记录、文档与路线图
 
-- **三条 in-progress 记录实质陈旧，另有一条缺全部继续条件。** `07-17-windows-everything-productionization`、`07-24-harden-app-icon-self-healing`、`07-26-install-launch-v2-4-13-beta-23` 最近任务工件分别已约 29、19、21 天未更新；最后一条同时缺 `meta.blocker`、`meta.nextAction`、`meta.evidence`。按 [#309](https://github.com/talex-touch/tuff/issues/309) 逐条更新真实阻塞、下一动作和可核验证据，或归档已完成记录。
+- **两条 in-progress 记录实质陈旧。** `07-17-windows-everything-productionization`、`07-24-harden-app-icon-self-healing` 最近任务工件分别已约 29、19 天未更新。按 [#309](https://github.com/talex-touch/tuff/issues/309) 逐条更新真实阻塞、下一动作和可核验证据，或归档已完成记录。
 - **CatalogService 的完成边界仍未写回文档。** `07-13-catalog-service-mvp` 的前八项验收已勾选；剩余项要求将 completed/open boundary 写入 R8 PRD、执行计划、质量基线、changelog、任务工件与开发者文档。路线图中的“暂停”不能替代这一收尾。
 - **全仓治理审计的 filing 未与 PRD 验收对账。** `08-05-full-repo-governance-audit` 已记录 454 个 verified finding，但 PRD 的证据、标签、去重、ledger、真实分域统计六项验收均未逐项回填。应以 `research/findings.jsonl`、`research/filed.jsonl` 与摘要对账；不要把已建 issue 直接等同于任务完成。
 
