@@ -5,6 +5,7 @@ import {
   DivisionBoxEvents,
   FlowEvents,
   MetaOverlayEvents,
+  NetworkEvents,
   PluginEvents,
   QuickOpsEvents,
   ScreenshotSessionEvents,
@@ -99,6 +100,9 @@ export const PLUGIN_FACING_EVENTS = [
   // MetaOverlayEvents — 2
   MetaOverlayEvents.action.register,
   MetaOverlayEvents.action.unregister,
+
+  // NetworkEvents — 1
+  NetworkEvents.api.request,
 
   // PluginEvents — 36
   PluginEvents.communicate.index,

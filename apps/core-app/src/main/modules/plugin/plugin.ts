@@ -157,7 +157,7 @@ import { createPluginHttpClient } from './plugin-http-client'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
 import { validatePluginFeatureAdmission } from './plugin-feature-admission'
-import { PluginFeature } from './plugin-feature'
+import { isPromiseLike, PluginFeature, snapshotLifecycleFeature } from './plugin-feature'
 import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
@@ -217,24 +217,6 @@ function getRuntimeErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') return undefined
   const code = (error as { code?: unknown }).code
   return typeof code === 'string' ? code : undefined
-}
-
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return (
-    value !== null &&
-    (typeof value === 'object' || typeof value === 'function') &&
-    typeof (value as { then?: unknown }).then === 'function'
-  )
-}
-
-function snapshotLifecycleFeature(feature: IPluginFeature): IPluginFeature {
-  const serializer = (feature as IPluginFeature & { toJSONObject?: () => object }).toJSONObject
-  const source = typeof serializer === 'function' ? serializer.call(feature) : feature
-  const serialized = JSON.stringify(source)
-  if (!serialized) {
-    throw new Error('PLUGIN_FEATURE_SNAPSHOT_INVALID')
-  }
-  return JSON.parse(serialized) as IPluginFeature
 }
 
 export interface TouchPluginRuntimeContext {
