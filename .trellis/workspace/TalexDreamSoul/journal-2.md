@@ -179,3 +179,41 @@ Closed the three deferred items from the BUI port: (1) confirmed W3's base-ancho
 ### Next Steps
 
 - None - task complete
+
+
+## Session 58: 三插件生产 Nexus 发布与运行时加固
+
+**Date**: 2026-08-17
+**Task**: 三插件生产 Nexus 发布与运行时加固
+**Branch**: `feat/nexus-header-controls-tuffex`
+
+### Summary
+
+加固插件安装、网络与生命周期边界，完成三插件本地端到端验收；推送 master 并修复全部相关 CI 门禁；确认 Cloudflare Pages 生产部署，发布 Clipboard History 1.1.11、JSON Formatter 1.0.8、Touch Translation 1.0.17，并验证签名、扫描、admission、公开目录和下载摘要。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d7401961d` | (see git log) |
+| `3d59117e0` | (see git log) |
+| `4f6add9c6` | (see git log) |
+| `88f315ca1` | (see git log) |
+| `bcd8c0fba` | (see git log) |
+| `0db79eede` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
