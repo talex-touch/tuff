@@ -302,6 +302,7 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('/api/auth/me')
     expect(guardSource).toContain('/api/app-auth/device/start')
     expect(guardSource).toContain('/api/app-auth/device/poll')
+    expect(guardSource).toContain('/api/app-auth/refresh')
     expect(guardSource).toContain('/api/app-auth/device/approve')
     expect(guardSource).toContain('/api/dashboard/plugins')
     expect(guardSource).toContain('/api/dashboard/team')

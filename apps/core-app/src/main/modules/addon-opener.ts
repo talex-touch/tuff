@@ -48,6 +48,10 @@ const schemaHandlers: SchemaHandler[] = [
     handler: (url) => {
       const token = url.searchParams.get('token') || ''
       const appToken = url.searchParams.get('app_token') || ''
+      const refreshToken = url.searchParams.get('refresh_token') || ''
+      const rawTtlSeconds = Number(url.searchParams.get('ttl_seconds'))
+      const ttlSeconds =
+        Number.isFinite(rawTtlSeconds) && rawTtlSeconds > 0 ? Math.floor(rawTtlSeconds) : undefined
       if (token || appToken) {
         if (token) {
           addonOpenerLog.debug('Auth callback received', { meta: { tokenLength: token.length } })
@@ -57,7 +61,12 @@ const schemaHandlers: SchemaHandler[] = [
             meta: { appTokenLength: appToken.length }
           })
         }
-        void applyExternalAuthCallback(token, appToken)
+        if (refreshToken) {
+          addonOpenerLog.debug('Auth refresh credential received', {
+            meta: { refreshTokenLength: refreshToken.length }
+          })
+        }
+        void applyExternalAuthCallback(token, appToken, refreshToken, ttlSeconds)
       } else {
         addonOpenerLog.warn('Auth callback received without token')
       }
@@ -97,7 +106,7 @@ function normalizeSchemaRoute(url: URL): string {
 function maskSchemaUrlForLog(rawUrl: string): string {
   try {
     const url = new URL(rawUrl)
-    const sensitiveKeys = ['token', 'app_token', 'login_token']
+    const sensitiveKeys = ['token', 'app_token', 'refresh_token', 'login_token']
     sensitiveKeys.forEach((key) => {
       if (!url.searchParams.has(key)) return
       const value = url.searchParams.get(key) || ''

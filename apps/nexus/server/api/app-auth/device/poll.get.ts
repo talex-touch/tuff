@@ -1,9 +1,6 @@
 import { createError, getQuery } from 'h3'
-import { createAppToken } from '../../../utils/auth'
+import { createAppTokenPair } from '../../../utils/auth'
 import { deleteDeviceAuthRequest, getDeviceAuthByDeviceCode, isDeviceAuthExpired, logLoginAttempt } from '../../../utils/authStore'
-
-const SHORT_TERM_TTL_SECONDS = 60 * 60 * 24
-const LONG_TERM_TTL_SECONDS = 60 * 60 * 24 * 30
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -61,11 +58,9 @@ export default defineEventHandler(async (event) => {
     return { status: 'pending', expiresAt: request.expiresAt }
   }
 
-  const ttlSeconds = request.grantType === 'long' ? LONG_TERM_TTL_SECONDS : SHORT_TERM_TTL_SECONDS
   const clientType = request.clientType ?? 'external'
-  const appToken = await createAppToken(event, request.userId, {
+  const tokens = await createAppTokenPair(event, request.userId, {
     deviceId: request.deviceId,
-    ttlSeconds,
     grantType: request.grantType,
     deviceMeta: {
       deviceName: request.deviceName ?? null,
@@ -84,9 +79,8 @@ export default defineEventHandler(async (event) => {
   await deleteDeviceAuthRequest(event, deviceCode)
   return {
     status: 'approved',
-    appToken,
+    ...tokens,
     grantType: request.grantType,
-    ttlSeconds,
-    refreshable: request.grantType === 'long',
+    refreshable: true,
   }
 })

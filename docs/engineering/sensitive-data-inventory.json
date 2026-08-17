@@ -48,22 +48,24 @@
       "classification": "identity-session",
       "owner": "AuthModule",
       "storageLocations": [
-        "secure-store.json: AES-256-GCM auth.token envelope",
+        "secure-store.json: AES-256-GCM auth.token envelope containing an exact version-1 access/refresh credential bundle; historical plain access tokens remain readable",
         "config/local-secret.v1.key: local random secret material",
         "app settings auth.requiresReauthenticationOnNextStartup: non-sensitive fail-closed marker",
         "main-memory session state"
       ],
       "writers": ["main-owned AuthModule protected-storage and fail-closed marker lifecycle"],
       "readers": ["main-side Nexus runtime injection"],
-      "exportPolicy": "never portable and never ordinary export; the local secret and auth token are not exportable",
-      "deletionPolicy": "logout or app-data reset; AuthModule durably sets its non-sensitive reauthentication marker before protected token mutation, clears the token, and clears the marker only after token deletion succeeds",
-      "retentionPolicy": "protected token persists only after validated local-secret AES-256-GCM storage; token write/read/health/validation or marker persistence failure leaves the marker fail-closed, keeps an accepted token memory-only, and blocks the next startup from restoring any prior ciphertext until protected cleanup succeeds",
+      "exportPolicy": "never portable and never ordinary export; the local secret and access/refresh credentials are not exportable",
+      "deletionPolicy": "logout, rejected refresh authorization, or app-data reset; AuthModule durably sets its non-sensitive reauthentication marker before protected credential mutation, clears the in-memory access/refresh pair, and clears the marker only after protected bundle deletion succeeds",
+      "retentionPolicy": "access tokens last 24 hours; short refresh authorization lasts 30 days and long refresh authorization lasts 180 days. The exact version-1 bundle persists only after validated local-secret AES-256-GCM storage; credential write/read/health/validation or marker persistence failure leaves the marker fail-closed, keeps accepted credentials memory-only, and blocks the next startup from restoring prior ciphertext until protected cleanup succeeds",
       "rendererExposure": "redacted auth state only; the main-owned reauthentication marker is omitted from renderer and sync settings projections",
       "portable": false,
       "migrationStatus": "forced-protected-storage; legacy user override fields are removed at AuthModule startup; non-sensitive fail-closed marker is main-owned and not a user setting",
       "evidence": [
         "apps/core-app/src/main/modules/auth/index.ts#symbol=loadAuthToken",
         "apps/core-app/src/main/modules/auth/index.test.ts#test=does not restore a stale protected token after a failed write leaves its cleanup incomplete",
+        "apps/core-app/src/main/modules/auth/index.test.ts#test=persists an access and refresh pair as an exact version-1 encrypted credential envelope",
+        "apps/core-app/src/main/modules/auth/index.test.ts#test=clears the complete credential bundle when the refresh credential is rejected",
         "apps/core-app/src/main/modules/auth/index.test.ts#test=keeps the fail-closed marker after sign-out cannot clear the protected token",
         "apps/core-app/src/main/utils/secure-store.ts#symbol=encodeEnvelope"
       ]

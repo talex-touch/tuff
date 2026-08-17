@@ -25,8 +25,32 @@ import { resolveSessionAuthSecret } from './sessionAuthSecret'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
 const APP_TOKEN_AUDIENCE = 'tuff-app'
-const APP_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7
+export const APP_ACCESS_TOKEN_TTL_SECONDS = 60 * 60 * 24
+export const APP_REFRESH_TOKEN_SHORT_TTL_SECONDS = 60 * 60 * 24 * 30
+export const APP_REFRESH_TOKEN_LONG_TTL_SECONDS = 60 * 60 * 24 * 180
 const APP_SECRET_MIN_LENGTH = 16
+
+export type AppTokenGrantType = 'short' | 'long'
+export type AppTokenKind = 'access' | 'refresh'
+
+export interface AppTokenPair {
+  appToken: string
+  refreshToken: string
+  ttlSeconds: number
+  refreshTtlSeconds: number
+}
+
+interface AppTokenDeviceMeta {
+  deviceName?: string | null
+  platform?: string | null
+  clientType?: 'app' | 'cli' | 'external' | null
+  reactivateRevoked?: boolean | null
+}
+
+interface AppTokenDeviceClaims {
+  deviceId: string | null
+  deviceTokenVersion?: number
+}
 
 let ephemeralJwtSecret: string | null = null
 let appSecretWarned = false
@@ -35,7 +59,8 @@ interface AppTokenPayload {
   sub: string
   deviceId?: string
   dv?: number
-  gt?: 'short' | 'long'
+  gt?: AppTokenGrantType
+  kind?: AppTokenKind
   iat: number
   exp: number
   iss: string
@@ -196,45 +221,42 @@ export async function requireAdminOrApiKey(event: H3Event, requiredScopes: strin
   }
 }
 
-export async function createAppToken(
+async function resolveAppTokenDeviceClaims(
   event: H3Event,
   userId: string,
-  options?: {
-    deviceId?: string | null
-    ttlSeconds?: number
-    grantType?: 'short' | 'long'
-    deviceMeta?: {
-      deviceName?: string | null
-      platform?: string | null
-      clientType?: 'app' | 'cli' | 'external' | null
-      reactivateRevoked?: boolean | null
-    }
-  },
-): Promise<string> {
-  const secret = getAppJwtSecret(event)
-  const now = Math.floor(Date.now() / 1000)
+  options?: { deviceId?: string | null; deviceMeta?: AppTokenDeviceMeta },
+): Promise<AppTokenDeviceClaims> {
   const hasExplicitDeviceId = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'deviceId'))
   const deviceId = hasExplicitDeviceId ? (options?.deviceId ?? null) : readDeviceId(event)
-  const ttlSeconds =
-    typeof options?.ttlSeconds === 'number' && Number.isFinite(options.ttlSeconds) && options.ttlSeconds > 0
-      ? Math.floor(options.ttlSeconds)
-      : APP_TOKEN_TTL_SECONDS
-  let deviceTokenVersion: number | undefined
-
-  if (deviceId) {
-    const metadata = options?.deviceMeta ?? readDeviceMetadata(event)
-    const device = await upsertDevice(event, userId, deviceId, metadata)
-    deviceTokenVersion = device.tokenVersion
+  if (!deviceId) {
+    return { deviceId: null }
   }
 
+  const metadata = options?.deviceMeta ?? readDeviceMetadata(event)
+  const device = await upsertDevice(event, userId, deviceId, metadata)
+  return { deviceId, deviceTokenVersion: device.tokenVersion }
+}
+
+function signAppToken(
+  secret: string,
+  userId: string,
+  claims: AppTokenDeviceClaims,
+  options: {
+    ttlSeconds: number
+    grantType?: AppTokenGrantType
+    tokenKind: AppTokenKind
+    issuedAt: number
+  },
+): string {
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const payload: AppTokenPayload = {
     sub: userId,
-    deviceId: deviceId ?? undefined,
-    dv: deviceTokenVersion ?? undefined,
-    gt: options?.grantType,
-    iat: now,
-    exp: now + ttlSeconds,
+    deviceId: claims.deviceId ?? undefined,
+    dv: claims.deviceTokenVersion ?? undefined,
+    gt: options.grantType,
+    kind: options.tokenKind,
+    iat: options.issuedAt,
+    exp: options.issuedAt + options.ttlSeconds,
     iss: APP_TOKEN_ISSUER,
     aud: APP_TOKEN_AUDIENCE,
     typ: 'app',
@@ -245,7 +267,71 @@ export async function createAppToken(
   return `${signingInput}.${base64UrlEncode(signature)}`
 }
 
-function verifyAppToken(event: H3Event, token: string): AppTokenPayload | null {
+export async function createAppToken(
+  event: H3Event,
+  userId: string,
+  options?: {
+    deviceId?: string | null
+    ttlSeconds?: number
+    grantType?: AppTokenGrantType
+    tokenKind?: AppTokenKind
+    deviceMeta?: AppTokenDeviceMeta
+  },
+): Promise<string> {
+  const ttlSeconds =
+    typeof options?.ttlSeconds === 'number' && Number.isFinite(options.ttlSeconds) && options.ttlSeconds > 0
+      ? Math.floor(options.ttlSeconds)
+      : APP_ACCESS_TOKEN_TTL_SECONDS
+  const claims = await resolveAppTokenDeviceClaims(event, userId, options)
+  return signAppToken(getAppJwtSecret(event), userId, claims, {
+    ttlSeconds,
+    grantType: options?.grantType,
+    tokenKind: options?.tokenKind ?? 'access',
+    issuedAt: Math.floor(Date.now() / 1000),
+  })
+}
+
+export async function createAppTokenPair(
+  event: H3Event,
+  userId: string,
+  options: {
+    deviceId?: string | null
+    grantType: AppTokenGrantType
+    deviceMeta?: AppTokenDeviceMeta
+  },
+): Promise<AppTokenPair> {
+  const refreshTtlSeconds = options.grantType === 'long'
+    ? APP_REFRESH_TOKEN_LONG_TTL_SECONDS
+    : APP_REFRESH_TOKEN_SHORT_TTL_SECONDS
+  const claims = await resolveAppTokenDeviceClaims(event, userId, options)
+  const secret = getAppJwtSecret(event)
+  const issuedAt = Math.floor(Date.now() / 1000)
+  const appToken = signAppToken(secret, userId, claims, {
+    tokenKind: 'access',
+    grantType: options.grantType,
+    ttlSeconds: APP_ACCESS_TOKEN_TTL_SECONDS,
+    issuedAt,
+  })
+  const refreshToken = signAppToken(secret, userId, claims, {
+    tokenKind: 'refresh',
+    grantType: options.grantType,
+    ttlSeconds: refreshTtlSeconds,
+    issuedAt,
+  })
+
+  return {
+    appToken,
+    refreshToken,
+    ttlSeconds: APP_ACCESS_TOKEN_TTL_SECONDS,
+    refreshTtlSeconds,
+  }
+}
+
+function verifyAppToken(
+  event: H3Event,
+  token: string,
+  expectedKind: AppTokenKind = 'access',
+): AppTokenPayload | null {
   const secret = getAppJwtSecret(event)
 
   const parts = token.split('.')
@@ -280,6 +366,11 @@ function verifyAppToken(event: H3Event, token: string): AppTokenPayload | null {
       return null
     }
     if (typeof payload.sub !== 'string' || !payload.sub) {
+      return null
+    }
+
+    const tokenKind = payload.kind ?? 'access'
+    if ((tokenKind !== 'access' && tokenKind !== 'refresh') || tokenKind !== expectedKind) {
       return null
     }
 
@@ -321,18 +412,30 @@ async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload):
   }
 }
 
-export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
+async function requireAppTokenKind(event: H3Event, expectedKind: AppTokenKind): Promise<AuthContext> {
   const bearerToken = parseBearerToken(event)
   if (!bearerToken) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  const payload = verifyAppToken(event, bearerToken)
+  const payload = verifyAppToken(event, bearerToken, expectedKind)
   if (!payload?.sub) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
   return await resolveAppTokenContext(event, payload)
+}
+
+export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
+  return await requireAppTokenKind(event, 'access')
+}
+
+export async function requireAppRefreshAuth(event: H3Event): Promise<AuthContext> {
+  const context = await requireAppTokenKind(event, 'refresh')
+  if (!context.deviceId || (context.tokenGrantType !== 'short' && context.tokenGrantType !== 'long')) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+  return context
 }
 
 function isSecureSessionCookieRequest(event: H3Event) {
@@ -423,9 +526,10 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
   }
 
   logSessionDebug('resolved', event, { userId: user.id, via: directUserId ? 'id' : 'email' })
-  await ensureDeviceForRequest(event, user.id)
+  const device = await ensureDeviceForRequest(event, user.id)
   return {
     userId: user.id,
+    deviceId: device?.id ?? null,
     authSource: 'session',
     tokenGrantType: null,
     sessionIssuedAt,

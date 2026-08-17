@@ -58,6 +58,9 @@ const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 12_000
 const AUTH_PROFILE_REQUEST_RETRY_DELAY_MS = 800
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
+const AUTH_CREDENTIAL_BUNDLE_VERSION = 1
+const AUTH_ACCESS_TOKEN_REFRESH_SKEW_MS = 5 * 60 * 1000
+const AUTH_ACCESS_TOKEN_REFRESH_RETRY_MS = 60 * 1000
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
 const DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS = 3
 const VISIBLE_AUTH_EVIDENCE_FLAG = 'TUFF_VISIBLE_EVIDENCE_AUTH'
@@ -74,6 +77,25 @@ const UNAVAILABLE_SECURE_STORE_HEALTH: SecureStoreHealth = Object.freeze({
 
 type AuthStateListener = (state: AuthState) => void
 
+interface AuthCredentialBundleV1 {
+  version: typeof AUTH_CREDENTIAL_BUNDLE_VERSION
+  accessToken: string
+  refreshToken: string
+  accessTokenExpiresAt: number | null
+}
+
+interface AuthCredentialState {
+  accessToken: string
+  refreshToken: string | null
+  accessTokenExpiresAt: number | null
+}
+
+type AccessTokenRefreshResult =
+  | { kind: 'success'; token: string }
+  | { kind: 'unauthorized' }
+  | { kind: 'unavailable' }
+  | { kind: 'not-refreshable' }
+
 const authState: AuthState = {
   isLoaded: false,
   isSignedIn: false,
@@ -88,6 +110,10 @@ let transport: ITuffTransportMain | null = null
 let requestRendererValue: (<T>(eventName: string) => Promise<T | null>) | null = null
 
 let authToken: string | null = null
+let authRefreshToken: string | null = null
+let authAccessTokenExpiresAt: number | null = null
+let authAccessRefreshTimer: NodeJS.Timeout | null = null
+let authRefreshInFlight: Promise<AccessTokenRefreshResult> | null = null
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
@@ -177,6 +203,13 @@ export function subscribeAuthState(listener: AuthStateListener): () => void {
 }
 
 export function getAuthToken(): string | null {
+  if (
+    authRefreshToken &&
+    (authAccessTokenExpiresAt === null ||
+      authAccessTokenExpiresAt - Date.now() <= AUTH_ACCESS_TOKEN_REFRESH_SKEW_MS)
+  ) {
+    void refreshAccessToken('access-read')
+  }
   return authToken
 }
 
@@ -283,6 +316,79 @@ async function openAuthUrlExternally(authorizeUrl: string): Promise<void> {
   await openValidatedExternalUrl(authorizeUrl, { opener: shell.openExternal })
 }
 
+function normalizePositiveTtlSeconds(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : null
+}
+
+function parseStoredAuthCredential(value: string): AuthCredentialState | null {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+  if (!trimmed.startsWith('{')) {
+    return { accessToken: trimmed, refreshToken: null, accessTokenExpiresAt: null }
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    const keys = Object.keys(parsed).sort()
+    const expectedKeys = ['accessToken', 'accessTokenExpiresAt', 'refreshToken', 'version']
+    if (
+      keys.length !== expectedKeys.length ||
+      keys.some((key, index) => key !== expectedKeys[index])
+    ) {
+      return null
+    }
+    const accessToken = typeof parsed.accessToken === 'string' ? parsed.accessToken.trim() : ''
+    const refreshToken = typeof parsed.refreshToken === 'string' ? parsed.refreshToken.trim() : ''
+    const expiresAt = parsed.accessTokenExpiresAt
+    if (parsed.version !== AUTH_CREDENTIAL_BUNDLE_VERSION || !accessToken || !refreshToken) {
+      return null
+    }
+    if (
+      expiresAt !== null &&
+      (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt) || expiresAt <= 0)
+    ) {
+      return null
+    }
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: expiresAt as number | null
+    }
+  } catch {
+    return null
+  }
+}
+
+function serializeAuthCredential(state: AuthCredentialState): string {
+  if (!state.refreshToken) {
+    return state.accessToken
+  }
+  const bundle: AuthCredentialBundleV1 = {
+    version: AUTH_CREDENTIAL_BUNDLE_VERSION,
+    accessToken: state.accessToken,
+    refreshToken: state.refreshToken,
+    accessTokenExpiresAt: state.accessTokenExpiresAt
+  }
+  return JSON.stringify(bundle)
+}
+
+function resolveAccessTokenExpiresAt(ttlSeconds: unknown): number | null {
+  const normalizedTtl = normalizePositiveTtlSeconds(ttlSeconds)
+  return normalizedTtl === null ? null : Date.now() + normalizedTtl * 1000
+}
+
+function applyAuthCredentialState(state: AuthCredentialState | null): void {
+  authToken = state?.accessToken ?? null
+  authRefreshToken = state?.refreshToken ?? null
+  authAccessTokenExpiresAt = state?.accessTokenExpiresAt ?? null
+  scheduleAccessTokenRefresh()
+}
+
 function normalizeBearerToken(token: string): string {
   const trimmed = token.trim()
   if (!trimmed) return ''
@@ -348,7 +454,7 @@ async function loadAuthToken(): Promise<void> {
   })
 
   if (isAuthReauthenticationRequired()) {
-    authToken = null
+    applyAuthCredentialState(null)
     const deleted = await deletePersistedAuthToken()
     if (deleted) {
       await persistAuthReauthenticationRequired(false)
@@ -373,15 +479,29 @@ async function loadAuthToken(): Promise<void> {
     )
   }
   if (!secureStoreHealth.available) {
-    authToken = null
+    applyAuthCredentialState(null)
     await invalidateAuthTokenPersistence(
       secureStoreHealthCheckFailed ? 'secure-store-health-check-failed' : 'secure-store-unavailable'
     )
   } else {
     try {
-      authToken = await getSecureValue(AUTH_TOKEN_KEY)
+      const storedCredential = await getSecureValue(AUTH_TOKEN_KEY)
+      if (!storedCredential) {
+        applyAuthCredentialState(null)
+      } else {
+        const credential = parseStoredAuthCredential(storedCredential)
+        if (!credential) {
+          applyAuthCredentialState(null)
+          await invalidateAuthTokenPersistence('secure-store-value-invalid')
+          authLog.warn('Secure auth persistence payload is invalid; login state was cleared', {
+            meta: { reason: 'secure-store-value-invalid' }
+          })
+        } else {
+          applyAuthCredentialState(credential)
+        }
+      }
     } catch {
-      authToken = null
+      applyAuthCredentialState(null)
       await invalidateAuthTokenPersistence('secure-store-read-failed')
       authLog.warn('Secure auth persistence unreadable; login state can only remain in memory', {
         meta: { reason: 'secure-store-read-failed' }
@@ -391,6 +511,7 @@ async function loadAuthToken(): Promise<void> {
   authLog.info('Auth token load completed', {
     meta: {
       hasToken: Boolean(authToken),
+      hasRefreshCredential: Boolean(authRefreshToken),
       credentialProtectionEnabled: true,
       secureStoreAvailable: secureStoreHealth.available,
       secureStoreBackend: secureStoreHealth.backend,
@@ -452,12 +573,23 @@ async function persistAuthToken(nextToken: string): Promise<boolean> {
   return await persistAuthReauthenticationRequired(false)
 }
 
-async function setAuthToken(nextToken: string): Promise<void> {
-  authToken = nextToken
+async function setAuthToken(
+  nextToken: string,
+  options?: { refreshToken?: string | null; ttlSeconds?: number | null }
+): Promise<void> {
+  const accessToken = nextToken.trim()
+  const refreshToken =
+    typeof options?.refreshToken === 'string' ? options.refreshToken.trim() || null : null
+  const credentialState: AuthCredentialState = {
+    accessToken,
+    refreshToken,
+    accessTokenExpiresAt: refreshToken ? resolveAccessTokenExpiresAt(options?.ttlSeconds) : null
+  }
+  applyAuthCredentialState(credentialState)
   authLog.info('Auth token accepted', {
-    meta: { credentialProtectionEnabled: true }
+    meta: { credentialProtectionEnabled: true, hasRefreshCredential: Boolean(refreshToken) }
   })
-  const persisted = await persistAuthToken(nextToken)
+  const persisted = await persistAuthToken(serializeAuthCredential(credentialState))
   if (!persisted) {
     authLog.warn('Secure auth persistence write failed; login state can only remain in memory', {
       meta: { reason: 'secure-store-write-failed' }
@@ -469,8 +601,8 @@ async function setAuthToken(nextToken: string): Promise<void> {
 }
 
 async function clearAuthToken(): Promise<void> {
-  const hadToken = Boolean(authToken)
-  authToken = null
+  const hadToken = Boolean(authToken || authRefreshToken)
+  applyAuthCredentialState(null)
   authLog.info('Clearing auth token', {
     meta: { hadToken, credentialProtectionEnabled: true }
   })
@@ -675,8 +807,10 @@ interface BrowserLoginStartResult {
 interface DeviceAuthPollResponse {
   status?: string
   appToken?: string
+  refreshToken?: string
   grantType?: 'short' | 'long'
   ttlSeconds?: number
+  refreshTtlSeconds?: number
   refreshable?: boolean
   reason?: string
   message?: string | null
@@ -685,6 +819,8 @@ interface DeviceAuthPollResponse {
 interface DeviceAuthPollResult {
   status: DeviceAuthPollStatus
   token?: string
+  refreshToken?: string
+  ttlSeconds?: number
   message?: string | null
 }
 
@@ -760,7 +896,19 @@ async function fetchRemoteUser(
 }
 
 async function fetchRemoteUserWithTimeout(token: string): Promise<FetchRemoteUserResult> {
-  const first = await fetchRemoteUser(token)
+  let requestToken = token
+  let first = await fetchRemoteUser(requestToken)
+
+  if (first.kind === 'unauthorized' && requestToken === authToken && authRefreshToken) {
+    const refreshed = await refreshAccessToken('profile-unauthorized')
+    if (refreshed.kind === 'success') {
+      requestToken = refreshed.token
+      first = await fetchRemoteUser(requestToken)
+    } else if (refreshed.kind === 'unavailable') {
+      return { kind: 'unavailable' }
+    }
+  }
+
   if (first.kind !== 'unavailable') {
     return first
   }
@@ -772,19 +920,20 @@ async function fetchRemoteUserWithTimeout(token: string): Promise<FetchRemoteUse
       timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS
     }
   })
-  return await fetchRemoteUser(token)
+  return await fetchRemoteUser(authToken || requestToken)
 }
 
 async function refreshAuthStateFromRemote(): Promise<void> {
   authLog.info('Refreshing auth state from remote', {
     meta: { hasToken: Boolean(authToken), currentUserId: authState.user?.id ?? null }
   })
-  if (!authToken) {
+  const token = await ensureFreshAccessToken('profile-refresh')
+  if (!token) {
     updateAuthState(null)
     return
   }
 
-  const remoteResult = await fetchRemoteUserWithTimeout(authToken)
+  const remoteResult = await fetchRemoteUserWithTimeout(token)
   if (remoteResult.kind === 'success') {
     updateAuthState(remoteResult.user, authState.sessionId)
     return
@@ -797,6 +946,129 @@ async function refreshAuthStateFromRemote(): Promise<void> {
   }
 
   authLog.info('Remote auth profile unavailable, keeping local cached auth state')
+}
+
+function clearAccessTokenRefreshTimer(): void {
+  if (!authAccessRefreshTimer) {
+    return
+  }
+  clearTimeout(authAccessRefreshTimer)
+  authAccessRefreshTimer = null
+}
+
+function scheduleAccessTokenRefresh(delayOverrideMs?: number): void {
+  clearAccessTokenRefreshTimer()
+  if (!authRefreshToken) {
+    return
+  }
+
+  const computedDelay =
+    authAccessTokenExpiresAt === null
+      ? 0
+      : Math.max(0, authAccessTokenExpiresAt - Date.now() - AUTH_ACCESS_TOKEN_REFRESH_SKEW_MS)
+  const delayMs =
+    typeof delayOverrideMs === 'number' && Number.isFinite(delayOverrideMs)
+      ? Math.max(0, Math.floor(delayOverrideMs))
+      : computedDelay
+  authAccessRefreshTimer = setTimeout(
+    () => {
+      authAccessRefreshTimer = null
+      void refreshAccessToken('scheduled')
+    },
+    Math.min(delayMs, 2_147_483_647)
+  )
+}
+
+async function refreshAccessToken(reason: string): Promise<AccessTokenRefreshResult> {
+  if (authRefreshInFlight) {
+    return await authRefreshInFlight
+  }
+
+  const refreshToken = authRefreshToken
+  if (!refreshToken) {
+    return { kind: 'not-refreshable' }
+  }
+
+  const operation = (async (): Promise<AccessTokenRefreshResult> => {
+    const url = new URL('/api/app-auth/refresh', resolveAuthBaseUrl()).toString()
+    authLog.info('Refreshing Nexus access token', { meta: { reason, url } })
+    try {
+      const response = await getNetworkService().request<{
+        appToken?: string | null
+        ttlSeconds?: number | null
+      }>({
+        method: 'POST',
+        url,
+        headers: { Authorization: normalizeBearerToken(refreshToken) },
+        responseType: 'json',
+        timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+        validateStatus: [200, 400, 401, 403, 404, 429, 500, 502, 503, 504]
+      })
+
+      if (authRefreshToken !== refreshToken) {
+        return { kind: 'not-refreshable' }
+      }
+      if (response.status === 401 || response.status === 403) {
+        authLog.warn('Nexus refresh credential was rejected', {
+          meta: { reason, status: response.status }
+        })
+        await clearAuthToken()
+        updateAuthState(null)
+        return { kind: 'unauthorized' }
+      }
+
+      const nextToken =
+        typeof response.data?.appToken === 'string' ? response.data.appToken.trim() : ''
+      if (response.status !== 200 || !nextToken) {
+        authLog.warn('Nexus access token refresh is temporarily unavailable', {
+          meta: { reason, status: response.status }
+        })
+        scheduleAccessTokenRefresh(AUTH_ACCESS_TOKEN_REFRESH_RETRY_MS)
+        return { kind: 'unavailable' }
+      }
+
+      await setAuthToken(nextToken, {
+        refreshToken,
+        ttlSeconds: response.data?.ttlSeconds
+      })
+      authLog.info('Nexus access token refreshed', { meta: { reason } })
+      return { kind: 'success', token: nextToken }
+    } catch (error) {
+      authLog.warn('Nexus access token refresh failed', { error, meta: { reason } })
+      if (authRefreshToken === refreshToken) {
+        scheduleAccessTokenRefresh(AUTH_ACCESS_TOKEN_REFRESH_RETRY_MS)
+      }
+      return { kind: 'unavailable' }
+    }
+  })()
+
+  authRefreshInFlight = operation
+  try {
+    return await operation
+  } finally {
+    if (authRefreshInFlight === operation) {
+      authRefreshInFlight = null
+    }
+  }
+}
+
+async function ensureFreshAccessToken(reason: string): Promise<string | null> {
+  if (!authRefreshToken) {
+    return authToken
+  }
+
+  const accessTokenIsFresh = Boolean(
+    authToken &&
+    authAccessTokenExpiresAt !== null &&
+    authAccessTokenExpiresAt - Date.now() > AUTH_ACCESS_TOKEN_REFRESH_SKEW_MS
+  )
+  if (accessTokenIsFresh) {
+    scheduleAccessTokenRefresh()
+    return authToken
+  }
+
+  const result = await refreshAccessToken(reason)
+  return result.kind === 'success' ? result.token : authToken
 }
 
 function scheduleAuthStartupRefresh(delayMs = AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS): void {
@@ -854,6 +1126,7 @@ function toAuthUserProfile(data: AuthUser): AuthUser {
 
 async function initializeAuthState(): Promise<void> {
   authState.isLoaded = true
+  await ensureFreshAccessToken('startup')
   if (!authToken) {
     updateAuthState(null)
     return
@@ -1020,7 +1293,8 @@ async function pollDeviceAuth(
           pollCount,
           statusCode: response.status,
           authStatus: response.data?.status ?? null,
-          hasAppToken: Boolean(response.data?.appToken)
+          hasAppToken: Boolean(response.data?.appToken),
+          hasRefreshToken: Boolean(response.data?.refreshToken)
         }
       })
 
@@ -1030,7 +1304,12 @@ async function pollDeviceAuth(
 
       const data = response.data
       if (data?.status === 'approved' && data.appToken) {
-        return { status: 'approved', token: data.appToken }
+        return {
+          status: 'approved',
+          token: data.appToken,
+          refreshToken: data.refreshToken,
+          ttlSeconds: normalizePositiveTtlSeconds(data.ttlSeconds) ?? undefined
+        }
       }
       if (data?.status === 'expired') return { status: 'expired' }
       if (data?.status === 'cancelled') return { status: 'cancelled' }
@@ -1100,7 +1379,12 @@ async function completeDeviceAuthLogin(
     return
   }
 
-  const applied = await handleExternalAuthCallback(result.token, result.token)
+  const applied = await handleExternalAuthCallback(
+    result.token,
+    result.token,
+    result.refreshToken,
+    result.ttlSeconds
+  )
   if (!applied) {
     authLog.warn('Device auth token was rejected')
     if (!authToken) {
@@ -1171,19 +1455,25 @@ async function openLoginPage(
   return loginStart
 }
 
-async function handleExternalAuthCallback(token: string, appToken?: string): Promise<boolean> {
+async function handleExternalAuthCallback(
+  token: string,
+  appToken?: string,
+  refreshToken?: string,
+  ttlSeconds?: number
+): Promise<boolean> {
   const resolvedToken = appToken || token
   authLog.info('Handling auth callback token', {
     meta: {
       hasToken: Boolean(token),
       hasAppToken: Boolean(appToken),
+      hasRefreshToken: Boolean(refreshToken),
       resolvedTokenLength: resolvedToken.length
     }
   })
   if (!resolvedToken) {
     return false
   }
-  await setAuthToken(resolvedToken)
+  await setAuthToken(resolvedToken, { refreshToken, ttlSeconds })
   const remoteResult = await fetchRemoteUserWithTimeout(resolvedToken)
   authLog.info('Auth callback profile resolution completed', {
     meta: { result: remoteResult.kind }
@@ -1264,7 +1554,8 @@ async function executeNexusRequest(
   method: NetworkMethod,
   headers: Headers,
   body: unknown,
-  context?: string
+  context?: string,
+  bodyFactory?: () => unknown
 ): Promise<NexusResponsePayload> {
   const startedAt = Date.now()
   authLog.info('Executing Nexus request', {
@@ -1273,17 +1564,30 @@ async function executeNexusRequest(
       method,
       url,
       hasAuthorization: headers.has('Authorization'),
-      hasBody: Boolean(body)
+      hasBody: Boolean(body || bodyFactory)
     }
   })
-  const response = await getNetworkService().request<string>({
-    method,
-    url,
-    headers: Object.fromEntries(headers.entries()),
-    body,
-    responseType: 'text',
-    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
-  })
+
+  const sendRequest = () =>
+    getNetworkService().request<string>({
+      method,
+      url,
+      headers: Object.fromEntries(headers.entries()),
+      body: bodyFactory ? bodyFactory() : body,
+      responseType: 'text',
+      validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
+    })
+
+  let response = await sendRequest()
+  let retriedAfterRefresh = false
+  if (response.status === 401 && authRefreshToken) {
+    const refreshed = await refreshAccessToken('request-unauthorized')
+    if (refreshed.kind === 'success') {
+      headers.set('Authorization', normalizeBearerToken(refreshed.token))
+      response = await sendRequest()
+      retriedAfterRefresh = true
+    }
+  }
 
   authLog.info('Nexus request completed', {
     meta: {
@@ -1292,6 +1596,7 @@ async function executeNexusRequest(
       url: response.url || url,
       status: response.status,
       ok: response.ok,
+      retriedAfterRefresh,
       durationMs: Date.now() - startedAt
     }
   })
@@ -1322,7 +1627,7 @@ async function executeNexusRequest(
 async function performNexusRequest(
   payload: NexusRequestPayload
 ): Promise<NexusResponsePayload | null> {
-  const token = authToken
+  const token = await ensureFreshAccessToken('request')
   if (!token) {
     authLog.warn('Nexus request skipped without auth token', {
       meta: { context: payload.context ?? '', path: payload.path ?? '', url: payload.url ?? '' }
@@ -1340,7 +1645,7 @@ async function performNexusRequest(
 async function performNexusUpload(
   payload: NexusUploadPayload
 ): Promise<NexusResponsePayload | null> {
-  const token = authToken
+  const token = await ensureFreshAccessToken('upload')
   if (!token) {
     authLog.warn('Nexus upload skipped without auth token', {
       meta: { context: payload.context ?? '', path: payload.path ?? '', url: payload.url ?? '' }
@@ -1353,12 +1658,8 @@ async function performNexusUpload(
   headers.delete('content-type')
   headers.set('Authorization', normalizeBearerToken(token))
 
-  return executeNexusRequest(
-    url,
-    method,
-    headers,
-    buildNexusUploadFormData(payload),
-    payload.context
+  return executeNexusRequest(url, method, headers, null, payload.context, () =>
+    buildNexusUploadFormData(payload)
   )
 }
 
@@ -1543,7 +1844,7 @@ async function attestCurrentDevice(): Promise<boolean> {
     return true
   }
 
-  const token = authToken
+  const token = await ensureFreshAccessToken('device-attestation')
   if (!token) {
     return false
   }
@@ -1649,15 +1950,21 @@ function getStepUpToken(): string | null {
  */
 export async function applyExternalAuthCallback(
   token: string,
-  appToken?: string
+  appToken?: string,
+  refreshToken?: string,
+  ttlSeconds?: number
 ): Promise<boolean> {
   if (!activeDeviceAuthCode) {
     authLog.warn('Rejected auth callback with no login in flight', {
-      meta: { hasToken: Boolean(token), hasAppToken: Boolean(appToken) }
+      meta: {
+        hasToken: Boolean(token),
+        hasAppToken: Boolean(appToken),
+        hasRefreshToken: Boolean(refreshToken)
+      }
     })
     return false
   }
-  return handleExternalAuthCallback(token, appToken)
+  return handleExternalAuthCallback(token, appToken, refreshToken, ttlSeconds)
 }
 
 export function applyStepUpToken(token: string): void {
@@ -1667,6 +1974,8 @@ export function applyStepUpToken(token: string): void {
 type AuthModuleTestState = {
   appRootPath?: string
   authToken?: string | null
+  authRefreshToken?: string | null
+  authAccessTokenExpiresAt?: number | null
 }
 
 function resetAuthModuleTestState(): void {
@@ -1674,6 +1983,7 @@ function resetAuthModuleTestState(): void {
     clearTimeout(authStartupRefreshTimer)
     authStartupRefreshTimer = null
   }
+  clearAccessTokenRefreshTimer()
   authState.isLoaded = false
   authState.isSignedIn = false
   authState.user = null
@@ -1683,6 +1993,9 @@ function resetAuthModuleTestState(): void {
   transport = null
   requestRendererValue = null
   authToken = null
+  authRefreshToken = null
+  authAccessTokenExpiresAt = null
+  authRefreshInFlight = null
   stepUpToken = null
   stepUpTokenExpiresAt = 0
   deviceAuthLoginAttempt += 1
@@ -1696,11 +2009,19 @@ function setAuthModuleTestState(nextState: AuthModuleTestState): void {
   if (Object.prototype.hasOwnProperty.call(nextState, 'authToken')) {
     authToken = nextState.authToken ?? null
   }
+  if (Object.prototype.hasOwnProperty.call(nextState, 'authRefreshToken')) {
+    authRefreshToken = nextState.authRefreshToken ?? null
+  }
+  if (Object.prototype.hasOwnProperty.call(nextState, 'authAccessTokenExpiresAt')) {
+    authAccessTokenExpiresAt = nextState.authAccessTokenExpiresAt ?? null
+  }
 }
 
 export const __test__ = {
   loadAuthToken,
   setAuthToken,
+  refreshAccessToken,
+  performNexusRequest,
   /** Lets a test put a browser login "in flight" without running the device flow. */
   setActiveDeviceAuthCode: (code: string | null): void => {
     activeDeviceAuthCode = code
@@ -1708,6 +2029,11 @@ export const __test__ = {
   clearAuthToken,
   initializeAuthState,
   getCachedAuthUser,
+  getCredentialState: (): AuthCredentialState => ({
+    accessToken: authToken ?? '',
+    refreshToken: authRefreshToken,
+    accessTokenExpiresAt: authAccessTokenExpiresAt
+  }),
   getState: cloneAuthState,
   resetState: resetAuthModuleTestState,
   setState: setAuthModuleTestState
@@ -1775,7 +2101,7 @@ export class AuthModule extends BaseModule<TalexEvents> {
       ...registerAuthHandler(
         AuthEvents.profile.update,
         async (payload: AuthProfileUpdateRequest) => {
-          const token = authToken
+          const token = await ensureFreshAccessToken('profile-update')
           if (!token) {
             return null
           }
@@ -1790,7 +2116,7 @@ export class AuthModule extends BaseModule<TalexEvents> {
       ...registerAuthHandler(
         AuthEvents.profile.updateAvatar,
         async (payload: AuthAvatarUpdateRequest) => {
-          const token = authToken
+          const token = await ensureFreshAccessToken('profile-update')
           if (!token) {
             return null
           }
@@ -1821,7 +2147,12 @@ export class AuthModule extends BaseModule<TalexEvents> {
         if (!token) {
           return { success: false }
         }
-        await handleExternalAuthCallback(token, payload?.appToken)
+        await handleExternalAuthCallback(
+          token,
+          payload?.appToken,
+          payload?.refreshToken,
+          normalizePositiveTtlSeconds(payload?.ttlSeconds) ?? undefined
+        )
         return { success: true }
       }),
       ...registerAuthHandler(AuthEvents.stepUp.request, async () => {

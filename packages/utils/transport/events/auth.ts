@@ -39,6 +39,8 @@ export interface AuthAvatarUpdateRequest {
 export interface AuthManualTokenRequest {
   token: string;
   appToken?: string;
+  refreshToken?: string;
+  ttlSeconds?: number;
 }
 
 export interface NexusRequestPayload {

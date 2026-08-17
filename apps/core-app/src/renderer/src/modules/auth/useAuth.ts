@@ -455,7 +455,12 @@ async function logout(): Promise<void> {
   }
 }
 
-async function handleExternalAuthCallback(token: string, appToken?: string): Promise<void> {
+async function handleExternalAuthCallback(
+  token: string,
+  appToken?: string,
+  refreshToken?: string,
+  ttlSeconds?: number
+): Promise<void> {
   const resolvedToken = appToken || token
   isHandlingExternalAuthCallback.value = true
   try {
@@ -470,7 +475,9 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
 
     const result = (await transport.send(AuthEvents.token.manual, {
       token: resolvedToken,
-      appToken
+      appToken,
+      refreshToken,
+      ttlSeconds
     })) as { success?: boolean } | null
     if (!result?.success) {
       throw new Error('Auth callback failed')
