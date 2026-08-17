@@ -1,5 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
-import { networkClient } from '@talex-touch/utils/network'
+import { getPluginNetworkClient } from './plugin-network-client'
 
 interface MyMemoryConfig {
   apiUrl: string
@@ -36,9 +36,14 @@ export class MyMemoryTranslateProvider implements TranslationProvider {
     const { text, targetLanguage: to, sourceLanguage: from } = request
 
     try {
+      const sourceLanguage = from && from !== 'auto'
+        ? this.mapLanguageCode(from)
+        : /[\u3400-\u9FFF]/u.test(text)
+          ? 'zh-CN'
+          : 'en'
       const params = new URLSearchParams({
         q: text,
-        langpair: `${this.mapLanguageCode(from || 'auto')}|${this.mapLanguageCode(to)}`,
+        langpair: `${sourceLanguage}|${this.mapLanguageCode(to)}`,
       })
 
       // 如果配置了邮箱，添加到请求中以提高配额
@@ -46,8 +51,9 @@ export class MyMemoryTranslateProvider implements TranslationProvider {
         params.append('de', this.config.email)
       }
 
-      const response = await networkClient.request<any>({
+      const response = await getPluginNetworkClient().request<any>({
         method: 'GET',
+        responseType: 'json',
         url: `${this.config.apiUrl}?${params}`,
         headers: {
           Accept: 'application/json',

@@ -1,5 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
-import { networkClient } from '@talex-touch/utils/network'
+import { getPluginNetworkClient } from './plugin-network-client'
 
 export class DeepLTranslateProvider implements TranslationProvider {
   name = 'DeepL'
@@ -14,8 +14,9 @@ export class DeepLTranslateProvider implements TranslationProvider {
   async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
     const { text, targetLanguage: targetLang = 'ZH', sourceLanguage: sourceLang = 'auto' } = request
     try {
-      const response = await networkClient.request<any>({
+      const response = await getPluginNetworkClient().request<any>({
         method: 'POST',
+        responseType: 'json',
         url: this.config.apiUrl,
         headers: {
           'Authorization': `DeepL-Auth-Key ${this.config.apiKey}`,

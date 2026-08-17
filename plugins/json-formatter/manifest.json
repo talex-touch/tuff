@@ -1,7 +1,7 @@
 {
   "id": "com.tuffex.json-formatter",
   "name": "json-formatter",
-  "version": "1.0.5",
+  "version": "1.0.8",
   "author": "TalexTouch Team",
   "sdkapi": 260713,
   "category": "utilities",
@@ -44,6 +44,7 @@
       "interaction": {
         "type": "webcontent",
         "path": "/json",
+        "showInput": false,
         "forceMax": true
       }
     }

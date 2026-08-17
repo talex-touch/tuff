@@ -1,7 +1,7 @@
 {
   "id": "com.tuffex.translation",
   "name": "touch-translation",
-  "version": "1.0.11",
+  "version": "1.0.17",
   "author": "TalexTouch Team",
   "sdkapi": 260713,
   "category": "utilities",
@@ -15,16 +15,6 @@
     "enable": false,
     "address": "http://localhost:3733/",
     "source": true
-  },
-  "build": {
-    "index": {
-      "entry": "index.js",
-      "format": "cjs",
-      "target": "node24",
-      "external": ["electron"],
-      "minify": true,
-      "sourcemap": false
-    }
   },
   "permissions": {
     "required": ["network.internet", "intelligence.basic", "storage.plugin", "search.root-results"],

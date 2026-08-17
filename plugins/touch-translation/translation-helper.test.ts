@@ -6,12 +6,19 @@ import {
   resolveTargetLanguage,
   toImageDataUrl,
 } from '@talex-touch/utils/plugin'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   canPersistProviderSecrets,
   getProviderSecretKey,
   stripProviderSecrets,
 } from './src/composables/useTranslationProvider'
+import { MyMemoryTranslateProvider } from './src/providers/mymemory-translate'
+
+const networkRequestMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./src/providers/plugin-network-client', () => ({
+  getPluginNetworkClient: () => ({ request: networkRequestMock }),
+}))
 
 describe('touch-translation helper integration', () => {
   it('uses utils translation helpers for direction and provider ordering', () => {
@@ -73,6 +80,33 @@ describe('touch-translation helper integration', () => {
       degraded: true,
       reason: 'Using local root secret',
     })).toBe(true)
+  })
+
+  it('resolves MyMemory auto source language before issuing the host request', async () => {
+    networkRequestMock.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: {
+        responseStatus: 200,
+        responseData: { translatedText: '你好，世界' },
+        matches: [],
+      },
+      url: 'https://api.mymemory.translated.net/get',
+      ok: true,
+    })
+
+    const provider = new MyMemoryTranslateProvider()
+    await expect(provider.translate({
+      text: 'Hello world',
+      targetLanguage: 'zh',
+      sourceLanguage: 'auto',
+    })).resolves.toMatchObject({ text: '你好，世界' })
+
+    expect(networkRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+      responseType: 'json',
+      url: expect.stringContaining('langpair=en%7Czh-CN'),
+    }))
   })
 
   it('builds translation copy actions as plugin actions', async () => {
