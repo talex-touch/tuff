@@ -217,3 +217,42 @@ Closed the three deferred items from the BUI port: (1) confirmed W3's base-ancho
 ### Next Steps
 
 - None - task complete
+
+
+## Session 59: Clipboard History 1.1.12 production Nexus release
+
+**Date**: 2026-08-17
+**Task**: Clipboard History 1.1.12 production Nexus release
+**Branch**: `master`
+
+### Summary
+
+Implemented SDK 260817 application resolution, permission-gated tfile previews, CoreBox input search, and source app identity; passed CI; deployed Nexus source 1516936; admin-signed, approved, and digest-verified Clipboard History 1.1.12 on the production catalog.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bf3eb9434` | (see git log) |
+| `c523af1db` | (see git log) |
+| `2eccf3d79` | (see git log) |
+| `989dad5a5` | (see git log) |
+| `c90fcfb3d` | (see git log) |
+| `a941469e3` | (see git log) |
+| `151693652` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
