@@ -3,7 +3,7 @@ title: Stream Markdown
 description: 面向流式输出的 Markdown 渲染器，尾部带光标，围栏块可按语言接管。
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, markdown, streaming]
 syncStatus: reviewed
 verified: true

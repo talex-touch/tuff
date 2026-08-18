@@ -3,7 +3,7 @@ title: Attachment Tray
 description: A message attachment area — images in a grid with a built-in viewer, files as chips, with optional upload progress and removal.
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, attachment, upload]
 syncStatus: reviewed
 verified: true

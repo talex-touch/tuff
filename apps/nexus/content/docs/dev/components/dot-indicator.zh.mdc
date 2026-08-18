@@ -3,7 +3,7 @@ title: "DotIndicator 圆点指示器"
 description: "裸圆点加文案的状态指示原语，用于表格单元格与汇总行。"
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [status, dot, table, data]
 syncStatus: reviewed
 verified: true

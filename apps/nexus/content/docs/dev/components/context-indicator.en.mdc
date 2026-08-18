@@ -3,7 +3,7 @@ title: Context Indicator
 description: A compact ring that shows how much of the conversation context is used.
 category: Status
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, context, token]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "RecommendationCard"
 description: "An agent suggestion with its confidence: rationale, alternatives drawer, and the action that confirms it — all without the card changing shape."
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, recommendation, confidence, decision]
 syncStatus: reviewed
 verified: true

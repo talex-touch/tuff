@@ -60,6 +60,7 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'fs:delete', permissions: ['fs.write'] },
   { pattern: 'fs:watch', permissions: ['fs.read'] },
   { pattern: 'fs:index', permissions: ['fs.index'] },
+  { pattern: 'fs:tfile', permissions: ['fs.tfile'] },
 
   // Clipboard APIs
   { pattern: 'clipboard:read', permissions: ['clipboard.read'] },

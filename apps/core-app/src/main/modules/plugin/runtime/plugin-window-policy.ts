@@ -512,16 +512,13 @@ function resolveWebSocketHttpOrigin(target: URL): string | null {
   return `${protocol}//${target.host}`
 }
 
-function hasPluginViewPermission(
-  policy: PluginViewNavigationPolicy,
-  permissionId: string
-): boolean {
+function hasPluginTfilePermission(policy: PluginViewNavigationPolicy): boolean {
   const scope = policy.permissionScope
   if (!scope) return false
 
   try {
     return (
-      getPermissionModule()?.checkPermission(scope.pluginId, permissionId, scope.sdkapi).allowed ===
+      getPermissionModule()?.checkPermission(scope.pluginId, 'fs:tfile', scope.sdkapi).allowed ===
       true
     )
   } catch {
@@ -541,7 +538,7 @@ export function isPluginViewResourceAllowed(
   }
 
   if (target.protocol === 'data:') return true
-  if (target.protocol === 'tfile:') return hasPluginViewPermission(policy, 'fs.tfile')
+  if (target.protocol === 'tfile:') return hasPluginTfilePermission(policy)
   if (target.protocol === 'blob:') {
     return policy.kind === 'local' || target.origin === policy.origin
   }
