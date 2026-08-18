@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const send = vi.fn()
 
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({ send })
+  useTuffTransport: () => ({ send, on: () => () => {} })
 }))
 
 const { useConversationHistory, createConversationId } = await import('./useConversationHistory')
