@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
@@ -28,14 +28,11 @@ const userMenuPanelCard = {
 } as const
 
 const userMenuOpen = ref(false)
-const languageMenuOpen = ref(false)
 const themeToggleEvent = ref<MouseEvent | null>(null)
 const themeToggleAt = ref(0)
 const accountStatsLoading = ref(false)
 const accountStatsLoaded = ref(false)
 const menuMotionDuration = 207
-let userMenuTimer: ReturnType<typeof setTimeout> | null = null
-let languageMenuTimer: ReturnType<typeof setTimeout> | null = null
 
 const userLabel = computed(() => {
   const rawLabel = session.value?.user?.name || session.value?.user?.email || ''
@@ -101,7 +98,6 @@ function tSafe(key: string, fallback: string) {
 async function handleLocaleSelect(nextLocale: 'en' | 'zh') {
   await setManualLocale(nextLocale)
   userMenuOpen.value = false
-  languageMenuOpen.value = false
 }
 
 function handleThemeSwitch(value: boolean) {
@@ -119,41 +115,6 @@ function captureThemeEvent(event: MouseEvent) {
     return
   themeToggleEvent.value = event
   themeToggleAt.value = Date.now()
-}
-
-function setUserMenuHover(active: boolean) {
-  if (userMenuTimer) {
-    clearTimeout(userMenuTimer)
-    userMenuTimer = null
-  }
-  if (active) {
-    userMenuOpen.value = true
-    void loadAccountStats()
-    return
-  }
-  userMenuTimer = setTimeout(() => {
-    userMenuOpen.value = false
-    languageMenuOpen.value = false
-  }, 160)
-}
-
-function setLanguageHover(active: boolean) {
-  if (languageMenuTimer) {
-    clearTimeout(languageMenuTimer)
-    languageMenuTimer = null
-  }
-  if (active) {
-    languageMenuOpen.value = true
-    return
-  }
-  languageMenuTimer = setTimeout(() => {
-    languageMenuOpen.value = false
-  }, 120)
-}
-
-function handleLanguagePanelHover(active: boolean) {
-  setUserMenuHover(active)
-  setLanguageHover(active)
 }
 
 function shouldNavigateFromAvatar() {
@@ -188,13 +149,11 @@ async function loadAccountStats() {
 
 async function handleMenuNavigate(path: string) {
   userMenuOpen.value = false
-  languageMenuOpen.value = false
   await navigateTo(path)
 }
 
 async function handleSignOut() {
   userMenuOpen.value = false
-  languageMenuOpen.value = false
   try {
     await signOut({ callbackUrl: afterSignOutUrl.value })
   }
@@ -202,17 +161,6 @@ async function handleSignOut() {
     console.error('[Header] Failed to sign out:', error)
   }
 }
-
-onBeforeUnmount(() => {
-  if (userMenuTimer) {
-    clearTimeout(userMenuTimer)
-    userMenuTimer = null
-  }
-  if (languageMenuTimer) {
-    clearTimeout(languageMenuTimer)
-    languageMenuTimer = null
-  }
-})
 
 watch(
   userMenuOpen,
@@ -225,9 +173,10 @@ watch(
 </script>
 
 <template>
-  <div class="header-user-wrapper header-user-vars" @mouseenter="setUserMenuHover(true)" @mouseleave="setUserMenuHover(false)">
+  <div class="header-user-wrapper header-user-vars">
     <TxDropdownMenu
       v-model="userMenuOpen"
+      trigger="hover"
       placement="bottom-end"
       :offset="10"
       :animation="{ type: 'transfer', duration: menuMotionDuration }"
@@ -257,7 +206,7 @@ watch(
         </TxButton>
       </template>
 
-      <div class="header-user-panel header-user-vars isolate" @mouseenter="setUserMenuHover(true)" @mouseleave="setUserMenuHover(false)">
+      <div class="header-user-panel header-user-vars isolate">
         <div class="header-user-profile fake-background">
           <TxAvatar
             :src="userAvatar || undefined"
@@ -301,50 +250,43 @@ watch(
           </span>
         </TxDropdownItem>
 
-        <div class="header-user-submenu" @mouseenter="setLanguageHover(true)" @mouseleave="setLanguageHover(false)">
-          <TxPopover
-            v-model="languageMenuOpen"
-            placement="right"
-            :offset="6"
-            :animation="{ type: 'transfer', duration: menuMotionDuration }"
-            :width="132"
-            :min-width="132"
-            reference-class="header-user-submenu-reference"
-            :panel-padding="0"
-            :panel-radius="14"
-            panel-variant="plain"
-            panel-background="refraction"
-            panel-shadow="soft"
-            :close-on-click-outside="false"
-          >
-            <template #reference>
-              <TxDropdownItem class="header-user-submenu-trigger">
-                <span class="header-user-item">
-                  <span class="i-carbon-language header-user-item-icon" />
-                  <span>{{ tSafe('auth.menu.language', 'Language') }}</span>
-                </span>
-                <template #right>
-                  <span class="header-user-right">
-                    <span class="header-user-meta">{{ localeLabel }}</span>
-                    <span class="i-carbon-chevron-right header-user-submenu-icon" />
-                  </span>
-                </template>
-              </TxDropdownItem>
-            </template>
-            <div
-              class="header-user-submenu-panel header-user-vars isolate"
-              @mouseenter="handleLanguagePanelHover(true)"
-              @mouseleave="handleLanguagePanelHover(false)"
-            >
-              <TxButton variant="bare" native-type="button" class="header-user-submenu-item" :class="{ 'is-active': locale === 'en' }" @click="handleLocaleSelect('en')">
+        <TxDropdownSubmenu
+          :width="132"
+          :min-width="132"
+          :offset="6"
+          :animation="{ type: 'transfer', duration: menuMotionDuration }"
+          :panel-radius="14"
+          :panel-padding="0"
+          panel-variant="plain"
+          panel-background="refraction"
+          panel-shadow="soft"
+        >
+          <span class="header-user-item">
+            <span class="i-carbon-language header-user-item-icon" />
+            <span>{{ tSafe('auth.menu.language', 'Language') }}</span>
+          </span>
+          <template #right>
+            <span class="header-user-meta">{{ localeLabel }}</span>
+          </template>
+          <template #menu>
+            <div class="header-user-submenu-panel header-user-vars">
+              <TxDropdownItem
+                class="header-user-submenu-item"
+                :class="{ 'is-active': locale === 'en' }"
+                @select="handleLocaleSelect('en')"
+              >
                 English
-              </TxButton>
-              <TxButton variant="bare" native-type="button" class="header-user-submenu-item" :class="{ 'is-active': locale === 'zh' }" @click="handleLocaleSelect('zh')">
+              </TxDropdownItem>
+              <TxDropdownItem
+                class="header-user-submenu-item"
+                :class="{ 'is-active': locale === 'zh' }"
+                @select="handleLocaleSelect('zh')"
+              >
                 中文
-              </TxButton>
+              </TxDropdownItem>
             </div>
-          </TxPopover>
-        </div>
+          </template>
+        </TxDropdownSubmenu>
 
         <TxDropdownItem class="header-user-theme-item">
           <span class="header-user-item">
@@ -406,25 +348,8 @@ watch(
   --header-user-divider: color-mix(in srgb, var(--header-user-border-strong) 90%, transparent);
 }
 
-:global(.tx-popover:has(.header-user-panel)) {
-  --tx-index-popper: 2200;
-}
-
-:global(.tx-popover:has(.header-user-submenu-panel)) {
-  --tx-index-popper: 2300;
-  width: 132px !important;
-  min-width: 132px !important;
-}
-
-:global(.tx-tooltip:has(.header-user-submenu-panel)),
-:global(.tx-tooltip:has(.header-user-submenu-panel) .tx-tooltip__content),
-:global(.tx-base-anchor:has(.header-user-submenu-panel)),
-:global(.tx-base-anchor:has(.header-user-submenu-panel) .tx-base-anchor__card) {
-  width: 132px !important;
-  min-width: 132px !important;
-  max-width: 132px !important;
-}
-
+/* No API exists to drop just the anchor's outline ring; both panels hide it
+   deliberately, so this internal reach stays. */
 :global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__outline),
 :global(.tx-base-anchor:has(.header-user-submenu-panel) .tx-base-anchor__outline) {
   display: none !important;
@@ -432,28 +357,6 @@ watch(
 
 :global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__card) {
   overflow-x: visible !important;
-}
-
-:global(.header-user-submenu-reference),
-:global(.header-user-submenu .tx-base-anchor__reference) {
-  width: 100%;
-  display: flex;
-}
-
-:global(.header-user-submenu-reference .tx-popover__reference),
-:global(.header-user-submenu .tx-popover__reference) {
-  width: 100%;
-}
-
-:global(.tx-tooltip:has(.header-user-panel)) {
-  --tx-tooltip-max-height: none !important;
-  max-height: none !important;
-  overflow: visible !important;
-}
-
-:global(.tx-tooltip:has(.header-user-panel) .tx-tooltip__content) {
-  max-height: none !important;
-  overflow: visible !important;
 }
 
 .header-user-wrapper {
@@ -625,73 +528,38 @@ watch(
   min-width: 0;
 }
 
-.header-user-submenu {
-  position: relative;
-  width: 100%;
-}
-
-.header-user-submenu-icon {
-  font-size: 14px;
-  opacity: 0.7;
-}
-
 .header-user-submenu-panel {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px;
+  padding: 6px;
   box-sizing: border-box;
-  width: min(132px, calc(100vw - 32px));
-  min-width: min(132px, calc(100vw - 32px));
+  width: 100%;
   border-radius: 14px;
   background: transparent;
   border: 1px solid var(--header-user-border);
   box-shadow: none;
+  color: var(--header-user-text);
 }
 
 .header-user-submenu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-width: 0;
-  text-align: left;
-  padding: 7px 9px;
-  border-radius: 10px;
+  --tx-card-item-padding: 7px 9px;
+  --tx-card-item-radius: 10px;
+}
+
+.header-user-submenu-item :deep(.tx-card-item__title) {
   font-size: 13px;
+  font-weight: 500;
   color: color-mix(in srgb, var(--header-user-text) 82%, transparent);
-  background: transparent;
-  border: 1px solid transparent;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-  --tx-button-bare-padding: 0;
-  --tx-button-bare-radius: 10px;
-  --tx-button-bare-hover: var(--header-user-hover);
-  --tx-button-bare-bg: transparent;
-  --tx-button-gap: 0.5rem;
 }
 
-.header-user-submenu-item :deep(.tx-button__inner) {
-  width: 100%;
-  justify-content: space-between;
-}
-
-.header-user-submenu-item :deep(.tx-button__content) {
-  display: flex;
-  width: 100%;
-  justify-content: flex-start;
-}
-
-.header-user-submenu-item:hover {
-  background: var(--header-user-hover);
-  border-color: var(--header-user-hover-border);
-  color: var(--header-user-text);
-  box-shadow: inset 0 0 0 1px var(--header-user-hover-border);
-}
-
-.header-user-submenu-item.is-active {
-  color: var(--header-user-text);
+.header-user-submenu-item.is-active :deep(.tx-card-item) {
   border-color: var(--header-user-hover-border);
   background: color-mix(in srgb, var(--header-user-bg) 82%, transparent);
+}
+
+.header-user-submenu-item.is-active :deep(.tx-card-item__title) {
+  color: var(--header-user-text);
 }
 
 .header-user-theme-switch {
@@ -704,7 +572,8 @@ watch(
   --tx-card-item-radius: 12px;
 }
 
-.header-user-panel :deep(.tx-card-item) {
+.header-user-panel :deep(.tx-card-item),
+.header-user-submenu-panel :deep(.tx-card-item) {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -716,13 +585,15 @@ watch(
   font-weight: 500;
 }
 
-.header-user-panel :deep(.tx-card-item--clickable:hover) {
+.header-user-panel :deep(.tx-card-item--clickable:hover),
+.header-user-submenu-panel :deep(.tx-card-item--clickable:hover) {
   border-color: var(--header-user-hover-border);
   background: var(--header-user-hover);
   box-shadow: inset 0 0 0 1px var(--header-user-hover-border);
 }
 
-.header-user-panel :deep(.tx-card-item:focus-visible) {
+.header-user-panel :deep(.tx-card-item:focus-visible),
+.header-user-submenu-panel :deep(.tx-card-item:focus-visible) {
   box-shadow: none;
 }
 

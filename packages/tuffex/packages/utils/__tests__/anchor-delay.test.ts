@@ -185,6 +185,110 @@ describe('anchor-delay service', () => {
     })
   })
 
+  describe('nested chain', () => {
+    it('closing a parent cascades to its open descendants, deepest first', () => {
+      const order: string[] = []
+      const grand = service.register({ layer: 'menu', onOpen: () => {}, onClose: () => order.push('root') })
+      const mid = service.register({ layer: 'menu', parent: grand.node, onOpen: () => {}, onClose: () => order.push('mid') })
+      const leaf = service.register({ layer: 'menu', parent: mid.node, onOpen: () => {}, onClose: () => order.push('leaf') })
+
+      grand.openNow()
+      mid.openNow()
+      leaf.openNow()
+      grand.closeNow()
+
+      expect(order).toEqual(['leaf', 'mid', 'root'])
+      expect(service.openNodes()).toHaveLength(0)
+    })
+
+    it('cancelChain drops pending close timers on every ancestor', () => {
+      const parent = attach(service, 'menu')
+      const child = attach(service, 'menu', parent.handle.node)
+
+      parent.handle.openNow()
+      child.handle.openNow()
+      // The pointer crossing out of the parent panel scheduled its close…
+      parent.handle.requestClose()
+      // …then landed in the child panel, proving it never left the chain.
+      child.handle.cancelChain()
+
+      vi.advanceTimersByTime(10_000)
+      expect(parent.handle.isOpen()).toBe(true)
+      expect(child.handle.isOpen()).toBe(true)
+    })
+
+    it('requestCloseChain closes hover-closeable ancestors with the leaf', () => {
+      const parent = { opened: 0, closed: 0 } as Probe
+      parent.handle = service.register({
+        layer: 'menu',
+        hoverCloseable: () => true,
+        onOpen: () => { parent.opened += 1 },
+        onClose: () => { parent.closed += 1 },
+      })
+      const child = attach(service, 'menu', parent.handle.node)
+
+      parent.handle.openNow()
+      child.handle.openNow()
+      child.handle.requestCloseChain()
+
+      vi.advanceTimersByTime(ANCHOR_DELAY_PRESETS.layers.menu.closeDelay)
+      expect(child.handle.isOpen()).toBe(false)
+      expect(parent.handle.isOpen()).toBe(false)
+    })
+
+    it('requestCloseChain skips ancestors that are not hover-closeable', () => {
+      // A click-opened menu: it never declared hoverCloseable, so a hover
+      // submenu leaving must not schedule its close.
+      const parent = attach(service, 'menu')
+      const child = attach(service, 'menu', parent.handle.node)
+
+      parent.handle.openNow()
+      child.handle.openNow()
+      child.handle.requestCloseChain()
+
+      vi.advanceTimersByTime(10_000)
+      expect(child.handle.isOpen()).toBe(false)
+      expect(parent.handle.isOpen()).toBe(true)
+    })
+
+    it('sees an event inside an open descendant panel', () => {
+      const parent = attach(service, 'menu')
+      const child = attach(service, 'menu', parent.handle.node)
+      parent.handle.openNow()
+      child.handle.openNow()
+
+      const childEl = {} as HTMLElement
+      service.setFloatingEl(child.handle.node, childEl)
+      const event = { composedPath: () => [childEl], target: null } as unknown as Event
+
+      expect(service.isEventInsideChain(parent.handle.node, event)).toBe(true)
+    })
+
+    it('ignores panels of closed descendants and unrelated anchors', () => {
+      // Menu-vs-menu preemption would never let an unrelated menu stay open
+      // next to this chain; neuter it — this test is about containment only.
+      service.configure({ preempts: { menu: [] } })
+      const parent = attach(service, 'menu')
+      const child = attach(service, 'menu', parent.handle.node)
+      const stranger = attach(service, 'menu')
+      parent.handle.openNow()
+      child.handle.openNow()
+      stranger.handle.openNow()
+
+      const childEl = {} as HTMLElement
+      const strangerEl = {} as HTMLElement
+      service.setFloatingEl(child.handle.node, childEl)
+      service.setFloatingEl(stranger.handle.node, strangerEl)
+
+      const inStranger = { composedPath: () => [strangerEl], target: null } as unknown as Event
+      expect(service.isEventInsideChain(parent.handle.node, inStranger)).toBe(false)
+
+      child.handle.closeNow()
+      const inChild = { composedPath: () => [childEl], target: null } as unknown as Event
+      expect(service.isEventInsideChain(parent.handle.node, inChild)).toBe(false)
+    })
+  })
+
   describe('warm group', () => {
     it('opens with no delay while a sibling is still open', () => {
       const a = attach(service, 'hint')

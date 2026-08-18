@@ -89,6 +89,14 @@ export interface AnchorDelayRegistration {
   openDelay?: () => number | undefined
   /** Per-anchor override, read at scheduling time. `undefined` uses the preset. */
   closeDelay?: () => number | undefined
+  /**
+   * Whether leaving this anchor's hover zone may close it. Read at scheduling
+   * time by `requestCloseChain`, which walks up from a nested panel: a
+   * click-opened ancestor answers false and is skipped — it only ever closes on
+   * outside click, Escape, or select, no matter what its hover children do.
+   * `undefined` means false: ancestors must opt in to being hover-closed.
+   */
+  hoverCloseable?: () => boolean
 }
 
 export interface AnchorDelayHandle {
@@ -103,6 +111,20 @@ export interface AnchorDelayHandle {
   closeNow: () => void
   /** Drop pending timers without changing the open state. */
   cancel: () => void
+  /**
+   * Drop pending timers on this anchor AND every ancestor. Called on
+   * panel pointer-enter: the pointer landing in a nested panel proves it never
+   * left the chain, so whatever close the ancestors scheduled when it crossed
+   * their (teleported, non-containing) panel boundary must not fire.
+   */
+  cancelChain: () => void
+  /**
+   * Schedule a close on this anchor and on every hover-closeable ancestor,
+   * each with its own delay. Called on panel pointer-leave: leaving a nested
+   * panel means leaving every panel above it too, but only anchors that opened
+   * by hover close by hover — click-opened ancestors are skipped.
+   */
+  requestCloseChain: () => void
   isOpen: () => boolean
   dispose: () => void
 }
@@ -111,6 +133,19 @@ export interface AnchorDelayService {
   register: (registration: AnchorDelayRegistration) => AnchorDelayHandle
   configure: (patch: PartialAnchorDelayPolicy) => void
   getPolicy: () => AnchorDelayPolicy
+  /**
+   * Publishes the floating element currently rendered for `node`, or clears it
+   * with `null`. Panels teleport to `body`, so outside-click handlers cannot
+   * see nested panels through DOM containment; this registry is how an
+   * ancestor asks "did that click land in one of my descendants?".
+   */
+  setFloatingEl: (node: AnchorDelayNode, el: HTMLElement | null) => void
+  /**
+   * True when the event's target sits inside the floating element of `node`
+   * itself or of any of its OPEN descendants. Closed descendants don't count:
+   * their panels are display-hidden and can't be clicked.
+   */
+  isEventInsideChain: (node: AnchorDelayNode, event: Event) => boolean
   /** Open anchors, registration order. Exposed for tests and debugging. */
   openNodes: () => AnchorDelayNode[]
   /** Test-only: drops every registration and timer. */
@@ -162,6 +197,16 @@ function isDescendantOf(node: AnchorDelayNode, maybeAncestor: AnchorDelayNode): 
   return false
 }
 
+function nodeDepth(node: AnchorDelayNode): number {
+  let depth = 0
+  let cursor: AnchorDelayNode | null = node.parent
+  while (cursor) {
+    depth++
+    cursor = cursor.parent
+  }
+  return depth
+}
+
 /**
  * Builds a service with its own registry.
  *
@@ -176,6 +221,27 @@ export function createAnchorDelayService(
   let policy = clonePolicy(initialPolicy)
   const entries = new Set<AnchorEntry>()
   const warmUntil: Record<AnchorDelayLayer, number> = { hint: 0, menu: 0, dialog: 0 }
+  const floatingEls = new Map<AnchorDelayNode, HTMLElement>()
+
+  function entryFor(node: AnchorDelayNode): AnchorEntry | null {
+    for (const entry of entries) {
+      if (entry.node === node)
+        return entry
+    }
+    return null
+  }
+
+  function ancestorEntries(node: AnchorDelayNode): AnchorEntry[] {
+    const result: AnchorEntry[] = []
+    let cursor: AnchorDelayNode | null = node.parent
+    while (cursor) {
+      const entry = entryFor(cursor)
+      if (entry)
+        result.push(entry)
+      cursor = cursor.parent
+    }
+    return result
+  }
 
   function clearTimer(entry: AnchorEntry) {
     if (entry.timer != null) {
@@ -244,13 +310,29 @@ export function createAnchorDelayService(
     return false
   }
 
-  function applyClose(entry: AnchorEntry) {
+  function closeOne(entry: AnchorEntry) {
     clearTimer(entry)
     if (!entry.open)
       return
     entry.open = false
     warmUntil[entry.node.layer] = Date.now() + policy.layers[entry.node.layer].skipDelay
     entry.registration.onClose()
+  }
+
+  /**
+   * Closing cascades downward, deepest first — the mirror of "never close
+   * upwards" in `preemptFor`. A closing panel takes its teleported children
+   * with it visually, but with `keepAliveContent` the child component survives
+   * the parent hiding; without the cascade its entry would stay open in the
+   * registry and keep preempting and suppressing as a phantom.
+   */
+  function applyClose(entry: AnchorEntry) {
+    const descendants = [...entries]
+      .filter(other => other.open && isDescendantOf(other.node, entry.node))
+      .sort((a, b) => nodeDepth(b.node) - nodeDepth(a.node))
+    for (const descendant of descendants)
+      closeOne(descendant)
+    closeOne(entry)
   }
 
   function preemptFor(entry: AnchorEntry) {
@@ -323,10 +405,24 @@ export function createAnchorDelayService(
       openNow: () => applyOpen(entry),
       closeNow: () => applyClose(entry),
       cancel: () => clearTimer(entry),
+      cancelChain: () => {
+        clearTimer(entry)
+        for (const ancestor of ancestorEntries(entry.node))
+          clearTimer(ancestor)
+      },
+      requestCloseChain: () => {
+        schedule(entry, resolveCloseDelay(entry), () => applyClose(entry))
+        for (const ancestor of ancestorEntries(entry.node)) {
+          if (!ancestor.registration.hoverCloseable?.())
+            continue
+          schedule(ancestor, resolveCloseDelay(ancestor), () => applyClose(ancestor))
+        }
+      },
       isOpen: () => entry.open,
       dispose: () => {
         clearTimer(entry)
         entries.delete(entry)
+        floatingEls.delete(node)
       },
     }
   }
@@ -347,15 +443,44 @@ export function createAnchorDelayService(
     policy = next
   }
 
+  function setFloatingEl(node: AnchorDelayNode, el: HTMLElement | null) {
+    if (el)
+      floatingEls.set(node, el)
+    else
+      floatingEls.delete(node)
+  }
+
+  function isEventInsideChain(node: AnchorDelayNode, event: Event): boolean {
+    const anyEvent = event as { composedPath?: () => EventTarget[] }
+    const path = typeof anyEvent.composedPath === 'function' ? anyEvent.composedPath() : undefined
+    const target = (event.target ?? null) as Node | null
+    const isInside = (el: HTMLElement) =>
+      path && path.length ? path.includes(el) : !!target && el.contains(target)
+
+    for (const entry of entries) {
+      if (!entry.open)
+        continue
+      if (entry.node !== node && !isDescendantOf(entry.node, node))
+        continue
+      const el = floatingEls.get(entry.node)
+      if (el && isInside(el))
+        return true
+    }
+    return false
+  }
+
   return {
     register,
     configure,
     getPolicy: () => clonePolicy(policy),
+    setFloatingEl,
+    isEventInsideChain,
     openNodes: () => [...entries].filter(entry => entry.open).map(entry => entry.node),
     reset: () => {
       for (const entry of entries)
         clearTimer(entry)
       entries.clear()
+      floatingEls.clear()
       for (const layer of LAYERS)
         warmUntil[layer] = 0
       policy = clonePolicy(initialPolicy)

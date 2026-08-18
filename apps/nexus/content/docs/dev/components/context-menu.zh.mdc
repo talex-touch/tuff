@@ -167,13 +167,41 @@ code: |
 <TxContextMenu anchor-mode="reference" />
 ```
 
+## 子菜单
+
+`TxContextMenuSubmenu` 在菜单里嵌套一层子面板，支持任意层级。悬停触发行展开，指针在父子面板之间移动不会误关；子面板里的条目选中后按根菜单的 `closeOnSelect` 关闭整条链。
+
+### ContextMenuSubmenu
+:::TuffDemoWrapper{demo="ContextMenuContextMenuSubmenuDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxContextMenu>
+      <div class="surface">在这里右键</div>
+
+      <template #menu>
+        <TxContextMenuItem>复制</TxContextMenuItem>
+        <TxContextMenuSubmenu>
+          分享
+          <template #menu>
+            <TxContextMenuItem>邮件</TxContextMenuItem>
+            <TxContextMenuItem>信息</TxContextMenuItem>
+            <TxContextMenuItem>复制链接</TxContextMenuItem>
+          </template>
+        </TxContextMenuSubmenu>
+      </template>
+    </TxContextMenu>
+  </template>
+---
+:::
+
 ## 交互契约
 
 - 定位：`TxContextMenu` 通过 `TxBaseAnchor` 用 Floating UI 的 `flip + shift + size` 自动定位，靠近视口边缘时翻转/平移并限制最大高度。
 - 锚点：`anchorMode="pointer"`（默认）跟随鼠标/传入坐标，同一 trigger 连续右键会把 virtual anchor 更新到最新位置；`anchorMode="reference"` 跟随触发区域，更接近 Dropdown。
 - 触发：`trigger` 支持 `contextmenu` / `click` / `both` / `manual`；`manual` 禁用组件内部触发，仅由 `v-model + x/y` 控制打开坐标，适合按钮点击、编辑器快捷键、画布节点菜单。
 - 关闭：默认 ESC、点击外部、选中条目都会关闭；`closeOnSelect=false` 仅用于父级二级菜单行或多步操作。
-- 二级菜单：`TxContextMenuPanel` 不含定位与触发器，可嵌入 `TxPopover` / `TxDropdownMenu` / 自定义 Overlay 复用；Teleport 出去的子菜单要在子 `TxContextMenuPanel` 上加 `outsideGuard`，否则父菜单会把子菜单点击当作外部点击而关闭。
+- 二级菜单：优先使用 `TxContextMenuSubmenu`，它自带悬停展开、键盘巡航、outside-click 豁免和整链关闭；`TxContextMenuPanel` 仍可手动嵌入 `TxPopover` / 自定义 Overlay 复用，此时 Teleport 出去的子面板要加 `outsideGuard`，否则父菜单会把子菜单点击当作外部点击而关闭。
 - 动画：动画直接走 `BaseAnchor`，支持 `transfer` / `boom` / `opacity` / `none`。
 
 ## API
@@ -268,6 +296,25 @@ code: |
 |------|------|------|
 | `select` | - | 选中条目；未禁用时触发 |
 
+### TxContextMenuSubmenu Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `disabled` | `boolean` | `false` | 禁用触发行，子面板不再展开 |
+| `placement` | `BaseAnchorPlacement` | `'right-start'` | 子面板相对触发行的位置 |
+| `offset` | `number` | `4` | 触发行与子面板的距离 |
+| `width` | `number` | `0` | 子面板固定宽度；`0` 表示按内容与 `minWidth` 自适应 |
+| `minWidth` | `number` | `160` | 子面板最小宽度 |
+| `maxHeight` | `number` | `420` | 子面板最大高度 |
+| `unlimitedHeight` | `boolean` | `false` | 不限制子面板高度 |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | 子面板锚点动画配置 |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给子面板卡片的低层配置 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 子面板边框样式 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 子面板背景效果 |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | 子面板阴影强度 |
+| `panelRadius` | `number` | `14` | 子面板圆角 |
+| `panelPadding` | `number` | `6` | 子面板内边距 |
+
 ### TxContextMenuDivider Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
@@ -300,6 +347,14 @@ code: |
 | `description` | - | 透传给 `TxCardItem` 的次级描述文本。 |
 | `right` | - | 覆盖默认生成的快捷键/二级菜单区域。 |
 
+### TxContextMenuSubmenu
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 触发行主标签。 |
+| `right` | - | 触发行右侧元信息，渲染在子菜单箭头之前。 |
+| `menu` | - | 子面板内容，通常是 `TxContextMenuItem` 或嵌套的 `TxContextMenuSubmenu`。 |
+
 `TxContextMenuDivider` 不提供插槽。
 
 ## 最佳实践
@@ -317,6 +372,7 @@ code: |
 - 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue` 确认受控/非受控打开状态、pointer/reference virtual anchor、触发模式、外部点击处理和 BaseAnchor 透传。
 - 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue` 确认面板布局、`closeOnSelect` / `close` 注入、`dense`、`outsideGuard`、`role` 与 `ariaLabel` 行为。
 - 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue` 确认 `disabled`、`danger`、自定义 `color`、`shortcut`、`submenu`、单项 `closeOnSelect` 和 item 插槽。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuSubmenu.vue` 确认悬停展开、键盘巡航、根上下文透传（子项选中关闭整条链）与 `outsideGuard` 自动开启。
 - 类型契约：`packages/tuffex/packages/components/src/context-menu/src/types.ts` 导出触发方式、锚点模式、面板视觉枚举、props 和打开目标类型。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts` 覆盖受控宽度渲染、右键坐标、受控 x/y 打开、Escape 关闭保护、触发器 pointerdown 关闭行为、pointer/reference 锚点模式、启用/禁用 item 选择、快捷键/自定义颜色/子菜单渲染，以及独立 panel 的 close 注入。
 

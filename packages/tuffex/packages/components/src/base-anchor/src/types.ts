@@ -1,3 +1,4 @@
+import type { AnchorDelayNode } from '../../../../utils/anchor-delay'
 import type { TxCardProps } from '../../card/src/types'
 
 export type BaseAnchorPlacement
@@ -156,4 +157,15 @@ export interface BaseAnchorProps {
   closeOnClickOutside?: boolean
   closeOnEsc?: boolean
   toggleOnReferenceClick?: boolean
+
+  /**
+   * Chain identity in the anchor-delay service, wired by TxTooltip — not a
+   * host-facing prop. With it the anchor publishes its floating element while
+   * open, and exempts clicks landing in open DESCENDANT panels from its own
+   * outside-click close: panels teleport to `body`, so DOM containment cannot
+   * make that call. Explicitly a prop rather than an inject — a bare anchor
+   * rendered inside someone else's panel would inject the enclosing tooltip's
+   * node and clobber its floating-element registration.
+   */
+  delayNode?: AnchorDelayNode | null
 }

@@ -5,6 +5,7 @@ import type { LiquidMetrics } from './base-anchor-liquid'
 import type { BaseAnchorClassValue, BaseAnchorProps, BaseAnchorVirtualReference } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
+import { useAnchorDelayService } from '../../../../utils/anchor-delay'
 import { hasWindow } from '../../../../utils/env'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxCard from '../../card/src/TxCard.vue'
@@ -13,6 +14,7 @@ import { useBaseAnchorMotion } from './base-anchor-motion'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
+const anchorDelayService = useAnchorDelayService()
 
 defineOptions({ name: 'TxBaseAnchor', inheritAttrs: false })
 
@@ -44,6 +46,7 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   closeOnClickOutside: true,
   closeOnEsc: true,
   toggleOnReferenceClick: true,
+  delayNode: null,
 })
 
 const emit = defineEmits<{
@@ -783,8 +786,14 @@ function handleOutside(e: Event) {
 
   const inRef = isEventInside(e, referenceRef.value)
   const inFloat = isEventInside(e, floatingRef.value)
-  if (!inRef && !inFloat)
-    close()
+  if (inRef || inFloat)
+    return
+  // A nested submenu's panel teleports to <body>, outside this anchor's DOM.
+  // Clicking it must not count as "outside": the service knows which open
+  // panels descend from this one and where their floating elements are.
+  if (props.delayNode && anchorDelayService.isEventInsideChain(props.delayNode, e))
+    return
+  close()
 }
 
 function handleEsc(e: KeyboardEvent) {
@@ -810,6 +819,10 @@ watch(
       cleanupResizeObserver.value?.()
       cleanupResizeObserver.value = null
       lastReferenceRect = null
+      // A closed panel can't be clicked; keepAliveContent keeps the element
+      // around, so deregister explicitly rather than waiting for unmount.
+      if (props.delayNode)
+        anchorDelayService.setFloatingEl(props.delayNode, null)
       animateClose(currentRunId)
       return
     }
@@ -819,6 +832,8 @@ watch(
     lastOpenedAt.value = performance.now()
 
     await nextTick()
+    if (props.delayNode)
+      anchorDelayService.setFloatingEl(props.delayNode, floatingRef.value)
     update()
     syncOutlineSize()
     scheduleOutlineRemeasure()
@@ -893,6 +908,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutside, true)
   document.removeEventListener('keydown', handleEsc)
+  if (props.delayNode)
+    anchorDelayService.setFloatingEl(props.delayNode, null)
   cleanupAutoUpdate.value?.()
   cleanupAutoUpdate.value = null
   cleanupResizeObserver.value?.()

@@ -155,6 +155,7 @@ defineExpose({
     interactive
     :trigger="props.trigger"
     :disabled="props.disabled"
+    :reference-full-width="props.referenceFullWidth"
     :open-delay="props.openDelay"
     :close-delay="props.closeDelay"
     :keep-alive-content="props.keepAliveContent"
