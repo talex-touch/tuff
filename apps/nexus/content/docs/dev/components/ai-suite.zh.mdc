@@ -3,7 +3,7 @@ title: AI 套件总览
 description: 源自 Beautiful UI 的 19 个 AI 原生界面组件案例集
 category: Foundations
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, showcase, beautiful-ui, agent, primitives]
 syncStatus: reviewed
 verified: true

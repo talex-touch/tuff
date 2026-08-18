@@ -3,7 +3,7 @@ title: Tool Confirmation
 description: 工具调用前的授权卡片，带风险等级与「本次会话记住」。
 category: Feedback
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, tool, permission]
 syncStatus: reviewed
 verified: true

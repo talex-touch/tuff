@@ -3,7 +3,7 @@ title: Reasoning Disclosure
 description: A collapsible reasoning trace that follows its own tail while streaming.
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, reasoning, disclosure]
 syncStatus: reviewed
 verified: true

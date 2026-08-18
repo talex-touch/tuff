@@ -3,7 +3,7 @@ title: "ToolChips 工具调用流"
 description: "一次智能体运行的紧凑行流：逐行可展开的工具调用，末尾是文件差分 chip。"
 category: Status
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, tool, diff, disclosure]
 syncStatus: reviewed
 verified: true

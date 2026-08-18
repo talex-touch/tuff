@@ -3,7 +3,7 @@ title: "InsightCards 洞察卡"
 description: "「洞察 N ‹ ›」翻页壳：一句结论、一张卡、一条追问，内容全部由插槽提供。"
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, insight, pager, data]
 syncStatus: reviewed
 verified: true

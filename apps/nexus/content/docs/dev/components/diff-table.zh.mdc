@@ -3,7 +3,7 @@ title: "DiffTable 变更表格"
 description: "以变更集语义呈现 AI 提议的改动，按阶段依次标红、展开新增行。"
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [table, diff, review, data]
 syncStatus: reviewed
 verified: true

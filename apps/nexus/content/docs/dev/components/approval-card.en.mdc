@@ -3,7 +3,7 @@ title: "ApprovalCard"
 description: "The clarifying questions an agent asks before it acts: single choice, multiple choice, and free text, with paging and a submitted state."
 category: Feedback
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, approval, questionnaire, human-in-the-loop]
 syncStatus: reviewed
 verified: true
