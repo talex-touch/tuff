@@ -136,6 +136,7 @@ import {
   type StorageUsageReport
 } from '../utils/storage-usage'
 import { tempFileService } from '../service/temp-file.service'
+import { registerSystemApplicationHandlers } from './system-application-handlers'
 import { registerSystemSecureStoreHandlers } from './system-secure-store-handlers'
 import { registerSystemSelectionCaptureHandlers } from './system-selection-capture-handlers'
 import { registerSystemShellHandlers } from './system-shell-handlers'
@@ -1604,6 +1605,7 @@ export class CommonChannelModule extends BaseModule {
           includeIcon: payload?.includeIcon === true
         })
       }),
+      ...registerSystemApplicationHandlers(transport),
       ...registerSystemSelectionCaptureHandlers(transport),
       ...registerSystemSecureStoreHandlers(transport, {
         rootPath: () => touchApp.rootPath,

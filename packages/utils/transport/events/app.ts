@@ -1,4 +1,4 @@
-import { defineEvent, defineRawEvent } from "../event/builder";
+import { defineEvent, defineRawEvent } from '../event/builder'
 
 import type {
   ActiveAppSnapshot,
@@ -34,6 +34,8 @@ import type {
   PluginStats,
   ReadFileRequest,
   RendererPerfReport,
+  ResolveApplicationRequest,
+  ResolvedApplication,
   SelectionCaptureRequest,
   SelectionCaptureResult,
   SecureValueGetRequest,
@@ -48,7 +50,7 @@ import type {
   TraySettingsGetResponse,
   TraySettingsUpdateRequest,
   TraySettingsUpdateResponse,
-} from "./types/app";
+} from './types/app'
 
 import type {
   AppIndexAddPathRequest,
@@ -63,12 +65,9 @@ import type {
   AppIndexSetEntryEnabledRequest,
   AppIndexSettings,
   AppIndexUpsertEntryRequest,
-} from "./types/app-index";
+} from './types/app-index'
 
-import type {
-  DeviceIdleDiagnostic,
-  DeviceIdleSettings,
-} from "./types/device-idle";
+import type { DeviceIdleDiagnostic, DeviceIdleSettings } from './types/device-idle'
 
 import type {
   FileIndexAddPathRequest,
@@ -80,7 +79,7 @@ import type {
   FileIndexRebuildResult,
   FileIndexStats,
   FileIndexStatus,
-} from "./types/file-index";
+} from './types/file-index'
 
 import type {
   IndexedSourceDiagnosticsRequest,
@@ -94,7 +93,7 @@ import type {
   SearchProviderConfigResponse,
   SearchProviderConfigUpdateRequest,
   SearchProviderConfigUpdateResult,
-} from "./types/indexed-source";
+} from './types/indexed-source'
 
 /**
  * Application-level events for window management, system info, and analytics.
@@ -107,74 +106,47 @@ export const AppEvents = {
     /**
      * Close the application window.
      */
-    close: defineEvent("app")
-      .module("window")
-      .event("close")
-      .define<void, void>(),
+    close: defineEvent('app').module('window').event('close').define<void, void>(),
 
     /**
      * Minimize the application window.
      */
-    minimize: defineEvent("app")
-      .module("window")
-      .event("minimize")
-      .define<void, void>(),
+    minimize: defineEvent('app').module('window').event('minimize').define<void, void>(),
 
     /**
      * Hide the application window.
      */
-    hide: defineEvent("app")
-      .module("window")
-      .event("hide")
-      .define<void, void>(),
+    hide: defineEvent('app').module('window').event('hide').define<void, void>(),
 
     /**
      * Show (and bring to front) the application window.
      */
-    show: defineEvent("app")
-      .module("window")
-      .event("show")
-      .define<void, void>(),
+    show: defineEvent('app').module('window').event('show').define<void, void>(),
 
     /**
      * Focus the application window.
      */
-    focus: defineEvent("app")
-      .module("window")
-      .event("focus")
-      .define<void, void>(),
+    focus: defineEvent('app').module('window').event('focus').define<void, void>(),
 
     /**
      * Maximize the application window.
      */
-    maximize: defineEvent("app")
-      .module("window")
-      .event("maximize")
-      .define<void, void>(),
+    maximize: defineEvent('app').module('window').event('maximize').define<void, void>(),
 
     /**
      * Restore the application window from its maximized state.
      */
-    unmaximize: defineEvent("app")
-      .module("window")
-      .event("unmaximize")
-      .define<void, void>(),
+    unmaximize: defineEvent('app').module('window').event('unmaximize').define<void, void>(),
 
     /**
      * Toggle the maximized state, resolving to the state after the toggle.
      */
-    toggleMaximize: defineEvent("app")
-      .module("window")
-      .event("toggle-maximize")
-      .define<void, boolean>(),
+    toggleMaximize: defineEvent('app').module('window').event('toggle-maximize').define<void, boolean>(),
 
     /**
      * Query whether the application window is currently maximized.
      */
-    isMaximized: defineEvent("app")
-      .module("window")
-      .event("is-maximized")
-      .define<void, boolean>(),
+    isMaximized: defineEvent('app').module('window').event('is-maximized').define<void, boolean>(),
 
     /**
      * Broadcast of the maximized state, emitted by the main process.
@@ -183,26 +155,17 @@ export const AppEvents = {
      * bar, the OS keyboard shortcut and snapping the window to a screen edge all change the
      * state without the renderer asking for it.
      */
-    maximizedChanged: defineEvent("app")
-      .module("window")
-      .event("maximized-changed")
-      .define<boolean, void>(),
+    maximizedChanged: defineEvent('app').module('window').event('maximized-changed').define<boolean, void>(),
 
     /**
      * Request renderer to navigate.
      */
-    navigate: defineEvent("app")
-      .module("window")
-      .event("navigate")
-      .define<NavigateRequest, void>(),
+    navigate: defineEvent('app').module('window').event('navigate').define<NavigateRequest, void>(),
 
     /**
      * Request renderer to open download center.
      */
-    openDownloadCenter: defineEvent("app")
-      .module("window")
-      .event("open-download-center")
-      .define<void, void>(),
+    openDownloadCenter: defineEvent('app').module('window').event('open-download-center').define<void, void>(),
   },
 
   /**
@@ -212,10 +175,7 @@ export const AppEvents = {
     /**
      * Fired before the app begins shutdown.
      */
-    beforeQuit: defineEvent("app")
-      .module("lifecycle")
-      .event("before-quit")
-      .define<void, void>(),
+    beforeQuit: defineEvent('app').module('lifecycle').event('before-quit').define<void, void>(),
   },
 
   /**
@@ -225,10 +185,7 @@ export const AppEvents = {
     /**
      * Set main-process locale.
      */
-    setLocale: defineEvent("app")
-      .module("i18n")
-      .event("set-locale")
-      .define<SetLocaleRequest, void>(),
+    setLocale: defineEvent('app').module('i18n').event('set-locale').define<SetLocaleRequest, void>(),
   },
 
   /**
@@ -238,151 +195,123 @@ export const AppEvents = {
     /**
      * Get operating system information.
      */
-    getOS: defineEvent("app")
-      .module("system")
-      .event("get-os")
-      .define<void, OSInfo>(),
+    getOS: defineEvent('app').module('system').event('get-os').define<void, OSInfo>(),
 
     /**
      * Get application package information.
      */
-    getPackage: defineEvent("app")
-      .module("system")
-      .event("get-package")
-      .define<void, PackageInfo>(),
+    getPackage: defineEvent('app').module('system').event('get-package').define<void, PackageInfo>(),
 
-    autoStartGet: defineEvent("app")
-      .module("system")
-      .event("autostart.get")
-      .define<void, AutoStartGetResponse>(),
+    autoStartGet: defineEvent('app').module('system').event('autostart.get').define<void, AutoStartGetResponse>(),
 
-    autoStartUpdate: defineEvent("app")
-      .module("system")
-      .event("autostart.update")
+    autoStartUpdate: defineEvent('app')
+      .module('system')
+      .event('autostart.update')
       .define<AutoStartUpdateRequest, AutoStartUpdateResponse>(),
 
-    traySettingsGet: defineEvent("app")
-      .module("system")
-      .event("tray-settings.get")
+    traySettingsGet: defineEvent('app')
+      .module('system')
+      .event('tray-settings.get')
       .define<void, TraySettingsGetResponse>(),
 
-    traySettingsUpdate: defineEvent("app")
-      .module("system")
-      .event("tray-settings.update")
+    traySettingsUpdate: defineEvent('app')
+      .module('system')
+      .event('tray-settings.update')
       .define<TraySettingsUpdateRequest, TraySettingsUpdateResponse>(),
 
     /**
      * Open an external URL in the default browser.
      */
-    openExternal: defineEvent("app")
-      .module("system")
-      .event("open-external")
-      .define<OpenExternalRequest, void>(),
+    openExternal: defineEvent('app').module('system').event('open-external').define<OpenExternalRequest, void>(),
 
     /**
      * Show a file/folder in the system file manager.
      */
-    showInFolder: defineEvent("app")
-      .module("system")
-      .event("show-in-folder")
-      .define<ShowInFolderRequest, void>(),
+    showInFolder: defineEvent('app').module('system').event('show-in-folder').define<ShowInFolderRequest, void>(),
 
     /**
      * Open an application.
      */
-    openApp: defineEvent("app")
-      .module("system")
-      .event("open-app")
-      .define<OpenAppRequest, void>(),
+    openApp: defineEvent('app').module('system').event('open-app').define<OpenAppRequest, void>(),
 
     /**
      * Open intelligence prompts folder.
      */
-    openPromptsFolder: defineEvent("app")
-      .module("system")
-      .event("open-prompts-folder")
-      .define<void, void>(),
+    openPromptsFolder: defineEvent('app').module('system').event('open-prompts-folder').define<void, void>(),
 
     /**
      * Execute a command/open a path.
      */
-    executeCommand: defineEvent("app")
-      .module("system")
-      .event("execute-command")
+    executeCommand: defineEvent('app')
+      .module('system')
+      .event('execute-command')
       .define<ExecuteCommandRequest, ExecuteCommandResponse>(),
 
     /**
      * Get current working directory.
      */
-    getCwd: defineEvent("app")
-      .module("system")
-      .event("get-cwd")
-      .define<void, string>(),
+    getCwd: defineEvent('app').module('system').event('get-cwd').define<void, string>(),
 
     /**
      * Resolve an Electron app path.
      */
-    getPath: defineEvent("app")
-      .module("system")
-      .event("get-path")
-      .define<GetPathRequest, string | null>(),
+    getPath: defineEvent('app').module('system').event('get-path').define<GetPathRequest, string | null>(),
 
     /**
      * Get currently active foreground application snapshot.
      */
-    getActiveApp: defineEvent("app")
-      .module("system")
-      .event("get-active-app")
+    getActiveApp: defineEvent('app')
+      .module('system')
+      .event('get-active-app')
       .define<GetActiveAppRequest, ActiveAppSnapshot | null>(),
+
+    /**
+     * Resolve one installed application by an exact host-owned identifier.
+     */
+    resolveApplication: defineEvent('app')
+      .module('system')
+      .event('resolve-application')
+      .define<ResolveApplicationRequest, ResolvedApplication | null>(),
 
     /**
      * Capture selected text from the active application for a verified plugin.
      * The host requires `clipboard.read` before invoking platform capture.
      */
-    captureSelection: defineEvent("app")
-      .module("system")
-      .event("capture-selection")
+    captureSelection: defineEvent('app')
+      .module('system')
+      .event('capture-selection')
       .define<SelectionCaptureRequest, SelectionCaptureResult>(),
 
     /**
      * Read a secure local value.
      */
-    getSecureValue: defineEvent("app")
-      .module("system")
-      .event("get-secure-value")
+    getSecureValue: defineEvent('app')
+      .module('system')
+      .event('get-secure-value')
       .define<SecureValueGetRequest, string | null>(),
 
     /**
      * Write a secure local value.
      */
-    setSecureValue: defineEvent("app")
-      .module("system")
-      .event("set-secure-value")
-      .define<SecureValueSetRequest, void>(),
+    setSecureValue: defineEvent('app').module('system').event('set-secure-value').define<SecureValueSetRequest, void>(),
 
     /**
      * Get current secure storage backend health.
      */
-    getSecureStoreHealth: defineEvent("app")
-      .module("system")
-      .event("get-secure-store-health")
+    getSecureStoreHealth: defineEvent('app')
+      .module('system')
+      .event('get-secure-store-health')
       .define<void, SecureStoreHealthResponse>(),
 
     /**
      * Read a local file as text.
      */
-    readFile: defineEvent("app")
-      .module("system")
-      .event("read-file")
-      .define<ReadFileRequest, string>(),
+    readFile: defineEvent('app').module('system').event('read-file').define<ReadFileRequest, string>(),
 
     /**
      * Get startup handshake info.
      */
-    startup: defineEvent("app")
-      .module("system")
-      .event("startup")
-      .define<StartupRequest, StartupResponse>(),
+    startup: defineEvent('app').module('system').event('startup').define<StartupRequest, StartupResponse>(),
   },
 
   /**
@@ -392,9 +321,7 @@ export const AppEvents = {
     /**
      * Battery status broadcast.
      */
-    batteryStatus: defineRawEvent<BatteryStatusPayload, void>(
-      "power:battery-status",
-    ),
+    batteryStatus: defineRawEvent<BatteryStatusPayload, void>('power:battery-status'),
   },
 
   /**
@@ -404,41 +331,35 @@ export const AppEvents = {
     /**
      * Get current indexing status.
      */
-    status: defineEvent("app")
-      .module("file-index")
-      .event("status")
-      .define<void, FileIndexStatus>(),
+    status: defineEvent('app').module('file-index').event('status').define<void, FileIndexStatus>(),
 
     /**
      * Get indexing statistics.
      */
-    stats: defineEvent("app")
-      .module("file-index")
-      .event("stats")
-      .define<void, FileIndexStats>(),
+    stats: defineEvent('app').module('file-index').event('stats').define<void, FileIndexStats>(),
 
     /**
      * Trigger a full index rebuild.
      */
-    rebuild: defineEvent("app")
-      .module("file-index")
-      .event("rebuild")
+    rebuild: defineEvent('app')
+      .module('file-index')
+      .event('rebuild')
       .define<FileIndexRebuildRequest | void, FileIndexRebuildResult>(),
 
     /**
      * Get current battery status (for indexing throttling UI).
      */
-    batteryLevel: defineEvent("app")
-      .module("file-index")
-      .event("battery-level")
+    batteryLevel: defineEvent('app')
+      .module('file-index')
+      .event('battery-level')
       .define<void, FileIndexBatteryStatus | null>(),
 
     /**
      * Stream indexing progress updates.
      */
-    progress: defineEvent("app")
-      .module("file-index")
-      .event("progress")
+    progress: defineEvent('app')
+      .module('file-index')
+      .event('progress')
       .define<void, AsyncIterable<FileIndexProgress>>({
         stream: { enabled: true },
       }),
@@ -446,17 +367,17 @@ export const AppEvents = {
     /**
      * Get list of failed files with error details.
      */
-    failedFiles: defineEvent("app")
-      .module("file-index")
-      .event("failed-files")
+    failedFiles: defineEvent('app')
+      .module('file-index')
+      .event('failed-files')
       .define<void, FileIndexFailedFilesResult>(),
 
     /**
      * Add a path to file index watch list.
      */
-    addPath: defineEvent("app")
-      .module("file-index")
-      .event("add-path")
+    addPath: defineEvent('app')
+      .module('file-index')
+      .event('add-path')
       .define<FileIndexAddPathRequest, FileIndexAddPathResult>(),
   },
 
@@ -467,49 +388,49 @@ export const AppEvents = {
     /**
      * Get unified source diagnostics, optionally filtered by source ID.
      */
-    diagnostics: defineEvent("app")
-      .module("indexed-source")
-      .event("diagnostics")
+    diagnostics: defineEvent('app')
+      .module('indexed-source')
+      .event('diagnostics')
       .define<IndexedSourceDiagnosticsRequest | void, IndexedSourceDiagnosticsResponse>(),
 
     /**
      * Reset source runtime state and record reset diagnostics.
      */
-    reset: defineEvent("app")
-      .module("indexed-source")
-      .event("reset")
+    reset: defineEvent('app')
+      .module('indexed-source')
+      .event('reset')
       .define<IndexedSourceResetRuntimeRequest, IndexedSourceResetRuntimeResult>(),
 
     /**
      * Run a source-level reconcile task.
      */
-    reconcile: defineEvent("app")
-      .module("indexed-source")
-      .event("reconcile")
+    reconcile: defineEvent('app')
+      .module('indexed-source')
+      .event('reconcile')
       .define<IndexedSourceReconcileRuntimeRequest, IndexedSourceReconcileRuntimeResult>(),
 
     /**
      * Run a source-level scan task.
      */
-    scan: defineEvent("app")
-      .module("indexed-source")
-      .event("scan")
+    scan: defineEvent('app')
+      .module('indexed-source')
+      .event('scan')
       .define<IndexedSourceScanRuntimeRequest, IndexedSourceScanRuntimeResult>(),
 
     /**
      * Get user-facing provider enable/order config.
      */
-    providerConfigGet: defineEvent("app")
-      .module("indexed-source")
-      .event("provider-config.get")
+    providerConfigGet: defineEvent('app')
+      .module('indexed-source')
+      .event('provider-config.get')
       .define<void, SearchProviderConfigResponse>(),
 
     /**
      * Update user-facing provider enable/order config.
      */
-    providerConfigUpdate: defineEvent("app")
-      .module("indexed-source")
-      .event("provider-config.update")
+    providerConfigUpdate: defineEvent('app')
+      .module('indexed-source')
+      .event('provider-config.update')
       .define<SearchProviderConfigUpdateRequest, SearchProviderConfigUpdateResult>(),
   },
 
@@ -520,25 +441,22 @@ export const AppEvents = {
     /**
      * Get device idle settings.
      */
-    getSettings: defineEvent("app")
-      .module("device-idle")
-      .event("settings.get")
-      .define<void, DeviceIdleSettings>(),
+    getSettings: defineEvent('app').module('device-idle').event('settings.get').define<void, DeviceIdleSettings>(),
 
     /**
      * Update device idle settings.
      */
-    updateSettings: defineEvent("app")
-      .module("device-idle")
-      .event("settings.update")
+    updateSettings: defineEvent('app')
+      .module('device-idle')
+      .event('settings.update')
       .define<Partial<DeviceIdleSettings>, DeviceIdleSettings>(),
 
     /**
      * Get current device idle policy diagnostic.
      */
-    getDiagnostic: defineEvent("app")
-      .module("device-idle")
-      .event("diagnostic.get")
+    getDiagnostic: defineEvent('app')
+      .module('device-idle')
+      .event('diagnostic.get')
       .define<void, DeviceIdleDiagnostic>(),
   },
 
@@ -549,73 +467,67 @@ export const AppEvents = {
     /**
      * Get app index settings.
      */
-    getSettings: defineEvent("app")
-      .module("app-index")
-      .event("settings.get")
-      .define<void, AppIndexSettings>(),
+    getSettings: defineEvent('app').module('app-index').event('settings.get').define<void, AppIndexSettings>(),
 
     /**
      * Update app index settings.
      */
-    updateSettings: defineEvent("app")
-      .module("app-index")
-      .event("settings.update")
+    updateSettings: defineEvent('app')
+      .module('app-index')
+      .event('settings.update')
       .define<Partial<AppIndexSettings>, AppIndexSettings>(),
 
     /**
      * Add an application path to the index list.
      */
-    addPath: defineEvent("app")
-      .module("app-index")
-      .event("add-path")
+    addPath: defineEvent('app')
+      .module('app-index')
+      .event('add-path')
       .define<AppIndexAddPathRequest, AppIndexAddPathResult>(),
 
     /**
      * List user-managed launcher entries.
      */
-    listEntries: defineEvent("app")
-      .module("app-index")
-      .event("entries.list")
-      .define<void, AppIndexManagedEntry[]>(),
+    listEntries: defineEvent('app').module('app-index').event('entries.list').define<void, AppIndexManagedEntry[]>(),
 
     /**
      * Create or update a user-managed launcher entry.
      */
-    upsertEntry: defineEvent("app")
-      .module("app-index")
-      .event("entry.upsert")
+    upsertEntry: defineEvent('app')
+      .module('app-index')
+      .event('entry.upsert')
       .define<AppIndexUpsertEntryRequest, AppIndexEntryMutationResult>(),
 
     /**
      * Remove a user-managed launcher entry.
      */
-    removeEntry: defineEvent("app")
-      .module("app-index")
-      .event("entry.remove")
+    removeEntry: defineEvent('app')
+      .module('app-index')
+      .event('entry.remove')
       .define<AppIndexRemoveEntryRequest, AppIndexEntryMutationResult>(),
 
     /**
      * Enable or disable a user-managed launcher entry.
      */
-    setEntryEnabled: defineEvent("app")
-      .module("app-index")
-      .event("entry.set-enabled")
+    setEntryEnabled: defineEvent('app')
+      .module('app-index')
+      .event('entry.set-enabled')
       .define<AppIndexSetEntryEnabledRequest, AppIndexEntryMutationResult>(),
 
     /**
      * Diagnose why a single application target does or does not match app search.
      */
-    diagnose: defineEvent("app")
-      .module("app-index")
-      .event("diagnose")
+    diagnose: defineEvent('app')
+      .module('app-index')
+      .event('diagnose')
       .define<AppIndexDiagnoseRequest, AppIndexDiagnoseResult>(),
 
     /**
      * Reindex or rescan one application target for search diagnostics.
      */
-    reindex: defineEvent("app")
-      .module("app-index")
-      .event("reindex")
+    reindex: defineEvent('app')
+      .module('app-index')
+      .event('reindex')
       .define<AppIndexReindexRequest, AppIndexReindexResult>(),
   },
 
@@ -626,10 +538,7 @@ export const AppEvents = {
     /**
      * Open developer tools.
      */
-    openDevTools: defineEvent("app")
-      .module("debug")
-      .event("open-devtools")
-      .define<DevToolsOptions | void, void>(),
+    openDevTools: defineEvent('app').module('debug').event('open-devtools').define<DevToolsOptions | void, void>(),
   },
 
   /**
@@ -640,9 +549,9 @@ export const AppEvents = {
      * Report a violation of the renderer's report-only CSP so it reaches the main process log
      * (#689). Fire-and-forget: a dropped report must never disturb the page it came from.
      */
-    reportCspViolation: defineEvent("app")
-      .module("security")
-      .event("report-csp-violation")
+    reportCspViolation: defineEvent('app')
+      .module('security')
+      .event('report-csp-violation')
       .define<CspViolationReport, void>(),
   },
 
@@ -653,24 +562,20 @@ export const AppEvents = {
     /**
      * Get build verification status.
      */
-    getVerificationStatus: defineEvent("app")
-      .module("build")
-      .event("get-verification-status")
+    getVerificationStatus: defineEvent('app')
+      .module('build')
+      .event('get-verification-status')
       .define<void, BuildVerificationStatus>(),
 
     /**
      * Historical build verification status request.
      */
-    getVerificationStatusLegacy: defineRawEvent<void, BuildVerificationStatus>(
-      "build:get-verification-status",
-    ),
+    getVerificationStatusLegacy: defineRawEvent<void, BuildVerificationStatus>('build:get-verification-status'),
 
     /**
      * Build verification status broadcast.
      */
-    statusUpdated: defineRawEvent<BuildVerificationStatus, void>(
-      "build:verification-status",
-    ),
+    statusUpdated: defineRawEvent<BuildVerificationStatus, void>('build:verification-status'),
   },
 
   /**
@@ -680,47 +585,47 @@ export const AppEvents = {
     /**
      * Get aggregated metrics snapshot for a specific window.
      */
-    getSnapshot: defineEvent("app")
-      .module("analytics")
-      .event("get-snapshot")
+    getSnapshot: defineEvent('app')
+      .module('analytics')
+      .event('get-snapshot')
       .define<AnalyticsSnapshotRequest, AnalyticsSnapshot>(),
 
     /**
      * Get metrics snapshots within a time range.
      */
-    getRange: defineEvent("app")
-      .module("analytics")
-      .event("get-range")
+    getRange: defineEvent('app')
+      .module('analytics')
+      .event('get-range')
       .define<AnalyticsRangeRequest, AnalyticsSnapshot[]>(),
 
     /**
      * Export metrics for a window/range.
      */
-    export: defineEvent("app")
-      .module("analytics")
-      .event("export")
+    export: defineEvent('app')
+      .module('analytics')
+      .event('export')
       .define<AnalyticsExportPayload, AnalyticsExportResult>(),
 
     /**
      * Toggle analytics reporting.
      */
-    toggleReporting: defineEvent("app")
-      .module("analytics")
-      .event("toggle-reporting")
+    toggleReporting: defineEvent('app')
+      .module('analytics')
+      .event('toggle-reporting')
       .define<AnalyticsToggleRequest, { enabled: boolean }>(),
 
     /**
      * Analytics message center events.
      */
     messages: {
-      list: defineEvent("app")
-        .module("analytics")
-        .event("messages.list")
+      list: defineEvent('app')
+        .module('analytics')
+        .event('messages.list')
         .define<AnalyticsMessageListRequest, AnalyticsMessage[]>(),
 
-      mark: defineEvent("app")
-        .module("analytics")
-        .event("messages.mark")
+      mark: defineEvent('app')
+        .module('analytics')
+        .event('messages.mark')
         .define<AnalyticsMessageUpdateRequest, AnalyticsMessage | null>(),
     },
 
@@ -728,58 +633,49 @@ export const AppEvents = {
      * SDK-level plugin analytics events.
      */
     sdk: {
-      trackEvent: defineEvent("app")
-        .module("analytics")
-        .event("sdk.track-event")
+      trackEvent: defineEvent('app')
+        .module('analytics')
+        .event('sdk.track-event')
         .define<TrackEventPayload, { ok: true }>(),
 
-      trackDuration: defineEvent("app")
-        .module("analytics")
-        .event("sdk.track-duration")
+      trackDuration: defineEvent('app')
+        .module('analytics')
+        .event('sdk.track-duration')
         .define<TrackDurationPayload, { ok: true }>(),
 
-      getStats: defineEvent("app")
-        .module("analytics")
-        .event("sdk.get-stats")
+      getStats: defineEvent('app')
+        .module('analytics')
+        .event('sdk.get-stats')
         .define<{ pluginName?: string; pluginVersion?: string }, PluginStats>(),
 
-      getFeatureStats: defineEvent("app")
-        .module("analytics")
-        .event("sdk.get-feature-stats")
-        .define<
-          { pluginName?: string; pluginVersion?: string; featureId: string },
-          FeatureStats
-        >(),
+      getFeatureStats: defineEvent('app')
+        .module('analytics')
+        .event('sdk.get-feature-stats')
+        .define<{ pluginName?: string; pluginVersion?: string; featureId: string }, FeatureStats>(),
 
-      getTopFeatures: defineEvent("app")
-        .module("analytics")
-        .event("sdk.get-top-features")
+      getTopFeatures: defineEvent('app')
+        .module('analytics')
+        .event('sdk.get-top-features')
         .define<
           { pluginName?: string; pluginVersion?: string; limit?: number },
           Array<{ id: string; count: number }>
         >(),
 
-      incrementCounter: defineEvent("app")
-        .module("analytics")
-        .event("sdk.increment-counter")
+      incrementCounter: defineEvent('app')
+        .module('analytics')
+        .event('sdk.increment-counter')
         .define<CounterPayload, { ok: true }>(),
 
-      setGauge: defineEvent("app")
-        .module("analytics")
-        .event("sdk.set-gauge")
-        .define<GaugePayload, { ok: true }>(),
+      setGauge: defineEvent('app').module('analytics').event('sdk.set-gauge').define<GaugePayload, { ok: true }>(),
 
-      recordHistogram: defineEvent("app")
-        .module("analytics")
-        .event("sdk.record-histogram")
+      recordHistogram: defineEvent('app')
+        .module('analytics')
+        .event('sdk.record-histogram')
         .define<HistogramPayload, { ok: true }>(),
     },
     /**
      * Report renderer performance incidents.
      */
-    perfReport: defineEvent("app")
-      .module("analytics")
-      .event("perf-report")
-      .define<RendererPerfReport, void>(),
+    perfReport: defineEvent('app').module('analytics').event('perf-report').define<RendererPerfReport, void>(),
   },
-} as const;
+} as const

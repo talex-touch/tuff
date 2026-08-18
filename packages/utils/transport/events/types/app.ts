@@ -112,7 +112,7 @@ export interface PackageInfo {
   /**
    * Package author.
    */
-  author?: string | { name: string, email?: string }
+  author?: string | { name: string; email?: string }
 
   /**
    * Package license.
@@ -243,6 +243,23 @@ export interface ActiveAppSnapshot {
 }
 
 /**
+ * Exact application lookup requested by a verified plugin.
+ */
+export interface ResolveApplicationRequest {
+  identifier: string
+  _sdkapi?: number
+}
+
+/**
+ * Bounded application projection safe for plugin renderers.
+ */
+export interface ResolvedApplication {
+  identifier: string
+  displayName: string
+  icon: string | null
+}
+
+/**
  * Request payload for capturing selected text from the active application.
  * `_sdkapi` is injected by the plugin runtime when available.
  */
@@ -366,17 +383,17 @@ export interface SetLocaleRequest {
 // Renderer Perf Report Types
 // =========================================================================
 
-export type RendererPerfReportKind
-  = | 'channel.send.slow'
-    | 'channel.send.timeout'
-    | 'channel.send.errorReply'
-    | 'ui.route.navigate'
-    | 'ui.route.render'
-    | 'ui.route.transition'
-    | 'ui.details.fetch'
-    | 'ui.details.render'
-    | 'ui.details.total'
-    | 'ui.component.load'
+export type RendererPerfReportKind =
+  | 'channel.send.slow'
+  | 'channel.send.timeout'
+  | 'channel.send.errorReply'
+  | 'ui.route.navigate'
+  | 'ui.route.render'
+  | 'ui.route.transition'
+  | 'ui.details.fetch'
+  | 'ui.details.render'
+  | 'ui.details.total'
+  | 'ui.component.load'
 
 export interface RendererPerfReport {
   kind: RendererPerfReportKind
@@ -413,13 +430,12 @@ export interface BuildVerificationStatus {
 }
 
 export function isBuildVerificationStatus(value: unknown): value is BuildVerificationStatus {
-  if (!value || typeof value !== 'object')
-    return false
+  if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<Record<keyof BuildVerificationStatus, unknown>>
   return (
-    typeof candidate.isOfficialBuild === 'boolean'
-    && typeof candidate.verificationFailed === 'boolean'
-    && typeof candidate.hasOfficialKey === 'boolean'
+    typeof candidate.isOfficialBuild === 'boolean' &&
+    typeof candidate.verificationFailed === 'boolean' &&
+    typeof candidate.hasOfficialKey === 'boolean'
   )
 }
 
@@ -481,10 +497,10 @@ export type {
  */
 export interface CspViolationReport {
   /** The directive that would have blocked the request. */
-  effectiveDirective: string;
+  effectiveDirective: string
   /** The blocked URI, or an empty string for inline sources. */
-  blockedURI: string;
-  documentURI: string;
-  sourceFile?: string;
-  lineNumber?: number;
+  blockedURI: string
+  documentURI: string
+  sourceFile?: string
+  lineNumber?: number
 }

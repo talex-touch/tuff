@@ -618,6 +618,10 @@
   },
   "permission": {
     "system": {
+      "applications": {
+        "name": "Query Installed Applications",
+        "desc": "Resolve installed application names and icons by exact identifier"
+      },
       "shortcut": {
         "name": "Global Shortcuts",
         "desc": "Register system-wide global shortcuts"
@@ -1697,6 +1701,10 @@
           }
         },
         "system": {
+          "applications": {
+            "name": "Query Installed Applications",
+            "desc": "Resolve installed application names and icons by exact identifier"
+          },
           "shell": {
             "name": "Execute Commands",
             "desc": "Run system commands or scripts"
@@ -5051,15 +5059,7 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-      ]
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     },
     "memoryReview": {
       "title": "Memory Review",

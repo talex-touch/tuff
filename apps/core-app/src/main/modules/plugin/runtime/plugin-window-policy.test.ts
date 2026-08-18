@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setPermissionModule } from '../../permission'
 import {
   createPluginViewNavigationPolicy,
   executePluginWindowCommand,
@@ -26,6 +27,7 @@ async function createPluginRoot(): Promise<string> {
 }
 
 afterEach(async () => {
+  setPermissionModule(null as never)
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -172,6 +174,23 @@ describe('plugin window policy', () => {
       isPluginViewResourceAllowed(policy, pathToFileURL(path.join(root, 'assets/app.js')).href)
     ).toBe(true)
     expect(isPluginViewResourceAllowed(policy, 'https://example.test/app.js')).toBe(false)
+  })
+
+  it('allows tfile resources only while the current plugin has fs.tfile', async () => {
+    const root = await createPluginRoot()
+    const entry = await fs.realpath(path.join(root, 'index.html'))
+    const policy = await createPluginViewNavigationPolicy({
+      pluginRoot: root,
+      targetUrl: pathToFileURL(entry).href,
+      permissionScope: { pluginId: 'clipboard-history', sdkapi: 260713 }
+    })
+    const checkPermission = vi.fn(() => ({ allowed: false }))
+    setPermissionModule({ checkPermission } as never)
+
+    expect(isPluginViewResourceAllowed(policy, 'tfile:///tmp/preview.png')).toBe(false)
+    checkPermission.mockReturnValue({ allowed: true })
+    expect(isPluginViewResourceAllowed(policy, 'tfile:///tmp/preview.png')).toBe(true)
+    expect(checkPermission).toHaveBeenLastCalledWith('clipboard-history', 'fs.tfile', 260713)
   })
 
   it('allows development navigation and resources only on the configured loopback origin', async () => {

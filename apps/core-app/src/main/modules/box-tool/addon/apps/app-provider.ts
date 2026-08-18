@@ -39,6 +39,7 @@ import type {
   AppIndexEntryMutationResult,
   AppIndexManagedEntry,
   AppIndexReindexRequest,
+  ResolvedApplication,
   AppIndexUpsertEntryRequest
 } from '@talex-touch/utils/transport/events/types'
 import { completeTiming, sleep, startTiming, StorageList, timingLogger } from '@talex-touch/utils'
@@ -77,6 +78,7 @@ import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/u
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { iconService } from '../../../../service/icon-service'
+import { normalizeRenderableSource } from '../../../../utils/local-renderable-assets'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
@@ -1380,6 +1382,77 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       },
       logError: (message: string, meta?: Record<string, unknown>) =>
         logApp(message, LogStyle.error, meta)
+    }
+  }
+
+  public async resolveApplication(identifier: string): Promise<ResolvedApplication | null> {
+    const normalizedIdentifier = identifier.trim()
+    if (!this.dbUtils || !normalizedIdentifier || normalizedIdentifier.length > 512) {
+      return null
+    }
+
+    const [pathMatches, bundleMatches] = await Promise.all([
+      this.dbUtils.getFilesByPaths([normalizedIdentifier]),
+      this.dbUtils.getFilesByBundleIds([normalizedIdentifier])
+    ])
+    const rowsById = new Map(
+      [...pathMatches, ...bundleMatches]
+        .filter((row) => row.type === 'app')
+        .map((row) => [row.id, row])
+    )
+    const applications = await this.fetchExtensionsForFiles([...rowsById.values()])
+    const application = applications.find(
+      (candidate) =>
+        candidate.path === normalizedIdentifier ||
+        candidate.extensions.bundleId === normalizedIdentifier
+    )
+    if (!application) {
+      return null
+    }
+
+    try {
+      await this.repairPersistedAppIconPointers([application])
+    } catch {
+      // A read-only application projection remains useful when pointer repair is unavailable.
+    }
+
+    const appInfo = this._mapDbAppToScannedInfo(application)
+    if (!appInfo.icon) {
+      try {
+        const hydratedIcon = await iconService.ensureAppIcon(
+          appInfo.iconSourcePath ?? appInfo.path,
+          appInfo.bundleId
+        )
+        if (hydratedIcon) {
+          appInfo.icon = hydratedIcon
+          try {
+            await this.persistHydratedAppIcons([{ appInfo, icon: hydratedIcon }])
+          } catch {
+            // Keep the generated cache resource usable even if pointer persistence is busy.
+          }
+        }
+      } catch {
+        // Application identity is still returned when the platform has no icon.
+      }
+    }
+
+    let icon: string | null = null
+    if (appInfo.icon) {
+      const normalizedIcon = normalizeRenderableSource(appInfo.icon)
+      if (!('missing' in normalizedIcon) && normalizedIcon.value.startsWith('tfile:')) {
+        icon = normalizedIcon.value
+      }
+    }
+
+    const inputIsNativePath = /^(?:[a-z]:[\\/]|[\\/]{1,2}|shell:AppsFolder\\)/i.test(
+      normalizedIdentifier
+    )
+    return {
+      identifier:
+        application.extensions.bundleId ||
+        (inputIsNativePath ? application.name : normalizedIdentifier),
+      displayName: appInfo.displayName || appInfo.name,
+      icon
     }
   }
 

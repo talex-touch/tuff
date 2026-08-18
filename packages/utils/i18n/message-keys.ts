@@ -98,6 +98,8 @@ export const PermissionKeys = {
   NETWORK_DOWNLOAD_DESC: 'permission.network.download.desc',
 
   // System permissions
+  SYSTEM_APPLICATIONS_NAME: 'permission.system.applications.name',
+  SYSTEM_APPLICATIONS_DESC: 'permission.system.applications.desc',
   SYSTEM_SHELL_NAME: 'permission.system.shell.name',
   SYSTEM_SHELL_DESC: 'permission.system.shell.desc',
   SYSTEM_NOTIFICATION_NAME: 'permission.system.notification.name',
@@ -237,7 +239,7 @@ export function isI18nMessage(str: string): boolean {
 /**
  * Parse i18n message to extract key and params
  */
-export function parseI18nMessage(str: string): { key: string, params?: Record<string, unknown> } | null {
+export function parseI18nMessage(str: string): { key: string; params?: Record<string, unknown> } | null {
   if (!isI18nMessage(str)) {
     return null
   }
@@ -253,16 +255,15 @@ export function parseI18nMessage(str: string): { key: string, params?: Record<st
   try {
     const params = JSON.parse(content.slice(pipeIndex + 1))
     return { key, params }
-  }
-  catch {
+  } catch {
     return { key }
   }
 }
 
-export type DevServerKey = typeof DevServerKeys[keyof typeof DevServerKeys]
-export type FlowTransferKey = typeof FlowTransferKeys[keyof typeof FlowTransferKeys]
-export type PluginKey = typeof PluginKeys[keyof typeof PluginKeys]
-export type PermissionKey = typeof PermissionKeys[keyof typeof PermissionKeys]
-export type WidgetKey = typeof WidgetKeys[keyof typeof WidgetKeys]
-export type SystemKey = typeof SystemKeys[keyof typeof SystemKeys]
-export type CoreBoxOmniPanelKey = typeof CoreBoxOmniPanelKeys[keyof typeof CoreBoxOmniPanelKeys]
+export type DevServerKey = (typeof DevServerKeys)[keyof typeof DevServerKeys]
+export type FlowTransferKey = (typeof FlowTransferKeys)[keyof typeof FlowTransferKeys]
+export type PluginKey = (typeof PluginKeys)[keyof typeof PluginKeys]
+export type PermissionKey = (typeof PermissionKeys)[keyof typeof PermissionKeys]
+export type WidgetKey = (typeof WidgetKeys)[keyof typeof WidgetKeys]
+export type SystemKey = (typeof SystemKeys)[keyof typeof SystemKeys]
+export type CoreBoxOmniPanelKey = (typeof CoreBoxOmniPanelKeys)[keyof typeof CoreBoxOmniPanelKeys]

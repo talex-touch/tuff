@@ -37,11 +37,12 @@ import {
  * `context.plugin` checks still apply.
  */
 export const PLUGIN_FACING_EVENTS = [
-  // AppEvents — 5
+  // AppEvents — 6
   AppEvents.fileIndex.batteryLevel,
   AppEvents.power.batteryStatus,
   AppEvents.system.captureSelection,
   AppEvents.system.getActiveApp,
+  AppEvents.system.resolveApplication,
   AppEvents.window.show,
 
   // ClipboardEvents — 15
@@ -176,9 +177,7 @@ export const PLUGIN_FACING_EVENTS = [
   TransportEvents.port.upgrade,
 ] as const
 
-const PLUGIN_FACING_EVENT_NAMES: ReadonlySet<string> = new Set(
-  PLUGIN_FACING_EVENTS.map(event => event.toEventName()),
-)
+const PLUGIN_FACING_EVENT_NAMES: ReadonlySet<string> = new Set(PLUGIN_FACING_EVENTS.map(event => event.toEventName()))
 
 /** Whether a plugin surface may reach this event at all. */
 export function isPluginFacingEvent(eventName: string): boolean {
