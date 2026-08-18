@@ -3,7 +3,7 @@ title: "FilterChips 筛选胶囊"
 description: "带圆点与计数的单选筛选条，可作为工具栏或标签页语义使用。"
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [filter, chips, table, data]
 syncStatus: reviewed
 verified: true

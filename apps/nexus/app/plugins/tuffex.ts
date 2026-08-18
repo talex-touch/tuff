@@ -30,7 +30,6 @@ const fromBadge = () => import('@tuffex-components/badge')
 const fromBaseAnchor = () => import('@tuffex-components/base-anchor')
 const fromBaseSurface = () => import('@tuffex-components/base-surface')
 const fromBlankSlate = () => import('@tuffex-components/blank-slate')
-const fromBorderBeam = () => import('@tuffex-components/border-beam')
 const fromBreadcrumb = () => import('@tuffex-components/breadcrumb')
 const fromButton = () => import('@tuffex-components/button')
 const fromCard = () => import('@tuffex-components/card')
@@ -90,7 +89,6 @@ const fromInput = () => import('@tuffex-components/input')
 const fromInsightCards = () => import('@tuffex-components/insight-cards')
 const fromKeyframeStrokeText = () => import('@tuffex-components/keyframe-stroke-text')
 const fromLayoutSkeleton = () => import('@tuffex-components/layout-skeleton')
-const fromLiquid = () => import('@tuffex-components/liquid')
 const fromLoadingOverlay = () => import('@tuffex-components/loading-overlay')
 const fromLoadingState = () => import('@tuffex-components/loading-state')
 const fromMarkdownView = () => import('@tuffex-components/markdown-view')
@@ -143,10 +141,8 @@ const fromTag = () => import('@tuffex-components/tag')
 const fromTagInput = () => import('@tuffex-components/tag-input')
 const fromTaskRows = () => import('@tuffex-components/task-rows')
 const fromTextTransformer = () => import('@tuffex-components/text-transformer')
-const fromThinkingOrb = () => import('@tuffex-components/thinking-orb')
 const fromTimeline = () => import('@tuffex-components/timeline')
 const fromToast = () => import('@tuffex-components/toast')
-const fromToolCallCard = () => import('@tuffex-components/tool-call-card')
 const fromToolChips = () => import('@tuffex-components/tool-chips')
 const fromTooltip = () => import('@tuffex-components/tooltip')
 const fromTransfer = () => import('@tuffex-components/transfer')
@@ -179,7 +175,6 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxBaseAnchor: asyncTuffexComponent(fromBaseAnchor, 'TxBaseAnchor'),
   TxBaseSurface: asyncTuffexComponent(fromBaseSurface, 'TxBaseSurface'),
   TxBlankSlate: asyncTuffexComponent(fromBlankSlate, 'TxBlankSlate'),
-  TxBorderBeam: asyncTuffexComponent(fromBorderBeam, 'TxBorderBeam'),
   TxBlockLine: asyncTuffexComponent(fromGroupBlock, 'TxBlockLine'),
   TxBlockSlot: asyncTuffexComponent(fromGroupBlock, 'TxBlockSlot'),
   TxBlockSwitch: asyncTuffexComponent(fromGroupBlock, 'TxBlockSwitch'),
@@ -258,8 +253,6 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxInsightMetric: asyncTuffexComponent(fromInsightCards, 'TxInsightMetric'),
   TxKeyframeStrokeText: asyncTuffexComponent(fromKeyframeStrokeText, 'TxKeyframeStrokeText'),
   TxLayoutSkeleton: asyncTuffexComponent(fromLayoutSkeleton, 'TxLayoutSkeleton'),
-  TxLiquid: asyncTuffexComponent(fromLiquid, 'TxLiquid'),
-  TxLiquidItem: asyncTuffexComponent(fromLiquid, 'TxLiquidItem'),
   TxLoadingOverlay: asyncTuffexComponent(fromLoadingOverlay, 'TxLoadingOverlay'),
   TxLoadingState: asyncTuffexComponent(fromLoadingState, 'TxLoadingState'),
   TxMarkdownView: asyncTuffexComponent(fromMarkdownView, 'TxMarkdownView'),
@@ -318,11 +311,9 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxTagInput: asyncTuffexComponent(fromTagInput, 'TxTagInput'),
   TxTaskRows: asyncTuffexComponent(fromTaskRows, 'TxTaskRows'),
   TxTextTransformer: asyncTuffexComponent(fromTextTransformer, 'TxTextTransformer'),
-  TxThinkingOrb: asyncTuffexComponent(fromThinkingOrb, 'TxThinkingOrb'),
   TxTimeline: asyncTuffexComponent(fromTimeline, 'TxTimeline'),
   TxTimelineItem: asyncTuffexComponent(fromTimeline, 'TxTimelineItem'),
   TxToastHost: asyncTuffexComponent(fromToast, 'TxToastHost'),
-  TxToolCallCard: asyncTuffexComponent(fromToolCallCard, 'TxToolCallCard'),
   TxToolChips: asyncTuffexComponent(fromToolChips, 'TxToolChips'),
   TxTooltip: asyncTuffexComponent(fromTooltip, 'TxTooltip'),
   TxTouchTip: asyncTuffexComponent(fromDialog, 'TxTouchTip'),

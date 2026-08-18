@@ -3,7 +3,7 @@ title: "SidebarNav"
 description: "Vertical workspace navigation: org switcher, quick search, primary action, and grouped destinations."
 category: Navigation
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [navigation, sidebar, workspace, search]
 syncStatus: reviewed
 verified: true

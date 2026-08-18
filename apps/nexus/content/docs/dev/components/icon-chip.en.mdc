@@ -3,7 +3,7 @@ title: "IconChip"
 description: "Filled plate carrying a file-type badge, an initial, or a small glyph."
 category: Basic
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [icon, badge, chip, avatar]
 syncStatus: reviewed
 verified: true

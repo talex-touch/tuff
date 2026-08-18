@@ -3,7 +3,7 @@ title: "SelectionActions"
 description: "A bar that floats beneath a text selection and hands the highlighted passage to an agent."
 category: Feedback
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, selection, rewrite, floating]
 syncStatus: reviewed
 verified: true

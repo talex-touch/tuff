@@ -3,7 +3,7 @@ title: Thinking Orb
 description: Canvas 绘制的思考指示球，同屏共相位、离屏自动停摆。
 category: Effects
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, loading, canvas]
 syncStatus: reviewed
 verified: true

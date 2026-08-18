@@ -3,7 +3,7 @@ title: "AllocationBar"
 description: "A pill split by share, with legend chips — selecting a segment changes what you are inspecting."
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [data, allocation, segment, chart]
 syncStatus: reviewed
 verified: true

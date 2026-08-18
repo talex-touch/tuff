@@ -1,6 +1,6 @@
 ---
 title: "Select"
-description: "Popover-backed primitive select with single select, multi-tag select, local filtering, remote search, creation, grouping, icon and description options, and custom dropdown content."
+description: "Popover-backed primitive select with single select, multi-tag select, local filtering, remote search, creation, grouping, and custom dropdown content."
 category: Form
 status: beta
 since: 1.0.0
@@ -228,50 +228,6 @@ code: |
 ---
 :::
 
-### Icons and Descriptions
-
-Options accept optional `icon` (an icon class resolved by the host app's styles) and `description` fields for pickers that need a second line of context, such as workspaces or members; the selected row shows a trailing check mark.
-
-#### Select (rich options)
-:::TuffDemoWrapper{demo="SelectSelectRichOptionsDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import type { TxSelectOptionLike, TxSelectValue } from '@talex-touch/tuffex'
-  import { ref } from 'vue'
-
-  const value = ref<TxSelectValue>('design-studio')
-  const options: TxSelectOptionLike[] = [
-    {
-      label: 'Recent',
-      options: [
-        { value: 'design-studio', label: 'Design studio', icon: 'i-carbon-paint-brush', description: '12 projects' },
-        { value: 'product-team', label: 'Product team', icon: 'i-carbon-layers', description: '8 projects' },
-      ],
-    },
-    {
-      label: 'Workspaces',
-      options: [
-        { value: 'playground', label: 'Playground', icon: 'i-carbon-chemistry', description: '24 experiments' },
-        { value: 'component-archive', label: 'Component archive', icon: 'i-carbon-archive', description: '61 components' },
-      ],
-    },
-  ]
-  </script>
-
-  <template>
-    <TuffSelect
-      v-model="value"
-      style="width: 300px"
-      searchable
-      :options="options"
-      placeholder="Select workspace"
-      search-placeholder="Search workspaces"
-    />
-  </template>
----
-:::
-
 ### Variants & States
 
 Each variant below flips a single prop and can be layered onto the interaction models above.
@@ -327,24 +283,11 @@ code: |
 ---
 :::
 
-#### Width
-The trigger defaults to a compact 240px and the dropdown panel always matches the trigger width. Set an explicit width on the component to fill a container or customize the footprint.
-:::TuffDemoWrapper{demo="SelectSelectWidthDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffSelect v-model="compact" :options="options" />
-    <TuffSelect v-model="fluid" style="width: 100%" :options="options" />
-  </template>
----
-:::
-
 ## Interaction Contract
 
 - `TuffSelect` owns a single primitive `string | number` value by default. Empty state is represented by `''`.
 - In `multiple` mode, `TuffSelect` owns `Array<string | number>`, renders selected values as tags, toggles options on click, and keeps the dropdown open.
-- `options` can contain plain options or grouped options. Plain options use `{ value, label, disabled?, icon?, description? }`; grouped options use `{ label, disabled?, options }`. `icon` renders as a leading icon class on the option row and `description` as secondary text under the label.
-- The trigger defaults to a 240px width. When the host sets an explicit width on the component, the trigger and the dropdown panel both follow it; the panel never grows wider than the trigger.
+- `options` can contain plain options or grouped options. Plain options use `{ value, label, disabled? }`; grouped options use `{ label, disabled?, options }`.
 - `TuffSelectItem` registers its value and label with the parent select; when `label` is omitted, slot text is used, then the raw value.
 - Clicking the trigger toggles the dropdown in non-editable mode. In `editable` or `remote` mode, focusing the trigger opens the dropdown and the trigger text becomes editable.
 - Picking an enabled option emits `update:modelValue` and `change`, updates the selected label, and closes the dropdown.
@@ -422,8 +365,6 @@ code: |
 | `value` | `string \| number` | - | Primitive option value written to the parent select when picked. |
 | `label` | `string` | - | Fallback visible label and registered selected-label text. Slot text is used when omitted. |
 | `disabled` | `boolean` | `false` | Prevents picking this option while leaving it visible in the dropdown. |
-| `icon` | `string` | - | Icon class for the leading option icon, resolved by the host app's styles. |
-| `description` | `string` | - | Secondary description text rendered under the label. |
 
 #### Exposed Methods
 
@@ -449,7 +390,7 @@ code: |
 - Source: `packages/tuffex/packages/components/src/select/src/TxSelect.vue` confirms Popover-backed rendering, prop/slot option registration, single and multiple value paths, local and remote search, creation, grouped options, loading/empty/footer slots, exposed methods, and selected-label synchronization.
 - Item source: `packages/tuffex/packages/components/src/select/src/TxSelectItem.vue` confirms injected registration, slot-text label fallback, local filtering visibility, and disabled click suppression.
 - Type contracts: `packages/tuffex/packages/components/src/select/src/types.ts` defines `TxSelectValue`, model value shapes, option/group structures, prop contracts, context, and `SELECT_KEY`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` covers enabled/disabled selection, listbox/option/combobox semantics, local filtering, remote search, selected-label resolution, numeric string matching, loading/empty states, multiple tags, creation, grouped options, footer slot, status classes, and option icon/description/check-mark rendering.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` covers enabled/disabled selection, listbox/option/combobox semantics, local filtering, remote search, selected-label resolution, numeric string matching, loading/empty states, multiple tags, creation, grouped options, footer slot, and status classes.
 - Export: `packages/tuffex/packages/components/src/select/index.ts` exports `TuffSelect`, `TuffSelectItem`, `TxSelect`, `TxSelectItem`, public types, context key, and instances.
 
 ## Source

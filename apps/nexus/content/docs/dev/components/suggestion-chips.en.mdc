@@ -3,7 +3,7 @@ title: Suggestion Chips
 description: A horizontal row of follow-up prompts users can send in one tap.
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, suggestion, chips]
 syncStatus: reviewed
 verified: true

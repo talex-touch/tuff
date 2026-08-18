@@ -3,7 +3,7 @@ title: "ScrubField 拖拽数值域"
 description: "标签即手柄的紧凑数值输入：横向拖动、方向键步进、也能直接键入。"
 category: Form
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [form, number, drag, inspector]
 syncStatus: reviewed
 verified: true

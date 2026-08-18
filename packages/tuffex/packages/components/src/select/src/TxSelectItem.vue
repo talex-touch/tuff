@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { Slots } from 'vue'
-import type { TxSelectItemProps } from './types'
 import { computed, inject, onBeforeUnmount, onMounted, useSlots, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import { SELECT_KEY } from './types'
@@ -10,7 +9,11 @@ defineOptions({
 })
 
 const props = withDefaults(
-  defineProps<TxSelectItemProps>(),
+  defineProps<{
+    value: string | number
+    label?: string
+    disabled?: boolean
+  }>(),
   {
     disabled: false,
   },
@@ -103,19 +106,10 @@ function handleClick() {
     :active="isSelected"
     :disabled="disabled"
     :aria-selected="isSelected"
-    :icon-class="icon"
-    :description="description"
     @click="handleClick"
   >
     <template #title>
       <slot>{{ resolvedLabel }}</slot>
-    </template>
-    <template v-if="isSelected" #right>
-      <span class="tuff-select__check" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="16" height="16">
-          <path fill="currentColor" d="M10 15.172L19.192 5.979L20.607 7.393L10 18L3.636 11.636L5.05 10.222L10 15.172Z" />
-        </svg>
-      </span>
     </template>
   </TxCardItem>
 </template>
@@ -136,11 +130,5 @@ function handleClick() {
 
 .tuff-select-item.is-disabled :deep(.tx-card-item__title) {
   color: var(--tx-disabled-text-color, #c0c4cc);
-}
-
-.tuff-select__check {
-  display: inline-flex;
-  align-items: center;
-  color: var(--tx-color-primary, #409eff);
 }
 </style>
