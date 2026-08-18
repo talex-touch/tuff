@@ -69,7 +69,7 @@
 | [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |
 | ├ [optimize-intelligence-plugin](.trellis/tasks/07-27-optimize-intelligence-plugin/prd.md) | P1 | planning |
 | ├ [optimize-translation-plugin](.trellis/tasks/07-27-optimize-translation-plugin/prd.md) | P1 | planning |
-| └ [optimize-clipboard-plugin](.trellis/tasks/07-27-optimize-clipboard-plugin/prd.md) | P1 | planning |
+| └ [optimize-clipboard-plugin](.trellis/tasks/archive/2026-08/07-27-optimize-clipboard-plugin/prd.md) | P1 | planning |
 | [search-crossplatform-audit](.trellis/tasks/07-13-search-crossplatform-audit/prd.md) | P2 | 🔄 审计父任务 [1/3] |
 | ├ [windows-everything-productionization](.trellis/tasks/07-17-windows-everything-productionization/prd.md) | P1 | 🔴 backend gate passed，packaged UI manifest 开放 |
 | └ [migrate-search-index-split-write-paths](.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md) | P1 | flag 默认 on（`cd39bdbf6`），剩余 writer 归属待收口 |
@@ -77,7 +77,7 @@
 | ├ [ota-one-click-background-update](.trellis/tasks/07-22-ota-one-click-background-update/prd.md) | P2 | 🔄 in_progress |
 | └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
 | [harden-app-icon-self-healing](.trellis/tasks/07-24-harden-app-icon-self-healing/prd.md) | P2 | 🔄 real-profile evidence ready；N+1 release 开放 |
-| install-launch-v2-4-13-beta-23 <sup>本地任务，未入库</sup> | P2 | 🔄 in_progress |
+| 本地安装记录（未纳入当前任务树） | P2 | 🔄 in_progress |
 | [fix-plugin-folder-button](.trellis/tasks/07-27-fix-plugin-folder-button/prd.md) | P2 | 🔄 in_progress |
 | [docs-roadmap-consolidation-cleanup](.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/prd.md) | P2 | 🔄 in_progress（本任务） |
 | [expose-plugin-search-sdk](.trellis/tasks/07-27-expose-plugin-search-sdk/prd.md) | P3 | planning |
