@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { computed } from 'vue'
+import type { ResolvedApplication } from '@talex-touch/utils/transport/events/types'
+import { computed, ref, watch } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
@@ -11,12 +12,14 @@ import {
   getClipboardTypeLabel,
   parseFileList,
   resolveDetailImagePreview,
+  resolveListImageSrc,
 } from '~/utils/clipboard-items'
 
 const props = defineProps<{
   item: PluginClipboardItem | null
   resolvedImageUrl?: string | null
   resolvingImageUrl?: boolean
+  sourceApplication?: ResolvedApplication | null
 }>()
 
 const emit = defineEmits<{
@@ -26,7 +29,38 @@ const emit = defineEmits<{
 const textInsight = computed(() => getClipboardTextInsight(props.item))
 const colorTokens = computed(() => getClipboardColorTokens(props.item))
 const ocrInsight = computed(() => getClipboardOcrInsight(props.item))
-const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.resolvedImageUrl))
+const failedImageSources = ref<ReadonlySet<string>>(new Set())
+const imagePreview = computed(() => {
+  const primary = resolveDetailImagePreview(props.item, props.resolvedImageUrl)
+  if (!primary.src || !failedImageSources.value.has(primary.src)) {
+    return primary
+  }
+
+  const fallback = resolveListImageSrc(props.item)
+  return {
+    src: fallback && !failedImageSources.value.has(fallback) ? fallback : null,
+    isThumbnailOnly: Boolean(fallback),
+  }
+})
+
+watch(
+  () => props.item?.id,
+  () => {
+    failedImageSources.value = new Set()
+  },
+)
+
+function handleImageError(): void {
+  const failedSource = imagePreview.value.src
+  if (!failedSource) return
+  failedImageSources.value = new Set([...failedImageSources.value, failedSource])
+}
+
+function handleSourceIconError(event: Event): void {
+  if (event.currentTarget instanceof HTMLImageElement) {
+    event.currentTarget.hidden = true
+  }
+}
 </script>
 
 <template>
@@ -45,9 +79,10 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
         <div class="image-container">
           <img
             :src="imagePreview.src || undefined"
-            alt=""
+            :alt="getClipboardTitle(item)"
             class="preview-img"
             :class="{ thumbnail: imagePreview.isThumbnailOnly }"
+            @error="handleImageError"
           >
           <span v-if="imagePreview.isThumbnailOnly" class="preview-badge">缩略图预览</span>
         </div>
@@ -81,9 +116,15 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
       </div>
 
       <div class="info-grid">
-        <div v-for="row in getClipboardInfoRows(item)" :key="row.label" class="info-row">
+        <div v-for="row in getClipboardInfoRows(item, sourceApplication)" :key="row.label" class="info-row">
           <span class="info-label">{{ row.label }}</span>
-          <span class="info-value">{{ row.value }}</span>
+          <span class="info-value" :class="{ 'with-icon': row.icon }">
+            <img v-if="row.icon" class="source-app-icon" :src="row.icon" alt="" @error="handleSourceIconError">
+            <span class="info-value-copy">
+              <span>{{ row.value }}</span>
+              <small v-if="row.secondaryValue" class="info-secondary">{{ row.secondaryValue }}</small>
+            </span>
+          </span>
         </div>
       </div>
 
@@ -322,6 +363,32 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
   color: var(--clipboard-text-primary);
   font-size: 0.78rem;
   word-break: break-word;
+}
+
+.info-value.with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-app-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+.info-value-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.info-secondary {
+  color: var(--clipboard-text-muted);
+  font-size: 0.7rem;
+  font-weight: 400;
 }
 
 .insight-section {
