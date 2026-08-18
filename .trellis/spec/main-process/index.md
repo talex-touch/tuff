@@ -20,9 +20,9 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   migration authoring (snapshot chain dead at 0014, journal `when` must be max,
   leaf-table rebuild pattern, renderer-assigned ids need parent-scoped PKs).
 - [channel-transport-contracts.md](channel-transport-contracts.md) — main→renderer
-  delivery modes: notification events must use `broadcastToWindow` (sendTo hangs a
-  60s pending timer whose WARN `.catch()` cannot suppress), delivery-target identity,
-  port allowlist, stable-mock test contract.
+  delivery modes, notification-vs-request semantics, renderer quiesce before handler teardown,
+  destroyed-transport send rejection, perf-report recursion prevention, delivery-target identity,
+  port allowlist, and stable-mock/runtime quit evidence.
 - [app-semantic-catalog-contracts.md](app-semantic-catalog-contracts.md) — category
   vocabulary: locale-structured alias groups (new language = locale key + rule),
   automatic English pluralization + skip-table discipline, match-needle token

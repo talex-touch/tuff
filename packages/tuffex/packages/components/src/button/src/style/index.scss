@@ -466,3 +466,30 @@
     background: color-mix(in srgb, var(--tx-split-button-bg) 86%, #000);
   }
 }
+
+/* Haptic click shake — the visual counterpart of `vibrate`. Amplitude comes
+   from --tx-button-shake-amp, set per click from the resolved vibrate type. */
+.tx-button.is-haptic-shake {
+  animation: tx-button-haptic-shake 260ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes tx-button-haptic-shake {
+  10%, 90% {
+    transform: translateX(calc(var(--tx-button-shake-amp, 1px) * -0.6));
+  }
+  20%, 80% {
+    transform: translateX(calc(var(--tx-button-shake-amp, 1px) * 0.9));
+  }
+  30%, 50%, 70% {
+    transform: translateX(calc(var(--tx-button-shake-amp, 1px) * -1));
+  }
+  40%, 60% {
+    transform: translateX(var(--tx-button-shake-amp, 1px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-button.is-haptic-shake {
+    animation: none;
+  }
+}

@@ -1,6 +1,6 @@
 ---
 title: IconButton
-description: 带按下态的可访问纯图标操作按钮。
+description: 带按下态和语义状态色的可访问纯图标操作按钮。
 category: Basic
 status: beta
 since: 1.0.0
@@ -31,9 +31,10 @@ code: |
         :pressed="pinned"
         @click="pinned = !pinned"
       />
-      <TxIconButton icon="i-carbon-settings" label="打开设置" shape="square" />
-      <TxIconButton icon="i-carbon-add" label="新增项目" shape="pill" size="lg" />
-      <TxIconButton icon="i-carbon-trash-can" label="Disabled action" disabled />
+      <TxIconButton icon="i-carbon-edit" label="编辑项目" shape="square" status="info" />
+      <TxIconButton icon="i-carbon-add" label="新增项目" shape="pill" size="lg" status="success" />
+      <TxIconButton icon="i-carbon-warning" label="需要注意的操作" status="warning" />
+      <TxIconButton icon="i-carbon-trash-can" label="删除项目" status="danger" disabled />
     </div>
   </template>
 ---
@@ -57,9 +58,11 @@ code: |
 | `label` | `string` | `''` | 可访问名称。纯图标操作必填。 |
 | `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 按钮尺寸。 |
 | `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | 点击区域轮廓。 |
+| `status` | `'success' \| 'warning' \| 'danger' \| 'info'` | - | 语义视觉状态色；未设置时保持中性样式。 |
 | `pressed` | `boolean` | - | 持久切换态；定义后转发为 `aria-pressed`。 |
 | `disabled` | `boolean` | `false` | 原生禁用态与禁用样式。 |
 | `nativeType` | `'button' \| 'submit' \| 'reset'` | `'button'` | 原生 `type` 属性。 |
+- `status` 会改变图标的语义颜色、悬停、按下和焦点样式；不改变行为，也不提供授权。
 
 ### Events
 
@@ -77,18 +80,18 @@ code: |
 
 - 除非插槽中有可见文本，否则始终设置 `label`。
 - `pressed` 只用于持久开关；一次性动作使用普通点击按钮即可。
-- 危险图标操作不要只靠颜色表达，应配合说明或确认流程。
+- 用语义 `status` 色强化操作含义；危险操作仍应配合周边文案或确认流程，不能只依赖颜色。
 - 表单内默认使用 `nativeType="button"`，除非明确要提交表单。
 
 ## 审阅说明
 
 - **可访问性说明：** `label` 是纯图标按钮内置的唯一可访问名称来源；如果自定义插槽包含可见文本，需要确认它仍能被辅助技术读取。
-- **实测覆盖:** 当前尚无专门的 `icon-button` 单元测试；本页已按 `TxIconButton.vue` 源码人工核对，`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会校验组件页面与 demo registry 可加载。
+- **实测覆盖:** `packages/tuffex/packages/components/src/icon-button/__tests__/icon-button.test.ts` 覆盖可访问名称告警与语义状态 class；`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会校验组件页面与 demo registry 可加载。
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`。
 - Export alias: `packages/tuffex/packages/components/src/icon-button/index.ts` 导出可安装的 `TxIconButton` 与 `TxIconButtonInstance`。
-- Coverage: `packages/tuffex/packages/components/src/icon-button` 下当前没有专门组件单元测试；本文档行为通过源码审阅与 Nexus 文档覆盖测试验证。
+- Coverage: `packages/tuffex/packages/components/src/icon-button/__tests__/icon-button.test.ts` 覆盖可访问名称告警和语义状态 class 渲染；Nexus 文档覆盖会校验本页与其 demo registry 可加载。
 
 <TuffDocSourceLink />

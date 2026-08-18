@@ -3,7 +3,7 @@ import type { ButtonEmits, ButtonProps } from './types'
 import type { ObjectDirective, VNode } from 'vue'
 import { computed, nextTick, ref, useAttrs, useSlots, watch } from 'vue'
 import { useFlip } from '../../../../utils/animation/flip'
-import { useVibrate } from '../../../../utils/vibrate'
+import { useVibrate, type VibrateType } from '../../../../utils/vibrate'
 import Spinner from '../../spinner'
 
 defineOptions({
@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<ButtonProps>(), {
   icon: undefined,
   autofocus: false,
   nativeType: 'button',
-  vibrate: true,
+  vibrate: false,
   vibrateType: 'light',
 })
 
@@ -190,6 +190,36 @@ const classList = computed(() => {
   ]
 })
 
+// Visual counterpart of the haptic feedback: desktops (and phones with
+// vibration off) still get a small nudge scaled to the vibration strength.
+const SHAKE_AMPLITUDE: Record<VibrateType, string> = {
+  bit: '0.6px',
+  light: '1px',
+  medium: '1.6px',
+  success: '1.6px',
+  warning: '2px',
+  heavy: '2.4px',
+  error: '2.4px',
+}
+
+function playShake(type: VibrateType) {
+  const el = buttonRef.value
+  if (!el)
+    return
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+    return
+  el.style.setProperty('--tx-button-shake-amp', SHAKE_AMPLITUDE[type])
+  // Restart the animation on rapid clicks.
+  el.classList.remove('is-haptic-shake')
+  void el.offsetWidth
+  el.classList.add('is-haptic-shake')
+}
+
+function onShakeEnd(event: AnimationEvent) {
+  if (event.animationName === 'tx-button-haptic-shake')
+    buttonRef.value?.classList.remove('is-haptic-shake')
+}
+
 function handleClick(event: MouseEvent) {
   if (props.disabled || props.loading)
     return
@@ -215,6 +245,7 @@ function handleClick(event: MouseEvent) {
       }
     }
     useVibrate(vibrateType)
+    playShake(vibrateType)
   }
 
   emit('click', event)
@@ -236,6 +267,7 @@ if (props.autofocus) {
     :type="nativeType"
     :disabled="disabled || loading"
     @click="handleClick"
+    @animationend="onShakeEnd"
   >
     <span v-if="showLoadingBar" class="tx-button__loading-layer" aria-hidden="true" />
     <span ref="innerRef" class="tx-button__inner" :style="innerStyle">

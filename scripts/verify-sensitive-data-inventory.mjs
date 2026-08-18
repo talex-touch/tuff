@@ -43,6 +43,7 @@ const REQUIRED_IDS = new Set([
   'search-history-and-usage',
   'intelligence-audit-context-memory',
   'analytics-telemetry-diagnostics',
+  'home-conversation-content',
   'plugin-ordinary-data',
   'plugin-secrets',
   'temporary-files',

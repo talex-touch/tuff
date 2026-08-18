@@ -316,6 +316,48 @@ describe('txSelect', () => {
     expect(wrapper.find('.custom-footer').text()).toBe('Custom footer')
   })
 
+  it('renders option icon, description, and a check mark on the selected row', () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: 'beta',
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta', icon: 'i-test-icon', description: 'Second line' },
+        ],
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+
+    const options = wrapper.findAll('.tuff-select__option')
+    expect(options[0].find('.tx-card-item__avatar--icon').exists()).toBe(false)
+    expect(options[0].find('.tuff-select__check').exists()).toBe(false)
+    expect(options[1].find('.tx-card-item__avatar--icon i').classes()).toContain('i-test-icon')
+    expect(options[1].find('.tx-card-item__desc').text()).toBe('Second line')
+    expect(options[1].find('.tuff-select__check').exists()).toBe(true)
+  })
+
+  it('renders slot item icon, description, and a check mark when selected', () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: 'alpha',
+      },
+      slots: {
+        default: '<TxSelectItem value="alpha" label="Alpha" icon="i-test-icon" description="Second line" />',
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+        components: { TxSelectItem },
+      },
+    })
+
+    const item = wrapper.find('.tuff-select-item')
+    expect(item.find('.tx-card-item__avatar--icon i').classes()).toContain('i-test-icon')
+    expect(item.find('.tx-card-item__desc').text()).toBe('Second line')
+    expect(item.find('.tuff-select__check').exists()).toBe(true)
+  })
+
   it('applies status classes', () => {
     const wrapper = mount(TxSelect, {
       props: {

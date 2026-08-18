@@ -6,7 +6,7 @@
  * Mirrors `docs/design/corebox/v2.5.0.pen` artboard `iqbKR`.
  */
 
-export type SettingGroupKey = 'preference' | 'capability' | 'system'
+export type SettingGroupKey = 'preference' | 'intelligence' | 'capability' | 'system'
 
 /**
  * A page reached from a category page rather than from the sidebar.
@@ -23,6 +23,8 @@ export interface SettingSubPage {
   labelKey: string
   /** Full i18n key for the entry row's one-line description. */
   descriptionKey: string
+  /** Promotes this child route into the settings sidebar when present. */
+  navIcon?: string
 }
 
 export interface SettingCategory {
@@ -38,7 +40,12 @@ export interface SettingCategory {
   children?: SettingSubPage[]
 }
 
-export const SETTING_GROUP_ORDER: SettingGroupKey[] = ['preference', 'capability', 'system']
+export const SETTING_GROUP_ORDER: SettingGroupKey[] = [
+  'preference',
+  'intelligence',
+  'capability',
+  'system'
+]
 
 export const SETTING_CATEGORIES: SettingCategory[] = [
   {
@@ -67,7 +74,7 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
     path: '/setting/intelligence',
     icon: 'i-ri-sparkling-2-line',
     labelKey: 'intelligence',
-    group: 'capability',
+    group: 'intelligence',
     /**
      * The former top-level `/intelligence/*` surface. It is configuration, so it folded into
      * settings; this list drives both the hub page's entry rows and the routes behind them.
@@ -77,19 +84,22 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
         key: 'channels',
         path: '/setting/intelligence/channels',
         labelKey: 'settingsIntelligenceHub.channels',
-        descriptionKey: 'settingsIntelligenceHub.channelsDesc'
+        descriptionKey: 'settingsIntelligenceHub.channelsDesc',
+        navIcon: 'i-ri-global-line'
       },
       {
         key: 'prompts',
         path: '/setting/intelligence/prompts',
         labelKey: 'settingsIntelligenceHub.prompts',
-        descriptionKey: 'settingsIntelligenceHub.promptsDesc'
+        descriptionKey: 'settingsIntelligenceHub.promptsDesc',
+        navIcon: 'i-carbon-text-font'
       },
       {
         key: 'agents',
         path: '/setting/intelligence/agents',
         labelKey: 'settingsIntelligenceHub.agents',
-        descriptionKey: 'settingsIntelligenceHub.agentsDesc'
+        descriptionKey: 'settingsIntelligenceHub.agentsDesc',
+        navIcon: 'i-carbon-bot'
       },
       {
         key: 'workflows',
@@ -107,7 +117,8 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
         key: 'capabilities',
         path: '/setting/intelligence/capabilities',
         labelKey: 'settingsIntelligenceHub.capabilities',
-        descriptionKey: 'settingsIntelligenceHub.capabilitiesDesc'
+        descriptionKey: 'settingsIntelligenceHub.capabilitiesDesc',
+        navIcon: 'i-carbon-machine-learning-model'
       }
     ]
   },
@@ -180,5 +191,43 @@ export function groupedSettingCategories(): { group: SettingGroupKey; items: Set
   return SETTING_GROUP_ORDER.map((group) => ({
     group,
     items: SETTING_CATEGORIES.filter((category) => category.group === group)
+  }))
+}
+
+export interface SettingNavItem {
+  key: string
+  path: string
+  icon: string
+  /** Full i18n key, unlike a category's key relative to settingsNav.category. */
+  labelKey: string
+  /** Parent hubs with promoted children only select on their exact route. */
+  activeExact: boolean
+}
+
+export function groupedSettingNavigation(): {
+  group: SettingGroupKey
+  items: SettingNavItem[]
+}[] {
+  return groupedSettingCategories().map(({ group, items }) => ({
+    group,
+    items: items.flatMap((category) => {
+      const promotedChildren = (category.children ?? []).filter((child) => child.navIcon)
+      return [
+        {
+          key: category.key,
+          path: category.path,
+          icon: category.icon,
+          labelKey: `settingsNav.category.${category.labelKey}`,
+          activeExact: promotedChildren.length > 0
+        },
+        ...promotedChildren.map((child) => ({
+          key: `${category.key}-${child.key}`,
+          path: child.path,
+          icon: child.navIcon ?? category.icon,
+          labelKey: child.labelKey,
+          activeExact: false
+        }))
+      ]
+    })
   }))
 }

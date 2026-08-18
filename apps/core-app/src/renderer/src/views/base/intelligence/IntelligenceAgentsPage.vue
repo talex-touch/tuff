@@ -5,7 +5,7 @@ import { useAgentsSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import FlatInput from '~/components/base/input/FlatInput.vue'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'
@@ -64,28 +64,26 @@ onMounted(() => {
 </script>
 
 <template>
-  <SettingsPage
-    :title="t('settingsIntelligenceHub.agents')"
-    back-to="/setting/intelligence"
-    :back-label="t('settingsIntelligenceHub.back')"
-    fill
-  >
-    <div class="agents-page">
-      <div class="agents-sidebar">
-        <div class="sidebar-header">
-          <FlatInput v-model="searchQuery" :placeholder="t('intelligence.agents.search')">
-            <i class="i-carbon-search" />
-          </FlatInput>
-        </div>
+  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
+    <TuffAsideTemplate
+      v-model="searchQuery"
+      class="agents-shell flex-1"
+      search-id="agent-search"
+      :search-placeholder="t('intelligence.agents.search')"
+      :clear-label="t('intelligence.search.clear')"
+      :main-edge-blur="false"
+      window-drag-region
+    >
+      <template #default>
         <AgentsList
           :agents="filteredAgents"
           :selected-id="selectedAgentId"
           :loading="showSkeleton"
           @select="handleSelectAgent"
         />
-      </div>
+      </template>
 
-      <div class="agents-content">
+      <template #main>
         <AgentDetail v-if="selectedAgent" :agent="selectedAgent" />
         <div v-else class="empty-state">
           <div class="i-carbon-bot text-4xl op-30" />
@@ -93,38 +91,14 @@ onMounted(() => {
             {{ t('intelligence.agents.select_hint') }}
           </p>
         </div>
-      </div>
-    </div>
+      </template>
+    </TuffAsideTemplate>
   </SettingsPage>
 </template>
 
 <style lang="scss" scoped>
-.agents-page {
-  display: flex;
-  gap: 1.5rem;
-  flex: 1;
+.agents-shell {
   min-height: 0;
-}
-
-.agents-sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.sidebar-header {
-  padding: 0 0.25rem;
-}
-
-.agents-content {
-  flex: 1;
-  min-width: 0;
-  background: var(--tx-bg-color);
-  border-radius: 12px;
-  padding: 1.5rem;
-  overflow: auto;
 }
 
 .empty-state {
@@ -134,5 +108,6 @@ onMounted(() => {
   justify-content: center;
   height: 100%;
   color: var(--tx-text-color-secondary);
+  -webkit-app-region: drag;
 }
 </style>

@@ -129,6 +129,77 @@ const enabled = typeof storedValue === 'boolean' ? storedValue : appSettingOrigi
 - Full snapshot push is limited to first bootstrap (`cursor <= 0`) and an explicit user-triggered sync. Startup with an established cursor, focus recovery, and online recovery push only dirty storage.
 - Renderer online/status recovery owns deduplication for one network transition. The main sync module must not register a second independent online recovery trigger for the same lifecycle event.
 
+
+### Scenario: Encrypted Conversation Sync With Durable Revision State
+
+#### 1. Scope / Trigger
+
+- Trigger: changing home-conversation persistence, cloud-sync collection/apply logic, conversation deletion, or renderer history refresh.
+- Conversation text is sensitive user content. It may cross devices only through the existing device-key encrypted sync payload/blob path.
+
+#### 2. Signatures
+
+```ts
+// database.db
+conversation_sync_state(conversation_id PRIMARY KEY, dirty_at NOT NULL, deleted_at NULLABLE)
+
+// One independent cloud item per thread.
+qualifiedName = `conversation::${encodeURIComponent(conversationId)}`
+
+subscribeConversationMutations(listener): () => void
+clearConversationSyncState(id, expectedDirtyAt): Promise<void>
+applyConversationSyncSnapshot(snapshot): Promise<void>
+applyConversationSyncDeletion(id, deletedAt): Promise<void>
+```
+
+#### 3. Contracts
+
+- `conversations` / `conversation_messages` remain the local business source of truth. `conversation_sync_state` is only the durable dirty queue and delete tombstone.
+- Migration `0039_conversation_sync_tombstones` is immutable once any developer profile has applied it. `0040_conversation_sync_state_migration` creates the durable state table, copies legacy tombstones as dirty deletes, and only then drops the old table.
+- Local save/rename and its dirty-state upsert share one scheduled SQLite transaction. Local delete and its tombstone upsert also share one transaction.
+- Every conversation is serialized independently, encrypted before push, and uses its domain `updatedAt` as sync conflict time. Prompts/responses never enter ordinary config, logs, analytics, or plugin storage.
+- A push acknowledgement clears state with compare-and-delete on `dirty_at`. A newer local mutation racing the push survives and remains dirty.
+- Pull compares the remote revision/delete time with the local conversation and durable dirty revision. Newer local state remains queued; otherwise the remote snapshot/delete applies without echoing another local mutation.
+- Initial bootstrap and explicit user sync may enumerate all conversations. Established-cursor startup rehydrates only durable dirty rows.
+- Remote apply broadcasts `ConversationEvents.changed` so the shared renderer history list refreshes, while the sync mutation listener ignores `source: 'sync'` to prevent feedback.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required outcome |
+|---|---|
+| App exits before push | Dirty row survives restart and is re-queued |
+| Delete while offline | Tombstone survives; remote delete is sent after sync resumes |
+| New edit races push acknowledgement | Compare-and-delete misses; newer dirty revision stays queued |
+| Dirty local revision newer than pull | Keep local and repush; do not overwrite |
+| Remote revision/delete wins | Apply transactionally, clear local sync state, refresh renderer list |
+| Payload is malformed or undecryptable | Reject it; do not mutate SQLite or log content |
+| Profile already recorded migration 0039 | Apply 0040 by its newer journal timestamp; preserve every tombstone as `dirtyAt === deletedAt` |
+
+#### 5. Good / Base / Bad Cases
+
+- Good: device A deletes a thread offline, restarts, signs in, and device B receives the encrypted tombstone without the thread reappearing.
+- Base: a completed local thread pushes once and its exact dirty revision is acknowledged and cleared.
+- Bad: keeping dirty ids only in a process `Set`, pushing the whole history as one JSON blob, or clearing by id without checking the acknowledged revision.
+
+#### 6. Tests Required
+
+- Real migrated SQLite test: save creates `{ dirtyAt, deletedAt: null }`; stale acknowledgement does not clear; exact acknowledgement clears; delete writes `dirtyAt === deletedAt`.
+- Upgrade smoke: seed the 0039 tombstone table, execute 0040 statements, assert the row survives in `conversation_sync_state` and the legacy table is removed.
+- Sync wire tests retain encrypted inline/blob and tombstone metadata behavior.
+- Main typecheck covers the store/sync event and migration contracts; renderer typecheck covers `ConversationEvents.changed` refresh.
+- Two-device acceptance: create/update/delete round-trip with restart between local mutation and push.
+
+#### 7. Wrong vs Correct
+
+```ts
+// Wrong: process memory loses the delete when the app exits.
+dirtyConversationIds.add(id)
+
+// Correct: commit the business delete and its durable sync state together.
+await tx.delete(conversations).where(eq(conversations.id, id))
+await tx.insert(conversationSyncState).values({ conversationId: id, dirtyAt, deletedAt: dirtyAt })
+```
+
 ### CoreApp Auth Credential Persistence
 
 #### 1. Scope / Trigger

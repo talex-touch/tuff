@@ -98,4 +98,41 @@ describe('saveConversation rolls back a failed replace-all', () => {
 
     expect(await storedMessageIds('thread-1')).toEqual(['m1', 'm2'])
   })
+
+  it('同步确认只清除已推送的会话修订，删除会留下持久标记', async () => {
+    const {
+      clearConversationSyncState,
+      deleteConversation,
+      listConversationSyncStates,
+      saveConversation
+    } = await loadStore()
+
+    const saved = await saveConversation({
+      id: 'thread-sync',
+      title: 'sync state',
+      messages: [{ id: 'm1', role: 'user', content: 'hello', status: 'complete' }]
+    })
+
+    expect(await listConversationSyncStates()).toEqual([
+      {
+        conversationId: 'thread-sync',
+        dirtyAt: saved.updatedAt,
+        deletedAt: null
+      }
+    ])
+
+    await clearConversationSyncState('thread-sync', saved.updatedAt - 1)
+    expect(await listConversationSyncStates()).toHaveLength(1)
+
+    await clearConversationSyncState('thread-sync', saved.updatedAt)
+    expect(await listConversationSyncStates()).toEqual([])
+
+    await deleteConversation('thread-sync')
+    const [deletedState] = await listConversationSyncStates()
+    expect(deletedState).toMatchObject({
+      conversationId: 'thread-sync',
+      deletedAt: expect.any(Number)
+    })
+    expect(deletedState?.dirtyAt).toBe(deletedState?.deletedAt)
+  })
 })

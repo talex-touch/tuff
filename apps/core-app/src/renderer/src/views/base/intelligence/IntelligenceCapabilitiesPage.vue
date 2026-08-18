@@ -371,12 +371,7 @@ async function handleCapabilityTest(
 </script>
 
 <template>
-  <SettingsPage
-    :title="t('settingsIntelligenceHub.capabilities')"
-    back-to="/setting/intelligence"
-    :back-label="t('settingsIntelligenceHub.back')"
-    fill
-  >
+  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
     <TuffAsideTemplate
       v-model="searchQuery"
       class="capability-shell flex-1"
@@ -384,6 +379,7 @@ async function handleCapabilityTest(
       :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
       :clear-label="t('intelligence.search.clear')"
       :main-edge-blur="false"
+      window-drag-region
     >
       <template #default>
         <!-- Loading skeleton -->
@@ -419,7 +415,11 @@ async function handleCapabilityTest(
       </template>
 
       <template #main>
-        <div :key="selectedCapabilityId ?? 'empty'" class="h-full overflow-hidden">
+        <div
+          :key="selectedCapabilityId ?? 'empty'"
+          class="capability-main h-full overflow-hidden"
+          :class="{ 'is-empty': !selectedCapability }"
+        >
           <IntelligenceCapabilityInfo
             v-if="selectedCapability"
             :capability="selectedCapability"
@@ -453,6 +453,10 @@ async function handleCapabilityTest(
 </template>
 
 <style lang="scss" scoped>
+.capability-main.is-empty {
+  -webkit-app-region: drag;
+}
+
 .capability-cards {
   display: flex;
   flex-direction: column;

@@ -64,6 +64,14 @@ export type StoreInstallInstruction
     sparse?: boolean
   }
 
+export interface StorePluginManifestMeta {
+  /** Canonical manifest identity used to reconcile installed plugins with catalog entries. */
+  id?: string
+  name?: string
+  /** Declared plugin SDK marker (YYMMDD). */
+  sdkapi?: number
+}
+
 export interface StorePlugin {
   id: string
   name: string
@@ -87,6 +95,8 @@ export interface StorePlugin {
    */
   iconUrl?: string
   metadata?: Record<string, unknown>
+  /** Public manifest identity and SDK marker returned by catalog providers. */
+  manifest?: StorePluginManifestMeta
   readmeUrl?: string
   homepage?: string
   downloadUrl?: string

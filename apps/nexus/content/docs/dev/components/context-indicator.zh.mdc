@@ -3,7 +3,7 @@ title: Context Indicator
 description: 以环形进度显示对话上下文用量的紧凑指示器。
 category: Status
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, context, token]
 syncStatus: reviewed
 verified: true

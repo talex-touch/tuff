@@ -6,7 +6,7 @@ import process from 'node:process'
  * This file describes the pre-core of the touch app.
  * Running necessary settings or environment params before startup the touch app.
  */
-import { app, crashReporter, powerMonitor, session } from 'electron'
+import { app, BrowserWindow, crashReporter, powerMonitor, session } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveRuntimeRootPath } from '../utils/app-root-path'
@@ -59,11 +59,42 @@ function applyDeprecationTraceSwitch(): void {
   mainLog.warn('Node deprecation trace enabled via TUFF_TRACE_DEPRECATION=1')
 }
 
+let rendererQuitNotified = false
+
 function broadcastBeforeQuit(): void {
+  if (rendererQuitNotified) return
   const channel = getCurrentTouchApp()?.channel
   if (!channel) return
+  rendererQuitNotified = true
   const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
   transport.broadcast(AppEvents.lifecycle.beforeQuit, undefined)
+}
+
+async function quiesceRenderersBeforeQuit(): Promise<void> {
+  if (rendererQuitNotified) return
+  const channel = getCurrentTouchApp()?.channel
+  if (!channel) return
+
+  const windows = BrowserWindow.getAllWindows().filter((window) => {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return false
+    return !window.webContents.getURL().startsWith('devtools://')
+  })
+  if (windows.length === 0) return
+
+  rendererQuitNotified = true
+  const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
+  const drain = await runWithBeforeQuitTimeout(async () => {
+    await Promise.allSettled(
+      windows.map((window) =>
+        transport.sendTo(window.webContents, AppEvents.lifecycle.beforeQuit, undefined)
+      )
+    )
+  }, 1_500)
+  if (drain.timedOut) {
+    mainLog.warn('Renderer shutdown acknowledgement timed out; continuing shutdown', {
+      meta: { timeoutMs: 1_500, windowCount: windows.length }
+    })
+  }
 }
 
 function markAppQuitting(reason: string): void {
@@ -259,6 +290,7 @@ void app.whenReady().then(() => {
   // would run under Electron's approve-by-default (#696).
   installDefaultSessionPermissionPolicy(session.defaultSession, {
     onDenied: (permission) => {
+      if (getCurrentTouchApp()?.isQuitting === true) return
       mainLog.warn('Denied a permission request on the default session', {
         meta: { permission }
       })
@@ -352,7 +384,10 @@ app.on('before-quit', (event) => {
     try {
       const quitEvent = new BeforeAppQuitEvent(event, intent)
       const beforeQuitResult = await runWithBeforeQuitTimeout(
-        () => touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent),
+        async () => {
+          await quiesceRenderersBeforeQuit()
+          await touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent)
+        },
         BEFORE_QUIT_TIMEOUT_MS,
         getBeforeQuitTimeoutHint
       )

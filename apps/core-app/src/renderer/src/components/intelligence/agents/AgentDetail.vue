@@ -379,15 +379,19 @@ function getCapabilityIcon(type: string): string {
 .agent-detail {
   height: 100%;
   overflow: auto;
+  box-sizing: border-box;
+  padding: 0 1.5rem 1.5rem;
 }
 
 .detail-header {
   display: flex;
   align-items: center;
   gap: 1rem;
+  padding-top: 1.5rem;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--tx-border-color-lighter);
   margin-bottom: 1.5rem;
+  -webkit-app-region: drag;
 }
 
 .header-icon {

@@ -15,6 +15,8 @@ export interface StorageSyncSnapshot {
   cryptoVersion: string
   keyId: string
   rawText: string
+  /** Domain mutation time used for conflict ordering when available. */
+  updatedAt?: string
 }
 
 export interface SyncPayloadBlobClient {

@@ -44,6 +44,7 @@ const capabilityType = computed(() => {
   gap: 0.75rem;
   padding: 0.875rem 1.25rem 0.75rem;
   background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
+  -webkit-app-region: drag;
 }
 
 .capability-header__notice {
@@ -121,5 +122,6 @@ const capabilityType = computed(() => {
   justify-content: flex-end;
   flex: 0 0 auto;
   padding-top: 0.25rem;
+  -webkit-app-region: no-drag;
 }
 </style>

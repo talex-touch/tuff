@@ -2,34 +2,18 @@
 import type { StorePluginListItem } from '~/composables/store/useStoreData'
 import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-/**
- * StoreGridView - Grid/List view for displaying store plugins
- *
- * Features:
- * - Responsive grid layout with smooth animations
- * - FLIP animation for view type transitions
- * - Shows loading, empty, and plugin list states
- */
 import gsap from 'gsap'
 import type { ComponentPublicInstance } from 'vue'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
 import { useStoreInstall } from '~/composables/store/useStoreInstall'
-import { hasUpgradeAvailable } from '~/composables/store/useVersionCompare'
-import { getPluginCompositeKey } from '~/modules/install/install-manager'
 import StoreItemCard from './StoreItemCard.vue'
 
 const props = defineProps<{
-  /** List of plugins to display */
   plugins: StorePluginListItem[]
-  /** View mode: grid or list */
   viewType: 'grid' | 'list'
-  /** Whether data is loading */
   loading: boolean
-  /** Set of installed plugin names */
-  installedNames?: Set<string>
-  /** Map of installed plugin names to their versions */
-  installedVersions?: Map<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -37,9 +21,8 @@ const emit = defineEmits<{
   'open-detail': [plugin: StorePluginListItem, source: HTMLElement | null]
 }>()
 
-// Get install task tracker
 const { getInstallTask } = useStoreInstall()
-
+const { getPluginVersionStatus } = usePluginVersionStatus()
 const { t } = useI18n()
 const gridRef = ref<HTMLElement | ComponentPublicInstance | null>(null)
 const isTransitioning = ref(false)
@@ -47,48 +30,9 @@ const enterStagger = 0.04
 const flipStagger = 0.02
 const bounceEase = 'back.out(1.6)'
 
-function resolveInstalledVersion(item: StorePluginListItem): string | undefined {
-  const keys: string[] = []
-
-  if (item.providerId && item.id) {
-    keys.push(getPluginCompositeKey(item.id, item.providerId))
-  }
-
-  if (item.id) {
-    keys.push(item.id)
-  }
-
-  if (item.name) {
-    keys.push(item.name)
-  }
-
-  for (const key of keys) {
-    const version = props.installedVersions?.get(key)
-    if (version) {
-      return version
-    }
-  }
-
-  return undefined
-}
-
-function isInstalled(item: StorePluginListItem): boolean {
-  if (resolveInstalledVersion(item)) return true
-
-  if (
-    item.providerId &&
-    item.id &&
-    props.installedNames?.has(getPluginCompositeKey(item.id, item.providerId))
-  ) {
-    return true
-  }
-
-  return Boolean(props.installedNames?.has(item.id) || props.installedNames?.has(item.name))
-}
-
-function hasUpgrade(item: StorePluginListItem): boolean {
-  return hasUpgradeAvailable(resolveInstalledVersion(item), item.version)
-}
+const pluginsWithStatus = computed(() =>
+  props.plugins.map((item) => ({ item, status: getPluginVersionStatus(item) }))
+)
 
 // Smooth animation functions using GSAP
 function onBeforeEnter(el: Element) {
@@ -208,7 +152,7 @@ watch(
     </div>
 
     <TransitionGroup
-      v-else-if="plugins.length > 0"
+      v-else-if="pluginsWithStatus.length > 0"
       ref="gridRef"
       name="store-items"
       tag="div"
@@ -219,7 +163,7 @@ watch(
       @leave="onLeave"
     >
       <TxAutoSizer
-        v-for="(item, index) in plugins"
+        v-for="({ item, status }, index) in pluginsWithStatus"
         :key="`${item.providerId}::${item.id}` || item.name || index"
         :data-index="index"
         :width="true"
@@ -230,9 +174,10 @@ watch(
         <StoreItemCard
           :item="item"
           :index="index"
-          :is-installed="isInstalled(item)"
-          :installed-version="resolveInstalledVersion(item)"
-          :has-upgrade="hasUpgrade(item)"
+          :is-installed="status.isInstalled"
+          :installed-version="status.installedVersion"
+          :has-upgrade="status.hasUpgrade"
+          :is-compatible="status.isCompatible"
           :install-task="getInstallTask(item.id, item.providerId)"
           class="store-grid-item"
           @install="emit('install', item)"

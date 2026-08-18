@@ -12,18 +12,14 @@ import SettingSkillsMcp from '../SettingSkillsMcp.vue'
 const { t } = useI18n()
 const router = useRouter()
 
-/**
- * The six pages that used to sit at `/intelligence/*`. Read from the category table rather than
- * listed here, so a sub-page can never appear as a row without a route behind it.
- */
-const subPages = settingCategoryChildren('intelligence')
+/** Workflows and audit remain hub destinations; the other intelligence pages live in the nav. */
+const subPages = settingCategoryChildren('intelligence').filter((subPage) => !subPage.navIcon)
 </script>
 
 <template>
   <SettingsPage :title="t('settingsNav.category.intelligence')">
-    <SettingAssistant mode="standard" />
-    <!-- Floating ball, voice wake and wake words; inherited from the dissolved `advanced` category. -->
-    <SettingAssistant mode="advanced" />
+    <!-- One shared group: the master switch and its floating/voice options belong together. -->
+    <SettingAssistant mode="all" />
 
     <!-- What the home conversation can reach beyond the model: skills and MCP servers. -->
     <SettingSkillsMcp />
@@ -35,10 +31,7 @@ const subPages = settingCategoryChildren('intelligence')
     -->
     <SettingLocalAiCli data-settings-section="local-ai-cli" />
 
-    <!--
-      The former standalone Intelligence surface, folded in as entry rows. Its landing page did
-      nothing this page does not, so the six destinations are linked directly.
-    -->
+    <!-- Workflows and audit stay together here; frequently used configuration lives in nav. -->
     <!-- No dividers between the rows: the group card draws its own hairlines between children. -->
     <TuffGroupBlock :name="t('settingsIntelligenceHub.label')">
       <SettingRow

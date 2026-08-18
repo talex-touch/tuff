@@ -274,6 +274,20 @@
       "when": 1785715200000,
       "tag": "0038_conversation_messages_composite_pk",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785801600000,
+      "tag": "0039_conversation_sync_tombstones",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785888000000,
+      "tag": "0040_conversation_sync_state_migration",
+      "breakpoints": true
     }
   ]
 }

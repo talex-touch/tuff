@@ -87,7 +87,11 @@ const plugin = {
     iconUrl: 'https://cdn.example.test/focus-flow.png',
     readmeMarkdown: '# Focus Flow',
     status: 'approved',
-    manifest: { permissions: ['clipboard', 'storage'] },
+    manifest: {
+      name: 'focus-flow',
+      sdkapi: 260817,
+      permissions: ['clipboard', 'storage'],
+    },
     changelog: 'Stable release',
     createdAt: '2026-06-01T00:00:00.000Z',
     updatedAt: '2026-06-01T00:00:00.000Z',
@@ -122,7 +126,7 @@ const plugin = {
       iconUrl: 'https://cdn.example.test/focus-flow.png',
       readmeMarkdown: '# Focus Flow beta',
       status: 'approved',
-      manifest: { permissions: ['clipboard'] },
+      manifest: { name: 'focus-flow', sdkapi: 260817, permissions: ['clipboard'] },
       changelog: 'Beta release',
       createdAt: '2026-05-01T00:00:00.000Z',
       updatedAt: '2026-05-01T00:00:00.000Z',
@@ -156,7 +160,11 @@ const plugin = {
       iconUrl: 'https://cdn.example.test/focus-flow.png',
       readmeMarkdown: '# Focus Flow',
       status: 'approved',
-      manifest: { permissions: ['clipboard', 'storage'] },
+      manifest: {
+        name: 'focus-flow',
+        sdkapi: 260817,
+        permissions: ['clipboard', 'storage'],
+      },
       changelog: 'Stable release',
       createdAt: '2026-06-01T00:00:00.000Z',
       updatedAt: '2026-06-01T00:00:00.000Z',
@@ -216,6 +224,7 @@ describe('/api/store/plugins', () => {
             status: 'approved',
             createdAt: '2026-06-01T00:00:00.000Z',
             updatedAt: '2026-06-01T00:00:00.000Z',
+            manifest: { name: 'focus-flow', sdkapi: 260817 },
           },
           readmeUrl: '/api/store/plugins/focus-flow/readme',
         },
@@ -225,7 +234,10 @@ describe('/api/store/plugins', () => {
       offset: 50,
     })
     expect(result.plugins[0]).not.toHaveProperty('versions')
-    expect(result.plugins[0].latestVersion).not.toHaveProperty('manifest')
+    expect(result.plugins[0].latestVersion.manifest).toEqual({
+      name: 'focus-flow',
+      sdkapi: 260817,
+    })
     expect(result.plugins[0].latestVersion).not.toHaveProperty('changelog')
   })
 

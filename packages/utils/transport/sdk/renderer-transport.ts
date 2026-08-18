@@ -207,6 +207,7 @@ interface BatchQueue<TRes> {
  */
 export class TuffRendererTransport implements ITuffTransport {
   private _channel: ReturnType<typeof useChannel> | null = null
+  private destroyed = false
   private invokeSender: ((eventName: string, payload?: unknown) => Promise<unknown>) | null = null
   private cache = new Map<string, CacheEntry>()
   private handlers = new Map<string, Set<(payload: any) => any>>()
@@ -269,6 +270,9 @@ export class TuffRendererTransport implements ITuffTransport {
   }
 
   private async sendRaw<TReq, TRes>(eventName: string, payload?: TReq | void): Promise<TRes> {
+    if (this.destroyed) {
+      throw new Error(`[TuffTransport] Renderer transport has been destroyed; cannot send "${eventName}".`)
+    }
     const invoke = this.getInvokeSender()
     if (invoke) {
       if (payload !== undefined) {
@@ -1118,6 +1122,8 @@ export class TuffRendererTransport implements ITuffTransport {
    * Destroys the transport instance and cleans up resources.
    */
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
     // Cancel all active streams
     for (const controller of this.streamControllers.values()) {
       controller.cancel()

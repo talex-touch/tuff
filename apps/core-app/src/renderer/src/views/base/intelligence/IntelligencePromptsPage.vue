@@ -474,12 +474,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <SettingsPage
-    :title="t('settingsIntelligenceHub.prompts')"
-    back-to="/setting/intelligence"
-    :back-label="t('settingsIntelligenceHub.back')"
-    fill
-  >
+  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
     <div
       class="prompt-page h-full flex flex-col"
       role="main"
@@ -492,6 +487,7 @@ onBeforeUnmount(() => {
         :search-placeholder="t('settings.intelligence.promptSearchPlaceholder')"
         :clear-label="t('intelligence.search.clear')"
         :main-edge-blur="false"
+        window-drag-region
       >
         <template #default>
           <div>
@@ -910,6 +906,7 @@ onBeforeUnmount(() => {
   gap: 1.25rem;
   border-bottom: 1px solid var(--tx-border-color-lighter);
   padding: 1.25rem 1.5rem;
+  -webkit-app-region: drag;
 }
 
 .prompt-main-header h1 {
@@ -944,6 +941,10 @@ onBeforeUnmount(() => {
   max-width: 460px;
 }
 
+.prompt-main-actions {
+  -webkit-app-region: no-drag;
+}
+
 .prompt-detail-body {
   padding: 1rem 1.5rem 1.5rem;
 }
@@ -962,6 +963,17 @@ onBeforeUnmount(() => {
   min-height: 64px;
   height: auto;
   padding-block: 0.55rem;
+}
+
+.prompt-detail-body :deep(.TBlockSlot-Content) {
+  flex: 1 1 170px;
+  min-width: 140px;
+}
+
+.prompt-detail-body :deep(.TBlockSlot-Slot) {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 360px;
 }
 
 .prompt-test__body {
@@ -985,8 +997,8 @@ onBeforeUnmount(() => {
 
 .prompt-inline-input,
 .prompt-inline-textarea {
-  width: min(360px, 34vw);
-  max-width: 100%;
+  width: 100%;
+  max-width: 360px;
   border: 1px solid var(--tx-border-color-lighter);
   border-radius: 0.65rem;
   padding: 0.55rem 0.75rem;
@@ -1084,6 +1096,11 @@ onBeforeUnmount(() => {
   color: var(--tx-text-color-secondary);
   text-align: center;
   padding: 2rem;
+  -webkit-app-region: drag;
+
+  .aisdk-btn {
+    -webkit-app-region: no-drag;
+  }
 
   &__title {
     font-size: 1rem;

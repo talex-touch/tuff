@@ -6,6 +6,23 @@ import { normalizeStoreIcon } from './store-icon-normalizer'
 
 const tpexApiProviderLog = createRendererLogger('TpexApiProvider')
 
+function normalizeManifestMeta(value: unknown): StorePlugin['manifest'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const id = typeof record.id === 'string' ? record.id.trim() : ''
+  const name = typeof record.name === 'string' ? record.name.trim() : ''
+  const sdkapi =
+    typeof record.sdkapi === 'number' && Number.isSafeInteger(record.sdkapi)
+      ? record.sdkapi
+      : undefined
+  if (!id && !name && sdkapi === undefined) return undefined
+  return {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(sdkapi !== undefined ? { sdkapi } : {})
+  }
+}
+
 interface TpexApiPlugin {
   id: string
   slug: string
@@ -136,6 +153,7 @@ export class TpexApiProvider extends BaseStoreProvider {
         isOfficial: entry.isOfficial,
         homepage: entry.homepage
       },
+      manifest: normalizeManifestMeta(entry.latestVersion?.manifest),
       readmeUrl,
       homepage: entry.homepage ?? undefined,
       downloadUrl,

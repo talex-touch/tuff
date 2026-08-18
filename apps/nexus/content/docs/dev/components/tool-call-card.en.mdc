@@ -3,7 +3,7 @@ title: Tool Call Card
 description: A tool call's status card, with logs that follow their tail and a result surface the host can own.
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, tool, status]
 syncStatus: reviewed
 verified: true

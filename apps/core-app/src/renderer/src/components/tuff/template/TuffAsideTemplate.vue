@@ -13,6 +13,8 @@ const props = withDefaults(
     clearLabel?: string
     mainAriaLive?: 'off' | 'polite' | 'assertive' | undefined
     mainEdgeBlur?: boolean
+    /** Turns the pane headers into frameless-window drag surfaces without covering their controls. */
+    windowDragRegion?: boolean
   }>(),
   {
     modelValue: '',
@@ -22,7 +24,8 @@ const props = withDefaults(
     searchable: true,
     clearLabel: 'Clear search',
     mainAriaLive: 'polite' as const,
-    mainEdgeBlur: true
+    mainEdgeBlur: true,
+    windowDragRegion: false
   }
 )
 
@@ -34,7 +37,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="TuffAsideTemplate">
+  <div class="TuffAsideTemplate" :class="{ 'has-window-drag-region': props.windowDragRegion }">
     <aside class="TuffAsideTemplate-Aside w-76" aria-label="Tuff aside layout">
       <slot name="aside">
         <TxScroll class="TuffAsideTemplate-AsideDefault">
@@ -97,6 +100,24 @@ const emit = defineEmits<{
   display: flex;
   height: 100%;
   overflow: hidden;
+}
+
+.TuffAsideTemplate.has-window-drag-region
+  .TuffAsideTemplate-AsideDefault
+  :deep(.tx-scroll__content) {
+  padding-top: 0;
+}
+
+.TuffAsideTemplate.has-window-drag-region .TuffAsideTemplate-Search {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  -webkit-app-region: drag;
+}
+
+.TuffAsideTemplate.has-window-drag-region .TuffAsideTemplate-Search :deep(.TuffAsideSearch) {
+  width: 100%;
+  -webkit-app-region: no-drag;
 }
 
 .TuffAsideTemplate-Aside {

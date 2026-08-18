@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
-import { conversationMessages, conversations } from '../../db/schema'
+import { conversationMessages, conversations, conversationSyncState } from '../../db/schema'
 import { databaseModule } from '../database'
 
 export type ConversationRole = 'user' | 'assistant'
@@ -33,6 +33,32 @@ export interface SaveConversationInput {
   messages: Array<Omit<StoredConversationMessage, 'seq' | 'createdAt'> & { createdAt?: number }>
 }
 
+export interface ConversationSyncState {
+  conversationId: string
+  dirtyAt: number
+  deletedAt: number | null
+}
+
+export interface ConversationMutation {
+  type: 'upsert' | 'delete'
+  conversationId: string
+  updatedAt: number
+  source: 'local' | 'sync'
+}
+
+const mutationListeners = new Set<(mutation: ConversationMutation) => void>()
+
+export function subscribeConversationMutations(
+  listener: (mutation: ConversationMutation) => void
+): () => void {
+  mutationListeners.add(listener)
+  return () => mutationListeners.delete(listener)
+}
+
+function emitConversationMutation(mutation: ConversationMutation): void {
+  for (const listener of mutationListeners) listener(mutation)
+}
+
 function parseMeta(value: string | null): Record<string, unknown> | undefined {
   if (!value) return undefined
   try {
@@ -42,6 +68,80 @@ function parseMeta(value: string | null): Record<string, unknown> | undefined {
     // A row written by a newer build with a shape this one cannot read must not take down the whole
     // thread; the message text is the part the user actually needs back.
     return undefined
+  }
+}
+
+async function writeConversationSnapshot(
+  snapshot: ConversationWithMessages,
+  label: string,
+  notifySource: ConversationMutation['source'] | null
+): Promise<void> {
+  const db = databaseModule.getDb()
+  await scheduleDbWrite(label, async () => {
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(conversations)
+        .values({
+          id: snapshot.id,
+          title: snapshot.title,
+          createdAt: snapshot.createdAt,
+          updatedAt: snapshot.updatedAt
+        })
+        .onConflictDoUpdate({
+          target: conversations.id,
+          set: {
+            title: snapshot.title,
+            createdAt: snapshot.createdAt,
+            updatedAt: snapshot.updatedAt
+          }
+        })
+
+      await tx
+        .delete(conversationMessages)
+        .where(eq(conversationMessages.conversationId, snapshot.id))
+
+      if (snapshot.messages.length > 0) {
+        await tx.insert(conversationMessages).values(
+          snapshot.messages.map((message, index) => ({
+            id: message.id,
+            conversationId: snapshot.id,
+            role: message.role,
+            content: message.content,
+            status: message.status,
+            meta: message.meta ? JSON.stringify(message.meta) : null,
+            seq: index,
+            createdAt: message.createdAt
+          }))
+        )
+      }
+
+      if (notifySource === 'local') {
+        await tx
+          .insert(conversationSyncState)
+          .values({
+            conversationId: snapshot.id,
+            dirtyAt: snapshot.updatedAt,
+            deletedAt: null
+          })
+          .onConflictDoUpdate({
+            target: conversationSyncState.conversationId,
+            set: { dirtyAt: snapshot.updatedAt, deletedAt: null }
+          })
+      } else {
+        await tx
+          .delete(conversationSyncState)
+          .where(eq(conversationSyncState.conversationId, snapshot.id))
+      }
+    })
+  })
+
+  if (notifySource) {
+    emitConversationMutation({
+      type: 'upsert',
+      conversationId: snapshot.id,
+      updatedAt: snapshot.updatedAt,
+      source: notifySource
+    })
   }
 }
 
@@ -99,71 +199,179 @@ export async function getConversation(id: string): Promise<ConversationWithMessa
 export async function saveConversation(input: SaveConversationInput): Promise<StoredConversation> {
   const db = databaseModule.getDb()
   const now = Date.now()
-
   const [existing] = await db.select().from(conversations).where(eq(conversations.id, input.id))
-
-  // One scheduled unit so no other writer interleaves; one transaction so a failed insert rolls
-  // the delete back — otherwise an insert error leaves the thread wiped with nothing written.
-  await scheduleDbWrite('conversation.save', async () => {
-    // Transactional because this is a replace-all: the DELETE below removes every message row
-    // before the INSERT puts them back. Without a rollback boundary a failing insert -- a
-    // duplicate message id from a retried stream, a full disk, a SQLITE_BUSY that outlives the
-    // retry budget -- leaves the thread row present and permanently empty.
-    await db.transaction(async (tx) => {
-      if (existing) {
-        await tx
-          .update(conversations)
-          .set({ title: input.title, updatedAt: now })
-          .where(eq(conversations.id, input.id))
-      } else {
-        await tx
-          .insert(conversations)
-          .values({ id: input.id, title: input.title, createdAt: now, updatedAt: now })
-      }
-
-      await tx.delete(conversationMessages).where(eq(conversationMessages.conversationId, input.id))
-
-      if (input.messages.length > 0) {
-        await tx.insert(conversationMessages).values(
-          input.messages.map((message, index) => ({
-            id: message.id,
-            conversationId: input.id,
-            role: message.role,
-            content: message.content,
-            status: message.status,
-            meta: message.meta ? JSON.stringify(message.meta) : null,
-            seq: index,
-            createdAt: message.createdAt ?? now
-          }))
-        )
-      }
-    })
-  })
-
-  return {
+  const snapshot: ConversationWithMessages = {
     id: input.id,
     title: input.title,
     createdAt: existing?.createdAt ?? now,
-    updatedAt: now
+    updatedAt: now,
+    messages: input.messages.map((message, index) => ({
+      ...message,
+      seq: index,
+      createdAt: message.createdAt ?? now
+    }))
+  }
+
+  await writeConversationSnapshot(snapshot, 'conversation.save', 'local')
+  return {
+    id: snapshot.id,
+    title: snapshot.title,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt
   }
 }
 
 export async function deleteConversation(id: string): Promise<{ deleted: boolean }> {
   const db = databaseModule.getDb()
-  // The message rows go with it through the cascade declared on the foreign key.
-  await scheduleDbWrite('conversation.delete', () =>
-    db.delete(conversations).where(eq(conversations.id, id))
-  )
+  const deletedAt = Date.now()
+  await scheduleDbWrite('conversation.delete', async () => {
+    await db.transaction(async (tx) => {
+      await tx.delete(conversations).where(eq(conversations.id, id))
+      await tx
+        .insert(conversationSyncState)
+        .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
+        .onConflictDoUpdate({
+          target: conversationSyncState.conversationId,
+          set: { dirtyAt: deletedAt, deletedAt }
+        })
+    })
+  })
+  emitConversationMutation({
+    type: 'delete',
+    conversationId: id,
+    updatedAt: deletedAt,
+    source: 'local'
+  })
   return { deleted: true }
 }
 
 export async function renameConversation(id: string, title: string): Promise<{ renamed: boolean }> {
   const db = databaseModule.getDb()
-  await scheduleDbWrite('conversation.rename', () =>
-    db
-      .update(conversations)
-      .set({ title, updatedAt: Date.now() })
-      .where(and(eq(conversations.id, id)))
-  )
+  const updatedAt = Date.now()
+  await scheduleDbWrite('conversation.rename', async () => {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(conversations)
+        .set({ title, updatedAt })
+        .where(and(eq(conversations.id, id)))
+      await tx
+        .insert(conversationSyncState)
+        .values({ conversationId: id, dirtyAt: updatedAt, deletedAt: null })
+        .onConflictDoUpdate({
+          target: conversationSyncState.conversationId,
+          set: { dirtyAt: updatedAt, deletedAt: null }
+        })
+    })
+  })
+  emitConversationMutation({ type: 'upsert', conversationId: id, updatedAt, source: 'local' })
   return { renamed: true }
+}
+
+export async function listConversationIdsForSync(): Promise<string[]> {
+  const rows = await databaseModule.getDb().select({ id: conversations.id }).from(conversations)
+  return rows.map((row) => row.id)
+}
+
+export async function listConversationSyncStates(): Promise<ConversationSyncState[]> {
+  return databaseModule.getDb().select().from(conversationSyncState)
+}
+
+export async function getConversationSyncState(id: string): Promise<ConversationSyncState | null> {
+  const [row] = await databaseModule
+    .getDb()
+    .select()
+    .from(conversationSyncState)
+    .where(eq(conversationSyncState.conversationId, id))
+  return row ?? null
+}
+
+export async function clearConversationSyncState(
+  id: string,
+  expectedDirtyAt: number
+): Promise<void> {
+  const db = databaseModule.getDb()
+  await scheduleDbWrite('conversation.sync-state.clear', () =>
+    db
+      .delete(conversationSyncState)
+      .where(
+        and(
+          eq(conversationSyncState.conversationId, id),
+          eq(conversationSyncState.dirtyAt, expectedDirtyAt)
+        )
+      )
+  )
+}
+
+export async function applyConversationSyncSnapshot(
+  snapshot: ConversationWithMessages
+): Promise<void> {
+  await writeConversationSnapshot(snapshot, 'conversation.sync-apply', 'sync')
+}
+
+export async function applyConversationSyncDeletion(id: string, deletedAt: number): Promise<void> {
+  const db = databaseModule.getDb()
+  await scheduleDbWrite('conversation.sync-delete', async () => {
+    await db.transaction(async (tx) => {
+      await tx.delete(conversations).where(eq(conversations.id, id))
+      await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+    })
+  })
+  emitConversationMutation({
+    type: 'delete',
+    conversationId: id,
+    updatedAt: deletedAt,
+    source: 'sync'
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function normalizeConversationSyncSnapshot(value: unknown): ConversationWithMessages | null {
+  if (!isRecord(value) || !Array.isArray(value.messages)) return null
+  if (
+    typeof value.id !== 'string' ||
+    typeof value.title !== 'string' ||
+    typeof value.createdAt !== 'number' ||
+    !Number.isFinite(value.createdAt) ||
+    typeof value.updatedAt !== 'number' ||
+    !Number.isFinite(value.updatedAt)
+  ) {
+    return null
+  }
+
+  const messages: StoredConversationMessage[] = []
+  for (const [index, candidate] of value.messages.entries()) {
+    if (!isRecord(candidate)) return null
+    const role = candidate.role
+    const status = candidate.status
+    if (
+      typeof candidate.id !== 'string' ||
+      (role !== 'user' && role !== 'assistant') ||
+      typeof candidate.content !== 'string' ||
+      (status !== 'complete' && status !== 'streaming' && status !== 'failed') ||
+      typeof candidate.createdAt !== 'number' ||
+      !Number.isFinite(candidate.createdAt)
+    ) {
+      return null
+    }
+    messages.push({
+      id: candidate.id,
+      role,
+      content: candidate.content,
+      status,
+      meta: isRecord(candidate.meta) ? candidate.meta : undefined,
+      seq: index,
+      createdAt: candidate.createdAt
+    })
+  }
+
+  return {
+    id: value.id,
+    title: value.title,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+    messages
+  }
 }
