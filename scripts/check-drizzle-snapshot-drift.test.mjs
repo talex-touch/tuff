@@ -68,5 +68,8 @@ describe('drizzle snapshot drift', () => {
     // The two the chain never had, rather than a truncated tail — see the script's comment.
     assert.ok(gap.missing.includes('0011'))
     assert.ok(gap.missing.includes('0012'))
+    // 0039/0040 are deliberate hand-written upgrades in the snapshotless 0015+ range.
+    assert.ok(gap.missing.includes('0039'))
+    assert.ok(gap.missing.includes('0040'))
   })
 })
