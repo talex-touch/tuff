@@ -59,6 +59,7 @@
       "download": { "name": "下载文件", "desc": "从互联网下载文件到本地" }
     },
     "system": {
+      "applications": { "name": "查询已安装应用", "desc": "按精确标识查询已安装应用的名称和图标" },
       "shell": { "name": "执行命令", "desc": "运行系统命令或脚本" },
       "notification": { "name": "系统通知", "desc": "发送系统通知" },
       "tray": { "name": "托盘交互", "desc": "访问系统托盘功能" }

@@ -10,10 +10,7 @@ import {
 } from '@talex-touch/utils/plugin'
 import { describe, expect, it } from 'vitest'
 
-const repoRoot = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../..',
-)
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..')
 const pluginsDir = join(repoRoot, 'plugins')
 
 function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
@@ -34,30 +31,25 @@ function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
 }
 
 describe('sdk-version', () => {
-  it('treats 260713 as current and keeps prior sdkapi markers supported', () => {
-    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260713)
-    expect(resolveSdkApiVersion(SdkApi.V260713)).toBe(SdkApi.V260713)
-    expect(
-      checkSdkCompatibility(SdkApi.V260713, 'touch-intelligence').warning,
-    ).toBeUndefined()
+  it('treats 260817 as current and keeps prior sdkapi markers supported', () => {
+    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260817)
+    expect(resolveSdkApiVersion(SdkApi.V260817)).toBe(SdkApi.V260817)
+    expect(checkSdkCompatibility(SdkApi.V260817, 'clipboard-history').warning).toBeUndefined()
 
+    expect(isSupportedSdkVersion(SdkApi.V260713)).toBe(true)
+    expect(resolveSdkApiVersion(SdkApi.V260713)).toBe(SdkApi.V260713)
+    expect(checkSdkCompatibility(SdkApi.V260713, 'touch-intelligence').warning).toBeUndefined()
     expect(isSupportedSdkVersion(SdkApi.V260626)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260626)).toBe(SdkApi.V260626)
-    expect(
-      checkSdkCompatibility(SdkApi.V260626, 'touch-intelligence').warning,
-    ).toBeUndefined()
+    expect(checkSdkCompatibility(SdkApi.V260626, 'touch-intelligence').warning).toBeUndefined()
 
     expect(isSupportedSdkVersion(SdkApi.V260615)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260615)).toBe(SdkApi.V260615)
-    expect(
-      checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning,
-    ).toBeUndefined()
+    expect(checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning).toBeUndefined()
 
     expect(isSupportedSdkVersion(SdkApi.V260428)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260428)).toBe(SdkApi.V260428)
-    expect(
-      checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning,
-    ).toBeUndefined()
+    expect(checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning).toBeUndefined()
   })
 
   it('blocks unknown sdkapi markers instead of normalizing them', () => {
@@ -88,16 +80,15 @@ describe('sdk-version', () => {
       .filter(({ sdkapi }) => sdkapi === CURRENT_SDK_VERSION)
       .map(({ pluginName }) => pluginName)
       .sort()
+    const localizationMarkerPlugins = manifests
+      .filter(({ sdkapi }) => sdkapi === SdkApi.V260713)
+      .map(({ pluginName }) => pluginName)
+      .sort()
 
     expect(unsupported).toEqual([])
-    // Same deliberate list as the manifest boundary gate: clipboard-history,
-    // json-formatter and touch-translation adopted the marker on 2026-08-16, which only
-    // declares support for the opt-in localization facade none of them calls.
-    expect(currentMarkerPlugins).toEqual([
-      'clipboard-history',
-      'json-formatter',
-      'touch-intelligence',
-      'touch-translation',
-    ])
+    // Clipboard History alone consumes the 260817 application-resolution facade.
+    // The other plugins stay on the 260713 localization baseline until they use a newer API.
+    expect(currentMarkerPlugins).toEqual(['clipboard-history'])
+    expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
   })
 })

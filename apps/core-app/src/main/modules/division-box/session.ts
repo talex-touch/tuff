@@ -521,7 +521,8 @@ export class DivisionBoxSession {
           devAddress: plugin.dev.address,
           appIsPackaged: app.isPackaged,
           pluginDevEnabled: plugin.dev.enable,
-          pluginDevSource: Boolean(plugin.dev.source)
+          pluginDevSource: Boolean(plugin.dev.source),
+          permissionScope: { pluginId: plugin.name, sdkapi: plugin.sdkapi }
         })
       : null
 

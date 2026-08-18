@@ -125,7 +125,8 @@ export function registerPluginWindowTransportHandlers(
           })
           const navigationPolicy = await createPluginViewNavigationPolicy({
             pluginRoot: touchPlugin.pluginPath,
-            targetUrl: pathToFileURL(target).href
+            targetUrl: pathToFileURL(target).href,
+            permissionScope: { pluginId: touchPlugin.name, sdkapi: touchPlugin.sdkapi }
           })
           const win = new TouchWindow(
             buildPublicPluginWindowOptions(request.options ?? {}, webPreferences)

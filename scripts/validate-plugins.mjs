@@ -35,6 +35,7 @@ const KNOWN_PERMISSION_IDS = new Set([
   'network.local',
   'network.internet',
   'network.download',
+  'system.applications',
   'system.shell',
   'system.notification',
   'system.tray',

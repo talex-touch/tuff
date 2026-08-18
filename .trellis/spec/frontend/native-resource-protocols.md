@@ -269,3 +269,78 @@ return {
 ```
 
 Native code owns AppKit and atomic persistence. TypeScript owns cache identity and bounded metadata. The protocol owns byte streaming.
+
+## 8. Permission-Gated Plugin Resources And Application Projection
+
+### 1. Scope / Trigger
+
+Apply this contract when a plugin-owned `WebContentsView` renders a host `tfile:` resource or resolves an installed application from an opaque clipboard/search/provider identifier.
+
+### 2. Signatures
+
+```ts
+interface ResolveApplicationRequest {
+  identifier: string
+  _sdkapi?: number
+}
+
+interface ResolvedApplication {
+  identifier: string
+  displayName: string
+  icon: string | null // null or a host-safe tfile URL
+}
+
+system.resolveApplication(identifier: string): Promise<ResolvedApplication | null>
+```
+
+### 3. Contracts
+
+- A plugin manifest declares and receives `fs.tfile` before its view may request any `tfile:` URL. `isPluginViewResourceAllowed()` checks the current plugin id/sdkapi grant on every request; a grant captured only when the view is created is stale after revocation.
+- The view policy is only the control-plane gate. The `tfile` protocol still canonicalizes the path and applies `getAllowedLocalFileRoots()`; permission never widens the protocol allowlist.
+- Installed-application lookup requires `sdkapi >= 260817`, verified plugin identity, and `system.applications`. The handler accepts one trimmed exact identifier of at most 512 characters and delegates to AppProvider's exact path/bundle-id lookup.
+- AppProvider owns icon cache repair and hydration. The response contains only bounded `identifier`, `displayName`, and `icon`; it never includes executable/native paths, file records, Buffer/base64 data, launch arguments, or search-index internals.
+- A plugin resolves only the selected item's source app, caches by exact source id for the view lifetime, and degrades to the raw id when the SDK is unavailable, denied, invalid, or not found.
+- Image details use the original `tfile:` URL when available and fall back to the already persisted thumbnail on `<img>` load failure. A blocked or missing original must not leave an empty preview.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                            | Required result                                                                           |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Plugin view has no permission scope or current `fs.tfile` grant                      | Reject `tfile:` before the request leaves the plugin session                              |
+| Current `fs.tfile` grant exists but canonical path is outside the protocol allowlist | Protocol returns HTTP 403                                                                 |
+| Plugin manifest uses `sdkapi < 260817` or the host does not support `260817`         | Package/runtime compatibility rejects activation before application lookup                |
+| Caller identity is unverified or `system.applications` is denied                     | `APPLICATION_RESOLUTION_PERMISSION_DENIED`; AppProvider is not called                     |
+| Permission runtime is unavailable                                                    | `APPLICATION_RESOLUTION_PERMISSION_UNAVAILABLE`; fail closed                              |
+| Identifier is empty or longer than 512 characters                                    | `SYSTEM_APPLICATION_IDENTIFIER_INVALID`; AppProvider is not called                        |
+| Exact application is absent                                                          | Return `null`; plugin keeps the raw source id                                             |
+| Icon hydration or pointer persistence fails                                          | Return the application with `icon: null`; never fail identity display solely for the icon |
+| SDK response contains a native icon path or malformed fields                         | Plugin SDK rejects the response as invalid                                                |
+| Original clipboard image fails to load                                               | Render the persisted thumbnail and label it as a thumbnail preview                        |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a Clipboard History view with live `fs.tfile` and `system.applications` grants loads an allowlisted original image and displays `{ displayName, tfile icon }` from an exact bundle id.
+- Base: the app record or icon is unavailable; clipboard content remains usable, the raw source id remains visible, and the image thumbnail remains visible.
+- Bad: permit all custom schemes once a plugin declares `fs.tfile`, return an executable path as the icon, query the fuzzy search engine for an exact id, or copy icon/image bytes through the SDK.
+
+### 6. Tests Required
+
+- Plugin-window policy tests toggle the live permission result for the same policy and prove `tfile:` changes from denied to allowed while other custom schemes remain denied.
+- Protocol tests continue to prove 400/403/404 and allowlisted streaming behavior independently from the plugin permission test.
+- Protected-handler tests cover unverified caller, unavailable runtime, denial, SDK mismatch, invalid id, not-found, and bounded success without invoking AppProvider on rejected input.
+- Plugin SDK tests keep the typed event name, trim the exact id, strip undeclared fields, and reject native icon paths.
+- Plugin view tests cover CoreBox-input debounce/stale isolation, source-app name/icon/raw-id fallback, original-image failure, and thumbnail rendering.
+- A real UI smoke confirms the CoreBox input reaches the database query and the visible detail contains image content plus the source app identity.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: declaration-only scheme trust and an unbounded app record.
+if (manifest.permissions.required.includes('fs.tfile')) allowEveryTfileRequest()
+return dbApp
+
+// Correct: live control-plane permission + existing data-plane allowlist + bounded DTO.
+if (!permissionModule.checkPermission(pluginId, 'fs.tfile', sdkapi).allowed) deny()
+const response = await fetchThroughCanonicalTfileAllowlist(url)
+return { identifier, displayName, icon: toTfileUrl(iconCachePath) }
+```

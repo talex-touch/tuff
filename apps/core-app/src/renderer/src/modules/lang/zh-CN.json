@@ -618,6 +618,10 @@
   },
   "permission": {
     "system": {
+      "applications": {
+        "name": "查询已安装应用",
+        "desc": "按精确标识查询已安装应用的名称和图标"
+      },
       "shortcut": {
         "name": "全局快捷键",
         "desc": "注册系统级全局快捷键"
@@ -1697,6 +1701,10 @@
           }
         },
         "system": {
+          "applications": {
+            "name": "查询已安装应用",
+            "desc": "按精确标识查询已安装应用的名称和图标"
+          },
           "shell": {
             "name": "执行命令",
             "desc": "运行系统命令或脚本"
@@ -5051,15 +5059,7 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": [
-        "日",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六"
-      ]
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
     },
     "memoryReview": {
       "title": "记忆审核",

@@ -59,6 +59,10 @@
       "download": { "name": "Download Files", "desc": "Download files from the internet" }
     },
     "system": {
+      "applications": {
+        "name": "Query Installed Applications",
+        "desc": "Resolve installed application names and icons by exact identifier"
+      },
       "shell": { "name": "Execute Commands", "desc": "Run system commands or scripts" },
       "notification": { "name": "Notifications", "desc": "Send system notifications" },
       "tray": { "name": "System Tray", "desc": "Access system tray features" }
@@ -84,7 +88,10 @@
       "dictation": { "name": "Voice Dictation", "desc": "Capture your microphone and transcribe speech to text" }
     },
     "search": {
-      "rootResults": { "name": "Push Root Search Results", "desc": "Push or update items in the CoreBox root results list" }
+      "rootResults": {
+        "name": "Push Root Search Results",
+        "desc": "Push or update items in the CoreBox root results list"
+      }
     },
     "grant": "Grant",
     "revoke": "Revoke",

@@ -8,6 +8,7 @@ import type {
   PluginWindowOptions
 } from '@talex-touch/utils/transport/events/types'
 import { PluginViewCompatibilityError } from './plugin-view-security-profile'
+import { getPermissionModule } from '../../permission'
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
 import path from 'node:path'
@@ -379,18 +380,25 @@ export function translateLegacyWindowProperty(value: unknown): PluginWindowComma
   return removedCommand(`Legacy plugin window command "${name}" is not supported.`)
 }
 
+interface PluginViewPermissionScope {
+  pluginId: string
+  sdkapi?: number
+}
+
 export type PluginViewNavigationPolicy =
   | {
       kind: 'local'
       entryUrl: string
       entryPath: string
       pluginRoot: string
+      permissionScope?: PluginViewPermissionScope
     }
   | {
       kind: 'development'
       entryUrl: string
       origin: string
       pluginRoot: string
+      permissionScope?: PluginViewPermissionScope
     }
 
 export interface PluginViewNavigationPolicyOptions {
@@ -400,6 +408,7 @@ export interface PluginViewNavigationPolicyOptions {
   appIsPackaged?: boolean
   pluginDevEnabled?: boolean
   pluginDevSource?: boolean
+  permissionScope?: PluginViewPermissionScope
 }
 
 export async function createPluginViewNavigationPolicy(
@@ -445,7 +454,8 @@ export async function createPluginViewNavigationPolicy(
       kind: 'local',
       entryUrl: pathToFileURL(entryPath).href,
       entryPath,
-      pluginRoot: realRoot
+      pluginRoot: realRoot,
+      permissionScope: options.permissionScope
     }
   }
 
@@ -465,7 +475,8 @@ export async function createPluginViewNavigationPolicy(
     kind: 'development',
     entryUrl: target.toString(),
     origin: devAddress.origin,
-    pluginRoot: realRoot
+    pluginRoot: realRoot,
+    permissionScope: options.permissionScope
   }
 }
 
@@ -501,6 +512,23 @@ function resolveWebSocketHttpOrigin(target: URL): string | null {
   return `${protocol}//${target.host}`
 }
 
+function hasPluginViewPermission(
+  policy: PluginViewNavigationPolicy,
+  permissionId: string
+): boolean {
+  const scope = policy.permissionScope
+  if (!scope) return false
+
+  try {
+    return (
+      getPermissionModule()?.checkPermission(scope.pluginId, permissionId, scope.sdkapi).allowed ===
+      true
+    )
+  } catch {
+    return false
+  }
+}
+
 export function isPluginViewResourceAllowed(
   policy: PluginViewNavigationPolicy,
   targetUrl: string
@@ -513,6 +541,7 @@ export function isPluginViewResourceAllowed(
   }
 
   if (target.protocol === 'data:') return true
+  if (target.protocol === 'tfile:') return hasPluginViewPermission(policy, 'fs.tfile')
   if (target.protocol === 'blob:') {
     return policy.kind === 'local' || target.origin === policy.origin
   }

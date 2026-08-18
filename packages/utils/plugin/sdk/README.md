@@ -12,24 +12,24 @@ Plugin SDK 已重构为统一的工厂函数模式，参考 `DivisionBoxSDK` 的
 
 ```typescript
 // 隐藏/显示 CoreBox
-plugin.box.hide();
-plugin.box.show();
+plugin.box.hide()
+plugin.box.show()
 
 // 扩展窗口（显示更多结果）
-plugin.box.expand({ length: 10 });
-plugin.box.expand({ forceMax: true });
+plugin.box.expand({ length: 10 })
+plugin.box.expand({ forceMax: true })
 
 // 收缩窗口
-plugin.box.shrink();
+plugin.box.shrink()
 
 // 控制输入框
-plugin.box.hideInput();
-plugin.box.showInput();
+plugin.box.hideInput()
+plugin.box.showInput()
 
 // 获取与设置输入
-const input = await plugin.box.getInput();
-await plugin.box.setInput("Hello Touch!");
-await plugin.box.clearInput();
+const input = await plugin.box.getInput()
+await plugin.box.setInput('Hello Touch!')
+await plugin.box.clearInput()
 ```
 
 ### 2. FeatureSDK - 搜索结果管理
@@ -76,25 +76,25 @@ unsubscribe()
 发送型 feature 可在声明中开启 `interaction.sendMode`，使 CoreBox 激活期间把右侧 pin 按钮替换为发送按钮。widget feature 默认启用发送模式；非 widget feature 可显式声明。
 
 ```typescript
-import { withSendMode } from "@talex-touch/utils/plugin/sdk";
+import { withSendMode } from '@talex-touch/utils/plugin/sdk'
 
 features.addFeature(
   withSendMode({
-    id: "ask-assistant",
-    name: "Ask Assistant",
-    desc: "Send the current CoreBox input to the assistant",
-    icon: { type: "emoji", value: "✨" },
+    id: 'ask-assistant',
+    name: 'Ask Assistant',
+    desc: 'Send the current CoreBox input to the assistant',
+    icon: { type: 'emoji', value: '✨' },
     push: true,
     platform: {},
-    commands: [{ type: "over", value: "" }],
+    commands: [{ type: 'over', value: '' }],
     interaction: {
-      type: "webcontent",
-      path: "/assistant",
+      type: 'webcontent',
+      path: '/assistant',
       showInput: true,
       allowInput: true,
     },
   }),
-);
+)
 ```
 
 Dynamic features use `feature.id` as their lifecycle identity. `addFeature()` rejects duplicate ids and duplicate display names; `removeFeature()` accepts the id, never the display name. This keeps persisted registries and reload reconciliation deterministic.
@@ -118,7 +118,7 @@ widgets/
 
 ```typescript
 // widgets/panel.vue
-import { formatResult } from "./_shared/format";
+import { formatResult } from './_shared/format'
 ```
 
 该约定只影响未声明文件的目录自动发现；manifest `interaction.path` 显式指向的 entry 仍会预编译。相对导入必须留在 `widgets/` 内，不能借 private module 绕过 widget sandbox 路径边界。
@@ -129,50 +129,46 @@ import { formatResult } from "./_shared/format";
 
 ```typescript
 export async function summarizeCurrentSelection(context) {
-  const { intelligence, system } = context.utils;
-  const selection = await system.captureSelection();
+  const { intelligence, system } = context.utils
+  const selection = await system.captureSelection()
   if (!selection.text) {
-    context.utils.logger.warn(
-      `Selection unavailable: ${selection.issueCode ?? "empty"}`,
-    );
-    return;
+    context.utils.logger.warn(`Selection unavailable: ${selection.issueCode ?? 'empty'}`)
+    return
   }
 
   const status = await intelligence.getCapabilityStatus({
-    capabilityId: "text.chat",
-  });
+    capabilityId: 'text.chat',
+  })
   const providers = await intelligence.getProviderModelOptions({
-    capabilityId: "text.chat",
-  });
+    capabilityId: 'text.chat',
+  })
 
   if (!status.available) {
-    context.utils.logger.warn(
-      `text.chat unavailable: ${status.reason ?? "no provider"}`,
-    );
-    return;
+    context.utils.logger.warn(`text.chat unavailable: ${status.reason ?? 'no provider'}`)
+    return
   }
 
   return await intelligence.text.chat(
     {
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: `Summarize the current selection:\n\n${selection.text}`,
         },
       ],
     },
     {
-      allowedProviderIds: providers
-        .filter((provider) => provider.available)
-        .map((provider) => provider.providerId),
+      allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId),
     },
-  );
+  )
 }
 ```
 
 `getCapabilityStatus()`、`getProviderModelOptions()` 与 `intelligence.text.*` / `intelligence.image.*` / `intelligence.audio.*` 等 domain wrapper 会走 typed Intelligence transport，并携带当前插件 `sdkapi` marker；`chat` 旧别名仍保持 hard-cut，不会恢复。
 
 `system.captureSelection()` / `captureSelectedText()` 需要 manifest 声明并获准 `clipboard.read`。宿主先验证插件 identity，再复用 OmniPanel 的选区服务：macOS 优先 AXSelectedText，其余情况使用可恢复剪贴板快照的复制 fallback。空选区、禁用与不支持平台返回 `issueCode` / `issueMessage` / `limitations`，不会把空字符串伪装成成功；选中文本不得写入普通日志、持久历史或审计 metadata。
+
+`sdkapi >= 260817` 的插件可调用 `system.resolveApplication(identifier)`，按精确 bundle id 或宿主已知应用路径解析 `{ identifier, displayName, icon }`。manifest 必须声明并获准 `system.applications`；返回的 `icon` 只会是 `tfile:` URL 或 `null`，不会暴露可执行文件路径、启动参数或图像字节。插件若要在 WebContent 中显示该图标，还必须声明并获准 `fs.tfile`，且请求仍受宿主 `tfile` 路径 allowlist 约束。
 
 宿主的默认 Nexus provider 通过已认证 `/api/v1/intelligence/stream` 消费真实 provider token SSE；delta/usage/end 会保留 Nexus 实际 `traceId/provider/model`，最终 latency 位于 `end.metadata.latency`。整次调用只发一个 start event，它可能携带首选 provider 的 provisional routing metadata；候选 provider 只有在首个可见 delta 前失败时才可切换，任何 delta 输出后失败都会直接进入 error，不能把另一个 provider 的回答拼接到已有前缀。官方 `touch-intelligence` 的 stream-to-`contextInvoke()` compatibility 也只允许在 widget 展示首个 delta 前发生，并会在 feature query/send/retry supersede 时调用旧 `StreamController.cancel()`；晚返回的旧 controller 也会自取消。插件必须按标准 stream event 渲染，不能依赖 delta 数量、切分粒度或 start event 作为最终路由结论。
 
@@ -193,33 +189,31 @@ Provider diagnostic/admin surfaces 也不属于插件 SDK：`testProvider()`、`
 Local knowledge 仍可由插件使用，但 `permissionScope` 与 SQLite id 不是插件可选择的所有权凭证：`knowledgeIndexDocument()` / `knowledgeIndexChunk()` / `knowledgeSearch()` / `knowledgeBuildContext()` 会按 verified transport identity 强制绑定 `plugin:<manifest plugin id>`，并把 document/chunk id 映射到 deterministic actor namespace。插件索引时无需传 `permissionScope`；追加 chunk 必须复用返回的 `document.id`，不得猜测 host/其他插件的 id。
 
 ```typescript
-let contextSessionId: string | undefined;
+let contextSessionId: string | undefined
 
 const execution = await intelligence.contextInvoke({
-  capabilityId: "text.chat",
-  input: "总结当前选中文本",
-  payload: { messages: [{ role: "system", content: "请简洁回答。" }] },
+  capabilityId: 'text.chat',
+  input: '总结当前选中文本',
+  payload: { messages: [{ role: 'system', content: '请简洁回答。' }] },
   context: {
-    mode: contextSessionId ? "continue" : "new",
+    mode: contextSessionId ? 'continue' : 'new',
     sessionId: contextSessionId,
-    scope: "retrieval",
+    scope: 'retrieval',
     tokenBudget: 1200,
   },
-});
+})
 
-context.utils.logger.info(execution.context.packageId);
-contextSessionId = execution.context.sessionId;
+context.utils.logger.info(execution.context.packageId)
+contextSessionId = execution.context.sessionId
 ```
 
 跨 archived/expired/idle 边界时，`execution.context.sessionId` 是新的 session id；`execution.context.continuation` 只包含 `sourceSessionId`、`reason`、`status`、`summarySourceType`、`summarySourceId` 和 `degradedReason` 等 metadata。插件应显示 reason/status 并更新本地 session id，不得假设能读取旧摘要正文或 raw turns。
 
 ```typescript
 if (execution.context.continuation) {
-  context.utils.logger.info(
-    `${execution.context.continuation.reason}:${execution.context.continuation.status}`,
-  );
+  context.utils.logger.info(`${execution.context.continuation.reason}:${execution.context.continuation.status}`)
 }
-contextSessionId = execution.context.sessionId;
+contextSessionId = execution.context.sessionId
 ```
 
 ### 4. ScreenshotSDK - 权限门禁截图
@@ -229,15 +223,15 @@ contextSessionId = execution.context.sessionId;
 manifest 必须声明并获得高风险 `window.capture`；宿主还会要求 verified plugin context。传入 `writeClipboard: true` 时还必须声明并获得 `clipboard.write`。需要截图后 OCR 时，再独立声明 `intelligence.basic` 并调用 `context.utils.intelligence.vision.ocr()`。
 
 ```typescript
-const displays = await context.utils.screenshot.listDisplays();
+const displays = await context.utils.screenshot.listDisplays()
 const capture = await context.utils.screenshot.capture({
-  target: "display",
+  target: 'display',
   displayId: displays[0]?.id,
   writeClipboard: false,
-});
+})
 
 // Renderer/plugin receives only a managed resource URL.
-image.src = capture.tfileUrl;
+image.src = capture.tfileUrl
 ```
 
 plugin facade 只返回必填的 `tfileUrl` 与显示器、尺寸、耗时、大小、剪贴板状态 metadata；不接受 output selector，也不返回 native 临时文件原始 `path`、base64、`dataUrl`、Buffer 或 attachment。截图、OCR 文本和 AI payload 不得写入普通日志或同步数据。
@@ -261,30 +255,28 @@ manifest 必须按使用面声明权限：
 ```typescript
 export default {
   async onInit(context) {
-    const { i18n, lexicon } = context.utils;
-    const locale = await i18n.getLocale();
+    const { i18n, lexicon } = context.utils
+    const locale = await i18n.getLocale()
     const title = await i18n.resolveText({
-      default: "Unit Converter",
-      locales: { "zh-CN": "单位换算" },
-    });
-    const transportMessage = i18n.createMessage("plugin.ready", { title });
+      default: 'Unit Converter',
+      locales: { 'zh-CN': '单位换算' },
+    })
+    const transportMessage = i18n.createMessage('plugin.ready', { title })
 
-    const meter = await lexicon.resolve("unit.length.meter", { locale });
+    const meter = await lexicon.resolve('unit.length.meter', { locale })
     const registration = await lexicon.register([
       {
-        id: "status.ready",
-        domain: "capability",
-        version: "1",
-        labels: { default: "Ready", locales: { "zh-CN": "就绪" } },
-        aliases: { default: ["ready"], locales: { "zh-CN": ["就绪"] } },
+        id: 'status.ready',
+        domain: 'capability',
+        version: '1',
+        labels: { default: 'Ready', locales: { 'zh-CN': '就绪' } },
+        aliases: { default: ['ready'], locales: { 'zh-CN': ['就绪'] } },
       },
-    ]);
+    ])
 
-    context.utils.logger.info(
-      `${transportMessage}:${meter?.label}:${registration.ids[0]}`,
-    );
+    context.utils.logger.info(`${transportMessage}:${meter?.label}:${registration.ids[0]}`)
   },
-};
+}
 ```
 
 - `getLocale()` / `resolveText()` 需要 `i18n.read`；`resolve()` / `search()` 需要 `lexicon.read`；`register()` 需要 `lexicon.register`。权限运行时、声明、grant、verified plugin context 或 SDK marker 缺失时均 fail-closed。
@@ -316,26 +308,26 @@ export default {
 
 ```typescript
 // ❌ 废弃
-plugin.$box.hide();
-plugin.$box.show();
+plugin.$box.hide()
+plugin.$box.show()
 
 // ✅ 使用新 API
-plugin.box.hide();
-plugin.box.show();
+plugin.box.hide()
+plugin.box.show()
 ```
 
 ### 旧的 Feature API
 
 ```typescript
 // ❌ 废弃
-plugin.pushItems(items);
-plugin.clearItems();
-plugin.getItems();
+plugin.pushItems(items)
+plugin.clearItems()
+plugin.getItems()
 
 // ✅ 使用新 API
-plugin.feature.pushItems(items);
-plugin.feature.clearItems();
-plugin.feature.getItems();
+plugin.feature.pushItems(items)
+plugin.feature.clearItems()
+plugin.feature.getItems()
 ```
 
 ## 迁移指南
@@ -345,17 +337,17 @@ plugin.feature.getItems();
 **旧代码：**
 
 ```typescript
-plugin.$box.hide();
-plugin.$box.show();
+plugin.$box.hide()
+plugin.$box.show()
 ```
 
 **新代码：**
 
 ```typescript
-plugin.box.hide();
-plugin.box.show();
-plugin.box.expand({ length: 10 });
-plugin.box.shrink();
+plugin.box.hide()
+plugin.box.show()
+plugin.box.expand({ length: 10 })
+plugin.box.shrink()
 ```
 
 ### 2. 更新搜索结果管理
@@ -397,18 +389,18 @@ onInit(context) {
 `regShortcut()` 会把快捷键注册到 CoreApp 全局快捷键系统；建议始终传入稳定 `id` 与面向用户的 `description`，这样设置页和插件详情页可以展示语义化来源。
 
 ```typescript
-import { regShortcut } from "@talex-touch/utils/plugin/sdk/common";
+import { regShortcut } from '@talex-touch/utils/plugin/sdk/common'
 
 await regShortcut(
-  "CommandOrControl+Shift+K",
+  'CommandOrControl+Shift+K',
   () => {
-    openCommandCenter();
+    openCommandCenter()
   },
   {
-    id: "open-command-center",
-    description: "Open command center",
+    id: 'open-command-center',
+    description: 'Open command center',
   },
-);
+)
 ```
 
 ## 完整示例
@@ -416,42 +408,42 @@ await regShortcut(
 ```typescript
 export default {
   onInit(context) {
-    const { feature, box } = context.utils;
+    const { feature, box } = context.utils
 
     // 监听输入变化
-    feature.onInputChange((input) => {
+    feature.onInputChange(input => {
       if (input.length > 2) {
         // 执行搜索
-        const results = performSearch(input);
-        feature.pushItems(results);
+        const results = performSearch(input)
+        feature.pushItems(results)
       } else {
-        feature.clearItems();
+        feature.clearItems()
       }
-    });
+    })
   },
 
   onFeatureTriggered(featureId, query, feature) {
-    const { feature: featureSDK, box } = this.context.utils;
+    const { feature: featureSDK, box } = this.context.utils
 
     // 推送结果
     featureSDK.pushItems([
       {
-        id: "result-1",
-        title: { text: "Search Result" },
-        subtitle: { text: "Description" },
+        id: 'result-1',
+        title: { text: 'Search Result' },
+        subtitle: { text: 'Description' },
         source: { id: this.pluginName, name: this.pluginName },
       },
-    ]);
+    ])
 
     // 扩展窗口显示结果
-    box.expand({ length: 5 });
+    box.expand({ length: 5 })
 
     // 3秒后隐藏
     setTimeout(() => {
-      box.hide();
-    }, 3000);
+      box.hide()
+    }, 3000)
   },
-};
+}
 ```
 
 ## 技术细节
