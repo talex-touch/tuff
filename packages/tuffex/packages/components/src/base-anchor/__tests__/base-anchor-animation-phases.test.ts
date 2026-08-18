@@ -20,7 +20,6 @@ function createMotion(animation: BaseAnchorAnimationOptions) {
     panelBackground: computed(() => 'refraction'),
     useCard: computed(() => true),
     keepAliveContent: computed(() => false),
-    isUnlimitedHeight: computed(() => false),
     isOpen: computed(() => false),
     isCurrentRun: () => true,
     setMounted: () => {},

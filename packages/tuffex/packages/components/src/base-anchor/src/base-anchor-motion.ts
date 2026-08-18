@@ -41,7 +41,6 @@ interface BaseAnchorMotionOptions {
   panelBackground: ComputedRef<string>
   useCard: ComputedRef<boolean>
   keepAliveContent: ComputedRef<boolean>
-  isUnlimitedHeight: ComputedRef<boolean>
   isOpen: ComputedRef<boolean>
   isCurrentRun: (runId: number) => boolean
   setMounted: (value: boolean) => void
@@ -915,16 +914,10 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   async function animateOpen(currentRunId: number) {
     const clip = options.clipRef.value
     const content = options.contentRef.value
-    if (options.isUnlimitedHeight.value) {
-      clearTimeline()
-      if (!clip || !content) {
-        options.setMounted(true)
-        options.setPanelSurfaceMoving(false)
-        return
-      }
-      finishOpen(currentRunId)
-      return
-    }
+    // Unlimited height used to snap straight to finishOpen — a leftover from
+    // when the motion animated max-height and needed a bounded target. The
+    // current engine measures the natural box per frame (see naturalHeight in
+    // the expand path), so unbounded panels animate like any other.
     if (!clip || !content || !hasWindow()) {
       options.setMounted(true)
       options.setPanelSurfaceMoving(false)
@@ -1159,16 +1152,6 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   async function animateClose(currentRunId: number) {
     const clip = options.clipRef.value
     const content = options.contentRef.value
-    if (options.isUnlimitedHeight.value) {
-      clearTimeline()
-      if (!clip || !content) {
-        options.setMounted(false)
-        options.setPanelSurfaceMoving(false)
-        return
-      }
-      finishClose(currentRunId)
-      return
-    }
     if (!clip || !content || !hasWindow()) {
       options.setMounted(false)
       options.setPanelSurfaceMoving(false)
