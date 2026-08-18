@@ -1,8 +1,11 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ResolvedApplication } from '@talex-touch/utils/transport/events/types'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useBox } from '@talex-touch/utils/plugin/sdk/box-sdk'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
+import { useFeature } from '@talex-touch/utils/plugin/sdk/feature-sdk'
+import { system } from '@talex-touch/utils/plugin/sdk/system'
 import ClipboardActionBar from '~/components/ClipboardActionBar.vue'
 import ClipboardDetail from '~/components/ClipboardDetail.vue'
 import ClipboardGlyph from '~/components/ClipboardGlyph.vue'
@@ -16,8 +19,11 @@ import {
 } from '~/utils/clipboard-items'
 
 const clipboard = useClipboard()
+const feature = useFeature()
 const box = useBox()
 const filter = ref<ClipboardFilter>('all')
+const searchQuery = ref('')
+const debouncedQuery = ref('')
 const items = ref<PluginClipboardItem[]>([])
 const selectedId = ref<number | null>(null)
 const page = ref(1)
@@ -33,8 +39,15 @@ const deletePending = ref(false)
 const pageRoot = ref<HTMLElement | null>(null)
 const resolvedImageUrls = ref<Record<number, string>>({})
 const resolvingImageIds = ref<Record<number, boolean>>({})
+const resolvedSourceApplications = reactive(new Map<string, ResolvedApplication | null>())
+const resolvingSourceApplicationIds = reactive(new Set<string>())
 
 let unsubscribeClipboard: (() => void) | null = null
+let unsubscribeInput: (() => void) | null = null
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let requestGeneration = 0
+
+const SEARCH_DEBOUNCE_MS = 180
 
 const hasMore = computed(() => items.value.length < total.value)
 const hasItems = computed(() => items.value.length > 0)
@@ -52,6 +65,10 @@ const selectedResolvedImageUrl = computed(() => {
 const resolvingSelectedImageUrl = computed(() => {
   const id = selectedItem.value?.id
   return typeof id === 'number' && resolvingImageIds.value[id] === true
+})
+const selectedSourceApplication = computed(() => {
+  const sourceId = selectedItem.value?.sourceApp
+  return sourceId ? (resolvedSourceApplications.get(sourceId) ?? null) : null
 })
 
 const filterOptions: Array<{ key: ClipboardFilter; label: string }> = [
@@ -90,20 +107,14 @@ function mergePageItems(nextItems: PluginClipboardItem[]): void {
   }
 
   const mergedIds = new Set(incoming.map(item => item.id as number))
-  const preserved = items.value.filter((item) => {
+  const preserved = items.value.filter(item => {
     const id = item.id
     return typeof id === 'number' && !mergedIds.has(id)
   })
 
   items.value = [...preserved, ...incoming].sort((left, right) => {
-    const leftTime =
-      typeof left.timestamp === 'number'
-        ? left.timestamp
-        : new Date(left.timestamp ?? 0).getTime()
-    const rightTime =
-      typeof right.timestamp === 'number'
-        ? right.timestamp
-        : new Date(right.timestamp ?? 0).getTime()
+    const leftTime = typeof left.timestamp === 'number' ? left.timestamp : new Date(left.timestamp ?? 0).getTime()
+    const rightTime = typeof right.timestamp === 'number' ? right.timestamp : new Date(right.timestamp ?? 0).getTime()
 
     return rightTime - leftTime
   })
@@ -115,7 +126,7 @@ function syncSelection(removedId?: number | null, removedIndex?: number | null):
 }
 
 function patchItemImageUrl(id: number, url: string): void {
-  items.value = items.value.map((item) => {
+  items.value = items.value.map(item => {
     if (item.id !== id || item.type !== 'image') {
       return item
     }
@@ -155,19 +166,35 @@ async function resolveSelectedImageUrl(item: PluginClipboardItem | null): Promis
       [item.id]: url,
     }
     patchItemImageUrl(item.id, url)
-  }
-  catch {
+  } catch {
     // Detail still falls back to the lightweight thumbnail.
-  }
-  finally {
+  } finally {
     const next = { ...resolvingImageIds.value }
     delete next[item.id]
     resolvingImageIds.value = next
   }
 }
 
+async function resolveSelectedSourceApplication(item: PluginClipboardItem | null): Promise<void> {
+  const sourceId = item?.sourceApp?.trim()
+  if (!sourceId || resolvedSourceApplications.has(sourceId) || resolvingSourceApplicationIds.has(sourceId)) {
+    return
+  }
+
+  resolvingSourceApplicationIds.add(sourceId)
+  try {
+    resolvedSourceApplications.set(sourceId, await system.resolveApplication(sourceId))
+  } catch {
+    resolvedSourceApplications.set(sourceId, null)
+  } finally {
+    resolvingSourceApplicationIds.delete(sourceId)
+  }
+}
+
 function moveSelection(delta: 1 | -1): void {
-  const selectableItems = items.value.filter((item): item is PluginClipboardItem & { id: number } => typeof item.id === 'number')
+  const selectableItems = items.value.filter(
+    (item): item is PluginClipboardItem & { id: number } => typeof item.id === 'number',
+  )
   if (selectableItems.length === 0) {
     selectedId.value = null
     return
@@ -175,9 +202,8 @@ function moveSelection(delta: 1 | -1): void {
 
   const currentIndex = selectableItems.findIndex(item => item.id === selectedId.value)
   const fallbackIndex = delta > 0 ? 0 : selectableItems.length - 1
-  const nextIndex = currentIndex < 0
-    ? fallbackIndex
-    : Math.min(selectableItems.length - 1, Math.max(0, currentIndex + delta))
+  const nextIndex =
+    currentIndex < 0 ? fallbackIndex : Math.min(selectableItems.length - 1, Math.max(0, currentIndex + delta))
 
   selectedId.value = selectableItems[nextIndex]?.id ?? null
 }
@@ -220,55 +246,72 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
+function queueSearch(input: string): void {
+  searchQuery.value = input
+  requestGeneration += 1
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    searchDebounceTimer = null
+    debouncedQuery.value = searchQuery.value.trim()
+    page.value = 1
+    void loadHistory({ reset: true })
+  }, SEARCH_DEBOUNCE_MS)
+}
+
+function retryHistory(): void {
+  page.value = 1
+  void loadHistory({ reset: true })
+}
+
 async function loadHistory(options: { reset?: boolean } = {}): Promise<void> {
   const reset = options.reset === true
-  const requestPage = reset ? 1 : page.value
+  if (!reset && (loadingMore.value || !hasMore.value)) {
+    return
+  }
 
+  const generation = ++requestGeneration
+  const requestPage = reset ? 1 : page.value
+  const keyword = debouncedQuery.value
   if (reset) {
     loading.value = true
-  }
-  else {
-    if (loadingMore.value || !hasMore.value) {
-      return
-    }
+  } else {
     loadingMore.value = true
   }
-
   errorMessage.value = ''
 
   try {
     const response = await clipboard.history.getHistory({
+      keyword: keyword || undefined,
       page: requestPage,
       pageSize,
       sortOrder: 'desc',
-      type:
-        filter.value === 'favorite'
-          ? undefined
-          : filter.value === 'all'
-            ? undefined
-            : filter.value,
+      type: filter.value === 'favorite' ? undefined : filter.value === 'all' ? undefined : filter.value,
       isFavorite: filter.value === 'favorite' ? true : undefined,
     })
+    if (generation !== requestGeneration) {
+      return
+    }
 
     total.value = response.total
-
     if (reset) {
       items.value = normalizeIncomingItems(response.history)
       page.value = 2
-    }
-    else {
+    } else {
       mergePageItems(response.history)
       page.value += 1
     }
-
     syncSelection()
-  }
-  catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '读取剪贴板历史失败'
-  }
-  finally {
-    loading.value = false
-    loadingMore.value = false
+  } catch (error) {
+    if (generation === requestGeneration) {
+      errorMessage.value = error instanceof Error ? error.message : '读取剪贴板历史失败'
+    }
+  } finally {
+    if (generation === requestGeneration) {
+      loading.value = false
+      loadingMore.value = false
+    }
   }
 }
 
@@ -288,8 +331,7 @@ async function handleCopy(): Promise<void> {
   copyPending.value = true
   try {
     await clipboard.write(payload)
-  }
-  finally {
+  } finally {
     copyPending.value = false
   }
 }
@@ -302,11 +344,8 @@ async function handleCopyText(value: string): Promise<void> {
   errorMessage.value = ''
   try {
     await clipboard.write({ text: value })
-  }
-  catch (error) {
-    errorMessage.value = error instanceof Error && error.message
-      ? error.message
-      : '复制文本失败'
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '复制文本失败'
   }
 }
 
@@ -319,13 +358,9 @@ async function handleApply(): Promise<void> {
   errorMessage.value = ''
   try {
     await clipboard.history.applyToActiveApp({ item: selectedItem.value })
-  }
-  catch (error) {
-    errorMessage.value = error instanceof Error && error.message
-      ? error.message
-      : '自动粘贴失败'
-  }
-  finally {
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '自动粘贴失败'
+  } finally {
     applyPending.value = false
   }
 }
@@ -352,7 +387,7 @@ async function handleToggleFavorite(): Promise<void> {
       return
     }
 
-    items.value = items.value.map((item) =>
+    items.value = items.value.map(item =>
       item.id === targetId
         ? {
             ...item,
@@ -360,8 +395,7 @@ async function handleToggleFavorite(): Promise<void> {
           }
         : item,
     )
-  }
-  finally {
+  } finally {
     favoritePending.value = false
   }
 }
@@ -380,8 +414,7 @@ async function handleDelete(): Promise<void> {
     items.value = items.value.filter(item => item.id !== removedId)
     total.value = Math.max(0, total.value - 1)
     syncSelection(removedId, removedIndex)
-  }
-  finally {
+  } finally {
     deletePending.value = false
   }
 }
@@ -389,8 +422,18 @@ async function handleDelete(): Promise<void> {
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown, true)
   void box.expand({ forceMax: true }).catch(() => {})
-  await loadHistory({ reset: true })
+  unsubscribeInput = feature.onInputChange(queueSearch)
 
+  try {
+    const initialQuery = await box.getInput()
+    searchQuery.value = initialQuery
+    debouncedQuery.value = initialQuery.trim()
+  } catch {
+    searchQuery.value = ''
+    debouncedQuery.value = ''
+  }
+
+  await loadHistory({ reset: true })
   unsubscribeClipboard = clipboard.history.onDidChange(async () => {
     await loadHistory({ reset: true })
   })
@@ -398,7 +441,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown, true)
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  unsubscribeInput?.()
   unsubscribeClipboard?.()
+  feature.dispose()
 })
 
 watch(filter, async () => {
@@ -406,7 +454,7 @@ watch(filter, async () => {
   await loadHistory({ reset: true })
 })
 
-watch(selectedId, async (id) => {
+watch(selectedId, async id => {
   if (id === null) {
     return
   }
@@ -418,14 +466,19 @@ watch(selectedId, async (id) => {
   }
 })
 
-watch(selectedItem, (item) => {
-  void resolveSelectedImageUrl(item)
-}, { immediate: true })
+watch(
+  selectedItem,
+  item => {
+    void resolveSelectedImageUrl(item)
+    void resolveSelectedSourceApplication(item)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <main ref="pageRoot" class="ClipboardManagerPage" tabindex="-1">
-    <div class="ClipboardPageHolder manager-holder" :class="{ blurred: loading && hasItems }">
+    <div class="ClipboardPageHolder manager-holder">
       <div v-if="hasItems" class="ClipboardPageHolder-Main">
         <aside class="holder-aside">
           <ClipboardSidebar
@@ -441,12 +494,16 @@ watch(selectedItem, (item) => {
 
         <section class="holder-main">
           <div v-if="errorMessage" class="error-banner inline-error">
-            {{ errorMessage }}
+            <span>{{ errorMessage }}</span>
+            <button type="button" class="retry-button" @click="retryHistory">
+              重试
+            </button>
           </div>
           <ClipboardDetail
             :item="selectedItem"
             :resolved-image-url="selectedResolvedImageUrl"
             :resolving-image-url="resolvingSelectedImageUrl"
+            :source-application="selectedSourceApplication"
             @copy-text="handleCopyText"
           />
         </section>
@@ -457,10 +514,21 @@ watch(selectedItem, (item) => {
           <div class="empty-state-icon">
             <ClipboardGlyph :name="loading ? 'loader' : 'clipboard'" :class="{ spin: loading }" />
           </div>
-          <h2>{{ loading ? '正在读取剪贴历史' : '暂无剪贴内容' }}</h2>
-          <p>{{ loading ? '稍等一下，最近的记录会很快出现在这里。' : '复制一些文本或图片后会出现在这里。' }}</p>
+          <h2>{{ loading ? '正在读取剪贴历史' : debouncedQuery ? `未找到“${debouncedQuery}”` : '暂无剪贴内容' }}</h2>
+          <p>
+            {{
+              loading
+                ? '稍等一下，最近的记录会很快出现在这里。'
+                : debouncedQuery
+                  ? '请尝试更短的关键词，或清空 CoreBox 输入。'
+                  : '复制一些文本或图片后会出现在这里。'
+            }}
+          </p>
           <div v-if="errorMessage" class="error-banner centered-error">
-            {{ errorMessage }}
+            <span>{{ errorMessage }}</span>
+            <button type="button" class="retry-button" @click="retryHistory">
+              重试
+            </button>
           </div>
         </div>
       </section>
@@ -532,11 +600,6 @@ watch(selectedItem, (item) => {
 
 .manager-holder {
   transition: filter 0.24s ease;
-}
-
-.manager-holder.blurred {
-  filter: blur(10px);
-  pointer-events: none;
 }
 
 .holder-aside,
@@ -692,11 +755,29 @@ watch(selectedItem, (item) => {
 }
 
 .error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 14px 18px;
   border-radius: 16px;
   color: var(--clipboard-color-danger);
   background: color-mix(in srgb, var(--clipboard-color-danger-soft-fallback) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--clipboard-color-danger) 20%, transparent);
+}
+
+.retry-button {
+  flex: none;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--clipboard-color-danger);
+  color: var(--clipboard-surface-base);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .inline-error {
@@ -738,7 +819,10 @@ watch(selectedItem, (item) => {
   color: var(--clipboard-text-secondary);
   cursor: pointer;
   font-size: 0.76rem;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .filter-chip.active {

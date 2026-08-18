@@ -1,9 +1,9 @@
 {
   "id": "com.tuffex.clipboard-history",
   "name": "clipboard-history",
-  "version": "1.1.11",
+  "version": "1.1.12",
   "author": "TalexTouch Team",
-  "sdkapi": 260713,
+  "sdkapi": 260817,
   "category": "utilities",
   "icon": {
     "type": "file",
@@ -27,13 +27,15 @@
     }
   },
   "permissions": {
-    "required": ["clipboard.read", "clipboard.write", "search.root-results"],
+    "required": ["clipboard.read", "clipboard.write", "fs.tfile", "search.root-results", "system.applications"],
     "optional": []
   },
   "permissionReasons": {
     "clipboard.read": "读取剪贴板历史记录并展示详情",
     "clipboard.write": "将选中的剪贴记录重新写回系统剪贴板",
-    "search.root-results": "将剪贴板历史入口推送到 CoreBox 根搜索结果"
+    "fs.tfile": "显示剪贴板图片原图和来源应用图标",
+    "search.root-results": "将剪贴板历史入口推送到 CoreBox 根搜索结果",
+    "system.applications": "按剪贴记录中的应用标识显示来源应用名称和图标"
   },
   "searchProviders": [
     {
@@ -77,8 +79,8 @@
       "interaction": {
         "type": "webcontent",
         "path": "/clipboard-manager",
-        "showInput": false,
-        "allowInput": false,
+        "showInput": true,
+        "allowInput": true,
         "forceMax": true
       }
     }

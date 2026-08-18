@@ -1,4 +1,5 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
+import type { ResolvedApplication } from '@talex-touch/utils/transport/events/types'
 
 export type ClipboardFilter = 'all' | 'text' | 'image' | 'files' | 'favorite'
 
@@ -12,6 +13,8 @@ export interface ClipboardSection {
 export interface ClipboardInfoRow {
   label: string
   value: string
+  secondaryValue?: string
+  icon?: string | null
 }
 
 export interface ClipboardTextInsight {
@@ -54,7 +57,7 @@ interface WordSegmenter {
 interface IntlWithSegmenter {
   Segmenter?: new (
     locale: string,
-    options: { granularity: 'grapheme' } | { granularity: 'word' }
+    options: { granularity: 'grapheme' } | { granularity: 'word' },
   ) => GraphemeSegmenter | WordSegmenter
 }
 
@@ -73,8 +76,7 @@ export function parseFileList(content: string | null | undefined): string[] {
       return []
     }
     return parsed.filter((value): value is string => typeof value === 'string' && value.length > 0)
-  }
-  catch {
+  } catch {
     return []
   }
 }
@@ -131,8 +133,7 @@ function parseMetadata(metadata: string | null | undefined): Record<string, unkn
   try {
     const parsed = JSON.parse(metadata)
     return isRecord(parsed) ? parsed : {}
-  }
-  catch {
+  } catch {
     return {}
   }
 }
@@ -163,7 +164,10 @@ function unique<T>(values: T[], getKey: (value: T) => string): T[] {
 function normalizeHexColor(value: string): string {
   const hex = value.replace('#', '').trim()
   if (hex.length === 3) {
-    return `#${hex.split('').map(char => `${char}${char}`).join('')}`.toUpperCase()
+    return `#${hex
+      .split('')
+      .map(char => `${char}${char}`)
+      .join('')}`.toUpperCase()
   }
   return `#${hex}`.toUpperCase()
 }
@@ -461,13 +465,20 @@ export function getClipboardSubtitle(item: PluginClipboardItem): string {
   return timeLabel
 }
 
-export function getClipboardInfoRows(item: PluginClipboardItem): ClipboardInfoRow[] {
+export function getClipboardInfoRows(
+  item: PluginClipboardItem,
+  sourceApplication?: ResolvedApplication | null,
+): ClipboardInfoRow[] {
   const timestamp = normalizeTimestamp(item.timestamp)
+  const sourceId = item.sourceApp || ''
 
   return [
     {
       label: '来源应用',
-      value: item.sourceApp || '未知来源',
+      value: sourceApplication?.displayName || sourceId || '未知来源',
+      secondaryValue:
+        sourceApplication && sourceId && sourceApplication.displayName !== sourceId ? sourceId : undefined,
+      icon: sourceApplication?.icon,
     },
     {
       label: '内容类型',
@@ -504,15 +515,10 @@ export function getClipboardTextInsight(item: PluginClipboardItem | null | undef
     }
   }
 
-  const SegmenterCtor = typeof Intl !== 'undefined' && 'Segmenter' in Intl
-    ? (Intl as IntlWithSegmenter).Segmenter
-    : null
-  const characterSegmenter = SegmenterCtor
-    ? new SegmenterCtor('zh-CN', { granularity: 'grapheme' })
-    : null
-  const wordSegmenter = SegmenterCtor
-    ? new SegmenterCtor('zh-CN', { granularity: 'word' })
-    : null
+  const SegmenterCtor =
+    typeof Intl !== 'undefined' && 'Segmenter' in Intl ? (Intl as IntlWithSegmenter).Segmenter : null
+  const characterSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'grapheme' }) : null
+  const wordSegmenter = SegmenterCtor ? new SegmenterCtor('zh-CN', { granularity: 'word' }) : null
   const characters = characterSegmenter
     ? Array.from(characterSegmenter.segment(content), segment => segment.segment)
     : Array.from(content)
@@ -567,8 +573,7 @@ export function getClipboardColorTokens(item: PluginClipboardItem | null | undef
       const direct = normalizeColorToken(raw)
       if (direct) {
         tokens.push(direct)
-      }
-      else {
+      } else {
         tokens.push(...extractColorTokensFromText(raw))
       }
     }
@@ -672,8 +677,7 @@ export function groupClipboardItems(items: PluginClipboardItem[]): ClipboardSect
     let label = formatter.format(day.getTime())
     if (day.getTime() === today.getTime()) {
       label = '今天'
-    }
-    else if (day.getTime() === yesterday) {
+    } else if (day.getTime() === yesterday) {
       label = '昨天'
     }
 
