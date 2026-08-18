@@ -3,7 +3,7 @@
   "name": "optimize-clipboard-plugin",
   "title": "优化 Clipboard 插件",
   "description": "审计并优化 Clipboard 插件的剪贴板工作流、检索、交互、稳定性与实现质量。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Complete the Clipboard History audit and produce its scoped implementation plan and acceptance evidence.",
-    "blocker": "The child remains in planning; no implementation scope or verification evidence has been approved.",
-    "evidence": "prd.md and parent program task map define the Clipboard optimization contract."
+    "nextAction": "Review and commit the verified Clipboard History 1.1.12 changes; publish only when explicitly requested.",
+    "blocker": "No implementation blocker; task remains in_progress because this session was not authorized to commit or archive it.",
+    "evidence": "PRD acceptance is complete; plugin 26 tests, Utils/CoreApp focused permission tests, node/plugin typechecks, package build, 25-plugin validation, and browser visual smoke passed. CoreApp web typecheck remains blocked only by unrelated dirty BorderBeam unused-symbol errors."
   }
 }
