@@ -3,7 +3,7 @@ title: "CodeStream"
 description: "A code block with a filename header that reveals line by line, with copy and syntax highlighting built in."
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, code, streaming, highlight]
 syncStatus: reviewed
 verified: true

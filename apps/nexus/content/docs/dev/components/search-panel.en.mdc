@@ -3,7 +3,7 @@ title: "SearchPanel"
 description: "Inline command search: field, live results, and empty state in one card."
 category: Form
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [search, filter, listbox, command]
 syncStatus: reviewed
 verified: true

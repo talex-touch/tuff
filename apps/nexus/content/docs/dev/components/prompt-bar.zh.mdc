@@ -3,7 +3,7 @@ title: "PromptBar 提示条"
 description: "紧凑的对话输入条：@ 数据源、/ 命令、模型选择、听写与附件都内联在输入框里。"
 category: Form
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, composer, prompt, mention, command]
 syncStatus: reviewed
 verified: true

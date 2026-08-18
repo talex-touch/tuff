@@ -1260,6 +1260,9 @@ importers:
 
   packages/tuffex/packages/components:
     dependencies:
+      '@number-flow/vue':
+        specifier: ^0.5.1
+        version: 0.5.1(vue@3.5.39(typescript@5.9.3))
       v-wave:
         specifier: ^3.1.1
         version: 3.1.1(magicast@0.5.4)(vue@3.5.39(typescript@5.9.3))

@@ -3,7 +3,7 @@ title: "FlatDropdown"
 description: "Slot-driven floating dropdown panel (`TxFlatDropdown`). Hover / click / manual triggers, flip-aware placement, and a scale + blur exit animation."
 category: Navigation
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [dropdown, flat, navigation, floating, menu]
 syncStatus: migrated
 verified: false

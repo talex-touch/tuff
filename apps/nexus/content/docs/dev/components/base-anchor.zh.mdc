@@ -3,7 +3,7 @@ title: "BaseAnchor 锚点定位"
 description: "基于 Floating UI 与 GSAP 的锚点定位弹出层，默认琉光面板、弹簧展开，另有位移、聚焦缩放、透明度与液态模式。"
 category: Primitives
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
 syncStatus: reviewed
 verified: true

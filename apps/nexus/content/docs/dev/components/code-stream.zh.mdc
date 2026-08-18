@@ -3,7 +3,7 @@ title: "CodeStream 流式代码块"
 description: "带文件名头部的代码块，按行显现，复制与语法高亮开箱可用。"
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, code, streaming, highlight]
 syncStatus: reviewed
 verified: true

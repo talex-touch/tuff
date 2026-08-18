@@ -3,7 +3,7 @@ title: "DiffTable"
 description: "Presents an AI-proposed edit as a change set, tinting outgoing rows and expanding incoming ones stage by stage."
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [table, diff, review, data]
 syncStatus: reviewed
 verified: true

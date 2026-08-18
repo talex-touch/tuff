@@ -3,7 +3,7 @@ title: AI Suite Overview
 description: 19 AI-native interface component showcases adapted from Beautiful UI
 category: Foundations
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, showcase, beautiful-ui, agent, primitives]
 syncStatus: reviewed
 verified: true

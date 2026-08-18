@@ -1,0 +1,178 @@
+---
+title: "Liquid 液态流体"
+description: "双层液态特效群组：SVG 剪影层承载 goo 融合与真实阴影，内容层保持清晰可交互。"
+category: Effects
+status: beta
+since: 0.3.9
+tags: [liquid, gooey, morph, physics]
+syncStatus: reviewed
+verified: true
+---
+# Liquid 液态流体
+
+## 基础用法
+
+Morph（默认）：给条目 `x` / `y`，元素与液面在同一 JS 时钟里同步动画，相触的块自动像水滴一样桥接、融合。
+
+:::TuffDemoWrapper{demo="LiquidMorphMenuDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxLiquid :blur="8" fill="var(--tx-bg-color)" shadow="0 2px 8px rgba(0,0,0,.14)">
+      <TxLiquidItem :x="open ? -64 : 0" :y="open ? -44 : 0" transition="bouncy">
+        <TxButton circle variant="ghost" :border="false">✦</TxButton>
+      </TxLiquidItem>
+      <TxLiquidItem :y="open ? -76 : 0" transition="bouncy" :delay="40">
+        <TxButton circle variant="ghost" :border="false">☾</TxButton>
+      </TxLiquidItem>
+      <TxLiquidItem :x="open ? 64 : 0" :y="open ? -44 : 0" transition="bouncy" :delay="80">
+        <TxButton circle variant="ghost" :border="false">♪</TxButton>
+      </TxLiquidItem>
+      <TxLiquidItem>
+        <TxButton circle variant="ghost" :border="false" @click="open = !open">＋</TxButton>
+      </TxLiquidItem>
+    </TxLiquid>
+  </template>
+---
+:::
+
+## Move 拖尾
+
+Move：由你自己移动元素（CSS、指针事件都可以），液面在弹簧上追赶它，并拖出小水滴尾巴。
+
+:::TuffDemoWrapper{demo="LiquidMoveTrailDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const stops = [8, 96, 184]
+  const pos = ref(0)
+  </script>
+
+  <template>
+    <TxLiquid :blur="7" fill="var(--tx-bg-color)">
+      <TxLiquidItem effect="move" :move="{ trail: 0.6 }">
+        <div class="thumb" :style="{ transform: `translateX(${stops[pos]}px)` }" />
+      </TxLiquidItem>
+    </TxLiquid>
+  </template>
+---
+:::
+
+## 组合示例
+
+### 形变物理
+
+`morph.shape` 打开液态形变：质心先流向新位置，尺寸与圆角随后跟上；内容在运动中交叉模糊、落定时变清晰。
+
+```vue
+<template>
+  <TxLiquid :blur="8" fill="var(--tx-bg-color)">
+    <TxLiquidItem :morph="{ shape: true, speed: 1, bounce: 0.5 }">
+      <div :class="open ? 'panel-open' : 'panel-closed'">…</div>
+    </TxLiquidItem>
+  </TxLiquid>
+</template>
+```
+
+### 溶解
+
+`dissolve` 是与 effect 正交的修饰：接触点处条目的图像被湍流位移场熔进邻居，是两种液体的混合而不是模糊。文本永远不会被熔化。
+
+```vue
+<template>
+  <TxLiquid :blur="10" fill="var(--tx-bg-color)">
+    <TxLiquidItem dissolve>
+      <img class="avatar" src="/a.png" alt="">
+    </TxLiquidItem>
+    <TxLiquidItem :dissolve="{ mix: 0.7, active: dragging }">
+      <img class="avatar" src="/b.png" alt="">
+    </TxLiquidItem>
+  </TxLiquid>
+</template>
+```
+
+## 交互契约
+
+- `TxLiquid` 渲染 `position: relative; isolation: isolate` 容器；剪影 SVG 以 `z-index: -1` 垫在所有子元素之下，熔化叠层渲染在内容层之上，两者均 `pointer-events: none`。
+- `TxLiquidItem` 必须处于 `TxLiquid` 内，否则抛错。
+- 群组尺寸需要容纳条目的完整行程（如菜单展开后的占位）；桥接近似发生在 `blur ≳ 间距` 时，该融合的块显得分离时先调大 `blur`。
+- 圆角从计算样式测量，百分比、胶囊、圆形均可；`radius` 可覆盖。
+- `x/y/scale` 驱动的条目由组件写 `transform`，消费方不要再对包装器写 transform 或 filter。
+- `morph.shape` 运动期间会对内容写 `filter: blur()`；`dissolve` 会对 `<img>` 写 `mask-image`，不要与自己的同名样式组合。
+- `dissolve` 与 `effect="move"` 组合会被忽略并给出警告；`prefers-reduced-motion: reduce` 下组件驱动的过渡塌缩为瞬移。
+
+## API
+
+### TxLiquid Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `blur` | `number` | `6` | goo 模糊 σ（px），决定多远开始桥接。 |
+| `contrast` | `number` | `18` | 透明度对比斜率，越大液面边缘越锐。 |
+| `fill` | `string` | `'#fff'` | 液面颜色，支持 `var()` 主题化。 |
+| `shadow` | `string` | - | `box-shadow` 语法，渲染在融合后的剪影上；`inset` 层画在液面内侧。 |
+| `filterPadding` | `number` | `24` | 滤镜区域额外余量（px），供 blob 溢出群组时使用。 |
+
+### TxLiquidItem Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `effect` | `'morph' \| 'move'` | `'morph'` | 液态行为。 |
+| `morph` | `MorphTuning` | - | `shape` / `speed` / `bounce` / `contentBlur` 与 `advanced` 逃生口。 |
+| `move` | `MoveTuning` | - | `springiness` / `wobble` / `stretch` / `trail` 与 `advanced`。 |
+| `dissolve` | `boolean \| number \| DissolveOptions` | - | 接触熔化修饰，`0..1` 缩放强度。 |
+| `x` / `y` / `scale` | `number` | `0` / `0` / `1` | 组件驱动位移；与液面像素级同步。 |
+| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig \| { duration, ease }` | `'smooth'` | x/y 的弹簧或时长过渡。 |
+| `delay` | `number` | `0` | 过渡延迟（ms），做交错入场。 |
+| `observe` | `boolean` | `false` | 由你的代码动画时让液面跟随渲染矩形；`morph.shape`、`dissolve`、`move` 隐含开启。 |
+| `radius` | `number \| [tl, tr, br, bl]` | 测量值 | 覆盖液面圆角。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default`（TxLiquid） | - | 群组内容，通常是若干 `TxLiquidItem`。 |
+| `default`（TxLiquidItem） | - | 真实交互内容；背景应保持透明，液面即表面。 |
+
+### Events
+
+不发出公开事件。
+
+### Exposed Methods
+
+不暴露公开实例方法。
+
+### CSS Variables
+
+不消费公开 CSS 变量；`fill` 可传 `var(--surface)` 实现明暗主题。
+
+## 最佳实践
+
+- 条目背景保持透明——blob 才是表面；不透明内容（如圆形照片）恰好盖住自己的液面，只在桥接处露出液体。
+- `fill` 传 CSS 变量（如 `var(--tx-bg-color)`），让液面随明暗主题切换。
+- 阴影写在 `shadow` 上而不是子元素上，才能让一份阴影贴着融合后的液面走过每次分合。
+- 该融合不融合优先调 `blur` 与间距的比例，再怀疑其他参数。
+- 高频拖拽场景优先 `effect="move"` 的默认参数；`advanced` 只在确认默认手感不满足时使用。
+
+## 审阅说明
+
+- 已人工核对 `packages/tuffex/packages/components/src/liquid/` 下 `index.ts`、`TxLiquid.vue`、`TxLiquidItem.vue`、`types.ts` 与 `liquid.test.ts`。
+- 物理引擎 `observer.ts`、`spring.ts`、`geometry.ts`、`shadow.ts` 逐字移植自上游 `liquid-gooey`（MIT © Jakub Antalik），仅做 strict-TS 索引加固；滤镜链在 `filter-primitives.ts` 改为命令式构建以规避 SVG 命名空间歧义。
+- 上游 React 的 `Liquid` / `Liquid.Item` 对应此处 `TxLiquid` / `TxLiquidItem`；`className` / `style` 由 Vue 属性透传承担。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/liquid/src/TxLiquid.vue`、`TxLiquidItem.vue`。
+- Types: `packages/tuffex/packages/components/src/liquid/src/types.ts`。
+- Upstream: [Jakubantalik/Libraries · liquid-gooey](https://github.com/Jakubantalik/Libraries/tree/main/packages/liquid-gooey)（MIT）。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/liquid/__tests__/liquid.test.ts` 验证剪影/熔化双层渲染、goo 滤镜链构建、阴影拆分（drop-shadow 与 SVG 通道）、morph blob 镜像、observed 注册与群组外抛错。
+
+<TuffDocSourceLink />

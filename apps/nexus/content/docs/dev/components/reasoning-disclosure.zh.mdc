@@ -3,7 +3,7 @@ title: Reasoning Disclosure
 description: 可折叠的推理过程区域，流式输出时自动跟随文本尾部。
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, reasoning, disclosure]
 syncStatus: reviewed
 verified: true

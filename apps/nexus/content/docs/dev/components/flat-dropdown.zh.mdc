@@ -3,7 +3,7 @@ title: "FlatDropdown 扁平下拉"
 description: "插槽驱动的浮层下拉面板（`TxFlatDropdown`）。支持悬停 / 点击 / 手动触发，自动翻转定位，退出时带缩放与模糊动效。"
 category: Navigation
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [dropdown, flat, navigation, floating, menu]
 syncStatus: migrated
 verified: false

@@ -1,6 +1,16 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Button from '../src/button.vue'
+
+const vibrateMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../../../../utils/vibrate', () => ({
+  useVibrate: vibrateMock,
+}))
+
+beforeEach(() => {
+  vibrateMock.mockClear()
+})
 
 describe('txButton', () => {
   it('renders correctly', () => {
@@ -133,12 +143,29 @@ describe('txButton', () => {
     expect(wrapper.find('.tx-button__spinner').exists()).toBe(false)
   })
 
-  it('emits click event', async () => {
+  it('emits click without haptics by default', async () => {
     const wrapper = mount(Button)
 
     await wrapper.trigger('click')
 
-    expect(wrapper.emitted('click')).toBeTruthy()
+    expect(wrapper.emitted('click')).toHaveLength(1)
+    expect(vibrateMock).not.toHaveBeenCalled()
+    expect(wrapper.classes()).not.toContain('is-haptic-shake')
+  })
+
+  it('plays the configured haptic preset and visual shake when enabled', async () => {
+    const wrapper = mount(Button, {
+      props: {
+        vibrate: true,
+        vibrateType: 'medium',
+      },
+    })
+
+    await wrapper.trigger('click')
+
+    expect(vibrateMock).toHaveBeenCalledOnce()
+    expect(vibrateMock).toHaveBeenCalledWith('medium')
+    expect(wrapper.classes()).toContain('is-haptic-shake')
   })
 
   it('does not emit click when disabled', async () => {

@@ -54,6 +54,7 @@ function handleMouseleave() {
     :class="[
       `tx-icon-button--${size}`,
       `tx-icon-button--${shape}`,
+      status && `tx-icon-button--status-${status}`,
       {
         'is-pressed': pressed === true,
         'is-disabled': disabled,
@@ -128,6 +129,32 @@ function handleMouseleave() {
 .tx-icon-button.is-disabled {
   cursor: not-allowed;
   opacity: 0.56;
+}
+
+.tx-icon-button--status-success {
+  --tx-icon-button-status-color: var(--tx-color-success, #67c23a);
+}
+
+.tx-icon-button--status-warning {
+  --tx-icon-button-status-color: var(--tx-color-warning, #e6a23c);
+}
+
+.tx-icon-button--status-danger {
+  --tx-icon-button-status-color: var(--tx-color-danger, #f56c6c);
+}
+
+.tx-icon-button--status-info {
+  --tx-icon-button-status-color: var(--tx-color-info, #909399);
+}
+
+.tx-icon-button--status-success,
+.tx-icon-button--status-warning,
+.tx-icon-button--status-danger,
+.tx-icon-button--status-info {
+  --tx-icon-button-color: var(--tx-icon-button-status-color);
+  --tx-icon-button-bg-hover: color-mix(in srgb, var(--tx-icon-button-status-color) 10%, transparent);
+  --tx-icon-button-bg-pressed: color-mix(in srgb, var(--tx-icon-button-status-color) 16%, transparent);
+  --tx-icon-button-focus: color-mix(in srgb, var(--tx-icon-button-status-color) 28%, transparent);
 }
 
 .tx-icon-button--xs {

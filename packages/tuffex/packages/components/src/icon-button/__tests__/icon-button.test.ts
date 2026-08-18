@@ -35,3 +35,32 @@ describe('txIconButton accessible name', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 })
+
+describe('txIconButton status', () => {
+  it.each([
+    { status: 'success', className: 'tx-icon-button--status-success' },
+    { status: 'warning', className: 'tx-icon-button--status-warning' },
+    { status: 'danger', className: 'tx-icon-button--status-danger' },
+    { status: 'info', className: 'tx-icon-button--status-info' },
+  ] as const)('renders the $status semantic status class', ({ status, className }) => {
+    const wrapper = mount(TxIconButton, {
+      props: { label: 'Status action', status },
+    })
+
+    expect(wrapper.classes()).toContain(className)
+  })
+
+  it('keeps omitted and undefined status neutral', () => {
+    const neutralButtons = [
+      mount(TxIconButton, { props: { label: 'Neutral action' } }),
+      mount(TxIconButton, { props: { label: 'Undefined status action', status: undefined } }),
+    ]
+
+    for (const wrapper of neutralButtons) {
+      expect(wrapper.classes()).not.toContain('tx-icon-button--status-success')
+      expect(wrapper.classes()).not.toContain('tx-icon-button--status-warning')
+      expect(wrapper.classes()).not.toContain('tx-icon-button--status-danger')
+      expect(wrapper.classes()).not.toContain('tx-icon-button--status-info')
+    }
+  })
+})

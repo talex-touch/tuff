@@ -3,7 +3,7 @@ title: Chain of Thought
 description: A timeline of reasoning and tool steps whose active entry follows its own output.
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, reasoning, timeline]
 syncStatus: reviewed
 verified: true

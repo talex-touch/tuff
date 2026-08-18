@@ -3,7 +3,7 @@ title: "SignalMeter 信号量表"
 description: "分段强度条，用几格填充表达置信度、相关度或信号强弱。"
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, confidence, meter]
 syncStatus: reviewed
 verified: true
