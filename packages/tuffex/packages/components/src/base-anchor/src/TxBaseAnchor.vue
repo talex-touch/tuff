@@ -413,7 +413,6 @@ const {
   panelBackground: computed(() => props.panelBackground),
   useCard: computed(() => props.useCard),
   keepAliveContent: computed(() => props.keepAliveContent),
-  isUnlimitedHeight,
   isOpen: open,
   isCurrentRun: currentRunId => currentRunId === runId,
   setMounted: value => (mounted.value = value),
