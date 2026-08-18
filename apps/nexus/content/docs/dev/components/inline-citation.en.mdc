@@ -3,7 +3,7 @@ title: "InlineCitation"
 description: "A source-reference chip that sits inside prose and emits rather than navigating."
 category: Basic
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, citation, source, inline]
 syncStatus: reviewed
 verified: true

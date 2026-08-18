@@ -3,7 +3,7 @@ title: "ContextCards 检索片段卡"
 description: "展示 RAG 检索回来的知识块及其来源出处。"
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [rag, context, chunk, source, retrieval]
 syncStatus: reviewed
 verified: true

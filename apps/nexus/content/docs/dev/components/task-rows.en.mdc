@@ -3,7 +3,7 @@ title: "TaskRows"
 description: "Agent task status rows with a progress ring, status pills, and expandable execution detail."
 category: Status
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, agent, task, status]
 syncStatus: reviewed
 verified: true

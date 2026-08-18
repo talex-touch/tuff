@@ -3,7 +3,7 @@ title: "VersionCapsule"
 description: "Split release pill: download the build on the left, open history on the right"
 category: Navigation
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [version, release, download, history]
 syncStatus: reviewed
 verified: true
