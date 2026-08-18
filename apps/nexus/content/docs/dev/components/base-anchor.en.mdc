@@ -3,7 +3,7 @@ title: "BaseAnchor"
 description: "Floating UI + GSAP anchored popover with configurable animation modes."
 category: Primitives
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
 syncStatus: reviewed
 verified: true

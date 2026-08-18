@@ -3,7 +3,7 @@ title: "SignalMeter"
 description: "A segmented strength bar that reads confidence, relevance, or signal as a count of lit segments."
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, confidence, meter]
 syncStatus: reviewed
 verified: true

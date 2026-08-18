@@ -3,7 +3,7 @@ title: Tool Call Card
 description: 工具调用的状态卡片，运行日志自动跟随尾部，结果区可由宿主接管。
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, tool, status]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "IconChip 图标角标"
 description: "承载文件类型角标、首字母方块或小图标的填充色块。"
 category: Basic
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [icon, badge, chip, avatar]
 syncStatus: reviewed
 verified: true

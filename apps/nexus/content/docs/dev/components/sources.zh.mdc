@@ -3,7 +3,7 @@ title: Sources
 description: 可折叠的引用来源列表，链接是否跳转完全由宿主决定。
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, sources, citation]
 syncStatus: reviewed
 verified: true

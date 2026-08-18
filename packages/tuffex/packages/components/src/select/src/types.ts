@@ -9,6 +9,10 @@ export interface TxSelectOption {
   value: TxSelectValue
   label: string
   disabled?: boolean
+  /** Icon class rendered as a leading tile (e.g. an UnoCSS/iconify class); resolved by the host app's CSS. */
+  icon?: string
+  /** Secondary line rendered under the label. */
+  description?: string
 }
 
 export interface TxSelectOptionGroup {
@@ -57,6 +61,10 @@ export interface TxSelectItemProps {
   value: TxSelectValue
   label?: string
   disabled?: boolean
+  /** Icon class rendered as a leading tile (e.g. an UnoCSS/iconify class); resolved by the host app's CSS. */
+  icon?: string
+  /** Secondary line rendered under the label. */
+  description?: string
 }
 
 export interface TxSelectContext {

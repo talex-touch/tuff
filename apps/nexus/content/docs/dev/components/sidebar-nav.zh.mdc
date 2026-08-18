@@ -3,7 +3,7 @@ title: "SidebarNav 侧边导航"
 description: "工作区级垂直导航：组织切换、快捷搜索、主操作与分组入口。"
 category: Navigation
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [navigation, sidebar, workspace, search]
 syncStatus: reviewed
 verified: true

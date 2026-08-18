@@ -3,7 +3,7 @@ title: "AgentTrace"
 description: "An expandable agent trace covering step, reasoning, search, and tool forms."
 category: Status
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, agent, trace, disclosure]
 syncStatus: reviewed
 verified: true

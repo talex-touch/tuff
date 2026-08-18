@@ -3,7 +3,7 @@ title: "FineTuneCard 属性检查器"
 description: "紧凑的属性面板：布局分段、四个拖拽数值域、类型选择器，共用一个值对象。"
 category: Form
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [form, inspector, panel, ai]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: Stream Markdown
 description: A Markdown renderer built for streaming output, with a tail cursor and per-language fenced-block renderers.
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, markdown, streaming]
 syncStatus: reviewed
 verified: true

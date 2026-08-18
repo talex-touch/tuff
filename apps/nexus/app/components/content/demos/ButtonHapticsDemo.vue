@@ -10,7 +10,7 @@ const labels = computed(() => {
       medium: '中等震动',
       heavy: '重度震动',
       error: '错误震动',
-      none: '无震动',
+      none: '默认无震动',
     }
   }
   return {
@@ -18,26 +18,26 @@ const labels = computed(() => {
     medium: 'Medium haptic',
     heavy: 'Heavy haptic',
     error: 'Error haptic',
-    none: 'No haptic',
+    none: 'Default: no haptic',
   }
 })
 </script>
 
 <template>
   <div class="tuff-demo-row">
-    <TxButton variant="primary" vibrate-type="light">
+    <TxButton variant="primary" vibrate vibrate-type="light">
       {{ labels.light }}
     </TxButton>
-    <TxButton variant="primary" vibrate-type="medium">
+    <TxButton variant="primary" vibrate vibrate-type="medium">
       {{ labels.medium }}
     </TxButton>
-    <TxButton variant="primary" vibrate-type="heavy">
+    <TxButton variant="primary" vibrate vibrate-type="heavy">
       {{ labels.heavy }}
     </TxButton>
-    <TxButton variant="danger" vibrate-type="error">
+    <TxButton variant="danger" vibrate vibrate-type="error">
       {{ labels.error }}
     </TxButton>
-    <TxButton variant="secondary" :vibrate="false">
+    <TxButton variant="secondary">
       {{ labels.none }}
     </TxButton>
   </div>
