@@ -78,7 +78,6 @@ import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/u
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { iconService } from '../../../../service/icon-service'
-import { normalizeRenderableSource } from '../../../../utils/local-renderable-assets'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
@@ -105,6 +104,7 @@ export function setAppExecutionRecorder(recorder: AppExecutionRecorder): void {
 
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
+import { resolveApplicationProjection } from './app-resolution-service'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
 import { AppIndexMaintenanceService } from './services/app-index-maintenance-service'
@@ -1386,74 +1386,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   public async resolveApplication(identifier: string): Promise<ResolvedApplication | null> {
-    const normalizedIdentifier = identifier.trim()
-    if (!this.dbUtils || !normalizedIdentifier || normalizedIdentifier.length > 512) {
-      return null
-    }
-
-    const [pathMatches, bundleMatches] = await Promise.all([
-      this.dbUtils.getFilesByPaths([normalizedIdentifier]),
-      this.dbUtils.getFilesByBundleIds([normalizedIdentifier])
-    ])
-    const rowsById = new Map(
-      [...pathMatches, ...bundleMatches]
-        .filter((row) => row.type === 'app')
-        .map((row) => [row.id, row])
-    )
-    const applications = await this.fetchExtensionsForFiles([...rowsById.values()])
-    const application = applications.find(
-      (candidate) =>
-        candidate.path === normalizedIdentifier ||
-        candidate.extensions.bundleId === normalizedIdentifier
-    )
-    if (!application) {
-      return null
-    }
-
-    try {
-      await this.repairPersistedAppIconPointers([application])
-    } catch {
-      // A read-only application projection remains useful when pointer repair is unavailable.
-    }
-
-    const appInfo = this._mapDbAppToScannedInfo(application)
-    if (!appInfo.icon) {
-      try {
-        const hydratedIcon = await iconService.ensureAppIcon(
-          appInfo.iconSourcePath ?? appInfo.path,
-          appInfo.bundleId
-        )
-        if (hydratedIcon) {
-          appInfo.icon = hydratedIcon
-          try {
-            await this.persistHydratedAppIcons([{ appInfo, icon: hydratedIcon }])
-          } catch {
-            // Keep the generated cache resource usable even if pointer persistence is busy.
-          }
-        }
-      } catch {
-        // Application identity is still returned when the platform has no icon.
+    return await resolveApplicationProjection(identifier, {
+      dbUtils: this.dbUtils,
+      fetchExtensions: (applications) => this.fetchExtensionsForFiles(applications),
+      repairIconPointers: (applications) => this.repairPersistedAppIconPointers(applications),
+      mapApplication: (application) => this._mapDbAppToScannedInfo(application),
+      ensureIcon: (appPath, bundleId) => iconService.ensureAppIcon(appPath, bundleId),
+      persistIcon: async (appInfo, icon) => {
+        await this.persistHydratedAppIcons([{ appInfo, icon }])
       }
-    }
-
-    let icon: string | null = null
-    if (appInfo.icon) {
-      const normalizedIcon = normalizeRenderableSource(appInfo.icon)
-      if (!('missing' in normalizedIcon) && normalizedIcon.value.startsWith('tfile:')) {
-        icon = normalizedIcon.value
-      }
-    }
-
-    const inputIsNativePath = /^(?:[a-z]:[\\/]|[\\/]{1,2}|shell:AppsFolder\\)/i.test(
-      normalizedIdentifier
-    )
-    return {
-      identifier:
-        application.extensions.bundleId ||
-        (inputIsNativePath ? application.name : normalizedIdentifier),
-      displayName: appInfo.displayName || appInfo.name,
-      icon
-    }
+    })
   }
 
   public async listManagedEntries(): Promise<AppIndexManagedEntry[]> {
