@@ -41,4 +41,28 @@ export interface DropdownItemProps {
   disabled?: boolean
   danger?: boolean
   arrow?: boolean
+  /**
+   * Per-item override of the menu-level `closeOnSelect`, mirroring
+   * `TxContextMenuItem`. `TxDropdownSubmenu` sets it to `false` on its trigger
+   * row so clicking the row opens the nested panel instead of closing the menu.
+   */
+  closeOnSelect?: boolean
+}
+
+export interface DropdownSubmenuProps {
+  disabled?: boolean
+  placement?: DropdownPlacement
+  offset?: number
+  width?: number
+  minWidth?: number
+  maxHeight?: number
+  unlimitedHeight?: boolean
+  animation?: BaseAnchorAnimationOptions
+  panelCard?: BaseAnchorPanelCardProps
+
+  panelVariant?: 'solid' | 'dashed' | 'plain'
+  panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
+  panelShadow?: 'none' | 'soft' | 'medium'
+  panelRadius?: number
+  panelPadding?: number
 }

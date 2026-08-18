@@ -76,6 +76,10 @@ const delay = useAnchorDelay({
   onClose: () => { open.value = false },
   openDelay: () => props.openDelay,
   closeDelay: () => props.closeDelay,
+  // Read when a nested panel's requestCloseChain walks up through here: only
+  // hover-opened anchors close because a hover child left; click-opened ones
+  // wait for outside click / Escape / select.
+  hoverCloseable: () => props.trigger === 'hover',
 })
 
 // Keeps the registry honest when the state moves without going through the
@@ -134,7 +138,10 @@ function onFloatingEnter() {
     return
   if (props.trigger !== 'hover')
     return
-  clearTimers()
+  // Chain-wide: this panel may be a nested submenu whose parent scheduled its
+  // own close when the pointer crossed out of it. Landing here proves the
+  // pointer never left the chain, so every ancestor's pending close is void.
+  delay.cancelChain()
 }
 
 function onFloatingLeave() {
@@ -142,7 +149,9 @@ function onFloatingLeave() {
     return
   if (props.trigger !== 'hover')
     return
-  scheduleClose()
+  // Chain-wide: leaving a nested panel means leaving every panel above it.
+  // Hover-opened ancestors close along; click-opened ones are skipped.
+  delay.requestCloseChain()
 }
 
 const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
@@ -186,6 +195,9 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     animation,
     closeOnClickOutside,
     toggleOnReferenceClick,
+    // Not host-overridable: the anchor publishes its floating element under
+    // this chain node so ancestors can recognise clicks inside nested panels.
+    delayNode: delay.node,
   }
 })
 

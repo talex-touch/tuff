@@ -80,6 +80,40 @@ code: |
 ---
 :::
 
+## Submenu
+
+`TxDropdownSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, and selecting a `TxDropdownItem` inside the child closes the whole chain following the root menu's `closeOnSelect`.
+
+### DropdownSubmenu
+:::TuffDemoWrapper{demo="DropdownMenuDropdownSubmenuDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu>
+      <template #trigger>
+        <TxButton>Actions</TxButton>
+      </template>
+
+      <TxDropdownItem>Open</TxDropdownItem>
+      <TxDropdownSubmenu>
+        Export as…
+        <template #menu>
+          <TxDropdownItem>PNG</TxDropdownItem>
+          <TxDropdownItem>SVG</TxDropdownItem>
+          <TxDropdownSubmenu>
+            More formats
+            <template #menu>
+              <TxDropdownItem>WebP</TxDropdownItem>
+              <TxDropdownItem>AVIF</TxDropdownItem>
+            </template>
+          </TxDropdownSubmenu>
+        </template>
+      </TxDropdownSubmenu>
+    </TxDropdownMenu>
+  </template>
+---
+:::
+
 ## Dashboard Navigation Composition
 
 Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
@@ -151,6 +185,26 @@ code: |
 | `disabled` | `boolean` | `false` | Prevents selection and renders the item as disabled. |
 | `danger` | `boolean` | `false` | Applies danger text styling for destructive actions. |
 | `arrow` | `boolean` | `false` | Shows a trailing chevron when no `right` slot is provided. |
+| `closeOnSelect` | `boolean` | `undefined` | Per-item override of the menu-level `closeOnSelect`; unset follows the menu-level value. |
+
+### TxDropdownSubmenu Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `disabled` | `boolean` | `false` | Disables the trigger row; the child panel no longer opens. |
+| `placement` | `DropdownPlacement` | `'right-start'` | Positions the child panel relative to the trigger row. |
+| `offset` | `number` | `4` | Distance in pixels between the trigger row and the child panel. |
+| `width` | `number` | `0` | Fixed child panel width; `0` sizes to content bounded by `minWidth`. |
+| `minWidth` | `number` | `160` | Minimum child panel width in pixels. |
+| `maxHeight` | `number` | `420` | Maximum scrollable child panel height in pixels. |
+| `unlimitedHeight` | `boolean` | `false` | Disables the child panel max-height constraint. |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | Anchor animation config for the child panel. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Low-level card props forwarded to the child panel. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Visual border variant of the child panel. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Background treatment of the child panel. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Shadow strength of the child panel. |
+| `panelRadius` | `number` | `14` | Child panel corner radius in pixels. |
+| `panelPadding` | `number` | `6` | Child panel padding in pixels. |
 
 ### TxDropdownMenu Events
 
@@ -182,6 +236,14 @@ code: |
 | `default` | - | Main menu item label. |
 | `right` | - | Replaces the generated trailing chevron used by `arrow`. |
 
+### TxDropdownSubmenu
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Main trigger row label. |
+| `right` | - | Trailing metadata on the trigger row, rendered before the submenu chevron. |
+| `menu` | - | Child panel content, usually `TxDropdownItem` rows or nested `TxDropdownSubmenu`. |
+
 ## Interaction Contract
 
 - `TxDropdownMenu` is for short action lists; use `TxPopover` / `TxDrawer` when content includes explanations, forms, or complex state.
@@ -191,6 +253,8 @@ code: |
 - The first enabled item receives focus when the menu opens.
 - Inside the panel, `ArrowDown` / `ArrowUp` move focus between enabled items with wraparound, and `Home` / `End` jump to the first / last item, skipping `aria-disabled` items.
 - `TxDropdownItem` emits `select` with no payload; attach business context in the handler that renders the item.
+- The `TxDropdownSubmenu` trigger row is a `role="menuitem"`: `ArrowRight` / `Enter` expand the child panel and focus its first item, and `ArrowLeft` inside the child panel collapses it and returns focus to the trigger row.
+- Pointer travel from parent panel into the child panel never closes the parent; clicks inside the child panel don't count as outside-clicks for the parent, and closing the parent (including preemption by another menu) cascades to its children.
 
 ## Best Practices
 
@@ -203,7 +267,8 @@ code: |
 ## Review Notes
 
 - Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` forwards Popover placement, sizing, animation, panel visual props, and trigger/default slots.
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow props, `right` slot behavior, `role="menuitem"`, and close-on-select injection.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow/closeOnSelect props, `right` slot behavior, `role="menuitem"`, and close-on-select injection.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` confirms hover expansion, keyboard traversal, and root-context passthrough (selecting a nested item closes the whole chain).
 - Type contracts: `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` exports `DropdownMenuProps`, `DropdownItemProps`, and the supported placement union.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, enabled selection, disabled item no-op behavior, and `closeOnSelect=false`.
 

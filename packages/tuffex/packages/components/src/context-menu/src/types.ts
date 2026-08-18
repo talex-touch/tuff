@@ -74,6 +74,23 @@ export interface ContextMenuItemProps {
   closeOnSelect?: boolean
 }
 
+export interface ContextMenuSubmenuProps {
+  disabled?: boolean
+  placement?: BaseAnchorPlacement
+  offset?: number
+  width?: number
+  minWidth?: number
+  maxHeight?: number
+  unlimitedHeight?: boolean
+  animation?: BaseAnchorAnimationOptions
+  panelCard?: BaseAnchorPanelCardProps
+  panelVariant?: ContextMenuPanelVariant
+  panelBackground?: ContextMenuPanelBackground
+  panelShadow?: ContextMenuPanelShadow
+  panelRadius?: number
+  panelPadding?: number
+}
+
 export interface ContextMenuDividerProps {
   dashed?: boolean
   inset?: boolean

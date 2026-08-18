@@ -29,6 +29,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Directory Structure](./directory-structure.md)               | Module organization and file layout                                                  | Filled |
 | [Component Guidelines](./component-guidelines.md)             | Component patterns, props, composition                                               | Filled |
 | [BUI Component Family](./bui-component-family.md)             | Beautiful UI port: `--tx-bui-*` tokens, mixins, hard rules, registration chain       | Filled |
+| [Anchor Overlay Chain](./anchor-overlay-chain.md)             | Nested overlay chain: anchor-delay links, hover travel, outside-click, submenus      | Filled |
 | [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
 | [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
 | [Quality Guidelines](./quality-guidelines.md)                 | Code standards, forbidden patterns, verification                                     | Filled |

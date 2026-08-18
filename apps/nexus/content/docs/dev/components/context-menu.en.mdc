@@ -167,13 +167,41 @@ The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates
 <TxContextMenu anchor-mode="reference" />
 ```
 
+## Submenu
+
+`TxContextMenuSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, and selecting an item inside the child closes the whole chain following the root menu's `closeOnSelect`.
+
+### ContextMenuSubmenu
+:::TuffDemoWrapper{demo="ContextMenuContextMenuSubmenuDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxContextMenu>
+      <div class="surface">Right-click here</div>
+
+      <template #menu>
+        <TxContextMenuItem>Copy</TxContextMenuItem>
+        <TxContextMenuSubmenu>
+          Share
+          <template #menu>
+            <TxContextMenuItem>Mail</TxContextMenuItem>
+            <TxContextMenuItem>Messages</TxContextMenuItem>
+            <TxContextMenuItem>Copy link</TxContextMenuItem>
+          </template>
+        </TxContextMenuSubmenu>
+      </template>
+    </TxContextMenu>
+  </template>
+---
+:::
+
 ## Interaction Contract
 
 - Placement: `TxContextMenu` positions itself through `TxBaseAnchor` with Floating UI `flip + shift + size`, flipping/shifting near viewport edges and constraining max height to the available viewport.
 - Anchor: `anchorMode="pointer"` (default) follows the mouse / provided coordinates and updates the virtual anchor to the latest position on repeated right-clicks; `anchorMode="reference"` follows the trigger area, more like a Dropdown.
 - Trigger: `trigger` supports `contextmenu` / `click` / `both` / `manual`; `manual` disables internal event handling and opens only through `v-model + x/y`, for button clicks, editor shortcuts, and canvas node menus.
 - Close: ESC, outside click, and item selection all close by default; `closeOnSelect=false` is only for parent submenu rows or multi-step actions.
-- Submenus: `TxContextMenuPanel` has no positioning or trigger logic and can be embedded in `TxPopover` / `TxDropdownMenu` / a custom overlay; a teleported submenu must set `outsideGuard` on its child `TxContextMenuPanel`, otherwise the parent treats the submenu click as an outside click and closes.
+- Submenus: prefer `TxContextMenuSubmenu` — it ships hover expansion, keyboard traversal, outside-click exemption, and whole-chain close; `TxContextMenuPanel` can still be embedded manually in `TxPopover` / a custom overlay, in which case a teleported child panel must set `outsideGuard`, otherwise the parent treats the submenu click as an outside click and closes.
 - Animation: handled directly by `BaseAnchor` — `transfer` / `boom` / `opacity` / `none`.
 
 ## API
@@ -268,6 +296,25 @@ The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates
 |------|------|------|
 | `select` | - | Emitted when an enabled item is selected. |
 
+### TxContextMenuSubmenu Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `disabled` | `boolean` | `false` | Disables the trigger row; the child panel no longer opens. |
+| `placement` | `BaseAnchorPlacement` | `'right-start'` | Positions the child panel relative to the trigger row. |
+| `offset` | `number` | `4` | Distance in pixels between the trigger row and the child panel. |
+| `width` | `number` | `0` | Fixed child panel width; `0` sizes to content bounded by `minWidth`. |
+| `minWidth` | `number` | `160` | Minimum child panel width in pixels. |
+| `maxHeight` | `number` | `420` | Maximum child panel height in pixels. |
+| `unlimitedHeight` | `boolean` | `false` | Disables the child panel max-height constraint. |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | Anchor animation config for the child panel. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Low-level card props forwarded to the child panel. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Visual border variant of the child panel. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Background treatment of the child panel. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | Shadow strength of the child panel. |
+| `panelRadius` | `number` | `14` | Child panel corner radius in pixels. |
+| `panelPadding` | `number` | `6` | Child panel padding in pixels. |
+
 ### TxContextMenuDivider Props
 
 | Prop | Type | Default | Description |
@@ -300,6 +347,14 @@ The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates
 | `description` | - | Secondary description text forwarded to `TxCardItem`. |
 | `right` | - | Replaces the generated shortcut/submenu area. |
 
+### TxContextMenuSubmenu
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Main trigger row label. |
+| `right` | - | Trailing metadata on the trigger row, rendered before the submenu chevron. |
+| `menu` | - | Child panel content, usually `TxContextMenuItem` rows or nested `TxContextMenuSubmenu`. |
+
 `TxContextMenuDivider` does not expose slots.
 
 ## Best Practices
@@ -317,6 +372,7 @@ The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates
 - Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue` confirms controlled/uncontrolled open state, pointer/reference virtual anchors, trigger modes, outside-click handling, and BaseAnchor forwarding.
 - Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue` confirms the panel layout, `closeOnSelect` / `close` injection, `dense`, `outsideGuard`, `role`, and `ariaLabel` behavior.
 - Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue` confirms `disabled`, `danger`, custom `color`, `shortcut`, `submenu`, per-item `closeOnSelect`, and item slots.
+- Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuSubmenu.vue` confirms hover expansion, keyboard traversal, root-context passthrough (selecting a nested item closes the whole chain), and automatic `outsideGuard`.
 - Type contracts: `packages/tuffex/packages/components/src/context-menu/src/types.ts` exports the trigger, anchor, panel visual enums, props, and open-target shapes.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts` covers controlled width rendering, contextmenu coordinates, controlled x/y opening, Escape close guards, trigger pointerdown close behavior, pointer/reference anchor modes, enabled/disabled item selection, shortcut/custom color/submenu rendering, and standalone panel close injection.
 

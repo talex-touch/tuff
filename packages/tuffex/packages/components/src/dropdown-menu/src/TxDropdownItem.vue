@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<DropdownItemProps>(), {
   disabled: false,
   danger: false,
   arrow: false,
+  closeOnSelect: undefined,
 })
 
 const emit = defineEmits<{
@@ -22,7 +23,8 @@ function onClick() {
   if (props.disabled)
     return
   emit('select')
-  if (ctx?.closeOnSelect)
+  const shouldClose = props.closeOnSelect ?? ctx?.closeOnSelect
+  if (shouldClose)
     ctx?.close()
 }
 </script>
