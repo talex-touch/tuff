@@ -26,5 +26,5 @@
 ## 任务记录、文档与路线图
 
 - **12 个活跃任务缺 `meta.blocker` 与 `meta.nextAction`。** 其中 `07-17-unify-ota-update-flow` 位于 TODO 的第一发布阻断 lane，却完全无状态；其余为 `08-05-ai-toolchain-suite`、`08-05-skeleton-loading-default`、`08-06-home-chat-pipeline-fixes`、`08-06-reco-negative-feedback`、`08-06-reco-scenario-playbook`、`08-06-web-search-tool`、`08-07-home-chain-and-native-search`、`08-07-native-web-search`、`08-09-home-panel-layering-v2`、`08-14-mobile-tuff-chat-draft`。它们必须写明受阻原因和下一步，或转回明确 backlog 状态。
-- **`07-26-install-launch-v2-4-13-beta-23` 是陈旧的 `in_progress` 记录。** 创建于 2026-07-26，任务工件约 22 天未更新，且 `meta` 为空；安装动作已不应以无验收边界的活跃任务形式留在树中。[#309](https://github.com/talex-touch/tuff/issues/309) 应承接其真实结论：补证据后归档，或记录具体未完成动作。
+- **本地安装记录是陈旧的 `in_progress` 状态。** 创建于 2026-07-26，记录约 22 天未更新，且 `meta` 为空；安装动作已不应以无验收边界的活跃任务形式留在树中。[#309](https://github.com/talex-touch/tuff/issues/309) 应承接其真实结论：补证据后归档，或记录具体未完成动作。
 - **两个文档型收尾仍未完成。** [#1751](https://github.com/talex-touch/tuff/issues/1751) 要把 CatalogService 已完成/未完成边界写入 R8、任务工件、质量基线、changelog 与开发者文档；[#1752](https://github.com/talex-touch/tuff/issues/1752) 要让全仓治理审计的 findings/filing ledger 与六项 PRD 验收逐条对账。二者都不能由全局 TODO 的“暂停”文字替代。

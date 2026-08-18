@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "none",
+    "evidence": "Nested submenu implementation is committed on master and covered by focused component validation.",
+    "nextAction": "Validate the published beta package and archive the task after release evidence is recorded."
+  }
 }
