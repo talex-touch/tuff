@@ -31,7 +31,7 @@
   "dependencies": {
     "@arrow-js/core": "1.0.6",
     "@talex-touch/utils": "workspace:*",
-    "@vue/compiler-sfc": "^3.5.39",
+    "@vue/compiler-sfc": "^3.5.41",
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
     "compressing": "^2.1.1",
