@@ -3,7 +3,7 @@ title: Conversation Stream
 description: 虚拟滚动的会话流，自动吸底并向上翻取历史。
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, conversation, virtual-scroll]
 syncStatus: reviewed
 verified: true

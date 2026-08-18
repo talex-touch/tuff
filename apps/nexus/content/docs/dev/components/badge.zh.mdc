@@ -18,68 +18,14 @@ verified: true
 :::TuffDemoWrapper{demo="BadgeBadgeVariantsDemo" code-lang="vue"}
 ---
 code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const initialCount = 8
-  const count = ref(initialCount)
-  const errorDot = ref(true)
-  const resetDemo = () => {
-    count.value = initialCount
-    errorDot.value = true
-  }
-  </script>
-
   <template>
-    <TxFlex direction="column" gap="16px">
-      <TxFlex align="center" gap="12px" wrap="wrap">
-        <TxBadge :value="count" />
-        <TxBadge value="New" variant="primary" />
-        <TxBadge value="99+" variant="success" />
-        <TxBadge v-if="errorDot" dot variant="error" />
-      </TxFlex>
-      <TxFlex align="center" gap="8px" wrap="wrap">
-        <TxButton size="sm" @click="count++">新增</TxButton>
-        <TxButton size="sm" variant="secondary" :disabled="count === 0" @click="count--">减少</TxButton>
-        <TxButton size="sm" variant="secondary" @click="resetDemo">重置</TxButton>
-        <TxSwitch v-model="errorDot" />
-      </TxFlex>
-    </TxFlex>
+    <div class="tuff-demo-row">
+      <TxBadge :value="8" />
+      <TxBadge value="New" variant="primary" />
+      <TxBadge value="99+" variant="success" />
+      <TxBadge dot variant="error" />
+    </div>
   </template>
----
-:::
-
-### 弹出动效
-
-`open` 驱动角标的出现与消失：出现时从锚点偏移滑入并带 scale/blur 弹出，关闭时快速弹出消失、保留布局占位。数字内容经 NumberFlow 渲染，计数变化逐位滚动。
-
-:::TuffDemoWrapper{demo="BadgeBadgeMotionDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(true)
-  const count = ref(8)
-  </script>
-
-  <template>
-    <span style="position: relative; display: inline-flex">
-      <TxButton variant="secondary">收件箱</TxButton>
-      <TxBadge variant="error" :value="count" :open="open" class="corner" />
-    </span>
-    <TxSwitch v-model="open" />
-    <TxButton size="sm" round @click="count++">+1</TxButton>
-  </template>
-
-  <style scoped>
-  .corner {
-    position: absolute;
-    top: -8px;
-    right: -10px;
-    pointer-events: none;
-  }
-  </style>
 ---
 :::
 
@@ -122,9 +68,6 @@ code: |
 - `dot=true` 时，组件渲染 `.tx-badge__dot`，添加 `tx-badge--dot`，并不渲染 `value` 或默认插槽文本。
 - `dot=false` 时，默认插槽优先于 `value`。
 - `value` 默认是 `0`，因此未传 slot 且未启用 dot 时会显示 `0`。
-- 数字 `value` 经 NumberFlow 渲染，数值变化时逐位滚动；字符串与插槽内容按原样渲染。
-- `open` 切换驱动弹出动效：开启时滑入 + scale/blur 弹出，关闭时快速弹出消失并保留布局占位；首次挂载不播放入场动画。
-- `prefers-reduced-motion: reduce` 下弹出动效停用，NumberFlow 也遵循同一偏好。
 - `TxBadge` 没有 click 事件、定位逻辑、溢出截断或目标元素锚定行为。
 
 ## API
@@ -137,7 +80,6 @@ code: |
 | `value` | `number \| string` | `0` | 未使用默认插槽且 `dot=false` 时的徽标文本。 |
 | `color` | `string` | - | 自定义背景色，同时把文本色设为白色。 |
 | `dot` | `boolean` | `false` | 渲染紧凑圆点并隐藏文本内容。 |
-| `open` | `boolean` | `true` | 显隐开关；切换时播放滑入/弹出动效，关闭时保留布局占位。 |
 
 ### Events
 
@@ -156,12 +98,6 @@ code: |
 | `--tx-badge-bg` | `variant` / `color` | 徽标背景色。 |
 | `--tx-badge-text` | `variant` / `color` | 徽标文本色。 |
 | `--tx-badge-border` | `variant` | 徽标边框色。 |
-| `--tx-badge-offset-x` / `--tx-badge-offset-y` | 消费方可选 | 滑入起始偏移，默认 `-8.2px` / `12.4px`。 |
-| `--tx-badge-slide-dur` | 消费方可选 | 滑入时长，默认 `260ms`。 |
-| `--tx-badge-pop-dur` / `--tx-badge-pop-close-dur` | 消费方可选 | 弹出/收起的 scale+blur 时长，默认 `500ms` / `180ms`。 |
-| `--tx-badge-fade-dur` / `--tx-badge-fade-close-dur` | 消费方可选 | 淡入/淡出时长，默认 `400ms` / `180ms`。 |
-| `--tx-badge-blur` | 消费方可选 | 收起态模糊量，默认 `2px`。 |
-| `--tx-badge-slide-ease` / `--tx-badge-pop-ease` / `--tx-badge-close-ease` | 消费方可选 | 三段动效的缓动曲线。 |
 
 ## 最佳实践
 
@@ -170,12 +106,11 @@ code: |
 - 目标角标通知需要在宿主组件里定位 `TxBadge`；`TxBadge` 不会自行锚定。
 - 关键状态不要只依赖圆点颜色，圆点旁应配合文本。
 - 语义状态优先使用 variants，`color` 只用于品牌色或自定义分类标签。
-- 角标通知场景把 `open` 绑定到未读状态，让弹入/弹出动效处理出现与消失；不要在徽标上再叠加自己的 transform。
 
 ## 审阅说明
 
 - 组件源码:`packages/tuffex/packages/components/src/badge/src/TxBadge.vue` 确认内联 `span` 渲染、`variant` class、自定义颜色 CSS 变量、dot 模式和默认插槽优先于 `value`。
-- 类型契约:`packages/tuffex/packages/components/src/badge/src/types.ts` 定义 `BadgeVariant` 和 `BadgeProps`（含 `open`）。数字值经 `@number-flow/vue` 渲染。
+- 类型契约:`packages/tuffex/packages/components/src/badge/src/types.ts` 定义 `BadgeVariant` 和 `BadgeProps`。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/badge/__tests__/badge.test.ts` 覆盖 value 渲染、插槽内容、dot 模式和自定义颜色变量。
 - 导出入口:`packages/tuffex/packages/components/src/badge/index.ts` 使用 `withInstall` 包装组件并导出 `TxBadgeInstance`。
 

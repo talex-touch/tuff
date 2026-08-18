@@ -3,7 +3,7 @@ title: Attachment Tray
 description: 消息附件区，图片走网格与预览器，文件走胶囊，可选上传进度与移除。
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, attachment, upload]
 syncStatus: reviewed
 verified: true

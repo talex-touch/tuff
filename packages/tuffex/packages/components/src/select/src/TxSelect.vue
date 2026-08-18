@@ -811,21 +811,12 @@ onBeforeUnmount(() => {
                 :active="isValueSelected(opt.value)"
                 :disabled="!!opt.disabled"
                 :aria-selected="isValueSelected(opt.value)"
-                :icon-class="opt.icon"
-                :description="opt.description"
                 @click="!opt.disabled && handleSelect(opt.value, opt.label)"
               >
                 <template #title>
                   <slot name="option" :option="opt" :selected="isValueSelected(opt.value)">
                     {{ opt.label }}
                   </slot>
-                </template>
-                <template v-if="isValueSelected(opt.value)" #right>
-                  <span class="tuff-select__check" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="16" height="16">
-                      <path fill="currentColor" d="M10 15.172L19.192 5.979L20.607 7.393L10 18L3.636 11.636L5.05 10.222L10 15.172Z" />
-                    </svg>
-                  </span>
                 </template>
               </TxCardItem>
             </template>
@@ -870,19 +861,8 @@ onBeforeUnmount(() => {
 .tuff-select {
   position: relative;
   display: inline-block;
-  // Compact by default; hosts opt into wider layouts with an explicit width
-  // (inline style or class), which the panel follows 1:1.
-  width: 240px;
-  max-width: 100%;
-
-  // TxTooltip's reference span sits between this root and the trigger and has
-  // no width of its own — without this the trigger shrinks to content width
-  // while the panel is measured from the full-width outer wrapper, so the two
-  // stop matching.
-  :deep(.tx-tooltip__reference) {
-    width: 100%;
-    min-width: 0;
-  }
+  width: 100%;
+  min-width: 180px;
 
   &__trigger {
     display: flex;
@@ -1062,18 +1042,10 @@ onBeforeUnmount(() => {
   }
 
   &__group-label {
-    padding: 10px 10px 4px;
+    padding: 8px 10px 4px;
     color: var(--tx-text-color-secondary, #909399);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  &__check {
-    display: inline-flex;
-    align-items: center;
-    color: var(--tx-color-primary, #409eff);
+    font-size: 13px;
+    font-weight: 500;
   }
 
   &__status {

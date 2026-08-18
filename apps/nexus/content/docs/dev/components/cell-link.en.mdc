@@ -3,7 +3,7 @@ title: "CellLink"
 description: "A link for table cells that renders a real href but never navigates on its own — the host decides how to open it."
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [link, table, cell, data]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: Message Actions
 description: 消息下方的操作条，内置复制与重新生成，方向键在按钮间移动。
 category: Data
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, message, toolbar]
 syncStatus: reviewed
 verified: true

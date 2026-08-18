@@ -3,7 +3,7 @@ title: "FineTuneCard"
 description: "A compact property panel: a layout segment, four scrubbable numbers and a type picker, over one value object."
 category: Form
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [form, inspector, panel, ai]
 syncStatus: reviewed
 verified: true

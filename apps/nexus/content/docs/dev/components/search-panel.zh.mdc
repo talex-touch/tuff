@@ -3,7 +3,7 @@ title: "SearchPanel 内联搜索面板"
 description: "卡片式内联搜索：输入框、实时结果与空态合为一体。"
 category: Form
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [search, filter, listbox, command]
 syncStatus: reviewed
 verified: true

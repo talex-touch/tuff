@@ -1,6 +1,6 @@
 ---
 title: "Select 选择器"
-description: "基于 Popover 的原始值选择器，支持单选、多选标签、本地过滤、远程搜索、自助创建、分组、图标与描述选项和自定义下拉内容。"
+description: "基于 Popover 的原始值选择器，支持单选、多选标签、本地过滤、远程搜索、自助创建、分组和自定义下拉内容。"
 category: Form
 status: beta
 since: 1.0.0
@@ -228,50 +228,6 @@ code: |
 ---
 :::
 
-### 图标与描述
-
-选项支持可选的 `icon`（icon class，由宿主应用的样式解析）和 `description` 字段，适合工作区、成员这类需要第二行信息的选择场景；选中项会在行尾展示对勾。
-
-#### Select (rich options)
-:::TuffDemoWrapper{demo="SelectSelectRichOptionsDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import type { TxSelectOptionLike, TxSelectValue } from '@talex-touch/tuffex'
-  import { ref } from 'vue'
-
-  const value = ref<TxSelectValue>('design-studio')
-  const options: TxSelectOptionLike[] = [
-    {
-      label: '最近使用',
-      options: [
-        { value: 'design-studio', label: '设计工作室', icon: 'i-carbon-paint-brush', description: '12 个项目' },
-        { value: 'product-team', label: '产品团队', icon: 'i-carbon-layers', description: '8 个项目' },
-      ],
-    },
-    {
-      label: '全部工作区',
-      options: [
-        { value: 'playground', label: '实验场', icon: 'i-carbon-chemistry', description: '24 个实验' },
-        { value: 'component-archive', label: '组件归档', icon: 'i-carbon-archive', description: '61 个组件' },
-      ],
-    },
-  ]
-  </script>
-
-  <template>
-    <TuffSelect
-      v-model="value"
-      style="width: 300px"
-      searchable
-      :options="options"
-      placeholder="选择工作区"
-      search-placeholder="搜索工作区"
-    />
-  </template>
----
-:::
-
 ### 变体与状态
 
 以下变体各自只切换一个 prop，可按需叠加到上面的交互模式中。
@@ -327,24 +283,11 @@ code: |
 ---
 :::
 
-#### 宽度
-触发器默认紧凑宽度 240px，下拉面板宽度始终与触发器一致。需要撑满容器或自定义宽度时，直接给组件设置显式宽度。
-:::TuffDemoWrapper{demo="SelectSelectWidthDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffSelect v-model="compact" :options="options" />
-    <TuffSelect v-model="fluid" style="width: 100%" :options="options" />
-  </template>
----
-:::
-
 ## 交互契约
 
 - `TuffSelect` 持有单个 `string | number` 原始值；空值使用 `''` 表示。
 - `multiple` 模式下 `TuffSelect` 持有 `Array<string | number>`，选中项以标签展示，点击选项执行 toggle，不会自动关闭面板。
-- `options` 可直接传入普通选项或分组选项；普通项结构为 `{ value, label, disabled?, icon?, description? }`，分组结构为 `{ label, disabled?, options }`。`icon` 渲染为选项行首的 icon class，`description` 渲染为 label 下方的次级文本。
-- 触发器默认宽度 240px；给组件设置显式宽度后，触发器与下拉面板会同步跟随该宽度，面板不会比触发器更宽。
+- `options` 可直接传入普通选项或分组选项；普通项结构为 `{ value, label, disabled? }`，分组结构为 `{ label, disabled?, options }`。
 - `TuffSelectItem` 会把 value 和 label 注册到父级。没有传 `label` 时优先使用插槽文本，再退回原始 value。
 - 非编辑模式下点击触发器会展开/收起下拉面板。`editable` 或 `remote` 模式下，聚焦触发器会展开面板，触发器文本可编辑。
 - 选择启用项时会触发 `update:modelValue` 和 `change`，更新选中 label，并关闭下拉面板。
@@ -422,8 +365,6 @@ code: |
 | `value` | `string \| number` | - | 选中时写入父级 Select 的原始值。 |
 | `label` | `string` | - | 可见 label 和选中后展示文本；未传时使用插槽文本。 |
 | `disabled` | `boolean` | `false` | 禁止选中当前项，但仍保留在下拉列表中。 |
-| `icon` | `string` | - | 选项行首图标的 icon class，由宿主应用样式解析。 |
-| `description` | `string` | - | label 下方的次级描述文本。 |
 
 #### 暴露方法
 
@@ -449,7 +390,7 @@ code: |
 - 组件源码:`packages/tuffex/packages/components/src/select/src/TxSelect.vue` 确认基于 Popover 渲染、prop/slot 选项注册、单选与多选值路径、本地与远程搜索、创建、分组选项、loading/empty/footer 插槽、暴露方法和选中 label 同步。
 - 选项源码:`packages/tuffex/packages/components/src/select/src/TxSelectItem.vue` 确认注入注册、slot 文本 label 回退、本地过滤可见性和禁用点击抑制。
 - 类型契约:`packages/tuffex/packages/components/src/select/src/types.ts` 定义 `TxSelectValue`、model 值形态、选项/分组结构、prop 契约、上下文和 `SELECT_KEY`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` 覆盖启用/禁用选择、listbox/option/combobox 语义、本地过滤、远程搜索、选中 label 解析、数字字符串匹配、loading/empty 状态、多选标签、创建、分组选项、footer 插槽、状态 class 和选项 icon/描述/选中对勾渲染。
+- **实测覆盖:** `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` 覆盖启用/禁用选择、listbox/option/combobox 语义、本地过滤、远程搜索、选中 label 解析、数字字符串匹配、loading/empty 状态、多选标签、创建、分组选项、footer 插槽和状态 class。
 - 导出入口:`packages/tuffex/packages/components/src/select/index.ts` 导出 `TuffSelect`、`TuffSelectItem`、`TxSelect`、`TxSelectItem`、公共类型、上下文 key 和实例类型。
 
 ## Source

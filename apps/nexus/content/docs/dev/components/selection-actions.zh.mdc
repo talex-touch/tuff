@@ -3,7 +3,7 @@ title: "SelectionActions 划词工具条"
 description: "浮在选区下方的工具条，把选中的文字交给智能体改写。"
 category: Feedback
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, selection, rewrite, floating]
 syncStatus: reviewed
 verified: true

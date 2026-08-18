@@ -135,20 +135,20 @@ code: |
 
 ### Haptics
 
-Haptics are explicit opt-in: set `vibrate` to invoke device vibration and a strength-matched button nudge. The visual feedback still works on desktops that do not expose vibration.
+Haptic feedback for mobile interactions, with multiple intensity options.
 
-:::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton variant="primary" vibrate vibrate-type="light">Light</TxButton>
-    <TxButton variant="primary" vibrate vibrate-type="medium">Medium</TxButton>
-    <TxButton variant="primary" vibrate vibrate-type="heavy">Heavy</TxButton>
-    <TxButton variant="danger" vibrate vibrate-type="error">Error</TxButton>
-    <TxButton variant="secondary">Default: no haptic</TxButton>
+    <TxButton variant="primary" vibrate-type="light">Light</TxButton>
+    <TxButton variant="primary" vibrate-type="medium">Medium</TxButton>
+    <TxButton variant="primary" vibrate-type="heavy">Heavy</TxButton>
+    <TxButton variant="danger" vibrate-type="error">Error</TxButton>
+    <TxButton variant="secondary" :vibrate="false">No Haptics</TxButton>
   </template>
 ---
-:::
+::
 
 ## API
 
@@ -229,8 +229,8 @@ rows:
     description: 'Native type attribute'
   - parameter: vibrate
     type: boolean
-    default: 'false'
-    description: 'Enable device haptics and its matching visual nudge; opt in explicitly'
+    default: 'true'
+    description: 'Enable haptics'
   - parameter: vibrate-type
     type:
       kind: enum
@@ -373,7 +373,6 @@ code: |
 - `disabled` and `loading` both disable the native `<button>` and suppress the emitted `click` event.
 - `loadingVariant="bar"` is only visible for `block` buttons; icon-only / inline buttons use the spinner slot or overlay spinner.
 - Non-block, non-circle buttons animate loading width changes with a size FLIP transition.
-- `vibrate` is off by default. When explicitly enabled, a click invokes device vibration at the resolved strength and plays a matching button shake; the shake is skipped under `prefers-reduced-motion: reduce`.
 - `TxSplitButton` disables both action zones while loading; `menuDisabled` only disables the menu trigger.
 
 ## Best Practices

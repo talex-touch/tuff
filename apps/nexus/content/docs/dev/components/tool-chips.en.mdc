@@ -3,7 +3,7 @@ title: "ToolChips"
 description: "One agent run as compact rows: individually expandable tool calls, closing on the file-diff chips."
 category: Status
 status: beta
-since: 0.3.9
+since: 2.5.0
 tags: [ai, tool, diff, disclosure]
 syncStatus: reviewed
 verified: true
