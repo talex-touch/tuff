@@ -3,7 +3,7 @@ title: Suggestion Chips
 description: 横向排列的提问建议胶囊，供用户一键发起后续对话。
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, suggestion, chips]
 syncStatus: reviewed
 verified: true

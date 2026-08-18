@@ -3,7 +3,7 @@ title: Chain of Thought
 description: 多步推理与工具调用的时间线，进行中的步骤自动跟随输出。
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, reasoning, timeline]
 syncStatus: reviewed
 verified: true

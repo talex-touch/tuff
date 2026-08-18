@@ -3,7 +3,7 @@ title: "WorkingIndicator 工作指示器"
 description: "长任务进行中的行内指示器：像素格 + 微光标签 + 实时计时。"
 category: Status
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, loading, status, timer]
 syncStatus: reviewed
 verified: true

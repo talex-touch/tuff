@@ -1,10 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import {
-  checkSdkCompatibility,
-  CURRENT_SDK_VERSION,
-  isSupportedSdkVersion,
-} from '@talex-touch/utils/plugin'
+import { checkSdkCompatibility, CURRENT_SDK_VERSION, isSupportedSdkVersion, SdkApi } from '@talex-touch/utils/plugin'
 import {
   resolveIndexedSourceManifestDescriptors,
   resolveSearchProviderManifestDescriptors,
@@ -29,7 +25,7 @@ interface PluginManifest {
 }
 
 function defaultManifestText(value: string | { default: string } | undefined): string {
-  return typeof value === 'string' ? value : value?.default ?? ''
+  return typeof value === 'string' ? value : (value?.default ?? '')
 }
 
 interface LoadedManifest {
@@ -86,16 +82,11 @@ function loadOfficialPluginPackages(): LoadedPluginPackage[] {
 }
 
 function declaredPermissionIds(manifest: PluginManifest): string[] {
-  return [
-    ...(manifest.permissions?.required ?? []),
-    ...(manifest.permissions?.optional ?? []),
-  ]
+  return [...(manifest.permissions?.required ?? []), ...(manifest.permissions?.optional ?? [])]
 }
 
 function pushFeatureIds(manifest: PluginManifest): string[] {
-  return (manifest.features ?? [])
-    .filter(feature => feature.push === true)
-    .map(feature => feature.id)
+  return (manifest.features ?? []).filter(feature => feature.push === true).map(feature => feature.id)
 }
 
 describe('official plugin manifest trust boundary', () => {
@@ -129,22 +120,14 @@ describe('official plugin manifest trust boundary', () => {
     const currentMarkerPlugins = manifests
       .filter(({ manifest }) => manifest.sdkapi === CURRENT_SDK_VERSION)
       .map(({ manifest }) => manifest.name)
+    const localizationMarkerPlugins = manifests
+      .filter(({ manifest }) => manifest.sdkapi === SdkApi.V260713)
+      .map(({ manifest }) => manifest.name)
 
-    // Named rather than empty. The migration this test was waiting on has started --
-    // touch-intelligence moved to the current marker in 7faea27bf -- so an empty list is
-    // no longer the invariant. Listing the migrated plugins keeps this a review gate:
-    // the next plugin to adopt the marker still has to be added here deliberately.
-    // clipboard-history, json-formatter and touch-translation joined the marker on
-    // 2026-08-16. 260713 gates one capability, the permission-scoped localization facade
-    // (`plugin-localization-channels.ts` checks `sdkapi >= LOCALIZATION_FACADE_MIN_VERSION`),
-    // and none of the three calls it -- the bump declares support, it does not migrate
-    // anything. Listed here so the next adopter still has to be added on purpose.
-    expect(currentMarkerPlugins).toEqual([
-      'clipboard-history',
-      'json-formatter',
-      'touch-intelligence',
-      'touch-translation',
-    ])
+    // Clipboard History alone consumes the 260817 application-resolution facade.
+    // Other migrated plugins stay on the 260713 localization baseline until they use a newer API.
+    expect(currentMarkerPlugins).toEqual(['clipboard-history'])
+    expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
   })
 
   it('requires a permission reason for every declared plugin permission', () => {
@@ -204,10 +187,15 @@ describe('official plugin manifest trust boundary', () => {
           `${manifest.name} is exempt for a gap it no longer has`,
         ).toContain('SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE')
       }
-      expect(providerResolution.derivedFromPushFeatures, `${manifest.name} must not use legacy provider derivation`).toBe(false)
+      expect(
+        providerResolution.derivedFromPushFeatures,
+        `${manifest.name} must not use legacy provider derivation`,
+      ).toBe(false)
 
       if (!exempt) {
-        expect(providerResolution.descriptors.length, `${manifest.name} provider count`).toBeGreaterThanOrEqual(pushIds.length)
+        expect(providerResolution.descriptors.length, `${manifest.name} provider count`).toBeGreaterThanOrEqual(
+          pushIds.length,
+        )
       }
 
       for (const provider of providerResolution.descriptors) {
@@ -265,16 +253,23 @@ describe('official plugin manifest trust boundary', () => {
       'touch-workspace-scripts',
     ])
 
-    for (const { manifest } of manifests.filter(({ manifest }) => declaredPermissionIds(manifest).includes('system.shell'))) {
+    for (const { manifest } of manifests.filter(({ manifest }) =>
+      declaredPermissionIds(manifest).includes('system.shell'),
+    )) {
       const declaredPermissions = declaredPermissionIds(manifest)
-      expect(defaultManifestText(manifest.permissionReasons?.['system.shell']).trim(), `${manifest.name} shell reason`).toBeTruthy()
+      expect(
+        defaultManifestText(manifest.permissionReasons?.['system.shell']).trim(),
+        `${manifest.name} shell reason`,
+      ).toBeTruthy()
 
       for (const provider of manifest.searchProviders ?? []) {
         const permissionScopes = provider.permissionScopes as Parameters<typeof resolveSearchProviderPermissionIds>[0]
         expect(permissionScopes, `${manifest.name}/${String(provider.id)} root-results scope`).toContain('root-results')
 
         for (const permissionId of resolveSearchProviderPermissionIds(permissionScopes)) {
-          expect(declaredPermissions, `${manifest.name}/${String(provider.id)} declared ${permissionId}`).toContain(permissionId)
+          expect(declaredPermissions, `${manifest.name}/${String(provider.id)} declared ${permissionId}`).toContain(
+            permissionId,
+          )
         }
       }
     }

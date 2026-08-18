@@ -190,7 +190,7 @@ describe('plugin window policy', () => {
     expect(isPluginViewResourceAllowed(policy, 'tfile:///tmp/preview.png')).toBe(false)
     checkPermission.mockReturnValue({ allowed: true })
     expect(isPluginViewResourceAllowed(policy, 'tfile:///tmp/preview.png')).toBe(true)
-    expect(checkPermission).toHaveBeenLastCalledWith('clipboard-history', 'fs.tfile', 260713)
+    expect(checkPermission).toHaveBeenLastCalledWith('clipboard-history', 'fs:tfile', 260713)
   })
 
   it('allows development navigation and resources only on the configured loopback origin', async () => {

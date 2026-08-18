@@ -3,7 +3,7 @@ title: "ScrubField"
 description: "A compact numeric field whose caption is the drag handle: scrub it, step it, or type into it."
 category: Form
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [form, number, drag, inspector]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "AllocationBar 占比条"
 description: "按份额分段的胶囊条 + 图例胶囊，选中哪段就检查哪段。"
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [data, allocation, segment, chart]
 syncStatus: reviewed
 verified: true

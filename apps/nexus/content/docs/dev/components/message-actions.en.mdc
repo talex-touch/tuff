@@ -3,7 +3,7 @@ title: Message Actions
 description: A message toolbar with built-in copy and regenerate, navigated with arrow keys.
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, message, toolbar]
 syncStatus: reviewed
 verified: true
