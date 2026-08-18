@@ -5,7 +5,10 @@ import type {
 } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { createConversationSdk } from '@talex-touch/utils/transport/sdk/domains/conversation'
+import {
+  ConversationEvents,
+  createConversationSdk
+} from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { ref, toRaw, type Ref } from 'vue'
 
 export interface UseConversationHistoryReturn {
@@ -100,6 +103,7 @@ function toSaveRequest(
 const conversations = ref<ConversationRecord[]>([])
 const loading = ref(false)
 
+let conversationChangeCleanup: (() => void) | null = null
 export function useConversationHistory(): UseConversationHistoryReturn {
   const sdk = createConversationSdk(useTuffTransport())
 
@@ -113,6 +117,12 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     } finally {
       loading.value = false
     }
+  }
+
+  if (!conversationChangeCleanup) {
+    conversationChangeCleanup = useTuffTransport().on(ConversationEvents.changed, (event) => {
+      if (event.source === 'sync') void refresh()
+    })
   }
 
   async function load(

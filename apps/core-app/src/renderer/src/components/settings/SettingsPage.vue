@@ -1,10 +1,12 @@
 <script lang="ts" name="SettingsPage" setup>
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = withDefaults(
   defineProps<{
-    title: string
+    /** Omit when a full-canvas child owns the drag-safe title-bar inset. */
+    title?: string
     /**
      * Renders a way back to the page that links here, above the title. Sub-pages are siblings of
      * their category route, so the sidebar shows no trail into them.
@@ -17,11 +19,28 @@ const props = withDefaults(
      * to size its two panes against.
      */
     fill?: boolean
+    /** Removes the outer column padding for full-canvas settings surfaces. */
+    flush?: boolean
+    /** Controls which pinned scroll-edge blur bands the page renders. */
+    edgeBlur?: 'both' | 'top' | 'bottom' | 'none'
+    /** Lets full-canvas children provide their own drag surfaces around live controls. */
+    integratedDragRegion?: boolean
   }>(),
-  { backTo: undefined, backLabel: undefined, fill: false }
+  {
+    title: undefined,
+    backTo: undefined,
+    backLabel: undefined,
+    fill: false,
+    flush: false,
+    edgeBlur: 'both' as const,
+    integratedDragRegion: false
+  }
 )
 
 const router = useRouter()
+
+const showTopEdgeBlur = computed(() => props.edgeBlur === 'both' || props.edgeBlur === 'top')
+const showBottomEdgeBlur = computed(() => props.edgeBlur === 'both' || props.edgeBlur === 'bottom')
 
 function goBack(): void {
   if (props.backTo) void router.push(props.backTo)
@@ -30,12 +49,14 @@ function goBack(): void {
 
 <template>
   <div class="SettingsPage">
+    <div v-if="!integratedDragRegion" class="SettingsPage-DragRegion" aria-hidden="true" />
+
     <!--
-      The scroll-edge fade every other view inherits from `ViewTemplate`. The v2 settings shell
-      owns its own column and bypasses that wrapper, which silently dropped the pair — so it is
-      restated here with the same parameters, and both surfaces keep fading identically.
+      Settings pages can opt into either pinned scroll-edge fade independently. Full-canvas
+      surfaces disable both so their pane geometry reaches the window edges without haze.
     -->
     <TxGradualBlur
+      v-if="showTopEdgeBlur"
       exponential
       :div-count="10"
       position="top"
@@ -45,6 +66,7 @@ function goBack(): void {
       :z-index="20"
     />
     <TxGradualBlur
+      v-if="showBottomEdgeBlur"
       exponential
       :div-count="10"
       position="bottom"
@@ -55,13 +77,13 @@ function goBack(): void {
     />
 
     <div class="SettingsPage-Scroll" :class="{ 'is-fill': fill }">
-      <div class="SettingsPage-Column" :class="{ 'is-fill': fill }">
+      <div class="SettingsPage-Column" :class="{ 'is-fill': fill, 'is-flush': flush }">
         <button v-if="backTo && backLabel" class="SettingsPage-Back" type="button" @click="goBack">
           <span class="SettingsPage-BackIcon i-ri-arrow-left-s-line" />
           <span>{{ backLabel }}</span>
         </button>
 
-        <h1 class="SettingsPage-Title">
+        <h1 v-if="title" class="SettingsPage-Title">
           {{ title }}
         </h1>
 
@@ -83,6 +105,16 @@ function goBack(): void {
   height: 100%;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.SettingsPage-DragRegion {
+  z-index: 19;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 44px;
+  -webkit-app-region: drag;
 }
 
 .SettingsPage-Scroll {
@@ -118,8 +150,17 @@ function goBack(): void {
   box-sizing: border-box;
 
   &.is-fill {
+    width: 100%;
+    max-width: none;
     height: 100%;
     min-height: 0;
+    margin: 0;
+    padding: 52px 24px 24px;
+  }
+
+  &.is-flush {
+    gap: 0;
+    padding: 0;
   }
 }
 

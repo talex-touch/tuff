@@ -1732,3 +1732,16 @@ export const conversationMessages = sqliteTable(
     threadIdx: index('idx_conversation_messages_thread').on(table.conversationId, table.seq)
   })
 )
+
+/** Durable per-conversation dirty state retained until cloud sync acknowledges that revision. */
+export const conversationSyncState = sqliteTable(
+  'conversation_sync_state',
+  {
+    conversationId: text('conversation_id').primaryKey(),
+    dirtyAt: integer('dirty_at').notNull(),
+    deletedAt: integer('deleted_at')
+  },
+  (table) => ({
+    dirtyIdx: index('idx_conversation_sync_state_dirty').on(table.dirtyAt)
+  })
+)

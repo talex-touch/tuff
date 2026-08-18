@@ -49,6 +49,7 @@ describe('TpexApiProvider', () => {
             channel: 'stable',
             packageUrl: '/downloads/clipboard-history.tpex',
             packageSize: 1024,
+            manifest: { name: 'clipboard-history', sdkapi: 260817 },
             createdAt: '2026-04-21T00:00:00.000Z'
           },
           createdAt: '2026-04-20T00:00:00.000Z',
@@ -63,7 +64,8 @@ describe('TpexApiProvider', () => {
         downloadUrl: 'https://nexus.example.com/downloads/clipboard-history.tpex',
         readmeUrl:
           'https://nexus.example.com/api/store/plugins/com.tuffex.clipboard.history/readme',
-        iconUrl: 'https://nexus.example.com/icons/clipboard-history.png'
+        iconUrl: 'https://nexus.example.com/icons/clipboard-history.png',
+        manifest: { name: 'clipboard-history', sdkapi: 260817 }
       })
     ])
   })

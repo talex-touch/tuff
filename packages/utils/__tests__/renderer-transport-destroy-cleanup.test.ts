@@ -8,7 +8,7 @@
  * down. These assert on the channel instead, which is where the registration actually lives.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { ClipboardEvents } from '../transport/events'
+import { AppEvents, ClipboardEvents } from '../transport/events'
 import { TuffRendererTransport } from '../transport/sdk/renderer-transport'
 
 let currentChannel: FakeChannel
@@ -134,5 +134,21 @@ describe('destroy releases the channel registrations on() made', () => {
     expect(() => transport.destroy()).not.toThrow()
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
+  })
+
+  it('destroy 之后的请求在 renderer 内失败，不再击穿到已卸载的 main handler', async () => {
+    const { transport, channel } = createTransport()
+    const send = vi.spyOn(channel, 'send')
+    transport.destroy()
+
+    await expect(
+      transport.send(AppEvents.analytics.perfReport, {
+        kind: 'channel.send.slow',
+        eventName: 'storage:app:save',
+        durationMs: 1,
+        at: Date.now()
+      })
+    ).rejects.toThrow('transport has been destroyed')
+    expect(send).not.toHaveBeenCalled()
   })
 })

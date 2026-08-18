@@ -10,7 +10,7 @@ const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
-    mode?: 'standard' | 'advanced'
+    mode?: 'standard' | 'advanced' | 'all'
   }>(),
   { mode: 'standard' }
 )
@@ -152,7 +152,7 @@ watch(
     memory-name="setting-assistant"
   >
     <TuffBlockSwitch
-      v-if="props.mode === 'standard'"
+      v-if="props.mode !== 'advanced'"
       v-model="assistantEnabled"
       :title="t('settingAssistant.enableAssistant')"
       :description="t('settingAssistant.enableAssistantDesc')"
@@ -161,7 +161,7 @@ watch(
     />
 
     <TuffBlockSwitch
-      v-if="props.mode === 'advanced'"
+      v-if="props.mode !== 'standard'"
       v-model="floatingBallEnabled"
       :title="t('settingAssistant.floatingBall')"
       :description="t('settingAssistant.floatingBallDesc')"
@@ -170,7 +170,7 @@ watch(
     />
 
     <TuffBlockSwitch
-      v-if="props.mode === 'advanced'"
+      v-if="props.mode !== 'standard'"
       v-model="voiceWakeEnabled"
       :title="t('settingAssistant.voiceWake')"
       :description="t('settingAssistant.voiceWakeDesc')"
@@ -179,7 +179,7 @@ watch(
     />
 
     <TuffBlockInput
-      v-if="props.mode === 'advanced'"
+      v-if="props.mode !== 'standard'"
       v-model="wakeWords"
       :title="t('settingAssistant.wakeWords')"
       :description="t('settingAssistant.wakeWordsDesc')"

@@ -1011,7 +1011,7 @@
   "shell": {
     "search": "搜索",
     "newChat": "新建对话",
-    "store": "市场",
+    "store": "插件",
     "setting": "设置",
     "collapseSidebar": "收起侧边栏",
     "expandSidebar": "展开侧边栏",
@@ -1177,7 +1177,8 @@
     "search": "搜索设置",
     "group": {
       "preference": "偏好",
-      "capability": "能力",
+      "intelligence": "塔芙智能",
+      "capability": "扩展与索引",
       "system": "系统"
     },
     "category": {
@@ -1198,7 +1199,7 @@
     "tagline": "为创造者们重新构想的命令栏"
   },
   "settingsIntelligenceHub": {
-    "label": "智能中心",
+    "label": "工作流与审计",
     "back": "返回智能",
     "channels": "模型渠道",
     "channelsDesc": "模型服务商、凭据与连通性测试。",
@@ -1240,6 +1241,7 @@
     "cli": "CLI",
     "installing": "安装中...",
     "upgrade": "升级",
+    "incompatible": "与当前版本不适配，需要更新 Tuff",
     "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
     "openPluginDetails": "查看 {name} 的详情",

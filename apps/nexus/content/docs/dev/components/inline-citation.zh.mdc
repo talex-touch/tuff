@@ -3,7 +3,7 @@ title: "InlineCitation 行内引用"
 description: "嵌在正文里的来源引用胶囊，点击只派发事件，不自行跳转。"
 category: Basic
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [ai, citation, source, inline]
 syncStatus: reviewed
 verified: true

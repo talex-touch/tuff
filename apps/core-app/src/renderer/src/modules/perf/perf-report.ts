@@ -24,7 +24,10 @@ export interface RendererPerfReport {
   meta?: Record<string, unknown>
 }
 
+const PERF_REPORT_EVENT_NAME = AppEvents.analytics.perfReport.toEventName()
+
 export function reportPerfToMain(report: RendererPerfReport): void {
+  if (report.eventName === PERF_REPORT_EVENT_NAME) return
   try {
     const transport = useTuffTransport()
     void transport.send(AppEvents.analytics.perfReport, report).catch(() => {})

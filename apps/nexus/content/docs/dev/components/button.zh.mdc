@@ -135,20 +135,20 @@ code: |
 
 ### Haptics
 
-移动端触觉反馈强化按下感，支持不同震动强度。
+移动端触觉反馈需要显式开启：设置 `vibrate` 后，点击会调用设备震动，并让按钮本体按震动强度做小幅晃动；桌面端即使设备不支持震动，也会显示该视觉反馈。
 
-::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton variant="primary" vibrate-type="light">轻微震动</TxButton>
-    <TxButton variant="primary" vibrate-type="medium">中等震动</TxButton>
-    <TxButton variant="primary" vibrate-type="heavy">重度震动</TxButton>
-    <TxButton variant="danger" vibrate-type="error">错误震动</TxButton>
-    <TxButton variant="secondary" :vibrate="false">无震动</TxButton>
+    <TxButton variant="primary" vibrate vibrate-type="light">轻微震动</TxButton>
+    <TxButton variant="primary" vibrate vibrate-type="medium">中等震动</TxButton>
+    <TxButton variant="primary" vibrate vibrate-type="heavy">重度震动</TxButton>
+    <TxButton variant="danger" vibrate vibrate-type="error">错误震动</TxButton>
+    <TxButton variant="secondary">默认无震动</TxButton>
   </template>
 ---
-::
+:::
 
 ## API
 
@@ -229,8 +229,8 @@ rows:
     description: '原生 type 属性'
   - parameter: vibrate
     type: boolean
-    default: 'true'
-    description: '是否启用震动反馈'
+    default: 'false'
+    description: '是否启用震动与对应的视觉晃动反馈；需显式开启'
   - parameter: vibrate-type
     type:
       kind: enum
@@ -373,6 +373,7 @@ code: |
 - `disabled` 和 `loading` 都会禁用原生 `<button>`，并阻止 `click` 事件向外 emit。
 - `loadingVariant="bar"` 仅在块级按钮上可见；图标按钮和普通内联按钮使用 spinner slot 或 overlay spinner。
 - 非 block、非 circle 的按钮在 loading 切换时会用尺寸 FLIP 过渡宽度变化。
+- `vibrate` 默认关闭。显式开启后，点击会按解析出的震动强度触发设备震动，并让按钮播放等比幅度的小晃动；`prefers-reduced-motion: reduce` 下不晃动。
 - `TxSplitButton` 在 loading 时会禁用主操作和菜单；`menuDisabled` 只额外禁用菜单触发器。
 
 ## 最佳实践

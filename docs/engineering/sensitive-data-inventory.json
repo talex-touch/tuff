@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-08-04",
+  "updatedAt": "2026-08-17",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -201,6 +201,28 @@
       "evidence": [
         "apps/core-app/src/main/modules/privacy/owners/diagnostics-retention-owner.ts#symbol=createDiagnosticsRetentionOwner",
         "apps/core-app/src/main/modules/observability/operational-error-service.ts#symbol=OperationalErrorService"
+      ]
+    },
+    {
+      "id": "home-conversation-content",
+      "classification": "user-content",
+      "owner": "ConversationModule/SyncModule",
+      "storageLocations": [
+        "database.db: conversations/conversation_messages",
+        "database.db: conversation_sync_state (opaque ids, dirty revisions, and deletion timestamps only)",
+        "Nexus sync payload/blob storage (device-key encrypted ciphertext)"
+      ],
+      "writers": ["typed Conversation SDK", "main-owned encrypted sync apply"],
+      "readers": ["host conversation UI", "main-owned encrypted sync collector"],
+      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation payloads; never plaintext logs, analytics, ordinary config, or plugin storage",
+      "deletionPolicy": "local delete transaction writes a durable tombstone; sync acknowledgement clears the local marker after the encrypted remote delete is accepted",
+      "retentionPolicy": "until explicit conversation deletion or app-data reset; tombstones persist only until sync acknowledgement",
+      "rendererExposure": "typed conversation list/detail DTOs to host renderer only; plugins are rejected at the transport boundary",
+      "portable": false,
+      "migrationStatus": "encrypted-per-conversation-sync-with-durable-tombstones",
+      "evidence": [
+        "apps/core-app/src/main/modules/conversation/conversation-store.ts#symbol=applyConversationSyncSnapshot",
+        "apps/core-app/src/main/modules/sync/index.ts#symbol=collectStorageSnapshots"
       ]
     },
     {

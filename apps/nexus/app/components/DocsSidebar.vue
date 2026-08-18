@@ -329,6 +329,8 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/transition',
     '/docs/dev/components/stagger',
     '/docs/dev/components/fusion',
+    '/docs/dev/components/border-beam',
+    '/docs/dev/components/liquid',
     // Primitives
     '/docs/dev/components/base-surface',
     '/docs/dev/components/base-anchor',

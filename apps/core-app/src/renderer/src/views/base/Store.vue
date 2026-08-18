@@ -15,7 +15,10 @@ import { useStoreInstall } from '~/composables/store/useStoreInstall'
 import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
 import { createRendererLogger } from '~/utils/renderer-log'
+import PluginInstalled from '~/views/base/Plugin.vue'
+import StoreCliBeta from '~/views/base/store/StoreCliBeta.vue'
 import StoreDetailOverlay from '~/views/base/store/StoreDetailOverlay.vue'
+import StoreDocs from '~/views/base/store/StoreDocs.vue'
 import StoreSourceEditor from '~/views/base/store/StoreSourceEditor.vue'
 
 const router = useRouter()
@@ -70,12 +73,7 @@ const { tags: categoryTags, updateCategoryTags } = useStoreCategories(storePlugi
 
 const { handleInstall, getInstallTask } = useStoreInstall()
 
-const {
-  installedPluginNames,
-  installedPluginVersions,
-  getInstalledVersionForStore,
-  getPluginVersionStatus
-} = usePluginVersionStatus()
+const { getInstalledVersionForStore, getPluginVersionStatus } = usePluginVersionStatus()
 
 const { isLoggedIn } = useAuth()
 const sourceEditorShow = ref(false)
@@ -95,10 +93,7 @@ const searchKey = ref('')
 const sourcesState = storeSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
 
-const PluginInstalled = defineAsyncComponent(() => import('~/views/base/Plugin.vue'))
-const StoreDocs = defineAsyncComponent(() => import('~/views/base/store/StoreDocs.vue'))
 const StorePublisher = defineAsyncComponent(() => import('~/views/base/store/StorePublisher.vue'))
-const StoreCliBeta = defineAsyncComponent(() => import('~/views/base/store/StoreCliBeta.vue'))
 
 const providerStatsComputed = computed(() => {
   const stats = providerStats.value
@@ -308,13 +303,11 @@ onMounted(() => {
         :plugins="displayedPlugins"
         :view-type="viewType"
         :loading="loading"
-        :installed-names="installedPluginNames"
-        :installed-versions="installedPluginVersions"
         @install="onInstall"
         @open-detail="openPluginDetail"
       />
 
-      <Transition name="store-tabs" mode="out-in">
+      <Transition name="store-tabs">
         <StorePublisher
           v-if="tabs === 'publisher' && showPublisherTab"
           key="publisher"
@@ -349,6 +342,7 @@ onMounted(() => {
           :plugin-name="activeDetailPlugin.name"
           :is-installed="activeDetailPluginStatus.isInstalled"
           :has-upgrade="activeDetailPluginStatus.hasUpgrade"
+          :is-compatible="activeDetailPluginStatus.isCompatible"
           :installed-version="activeDetailPluginStatus.installedVersion"
           :store-version="activeDetailPluginStatus.storeVersion"
           :install-task="activeDetailInstallTask"

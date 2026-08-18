@@ -2,6 +2,7 @@ import type { DashboardPlugin, DashboardPluginVersion } from '../../utils/plugin
 import type { PluginReleaseAudience } from '../../utils/pluginReleaseEligibility'
 import { listStorePlugins } from '../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../utils/pluginStoreAccess'
+import { projectPublicPluginManifest } from '../../utils/pluginManifestProjection'
 
 function buildStoreDownloadUrl(
   slug: string,
@@ -63,6 +64,7 @@ function cleanVersionForStore(
     status: version.status,
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
+    manifest: projectPublicPluginManifest(version.manifest),
   }
 
   if (options.compact) {

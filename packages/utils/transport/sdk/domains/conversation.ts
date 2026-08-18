@@ -38,6 +38,13 @@ export interface ConversationSaveRequest {
   }>;
 }
 
+export interface ConversationChangeNotification {
+  type: 'upsert' | 'delete';
+  conversationId: string;
+  updatedAt: number;
+  source: 'local' | 'sync';
+}
+
 export const ConversationEvents = {
   list: defineEvent("conversation")
     .module("api")
@@ -59,6 +66,10 @@ export const ConversationEvents = {
     .module("api")
     .event("rename")
     .define<{ id: string; title: string }, { renamed: boolean }>(),
+  changed: defineEvent("conversation")
+    .module("push")
+    .event("changed")
+    .define<ConversationChangeNotification, void>(),
 } as const;
 
 export interface ConversationSdk {

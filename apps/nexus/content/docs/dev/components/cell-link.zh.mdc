@@ -3,7 +3,7 @@ title: "CellLink 单元格链接"
 description: "表格单元格里的链接，渲染真实 href 但从不自行导航，由宿主决定如何打开。"
 category: Data
 status: beta
-since: 2.5.0
+since: 0.3.9
 tags: [link, table, cell, data]
 syncStatus: reviewed
 verified: true

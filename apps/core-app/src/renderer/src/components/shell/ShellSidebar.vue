@@ -6,7 +6,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
-import { groupedSettingCategories } from '~/modules/settings/categories'
+import { groupedSettingNavigation } from '~/modules/settings/categories'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import ShellBackRow from './ShellBackRow.vue'
 import ShellChromeBar from './ShellChromeBar.vue'
@@ -65,7 +65,7 @@ const contextTransition = computed(() =>
 )
 
 const searchKbd = computed(() => (isMac.value ? '⌘E' : 'Ctrl+E'))
-const settingGroups = groupedSettingCategories()
+const settingGroups = groupedSettingNavigation()
 const appVersion = computed(() =>
   packageJson.value?.version ? `v${packageJson.value.version}` : ''
 )
@@ -98,11 +98,12 @@ function openCoreBox(): void {
           :label="t(`settingsNav.group.${group.group}`)"
         >
           <ShellNavItem
-            v-for="category in group.items"
-            :key="category.key"
-            :icon="category.icon"
-            :label="t(`settingsNav.category.${category.labelKey}`)"
-            :to="category.path"
+            v-for="item in group.items"
+            :key="item.key"
+            :icon="item.icon"
+            :label="t(item.labelKey)"
+            :to="item.path"
+            :active="item.activeExact ? route.path === item.path : undefined"
           />
         </ShellNavGroup>
 
@@ -122,11 +123,7 @@ function openCoreBox(): void {
 
         <nav class="ShellSidebar-Nav">
           <ShellNavItem icon="i-ri-edit-box-line" :label="t('shell.newChat')" to="/home" />
-          <!--
-            Intelligence moved under 「设置 · 智能」: it is configuration, not a place you switch to
-            alongside conversations and the store. Its six pages are sub-routes of that category,
-            which `ShellNavItem` keeps selected by path prefix.
-          -->
+          <!-- Intelligence configuration lives in the settings rail, not the home-mode nav. -->
           <ShellNavItem icon="i-ri-store-2-line" :label="t('shell.store')" to="/store" />
         </nav>
 

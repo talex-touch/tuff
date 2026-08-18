@@ -337,12 +337,7 @@ useKeyboardNavigation({
 </script>
 
 <template>
-  <SettingsPage
-    :title="t('settingsIntelligenceHub.channels')"
-    back-to="/setting/intelligence"
-    :back-label="t('settingsIntelligenceHub.back')"
-    fill
-  >
+  <SettingsPage edge-blur="none" fill flush integrated-drag-region>
     <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
       <TuffAsideTemplate
         v-model="searchQuery"
@@ -351,6 +346,7 @@ useKeyboardNavigation({
         :clear-label="t('intelligence.search.clear')"
         :main-aria-live="selectedProvider ? 'polite' : 'off'"
         :main-edge-blur="false"
+        window-drag-region
       >
         <template #default>
           <IntelligenceList

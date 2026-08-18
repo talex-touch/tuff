@@ -40,6 +40,17 @@ import {
   touchEventBus
 } from '../../core/eventbus/touch-event'
 import {
+  applyConversationSyncDeletion,
+  applyConversationSyncSnapshot,
+  clearConversationSyncState,
+  getConversation,
+  getConversationSyncState,
+  listConversationIdsForSync,
+  listConversationSyncStates,
+  normalizeConversationSyncSnapshot,
+  subscribeConversationMutations
+} from '../conversation/conversation-store'
+import {
   encryptSyncPayload,
   getSyncPayloadKeyRegistration,
   markSyncPayloadKeyRegistered,
@@ -61,6 +72,8 @@ const syncLog = getLogger('sync')
 
 const PLUGIN_SYNC_QUALIFIED_PREFIX = 'plugin::'
 const PLUGIN_SYNC_ALL_SCOPE = `${PLUGIN_SYNC_QUALIFIED_PREFIX}__all__`
+const CONVERSATION_SYNC_QUALIFIED_PREFIX = 'conversation::'
+const CONVERSATION_SYNC_ALL_SCOPE = `${CONVERSATION_SYNC_QUALIFIED_PREFIX}__all__`
 
 const AUTO_PULL_TASK_ID = 'main.sync.auto-pull'
 const AUTO_PULL_INTERVAL_MINUTES = 10
@@ -109,6 +122,7 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null
 let blobBatchTimer: ReturnType<typeof setTimeout> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let pluginStorageListenerBound = false
+let conversationMutationCleanup: (() => void) | null = null
 let transport: ITuffTransportMain | null = null
 let syncEnabledWatcherCleanup: (() => void) | null = null
 let authStateCleanup: (() => void) | null = null
@@ -553,6 +567,53 @@ function parsePluginStorageQualifiedName(
   }
 }
 
+function isConversationQualifiedName(value: string): boolean {
+  return value.startsWith(CONVERSATION_SYNC_QUALIFIED_PREFIX)
+}
+
+function buildConversationQualifiedName(conversationId: string): string {
+  const normalized = conversationId.trim()
+  return normalized ? `${CONVERSATION_SYNC_QUALIFIED_PREFIX}${encodeURIComponent(normalized)}` : ''
+}
+
+function parseConversationQualifiedName(qualifiedName: string): string | null {
+  const normalized = qualifiedName.trim()
+  if (!isConversationQualifiedName(normalized) || normalized === CONVERSATION_SYNC_ALL_SCOPE) {
+    return null
+  }
+  try {
+    const id = decodeURIComponent(
+      normalized.slice(CONVERSATION_SYNC_QUALIFIED_PREFIX.length)
+    ).trim()
+    return id || null
+  } catch {
+    return null
+  }
+}
+
+async function resolveConversationDeleteCandidates(
+  scope: Set<string>
+): Promise<Array<{ qualifiedName: string; conversationId: string; deletedAt: number }>> {
+  const states = scope.has(CONVERSATION_SYNC_ALL_SCOPE)
+    ? await listConversationSyncStates()
+    : (
+        await Promise.all(
+          [...scope]
+            .map(parseConversationQualifiedName)
+            .filter((id): id is string => Boolean(id))
+            .map((conversationId) => getConversationSyncState(conversationId))
+        )
+      ).filter((state): state is NonNullable<typeof state> => Boolean(state))
+
+  return states
+    .filter((state): state is typeof state & { deletedAt: number } => state.deletedAt !== null)
+    .map((state) => ({
+      qualifiedName: buildConversationQualifiedName(state.conversationId),
+      conversationId: state.conversationId,
+      deletedAt: state.deletedAt
+    }))
+}
+
 function buildDeleteOpHash(qualifiedName: string, updatedAt: string): string {
   return `delete:${qualifiedName}:${updatedAt}`
 }
@@ -660,37 +721,36 @@ async function collectStorageSnapshots(
   qualifiedNames?: Iterable<string>
 ): Promise<StorageSyncSnapshot[]> {
   const targetNames = qualifiedNames ? Array.from(new Set(qualifiedNames)) : [...SYNC_STORAGE_KEYS]
-  const localTargetNames = targetNames.filter((name) => !isPluginStorageQualifiedName(name))
+  const localTargetNames = targetNames.filter(
+    (name) => !isPluginStorageQualifiedName(name) && !isConversationQualifiedName(name)
+  )
   const includeAllPluginItems = !qualifiedNames || targetNames.includes(PLUGIN_SYNC_ALL_SCOPE)
   const pluginTargetNames = includeAllPluginItems
     ? undefined
     : targetNames.filter((name) => isPluginStorageQualifiedName(name))
+  const includeAllConversations =
+    !qualifiedNames || targetNames.includes(CONVERSATION_SYNC_ALL_SCOPE)
+  const requestedConversationIds = includeAllConversations
+    ? await listConversationIdsForSync()
+    : targetNames.map(parseConversationQualifiedName).filter((id): id is string => Boolean(id))
 
   const snapshots: StorageSyncSnapshot[] = []
 
   for (const qualifiedName of localTargetNames) {
-    if (!isSyncStorageKey(qualifiedName)) {
-      continue
-    }
+    if (!isSyncStorageKey(qualifiedName)) continue
     const raw = getMainStorageConfig(qualifiedName)
-    if (!raw || typeof raw !== 'object') {
-      continue
-    }
+    if (!raw || typeof raw !== 'object') continue
 
     const syncPayload =
       qualifiedName === StorageList.APP_SETTING ? omitMainOwnedAuthSettings(raw) : raw
     const rawText = JSON.stringify(syncPayload)
     const encrypted = await encryptSyncPayload(rawText)
-    const payloadEnc = encrypted.payloadEnc
-    const payloadSize = textEncoder.encode(payloadEnc).byteLength
-    const contentHash = sha256Hex(rawText)
-
     snapshots.push({
       qualifiedName,
       itemId: `${STORAGE_ITEM_PREFIX}${qualifiedName}`,
-      payloadEnc,
-      payloadSize,
-      contentHash,
+      payloadEnc: encrypted.payloadEnc,
+      payloadSize: textEncoder.encode(encrypted.payloadEnc).byteLength,
+      contentHash: sha256Hex(rawText),
       cryptoVersion: encrypted.cryptoVersion,
       keyId: encrypted.keyId,
       rawText
@@ -698,30 +758,42 @@ async function collectStorageSnapshots(
   }
 
   if (includeAllPluginItems || (pluginTargetNames && pluginTargetNames.length > 0)) {
-    const pluginItems = collectPluginSyncItems(pluginTargetNames)
-    for (const item of pluginItems) {
-      const normalizedQualifiedName = item.qualifiedName.trim()
-      if (!normalizedQualifiedName || !isPluginStorageQualifiedName(normalizedQualifiedName)) {
-        continue
-      }
+    for (const item of collectPluginSyncItems(pluginTargetNames)) {
+      const qualifiedName = item.qualifiedName.trim()
+      if (!qualifiedName || !isPluginStorageQualifiedName(qualifiedName)) continue
       const content = item.content && typeof item.content === 'object' ? item.content : {}
       const rawText = JSON.stringify(content)
       const encrypted = await encryptSyncPayload(rawText)
-      const payloadEnc = encrypted.payloadEnc
-      const payloadSize = textEncoder.encode(payloadEnc).byteLength
-      const contentHash = sha256Hex(rawText)
-
       snapshots.push({
-        qualifiedName: normalizedQualifiedName,
-        itemId: `${STORAGE_ITEM_PREFIX}${normalizedQualifiedName}`,
-        payloadEnc,
-        payloadSize,
-        contentHash,
+        qualifiedName,
+        itemId: `${STORAGE_ITEM_PREFIX}${qualifiedName}`,
+        payloadEnc: encrypted.payloadEnc,
+        payloadSize: textEncoder.encode(encrypted.payloadEnc).byteLength,
+        contentHash: sha256Hex(rawText),
         cryptoVersion: encrypted.cryptoVersion,
         keyId: encrypted.keyId,
         rawText
       })
     }
+  }
+
+  for (const conversationId of new Set(requestedConversationIds)) {
+    const snapshot = await getConversation(conversationId)
+    if (!snapshot) continue
+    const qualifiedName = buildConversationQualifiedName(conversationId)
+    const rawText = JSON.stringify(snapshot)
+    const encrypted = await encryptSyncPayload(rawText)
+    snapshots.push({
+      qualifiedName,
+      itemId: `${STORAGE_ITEM_PREFIX}${qualifiedName}`,
+      payloadEnc: encrypted.payloadEnc,
+      payloadSize: textEncoder.encode(encrypted.payloadEnc).byteLength,
+      contentHash: sha256Hex(rawText),
+      cryptoVersion: encrypted.cryptoVersion,
+      keyId: encrypted.keyId,
+      rawText,
+      updatedAt: new Date(snapshot.updatedAt).toISOString()
+    })
   }
 
   return snapshots
@@ -972,51 +1044,91 @@ async function applyPulledStorageItems(
   let appliedCount = 0
 
   for (const item of items) {
-    if (item.type !== STORAGE_ITEM_TYPE) {
-      continue
-    }
-
+    if (item.type !== STORAGE_ITEM_TYPE) continue
     const qualifiedName = extractQualifiedName(item)
-    if (!qualifiedName) {
+    if (!qualifiedName) continue
+
+    if (isConversationQualifiedName(qualifiedName)) {
+      const conversationId = parseConversationQualifiedName(qualifiedName)
+      if (!conversationId) continue
+
+      try {
+        const local = await getConversation(conversationId)
+        const localState = await getConversationSyncState(conversationId)
+        const localUpdatedAt = Math.max(local?.updatedAt ?? 0, localState?.dirtyAt ?? 0)
+
+        if (item.deleted_at) {
+          const remoteDeletedAt = Date.parse(item.deleted_at)
+          if (
+            dirtyStorages.has(qualifiedName) &&
+            Number.isFinite(remoteDeletedAt) &&
+            localUpdatedAt > remoteDeletedAt
+          ) {
+            continue
+          }
+          remoteApplyInFlight.add(qualifiedName)
+          await applyConversationSyncDeletion(
+            conversationId,
+            Number.isFinite(remoteDeletedAt) ? remoteDeletedAt : Date.now()
+          )
+          remoteApplyInFlight.delete(qualifiedName)
+          dirtyStorages.delete(qualifiedName)
+          appliedCount += 1
+          setQueueDepthByBuffers()
+          continue
+        }
+
+        const payload = await resolveEncryptedPayloadText(item, client)
+        if (!payload) continue
+        const remote = normalizeConversationSyncSnapshot(JSON.parse(payload.rawText))
+        if (!remote) {
+          syncLog.warn('Rejected invalid remote conversation snapshot', {
+            meta: { qualifiedName }
+          })
+          continue
+        }
+        if (dirtyStorages.has(qualifiedName) && localUpdatedAt > remote.updatedAt) continue
+
+        remoteApplyInFlight.add(qualifiedName)
+        await applyConversationSyncSnapshot(remote)
+        remoteApplyInFlight.delete(qualifiedName)
+        if (payload.requiresMigrationRewrite) {
+          markB64MigrationPayloadForRepush(qualifiedName)
+        } else {
+          dirtyStorages.delete(qualifiedName)
+          setQueueDepthByBuffers()
+        }
+        appliedCount += 1
+      } catch (error) {
+        remoteApplyInFlight.delete(qualifiedName)
+        syncLog.warn('Failed to apply remote conversation snapshot', {
+          error,
+          meta: { qualifiedName }
+        })
+      }
       continue
     }
 
     if (isPluginStorageQualifiedName(qualifiedName)) {
       if (item.deleted_at) {
-        const removed = await applyPluginStorageDeletion(qualifiedName)
-        if (removed) {
-          appliedCount += 1
-        }
+        if (await applyPluginStorageDeletion(qualifiedName)) appliedCount += 1
         continue
       }
-
       const payload = await resolveEncryptedPayloadText(item, client)
-      if (!payload) {
-        continue
-      }
-
+      if (!payload) continue
       const applied = await applyPluginStorageSnapshot(
         qualifiedName,
         payload.rawText,
         extractContentHash(item)
       )
-      if (payload.requiresMigrationRewrite) {
-        markB64MigrationPayloadForRepush(qualifiedName)
-      }
-      if (applied) {
-        appliedCount += 1
-      }
+      if (payload.requiresMigrationRewrite) markB64MigrationPayloadForRepush(qualifiedName)
+      if (applied) appliedCount += 1
       continue
     }
 
-    if (item.deleted_at) {
-      continue
-    }
-
+    if (item.deleted_at) continue
     const payload = await resolveEncryptedPayloadText(item, client)
-    if (!payload) {
-      continue
-    }
+    if (!payload) continue
 
     try {
       const parsed = JSON.parse(payload.rawText) as Record<string, unknown>
@@ -1042,6 +1154,7 @@ async function applyPulledStorageItems(
       }
       appliedCount += 1
     } catch (error) {
+      remoteApplyInFlight.delete(qualifiedName)
       syncLog.warn('Failed to apply remote storage snapshot', {
         error,
         meta: { qualifiedName }
@@ -1140,7 +1253,11 @@ function markStorageDirty(qualifiedName: string): void {
   if (normalized === StorageList.APP_SETTING && syncPreferenceWriteDepth > 0) {
     return
   }
-  if (!isSyncStorageKey(normalized) && !isPluginStorageQualifiedName(normalized)) {
+  if (
+    !isSyncStorageKey(normalized) &&
+    !isPluginStorageQualifiedName(normalized) &&
+    !isConversationQualifiedName(normalized)
+  ) {
     return
   }
   if (!started || !getSyncPreferenceState().enabled) {
@@ -1209,6 +1326,21 @@ function handlePluginStorageUpdate(event: ITouchEvent<TalexEvents>): void {
   markStorageDirty(PLUGIN_SYNC_ALL_SCOPE)
 }
 
+function registerConversationMutationListener(): void {
+  if (conversationMutationCleanup) return
+  conversationMutationCleanup = subscribeConversationMutations((mutation) => {
+    if (mutation.source === 'sync') return
+    const qualifiedName = buildConversationQualifiedName(mutation.conversationId)
+    if (qualifiedName) markStorageDirty(qualifiedName)
+  })
+}
+
+function cleanupConversationMutationListener(): void {
+  if (!conversationMutationCleanup) return
+  conversationMutationCleanup()
+  conversationMutationCleanup = null
+}
+
 function warmupKnownStorages(): void {
   for (const key of SYNC_STORAGE_KEYS) {
     try {
@@ -1220,6 +1352,23 @@ function warmupKnownStorages(): void {
       syncLog.warn('Failed to warmup sync storage', { error, meta: { key } })
     }
   }
+}
+
+async function warmupConversationSyncState(): Promise<void> {
+  try {
+    for (const state of await listConversationSyncStates()) {
+      const qualifiedName = buildConversationQualifiedName(state.conversationId)
+      if (qualifiedName) dirtyStorages.add(qualifiedName)
+    }
+  } catch (error) {
+    // Dev HMR can reload sync code before the restarted main process applies a newly added
+    // migration. Degrade this one domain instead of turning the migration race into an unhandled
+    // startup rejection; the next cold/restarted main applies the forward migration.
+    syncLog.warn('Conversation sync state is unavailable until database migrations complete', {
+      error
+    })
+  }
+  setQueueDepthByBuffers()
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, timeoutCode: string): Promise<T> {
@@ -1467,6 +1616,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
         scope.add(key)
       }
       scope.add(PLUGIN_SYNC_ALL_SCOPE)
+      scope.add(CONVERSATION_SYNC_ALL_SCOPE)
     } else {
       for (const key of dirtyStorages) {
         scope.add(key)
@@ -1479,7 +1629,9 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       return false
     }
 
-    const scopeMarkers = Array.from(scope).filter(isPluginScopeMarker)
+    const scopeMarkers = Array.from(scope).filter(
+      (name) => isPluginScopeMarker(name) || name === CONVERSATION_SYNC_ALL_SCOPE
+    )
 
     try {
       await ensureSyncPayloadKeyRegistered(client)
@@ -1487,6 +1639,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       const items: SyncItemInput[] = []
       const processed = new Set<string>()
       const currentPluginQualifiedNames = new Set<string>()
+      const processedConversationDirtyAt = new Map<string, number>()
       let lastAllocatedOpSeq = Math.max(0, Math.floor(getSyncPreferenceState().opSeq || 0))
 
       for (const snapshot of snapshots) {
@@ -1501,7 +1654,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
           continue
         }
 
-        const nowIso = new Date().toISOString()
+        const updatedAt = snapshot.updatedAt ?? new Date().toISOString()
         lastAllocatedOpSeq += 1
         const opSeq = lastAllocatedOpSeq
         if (isLarge) {
@@ -1510,12 +1663,17 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
             filename: `${snapshot.qualifiedName}.sync`,
             contentType: 'text/plain;charset=utf-8'
           })
-          items.push(buildBlobSyncItem(snapshot, opSeq, nowIso, upload.blob_id))
+          items.push(buildBlobSyncItem(snapshot, opSeq, updatedAt, upload.blob_id))
           pendingBlobStorages.delete(snapshot.qualifiedName)
         } else {
-          items.push(buildSyncItemFromSnapshot(snapshot, opSeq, nowIso))
+          items.push(buildSyncItemFromSnapshot(snapshot, opSeq, updatedAt))
         }
         processed.add(snapshot.qualifiedName)
+        const conversationId = parseConversationQualifiedName(snapshot.qualifiedName)
+        const conversationDirtyAt = snapshot.updatedAt ? Date.parse(snapshot.updatedAt) : Number.NaN
+        if (conversationId && Number.isFinite(conversationDirtyAt)) {
+          processedConversationDirtyAt.set(conversationId, conversationDirtyAt)
+        }
       }
 
       const deletedPluginQualifiedNames = resolvePluginDeleteCandidates(
@@ -1536,6 +1694,22 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
         processed.add(qualifiedName)
       }
 
+      const deletedConversations = await resolveConversationDeleteCandidates(scope)
+      for (const deletion of deletedConversations) {
+        const updatedAt = new Date(deletion.deletedAt).toISOString()
+        lastAllocatedOpSeq += 1
+        items.push(
+          buildDeletedSyncItem(
+            deletion.qualifiedName,
+            lastAllocatedOpSeq,
+            updatedAt,
+            buildDeleteOpHash(deletion.qualifiedName, updatedAt)
+          )
+        )
+        processed.add(deletion.qualifiedName)
+        processedConversationDirtyAt.set(deletion.conversationId, deletion.deletedAt)
+      }
+
       if (!items.length) {
         for (const marker of scopeMarkers) {
           dirtyStorages.delete(marker)
@@ -1554,7 +1728,22 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       setSyncCursor(Math.max(getSyncPreferenceState().cursor, result.ack_cursor))
       setSyncStatus('idle')
 
+      const conflictedItemIds = new Set(result.conflicts.map((conflict) => conflict.item_id))
       for (const key of processed) {
+        if (conflictedItemIds.has(`${STORAGE_ITEM_PREFIX}${key}`)) continue
+
+        const conversationId = parseConversationQualifiedName(key)
+        const expectedDirtyAt = conversationId
+          ? processedConversationDirtyAt.get(conversationId)
+          : undefined
+        if (conversationId && expectedDirtyAt !== undefined) {
+          await clearConversationSyncState(conversationId, expectedDirtyAt)
+          const remainingState = await getConversationSyncState(conversationId)
+          if (remainingState) dirtyStorages.add(key)
+          else dirtyStorages.delete(key)
+          continue
+        }
+
         dirtyStorages.delete(key)
         if (isSyncStorageKey(key)) {
           const data = getMainStorageConfig(key)
@@ -1618,6 +1807,7 @@ async function startAutoSync(): Promise<void> {
   if (started) {
     registerStorageWatchers()
     registerPluginStorageListener()
+    registerConversationMutationListener()
     return
   }
   if (!(await canRunSync())) {
@@ -1630,6 +1820,8 @@ async function startAutoSync(): Promise<void> {
   clearRetryTimer()
   registerStorageWatchers()
   registerPluginStorageListener()
+  registerConversationMutationListener()
+  await warmupConversationSyncState()
 
   setSyncStatus('idle')
   setNextPullAt(new Date(Date.now() + AUTO_PULL_INTERVAL_MINUTES * 60 * 1000).toISOString())
@@ -1656,7 +1848,12 @@ async function startAutoSync(): Promise<void> {
 }
 
 function stopAutoSync(reason = 'stop'): void {
-  if (!started && !storageWatchers.size && !pluginStorageListenerBound) {
+  if (
+    !started &&
+    !storageWatchers.size &&
+    !pluginStorageListenerBound &&
+    !conversationMutationCleanup
+  ) {
     return
   }
 
@@ -1669,6 +1866,7 @@ function stopAutoSync(reason = 'stop'): void {
   setQueueDepthByBuffers()
   cleanupStorageWatchers()
   cleanupPluginStorageListener()
+  cleanupConversationMutationListener()
 
   if (pollingService.isRegistered(AUTO_PULL_TASK_ID)) {
     pollingService.unregister(AUTO_PULL_TASK_ID)
@@ -1785,6 +1983,7 @@ export class SyncModule extends BaseModule<TalexEvents> {
     }
     cleanupPluginStorageListener()
     cleanupStorageWatchers()
+    cleanupConversationMutationListener()
     for (const dispose of this.transportDisposers) {
       try {
         dispose()

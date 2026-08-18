@@ -35,6 +35,8 @@ interface Props {
   installTask?: PluginInstallProgressEvent | null
   /** Whether to show in mini mode (smaller button) */
   mini?: boolean
+  /** Whether the catalog manifest SDK can run on this host version */
+  isCompatible?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -44,7 +46,8 @@ const props = withDefaults(defineProps<Props>(), {
   installedVersion: '',
   storeVersion: '',
   installTask: null,
-  mini: true
+  mini: true,
+  isCompatible: true
 })
 
 const emit = defineEmits<{
@@ -106,6 +109,9 @@ const showSpinner = computed(() => installStage.value === 'installing' && !showP
 
 /** Button icon based on current state */
 const buttonIcon = computed(() => {
+  if (!props.isCompatible && !installStage.value) {
+    return 'i-ri-error-warning-line'
+  }
   // Has upgrade available - show upload/upgrade icon
   if (props.isInstalled && props.hasUpgrade && !installStage.value) {
     return 'i-ri-arrow-up-circle-line'
@@ -136,6 +142,9 @@ const buttonIcon = computed(() => {
 
 /** Button label text based on current state */
 const buttonLabel = computed(() => {
+  if (!props.isCompatible && !installStage.value) {
+    return t('store.incompatible')
+  }
   // Has upgrade available
   if (props.isInstalled && props.hasUpgrade && !installStage.value) {
     return t('store.upgrade')
@@ -170,6 +179,7 @@ const buttonLabel = computed(() => {
 
 /** Whether install button should be disabled */
 const isDisabled = computed(() => {
+  if (!props.isCompatible) return true
   // Disabled during active installation
   if (isActiveStage.value) return true
   // Disabled if installed AND no upgrade available
@@ -191,10 +201,11 @@ function handleClick(event: MouseEvent): void {
 <template>
   <TxButton
     variant="flat"
-    :type="!isInstalled || hasUpgrade ? 'primary' : undefined"
+    :type="isCompatible && (!isInstalled || hasUpgrade) ? 'primary' : undefined"
     :size="mini ? 'sm' : undefined"
+    :title="!isCompatible ? t('store.incompatible') : undefined"
     :disabled="isDisabled"
-    :class="{ 'upgrade-available': hasUpgrade && isInstalled && !isActiveStage }"
+    :class="{ 'upgrade-available': isCompatible && hasUpgrade && isInstalled && !isActiveStage }"
     @click="handleClick"
   >
     <div class="install-button-content">

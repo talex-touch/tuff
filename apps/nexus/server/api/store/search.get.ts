@@ -2,6 +2,7 @@ import type { DashboardPluginVersion, StorePluginSearchPlugin } from '../../util
 import type { PluginReleaseAudience } from '../../utils/pluginReleaseEligibility'
 import { searchStorePlugins } from '../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../utils/pluginStoreAccess'
+import { projectPublicPluginManifest } from '../../utils/pluginManifestProjection'
 
 interface StoreSearchQuery {
   q?: string
@@ -62,6 +63,7 @@ function cleanVersionForSearch(
     status: version.status,
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
+    manifest: projectPublicPluginManifest(version.manifest),
   }
   if (compact)
     return base

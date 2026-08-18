@@ -1,0 +1,171 @@
+---
+title: "BorderBeam"
+description: "A traveling / breathing border glow wrapper for emphasizing cards, buttons and search bars."
+category: Effects
+status: beta
+since: 0.3.9
+tags: [border, beam, glow, highlight]
+syncStatus: reviewed
+verified: true
+---
+# BorderBeam
+
+## Basic Usage
+
+:::TuffDemoWrapper{demo="BorderBeamShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed } from 'vue'
+
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+  </script>
+
+  <template>
+    <TxBorderBeam :theme="beamTheme" :border-radius="16">
+      <TxCard :radius="16" :padding="24">md · full border</TxCard>
+    </TxBorderBeam>
+    <TxBorderBeam size="sm" :theme="beamTheme">
+      <TxButton round variant="secondary">sm</TxButton>
+    </TxBorderBeam>
+    <TxBorderBeam size="line" :theme="beamTheme" :border-radius="12">
+      <TxFlatInput placeholder="line" />
+    </TxBorderBeam>
+  </template>
+---
+:::
+
+## Pulse Family
+
+The pulse family does not rotate — the glow breathes on a shared ~30fps rAF loop. `pulse-outside` renders its halo behind the content layer and blooms outward, so it needs an opaque child with its own 1px border.
+
+:::TuffDemoWrapper{demo="BorderBeamPulseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+  const active = ref(true)
+  </script>
+
+  <template>
+    <TxBorderBeam size="pulse-inner" :theme="beamTheme" :active="active" :border-radius="16">
+      <TxCard :radius="16" :padding="28">pulse-inner</TxCard>
+    </TxBorderBeam>
+    <TxBorderBeam size="pulse-outside" :theme="beamTheme" :active="active" :border-radius="16">
+      <TxCard :radius="16" :padding="28">pulse-outside</TxCard>
+    </TxBorderBeam>
+    <TxSwitch v-model="active" />
+  </template>
+---
+:::
+
+## Composition Examples
+
+### Color and Theme
+
+Four palettes; `mono` automatically disables the hue-shift animation. `theme` tunes the beam for dark or light backgrounds, and `auto` follows the system `prefers-color-scheme`.
+
+```vue
+<template>
+  <TxBorderBeam color-variant="ocean" theme="light">
+    <div class="card">ocean · light</div>
+  </TxBorderBeam>
+  <TxBorderBeam color-variant="sunset" :strength="0.7">
+    <div class="card">sunset · 70%</div>
+  </TxBorderBeam>
+</template>
+```
+
+### Custom Tempo
+
+`duration` sets one travel loop or breathe cycle in seconds; `hueRange` bounds the hue drift and `staticColors` freezes it entirely.
+
+```vue
+<template>
+  <TxBorderBeam :duration="4" :hue-range="60">
+    <div class="card">slow · wide hue swing</div>
+  </TxBorderBeam>
+  <TxBorderBeam static-colors>
+    <div class="card">frozen palette</div>
+  </TxBorderBeam>
+</template>
+```
+
+## Interaction Contract
+
+- The component wraps its slot content and overlays the beam layers; every effect layer is `pointer-events: none` and never blocks slot interaction.
+- Without `borderRadius`, the `border-top-left-radius` of the first slot element is auto-detected; detection failure falls back to the size preset default.
+- Toggling `active` runs a fade transition and emits `activate` / `deactivate` when the fade finishes.
+- Animations pause automatically while the element is offscreen (256px margin, `data-paused`) without firing activate/deactivate.
+- Each instance injects its own `<style>` scoped by the instance id (`data-beam`).
+- The pulse family disables its breathing driver under `prefers-reduced-motion: reduce`.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `size` | `'sm' \| 'md' \| 'line' \| 'pulse-outside' \| 'pulse-inner'` | `'md'` | Type preset: rotate family (sm/md/line) or pulse family. |
+| `colorVariant` | `'colorful' \| 'mono' \| 'ocean' \| 'sunset'` | `'colorful'` | Color palette; `mono` implies `staticColors`. |
+| `theme` | `'dark' \| 'light' \| 'auto'` | `'dark'` | Background adaptation; `auto` follows the system preference. |
+| `strength` | `number` | `1` | Overall effect intensity (0-1); only affects the beam layers. |
+| `duration` | `number` | `1.96` / `3.1` / `2.3` | Cycle duration in seconds (rotate / line / pulse). |
+| `active` | `boolean` | `true` | Whether the animation is playing, with fade transitions. |
+| `borderRadius` | `number` | auto-detected | Beam corner radius in px. |
+| `brightness` | `number` | per-type preset (`1.3`) | Glow brightness multiplier. |
+| `saturation` | `number` | `1.2` (dark) | Glow saturation multiplier. |
+| `hueRange` | `number` | `30` | Hue drift range in degrees; capped at 13 for `line`. |
+| `staticColors` | `boolean` | `false` | Disables the hue-shift animation. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | The wrapped content; beam layers render behind/around it. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `activate` | - | Fired when the fade-in animation completes. |
+| `deactivate` | - | Fired when the fade-out animation completes. |
+
+### Exposed Methods
+
+No public instance methods.
+
+### CSS Variables
+
+| Variable | Source | Description |
+|------|------|------|
+| `--beam-strength` | `strength` | Overall beam-layer opacity (0-1, clamped). |
+| `--pulse-glow-sx` / `--pulse-glow-sy` | internal measurement | Per-axis halo scaling of `pulse-outside`. |
+| `--pulse-glow-boost` | optional consumer hook | Pulse glow gain, defaults to `1`. |
+
+## Best Practices
+
+- Give the slot content its own background, with a corner radius matching the detected/explicit `borderRadius`, so the beam hugs the content edge.
+- `pulse-outside` requires an opaque child with its own 1px border, plus surrounding layout room (`overflow: visible`) for the halo to spill.
+- With several instances on one screen, lower `strength` or slow `duration`; this is a high-attention effect — one per view section is enough.
+- Use `theme="light"` or `"auto"` on light pages; the dark tuning lacks contrast on light backgrounds.
+- Beam layers never hit-test; slot content owns its own focus styling.
+
+## Review Notes
+
+- Manually verified against `index.ts`, `TxBorderBeam.vue`, `types.ts` and `border-beam.test.ts` under `packages/tuffex/packages/components/src/border-beam/`.
+- The CSS engine `styles.ts` and the pulse driver `pulse-driver.ts` are verbatim ports of upstream `border-beam` (MIT © Jakub Antalik) with strict-TS index hardening only.
+- Events are `activate` / `deactivate`, mirroring the upstream React `onActivate` / `onDeactivate` callbacks.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/border-beam/src/TxBorderBeam.vue`.
+- Types: `packages/tuffex/packages/components/src/border-beam/src/types.ts`.
+- Upstream: [Jakubantalik/Libraries · border-beam](https://github.com/Jakubantalik/Libraries/tree/main/packages/border-beam) (MIT).
+- **Coverage:** `packages/tuffex/packages/components/src/border-beam/__tests__/border-beam.test.ts` verifies slot rendering, per-instance style injection, the active lifecycle with the deactivate event, and strength clamping.
+
+<TuffDocSourceLink />

@@ -86,7 +86,11 @@ const plugin = {
     iconUrl: 'https://cdn.example.test/focus-flow.png',
     readmeMarkdown: '# Focus Flow',
     status: 'approved',
-    manifest: { permissions: ['clipboard', 'storage'] },
+    manifest: {
+      name: 'focus-flow',
+      sdkapi: 260817,
+      permissions: ['clipboard', 'storage'],
+    },
     changelog: 'Stable release',
     createdAt: '2026-06-01T00:00:00.000Z',
     updatedAt: '2026-06-01T00:00:00.000Z',
@@ -215,6 +219,7 @@ describe('/api/store/search', () => {
             status: 'approved',
             createdAt: '2026-06-01T00:00:00.000Z',
             updatedAt: '2026-06-01T00:00:00.000Z',
+            manifest: { name: 'focus-flow', sdkapi: 260817 },
           },
           readmeUrl: '/api/store/plugins/focus-flow/readme',
         },
@@ -242,7 +247,10 @@ describe('/api/store/search', () => {
     ])
     expect(result.plugins[0]).not.toHaveProperty('versions')
     expect(result.plugins[0]).not.toHaveProperty('readmeMarkdown')
-    expect(result.plugins[0].latestVersion).not.toHaveProperty('manifest')
+    expect(result.plugins[0].latestVersion.manifest).toEqual({
+      name: 'focus-flow',
+      sdkapi: 260817,
+    })
     expect(result.plugins[0].latestVersion).not.toHaveProperty('changelog')
     expect(result.plugins[0].latestVersion).not.toHaveProperty('readmeMarkdown')
     expect(result.plugins[0].latestVersion.packageUrl).not.toContain('storage.example.test')

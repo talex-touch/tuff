@@ -1011,7 +1011,7 @@
   "shell": {
     "search": "Search",
     "newChat": "New Chat",
-    "store": "Store",
+    "store": "Plugins",
     "setting": "Settings",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
@@ -1177,7 +1177,8 @@
     "search": "Search settings",
     "group": {
       "preference": "Preferences",
-      "capability": "Capabilities",
+      "intelligence": "TuffIntelligence",
+      "capability": "Extensions & Indexing",
       "system": "System"
     },
     "category": {
@@ -1198,7 +1199,7 @@
     "tagline": "The command bar, reimagined for makers"
   },
   "settingsIntelligenceHub": {
-    "label": "Intelligence Center",
+    "label": "Workflows & Audit",
     "back": "Back to Intelligence",
     "channels": "Channels",
     "channelsDesc": "Model providers, credentials and connectivity tests.",
@@ -1240,6 +1241,7 @@
     "cli": "CLI",
     "installing": "Installing...",
     "upgrade": "Upgrade",
+    "incompatible": "Not compatible with this Tuff version. Update Tuff",
     "upgradeAvailable": "Update available",
     "officialBadge": "Official",
     "openPluginDetails": "Open details for {name}",

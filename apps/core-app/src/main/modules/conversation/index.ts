@@ -17,7 +17,8 @@ import {
   getConversation,
   listConversations,
   renameConversation,
-  saveConversation
+  saveConversation,
+  subscribeConversationMutations
 } from './conversation-store'
 
 export * from './conversation-store'
@@ -44,6 +45,11 @@ export class ConversationModule extends BaseModule<TalexEvents> {
     const runtime = resolveMainRuntime(ctx, 'ConversationModule.onInit')
     const transport = runtime.transport
 
+    this.disposers.push(
+      subscribeConversationMutations((mutation) => {
+        transport.broadcast(ConversationEvents.changed, mutation)
+      })
+    )
     this.disposers.push(
       transport.on(ConversationEvents.list, async (payload, context) => {
         assertHostOwned(context)

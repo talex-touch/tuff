@@ -352,6 +352,11 @@ function closeDeleteConfirm() {
 .IntelligenceHeader {
   backdrop-filter: blur(18px) saturate(180%);
   border-bottom: 1px solid var(--tx-border-color-light);
+  -webkit-app-region: drag;
+}
+
+.IntelligenceHeader [role='group'] {
+  -webkit-app-region: no-drag;
 }
 
 .provider-official-badge {
