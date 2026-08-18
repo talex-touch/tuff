@@ -39,7 +39,7 @@
   "dependencies": {
     "@floating-ui/vue": "catalog:",
     "@iconify-json/cib": "catalog:",
-    "@langchain/anthropic": "^0.3.34",
+    "@langchain/anthropic": "^1.5.6",
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "catalog:",
     "@langchain/openai": "catalog:",
