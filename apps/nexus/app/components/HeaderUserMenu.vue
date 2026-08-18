@@ -184,7 +184,7 @@ watch(
       :panel-padding="0"
       :close-on-select="false"
       :panel-card="userMenuPanelCard"
-      :unlimited-height="true"
+      :max-height="640"
       panel-variant="plain"
       panel-background="refraction"
       panel-shadow="medium"
