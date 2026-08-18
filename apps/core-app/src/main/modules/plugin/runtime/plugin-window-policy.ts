@@ -8,7 +8,7 @@ import type {
   PluginWindowOptions
 } from '@talex-touch/utils/transport/events/types'
 import { PluginViewCompatibilityError } from './plugin-view-security-profile'
-import { getPermissionModule } from '../../permission'
+import { getPermissionModule } from '../../permission/permission-module-ref'
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
 import path from 'node:path'
