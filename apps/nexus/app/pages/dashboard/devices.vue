@@ -5,6 +5,7 @@ import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxPopover } from '@talex-touch/tuffex/popover'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
@@ -408,9 +409,6 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           class="DashboardDevices-Item"
           :class="{ 'is-current': isCurrent(device), 'is-trusted': isTrustedDevice(device), 'is-revoked': Boolean(device.revokedAt) }"
         >
-          <span v-if="isCurrent(device)" class="DashboardDevices-CurrentRibbon">
-            {{ t('dashboard.devices.currentDevice', '当前设备') }}
-          </span>
           <div class="DashboardDevices-ItemMain">
             <div class="DashboardDevices-Brand">
               <div class="DashboardDevices-BrandIcon">
@@ -427,13 +425,31 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
             <div class="DashboardDevices-Content">
               <p class="DashboardDevices-Title">
                 <span class="DashboardDevices-TitleName truncate">{{ device.deviceName || t('dashboard.devices.unnamed', '未命名设备') }}</span>
-                <span v-if="isTrustedDevice(device)" class="DashboardDevices-Badge is-trusted">
-                  <span class="i-carbon-checkmark-filled" aria-hidden="true" />
-                  {{ t('dashboard.devices.trusted', '可信设备') }}
-                </span>
-                <span v-if="device.revokedAt" class="DashboardDevices-Badge is-revoked">
-                  {{ t('dashboard.devices.revoked', '已撤销') }}
-                </span>
+                <!--
+                  All three device states read as one family. "Current" used to
+                  be a rotated ribbon pinned to the card corner, where it was
+                  clipped by the card edge and looked like a different kind of
+                  thing from the two inline pills beside it.
+                -->
+                <TxStatusBadge
+                  v-if="isCurrent(device)"
+                  size="sm"
+                  status="info"
+                  icon="i-carbon-location-current"
+                  :text="t('dashboard.devices.currentDevice', '当前设备')"
+                />
+                <TxStatusBadge
+                  v-if="isTrustedDevice(device)"
+                  size="sm"
+                  status="success"
+                  :text="t('dashboard.devices.trusted', '可信设备')"
+                />
+                <TxStatusBadge
+                  v-if="device.revokedAt"
+                  size="sm"
+                  status="danger"
+                  :text="t('dashboard.devices.revoked', '已撤销')"
+                />
               </p>
               <p class="DashboardDevices-Subtle">
                 {{ formatLocation(device) }}
@@ -735,27 +751,6 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
   opacity: 1;
 }
 
-.DashboardDevices-CurrentRibbon {
-  position: absolute;
-  z-index: 2;
-  top: 14px;
-  left: 6px;
-  display: inline-flex;
-  width: 92px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  transform: rotate(-34deg);
-  background: color-mix(in srgb, var(--tx-color-primary) 16%, var(--tx-fill-color-blank));
-  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
-  border-radius: 999px;
-  box-shadow: 0 6px 18px rgba(64, 158, 255, 0.12);
-  color: var(--tx-color-primary);
-  font-size: 11px;
-  font-weight: 700;
-  pointer-events: none;
-}
-
 .DashboardDevices-ItemMain {
   position: relative;
   z-index: 1;
@@ -840,30 +835,6 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
 .DashboardDevices-TitleName {
   min-width: 0;
   max-width: 100%;
-}
-
-.DashboardDevices-Badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border-radius: 999px;
-  border: 1px solid var(--tx-border-color-lighter);
-  padding: 2px 8px;
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.DashboardDevices-Badge.is-trusted {
-  border-color: color-mix(in srgb, var(--tx-color-success) 42%, transparent);
-  background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
-  color: var(--tx-color-success);
-}
-
-.DashboardDevices-Badge.is-revoked {
-  border-color: color-mix(in srgb, var(--tx-color-danger) 22%, transparent);
-  background: color-mix(in srgb, var(--tx-color-danger) 7%, transparent);
-  color: color-mix(in srgb, var(--tx-color-danger) 72%, var(--tx-text-color-secondary));
 }
 
 .DashboardDevices-Subtle {
