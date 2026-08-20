@@ -7,12 +7,14 @@
  * - `WhatsChangedDialog` — rendered by `AppEntrance.vue` when `appEntranceMode === 'MainApp'`.
  *   Capturing it needs **three** conditions, all learned by running this and finding it absent:
  *
- *     1. The bundled catalog must resolve. `release-notes-service.ts:readCatalog` walks
- *        `catalogPaths` and throws `Bundled release notes catalog is missing` when every candidate
- *        is ENOENT. Under a dev-build launch (`electron out/main/index.js`) none of them reach the
- *        repo's `resources/release-notes/catalog.json`, so `getBundledReleaseNotes()` fails and
- *        `evaluateStartup` never reaches a decision. **A packaged app is required**, not merely
- *        convenient.
+ *     1. The bundled catalog must resolve, and in a dev build that depends on the **working
+ *        directory**. `UpdateService.getReleaseNotesCatalogPaths()`'s last candidate is
+ *        `process.cwd()/apps/core-app/resources/release-notes/catalog.json`, so launching from the
+ *        repo root works and launching from `apps/core-app` does not -- the path doubles to
+ *        `apps/core-app/apps/core-app/...`. When every candidate misses,
+ *        `readCatalog` throws `Bundled release notes catalog is missing`,
+ *        `getBundledReleaseNotes()` fails, and `evaluateStartup` never reaches a decision.
+ *        (I first read this as "a packaged app is required". It is not; the cwd was wrong.)
  *     2. Onboarding must be complete. `evaluateStartup(Boolean(appSetting?.beginner?.init))` feeds
  *        `resolveReleaseNotesStartupDecision`, whose first branch is
  *        `if (!onboardingComplete) return { kind: 'acknowledge' }` — it marks the version seen and
@@ -33,8 +35,15 @@
  * is exercised only by a real run.
  *
  * Launching is left to the caller, the same split `coreapp-packaged-indexing-diagnostics-probe.ts`
- * already implements: start CoreApp with `--remote-debugging-port` and an isolated `userDataDir`,
- * then point this at it.
+ * already implements. A dev-build launch that satisfies all three conditions, verified end to end:
+ *
+ *   (cd apps/core-app/out/renderer && python3 -m http.server 9447 &)
+ *   mkdir -p /tmp/p/tuff-dev/modules/config
+ *   echo '{"beginner":{"init":true}}' > /tmp/p/tuff-dev/modules/config/app-setting.ini
+ *   # from the REPO ROOT, not apps/core-app -- see condition 1
+ *   ELECTRON_RENDERER_URL=http://127.0.0.1:9447/ TUFF_STARTUP_BENCHMARK_ONCE=1 \
+ *     TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS=60000 TUFF_STARTUP_BENCHMARK_USER_DATA_DIR=/tmp/p \
+ *     electron apps/core-app/out/main/index.js --remote-debugging-port=9333
  *
  *   tsx scripts/coreapp-visible-release-notes-probe.ts \
  *     --cdp-url http://127.0.0.1:9222 --out-dir docs/engineering/reports/release-notes-<date>
