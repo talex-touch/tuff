@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   compareParity,
-  databasePaths,
+  candidateDatabaseDirs,
+  resolveProfileLayout,
   judgeLog,
   judgeTopology,
   type Topology
@@ -32,6 +33,7 @@ function topology(over: Partial<Topology> = {}): Topology {
     },
     primaryFilesByType: { app: 220 },
     searchFilesByType: { file: 5000 },
+    primaryNonAppExtensions: 0,
     ...over
   }
 }
@@ -68,6 +70,19 @@ describe('judgeTopology under the default-on split', () => {
       'split'
     )
     expect(failing(checks)).toContain('the app catalog stayed on the primary')
+  })
+
+  /** Live profiles carry app-owned extensions on the primary; only non-app ones are a leak. */
+  it('ignores app-owned file_extensions on the primary and flags non-app ones', () => {
+    expect(failing(judgeTopology(topology({ primaryNonAppExtensions: 0 }), 'split'))).toEqual([])
+    expect(failing(judgeTopology(topology({ primaryNonAppExtensions: 2300 }), 'split'))).toContain(
+      'no file extensions stranded on the primary'
+    )
+  })
+
+  it('skips the extension check when the table could not be read', () => {
+    const checks = judgeTopology(topology({ primaryNonAppExtensions: null }), 'split')
+    expect(checks.map((c) => c.name)).not.toContain('no file extensions stranded on the primary')
   })
 
   it('fails when a worker-owned table is written on the primary', () => {
@@ -155,10 +170,44 @@ describe('judgeLog', () => {
   })
 })
 
-describe('databasePaths', () => {
-  it('resolves both files under the profile', () => {
-    const paths = databasePaths('/tmp/profile')
-    expect(paths.primary).toBe('/tmp/profile/tuff/modules/database/database.db')
-    expect(paths.search).toBe('/tmp/profile/tuff/modules/database/search-index.db')
+describe('resolveProfileLayout', () => {
+  /**
+   * `resolveRuntimeRootPath` names the app root `tuff` when packaged and `tuff-dev` otherwise, so a
+   * verifier that knew only one would open two nonexistent files against the other and report every
+   * table absent -- which reads as "the search file was never populated" rather than "I read
+   * nothing". A live dev launch produced `tuff-dev`, which is what caught this.
+   */
+  it('finds a packaged profile', () => {
+    const paths = resolveProfileLayout('/p', (c) => c === '/p/tuff/modules/database/database.db')
+    expect(paths.primary).toBe('/p/tuff/modules/database/database.db')
+    expect(paths.search).toBe('/p/tuff/modules/database/search-index.db')
+  })
+
+  it('finds a dev profile', () => {
+    const paths = resolveProfileLayout(
+      '/p',
+      (c) => c === '/p/tuff-dev/modules/database/database.db'
+    )
+    expect(paths.primary).toBe('/p/tuff-dev/modules/database/database.db')
+    expect(paths.search).toBe('/p/tuff-dev/modules/database/search-index.db')
+  })
+
+  it('prefers the packaged layout when both are present', () => {
+    expect(resolveProfileLayout('/p', () => true).primary).toBe(
+      '/p/tuff/modules/database/database.db'
+    )
+  })
+
+  /** The whole point: never return a plausible path it has not verified. */
+  it('throws rather than guessing when neither layout exists', () => {
+    expect(() => resolveProfileLayout('/p', () => false)).toThrow(/no database\.db under \/p/)
+    expect(() => resolveProfileLayout('/p', () => false)).toThrow(/tuff-dev/)
+  })
+
+  it('offers both layouts as candidates', () => {
+    expect(candidateDatabaseDirs('/p')).toEqual([
+      '/p/tuff/modules/database',
+      '/p/tuff-dev/modules/database'
+    ])
   })
 })

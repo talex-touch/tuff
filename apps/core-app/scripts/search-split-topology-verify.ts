@@ -21,14 +21,19 @@
  *
  * Exit code is 0 only when every check passes, so it can gate a release review directly.
  */
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-/** Tables the worker owns under the split. Rows here belong in `search-index.db`. */
+/**
+ * Tables the worker owns *wholesale*. `file_extensions` is deliberately absent: like `files` it is
+ * split by owner, not by table -- the app catalog's extensions live on the primary alongside their
+ * rows. A live profile showed 2,300 of them there with the split healthy, so counting the table
+ * whole reports a failure on every correct install.
+ */
 const SEARCH_OWNED = [
-  'file_extensions',
   'file_index_progress',
   'scan_progress',
   'search_index',
@@ -54,6 +59,8 @@ export interface Topology {
   /** `files` rows split by `type`, per file. */
   primaryFilesByType: Record<string, number>
   searchFilesByType: Record<string, number>
+  /** `file_extensions` on the primary whose owning row is NOT `type='app'`. Must be zero. */
+  primaryNonAppExtensions: number | null
 }
 
 export interface Check {
@@ -111,6 +118,16 @@ export function judgeTopology(topology: Topology, expect: 'split' | 'shared'): C
   })
 
   // The app catalog is the mirror-image mistake: it must NOT have moved.
+  if (topology.primaryNonAppExtensions !== null) {
+    checks.push({
+      name: 'no file extensions stranded on the primary',
+      ok: topology.primaryNonAppExtensions === 0,
+      detail:
+        `database.db holds ${topology.primaryNonAppExtensions} file_extensions row(s) owned by ` +
+        'non-app files (app-owned extensions belong there and are excluded)'
+    })
+  }
+
   checks.push({
     name: 'the app catalog stayed on the primary',
     ok: appRowsPrimary > 0 && appRowsSearch === 0,
@@ -166,19 +183,52 @@ export function judgeLog(logText: string): Check[] {
   ]
 }
 
-export function databasePaths(profile: string): { primary: string; search: string } {
-  const dir = path.join(profile, 'tuff', 'modules', 'database')
+/**
+ * The app root inside a profile is named for how it was launched: `resolveRuntimeRootPath` uses
+ * `APP_FOLDER_NAME` when packaged and `${APP_FOLDER_NAME}-dev` otherwise. A verifier that knew only
+ * one of them would open two nonexistent files against the other, and `readCounts` would report
+ * every table as absent -- which `judgeTopology` then reads as "the search file was never
+ * populated". That is a partial pass on a profile it never opened, i.e. exactly the silence this
+ * tool exists to remove, so `resolveProfileLayout` fails loudly instead of guessing.
+ */
+export const PROFILE_ROOT_NAMES = ['tuff', 'tuff-dev'] as const
+
+export function candidateDatabaseDirs(profile: string): string[] {
+  return PROFILE_ROOT_NAMES.map((root) => path.join(profile, root, 'modules', 'database'))
+}
+
+export function databasePathsForDir(dir: string): { primary: string; search: string } {
   return { primary: path.join(dir, 'database.db'), search: path.join(dir, 'search-index.db') }
+}
+
+/** Picks the layout whose primary database exists. `exists` is injected so this stays testable. */
+export function resolveProfileLayout(
+  profile: string,
+  exists: (candidate: string) => boolean
+): { primary: string; search: string } {
+  for (const dir of candidateDatabaseDirs(profile)) {
+    const paths = databasePathsForDir(dir)
+    if (exists(paths.primary)) return paths
+  }
+  throw new Error(
+    `no database.db under ${profile} -- looked in ${PROFILE_ROOT_NAMES.map((r) => `${r}/modules/database`).join(' and ')}. ` +
+      'Point --profile at the userData directory itself, not at the app root inside it.'
+  )
 }
 
 async function readCounts(
   dbPath: string,
   tables: readonly string[]
-): Promise<{ counts: TableCounts; filesByType: Record<string, number> }> {
+): Promise<{
+  counts: TableCounts
+  filesByType: Record<string, number>
+  nonAppExtensions: number | null
+}> {
   const { createClient } = await import('@libsql/client')
   const client = createClient({ url: `file:${dbPath}` })
   const counts: TableCounts = {}
   const filesByType: Record<string, number> = {}
+  let nonAppExtensions: number | null = null
   try {
     for (const table of tables) {
       try {
@@ -195,14 +245,22 @@ async function readCounts(
     } catch {
       // `files` absent: leave the map empty.
     }
+    try {
+      const rows = await client.execute(
+        "SELECT count(*) AS c FROM file_extensions WHERE file_id IN (SELECT id FROM files WHERE type != 'app')"
+      )
+      nonAppExtensions = Number(rows.rows[0]?.c ?? 0)
+    } catch {
+      nonAppExtensions = null
+    }
   } finally {
     client.close()
   }
-  return { counts, filesByType }
+  return { counts, filesByType, nonAppExtensions }
 }
 
 export async function readTopology(profile: string): Promise<Topology> {
-  const { primary, search } = databasePaths(profile)
+  const { primary, search } = resolveProfileLayout(profile, (candidate) => existsSync(candidate))
   const [a, b] = await Promise.all([
     readCounts(primary, SEARCH_OWNED),
     readCounts(search, SEARCH_OWNED)
@@ -212,7 +270,8 @@ export async function readTopology(profile: string): Promise<Topology> {
     primary: a.counts,
     search: b.counts,
     primaryFilesByType: a.filesByType,
-    searchFilesByType: b.filesByType
+    searchFilesByType: b.filesByType,
+    primaryNonAppExtensions: a.nonAppExtensions
   }
 }
 
