@@ -175,6 +175,14 @@ const storageOverQuota = computed(() => {
     && quota.usage.used_storage_bytes > quota.limits.storage_limit_bytes
 })
 
+/**
+ * With no quota payload the percentages fall through their guards and read 0,
+ * so a card whose headline had already degraded to "-" still asserted "0% used"
+ * underneath it. Nothing is known at that point; say so with the same dash the
+ * value above uses.
+ */
+const hasQuota = computed(() => quotas.value !== null)
+
 const OVER_QUOTA_FILL = 'linear-gradient(90deg, var(--tx-color-danger), var(--tx-color-danger))'
 
 const statusErrorText = computed(() => {
@@ -525,9 +533,11 @@ watch(showDetailsOverlay, (open) => {
           />
           <div class="StorageProgress-Foot">
             <span :class="{ 'StorageProgress-Over': storageOverQuota }">
-              {{ storageOverQuota
-                ? t('dashboard.storage.overQuota', 'Over limit')
-                : `${storageUsagePercent}% ${t('dashboard.storage.used', 'used')}` }}
+              {{ !hasQuota
+                ? `- ${t('dashboard.storage.used', 'used')}`
+                : storageOverQuota
+                  ? t('dashboard.storage.overQuota', 'Over limit')
+                  : `${storageUsagePercent}% ${t('dashboard.storage.used', 'used')}` }}
             </span>
             <span>{{ t('dashboard.storage.plan', 'Plan') }}: {{ planTier }}</span>
           </div>
@@ -571,9 +581,11 @@ watch(showDetailsOverlay, (open) => {
           />
           <div class="StorageProgress-Foot">
             <span :class="{ 'StorageProgress-Over': deviceOverQuota }">
-              {{ deviceOverQuota
-                ? t('dashboard.storage.overQuota', 'Over limit')
-                : `${deviceUsagePercent}% ${t('dashboard.storage.capacity', 'capacity')}` }}
+              {{ !hasQuota
+                ? `- ${t('dashboard.storage.capacity', 'capacity')}`
+                : deviceOverQuota
+                  ? t('dashboard.storage.overQuota', 'Over limit')
+                  : `${deviceUsagePercent}% ${t('dashboard.storage.capacity', 'capacity')}` }}
             </span>
             <NuxtLink to="/dashboard/devices" class="StorageLink">
               {{ t('dashboard.storage.manageDevices', 'Manage Slots') }}
