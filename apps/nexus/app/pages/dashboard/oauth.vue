@@ -480,9 +480,13 @@ async function copySecret() {
         <p v-else-if="errorMessage" class="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">
           {{ errorMessage }}
         </p>
-        <div v-else-if="applications.length <= 0" class="rounded-xl border border-dashed border-black/[0.08] px-4 py-8 text-center text-sm text-black/50 dark:border-white/[0.1] dark:text-white/50">
-          {{ t('dashboard.sections.oauth.empty', 'No OAuth applications yet.') }}
-        </div>
+        <TxEmptyState
+          v-else-if="applications.length <= 0"
+          variant="no-data"
+          :title="t('dashboard.sections.oauth.empty', 'No OAuth applications yet.')"
+          size="small"
+          layout="vertical"
+        />
         <div v-else class="space-y-3">
           <article
             v-for="app in applications"
