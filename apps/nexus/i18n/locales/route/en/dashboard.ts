@@ -932,6 +932,7 @@ export default {
         },
         errors: {
           load: 'Failed to load API keys',
+          retry: 'Retry',
           create: 'Failed to create API key',
           delete: 'Failed to delete API key',
         },
@@ -2247,6 +2248,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       copyUserAgent: 'Copy User-Agent',
       copied: 'Copied',
       copyFailed: 'Copy failed',
+      loadFailed: 'Could not load your devices',
+      retry: 'Retry',
       noSessions: 'No active sessions',
       noFilteredSessions: 'No active sessions match the selected filters',
       securityTips: 'Security tips',
