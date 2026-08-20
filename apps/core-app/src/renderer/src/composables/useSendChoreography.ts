@@ -124,6 +124,29 @@ export const FLIGHT_IMPACT_MS = 324
 /** How deep the bubble starts sunk into the composer while fused with it. */
 const FLIGHT_SINK_PX = 8
 
+/**
+ * How far the tracked landing may move in one frame while the clone is still in
+ * the air.
+ *
+ * Tracking the row's live rect is what makes the landing exact, but it also
+ * means the clone inherits every layout correction at full size and in a single
+ * frame. Late in the flight the curve has covered ~100% of the distance, so a
+ * correction of Δ moves the clone by nearly all of Δ at once: measured against a
+ * -60px correction at t=350ms, one frame moved -61.8px while its neighbours
+ * moved -3.2px and +3.0px — a twentyfold discontinuity, landing exactly where
+ * the eye is watching. The causes are the ones named below: the composer
+ * collapse settling a frame late, and the virtualizer trading its estimated row
+ * height for a measured one.
+ *
+ * A rate limit rather than jump detection, because it needs no classification:
+ * the scroll glide moves the row a few px a frame and never reaches the cap, so
+ * it is followed exactly as before, byte for byte. Only a correction hits the
+ * cap, and the remainder bleeds off over the following frames. The cap sits
+ * under the flight's own peak (~42px/frame at 60Hz) so an absorbed correction
+ * still reads as motion the flight was already making.
+ */
+const CORRECTION_MAX_STEP_PX = 28
+
 /** The "make room" glide before the strike — fixed, however far away the reader was. */
 export const SCROLL_TWEEN_MS = 280
 
@@ -379,11 +402,26 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
     // hidden real row's LIVE rect makes the last frame the row's actual
     // position by construction; every layout correction pulls the clone along.
     const start = performance.now()
+    // The landing the clone is flying at. It chases the row's live rect, rate
+    // limited so a correction is absorbed over a few frames instead of teleporting
+    // the bubble (see CORRECTION_MAX_STEP_PX); at the finish it is the live rect
+    // exactly, which is what keeps the clone-for-row swap invisible.
+    let tracked = Number.NaN
+    let lastElapsed = 0
     const place = (elapsed: number): void => {
       const o = Math.min(1, elapsed / FLIGHT_MS)
       const { x, v } = sampleFlight(o)
       const targetTop = bubble.getBoundingClientRect().top
-      const y = targetTop + (1 - x) * (launchTop + FLIGHT_SINK_PX - targetTop)
+      const frames = Math.max(1, (elapsed - lastElapsed) / 16.67)
+      lastElapsed = elapsed
+      if (Number.isNaN(tracked) || o >= 1) {
+        tracked = targetTop
+      } else {
+        const step = CORRECTION_MAX_STEP_PX * frames
+        const drift = targetTop - tracked
+        tracked += Math.max(-step, Math.min(step, drift))
+      }
+      const y = tracked + (1 - x) * (launchTop + FLIGHT_SINK_PX - tracked)
       // The bubble emerges slightly small, as if still part of the box, and
       // the jelly stretch rides the velocity on top of that.
       const emerge = 0.94 + 0.06 * Math.min(1, o / 0.45)
