@@ -298,8 +298,11 @@ watch(
   --fake-color: var(--tx-bg-color, #fff);
   --fake-opacity: 0.7;
   --tx-stat-card-icon-color: var(--tx-text-color-primary, #303133);
-  --tx-stat-card-glow-color: rgba(64, 158, 255, 0.42);
-  --tx-stat-card-glow-color-soft: rgba(64, 158, 255, 0.18);
+  // Only the no-icon default: with an icon, `updateGlowVars` overwrites both from
+  // the icon's computed colour. These were frozen at the library's old primary
+  // (#409eff), so an iconless card glowed a blue the theme no longer uses.
+  --tx-stat-card-glow-color: color-mix(in srgb, var(--tx-color-primary) 42%, transparent);
+  --tx-stat-card-glow-color-soft: color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
 
   background: transparent;
   border: 1px solid var(--tx-border-color-lighter, #eee);
@@ -463,7 +466,7 @@ watch(
   position: absolute;
   inset: 10px;
   border-radius: 999px;
-  background: rgba(64, 158, 255, 0.16);
+  background: color-mix(in srgb, var(--tx-stat-card-progress-color) 16%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
