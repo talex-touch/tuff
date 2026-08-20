@@ -4,7 +4,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import type { WritableComputedRef } from 'vue'
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(
@@ -33,6 +33,9 @@ const emits = defineEmits<{
 
 const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<boolean>
 const isActive = computed(() => !!value.value)
+// Names the switch after the visible row title; without it every settings
+// switch announces as TxSwitch's literal "Toggle" fallback.
+const titleId = useId()
 
 function handleChange(val: boolean) {
   emits('change', val)
@@ -48,6 +51,7 @@ function handleClick(event: MouseEvent) {
 <template>
   <TuffBlockSlot
     :title="title"
+    :title-id="titleId"
     :description="description"
     :default-icon="defaultIcon"
     :active-icon="activeIcon"
@@ -64,7 +68,12 @@ function handleClick(event: MouseEvent) {
           v-if="loading"
           class="i-ri-loader-4-line text-[var(--tx-text-color-secondary)] animate-spin"
         />
-        <TxSwitch v-model="value" :disabled="disabled || loading" @change="handleChange" />
+        <TxSwitch
+          v-model="value"
+          :disabled="disabled || loading"
+          :aria-labelledby="titleId"
+          @change="handleChange"
+        />
       </div>
     </template>
     <template v-else>

@@ -35,6 +35,7 @@ const settingNetworkLog = createRendererLogger('SettingNetwork')
 const form = reactive<NetworkSettingsForm>(createDefaultNetworkSettingsForm())
 const loading = ref(false)
 const saving = ref(false)
+const saveFailed = ref(false)
 
 const proxyModeOptions: NetworkProxyMode[] = ['system', 'direct', 'custom']
 const customProxyEnabled = computed(() => form.proxyMode === 'custom')
@@ -68,14 +69,21 @@ function openProxyDialog(): void {
   proxyDialogVisible.value = true
 }
 
-function applyProxyDialog(): void {
+async function applyProxyDialog(): Promise<void> {
   form.httpProxy = draft.httpProxy
   form.httpsProxy = draft.httpsProxy
   form.socksProxy = draft.socksProxy
   form.pacUrl = draft.pacUrl
   form.bypassText = draft.bypassText
   form.separateHttpsProxy = draft.separateHttpsProxy
-  proxyDialogVisible.value = false
+  // The dialog button says "save", so it must persist — before this, the
+  // values only reached the backend if the user also pressed the page-level
+  // save afterwards. Close only once the write succeeded; on failure the
+  // dialog stays open with the draft intact.
+  await saveNetworkConfig()
+  if (!saveFailed.value) {
+    proxyDialogVisible.value = false
+  }
 }
 
 function assignForm(next: NetworkSettingsForm): void {
@@ -106,11 +114,13 @@ async function loadNetworkConfig(): Promise<void> {
 
 async function saveNetworkConfig(): Promise<void> {
   saving.value = true
+  saveFailed.value = false
   try {
     const config = await networkSdk.updateConfig(toNetworkConfigUpdateRequest(form))
     assignForm(toNetworkSettingsForm(config))
     toast.success(t('settings.settingNetwork.messages.saved'))
   } catch (error) {
+    saveFailed.value = true
     settingNetworkLog.error('Failed to save network settings', error)
     toast.error(t('settings.settingNetwork.messages.saveFailed'))
   } finally {
@@ -119,7 +129,11 @@ async function saveNetworkConfig(): Promise<void> {
 }
 
 async function restoreDefaults(): Promise<void> {
+  // The credential reference has no UI that can recreate it — the auth row
+  // only reports whether one exists — so a policy reset must carry it over.
+  const preservedAuthRef = form.authRef
   assignForm(createDefaultNetworkSettingsForm())
+  form.authRef = preservedAuthRef
   await saveNetworkConfig()
 }
 
@@ -328,7 +342,7 @@ onMounted(() => {
         <TxButton variant="flat" @click.stop="proxyDialogVisible = false">
           {{ t('settings.settingNetwork.cancel') }}
         </TxButton>
-        <TxButton type="primary" @click.stop="applyProxyDialog">
+        <TxButton type="primary" :loading="saving" @click.stop="applyProxyDialog">
           {{ t('settings.settingNetwork.save') }}
         </TxButton>
       </div>
