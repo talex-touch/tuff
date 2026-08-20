@@ -30,10 +30,10 @@ const labels = computed(() => locale.value === 'zh'
     <TxGroupBlock
       :name="labels.title"
       :description="labels.description"
-      default-icon="i-ri-user-settings-line"
+      default-icon="i-carbon-user-settings"
       :collapsible="false"
     >
-      <TxBlockSlot default-icon="i-ri-profile-line">
+      <TxBlockSlot default-icon="i-carbon-user-profile">
         <template #label>
           <div class="group-block-custom-label">
             <div class="group-block-custom-label__title">

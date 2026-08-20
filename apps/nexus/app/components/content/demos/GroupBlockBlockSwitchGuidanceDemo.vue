@@ -26,14 +26,14 @@ const labels = computed(() => locale.value === 'zh'
     <TxGroupBlock
       :name="labels.title"
       :description="labels.description"
-      default-icon="i-ri-shield-keyhole-line"
+      default-icon="i-carbon-security"
       :collapsible="false"
     >
       <TxBlockSwitch
         v-model="dummy"
         :title="labels.item"
         :description="labels.itemDesc"
-        default-icon="i-ri-shield-keyhole-line"
+        default-icon="i-carbon-security"
         guidance
         @click="handleClick"
       />

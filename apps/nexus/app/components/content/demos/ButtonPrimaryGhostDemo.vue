@@ -12,7 +12,7 @@ const labels = computed(() => {
 
 <template>
   <div class="tuff-demo-row">
-    <TxButton icon="i-ri-add-line">
+    <TxButton icon="i-carbon-add">
       {{ labels.create }}
     </TxButton>
     <TxButton variant="ghost">

@@ -30,15 +30,15 @@ const labels = computed(() => locale.value === 'zh'
     <TxGroupBlock
       :name="labels.title"
       :description="labels.description"
-      default-icon="i-ri-star-line"
-      active-icon="i-ri-star-fill"
+      default-icon="i-carbon-star"
+      active-icon="i-carbon-star-filled"
       :collapsible="false"
     >
       <TxBlockSlot
         :title="labels.pinned"
         :description="labels.pinnedDesc"
-        default-icon="i-ri-star-line"
-        active-icon="i-ri-star-fill"
+        default-icon="i-carbon-star"
+        active-icon="i-carbon-star-filled"
         active
       >
         <template #tags>

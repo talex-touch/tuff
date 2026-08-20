@@ -40,16 +40,16 @@ const labels = computed(() => locale.value === 'zh'
   <div class="group-block-showcase">
     <TxGroupBlock
       :name="labels.title"
-      default-icon="i-ri-settings-3-line"
-      active-icon="i-ri-settings-3-fill"
+      default-icon="i-carbon-settings"
+      active-icon="i-carbon-settings"
       :description="labels.description"
     >
       <TxBlockSwitch
         v-model="notifications"
         :title="labels.notifications"
         :description="labels.notificationsDesc"
-        default-icon="i-ri-notification-line"
-        active-icon="i-ri-notification-fill"
+        default-icon="i-carbon-notification"
+        active-icon="i-carbon-notification-filled"
       />
       <TxBlockSlot :title="labels.language" :description="labels.languageDesc" default-icon="i-carbon-translate">
         <TxSelect v-model="language" :placeholder="labels.languagePlaceholder" class="group-block-showcase__select">

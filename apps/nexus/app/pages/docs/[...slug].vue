@@ -1889,7 +1889,7 @@ watch(
     <div :key="viewState" class="docs-state">
         <div v-if="viewState === 'loading'" class="docs-state__body px-6 py-20">
           <div class="docs-loading-state" role="status" aria-live="polite">
-            <span class="docs-loading-state__spinner i-ri-loader-4-line" aria-hidden="true" />
+            <span class="docs-loading-state__spinner i-carbon-circle-dash" aria-hidden="true" />
             <span class="docs-loading-state__text">{{ t('docs.loading') }}</span>
           </div>
         </div>

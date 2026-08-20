@@ -27,7 +27,7 @@ const labels = computed(() => locale.value === 'zh'
     <TxGroupBlock
       :name="labels.title"
       :description="labels.description"
-      default-icon="i-ri-loop-left-line"
+      default-icon="i-carbon-rotate"
       :collapsible="false"
     >
       <template #header-extra>

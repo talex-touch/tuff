@@ -33,17 +33,17 @@ async function handleRun() {
     <TxSplitButton
       variant="primary"
       size="sm"
-      icon="i-ri-play-fill"
+      icon="i-carbon-play-filled"
       :loading="loading"
       @click="handleRun"
     >
       {{ labels.run }}
       <template #menu="{ close }">
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+          <TxButton size="sm" plain block icon="i-carbon-settings" @click="close()">
             {{ labels.settings }}
           </TxButton>
-          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+          <TxButton size="sm" plain block icon="i-carbon-folder-open" @click="close()">
             {{ labels.openFolder }}
           </TxButton>
         </div>

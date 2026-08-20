@@ -25,15 +25,15 @@ const labels = computed(() => locale.value === 'zh'
     <TxGroupBlock
       :name="labels.title"
       :description="labels.description"
-      default-icon="i-ri-refresh-line"
+      default-icon="i-carbon-renew"
       :collapsible="false"
     >
       <TxBlockSwitch
         v-model="syncEnabled"
         :title="labels.item"
         :description="labels.itemDesc"
-        default-icon="i-ri-refresh-line"
-        active-icon="i-ri-refresh-line"
+        default-icon="i-carbon-renew"
+        active-icon="i-carbon-renew"
         loading
       />
     </TxGroupBlock>
