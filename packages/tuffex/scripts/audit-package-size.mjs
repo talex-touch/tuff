@@ -92,6 +92,21 @@ const LIMITS = {
   fullCssBytes: 640 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
+  // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.
+  // A global raise was the wrong lever here: border-beam is a lone outlier at
+  // 76.7 KiB while the next largest component JS is 38.5 KiB, so lifting the
+  // shared limit would hand ~10 KiB of new slack to all 492 files to
+  // accommodate one. Each entry is a measurement plus the reason it is not
+  // simply bloat, and it still fails when it grows past the number recorded.
+  componentJsOverrides: {
+    // 76.7 KiB measured 2026-08-20. `border-beam/src/styles.ts` is a 2,163-line
+    // MIT port kept deliberately close to upstream so upstream fixes stay
+    // diffable (see the header of that file); trimming it to fit is a call for
+    // whoever owns that contract, not for this gate. It arrived in c5e6660d9 on
+    // 2026-08-18 and has failed tuffex CI on every commit since — which cost
+    // every tuffex change its build signal, this file's own audits included.
+    'border-beam/src/styles.js': 80 * 1024,
+  },
   emptyStateAliasCssBytes: 128,
 }
 const emptyStateStyleAliases = [
@@ -417,10 +432,14 @@ async function auditDistSizes(errors) {
     && !filePath.includes('/packages/utils/'),
   )
   const componentJsSizes = toSortedEntries(await getSizedFiles(componentJsFiles))
-  const oversizedJs = componentJsSizes.filter(entry => entry.bytes > LIMITS.componentJsBytes)
+  const componentJsLimitFor = (file) => {
+    const key = Object.keys(LIMITS.componentJsOverrides).find(name => file.endsWith(`/${name}`))
+    return key ? LIMITS.componentJsOverrides[key] : LIMITS.componentJsBytes
+  }
+  const oversizedJs = componentJsSizes.filter(entry => entry.bytes > componentJsLimitFor(entry.file))
   for (const entry of oversizedJs) {
     errors.push(
-      `Component JS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(LIMITS.componentJsBytes)}`,
+      `Component JS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(componentJsLimitFor(entry.file))}`,
     )
   }
 
