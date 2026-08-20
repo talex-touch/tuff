@@ -209,6 +209,46 @@ describe('send flight landing', () => {
   })
 })
 
+describe('entrance watchdog', () => {
+  /**
+   * A marked row renders at opacity 0, so an id nothing removes is a message
+   * the reader wrote and cannot see. The view marks a whole appended batch
+   * while the send score reveals only the ids it knows about, which is how
+   * rows have been stranded before.
+   */
+  it('reveals a row whose entrance never ran', () => {
+    vi.useFakeTimers()
+    try {
+      const stage = buildStage({ composerTop: 800, rowTop: 500 })
+      stage.choreography.markEntering(['msg-1', 'orphan'])
+      stage.choreography.playSend('msg-1', stage.composer)
+
+      // Long past the flight, and nothing ever revealed the second id.
+      vi.advanceTimersByTime(2100)
+
+      expect(stage.choreography.enteringMessages.has('orphan')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves the watchdog to cancel() on unmount', () => {
+    vi.useFakeTimers()
+    try {
+      const stage = buildStage({ composerTop: 800, rowTop: 500 })
+      stage.choreography.markEntering(['msg-1'])
+      stage.choreography.cancel()
+      vi.advanceTimersByTime(2100)
+
+      // cancel() clears the timer rather than letting it fire against a view
+      // that is gone; the set dies with the composable either way.
+      expect(stage.choreography.enteringMessages.has('msg-1')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('cancel', () => {
   it('drops pending beats so an unmounted view animates nothing', () => {
     vi.useFakeTimers()

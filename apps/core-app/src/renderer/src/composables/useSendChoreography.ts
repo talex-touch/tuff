@@ -180,6 +180,26 @@ const CORRECTION_MAX_STEP_PX = 28
 /** The "make room" glide before the strike — fixed, however far away the reader was. */
 export const SCROLL_TWEEN_MS = 280
 
+/**
+ * How long a row may stay marked as entering before it is revealed regardless.
+ *
+ * A marked row renders at `opacity: 0`, and every removal from that set belongs
+ * to an animation that might not run: the flight retires early when a newer send
+ * takes the stage, the entrance returns immediately when its element has gone,
+ * and the view marks a whole appended batch while the send score only reveals
+ * the two ids it knows about. Anything left behind is a message the reader wrote
+ * and cannot see.
+ *
+ * That has happened twice — the append watcher carries a comment about rows
+ * "stranded at opacity 0 with nothing left to reveal them", and the stylesheet
+ * carries a matching `opacity: 1` guard that only applies under reduced motion.
+ * This is the same guard for the path that animates. Well clear of the longest
+ * real hold (the 460ms flight after a 280ms glide), so it never cuts an
+ * animation short; if a machine were slow enough to reach it, a row appearing
+ * early beats a row that never appears.
+ */
+const ENTRANCE_WATCHDOG_MS = 2000
+
 /** Linear interpolation over the baked FLIGHT table (offsets are monotonic). */
 export function sampleFlight(o: number): { x: number; v: number } {
   if (o <= 0) return { x: 0, v: 0 }
@@ -558,7 +578,13 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
   }
 
   function markEntering(ids: string[]): void {
-    for (const id of ids) enteringMessages.add(id)
+    for (const id of ids) {
+      enteringMessages.add(id)
+      // Unstamped, like the entrance's own un-hide: a sequence bump is exactly
+      // the case that leaves a row with nothing left to reveal it. Registered
+      // through `schedule`, so `cancel()` still clears it on unmount.
+      schedule(() => enteringMessages.delete(id), ENTRANCE_WATCHDOG_MS)
+    }
   }
 
   function scheduleForCurrentSend(fn: () => void, delay: number): void {
