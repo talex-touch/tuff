@@ -11,7 +11,7 @@ const labels = computed(() => (locale.value === 'zh'
 <template>
   <div class="tuff-demo-row">
     <TxTooltip :content="labels.share">
-      <TxButton icon="i-ri-share-line" circle />
+      <TxButton icon="i-carbon-share" circle />
     </TxTooltip>
   </div>
 </template>

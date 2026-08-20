@@ -30,7 +30,7 @@ const toneLabels = computed(() => {
 <template>
   <div class="icon-status-demo" :aria-label="groupLabel">
     <div v-for="tone in tones" :key="tone" class="icon-status-demo__item">
-      <TxStatusIcon name="i-ri-translate-2" :size="24" :tone="tone" />
+      <TxStatusIcon name="i-carbon-translate" :size="24" :tone="tone" />
       <span>{{ toneLabels[tone] }}</span>
     </div>
   </div>

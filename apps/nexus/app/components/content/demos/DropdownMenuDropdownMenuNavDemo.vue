@@ -44,7 +44,7 @@ const labels = computed(() => {
         {{ labels.github }}
         <template #right>
           <span style="opacity: 0.72; display: inline-flex; align-items: center;">
-            <i class="i-ri-external-link-line" style="font-size: 16px;" />
+            <i class="i-carbon-launch" style="font-size: 16px;" />
           </span>
         </template>
       </TxDropdownItem>
@@ -52,7 +52,7 @@ const labels = computed(() => {
         {{ labels.npm }}
         <template #right>
           <span style="opacity: 0.72; display: inline-flex; align-items: center;">
-            <i class="i-ri-external-link-line" style="font-size: 16px;" />
+            <i class="i-carbon-launch" style="font-size: 16px;" />
           </span>
         </template>
       </TxDropdownItem>

@@ -24,8 +24,8 @@ const labels = computed(() => locale.value === 'zh'
     <TxGroupBlock
       :name="labels.title"
       :description="labels.description"
-      default-icon="i-ri-folder-line"
-      active-icon="i-ri-folder-open-line"
+      default-icon="i-carbon-folder"
+      active-icon="i-carbon-folder-open"
       :default-expand="false"
     >
       <TxBlockLine :title="labels.detail" :description="labels.detailValue" />

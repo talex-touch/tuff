@@ -56,7 +56,7 @@ const scenarios: PreviewScenario[] = [
     type: 'color',
     result: '#8B5CF6',
     extra: 'RGB(139, 92, 246)',
-    icon: 'i-ri-palette-line',
+    icon: 'i-carbon-color-palette',
     details: {
       rgb: 'rgb(139, 92, 246)',
       hsl: 'hsl(262, 90%, 66%)',

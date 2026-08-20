@@ -600,7 +600,7 @@ onUnmounted(() => {
             </p>
 
             <div v-if="deletionSessionLoading" class="privacy-deletion-loading">
-              <span class="i-ri-loader-4-line animate-spin" aria-hidden="true" />
+              <span class="i-carbon-circle-dash animate-spin" aria-hidden="true" />
               <span>{{ t('dashboard.privacy.deleteTermsLoading', '正在创建阅读会话…') }}</span>
             </div>
 

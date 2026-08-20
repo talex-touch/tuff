@@ -388,9 +388,9 @@ function getDeviceBrandIcon(device: DeviceItem): string {
   if (value.includes('android'))
     return 'i-cib-android'
   if (value.includes('safari'))
-    return 'i-ri-safari-line'
+    return 'i-cib-safari'
   if (value.includes('edge'))
-    return 'i-ri-edge-line'
+    return 'i-cib-microsoft-edge'
   if (value.includes('web'))
     return 'i-carbon-application-web'
   return 'i-carbon-devices'
