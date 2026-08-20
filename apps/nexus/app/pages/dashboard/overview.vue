@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, defineAsyncComponent } from 'vue'
 import { formatCompactAccountLabel } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
@@ -679,12 +680,17 @@ function isCurrentDevice(device: DeviceItem) {
                   {{ item.location }}
                 </p>
               </div>
-              <span
-                class="rounded-full px-2 py-0.5 text-xs"
-                :class="item.success ? 'bg-green-500/20 text-green-600 dark:text-green-300' : 'bg-red-500/20 text-red-600 dark:text-red-300'"
-              >
-                {{ item.kind === 'device' ? t('dashboard.overview.stream.device') : item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed') }}
-              </span>
+              <!--
+                Was a hand-tinted pill on raw green-600/red-600. Those are
+                UnoCSS palette entries, not tokens, so they sat outside the
+                theme and ignored the high-contrast palette entirely — measured
+                at 2.68:1 against their own tint even with it switched on.
+              -->
+              <TxStatusBadge
+                size="sm"
+                :status="item.success ? 'success' : 'danger'"
+                :text="item.kind === 'device' ? t('dashboard.overview.stream.device') : item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed')"
+              />
             </div>
           </div>
 
@@ -737,12 +743,16 @@ function isCurrentDevice(device: DeviceItem) {
                     <span class="DashboardOverviewDevice-TitleName truncate">{{ formatDevicePreviewName(device) }}</span>
                   </p>
                   <div class="DashboardOverviewDevice-Meta">
-                    <span
+                    <!-- The devices page renders this same badge as a
+                         TxStatusBadge; the two pages showed one concept two
+                         different ways. -->
+                    <TxStatusBadge
                       v-if="isCurrentDevice(device)"
-                      class="DashboardOverviewDevice-Badge"
-                    >
-                      {{ t('dashboard.overview.devices.current') }}
-                    </span>
+                      size="sm"
+                      status="info"
+                      icon="i-carbon-location-current"
+                      :text="t('dashboard.overview.devices.current')"
+                    />
                     <span class="DashboardOverviewDevice-Time">
                       {{ formatRelativeTime(device.lastSeenAt || device.createdAt) }}
                     </span>
@@ -852,22 +862,6 @@ function isCurrentDevice(device: DeviceItem) {
   max-width: 44%;
 }
 
-.DashboardOverviewDevice-Badge {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  border-radius: 999px;
-  background: rgb(34 197 94 / 0.2);
-  padding: 2px 8px;
-  color: rgb(22 163 74);
-  font-size: 12px;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
-.dark .DashboardOverviewDevice-Badge {
-  color: rgb(134 239 172);
-}
 
 .DashboardOverviewDevice-Time {
   flex: 0 0 auto;

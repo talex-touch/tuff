@@ -37,6 +37,8 @@ const BASE_URL = process.env.CONTRAST_URL || 'http://localhost:3200'
 const AUTH_SECRET = process.env.AUTH_SECRET || 'tuff-dev-secret'
 const THEME = process.env.CONTRAST_THEME === 'dark' ? 'dark' : 'light'
 const INJECT = process.env.CONTRAST_INJECT === '1'
+/** Exercises the high-contrast palette tuffex ships behind `prefers-contrast: more`. */
+const HIGH_CONTRAST = process.env.CONTRAST_HIGH === '1'
 
 /**
  * `rgb()` carries 0-255 while CSS Color 4 (`color(srgb 0.89 0.91 0.95 / 0.92)`)
@@ -196,7 +198,10 @@ async function main() {
       await client.send('Network.enable')
       await setViewport(client, { width: 1440, height: 1000 })
       await client.send('Emulation.setEmulatedMedia', {
-        features: [{ name: 'prefers-color-scheme', value: THEME }],
+        features: [
+          { name: 'prefers-color-scheme', value: THEME },
+          ...(HIGH_CONTRAST ? [{ name: 'prefers-contrast', value: 'more' }] : []),
+        ],
       })
       await client.send('Network.setCookie', {
         name: 'next-auth.session-token',
@@ -214,6 +219,7 @@ async function main() {
         document.documentElement.classList.toggle('dark', theme === 'dark')
         document.documentElement.setAttribute('data-theme', theme)
         localStorage.setItem('color-mode', theme)
+        if (${HIGH_CONTRAST}) document.documentElement.classList.add('contrast')
       })()`)
       await delay(700)
       if (INJECT) {
