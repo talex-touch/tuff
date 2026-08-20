@@ -1394,6 +1394,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           restrictedIdentifier: 'Identifier or name uses reserved terms. Mark it as official to continue.',
           missingName: 'Plugin name is required.',
           missingReadme: 'Provide a README for your plugin.',
+          loadFailed: 'Your plugins could not be loaded. Check your connection and try again.',
           unknown: 'Something went wrong while saving the plugin.',
         },
         pendingReviews: 'Pending Reviews',
