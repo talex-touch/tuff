@@ -15,7 +15,7 @@ import type { TagEmits, TagProps } from './types'
  *
  * @component
  */
-import { computed } from 'vue'
+import { computed, getCurrentInstance } from 'vue'
 
 defineOptions({
   name: 'TxTag',
@@ -120,6 +120,23 @@ function handleClick(event: MouseEvent): void {
   emit('click', event)
 }
 
+// A tag is passive until a click listener is attached; only then does it
+// become a keyboard-reachable button (same pattern as TxStatusBadge).
+const instance = getCurrentInstance()
+const interactive = computed(() => !!instance?.vnode.props?.onClick)
+
+function handleKeydown(event: KeyboardEvent): void {
+  // The close button keeps its own keyboard handling.
+  if (event.target !== event.currentTarget)
+    return
+  if (!interactive.value || props.disabled)
+    return
+  if (event.key !== 'Enter' && event.key !== ' ')
+    return
+  event.preventDefault()
+  handleClick(event as unknown as MouseEvent)
+}
+
 /**
  * Handles the close button click.
  * Stops propagation to prevent triggering the tag click event.
@@ -146,7 +163,11 @@ function handleClose(event: MouseEvent): void {
       },
     ]"
     :style="styleVars"
+    :role="interactive ? 'button' : undefined"
+    :tabindex="interactive && !disabled ? 0 : undefined"
+    :aria-disabled="interactive && disabled ? true : undefined"
     @click="handleClick"
+    @keydown="handleKeydown"
   >
     <span v-if="dot" class="tx-tag__dot" aria-hidden="true" :style="{ background: dot }" />
     <i v-if="icon" :class="icon" class="tx-tag__icon" aria-hidden="true" />
@@ -193,6 +214,15 @@ function handleClose(event: MouseEvent): void {
   white-space: nowrap;
   transition: all 0.2s ease;
   cursor: default;
+
+  &[role='button'] {
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--tx-tag-color, var(--tx-color-primary, #409eff)) 60%, transparent);
+      outline-offset: 2px;
+    }
+  }
 
   &__icon {
     font-size: 12px;
