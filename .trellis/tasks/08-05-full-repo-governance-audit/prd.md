@@ -23,16 +23,29 @@ Whole monorepo: `apps/*` (core-app, nexus, reverse-proxy-design, tuff-analyse),
 
 ## Acceptance criteria
 
-- [ ] Every filed issue is **backed by a concrete code location (file:line) and a
+Reconciled against the ledgers and against live GitHub state on 2026-08-20 (#1752).
+Method and per-criterion evidence: `research/audit-summary.md` § Reconciliation.
+
+- [x] Every filed issue is **backed by a concrete code location (file:line) and a
   reproducible failure scenario or a cited best-practice/compat rule** — no vibes.
-- [ ] Every filed issue carries the `audit` label (enables bulk filter/close) plus a
+  All 454 findings carry non-empty `file`, `line`, `evidence` and `failure_scenario`.
+- [x] Every filed issue carries the `audit` label (enables bulk filter/close) plus a
   domain label and a type label (`bug`/`documentation`/`enhancement`/…).
-- [ ] Issues are **deduplicated** across domains before filing.
-- [ ] Titles follow the repo's bracketed convention: `[audit/<domain>] <summary>`.
-- [ ] A findings ledger (`research/findings.jsonl`) and a filed ledger
+  475/475 carry `audit` + a domain label. Five carried no type label because the filer
+  drops labels the repo does not define; repaired 2026-08-20.
+- [x] Issues are **deduplicated** across domains before filing.
+  No duplicate normalized title within the 454; the 20 near-duplicates that did reach
+  GitHub were caught and closed, with `possible-dupes.jsonl` / `dup-issues.json` as the trail.
+- [x] Titles follow the repo's bracketed convention: `[audit/<domain>] <summary>`.
+  475/475 match `^\[audit/<domain>\] `.
+- [x] A findings ledger (`research/findings.jsonl`) and a filed ledger
   (`research/filed.jsonl`) exist so filing is **resumable** and auditable.
-- [ ] Final report states the true count filed, per-domain breakdown, and any
+  Both exist and the original run was resumable. A **re-run today would not be** —
+  see the two ledger defects recorded in the reconciliation.
+- [x] Final report states the true count filed, per-domain breakdown, and any
   domains that under-delivered vs. an even split.
+  True count 475 = 454 findings + 1 tracking issue + 20 closed near-duplicates.
+  Per-domain table verified exact against the ledger; eight under-delivering domains named.
 
 ## Explicit non-goals
 

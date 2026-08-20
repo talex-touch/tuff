@@ -54,6 +54,50 @@ gh issue list --label audit --state open --json number --jq '.[].number' | xargs
 - `reconcile.mjs` — (superseded by the filer's exact-title guard) ledger↔GitHub title reconciliation.
 - Findings source of truth: `research/audit/*.jsonl` (per-domain) + `research/findings.jsonl` (consolidated).
 
+## Reconciliation (2026-08-20, #1752)
+
+Every number above was re-derived from the ledgers and checked against live GitHub state, because
+"454 findings were filed" is a claim the ledgers alone cannot settle — they record what the filer
+believed, not what exists.
+
+**The counts hold.** All 15 domain rows match `findings.jsonl`'s `domain_label` exactly, with zero
+delta on any row; severity matches at 104 high / 246 medium / 104 low. All 454 findings resolve to a
+live `audit`-labelled issue by normalized title (454/454), and 475/475 issues in `#484–#958` match
+the `[audit/<domain>]` title convention. The `475 = 454 + 1 tracking (#838) + 20 closed
+near-duplicates` arithmetic reconciles against GitHub, so the "455 open" line above is the same
+number counted before the near-duplicates were closed.
+
+Three defects were found, one repaired and two recorded:
+
+**Five issues carried no type label** — #786, #789, #801, #802, #806. Root cause is not an oversight
+in the findings: their ledger `type_label` values are `build`, `refactor`, `chore` and
+`compatibility`, none of which exist as labels in this repo, and `audit-file-issues.mjs` deliberately
+"discover[s] which labels actually exist so `gh` never rejects an unknown one" — so it dropped them
+silently. Repaired 2026-08-20 by mapping onto the existing vocabulary (`tech-debt` ×3, `bug`, `compat`).
+The general lesson is that the filer should report labels it drops rather than swallow them.
+
+**The ledgers no longer join.** `consolidate.mjs` rewrote titles after filing had begun, and `key`
+is derived from `(file, normalized-title)`. Joining `findings.jsonl` to `filed.jsonl` by key today
+matches only 357 of 454 — 97 findings appear unfiled and 117 filed entries appear orphaned, both
+artefacts of that rewrite rather than real gaps (GitHub shows all 454 filed). The consequence is
+narrow but real: the "resumable" property held for the original run and would **not** hold for a
+re-run, which would refile the 117. Anything resuming this ledger must match on normalized title
+against live issues, the way `reconcile.mjs` does, not on `key`.
+
+**One ledger row has `number: 0`** — a filing failure recorded as success. Harmless here because the
+finding was filed on a later pass, but it means `filed.jsonl` row count (474) is not a filed count.
+
+**Under-delivery vs an even split** (475 ÷ 15 = 31.7 per domain): `test-coverage` 8, `nexus` 8,
+`renderer` 13, `plugins` 15, `a11y` 15, `rust` 20, `i18n` 24, `tuffex` 27. Per the PRD's "if a domain
+is thin, do not pad" rule these are reported, not corrected — but `renderer` at 13 against
+`main-process` at 100 is a coverage asymmetry worth a second pass rather than a conclusion that the
+renderer is eight times healthier.
+
+One claim above is true on GitHub but unrecorded in the ledger: **10 issues carry the `question`
+label** for low confidence, as stated, yet no finding has `question` in its `extra_labels`. The
+label was applied at filing time only, so the ledger cannot tell you which ten they are —
+`gh issue list --label audit --label question` can.
+
 ## Notable findings
 
 - **#838 exploit chain** (tracking): renderer CSP disabled (#689) → preload bridges raw ipcRenderer
