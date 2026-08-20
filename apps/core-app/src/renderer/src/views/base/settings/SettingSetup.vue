@@ -7,6 +7,7 @@
 <script setup lang="ts" name="SettingSetup">
 import type { AppIndexSettings } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useNotificationSdk, useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -312,14 +313,32 @@ function applyPermissionResult(type: string, result: SystemPermissionCheckResult
 }
 
 async function checkPermission(type: string): Promise<SystemPermissionCheckResult> {
-  const result = await transport.send(systemPermissionCheck, type)
-  applyPermissionResult(type, result)
-  return result
+  try {
+    const result = await transport.send(systemPermissionCheck, type)
+    applyPermissionResult(type, result)
+    return result
+  } catch (error) {
+    // A failed probe must still resolve the row. These checks run in sequence,
+    // so letting one throw left every later permission unchecked — and the rows
+    // read `checked` to decide whether they know anything yet, so the ones that
+    // never ran would sit on a placeholder forever. `unverifiable` is the state
+    // the badge already has for "we could not read this".
+    settingSetupLog.warn(`Permission check failed: ${type}`, error)
+    applyPermissionResult(type, { status: 'unverifiable', canRequest: false })
+    return { status: 'unverifiable', canRequest: false }
+  }
 }
 
 async function checkAllPermissions(options: { silent?: boolean } = {}): Promise<void> {
   try {
-    await checkFileAccess(options)
+    // Isolated: this only refreshes file-access diagnostics and resolves none of
+    // the rows below, but it is the first await in the chain — letting it throw
+    // used to abort every permission check that follows it.
+    try {
+      await checkFileAccess(options)
+    } catch (error) {
+      settingSetupLog.warn('File access probe failed', error)
+    }
 
     // Check accessibility permission (macOS)
     if (isMacOS.value) {
@@ -620,7 +639,9 @@ function getStatusIconClass(status: string): string {
       <template #tags>
         <TuffMacOSTag />
       </template>
+      <TxSkeleton v-if="!permissions.accessibility.checked" :width="86" :height="22" :radius="8" />
       <TuffStatusBadge
+        v-else
         size="md"
         :status-key="permissions.accessibility.status"
         :icon="getStatusIconClass(permissions.accessibility.status)"
@@ -628,7 +649,9 @@ function getStatusIconClass(status: string): string {
       />
       <TxButton
         v-if="
-          permissions.accessibility.status !== 'granted' && permissions.accessibility.canRequest
+          permissions.accessibility.checked &&
+          permissions.accessibility.status !== 'granted' &&
+          permissions.accessibility.canRequest
         "
         variant="flat"
         type="primary"
@@ -652,7 +675,9 @@ function getStatusIconClass(status: string): string {
       <template #tags>
         <TuffMacOSTag />
       </template>
+      <TxSkeleton v-if="!permissions.fullDiskAccess.checked" :width="86" :height="22" :radius="8" />
       <TuffStatusBadge
+        v-else
         size="md"
         :status-key="permissions.fullDiskAccess.status"
         :icon="getStatusIconClass(permissions.fullDiskAccess.status)"
@@ -660,7 +685,9 @@ function getStatusIconClass(status: string): string {
       />
       <TxButton
         v-if="
-          permissions.fullDiskAccess.status !== 'granted' && permissions.fullDiskAccess.canRequest
+          permissions.fullDiskAccess.checked &&
+          permissions.fullDiskAccess.status !== 'granted' &&
+          permissions.fullDiskAccess.canRequest
         "
         variant="flat"
         type="primary"
@@ -680,14 +707,20 @@ function getStatusIconClass(status: string): string {
         permissions.microphone.status === 'unsupported' && !permissions.microphone.canRequest
       "
     >
+      <TxSkeleton v-if="!permissions.microphone.checked" :width="86" :height="22" :radius="8" />
       <TuffStatusBadge
+        v-else
         size="md"
         :status-key="permissions.microphone.status"
         :icon="getStatusIconClass(permissions.microphone.status)"
         :text="getStatusText(permissions.microphone.status)"
       />
       <TxButton
-        v-if="permissions.microphone.status !== 'granted' && permissions.microphone.canRequest"
+        v-if="
+          permissions.microphone.checked &&
+          permissions.microphone.status !== 'granted' &&
+          permissions.microphone.canRequest
+        "
         variant="flat"
         type="primary"
         size="sm"
@@ -706,7 +739,9 @@ function getStatusIconClass(status: string): string {
         permissions.notifications.status === 'unsupported' && !permissions.notifications.canRequest
       "
     >
+      <TxSkeleton v-if="!permissions.notifications.checked" :width="86" :height="22" :radius="8" />
       <TuffStatusBadge
+        v-else
         size="md"
         :status-key="permissions.notifications.status"
         :icon="getStatusIconClass(permissions.notifications.status)"
@@ -714,7 +749,9 @@ function getStatusIconClass(status: string): string {
       />
       <TxButton
         v-if="
-          permissions.notifications.status !== 'granted' && permissions.notifications.canRequest
+          permissions.notifications.checked &&
+          permissions.notifications.status !== 'granted' &&
+          permissions.notifications.canRequest
         "
         variant="flat"
         type="primary"
@@ -734,7 +771,14 @@ function getStatusIconClass(status: string): string {
       <template #tags>
         <TuffWindowsTag />
       </template>
+      <TxSkeleton
+        v-if="!permissions.adminPrivileges.checked"
+        :width="86"
+        :height="22"
+        :radius="8"
+      />
       <TuffStatusBadge
+        v-else
         size="md"
         :status-key="permissions.adminPrivileges.status"
         :icon="getStatusIconClass(permissions.adminPrivileges.status)"
