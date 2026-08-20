@@ -492,9 +492,12 @@ watch(showDetailsOverlay, (open) => {
         </div>
 
         <div class="StorageProgress">
-          <div class="StorageProgress-Track">
-            <div class="StorageProgress-Bar StorageProgress-Bar--blue" :style="{ width: `${storageUsagePercent}%` }" />
-          </div>
+          <TxProgressBar
+            :percentage="storageUsagePercent"
+            height="8px"
+            color="linear-gradient(90deg, #3b82f6, #2563eb)"
+            :aria-label="t('dashboard.storage.syncStorage', 'Sync Storage')"
+          />
           <div class="StorageProgress-Foot">
             <span>{{ storageUsagePercent }}% {{ t('dashboard.storage.used', 'used') }}</span>
             <span>{{ t('dashboard.storage.plan', 'Plan') }}: {{ planTier }}</span>
@@ -531,9 +534,12 @@ watch(showDetailsOverlay, (open) => {
         </div>
 
         <div class="StorageProgress">
-          <div class="StorageProgress-Track">
-            <div class="StorageProgress-Bar StorageProgress-Bar--violet" :style="{ width: `${deviceUsagePercent}%` }" />
-          </div>
+          <TxProgressBar
+            :percentage="deviceUsagePercent"
+            height="8px"
+            color="linear-gradient(90deg, #a855f7, #9333ea)"
+            :aria-label="t('dashboard.storage.authorizedDevices', 'Authorized Devices')"
+          />
           <div class="StorageProgress-Foot">
             <span>{{ deviceUsagePercent }}% {{ t('dashboard.storage.capacity', 'capacity') }}</span>
             <NuxtLink to="/dashboard/devices" class="StorageLink">
@@ -943,28 +949,6 @@ watch(showDetailsOverlay, (open) => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.StorageProgress-Track {
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-bg-color-secondary) 70%, transparent);
-  overflow: hidden;
-}
-
-.StorageProgress-Bar {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 220ms ease;
-}
-
-.StorageProgress-Bar--blue {
-  background: linear-gradient(90deg, #3b82f6, #2563eb);
-}
-
-.StorageProgress-Bar--violet {
-  background: linear-gradient(90deg, #a855f7, #9333ea);
 }
 
 .StorageProgress-Foot {
