@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<ProgressBarProps>(), {
   success: false,
   status: '',
   message: '',
+  ariaLabel: '',
   percentage: 0,
   segmentsTotal: 100,
   height: '5px',
@@ -222,7 +223,7 @@ watch(
         :aria-valuenow="loading || indeterminate ? undefined : resolvedPercentage"
         :aria-valuemin="0"
         :aria-valuemax="100"
-        :aria-label="message || 'Progress'"
+        :aria-label="ariaLabel || message || 'Progress'"
       >
         <span class="tx-progress-bar__mask" aria-hidden="true" />
 
@@ -261,7 +262,7 @@ watch(
       :aria-valuenow="loading || indeterminate ? undefined : resolvedPercentage"
       :aria-valuemin="0"
       :aria-valuemax="100"
-      :aria-label="message || 'Progress'"
+      :aria-label="ariaLabel || message || 'Progress'"
     >
       <span class="tx-progress-bar__mask" aria-hidden="true" />
 

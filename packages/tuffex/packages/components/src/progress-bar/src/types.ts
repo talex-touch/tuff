@@ -64,6 +64,15 @@ export interface ProgressBarProps {
   message?: string
 
   /**
+   * Accessible name for the progressbar. Without it the name falls back to
+   * `message` — which is *visible* in-bar text, so naming a bar used to mean
+   * printing a label across it. Set this when the bar is already labelled by
+   * surrounding copy.
+   * @default ''
+   */
+  ariaLabel?: string
+
+  /**
    * The progress percentage value (0-100).
    * Only used when not in loading mode.
    */
