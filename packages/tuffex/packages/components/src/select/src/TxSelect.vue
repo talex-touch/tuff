@@ -807,6 +807,7 @@ onBeforeUnmount(() => {
                 }"
                 :id="optionDomId(opt.value)"
                 role="option"
+                :tabindex="-1"
                 :clickable="true"
                 :active="isValueSelected(opt.value)"
                 :disabled="!!opt.disabled"
@@ -874,15 +875,6 @@ onBeforeUnmount(() => {
   // (inline style or class), which the panel follows 1:1.
   width: 240px;
   max-width: 100%;
-
-  // TxTooltip's reference span sits between this root and the trigger and has
-  // no width of its own — without this the trigger shrinks to content width
-  // while the panel is measured from the full-width outer wrapper, so the two
-  // stop matching.
-  :deep(.tx-tooltip__reference) {
-    width: 100%;
-    min-width: 0;
-  }
 
   &__trigger {
     display: flex;

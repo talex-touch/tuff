@@ -74,36 +74,31 @@ function handleClose() {
   font-size: 14px;
   line-height: 1.5;
   position: relative;
-  border: 1px solid;
-  background: var(--tx-alert-bg, #ffffff);
+  /* Chrome derives from the semantic accent with the family recipe
+     (12% bg / 32% border, same as TxStatusBadge), so dark mode follows
+     the token layer instead of hardcoded light-only hexes. */
+  --tx-alert-bg: color-mix(in srgb, var(--tx-alert-accent) 12%, transparent);
+  --tx-alert-border: color-mix(in srgb, var(--tx-alert-accent) 32%, transparent);
+  --tx-alert-text: var(--tx-alert-accent);
+  --tx-alert-icon: var(--tx-alert-accent);
+  border: 1px solid var(--tx-alert-border);
+  background: var(--tx-alert-bg);
 }
 
 .tx-alert--info {
-  --tx-alert-bg: #eff6ff;
-  --tx-alert-border: #3b82f6;
-  --tx-alert-text: #1e40af;
-  --tx-alert-icon: #3b82f6;
+  --tx-alert-accent: var(--tx-color-primary, #409eff);
 }
 
 .tx-alert--success {
-  --tx-alert-bg: #f0fdf4;
-  --tx-alert-border: #22c55e;
-  --tx-alert-text: #15803d;
-  --tx-alert-icon: #22c55e;
+  --tx-alert-accent: var(--tx-color-success, #67c23a);
 }
 
 .tx-alert--warning {
-  --tx-alert-bg: #fffbeb;
-  --tx-alert-border: #f59e0b;
-  --tx-alert-text: #d97706;
-  --tx-alert-icon: #f59e0b;
+  --tx-alert-accent: var(--tx-color-warning, #e6a23c);
 }
 
 .tx-alert--error {
-  --tx-alert-bg: #fef2f2;
-  --tx-alert-border: #ef4444;
-  --tx-alert-text: #dc2626;
-  --tx-alert-icon: #ef4444;
+  --tx-alert-accent: var(--tx-color-danger, #f56c6c);
 }
 
 .tx-alert__icon {

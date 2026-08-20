@@ -59,6 +59,7 @@ onBeforeUnmount(() => {
     type="button"
     class="tx-flat-select-item"
     role="option"
+    tabindex="-1"
     :aria-selected="isSelected"
     :class="{
       'is-selected': isSelected,
@@ -99,6 +100,11 @@ onBeforeUnmount(() => {
 
   &:hover:not(.is-disabled):not(.is-selected) {
     background: var(--tx-fill-color-light, #f5f7fa);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+    outline-offset: -2px;
   }
 
   &.is-selected {

@@ -618,9 +618,14 @@ defineExpose({
     background: transparent;
     border: 0;
     outline: none;
+    border-radius: 999px;
 
     &::placeholder {
       color: var(--tx-bui-ink-3, #9a9da3);
+    }
+
+    &:focus-visible {
+      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tx-bui-ink, #1f2124) 28%, transparent);
     }
   }
 

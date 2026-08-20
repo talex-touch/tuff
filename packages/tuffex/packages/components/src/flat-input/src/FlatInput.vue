@@ -16,6 +16,8 @@ const props = withDefaults(
     password: false,
     nonWin: false,
     area: false,
+    disabled: false,
+    readonly: false,
   },
 )
 
@@ -43,7 +45,7 @@ function syncCapsLock(e: KeyboardEvent) {
 <template>
   <div
     class="flat-input fake-background"
-    :class="{ 'none-prefix': !$slots?.default && !icon, 'win': nonWin !== true, area }"
+    :class="{ 'none-prefix': !$slots?.default && !icon, 'win': nonWin !== true, 'is-disabled': disabled, area }"
     @keydown="syncCapsLock"
     @keyup="syncCapsLock"
   >
@@ -57,6 +59,8 @@ function syncCapsLock(e: KeyboardEvent) {
       v-if="area"
       v-model="value"
       :placeholder="placeholder"
+      :disabled="disabled"
+      :readonly="readonly"
       class="flat-input__control"
     />
 
@@ -65,6 +69,8 @@ function syncCapsLock(e: KeyboardEvent) {
       v-model="value"
       :placeholder="placeholder"
       :type="password ? 'password' : 'text'"
+      :disabled="disabled"
+      :readonly="readonly"
       class="flat-input__control"
     >
 
@@ -177,6 +183,21 @@ textarea.flat-input__control {
   border-radius: 8px;
   --fake-radius: 8px !important;
   border-bottom: 1px solid var(--tx-border-color, #dcdfe6);
+}
+
+.flat-input.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+
+  &:hover,
+  &:focus-within {
+    border-color: var(--tx-border-color, #dcdfe6);
+    box-shadow: none;
+  }
+
+  .flat-input__control {
+    cursor: not-allowed;
+  }
 }
 
 .flat-input__caps {

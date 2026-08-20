@@ -323,6 +323,7 @@ defineExpose({
             class="tx-search-select__item"
             :class="{ 'is-selected': opt.value === props.modelValue, 'is-disabled': opt.disabled, 'is-active': index === activeIndex }"
             role="option"
+            :tabindex="-1"
             :aria-selected="opt.value === props.modelValue"
             :clickable="!opt.disabled"
             :disabled="!!opt.disabled"
