@@ -30,7 +30,7 @@
  * it — emulated media plus the class/attr/localStorage the app itself reads —
  * because the media query alone does not move @nuxtjs/color-mode.
  */
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { createRequire } from 'node:module'
@@ -186,11 +186,15 @@ async function main() {
             redirected: location.pathname.includes('sign-in'),
             chars: body.length,
             head: body.slice(0, 160),
+            text: body,
           })
         })()`)
         const parsed = JSON.parse(state)
         const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}${SETTLE_MS === 4000 ? '' : `-${SETTLE_MS}ms`}${THROTTLE ? '-slow' : ''}${FAIL_API ? '-apifail' : ''}`
         await screenshot(client, label, outDir, { captureBeyondViewport: true })
+        // A sweep over many routes is only searchable as text — reading every
+        // screenshot to find which page claims "no results" does not scale.
+        await writeFile(path.join(outDir, `${label}.txt`), parsed.text ?? '', 'utf8')
         results.push({ route, ...parsed })
         console.log(`${route} → ${parsed.redirected ? 'REDIRECTED(sign-in)' : 'ok'} ${parsed.chars} chars`)
       }
