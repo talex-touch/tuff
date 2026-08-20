@@ -33,19 +33,31 @@ Method and per-criterion evidence: `research/audit-summary.md` § Reconciliation
   domain label and a type label (`bug`/`documentation`/`enhancement`/…).
   475/475 carry `audit` + a domain label. Five carried no type label because the filer
   drops labels the repo does not define; repaired 2026-08-20.
-- [x] Issues are **deduplicated** across domains before filing.
-  No duplicate normalized title within the 454; the 20 near-duplicates that did reach
-  GitHub were caught and closed, with `possible-dupes.jsonl` / `dup-issues.json` as the trail.
+- [ ] Issues are **deduplicated** across domains before filing.
+  Not met as worded, and the reconciliation is what shows it. `findings.jsonl` carries no
+  duplicate normalized title, but 20 near-duplicates still reached GitHub and were closed
+  afterwards — that is post-filing cleanup, not pre-filing deduplication. The trail
+  (`possible-dupes.jsonl`, `dup-issues.json`) records the cleanup, not a prevention.
+  Closing this needs either a filer that cannot emit them or the criterion reworded to
+  "deduplicated, with any survivors reconciled and closed".
 - [x] Titles follow the repo's bracketed convention: `[audit/<domain>] <summary>`.
   475/475 match `^\[audit/<domain>\] `.
-- [x] A findings ledger (`research/findings.jsonl`) and a filed ledger
+- [ ] A findings ledger (`research/findings.jsonl`) and a filed ledger
   (`research/filed.jsonl`) exist so filing is **resumable** and auditable.
-  Both exist and the original run was resumable. A **re-run today would not be** —
-  see the two ledger defects recorded in the reconciliation.
+  Both exist, and the original run was resumable. Scoped to today it is not: `consolidate.mjs`
+  rewrote titles after filing began and the ledger key is derived from the title, so 97 findings
+  no longer match a ledger entry and would be re-queued on a re-run. They would not become
+  duplicates — the filer's live-title guard catches them — but each one costs a GitHub round
+  trip and appends a `number: 0, url: "preexisting"` row that does not carry the issue number
+  it matched. Auditable: yes. Resumable from the ledger alone: no.
 - [x] Final report states the true count filed, per-domain breakdown, and any
   domains that under-delivered vs. an even split.
-  True count 475 = 454 findings + 1 tracking issue + 20 closed near-duplicates.
-  Per-domain table verified exact against the ledger; eight under-delivering domains named.
+  Three counts, kept separate because collapsing them is how the earlier numbers drifted:
+  **454 unique findings**, **455 issues** once the #838 tracking issue is included, and
+  **475 total issue records** in `#484–#958` once the 20 closed near-duplicates are counted.
+  The per-domain table is exact against `findings.jsonl`. Under-delivery is measured on the
+  454 findings (30.3 per domain), not on the 475 records — nine domains, listed in the
+  reconciliation.
 
 ## Explicit non-goals
 
