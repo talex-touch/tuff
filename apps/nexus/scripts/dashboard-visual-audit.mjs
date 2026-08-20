@@ -15,6 +15,7 @@
  *   chrome --headless=new --remote-debugging-port=9224 --user-data-dir=/tmp/...
  *   node apps/nexus/scripts/dashboard-visual-audit.mjs [route ...]
  *
+ * NEXUS_AUDIT_VIEWPORT=mobile|tablet|desktop picks the width (desktop default).
  * NEXUS_AUDIT_THEME=dark captures the dark palette instead (light is the
  * default). Theme is applied the same way scripts/tuffex-visual-smoke.mjs does
  * it — emulated media plus the class/attr/localStorage the app itself reads —
@@ -52,9 +53,13 @@ const DEFAULT_ROUTES = [
   '/dashboard/updates',
 ]
 
-const VIEWPORTS = [
-  { name: 'desktop', width: 1440, height: 1000 },
-]
+// Same matrix scripts/tuffex-visual-smoke.mjs uses, so captures are comparable.
+const ALL_VIEWPORTS = {
+  mobile: { name: 'mobile', width: 375, height: 812 },
+  tablet: { name: 'tablet', width: 768, height: 900 },
+  desktop: { name: 'desktop', width: 1440, height: 1000 },
+}
+const VIEWPORTS = [ALL_VIEWPORTS[process.env.NEXUS_AUDIT_VIEWPORT] ?? ALL_VIEWPORTS.desktop]
 
 const THEME = process.env.NEXUS_AUDIT_THEME === 'dark' ? 'dark' : 'light'
 

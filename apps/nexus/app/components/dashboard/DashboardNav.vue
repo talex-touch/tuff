@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 const { t } = useI18n()
@@ -262,6 +262,37 @@ const adminMenuItems = computed(() => {
   return mapItems(items)
 })
 
+/**
+ * Below `lg` the dashboard shell drops to one column, so this whole nav used to
+ * stack above the page: ~270px of links to scroll past before the heading, on
+ * every dashboard route. The header's hamburger is the site nav and carries
+ * none of these destinations, so hiding it was not an option — it collapses to
+ * a disclosure showing where you are instead. Forced open from `lg` up, where
+ * the summary is hidden and the markup is exactly what it always was.
+ */
+const isDesktop = ref(false)
+let desktopQuery: MediaQueryList | null = null
+const syncDesktop = (event: MediaQueryList | MediaQueryListEvent) => {
+  isDesktop.value = event.matches
+}
+
+onMounted(() => {
+  desktopQuery = window.matchMedia('(min-width: 1024px)')
+  syncDesktop(desktopQuery)
+  desktopQuery.addEventListener('change', syncDesktop)
+})
+
+onBeforeUnmount(() => {
+  desktopQuery?.removeEventListener('change', syncDesktop)
+  desktopQuery = null
+})
+
+const activeLabel = computed(() => {
+  const all = [...workspaceMenuItems.value, ...accountMenuItems.value, ...adminMenuItems.value]
+  return all.find(item => item.id === activeSection.value)?.label
+    ?? t('dashboard.sections.menu.workspaceTitle', '工作台')
+})
+
 const activeSection = computed(() => {
   if (route.path.startsWith('/dashboard/admin/users'))
     return 'users'
@@ -310,7 +341,14 @@ const activeSection = computed(() => {
 </script>
 
 <template>
-  <aside class="dashboard-nav sticky top-24 max-h-[calc(100vh-6rem)] self-start overflow-y-auto pr-1 space-y-6">
+  <details :open="isDesktop" class="dashboard-nav sticky top-24 max-h-[calc(100vh-6rem)] self-start overflow-y-auto pr-1 space-y-6">
+    <summary class="dashboard-nav-summary">
+      <span class="min-w-0 flex items-center gap-2">
+        <span class="i-carbon-menu text-[15px]" aria-hidden="true" />
+        <span class="truncate">{{ activeLabel }}</span>
+      </span>
+      <span class="dashboard-nav-summary-chevron i-carbon-chevron-down text-[15px]" aria-hidden="true" />
+    </summary>
     <nav class="relative p-4" aria-label="Dashboard workspace sections">
       <p class="apple-section-title mb-4 px-3">
         {{ t('dashboard.sections.menu.workspaceTitle', '工作台') }}
@@ -387,10 +425,49 @@ const activeSection = computed(() => {
         </li>
       </ul>
     </nav>
-  </aside>
+  </details>
 </template>
 
 <style scoped>
+/* Collapsed only below `lg`; the media query forces it open above that so the
+   desktop layout is byte-for-byte what it was. */
+.dashboard-nav-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+  color: var(--tx-text-color-primary, #000);
+}
+
+.dashboard-nav-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-nav-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #1BB5F4) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.dashboard-nav[open] .dashboard-nav-summary-chevron {
+  transform: rotate(180deg);
+}
+
+.dashboard-nav-summary-chevron {
+  transition: transform 0.2s ease;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-nav-summary {
+    display: none;
+  }
+}
+
 .dashboard-nav-link {
   color: var(--tx-text-color-secondary, rgba(0, 0, 0, 0.55));
 }
