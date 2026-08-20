@@ -107,41 +107,37 @@ describe('Nexus deploy asset budget', () => {
       'app/components/dashboard/DashboardNav.vue',
     ].map(file => readFileSync(join(nexusRoot, file), 'utf8')).join('\n')
 
-    expect(unoSource).toContain("['i-simple-icons-linux', 'i-carbon-linux-alt']")
-    expect(unoSource).toContain("['i-carbon-settings', 'i-ri-settings-line']")
-    expect(unoSource).toContain("['i-carbon-fire', 'i-ri-fire-line']")
-    expect(unoSource).toContain("['i-ri-settings-3-line', 'i-ri-settings-line']")
-    expect(unoSource).toContain("['i-ri-settings-3-fill', 'i-ri-settings-fill']")
-    expect(unoSource).toContain("['i-carbon-data-vis-1', 'i-ri-bar-chart-line']")
-    expect(unoSource).toContain("['i-carbon-deployment-pattern', 'i-ri-route-line']")
-    expect(unoSource).toContain("['i-carbon-queued', 'i-ri-time-line']")
-    expect(unoSource).toContain("['i-carbon-ai-status', 'i-ri-robot-2-line']")
-    expect(unoSource).not.toContain("['i-carbon-circle-dash', 'i-ri-loader-4-line']")
-    expect(unoSource).not.toContain("['i-carbon-color-palette', 'i-ri-palette-line']")
-    const oversizedIcons = [
-      ['i-cib', 'apple'],
-      ['i-cib', 'linux'],
-      ['i-cib', 'safari'],
-      ['i-cib', 'microsoft-edge'],
-      ['i-carbon', 'fingerprint-recognition'],
-      ['i-simple-icons', 'snowflake'],
-      ['i-carbon', 'logo-figma'],
-      ['i-carbon', 'tool-kit'],
-      ['i-carbon', 'machine-learning-model'],
-    ].map(parts => parts.join('-'))
-    for (const icon of oversizedIcons) {
-      expect(iconSources).not.toContain(icon)
-    }
+    // This block used to require nine `uno.config.ts` aliases and a specific set
+    // of `i-ri-*` / `i-simple-icons-*` class names, on the theory that funnelling
+    // several names onto one glyph keeps the shared entry CSS small.
+    //
+    // The scheme could not work: neither `ri` nor `simple-icons` is a dependency
+    // of this app (they appear in no package.json and no pnpm store dir), and
+    // UnoCSS emits nothing for a collection it cannot resolve. Measured on the
+    // running sign-in page, `i-ri-fingerprint-2-line` had no mask image and was
+    // 0x0 while three `i-carbon-*` elements in the same paint rendered normally.
+    // So the budget those assertions protected was being paid for with icons
+    // that never drew — including the passkey mark every visitor sees. The
+    // aliases and names were replaced with installed collections in 535be553e,
+    // 82f900ccf and 9237a8282, and `pnpm check:icon-collections` now blocks a
+    // relapse by comparing every class against the installed @iconify-json deps.
+    //
+    // What remains asserted here is the part that was always real: the size
+    // pressure. Brand marks are inlined into the shared entry CSS, so where two
+    // installed collections both carry a glyph the lighter one is required.
+    expect(unoSource).not.toContain('i-ri-')
+    expect(unoSource).not.toContain('i-simple-icons-')
+    expect(iconSources).not.toContain('i-ri-')
+    expect(iconSources).not.toContain('i-simple-icons-')
+    // 5.5 KB of path against i-carbon-linux-alt's 1.0 KB; likewise cib's apple
+    // (1.3 KB) against carbon's (0.7 KB). Safari and Edge have no carbon
+    // equivalent and stay on cib.
+    expect(iconSources).not.toContain('i-cib-linux')
+    expect(iconSources).not.toContain('i-cib-apple')
     for (const icon of [
-      'i-simple-icons-apple',
-      'i-simple-icons-linux',
-      'i-ri-safari-line',
-      'i-ri-edge-line',
-      'i-ri-fingerprint-2-line',
-      'i-carbon-snowflake',
-      'i-ri-figma-fill',
-      'i-carbon-tools',
-      'i-carbon-machine-learning',
+      'i-carbon-apple',
+      'i-carbon-linux-alt',
+      'i-carbon-fingerprint-recognition',
     ]) {
       expect(iconSources).toContain(icon)
     }

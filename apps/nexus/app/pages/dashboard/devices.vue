@@ -214,19 +214,23 @@ async function copyText(value: string | null | undefined) {
 }
 
 /**
- * Brand icons come from `cib`, the only brand collection this app installs
- * (`@iconify-json/cib`, alongside carbon/logos/twemoji). The Apple, Linux,
- * Safari and Edge glyphs previously named `simple-icons`/`ri` sets that are not
- * dependencies here, so every macOS row — the common case — drew an empty box.
+ * Brand glyphs come from carbon where it has one and `cib` otherwise — both are
+ * installed, unlike the `simple-icons`/`ri` names these used to carry, which is
+ * why every macOS row (the common case) drew an empty box.
+ *
+ * carbon is preferred where the shapes are equivalent because these are inlined
+ * into the shared entry CSS: carbon's linux-alt path is 1.0 KB against cib's
+ * 5.5 KB, and its apple is 0.7 KB against 1.3 KB. Safari and Edge have no
+ * carbon equivalent, so they stay on cib.
  */
 function getDeviceBrandIcon(device: DeviceItem): string {
   const value = `${device.platform || ''} ${device.deviceName || ''} ${device.clientType || ''}`.toLowerCase()
   if (value.includes('mac') || value.includes('darwin') || value.includes('iphone') || value.includes('ipad') || value.includes('ios'))
-    return 'i-cib-apple'
+    return 'i-carbon-apple'
   if (value.includes('win'))
     return 'i-cib-windows'
   if (value.includes('linux'))
-    return 'i-cib-linux'
+    return 'i-carbon-linux-alt'
   if (value.includes('android'))
     return 'i-cib-android'
   if (value.includes('safari'))
