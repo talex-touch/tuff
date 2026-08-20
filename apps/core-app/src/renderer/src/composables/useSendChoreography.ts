@@ -53,19 +53,49 @@ const SPRING_IMPACT_MS = 161
 /**
  * How a resting row rings after being hit from below. Not a raw spring
  * impulse: the onset is mass-shaped (quadratic-ish — a row accelerates, it
- * doesn't twitch), the crown at ~16% is round, sampling is dense through the
- * rise and peak so the linear-interpolated keyframes carry no corners, and
- * the counter-swing is a gentle −7% rather than a wobble.
+ * doesn't twitch), the crown at ~16% is round, and the counter-swing is a
+ * gentle −7% rather than a wobble.
+ *
+ * Sampling has to be dense through the rise and crest because WAAPI interpolates
+ * between keyframes linearly, so every pair of samples is a straight line and
+ * every sample a potential corner. The original table was sparse there and did
+ * carry two: at the 18px amplitude the nearest row gets, velocity changed by
+ * 4.06px/frame at the onset (t≈56ms) and 4.23px/frame at the crest (t≈101ms) —
+ * the row rushed up and stopped dead at the top instead of settling into it,
+ * and the crest is the frame the eye is actually on.
+ *
+ * The in-between points below are a Catmull-Rom resampling of the original
+ * anchors, which are all still here at their exact values: the designed shape is
+ * untouched, only the straight lines between it are. Worst corner drops to
+ * 2.36px/frame and moves into the fast part of the rise where it cannot be seen;
+ * the crest corner is gone. The crown rounds from 0.995 to 1.0003, which is
+ * 0.005px — below a pixel, and in the direction the crown wanted anyway.
  */
 const IMPULSE = [
   { o: 0, y: 0 },
+  { o: 0.013, y: 0.0077 },
+  { o: 0.0315, y: 0.0248 },
   { o: 0.05, y: 0.084 },
+  { o: 0.067, y: 0.2133 },
+  { o: 0.0841, y: 0.3848 },
   { o: 0.1, y: 0.547 },
+  { o: 0.1141, y: 0.6915 },
+  { o: 0.127, y: 0.8268 },
   { o: 0.14, y: 0.927 },
+  { o: 0.1533, y: 0.974 },
+  { o: 0.1667, y: 0.9858 },
   { o: 0.18, y: 0.991 },
+  { o: 0.193, y: 0.999 },
+  { o: 0.2059, y: 1.0003 },
   { o: 0.22, y: 0.995 },
+  { o: 0.2359, y: 0.9825 },
+  { o: 0.253, y: 0.9634 },
   { o: 0.27, y: 0.939 },
+  { o: 0.2863, y: 0.9101 },
+  { o: 0.3026, y: 0.8759 },
   { o: 0.32, y: 0.836 },
+  { o: 0.3389, y: 0.7895 },
+  { o: 0.3589, y: 0.7373 },
   { o: 0.38, y: 0.681 },
   { o: 0.45, y: 0.49 },
   { o: 0.52, y: 0.314 },
