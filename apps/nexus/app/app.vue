@@ -12,6 +12,7 @@ useHead({
   titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff Nexus`),
 })
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
@@ -504,7 +505,7 @@ watchEffect(() => {
     >
       <TxEmptyState
         variant="loading"
-        :title="$t('auth.checkingSession')"
+        :title="t('auth.checkingSession')"
         size="small"
         layout="vertical"
       />
@@ -515,7 +516,7 @@ watchEffect(() => {
     >
       <TxEmptyState
         variant="loading"
-        :title="$t('auth.redirecting')"
+        :title="t('auth.redirecting')"
         size="small"
         layout="vertical"
       />
