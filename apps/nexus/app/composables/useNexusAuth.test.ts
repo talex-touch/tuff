@@ -62,6 +62,7 @@ export async function initializeApp(dependencies) {
     useCookie,
     useGlobalSearchState,
     useHead,
+    useI18n,
     useLocaleOrchestrator,
     useNexusAuth,
     useRoute,
@@ -135,6 +136,10 @@ describe('Nexus public-session lifecycle', () => {
           summonSearch: () => undefined,
         }),
         useHead: () => undefined,
+        // The app root reads t() for the two auth gates; this harness has to
+        // list every auto-import the root uses or the compiled initializer
+        // throws on a bare reference.
+        useI18n: () => ({ t: (key: string) => key }),
         useLocaleOrchestrator: () => ({
           initLocale: async () => undefined,
           reconcileClientLocale: async () => undefined,
