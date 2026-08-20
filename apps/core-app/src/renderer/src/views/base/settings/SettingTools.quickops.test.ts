@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { defineComponent, nextTick } from 'vue'
 import SettingTools from './SettingTools.vue'
 
 interface QuickOpsSettingMock {
@@ -181,39 +181,44 @@ function resetAppSetting(): void {
   appSettingMock.quickOps = createQuickOpsSetting()
 }
 
+// The group stub must render `name`: the duplicate-header regression only shows
+// up when both mounts are on screen and headers are visible in text().
+const settingToolsStubs = {
+  TuffGroupBlock: {
+    template: '<section><h5 v-if="name">{{ name }}</h5><slot /></section>',
+    props: ['name']
+  },
+  TuffBlockInput: {
+    template: '<label><span>{{ title }}</span><slot name="control" /></label>',
+    props: ['title']
+  },
+  TuffBlockSlot: {
+    template: '<div><span>{{ title }}</span><slot /></div>',
+    props: ['title']
+  },
+  TuffBlockSwitch: {
+    template:
+      '<label><span>{{ title }}</span><input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /></label>',
+    props: ['modelValue', 'title'],
+    emits: ['update:modelValue']
+  },
+  TuffBlockSelect: {
+    template:
+      '<label><span>{{ title }}</span><select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select></label>',
+    props: ['modelValue', 'title'],
+    emits: ['update:modelValue']
+  },
+  TxSelectItem: { template: '<option :value="value"><slot /></option>', props: ['value'] },
+  TuffSelectItem: { template: '<option :value="value"><slot /></option>', props: ['value'] },
+  TxInput: { template: '<input />' },
+  TxButton: { template: '<button><slot /></button>' },
+  ShortcutDialog: { template: '<div />' }
+}
+
 function mountSettingTools(advancedOnly = false) {
   return mount(SettingTools, {
     props: { advancedOnly },
-    global: {
-      stubs: {
-        TuffGroupBlock: { template: '<section><slot /></section>' },
-        TuffBlockInput: {
-          template: '<label><span>{{ title }}</span><slot name="control" /></label>',
-          props: ['title']
-        },
-        TuffBlockSlot: {
-          template: '<div><span>{{ title }}</span><slot /></div>',
-          props: ['title']
-        },
-        TuffBlockSwitch: {
-          template:
-            '<label><span>{{ title }}</span><input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /></label>',
-          props: ['modelValue', 'title'],
-          emits: ['update:modelValue']
-        },
-        TuffBlockSelect: {
-          template:
-            '<label><span>{{ title }}</span><select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select></label>',
-          props: ['modelValue', 'title'],
-          emits: ['update:modelValue']
-        },
-        TxSelectItem: { template: '<option :value="value"><slot /></option>', props: ['value'] },
-        TuffSelectItem: { template: '<option :value="value"><slot /></option>', props: ['value'] },
-        TxInput: { template: '<input />' },
-        TxButton: { template: '<button><slot /></button>' },
-        ShortcutDialog: { template: '<div />' }
-      }
-    }
+    global: { stubs: settingToolsStubs }
   })
 }
 
@@ -271,6 +276,30 @@ describe('SettingTools QuickOps settings boundary', () => {
     expect(wrapper.text()).not.toContain('settingTools.autoClear')
     expect(wrapper.text()).not.toContain('settingTools.clipboardPollingInterval')
     expect(wrapper.text()).not.toContain('settingTools.recommendationEnabled')
+
+    wrapper.unmount()
+  })
+
+  it('renders every group and row exactly once across the basic + advanced double mount', async () => {
+    // SettingPluginsPage mounts both variants back to back; a region missing its
+    // advancedOnly gate shows up as a duplicated header, input or row here.
+    const Host = defineComponent({
+      components: { SettingTools },
+      template: '<div><SettingTools /><SettingTools advanced-only /></div>'
+    })
+    const wrapper = mount(Host, {
+      global: { stubs: settingToolsStubs }
+    })
+    await nextTick()
+    const text = wrapper.text()
+    const occurrences = (needle: string) => text.split(needle).length - 1
+
+    expect(occurrences('settingTools.groupTitle')).toBe(1)
+    expect(occurrences('settingTools.autoContextGroupTitle')).toBe(1)
+    expect(occurrences('settingTools.customPlaceholder')).toBe(1)
+    expect(occurrences('settingTools.shortcutsTitle')).toBe(1)
+    expect(occurrences('settingTools.autoPaste')).toBe(1)
+    expect(occurrences('settingTools.autoHide')).toBe(1)
 
     wrapper.unmount()
   })

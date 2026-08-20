@@ -25,7 +25,7 @@ import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
-import { computed, h, onMounted, onUnmounted, ref } from 'vue'
+import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -36,6 +36,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
+import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
@@ -114,7 +115,13 @@ const BROWSER_BOOKMARKS_PROVIDER_ID = 'touch-browser-data.browser-bookmarks'
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
-const showAdvancedSettings = computed(() => Boolean(props.forceAdvancedSettings))
+// Advanced groups follow Developer Mode (SettingAbout), as they did before the
+// global dev.advancedSettings flag was retired; the prop stays as an explicit
+// host override. Without this the three advanced groups were unreachable — the
+// prop had no caller.
+const showAdvancedSettings = computed(() =>
+  Boolean(props.forceAdvancedSettings || appSetting?.dev?.developerMode)
+)
 const indexedSourceDiagnosticsById = computed(() => {
   return new Map(
     (sourceDiagnostics.value?.sources ?? []).map((source) => [source.descriptor.id, source])
@@ -709,25 +716,39 @@ function coerceNumberInput(value: string | number): number {
 
 let unsubscribeProgress: (() => void) | null = null
 let statusCheckInterval: ReturnType<typeof setInterval> | null = null
+let rebuildSettleTimer: ReturnType<typeof setTimeout> | null = null
 
-onMounted(() => {
-  checkStatus()
+// Everything below the status group is advanced-only; loading (and polling) it
+// while hidden surfaced failure toasts for sections the user could not see.
+function loadAdvancedSections(): void {
   loadSourceDiagnostics()
   loadSearchProviderConfig()
   loadDeviceIdleSettings()
   loadDeviceIdleDiagnostic()
   loadAppIndexSettings()
+}
+
+watch(
+  showAdvancedSettings,
+  (visible) => {
+    if (visible) loadAdvancedSections()
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  checkStatus()
 
   unsubscribeProgress = onProgressUpdate((progress) => {
     estimatedTimeRemaining.value = progress?.estimatedRemainingMs ?? null
     estimatedTimeStatus.value = progress?.estimateStatus ?? null
     checkStatus()
-    loadSourceDiagnostics()
+    if (showAdvancedSettings.value) loadSourceDiagnostics()
   })
 
   statusCheckInterval = setInterval(() => {
     checkStatus()
-    loadSourceDiagnostics()
+    if (showAdvancedSettings.value) loadSourceDiagnostics()
   }, 30000)
 })
 
@@ -738,6 +759,10 @@ onUnmounted(() => {
   if (statusCheckInterval) {
     clearInterval(statusCheckInterval)
     statusCheckInterval = null
+  }
+  if (rebuildSettleTimer) {
+    clearTimeout(rebuildSettleTimer)
+    rebuildSettleTimer = null
   }
 })
 
@@ -1086,7 +1111,9 @@ async function triggerRebuild() {
     }
 
     toast.success(successMessage || t('settings.settingFileIndex.alertRebuildStarted'))
-    setTimeout(async () => {
+    if (rebuildSettleTimer) clearTimeout(rebuildSettleTimer)
+    rebuildSettleTimer = setTimeout(async () => {
+      rebuildSettleTimer = null
       await checkStatus()
       isRebuilding.value = false
     }, 2000)
@@ -2002,7 +2029,7 @@ async function triggerRebuild() {
   <TModal
     v-model="appIndexManagerVisible"
     :title="t('settings.settingFileIndex.appIndexManagerDialogTitle')"
-    width="960px"
+    width="min(92vw, 860px)"
   >
     <div class="app-index-manager-dialog">
       <SettingFileIndexAppIndexManager />

@@ -14,7 +14,7 @@ import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -52,7 +52,6 @@ const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
-const showAdvancedSettings = computed(() => props.advancedOnly)
 
 /**
  * Same stored preference the home composer's Auto Context button writes, so the two never
@@ -64,7 +63,6 @@ const autoContextEnabled = computed({
     if (appSetting.tools) appSetting.tools.autoContext = value
   }
 })
-const showLegacySystemControls = computed(() => false)
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
@@ -93,99 +91,6 @@ const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS = {
 } as const
 type RecommendationContextSourceKey = keyof typeof DEFAULT_RECOMMENDATION_CONTEXT_SOURCES
 type RecommendationSemanticSettingKey = keyof typeof DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS
-const recommendationContextSourceItems: Array<{
-  key: RecommendationContextSourceKey
-  titleKey: string
-  descriptionKey: string
-  defaultIcon: string
-  activeIcon: string
-}> = [
-  {
-    key: 'time',
-    titleKey: 'settingTools.recommendationContextTime',
-    descriptionKey: 'settingTools.recommendationContextTimeDesc',
-    defaultIcon: 'i-carbon-time',
-    activeIcon: 'i-carbon-time'
-  },
-  {
-    key: 'foregroundApp',
-    titleKey: 'settingTools.recommendationContextForegroundApp',
-    descriptionKey: 'settingTools.recommendationContextForegroundAppDesc',
-    defaultIcon: 'i-carbon-application',
-    activeIcon: 'i-carbon-application'
-  },
-  {
-    key: 'clipboard',
-    titleKey: 'settingTools.recommendationContextClipboard',
-    descriptionKey: 'settingTools.recommendationContextClipboardDesc',
-    defaultIcon: 'i-carbon-clipboard',
-    activeIcon: 'i-carbon-clipboard'
-  },
-  {
-    key: 'selection',
-    titleKey: 'settingTools.recommendationContextSelection',
-    descriptionKey: 'settingTools.recommendationContextSelectionDesc',
-    defaultIcon: 'i-carbon-text-selection',
-    activeIcon: 'i-carbon-text-selection'
-  },
-  {
-    key: 'network',
-    titleKey: 'settingTools.recommendationContextNetwork',
-    descriptionKey: 'settingTools.recommendationContextNetworkDesc',
-    defaultIcon: 'i-carbon-wifi',
-    activeIcon: 'i-carbon-wifi'
-  },
-  {
-    key: 'focus',
-    titleKey: 'settingTools.recommendationContextFocus',
-    descriptionKey: 'settingTools.recommendationContextFocusDesc',
-    defaultIcon: 'i-carbon-notification-off',
-    activeIcon: 'i-carbon-notification-off-filled'
-  },
-  {
-    key: 'power',
-    titleKey: 'settingTools.recommendationContextPower',
-    descriptionKey: 'settingTools.recommendationContextPowerDesc',
-    defaultIcon: 'i-carbon-battery-charging',
-    activeIcon: 'i-carbon-battery-charging'
-  },
-  {
-    key: 'location',
-    titleKey: 'settingTools.recommendationContextLocation',
-    descriptionKey: 'settingTools.recommendationContextLocationDesc',
-    defaultIcon: 'i-carbon-location',
-    activeIcon: 'i-carbon-location-filled'
-  }
-]
-const recommendationSemanticItems: Array<{
-  key: RecommendationSemanticSettingKey
-  titleKey: string
-  descriptionKey: string
-  defaultIcon: string
-  activeIcon: string
-}> = [
-  {
-    key: 'localVectorEnabled',
-    titleKey: 'settingTools.recommendationSemanticLocalVector',
-    descriptionKey: 'settingTools.recommendationSemanticLocalVectorDesc',
-    defaultIcon: 'i-carbon-network-3',
-    activeIcon: 'i-carbon-network-3'
-  },
-  {
-    key: 'aiRerankEnabled',
-    titleKey: 'settingTools.recommendationSemanticAiRerank',
-    descriptionKey: 'settingTools.recommendationSemanticAiRerankDesc',
-    defaultIcon: 'i-carbon-machine-learning-model',
-    activeIcon: 'i-carbon-machine-learning-model'
-  },
-  {
-    key: 'aiEmbeddingEnabled',
-    titleKey: 'settingTools.recommendationSemanticAiEmbedding',
-    descriptionKey: 'settingTools.recommendationSemanticAiEmbeddingDesc',
-    defaultIcon: 'i-carbon-vector',
-    activeIcon: 'i-carbon-vector'
-  }
-]
 type SystemPermissionStatus =
   | 'granted'
   | 'denied'
@@ -423,10 +328,6 @@ async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
     omniPanelAccessibilityGranted.value = null
   }
 }
-
-const clipboardPollingLowBatteryDisabled = computed(
-  () => appSetting.tools.clipboardPolling?.lowBatteryPolicy?.enable === false
-)
 
 const omniPanelMouseTriggerEnabled = computed(() => {
   const target = shortcuts.value?.find(
@@ -769,6 +670,13 @@ watch(shortcutsDialogVisible, (visible) => {
   }
   initialShortcutSnapshot.value = snapshot
 })
+
+onBeforeUnmount(() => {
+  for (const timer of saveTimers.values()) {
+    window.clearTimeout(timer)
+  }
+  saveTimers.clear()
+})
 </script>
 
 <!--
@@ -797,6 +705,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
   <!-- Utilities group block -->
   <TuffGroupBlock
+    v-if="!props.advancedOnly"
     :name="t('settingTools.groupTitle')"
     :description="t('settingTools.groupDesc')"
     :collapsible="false"
@@ -822,11 +731,7 @@ watch(shortcutsDialogVisible, (visible) => {
       search in the main process, so exposing it as a toggle let a user disable the launcher
       entirely while believing they were only turning off a tutorial.
     -->
-    <TuffBlockSlot
-      v-if="!props.advancedOnly"
-      :title="t('settingTools.usage')"
-      :description="t('settingTools.usageDesc')"
-    >
+    <TuffBlockSlot :title="t('settingTools.usage')" :description="t('settingTools.usageDesc')">
       <TxButton variant="flat" type="primary" @click.stop="rerunBeginnerGuide">
         {{ t('settingTools.usageAction') }}
       </TxButton>
@@ -846,9 +751,15 @@ watch(shortcutsDialogVisible, (visible) => {
         {{ t('settingTools.shortcutsAction') }}
       </TxButton>
     </TuffBlockSlot>
+  </TuffGroupBlock>
 
+  <!--
+    Advanced half inherited from the dissolved `advanced` category. Headerless on
+    purpose: the page mounts both halves back to back, so the utilities header must
+    appear exactly once (a dedicated title awaits the in-flight lang files).
+  -->
+  <TuffGroupBlock v-else :collapsible="false">
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
       v-model="appSetting.omniPanel.mouseLongPressDurationMs"
       :title="t('settingTools.omniPanelMouseLongPressDuration')"
       :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
@@ -865,7 +776,6 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Auto paste time selection -->
     <TuffBlockSelect
-      v-if="showAdvancedSettings"
       v-model="appSetting.tools.autoPaste.time"
       :title="t('settingTools.autoPaste')"
       :description="t('settingTools.autoPasteDesc')"
@@ -888,100 +798,16 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="300"> 5 {{ t('settingTools.min') }} </TxSelectItem>
     </TuffBlockSelect>
 
-    <!-- Auto clear time selection -->
-    <TuffBlockSelect
-      v-if="showLegacySystemControls"
-      v-model="appSetting.tools.autoClear"
-      :title="t('settingTools.autoClear')"
-      :description="t('settingTools.autoClearDesc')"
-    >
-      <TxSelectItem :value="-1">
-        {{ t('settingTools.disabled') }}
-      </TxSelectItem>
-      <TxSelectItem :value="1"> 1 {{ t('settingTools.sec') }} </TxSelectItem>
-      <TxSelectItem :value="3"> 3 {{ t('settingTools.sec') }} </TxSelectItem>
-      <TxSelectItem :value="5"> 5 {{ t('settingTools.sec') }} </TxSelectItem>
-      <TxSelectItem :value="10"> 10 {{ t('settingTools.sec') }} </TxSelectItem>
-      <TxSelectItem :value="15"> 15 {{ t('settingTools.sec') }} </TxSelectItem>
-      <TxSelectItem :value="30"> 30 {{ t('settingTools.sec') }} </TxSelectItem>
-      <TxSelectItem :value="60"> 1 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="120"> 2 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="180"> 3 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="300"> 5 {{ t('settingTools.min') }} </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-if="showLegacySystemControls"
-      v-model="appSetting.tools.clipboardPolling.interval"
-      :title="t('settingTools.clipboardPollingInterval')"
-      :description="t('settingTools.clipboardPollingIntervalDesc')"
-    >
-      <TxSelectItem :value="1">1 {{ t('settingTools.sec') }}</TxSelectItem>
-      <TxSelectItem :value="3">3 {{ t('settingTools.sec') }}</TxSelectItem>
-      <TxSelectItem :value="5">5 {{ t('settingTools.sec') }}</TxSelectItem>
-      <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
-      <TxSelectItem :value="15">15 {{ t('settingTools.sec') }}</TxSelectItem>
-      <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
-    </TuffBlockSelect>
-
-    <template v-if="showLegacySystemControls">
-      <TuffBlockSwitch
-        v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
-        :title="t('settingTools.clipboardPollingLowBattery')"
-        :description="t('settingTools.clipboardPollingLowBatteryDesc')"
-      />
-
-      <TuffBlockSelect
-        v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.interval"
-        :title="t('settingTools.clipboardPollingLowBatteryInterval')"
-        :description="t('settingTools.clipboardPollingLowBatteryIntervalDesc')"
-        :disabled="clipboardPollingLowBatteryDisabled"
-      >
-        <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
-        <TxSelectItem :value="15">15 {{ t('settingTools.sec') }}</TxSelectItem>
-      </TuffBlockSelect>
-    </template>
-
     <!-- Auto hide switch -->
     <TuffBlockSwitch
-      v-if="showAdvancedSettings"
       v-model="appSetting.tools.autoHide"
       :title="t('settingTools.autoHide')"
       :description="t('settingTools.autoHideDesc')"
     />
-
-    <!-- Recommendation Enabled switch -->
-    <TuffBlockSwitch
-      v-if="showLegacySystemControls"
-      v-model="appSetting.recommendation.enabled"
-      :title="t('settingTools.recommendationEnabled')"
-      :description="t('settingTools.recommendationEnabledDesc')"
-    />
-
-    <template v-if="showLegacySystemControls">
-      <TuffBlockSwitch
-        v-for="item in recommendationSemanticItems"
-        :key="item.key"
-        v-model="appSetting.recommendation.semantic[item.key]"
-        :title="t(item.titleKey)"
-        :description="t(item.descriptionKey)"
-        :default-icon="item.defaultIcon"
-        :active-icon="item.activeIcon"
-      />
-
-      <TuffBlockSwitch
-        v-for="source in recommendationContextSourceItems"
-        :key="source.key"
-        v-model="appSetting.recommendation.contextSources[source.key]"
-        :title="t(source.titleKey)"
-        :description="t(source.descriptionKey)"
-        :default-icon="source.defaultIcon"
-        :active-icon="source.activeIcon"
-      />
-    </template>
   </TuffGroupBlock>
 
   <ShortcutDialog
+    v-if="!props.advancedOnly"
     v-model="shortcutsDialogVisible"
     v-model:search="shortcutSearch"
     :source="shortcutsDialogSource"
