@@ -562,6 +562,7 @@ export default {
       keyrings: 'Authorized Keyrings',
       keyringsDesc: 'Keys allow third-party apps to access your sync storage. Do not share your private keys.',
       keyringsEmpty: 'No keyring records',
+      overQuota: 'Over limit',
       keyringCount: 'Keyrings: {count}',
       lastActive: 'Last active',
       recoveryEnabled: 'Recovery enabled',
