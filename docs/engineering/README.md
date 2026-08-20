@@ -18,6 +18,7 @@
 - [`cloud-sync-sdk-usage.md`](./cloud-sync-sdk-usage.md)：Cloud Sync SDK 使用说明。
 - [`sensitive-data-inventory.md`](./sensitive-data-inventory.md)：敏感数据 owner、存储、导出、删除、保留与迁移清单；机器可读源为 [`sensitive-data-inventory.json`](./sensitive-data-inventory.json)。
 - [`tuff-intelligence-rollout-todo.md`](./tuff-intelligence-rollout-todo.md)：Intelligence rollout 专题。
+- [`catalog-service-boundary.md`](./catalog-service-boundary.md)：R8-F CatalogService 的已完成/未完成边界 —— 服务契约已成立，触发面未接出。
 
 ## Evidence 与报告
 
