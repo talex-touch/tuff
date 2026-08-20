@@ -54,6 +54,8 @@ const SKELETON_ENTRIES = 4
  * removing an entry, and those must leave the rendered list in place.
  */
 const hasLoaded = ref(false)
+/** The last listEntries() call did not answer; distinct from an empty index. */
+const loadFailed = ref(false)
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 const busyPath = ref<string | null>(null)
 const diagnosticMap = ref<Record<string, AppIndexDiagnoseResult>>({})
@@ -79,7 +81,8 @@ const emptyState = computed(() =>
       source: sourceFilter.value,
       diagnostic: diagnosticFilter.value
     },
-    t
+    t,
+    loadFailed.value
   )
 )
 
@@ -171,9 +174,11 @@ function clearFilters(): void {
 
 async function loadEntries(): Promise<void> {
   loading.value = true
+  loadFailed.value = false
   try {
     entries.value = await settingsSdk.appIndex.listEntries()
   } catch (error) {
+    loadFailed.value = true
     log.error('Failed to load managed app index entries', error)
     toast.error(t('settings.settingFileIndex.appIndexManagerLoadFailed'))
   } finally {
@@ -479,6 +484,15 @@ onMounted(() => {
             size="sm"
             :disabled="adding"
             @click="selectAppFile"
+          >
+            {{ emptyState.actionLabel }}
+          </TxButton>
+          <TxButton
+            v-else-if="emptyState.actionKind === 'retry'"
+            variant="flat"
+            size="sm"
+            :disabled="loading"
+            @click="loadEntries"
           >
             {{ emptyState.actionLabel }}
           </TxButton>

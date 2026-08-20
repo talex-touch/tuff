@@ -172,6 +172,19 @@ describe('app-index-manager-display', () => {
     })
   })
 
+  it('separates a failed load from an empty index', () => {
+    // Same inputs as the empty case above — only the load outcome differs. Told
+    // there are no entries and invited to add one, the reader would act on a
+    // list nobody could read.
+    expect(
+      resolveAppIndexManagerEmptyState([], {}, { source: 'all', diagnostic: 'all' }, t, true)
+    ).toMatchObject({
+      title: 'Failed to load app entries',
+      actionKind: 'retry',
+      tone: 'attention'
+    })
+  })
+
   it('explains the initial empty state with an add action', () => {
     expect(
       resolveAppIndexManagerEmptyState([], {}, { source: 'all', diagnostic: 'all' }, t)
