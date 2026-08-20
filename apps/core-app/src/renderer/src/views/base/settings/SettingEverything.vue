@@ -1210,7 +1210,7 @@ watch(
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--tx-fill-color);
 }
 
 .status-actions {
@@ -1223,7 +1223,7 @@ watch(
 
 .version-info {
   font-size: 12px;
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -1275,7 +1275,7 @@ watch(
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
   }
@@ -1297,13 +1297,13 @@ watch(
 }
 
 .installation-state {
-  color: var(--tuff-text-primary);
+  color: var(--tx-text-color-primary);
   font-size: 13px;
   font-weight: 600;
 }
 
 .installation-action {
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
@@ -1312,11 +1312,11 @@ watch(
   grid-template-columns: minmax(120px, auto) minmax(48px, 1fr);
   gap: 6px 10px;
   align-items: center;
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 
   strong {
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-weight: 500;
   }
 }
@@ -1327,7 +1327,7 @@ watch(
   gap: 8px;
   align-items: center;
   font-size: 12px;
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
 
   code {
     min-width: 0;
@@ -1335,7 +1335,7 @@ watch(
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-family: 'JetBrains Mono', monospace;
   }
 }
@@ -1361,7 +1361,7 @@ watch(
 
 .diagnostic-stage,
 .diagnostic-duration {
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .diagnostic-status {
@@ -1472,17 +1472,17 @@ watch(
   min-width: 0;
   padding: 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--tx-fill-color-light);
 
   strong {
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-size: 13px;
   }
 
   code {
     min-width: 0;
     overflow-wrap: anywhere;
-    color: var(--tuff-text-secondary);
+    color: var(--tx-text-color-secondary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
     line-height: 1.45;
@@ -1527,11 +1527,15 @@ watch(
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   padding: 18px;
-  border: 1px solid rgba(59, 130, 246, 0.28);
+  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 28%, transparent);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(34, 197, 94, 0.08)),
-    rgba(255, 255, 255, 0.04);
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--tx-color-primary) 16%, transparent),
+      color-mix(in srgb, var(--tx-color-success) 8%, transparent)
+    ),
+    var(--tx-fill-color-light);
 }
 
 .install-recommend-icon {
@@ -1556,13 +1560,13 @@ watch(
 .install-recommend-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--tuff-text-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .install-recommend-desc {
   font-size: 12px;
   line-height: 1.55;
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .install-recommend-tags {
@@ -1573,8 +1577,8 @@ watch(
   span {
     padding: 3px 7px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--tuff-text-secondary);
+    background: var(--tx-fill-color-light);
+    color: var(--tx-text-color-secondary);
     font-size: 11px;
   }
 }
@@ -1585,7 +1589,7 @@ watch(
   gap: 8px;
   padding: 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--tx-fill-color-light);
 }
 
 .install-status-main {
@@ -1593,10 +1597,10 @@ watch(
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: var(--tuff-text-secondary);
+  color: var(--tx-text-color-secondary);
 
   strong {
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-family: 'JetBrains Mono', monospace;
   }
 }
@@ -1606,7 +1610,7 @@ watch(
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--tx-fill-color-light);
 }
 
 .install-progress-fill {
@@ -1625,7 +1629,7 @@ watch(
 .dialog-section-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--tuff-text-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .diagnostic-grid {
@@ -1641,11 +1645,11 @@ watch(
   min-width: 0;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tx-fill-color-light);
 
   span {
     font-size: 12px;
-    color: var(--tuff-text-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   strong {
@@ -1655,7 +1659,7 @@ watch(
     white-space: nowrap;
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
   }
 
   &--wide {
@@ -1682,7 +1686,7 @@ watch(
   align-items: start;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--tx-fill-color-light);
 
   div {
     min-width: 0;
@@ -1697,12 +1701,12 @@ watch(
 
   strong {
     margin-bottom: 4px;
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-size: 12px;
   }
 
   code {
-    color: var(--tuff-text-secondary);
+    color: var(--tx-text-color-secondary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     line-height: 1.45;
@@ -1716,7 +1720,7 @@ watch(
   align-items: start;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--tx-fill-color-light);
   font-size: 12px;
 
   code,
@@ -1726,12 +1730,12 @@ watch(
   }
 
   code {
-    color: var(--tuff-text-primary);
+    color: var(--tx-text-color-primary);
     font-family: 'JetBrains Mono', monospace;
   }
 
   span {
-    color: var(--tuff-text-secondary);
+    color: var(--tx-text-color-secondary);
   }
 }
 
