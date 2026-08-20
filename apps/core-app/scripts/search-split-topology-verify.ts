@@ -12,11 +12,11 @@
  * owns that shape. Run the app yourself against a disposable profile, then point this at it.
  *
  *   # criterion 2 — default-on split, after a first-launch index
- *   tsx scripts/search-split-topology-verify.ts --profile /tmp/tuff-split-on --expect-split \
+ *   pnpm search-split:topology:verify -- --profile /tmp/tuff-split-on --expect-split \
  *     --log ~/Library/Logs/TalexTouch/main.log --out /tmp/split-on.json
  *
  *   # criterion 3 — relaunch the same profile with TUFF_DB_SEARCH_SPLIT_ENABLED=0, then
- *   tsx scripts/search-split-topology-verify.ts --profile /tmp/tuff-split-on --expect-shared \
+ *   pnpm search-split:topology:verify -- --profile /tmp/tuff-split-on --expect-shared \
  *     --baseline /tmp/split-on.json
  *
  * Exit code is 0 only when every check passes, so it can gate a release review directly.
