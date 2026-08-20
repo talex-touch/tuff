@@ -195,7 +195,50 @@ export async function typeIntoElement(client, selector, text, options = {}) {
   await delay(150)
 }
 
+/**
+ * Elements that `captureBeyondViewport` will draw somewhere they are not.
+ *
+ * A full-page capture renders the whole document height, and a `position: fixed`
+ * element parked outside the viewport — a closed bottom drawer at `top: 100vh`,
+ * an off-canvas nav — gets composited into that extra height as though it sat in
+ * the flow. The screenshot then shows a closed drawer open, in the middle of the
+ * page. That has cost two rounds of chasing a defect that was never there, so
+ * the capture now names the elements it is about to misplace.
+ */
+async function warnAboutFixedElements(client, name) {
+  // The fixed element itself is usually a full-viewport shell sitting at 0,0 —
+  // it is the content parked inside it that is off-screen, and that content is
+  // positioned absolutely, so testing the fixed element's own rect finds
+  // nothing. Walk the subtree instead.
+  const raw = await evaluate(client, `(() => {
+    const vh = window.innerHeight
+    const misplaced = []
+    for (const root of document.querySelectorAll('body *')) {
+      if (getComputedStyle(root).position !== 'fixed') continue
+      for (const el of [root, ...root.querySelectorAll('*')]) {
+        const rect = el.getBoundingClientRect()
+        if (rect.width === 0 || rect.height === 0) continue
+        if (rect.top >= vh || rect.bottom <= 0) {
+          misplaced.push(\`<\${root.tagName.toLowerCase()} class="\${(root.className || '').toString().slice(0, 40)}">\`)
+          break
+        }
+      }
+    }
+    return JSON.stringify([...new Set(misplaced)].slice(0, 5))
+  })()`)
+  const misplaced = JSON.parse(raw)
+  if (misplaced.length) {
+    console.warn(
+      `[audit] ${name}: ${misplaced.length} fixed element(s) sit outside the viewport and will be`
+      + ` drawn in the page body by captureBeyondViewport — they are not really there:`,
+    )
+    for (const element of misplaced) console.warn(`          ${element}`)
+  }
+}
+
 export async function screenshot(client, name, screenshotDir, options = {}) {
+  if (options.captureBeyondViewport)
+    await warnAboutFixedElements(client, name)
   const result = await client.send('Page.captureScreenshot', {
     format: 'png',
     captureBeyondViewport: false,
