@@ -14,7 +14,7 @@ interface CommandItem {
 const commands: CommandItem[] = [
   {
     id: 'ai',
-    icon: 'i-heroicons-chat-bubble-left-right',
+    icon: 'i-carbon-chat',
     label: 'Ask AI',
     desc: 'Draft content, answer questions...',
     type: 'AI',
@@ -22,7 +22,7 @@ const commands: CommandItem[] = [
   },
   {
     id: 'project',
-    icon: 'i-heroicons-rocket-launch',
+    icon: 'i-carbon-rocket',
     label: 'Launch Project',
     desc: 'Open recent workspace',
     type: 'Workflow',
@@ -30,7 +30,7 @@ const commands: CommandItem[] = [
   },
   {
     id: 'meeting',
-    icon: 'i-heroicons-calendar',
+    icon: 'i-carbon-calendar',
     label: 'Schedule Meeting',
     desc: 'Google Calendar',
     type: 'App',
@@ -38,7 +38,7 @@ const commands: CommandItem[] = [
   },
   {
     id: 'files',
-    icon: 'i-heroicons-folder-open',
+    icon: 'i-carbon-folder-open',
     label: 'Search Files',
     desc: 'Looking in /Users/Dev...',
     type: 'System',
@@ -46,7 +46,7 @@ const commands: CommandItem[] = [
   },
   {
     id: 'theme',
-    icon: 'i-heroicons-swatch',
+    icon: 'i-carbon-color-palette',
     label: 'Theme Settings',
     desc: 'Dark / Light / System',
     type: 'Config',
@@ -179,10 +179,10 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-6">
         <div class="flex gap-4 text-white/60">
           <a href="#" class="hover:text-white transition-colors">
-            <span class="i-heroicons-command-line w-4 h-4" />
+            <span class="i-carbon-terminal w-4 h-4" />
           </a>
           <a href="#" class="hover:text-white transition-colors">
-            <span class="i-heroicons-code-bracket w-4 h-4" />
+            <span class="i-carbon-code w-4 h-4" />
           </a>
         </div>
         <a href="#" class="text-white/80 hover:text-white transition-colors">Log in</a>
@@ -206,7 +206,7 @@ Tuff
       <div class="w-full max-w-[720px]">
         <div class="hero-launcher" :class="{ 'is-flash': isFlash }">
           <div class="relative flex items-center h-16 px-6 border-b border-white/5">
-            <span class="i-heroicons-magnifying-glass w-5 h-5 text-white/40 mr-4" />
+            <span class="i-carbon-search w-5 h-5 text-white/40 mr-4" />
             <input
               v-model="query"
               type="text"
@@ -270,13 +270,13 @@ Tuff
         <button
           class="px-6 py-2.5 bg-white text-black rounded-full text-sm font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
         >
-          <span class="i-heroicons-play-circle w-5 h-5" />
+          <span class="i-carbon-play-outline w-5 h-5" />
           Join waitlist
         </button>
         <button
           class="px-6 py-2.5 bg-transparent border border-white/20 text-white rounded-full text-sm font-medium hover:bg-white/5 transition-colors flex items-center gap-2"
         >
-          <span class="i-heroicons-code-bracket w-5 h-5" />
+          <span class="i-carbon-code w-5 h-5" />
           Developer docs
         </button>
       </div>
@@ -284,10 +284,10 @@ Tuff
 
     <div class="fixed right-8 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-30">
       <div class="w-12 h-12 rounded-full border border-white/10 bg-white/5 backdrop-blur-md flex items-center justify-center hover:scale-110 transition-transform cursor-pointer group">
-        <span class="i-heroicons-microphone w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
+        <span class="i-carbon-microphone w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
       </div>
       <div class="w-12 h-12 rounded-full border border-white/10 bg-white/5 backdrop-blur-md flex items-center justify-center hover:scale-110 transition-transform cursor-pointer group">
-        <span class="i-heroicons-clock w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
+        <span class="i-carbon-time w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
       </div>
     </div>
   </div>

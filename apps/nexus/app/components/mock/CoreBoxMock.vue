@@ -7,7 +7,7 @@ const selectedIndex = ref(0)
 
 const mockItems = [
   {
-    icon: 'i-heroicons-window',
+    icon: 'i-carbon-application-web',
     color: 'text-blue-400',
     bg: 'bg-blue-500/10',
     title: 'Open Application',
@@ -15,7 +15,7 @@ const mockItems = [
     action: 'Return'
   },
   {
-    icon: 'i-heroicons-sparkles',
+    icon: 'i-carbon-magic-wand',
     color: 'text-purple-400',
     bg: 'bg-purple-500/10',
     title: 'Ask AI Assistant',
@@ -23,7 +23,7 @@ const mockItems = [
     action: 'Return'
   },
   {
-    icon: 'i-heroicons-document-text',
+    icon: 'i-carbon-document',
     color: 'text-emerald-400',
     bg: 'bg-emerald-500/10',
     title: 'Search Documents',
@@ -43,7 +43,7 @@ const mockItems = [
     <div class="flex items-center px-5 py-5 gap-4 relative">
       <!-- Logo -->
       <div class="w-9 h-9 flex items-center justify-center relative rounded-lg bg-white/5 border border-white/5 shadow-inner">
-         <div class="i-heroicons-magnifying-glass w-5 h-5 text-white/70" />
+         <div class="i-carbon-search w-5 h-5 text-white/70" />
       </div>
 
       <!-- 输入框 -->
