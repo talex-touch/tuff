@@ -3,8 +3,10 @@ import {
   buildReleaseNotesEvidenceChecks,
   navigateToUpdatePageExpression,
   readReleaseNotesDomExpression,
+  attachableTargets,
+  isDevToolsTarget,
+  isMainWindowIdentity,
   screenshotFileName,
-  selectMainWindowTarget,
   UPDATE_ROUTE_HASH,
   VIEWPORTS,
   type DevToolsTarget,
@@ -87,42 +89,57 @@ describe('buildReleaseNotesEvidenceChecks', () => {
   })
 })
 
-describe('selectMainWindowTarget', () => {
-  const page = (url: string, id = url): DevToolsTarget => ({
+describe('target selection', () => {
+  const page = (id: string, url = 'http://127.0.0.1:9444/'): DevToolsTarget => ({
     id,
     type: 'page',
     url,
-    webSocketDebuggerUrl: `ws://127.0.0.1:9222/devtools/page/${id}`
-  })
-
-  it('returns null when nothing is attachable', () => {
-    expect(selectMainWindowTarget([])).toBeNull()
-    expect(selectMainWindowTarget([{ id: 'a', type: 'service_worker' }])).toBeNull()
-  })
-
-  it('ignores a page target with no websocket url', () => {
-    expect(selectMainWindowTarget([{ id: 'a', type: 'page', url: 'app://index.html' }])).toBeNull()
+    webSocketDebuggerUrl: `ws://127.0.0.1:9333/devtools/page/${id}`
   })
 
   /**
-   * The race this exists to remove: on first launch CoreBox and plugin Surfaces are also `page`
-   * targets, and taking the first one screenshots whichever happened to come up first.
+   * Every case below is a shape a live launch actually produced. A dev-server launch exposed four
+   * page targets: two DevTools windows, the main window and CoreBox — with the main window and
+   * CoreBox reporting the *same* URL, which is why the first version of this probe attached to
+   * CoreBox, reported `#/home` instead of the route it had just set, and captured two screenshots
+   * of the wrong window under the right filename.
    */
-  it('prefers the main window over CoreBox and plugin surfaces', () => {
-    const targets = [
-      page('app://corebox/index.html', 'corebox'),
-      page('http://127.0.0.1:5173/plugin/demo', 'plugin'),
-      page('app://index.html#/', 'main')
+  it('drops DevTools windows, which are page targets and answer Runtime.evaluate happily', () => {
+    expect(isDevToolsTarget({ id: 'a', type: 'page', title: 'DevTools' })).toBe(true)
+    expect(
+      isDevToolsTarget({ id: 'b', type: 'page', url: 'devtools://devtools/bundled/x.html' })
+    ).toBe(true)
+    expect(isDevToolsTarget(page('c'))).toBe(false)
+  })
+
+  it('keeps only attachable non-DevTools pages', () => {
+    const targets: DevToolsTarget[] = [
+      { id: 'devtools', type: 'page', title: 'DevTools', webSocketDebuggerUrl: 'ws://x' },
+      { id: 'no-socket', type: 'page' },
+      { id: 'worker', type: 'service_worker', webSocketDebuggerUrl: 'ws://y' },
+      page('main')
     ]
-    expect(selectMainWindowTarget(targets)?.id).toBe('main')
+    expect(attachableTargets(targets).map((target) => target.id)).toEqual(['main'])
   })
 
-  it('accepts a dev-server main window', () => {
-    expect(selectMainWindowTarget([page('http://localhost:5173/#/', 'dev')])?.id).toBe('dev')
+  it('returns nothing rather than guessing when there is no page target', () => {
+    expect(attachableTargets([])).toEqual([])
   })
 
-  it('falls back to the first page rather than giving up', () => {
-    expect(selectMainWindowTarget([page('app://something-else', 'x')])?.id).toBe('x')
+  /** The discriminator the live run proved necessary: body class, not URL. */
+  it('tells the main window from CoreBox by body class', () => {
+    expect(isMainWindowIdentity({ bodyClass: 'MacIntel', title: 'Tuff' })).toBe(true)
+    expect(isMainWindowIdentity({ bodyClass: 'MacIntel core-box', title: 'Tuff' })).toBe(false)
+    expect(isMainWindowIdentity({ bodyClass: 'plugin-view dark', title: 'Tuff' })).toBe(false)
+  })
+
+  /** `core-boxed` must not be read as `core-box`; the check is on whole class tokens. */
+  it('matches whole class tokens, not substrings', () => {
+    expect(isMainWindowIdentity({ bodyClass: 'core-boxed', title: 'Tuff' })).toBe(true)
+  })
+
+  it('rejects a DevTools identity even if its body class looks ordinary', () => {
+    expect(isMainWindowIdentity({ bodyClass: 'undocked inactive', title: 'DevTools' })).toBe(false)
   })
 })
 

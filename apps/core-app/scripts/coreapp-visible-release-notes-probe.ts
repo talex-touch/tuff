@@ -61,6 +61,19 @@ export const VIEWPORTS: readonly Viewport[] = [
   { name: 'narrow', width: 720, height: 900 }
 ]
 
+/**
+ * Read from a candidate target to decide whether it is the main window.
+ *
+ * Learned by running this: in a dev-server launch the main window and CoreBox load the *same*
+ * base URL, so URL matching cannot tell them apart -- the probe attached to CoreBox, reported
+ * `#/home` instead of the route it had just set, and captured two screenshots of the wrong
+ * window under the right filename. The body class is what actually differs.
+ */
+export interface TargetIdentity {
+  bodyClass: string
+  title: string
+}
+
 /** What one capture pass reads out of the renderer before it shoots. */
 export interface ReleaseNotesProbeDom {
   href: string
@@ -110,19 +123,36 @@ export interface ReleaseNotesEvidenceCheck {
  * several. Picking the first `page` would attach to whichever came up first, which is a race —
  * the probe would sometimes screenshot a plugin's HTML and report a missing dialog.
  */
-export function selectMainWindowTarget(targets: readonly DevToolsTarget[]): DevToolsTarget | null {
-  const pages = targets.filter(
-    (target) => target.type === 'page' && Boolean(target.webSocketDebuggerUrl)
+export function isDevToolsTarget(target: DevToolsTarget): boolean {
+  return (target.url ?? '').startsWith('devtools://') || target.title === 'DevTools'
+}
+
+/**
+ * Attachable, non-DevTools page targets. A live launch exposes one `page` per DevTools window as
+ * well as per app window, and those answer `Runtime.evaluate` perfectly happily — they just report
+ * an empty hash and no dialog, which reads as "the app is broken".
+ */
+export function attachableTargets(targets: readonly DevToolsTarget[]): DevToolsTarget[] {
+  return targets.filter(
+    (target) =>
+      target.type === 'page' && Boolean(target.webSocketDebuggerUrl) && !isDevToolsTarget(target)
   )
-  if (pages.length === 0) return null
-  const main = pages.find((target) => {
-    const url = target.url ?? ''
-    // The main window is the one serving the renderer bundle: `index.html` in a packaged build,
-    // the dev server root in dev. CoreBox and plugin Surfaces carry a route or a plugin origin.
-    if (url.includes('/plugin') || url.includes('corebox') || url.includes('core-box')) return false
-    return url.includes('index.html') || /^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(url)
-  })
-  return main ?? pages[0] ?? null
+}
+
+/**
+ * The main window, told apart from CoreBox by body class rather than by URL.
+ *
+ * `core-box` is set on CoreBox's body; the main window carries neither it nor a plugin marker.
+ * URL matching does not work: under a dev-server launch both windows load the same origin.
+ */
+export function isMainWindowIdentity(identity: TargetIdentity): boolean {
+  if (identity.title === 'DevTools') return false
+  const cls = identity.bodyClass
+  return !cls.split(/\s+/).some((token) => token === 'core-box' || token === 'plugin-view')
+}
+
+export function identityExpression(): string {
+  return `JSON.stringify({ bodyClass: document.body?.className || '', title: document.title || '' })`
 }
 
 /**
@@ -224,6 +254,9 @@ export function navigateToUpdatePageExpression(): string {
   })()`
 }
 
+/** Vue Router resolves a hash change on a microtask plus a render tick; this is slack over that. */
+export const ROUTE_SETTLE_MS = 750
+
 export function screenshotFileName(viewport: Viewport, surface: 'dialog' | 'update-page'): string {
   return `release-notes-${surface}-${viewport.name}-${viewport.width}x${viewport.height}.png`
 }
@@ -282,7 +315,13 @@ export async function runProbe(send: CdpSend, outDir: string): Promise<ProbeRunR
   for (const viewport of VIEWPORTS) {
     await applyViewport(send, viewport)
     const dom = await readDom(send)
-    if (viewport.name === 'desktop') checks.push(...buildReleaseNotesEvidenceChecks(dom))
+    if (viewport.name === 'desktop') {
+      checks.push(
+        ...buildReleaseNotesEvidenceChecks(dom).filter(
+          (check) => check.tag !== 'update-page-reached'
+        )
+      )
+    }
     if (dom.hasDialog) {
       const file = path.join(outDir, screenshotFileName(viewport, 'dialog'))
       await capture(send, file)
@@ -294,12 +333,24 @@ export async function runProbe(send: CdpSend, outDir: string): Promise<ProbeRunR
     expression: navigateToUpdatePageExpression(),
     returnByValue: true
   })
+  // The router resolves the hash asynchronously; capturing immediately shoots the previous route.
+  await new Promise((resolve) => setTimeout(resolve, ROUTE_SETTLE_MS))
 
-  for (const viewport of VIEWPORTS) {
-    await applyViewport(send, viewport)
-    const file = path.join(outDir, screenshotFileName(viewport, 'update-page'))
-    await capture(send, file)
-    artifacts.push(file)
+  const afterNav = await readDom(send)
+  const navChecks = buildReleaseNotesEvidenceChecks(afterNav).filter(
+    (check) => check.tag === 'update-page-reached'
+  )
+  checks.push(...navChecks)
+
+  // Only capture what the checks say is actually on screen. A PNG named `update-page` that shows
+  // something else is worse than no PNG: it is filed as evidence and read as one.
+  if (navChecks.every((check) => check.ok)) {
+    for (const viewport of VIEWPORTS) {
+      await applyViewport(send, viewport)
+      const file = path.join(outDir, screenshotFileName(viewport, 'update-page'))
+      await capture(send, file)
+      artifacts.push(file)
+    }
   }
 
   return { checks, artifacts }
@@ -310,7 +361,9 @@ function arg(name: string): string | undefined {
   return index >= 0 ? process.argv[index + 1] : undefined
 }
 
-function isDevToolsTarget(value: unknown): value is DevToolsTarget {
+/** Shape guard for the `/json` payload -- distinct from `isDevToolsTarget`, which asks whether a
+ * target *is* a DevTools window. The two were briefly the same name, which esbuild caught. */
+function hasDevToolsTargetShape(value: unknown): value is DevToolsTarget {
   if (!value || typeof value !== 'object') return false
   const target = value as Partial<DevToolsTarget>
   return typeof target.id === 'string' && typeof target.type === 'string'
@@ -322,7 +375,7 @@ async function loadTargets(remoteDebuggingUrl: string): Promise<DevToolsTarget[]
   const payload = (await response.json()) as unknown
   if (!Array.isArray(payload))
     throw new Error('Remote debugging endpoint did not return a target list')
-  return payload.filter(isDevToolsTarget)
+  return payload.filter(hasDevToolsTargetShape)
 }
 
 async function withTarget<T>(
@@ -387,9 +440,34 @@ async function main(): Promise<void> {
   }
 
   const targets = await loadTargets(`${cdpUrl.replace(/\/$/, '')}/json`)
-  const target = selectMainWindowTarget(targets)
-  if (!target) {
+  const candidates = attachableTargets(targets)
+  if (candidates.length === 0) {
     console.error(`no attachable page target among ${targets.length} target(s)`)
+    process.exit(1)
+  }
+
+  // Identity has to be read from the renderer, not guessed from the target list: under a
+  // dev-server launch every window reports the same URL.
+  let target: DevToolsTarget | null = null
+  for (const candidate of candidates) {
+    const identity = await withTarget(candidate, async (send) => {
+      const response = await send('Runtime.evaluate', {
+        expression: identityExpression(),
+        returnByValue: true
+      })
+      const raw = (response.result?.result as { value?: string } | undefined)?.value
+      return raw ? (JSON.parse(raw) as TargetIdentity) : null
+    })
+    if (identity && isMainWindowIdentity(identity)) {
+      target = candidate
+      break
+    }
+  }
+  if (!target) {
+    console.error(
+      `none of ${candidates.length} attachable target(s) is the main window ` +
+        '(all were DevTools, CoreBox or plugin views)'
+    )
     process.exit(1)
   }
 
