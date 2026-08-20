@@ -192,27 +192,39 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
       clickMethod: 'cdp-mouse',
       activationText: ''
     })
-    expect(calls.map((call) => call.method)).toEqual([
+    // Asserted by shape rather than by index. The send-mode poll runs until it
+    // gives up on the keyboard, so how many `Runtime.evaluate` calls land before
+    // the mouse fallback depends on how fast the machine is — pinning the exact
+    // ten-call sequence made this fail on a loaded CI runner with one evaluate
+    // on the far side of the click, and it reproduced neither in isolation nor
+    // under the full local suite.
+    const methods = calls.map((call) => call.method)
+    const firstMouse = methods.indexOf('Input.dispatchMouseEvent')
+
+    // The keyboard is tried first, and only then the pointer.
+    expect(methods.slice(0, 3)).toEqual([
       'Runtime.evaluate',
       'Input.dispatchKeyEvent',
-      'Input.dispatchKeyEvent',
-      'Runtime.evaluate',
-      'Runtime.evaluate',
-      'Runtime.evaluate',
-      'Input.dispatchMouseEvent',
-      'Input.dispatchMouseEvent',
-      'Runtime.evaluate',
-      'Runtime.evaluate'
+      'Input.dispatchKeyEvent'
     ])
-    expect(calls[5]?.params?.expression).toContain('getBoundingClientRect')
-    expect(calls[6]?.params).toMatchObject({
+    expect(firstMouse).toBeGreaterThan(2)
+
+    // The click has to be measured before it is dispatched, or it lands
+    // wherever the last layout happened to be.
+    const rectCall = calls
+      .slice(0, firstMouse)
+      .filter((call) => String(call.params?.expression || '').includes('getBoundingClientRect'))
+    expect(rectCall).toHaveLength(1)
+
+    expect(methods[firstMouse + 1]).toBe('Input.dispatchMouseEvent')
+    expect(calls[firstMouse]?.params).toMatchObject({
       type: 'mousePressed',
       x: 24,
       y: 48,
       button: 'left',
       clickCount: 1
     })
-    expect(calls[7]?.params).toMatchObject({
+    expect(calls[firstMouse + 1]?.params).toMatchObject({
       type: 'mouseReleased',
       x: 24,
       y: 48,
