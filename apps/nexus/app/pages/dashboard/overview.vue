@@ -416,12 +416,26 @@ function formatDeviceLocation(device: DeviceItem): string {
   return pieces.length ? pieces.join(' · ') : t('dashboard.devices.locationUnknown', '位置未知')
 }
 
+/**
+ * `statusMessage` is something the server wrote for a person; `message` is
+ * whatever the fetch layer produced. On a network failure that is the raw
+ * ofetch line — method, internal path and query — which is how four panels
+ * ended up printing `[GET] "/api/dashboard/telemetry/me?days=7": <no response>
+ * Failed to fetch` to the user. The localized fallback outranks it now, and the
+ * detail goes to the console for whoever is debugging.
+ */
 function resolveErrorMessage(error: any, fallback: string) {
   if (!error)
     return ''
 
   const source = error?.value ?? error
-  return source?.data?.statusMessage || source?.statusMessage || source?.message || fallback
+  const serverMessage = source?.data?.statusMessage || source?.statusMessage
+  if (serverMessage)
+    return serverMessage
+
+  if (source?.message)
+    console.warn('[dashboard/overview] request failed:', source.message)
+  return fallback
 }
 
 function isCurrentDevice(device: DeviceItem) {
