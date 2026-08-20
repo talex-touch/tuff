@@ -123,34 +123,36 @@ watch(
     filter var(--tx-badge-pop-dur, 500ms) var(--tx-badge-pop-ease, cubic-bezier(0.34, 1.36, 0.64, 1));
 }
 
+/* Status variants ride the semantic tokens with the family recipe
+   (12% bg / 32% border, same as TxStatusBadge) so they hold up in dark mode. */
 .tx-badge--default {
-  --tx-badge-bg: #f3f4f6;
-  --tx-badge-text: #374151;
+  --tx-badge-bg: var(--tx-fill-color-light, #f3f4f6);
+  --tx-badge-text: var(--tx-text-color-secondary, #374151);
   --tx-badge-border: transparent;
 }
 
 .tx-badge--primary {
-  --tx-badge-bg: #dbeafe;
-  --tx-badge-text: #1d4ed8;
-  --tx-badge-border: #3b82f6;
+  --tx-badge-bg: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  --tx-badge-text: var(--tx-color-primary, #409eff);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-primary, #409eff) 32%, transparent);
 }
 
 .tx-badge--success {
-  --tx-badge-bg: #d1fae5;
-  --tx-badge-text: #065f46;
-  --tx-badge-border: #22c55e;
+  --tx-badge-bg: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent);
+  --tx-badge-text: var(--tx-color-success, #67c23a);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-success, #67c23a) 32%, transparent);
 }
 
 .tx-badge--warning {
-  --tx-badge-bg: #fed7aa;
-  --tx-badge-text: #92400e;
-  --tx-badge-border: #f59e0b;
+  --tx-badge-bg: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 12%, transparent);
+  --tx-badge-text: var(--tx-color-warning, #e6a23c);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 32%, transparent);
 }
 
 .tx-badge--error {
-  --tx-badge-bg: #fee2e2;
-  --tx-badge-text: #991b1b;
-  --tx-badge-border: #ef4444;
+  --tx-badge-bg: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 12%, transparent);
+  --tx-badge-text: var(--tx-color-danger, #f56c6c);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 32%, transparent);
 }
 
 .tx-badge--numeric {

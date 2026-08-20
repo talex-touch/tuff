@@ -99,6 +99,7 @@ function handleClick() {
     class="tuff-select-item"
     :class="{ 'is-selected': isSelected, 'is-disabled': disabled }"
     role="option"
+    :tabindex="-1"
     :clickable="true"
     :active="isSelected"
     :disabled="disabled"

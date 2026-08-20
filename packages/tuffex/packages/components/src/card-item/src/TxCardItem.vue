@@ -21,6 +21,7 @@ const props = withDefaults(defineProps<CardItemProps>(), {
   clickable: false,
   active: false,
   disabled: false,
+  tabindex: undefined,
 })
 
 const emit = defineEmits<{
@@ -66,9 +67,9 @@ const avatarStyle = computed(() => {
       'tx-card-item--disabled': disabled,
       'tx-card-item--no-left': !($slots.avatar || avatarUrl || iconClass || avatarText),
     }"
-    :role="clickable ? role : undefined"
-    :tabindex="(clickable && !disabled) ? 0 : undefined"
-    :aria-disabled="(clickable && disabled) ? true : undefined"
+    :role="role"
+    :tabindex="tabindex !== undefined ? tabindex : ((clickable && !disabled) ? 0 : undefined)"
+    :aria-disabled="disabled ? true : undefined"
     @click="!disabled && clickable && $emit('click', $event)"
     @keydown.enter="onActivateKey"
     @keydown.space="onActivateKey"

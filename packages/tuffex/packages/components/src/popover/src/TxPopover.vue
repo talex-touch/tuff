@@ -99,14 +99,10 @@ const anchorMatchReferenceWidth = computed(() => {
 })
 
 const anchorReferenceClass = computed<BaseAnchorClassValue | undefined>(() => {
-  const classes: BaseAnchorClassValue[] = []
-  if (props.referenceClass) {
-    classes.push(props.referenceClass)
-  }
-  if (props.referenceFullWidth) {
-    classes.push({ 'is-full-width': true })
-  }
-  return classes.length ? classes : undefined
+  // `referenceFullWidth` is forwarded to TxTooltip (:158), which owns merging
+  // `is-full-width` into the anchor's referenceClass — for standalone tooltip
+  // hosts too. Adding it here as well would double-apply the class.
+  return props.referenceClass || undefined
 })
 
 /**

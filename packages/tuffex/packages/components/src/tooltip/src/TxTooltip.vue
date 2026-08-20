@@ -174,6 +174,13 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
   // anchor's default expand. Hosts refine either through `anchor.animation`.
   const animation = anchor.animation ?? (props.layer === 'hint' ? { type: 'boom' as const } : {})
 
+  // Standalone parity with TxPopover: full-width must also reach the anchor's
+  // own reference wrapper, or the inner span's `width: 100%` resolves against
+  // a shrink-to-fit parent and the width chain still collapses.
+  const referenceClass: BaseAnchorProps['referenceClass'] = props.referenceFullWidth
+    ? (anchor.referenceClass != null ? [anchor.referenceClass, { 'is-full-width': true }] : { 'is-full-width': true })
+    : anchor.referenceClass
+
   return {
     placement: 'top',
     offset: 8,
@@ -193,6 +200,7 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     closeOnEsc: true,
     ...anchor,
     animation,
+    referenceClass,
     closeOnClickOutside,
     toggleOnReferenceClick,
     // Not host-overridable: the anchor publishes its floating element under

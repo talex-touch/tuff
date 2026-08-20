@@ -11,6 +11,7 @@ let mermaidIdSeq = 0
 <script setup lang="ts">
 import { hasDocument } from '@talex-touch/utils/env'
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxCodeBlock from './TxCodeBlock.vue'
 
 defineOptions({ name: 'TxMermaidBlock' })
@@ -36,6 +37,10 @@ const props = withDefaults(
 const svg = ref<string | null>(null)
 const failed = ref(false)
 const zoomOpen = ref(false)
+// The fullscreen preview joins the shared overlay stack instead of pinning a
+// literal above the seed, so later dialogs/drawers still stack above it.
+const zIndexAllocator = useZIndexAllocator()
+const overlayZIndex = ref(zIndexAllocator.get())
 let renderToken = 0
 
 /**
@@ -100,10 +105,13 @@ function handleKeydown(event: KeyboardEvent): void {
 watch(zoomOpen, (open) => {
   if (!hasDocument())
     return
-  if (open)
+  if (open) {
+    overlayZIndex.value = zIndexAllocator.next()
     document.addEventListener('keydown', handleKeydown)
-  else
+  }
+  else {
     document.removeEventListener('keydown', handleKeydown)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -145,6 +153,7 @@ onBeforeUnmount(() => {
         role="dialog"
         aria-modal="true"
         aria-label="Diagram preview"
+        :style="{ zIndex: overlayZIndex }"
         @click.self="closeZoom"
       >
         <button
@@ -245,7 +254,6 @@ onBeforeUnmount(() => {
 .tx-mermaid-block__overlay {
   position: fixed;
   inset: 0;
-  z-index: 2100;
   display: grid;
   place-items: center;
   padding: 48px;

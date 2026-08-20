@@ -407,6 +407,11 @@ function onKeydown(e: KeyboardEvent) {
   gap: 10px;
   padding: 16px;
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
+  transition: border-bottom-color 0.18s ease;
+}
+
+.tx-command-palette__search:focus-within {
+  border-bottom-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
 }
 
 .tx-command-palette__search-icon {

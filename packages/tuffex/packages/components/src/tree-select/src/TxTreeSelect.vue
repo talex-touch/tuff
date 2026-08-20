@@ -215,7 +215,7 @@ defineExpose({
               :clickable="!node.disabled"
               :disabled="!!node.disabled"
               :active="selected"
-              tabindex="-1"
+              :tabindex="-1"
               :style="{ paddingLeft: `${10 + level * indent}px` }"
             >
               <template #avatar>

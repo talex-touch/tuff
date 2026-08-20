@@ -5,6 +5,8 @@ export interface FlatInputProps {
   password?: boolean
   nonWin?: boolean
   area?: boolean
+  disabled?: boolean
+  readonly?: boolean
 }
 
 export interface FlatInputEmits {
