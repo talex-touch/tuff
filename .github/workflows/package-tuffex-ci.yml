@@ -35,7 +35,9 @@ jobs:
       run-test: true
       run-build: true
       build-command: pnpm build
-      # Only the two that pass today. audit:types is broken by construction and audit:size
-      # has been over budget since well before this change -- both tracked in #1555, and
-      # wiring them here would land a gate that is red on every PR.
+      # All four audits gate this job. The comment that used to sit here said only two
+      # of them ran because audit:types was "broken by construction" and audit:size was
+      # over budget -- but the command below has run all four for some time, and as of
+      # 2026-08-20 audit:types passes and audit:size is green again (border-beam's
+      # measured outlier is recorded as a per-file exception in the audit script).
       post-build-command: pnpm audit:exports && pnpm audit:exports:self-test && pnpm audit:readme && pnpm audit:readme:self-test && pnpm audit:types && pnpm audit:types:self-test && pnpm audit:size && pnpm audit:size:self-test
