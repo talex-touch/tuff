@@ -68,6 +68,7 @@
     "clipboard:stress:verify": "pnpm exec tsx \"scripts/clipboard-stress-verify.ts\"",
     "app-index:diagnostic:verify": "pnpm exec tsx \"scripts/app-index-diagnostic-verify.ts\"",
     "everything:diagnostic:verify": "pnpm exec tsx \"scripts/everything-diagnostic-verify.ts\"",
+    "release-notes:visual:probe": "pnpm exec tsx \"scripts/coreapp-visible-release-notes-probe.ts\"",
     "settings:indexing-diagnostics:verify": "pnpm exec tsx \"scripts/settings-indexing-diagnostics-verify.ts\"",
     "search:fts-ownership-simulate": "pnpm exec tsx \"scripts/search-index-fts-ownership-simulation.ts\"",
     "search:index-migration:preflight": "pnpm exec tsx \"scripts/search-index-migration-preflight.ts\"",
