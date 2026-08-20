@@ -7,6 +7,7 @@ import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -36,6 +37,11 @@ const form = reactive<NetworkSettingsForm>(createDefaultNetworkSettingsForm())
 const loading = ref(false)
 const saving = ref(false)
 const saveFailed = ref(false)
+// The form starts on hardcoded defaults; until a real config lands the page
+// shows a skeleton, and if the load gives up it says so rather than leaving a
+// skeleton spinning forever.
+const loaded = ref(false)
+const loadFailed = ref(false)
 
 const proxyModeOptions: NetworkProxyMode[] = ['system', 'direct', 'custom']
 const customProxyEnabled = computed(() => form.proxyMode === 'custom')
@@ -101,10 +107,13 @@ function coerceNumberInput(value: unknown): number {
 
 async function loadNetworkConfig(): Promise<void> {
   loading.value = true
+  loadFailed.value = false
   try {
     const config = await networkSdk.getConfig()
     assignForm(toNetworkSettingsForm(config))
+    loaded.value = true
   } catch (error) {
+    loadFailed.value = true
     settingNetworkLog.error('Failed to load network settings', error)
     toast.error(t('settings.settingNetwork.messages.loadFailed'))
   } finally {
@@ -137,13 +146,53 @@ async function restoreDefaults(): Promise<void> {
   await saveNetworkConfig()
 }
 
+const showSkeleton = computed(() => !loaded.value && !loadFailed.value)
+/** Mirrors the two real groups: the proxy card, then the policy card. */
+const skeletonGroups = computed(() => {
+  const groups = [
+    {
+      label: t('settings.settingNetwork.groupTitle'),
+      rows: 3,
+      description: true,
+      trailing: true
+    }
+  ]
+  if (!props.proxyOnly) {
+    groups.push({
+      label: t('settings.settingNetwork.policyGroupTitle'),
+      rows: 4,
+      description: true,
+      trailing: true
+    })
+  }
+  return groups
+})
+
 onMounted(() => {
   void loadNetworkConfig()
 })
 </script>
 
 <template>
+  <SettingSkeleton v-if="showSkeleton" :groups="skeletonGroups" />
+
   <TuffGroupBlock
+    v-else-if="loadFailed"
+    :name="t('settings.settingNetwork.groupTitle')"
+    :collapsible="false"
+  >
+    <TuffBlockSlot
+      :title="t('settings.settingNetwork.messages.loadFailed')"
+      :description="t('settings.settingNetwork.groupDesc')"
+    >
+      <TxButton variant="flat" type="primary" :loading="loading" @click.stop="loadNetworkConfig">
+        {{ t('home.retry') }}
+      </TxButton>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
+
+  <TuffGroupBlock
+    v-else
     :name="t('settings.settingNetwork.groupTitle')"
     :description="t('settings.settingNetwork.groupDesc')"
     :collapsible="false"
@@ -187,7 +236,7 @@ onMounted(() => {
   </TuffGroupBlock>
 
   <TuffGroupBlock
-    v-if="!props.proxyOnly"
+    v-if="!props.proxyOnly && loaded"
     :name="t('settings.settingNetwork.policyGroupTitle')"
     :description="t('settings.settingNetwork.policyGroupDesc')"
     :collapsible="false"
