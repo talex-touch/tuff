@@ -59,6 +59,8 @@
     "audit:types:self-test": "node ./scripts/audit-package-types.mjs --self-test",
     "audit:readme": "node ./scripts/audit-readme-inventory.mjs",
     "audit:readme:self-test": "node ./scripts/audit-readme-inventory.mjs --self-test",
+    "audit:vocab": "node ./scripts/audit-prop-vocabularies.mjs",
+    "audit:vocab:self-test": "node ./scripts/audit-prop-vocabularies.mjs --self-test",
     "audit:size": "node ./scripts/audit-package-size.mjs",
     "audit:size:self-test": "node ./scripts/audit-package-size.mjs --self-test"
   },
