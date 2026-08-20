@@ -18,6 +18,7 @@ import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
+import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -79,6 +80,10 @@ const cleaningTemp = ref(false)
 // the first toggle after a failed load overwrites the user's actual settings
 // with the fabrication.
 const configLoaded = ref(false)
+// Terminal failure — distinct from "still loading". A skeleton that never
+// resolves is a worse lie than a locked control, so the page must be able to
+// say it gave up.
+const configLoadFailed = ref(false)
 const controlsLocked = computed(() => loading.value || !configLoaded.value)
 let configRetryTimer: ReturnType<typeof setTimeout> | null = null
 let configRetries = 0
@@ -98,11 +103,15 @@ onBeforeUnmount(() => {
 // Load configuration from backend
 async function loadConfig() {
   loading.value = true
+  configLoadFailed.value = false
   try {
     const response = await downloadSdk.getConfig()
     if (response.success && response.config) {
       downloadConfig.value = response.config
       configLoaded.value = true
+      configRetries = 0
+    } else {
+      configLoadFailed.value = true
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : ''
@@ -116,14 +125,22 @@ async function loadConfig() {
           configRetryTimer = null
           void loadConfig()
         }, 3000)
+      } else {
+        configLoadFailed.value = true
       }
       return
     }
+    configLoadFailed.value = true
     settingDownloadLog.error('Failed to load config', error)
     toast.warning(t('settings.settingDownload.messages.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+
+function retryLoadConfig(): void {
+  configRetries = 0
+  void loadConfig()
 }
 
 // Update configuration
@@ -147,6 +164,21 @@ function onConfigChange() {
 const destinationLabel = computed(
   () => downloadConfig.value.storage.defaultDestination || t('settings.settingDownload.notSet')
 )
+
+/**
+ * Stands in until the real config lands. Every row of the single group is
+ * represented, so nothing shifts when the values arrive; the group carries a
+ * description line and a trailing control on each row, like the loaded one.
+ */
+const showSkeleton = computed(() => !configLoaded.value && !configLoadFailed.value)
+const skeletonGroups = computed(() => [
+  {
+    label: t('settings.settingDownload.groupTitle'),
+    rows: 6,
+    description: true,
+    trailing: true
+  }
+])
 
 /**
  * One control for what used to be `chunk.autoRetry` plus `chunk.maxRetries`: turning retries off
@@ -246,11 +278,29 @@ async function cleanupTempFiles() {
   Displays download settings in a structured layout with switches, selects, and inputs.
 -->
 <template>
+  <SettingSkeleton v-if="showSkeleton" :groups="skeletonGroups" />
+
+  <TuffGroupBlock
+    v-else-if="configLoadFailed"
+    :name="t('settings.settingDownload.groupTitle')"
+    :collapsible="false"
+  >
+    <TuffBlockSlot
+      :title="t('settings.settingDownload.messages.loadFailed')"
+      :description="t('settings.settingDownload.groupDesc')"
+    >
+      <TxButton variant="flat" type="primary" :loading="loading" @click.stop="retryLoadConfig">
+        {{ t('home.retry') }}
+      </TxButton>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
+
   <!--
     Download center first: the task list is what people come here for, and it used to sit at the
     very bottom under an "Entries" heading.
   -->
   <TuffGroupBlock
+    v-else
     :name="t('settings.settingDownload.groupTitle')"
     :description="t('settings.settingDownload.groupDesc')"
     :collapsible="false"
