@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
+import { createRendererLogger } from '~/utils/renderer-log'
 import PrivacyDataSection from './PrivacyDataSection.vue'
 
 interface StorageUsageNode {
@@ -116,6 +117,7 @@ const report = ref<StorageUsageReport | null>(null)
 const cleaningKey = ref<string | null>(null)
 const transport = useTuffTransport()
 const downloadSdk = useDownloadSdk()
+const storagableLog = createRendererLogger('Storagable')
 
 /**
  * Mounted inside `SettingsPage` when it backs the storage category, which already supplies the
@@ -333,8 +335,6 @@ const databaseSizeKnown = computed(() => {
   return tables.every((table) => table.sizeKnown)
 })
 
-const moduleRowActions: Record<string, CleanupAction[]> = {}
-
 // Privacy-owned categories are managed exclusively through PrivacyDataSection's
 // typed preview/cleanup/delete flows. Keep only unrelated maintenance actions here.
 const databaseGroupActions: Record<string, CleanupAction[]> = {
@@ -437,13 +437,13 @@ async function loadPlugins(): Promise<void> {
       }
     })
     const data = res as StorageUsageReport
-    if (!report.value) {
-      report.value = data
-    } else {
-      report.value = { ...report.value, plugins: data.plugins ?? [] }
-    }
-  } catch {
-    // ignore
+    // A partial payload must never seed the whole report: if the summary load
+    // failed, plugins-only data would paint every other section as zero next
+    // to the error banner.
+    if (!report.value) return
+    report.value = { ...report.value, plugins: data.plugins ?? [] }
+  } catch (error) {
+    storagableLog.warn('Plugin storage scan failed', error)
   } finally {
     pluginsLoading.value = false
   }
@@ -464,20 +464,17 @@ async function loadDatabaseTables(): Promise<void> {
       }
     })
     const data = res as StorageUsageReport
-    if (!report.value) {
-      report.value = data
-    } else {
-      report.value = {
-        ...report.value,
-        database: {
-          ...report.value.database,
-          tables: data.database?.tables ?? [],
-          tablesLoaded: data.database?.tablesLoaded ?? true
-        }
+    if (!report.value) return
+    report.value = {
+      ...report.value,
+      database: {
+        ...report.value.database,
+        tables: data.database?.tables ?? [],
+        tablesLoaded: data.database?.tablesLoaded ?? true
       }
     }
-  } catch {
-    // ignore
+  } catch (error) {
+    storagableLog.warn('Database table scan failed', error)
   } finally {
     dbTablesLoading.value = false
   }
@@ -597,19 +594,6 @@ onMounted(() => {
                       <span class="sep">·</span>
                       <span>{{ node.dirCount }} dirs</span>
                     </div>
-                  </div>
-                  <div class="row-actions">
-                    <TxButton
-                      v-for="action in moduleRowActions[node.key] || []"
-                      :key="action.key"
-                      variant="bare"
-                      class="btn action"
-                      :class="{ danger: action.confirm.type === 'error' }"
-                      :disabled="isBusy"
-                      @click="runCleanup(action)"
-                    >
-                      {{ cleaningKey === action.key ? '处理中…' : action.label }}
-                    </TxButton>
                   </div>
                 </div>
                 <div class="bar">
@@ -857,10 +841,11 @@ onMounted(() => {
 
   height: 100%;
   width: 100%;
-  padding: 16px 18px 24px;
+  /* SettingsPage-Column already carries the page inset; adding padding here
+     indented this page 58px where every sibling sits at 40px. */
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .header {
@@ -1116,10 +1101,5 @@ onMounted(() => {
   padding: 10px 12px;
   font-size: 12px;
   word-break: break-word;
-}
-
-.loading {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
 }
 </style>
