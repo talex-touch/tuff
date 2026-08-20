@@ -19,6 +19,12 @@ import { fileURLToPath } from 'node:url'
 
 const appDir = fileURLToPath(new URL('../app', import.meta.url))
 const nexusPkg = fileURLToPath(new URL('../package.json', import.meta.url))
+// Scanned too: a shortcut can redirect a perfectly valid name onto a missing
+// collection, which is worse than writing the bad name directly because the
+// call site looks correct. `i-carbon-data-vis-1` was aliased to `i-ri-…` and
+// measured 0x0 on /dashboard/privacy while its source read like any other
+// carbon icon.
+const unoConfig = fileURLToPath(new URL('../uno.config.ts', import.meta.url))
 
 const SCAN_EXTENSIONS = new Set(['.vue', '.ts', '.tsx', '.js', '.mjs'])
 // `i-carbon-foo`, `i-logos-openai-icon`, … The trailing part may contain
@@ -56,7 +62,7 @@ function main() {
   }
 
   const offenders = new Map()
-  for (const file of walk(appDir)) {
+  for (const file of [...walk(appDir), unoConfig]) {
     const source = readFileSync(file, 'utf8')
     for (const match of source.matchAll(ICON_CLASS)) {
       const full = match[0]
@@ -76,7 +82,7 @@ function main() {
       const key = full
       if (!offenders.has(key))
         offenders.set(key, new Set())
-      offenders.get(key).add(path.relative(appDir, file))
+      offenders.get(key).add(file === unoConfig ? 'uno.config.ts' : path.relative(appDir, file))
     }
   }
 

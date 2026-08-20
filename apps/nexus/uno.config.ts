@@ -27,16 +27,12 @@ export default defineConfig({
     },
   },
   shortcuts: [
-    // Keep common glyphs compact because Uno emits every referenced icon into the shared entry CSS.
-    ['i-carbon-settings', 'i-ri-settings-line'],
-    ['i-carbon-fire', 'i-ri-fire-line'],
-    ['i-ri-settings-3-line', 'i-ri-settings-line'],
-    ['i-ri-settings-3-fill', 'i-ri-settings-fill'],
-    ['i-carbon-data-vis-1', 'i-ri-bar-chart-line'],
-    ['i-carbon-deployment-pattern', 'i-ri-route-line'],
-    ['i-carbon-queued', 'i-ri-time-line'],
-    ['i-carbon-ai-status', 'i-ri-robot-2-line'],
-    ['i-simple-icons-linux', 'i-carbon-linux-alt'],
+    // No icon aliases here. The set that used to live at this spot redirected
+    // valid carbon names onto `ri`, a collection this app has never installed,
+    // to share one glyph between several names and keep the entry CSS small.
+    // Uno emits nothing for a collection it cannot resolve, so the aliases did
+    // not shrink anything — they turned working icons into 0x0 blanks
+    // (`i-carbon-data-vis-1` on /dashboard/privacy, measured).
     ['btn', 'px-4 py-1 rounded inline-block bg-teal-600 text-white cursor-pointer hover:bg-teal-700 disabled:cursor-default disabled:bg-gray-600 disabled:opacity-50'],
     ['icon-btn', 'inline-block cursor-pointer select-none opacity-75 transition duration-200 ease-in-out hover:opacity-100 hover:text-teal-600'],
     ['apple-card', 'rounded-2xl border border-black/[0.04] bg-white/80 backdrop-blur-xl shadow-sm dark:border-white/[0.06] dark:bg-white/[0.04]'],
