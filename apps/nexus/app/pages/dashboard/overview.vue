@@ -438,6 +438,16 @@ function resolveErrorMessage(error: any, fallback: string) {
   return fallback
 }
 
+/**
+ * A failed request is not a zero. Each KPI reads from one of the three fetches,
+ * and the view model fills the gaps with zeros, so a tile whose source failed
+ * would otherwise state "Login health 0%" or "0 active devices" — a measurement
+ * nobody took, in the same type as a real one.
+ */
+function orDash(errorText: string, value: string | number) {
+  return errorText ? '—' : String(value)
+}
+
 function isCurrentDevice(device: DeviceItem) {
   return device.id === currentDeviceId.value
 }
@@ -469,7 +479,7 @@ function isCurrentDevice(device: DeviceItem) {
     <template v-else>
       <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <TxStatCard
-          :value="formatNumber(viewModel.kpis.searches)"
+          :value="orDash(telemetryErrorText, formatNumber(viewModel.kpis.searches))"
           :label="t('dashboard.overview.kpis.searchCount')"
           icon-class="i-carbon-search text-5xl text-[var(--tx-color-primary)] sm:text-6xl"
         >
@@ -484,7 +494,7 @@ function isCurrentDevice(device: DeviceItem) {
         </TxStatCard>
 
         <TxStatCard
-          :value="`${formatNumber(viewModel.kpis.avgLatency)} ms`"
+          :value="orDash(telemetryErrorText, `${formatNumber(viewModel.kpis.avgLatency)} ms`)"
           :label="t('dashboard.overview.kpis.searchEfficiency')"
           icon-class="i-carbon-meter text-5xl text-[var(--tx-color-success)] sm:text-6xl"
         >
@@ -492,14 +502,14 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="space-y-1">
               <span class="block">{{ t('dashboard.overview.kpis.searchEfficiency') }}</span>
               <span class="block text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.overview.kpis.avgResultsHint', { n: formatNumber(viewModel.kpis.avgResults) }) }}
+                {{ t('dashboard.overview.kpis.avgResultsHint', { n: orDash(telemetryErrorText, formatNumber(viewModel.kpis.avgResults)) }) }}
               </span>
             </div>
           </template>
         </TxStatCard>
 
         <TxStatCard
-          :value="`${viewModel.kpis.login.successRate}%`"
+          :value="orDash(historyErrorText, `${viewModel.kpis.login.successRate}%`)"
           :label="t('dashboard.overview.kpis.loginHealth')"
           icon-class="i-carbon-security text-5xl text-[var(--tx-color-warning)] sm:text-6xl"
         >
@@ -507,14 +517,14 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="space-y-1">
               <span class="block">{{ t('dashboard.overview.kpis.loginHealth') }}</span>
               <span class="block text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.overview.kpis.loginSplit', { success: viewModel.kpis.login.success, failed: viewModel.kpis.login.failed }) }}
+                {{ t('dashboard.overview.kpis.loginSplit', { success: orDash(historyErrorText, viewModel.kpis.login.success), failed: orDash(historyErrorText, viewModel.kpis.login.failed) }) }}
               </span>
             </div>
           </template>
         </TxStatCard>
 
         <TxStatCard
-          :value="formatNumber(viewModel.kpis.devices.active)"
+          :value="orDash(devicesErrorText, formatNumber(viewModel.kpis.devices.active))"
           :label="t('dashboard.overview.kpis.activeDevices')"
           icon-class="i-carbon-devices text-5xl text-[var(--tx-color-info)] sm:text-6xl"
         >
@@ -522,7 +532,7 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="space-y-1">
               <span class="block">{{ t('dashboard.overview.kpis.activeDevices') }}</span>
               <span class="block text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.overview.kpis.activeNow', { active: viewModel.kpis.devices.active, total: viewModel.kpis.devices.total }) }}
+                {{ t('dashboard.overview.kpis.activeNow', { active: orDash(devicesErrorText, viewModel.kpis.devices.active), total: orDash(devicesErrorText, viewModel.kpis.devices.total) }) }}
               </span>
             </div>
           </template>

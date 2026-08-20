@@ -521,7 +521,22 @@ watch(() => creditTab.value, (value) => {
       </div>
     </section>
 
-    <template v-else-if="team">
+    <!--
+      The endpoint always answers with a team — a personal one at minimum — so
+      settling with none means the request failed. This chain had no final
+      branch, and the whole page simply rendered nothing.
+    -->
+    <TxEmptyState
+      v-else-if="!team"
+      variant="error"
+      size="small"
+      layout="vertical"
+      :title="t('dashboard.team.loadFailed', '团队信息没能加载出来，请检查网络后重试。')"
+      :primary-action="{ label: t('common.retry', '重试'), variant: 'flat' }"
+      @primary="refresh"
+    />
+
+    <template v-else>
       <section class="apple-card-lg p-6">
         <div class="grid gap-4" :class="isPersonalTeam ? 'sm:grid-cols-2' : 'sm:grid-cols-4'">
           <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
