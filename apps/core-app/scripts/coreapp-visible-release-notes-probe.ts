@@ -5,11 +5,25 @@
  * Surfaces, and why each is reachable:
  *
  * - `WhatsChangedDialog` — rendered by `AppEntrance.vue` when `appEntranceMode === 'MainApp'`.
- *   `useReleaseNotesRuntime.evaluateStartup()` opens it only while the version is unacknowledged,
- *   and `closeDialog()` acknowledges it permanently. So it appears exactly once per profile per
- *   upgrade: **this probe is only reproducible against a fresh `userDataDir`**, which is also why
- *   every sibling probe isolates one. Pointed at a real profile it captures nothing and reports
- *   `dialog-not-shown`, which is a true observation about that profile, not a probe failure.
+ *   Capturing it needs **three** conditions, all learned by running this and finding it absent:
+ *
+ *     1. The bundled catalog must resolve. `release-notes-service.ts:readCatalog` walks
+ *        `catalogPaths` and throws `Bundled release notes catalog is missing` when every candidate
+ *        is ENOENT. Under a dev-build launch (`electron out/main/index.js`) none of them reach the
+ *        repo's `resources/release-notes/catalog.json`, so `getBundledReleaseNotes()` fails and
+ *        `evaluateStartup` never reaches a decision. **A packaged app is required**, not merely
+ *        convenient.
+ *     2. Onboarding must be complete. `evaluateStartup(Boolean(appSetting?.beginner?.init))` feeds
+ *        `resolveReleaseNotesStartupDecision`, whose first branch is
+ *        `if (!onboardingComplete) return { kind: 'acknowledge' }` — it marks the version seen and
+ *        shows nothing. A brand-new profile has `beginner.init === false`, verified on disk.
+ *     3. The version must be unacknowledged, and the catalog must contain an entry matching its own
+ *        `generatedForVersion`; otherwise the same `acknowledge` branch is taken.
+ *
+ *   So an isolated profile is necessary but **not sufficient** — and on its own it actively
+ *   guarantees the dialog will not appear, because (2) fails and silently acknowledges. Seed
+ *   `<userDataDir>/tuff-dev/modules/config/app-setting.ini` with `beginner.init: true` before the
+ *   first launch.
  * - Settings → Update (`router.ts` key `update` → `SettingUpdatePage.vue`). #482 and the
  *   maintenance audit both call this "Update-history"; no such name exists in the renderer —
  *   searching all 756 files for `update.?history` returns zero. The name here follows the router.
