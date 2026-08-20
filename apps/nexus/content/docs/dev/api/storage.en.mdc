@@ -280,3 +280,31 @@ code: |
 - Storage uses an isolated directory per plugin with filename sanitization.
 - Reads/writes are executed in the main process via IPC for safety and consistency.
 - SQLite data file is located at `<userData>/modules/plugins/<pluginName>/data/plugin-sdk.sqlite`.
+
+## Type Definitions
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface StorageStats {
+    totalSize: number
+    fileCount: number
+    limit: number
+    usagePercent: number
+  }
+
+  interface StorageTreeNode {
+    name: string
+    type: 'file' | 'directory'
+    size?: number
+    children?: StorageTreeNode[]
+  }
+
+  interface FileDetails {
+    name: string
+    size: number
+    createdAt: number
+    modifiedAt: number
+  }
+---
+:::

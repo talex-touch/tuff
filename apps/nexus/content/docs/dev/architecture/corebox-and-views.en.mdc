@@ -19,6 +19,23 @@ When input is empty and no providers are active, CoreBox requests recommendation
 
 To avoid “flash collapse” while recommendations are still in-flight, the renderer keeps a pending flag until a response arrives (or a short timeout).
 
+## AutoPaste / AutoClear (CoreBox show phase)
+
+**AutoPaste**
+
+- Only fires automatically when CoreBox is opened by its shortcut. Explicit pastes and plugin actions the user triggers keep manual semantics.
+- Freshness is decided by `autoPaste.time` (seconds): `0` means no limit, `-1` disables it. Implicit input fill, clipboard tags and query input all pass through the same gate.
+- The main process supplies `autoPasteEligible`, `observedAt` and `freshnessBaseAt`; the renderer's visibility, clipboard and search hooks reuse the same predicate.
+- While CoreBox is hidden the main process only records the latest clipboard entry — it does not activate renderer state. Freshness is re-evaluated when the window is shown again.
+- Text up to 80 characters is filled straight into the input; longer text is only attached as a tag. Files and images use their own modes.
+- `autoPastedClipboardIdentities` deduplicates entries (TTL 1h), and `clearClipboard(remember)` prevents the same content from firing twice.
+
+**AutoClear**
+
+- Only compares `lastHidden` against `autoClear` when CoreBox is **shown again**.
+- Past the timeout it clears the input, mode, files/layout and clipboard cache, and deactivates providers.
+- It is not a background timer: a window that stays visible never triggers it.
+
 ## Plugin `attachUIView` cache
 
 For `webcontent` features, CoreBox can attach a plugin UI via Electron `WebContentsView`.
@@ -50,3 +67,23 @@ Payload:
 - `source`: `attach` | `cache`
 - `featureId`: optional feature id
 - `url`: the attached URL
+
+## Troubleshooting (recent reports)
+
+**1) Empty input with no recommendations does not collapse**
+
+- Check whether `recommendationPending` is stuck at `true` — `applyLayoutUpdate` skips the collapse while it is.
+- The `search.noResults` event does not change window height on its own; a `layout.update` is still required.
+- Check whether you are in UI Mode: the main process skips layout updates outright there.
+- Check whether `activeActivations` is non-empty — an active activation forces the window to stay expanded.
+
+**2) AutoPaste still fires past the configured time**
+
+- `autoPaste.time = 0` means no limit. For an actual time window pick an explicit value: 1, 3, 5 seconds or longer.
+- `ClipboardEvents.getLatest` refreshes the clipboard snapshot when the shortcut opens CoreBox. AutoPaste judges freshness by `freshnessBaseAt` / `observedAt`, not by `item.timestamp`.
+- If stale content still comes through, confirm the stored value: `appSetting.tools.autoPaste.time` is in seconds, and `-1` disables it.
+
+**3) AutoClear does nothing long after a plugin is activated**
+
+- `autoClear` is only checked when CoreBox is shown again; a UI that stays visible never triggers it.
+- `lastHidden` is written in `onHide`, so it does not advance while UI Mode keeps the window visible.

@@ -237,6 +237,67 @@ code: |
 
 ---
 
+## Complete Example
+
+**Translation plugin**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useBox, useClipboard, ClipboardType } from '@talex-touch/utils/plugin/sdk'
+
+  const box = useBox()
+  const clipboard = useClipboard()
+
+  // Initialise
+  async function init() {
+    // Enable clipboard monitoring
+    await box.allowClipboard(ClipboardType.TEXT)
+
+    // Watch for clipboard changes
+    clipboard.history.onDidChange(async (item) => {
+      if (item.type === 'text') {
+        // Translate newly copied text automatically
+        const translated = await translate(item.content)
+        console.log('Translation:', translated)
+      }
+    })
+  }
+
+  // Emit the translation
+  async function outputTranslation(text: string) {
+    // Hide CoreBox and paste the result
+    await clipboard.copyAndPaste({ text })
+  }
+---
+:::
+
+**Search plugin**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { onCoreBoxInputChange, useBox } from '@talex-touch/utils/plugin/sdk'
+
+  const box = useBox()
+
+  async function init() {
+    // Enable input monitoring
+    await box.allowInput()
+
+    // Watch for input changes
+    onCoreBoxInputChange(async ({ data }) => {
+      const results = await search(data.query.text)
+
+      // Resize the window to match the result count
+      await box.expand({ length: Math.min(results.length, 10) })
+    })
+  }
+---
+:::
+
+---
+
 ## Type Definitions
 
 :::TuffCodeBlock{lang="typescript"}

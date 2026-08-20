@@ -186,6 +186,51 @@ code: |
 
 ---
 
+## Complete Example
+
+**Live search plugin**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useFeature, useBox } from '@talex-touch/utils/plugin/sdk'
+  import { debounce } from 'lodash-es'
+
+  const feature = useFeature()
+  const box = useBox()
+
+  // Debounced search
+  const debouncedSearch = debounce(async (query: string) => {
+    if (!query.trim()) {
+      feature.clearItems()
+      return
+    }
+
+    const results = await fetchSearchResults(query)
+
+    feature.clearItems()
+    feature.pushItems(results.map((r, i) => ({
+      id: `result-${i}`,
+      title: { text: r.title },
+      subtitle: { text: r.description },
+      source: { id: 'my-search', name: 'Search' },
+      icon: r.icon
+    })))
+
+    // Resize the window
+    await box.expand({ length: results.length })
+  }, 300)
+
+  // Listen for input
+  feature.onInputChange(debouncedSearch)
+
+  // Handle keyboard interaction inside the plugin UI component with a local
+  // keydown listener or the hostKeyEvent props.
+---
+:::
+
+---
+
 ## Type Definitions
 
 :::TuffCodeBlock{lang="typescript"}
