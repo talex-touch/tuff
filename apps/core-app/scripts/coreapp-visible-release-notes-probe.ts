@@ -455,10 +455,13 @@ async function main(): Promise<void> {
     console.error(
       'usage: coreapp-visible-release-notes-probe --cdp-url <http://127.0.0.1:9222> --out-dir <dir>'
     )
-    console.error(
-      'the app must have been launched with an ISOLATED userDataDir, or the release-notes'
-    )
-    console.error('version is already acknowledged and the dialog never opens.')
+    console.error('')
+    console.error('The dialog only renders when all three hold; the first two are silent:')
+    console.error('  1. the app was launched with the REPO ROOT as cwd, or the bundled')
+    console.error('     release-notes catalog does not resolve in a dev build')
+    console.error('  2. the profile was seeded with beginner.init: true before first launch,')
+    console.error('     or startup silently acknowledges the version instead of showing it')
+    console.error('  3. the version is not already acknowledged')
     process.exit(2)
   }
 
