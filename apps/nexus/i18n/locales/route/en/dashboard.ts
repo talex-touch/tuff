@@ -448,6 +448,7 @@ export default {
     team: {
       subtitle: 'Manage plans, team members and collaboration permissions in one place.',
       pending: 'Loading team information…',
+      loadFailed: 'Your team information could not be loaded. Check your connection and try again.',
       planLabel: 'Current plan',
       managePlan: 'Manage plan',
       seatUsage: '{used} of {total} seats in use',
@@ -1510,6 +1511,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         listTitle: 'Updates & News',
         listSubtitle: 'Manage news and release updates together.',
         empty: 'No updates or news yet. Check again soon.',
+        loadFailed: 'Updates and news could not be loaded. Check your connection and try again.',
         addButton: 'New update',
         editButton: 'Edit update',
         closeButton: 'Close',
