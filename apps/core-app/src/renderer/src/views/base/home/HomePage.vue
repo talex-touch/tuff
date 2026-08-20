@@ -349,6 +349,21 @@ const FLIGHT_SINK_PX = 8
 /** The "make room" glide before the strike — fixed, however far away the reader was. */
 const SCROLL_TWEEN_MS = 280
 
+/** Linear interpolation over the baked FLIGHT table (offsets are monotonic). */
+function sampleFlight(o: number): { x: number; v: number } {
+  if (o <= 0) return { x: 0, v: 0 }
+  if (o >= 1) return { x: 1, v: 0 }
+  for (let i = 1; i < FLIGHT.length; i++) {
+    const b = FLIGHT[i]
+    if (o <= b.o) {
+      const a = FLIGHT[i - 1]
+      const t = (o - a.o) / (b.o - a.o)
+      return { x: a.x + (b.x - a.x) * t, v: a.v + (b.v - a.v) * t }
+    }
+  }
+  return { x: 1, v: 0 }
+}
+
 /** Stamps each send's choreography; a newer send silences the older one's pending beats. */
 let sendSeq = 0
 
@@ -372,11 +387,14 @@ let choreographedSend = false
 watch(
   () => messages.value.length,
   (length, previous) => {
+    // Consumed before ANY early return: a claim that survived reduced motion
+    // (or a non-streaming append) used to latch, hijack the next programmatic
+    // batch, and strand its rows at opacity 0 with nothing left to reveal them.
+    const claimed = choreographedSend
+    choreographedSend = false
     if (!isStreaming.value || prefersReducedMotion()) return
     const appended = messages.value.slice(previous ?? 0, length)
     for (const message of appended) enteringMessages.add(message.id)
-    const claimed = choreographedSend
-    choreographedSend = false
     // The composer's own send runs the full glide-flight-placeholder score;
     // everything else (retry placeholders, form submissions) enters here.
     if (claimed && appended.some((message) => message.role === 'user')) return
@@ -421,8 +439,15 @@ function runEntrance(id: string, strength = 0.6): void {
     fill: 'backwards'
   })
   if (strength > 0) {
-    window.setTimeout(() => knockRows(el, strength), SPRING_IMPACT_MS - KNOCK_LEAD_MS)
+    // Sequence-stamped: a rapid follow-up send or a thread switch owns the
+    // stage by the time this fires, and a stale knock would hit its rows.
+    const seq = sendSeq
+    window.setTimeout(() => {
+      if (seq === sendSeq) knockRows(el, strength)
+    }, SPRING_IMPACT_MS - KNOCK_LEAD_MS)
   }
+  // Deliberately unstamped: un-hiding is idempotent and must survive any
+  // sequence bump, or the row stays at opacity 0 forever.
   window.setTimeout(() => enteringMessages.delete(id), SPRING_IMPACT_MS)
 }
 
@@ -435,7 +460,11 @@ function runEntrance(id: string, strength = 0.6): void {
  */
 function knockRows(origin: HTMLElement, strength: number): void {
   if (prefersReducedMotion()) return
-  const rows = Array.from(origin.ownerDocument.querySelectorAll<HTMLElement>('[data-message-id]'))
+  // Scoped to the origin's own stream: during a thread-switch crossfade both
+  // the leaving and entering transcripts are mounted, and a document-wide
+  // query would ring rows across the two.
+  const scope = origin.closest<HTMLElement>('.HomePage-Stream') ?? origin.ownerDocument
+  const rows = Array.from(scope.querySelectorAll<HTMLElement>('[data-message-id]'))
   const index = rows.indexOf(origin)
   if (index <= 0) return
 
@@ -676,6 +705,12 @@ async function submit(): Promise<void> {
   // the stream only auto-follows readers already at the bottom.
   await nextTick()
 
+  // If send() bailed on its own streaming guard nothing was appended, the
+  // watcher never consumed the claim, and a latched claim would steal the
+  // next batch's entrance. Clearing after the flush is free in the normal
+  // path — the watcher already consumed it.
+  choreographedSend = false
+
   // The leaving greeting must neither ride the new layout (it would teleport
   // to the column top) nor keep occupying it (it would shove the stream down,
   // then snap it up when the fade ends): pin it where it stood, out of flow.
@@ -728,18 +763,18 @@ async function submit(): Promise<void> {
 
 /**
  * The send flight, iMessage's own trick: a fixed-position CLONE of the bubble
- * flies from the composer to the bubble's *final* resting place — computed
- * against the make-room glide's own target — while the real bubble stays
- * hidden and the thread slides independently underneath. Decoupling flight
- * from scroll is what lets the drop leave the composer on press, with no
- * queueing behind the glide.
+ * flies from the composer to the hidden real bubble's position — re-read from
+ * its live rect every frame — while the thread slides independently
+ * underneath. Decoupling flight from scroll is what lets the drop leave the
+ * composer on press, with no queueing behind the glide; tracking the live
+ * rect is what makes the landing exact wherever layout finally settles.
  *
  * No blur: per-frame `blur()` radius changes force a re-raster of the bubble
  * texture every frame, which is exactly the stutter this replaces. The jelly
  * stretch carries the speed instead — fast things deform, crisp.
  *
- * Beats fire off the animation's own clock (split → recoil, impact → knock,
- * finish → swap clone for the real row), read by one rAF watcher — wall-clock
+ * Beats fire off the same per-frame clock that drives the clone (split →
+ * recoil, impact → knock, finish → swap clone for the real row) — wall-clock
  * timers drifted a frame or two under load and landed the knock after the eye
  * had already seen the touch-down.
  */
@@ -757,16 +792,14 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
   if (!host) return bail()
   const scroller = host.querySelector<HTMLElement>('.tx-conversation-stream__scroller')
   const bubbleRect = bubble.getBoundingClientRect()
-  // Where the bubble will sit once the glide lands: its current rect shifted
-  // by the scroll still owed. The rows are already in their final layout
-  // (hidden by `--enter`), so the scroll is the only motion left to account.
+  // Estimate only, and only for the bail: the flight itself never trusts a
+  // precomputed landing (see `place` below) — but a send whose travel rounds
+  // to nothing should still skip the whole apparatus.
   const owed = scroller
     ? Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
     : 0
-  const finalTop = bubbleRect.top - owed
-  const deltaY = composerEl.getBoundingClientRect().top - finalTop
-  if (deltaY < 4) return bail()
-  const launchY = deltaY + FLIGHT_SINK_PX
+  const launchTop = composerEl.getBoundingClientRect().top
+  if (launchTop - (bubbleRect.top - owed) < 4) return bail()
 
   const clone = bubble.cloneNode(true) as HTMLElement
   clone.removeAttribute('data-message-id') // the knock query must not hit the stand-in
@@ -779,7 +812,7 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
   clone.classList.add('HomePage-FlightClone')
   Object.assign(clone.style, {
     position: 'fixed',
-    top: `${finalTop}px`,
+    top: '0px',
     left: `${bubbleRect.left}px`,
     width: `${bubbleRect.width}px`,
     margin: '0',
@@ -788,24 +821,28 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
   } satisfies Partial<CSSStyleDeclaration>)
   host.appendChild(clone)
 
-  const animation = animateRaw(
-    clone,
-    FLIGHT.map(({ o, x, v }) => {
-      // The bubble emerges slightly small, as if still part of the box, and
-      // the jelly stretch rides the velocity on top of that.
-      const emerge = 0.94 + 0.06 * Math.min(1, o / 0.45)
-      return {
-        offset: o,
-        transform:
-          `translateY(${((1 - x) * launchY).toFixed(1)}px) ` +
-          `scale(${(emerge * (1 - 0.05 * v)).toFixed(4)}, ${(emerge * (1 + 0.14 * v)).toFixed(4)})`,
-        opacity: Math.min(1, 0.4 + o * 1.35)
-      }
-    }),
-    // `both`: the clone owns the launch frame before the first tick and holds
-    // the landing pose until the swap removes it.
-    { duration: FLIGHT_MS, easing: 'linear', fill: 'both' }
-  )
+  // Not a baked WAAPI track. Every prior pass precomputed the landing at
+  // press time — while the composer collapse (its ResizeObserver lands a
+  // frame later), the glide's continuously re-read scroll target and the
+  // virtualizer's estimated height for the never-measured new row were all
+  // still moving — so the clone-for-row swap jumped by the accumulated error,
+  // worse the longer the draft. Sampling the spring per frame against the
+  // hidden real row's LIVE rect makes the last frame the row's actual
+  // position by construction; every layout correction pulls the clone along.
+  const start = performance.now()
+  const place = (elapsed: number): void => {
+    const o = Math.min(1, elapsed / FLIGHT_MS)
+    const { x, v } = sampleFlight(o)
+    const targetTop = bubble.getBoundingClientRect().top
+    const y = targetTop + (1 - x) * (launchTop + FLIGHT_SINK_PX - targetTop)
+    // The bubble emerges slightly small, as if still part of the box, and
+    // the jelly stretch rides the velocity on top of that.
+    const emerge = 0.94 + 0.06 * Math.min(1, o / 0.45)
+    clone.style.transform =
+      `translateY(${y.toFixed(1)}px) ` +
+      `scale(${(emerge * (1 - 0.05 * v)).toFixed(4)}, ${(emerge * (1 + 0.14 * v)).toFixed(4)})`
+    clone.style.opacity = String(Math.min(1, 0.4 + o * 1.35))
+  }
 
   let impactResolve: () => void = () => {}
   const impact = new Promise<void>((resolve) => {
@@ -827,15 +864,21 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
     impactResolve()
   }
 
-  const watch = (): void => {
+  const watchFrame = (): void => {
     if (done) return
     // A newer send owns the stage now; this flight ends where it stands.
     if (seq !== sendSeq) {
-      animation.cancel()
       finish()
       return
     }
-    const elapsed = Number(animation.currentTime ?? 0)
+    const elapsed = performance.now() - start
+    if (elapsed >= FLIGHT_MS) {
+      // Land exactly on the live row, then swap inside the same paint.
+      place(FLIGHT_MS)
+      finish()
+      return
+    }
+    place(elapsed)
     if (!recoiled && elapsed >= FLIGHT_SPLIT_MS) {
       recoiled = true
       // Recoil at the split — the box springs back the moment the drop snaps
@@ -859,10 +902,10 @@ function animateSendFlight(composerEl: HTMLElement | null): { impact: Promise<vo
       landed = true
       impactResolve()
     }
-    requestAnimationFrame(watch)
+    requestAnimationFrame(watchFrame)
   }
-  requestAnimationFrame(watch)
-  void animation.finished.then(finish).catch(finish)
+  place(0)
+  requestAnimationFrame(watchFrame)
 
   return { impact }
 }
@@ -1838,14 +1881,14 @@ watch(
   position: absolute;
   z-index: var(--home-z-leaving);
   inset: 0;
-  transition:
-    opacity 0.26s cubic-bezier(0.4, 0, 0.2, 1),
-    filter 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Opacity only — animating a blur() radius re-rasters the whole transcript
+     every frame, the exact stutter the send flight's no-blur rule exists to
+     avoid (see animateSendFlight). */
+  transition: opacity 0.26s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .home-stream-leave-to {
   opacity: 0;
-  filter: blur(8px);
 }
 
 /* Opening a thread: the transcript breathes in while the composer docks. */
