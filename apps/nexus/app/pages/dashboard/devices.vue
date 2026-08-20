@@ -213,20 +213,26 @@ async function copyText(value: string | null | undefined) {
   }
 }
 
+/**
+ * Brand icons come from `cib`, the only brand collection this app installs
+ * (`@iconify-json/cib`, alongside carbon/logos/twemoji). The Apple, Linux,
+ * Safari and Edge glyphs previously named `simple-icons`/`ri` sets that are not
+ * dependencies here, so every macOS row — the common case — drew an empty box.
+ */
 function getDeviceBrandIcon(device: DeviceItem): string {
   const value = `${device.platform || ''} ${device.deviceName || ''} ${device.clientType || ''}`.toLowerCase()
   if (value.includes('mac') || value.includes('darwin') || value.includes('iphone') || value.includes('ipad') || value.includes('ios'))
-    return 'i-simple-icons-apple'
+    return 'i-cib-apple'
   if (value.includes('win'))
     return 'i-cib-windows'
   if (value.includes('linux'))
-    return 'i-simple-icons-linux'
+    return 'i-cib-linux'
   if (value.includes('android'))
     return 'i-cib-android'
   if (value.includes('safari'))
-    return 'i-ri-safari-line'
+    return 'i-cib-safari'
   if (value.includes('edge'))
-    return 'i-ri-edge-line'
+    return 'i-cib-microsoft-edge'
   if (value.includes('web'))
     return 'i-carbon-application-web'
   return 'i-carbon-devices'
