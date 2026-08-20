@@ -22,5 +22,5 @@
 
 ## 任务记录、文档与路线图
 
-- **12 个活跃任务仍没有 `meta.blocker` 与 `meta.nextAction`。** [#309](https://github.com/talex-touch/tuff/issues/309) 需逐项写明阻塞原因和下一步，尤其是 TODO 第一 lane 的 `07-17-unify-ota-update-flow`；`07-26-install-launch-v2-4-13-beta-23` 仍是无元数据的陈旧 `in_progress`，应补验收后归档或记录具体遗留动作。`_example` JSONL 是 sub-agent context 模板，不应被误报为验收记录。
+- **任务元数据仍不完整。** [#309](https://github.com/talex-touch/tuff/issues/309) 需逐项写明阻塞原因和下一步，尤其是 TODO 第一 lane 的 OTA 规划任务；一个 2026-07-26 创建的本地安装记录仍是无元数据的陈旧 `in_progress`，应补验收后归档或记录具体遗留动作。`_example` JSONL 是 sub-agent context 模板，不应被误报为验收记录。
 - **两个文档收尾阻塞事实源完整性。** [#1751](https://github.com/talex-touch/tuff/issues/1751) 必须把 CatalogService 已完成/未完成边界写入其 PRD、执行计划、质量基线、changelog 与开发者文档；[#1752](https://github.com/talex-touch/tuff/issues/1752) 必须将全仓治理审计 findings/filing ledger 与六条 PRD 验收逐项对账。全局 `TODO.md` 的暂停描述不能替代这些 task-local 记录。
