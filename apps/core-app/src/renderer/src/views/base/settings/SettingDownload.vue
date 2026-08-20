@@ -11,7 +11,7 @@ import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -74,10 +74,25 @@ const downloadConfig = ref<DownloadConfig>({
 
 const loading = ref(false)
 const cleaningTemp = ref(false)
+// The ref above starts as fabricated defaults. Until a real config has been
+// loaded, every control stays locked and every write path refuses — otherwise
+// the first toggle after a failed load overwrites the user's actual settings
+// with the fabrication.
+const configLoaded = ref(false)
+const controlsLocked = computed(() => loading.value || !configLoaded.value)
+let configRetryTimer: ReturnType<typeof setTimeout> | null = null
+let configRetries = 0
 
 // Load settings on mount
 onMounted(async () => {
   await loadConfig()
+})
+
+onBeforeUnmount(() => {
+  if (configRetryTimer) {
+    clearTimeout(configRetryTimer)
+    configRetryTimer = null
+  }
 })
 
 // Load configuration from backend
@@ -87,12 +102,21 @@ async function loadConfig() {
     const response = await downloadSdk.getConfig()
     if (response.success && response.config) {
       downloadConfig.value = response.config
+      configLoaded.value = true
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : ''
-    // Ignore timeout errors during startup - module may not be ready yet
+    // Startup timeouts mean the module is still initializing: retry a few
+    // times instead of leaving the page locked on the fabricated defaults.
     if (message.includes('timed out')) {
       devLog('[SettingDownload] Config load timed out, module may be initializing')
+      if (configRetries < 3) {
+        configRetries += 1
+        configRetryTimer = setTimeout(() => {
+          configRetryTimer = null
+          void loadConfig()
+        }, 3000)
+      }
       return
     }
     settingDownloadLog.error('Failed to load config', error)
@@ -104,6 +128,8 @@ async function loadConfig() {
 
 // Update configuration
 async function updateDownloadConfig() {
+  // Never persist a config the backend hasn't produced.
+  if (!configLoaded.value) return
   try {
     await updateConfig(downloadConfig.value)
     toast.success(t('settings.settingDownload.messages.saved'))
@@ -247,7 +273,7 @@ async function cleanupTempFiles() {
       :description="t('settings.settingDownload.defaultDestinationDesc')"
     >
       <span class="SettingDownload-Path">{{ destinationLabel }}</span>
-      <TxButton variant="flat" :disabled="loading" @click.stop="chooseDestination">
+      <TxButton variant="flat" :disabled="controlsLocked" @click.stop="chooseDestination">
         {{ t('settings.settingDownload.choose') }}
       </TxButton>
     </TuffBlockSlot>
@@ -256,7 +282,7 @@ async function cleanupTempFiles() {
       v-model="downloadConfig.notifyOnComplete"
       :title="t('settings.settingDownload.notifyOnComplete')"
       :description="t('settings.settingDownload.notifyOnCompleteDesc')"
-      :disabled="loading"
+      :disabled="controlsLocked"
       @update:model-value="onConfigChange"
     />
 
@@ -264,7 +290,7 @@ async function cleanupTempFiles() {
       v-model="downloadConfig.concurrency.maxConcurrent"
       :title="t('settings.settingDownload.maxConcurrent')"
       :description="t('settings.settingDownload.maxConcurrentDesc')"
-      :disabled="loading"
+      :disabled="controlsLocked"
       @update:model-value="onConfigChange"
     >
       <TxSelectItem v-for="value in [1, 2, 3, 5, 8]" :key="value" :value="value">
@@ -281,7 +307,7 @@ async function cleanupTempFiles() {
       :model-value="retryCount"
       :title="t('settings.settingDownload.retry')"
       :description="t('settings.settingDownload.retryDesc')"
-      :disabled="loading"
+      :disabled="controlsLocked"
       @update:model-value="(value) => applyRetryCount(Number(value))"
     >
       <TxSelectItem :value="0">
@@ -296,7 +322,7 @@ async function cleanupTempFiles() {
       v-model="downloadConfig.storage.historyRetention"
       :title="t('settings.settingDownload.historyRetention')"
       :description="t('settings.settingDownload.historyRetentionDesc')"
-      :disabled="loading"
+      :disabled="controlsLocked"
       @update:model-value="onConfigChange"
     >
       <TxSelectItem v-for="days in [7, 30, 90, 365]" :key="days" :value="days">
@@ -312,7 +338,7 @@ async function cleanupTempFiles() {
         <TxButton variant="flat" :loading="cleaningTemp" @click.stop="cleanupTempFiles">
           {{ t('settings.settingDownload.cleanTemp') }}
         </TxButton>
-        <TxButton variant="flat" :disabled="loading" @click.stop="restoreDefaults">
+        <TxButton variant="flat" :disabled="controlsLocked" @click.stop="restoreDefaults">
           {{ t('settings.settingDownload.restoreDefaults') }}
         </TxButton>
       </div>

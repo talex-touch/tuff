@@ -51,11 +51,13 @@ function handleChange(val: TxSelectModelValue) {
     </template>
     <template #default>
       <div class="TuffBlockSelect-Control">
+        <!-- Real `disabled`, not a pointer-events veil: the veil left the
+             trigger keyboard-focusable and operable mid-save. -->
         <TxSelect
           v-model="value"
           class="TuffBlockSelect-Select"
           eager
-          :class="disabled ? 'pointer-events-none opacity-70' : ''"
+          :disabled="disabled"
           @change="handleChange"
         >
           <slot />

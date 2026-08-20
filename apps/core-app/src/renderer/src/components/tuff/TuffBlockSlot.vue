@@ -13,6 +13,8 @@ const props = withDefaults(
     iconSize?: number
     disabled?: boolean
     active?: boolean
+    /** Id for the title element so controls in the slot can aria-labelledby it. */
+    titleId?: string
   }>(),
   {
     title: '',
@@ -62,7 +64,7 @@ function handleClick(event: MouseEvent) {
         </template>
         <template v-else>
           <div class="TBlockSlot-TitleRow">
-            <h5 class="text-sm">
+            <h5 :id="titleId" class="text-sm">
               {{ title }}
             </h5>
             <div v-if="$slots.tags" class="TBlockSlot-Tags">
