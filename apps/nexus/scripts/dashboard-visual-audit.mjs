@@ -15,6 +15,9 @@
  *   chrome --headless=new --remote-debugging-port=9224 --user-data-dir=/tmp/...
  *   node apps/nexus/scripts/dashboard-visual-audit.mjs [route ...]
  *
+ * NEXUS_AUDIT_FAIL_API=1 makes every /api/ request fail, which is the only way
+ * to see what a page says when its data does not arrive — the sibling of the
+ * loading state and just as invisible against a healthy local server.
  * NEXUS_AUDIT_THROTTLE=1 adds latency to every request. Local dev against a
  * local D1 answers faster than a page can paint, so without it a "mid-load"
  * capture is either blank or already settled — there is no window to see.
@@ -70,6 +73,7 @@ const VIEWPORTS = [ALL_VIEWPORTS[process.env.NEXUS_AUDIT_VIEWPORT] ?? ALL_VIEWPO
 const THEME = process.env.NEXUS_AUDIT_THEME === 'dark' ? 'dark' : 'light'
 const SETTLE_MS = Number(process.env.NEXUS_AUDIT_SETTLE ?? 4000)
 const THROTTLE = process.env.NEXUS_AUDIT_THROTTLE === '1'
+const FAIL_API = process.env.NEXUS_AUDIT_FAIL_API === '1'
 
 async function emulateTheme(client) {
   await client.send('Emulation.setEmulatedMedia', {
@@ -121,6 +125,26 @@ async function main() {
         // Host-bound cookie: AUTH_ORIGIN pins localhost, and a 127.0.0.1
         // session would neither share the cookie nor survive a redirect.
         await client.send('Network.enable')
+        if (FAIL_API) {
+          // Auth endpoints stay up: failing them would only reproduce the
+          // signed-out gate, not a page's own data-error state.
+          await client.send('Fetch.enable', {
+            patterns: [{ urlPattern: '*/api/*', requestStage: 'Request' }],
+          })
+          client.on('Fetch.requestPaused', (event) => {
+            const url = event.request?.url ?? ''
+            // Domain prefix is mandatory: `client.send('failRequest')` rejects,
+            // and a rejected send leaves the request paused forever, which
+            // looks exactly like the app hanging.
+            const isAuth = url.includes('/api/auth/')
+            const send = isAuth
+              ? client.send('Fetch.continueRequest', { requestId: event.requestId })
+              : client.send('Fetch.failRequest', { requestId: event.requestId, errorReason: 'Failed' })
+            void send.catch((error) => {
+              console.error('[audit] fetch interception failed:', error?.message ?? error)
+            })
+          })
+        }
         if (THROTTLE) {
           await client.send('Network.emulateNetworkConditions', {
             offline: false,
@@ -165,7 +189,7 @@ async function main() {
           })
         })()`)
         const parsed = JSON.parse(state)
-        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}${SETTLE_MS === 4000 ? '' : `-${SETTLE_MS}ms`}${THROTTLE ? '-slow' : ''}`
+        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}${SETTLE_MS === 4000 ? '' : `-${SETTLE_MS}ms`}${THROTTLE ? '-slow' : ''}${FAIL_API ? '-apifail' : ''}`
         await screenshot(client, label, outDir, { captureBeyondViewport: true })
         results.push({ route, ...parsed })
         console.log(`${route} → ${parsed.redirected ? 'REDIRECTED(sign-in)' : 'ok'} ${parsed.chars} chars`)
