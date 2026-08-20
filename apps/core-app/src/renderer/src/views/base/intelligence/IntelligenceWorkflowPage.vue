@@ -1048,10 +1048,10 @@ onMounted(async () => {
 }
 
 .card-panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tx-border-color-extra-light);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(18, 24, 33, 0.96), rgba(13, 18, 27, 0.92));
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  background: var(--tx-bg-color-overlay);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.06);
 }
 
 .workflow-sidebar,
@@ -1124,7 +1124,7 @@ onMounted(async () => {
 .runtime-kv span,
 .approval-reason,
 .empty-state {
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
@@ -1138,8 +1138,8 @@ onMounted(async () => {
 .workflow-list-item,
 .history-item {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--tx-border-color-extra-light);
+  background: var(--tx-fill-color-lighter);
   border-radius: 14px;
   padding: 12px;
   text-align: left;
@@ -1151,13 +1151,13 @@ onMounted(async () => {
 
 .workflow-list-item:hover,
 .history-item:hover {
-  border-color: rgba(106, 201, 255, 0.32);
+  border-color: color-mix(in srgb, var(--tx-color-primary) 32%, transparent);
   transform: translateY(-1px);
 }
 
 .workflow-list-item--active {
-  border-color: rgba(106, 201, 255, 0.45);
-  background: rgba(106, 201, 255, 0.08);
+  border-color: color-mix(in srgb, var(--tx-color-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary) 8%, transparent);
 }
 
 .mini-badge,
@@ -1166,36 +1166,36 @@ onMounted(async () => {
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--tx-fill-color);
 }
 
 .mini-badge--ghost {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tx-fill-color-light);
 }
 
 .status-pill--success {
-  background: rgba(42, 184, 92, 0.18);
-  color: #97f3b6;
+  background: color-mix(in srgb, var(--tx-color-success) 18%, transparent);
+  color: var(--tx-color-success);
 }
 
 .status-pill--error {
-  background: rgba(255, 87, 87, 0.18);
-  color: #ffb5b5;
+  background: color-mix(in srgb, var(--tx-color-danger) 18%, transparent);
+  color: var(--tx-color-danger);
 }
 
 .status-pill--warning {
-  background: rgba(255, 183, 77, 0.18);
-  color: #ffd59c;
+  background: color-mix(in srgb, var(--tx-color-warning) 18%, transparent);
+  color: var(--tx-color-warning);
 }
 
 .status-pill--running {
-  background: rgba(106, 201, 255, 0.18);
-  color: #9fe3ff;
+  background: color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  color: var(--tx-color-primary);
 }
 
 .status-pill--muted {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.78);
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-secondary);
 }
 
 .form-grid,
@@ -1221,10 +1221,10 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tx-border-color-extra-light);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(255, 255, 255, 0.72);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-secondary);
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -1236,13 +1236,13 @@ onMounted(async () => {
 
 .review-filter-chip:hover,
 .review-filter-chip--active {
-  border-color: rgba(106, 201, 255, 0.38);
-  background: rgba(106, 201, 255, 0.1);
-  color: #dff6ff;
+  border-color: color-mix(in srgb, var(--tx-color-primary) 38%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
+  color: var(--tx-color-primary);
 }
 
 .review-filter-chip strong {
-  color: #fff;
+  color: var(--tx-text-color-primary);
 }
 
 .review-meta-grid {
@@ -1257,19 +1257,19 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tx-border-color-extra-light);
   border-radius: 999px;
   padding: 4px 8px;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-lighter);
   font-size: 11px;
   line-height: 1.2;
 }
 
 .review-meta-chip--warning {
-  border-color: rgba(255, 149, 0, 0.28);
-  color: #ffe1b8;
-  background: rgba(255, 149, 0, 0.08);
+  border-color: color-mix(in srgb, var(--tx-color-warning) 28%, transparent);
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 8%, transparent);
 }
 
 .review-summary-card {
@@ -1278,32 +1278,32 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tx-border-color-extra-light);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(255, 255, 255, 0.72);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
 .review-summary-card strong {
-  color: #fff;
+  color: var(--tx-text-color-primary);
   font-size: 16px;
 }
 
 .review-summary-card--pending {
-  border-color: rgba(255, 183, 77, 0.22);
+  border-color: color-mix(in srgb, var(--tx-color-warning) 22%, transparent);
 }
 
 .review-summary-card--copied {
-  border-color: rgba(106, 201, 255, 0.22);
+  border-color: color-mix(in srgb, var(--tx-color-primary) 22%, transparent);
 }
 
 .review-summary-card--replaced {
-  border-color: rgba(42, 184, 92, 0.22);
+  border-color: color-mix(in srgb, var(--tx-color-success) 22%, transparent);
 }
 
 .review-summary-card--failed {
-  border-color: rgba(255, 87, 87, 0.22);
+  border-color: color-mix(in srgb, var(--tx-color-danger) 22%, transparent);
 }
 
 .field {
@@ -1322,7 +1322,7 @@ onMounted(async () => {
 .field-label,
 .step-card__index {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--tx-text-color-secondary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1335,10 +1335,10 @@ input:not([type='checkbox']),
 select,
 textarea {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 12px;
-  background: rgba(5, 9, 14, 0.5);
-  color: rgba(255, 255, 255, 0.92);
+  background: var(--tx-fill-color-blank);
+  color: var(--tx-text-color-primary);
   padding: 10px 12px;
 }
 
@@ -1356,9 +1356,9 @@ textarea {
 
 .small-card,
 .step-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tx-border-color-extra-light);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--tx-fill-color-lighter);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1366,8 +1366,8 @@ textarea {
 }
 
 .small-card--failed {
-  border-color: rgba(255, 87, 87, 0.24);
-  background: rgba(255, 87, 87, 0.045);
+  border-color: color-mix(in srgb, var(--tx-color-danger) 24%, transparent);
+  background: color-mix(in srgb, var(--tx-color-danger) 6%, transparent);
 }
 
 .step-card__title {
@@ -1376,37 +1376,37 @@ textarea {
 }
 
 .runtime-error {
-  color: #ffb5b5;
+  color: var(--tx-color-danger);
   font-size: 12px;
   white-space: pre-wrap;
 }
 
 .review-action-hint {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tx-border-color-extra-light);
   border-radius: 10px;
   padding: 8px 10px;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-lighter);
   font-size: 12px;
 }
 
 .review-action-hint--success {
-  border-color: rgba(52, 199, 89, 0.26);
-  color: #c8ffd4;
-  background: rgba(52, 199, 89, 0.08);
+  border-color: color-mix(in srgb, var(--tx-color-success) 26%, transparent);
+  color: var(--tx-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 8%, transparent);
 }
 
 .review-action-hint--warning {
-  border-color: rgba(255, 149, 0, 0.28);
-  color: #ffe1b8;
-  background: rgba(255, 149, 0, 0.08);
+  border-color: color-mix(in srgb, var(--tx-color-warning) 28%, transparent);
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 8%, transparent);
 }
 
 .result-pre {
   margin: 0;
   padding: 10px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.24);
+  background: var(--tx-fill-color-light);
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 12px;
@@ -1415,7 +1415,7 @@ textarea {
 .model-summary {
   justify-content: flex-start;
   flex-wrap: wrap;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
