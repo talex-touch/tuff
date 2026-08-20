@@ -326,7 +326,7 @@ const activeSection = computed(() => {
           >
             <span class="min-w-0 flex items-center gap-3">
               <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span class="truncate">{{ item.label }}</span>
+              <span class="truncate" :title="item.label">{{ item.label }}</span>
             </span>
           </NuxtLink>
         </li>
@@ -350,7 +350,7 @@ const activeSection = computed(() => {
           >
             <span class="min-w-0 flex items-center gap-3">
               <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span class="truncate">{{ item.label }}</span>
+              <span class="truncate" :title="item.label">{{ item.label }}</span>
             </span>
             <span
               v-if="item.id === 'notifications' && notificationUnreadCount > 0"
@@ -381,7 +381,7 @@ const activeSection = computed(() => {
           >
             <span class="min-w-0 flex items-center gap-3">
               <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span class="truncate">{{ item.label }}</span>
+              <span class="truncate" :title="item.label">{{ item.label }}</span>
             </span>
           </NuxtLink>
         </li>

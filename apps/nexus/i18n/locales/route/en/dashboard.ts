@@ -2,7 +2,9 @@ export default {
     header: {
       badge: 'Tuff Nexus',
       defaultName: 'friend',
-      namedName: '{name} friend',
+      // English addresses a known user by name alone. Mirroring the Chinese
+      // "{name} 伙伴" pattern literally rendered "Welcome back, Ada friend".
+      namedName: '{name}',
       greeting: 'Welcome back, {name}',
       intro:
         'This space gathers your environments, releases, and plugin status. Automated insights and reminders will appear here soon.',
@@ -560,6 +562,7 @@ export default {
       keyrings: 'Authorized Keyrings',
       keyringsDesc: 'Keys allow third-party apps to access your sync storage. Do not share your private keys.',
       keyringsEmpty: 'No keyring records',
+      keyringCount: 'Keyrings: {count}',
       lastActive: 'Last active',
       recoveryEnabled: 'Recovery enabled',
       recoveryMissing: 'Recovery missing',
