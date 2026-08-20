@@ -611,7 +611,9 @@ watch(showDetailsOverlay, (open) => {
         <h2 class="StoragePanel-Title">
           {{ t('dashboard.storage.keyrings', 'Authorized Keyring') }}
         </h2>
-        <span class="StoragePanel-Subtle">keyring: {{ keyringCount }}</span>
+        <span class="StoragePanel-Subtle">
+          {{ t('dashboard.storage.keyringCount', { count: keyringCount }) }}
+        </span>
       </header>
 
       <p class="StoragePanel-Desc">
@@ -623,9 +625,14 @@ watch(showDetailsOverlay, (open) => {
         }}
       </p>
 
-      <div v-if="!keyrings.length" class="StorageKeyringEmpty">
-        {{ t('dashboard.storage.keyringsEmpty', '暂无 keyring 记录') }}
-      </div>
+      <TxEmptyState
+        v-if="!keyrings.length"
+        class="StorageKeyringEmpty"
+        variant="no-data"
+        :title="t('dashboard.storage.keyringsEmpty')"
+        size="small"
+        layout="vertical"
+      />
       <ul v-else class="StorageKeyringList">
         <li v-for="item in keyrings" :key="item.keyring_id" class="StorageKeyringItem">
           <div class="StorageKeyringItem-Main">
@@ -1074,11 +1081,6 @@ watch(showDetailsOverlay, (open) => {
 
 .StorageKeyringEmpty {
   margin-top: 10px;
-  border-radius: 12px;
-  border: 1px dashed var(--tx-border-color-lighter);
-  padding: 16px;
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
 }
 
 .StorageKeyringList {

@@ -1,0 +1,135 @@
+/**
+ * Screenshots the authenticated dashboard pages so their design can be compared
+ * against the tuffex component language.
+ *
+ * The dashboard is auth-gated and every real sign-in path is unavailable
+ * locally (email dispatch 503s, passkeys need a seeded token row, OAuth needs a
+ * third-party round-trip). Local dev deliberately allow-lists a known
+ * AUTH_SECRET (nuxt.config.ts + server/utils/runtimeCredentialPolicy.ts), and
+ * sessions are next-auth JWE cookies, so a session is minted here instead. The
+ * token carries only an email — the server auto-provisions a plain `user` role
+ * account — so this never impersonates a real account.
+ *
+ * Usage:
+ *   pnpm -C apps/nexus dev                       # localhost:3200, needs CF bindings
+ *   chrome --headless=new --remote-debugging-port=9224 --user-data-dir=/tmp/...
+ *   node apps/nexus/scripts/dashboard-visual-audit.mjs [route ...]
+ */
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
+import { createRequire } from 'node:module'
+import {
+  auditDate,
+  closeTarget,
+  createClient,
+  createTarget,
+  delay,
+  evaluate,
+  repoRoot,
+  screenshot,
+  setViewport,
+  waitFor,
+} from './audit-cdp-client.mjs'
+
+const require = createRequire(import.meta.url)
+
+const BASE_URL = process.env.NEXUS_DASHBOARD_URL || 'http://localhost:3200'
+const AUTH_SECRET = process.env.AUTH_SECRET || 'tuff-dev-secret'
+const SESSION_EMAIL = process.env.NEXUS_AUDIT_EMAIL || 'ui-audit-bot@local.test'
+
+const DEFAULT_ROUTES = [
+  '/dashboard/overview',
+  '/dashboard/devices',
+  '/dashboard/storage',
+  '/dashboard/api-keys',
+  '/dashboard/privacy',
+  '/dashboard/updates',
+]
+
+const VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 1000 },
+]
+
+async function mintSessionToken() {
+  const { encode } = require('next-auth/jwt')
+  return await encode({
+    secret: AUTH_SECRET,
+    maxAge: 2592000,
+    token: { email: SESSION_EMAIL, name: 'UI Audit Bot' },
+  })
+}
+
+async function main() {
+  const routes = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_ROUTES
+  const outDir = path.resolve(repoRoot, `output/playwright/nexus-dashboard-audit/${auditDate}`)
+  await mkdir(outDir, { recursive: true })
+
+  const token = await mintSessionToken()
+  const results = []
+
+  for (const route of routes) {
+    for (const viewport of VIEWPORTS) {
+      const target = await createTarget('about:blank')
+      const client = createClient(target.webSocketDebuggerUrl)
+      try {
+        await client.ready
+        await client.send('Page.enable')
+        await client.send('Runtime.enable')
+        await setViewport(client, viewport)
+        // Host-bound cookie: AUTH_ORIGIN pins localhost, and a 127.0.0.1
+        // session would neither share the cookie nor survive a redirect.
+        await client.send('Network.enable')
+        await client.send('Network.setCookie', {
+          name: 'next-auth.session-token',
+          value: token,
+          domain: 'localhost',
+          path: '/',
+          httpOnly: true,
+          secure: false,
+        })
+
+        await client.send('Page.navigate', { url: `${BASE_URL}${route}` })
+        // The shared waitForPage waits on `.vp-doc`, which only the docs site
+        // renders; the app shell is the dashboard's equivalent ready signal.
+        await waitFor(
+          client,
+          `document.readyState === 'complete' && !!document.querySelector('#__nuxt')`,
+          20000,
+        )
+        // Nuxt hydrates, then the dashboard fetches; no single deterministic
+        // signal covers both, so settle on a fixed beat.
+        await delay(4000)
+
+        const state = await evaluate(client, `(() => {
+          const body = document.body?.innerText || ''
+          return JSON.stringify({
+            url: location.pathname,
+            redirected: location.pathname.includes('sign-in'),
+            chars: body.length,
+            head: body.slice(0, 160),
+          })
+        })()`)
+        const parsed = JSON.parse(state)
+        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}`
+        await screenshot(client, label, outDir, { captureBeyondViewport: true })
+        results.push({ route, ...parsed })
+        console.log(`${route} → ${parsed.redirected ? 'REDIRECTED(sign-in)' : 'ok'} ${parsed.chars} chars`)
+      }
+      finally {
+        client.close?.()
+        await closeTarget(target.id)
+      }
+    }
+  }
+
+  console.log(`\nScreenshots: ${outDir}`)
+  const blocked = results.filter(r => r.redirected)
+  if (blocked.length)
+    console.log(`WARNING: ${blocked.length}/${results.length} routes redirected to sign-in — session not accepted.`)
+}
+
+main().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})
