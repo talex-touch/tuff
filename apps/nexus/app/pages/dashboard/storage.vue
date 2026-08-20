@@ -191,6 +191,11 @@ const sessionsErrorText = computed(() => {
   return statusMessage || message || ''
 })
 
+watch(sessionsErrorText, (message) => {
+  if (message)
+    console.warn('[dashboard/storage] recent sessions failed to load:', message)
+})
+
 const systemOperational = computed(() => !statusErrorText.value && !session.value?.last_error_code)
 const systemStatusLabel = computed(() =>
   systemOperational.value
@@ -599,11 +604,24 @@ watch(showDetailsOverlay, (open) => {
         <span class="StoragePanel-Badge">{{ t('dashboard.storage.last24Hours', 'Last 24 Hours') }}</span>
       </header>
 
-      <p v-if="sessionsErrorText" class="StoragePanel-Error">
-        {{ sessionsErrorText }}
-      </p>
+      <!--
+        A failed fetch used to print the raw ofetch string — method, internal
+        path and query included — straight into the panel, and the table below
+        it still rendered its "no session records" empty state, which claims
+        there are none rather than that we could not ask. The reason stays in
+        the console for whoever is debugging.
+      -->
+      <TxEmptyState
+        v-if="sessionsErrorText"
+        variant="error"
+        :title="t('dashboard.storage.loadFailed')"
+        size="small"
+        layout="vertical"
+        :primary-action="{ label: t('dashboard.storage.refresh', 'Refresh'), variant: 'flat' }"
+        @primary="refreshAll"
+      />
 
-      <div class="StorageSessionTableWrap">
+      <div v-else class="StorageSessionTableWrap">
         <TxDataTable
           :columns="recentSessionColumns"
           :data="recentSessionRows"
@@ -1056,11 +1074,6 @@ watch(showDetailsOverlay, (open) => {
   color: var(--tx-text-color-secondary);
 }
 
-.StoragePanel-Error {
-  margin: 10px 0 0;
-  color: #ef4444;
-  font-size: 13px;
-}
 
 .StorageSessionTableWrap {
   margin-top: 12px;

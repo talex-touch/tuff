@@ -560,6 +560,7 @@ export default {
       keyringsDesc: '密钥用于第三方应用访问你的同步存储，请勿分享私钥。',
       keyringsEmpty: '暂无密钥记录',
       overQuota: '已超出上限',
+      loadFailed: '这些记录没能加载出来，请检查网络后重试。',
       keyringCount: '密钥：{count}',
       lastActive: '最近活跃',
       recoveryEnabled: '已配置恢复码',
