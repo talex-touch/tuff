@@ -108,6 +108,7 @@ export default {
     deviceUnknown: '未知设备',
     passkeyRegister: '添加',
     passkeySuccess: 'Passkey 已绑定',
+    checkingSession: '正在校验登录状态…',
     redirecting: '正在跳转登录...',
     verifyFailed: '验证失败',
     verifyMissing: '缺少验证信息',

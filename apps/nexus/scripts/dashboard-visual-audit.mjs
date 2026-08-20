@@ -15,6 +15,12 @@
  *   chrome --headless=new --remote-debugging-port=9224 --user-data-dir=/tmp/...
  *   node apps/nexus/scripts/dashboard-visual-audit.mjs [route ...]
  *
+ * NEXUS_AUDIT_THROTTLE=1 adds latency to every request. Local dev against a
+ * local D1 answers faster than a page can paint, so without it a "mid-load"
+ * capture is either blank or already settled — there is no window to see.
+ * NEXUS_AUDIT_SETTLE=<ms> shortens the post-hydration wait (default 4000) so a
+ * capture lands mid-fetch — that is how you see what a page claims before its
+ * data arrives, which is a different picture from the settled one.
  * NEXUS_AUDIT_VIEWPORT=mobile|tablet|desktop picks the width (desktop default).
  * NEXUS_AUDIT_THEME=dark captures the dark palette instead (light is the
  * default). Theme is applied the same way scripts/tuffex-visual-smoke.mjs does
@@ -62,6 +68,8 @@ const ALL_VIEWPORTS = {
 const VIEWPORTS = [ALL_VIEWPORTS[process.env.NEXUS_AUDIT_VIEWPORT] ?? ALL_VIEWPORTS.desktop]
 
 const THEME = process.env.NEXUS_AUDIT_THEME === 'dark' ? 'dark' : 'light'
+const SETTLE_MS = Number(process.env.NEXUS_AUDIT_SETTLE ?? 4000)
+const THROTTLE = process.env.NEXUS_AUDIT_THROTTLE === '1'
 
 async function emulateTheme(client) {
   await client.send('Emulation.setEmulatedMedia', {
@@ -113,6 +121,14 @@ async function main() {
         // Host-bound cookie: AUTH_ORIGIN pins localhost, and a 127.0.0.1
         // session would neither share the cookie nor survive a redirect.
         await client.send('Network.enable')
+        if (THROTTLE) {
+          await client.send('Network.emulateNetworkConditions', {
+            offline: false,
+            latency: 900,
+            downloadThroughput: 200 * 1024,
+            uploadThroughput: 200 * 1024,
+          })
+        }
         await client.send('Network.setCookie', {
           name: 'next-auth.session-token',
           value: token,
@@ -133,11 +149,11 @@ async function main() {
         )
         // Nuxt hydrates, then the dashboard fetches; no single deterministic
         // signal covers both, so settle on a fixed beat.
-        await delay(4000)
+        await delay(SETTLE_MS)
         // Re-applied post-hydration: color-mode writes the class on mount and
         // would otherwise overwrite what was set on the blank page.
         await applyTheme(client)
-        await delay(400)
+        await delay(Math.min(400, SETTLE_MS))
 
         const state = await evaluate(client, `(() => {
           const body = document.body?.innerText || ''
@@ -149,7 +165,7 @@ async function main() {
           })
         })()`)
         const parsed = JSON.parse(state)
-        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}`
+        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}${SETTLE_MS === 4000 ? '' : `-${SETTLE_MS}ms`}${THROTTLE ? '-slow' : ''}`
         await screenshot(client, label, outDir, { captureBeyondViewport: true })
         results.push({ route, ...parsed })
         console.log(`${route} → ${parsed.redirected ? 'REDIRECTED(sign-in)' : 'ok'} ${parsed.chars} chars`)
