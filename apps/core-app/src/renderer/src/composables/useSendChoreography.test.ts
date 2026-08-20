@@ -131,12 +131,43 @@ describe('send flight landing', () => {
     const beforeShift = translateYOf(clone)
 
     stage.state.rowTop = 300
-    advanceTo(320)
+    // Several frames, not one: the clone absorbs a correction rather than
+    // teleporting onto it. A precomputed flight never converges on the new
+    // position at all, which is what this separates.
+    advanceTo(400)
     const afterShift = translateYOf(clone)
 
-    // A precomputed flight would keep gliding to the old landing; a tracking
-    // one follows the row up immediately.
     expect(afterShift).toBeLessThan(beforeShift - 50)
+  })
+
+  /**
+   * Tracking the live rect is what makes the landing exact, but read raw it also
+   * hands the clone every layout correction whole, in one frame. Late in the
+   * flight the curve has covered ~100% of the distance, so the clone inherits
+   * nearly all of it at once: a -60px correction at t=350ms used to move one
+   * frame by -61.8px between neighbours moving -3.2px and +3.0px.
+   */
+  it('absorbs a late layout correction instead of teleporting onto it', () => {
+    const stage = buildStage({ composerTop: 800, rowTop: 500 })
+    stage.choreography.markEntering(['msg-1'])
+    stage.choreography.playSend('msg-1', stage.composer)
+    const clone = stage.clone()!
+
+    let previous = translateYOf(clone)
+    let largestStep = 0
+    for (let t = 16; t <= FLIGHT_MS + 16; t += 16) {
+      if (t >= 350) stage.state.rowTop = 440
+      advanceTo(t)
+      const current = translateYOf(clone)
+      largestStep = Math.max(largestStep, Math.abs(current - previous))
+      previous = current
+    }
+
+    // The flight's own peak is ~42px/frame at 60Hz; the correction must not
+    // exceed the motion the bubble was already making.
+    expect(largestStep).toBeLessThan(45)
+    // …and it still lands exactly on the corrected row, or the swap jumps.
+    expect(previous).toBeCloseTo(440, 1)
   })
 
   it('reveals the real row exactly when the clone is removed', async () => {
