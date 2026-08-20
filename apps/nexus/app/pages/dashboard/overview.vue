@@ -380,11 +380,11 @@ function formatDevicePreviewName(device: DeviceItem): string {
 function getDeviceBrandIcon(device: DeviceItem): string {
   const value = `${device.platform || ''} ${device.deviceName || ''} ${device.clientType || ''}`.toLowerCase()
   if (value.includes('mac') || value.includes('darwin') || value.includes('iphone') || value.includes('ipad') || value.includes('ios'))
-    return 'i-simple-icons-apple'
+    return 'i-cib-apple'
   if (value.includes('win'))
     return 'i-cib-windows'
   if (value.includes('linux'))
-    return 'i-simple-icons-linux'
+    return 'i-cib-linux'
   if (value.includes('android'))
     return 'i-cib-android'
   if (value.includes('safari'))
