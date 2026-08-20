@@ -157,6 +157,26 @@ const deviceUsagePercent = computed(() => {
   return Math.min(100, Math.max(0, Math.round(ratio * 100)))
 })
 
+/**
+ * Both bars clamp at 100%, so without these an account 2x over its limit read
+ * exactly like one sitting neatly at the cap — a full bar and "100% capacity",
+ * with nothing telling the user to go and revoke something. Surfaced by a
+ * dashboard screenshot showing "6 / 3 Slots" beside "100% capacity".
+ */
+const deviceOverQuota = computed(() => {
+  const quota = quotas.value
+  return !!quota && quota.limits.device_limit > 0
+    && quota.usage.used_devices > quota.limits.device_limit
+})
+
+const storageOverQuota = computed(() => {
+  const quota = quotas.value
+  return !!quota && quota.limits.storage_limit_bytes > 0
+    && quota.usage.used_storage_bytes > quota.limits.storage_limit_bytes
+})
+
+const OVER_QUOTA_FILL = 'linear-gradient(90deg, var(--tx-color-danger), var(--tx-color-danger))'
+
 const statusErrorText = computed(() => {
   const err = error.value as { data?: { statusMessage?: unknown }, message?: unknown } | null
   const statusMessage = typeof err?.data?.statusMessage === 'string' ? err.data.statusMessage : ''
@@ -495,11 +515,15 @@ watch(showDetailsOverlay, (open) => {
           <TxProgressBar
             :percentage="storageUsagePercent"
             height="8px"
-            color="linear-gradient(90deg, #3b82f6, #2563eb)"
+            :color="storageOverQuota ? OVER_QUOTA_FILL : 'linear-gradient(90deg, #3b82f6, #2563eb)'"
             :aria-label="t('dashboard.storage.syncStorage', 'Sync Storage')"
           />
           <div class="StorageProgress-Foot">
-            <span>{{ storageUsagePercent }}% {{ t('dashboard.storage.used', 'used') }}</span>
+            <span :class="{ 'StorageProgress-Over': storageOverQuota }">
+              {{ storageOverQuota
+                ? t('dashboard.storage.overQuota', 'Over limit')
+                : `${storageUsagePercent}% ${t('dashboard.storage.used', 'used')}` }}
+            </span>
             <span>{{ t('dashboard.storage.plan', 'Plan') }}: {{ planTier }}</span>
           </div>
         </div>
@@ -537,11 +561,15 @@ watch(showDetailsOverlay, (open) => {
           <TxProgressBar
             :percentage="deviceUsagePercent"
             height="8px"
-            color="linear-gradient(90deg, #a855f7, #9333ea)"
+            :color="deviceOverQuota ? OVER_QUOTA_FILL : 'linear-gradient(90deg, #a855f7, #9333ea)'"
             :aria-label="t('dashboard.storage.authorizedDevices', 'Authorized Devices')"
           />
           <div class="StorageProgress-Foot">
-            <span>{{ deviceUsagePercent }}% {{ t('dashboard.storage.capacity', 'capacity') }}</span>
+            <span :class="{ 'StorageProgress-Over': deviceOverQuota }">
+              {{ deviceOverQuota
+                ? t('dashboard.storage.overQuota', 'Over limit')
+                : `${deviceUsagePercent}% ${t('dashboard.storage.capacity', 'capacity')}` }}
+            </span>
             <NuxtLink to="/dashboard/devices" class="StorageLink">
               {{ t('dashboard.storage.manageDevices', 'Manage Slots') }}
             </NuxtLink>
@@ -949,6 +977,11 @@ watch(showDetailsOverlay, (open) => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.StorageProgress-Over {
+  color: var(--tx-color-danger);
+  font-weight: 600;
 }
 
 .StorageProgress-Foot {

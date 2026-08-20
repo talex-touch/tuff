@@ -14,6 +14,11 @@
  *   pnpm -C apps/nexus dev                       # localhost:3200, needs CF bindings
  *   chrome --headless=new --remote-debugging-port=9224 --user-data-dir=/tmp/...
  *   node apps/nexus/scripts/dashboard-visual-audit.mjs [route ...]
+ *
+ * NEXUS_AUDIT_THEME=dark captures the dark palette instead (light is the
+ * default). Theme is applied the same way scripts/tuffex-visual-smoke.mjs does
+ * it — emulated media plus the class/attr/localStorage the app itself reads —
+ * because the media query alone does not move @nuxtjs/color-mode.
  */
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -50,6 +55,29 @@ const DEFAULT_ROUTES = [
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 1000 },
 ]
+
+const THEME = process.env.NEXUS_AUDIT_THEME === 'dark' ? 'dark' : 'light'
+
+async function emulateTheme(client) {
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-color-scheme', value: THEME },
+      { name: 'prefers-reduced-motion', value: 'reduce' },
+    ],
+  })
+}
+
+// Only valid on a real origin — about:blank has no localStorage.
+async function applyTheme(client) {
+  await evaluate(client, `(() => {
+    const theme = ${JSON.stringify(THEME)}
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.style.colorScheme = theme
+    localStorage.setItem('color-mode', theme)
+  })()`)
+  await delay(300)
+}
 
 async function mintSessionToken() {
   const { encode } = require('next-auth/jwt')
@@ -89,6 +117,7 @@ async function main() {
           secure: false,
         })
 
+        await emulateTheme(client)
         await client.send('Page.navigate', { url: `${BASE_URL}${route}` })
         // The shared waitForPage waits on `.vp-doc`, which only the docs site
         // renders; the app shell is the dashboard's equivalent ready signal.
@@ -100,6 +129,10 @@ async function main() {
         // Nuxt hydrates, then the dashboard fetches; no single deterministic
         // signal covers both, so settle on a fixed beat.
         await delay(4000)
+        // Re-applied post-hydration: color-mode writes the class on mount and
+        // would otherwise overwrite what was set on the blank page.
+        await applyTheme(client)
+        await delay(400)
 
         const state = await evaluate(client, `(() => {
           const body = document.body?.innerText || ''
@@ -111,7 +144,7 @@ async function main() {
           })
         })()`)
         const parsed = JSON.parse(state)
-        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}`
+        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}`
         await screenshot(client, label, outDir, { captureBeyondViewport: true })
         results.push({ route, ...parsed })
         console.log(`${route} → ${parsed.redirected ? 'REDIRECTED(sign-in)' : 'ok'} ${parsed.chars} chars`)
