@@ -531,9 +531,14 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.searchTrend.hasData" class="mt-4 rounded-2xl border border-dashed border-black/[0.08] py-12 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.trends.noSearchData') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.searchTrend.hasData"
+            class="mt-4"
+            variant="no-data"
+            :title="t('dashboard.overview.trends.noSearchData')"
+            size="small"
+            layout="vertical"
+          />
 
           <template v-else>
             <div class="mt-4 flex items-end justify-between gap-3">
@@ -578,9 +583,14 @@ function isCurrentDevice(device: DeviceItem) {
             {{ telemetryErrorText }}
           </div>
 
-          <div v-else-if="!viewModel.searchTrend.hasData" class="mt-4 rounded-2xl border border-dashed border-black/[0.08] py-12 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.trends.noLatencyData') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.searchTrend.hasData"
+            class="mt-4"
+            variant="no-data"
+            :title="t('dashboard.overview.trends.noLatencyData')"
+            size="small"
+            layout="vertical"
+          />
 
           <template v-else>
             <div class="mt-4 overflow-x-auto pb-1">
@@ -620,9 +630,13 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.recentActivities.length" class="rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.stream.empty') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.recentActivities.length"
+            variant="no-data"
+            :title="t('dashboard.overview.stream.empty')"
+            size="small"
+            layout="vertical"
+          />
 
           <div v-else class="space-y-2">
             <div
@@ -673,9 +687,13 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.devices.length" class="rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.devices.empty') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.devices.length"
+            variant="no-data"
+            :title="t('dashboard.overview.devices.empty')"
+            size="small"
+            layout="vertical"
+          />
 
           <div v-else class="space-y-2">
             <div

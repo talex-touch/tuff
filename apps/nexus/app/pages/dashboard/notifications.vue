@@ -549,12 +549,14 @@ onMounted(() => {
         {{ error }}
       </div>
 
-      <div
+      <TxEmptyState
         v-else-if="!visibleNotifications.length"
-        class="mt-5 rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/45 dark:border-white/[0.08] dark:text-white/45"
-      >
-        {{ filter === 'unread' ? t('dashboard.notifications.emptyUnread', '暂无未读通知') : t('dashboard.notifications.emptyAll', '暂无通知') }}
-      </div>
+        class="mt-5"
+        variant="no-data"
+        :title="filter === 'unread' ? t('dashboard.notifications.emptyUnread', '暂无未读通知') : t('dashboard.notifications.emptyAll', '暂无通知')"
+        size="small"
+        layout="vertical"
+      />
 
       <div v-else class="mt-5 divide-y divide-black/[0.06] dark:divide-white/[0.08]">
         <article
