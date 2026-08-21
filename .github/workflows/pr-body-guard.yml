@@ -1,0 +1,49 @@
+# Split out of ci.yml's PR Quality job, for `types: edited` (#1773).
+#
+# The check itself is unchanged and still lives in scripts/check-closing-keywords.mjs. What was
+# wrong was when it ran: `pull_request` with no `types` defaults to opened/synchronize/reopened, so
+# the guard only ever saw the body as of the last push. GitHub reads closing keywords from the body
+# **at merge time**, so a description edited after the last push was never the document that got
+# checked -- and a body that passed could gain "this does not fix #N" during review and merge green,
+# closing an unfixed issue. That is the outcome #213 and #308 recorded, which is what the guard
+# exists to prevent.
+#
+# Its own workflow rather than adding `edited` to ci.yml: this needs to re-run on every description
+# edit, and re-running the whole PR Quality job for that would cost minutes each time on a repo
+# where descriptions get edited often. This is a checkout and one node script.
+name: PR Body Guard
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-body-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  closing_keywords:
+    name: Closing keywords
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      # The body goes through the environment rather than being interpolated into the shell, so a
+      # description cannot inject commands. `printf '%s'` rather than `echo` so a body starting with
+      # `-n` or containing backslashes reaches the file verbatim.
+      - name: Check for negated closing keywords in the PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+          node scripts/check-closing-keywords.mjs "$RUNNER_TEMP/pr-body.md"
+
+      # A guard that matches nothing looks exactly like a repository with no negated keywords, so
+      # the detector proves it fires before its verdict on the body above is worth anything.
+      - name: Check closing-keyword guard self-test
+        run: node scripts/check-closing-keywords.mjs --self-test
