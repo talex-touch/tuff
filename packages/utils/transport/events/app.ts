@@ -18,6 +18,7 @@ import type {
   BuildVerificationStatus,
   CounterPayload,
   CspViolationReport,
+  RendererComponentErrorReport,
   DevToolsOptions,
   ExecuteCommandRequest,
   ExecuteCommandResponse,
@@ -553,6 +554,15 @@ export const AppEvents = {
       .module('security')
       .event('report-csp-violation')
       .define<CspViolationReport, void>(),
+    /**
+     * Report an uncaught component error so it reaches the main process log. Same
+     * fire-and-forget contract as the CSP report: a dropped report must never
+     * disturb the view that produced it.
+     */
+    reportComponentError: defineEvent('app')
+      .module('security')
+      .event('report-component-error')
+      .define<RendererComponentErrorReport, void>(),
   },
 
   /**
