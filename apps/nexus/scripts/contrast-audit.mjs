@@ -152,6 +152,25 @@ const PROBE = `(() => {
     return false
   }
 
+  /**
+   * True when the text sits inside a backdrop-filtered subtree.
+   *
+   * A glass surface shows whatever is behind it, refracted — its effective
+   * background is not in the DOM at all, so compositing ancestors answers a
+   * different question. On the glass-surface demo that scored dark-on-dark at
+   * 1.03:1 for text that is perfectly legible over the bright band it floats on.
+   * Undetermined, not clean: the probe genuinely cannot see through glass.
+   */
+  const sitsOnGlass = (el) => {
+    let node = el
+    while (node) {
+      const filter = getComputedStyle(node).backdropFilter
+      if (filter && filter !== 'none') return true
+      node = node.parentElement
+    }
+    return false
+  }
+
   const failures = []
   const undetermined = []
   const scope = ${JSON.stringify(SCOPE)}
@@ -176,7 +195,7 @@ const PROBE = `(() => {
     // the same colour, which text never does. It is the probe failing to find a
     // background, and reporting it as a finding is how three rounds of
     // fabricated results got believed.
-    if (Math.abs(measured - 1) < 0.005 || overlaysOpaqueSibling(el, rect)) {
+    if (Math.abs(measured - 1) < 0.005 || overlaysOpaqueSibling(el, rect) || sitsOnGlass(el)) {
       undetermined.push(text.slice(0, 46))
       continue
     }

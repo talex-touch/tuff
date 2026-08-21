@@ -250,7 +250,7 @@ function handlePageChange(page: number) {
 .tx-pagination__button--active {
   background: var(--tx-pagination-active-bg, var(--tx-color-primary, #409eff));
   border-color: var(--tx-pagination-active-border, var(--tx-color-primary, #409eff));
-  color: var(--tx-pagination-active-text, #ffffff);
+  color: var(--tx-pagination-active-text, var(--tx-color-on-primary, #ffffff));
   font-weight: 600;
 }
 
