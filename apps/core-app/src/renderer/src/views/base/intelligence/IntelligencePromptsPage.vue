@@ -114,10 +114,28 @@ async function handlePromptTest(options: {
   }
 }
 
+const promptStats = computed(() => ({
+  total: (promptManager.prompts.builtin ?? []).length + (promptManager.prompts.custom ?? []).length,
+  builtin: (promptManager.prompts.builtin ?? []).length,
+  custom: (promptManager.prompts.custom ?? []).length
+}))
+
 const filterOptions = computed(() => [
-  { value: 'all', label: t('settings.intelligence.promptFilterAll') },
-  { value: 'builtin', label: t('settings.intelligence.builtin') },
-  { value: 'custom', label: t('settings.intelligence.custom') }
+  {
+    value: 'all',
+    label: t('settings.intelligence.promptFilterAll'),
+    count: promptStats.value.total
+  },
+  {
+    value: 'builtin',
+    label: t('settings.intelligence.builtin'),
+    count: promptStats.value.builtin
+  },
+  {
+    value: 'custom',
+    label: t('settings.intelligence.custom'),
+    count: promptStats.value.custom
+  }
 ])
 
 const orderedPrompts = computed<PromptTemplate[]>(() => {
@@ -220,19 +238,6 @@ const isDirty = computed(() => {
     selectedPrompt.value.content !== promptDraft.content
   )
 })
-
-const promptStats = computed(() => ({
-  total: orderedPrompts.value.length,
-  builtin: promptManager.prompts.builtin.length,
-  custom: promptManager.prompts.custom.length
-}))
-
-const totalWordsApprox = computed(() =>
-  orderedPrompts.value.reduce((sum, prompt) => {
-    const words = prompt.content.trim().split(/\s+/).filter(Boolean).length
-    return sum + words
-  }, 0)
-)
 
 const autoSaveStatusText = computed(() => {
   switch (autoSaveStatus.value) {
@@ -500,9 +505,11 @@ onBeforeUnmount(() => {
                 native-type="button"
                 role="tab"
                 :class="{ 'is-active': filterMode === option.value }"
+                :aria-selected="filterMode === option.value"
                 @click="filterMode = option.value as FilterMode"
               >
-                {{ option.label }}
+                <span>{{ option.label }}</span>
+                <span class="prompt-filter-count">{{ option.count }}</span>
               </TxButton>
             </div>
           </div>
@@ -516,26 +523,16 @@ onBeforeUnmount(() => {
         </template>
 
         <template #footer>
-          <div>
-            <p class="prompt-footer-stats">
-              {{ t('settings.intelligence.promptStatsLabel', promptStats) }}
-            </p>
-            <p v-if="false" class="prompt-footer-hint">
-              {{
-                t('settings.intelligence.landing.prompts.statsDesc', { words: totalWordsApprox })
-              }}
-            </p>
-            <TxButton
-              variant="flat"
-              type="primary"
-              native-type="button"
-              class="mt-2"
-              @click="handleCreatePrompt"
-            >
-              <i class="i-carbon-add" aria-hidden="true" />
-              <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-            </TxButton>
-          </div>
+          <TxButton
+            variant="flat"
+            type="primary"
+            native-type="button"
+            class="w-full"
+            @click="handleCreatePrompt"
+          >
+            <i class="i-carbon-add" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
+          </TxButton>
         </template>
 
         <template #main>
@@ -885,18 +882,22 @@ onBeforeUnmount(() => {
   }
 }
 
-.prompt-footer-stats {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.prompt-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
   color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-lighter);
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.prompt-footer-hint {
-  font-size: 0.7rem;
-  color: var(--tx-text-color-secondary);
-  opacity: 0.7;
+.prompt-filter.is-active .prompt-filter-count {
+  color: var(--tx-color-primary);
+  background: rgba(var(--tx-color-primary-rgb), 0.12);
 }
 
 .prompt-main-header {

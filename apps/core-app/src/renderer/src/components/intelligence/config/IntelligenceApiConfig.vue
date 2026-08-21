@@ -181,27 +181,30 @@ async function handleTest() {
   testResult.value = ''
 
   try {
-    // 创建临时提供商配置用于测试 - 确保所有字段都是可序列化的
-    const testProvider = {
-      id: props.modelValue.id,
-      type: props.modelValue.type,
-      name: props.modelValue.name,
-      enabled: true, // 测试时强制启用
-      apiKey: localApiKey.value.trim() ? localApiKey.value : undefined,
-      baseUrl: localBaseUrl.value.trim() || undefined,
-      models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
-      defaultModel: props.modelValue.defaultModel || undefined,
-      instructions: props.modelValue.instructions || undefined,
-      metadata: props.modelValue.metadata ? { ...props.modelValue.metadata } : undefined,
-      timeout: Number(props.modelValue.timeout) || 30000,
-      rateLimit: props.modelValue.rateLimit
-        ? {
-            requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
-            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
-          }
-        : undefined,
-      priority: Number(props.modelValue.priority) || 1
-    }
+    // Build from trusted local form state, then detach Vue reactivity and omit `undefined`
+    // fields before the strict credential DTO boundary. The SDK intentionally rejects both.
+    const testProvider = JSON.parse(
+      JSON.stringify({
+        id: props.modelValue.id,
+        type: props.modelValue.type,
+        name: props.modelValue.name,
+        enabled: true,
+        apiKey: localApiKey.value.trim() ? localApiKey.value : undefined,
+        baseUrl: localBaseUrl.value.trim() || undefined,
+        models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
+        defaultModel: props.modelValue.defaultModel || undefined,
+        instructions: props.modelValue.instructions || undefined,
+        metadata: props.modelValue.metadata ? { ...props.modelValue.metadata } : undefined,
+        timeout: Number(props.modelValue.timeout) || 30000,
+        rateLimit: props.modelValue.rateLimit
+          ? {
+              requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
+              tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
+            }
+          : undefined,
+        priority: Number(props.modelValue.priority) || 1
+      })
+    ) as IntelligenceProviderConfig
 
     const result = (await aiClient.testProvider(testProvider)) as {
       success?: boolean

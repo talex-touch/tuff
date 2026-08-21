@@ -40,37 +40,37 @@ const emit = defineEmits<{
   <div class="TuffAsideTemplate" :class="{ 'has-window-drag-region': props.windowDragRegion }">
     <aside class="TuffAsideTemplate-Aside w-76" aria-label="Tuff aside layout">
       <slot name="aside">
-        <TxScroll class="TuffAsideTemplate-AsideDefault">
-          <template #header>
-            <header
-              v-if="$slots['aside-header']"
-              class="TuffAsideTemplate-AsideHeader fake-background"
-            >
-              <slot name="aside-header" />
-            </header>
+        <div class="TuffAsideTemplate-AsideDefault">
+          <header
+            v-if="$slots['aside-header']"
+            class="TuffAsideTemplate-AsideHeader fake-background"
+          >
+            <slot name="aside-header" />
+          </header>
 
-            <header v-if="props.searchable" class="TuffAsideTemplate-Search fake-background">
-              <TuffAsideSearchBar
-                :model-value="props.modelValue"
-                :search-label="props.searchLabel"
-                :search-placeholder="props.searchPlaceholder"
-                :search-id="props.searchId"
-                :clear-label="props.clearLabel"
-                @update:model-value="emit('update:modelValue', $event)"
-                @search="emit('search', $event)"
-                @clear="emit('clear')"
-              />
-            </header>
-          </template>
+          <header v-if="props.searchable" class="TuffAsideTemplate-Search fake-background">
+            <TuffAsideSearchBar
+              :model-value="props.modelValue"
+              :search-label="props.searchLabel"
+              :search-placeholder="props.searchPlaceholder"
+              :search-id="props.searchId"
+              :clear-label="props.clearLabel"
+              @update:model-value="emit('update:modelValue', $event)"
+              @search="emit('search', $event)"
+              @clear="emit('clear')"
+            />
+          </header>
 
-          <div v-if="$slots.filter" class="TuffAsideTemplate-Filters">
-            <slot name="filter" />
-          </div>
+          <TxScroll class="TuffAsideTemplate-AsideScroll">
+            <div v-if="$slots.filter" class="TuffAsideTemplate-Filters">
+              <slot name="filter" />
+            </div>
 
-          <div class="TuffAsideTemplate-AsideBody">
-            <slot />
-          </div>
-        </TxScroll>
+            <div class="TuffAsideTemplate-AsideBody">
+              <slot />
+            </div>
+          </TxScroll>
+        </div>
       </slot>
       <div v-if="$slots.footer" class="TuffAsideTemplate-Footer fake-background">
         <slot name="footer" />
@@ -102,12 +102,6 @@ const emit = defineEmits<{
   overflow: hidden;
 }
 
-.TuffAsideTemplate.has-window-drag-region
-  .TuffAsideTemplate-AsideDefault
-  :deep(.tx-scroll__content) {
-  padding-top: 0;
-}
-
 .TuffAsideTemplate.has-window-drag-region .TuffAsideTemplate-Search {
   display: flex;
   align-items: center;
@@ -128,13 +122,17 @@ const emit = defineEmits<{
 }
 
 .TuffAsideTemplate-AsideDefault {
-  flex: 1;
-  min-height: 0;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 1rem;
-  height: 100%;
   width: 100%;
+  min-height: 0;
+}
+
+.TuffAsideTemplate-AsideScroll {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
 }
 
 .TuffAsideTemplate-AsideHeader {
@@ -148,8 +146,6 @@ const emit = defineEmits<{
 }
 
 .TuffAsideTemplate-AsideBody {
-  flex: 1;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

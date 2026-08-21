@@ -1,15 +1,47 @@
+// @vitest-environment jsdom
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { IBoxOptions } from '..'
 import type { Ref } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createApp, ref } from 'vue'
 import { BoxMode } from '..'
 import {
   clearCoreBoxAttachment,
   handleCoreBoxEscapeKey,
   hasCoreBoxAttachment,
   resolveQuickActionsItem,
-  shouldForwardKey
+  shouldForwardKey,
+  useKeyboard
 } from './useKeyboard'
+
+vi.mock('@talex-touch/utils/transport', () => ({
+  useTuffTransport: () => ({ send: vi.fn() })
+}))
+
+vi.mock('../transport/key-transport', () => ({
+  createCoreBoxKeyTransport: () => ({
+    forwardKeyEvent: vi.fn(),
+    getUIViewState: vi.fn(async () => ({ isActive: false, isFocused: false, isUIMode: false }))
+  })
+}))
+
+vi.mock('~/modules/platform/renderer-platform', () => ({
+  getCurrentRendererPlatformState: () => ({
+    platform: 'unknown',
+    isMac: false,
+    isWindows: false,
+    isLinux: false
+  })
+}))
+
+vi.mock('~/modules/plugin/widget-host-key-bridge', () => ({
+  publishWidgetHostKeyEvent: vi.fn()
+}))
+
+vi.mock('~/utils/dev-log', () => ({ devLog: vi.fn() }))
+vi.mock('~/utils/renderer-log', () => ({
+  createRendererLogger: () => ({ error: vi.fn() })
+}))
 
 function createFocusedItem(): TuffItem {
   return {
@@ -228,5 +260,128 @@ describe('handleCoreBoxEscapeKey', () => {
     expect(result).toBe('attachment')
     expect(options.clearClipboard).toHaveBeenCalledWith({ remember: true })
     expect(options.handleExit).not.toHaveBeenCalled()
+  })
+})
+
+type GridKeyboardHarness = {
+  boxOptions: IBoxOptions
+  cleanup: () => void
+}
+
+let activeGridKeyboardHarness: GridKeyboardHarness | undefined
+
+function createGridResults(): TuffItem[] {
+  return Array.from({ length: 10 }, (_, index) => ({ id: `grid-result-${index}` }) as TuffItem)
+}
+
+function mountGridKeyboardHarness(
+  focus: number,
+  layout: NonNullable<IBoxOptions['layout']> = { mode: 'grid', grid: { columns: 5 } }
+): GridKeyboardHarness {
+  const root = document.createElement('div')
+  const boxOptions: IBoxOptions = {
+    lastHidden: -1,
+    mode: BoxMode.INPUT,
+    focus,
+    file: { buffer: null, paths: [] },
+    data: {},
+    layout
+  }
+  const results = ref(createGridResults())
+  const scrollbar = ref<{
+    getScrollInfo: () => { clientHeight: number; scrollTop: number }
+    scrollTo: (x: number, y: number) => void
+  } | null>(null)
+
+  document.body.classList.add('core-box')
+  document.body.appendChild(root)
+
+  const app = createApp({
+    setup() {
+      useKeyboard(
+        boxOptions,
+        results,
+        ref(-1),
+        scrollbar,
+        ref(''),
+        vi.fn(),
+        async () => undefined,
+        ref<HTMLInputElement | undefined>(undefined),
+        { last: undefined },
+        vi.fn(),
+        ref<IProviderActivate[] | null>(null),
+        vi.fn(),
+        ref<Array<HTMLElement | null>>([])
+      )
+      return () => null
+    }
+  })
+  app.mount(root)
+
+  return {
+    boxOptions,
+    cleanup: () => {
+      app.unmount()
+      root.remove()
+    }
+  }
+}
+
+function dispatchGridKey(key: string): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key })
+  document.dispatchEvent(event)
+  return event
+}
+
+describe('useKeyboard grid navigation', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+  })
+
+  afterEach(() => {
+    activeGridKeyboardHarness?.cleanup()
+    activeGridKeyboardHarness = undefined
+    document.body.classList.remove('core-box')
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    { key: 'ArrowDown', focus: 2, expectedFocus: 7 },
+    { key: 'ArrowRight', focus: 6, expectedFocus: 7 },
+    { key: 'ArrowUp', focus: 7, expectedFocus: 2 },
+    { key: 'ArrowLeft', focus: 7, expectedFocus: 6 }
+  ])('moves focus with plain $key in the five-column grid', ({ key, focus, expectedFocus }) => {
+    activeGridKeyboardHarness = mountGridKeyboardHarness(focus)
+
+    const event = dispatchGridKey(key)
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(expectedFocus)
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('uses five columns for a single intelligence recommendation section', () => {
+    const itemIds = createGridResults().map((item) => item.id)
+    activeGridKeyboardHarness = mountGridKeyboardHarness(4, {
+      mode: 'grid',
+      grid: { columns: 8 },
+      sections: [
+        {
+          id: 'intelligence-recommendations',
+          layout: 'grid',
+          itemIds,
+          meta: { intelligence: true }
+        }
+      ]
+    })
+
+    const downEvent = dispatchGridKey('ArrowDown')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(9)
+    expect(downEvent.defaultPrevented).toBe(true)
+
+    const upEvent = dispatchGridKey('ArrowUp')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(4)
+    expect(upEvent.defaultPrevented).toBe(true)
   })
 })

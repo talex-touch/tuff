@@ -19,6 +19,7 @@ import {
 import { useAliveTarget } from '../../hooks/use-electron-guard'
 import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
+import { DivisionBoxManager } from '../division-box/manager'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
@@ -365,6 +366,21 @@ export class TrayManager extends BaseModule {
     })
 
     if (process.platform === 'darwin') {
+      this.registerAppListener('browser-window-created', (_event, window) => {
+        const browserWindow = window as Electron.BrowserWindow | undefined
+        if (!browserWindow || browserWindow === mainWindow) return
+
+        const refreshDockVisibility = (): void => this.updateDockVisibility()
+        browserWindow.on('show', refreshDockVisibility)
+        browserWindow.on('hide', refreshDockVisibility)
+        browserWindow.on('closed', refreshDockVisibility)
+        this.windowDisposers.push(() => {
+          browserWindow.removeListener('show', refreshDockVisibility)
+          browserWindow.removeListener('hide', refreshDockVisibility)
+          browserWindow.removeListener('closed', refreshDockVisibility)
+        })
+      })
+
       this.registerAppListener('activate', () => {
         const safeWindow = useAliveTarget(mainWindow)
         if (!safeWindow) return
@@ -530,9 +546,11 @@ export class TrayManager extends BaseModule {
 
   private hasActiveDivisionBox(): boolean {
     try {
-      const { DivisionBoxManager } = require('../division-box/manager')
       const manager = DivisionBoxManager.getInstance()
-      return manager.getActiveSessions().length > 0
+      return manager.getActiveSessions().some((session) => {
+        const window = useAliveTarget(session.getWindow()?.window)
+        return window?.isVisible() === true
+      })
     } catch {
       return false
     }

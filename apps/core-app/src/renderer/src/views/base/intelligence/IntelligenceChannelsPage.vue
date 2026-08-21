@@ -278,7 +278,12 @@ async function handleTestProvider(): Promise<void> {
   isTesting.value = true
   testResult.value = null
   try {
-    const response = (await aiClient.testProvider(selectedProvider.value)) as TestResult
+    // The provider comes from Vue reactive state. Detach it before the strict SDK DTO boundary,
+    // which intentionally rejects Proxy objects and accessor-backed records.
+    const providerSnapshot = JSON.parse(
+      JSON.stringify(selectedProvider.value)
+    ) as IntelligenceProviderConfig
+    const response = (await aiClient.testProvider(providerSnapshot)) as TestResult
     testResult.value = response
   } catch (error) {
     testResult.value = {

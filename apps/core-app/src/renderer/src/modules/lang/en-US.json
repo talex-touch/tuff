@@ -1523,6 +1523,8 @@
     },
     "emptyState": {
       "message": "Choose a plugin to view details",
+      "description": "Select an installed plugin from the list, or browse the store to add one.",
+      "listEmpty": "No plugins in this section",
       "exploreStore": "Explore Store"
     },
     "actions": {
@@ -5212,11 +5214,15 @@
       "empty": "No agents available",
       "select_hint": "Select an agent to view details",
       "description": "Description",
+      "overview_hint": "Identity, status, and runtime metadata",
       "capabilities": "Capabilities",
+      "capabilities_hint": "Capabilities this agent can invoke",
       "tools": "Tools",
+      "tools_hint": "Tools available to this agent",
       "active": "Active",
       "inactive": "Inactive",
       "quick_execute": "Quick Execute",
+      "quick_execute_hint": "Run a task with this agent",
       "input_placeholder": "Enter task instructions...",
       "execute": "Execute",
       "result": "Result",

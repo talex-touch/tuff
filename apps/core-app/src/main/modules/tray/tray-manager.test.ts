@@ -3,48 +3,57 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocale } from '../../utils/i18n-helper'
 
-const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock, trayInstances } =
-  vi.hoisted(() => ({
-    trayInstances: [] as Array<{
-      setToolTip: ReturnType<typeof vi.fn>
-      on: ReturnType<typeof vi.fn>
-      setContextMenu: ReturnType<typeof vi.fn>
-      getBounds: ReturnType<typeof vi.fn>
-      destroy: ReturnType<typeof vi.fn>
-    }>,
-    appMock: {
-      on: vi.fn(),
-      off: vi.fn(),
-      removeListener: vi.fn(),
-      setActivationPolicy: vi.fn(),
-      getLocale: vi.fn(() => 'en-US'),
-      getVersion: vi.fn(() => '0.0.0-test'),
-      isPackaged: false,
-      dock: {
-        show: vi.fn(),
-        hide: vi.fn(),
-        setIcon: vi.fn(),
-        setBadge: vi.fn()
-      }
+const {
+  appMock,
+  touchEventBusMock,
+  getMainConfigMock,
+  getDockIconMock,
+  divisionBoxManagerMock,
+  trayInstances
+} = vi.hoisted(() => ({
+  trayInstances: [] as Array<{
+    setToolTip: ReturnType<typeof vi.fn>
+    on: ReturnType<typeof vi.fn>
+    setContextMenu: ReturnType<typeof vi.fn>
+    getBounds: ReturnType<typeof vi.fn>
+    destroy: ReturnType<typeof vi.fn>
+  }>,
+  appMock: {
+    on: vi.fn(),
+    off: vi.fn(),
+    removeListener: vi.fn(),
+    setActivationPolicy: vi.fn(),
+    getLocale: vi.fn(() => 'en-US'),
+    getVersion: vi.fn(() => '0.0.0-test'),
+    isPackaged: false,
+    dock: {
+      show: vi.fn(),
+      hide: vi.fn(),
+      setIcon: vi.fn(),
+      setBadge: vi.fn()
+    }
+  },
+  touchEventBusMock: {
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn()
+  },
+  getMainConfigMock: vi.fn(() => ({
+    setup: {
+      showTray: true,
+      hideDock: false
     },
-    touchEventBusMock: {
-      on: vi.fn(),
-      off: vi.fn(),
-      emit: vi.fn()
-    },
-    getMainConfigMock: vi.fn(() => ({
-      setup: {
-        showTray: true,
-        hideDock: false
-      },
-      window: {
-        startSilent: false
-      }
-    })),
-    getDockIconMock: vi.fn(() => ({
-      isEmpty: vi.fn(() => false)
-    }))
-  }))
+    window: {
+      startSilent: false
+    }
+  })),
+  getDockIconMock: vi.fn(() => ({
+    isEmpty: vi.fn(() => false)
+  })),
+  divisionBoxManagerMock: {
+    getActiveSessions: vi.fn<() => unknown[]>(() => [])
+  }
+}))
 
 vi.mock('electron', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
@@ -136,6 +145,12 @@ vi.mock('../box-tool/core-box/manager', () => ({
   }
 }))
 
+vi.mock('../division-box/manager', () => ({
+  DivisionBoxManager: {
+    getInstance: vi.fn(() => divisionBoxManagerMock)
+  }
+}))
+
 vi.mock('../screenshot-session', () => ({
   screenshotSessionModule: {
     startStandalone: vi.fn(async () => undefined)
@@ -193,6 +208,7 @@ describe('TrayManager', () => {
     appMock.on.mockReset()
     appMock.off.mockReset()
     appMock.removeListener.mockReset()
+    divisionBoxManagerMock.getActiveSessions.mockReturnValue([])
     getDockIconMock.mockReturnValue({
       isEmpty: vi.fn(() => false)
     })
@@ -545,4 +561,146 @@ describe('TrayManager', () => {
 
     expect(appMock.dock.setIcon).not.toHaveBeenCalled()
   })
+
+  it('refreshes Dock visibility for every lifecycle change of a created non-main window', () => {
+    const mainWindow = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      isVisible: vi.fn(() => false),
+      isDestroyed: vi.fn(() => false)
+    }
+    const secondaryWindowHandlers: Record<string, () => void> = {}
+    const secondaryWindow = {
+      on: vi.fn((eventName: string, handler: () => void) => {
+        secondaryWindowHandlers[eventName] = handler
+      }),
+      removeListener: vi.fn(),
+      isVisible: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false)
+    }
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      registerWindowEvents: () => void
+      updateDockVisibility: ReturnType<typeof vi.fn>
+    }
+
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.updateDockVisibility = vi.fn()
+    trayManager.registerWindowEvents()
+
+    const browserWindowCreatedHandler = appMock.on.mock.calls.find(
+      ([eventName]) => eventName === 'browser-window-created'
+    )?.[1]
+    expect(browserWindowCreatedHandler).toBeTypeOf('function')
+
+    browserWindowCreatedHandler?.({}, secondaryWindow)
+
+    expect(secondaryWindow.on).toHaveBeenCalledWith('show', expect.any(Function))
+    expect(secondaryWindow.on).toHaveBeenCalledWith('hide', expect.any(Function))
+    expect(secondaryWindow.on).toHaveBeenCalledWith('closed', expect.any(Function))
+
+    secondaryWindowHandlers.show()
+    expect(trayManager.updateDockVisibility).toHaveBeenCalledTimes(1)
+    secondaryWindowHandlers.hide()
+    expect(trayManager.updateDockVisibility).toHaveBeenCalledTimes(2)
+    secondaryWindowHandlers.closed()
+    expect(trayManager.updateDockVisibility).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([
+    {
+      name: 'an alive visible window',
+      session: {
+        getWindow: vi.fn(() => ({
+          window: {
+            isDestroyed: vi.fn(() => false),
+            isVisible: vi.fn(() => true)
+          }
+        }))
+      },
+      dockVisible: true
+    },
+    {
+      name: 'a hidden window',
+      session: {
+        getWindow: vi.fn(() => ({
+          window: {
+            isDestroyed: vi.fn(() => false),
+            isVisible: vi.fn(() => false)
+          }
+        }))
+      },
+      dockVisible: false
+    },
+    {
+      name: 'a destroyed window',
+      session: {
+        getWindow: vi.fn(() => ({
+          window: {
+            isDestroyed: vi.fn(() => true),
+            isVisible: vi.fn(() => true)
+          }
+        }))
+      },
+      dockVisible: false
+    },
+    {
+      name: 'no window',
+      session: {
+        getWindow: vi.fn(() => undefined)
+      },
+      dockVisible: false
+    }
+  ])(
+    'keeps the Dock visible only for DivisionBox sessions with $name',
+    ({ session, dockVisible }) => {
+      const mainWindow = {
+        isVisible: vi.fn(() => false),
+        isDestroyed: vi.fn(() => false)
+      }
+      const trayManager = new TrayManager() as unknown as {
+        touchApp: {
+          window: { window: typeof mainWindow }
+          config: { data: Record<string, unknown> }
+          isQuitting: boolean
+          version: string
+        }
+        tray: object | null
+        updateDockVisibility: () => void
+      }
+
+      getMainConfigMock.mockReturnValue({
+        setup: { showTray: true, hideDock: true },
+        window: { startSilent: false }
+      })
+      divisionBoxManagerMock.getActiveSessions.mockReturnValue([session])
+      trayManager.touchApp = {
+        window: { window: mainWindow },
+        config: { data: {} },
+        isQuitting: false,
+        version: 'dev'
+      }
+      trayManager.tray = {}
+
+      trayManager.updateDockVisibility()
+
+      if (dockVisible) {
+        expect(appMock.dock.show).toHaveBeenCalledTimes(1)
+        expect(appMock.dock.hide).not.toHaveBeenCalled()
+      } else {
+        expect(appMock.dock.hide).toHaveBeenCalledTimes(1)
+        expect(appMock.dock.show).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

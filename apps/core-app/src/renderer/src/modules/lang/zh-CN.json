@@ -1523,6 +1523,8 @@
     },
     "emptyState": {
       "message": "选择一个插件查看详情",
+      "description": "从列表中选择已安装插件，或前往市场添加插件。",
+      "listEmpty": "此分组暂无插件",
       "exploreStore": "浏览市场"
     },
     "actions": {
@@ -5212,11 +5214,15 @@
       "empty": "暂无智能体",
       "select_hint": "选择一个智能体查看详情",
       "description": "描述",
+      "overview_hint": "智能体身份、状态与运行信息",
       "capabilities": "能力",
+      "capabilities_hint": "该智能体可以调用的能力",
       "tools": "工具",
+      "tools_hint": "该智能体可以使用的工具",
       "active": "活跃",
       "inactive": "未激活",
       "quick_execute": "快速执行",
+      "quick_execute_hint": "使用此智能体运行一项任务",
       "input_placeholder": "输入任务指令...",
       "execute": "执行",
       "result": "执行结果",
