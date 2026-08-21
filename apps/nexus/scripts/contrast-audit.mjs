@@ -37,6 +37,12 @@ const BASE_URL = process.env.CONTRAST_URL || 'http://localhost:3200'
 const AUTH_SECRET = process.env.AUTH_SECRET || 'tuff-dev-secret'
 const THEME = process.env.CONTRAST_THEME === 'dark' ? 'dark' : 'light'
 const INJECT = process.env.CONTRAST_INJECT === '1'
+/**
+ * Restricts the sweep to a subtree. Component doc pages carry the whole nexus
+ * shell, so measuring the page measures the site chrome too; scoping to
+ * `.tuff-demo__window` reports the components and nothing else.
+ */
+const SCOPE = process.env.CONTRAST_SCOPE || ''
 /** Exercises the high-contrast palette tuffex ships behind `prefers-contrast: more`. */
 const HIGH_CONTRAST = process.env.CONTRAST_HIGH === '1'
 
@@ -114,9 +120,44 @@ const PROBE = `(() => {
     for (let i = layers.length - 1; i >= 0; i--) result = over(layers[i], result)
     return result
   }
+  /**
+   * True when an opaque sibling sits under this text.
+   *
+   * bgOf only walks ancestors, so text painted over an absolutely positioned
+   * sibling — a progress fill, an image overlay, a badge over artwork — reads as
+   * sitting on whatever is behind the whole stack. The progress bar's own label
+   * is the case in point: the label span and the coloured fill are both
+   * children of a transparent track, so white-on-blue measured as
+   * white-on-white at 1.05:1. Reported as undetermined rather than as a failure,
+   * because the probe genuinely cannot see it.
+   */
+  const overlaysOpaqueSibling = (el, rect) => {
+    let node = el
+    while (node && node !== document.body) {
+      const parent = node.parentElement
+      if (!parent) break
+      for (const sibling of parent.children) {
+        if (sibling === node || sibling.contains(el)) continue
+        const style = getComputedStyle(sibling)
+        if (style.position === 'static') continue
+        const colour = parseColor(style.backgroundColor)
+        if (!colour || colour[3] < 0.5) continue
+        const other = sibling.getBoundingClientRect()
+        const overlaps = other.left < rect.right && other.right > rect.left
+          && other.top < rect.bottom && other.bottom > rect.top
+        if (overlaps) return true
+      }
+      node = parent
+    }
+    return false
+  }
+
   const failures = []
   const undetermined = []
-  for (const el of document.querySelectorAll('body *')) {
+  const scope = ${JSON.stringify(SCOPE)}
+  const roots = scope ? [...document.querySelectorAll(scope)] : [document.body]
+  if (scope && !roots.length) return JSON.stringify({ failures: [], undetermined: 0, noScope: true })
+  for (const el of roots.flatMap(root => [...root.querySelectorAll('*')])) {
     if (el.children.length) continue
     const text = (el.textContent || '').trim()
     if (!text || text.length > 120) continue
@@ -135,7 +176,7 @@ const PROBE = `(() => {
     // the same colour, which text never does. It is the probe failing to find a
     // background, and reporting it as a finding is how three rounds of
     // fabricated results got believed.
-    if (Math.abs(measured - 1) < 0.005) {
+    if (Math.abs(measured - 1) < 0.005 || overlaysOpaqueSibling(el, rect)) {
       undetermined.push(text.slice(0, 46))
       continue
     }
@@ -224,14 +265,25 @@ async function main() {
       await delay(700)
       if (INJECT) {
         await evaluate(client, `(() => {
+  
           const el = document.createElement('div')
           el.textContent = 'CONTRAST CONTROL — must be reported'
           el.style.cssText = 'color:color(srgb 0.33 0.33 0.33);background:color(srgb 0.29 0.29 0.29);font-size:14px;padding:4px'
-          document.body.appendChild(el)
+          // Inside the scope when there is one: appended to body it falls outside
+          // the subtree being measured, and a scoped run then has no control at
+          // all — every "ok" would be unverifiable.
+          const host = ${JSON.stringify(SCOPE)} ? document.querySelector(${JSON.stringify(SCOPE)}) : null
+          ;(host || document.body).appendChild(el)
         })()`)
         await delay(200)
       }
-      const { failures, undetermined } = JSON.parse(await evaluate(client, PROBE))
+      const { failures, undetermined, noScope } = JSON.parse(await evaluate(client, PROBE))
+      if (noScope) {
+        // Silence here would read as a clean page; it means the selector matched
+        // nothing, which is a broken run.
+        console.log(`${route.padEnd(40)} SCOPE MATCHED NOTHING`)
+        continue
+      }
       total += failures.length
       const unknown = undetermined ? `  (${undetermined} undetermined)` : ''
       console.log(`${route.padEnd(26)} ${failures.length ? `${failures.length} below AA` : 'ok'}${unknown}`)
