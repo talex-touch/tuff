@@ -381,6 +381,15 @@ async function handleCapabilityTest(
       :main-edge-blur="false"
       window-drag-region
     >
+      <template #filter>
+        <div class="capability-list-heading">
+          <span>{{ t('settings.intelligence.capabilityPageTitle') }}</span>
+          <span>{{
+            t('settings.intelligence.capabilitySummary', { count: capabilityList.length })
+          }}</span>
+        </div>
+      </template>
+
       <template #default>
         <!-- Loading skeleton -->
         <div v-if="loading" class="capability-cards">
@@ -406,12 +415,6 @@ async function handleCapabilityTest(
             <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
           </div>
         </div>
-      </template>
-
-      <template #footer>
-        <span class="w-full text-xs text-center op-50 block">
-          {{ t('settings.intelligence.capabilitySummary', { count: capabilityList.length }) }}
-        </span>
       </template>
 
       <template #main>
@@ -455,6 +458,20 @@ async function handleCapabilityTest(
 <style lang="scss" scoped>
 .capability-main.is-empty {
   -webkit-app-region: drag;
+}
+
+.capability-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.75rem;
+}
+
+.capability-list-heading span:first-child {
+  color: var(--tx-text-color-primary);
+  font-weight: 600;
 }
 
 .capability-cards {

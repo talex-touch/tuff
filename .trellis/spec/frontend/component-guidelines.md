@@ -142,6 +142,12 @@ Current examples:
 - `TxFileUploader` uses a real drop-zone button and a real remove button.
 - `docs/engineering/reports/coreapp-button-migration.md` records the current CoreApp button migration direction.
 
+### Grid keyboard geometry
+
+- A grid's renderer and keyboard navigation must resolve the same effective column count. If a section caps or overrides the container's declared columns, keep that rule in one shared helper rather than duplicating it in the component and keyboard hook.
+- Section-aware navigation applies even when only one section is visible. Do not gate rendered-row geometry on `sections.length > 1`, and do not calculate vertical movement from the raw container column count when the rendered section uses fewer columns.
+- Regression coverage for an overridden section must use the production mismatch shape, not a matching synthetic layout. CoreBox recommendations declare eight container columns but render an intelligence section at five columns; with ten items, ArrowDown moves `4 → 9` and ArrowUp moves `9 → 4`.
+
 ---
 
 ## I18n

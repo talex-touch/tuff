@@ -87,7 +87,11 @@ function openCoreBox(): void {
       what makes the change read as one surface changing contents rather than two sidebars.
     -->
     <Transition :name="contextTransition" mode="out-in">
-      <div v-if="isSettingsContext" key="settings" class="ShellSidebar-Context">
+      <div
+        v-if="isSettingsContext"
+        key="settings"
+        class="ShellSidebar-Context ShellSidebar-Context--settings"
+      >
         <ShellBackRow />
 
         <ShellSearchEntry :placeholder="t('settingsNav.search')" @activate="openCoreBox" />
@@ -216,6 +220,15 @@ function openCoreBox(): void {
   gap: 6px;
   width: 100%;
   min-height: 0;
+}
+
+.ShellSidebar-Context--settings {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+
+  > :not(.ShellSidebar-Spacer) {
+    flex-shrink: 0;
+  }
 }
 
 .ShellSidebar.is-rail .ShellSidebar-Context {

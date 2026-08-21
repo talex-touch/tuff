@@ -1,6 +1,7 @@
 <script lang="ts" name="PluginListModule" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PluginItem from './PluginItem.vue'
 
 const props = defineProps<{
@@ -13,6 +14,7 @@ defineEmits<{
   (e: 'update:modelValue', value: ITouchPlugin): void
 }>()
 
+const { t } = useI18n()
 const value = computed(() => props.modelValue)
 </script>
 
@@ -32,7 +34,7 @@ const value = computed(() => props.modelValue)
     <p
       :class="{ visible: Object.values(plugins).length > 0 }"
       class="PluginList-Empty"
-      v-text="`No selection made.`"
+      v-text="t('plugin.emptyState.listEmpty')"
     />
 
     <transition-group name="list" tag="div">

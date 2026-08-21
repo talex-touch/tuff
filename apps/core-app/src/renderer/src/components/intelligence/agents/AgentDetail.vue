@@ -1,10 +1,14 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
 import { TuffProgress } from '@talex-touch/tuffex/progress'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { useAgentsSdk } from '@talex-touch/utils/renderer'
 import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
@@ -257,226 +261,191 @@ function getCapabilityIcon(type: string): string {
 </script>
 
 <template>
-  <div class="agent-detail">
-    <!-- Header -->
-    <div class="detail-header">
-      <div class="header-icon i-carbon-bot" />
-      <div class="header-info">
-        <h2 class="agent-title">
-          {{ agent.name }}
-        </h2>
-        <p class="agent-version">v{{ agent.version }}</p>
-      </div>
-      <TxTag v-if="agent.enabled !== false" type="success">
-        {{ t('intelligence.agents.active') }}
-      </TxTag>
-      <TxTag v-else type="info">
-        {{ t('intelligence.agents.inactive') }}
-      </TxTag>
-    </div>
-
-    <!-- Description -->
-    <div class="detail-section">
-      <h3 class="section-title">
-        {{ t('intelligence.agents.description') }}
-      </h3>
-      <p class="section-content">
-        {{ agent.description }}
-      </p>
-    </div>
-
-    <!-- Capabilities -->
-    <div v-if="agent.capabilities?.length" class="detail-section">
-      <h3 class="section-title">
-        {{ t('intelligence.agents.capabilities') }}
-      </h3>
-      <div class="capabilities-grid">
-        <div v-for="cap in agent.capabilities" :key="cap.id" class="capability-card">
-          <div class="cap-header">
-            <span :class="getCapabilityIcon(cap.type)" />
-            <span class="cap-name">{{ cap.id }}</span>
-            <TxTag size="small">
-              {{ cap.type }}
-            </TxTag>
-          </div>
+  <TxScroll class="agent-detail">
+    <template #header>
+      <div class="detail-header">
+        <div class="header-icon i-carbon-bot" aria-hidden="true" />
+        <div class="header-info">
+          <h2 class="agent-title">
+            {{ agent.name }}
+          </h2>
+          <p class="agent-version">v{{ agent.version }}</p>
         </div>
-      </div>
-    </div>
-
-    <!-- Tools -->
-    <div v-if="agent.tools?.length" class="detail-section">
-      <h3 class="section-title">
-        {{ t('intelligence.agents.tools') }}
-      </h3>
-      <div class="tools-list">
-        <TxTag v-for="tool in agent.tools" :key="tool.toolId" size="small" class="tool-tag">
-          <span class="i-carbon-tool mr-1" />
-          {{ tool.toolId }}
+        <TxTag v-if="agent.enabled !== false" type="success">
+          {{ t('intelligence.agents.active') }}
+        </TxTag>
+        <TxTag v-else type="info">
+          {{ t('intelligence.agents.inactive') }}
         </TxTag>
       </div>
-    </div>
+    </template>
 
-    <!-- Quick Execute -->
-    <div class="detail-section">
-      <h3 class="section-title">
-        {{ t('intelligence.agents.quick_execute') }}
-      </h3>
-      <div class="execute-form">
-        <TuffInput
-          v-model="taskInput"
-          :placeholder="t('intelligence.agents.input_placeholder')"
-          type="textarea"
-          :rows="3"
-          :disabled="executing"
+    <div class="agent-detail-body" role="region" :aria-label="t('intelligence.agents.title')">
+      <TuffGroupBlock
+        :name="t('intelligence.agents.description')"
+        :description="t('intelligence.agents.overview_hint')"
+        default-icon="i-carbon-document"
+        active-icon="i-carbon-document"
+        :collapsible="false"
+      >
+        <TuffBlockSlot
+          :title="agent.name"
+          :description="agent.description"
+          default-icon="i-carbon-information"
+          :icon-size="18"
+        >
+          <TxTag size="sm">v{{ agent.version }}</TxTag>
+        </TuffBlockSlot>
+      </TuffGroupBlock>
+
+      <TuffGroupBlock
+        v-if="agent.capabilities?.length"
+        :name="t('intelligence.agents.capabilities')"
+        :description="t('intelligence.agents.capabilities_hint')"
+        default-icon="i-carbon-capacity"
+        active-icon="i-carbon-capacity"
+      >
+        <TuffBlockSlot
+          v-for="cap in agent.capabilities"
+          :key="cap.id"
+          :title="cap.id"
+          :default-icon="getCapabilityIcon(cap.type)"
+          :active-icon="getCapabilityIcon(cap.type)"
+          :icon-size="18"
+        >
+          <TxTag size="sm">
+            {{ cap.type }}
+          </TxTag>
+        </TuffBlockSlot>
+      </TuffGroupBlock>
+
+      <TuffGroupBlock
+        v-if="agent.tools?.length"
+        :name="t('intelligence.agents.tools')"
+        :description="t('intelligence.agents.tools_hint')"
+        default-icon="i-carbon-tool-box"
+        active-icon="i-carbon-tool-box"
+      >
+        <TuffBlockSlot
+          v-for="tool in agent.tools"
+          :key="tool.toolId"
+          :title="tool.toolId"
+          default-icon="i-carbon-tool"
+          active-icon="i-carbon-tool"
+          :icon-size="18"
         />
-        <div class="execute-actions">
-          <TxButton
-            type="primary"
-            :loading="executing"
-            :disabled="!taskInput.trim() || executing"
-            @click="executeTask"
-          >
-            <span class="i-carbon-play mr-1" />
-            {{ t('intelligence.agents.execute') }}
-          </TxButton>
-          <TxButton
-            v-if="executing && currentTaskId"
-            text
-            type="warning"
-            :loading="canceling"
-            :disabled="canceling"
-            @click="cancelTask"
-          >
-            {{ t('intelligence.agents.cancel') }}
-          </TxButton>
+      </TuffGroupBlock>
+
+      <TuffGroupBlock
+        :name="t('intelligence.agents.quick_execute')"
+        :description="t('intelligence.agents.quick_execute_hint')"
+        default-icon="i-carbon-play"
+        active-icon="i-carbon-play"
+      >
+        <div class="execute-form">
+          <TuffInput
+            v-model="taskInput"
+            :placeholder="t('intelligence.agents.input_placeholder')"
+            type="textarea"
+            :rows="3"
+            :disabled="executing"
+          />
+          <div class="execute-actions">
+            <TxButton
+              type="primary"
+              :loading="executing"
+              :disabled="!taskInput.trim() || executing"
+              @click="executeTask"
+            >
+              <span class="i-carbon-play mr-1" aria-hidden="true" />
+              {{ t('intelligence.agents.execute') }}
+            </TxButton>
+            <TxButton
+              v-if="executing && currentTaskId"
+              text
+              type="warning"
+              :loading="canceling"
+              :disabled="canceling"
+              @click="cancelTask"
+            >
+              {{ t('intelligence.agents.cancel') }}
+            </TxButton>
+          </div>
         </div>
-      </div>
 
-      <div v-if="executing" class="execute-status">
-        <div class="status-line">
-          <span>{{ taskStep || t('intelligence.agents.task_running') }}</span>
-          <span>{{ taskProgress }}%</span>
+        <div v-if="executing" class="execute-status" role="status">
+          <div class="status-line">
+            <span>{{ taskStep || t('intelligence.agents.task_running') }}</span>
+            <span>{{ taskProgress }}%</span>
+          </div>
+          <TuffProgress :percentage="taskProgress" :show-text="false" :stroke-width="8" />
         </div>
-        <TuffProgress :percentage="taskProgress" :show-text="false" :stroke-width="8" />
-      </div>
 
-      <div v-if="taskError" class="execute-error">
-        {{ taskError }}
-      </div>
+        <div v-if="taskError" class="execute-error" role="alert">
+          {{ taskError }}
+        </div>
 
-      <!-- Result -->
-      <div v-if="taskResult" class="execute-result">
-        <h4 class="result-title">
-          {{ t('intelligence.agents.result') }}
-        </h4>
-        <pre class="result-content">{{ JSON.stringify(taskResult, null, 2) }}</pre>
-      </div>
+        <div v-if="taskResult" class="execute-result">
+          <h4 class="result-title">
+            {{ t('intelligence.agents.result') }}
+          </h4>
+          <pre class="result-content">{{ JSON.stringify(taskResult, null, 2) }}</pre>
+        </div>
+      </TuffGroupBlock>
     </div>
-  </div>
+  </TxScroll>
 </template>
 
 <style lang="scss" scoped>
 .agent-detail {
   height: 100%;
-  overflow: auto;
-  box-sizing: border-box;
-  padding: 0 1.5rem 1.5rem;
+  min-height: 0;
 }
 
 .detail-header {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--tx-border-color-lighter);
-  margin-bottom: 1.5rem;
   -webkit-app-region: drag;
 }
 
 .header-icon {
-  font-size: 2.5rem;
   color: var(--tx-color-primary);
+  font-size: 2.5rem;
 }
 
 .header-info {
   flex: 1;
+  min-width: 0;
 }
 
 .agent-title {
-  font-size: 1.25rem;
-  font-weight: 600;
   margin: 0;
   color: var(--tx-text-color-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .agent-version {
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
   margin: 0.25rem 0 0;
-}
-
-.detail-section {
-  margin-bottom: 1.5rem;
-}
-
-.section-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-  margin: 0 0 0.75rem;
-}
-
-.section-content {
-  font-size: 0.875rem;
   color: var(--tx-text-color-secondary);
-  line-height: 1.6;
-  margin: 0;
+  font-size: 0.75rem;
 }
 
-.capabilities-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-}
-
-.capability-card {
-  padding: 0.75rem;
-  background: var(--tx-fill-color-lighter);
-  border-radius: 8px;
-}
-
-.cap-header {
+.agent-detail-body {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  span:first-child {
-    color: var(--tx-color-primary);
-  }
-}
-
-.cap-name {
-  flex: 1;
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.tools-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.tool-tag {
-  display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 1rem;
 }
 
 .execute-form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  padding: 0.75rem 1rem;
 }
 
 .execute-actions {
@@ -486,48 +455,42 @@ function getCapabilityIcon(type: string): string {
 }
 
 .execute-status {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  border-radius: 8px;
-  background: var(--tx-fill-color-lighter);
+  margin: 0 1rem 0.75rem;
 }
 
 .status-line {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
   margin-bottom: 0.5rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.75rem;
 }
 
 .execute-error {
-  margin-top: 0.75rem;
-  font-size: 0.8125rem;
+  margin: 0 1rem 0.75rem;
   color: var(--tx-color-danger);
+  font-size: 0.8125rem;
 }
 
 .execute-result {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: var(--tx-fill-color-lighter);
-  border-radius: 8px;
+  margin: 0 1rem 1rem;
 }
 
 .result-title {
-  font-size: 0.75rem;
-  font-weight: 600;
   margin: 0 0 0.5rem;
   color: var(--tx-text-color-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .result-content {
-  font-size: 0.75rem;
-  font-family: 'SF Mono', Monaco, monospace;
-  background: var(--tx-bg-color);
-  padding: 0.75rem;
-  border-radius: 4px;
-  overflow: auto;
   max-height: 200px;
   margin: 0;
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--tx-bg-color);
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.75rem;
 }
 </style>

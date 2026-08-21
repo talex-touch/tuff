@@ -1,5 +1,6 @@
 <script lang="ts" name="AgentItem" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
+import { TxTag } from '@talex-touch/tuffex/tag'
 
 defineProps<{
   agent: AgentDescriptor
@@ -40,7 +41,7 @@ function getAgentIcon(agent: AgentDescriptor): string {
       </div>
     </div>
     <div v-if="agent.capabilities?.length" class="agent-badge">
-      <TxTag size="small" type="info">
+      <TxTag size="sm" type="info">
         {{ agent.capabilities.length }}
       </TxTag>
     </div>
