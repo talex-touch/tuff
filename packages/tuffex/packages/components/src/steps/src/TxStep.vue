@@ -148,7 +148,7 @@ function handleClick() {
 }
 
 .tx-step--clickable:hover .tx-step__title {
-  color: var(--tx-step-title-hover, #3b82f6);
+  color: var(--tx-step-title-hover, var(--tx-color-primary));
 }
 
 .tx-step__head {
@@ -199,22 +199,22 @@ function handleClick() {
 }
 
 .tx-step__icon--wait {
-  background: var(--tx-step-icon-wait-bg, #f3f4f6);
-  color: var(--tx-step-icon-wait-text, #6b7280);
-  border: 2px solid var(--tx-step-icon-wait-border, #d1d5db);
+  background: var(--tx-step-icon-wait-bg, var(--tx-fill-color-light));
+  color: var(--tx-step-icon-wait-text, var(--tx-text-color-secondary));
+  border: 2px solid var(--tx-step-icon-wait-border, var(--tx-border-color-lighter));
 }
 
 .tx-step__icon--active {
-  background: var(--tx-step-icon-active-bg, #3b82f6);
-  color: var(--tx-step-icon-active-text, #ffffff);
-  border: 2px solid var(--tx-step-icon-active-border, #3b82f6);
-  box-shadow: 0 0 0 4px var(--tx-step-icon-active-shadow, #dbeafe);
+  background: var(--tx-step-icon-active-bg, var(--tx-color-primary));
+  color: var(--tx-step-icon-active-text, var(--tx-color-on-primary));
+  border: 2px solid var(--tx-step-icon-active-border, var(--tx-color-primary));
+  box-shadow: 0 0 0 4px var(--tx-step-icon-active-shadow, color-mix(in srgb, var(--tx-color-primary) 22%, transparent));
 }
 
 .tx-step__icon--completed {
-  background: var(--tx-step-icon-completed-bg, #22c55e);
-  color: var(--tx-step-icon-completed-text, #ffffff);
-  border: 2px solid var(--tx-step-icon-completed-border, #22c55e);
+  background: var(--tx-step-icon-completed-bg, var(--tx-color-success));
+  color: var(--tx-step-icon-completed-text, var(--tx-color-on-primary));
+  border: 2px solid var(--tx-step-icon-completed-border, var(--tx-color-success));
 }
 
 .tx-step__number {
@@ -224,7 +224,7 @@ function handleClick() {
 .tx-step__line {
   flex: 1;
   height: 2px;
-  background: var(--tx-step-line, #d1d5db);
+  background: var(--tx-step-line, var(--tx-border-color-lighter));
   position: relative;
   top: -1px;
 }
@@ -270,7 +270,7 @@ function handleClick() {
 
 .tx-step__title {
   font-weight: 500;
-  color: var(--tx-step-title, #374151);
+  color: var(--tx-step-title, var(--tx-text-color-primary));
   font-size: 14px;
   line-height: 1.4;
   transition: color 0.3s;
@@ -285,12 +285,12 @@ function handleClick() {
 }
 
 .tx-step--active .tx-step__title {
-  color: var(--tx-step-title-active, #3b82f6);
+  color: var(--tx-step-title-active, var(--tx-color-primary));
   font-weight: 600;
 }
 
 .tx-step__description {
-  color: var(--tx-step-description, #6b7280);
+  color: var(--tx-step-description, var(--tx-text-color-secondary));
   font-size: 12px;
   line-height: 1.4;
   margin-top: 4px;
