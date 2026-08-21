@@ -40,6 +40,44 @@ setRuntimeEnv(import.meta.env as Record<string, string | undefined>)
 
 const transport = useTuffTransport()
 const mainLog = createRendererLogger('RendererMain')
+
+/**
+ * Vue's default handler prints an uncaught component error and stops there. It
+ * does not say where the reader was, and a component that throws leaves its
+ * subtree unrendered — a settings panel that simply goes blank, with a console
+ * line that names a component but not the page it was on.
+ *
+ * The route is the part that makes a blank panel reportable: a user can say
+ * which page went empty, and this is what lets that be matched to a stack.
+ * Reported rather than swallowed — Vue still runs its own recovery, and the
+ * console still receives the error for devtools break-on-exception.
+ */
+function installComponentErrorHandler(app: ReturnType<typeof createApp>): void {
+  app.config.errorHandler = (error, _instance, info) => {
+    const route = window.location.hash || window.location.pathname
+    mainLog.error('Uncaught component error', { route, lifecycle: info, error })
+    // Forwarded for the same reason the CSP reporter above forwards: the renderer
+    // logger reaches a devtools console nobody has open during real use.
+    //
+    // Guarded on both edges. A rejection is caught because a dropped report must
+    // not disturb the view that produced it; a synchronous throw is caught
+    // because it would escape the error handler itself, and an error handler
+    // that throws is the one component of this the reader can never recover
+    // from.
+    try {
+      void transport
+        .send(AppEvents.security.reportComponentError, {
+          route,
+          lifecycle: info,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        })
+        .catch(() => {})
+    } catch {
+      // The console line above is already written; nothing further to try.
+    }
+  }
+}
 const rendererBootstrapStartedAt = performance.now()
 const isLightweightWindow = isCoreBox() || isAssistantWindow()
 
@@ -157,6 +195,7 @@ async function bootstrap() {
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
   app.provide(TX_ICON_CONFIG_KEY, createCoreAppIconConfig())
+  installComponentErrorHandler(app)
 
   await runBootStep('Registering plugins and global modules', 0.05, () => {
     return registerCorePlugins(app, i18n, router)

@@ -1563,6 +1563,19 @@ export class CommonChannelModule extends BaseModule {
           }
         )
       }),
+      transport.on(AppEvents.security.reportComponentError, (payload, context) => {
+        // Host renderer only, for the same reason as the CSP report: a plugin view
+        // must not be able to write arbitrary lines into the host's log.
+        this.assertHostOnly(context, 'security.reportComponentError')
+        if (!payload || typeof payload !== 'object') return
+
+        // A component that throws leaves its subtree unrendered, so what the reader
+        // reports is "this page went blank". The route is what lets that be matched
+        // to a stack; the renderer logger alone only reaches a devtools console.
+        log.error(`[renderer-error] ${payload.route} ${payload.lifecycle}: ${payload.message}`, {
+          meta: { stack: payload.stack }
+        })
+      }),
       transport.on(AppEvents.system.getCwd, (_payload, context) => {
         this.assertHostOnly(context, 'system.getCwd')
         return process.cwd()

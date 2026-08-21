@@ -495,6 +495,23 @@ export type {
  * unreachable: the renderer logger writes to the renderer console and nowhere else, so the
  * findings only existed in devtools nobody has open during real use.
  */
+/**
+ * An uncaught Vue component error, forwarded so it reaches the main log.
+ *
+ * Same reason as CspViolationReport above: the renderer logger writes to the
+ * renderer console and nowhere else. A component that throws leaves its subtree
+ * unrendered — the reader sees a panel go blank — and the only trace of why sat
+ * in a devtools console nobody has open.
+ */
+export interface RendererComponentErrorReport {
+  /** Where the reader was, which is what makes a blank panel reportable. */
+  route: string
+  /** Vue's own description of the hook that threw, e.g. `setup function`. */
+  lifecycle: string
+  message: string
+  stack?: string
+}
+
 export interface CspViolationReport {
   /** The directive that would have blocked the request. */
   effectiveDirective: string
