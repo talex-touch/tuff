@@ -96,7 +96,7 @@ function handleClick(item: BreadcrumbItem, index: number) {
 .tx-breadcrumb__link {
   display: flex;
   align-items: center;
-  color: var(--tx-breadcrumb-text, #6b7280);
+  color: var(--tx-breadcrumb-text, var(--tx-text-color-secondary));
   text-decoration: none;
   font-size: 14px;
   transition: color 0.2s;
@@ -116,12 +116,12 @@ function handleClick(item: BreadcrumbItem, index: number) {
 }
 
 .tx-breadcrumb__link:hover:not(.tx-breadcrumb__link--current) {
-  color: var(--tx-breadcrumb-hover, #374151);
-  background: var(--tx-breadcrumb-hover-bg, #f3f4f6);
+  color: var(--tx-breadcrumb-hover, var(--tx-text-color-regular));
+  background: var(--tx-breadcrumb-hover-bg, var(--tx-fill-color-light));
 }
 
 .tx-breadcrumb__link--current {
-  color: var(--tx-breadcrumb-current, #111827);
+  color: var(--tx-breadcrumb-current, var(--tx-text-color-primary));
   font-weight: 500;
   cursor: default;
 }
@@ -140,7 +140,7 @@ function handleClick(item: BreadcrumbItem, index: number) {
 .tx-breadcrumb__separator {
   display: flex;
   align-items: center;
-  color: var(--tx-breadcrumb-separator, #9ca3af);
+  color: var(--tx-breadcrumb-separator, var(--tx-text-color-placeholder));
   margin: 0 4px;
   font-size: 16px;
 }

@@ -78,7 +78,7 @@ const layout = computed(() => timeline.layout)
   top: 24px;
   bottom: -24px;
   width: 2px;
-  background: var(--tx-timeline-line, #e5e7eb);
+  background: var(--tx-timeline-line, var(--tx-border-color-lighter));
 }
 
 .tx-timeline-item--vertical:last-child::before {
@@ -101,7 +101,7 @@ const layout = computed(() => timeline.layout)
   height: 12px;
   border-radius: 50%;
   border: 2px solid #ffffff;
-  box-shadow: 0 0 0 2px var(--tx-timeline-dot-border, #e5e7eb);
+  box-shadow: 0 0 0 2px var(--tx-timeline-dot-border, var(--tx-bg-color));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,27 +109,27 @@ const layout = computed(() => timeline.layout)
 }
 
 .tx-timeline-item__dot--default {
-  background: var(--tx-timeline-dot-default, #6b7280);
+  background: var(--tx-timeline-dot-default, var(--tx-color-info));
 }
 
 .tx-timeline-item__dot--primary {
-  background: var(--tx-timeline-dot-primary, #3b82f6);
+  background: var(--tx-timeline-dot-primary, var(--tx-color-primary));
 }
 
 .tx-timeline-item__dot--success {
-  background: var(--tx-timeline-dot-success, #22c55e);
+  background: var(--tx-timeline-dot-success, var(--tx-color-success));
 }
 
 .tx-timeline-item__dot--warning {
-  background: var(--tx-timeline-dot-warning, #f59e0b);
+  background: var(--tx-timeline-dot-warning, var(--tx-color-warning));
 }
 
 .tx-timeline-item__dot--error {
-  background: var(--tx-timeline-dot-error, #ef4444);
+  background: var(--tx-timeline-dot-error, var(--tx-color-danger));
 }
 
 .tx-timeline-item__dot--active {
-  box-shadow: 0 0 0 2px var(--tx-timeline-dot-active, #3b82f6);
+  box-shadow: 0 0 0 2px var(--tx-timeline-dot-active, var(--tx-color-primary));
   transform: scale(1.2);
 }
 
@@ -165,17 +165,17 @@ const layout = computed(() => timeline.layout)
 
 .tx-timeline-item__title {
   font-weight: 600;
-  color: var(--tx-timeline-title, #111827);
+  color: var(--tx-timeline-title, var(--tx-text-color-primary));
   font-size: 14px;
 }
 
 .tx-timeline-item__time {
   font-size: 12px;
-  color: var(--tx-timeline-time, #6b7280);
+  color: var(--tx-timeline-time, var(--tx-text-color-secondary));
 }
 
 .tx-timeline-item__description {
-  color: var(--tx-timeline-description, #6b7280);
+  color: var(--tx-timeline-description, var(--tx-text-color-secondary));
   font-size: 14px;
   line-height: 1.5;
 }
