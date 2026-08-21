@@ -7,6 +7,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import type { IndexedSourceDiagnosticsSnapshot } from '@talex-touch/utils/search'
 import packageJson from '../package.json'
+import { RAW_MAIN_PROCESS_CHANNEL } from '../src/shared/ipc/raw-channel'
 import {
   applySettingsIndexingDiagnosticsEnvelopeGate,
   verifySettingsIndexingDiagnosticsEvidence
@@ -674,7 +675,12 @@ function inspectTargetExpression(): string {
     href: location.href,
     readyState: document.readyState,
     hasRouter: Boolean(window.__VUE_ROUTER__?.push),
-    hasIpcInvoke: Boolean(window.electron?.ipcRenderer?.invoke),
+    // Was \`hasIpcInvoke\`, which no renderer can ever report true: the preload bridges send/on/
+    // removeListener and leaves \`invoke\` off deliberately. selectSettingsTarget required it, so it
+    // matched no target at all (#1775). This reports what the probe actually needs.
+    hasChannelBridge: Boolean(
+      window.electron?.ipcRenderer?.send && window.electron?.ipcRenderer?.on
+    ),
     hasSettingsShell: Boolean(document.querySelector('.AppSettings-Container')),
     text: document.body?.innerText?.slice(0, 1000) || ''
   }))()`
@@ -697,17 +703,69 @@ function openFileIndexSettingsExpression(): string {
   }`
 }
 
+/**
+ * The renderer half of the channel request/response protocol, rebuilt for `Runtime.evaluate`.
+ *
+ * Both expressions below used to call `window.electron.ipcRenderer.invoke`, which does not exist:
+ * the preload bridges `send` / `on` / `removeListener` over a two-channel allowlist and states that
+ * `invoke` is "deliberately absent rather than allowlisted" (`src/preload/index.ts`). So every run
+ * threw before reaching a single assertion (#1775).
+ *
+ * `send` + `on` are enough, because they are exactly what the renderer's own client uses. This
+ * mirrors `renderer/src/modules/channel/channel-core.ts` — the same envelope, the same reply match
+ * on `header.status === 'reply'` and `sync.id`. It is a reimplementation and will drift if that
+ * protocol changes; the alternative was widening the preload surface the preload deliberately
+ * narrowed, for a diagnostics script.
+ *
+ * `transport.on(AppEvents.indexedSource.*)` registers through `regChannel(BRIDGE_CHANNEL.MAIN, …)`
+ * under the plain event name (`transport/sdk/main-transport.ts:738`), so these events are reachable
+ * here without touching the MessagePort the transport prefers.
+ */
+function channelRequestPrelude(): string {
+  return `
+    const bridge = window.electron?.ipcRenderer
+    if (!bridge || typeof bridge.send !== 'function' || typeof bridge.on !== 'function') {
+      throw new Error('window.electron.ipcRenderer send/on are unavailable')
+    }
+    const channelRequest = (eventName, payload, timeoutMs, timeoutValue) =>
+      new Promise((resolve) => {
+        const id = Date.now() + '#' + eventName + '@probe' + Math.random().toString(16).slice(2)
+        let settled = false
+        let off = null
+        let timer = null
+        const finish = (value) => {
+          if (settled) return
+          settled = true
+          if (timer !== null) clearTimeout(timer)
+          if (typeof off === 'function') off()
+          resolve(value)
+        }
+        off = bridge.on(${JSON.stringify(RAW_MAIN_PROCESS_CHANNEL)}, (_event, raw) => {
+          if (!raw || typeof raw !== 'object') return
+          if (raw.header && raw.header.status !== 'reply') return
+          if (!raw.sync || raw.sync.id !== id) return
+          finish(raw.data)
+        })
+        timer = setTimeout(() => finish(timeoutValue), timeoutMs)
+        bridge.send(${JSON.stringify(RAW_MAIN_PROCESS_CHANNEL)}, {
+          code: 200,
+          data: payload,
+          sync: { timeStamp: Date.now(), timeout: timeoutMs, id },
+          name: eventName,
+          header: { status: 'request', type: 'main' }
+        })
+      })
+  `
+}
+
 function loadDiagnosticsExpression(sourceId: string): string {
   return `async () => {
-    const invoke = window.electron?.ipcRenderer?.invoke?.bind(window.electron.ipcRenderer)
-    if (!invoke) throw new Error('window.electron.ipcRenderer.invoke is unavailable')
-    const invokeWithTimeout = (payload, timeoutMs = 12000) =>
-      Promise.race([
-        invoke(${JSON.stringify(INDEXED_SOURCE_DIAGNOSTICS_EVENT)}, payload),
-        new Promise((resolve) => setTimeout(() => resolve({ sources: [], summary: { total: 0 }, timeout: true }), timeoutMs))
-      ])
-    const allDiagnostics = await invokeWithTimeout(undefined)
-    const sourceDiagnostics = await invokeWithTimeout({ sourceId: ${JSON.stringify(sourceId)} })
+    ${channelRequestPrelude()}
+    const emptySnapshot = { sources: [], summary: { total: 0 }, timeout: true }
+    const request = (payload) =>
+      channelRequest(${JSON.stringify(INDEXED_SOURCE_DIAGNOSTICS_EVENT)}, payload, 12000, emptySnapshot)
+    const allDiagnostics = await request(undefined)
+    const sourceDiagnostics = await request({ sourceId: ${JSON.stringify(sourceId)} })
     return { allDiagnostics, sourceDiagnostics }
   }`
 }
@@ -735,12 +793,13 @@ function runMaintenanceActionExpression(
           }
 
   return `async () => {
-    const invoke = window.electron?.ipcRenderer?.invoke?.bind(window.electron.ipcRenderer)
-    if (!invoke) throw new Error('window.electron.ipcRenderer.invoke is unavailable')
-    return await Promise.race([
-      invoke(${JSON.stringify(eventName)}, ${JSON.stringify(payload)}),
-      new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 45000))
-    ])
+    ${channelRequestPrelude()}
+    return await channelRequest(
+      ${JSON.stringify(eventName)},
+      ${JSON.stringify(payload)},
+      45000,
+      { timeout: true }
+    )
   }`
 }
 
@@ -850,7 +909,12 @@ function inspectSettingsDomExpression(): string {
 export function selectSettingsTarget(
   snapshots: Array<{
     target: DevToolsTarget
-    snapshot: { hasRouter: boolean; hasIpcInvoke: boolean; hasSettingsShell: boolean; text: string }
+    snapshot: {
+      hasRouter: boolean
+      hasChannelBridge: boolean
+      hasSettingsShell: boolean
+      text: string
+    }
   }>
 ): DevToolsTarget | undefined {
   return snapshots.find((entry) => {
@@ -858,7 +922,7 @@ export function selectSettingsTarget(
       entry.target.type === 'page' &&
       Boolean(entry.target.webSocketDebuggerUrl) &&
       entry.snapshot.hasRouter &&
-      entry.snapshot.hasIpcInvoke &&
+      entry.snapshot.hasChannelBridge &&
       (entry.snapshot.hasSettingsShell ||
         entry.snapshot.text.includes('应用设置') ||
         entry.snapshot.text.includes('App Settings'))
@@ -886,7 +950,7 @@ async function pickInteractiveSettingsTarget(
       target: DevToolsTarget
       snapshot: {
         hasRouter: boolean
-        hasIpcInvoke: boolean
+        hasChannelBridge: boolean
         hasSettingsShell: boolean
         text: string
       }
@@ -896,7 +960,7 @@ async function pickInteractiveSettingsTarget(
         const snapshot = await withTarget(target, (send) =>
           evaluate<{
             hasRouter: boolean
-            hasIpcInvoke: boolean
+            hasChannelBridge: boolean
             hasSettingsShell: boolean
             text: string
           }>(send, inspectTargetExpression(), 5000)
