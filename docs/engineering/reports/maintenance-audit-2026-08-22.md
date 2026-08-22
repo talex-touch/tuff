@@ -22,5 +22,5 @@
 ## 文档、门禁接线与工作治理
 
 - **Nexus 中英文 API 文档已漂移，且 parity guard 尚未进入 CI。** 本机 `pnpm -C apps/nexus check:doc-parity` 失败：`division-box` 英文少 9 个标题、`flow-transfer` 少 5 个、`intelligence` 少 1 个。[#1776](https://github.com/talex-touch/tuff/issues/1776) 还追踪未接线的 bundle analyzer；应先依据源码补齐英文 API 文档，再接入 parity gate。不得以 `continue-on-error` 或整体上调 bundle 预算伪造绿色。
-- **活跃 Trellis 树无法可靠表达执行状态。** 当前 81 个活跃任务中，24 个至少缺 `meta.nextAction`、`meta.blocker`、`meta.evidence`，其中 12 个三项皆空，且一个 `in_progress` 任务（`07-26-install-launch-v2-4-13-beta-23`）三项皆空。[#309](https://github.com/talex-touch/tuff/issues/309) 应先收敛当前 roadmap 第一执行 lane 的旧 release/OTA 记录，再将其余计划任务明确为“被路线图阻塞”“等待人工输入”或给出下一可执行动作；不要把 backlog container 当作进行中的实施。
+- **活跃 Trellis 树无法可靠表达执行状态。** 当前 81 个活跃任务中，24 个至少缺 `meta.nextAction`、`meta.blocker`、`meta.evidence`，其中 12 个三项皆空，且一个仍标为 `in_progress` 的旧 v2.4.13-beta.23 安装/发布任务三项皆空。[#309](https://github.com/talex-touch/tuff/issues/309) 应先收敛当前 roadmap 第一执行 lane 的旧 release/OTA 记录，再将其余计划任务明确为“被路线图阻塞”“等待人工输入”或给出下一可执行动作；不要把 backlog container 当作进行中的实施。
 - **未归属的工具输出仍留在工作区。** `.dsh-plugin-hub-adapter-staging/`、`.dsh-plugin-hub-install/`、`.dsh-plugin-hub-config-dump.yml`、`.dsh-plugin-hub-root.html` 未跟踪且不属于本审计提交。其生成者应建立任务与验证边界；无价值时由所有者删除，审计不得吞入或清理它们。
