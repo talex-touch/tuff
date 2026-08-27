@@ -144,13 +144,14 @@ describe('cleanupFileIndex', () => {
     const [filesPredicate] = deleteWhereMock.mock.calls[1] as [SQL]
 
     expect(render(filesPredicate)).toEqual(render(ne(files.type, 'app')))
-    // The extensions delete must be scoped by the same non-app file set. Rendering the expected
-    // subquery shape verbatim would over-pin how it is built, so assert the load-bearing parts:
-    // it filters file_extensions.file_id against files rows excluding type = 'app'.
-    const extensionsRender = render(extensionsPredicate)
-    expect(extensionsRender.sql).toContain('"file_id" in ')
-    expect(extensionsRender.sql).toContain('"type" <> ?')
-    expect(extensionsRender.params).toEqual(['app'])
+
+    // The extensions delete is scoped by a subquery. Its inner SQL is not readable from here --
+    // the connection is a mock, so drizzle sees an opaque value and renders the whole subquery as
+    // a single `?` rather than nested SQL. What is readable is the predicate the subquery itself
+    // was built with, which is where the scoping actually lives.
+    expect(render(extensionsPredicate).sql).toBe('"file_extensions"."file_id" in ?')
+    const [subqueryPredicate] = selectWhereMock.mock.calls[0] as [SQL]
+    expect(render(subqueryPredicate)).toEqual(render(ne(files.type, 'app')))
   })
 
   it('returns rebuild error while still attempting file index rebuild', async () => {
