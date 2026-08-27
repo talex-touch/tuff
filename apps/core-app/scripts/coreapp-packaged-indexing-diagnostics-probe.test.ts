@@ -166,7 +166,7 @@ describe('packaged indexing diagnostics probe helpers', () => {
         target: makeTarget('overlay', 'app://tuff/renderer/index.html#/meta-overlay', 'CoreBox'),
         snapshot: {
           hasRouter: true,
-          hasIpcInvoke: true,
+          hasChannelBridge: true,
           hasSettingsShell: false,
           text: 'CoreBox'
         }
@@ -175,7 +175,7 @@ describe('packaged indexing diagnostics probe helpers', () => {
         target: makeTarget('settings', 'app://tuff/renderer/index.html#/setting', 'Settings'),
         snapshot: {
           hasRouter: true,
-          hasIpcInvoke: true,
+          hasChannelBridge: true,
           hasSettingsShell: true,
           text: 'App Settings'
         }
@@ -183,6 +183,72 @@ describe('packaged indexing diagnostics probe helpers', () => {
     ])
 
     expect(selected?.id).toBe('settings')
+  })
+
+  /**
+   * The capability this gates on has to be one the renderer can actually report. It used to be
+   * `hasIpcInvoke`, and the preload bridges send/on/removeListener with `invoke` deliberately left
+   * off — so the real answer was always false and this selector matched nothing, on every run
+   * (#1775). The old fixtures said `hasIpcInvoke: true`, a value no window could produce, so the
+   * test passed against a probe that could not select a target at all.
+   *
+   * Hence this case: a snapshot shaped like what the bridge really exposes must still select.
+   */
+  it('selects a target whose bridge exposes only send/on, as the preload does', () => {
+    const bridge = { send: () => {}, on: () => () => {} }
+    const selected = selectSettingsTarget([
+      {
+        target: makeTarget('settings', 'app://tuff/renderer/index.html#/setting', 'Settings'),
+        snapshot: {
+          hasRouter: true,
+          // Exactly the expression the probe evaluates in the page.
+          hasChannelBridge: typeof bridge.send === 'function' && typeof bridge.on === 'function',
+          hasSettingsShell: true,
+          text: 'App Settings'
+        }
+      }
+    ])
+
+    expect(selected?.id).toBe('settings')
+  })
+
+  /**
+   * The truthiness trap on the same expression: a bridge whose members exist but are not callable
+   * satisfies `Boolean(send && on)` and then dies in channelRequestPrelude, which requires
+   * functions. Selection applies the same typeof gate so such a target is never chosen.
+   */
+  it('rejects a target whose bridge members are truthy but not callable', () => {
+    const bridge: { send: unknown; on: unknown } = { send: true, on: 'listener' }
+    const selected = selectSettingsTarget([
+      {
+        target: makeTarget('settings', 'app://tuff/renderer/index.html#/setting', 'Settings'),
+        snapshot: {
+          hasRouter: true,
+          // Exactly the expression the probe evaluates in the page.
+          hasChannelBridge: typeof bridge.send === 'function' && typeof bridge.on === 'function',
+          hasSettingsShell: true,
+          text: 'App Settings'
+        }
+      }
+    ])
+
+    expect(selected).toBeUndefined()
+  })
+
+  it('rejects a target with no channel bridge, since the probe cannot talk to it', () => {
+    const selected = selectSettingsTarget([
+      {
+        target: makeTarget('settings', 'app://tuff/renderer/index.html#/setting', 'Settings'),
+        snapshot: {
+          hasRouter: true,
+          hasChannelBridge: false,
+          hasSettingsShell: true,
+          text: 'App Settings'
+        }
+      }
+    ])
+
+    expect(selected).toBeUndefined()
   })
 
   it('builds stable artifact names for packaged evidence', () => {
