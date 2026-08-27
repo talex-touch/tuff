@@ -140,7 +140,8 @@
 - `LocalizedText` / `LocalizedList` 必须支持 default 值与按 locale 解析；缺失翻译只能走显式 fallback chain，不得临时拼接中英文。
 - 2026-06-24 已落地 R8 Phase 1/2 foundation：共享 Locale Core、`LocalizedText` / `LocalizedList` resolver、CoreApp 插件 manifest localized metadata loader 与运行态展示解析。
 - 2026-07-13 已落地 R8 Phase 3 Domain Lexicon V1：带 `source=builtin` provenance 的只读 registry、53-entry 单位 baseline、跨语言 aliases、locale label 与 PreviewSDK/CoreApp/QuickOps 共享 conversion source。
-- 2026-07-13 已落地 R8 Phase 4 Plugin SDK facade：`sdkapi 260713` main/renderer typed surface、verified context、`i18n.read` / `lexicon.read` / `lexicon.register` fail-closed、host namespace/provenance、原子 bounds、跨插件隔离与 disable/unload cleanup；CatalogService 与质量门禁仍未完成。
+- 2026-07-13 已落地 R8 Phase 4 Plugin SDK facade：`sdkapi 260713` main/renderer typed surface、verified context、`i18n.read` / `lexicon.read` / `lexicon.register` fail-closed、host namespace/provenance、原子 bounds、跨插件隔离与 disable/unload cleanup。
+- 2026-08-20 已复核 R8 Phase 5 CatalogService **服务契约**：pinned RSA 信任根（manifest 不能自带密钥）、内容寻址下载、fail-closed 归一化与验签、DB write scheduler 串行化的失败原子导入、activate/rollback 仅在持久化提交后重建 official registry，插件 overlay 与跨插件隔离在 activate→rollback 全程保持。达成口径是服务契约成立而非能力交付：远程更新链路与诊断状态在运行中的应用里没有调用方，边界见 [`../engineering/catalog-service-boundary.md`](../engineering/catalog-service-boundary.md)。质量门禁仍未完成。
 - Domain Lexicon entry 必须包含 stable id、domain/source provenance、version、labels、aliases 与 locale coverage；metadata 必须是 plain JSON，单位换算展示、解析和搜索召回必须消费同一 official registry。
 - 插件 SDK 只能开放受控 facade，不暴露宿主内部 resolver、raw locale store 或未隔离 catalog 写入；plugin overlay 只驻留内存，不能覆盖 official 或跨 plugin 读取。
 - CatalogService 必须覆盖 download、verify、schema validate、SQLite import、activate、rollback 与版本状态；校验失败不得污染 active catalog。
