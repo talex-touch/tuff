@@ -11,12 +11,12 @@
 // The check compares the *shape* — the sequence of heading depths — not the
 // text, because the headings themselves are translated.
 //
-// All 159 component doc pairs are clean. The remaining offenders are under
-// dev/api, where the English copies are missing whole chapters: division-box is
-// short an entire lifecycle chapter and flow-transfer is short five sections.
-// Those need someone who knows the subsystem, so this is NOT wired into ci.yml
-// yet — it would fail the build on a gap it cannot fix. Add the CI step once the
-// list is empty.
+// The list emptied on 2026-08-27: the dev/api offenders (division-box's
+// missing lifecycle chapter, flow-transfer's five missing sections,
+// intelligence's missing example) were translated against source, so this is
+// now wired into ci.yml as a job_nexus gate. A red run here means a section
+// was added to one locale and not the other — write the counterpart, don't
+// delete the section.
 //
 // Headings inside fenced code blocks are skipped: a `# comment` line in a shell
 // example is not a section, and the two locales routinely differ there. MDC
