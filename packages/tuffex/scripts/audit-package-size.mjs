@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { dirname, extname, relative, resolve } from 'node:path'
+import { dirname, extname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -108,6 +108,23 @@ const LIMITS = {
     'border-beam/src/styles.js': 80 * 1024,
   },
   emptyStateAliasCssBytes: 128,
+}
+
+/**
+ * A built file's path relative to `dist/es`, with `/` separators on every platform.
+ *
+ * `componentJsOverrides` keys are exact relative paths, so they have to be compared against one.
+ * A suffix test also matches `x/border-beam/src/styles.js` -- a different component that happens
+ * to end the same way -- and would hand it the 80 KiB budget without anyone noticing. `relative()`
+ * also emits `\` on Windows, which no key contains.
+ */
+function toDistRelativePath(file) {
+  return relative(distEs, file).split(sep).join('/')
+}
+
+function componentJsLimitFor(file) {
+  const limit = LIMITS.componentJsOverrides[toDistRelativePath(file)]
+  return limit === undefined ? LIMITS.componentJsBytes : limit
 }
 const emptyStateStyleAliases = [
   'blank-slate',
@@ -432,15 +449,27 @@ async function auditDistSizes(errors) {
     && !filePath.includes('/packages/utils/'),
   )
   const componentJsSizes = toSortedEntries(await getSizedFiles(componentJsFiles))
-  const componentJsLimitFor = (file) => {
-    const key = Object.keys(LIMITS.componentJsOverrides).find(name => file.endsWith(`/${name}`))
-    return key ? LIMITS.componentJsOverrides[key] : LIMITS.componentJsBytes
-  }
   const oversizedJs = componentJsSizes.filter(entry => entry.bytes > componentJsLimitFor(entry.file))
   for (const entry of oversizedJs) {
     errors.push(
       `Component JS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(componentJsLimitFor(entry.file))}`,
     )
+  }
+
+  // An override that outlives its reason is an exception nobody re-reads. Fail while deleting it is
+  // still cheap: either the file came back under the shared limit, or it no longer exists at all.
+  for (const [key, limit] of Object.entries(LIMITS.componentJsOverrides)) {
+    const entry = componentJsSizes.find(candidate => toDistRelativePath(candidate.file) === key)
+    if (!entry) {
+      errors.push(`Component JS override ${key} matches no built file; remove it from componentJsOverrides`)
+      continue
+    }
+    if (entry.bytes <= LIMITS.componentJsBytes) {
+      errors.push(
+        `Component JS override ${key} (${formatBytes(limit)}) is no longer needed: the file is `
+        + `${formatBytes(entry.bytes)}, within the ${formatBytes(LIMITS.componentJsBytes)} shared limit. Remove it.`,
+      )
+    }
   }
 
   console.log(`[audit-package-size] Base CSS: ${formatBytes(baseCssBytes)}/${formatBytes(LIMITS.baseCssBytes)}`)
@@ -535,6 +564,41 @@ function selfTest() {
       name: 'a node_modules edge is not followed',
       run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), './node_modules/x') ?? 'null'],
       expect: 'null',
+    },
+    // The override map decides which files may exceed the shared budget. A matcher that hit
+    // everything, or nothing, would both read as a green run.
+    {
+      name: 'a file with no override gets the shared component JS limit',
+      run: () => [String(componentJsLimitFor(inDist('button/src/TxButton.vue.js')))],
+      expect: String(LIMITS.componentJsBytes),
+    },
+    {
+      name: 'an overridden file gets its own limit',
+      run: () => [String(componentJsLimitFor(inDist('border-beam/src/styles.js')))],
+      expect: String(LIMITS.componentJsOverrides['border-beam/src/styles.js']),
+    },
+    {
+      // `endsWith('/' + key)` matched this too, so a different component nested one level down
+      // silently inherited the 80 KiB budget. `x/not-border-beam/...` does NOT exercise it -- the
+      // `-` breaks the suffix on its own, so that shape passes against the bug.
+      name: 'a deeper path that ends the same way is not the overridden file',
+      run: () => [String(componentJsLimitFor(inDist('x/border-beam/src/styles.js')))],
+      expect: String(LIMITS.componentJsBytes),
+    },
+    {
+      name: 'a same-named file in another component does not inherit the override',
+      run: () => [String(componentJsLimitFor(inDist('liquid/src/styles.js')))],
+      expect: String(LIMITS.componentJsBytes),
+    },
+    {
+      name: 'the override key is matched as a whole dist-relative path',
+      run: () => [toDistRelativePath(inDist('border-beam/src/styles.js'))],
+      expect: 'border-beam/src/styles.js',
+    },
+    {
+      name: 'every override raises its limit, so none is a silent no-op',
+      run: () => [String(Object.values(LIMITS.componentJsOverrides).every(v => v > LIMITS.componentJsBytes))],
+      expect: 'true',
     },
   ]
 
