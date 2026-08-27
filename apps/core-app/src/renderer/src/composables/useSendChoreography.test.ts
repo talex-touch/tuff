@@ -131,12 +131,43 @@ describe('send flight landing', () => {
     const beforeShift = translateYOf(clone)
 
     stage.state.rowTop = 300
-    advanceTo(320)
+    // Several frames, not one: the clone absorbs a correction rather than
+    // teleporting onto it. A precomputed flight never converges on the new
+    // position at all, which is what this separates.
+    advanceTo(400)
     const afterShift = translateYOf(clone)
 
-    // A precomputed flight would keep gliding to the old landing; a tracking
-    // one follows the row up immediately.
     expect(afterShift).toBeLessThan(beforeShift - 50)
+  })
+
+  /**
+   * Tracking the live rect is what makes the landing exact, but read raw it also
+   * hands the clone every layout correction whole, in one frame. Late in the
+   * flight the curve has covered ~100% of the distance, so the clone inherits
+   * nearly all of it at once: a -60px correction at t=350ms used to move one
+   * frame by -61.8px between neighbours moving -3.2px and +3.0px.
+   */
+  it('absorbs a late layout correction instead of teleporting onto it', () => {
+    const stage = buildStage({ composerTop: 800, rowTop: 500 })
+    stage.choreography.markEntering(['msg-1'])
+    stage.choreography.playSend('msg-1', stage.composer)
+    const clone = stage.clone()!
+
+    let previous = translateYOf(clone)
+    let largestStep = 0
+    for (let t = 16; t <= FLIGHT_MS + 16; t += 16) {
+      if (t >= 350) stage.state.rowTop = 440
+      advanceTo(t)
+      const current = translateYOf(clone)
+      largestStep = Math.max(largestStep, Math.abs(current - previous))
+      previous = current
+    }
+
+    // The flight's own peak is ~42px/frame at 60Hz; the correction must not
+    // exceed the motion the bubble was already making.
+    expect(largestStep).toBeLessThan(45)
+    // …and it still lands exactly on the corrected row, or the swap jumps.
+    expect(previous).toBeCloseTo(440, 1)
   })
 
   it('reveals the real row exactly when the clone is removed', async () => {
@@ -175,6 +206,46 @@ describe('send flight landing', () => {
 
     expect(stage.clone()).toBeNull()
     expect(stage.choreography.enteringMessages.has('msg-1')).toBe(false)
+  })
+})
+
+describe('entrance watchdog', () => {
+  /**
+   * A marked row renders at opacity 0, so an id nothing removes is a message
+   * the reader wrote and cannot see. The view marks a whole appended batch
+   * while the send score reveals only the ids it knows about, which is how
+   * rows have been stranded before.
+   */
+  it('reveals a row whose entrance never ran', () => {
+    vi.useFakeTimers()
+    try {
+      const stage = buildStage({ composerTop: 800, rowTop: 500 })
+      stage.choreography.markEntering(['msg-1', 'orphan'])
+      stage.choreography.playSend('msg-1', stage.composer)
+
+      // Long past the flight, and nothing ever revealed the second id.
+      vi.advanceTimersByTime(2100)
+
+      expect(stage.choreography.enteringMessages.has('orphan')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves the watchdog to cancel() on unmount', () => {
+    vi.useFakeTimers()
+    try {
+      const stage = buildStage({ composerTop: 800, rowTop: 500 })
+      stage.choreography.markEntering(['msg-1'])
+      stage.choreography.cancel()
+      vi.advanceTimersByTime(2100)
+
+      // cancel() clears the timer rather than letting it fire against a view
+      // that is gone; the set dies with the composable either way.
+      expect(stage.choreography.enteringMessages.has('msg-1')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

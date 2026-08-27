@@ -1,42 +1,43 @@
 <script lang="ts" name="PluginEmptyState" setup>
-import { TxButton } from '@talex-touch/tuffex/button'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
+const router = useRouter()
+
+function openStore(): void {
+  void router.push('/store')
+}
 </script>
 
 <template>
-  <div
-    class="relative w-full h-full flex flex-col items-center justify-center text-center overflow-hidden"
-  >
-    <div
-      class="w-20 h-20 rounded-full bg-gradient-to-br from-[var(--tx-color-primary-light-9)] to-[var(--tx-color-primary-light-8)] flex items-center justify-center mb-6 shadow-lg"
-    >
-      <i class="i-ri-puzzle-line text-3xl text-[var(--tx-color-primary)]" />
-    </div>
-    <div class="max-w-96">
-      <p class="text-[var(--tx-text-color-regular)] opacity-80 mb-6">
-        {{ t('plugin.emptyState.message') }}
-      </p>
-      <TxButton variant="flat" class="cta-button text-sm" @click="() => $router.push('/store')">
-        <i class="i-ri-store-line" />
-        {{ t('plugin.emptyState.exploreStore') }}
-      </TxButton>
-    </div>
-  </div>
+  <TxEmptyState
+    class="plugin-empty-state"
+    variant="no-selection"
+    size="large"
+    :title="t('plugin.emptyState.message')"
+    :description="t('plugin.emptyState.description')"
+    :primary-action="{
+      label: t('plugin.emptyState.exploreStore'),
+      variant: 'flat',
+      icon: 'i-ri-store-line'
+    }"
+    role="status"
+    aria-live="polite"
+    @primary="openStore"
+  />
 </template>
 
 <style lang="scss" scoped>
-.cta-button :deep(.tx-button) {
-  @apply px-8 py-3 bg-[var(--tx-color-primary)] text-white rounded-full font-semibold flex items-center gap-3 transition-all duration-300 ease-out relative overflow-hidden;
+.plugin-empty-state {
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  -webkit-app-region: drag;
 }
 
-.cta-button :deep(.tx-button:hover) {
-  @apply bg-[var(--tx-color-primary-dark-2)] -translate-y-0.5 scale-105;
-  box-shadow: 0 12px 30px rgba(var(--tx-color-primary-rgb), 0.4);
-}
-
-.cta-button :deep(.tx-button) i {
-  @apply text-lg;
+.plugin-empty-state :deep(.tx-button) {
+  -webkit-app-region: no-drag;
 }
 </style>

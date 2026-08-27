@@ -40,7 +40,7 @@ export interface AppIndexManagerSummary {
 export interface AppIndexManagerEmptyState {
   title: string
   detail: string
-  actionKind: 'add-entry' | 'clear-filters'
+  actionKind: 'add-entry' | 'clear-filters' | 'retry'
   actionLabel: string
   tone: 'neutral' | 'filtered' | 'attention'
 }
@@ -280,9 +280,27 @@ export function resolveAppIndexManagerEmptyState(
   entries: AppIndexManagedEntry[],
   diagnostics: Record<string, AppIndexDiagnoseResult>,
   filters: AppIndexEntryFilters,
-  t: ComposerTranslation
+  t: ComposerTranslation,
+  /**
+   * The last list request did not answer. Without it a failed load is
+   * indistinguishable from an empty index here, and the reader is told there
+   * are no entries — then invited to add one — for a list nobody could read.
+   */
+  loadFailed = false
 ): AppIndexManagerEmptyState | null {
   if (entries.length === 0) {
+    if (loadFailed) {
+      return {
+        title: t(
+          'settings.settingFileIndex.appIndexManagerLoadFailed',
+          'Failed to load app entries'
+        ),
+        detail: '',
+        actionKind: 'retry',
+        actionLabel: t('settings.settingFileIndex.diagnosticRefresh', 'Refresh'),
+        tone: 'attention'
+      }
+    }
     return {
       title: t('settings.settingFileIndex.appIndexManagerEmpty', 'No app index entries'),
       detail: t(

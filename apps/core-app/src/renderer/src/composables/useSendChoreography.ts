@@ -53,19 +53,49 @@ const SPRING_IMPACT_MS = 161
 /**
  * How a resting row rings after being hit from below. Not a raw spring
  * impulse: the onset is mass-shaped (quadratic-ish — a row accelerates, it
- * doesn't twitch), the crown at ~16% is round, sampling is dense through the
- * rise and peak so the linear-interpolated keyframes carry no corners, and
- * the counter-swing is a gentle −7% rather than a wobble.
+ * doesn't twitch), the crown at ~16% is round, and the counter-swing is a
+ * gentle −7% rather than a wobble.
+ *
+ * Sampling has to be dense through the rise and crest because WAAPI interpolates
+ * between keyframes linearly, so every pair of samples is a straight line and
+ * every sample a potential corner. The original table was sparse there and did
+ * carry two: at the 18px amplitude the nearest row gets, velocity changed by
+ * 4.06px/frame at the onset (t≈56ms) and 4.23px/frame at the crest (t≈101ms) —
+ * the row rushed up and stopped dead at the top instead of settling into it,
+ * and the crest is the frame the eye is actually on.
+ *
+ * The in-between points below are a Catmull-Rom resampling of the original
+ * anchors, which are all still here at their exact values: the designed shape is
+ * untouched, only the straight lines between it are. Worst corner drops to
+ * 2.36px/frame and moves into the fast part of the rise where it cannot be seen;
+ * the crest corner is gone. The crown rounds from 0.995 to 1.0003, which is
+ * 0.005px — below a pixel, and in the direction the crown wanted anyway.
  */
 const IMPULSE = [
   { o: 0, y: 0 },
+  { o: 0.013, y: 0.0077 },
+  { o: 0.0315, y: 0.0248 },
   { o: 0.05, y: 0.084 },
+  { o: 0.067, y: 0.2133 },
+  { o: 0.0841, y: 0.3848 },
   { o: 0.1, y: 0.547 },
+  { o: 0.1141, y: 0.6915 },
+  { o: 0.127, y: 0.8268 },
   { o: 0.14, y: 0.927 },
+  { o: 0.1533, y: 0.974 },
+  { o: 0.1667, y: 0.9858 },
   { o: 0.18, y: 0.991 },
+  { o: 0.193, y: 0.999 },
+  { o: 0.2059, y: 1.0003 },
   { o: 0.22, y: 0.995 },
+  { o: 0.2359, y: 0.9825 },
+  { o: 0.253, y: 0.9634 },
   { o: 0.27, y: 0.939 },
+  { o: 0.2863, y: 0.9101 },
+  { o: 0.3026, y: 0.8759 },
   { o: 0.32, y: 0.836 },
+  { o: 0.3389, y: 0.7895 },
+  { o: 0.3589, y: 0.7373 },
   { o: 0.38, y: 0.681 },
   { o: 0.45, y: 0.49 },
   { o: 0.52, y: 0.314 },
@@ -124,8 +154,51 @@ export const FLIGHT_IMPACT_MS = 324
 /** How deep the bubble starts sunk into the composer while fused with it. */
 const FLIGHT_SINK_PX = 8
 
+/**
+ * How far the tracked landing may move in one frame while the clone is still in
+ * the air.
+ *
+ * Tracking the row's live rect is what makes the landing exact, but it also
+ * means the clone inherits every layout correction at full size and in a single
+ * frame. Late in the flight the curve has covered ~100% of the distance, so a
+ * correction of Δ moves the clone by nearly all of Δ at once: measured against a
+ * -60px correction at t=350ms, one frame moved -61.8px while its neighbours
+ * moved -3.2px and +3.0px — a twentyfold discontinuity, landing exactly where
+ * the eye is watching. The causes are the ones named below: the composer
+ * collapse settling a frame late, and the virtualizer trading its estimated row
+ * height for a measured one.
+ *
+ * A rate limit rather than jump detection, because it needs no classification:
+ * the scroll glide moves the row a few px a frame and never reaches the cap, so
+ * it is followed exactly as before, byte for byte. Only a correction hits the
+ * cap, and the remainder bleeds off over the following frames. The cap sits
+ * under the flight's own peak (~42px/frame at 60Hz) so an absorbed correction
+ * still reads as motion the flight was already making.
+ */
+const CORRECTION_MAX_STEP_PX = 28
+
 /** The "make room" glide before the strike — fixed, however far away the reader was. */
 export const SCROLL_TWEEN_MS = 280
+
+/**
+ * How long a row may stay marked as entering before it is revealed regardless.
+ *
+ * A marked row renders at `opacity: 0`, and every removal from that set belongs
+ * to an animation that might not run: the flight retires early when a newer send
+ * takes the stage, the entrance returns immediately when its element has gone,
+ * and the view marks a whole appended batch while the send score only reveals
+ * the two ids it knows about. Anything left behind is a message the reader wrote
+ * and cannot see.
+ *
+ * That has happened twice — the append watcher carries a comment about rows
+ * "stranded at opacity 0 with nothing left to reveal them", and the stylesheet
+ * carries a matching `opacity: 1` guard that only applies under reduced motion.
+ * This is the same guard for the path that animates. Well clear of the longest
+ * real hold (the 460ms flight after a 280ms glide), so it never cuts an
+ * animation short; if a machine were slow enough to reach it, a row appearing
+ * early beats a row that never appears.
+ */
+const ENTRANCE_WATCHDOG_MS = 2000
 
 /** Linear interpolation over the baked FLIGHT table (offsets are monotonic). */
 export function sampleFlight(o: number): { x: number; v: number } {
@@ -379,11 +452,26 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
     // hidden real row's LIVE rect makes the last frame the row's actual
     // position by construction; every layout correction pulls the clone along.
     const start = performance.now()
+    // The landing the clone is flying at. It chases the row's live rect, rate
+    // limited so a correction is absorbed over a few frames instead of teleporting
+    // the bubble (see CORRECTION_MAX_STEP_PX); at the finish it is the live rect
+    // exactly, which is what keeps the clone-for-row swap invisible.
+    let tracked = Number.NaN
+    let lastElapsed = 0
     const place = (elapsed: number): void => {
       const o = Math.min(1, elapsed / FLIGHT_MS)
       const { x, v } = sampleFlight(o)
       const targetTop = bubble.getBoundingClientRect().top
-      const y = targetTop + (1 - x) * (launchTop + FLIGHT_SINK_PX - targetTop)
+      const frames = Math.max(1, (elapsed - lastElapsed) / 16.67)
+      lastElapsed = elapsed
+      if (Number.isNaN(tracked) || o >= 1) {
+        tracked = targetTop
+      } else {
+        const step = CORRECTION_MAX_STEP_PX * frames
+        const drift = targetTop - tracked
+        tracked += Math.max(-step, Math.min(step, drift))
+      }
+      const y = tracked + (1 - x) * (launchTop + FLIGHT_SINK_PX - tracked)
       // The bubble emerges slightly small, as if still part of the box, and
       // the jelly stretch rides the velocity on top of that.
       const emerge = 0.94 + 0.06 * Math.min(1, o / 0.45)
@@ -490,7 +578,13 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
   }
 
   function markEntering(ids: string[]): void {
-    for (const id of ids) enteringMessages.add(id)
+    for (const id of ids) {
+      enteringMessages.add(id)
+      // Unstamped, like the entrance's own un-hide: a sequence bump is exactly
+      // the case that leaves a row with nothing left to reveal it. Registered
+      // through `schedule`, so `cancel()` still clears it on unmount.
+      schedule(() => enteringMessages.delete(id), ENTRANCE_WATCHDOG_MS)
+    }
   }
 
   function scheduleForCurrentSend(fn: () => void, delay: number): void {

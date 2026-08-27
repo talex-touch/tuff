@@ -14,7 +14,7 @@ import type {
   PluginChannel,
 } from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
 import DashboardAssetIcon from '~/components/dashboard/DashboardAssetIcon.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
@@ -405,11 +405,15 @@ const pluginsInitialLoading = computed(() =>
   pluginsPending.value && !plugins.value.length && !pluginsLoadError.value,
 )
 
-const pluginsLoadErrorMessage = computed(() => {
-  const error = pluginsLoadError.value
-  if (!error)
-    return ''
-  return error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
+// `error.message` here is the raw ofetch line carrying the internal request
+// path, and the previous fallback said "while saving the plugin" on a request
+// that only ever read. Both go to the console instead.
+const pluginsLoadErrorMessage = computed(() =>
+  pluginsLoadError.value ? t('dashboard.sections.plugins.errors.loadFailed') : '',
+)
+watch(pluginsLoadError, (error) => {
+  if (error)
+    console.warn('[dashboard/assets] failed to load plugins:', error instanceof Error ? error.message : error)
 })
 
 function openPluginDetail(plugin: DashboardPlugin, event?: MouseEvent) {

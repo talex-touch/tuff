@@ -18,6 +18,11 @@ The Platform Capabilities SDK provides a catalog of platform-level capabilities 
 - The SDK is a thin wrapper over transport events.
 - Capabilities are statically registered and can be extended over time.
 
+## How it works
+
+- The SDK only wraps the event calls.
+- The capability manifest is registered statically by the main process and extended on demand.
+
 ## Usage
 
 :::TuffCodeBlock{lang="typescript"}

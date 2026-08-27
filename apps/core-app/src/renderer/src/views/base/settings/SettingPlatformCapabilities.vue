@@ -28,6 +28,8 @@ type PlatformCapabilityView = PlatformCapability & {
 
 const capabilities = ref<PlatformCapabilityView[]>([])
 const loading = ref(false)
+/** The last scan did not answer. Distinct from "the scan found nothing". */
+const loadFailed = ref(false)
 
 /** Two groups of three: the scan always returns at least a couple of scopes. */
 const SKELETON_GROUPS = 2
@@ -131,11 +133,18 @@ function supportTone(level: PlatformCapabilitySupportLevel | undefined) {
 
 async function loadCapabilities() {
   loading.value = true
+  loadFailed.value = false
   try {
     const result = await platformSdk.listCapabilities()
     capabilities.value = Array.isArray(result) ? (result as PlatformCapabilityView[]) : []
     lastUpdated.value = new Date()
   } catch (error: unknown) {
+    // Either way the scan did not answer, and the list below must not read as
+    // "this platform supports nothing" on a page whose whole job is to say what
+    // it supports. The timeout stays toast-free — it is the expected shape
+    // while the module is still coming up — but it still has to reach the
+    // template, or it lands as a silent, confident denial.
+    loadFailed.value = true
     const message = error instanceof Error ? error.message : ''
     if (message.includes('timed out')) {
       devLog('[SettingPlatformCapabilities] Load timed out, module may be initializing')
@@ -177,8 +186,11 @@ onMounted(() => {
 
       <div class="PlatformCapabilities-Overview">
         <div class="PlatformCapabilities-Meta">
+          <!-- A scan that failed counted nothing; "0" is a measurement it never took. -->
           <span>{{
-            t('settings.settingPlatformCapabilities.total', { count: capabilities.length })
+            t('settings.settingPlatformCapabilities.total', {
+              count: loadFailed && !capabilities.length ? '—' : capabilities.length
+            })
           }}</span>
           <span v-if="lastUpdatedText">
             {{ t('settings.settingPlatformCapabilities.lastUpdated', { time: lastUpdatedText }) }}
@@ -237,11 +249,18 @@ onMounted(() => {
     </template>
 
     <TuffGroupBlock v-else-if="loading || groupedCapabilities.length === 0">
+      <!--
+        Three states, not two: a scan that failed says so. Reading "empty" here
+        means this platform supports nothing, which is a claim the failed scan
+        never made. Refresh in the header above is the retry.
+      -->
       <div class="PlatformCapabilities-State">
         {{
           loading
             ? t('settings.settingPlatformCapabilities.loading')
-            : t('settings.settingPlatformCapabilities.empty')
+            : loadFailed
+              ? t('settings.settingPlatformCapabilities.messages.loadFailed')
+              : t('settings.settingPlatformCapabilities.empty')
         }}
       </div>
     </TuffGroupBlock>

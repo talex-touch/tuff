@@ -109,6 +109,7 @@ export default {
     deviceUnknown: 'Unknown device',
     passkeyRegister: 'Add',
     passkeySuccess: 'Passkey added',
+    checkingSession: 'Checking your session…',
     redirecting: 'Redirecting to sign in...',
     verifyFailed: 'Verification failed',
     verifyMissing: 'Verification details are missing',

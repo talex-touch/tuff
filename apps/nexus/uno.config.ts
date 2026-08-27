@@ -50,6 +50,34 @@ export default defineConfig({
       light: '#FAFAFA',
     },
   },
+  /*
+   * `primary` above is a second colour system running beside the tuffex tokens:
+   * UnoCSS compiles it to a literal, so it never saw the high-contrast palette
+   * tuffex ships behind `prefers-contrast: more`. Measured, `.text-primary` sat
+   * at 2.34:1 on white on every dashboard page and stayed there with high
+   * contrast switched on, while everything token-driven moved.
+   *
+   * Only the text colour is redirected, and only when the reader has asked for
+   * more contrast — the brand cyan is untouched by default. The replacement is
+   * the design system's own high-contrast primary rather than a value picked
+   * here. Backgrounds keep the brand: `bg-primary/12` is a tint behind other
+   * text, not a contrast surface of its own.
+   */
+  preflights: [
+    {
+      getCSS: () => `
+        html.contrast .text-primary,
+        html.dark.contrast .text-primary {
+          color: var(--tx-color-primary);
+        }
+        @media (prefers-contrast: more) {
+          html:not([data-tx-contrast='normal']) .text-primary {
+            color: var(--tx-color-primary);
+          }
+        }
+      `,
+    },
+  ],
   presets: [
     presetWind(),
     presetAttributify({ prefixedOnly: true }),

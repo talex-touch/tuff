@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, defineAsyncComponent } from 'vue'
 import { formatCompactAccountLabel } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
@@ -416,12 +417,36 @@ function formatDeviceLocation(device: DeviceItem): string {
   return pieces.length ? pieces.join(' · ') : t('dashboard.devices.locationUnknown', '位置未知')
 }
 
+/**
+ * `statusMessage` is something the server wrote for a person; `message` is
+ * whatever the fetch layer produced. On a network failure that is the raw
+ * ofetch line — method, internal path and query — which is how four panels
+ * ended up printing `[GET] "/api/dashboard/telemetry/me?days=7": <no response>
+ * Failed to fetch` to the user. The localized fallback outranks it now, and the
+ * detail goes to the console for whoever is debugging.
+ */
 function resolveErrorMessage(error: any, fallback: string) {
   if (!error)
     return ''
 
   const source = error?.value ?? error
-  return source?.data?.statusMessage || source?.statusMessage || source?.message || fallback
+  const serverMessage = source?.data?.statusMessage || source?.statusMessage
+  if (serverMessage)
+    return serverMessage
+
+  if (source?.message)
+    console.warn('[dashboard/overview] request failed:', source.message)
+  return fallback
+}
+
+/**
+ * A failed request is not a zero. Each KPI reads from one of the three fetches,
+ * and the view model fills the gaps with zeros, so a tile whose source failed
+ * would otherwise state "Login health 0%" or "0 active devices" — a measurement
+ * nobody took, in the same type as a real one.
+ */
+function orDash(errorText: string, value: string | number) {
+  return errorText ? '—' : String(value)
 }
 
 function isCurrentDevice(device: DeviceItem) {
@@ -455,7 +480,7 @@ function isCurrentDevice(device: DeviceItem) {
     <template v-else>
       <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <TxStatCard
-          :value="formatNumber(viewModel.kpis.searches)"
+          :value="orDash(telemetryErrorText, formatNumber(viewModel.kpis.searches))"
           :label="t('dashboard.overview.kpis.searchCount')"
           icon-class="i-carbon-search text-5xl text-[var(--tx-color-primary)] sm:text-6xl"
         >
@@ -470,7 +495,7 @@ function isCurrentDevice(device: DeviceItem) {
         </TxStatCard>
 
         <TxStatCard
-          :value="`${formatNumber(viewModel.kpis.avgLatency)} ms`"
+          :value="orDash(telemetryErrorText, `${formatNumber(viewModel.kpis.avgLatency)} ms`)"
           :label="t('dashboard.overview.kpis.searchEfficiency')"
           icon-class="i-carbon-meter text-5xl text-[var(--tx-color-success)] sm:text-6xl"
         >
@@ -478,14 +503,14 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="space-y-1">
               <span class="block">{{ t('dashboard.overview.kpis.searchEfficiency') }}</span>
               <span class="block text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.overview.kpis.avgResultsHint', { n: formatNumber(viewModel.kpis.avgResults) }) }}
+                {{ t('dashboard.overview.kpis.avgResultsHint', { n: orDash(telemetryErrorText, formatNumber(viewModel.kpis.avgResults)) }) }}
               </span>
             </div>
           </template>
         </TxStatCard>
 
         <TxStatCard
-          :value="`${viewModel.kpis.login.successRate}%`"
+          :value="orDash(historyErrorText, `${viewModel.kpis.login.successRate}%`)"
           :label="t('dashboard.overview.kpis.loginHealth')"
           icon-class="i-carbon-security text-5xl text-[var(--tx-color-warning)] sm:text-6xl"
         >
@@ -493,14 +518,14 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="space-y-1">
               <span class="block">{{ t('dashboard.overview.kpis.loginHealth') }}</span>
               <span class="block text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.overview.kpis.loginSplit', { success: viewModel.kpis.login.success, failed: viewModel.kpis.login.failed }) }}
+                {{ t('dashboard.overview.kpis.loginSplit', { success: orDash(historyErrorText, viewModel.kpis.login.success), failed: orDash(historyErrorText, viewModel.kpis.login.failed) }) }}
               </span>
             </div>
           </template>
         </TxStatCard>
 
         <TxStatCard
-          :value="formatNumber(viewModel.kpis.devices.active)"
+          :value="orDash(devicesErrorText, formatNumber(viewModel.kpis.devices.active))"
           :label="t('dashboard.overview.kpis.activeDevices')"
           icon-class="i-carbon-devices text-5xl text-[var(--tx-color-info)] sm:text-6xl"
         >
@@ -508,7 +533,7 @@ function isCurrentDevice(device: DeviceItem) {
             <div class="space-y-1">
               <span class="block">{{ t('dashboard.overview.kpis.activeDevices') }}</span>
               <span class="block text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.overview.kpis.activeNow', { active: viewModel.kpis.devices.active, total: viewModel.kpis.devices.total }) }}
+                {{ t('dashboard.overview.kpis.activeNow', { active: orDash(devicesErrorText, viewModel.kpis.devices.active), total: orDash(devicesErrorText, viewModel.kpis.devices.total) }) }}
               </span>
             </div>
           </template>
@@ -531,9 +556,14 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.searchTrend.hasData" class="mt-4 rounded-2xl border border-dashed border-black/[0.08] py-12 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.trends.noSearchData') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.searchTrend.hasData"
+            class="mt-4"
+            variant="no-data"
+            :title="t('dashboard.overview.trends.noSearchData')"
+            size="small"
+            layout="vertical"
+          />
 
           <template v-else>
             <div class="mt-4 flex items-end justify-between gap-3">
@@ -578,9 +608,14 @@ function isCurrentDevice(device: DeviceItem) {
             {{ telemetryErrorText }}
           </div>
 
-          <div v-else-if="!viewModel.searchTrend.hasData" class="mt-4 rounded-2xl border border-dashed border-black/[0.08] py-12 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.trends.noLatencyData') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.searchTrend.hasData"
+            class="mt-4"
+            variant="no-data"
+            :title="t('dashboard.overview.trends.noLatencyData')"
+            size="small"
+            layout="vertical"
+          />
 
           <template v-else>
             <div class="mt-4 overflow-x-auto pb-1">
@@ -620,9 +655,13 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.recentActivities.length" class="rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.stream.empty') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.recentActivities.length"
+            variant="no-data"
+            :title="t('dashboard.overview.stream.empty')"
+            size="small"
+            layout="vertical"
+          />
 
           <div v-else class="space-y-2">
             <div
@@ -641,12 +680,17 @@ function isCurrentDevice(device: DeviceItem) {
                   {{ item.location }}
                 </p>
               </div>
-              <span
-                class="rounded-full px-2 py-0.5 text-xs"
-                :class="item.success ? 'bg-green-500/20 text-green-600 dark:text-green-300' : 'bg-red-500/20 text-red-600 dark:text-red-300'"
-              >
-                {{ item.kind === 'device' ? t('dashboard.overview.stream.device') : item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed') }}
-              </span>
+              <!--
+                Was a hand-tinted pill on raw green-600/red-600. Those are
+                UnoCSS palette entries, not tokens, so they sat outside the
+                theme and ignored the high-contrast palette entirely — measured
+                at 2.68:1 against their own tint even with it switched on.
+              -->
+              <TxStatusBadge
+                size="sm"
+                :status="item.success ? 'success' : 'danger'"
+                :text="item.kind === 'device' ? t('dashboard.overview.stream.device') : item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed')"
+              />
             </div>
           </div>
 
@@ -673,9 +717,13 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.devices.length" class="rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
-            {{ t('dashboard.overview.devices.empty') }}
-          </div>
+          <TxEmptyState
+            v-else-if="!viewModel.devices.length"
+            variant="no-data"
+            :title="t('dashboard.overview.devices.empty')"
+            size="small"
+            layout="vertical"
+          />
 
           <div v-else class="space-y-2">
             <div
@@ -695,12 +743,16 @@ function isCurrentDevice(device: DeviceItem) {
                     <span class="DashboardOverviewDevice-TitleName truncate">{{ formatDevicePreviewName(device) }}</span>
                   </p>
                   <div class="DashboardOverviewDevice-Meta">
-                    <span
+                    <!-- The devices page renders this same badge as a
+                         TxStatusBadge; the two pages showed one concept two
+                         different ways. -->
+                    <TxStatusBadge
                       v-if="isCurrentDevice(device)"
-                      class="DashboardOverviewDevice-Badge"
-                    >
-                      {{ t('dashboard.overview.devices.current') }}
-                    </span>
+                      size="sm"
+                      status="info"
+                      icon="i-carbon-location-current"
+                      :text="t('dashboard.overview.devices.current')"
+                    />
                     <span class="DashboardOverviewDevice-Time">
                       {{ formatRelativeTime(device.lastSeenAt || device.createdAt) }}
                     </span>
@@ -810,22 +862,6 @@ function isCurrentDevice(device: DeviceItem) {
   max-width: 44%;
 }
 
-.DashboardOverviewDevice-Badge {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  border-radius: 999px;
-  background: rgb(34 197 94 / 0.2);
-  padding: 2px 8px;
-  color: rgb(22 163 74);
-  font-size: 12px;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
-.dark .DashboardOverviewDevice-Badge {
-  color: rgb(134 239 172);
-}
 
 .DashboardOverviewDevice-Time {
   flex: 0 0 auto;

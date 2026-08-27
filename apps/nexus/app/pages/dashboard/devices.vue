@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
@@ -46,10 +46,18 @@ interface DeviceItem {
 
 type DeviceFilter = 'all' | 'revoked' | 'trusted'
 
-const { data, pending, refresh } = useTypedFetch<DeviceItem[]>('/api/devices')
+const { data, pending, error, refresh } = useTypedFetch<DeviceItem[]>('/api/devices')
 const actionLoading = ref(false)
 const editingId = ref<string | null>(null)
 const renameValue = ref('')
+
+// The raw message carries the internal request path, so it goes to the console
+// and the reader gets a stable sentence.
+const errorText = computed(() => (error.value ? String(error.value.message ?? error.value) : ''))
+watch(errorText, (message) => {
+  if (message)
+    console.warn('[dashboard/devices] failed to load devices:', message)
+})
 
 const devices = computed(() => data.value ?? [])
 const expandedMapDeviceId = ref<string | null>(null)
@@ -602,6 +610,22 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           </div>
         </li>
       </ul>
+
+      <!--
+        Ordered after the list so a failed refresh keeps showing the devices we
+        already have. It has to come before the empty state: without it a failed
+        request renders "no active sessions", which tells the reader their
+        account has none when the truth is we could not ask.
+      -->
+      <TxEmptyState
+        v-else-if="errorText"
+        variant="error"
+        size="small"
+        layout="vertical"
+        :title="t('dashboard.devices.loadFailed', '加载设备列表失败')"
+        :primary-action="{ label: t('dashboard.devices.retry', '重试'), variant: 'flat' }"
+        @primary="refresh"
+      />
 
       <div v-else class="DashboardDevices-Empty">
         {{ devices.length ? t('dashboard.devices.noFilteredSessions', '当前筛选下暂无设备') : t('dashboard.devices.noSessions', '暂无设备') }}

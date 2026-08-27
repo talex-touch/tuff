@@ -12,6 +12,7 @@ useHead({
   titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff Nexus`),
 })
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
@@ -491,17 +492,34 @@ watchEffect(() => {
     <LazySearchGlobalSearch v-if="!isAuthShellRoute && globalSearchOpen" />
   </ClientOnly>
   <template v-if="isProtectedRoute">
+    <!--
+      First thing a returning user sees on every protected route, and on a slow
+      connection it is the only thing for several seconds. It used to be one
+      line of hardcoded English on a blank page — no spinner, so nothing said
+      the app was working, and a Chinese user got English even though
+      `auth.redirecting` already existed in both locales.
+    -->
     <div
       v-if="isAuthLoading"
-      class="grid h-screen w-screen place-content-center text-sm text-gray-500"
+      class="grid h-screen w-screen place-content-center"
     >
-      Checking your session…
+      <TxEmptyState
+        variant="loading"
+        :title="t('auth.checkingSession')"
+        size="small"
+        layout="vertical"
+      />
     </div>
     <div
       v-else-if="!isAuthenticated"
-      class="grid h-screen w-screen place-content-center text-sm text-gray-500"
+      class="grid h-screen w-screen place-content-center"
     >
-      Redirecting to sign in…
+      <TxEmptyState
+        variant="loading"
+        :title="t('auth.redirecting')"
+        size="small"
+        layout="vertical"
+      />
     </div>
     <NuxtLayout v-else>
       <NuxtPage />

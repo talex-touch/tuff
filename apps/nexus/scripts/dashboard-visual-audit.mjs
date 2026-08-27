@@ -14,8 +14,23 @@
  *   pnpm -C apps/nexus dev                       # localhost:3200, needs CF bindings
  *   chrome --headless=new --remote-debugging-port=9224 --user-data-dir=/tmp/...
  *   node apps/nexus/scripts/dashboard-visual-audit.mjs [route ...]
+ *
+ * NEXUS_AUDIT_FAIL_API=1 makes every /api/ request fail, which is the only way
+ * to see what a page says when its data does not arrive — the sibling of the
+ * loading state and just as invisible against a healthy local server.
+ * NEXUS_AUDIT_THROTTLE=1 adds latency to every request. Local dev against a
+ * local D1 answers faster than a page can paint, so without it a "mid-load"
+ * capture is either blank or already settled — there is no window to see.
+ * NEXUS_AUDIT_SETTLE=<ms> shortens the post-hydration wait (default 4000) so a
+ * capture lands mid-fetch — that is how you see what a page claims before its
+ * data arrives, which is a different picture from the settled one.
+ * NEXUS_AUDIT_VIEWPORT=mobile|tablet|desktop picks the width (desktop default).
+ * NEXUS_AUDIT_THEME=dark captures the dark palette instead (light is the
+ * default). Theme is applied the same way scripts/tuffex-visual-smoke.mjs does
+ * it — emulated media plus the class/attr/localStorage the app itself reads —
+ * because the media query alone does not move @nuxtjs/color-mode.
  */
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { createRequire } from 'node:module'
@@ -47,9 +62,39 @@ const DEFAULT_ROUTES = [
   '/dashboard/updates',
 ]
 
-const VIEWPORTS = [
-  { name: 'desktop', width: 1440, height: 1000 },
-]
+// Same matrix scripts/tuffex-visual-smoke.mjs uses, so captures are comparable.
+const ALL_VIEWPORTS = {
+  mobile: { name: 'mobile', width: 375, height: 812 },
+  tablet: { name: 'tablet', width: 768, height: 900 },
+  desktop: { name: 'desktop', width: 1440, height: 1000 },
+}
+const VIEWPORTS = [ALL_VIEWPORTS[process.env.NEXUS_AUDIT_VIEWPORT] ?? ALL_VIEWPORTS.desktop]
+
+const THEME = process.env.NEXUS_AUDIT_THEME === 'dark' ? 'dark' : 'light'
+const SETTLE_MS = Number(process.env.NEXUS_AUDIT_SETTLE ?? 4000)
+const THROTTLE = process.env.NEXUS_AUDIT_THROTTLE === '1'
+const FAIL_API = process.env.NEXUS_AUDIT_FAIL_API === '1'
+
+async function emulateTheme(client) {
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-color-scheme', value: THEME },
+      { name: 'prefers-reduced-motion', value: 'reduce' },
+    ],
+  })
+}
+
+// Only valid on a real origin — about:blank has no localStorage.
+async function applyTheme(client) {
+  await evaluate(client, `(() => {
+    const theme = ${JSON.stringify(THEME)}
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.style.colorScheme = theme
+    localStorage.setItem('color-mode', theme)
+  })()`)
+  await delay(300)
+}
 
 async function mintSessionToken() {
   const { encode } = require('next-auth/jwt')
@@ -80,6 +125,34 @@ async function main() {
         // Host-bound cookie: AUTH_ORIGIN pins localhost, and a 127.0.0.1
         // session would neither share the cookie nor survive a redirect.
         await client.send('Network.enable')
+        if (FAIL_API) {
+          // Auth endpoints stay up: failing them would only reproduce the
+          // signed-out gate, not a page's own data-error state.
+          await client.send('Fetch.enable', {
+            patterns: [{ urlPattern: '*/api/*', requestStage: 'Request' }],
+          })
+          client.on('Fetch.requestPaused', (event) => {
+            const url = event.request?.url ?? ''
+            // Domain prefix is mandatory: `client.send('failRequest')` rejects,
+            // and a rejected send leaves the request paused forever, which
+            // looks exactly like the app hanging.
+            const isAuth = url.includes('/api/auth/')
+            const send = isAuth
+              ? client.send('Fetch.continueRequest', { requestId: event.requestId })
+              : client.send('Fetch.failRequest', { requestId: event.requestId, errorReason: 'Failed' })
+            void send.catch((error) => {
+              console.error('[audit] fetch interception failed:', error?.message ?? error)
+            })
+          })
+        }
+        if (THROTTLE) {
+          await client.send('Network.emulateNetworkConditions', {
+            offline: false,
+            latency: 900,
+            downloadThroughput: 200 * 1024,
+            uploadThroughput: 200 * 1024,
+          })
+        }
         await client.send('Network.setCookie', {
           name: 'next-auth.session-token',
           value: token,
@@ -89,6 +162,7 @@ async function main() {
           secure: false,
         })
 
+        await emulateTheme(client)
         await client.send('Page.navigate', { url: `${BASE_URL}${route}` })
         // The shared waitForPage waits on `.vp-doc`, which only the docs site
         // renders; the app shell is the dashboard's equivalent ready signal.
@@ -99,7 +173,11 @@ async function main() {
         )
         // Nuxt hydrates, then the dashboard fetches; no single deterministic
         // signal covers both, so settle on a fixed beat.
-        await delay(4000)
+        await delay(SETTLE_MS)
+        // Re-applied post-hydration: color-mode writes the class on mount and
+        // would otherwise overwrite what was set on the blank page.
+        await applyTheme(client)
+        await delay(Math.min(400, SETTLE_MS))
 
         const state = await evaluate(client, `(() => {
           const body = document.body?.innerText || ''
@@ -108,11 +186,15 @@ async function main() {
             redirected: location.pathname.includes('sign-in'),
             chars: body.length,
             head: body.slice(0, 160),
+            text: body,
           })
         })()`)
         const parsed = JSON.parse(state)
-        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}`
+        const label = `${route.replace(/\//g, '_').replace(/^_/, '')}-${viewport.name}-${THEME}${SETTLE_MS === 4000 ? '' : `-${SETTLE_MS}ms`}${THROTTLE ? '-slow' : ''}${FAIL_API ? '-apifail' : ''}`
         await screenshot(client, label, outDir, { captureBeyondViewport: true })
+        // A sweep over many routes is only searchable as text — reading every
+        // screenshot to find which page claims "no results" does not scale.
+        await writeFile(path.join(outDir, `${label}.txt`), parsed.text ?? '', 'utf8')
         results.push({ route, ...parsed })
         console.log(`${route} → ${parsed.redirected ? 'REDIRECTED(sign-in)' : 'ok'} ${parsed.chars} chars`)
       }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { resolveBoxGridColumnCount } from './box-grid-layout'
 import BoxGridItem from './BoxGridItem.vue'
 
 interface Props {
@@ -72,13 +73,12 @@ function isPinnedSection(section: TuffSection): boolean {
   return section.meta?.pinned === true
 }
 
-// The fixed-width CoreBox fits ~5 result cards per row. Fill the first row
-// left-to-right up to this cap, then wrap — never split early via ceil(n/2).
-const MAX_GRID_COLUMNS = 5
-
 function getSectionColumnCount(sectionData: SectionData): number {
-  if (!isIntelligenceSection(sectionData.section)) return gridConfig.value.columns
-  return Math.max(1, Math.min(sectionData.items.length, MAX_GRID_COLUMNS))
+  return resolveBoxGridColumnCount(
+    sectionData.section,
+    sectionData.items.length,
+    gridConfig.value.columns
+  )
 }
 
 /** Intelligence tray shows at most two rows: a full first row, then the rest. */
@@ -233,10 +233,9 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 
 .BoxGrid {
   display: grid;
-  // Use minmax to prevent items from stretching when fewer than columns
+  // Keep result cards compact while distributing every column across the available row.
   grid-template-columns: repeat(var(--grid-cols), minmax(0, 108px));
-  // Left-align: items fill from the left edge, row by row.
-  justify-content: start;
+  justify-content: space-between;
   gap: var(--grid-gap);
   overflow-x: hidden;
   width: 100%;

@@ -49,7 +49,15 @@ const { t, locale } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
 
-const { updates, pending: updatesPending, refresh: refreshUpdates } = useDashboardUpdatesData()
+const { updates, pending: updatesPending, error: updatesError, refresh: refreshUpdates } = useDashboardUpdatesData()
+
+// The raw message names the internal request path, so it goes to the console
+// and the panel gets a sentence written for the reader.
+const updatesErrorText = computed(() => (updatesError.value ? String((updatesError.value as any)?.message ?? updatesError.value) : ''))
+watch(updatesErrorText, (message) => {
+  if (message)
+    console.warn('[dashboard/updates] failed to load updates:', message)
+})
 
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { dateStyle: 'medium' }))
@@ -498,6 +506,21 @@ function closeDeleteConfirm() {
           <TxSkeleton :loading="true" :lines="2" />
         </div>
       </div>
+
+      <!--
+        Before the empty branch: without it a failed request renders "no updates
+        yet", which denies the existence of records we never managed to read.
+      -->
+      <TxEmptyState
+        v-else-if="updatesErrorText"
+        class="mt-4"
+        variant="error"
+        size="small"
+        layout="vertical"
+        :title="t('dashboard.sections.updates.loadFailed')"
+        :primary-action="{ label: t('common.retry', '重试'), variant: 'flat' }"
+        @primary="refreshUpdates"
+      />
 
       <div
         v-else-if="!updates.length"

@@ -14,7 +14,7 @@ definePageMeta({
 })
 
 const { t } = useI18n()
-const { user } = useAuthUser()
+const { user, error: userError, refresh: refreshUser } = useAuthUser()
 const isAdmin = computed(() => user.value?.role === 'admin')
 
 interface ApiKey {
@@ -92,10 +92,30 @@ async function fetchKeys() {
   }
 }
 
-watch(user, (currentUser) => {
-  if (currentUser)
+// The key request only runs once a profile exists. When the profile request
+// itself fails nothing downstream fires, so this has to resolve the skeleton or
+// it spins forever with no way out.
+watch([user, userError], ([currentUser, profileError]) => {
+  if (currentUser) {
     fetchKeys()
+    return
+  }
+  if (profileError) {
+    console.warn('[dashboard/api-keys] profile failed to load:', profileError)
+    loading.value = false
+    error.value = t('dashboard.sections.apiKeys.errors.load')
+  }
 }, { immediate: true })
+
+function retryLoad() {
+  error.value = null
+  loading.value = true
+  // Refreshing the profile re-runs the watcher above, which owns both outcomes.
+  if (user.value)
+    fetchKeys()
+  else
+    refreshUser()
+}
 
 async function createKey() {
   if (!newKeyName.value.trim())
@@ -390,9 +410,15 @@ const expiryOptions = computed(() => [
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="rounded-xl bg-red-500/10 p-4 text-center text-red-500">
-      {{ error }}
-    </div>
+    <TxEmptyState
+      v-else-if="error"
+      variant="error"
+      size="small"
+      layout="vertical"
+      :title="error"
+      :primary-action="{ label: t('dashboard.sections.apiKeys.errors.retry'), variant: 'flat' }"
+      @primary="retryLoad"
+    />
 
     <!-- Keys List -->
     <div v-else-if="keys.length > 0" class="space-y-3">
@@ -443,20 +469,25 @@ const expiryOptions = computed(() => [
     </div>
 
     <!-- Empty State -->
-    <div v-else class="rounded-2xl bg-black/[0.02] p-8 text-center dark:bg-white/[0.03]">
-      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
-        <span class="i-carbon-password text-2xl text-black/30 dark:text-white/30" />
-      </div>
-      <h3 class="font-medium text-black dark:text-white">
-        {{ t('dashboard.sections.apiKeys.empty.title') }}
-      </h3>
-      <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.apiKeys.empty.description') }}
-      </p>
-      <TxButton ref="emptyCreateTriggerRef" variant="primary" class="mt-4" @click="openCreateOverlay(emptyCreateTriggerRef?.$el || null)">
-        {{ t('dashboard.sections.apiKeys.empty.cta') }}
-      </TxButton>
-    </div>
+    <TxEmptyState
+      v-else
+      variant="empty"
+      surface="card"
+      icon="i-carbon-password"
+      :title="t('dashboard.sections.apiKeys.empty.title')"
+      :description="t('dashboard.sections.apiKeys.empty.description')"
+    >
+      <!--
+        The button stays in a slot rather than becoming a primaryAction: the
+        create dialog flies out of this element, and the `primary` emit carries
+        no node to fly from.
+      -->
+      <template #actions>
+        <TxButton ref="emptyCreateTriggerRef" variant="primary" @click="openCreateOverlay(emptyCreateTriggerRef?.$el || null)">
+          {{ t('dashboard.sections.apiKeys.empty.cta') }}
+        </TxButton>
+      </template>
+    </TxEmptyState>
 
     <LazyFlipDialog
       v-if="showCreateModal"

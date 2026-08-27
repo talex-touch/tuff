@@ -149,8 +149,13 @@ function readErrorMessage(errorValue: unknown): string {
   const dataMessage = candidate?.data?.message
   if (typeof dataMessage === 'string' && dataMessage)
     return dataMessage
+  // Anything the server authored above is written for the reader. `message` is
+  // not: on a transport failure it is the raw ofetch line, internal request
+  // path and query string included, so it only goes to the console.
   const message = candidate?.message
-  return typeof message === 'string' && message ? message : t('dashboard.notifications.errors.unknown', '通知加载失败')
+  if (typeof message === 'string' && message)
+    console.warn('[dashboard/notifications] request failed:', message)
+  return t('dashboard.notifications.errors.unknown', '通知加载失败')
 }
 
 function formatDateTime(value: string | null): string {
@@ -545,16 +550,25 @@ onMounted(() => {
         <TxSpinner :size="22" />
       </div>
 
-      <div v-else-if="error" class="mt-5 rounded-2xl bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-300">
-        {{ error }}
-      </div>
+      <TxEmptyState
+        v-else-if="error"
+        class="mt-5"
+        variant="error"
+        :title="error"
+        size="small"
+        layout="vertical"
+        :primary-action="{ label: t('dashboard.notifications.refresh', '刷新'), variant: 'flat' }"
+        @primary="loadNotifications"
+      />
 
-      <div
+      <TxEmptyState
         v-else-if="!visibleNotifications.length"
-        class="mt-5 rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/45 dark:border-white/[0.08] dark:text-white/45"
-      >
-        {{ filter === 'unread' ? t('dashboard.notifications.emptyUnread', '暂无未读通知') : t('dashboard.notifications.emptyAll', '暂无通知') }}
-      </div>
+        class="mt-5"
+        variant="no-data"
+        :title="filter === 'unread' ? t('dashboard.notifications.emptyUnread', '暂无未读通知') : t('dashboard.notifications.emptyAll', '暂无通知')"
+        size="small"
+        layout="vertical"
+      />
 
       <div v-else class="mt-5 divide-y divide-black/[0.06] dark:divide-white/[0.08]">
         <article
