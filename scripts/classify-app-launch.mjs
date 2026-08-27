@@ -263,6 +263,11 @@ function selfTest() {
       actual: describeUsernsRestriction('1').present,
       expected: true,
     },
+    {
+      name: 'restriction on is reported as ON, not as an unrecognised value',
+      actual: describeUsernsRestriction('1').text.includes('ON ('),
+      expected: true,
+    },
     /**
      * These assert the message, not just `present`. Asserting `present === false` alone passes
      * against a broken branch, because the unrecognised-value fallback is also `false` -- so
