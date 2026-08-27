@@ -66,7 +66,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
       - name: Setup mise
-        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
         with:
           cache: true
           install: true
@@ -102,7 +102,7 @@ jobs:
       # here rather than in the Documentation Quality job because that one is red on every PR
       # (#1254) -- a new check added there would report into a job nobody can read a signal from.
       - name: Setup mise
-        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
         with:
           cache: true
           install: true
@@ -182,23 +182,11 @@ jobs:
       - name: Check maintenance-audit report claims
         run: pnpm check:audit-report-claims && pnpm check:audit-report-claims:self-test
 
-      # GitHub's closing-keyword parser is a regex over `keyword #N` and ignores the words before
-      # it, so "It does not fix #213" marks #213 for closing exactly as "Fixes #213" does. That is
-      # not hypothetical: on 2026-08-13 it closed two user-facing issues within an hour -- #213 via
-      # "does not fix", #308 via "does not close" -- and both sentences existed specifically to stop
-      # a reader mistaking instrumentation for a fix. The second happened after the first was
-      # already understood, which is why this is a check and not a note. The body is passed through
-      # the environment rather than interpolated into the shell.
-      - name: Check for negated closing keywords in the PR body
-        if: github.event_name == 'pull_request'
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          printf '%s' "$PR_BODY" > /tmp/pr-body.md
-          node scripts/check-closing-keywords.mjs /tmp/pr-body.md
-
-      - name: Check closing-keyword guard self-test
-        run: pnpm check:closing-keywords:self-test
+      # The negated-closing-keyword guard moved to .github/workflows/pr-body-guard.yml (#1773). It
+      # has to re-run when a description is edited, and this job's trigger has no `edited` type, so
+      # here it only ever saw the body as of the last push -- while GitHub reads closing keywords
+      # from the body at merge time. Adding `edited` to this workflow would re-run every step above
+      # on each description edit; the guard is a checkout and one node script, so it went alone.
 
       # 34 distinct blocked reasons live across plugins/ and 20 of them belong to exactly one
       # plugin, so the vocabulary is open and a closed union would be the wrong contract. Only the
@@ -394,13 +382,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Both verified passing on a clean tree before being wired: the route-tree check exits 0
-      # with "server/api route tree verified", the fence check exits 0 silently.
+      # All three verified passing on a clean tree before being wired: the route-tree check exits 0
+      # with "server/api route tree verified", the fence check exits 0 silently, and the icon check
+      # exits 0 with "ok — installed: carbon, cib, logos, twemoji".
       - name: Verify server API route tree
         run: pnpm -C apps/nexus check:api-routes
 
       - name: Verify MDC fences
         run: pnpm -C apps/nexus check:mdc-fences
+
+      # #1768 shipped blank icons for two days: eight of nine shortcuts aliased onto
+      # `@iconify-json/ri`, which this app does not install, and UnoCSS emits nothing for a
+      # collection it cannot resolve. The aliases were fixed and this script was written to block a
+      # relapse — but it was never invoked by anything, so it blocked nothing (#1776).
+      #
+      # Also verified it can fail, since a gate that only ever passes is what let #1768 land: a
+      # planted `class="i-ri-refresh-line"` under app/components/ exits 1 and names the file.
+      - name: Verify icon collections are installed
+        run: pnpm -C apps/nexus check:icon-collections
 
       # Blocking. It was briefly continue-on-error because wiring it up is what discovered
       # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a

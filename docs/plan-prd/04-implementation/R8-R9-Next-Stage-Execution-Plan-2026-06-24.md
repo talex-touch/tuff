@@ -1,7 +1,7 @@
 # R8 / R9 Next Stage Execution Plan
 
-> 更新时间：2026-07-13
-> 状态：R8-E Plugin SDK facade implemented / R8-F CatalogService MVP next
+> 更新时间：2026-08-20
+> 状态：R8-F CatalogService MVP service contract implemented（触发面未接出）/ R8-G Quality Gates next
 > 范围：R8 i18n / Domain Lexicon / Catalog 2.6.0 与 R9 AI 2.5.x 后续能力。
 
 ## 执行口径
@@ -22,7 +22,7 @@
 | P1     | R9-C / R9-D | 2.5.4 ContextHygiene P0/P1                                           | 建立 session / checkpoint / context package / memory policy，避免 AI 后续能力继续堆隐式长上下文。          |
 | P1     | R8-D        | Domain Lexicon V1（completed 2026-07-13）                            | 单位 registry 已验证跨语言解析、locale 展示与共享 conversion source。                                      |
 | P1     | R8-E        | Plugin SDK facade（completed 2026-07-13）                            | typed main/renderer facade、verified identity、三项 permission 与 plugin namespace/isolation 已闭合。      |
-| P2     | R8-F / R8-G | CatalogService MVP（next）与质量门禁                                 | 验签、hash、schema、SQLite import、activate/rollback 都要 fail-closed。                                    |
+| P2     | R8-F / R8-G | CatalogService MVP（服务契约 completed 2026-08-20）与质量门禁（next） | 验签、hash、schema、SQLite import、activate/rollback 均已 fail-closed 落地并测试；触发面与状态展示未接出。 |
 | P2     | R9-F / R9-G | 2.5.5 Local Model Runtime                                            | runtime binary、模型下载、设备 smoke 与 fallback 链路长，放在 provider/evidence 体系稳定后。               |
 | P2     | R9-H / R9-I | 2.5.8 ASR Provider Runtime                                           | 录音权限、音频 artifact、local/cloud/auto 策略独立推进，不绑定本地 LLM runtime。                           |
 
@@ -91,7 +91,7 @@ flowchart TD
 | -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | R8-A/B/C | mostly landed             | locale core、LocalizedText/List、插件 manifest localized metadata loader / display path                                                                                                                                                                                                                                                | 兼容回归与散落 UI/domain 文案审计继续开放。                                   |
 | R8-D     | completed                 | 只读 DomainLexiconRegistry、53-entry unit baseline、跨语言 aliases、locale label、PreviewSDK/CoreApp/QuickOps 共享 conversion source                                                                                                                                                                                                   | 不外推到 currency/timezone 等领域。                                           |
-| R8-E     | completed                 | `sdkapi 260713` main/renderer i18n+lexicon facade、typed transport、verified identity、`i18n.read`/`lexicon.read`/`lexicon.register`、plugin-scoped atomic overlay 与 lifecycle cleanup                                                                                                                                                | overlay 不持久化；R8-F CatalogService MVP 为下一批。                          |
+| R8-E     | completed                 | `sdkapi 260713` main/renderer i18n+lexicon facade、typed transport、verified identity、`i18n.read`/`lexicon.read`/`lexicon.register`、plugin-scoped atomic overlay 与 lifecycle cleanup                                                                                                                                                | overlay 不持久化；R8-F CatalogService MVP 服务契约已于 2026-08-20 完成，见下一行。 |
 | R9-A/B   | foundation consumed       | SQLite / FTS5 / metadata / citation；host assembler 与 controlled/packaged Provider payload 已证明 ContextPackage 参与模型输入                                                                                                                                                                                                         | 真实用户 profile、permission/citation 广覆盖与 embeddings/rerank 增强仍开放。 |
 | R9-C/D/E | P0/P1 closure implemented | session/checkpoint/package logs、host assembler、CoreBox controls、Memory governance/Review、CompressionSnapshot、多入口 isolation、inactive summary continuation、metadata-only tombstone explain 与 evidence verifier 已落；Workflow `new / session` 与 OmniPanel `new / light` packaged owner/scope/single-dispatch evidence 已闭合 | real-profile 与 `scopeRef` migration follow-up。                              |
 
