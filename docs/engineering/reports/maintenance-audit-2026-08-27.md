@@ -9,7 +9,7 @@
 
 ## 数据库、隐私与计费
 
-- **“清理索引”仍可删除主库中全部应用目录，却没有清理实际 file index。** [#1770](https://github.com/talex-touch/tuff/issues/1770) 已对真实隔离数据库复现：默认 split 开启时，Settings 操作从 primary `database.db` 无条件删表，造成 229 个 app 行消失，而 `search-index.db` 的目标索引未触及。先修 split owner 路由、永久排除 `type='app'`，并让 writer guard 和 split-on 回归能重新抓到该路径。
+- **“清理索引”仍可删除主库中全部应用目录，却没有清理实际 file index。** [#1770](https://github.com/talex-touch/tuff/issues/1770) 已对真实隔离数据库复现：默认 split 开启时，Settings 操作在 primary `database.db` 上对 `files` 等表执行无 `where` 的全表 DELETE，清掉了 229 个 app 目录行，而 `search-index.db` 的目标索引未触及。先修 split owner 路由、永久排除 `type='app'`，并让 writer guard 和 split-on 回归能重新抓到该路径。
 - **默认开启的 search-index split 缺端到端运行和回滚证据。** [#1748](https://github.com/talex-touch/tuff/issues/1748) 尚未记录同一隔离 profile 的首启重建、两库拓扑/查询结果、无 WAL/`SQLITE_BUSY` 异常及 `TUFF_DB_SEARCH_SPLIT_ENABLED=0` quiesce/restart parity。静态 writer 检查不覆盖 #1770 所示的参数化删除路径，不能作为 release closure。
 - **遥测、隐私删除和 Credits 存在可重复的假成功/部分扣账路径。** [#1788](https://github.com/talex-touch/tuff/issues/1788) 归属的验收任务确认：服务端忽略幂等键、必要写入分别提交且 D1 不可用仍可能 ACK；隐私开关未进入收集与接收双门；Credits 余额/ledger 不是一个原子、有业务幂等键的操作。必须以 scoped receipt、D1 atomic batch、准确 ACK、双端隐私门和最终删除 worker 收敛，不能用 local/mock 证据关闭。
 
@@ -20,7 +20,7 @@
 
 ## 文档、路线图与工作治理
 
-- **Trellis 活跃任务树当前不可作为可执行计划。** [#309](https://github.com/talex-touch/tuff/issues/309) 的本轮读取得到 88 个 active task，所有 task.json 的 `meta` 为空；`nextAction`、`blocker`、`evidence` 均不可机读。先收敛已经完成的工作到 archive，并为每个保留任务写明下一步、阻塞原因和可核验证据；全局 TODO 只保留排序，不承载易变状态。
+- **Trellis 活跃任务树当前不可作为可执行计划。** [#309](https://github.com/talex-touch/tuff/issues/309) 的本轮复核：80 个未归档 task.json（44 in_progress / 36 planning）。in_progress 的 `meta` 均有内容；`meta` 为空的是 10 个 planning 任务——verifier 按设计豁免 planning（`scripts/docs/verify-docs.mjs:282`），但它们正是长期停滞、无人认领的部分。先收敛已经完成的工作到 archive，并为每个保留任务写明下一步、阻塞原因和可核验证据；全局 TODO 只保留排序，不承载易变状态。
 - **Nexus 中英文 API 文档已经漂移，且 gate 仍未接入 CI。** [#1776](https://github.com/talex-touch/tuff/issues/1776) 的 `check:doc-parity` 本轮失败：`division-box` 少 9 个英文 heading、`flow-transfer` 少 5、`intelligence` 少 1。先按实现补齐三组英文 API 文档并使 check 变绿，再接入 blocking CI；不接受 `continue-on-error`。
 - **全库文档质量门仍为红色。** `scripts/docs/verify-docs.mjs` 本轮报出两条 `DOC-TASK-CHILDREN`，分别来自 `07-27-optimize-core-utility-plugins` 和 `08-05-search-audit-remediation` 的未提交 child 引用。二者均由 [#309](https://github.com/talex-touch/tuff/issues/309) 统一收敛；在 child task 真正受控或父项移除失效引用前，路线图不能当作绿色发布证据。
 - **四组 `.dsh-plugin-hub-*` 未跟踪生成物仍无所有者或保留边界。** [#1785](https://github.com/talex-touch/tuff/issues/1785) 所列 staging、install、config dump 和 root HTML 全部仍在工作区。它们同时阻断干净 source-based plugin release-audit；必须由生成者归属到任务/可重复流程，或由其所有者删除，审计提交不得吸收。
