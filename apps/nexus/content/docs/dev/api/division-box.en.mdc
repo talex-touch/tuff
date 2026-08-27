@@ -213,15 +213,144 @@ code: |
 | `division-box:state-changed` | Main → Renderer | State change notice |
 | `division-box:session-destroyed` | Main → Renderer | Session destroyed |
 
+## Resource Limits
+- Resource limits and caching policy follow the main-process implementation (`apps/core-app/src/main/modules/division-box/`).
+
+## Technical Notes
+- DivisionBox is managed by the main process using `WebContentsView`.
+- The SDK wraps IPC events and normalizes lifecycle updates.
+
+## Lifecycle Deep Dive
+
+### prepare Phase
+
+`prepare` is the initial state of a DivisionBox session, entered after `open()` is called and before the window is created.
+
+**Triggers**:
+- Entered immediately when `divisionBox.open(config)` is called
+- The main process validates the config, assigns a sessionId, and creates the DivisionBoxSession instance
+
+**Resource management**:
+- Assigns a sessionId in the format `division-box-${timestamp}-${counter}` (timestamp plus an incrementing counter)
+- Validates the URL protocol and permissions
+- Initializes session state storage
+- If `keepAlive` is configured, registers with the LRU cache manager
+
+**Error handling**:
+- Invalid or missing URL (config validation failure) → returns `DivisionBoxError` (`CONFIG_ERROR`)
+- Insufficient permission → returns `DivisionBoxError` (`PERMISSION_DENIED`)
+- Resource limit exceeded (more than `MAX_ACTIVE_SESSIONS`) → returns `DivisionBoxError` (`LIMIT_EXCEEDED`)
+
+### attach Phase
+
+`attach` occurs after window creation completes.
+
+**Triggers**:
+- Entered explicitly: `createWindow()` calls `setState(attach)` at the end once the window has been created
+- Transitions are driven purely by explicit `setState` calls; the main process does not listen for Electron loading events such as `did-start-loading`
+
+**Resource management**:
+- Creates the WebContentsView instance
+- Loads the specified URL
+- Registers IPC channel listeners
+- If detached from CoreBox, transfers ownership of the UI view
+
+**Error handling**:
+- Window creation failure → cleans up the window and throws `DivisionBoxError` (`RESOURCE_ERROR`)
+- URL load failure → `loadURL()` rejects and the error propagates to the caller while the manager drops the session from its registry; there are no `did-fail-load` / `render-process-gone` listeners
+
+### active Phase
+
+`active` means the user is currently interacting with the DivisionBox.
+
+**Triggers**:
+- `attachUIView()` explicitly calls `setState(active)` after `loadURL()` resolves
+- When an existing view is transferred from CoreBox, `attachExistingUIView()` enters `active` explicitly after attaching; sessions without a UI view are set to `active` directly by the manager once the window is created
+- Restoring from `inactive` also happens via an explicit `setState`; there is no focus-based automatic switching
+
+**Resource management**:
+- Normal running state; no special resource management needed
+- IPC communication can be performed safely
+
+### inactive Phase
+
+`inactive` means the DivisionBox is not currently active and may be cached.
+
+**Triggers**:
+- No automatic trigger currently exists: the main process does not listen for `blur` or window-occlusion events
+- Currently only reachable programmatically via `setState` / the SDK; once entered, the manager places `keepAlive` sessions into the LRU cache
+
+**Resource management**:
+- If `keepAlive=false`, delayed destruction may be triggered
+- If `keepAlive=true`, resources are retained but at lower priority
+- The LRU cache may reclaim low-priority sessions during this phase
+
+**Error handling**:
+- Staying inactive for a long time may trigger memory-pressure reclamation
+- When the LRU cache limit is exceeded, the least recently used session is destroyed
+
+### detach Phase
+
+`detach` means the session has been explicitly detached from its window.
+
+**Triggers**:
+- No automatic trigger currently exists; the state is only reachable programmatically via `setState` / the SDK
+- `divisionBox.close(sessionId)` and the window `closed` event both go straight to `destroy` without passing through `detach`
+
+**Resource management**:
+- If `keepAlive=true`, the session enters the LRU cache awaiting restoration
+- If `keepAlive=false`, it proceeds directly to the `destroy` phase
+- Releases the WebContentsView and associated resources
+
+**Error handling**:
+- The close animation may be interrupted (`force: true`)
+- When the cache is full, the session may be destroyed immediately instead of cached
+
+### destroy Phase
+
+`destroy` is the final state of a session; all resources have been fully released.
+
+**Triggers**:
+- When `divisionBox.close(sessionId)` is called, `destroySession()` invokes `destroy()` directly
+- When the user closes the window, the `closed` event listener calls `destroy()`
+- When a `keepAlive` session is evicted from the LRU cache (eviction on cache overflow)
+- Forced destruction triggered by memory pressure (cached sessions are evicted when heap usage exceeds the threshold)
+
+**Resource management**:
+- Releases all associated resources
+- Removed from the session map
+- Removed from the LRU cache
+- Unregisters IPC channel listeners
+- Fires the `session-destroyed` event
+
+**Error handling**:
+- No errors should occur in this phase; resources must be fully released
+- If a release fails, the error is logged but the state transition is not blocked
+
+### State Transition Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> prepare: open()
+    prepare --> attach: window created (explicit setState)
+    attach --> active: loadURL() resolved (explicit setState)
+    active --> inactive: setState (programmatic)
+    inactive --> active: setState (programmatic)
+    inactive --> detach: setState (programmatic)
+    active --> detach: setState (programmatic)
+    detach --> destroy: destroy()
+    prepare --> destroy: early close()
+    attach --> destroy: close() / window closed
+    active --> destroy: close() / window closed
+    inactive --> destroy: LRU eviction / memory pressure
+    destroy --> [*]
+```
+
 ## Best Practices
 - Enable `keepAlive` for frequently used panels.
 - Choose `size` based on content density.
 - Persist user state via `updateState/getState`.
 - Release resources on `inactive` and `destroy` states.
-
-## Technical Notes
-- DivisionBox is managed by the main process using `WebContentsView`.
-- The SDK wraps IPC events and normalizes lifecycle updates.
 
 ## Related Docs
 - [Flow Transfer API](./flow-transfer.en.mdc)
