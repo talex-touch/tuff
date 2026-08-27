@@ -137,6 +137,78 @@ export const BASE_BLACKLISTED_DIRS = new Set([
 ]);
 
 /**
+ * The dev/temp names that are also ordinary English words (#1727).
+ *
+ * `node_modules` is nobody's document folder. `build`, `dist`, `out`, `bin`, `target`, `coverage`,
+ * `logs`, `tmp`, `temp` and `cache` are, and matching them on the leaf name alone is what left
+ * `~/Documents/build` unindexable in silence: the check runs before `readdir`, so nothing errors,
+ * nothing increments `errorCount`, and the folder simply never appears in search.
+ *
+ * They still exclude — but only where the caller can show a project marker sits beside them.
+ * A caller that cannot say either way gets the pre-#1727 answer, so no existing caller changes.
+ *
+ * Every name here is already in `DEV_BLACKLISTED_DIRS` or `TEMP_BLACKLISTED_DIRS`; this set only
+ * weakens *where* those lists apply and never introduces a name of its own. A test asserts that.
+ */
+export const CONTEXT_DEPENDENT_BLACKLISTED_DIRS = new Set([
+  "bin",
+  "build",
+  "cache",
+  "coverage",
+  "dist",
+  "logs",
+  "out",
+  "target",
+  "temp",
+  "temporary",
+  "tmp",
+]);
+
+/**
+ * Files and directories whose presence makes the containing directory a code project.
+ *
+ * This is the signal `ripgrep`, `fd` and VS Code use to decide the same question, and it costs
+ * nothing here: the traversal has already called `readdir` on the parent before it descends, so the
+ * sibling list is in hand. Compared lowercase — `makefile` and `Makefile` are both real.
+ */
+export const PROJECT_MARKER_ENTRIES = new Set([
+  ".git",
+  ".gitignore",
+  ".hg",
+  ".svn",
+  "build.gradle",
+  "build.gradle.kts",
+  "build.sbt",
+  "cargo.toml",
+  "cmakelists.txt",
+  "composer.json",
+  "deno.json",
+  "gemfile",
+  "go.mod",
+  "makefile",
+  "meson.build",
+  "mix.exs",
+  "package.json",
+  "package.swift",
+  "pnpm-workspace.yaml",
+  "pom.xml",
+  "pubspec.yaml",
+  "pyproject.toml",
+  "requirements.txt",
+  "settings.gradle",
+  "setup.py",
+  "tsconfig.json",
+]);
+
+/** Project markers carrying a per-project name, so only the suffix is fixed. */
+export const PROJECT_MARKER_SUFFIXES = [
+  ".csproj",
+  ".sln",
+  ".xcodeproj",
+  ".xcworkspace",
+];
+
+/**
  * macOS 媒体库 package 后缀黑名单（小写，匹配时大小写不敏感）。
  * 这类 bundle 内部全是 UUID 命名的衍生图/缓存/渲染件，按文件名搜索无意义，
  * 整棵子树都不应进入文件索引（曾因 Photos Library 的大小写敏感放行逻辑被错误索引，
