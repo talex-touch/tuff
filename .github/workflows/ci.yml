@@ -394,13 +394,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Both verified passing on a clean tree before being wired: the route-tree check exits 0
-      # with "server/api route tree verified", the fence check exits 0 silently.
+      # All three verified passing on a clean tree before being wired: the route-tree check exits 0
+      # with "server/api route tree verified", the fence check exits 0 silently, and the icon check
+      # exits 0 with "ok — installed: carbon, cib, logos, twemoji".
       - name: Verify server API route tree
         run: pnpm -C apps/nexus check:api-routes
 
       - name: Verify MDC fences
         run: pnpm -C apps/nexus check:mdc-fences
+
+      # #1768 shipped blank icons for two days: eight of nine shortcuts aliased onto
+      # `@iconify-json/ri`, which this app does not install, and UnoCSS emits nothing for a
+      # collection it cannot resolve. The aliases were fixed and this script was written to block a
+      # relapse — but it was never invoked by anything, so it blocked nothing (#1776).
+      #
+      # Also verified it can fail, since a gate that only ever passes is what let #1768 land: a
+      # planted `class="i-ri-refresh-line"` under app/components/ exits 1 and names the file.
+      - name: Verify icon collections are installed
+        run: pnpm -C apps/nexus check:icon-collections
 
       # Blocking. It was briefly continue-on-error because wiring it up is what discovered
       # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
