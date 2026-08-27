@@ -677,10 +677,12 @@ function inspectTargetExpression(): string {
     hasRouter: Boolean(window.__VUE_ROUTER__?.push),
     // Was \`hasIpcInvoke\`, which no renderer can ever report true: the preload bridges send/on/
     // removeListener and leaves \`invoke\` off deliberately. selectSettingsTarget required it, so it
-    // matched no target at all (#1775). This reports what the probe actually needs.
-    hasChannelBridge: Boolean(
-      window.electron?.ipcRenderer?.send && window.electron?.ipcRenderer?.on
-    ),
+    // matched no target at all (#1775). This reports what the probe actually needs — and it must
+    // be callable, not merely truthy: channelRequestPrelude refuses non-function members, so
+    // selection has to apply the same gate.
+    hasChannelBridge:
+      typeof window.electron?.ipcRenderer?.send === 'function' &&
+      typeof window.electron?.ipcRenderer?.on === 'function',
     hasSettingsShell: Boolean(document.querySelector('.AppSettings-Container')),
     text: document.body?.innerText?.slice(0, 1000) || ''
   }))()`

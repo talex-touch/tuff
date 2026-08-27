@@ -202,7 +202,7 @@ describe('packaged indexing diagnostics probe helpers', () => {
         snapshot: {
           hasRouter: true,
           // Exactly the expression the probe evaluates in the page.
-          hasChannelBridge: Boolean(bridge.send && bridge.on),
+          hasChannelBridge: typeof bridge.send === 'function' && typeof bridge.on === 'function',
           hasSettingsShell: true,
           text: 'App Settings'
         }
@@ -210,6 +210,29 @@ describe('packaged indexing diagnostics probe helpers', () => {
     ])
 
     expect(selected?.id).toBe('settings')
+  })
+
+  /**
+   * The truthiness trap on the same expression: a bridge whose members exist but are not callable
+   * satisfies `Boolean(send && on)` and then dies in channelRequestPrelude, which requires
+   * functions. Selection applies the same typeof gate so such a target is never chosen.
+   */
+  it('rejects a target whose bridge members are truthy but not callable', () => {
+    const bridge: { send: unknown; on: unknown } = { send: true, on: 'listener' }
+    const selected = selectSettingsTarget([
+      {
+        target: makeTarget('settings', 'app://tuff/renderer/index.html#/setting', 'Settings'),
+        snapshot: {
+          hasRouter: true,
+          // Exactly the expression the probe evaluates in the page.
+          hasChannelBridge: typeof bridge.send === 'function' && typeof bridge.on === 'function',
+          hasSettingsShell: true,
+          text: 'App Settings'
+        }
+      }
+    ])
+
+    expect(selected).toBeUndefined()
   })
 
   it('rejects a target with no channel bridge, since the probe cannot talk to it', () => {
