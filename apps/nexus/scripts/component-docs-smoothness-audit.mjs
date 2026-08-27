@@ -15,7 +15,7 @@
 // Frame numbers come from a dev server and an unminified bundle: treat them as
 // relative signals between pages of the same run, not absolute budgets.
 
-import { mkdir, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import {
@@ -28,8 +28,30 @@ import {
   repoRoot,
   screenshot,
   setViewport,
-  waitFor,
 } from './audit-cdp-client.mjs'
+
+// An evaluate issued the instant navigation kills the old context can get no
+// response at all — client.send has no timeout, so a plain await hangs the
+// sweep forever. Race every evaluate against a deadline and let the orphan
+// leak; the next poll issues a fresh call against the settled context.
+const TIMED_OUT = Symbol('timed-out')
+async function safeEval(client, expression, ms = 3000) {
+  const result = await Promise.race([
+    evaluate(client, expression).catch(() => TIMED_OUT),
+    delay(ms).then(() => TIMED_OUT),
+  ])
+  return result === TIMED_OUT ? undefined : result
+}
+
+async function pollUntil(client, expression, timeoutMs) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (await safeEval(client, `Boolean(${expression})`))
+      return true
+    await delay(250)
+  }
+  return false
+}
 
 // localhost, not 127.0.0.1 — the dev server binds the former only.
 const nexusBaseUrl = (process.env.NEXUS_SMOOTHNESS_URL || 'http://localhost:3200').replace(/\/$/, '')
@@ -50,6 +72,18 @@ async function listSlugs() {
     .filter(entry => entry.endsWith('.zh.mdc'))
     .map(entry => entry.replace(/\.zh\.mdc$/, ''))
     .sort()
+}
+
+/** Overview pages (utils, foundations) legitimately have zero demos — flag a
+ * missing demo only against what the page's own content declares. */
+async function expectedDemoCount(slug) {
+  try {
+    const source = await readFile(path.join(componentsDir, `${slug}.${locale}.mdc`), 'utf8')
+    return [...source.matchAll(/TuffDemoWrapper\{/g)].length
+  }
+  catch {
+    return null
+  }
 }
 
 const PROBE_SETUP = `(() => {
@@ -120,24 +154,24 @@ async function auditPage(client, events, slug) {
   // The old document also answers readyState "complete", so the wait must pin
   // the new pathname first or every probe runs against the previous page.
   const pathname = `/${locale}/docs/dev/components/${slug}`
-  await waitFor(client, `location.pathname === ${JSON.stringify(pathname)} && document.readyState === "complete"`, 60000)
+  const loaded = await pollUntil(client, `location.pathname === ${JSON.stringify(pathname)} && document.readyState === "complete"`, 60000)
   // Demos appear on hydration; cold dev routes compile on first hit.
-  await waitFor(client, 'document.querySelectorAll("section.tuff-demo").length > 0', 30000).catch(() => undefined)
+  await pollUntil(client, 'document.querySelectorAll("section.tuff-demo").length > 0', 30000)
   await delay(1200)
 
-  await evaluate(client, PROBE_SETUP)
+  await safeEval(client, PROBE_SETUP)
 
   // Scroll to the bottom in steps; every step can activate lazy demos.
   for (let i = 0; i < 60; i++) {
-    const step = JSON.parse((await evaluate(client, `JSON.stringify(${SCROLL_STEP})`)) ?? '{}')
+    const step = JSON.parse((await safeEval(client, `JSON.stringify(${SCROLL_STEP})`)) ?? '{}')
     await delay(320)
     if (step.done)
       break
   }
   // Let trailing dynamic imports and enter animations settle, then re-check.
   await delay(2500)
-  const probe = JSON.parse((await evaluate(client, PROBE_COLLECT)) ?? '{}')
-  const state = JSON.parse((await evaluate(client, PAGE_STATE)) ?? '{}')
+  const probe = JSON.parse((await safeEval(client, PROBE_COLLECT, 6000)) ?? '{}')
+  const state = JSON.parse((await safeEval(client, PAGE_STATE, 6000)) ?? '{}')
 
   const consoleErrors = events.consoleMessages
     .filter(message => message.level === 'error')
@@ -145,9 +179,12 @@ async function auditPage(client, events, slug) {
   const pageErrors = events.pageErrors.map(text => String(text).slice(0, 200))
   const badResponses = events.badResponses.map(bad => `${bad.status} ${bad.url}`.slice(0, 160))
 
+  const expected = await expectedDemoCount(slug)
   const verdictProblems = []
-  if (state.demosTotal === 0)
-    verdictProblems.push('no demos found on the page')
+  if (!loaded)
+    verdictProblems.push('page never finished loading')
+  if (expected !== null && expected > 0 && state.demosTotal < expected)
+    verdictProblems.push(`content declares ${expected} demo(s), page rendered ${state.demosTotal}`)
   if (state.demosFailed > 0)
     verdictProblems.push(`${state.demosFailed} demo(s) failed to load`)
   if (state.demosUnresolved > state.demosFailed)
@@ -162,6 +199,7 @@ async function auditPage(client, events, slug) {
   const result = {
     slug,
     url,
+    expectedDemos: expected,
     ...state,
     ...probe,
     consoleErrors,
