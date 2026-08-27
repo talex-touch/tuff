@@ -663,6 +663,17 @@ jobs:
           sudo apt-get install -y -qq xvfb libgbm1 libnss3 libasound2t64 libgtk-3-0t64 || sudo apt-get install -y -qq xvfb libgbm1 libnss3 libasound2 libgtk-3-0
           command -v xvfb-run >/dev/null || { echo "xvfb-run missing after install"; exit 1; }
 
+          # Whether this runner has the thing #213 is about. 24.04 ships
+          # kernel.apparmor_restrict_unprivileged_userns=1, which is what an AppImage cannot satisfy
+          # -- but GitHub's hosted images are not guaranteed to match a desktop install
+          # (actions/runner-images#10015 proposes disabling AppArmor on them). Without this the
+          # three `ok` runs on #213 cannot be told apart from "the restriction was never there",
+          # which is a pass produced by the absence of the condition under test.
+          # `|| true` because -e is on and a missing sysctl is a real answer, not a step failure.
+          USERNS_RESTRICT=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo "not present")
+          export TUFF_LAUNCH_USERNS_RESTRICT="$USERNS_RESTRICT"
+          echo "kernel.apparmor_restrict_unprivileged_userns=$USERNS_RESTRICT"
+
           APPIMAGE=$(find apps/core-app/dist -name "*.AppImage" -type f | head -1)
           if [ -z "$APPIMAGE" ]; then
             echo "No .AppImage to launch. The verification step above should already have failed."
