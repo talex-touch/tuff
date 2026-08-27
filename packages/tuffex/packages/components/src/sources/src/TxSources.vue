@@ -100,7 +100,13 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
       </span>
     </button>
 
-    <div :id="bodyId" class="tx-sources__collapse" :class="{ 'is-open': open }">
+    <!-- `inert` while closed: a 0fr grid still leaves its links in the tab order -->
+    <div
+      :id="bodyId"
+      class="tx-sources__collapse"
+      :class="{ 'is-open': open }"
+      :inert="open ? undefined : true"
+    >
       <ol class="tx-sources__list">
         <li v-for="(source, index) in sources" :key="source.id" class="tx-sources__item">
           <a
