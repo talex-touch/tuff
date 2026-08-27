@@ -410,23 +410,23 @@ code: |
 - 主进程验证配置、分配 sessionId、创建 DivisionBoxSession 实例
 
 **资源管理**：
-- 分配 sessionId（自增计数器）
+- 分配 sessionId（格式为 `division-box-${timestamp}-${counter}`，即时间戳加递增计数器）
 - 验证 URL 协议和权限
 - 初始化会话状态存储
 - 如果配置了 `keepAlive`，注册到 LRU 缓存管理器
 
 **异常处理**：
-- URL 协议不支持 → 返回 `DivisionBoxError`（`INVALID_URL`）
+- URL 缺失或非法（配置校验失败）→ 返回 `DivisionBoxError`（`CONFIG_ERROR`）
 - 权限不足 → 返回 `DivisionBoxError`（`PERMISSION_DENIED`）
-- 资源超限（超过 `MAX_ACTIVE_SESSIONS`）→ 返回 `DivisionBoxError`（`RESOURCE_LIMIT_EXCEEDED`）
+- 资源超限（超过 `MAX_ACTIVE_SESSIONS`）→ 返回 `DivisionBoxError`（`LIMIT_EXCEEDED`）
 
 ### attach 阶段
 
-`attach` 发生在窗口创建完成后，视图已附加到 DivisionBox 窗口。
+`attach` 发生在窗口创建完成后。
 
 **触发时机**：
-- WebContentsView 创建并附加到 BrowserWindow
-- 插件 UI 开始加载（`did-start-loading` 事件）
+- 窗口创建完成后，`createWindow()` 末尾显式调用 `setState(attach)` 进入该状态
+- 状态推进完全由显式 `setState` 调用驱动，主进程并未监听 `did-start-loading` 等 Electron 加载事件
 
 **资源管理**：
 - 创建 WebContentsView 实例
@@ -435,17 +435,17 @@ code: |
 - 如果是从 CoreBox detach，转移 UI view 所有权
 
 **异常处理**：
-- URL 加载失败 → 触发 `did-fail-load`，状态转为 `destroy`
-- WebContents 崩溃 → 触发 `render-process-gone`，状态转为 `destroy`
+- 窗口创建失败 → 清理窗口并抛出 `DivisionBoxError`（`RESOURCE_ERROR`）
+- URL 加载失败 → `loadURL()` 抛错并传递给调用方，管理器将会话移出注册表；当前没有 `did-fail-load` / `render-process-gone` 的事件监听
 
 ### active 阶段
 
 `active` 表示 DivisionBox 正在被用户交互。
 
 **触发时机**：
-- 窗口获得焦点
-- 页面完成加载（`did-finish-load`）
-- 从 `inactive` 恢复时（窗口重新获得焦点）
+- `attachUIView()` 在 `loadURL()` 完成后显式调用 `setState(active)`
+- 从 CoreBox 转移已有视图时，`attachExistingUIView()` 附加完成后显式进入 `active`；无 UI 视图的会话由管理器在窗口创建后直接置为 `active`
+- 从 `inactive` 恢复同样通过显式 `setState` 完成，没有基于窗口焦点的自动切换
 
 **资源管理**：
 - 正常运行状态，无需特殊资源管理
@@ -453,11 +453,11 @@ code: |
 
 ### inactive 阶段
 
-`inactive` 表示 DivisionBox 窗口失去焦点或被其他窗口遮挡。
+`inactive` 表示 DivisionBox 处于非活跃状态，可能被缓存。
 
 **触发时机**：
-- 窗口失去焦点（`blur` 事件）
-- 被其他 DivisionBox 或 CoreBox 窗口覆盖
+- 当前没有自动触发来源：主进程未监听 `blur` 或窗口遮挡等事件
+- 目前只能通过 `setState` / SDK 编程式进入；管理器监听到该状态后会把 `keepAlive` 会话放入 LRU 缓存
 
 **资源管理**：
 - 如果 `keepAlive=false`，可能触发延迟销毁
@@ -470,12 +470,11 @@ code: |
 
 ### detach 阶段
 
-`detach` 发生在 DivisionBox 窗口关闭或会话被显式分离时。
+`detach` 表示会话已从窗口显式分离。
 
 **触发时机**：
-- 调用 `divisionBox.close(sessionId)` 时
-- 窗口被用户关闭（`close` 事件）
-- 资源超限触发的强制销毁
+- 当前没有自动触发来源，只能通过 `setState` / SDK 编程式进入该状态
+- `divisionBox.close(sessionId)` 与窗口 `closed` 事件都会直接进入 `destroy`，不会经过 `detach`
 
 **资源管理**：
 - 如果 `keepAlive=true`，会话进入 LRU 缓存等待恢复
@@ -491,10 +490,10 @@ code: |
 `destroy` 是会话的最终状态，资源已完全释放。
 
 **触发时机**：
-- `keepAlive=false` 时的 `detach` 后
-- `keepAlive=true` 但被 LRU 回收时
-- 内存压力触发的强制销毁
-- 资源超限触发的强制销毁
+- 调用 `divisionBox.close(sessionId)` 时，`destroySession()` 直接调用 `destroy()`
+- 窗口被用户关闭时，`closed` 事件监听器调用 `destroy()`
+- `keepAlive` 会话被 LRU 缓存回收时（缓存溢出触发驱逐）
+- 内存压力触发的强制销毁（堆内存超限时驱逐部分缓存会话）
 
 **资源管理**：
 - 释放所有关联资源
@@ -512,18 +511,16 @@ code: |
 ```mermaid
 stateDiagram-v2
     [*] --> prepare: open()
-    prepare --> attach: 窗口创建完成
-    attach --> active: 窗口获得焦点
-    active --> inactive: 窗口失去焦点
-    inactive --> active: 窗口重新获得焦点
-    inactive --> detach: close() / 资源回收
-    active --> detach: close() / 资源回收
-    attach --> detach: close() / 资源回收
-    detach --> [*]: keepAlive=false
-    detach --> prepare: keepAlive=true, 恢复
-    prepare --> destroy: 加载失败 / 资源超限
-    attach --> destroy: 加载失败 / 崩溃
-    active --> destroy: 崩溃
+    prepare --> attach: 窗口创建完成（显式 setState）
+    attach --> active: loadURL() 完成（显式 setState）
+    active --> inactive: setState（编程调用）
+    inactive --> active: setState（编程调用）
+    inactive --> detach: setState（编程调用）
+    active --> detach: setState（编程调用）
+    detach --> destroy: destroy()
+    prepare --> destroy: close() 提前销毁
+    attach --> destroy: close() / 窗口 closed
+    active --> destroy: close() / 窗口 closed
     inactive --> destroy: LRU 回收 / 内存压力
     destroy --> [*]
 ```

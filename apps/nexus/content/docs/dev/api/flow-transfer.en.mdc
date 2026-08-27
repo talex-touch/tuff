@@ -127,32 +127,99 @@ code: |
 
   const flow = createFlowSDK(channel, 'my-plugin-id')
 
-  flow.onFlowTransfer(async (payload, ctx) => {
+  // Register the flow receive handler (required!)
+  const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
+    console.log(`Received ${payload.type} data from ${sender.senderName}`)
+
     try {
-      await handlePayload(payload)
-      ctx.acknowledge({ success: true })
+      // Process the data
+      const result = await processPayload(payload)
+
+      // Send the acknowledgment
+      await flow.acknowledge(sessionId, { success: true, result })
     } catch (error) {
-      ctx.reportError({ message: 'Failed to handle payload' })
+      // Report the error
+      await flow.reportError(sessionId, error.message)
     }
+  })
+
+  // Unregister when the component unmounts
+  onUnmounted(() => {
+    unsubscribe()
   })
 ---
 :::
 
-**Native share**
-
-Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
+## Flow Session State
 
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  await flow.nativeShare({
-    type: 'text',
-    data: 'Share via system dialog'
-  })
+  type FlowSessionState =
+    | 'INIT'             // Initialized
+    | 'TARGET_SELECTING' // User is selecting a target
+    | 'TARGET_SELECTED'  // Target selected
+    | 'DELIVERING'       // Delivering
+    | 'DELIVERED'        // Delivered
+    | 'PROCESSING'       // Target is processing
+    | 'ACKED'            // Acknowledged
+    | 'FAILED'           // Failed
+    | 'CANCELLED'        // Cancelled
 ---
 :::
 
-**Native targets**
+## Error Handling
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum FlowErrorCode {
+    SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
+    TARGET_NOT_FOUND = 'TARGET_NOT_FOUND',
+    TARGET_OFFLINE = 'TARGET_OFFLINE',
+    PAYLOAD_INVALID = 'PAYLOAD_INVALID',
+    PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
+    TYPE_NOT_SUPPORTED = 'TYPE_NOT_SUPPORTED',
+    PERMISSION_DENIED = 'PERMISSION_DENIED',
+    TIMEOUT = 'TIMEOUT',
+    CANCELLED = 'CANCELLED',
+    INTERNAL_ERROR = 'INTERNAL_ERROR'
+  }
+---
+:::
+
+## Native System Share
+
+Flow Transfer integrates the system's native share capabilities, so data can be shared to system apps such as AirDrop, Mail, and Messages. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
+
+**Using native share**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+
+  // Share via the system
+  const result = await flow.nativeShare({
+    type: 'text',
+    data: 'Hello World!'
+  })
+
+  // Specify a share target
+  const result = await flow.nativeShare(
+    { type: 'text', data: 'Hello!' },
+    'airdrop'  // Optional: 'system' | 'airdrop' | 'mail' | 'messages'
+  )
+
+  if (result.success) {
+    console.log('Share succeeded:', result.target)
+  } else {
+    console.error('Share failed:', result.error)
+  }
+---
+:::
+
+**Supported native targets**
 
 | Platform | Target | Notes |
 | --- | --- | --- |
@@ -165,15 +232,56 @@ code: |
 
 Flow target lists expose the system chooser as `system-share`; `flow.nativeShare()` also accepts `system` as a compatibility alias. Windows and Linux currently expose only the explicit `mail` fallback, not a fake system share panel.
 
+## Target Ranking Rules
+
+The Flow target list is sorted by the following priority:
+
+1. **Native share targets** - system share entries are shown first
+2. **Adapted plugins** - plugins that have registered an `onFlowTransfer` handler
+3. **Unadapted plugins** - plugins without a registered handler (shown with a "not adapted" hint)
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Adaptation status fields on FlowTargetInfo
+  interface FlowTargetInfo {
+    // ...other fields
+    hasFlowHandler: boolean    // Whether a handler is registered
+    isNativeShare?: boolean    // Whether this is a native share target
+    adaptationHint?: string    // Adaptation hint (e.g. "This plugin has not adapted Flow Transfer yet")
+  }
+---
+:::
+
+## IPC Channels (Implementation-Aligned)
+
+The following channels are the key event names used by the current implementation (see the main-process `apps/core-app/src/main/modules/flow-bus/`):
+
+- **`flow:bus:dispatch`**: dispatch a flow
+- **`flow:bus:get-targets`**: get available targets
+- **`flow:bus:cancel`**: cancel a session
+- **`flow:bus:acknowledge`**: ack
+- **`flow:bus:report-error`**: report an error
+- **`flow:session:update`**: broadcast session state updates
+- **`flow:bus:select-target`**: user picks a target in the selector panel (UI → main process)
+- **`flow:native:share`**: system share
+
+Plugin integration (registered on the main-process side):
+
+- **`flow:plugin:register-targets`**: register targets (plugin → main process)
+- **`flow:plugin:unregister-targets`**: unregister targets
+- **`flow:plugin:set-plugin-enabled`**: update plugin enabled state
+- **`flow:plugin:set-plugin-handler`**: declare whether the current plugin has registered an `onFlowTransfer` handler
+
+## Technical Notes
+- Target list is maintained by the main process and merged with native share targets.
+- Plugins are registered via `flow:plugin:register-targets`; missing registration means targets won’t appear.
+
 ## Best Practices
 - Register `onFlowTransfer` to avoid being marked “not supported”.
 - Provide clear `supportedTypes` and `description` for better target ranking.
 - Use `requireAck` for critical workflows and handle fallback actions.
 - Use QuickActions `shareItem()` for MetaK item sharing.
-
-## Technical Notes
-- Target list is maintained by the main process and merged with native share targets.
-- Plugins are registered via `flow:register-targets`; missing registration means targets won’t appear.
 
 ## Related Docs
 - [QuickActions SDK](./quick-actions.en.mdc)
