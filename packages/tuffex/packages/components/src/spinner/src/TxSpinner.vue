@@ -165,4 +165,39 @@ const styleVars = computed(() => ({
   filter: blur(4px);
   scale: 0.86;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-spinner {
+    animation: none;
+    // Visibility changes keep an opacity-only crossfade: the cue survives,
+    // the blur/scale movement does not.
+    transition: opacity 0.18s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .tx-spinner .tx-spinner__svg {
+    animation: none;
+  }
+
+  // The circle's dasharray/dashoffset attributes park the stroke fully
+  // offset — invisible — and the dash animation is what draws it. Frozen, it
+  // needs a static quarter arc or the fallback spinner vanishes entirely.
+  .tx-spinner .tx-spinner__circle {
+    animation: none;
+    stroke-dashoffset: 23.562;
+  }
+
+  // The pulsing ball is the activity layer over the ring + float dot; frozen
+  // at the base state it would fill the ring as a solid disc, so it hides and
+  // the static ring glyph remains.
+  .tx-spinner-container-ball {
+    animation: none;
+    opacity: 0;
+  }
+
+  .tx-spinner-visibility-enter-from,
+  .tx-spinner-visibility-leave-to {
+    filter: none;
+    scale: 1;
+  }
+}
 </style>

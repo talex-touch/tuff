@@ -15,10 +15,14 @@ describe('txSources', () => {
     const header = wrapper.find('.tx-sources__header')
     expect(header.text()).toContain('Used 2 sources')
     expect(header.attributes('aria-expanded')).toBe('false')
+    // Closed, the 0fr grid still holds real links — inert keeps them out of
+    // the tab order.
+    expect(wrapper.find('.tx-sources__collapse').attributes('inert')).toBe('true')
 
     await header.trigger('click')
     expect(header.attributes('aria-expanded')).toBe('true')
     expect(wrapper.find('.tx-sources__collapse').classes()).toContain('is-open')
+    expect(wrapper.find('.tx-sources__collapse').attributes('inert')).toBeUndefined()
   })
 
   it('formats singular counts and accepts a custom formatter', () => {
