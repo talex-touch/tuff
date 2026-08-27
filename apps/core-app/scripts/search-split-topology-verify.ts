@@ -176,11 +176,26 @@ export function compareParity(before: Topology, after: Topology): Check[] {
 /** WAL/contention evidence. The gate asks for the absence of these, so absence has to be measured. */
 export function judgeLog(logText: string): Check[] {
   const busy = (logText.match(/SQLITE_BUSY/g) ?? []).length
+  // SQLite defines SQLITE_LOCKED as a separate lock result code, with its own message ("database
+  // table is locked") that the text pattern below does not match. Substring matching also covers
+  // the extended forms (SQLITE_LOCKED_SHAREDCACHE, …), as it does for SQLITE_BUSY's.
+  const lockedCode = (logText.match(/SQLITE_LOCKED/g) ?? []).length
   const locked = (logText.match(/database is locked/gi) ?? []).length
   return [
     { name: 'no SQLITE_BUSY', ok: busy === 0, detail: `${busy} occurrence(s)` },
+    { name: 'no SQLITE_LOCKED', ok: lockedCode === 0, detail: `${lockedCode} occurrence(s)` },
     { name: 'no "database is locked"', ok: locked === 0, detail: `${locked} occurrence(s)` }
   ]
+}
+
+/**
+ * Only a confirmed missing table may read as "absent". Every other failure — lock, I/O,
+ * permission, corruption — must propagate: mapping those onto `null` would turn a damaged or
+ * contended profile into the silent pass this tool exists to remove. `@libsql/client` wraps the
+ * driver error but preserves the SQLite message, so "no such table" is the stable discriminator.
+ */
+export function isMissingTableError(error: unknown): boolean {
+  return error instanceof Error && /no such table/i.test(error.message)
 }
 
 /**
@@ -232,9 +247,12 @@ async function readCounts(
   try {
     for (const table of tables) {
       try {
+        // `table` comes from the SEARCH_OWNED const list; identifiers cannot be bound parameters,
+        // and nothing user-controlled reaches this string.
         const result = await client.execute(`SELECT count(*) AS c FROM ${table}`)
         counts[table] = Number(result.rows[0]?.c ?? 0)
-      } catch {
+      } catch (error) {
+        if (!isMissingTableError(error)) throw error
         // Absent table, not an empty one. Kept distinct so a missing migration cannot read as 0.
         counts[table] = null
       }
@@ -242,15 +260,17 @@ async function readCounts(
     try {
       const rows = await client.execute('SELECT type, count(*) AS c FROM files GROUP BY type')
       for (const row of rows.rows) filesByType[String(row.type)] = Number(row.c ?? 0)
-    } catch {
+    } catch (error) {
       // `files` absent: leave the map empty.
+      if (!isMissingTableError(error)) throw error
     }
     try {
       const rows = await client.execute(
         "SELECT count(*) AS c FROM file_extensions WHERE file_id IN (SELECT id FROM files WHERE type != 'app')"
       )
       nonAppExtensions = Number(rows.rows[0]?.c ?? 0)
-    } catch {
+    } catch (error) {
+      if (!isMissingTableError(error)) throw error
       nonAppExtensions = null
     }
   } finally {
@@ -293,7 +313,15 @@ async function main(): Promise<void> {
     console.error('       [--baseline <json>] [--log <file>] [--out <json>]')
     process.exit(2)
   }
-  const expect = has('expect-split') ? 'split' : has('expect-shared') ? 'shared' : null
+  const expectSplit = has('expect-split')
+  const expectShared = has('expect-shared')
+  if (expectSplit && expectShared) {
+    // Contradictory input must not be silently interpreted: whichever one this picked, the run
+    // would judge against an expectation nobody stated.
+    console.error('contradictory: pass exactly one of --expect-split or --expect-shared, not both')
+    process.exit(2)
+  }
+  const expect = expectSplit ? 'split' : expectShared ? 'shared' : null
   if (!expect) {
     console.error(
       'refusing to guess: pass --expect-split or --expect-shared to say which flag the app ran with'
@@ -305,7 +333,10 @@ async function main(): Promise<void> {
   const checks = judgeTopology(topology, expect)
 
   const logPath = arg('log')
-  if (logPath) checks.push(...judgeLog(await readFile(logPath, 'utf8').catch(() => '')))
+  // A log that cannot be read is a failed run, not a clean one — swallowing the error here would
+  // judge absence of evidence as evidence of absence. The read error propagates to main's catch,
+  // which reports it and exits nonzero.
+  if (logPath) checks.push(...judgeLog(await readFile(logPath, 'utf8')))
 
   const baselinePath = arg('baseline')
   if (baselinePath) {

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import {
   compareParity,
   candidateDatabaseDirs,
+  isMissingTableError,
+  readTopology,
   resolveProfileLayout,
   judgeLog,
   judgeTopology,
@@ -167,6 +172,67 @@ describe('judgeLog', () => {
 
   it('fails on a lock message regardless of case', () => {
     expect(failing(judgeLog('Error: Database Is Locked'))).toContain('no "database is locked"')
+  })
+
+  /**
+   * SQLITE_LOCKED is a distinct lock result code whose message ("database table is locked") the
+   * text pattern does not match, so a log carrying only it used to pass. The substring also has to
+   * cover the extended forms.
+   */
+  it('fails on SQLITE_LOCKED, including the extended result codes', () => {
+    expect(failing(judgeLog('err: SQLITE_LOCKED: database table is locked'))).toContain(
+      'no SQLITE_LOCKED'
+    )
+    expect(failing(judgeLog('err: SQLITE_LOCKED_SHAREDCACHE'))).toContain('no SQLITE_LOCKED')
+  })
+})
+
+describe('readTopology error discrimination', () => {
+  /** The classification the absent-vs-broken split rests on. */
+  it('classifies only missing-table errors as absence', () => {
+    expect(isMissingTableError(new Error('no such table: files'))).toBe(true)
+    expect(isMissingTableError(new Error('SQLITE_BUSY: database is locked'))).toBe(false)
+    expect(isMissingTableError(new Error('SQLITE_NOTADB: file is not a database'))).toBe(false)
+    expect(isMissingTableError(new Error('disk I/O error'))).toBe(false)
+    expect(isMissingTableError(new Error('attempt to write a readonly database'))).toBe(false)
+    expect(isMissingTableError('no such table')).toBe(false)
+  })
+
+  /**
+   * End-to-end through real libsql. A zero-byte database.db is a valid, empty SQLite database, so
+   * every table reads as absent — null, not zero, not a throw. That is the legitimate use of the
+   * missing-table mapping.
+   */
+  it('reads an empty database as all-absent rather than failing or zeroing', async () => {
+    const profile = mkdtempSync(path.join(os.tmpdir(), 'split-verify-'))
+    try {
+      const dbDir = path.join(profile, 'tuff', 'modules', 'database')
+      mkdirSync(dbDir, { recursive: true })
+      writeFileSync(path.join(dbDir, 'database.db'), '')
+      const topology = await readTopology(profile)
+      expect(topology.primary.search_index).toBeNull()
+      expect(topology.primaryFilesByType).toEqual({})
+      expect(topology.primaryNonAppExtensions).toBeNull()
+    } finally {
+      rmSync(profile, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * The other half of the discrimination: a damaged file must reject, because reading it as
+   * "tables absent" would judge a corrupt profile exactly like an unpopulated one — the silent
+   * pass the verifier exists to remove.
+   */
+  it('rejects a corrupt database instead of reading it as absent tables', async () => {
+    const profile = mkdtempSync(path.join(os.tmpdir(), 'split-verify-'))
+    try {
+      const dbDir = path.join(profile, 'tuff', 'modules', 'database')
+      mkdirSync(dbDir, { recursive: true })
+      writeFileSync(path.join(dbDir, 'database.db'), 'not a sqlite database\n'.repeat(64))
+      await expect(readTopology(profile)).rejects.toThrow()
+    } finally {
+      rmSync(profile, { recursive: true, force: true })
+    }
   })
 })
 
