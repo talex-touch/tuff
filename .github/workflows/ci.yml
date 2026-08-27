@@ -394,6 +394,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Keeps demo-registry.ts, the demo .vue files, and content TuffDemoWrapper
+      # references agreeing three ways; a content key the registry does not
+      # define renders as an empty demo box with no build error. Verified
+      # passing on a clean tree, and its --self-test proves each failure class
+      # is detectable before trusting the green.
+      - name: Verify demo registry
+        run: |
+          pnpm -C apps/nexus check:demo-registry
+          node apps/nexus/build/check-demo-registry-orphans.mjs --self-test
+
+      # Wired 2026-08-27, the day its offender list emptied (#1776 measured it
+      # red before that): zh/en doc pairs must keep the same heading shape, or
+      # the shorter locale silently loses chapters.
+      - name: Verify doc translation parity
+        run: pnpm -C apps/nexus check:doc-parity
+
       # Both verified passing on a clean tree before being wired: the route-tree check exits 0
       # with "server/api route tree verified", the fence check exits 0 silently.
       - name: Verify server API route tree
