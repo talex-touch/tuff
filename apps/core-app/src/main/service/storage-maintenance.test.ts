@@ -1,3 +1,6 @@
+import type { SQL } from 'drizzle-orm'
+import { ne } from 'drizzle-orm'
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -63,6 +66,7 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { files } from '../db/schema'
 import { cleanupFileIndex } from './storage-maintenance'
 
 describe('cleanupFileIndex', () => {
@@ -126,11 +130,27 @@ describe('cleanupFileIndex', () => {
     await cleanupFileIndex({})
 
     // Four tables are cleared: fileIndexProgress and scanProgress are file-only and stay
-    // unscoped, while files and file_extensions must each go through `.where(...)`. Asserting the
-    // delete counts rather than the select counts keeps this independent of how the
-    // file_extensions subquery happens to be built.
+    // unscoped, while files and file_extensions must each go through `.where(...)`.
     expect(deleteMock).toHaveBeenCalledTimes(4)
     expect(deleteWhereMock).toHaveBeenCalledTimes(2)
+
+    // Counting `.where()` calls alone would pass with an inverted predicate, so pin the rendered
+    // SQL: the same clause built here must render identically to what the deletes received. If the
+    // source predicate drifts from `ne(files.type, 'app')`, the render diverges and this fails.
+    const dialect = new SQLiteSyncDialect()
+    const render = (predicate: SQL) => dialect.sqlToQuery(predicate)
+
+    const [extensionsPredicate] = deleteWhereMock.mock.calls[0] as [SQL]
+    const [filesPredicate] = deleteWhereMock.mock.calls[1] as [SQL]
+
+    expect(render(filesPredicate)).toEqual(render(ne(files.type, 'app')))
+    // The extensions delete must be scoped by the same non-app file set. Rendering the expected
+    // subquery shape verbatim would over-pin how it is built, so assert the load-bearing parts:
+    // it filters file_extensions.file_id against files rows excluding type = 'app'.
+    const extensionsRender = render(extensionsPredicate)
+    expect(extensionsRender.sql).toContain('"file_id" in ')
+    expect(extensionsRender.sql).toContain('"type" <> ?')
+    expect(extensionsRender.params).toEqual(['app'])
   })
 
   it('returns rebuild error while still attempting file index rebuild', async () => {
