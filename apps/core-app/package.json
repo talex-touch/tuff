@@ -115,7 +115,7 @@
     "@talex-touch/tuff-native": "workspace:^",
     "@talex-touch/tuffex": "workspace:^",
     "@talex-touch/utils": "workspace:^",
-    "@vue/compiler-sfc": "^3.5.39",
+    "@vue/compiler-sfc": "^3.5.41",
     "@vueuse/core": "catalog:frontend",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
