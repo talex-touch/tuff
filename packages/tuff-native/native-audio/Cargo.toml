@@ -14,7 +14,7 @@ enigo = "0.6"
 hound = "3.5"
 napi.workspace = true
 napi-derive.workspace = true
-symphonia = { version = "0.6", features = ["mp3", "wav", "pcm"] }
+symphonia = { version = "0.5", features = ["mp3", "wav", "pcm"] }
 
 [build-dependencies]
 napi-build.workspace = true
