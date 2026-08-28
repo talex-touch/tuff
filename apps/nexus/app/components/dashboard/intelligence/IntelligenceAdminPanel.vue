@@ -6,9 +6,11 @@ import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { $fetch as rawFetch } from 'ofetch'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
+import { isFeatureFlagEnabled } from '#shared/utils/feature-flags'
 
 const { t } = useI18n()
 const { user } = useAuthUser()
+const runtimeConfig = useRuntimeConfig()
 
 // Admin check - redirect if not admin
 const isAdmin = computed(() => {
@@ -91,13 +93,13 @@ interface Pagination {
 // ── State ──
 const activeTab = ref('overview')
 const settingsRequested = ref(false)
+const settingsLoaded = ref(false)
 const overviewRequested = ref(false)
 const auditRequested = ref(false)
 const ipBansRequested = ref(false)
 const settings = ref<Settings>({
   enableAudit: false,
 })
-const error = ref<string | null>(null)
 const auditLogs = ref<AuditLog[]>([])
 const auditLoading = ref(false)
 const auditError = ref<string | null>(null)
@@ -115,7 +117,10 @@ const userUsageResult = ref<UsageResult | null>(null)
 const ipBans = ref<IpBan[]>([])
 const ipBanLoading = ref(false)
 const ipBanError = ref<string | null>(null)
-const ipBanFeatureAvailable = ref(true)
+// Seeded from the deploy-time flag so a disabled environment never fires the
+// risk-gated ip-bans request just to learn it 404s; the fetch-time fallback
+// below still covers a server that disagrees with its own public config.
+const ipBanFeatureAvailable = ref(isFeatureFlagEnabled(runtimeConfig.public?.riskControl?.enabled))
 const ipBanStepUpToken = ref('')
 const ipBanForm = reactive({
   ip: '',
@@ -144,8 +149,13 @@ async function fetchSettings() {
     const data = await rawFetch<{ settings: Settings }>('/api/dashboard/intelligence/settings')
     if (data.settings)
       settings.value = { ...settings.value, ...data.settings }
+    settingsLoaded.value = true
   }
-  catch {}
+  catch {
+    // enableAudit stays at its `false` default here, so claiming "auditing is off"
+    // would report our own fetch failure as a confirmed configuration state.
+    settingsLoaded.value = false
+  }
 }
 
 async function fetchAudits() {
@@ -397,14 +407,6 @@ function formatEndpointCandidates(list?: string[]) {
       </p>
     </header>
 
-    <!-- Error -->
-    <div v-if="error" class="flex items-center justify-between rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
-      <span>{{ error }}</span>
-      <TxButton variant="bare" circle size="mini" @click="error = null">
-        <span class="i-carbon-close" />
-      </TxButton>
-    </div>
-
     <TxTabs v-model="activeTab" placement="top" :content-scrollable="false" class="IntelligenceTabs">
       <TxTabItem name="lab" icon-class="i-carbon-beaker">
         <template #name>
@@ -420,7 +422,7 @@ function formatEndpointCandidates(list?: string[]) {
         </template>
 
         <div class="space-y-6">
-          <section v-if="ipBanFeatureAvailable" class="apple-card-lg space-y-4 p-6">
+          <section class="apple-card-lg space-y-4 p-6">
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h2 class="apple-heading-sm">
@@ -443,13 +445,15 @@ function formatEndpointCandidates(list?: string[]) {
               <TxSpinner :size="18" />
             </div>
 
-            <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <!-- `?? 0` renders four zero cards from a null payload, so a failed load
+                 looked exactly like a quiet week. Cards need real data behind them. -->
+            <div v-else-if="overviewData" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
                 <p class="text-xs text-black/40 dark:text-white/40">
                   {{ t('dashboard.sections.intelligence.overview.cards.totalRequests') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ overviewData?.summary.totalRequests ?? 0 }}
+                  {{ overviewData.summary.totalRequests }}
                 </p>
               </div>
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
@@ -457,7 +461,7 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.cards.successRate') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ overviewData?.summary.successRate ?? 0 }}%
+                  {{ overviewData.summary.successRate }}%
                 </p>
               </div>
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
@@ -465,7 +469,7 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.cards.totalTokens') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ overviewData?.summary.totalTokens ?? 0 }}
+                  {{ overviewData.summary.totalTokens }}
                 </p>
               </div>
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
@@ -473,13 +477,13 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.cards.avgLatency') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ overviewData?.summary.avgLatency ?? 0 }}ms
+                  {{ overviewData.summary.avgLatency }}ms
                 </p>
               </div>
             </div>
 
-            <p class="text-[11px] text-black/40 dark:text-white/40">
-              {{ t('dashboard.sections.intelligence.overview.sampleHint', { count: overviewData?.summary.sampleSize || 0 }) }}
+            <p v-if="overviewData" class="text-[11px] text-black/40 dark:text-white/40">
+              {{ t('dashboard.sections.intelligence.overview.sampleHint', { count: overviewData.summary.sampleSize }) }}
             </p>
           </section>
 
@@ -530,7 +534,7 @@ function formatEndpointCandidates(list?: string[]) {
             </div>
           </section>
 
-          <section v-if="ipBanFeatureAvailable" class="apple-card-lg space-y-4 p-6">
+          <section class="apple-card-lg space-y-4 p-6">
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h3 class="apple-heading-sm">
@@ -603,7 +607,13 @@ function formatEndpointCandidates(list?: string[]) {
             </div>
           </section>
 
-          <section class="apple-card-lg space-y-4 p-6">
+          <!--
+            Only this section is risk-gated: server/middleware/feature-gates.ts blocks
+            /api/dashboard/intelligence/ip-bans alone. Overview and user-usage above are
+            plain requireAdmin routes, so gating them on the ip-ban flag blanked working
+            panels and left this form live while claiming it was hidden.
+          -->
+          <section v-if="ipBanFeatureAvailable" class="apple-card-lg space-y-4 p-6">
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h3 class="apple-heading-sm">
@@ -740,7 +750,7 @@ function formatEndpointCandidates(list?: string[]) {
       </div>
 
       <div
-        v-if="!settings.enableAudit"
+        v-if="settingsLoaded && !settings.enableAudit"
         class="rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/40 dark:bg-white/[0.04] dark:text-white/40"
       >
         {{ t('dashboard.sections.intelligence.audit.disabledHint') }}
@@ -834,7 +844,9 @@ function formatEndpointCandidates(list?: string[]) {
         </div>
       </div>
 
-            <div v-else class="rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/40 dark:bg-white/[0.04] dark:text-white/40">
+            <!-- Without the auditError guard a failed load printed the red banner and
+                 "no audit records yet" together: one says we don't know, one says none exist. -->
+            <div v-else-if="!auditError" class="rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/40 dark:bg-white/[0.04] dark:text-white/40">
               {{ t('dashboard.sections.intelligence.audit.empty') }}
             </div>
 

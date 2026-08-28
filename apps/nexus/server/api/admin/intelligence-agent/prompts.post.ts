@@ -2,6 +2,7 @@ import type {
   IntelligencePromptRecord,
   IntelligencePromptRegistryUpsertPayload,
 } from '@talex-touch/tuff-intelligence/light'
+import { logAdminAudit } from '../../../utils/adminAuditStore'
 import { requireAdmin } from '../../../utils/auth'
 import { savePromptRecord } from '../../../utils/intelligenceStore'
 
@@ -55,5 +56,23 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const record = normalizeRecord(body)
   const saved = await savePromptRecord(event, userId, record)
+
+  await logAdminAudit(event, {
+    adminUserId: userId,
+    action: 'intelligence.prompt.upsert',
+    targetType: 'intelligence_prompt',
+    targetId: saved.id,
+    targetLabel: `${saved.id}@${saved.version}`,
+    metadata: {
+      after: {
+        version: saved.version,
+        scope: saved.scope,
+        status: saved.status,
+        capabilityId: saved.capabilityId ?? null,
+        providerId: saved.providerId ?? null,
+      },
+    },
+  })
+
   return { prompt: saved }
 })

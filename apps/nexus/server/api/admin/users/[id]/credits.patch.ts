@@ -4,6 +4,8 @@ import { getUserById } from '../../../../utils/authStore'
 import { logAdminAudit } from '../../../../utils/adminAuditStore'
 import { adjustUserCredits, getCreditSummary, listCreditLedgerByUsers } from '../../../../utils/creditsStore'
 
+const MAX_CREDIT_ADJUSTMENT = 1_000_000_000
+
 export default defineEventHandler(async (event) => {
   const { userId: adminId } = await requireAdmin(event)
 
@@ -21,6 +23,9 @@ export default defineEventHandler(async (event) => {
   const amount = Math.round(Math.abs(Number(body?.amount ?? 0)))
   if (!Number.isFinite(amount) || amount <= 0)
     throw createError({ statusCode: 400, statusMessage: 'Invalid credit amount.' })
+  // Beyond this the balance and ledger stop round-tripping through float arithmetic.
+  if (amount > MAX_CREDIT_ADJUSTMENT)
+    throw createError({ statusCode: 400, statusMessage: 'Credit amount exceeds the maximum single adjustment.' })
 
   const direction = String(body?.direction || 'add').trim().toLowerCase()
   if (direction !== 'add' && direction !== 'subtract')

@@ -72,22 +72,40 @@ const filters = reactive({
 const hasPrev = computed(() => pagination.page > 1)
 const hasNext = computed(() => pagination.page < pagination.totalPages)
 
-const actionOptions = computed(() => ([
-  { value: 'all', label: t('dashboard.sections.audits.filters.actionAll', 'All actions') },
-  { value: 'user.role.update', label: t('dashboard.sections.audits.actions.userRole', 'User role updated') },
-  { value: 'user.status.update', label: t('dashboard.sections.audits.actions.userStatus', 'User status updated') },
-  { value: 'subscription.grant', label: t('dashboard.sections.audits.actions.subscriptionGrant', 'Subscription granted') },
-  { value: 'activation_code.revoke', label: t('dashboard.sections.audits.actions.codeRevoke', 'Activation code revoked') },
-  { value: 'audit.export', label: t('dashboard.sections.audits.actions.auditExport', 'Audit exported') },
-]))
-
-const actionLabels: Record<string, string> = {
+// Covers only 5 of the 17 actions logAdminAudit() writes; the other 12 have no
+// locale key yet, so they stay out of the filter and render as their raw action
+// id. admin-page-layout-contracts.test.ts pins that list so it cannot grow.
+const actionLabels = computed<Record<string, string>>(() => ({
   'user.role.update': t('dashboard.sections.audits.actions.userRole', 'User role updated'),
   'user.status.update': t('dashboard.sections.audits.actions.userStatus', 'User status updated'),
   'subscription.grant': t('dashboard.sections.audits.actions.subscriptionGrant', 'Subscription granted'),
   'activation_code.revoke': t('dashboard.sections.audits.actions.codeRevoke', 'Activation code revoked'),
   'audit.export': t('dashboard.sections.audits.actions.auditExport', 'Audit exported'),
-}
+  // The audit-coverage pass made these actions start appearing in the table.
+  // Without a label each renders as its raw id and is absent from the filter
+  // dropdown, so the entries exist but no admin can find them.
+  'user.role.bootstrap': t('dashboard.sections.audits.actions.userRoleBootstrap', 'Administrator bootstrapped'),
+  'user.profile.update': t('dashboard.sections.audits.actions.userProfileUpdate', 'User profile updated'),
+  'user.credits.adjust': t('dashboard.sections.audits.actions.userCreditsAdjust', 'User credits adjusted'),
+  'activation_code.generate': t('dashboard.sections.audits.actions.codeGenerate', 'Activation codes generated'),
+  'doc_comment.delete': t('dashboard.sections.audits.actions.docCommentDelete', 'Doc comment deleted'),
+  'store_review.status.update': t('dashboard.sections.audits.actions.storeReviewStatus', 'Store review status updated'),
+  'plugin_scan_waiver.create': t('dashboard.sections.audits.actions.scanWaiverCreate', 'Plugin scan waiver created'),
+  'plugin_scan_waiver.revoke': t('dashboard.sections.audits.actions.scanWaiverRevoke', 'Plugin scan waiver revoked'),
+  'maintenance.telemetry_retention.run': t('dashboard.sections.audits.actions.telemetryRetentionRun', 'Telemetry retention run'),
+  'intelligence.prompt.upsert': t('dashboard.sections.audits.actions.promptUpsert', 'Agent prompt saved'),
+  'intelligence.prompt.delete': t('dashboard.sections.audits.actions.promptDelete', 'Agent prompt deleted'),
+  'intelligence.prompt-binding.upsert': t('dashboard.sections.audits.actions.promptBindingUpsert', 'Agent prompt binding saved'),
+  'intelligence.prompt-binding.delete': t('dashboard.sections.audits.actions.promptBindingDelete', 'Agent prompt binding deleted'),
+  'release.evidence.run.create': t('dashboard.sections.audits.actions.evidenceRunCreate', 'Release evidence run created'),
+  'release.evidence.item.upsert': t('dashboard.sections.audits.actions.evidenceItemUpsert', 'Release evidence item saved'),
+  'release.evidence.doc-guard.record': t('dashboard.sections.audits.actions.evidenceDocGuard', 'Release doc guard recorded'),
+}))
+
+const actionOptions = computed(() => ([
+  { value: 'all', label: t('dashboard.sections.audits.filters.actionAll', 'All actions') },
+  ...Object.entries(actionLabels.value).map(([value, label]) => ({ value, label })),
+]))
 
 const auditColumns = computed<DataTableColumn<AdminAudit>[]>(() => [
   { key: 'time', title: t('dashboard.sections.audits.table.time', 'Time'), width: 180 },
@@ -128,7 +146,10 @@ async function fetchAudits(options: { resetPage?: boolean } = {}) {
     }
   }
   catch (err: any) {
-    error.value = err?.data?.message || err?.message || t('dashboard.sections.audits.errors.loadFailed', 'Failed to load audit logs.')
+    // Only the server-supplied message is presentable; err.message is ofetch's
+    // internal '[GET] "/api/..." <no response> Failed to fetch' string.
+    error.value = err?.data?.message || t('dashboard.sections.audits.errors.loadFailed', 'Failed to load audit logs.')
+    audits.value = []
   }
   finally {
     loading.value = false
@@ -325,25 +346,32 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="loading && !audits.length" class="space-y-3 p-5">
+      <div v-if="loading && !audits.length" class="p-5 space-y-3">
         <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
           {{ t('dashboard.sections.audits.loading', 'Loading...') }}
         </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
+        <!-- One skeleton row per audit row, split on the same 5 columns. -->
+        <div
+          v-for="row in 6"
+          :key="row"
+          class="grid grid-cols-[180px_24%_180px_180px_1fr] items-center gap-4 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
+        >
+          <TxSkeleton v-for="col in 5" :key="col" :loading="true" :lines="1" />
         </div>
       </div>
 
-      <div v-else-if="!audits.length" class="p-8 text-center text-black/50 dark:text-white/50">
+      <!-- The banner above already names the failure; showing the empty state
+           too would read as "the log is genuinely empty". -->
+      <div v-else-if="!audits.length && !error" class="p-8 text-center text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.audits.empty', 'No audit records found.') }}
       </div>
 
-      <div v-else class="overflow-x-auto">
-        <TxDataTable :columns="auditColumns" :data="audits" row-key="id" class="min-w-[860px]">
+      <div v-else>
+        <!-- scroll-x makes TxDataTable own the scroll; without it the component's
+             own `overflow: hidden` clips the last column and no ancestor can
+             scroll to it. -->
+        <TxDataTable :columns="auditColumns" :data="audits" row-key="id" scroll-x>
           <template #cell-time="{ row: entry }">
             <span class="text-sm text-black/60 dark:text-white/60">{{ formatTime(entry.createdAt) }}</span>
           </template>
