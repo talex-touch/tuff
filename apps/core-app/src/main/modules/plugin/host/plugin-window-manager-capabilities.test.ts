@@ -151,6 +151,11 @@ function createHarness(
   }
 }
 
+/** Serializes a result with token values blanked, so a redaction scan cannot match random token text. */
+function withoutTokens(result: unknown): string {
+  return JSON.stringify(result).replace(/"token":"[^"]*"/g, '"token":""')
+}
+
 function firstToken(result: unknown, kind: 'window' | 'app' = 'window'): string {
   const items = (result as { items: Array<{ kind: string; token: string }> }).items
   const item = items.find((entry) => entry.kind === kind)
@@ -181,7 +186,12 @@ describe('isolated window manager capability', () => {
       topmost: false,
       actions: PLUGIN_WINDOW_MANAGER_ACTION_IDS.filter((action) => action !== 'launch')
     })
-    expect(JSON.stringify(result)).not.toMatch(/6389|Program Files|nativeId|pid|handle|appPath/i)
+    // Tokens are 32 random base64url characters, so scanning the serialized result as-is greps
+    // random data for short words: a real CI run produced `wm_5T_MjLgIStPiDP2nOQbiC5sdxqWQHhgE`,
+    // whose `PiD` matched /pid/i and failed this line while nothing had leaked. At three tokens per
+    // result that is roughly 1 run in 370. Blank the tokens first -- their shape is asserted
+    // separately below -- so this checks redaction rather than token entropy.
+    expect(withoutTokens(result)).not.toMatch(/6389|Program Files|nativeId|pid|handle|appPath/i)
     expect(firstToken(result)).toMatch(/^wm_[A-Za-z0-9_-]{32}$/)
     expect(harness.spawn).toHaveBeenCalledExactlyOnceWith(
       'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
