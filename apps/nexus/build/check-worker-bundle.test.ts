@@ -132,6 +132,14 @@ describe('Nexus deploy asset budget', () => {
   it('keeps oversized route-local icon paths out of the shared entry CSS', () => {
     const unoSource = readFileSync(unoConfigPath, 'utf8')
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
+    const iconSources = [
+      'app/pages/dashboard/devices.vue',
+      'app/pages/dashboard/overview.vue',
+      'app/pages/sign-in/components/SignInEmailStep.vue',
+      'app/pages/sign-in/components/SignInPasskeyStep.vue',
+    ]
+      .map(path => readFileSync(join(nexusRoot, path), 'utf8'))
+      .join('\n')
 
     // This block used to require nine `uno.config.ts` aliases and a specific set
     // of `i-ri-*` / `i-simple-icons-*` class names, on the theory that funnelling
