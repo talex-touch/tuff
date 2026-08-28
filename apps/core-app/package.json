@@ -149,7 +149,7 @@
     "vue": "catalog:frontend",
     "vue-i18n": "^11.4.0",
     "vue-router": "^4.6.4",
-    "zod": "3.25.76"
+    "zod": "4.4.3"
   },
   "optionalDependencies": {
     "@crosscopy/clipboard": "^0.3.6",
