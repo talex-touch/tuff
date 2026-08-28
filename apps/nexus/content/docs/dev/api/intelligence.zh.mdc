@@ -48,7 +48,7 @@ code: |
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
-  ## void intelligence
+  void intelligence
 ---
 :::
 
@@ -398,7 +398,7 @@ code: |
 
   }
 
-  ## void translateAndPaste
+  void translateAndPaste
 ---
 :::
 
@@ -422,7 +422,7 @@ code: |
 
   }
 
-  ## void recognizeText
+  void recognizeText
 ---
 :::
 
@@ -459,7 +459,7 @@ code: |
   CUSTOM = 'custom'
   }
 
-  ## void IntelligenceProviderType.OPENAI
+  void IntelligenceProviderType.OPENAI
 ---
 :::
 
