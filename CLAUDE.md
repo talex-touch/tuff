@@ -292,7 +292,7 @@ Renderer ([modules/channel/channel-core.ts](apps/core-app/src/renderer/src/modul
 regChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): () => void
 unRegChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): boolean
 
-send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): Promise<TResponse>
+send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest, options?: { timeout?: number }): Promise<TResponse>
 ```
 
 The two `regChannel` signatures are the trap: passing a `ChannelType` to the renderer's registers a handler under that value as the event name, which type-checks and then never fires.
