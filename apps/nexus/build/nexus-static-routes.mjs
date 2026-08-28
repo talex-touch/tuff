@@ -27,12 +27,13 @@ export const docsApiPrerenderRoutes = [
 ]
 
 /**
- * The docs routes whose prerendered output is treated as release evidence.
+ * The docs routes whose prerendered output is treated as release evidence. Consumed by
+ * `createNexusPrerenderEvidence` in `nexus-prerender-routes.ts`.
  *
- * Lives here rather than in `nexus-prerender-routes.ts` so `check-prerender-bodies.mjs` can read it
- * under plain node: that file's TS siblings use extensionless imports, which node cannot resolve
- * without a loader, and duplicating the list in the checker would let the two drift -- which is the
- * failure this list exists to prevent.
+ * Lives in this `.mjs` rather than beside its consumer so plain-node tooling can read it: the TS
+ * modules in `build/` import each other without file extensions, which node cannot resolve without
+ * a loader. Any such tool must import this list rather than restate it -- a second copy that drifts
+ * from this one is the failure the list exists to prevent.
  */
 export const docsPrerenderEvidenceRoutes = [
   '/docs',
@@ -41,7 +42,4 @@ export const docsPrerenderEvidenceRoutes = [
   '/docs/dev/components',
   '/docs/guide/start',
 ]
-
-/** Mirrors `DOCS_SUPPORTED_LOCALES` in shared/utils/docs-path.ts, for the same reason. */
-export const docsPrerenderLocales = ['en', 'zh']
 
