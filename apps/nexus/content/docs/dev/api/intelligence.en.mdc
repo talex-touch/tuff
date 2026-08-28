@@ -48,7 +48,7 @@ Plugin UI and lifecycle code should use the plugin SDK export or `context.utils.
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
-  ## void intelligence
+  void intelligence
 ---
 :::
 
@@ -376,6 +376,64 @@ Stream consumers must treat event boundaries as transport details:
 
 ---
 
+## Complete Examples
+
+**Translation plugin**
+
+Check availability before invoking: `getCapabilityStatus` returns `{ capabilityId, available, providerIds, reason? }`, and `available` is `false` when no configured provider serves that capability.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+  const clipboard = useClipboard()
+
+  async function translateAndPaste(content: string, targetLang: string) {
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.translate' })
+  if (!status.available) return
+
+      const result = await intelligence.text.translate({
+        text: content,
+        targetLang
+      })
+
+      await clipboard.copyAndPaste({ text: result.result })
+
+  }
+
+  void translateAndPaste
+---
+:::
+
+**OCR plugin**
+
+`vision.ocr` resolves to an `IntelligenceInvokeResult<IntelligenceVisionOcrResult>`, so the extracted text is at `result.result.text`. `keywords` is populated only when `includeKeywords` is set, and stays optional even then.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  async function recognizeText(imageDataUrl: string) {
+  const result = await intelligence.vision.ocr({
+  source: { type: 'data-url', dataUrl: imageDataUrl },
+  includeKeywords: true
+  })
+
+      return {
+        text: result.result.text,
+        keywords: result.result.keywords
+      }
+
+  }
+
+  void recognizeText
+---
+:::
+
+---
+
 ## State Management
 
 :::TuffCodeBlock{lang="typescript"}
@@ -410,7 +468,7 @@ code: |
   CUSTOM = 'custom'
   }
 
-  ## void IntelligenceProviderType.OPENAI
+  void IntelligenceProviderType.OPENAI
 ---
 :::
 
