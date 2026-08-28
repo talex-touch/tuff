@@ -310,6 +310,8 @@ code: |
 
 ## 错误处理
 
+`ctx.reportError()` 与失败的 dispatch 都会带上 `FlowErrorCode`。把无法识别的值一律当作 `INTERNAL_ERROR` 处理，不要假设这个列表是封闭的。
+
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |

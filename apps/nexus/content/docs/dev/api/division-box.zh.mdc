@@ -410,15 +410,18 @@ code: |
 - 主进程验证配置、分配 sessionId、创建 DivisionBoxSession 实例
 
 **资源管理**：
-- 分配 sessionId（自增计数器）
-- 验证 URL 协议和权限
-- 初始化会话状态存储
-- 如果配置了 `keepAlive`，注册到 LRU 缓存管理器
+- 先检查全局会话上限，通过后才分配任何资源
+- 生成 sessionId 并登记到 session map
+- 验证配置并应用默认值；构造窗口前先解析插件归属
+- 配置了 `keepAlive` 时只是安装状态变更回调，此时**尚未**进入 LRU 缓存——缓存条目在会话首次进入 `inactive` 时加入，回到 `active` 时刷新访问时间，`destroy` 时移除
 
 **异常处理**：
-- 超过全局会话上限 `MAX_ACTIVE_SESSIONS` → 抛出 `DivisionBoxError`（`LIMIT_EXCEEDED`）
-- 插件归属缺失或无权限 → 抛出 `DivisionBoxError`（`PERMISSION_DENIED`）
-- 配置不合法 → 抛出 `DivisionBoxError`（`CONFIG_ERROR`）
+
+以下三种都会让 `open()` 直接失败，不会产生一个随后再发生状态转换的会话。
+
+- 超过全局会话上限 `MAX_ACTIVE_SESSIONS` → 抛出 `DivisionBoxError`（`LIMIT_EXCEEDED`），在生成 sessionId 之前
+- 请求 UI view 但缺少 `pluginId`，或 `pluginId` 找不到已加载插件 → 抛出 `DivisionBoxError`（`CONFIG_ERROR`）
+- 非 authoritative 调用方请求 UI view，或 `pluginId` 与调用插件不符 → 抛出 `DivisionBoxError`（`PERMISSION_DENIED`），在 IPC 边界拦截，不会进入 manager
 
 ### attach 阶段
 
@@ -521,7 +524,7 @@ stateDiagram-v2
     attach --> detach: close() / 资源回收
     detach --> [*]: keepAlive=false
     detach --> prepare: keepAlive=true, 恢复
-    prepare --> destroy: 加载失败 / 资源超限
+    prepare --> destroy: 加载失败
     attach --> destroy: 加载失败 / 崩溃
     active --> destroy: 崩溃
     inactive --> destroy: LRU 回收 / 内存压力
