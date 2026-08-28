@@ -401,6 +401,19 @@ jobs:
       - name: Verify icon collections are installed
         run: pnpm -C apps/nexus check:icon-collections
 
+      # The third gate #1776 found defined-but-uninvoked. It stayed unwired on purpose: it would
+      # have failed the build on a gap it could not fix, since the English copies of division-box,
+      # flow-transfer and intelligence were short 15 headings between them. Those chapters are
+      # written now and the check exits 0 across all 162 pairs, so the reason to leave it out is
+      # gone. Blocking, not continue-on-error — an advisory parity check is the same defect in a
+      # quieter form.
+      #
+      # Verified it can fail before wiring, twice: demoting one `###` to bold reports
+      # "zh has 21 headings, en has 20", and changing a `##` to `###` reports
+      # "heading 10 is h2 in zh but h3 in en".
+      - name: Verify zh/en doc parity
+        run: pnpm -C apps/nexus check:doc-parity
+
       # Blocking. It was briefly continue-on-error because wiring it up is what discovered
       # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
       # root node_modules path that only existed under shamefully-hoist (#1151, #1099

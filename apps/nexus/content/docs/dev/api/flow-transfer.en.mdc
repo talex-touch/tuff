@@ -138,7 +138,49 @@ code: |
 ---
 :::
 
-**Native share**
+## Flow Session State
+
+A session moves through these states; `flow:session:update` broadcasts every transition.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type FlowSessionState =
+    | 'INIT'             // created, no target chosen yet
+    | 'TARGET_SELECTING' // the chooser is open
+    | 'TARGET_SELECTED'  // a target has been picked
+    | 'DELIVERING'       // payload is being handed to the target
+    | 'DELIVERED'        // the target received it
+    | 'PROCESSING'       // the target is working on it
+    | 'ACKED'            // the target acknowledged completion
+    | 'FAILED'           // terminal failure
+    | 'CANCELLED'        // cancelled by the sender or the user
+---
+:::
+
+## Error Handling
+
+`ctx.reportError()` and failed dispatches carry a `FlowErrorCode`. Treat any unrecognised value as `INTERNAL_ERROR` rather than assuming the list is closed.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum FlowErrorCode {
+    SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
+    TARGET_NOT_FOUND = 'TARGET_NOT_FOUND',
+    TARGET_OFFLINE = 'TARGET_OFFLINE',
+    PAYLOAD_INVALID = 'PAYLOAD_INVALID',
+    PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
+    TYPE_NOT_SUPPORTED = 'TYPE_NOT_SUPPORTED',
+    PERMISSION_DENIED = 'PERMISSION_DENIED',
+    TIMEOUT = 'TIMEOUT',
+    CANCELLED = 'CANCELLED',
+    INTERNAL_ERROR = 'INTERNAL_ERROR'
+  }
+---
+:::
+
+## Native System Sharing
 
 Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
 
@@ -165,6 +207,58 @@ code: |
 
 Flow target lists expose the system chooser as `system-share`; `flow.nativeShare()` also accepts `system` as a compatibility alias. Windows and Linux currently expose only the explicit `mail` fallback, not a fake system share panel.
 
+## Target Ordering Rules
+
+The target list is ordered by:
+
+1. **Native share targets** — the system chooser and its siblings come first.
+2. **Adapted plugins** — those that registered an `onFlowTransfer` handler.
+3. **Unadapted plugins** — shown with an adaptation hint rather than hidden, so a user can tell the difference between "cannot receive this" and "not installed".
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // The adaptation fields on FlowTargetInfo
+  interface FlowTargetInfo {
+    // ...other fields
+    hasFlowHandler: boolean    // an onFlowTransfer handler is registered
+    isNativeShare?: boolean    // this is a native share target
+    adaptationHint?: string    // shown when the plugin has not adapted yet
+  }
+---
+:::
+
+## IPC Channels
+
+Event names are composed as `namespace:module:action`, so every Flow channel carries a module segment. These are the names the main process actually registers — see `apps/core-app/src/main/modules/flow-bus/`.
+
+| Channel | Direction | Purpose |
+| --- | --- | --- |
+| `flow:bus:dispatch` | plugin → main | Start a flow |
+| `flow:bus:get-targets` | plugin → main | List available targets |
+| `flow:bus:cancel` | plugin → main | Cancel a session |
+| `flow:bus:acknowledge` | target → main | Acknowledge completion |
+| `flow:bus:report-error` | target → main | Report a `FlowErrorCode` |
+| `flow:bus:select-target` | UI → main | User picked a target in the chooser |
+| `flow:session:update` | main → all | Broadcast a session state transition |
+| `flow:session:deliver` | main → target | Hand the payload to the target |
+| `flow:native:share` | plugin → main | Invoke a native share target |
+| `flow:consent:check` | plugin → main | Check transfer consent |
+| `flow:consent:grant` | UI → main | Grant transfer consent |
+| `flow:ui:trigger-transfer` | main → UI | Open the transfer surface |
+| `flow:ui:trigger-detach` | main → UI | Detach the transfer surface |
+
+Plugin registration, from the plugin process:
+
+| Channel | Purpose |
+| --- | --- |
+| `flow:plugin:register-targets` | Register this plugin's targets |
+| `flow:plugin:unregister-targets` | Remove them |
+| `flow:plugin:set-plugin-enabled` | Update the plugin's enabled state |
+| `flow:plugin:set-plugin-handler` | Declare whether `onFlowTransfer` is registered |
+
+Prefer the `FlowEvents` constants over these literals — the SDK builds the name from the same builder, so a rename stays in one place.
+
 ## Best Practices
 - Register `onFlowTransfer` to avoid being marked “not supported”.
 - Provide clear `supportedTypes` and `description` for better target ranking.
@@ -173,7 +267,7 @@ Flow target lists expose the system chooser as `system-share`; `flow.nativeShare
 
 ## Technical Notes
 - Target list is maintained by the main process and merged with native share targets.
-- Plugins are registered via `flow:register-targets`; missing registration means targets won’t appear.
+- Plugins are registered via `flow:plugin:register-targets`; missing registration means targets won’t appear.
 
 ## Related Docs
 - [QuickActions SDK](./quick-actions.en.mdc)

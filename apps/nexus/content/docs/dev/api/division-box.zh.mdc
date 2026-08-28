@@ -416,9 +416,9 @@ code: |
 - 如果配置了 `keepAlive`，注册到 LRU 缓存管理器
 
 **异常处理**：
-- URL 协议不支持 → 返回 `DivisionBoxError`（`INVALID_URL`）
-- 权限不足 → 返回 `DivisionBoxError`（`PERMISSION_DENIED`）
-- 资源超限（超过 `MAX_ACTIVE_SESSIONS`）→ 返回 `DivisionBoxError`（`RESOURCE_LIMIT_EXCEEDED`）
+- 超过全局会话上限 `MAX_ACTIVE_SESSIONS` → 抛出 `DivisionBoxError`（`LIMIT_EXCEEDED`）
+- 插件归属缺失或无权限 → 抛出 `DivisionBoxError`（`PERMISSION_DENIED`）
+- 配置不合法 → 抛出 `DivisionBoxError`（`CONFIG_ERROR`）
 
 ### attach 阶段
 
