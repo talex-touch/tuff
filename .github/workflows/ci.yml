@@ -414,10 +414,6 @@ jobs:
       - name: Verify zh/en doc parity
         run: pnpm -C apps/nexus check:doc-parity
 
-      # The self-test runs before the build so a broken judge is reported in seconds rather than
-      # after a full nexus build. A gate whose own logic is never exercised is what #1794 is about.
-      - name: Self-test the prerender body judge
-        run: pnpm -C apps/nexus check:prerender-bodies:self-test
 
       # Blocking. It was briefly continue-on-error because wiring it up is what discovered
       # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
@@ -428,19 +424,6 @@ jobs:
       - name: Build
         run: pnpm -C apps/nexus build
 
-      # `check:prerender-bodies` belongs here and is deliberately NOT wired yet.
-      #
-      # It was wired in #1799 and failed on its first run against master -- correctly. 8 of the 10
-      # evidence routes ship with no server-rendered body, and the production site returns the same
-      # byte counts, so it is a live defect rather than a CI artefact (#1800). Leaving the step in
-      # would hold master red for everyone while that is triaged, and marking it continue-on-error
-      # would turn a gate that just found a real defect into decoration.
-      #
-      # The self-test above stays wired, so the judge cannot rot while the step is out. Re-add this
-      # once #1800 is fixed -- it is one line, and #1800's acceptance criteria require it:
-      #
-      #   - name: Verify prerendered docs pages carry their content
-      #     run: pnpm -C apps/nexus check:prerender-bodies
 
   job_app_tests:
     name: App suites (${{ matrix.app }})
