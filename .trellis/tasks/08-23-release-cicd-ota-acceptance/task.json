@@ -22,5 +22,9 @@
   "parent": "08-23-full-product-completion",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Requires current beta artifacts and N/N+1 OTA evidence after release publication.",
+    "evidence": "The task records local release preflight and prior beta updater evidence.",
+    "nextAction": "Validate the published beta artifacts and collect controlled OTA evidence."
+  }
 }

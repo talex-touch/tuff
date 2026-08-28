@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "Requires deployed SSG body evidence for every gated Nexus documentation route.",
+    "evidence": "The task includes the local verifier, baseline build, and retry-patch research.",
+    "nextAction": "Run the verifier against a deployed candidate and record route-level evidence."
+  }
 }
