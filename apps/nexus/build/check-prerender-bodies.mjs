@@ -218,5 +218,9 @@ async function main() {
   console.log(`\n[nexus-prerender-bodies] ${results.length} prerendered pages carry their content.`)
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href)
-  await main()
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  })
+}
