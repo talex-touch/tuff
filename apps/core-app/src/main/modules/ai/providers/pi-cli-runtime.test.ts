@@ -38,12 +38,13 @@ describe('parsePiCliLine', () => {
     expect(parsePiCliLine(MESSAGE_END_LINE)?.usage).toEqual({
       promptTokens: 965,
       completionTokens: 5,
-      totalTokens: 4810
+      totalTokens: 4810,
+      cost: 0
     })
   })
 
-  it('omits cost when pi reports a zero total', () => {
-    expect(parsePiCliLine(MESSAGE_END_LINE)?.usage).not.toHaveProperty('cost')
+  it('keeps an explicitly reported zero cost', () => {
+    expect(parsePiCliLine(MESSAGE_END_LINE)?.usage?.cost).toBe(0)
   })
 
   it('keeps a non-zero reported cost', () => {

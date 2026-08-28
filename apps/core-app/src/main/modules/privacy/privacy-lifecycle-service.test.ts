@@ -4,6 +4,7 @@ import type {
   PrivacyRetentionSelectionV1
 } from '@talex-touch/utils/transport/events/types'
 import type { PrivacyDataOwnerCandidate } from './data-owner'
+import type { OrchestratorRunPrivacyLifecycle } from './owners/orchestrator-run-privacy-lifecycle'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPrivacyDataOwnerRegistry,
@@ -27,6 +28,25 @@ const DEFAULT_SELECTION: PrivacyRetentionSelectionV1 = {
     'intelligence-audit': '30-days',
     'intelligence-context': '30-days',
     diagnostics: '30-days'
+  }
+}
+
+const ORCHESTRATOR_RUN_REVISION = 'a'.repeat(64)
+const NEXT_ORCHESTRATOR_RUN_REVISION = 'b'.repeat(64)
+
+function orchestratorRunLifecycle(
+  overrides: Partial<OrchestratorRunPrivacyLifecycle> = {}
+): OrchestratorRunPrivacyLifecycle {
+  return {
+    previewDelete: vi.fn(async () => ({
+      disposition: 'eligible' as const,
+      eventCount: 2,
+      revision: ORCHESTRATOR_RUN_REVISION
+    })),
+    delete: vi.fn(async () => ({ disposition: 'deleted' as const, deletedEventCount: 2 })),
+    previewRetention: vi.fn(async () => privacyPreviewResult('intelligence-context')),
+    applyRetention: vi.fn(async () => privacyOwnerCompletedDelete('intelligence-context')),
+    ...overrides
   }
 }
 
@@ -85,6 +105,7 @@ function createHarness(
     savePolicy?: PrivacyRetentionPolicyV1
     timeoutMs?: number
     now?: () => number
+    orchestratorRuns?: OrchestratorRunPrivacyLifecycle
   } = {}
 ) {
   let policy = options.loadPolicy ?? DEFAULT_PRIVACY_RETENTION_POLICY
@@ -136,6 +157,7 @@ function createHarness(
     ),
     destroy: vi.fn(async () => undefined)
   }
+  const orchestratorRuns = options.orchestratorRuns ?? orchestratorRunLifecycle()
   const service = createPrivacyLifecycleService({
     ownerRegistry: createPrivacyDataOwnerRegistry(owners.map(definePrivacyDataOwner)),
     policyStore: {
@@ -145,11 +167,22 @@ function createHarness(
     exporter,
     disclosure,
     secrets,
+    orchestratorRuns,
     reportError,
     now: options.now ?? (() => 10 * PRIVACY_RETENTION_DAY_MS),
     operationTimeoutMs: options.timeoutMs ?? 1_000
   })
-  return { service, owners, load, save, exporter, disclosure, secrets, reportError }
+  return {
+    service,
+    owners,
+    load,
+    save,
+    exporter,
+    disclosure,
+    secrets,
+    orchestratorRuns,
+    reportError
+  }
 }
 
 async function categoryDeletePreviewId(
@@ -158,6 +191,19 @@ async function categoryDeletePreviewId(
 ): Promise<string> {
   const preview = await service.previewCategoryDelete(categories)
   if (!preview.ok) throw new Error(preview.code)
+  return preview.data.previewId
+}
+
+async function orchestratorRunDeletePreviewId(
+  service: PrivacyLifecycleService,
+  runId: string,
+  authorityId: number
+): Promise<string> {
+  const preview = await service.previewOrchestratorRunDelete(runId, authorityId)
+  if (!preview.ok) throw new Error(preview.code)
+  if (preview.data.disposition !== 'eligible' || !preview.data.previewId) {
+    throw new Error('ORCHESTRATOR_RUN_NOT_ELIGIBLE')
+  }
   return preview.data.previewId
 }
 
@@ -303,6 +349,60 @@ describe('privacyLifecycleService', () => {
     })
   })
 
+  it('merges orchestrator run retention into the intelligence context category once', async () => {
+    const contextOwner = owner('intelligence-context')
+    const previewRetention = vi.fn(async () =>
+      privacyPreviewResult('intelligence-context', {
+        eligibleItemCount: 3,
+        eligibleByteCount: 30,
+        protectedItemCount: 2,
+        bounded: true
+      })
+    )
+    const applyRetention = vi.fn(async () =>
+      privacyOwnerCompletedDelete('intelligence-context', {
+        deletedItemCount: 3,
+        deletedByteCount: 30,
+        protectedItemCount: 2,
+        batches: 1
+      })
+    )
+    const harness = createHarness({
+      owners: [contextOwner],
+      orchestratorRuns: orchestratorRunLifecycle({ previewRetention, applyRetention })
+    })
+
+    await expect(harness.service.previewCleanup(['intelligence-context'])).resolves.toMatchObject({
+      ok: true,
+      data: {
+        categories: [
+          {
+            category: 'intelligence-context',
+            eligibleItemCount: 5,
+            eligibleByteCount: 46,
+            protectedItemCount: 3
+          }
+        ],
+        bounded: true
+      }
+    })
+    await expect(harness.service.runCleanup(['intelligence-context'])).resolves.toMatchObject({
+      ok: true,
+      data: {
+        categories: [
+          {
+            category: 'intelligence-context',
+            deletedItemCount: 5,
+            deletedByteCount: 46
+          }
+        ],
+        partial: false
+      }
+    })
+    expect(previewRetention).toHaveBeenCalledOnce()
+    expect(applyRetention).toHaveBeenCalledOnce()
+  })
+
   it('requires a fresh exact one-time preview before category deletion', async () => {
     let currentTime = 10 * PRIVACY_RETENTION_DAY_MS
     const clipboardOwner = owner('clipboard-history')
@@ -346,6 +446,146 @@ describe('privacyLifecycleService', () => {
     expect(searchOwner.delete).not.toHaveBeenCalled()
   })
 
+  it('binds orchestrator run delete previews to run, authority, TTL and one-time use', async () => {
+    let currentTime = 10 * PRIVACY_RETENTION_DAY_MS
+    const deleteRun = vi.fn(async () => ({
+      disposition: 'deleted' as const,
+      deletedEventCount: 2
+    }))
+    const harness = createHarness({
+      orchestratorRuns: orchestratorRunLifecycle({ delete: deleteRun }),
+      now: () => currentTime
+    })
+    const runId = 'run-token-owner'
+    const authorityId = 101
+
+    await expect(
+      harness.service.deleteOrchestratorRun(
+        'delete-orchestrator-run',
+        undefined as never,
+        authorityId
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    const wrongAuthority = await orchestratorRunDeletePreviewId(harness.service, runId, authorityId)
+    await expect(
+      harness.service.deleteOrchestratorRun(
+        'delete-orchestrator-run',
+        wrongAuthority,
+        authorityId + 1
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+    await expect(
+      harness.service.deleteOrchestratorRun('delete-orchestrator-run', wrongAuthority, authorityId)
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    const admitted = await orchestratorRunDeletePreviewId(harness.service, runId, authorityId)
+    await expect(
+      harness.service.deleteOrchestratorRun('delete-orchestrator-run', admitted, authorityId)
+    ).resolves.toEqual({
+      ok: true,
+      data: { deletedEventCount: 2 }
+    })
+    await expect(
+      harness.service.deleteOrchestratorRun('delete-orchestrator-run', admitted, authorityId)
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    const expired = await orchestratorRunDeletePreviewId(harness.service, runId, authorityId)
+    currentTime += 5 * 60 * 1_000 + 1
+    await expect(
+      harness.service.deleteOrchestratorRun('delete-orchestrator-run', expired, authorityId)
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    expect(deleteRun).toHaveBeenCalledOnce()
+    expect(deleteRun).toHaveBeenCalledWith(
+      runId,
+      ORCHESTRATOR_RUN_REVISION,
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('keeps legacy run locators inside owner lookup and token-bound deletion', async () => {
+    const rawLocator = 'legacy/CANARY_RAW_ORCHESTRATOR_LOCATOR/2024-01-01'
+    const authorityId = 151
+    const previewDelete = vi.fn(async () => ({
+      disposition: 'eligible' as const,
+      eventCount: 7,
+      revision: NEXT_ORCHESTRATOR_RUN_REVISION
+    }))
+    const deleteRun = vi.fn(async () => ({
+      disposition: 'deleted' as const,
+      deletedEventCount: 7
+    }))
+    const harness = createHarness({
+      orchestratorRuns: orchestratorRunLifecycle({ previewDelete, delete: deleteRun })
+    })
+
+    const preview = await harness.service.previewOrchestratorRunDelete(rawLocator, authorityId)
+    expect(preview).toMatchObject({
+      ok: true,
+      data: { disposition: 'eligible', eventCount: 7, previewId: expect.any(String) }
+    })
+    expect(previewDelete).toHaveBeenCalledWith(rawLocator, expect.any(AbortSignal))
+    if (!preview.ok || preview.data.disposition !== 'eligible' || !preview.data.previewId) {
+      throw new Error('ORCHESTRATOR_RUN_NOT_ELIGIBLE')
+    }
+
+    const deletion = await harness.service.deleteOrchestratorRun(
+      'delete-orchestrator-run',
+      preview.data.previewId,
+      authorityId
+    )
+    expect(deletion).toEqual({ ok: true, data: { deletedEventCount: 7 } })
+    expect(deleteRun).toHaveBeenCalledWith(
+      rawLocator,
+      NEXT_ORCHESTRATOR_RUN_REVISION,
+      expect.any(AbortSignal)
+    )
+    expect(JSON.stringify([preview, deletion])).not.toContain(rawLocator)
+    expect(JSON.stringify([preview, deletion])).not.toContain('CANARY_RAW_ORCHESTRATOR_LOCATOR')
+  })
+
+  it('projects protected previews and rejects stale or newly protected deletes', async () => {
+    const previewDelete = vi
+      .fn()
+      .mockResolvedValueOnce({ disposition: 'protected' as const, eventCount: 3 })
+      .mockResolvedValueOnce({
+        disposition: 'eligible' as const,
+        eventCount: 4,
+        revision: ORCHESTRATOR_RUN_REVISION
+      })
+      .mockResolvedValueOnce({
+        disposition: 'eligible' as const,
+        eventCount: 5,
+        revision: NEXT_ORCHESTRATOR_RUN_REVISION
+      })
+    const deleteRun = vi
+      .fn()
+      .mockResolvedValueOnce({ disposition: 'stale' as const, deletedEventCount: 0 })
+      .mockResolvedValueOnce({ disposition: 'protected' as const, deletedEventCount: 0 })
+    const harness = createHarness({
+      orchestratorRuns: orchestratorRunLifecycle({ previewDelete, delete: deleteRun })
+    })
+    const runId = 'run-race-protection'
+    const authorityId = 202
+
+    await expect(harness.service.previewOrchestratorRunDelete(runId, authorityId)).resolves.toEqual(
+      {
+        ok: true,
+        data: { disposition: 'protected', eventCount: 3 }
+      }
+    )
+
+    for (const expectedRevision of [ORCHESTRATOR_RUN_REVISION, NEXT_ORCHESTRATOR_RUN_REVISION]) {
+      const previewId = await orchestratorRunDeletePreviewId(harness.service, runId, authorityId)
+      await expect(
+        harness.service.deleteOrchestratorRun('delete-orchestrator-run', previewId, authorityId)
+      ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+      expect(deleteRun).toHaveBeenLastCalledWith(runId, expectedRevision, expect.any(AbortSignal))
+    }
+    expect(harness.reportError).not.toHaveBeenCalled()
+  })
+
   it('serializes destructive, export and scheduled operations through one admission gate', async () => {
     let release: (() => void) | undefined
     const barrier = new Promise<void>((resolve) => {
@@ -364,7 +604,14 @@ describe('privacyLifecycleService', () => {
         return [privacyOwnerCompletedDelete('clipboard-history')]
       })
     })
-    const harness = createHarness({ owners: [clipboardOwner] })
+    const deleteRun = vi.fn(async () => {
+      calls.push('run-delete')
+      return { disposition: 'deleted' as const, deletedEventCount: 2 }
+    })
+    const harness = createHarness({
+      owners: [clipboardOwner],
+      orchestratorRuns: orchestratorRunLifecycle({ delete: deleteRun })
+    })
     harness.exporter.exportCategories.mockImplementationOnce(async () => {
       calls.push('export')
       return {
@@ -378,17 +625,23 @@ describe('privacyLifecycleService', () => {
     })
 
     const previewId = await categoryDeletePreviewId(harness.service, ['clipboard-history'])
+    const runPreviewId = await orchestratorRunDeletePreviewId(harness.service, 'run-admission', 303)
     const first = harness.service.deleteCategories(
       ['clipboard-history'],
       'delete-selected-data',
       previewId
     )
-    const second = harness.service.exportCategories(['clipboard-history'])
-    const third = harness.service.runScheduledCleanup()
+    const second = harness.service.deleteOrchestratorRun(
+      'delete-orchestrator-run',
+      runPreviewId,
+      303
+    )
+    const third = harness.service.exportCategories(['clipboard-history'])
+    const fourth = harness.service.runScheduledCleanup()
     await vi.waitFor(() => expect(calls).toEqual(['delete:start']))
     release?.()
-    await Promise.all([first, second, third])
-    expect(calls).toEqual(['delete:start', 'delete:end', 'export', 'scheduled'])
+    await Promise.all([first, second, third, fourth])
+    expect(calls).toEqual(['delete:start', 'delete:end', 'run-delete', 'export', 'scheduled'])
   })
 
   it('closes synchronous reentrancy before invoking the operation clock', async () => {
@@ -414,7 +667,9 @@ describe('privacyLifecycleService', () => {
     })
 
     const first = harness.service.getPolicy()
-    await vi.waitFor(() => expect(loadCalls).toBe(1))
+    expect(loadCalls).toBe(1)
+    await Promise.resolve()
+    expect(loadCalls).toBe(1)
     release?.()
     await first
     await reentrant
@@ -649,6 +904,7 @@ describe('privacyLifecycleService', () => {
     })
     const harness = createHarness({ owners: [slowOwner], timeoutMs: 10 })
     const running = harness.service.runCleanup(['clipboard-history'])
+    await vi.waitFor(() => expect(slowOwner.delete).toHaveBeenCalledOnce())
     const destroying = harness.service.destroy()
     await expect(running).resolves.toMatchObject({
       ok: false,
@@ -657,5 +913,170 @@ describe('privacyLifecycleService', () => {
     })
     await destroying
     expect(ownerSettled).toBe(true)
+  })
+
+  it('drains an operation when destroy synchronously reenters through the clock', async () => {
+    const calls: string[] = []
+    let releaseDisclosure: (() => void) | undefined
+    const disclosureBarrier = new Promise<void>((resolve) => {
+      releaseDisclosure = resolve
+    })
+    let service!: PrivacyLifecycleService
+    let destroying: Promise<void> | undefined
+    const harness = createHarness({
+      now: () => {
+        destroying ??= service.destroy()
+        return 10 * PRIVACY_RETENTION_DAY_MS
+      }
+    })
+    service = harness.service
+    harness.disclosure.getProviders.mockImplementationOnce(async () => {
+      calls.push('disclosure:start')
+      await disclosureBarrier
+      calls.push('disclosure:end')
+      return []
+    })
+    harness.secrets.destroy.mockImplementationOnce(async () => {
+      calls.push('secrets:destroy')
+    })
+
+    const running = service.getProviderDisclosure()
+    await vi.waitFor(() => expect(calls).toContain('disclosure:start'))
+    await Promise.resolve()
+    expect(calls).toEqual(['disclosure:start'])
+    const destroyPromise = destroying
+    if (!destroyPromise) throw new Error('PRIVACY_DESTROY_REENTRY_MISSING')
+
+    releaseDisclosure?.()
+    await expect(running).resolves.toEqual({
+      ok: false,
+      code: 'PRIVACY_OPERATION_CANCELLED',
+      retryable: false,
+      cancelled: true
+    })
+    await destroyPromise
+    expect(calls).toEqual(['disclosure:start', 'disclosure:end', 'secrets:destroy'])
+  })
+
+  it('aborts active orchestrator deletion and suppresses queued owner work during destroy', async () => {
+    let deleteSettled = false
+    const previewDelete = vi.fn(async () => ({
+      disposition: 'eligible' as const,
+      eventCount: 2,
+      revision: ORCHESTRATOR_RUN_REVISION
+    }))
+    const deleteRun = vi.fn(async (_runId: string, _revision: string, signal: AbortSignal) => {
+      await new Promise<void>((resolve) => {
+        signal.addEventListener('abort', () => setTimeout(resolve, 5), { once: true })
+      })
+      deleteSettled = true
+      return { disposition: 'protected' as const, deletedEventCount: 0 }
+    })
+    const harness = createHarness({
+      orchestratorRuns: orchestratorRunLifecycle({ previewDelete, delete: deleteRun })
+    })
+    const previewId = await orchestratorRunDeletePreviewId(
+      harness.service,
+      'run-destroy-active',
+      404
+    )
+    const running = harness.service.deleteOrchestratorRun('delete-orchestrator-run', previewId, 404)
+    await vi.waitFor(() => expect(deleteRun).toHaveBeenCalledOnce())
+    const queued = harness.service.previewOrchestratorRunDelete('run-destroy-queued', 405)
+    const destroying = harness.service.destroy()
+
+    await expect(running).resolves.toEqual({
+      ok: false,
+      code: 'PRIVACY_OPERATION_CANCELLED',
+      retryable: false,
+      cancelled: true
+    })
+    await expect(queued).resolves.toEqual({
+      ok: false,
+      code: 'PRIVACY_OPERATION_CANCELLED',
+      retryable: false,
+      cancelled: true
+    })
+    await destroying
+    expect(deleteSettled).toBe(true)
+    expect(previewDelete).toHaveBeenCalledOnce()
+    expect(harness.secrets.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('cancels an in-flight run preview before destroy can mint a replacement token', async () => {
+    let releasePreview: (() => void) | undefined
+    const previewBarrier = new Promise<void>((resolve) => {
+      releasePreview = resolve
+    })
+    const previewDelete = vi.fn(async () => {
+      await previewBarrier
+      return {
+        disposition: 'eligible' as const,
+        eventCount: 2,
+        revision: ORCHESTRATOR_RUN_REVISION
+      }
+    })
+    const harness = createHarness({
+      orchestratorRuns: orchestratorRunLifecycle({ previewDelete })
+    })
+
+    const previewing = harness.service.previewOrchestratorRunDelete('run-destroy-preview', 505)
+    await vi.waitFor(() => expect(previewDelete).toHaveBeenCalledOnce())
+    const destroying = harness.service.destroy()
+    releasePreview?.()
+
+    await expect(previewing).resolves.toEqual({
+      ok: false,
+      code: 'PRIVACY_OPERATION_CANCELLED',
+      retryable: false,
+      cancelled: true
+    })
+    await destroying
+    expect(harness.orchestratorRuns.delete).not.toHaveBeenCalled()
+    expect(harness.secrets.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('aborts a resolved run preview before its continuation can mint a token', async () => {
+    const harness = createHarness()
+
+    const previewing = harness.service.previewOrchestratorRunDelete(
+      'run-destroy-resolved-preview',
+      506
+    )
+    const destroying = harness.service.destroy()
+
+    await expect(previewing).resolves.toEqual({
+      ok: false,
+      code: 'PRIVACY_OPERATION_CANCELLED',
+      retryable: false,
+      cancelled: true
+    })
+    await destroying
+    expect(harness.orchestratorRuns.previewDelete).toHaveBeenCalledOnce()
+    expect(harness.orchestratorRuns.delete).not.toHaveBeenCalled()
+  })
+
+  it('returns one destroy promise and keeps every caller pending through Secret teardown', async () => {
+    let releaseSecrets: (() => void) | undefined
+    const secretBarrier = new Promise<void>((resolve) => {
+      releaseSecrets = resolve
+    })
+    const harness = createHarness()
+    harness.secrets.destroy.mockImplementationOnce(async () => {
+      await secretBarrier
+    })
+
+    const first = harness.service.destroy()
+    const second = harness.service.destroy()
+    const settled = vi.fn()
+    void first.then(() => settled('first'))
+    void second.then(() => settled('second'))
+
+    expect(second).toBe(first)
+    await vi.waitFor(() => expect(harness.secrets.destroy).toHaveBeenCalledOnce())
+    expect(settled).not.toHaveBeenCalled()
+    releaseSecrets?.()
+    await Promise.all([first, second])
+    expect(settled).toHaveBeenCalledTimes(2)
   })
 })

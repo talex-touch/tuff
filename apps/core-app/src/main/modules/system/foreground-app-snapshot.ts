@@ -1,6 +1,7 @@
 import type { ActiveAppInfo } from './active-app'
 import process from 'node:process'
 import { createLogger } from '../../utils/logger'
+import { isSelfAppIdentity } from './self-app-identity'
 
 const snapshotLog = createLogger('ActiveApp').child('Snapshot')
 
@@ -35,12 +36,13 @@ export function isSelfActiveApp(
 ): boolean {
   if (typeof info.processId === 'number' && info.processId === process.pid) return true
 
-  const executablePath = info.executablePath
-  if (!executablePath || !selfExecutablePath) return false
-  const left = executablePath.toLowerCase()
-  const right = selfExecutablePath.toLowerCase()
-  // Either form may be the bundle and the other the binary inside it.
-  return left.startsWith(right) || right.startsWith(left)
+  return isSelfAppIdentity(
+    {
+      executablePath: info.executablePath,
+      bundleId: info.bundleId
+    },
+    selfExecutablePath
+  )
 }
 
 /**

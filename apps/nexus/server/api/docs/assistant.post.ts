@@ -183,6 +183,8 @@ export default defineEventHandler(async (event) => {
       promptTokens: usage.promptTokens,
       completionTokens: usage.completionTokens,
       estimated: usage.estimated ?? false,
+    }, {
+      idempotencyKey: `docs-assistant:${session.id}:${response.traceId}`,
     })
 
     if (settings.enableAudit && userId) {
@@ -596,6 +598,8 @@ async function streamAssistantResponse(
               promptTokens: usage.promptTokens,
               completionTokens: usage.completionTokens,
               estimated: usage.estimated ?? false,
+            }, {
+              idempotencyKey: `docs-assistant:${params.sessionId}:${result.traceId}`,
             })
           }
           catch (creditError: any) {

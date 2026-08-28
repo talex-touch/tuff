@@ -5,6 +5,7 @@ import type {
   FormSpec,
   WidgetSpec
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type { StableToolErrorCode } from '../ai/tool-error-projection'
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import type { PluginFeatureSource } from './plugin-feature-source'
 import { readFile, stat, writeFile } from 'node:fs/promises'
@@ -16,6 +17,11 @@ import {
   WIDGET_RESULT_PREFIX,
   WIDGET_SOURCE_MAX_CHARS
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import {
+  formatStableToolError,
+  projectToolError,
+  projectToolErrorCode
+} from '../ai/tool-error-projection'
 
 /**
  * How much damage a tool can do, which decides whether a session-level
@@ -26,6 +32,17 @@ export type ToolRisk = 'read' | 'write' | 'execute'
 export interface ToolResult {
   output: string
   isError: boolean
+  code?: StableToolErrorCode
+}
+
+function toolFailure(code: StableToolErrorCode): ToolResult {
+  const projection = projectToolErrorCode(code)
+  return { output: projection.message, isError: true, code: projection.code }
+}
+
+function projectedToolFailure(error: unknown): ToolResult {
+  const projection = projectToolError(error)
+  return { output: projection.message, isError: true, code: projection.code }
 }
 
 /** What the gateway needs to know about one specific call before running it. */
@@ -369,7 +386,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       summarize: (args) => `Search files for "${readStringArg(args, 'query')}"`,
       execute: async (args) => {
         const query = readStringArg(args, 'query').trim()
-        if (!query) return { output: 'query is required', isError: true }
+        if (!query) return toolFailure('TOOL_INPUT_INVALID')
         const limitArg = args.limit
         const limit = typeof limitArg === 'number' && limitArg > 0 ? Math.min(limitArg, 50) : 20
 
@@ -407,21 +424,16 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       },
       execute: async (args) => {
         const path = resolveUserPath(readStringArg(args, 'path'))
-        if (!path) return { output: 'path is required', isError: true }
-        if (looksBinary(path)) return { output: 'Refusing to read a binary file.', isError: true }
+        if (!path) return toolFailure('TOOL_INPUT_INVALID')
+        if (looksBinary(path)) return toolFailure('TOOL_INPUT_INVALID')
 
         try {
           const info = await stat(path)
-          if (info.isDirectory()) return { output: 'Path is a directory.', isError: true }
-          if (info.size > MAX_READ_BYTES) {
-            return {
-              output: `File is ${Math.round(info.size / 1024)}KB, over the ${MAX_READ_BYTES / 1024}KB read limit.`,
-              isError: true
-            }
-          }
+          if (info.isDirectory()) return toolFailure('TOOL_INPUT_INVALID')
+          if (info.size > MAX_READ_BYTES) return toolFailure('TOOL_INPUT_INVALID')
           return { output: await readFile(path, 'utf8'), isError: false }
         } catch (error) {
-          return { output: `Could not read file: ${(error as Error).message}`, isError: true }
+          return projectedToolFailure(error)
         }
       }
     },
@@ -431,18 +443,12 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       summarize: (args) => `Write ${readStringArg(args, 'path')}`,
       execute: async (args) => {
         const path = resolveUserPath(readStringArg(args, 'path'))
-        if (!path) return { output: 'path is required', isError: true }
+        if (!path) return toolFailure('TOOL_INPUT_INVALID')
         const content = typeof args.content === 'string' ? args.content : null
-        if (content === null) return { output: 'content is required', isError: true }
-        if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES) {
-          return {
-            output: `Content is over the ${MAX_WRITE_BYTES / 1024}KB write limit.`,
-            isError: true
-          }
-        }
-        if (looksBinary(path)) {
-          return { output: 'Refusing to write a binary extension.', isError: true }
-        }
+        if (content === null) return toolFailure('TOOL_INPUT_INVALID')
+        if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES)
+          return toolFailure('TOOL_INPUT_INVALID')
+        if (looksBinary(path)) return toolFailure('TOOL_INPUT_INVALID')
 
         try {
           // `wx` is the whole safety story: this tool creates, never clobbers.
@@ -451,20 +457,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
           await writeFile(path, content, { encoding: 'utf8', flag: 'wx' })
           return { output: `Created ${path}`, isError: false }
         } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code
-          if (code === 'EEXIST') {
-            return {
-              output: 'File already exists — this tool never overwrites. Pick a new name.',
-              isError: true
-            }
-          }
-          if (code === 'ENOENT') {
-            return {
-              output: 'Parent directory does not exist — this tool does not create directories.',
-              isError: true
-            }
-          }
-          return { output: `Could not write file: ${(error as Error).message}`, isError: true }
+          return projectedToolFailure(error)
         }
       }
     },
@@ -474,10 +467,10 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       summarize: (args) => `Open ${readStringArg(args, 'path')} in the system default app`,
       execute: async (args) => {
         const path = resolveUserPath(readStringArg(args, 'path'))
-        if (!path) return { output: 'path is required', isError: true }
+        if (!path) return toolFailure('TOOL_INPUT_INVALID')
         const failure = await options.openPath(path)
         return failure
-          ? { output: `Could not open: ${failure}`, isError: true }
+          ? projectedToolFailure(failure)
           : { output: `Opened ${path}`, isError: false }
       }
     },
@@ -489,7 +482,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       summarize: (args) => `Render a ${String(args.type ?? 'chart')} chart`,
       execute: async (args) => {
         const spec = parseChartSpec(args)
-        if (typeof spec === 'string') return { output: `Invalid chart: ${spec}`, isError: true }
+        if (typeof spec === 'string') return toolFailure('TOOL_INPUT_INVALID')
         // The payload rides the normal tool-result channel with a marker the
         // renderer recognises, so no second transport is needed for widgets.
         return { output: `${CHART_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
@@ -501,14 +494,14 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       summarize: (args) => `Read imported skill ${readStringArg(args, 'id')}`,
       execute: async (args) => {
         const id = readStringArg(args, 'id').trim()
-        if (!id) return { output: 'id is required', isError: true }
+        if (!id) return toolFailure('TOOL_INPUT_INVALID')
         try {
           return {
             output: truncateForModel(await options.agentContext.readSkill(id)),
             isError: false
           }
         } catch (error) {
-          return { output: (error as Error).message, isError: true }
+          return projectedToolFailure(error)
         }
       }
     },
@@ -542,7 +535,9 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
             }
           } catch (error) {
             // One unreachable server must not hide the rest of the catalogue.
-            lines.push(`${server.id}\tunavailable: ${(error as Error).message}`)
+            lines.push(
+              `${server.id}\tunavailable: ${formatStableToolError(projectToolError(error))}`
+            )
           }
         }
         return { output: lines.join('\n'), isError: false }
@@ -583,7 +578,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       execute: async (args) => {
         const server = readStringArg(args, 'server').trim()
         const tool = readStringArg(args, 'tool').trim()
-        if (!server || !tool) return { output: 'server and tool are required', isError: true }
+        if (!server || !tool) return toolFailure('TOOL_INPUT_INVALID')
         const callArgs =
           args.args && typeof args.args === 'object' ? (args.args as Record<string, unknown>) : {}
 
@@ -591,7 +586,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
           const result = await options.agentContext.callMcpTool(server, tool, callArgs)
           return { output: truncateForModel(stringifyMcpResult(result)), isError: false }
         } catch (error) {
-          return { output: `MCP call failed: ${(error as Error).message}`, isError: true }
+          return projectedToolFailure(error)
         }
       }
     },
@@ -644,17 +639,10 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       execute: async (args) => {
         const pluginName = readStringArg(args, 'plugin').trim()
         const featureId = readStringArg(args, 'feature').trim()
-        if (!pluginName || !featureId) {
-          return { output: 'plugin and feature are required', isError: true }
-        }
+        if (!pluginName || !featureId) return toolFailure('TOOL_INPUT_INVALID')
 
         const entry = options.pluginFeatures.findFeature(pluginName, featureId)
-        if (!entry) {
-          return {
-            output: `No enabled plugin feature "${pluginName}" / "${featureId}". Call tuff_list_features for the current catalogue.`,
-            isError: true
-          }
-        }
+        if (!entry) return toolFailure('TOOL_NOT_FOUND')
 
         const title = `${entry.pluginLabel} / ${entry.featureName}`
         try {
@@ -663,7 +651,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
             featureId,
             readStringArg(args, 'text')
           )
-          if (!handled) return { output: `${title} declined the request.`, isError: true }
+          if (!handled) return toolFailure('TOOL_APPROVAL_DENIED')
           return {
             output: entry.opensUi
               ? `Triggered ${title}. It opened its own window, so its result is on the user's screen rather than here.`
@@ -671,7 +659,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
             isError: false
           }
         } catch (error) {
-          return { output: `Feature invocation failed: ${(error as Error).message}`, isError: true }
+          return projectedToolFailure(error)
         }
       }
     },
@@ -686,7 +674,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       },
       execute: async (args) => {
         const spec = parseFormSpec(args)
-        if (typeof spec === 'string') return { output: `Invalid form: ${spec}`, isError: true }
+        if (typeof spec === 'string') return toolFailure('TOOL_INPUT_INVALID')
         return { output: `${FORM_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
     },
@@ -702,7 +690,7 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       },
       execute: async (args) => {
         const spec = parseWidgetSpec(args)
-        if (typeof spec === 'string') return { output: `Invalid widget: ${spec}`, isError: true }
+        if (typeof spec === 'string') return toolFailure('TOOL_INPUT_INVALID')
         return { output: `${WIDGET_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
     }

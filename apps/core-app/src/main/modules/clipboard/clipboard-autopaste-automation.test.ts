@@ -1,15 +1,47 @@
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { ClipboardAutopasteAutomationOptions } from './clipboard-autopaste-automation'
 import type { IClipboardItem } from './clipboard-history-persistence'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+type ClipboardAutopasteAutomationModule = typeof import('./clipboard-autopaste-automation')
+
+let ClipboardAutopasteAutomation: ClipboardAutopasteAutomationModule['ClipboardAutopasteAutomation']
+let parseClipboardFileList: ClipboardAutopasteAutomationModule['parseClipboardFileList']
+
+const unhandledProcessErrors: Array<{
+  event: 'unhandledRejection' | 'uncaughtException'
+  error: unknown
+}> = []
+
+function onUnhandledRejection(error: unknown): void {
+  unhandledProcessErrors.push({ event: 'unhandledRejection', error })
+}
+
+function onUncaughtException(error: unknown): void {
+  unhandledProcessErrors.push({ event: 'uncaughtException', error })
+}
+
+async function drainUnhandledProcessErrors(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve))
+}
+
+function assertNoUnhandledProcessErrors(): void {
+  const errors = unhandledProcessErrors.splice(0)
+  expect(errors, 'test leaked an unhandled process error').toEqual([])
+}
+
+function removeUnhandledProcessErrorGuards(): void {
+  process.removeListener('unhandledRejection', onUnhandledRejection)
+  process.removeListener('uncaughtException', onUncaughtException)
+}
 
 const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
   clipboardWriteImage: vi.fn(),
   clipboardWriteBuffer: vi.fn(),
   clipboardCreateEmpty: vi.fn(() => ({ isEmpty: () => true })),
-  clipboardCreateFromDataURL: vi.fn(() => ({ isEmpty: () => false })),
-  clipboardCreateFromPath: vi.fn(() => ({ isEmpty: () => false })),
+  clipboardCreateFromDataURL: vi.fn((_source: string) => ({ isEmpty: () => false })),
+  clipboardCreateFromPath: vi.fn((_source: string) => ({ isEmpty: () => false })),
   sendPlatformShortcut: vi.fn(async () => {}),
   getAutoPasteCapabilityPatch: vi.fn(async () => ({ supportLevel: 'supported' })),
   showInternalSystemNotification: vi.fn(),
@@ -17,21 +49,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn(() => '/tmp'),
-    getVersion: vi.fn(() => '0.0.0-test'),
-    whenReady: vi.fn(() => Promise.resolve()),
-    isPackaged: false,
-    commandLine: {
-      appendSwitch: vi.fn()
-    },
-    addListener: vi.fn(),
-    on: vi.fn(),
-    once: vi.fn(),
-    quit: vi.fn(),
-    requestSingleInstanceLock: vi.fn(() => true),
-    setPath: vi.fn()
-  },
   clipboard: {
     write: mocks.clipboardWrite,
     writeImage: mocks.clipboardWriteImage,
@@ -41,29 +58,6 @@ vi.mock('electron', () => ({
     createEmpty: mocks.clipboardCreateEmpty,
     createFromDataURL: mocks.clipboardCreateFromDataURL,
     createFromPath: mocks.clipboardCreateFromPath
-  },
-  BrowserWindow: class BrowserWindow {},
-  crashReporter: {
-    start: vi.fn()
-  },
-  ipcMain: {
-    handle: vi.fn(),
-    on: vi.fn(),
-    removeHandler: vi.fn(),
-    removeListener: vi.fn()
-  },
-  MessageChannelMain: vi.fn(() => ({
-    port1: { close: vi.fn(), postMessage: vi.fn(), start: vi.fn() },
-    port2: { close: vi.fn(), postMessage: vi.fn(), start: vi.fn() }
-  })),
-  Notification: vi.fn(),
-  powerMonitor: {
-    on: vi.fn(),
-    off: vi.fn()
-  },
-  screen: {
-    getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
-    getDisplayNearestPoint: vi.fn(() => ({ bounds: { x: 0, y: 0, width: 1, height: 1 } }))
   }
 }))
 
@@ -119,10 +113,15 @@ vi.mock('../box-tool/core-box/manager.ts', () => ({
   }
 }))
 
-import {
-  ClipboardAutopasteAutomation,
-  parseClipboardFileList
-} from './clipboard-autopaste-automation'
+// The automation only consumes this image converter. Loading the persistence module would also
+// start Clipboard diagnostics, Sentry and Precore, which are outside this unit-test boundary.
+vi.mock('./clipboard-image-persistence', () => ({
+  createNativeImageFromClipboardSource: vi.fn((source: string) => {
+    if (!source) return mocks.clipboardCreateEmpty()
+    if (source.startsWith('data:')) return mocks.clipboardCreateFromDataURL(source)
+    return mocks.clipboardCreateFromPath(source)
+  })
+}))
 
 function createOptions(
   overrides: Partial<ClipboardAutopasteAutomationOptions> = {}
@@ -157,10 +156,51 @@ function createContext(): HandlerContext {
 }
 
 describe('clipboard-autopaste-automation', () => {
+  beforeAll(async () => {
+    process.prependListener('unhandledRejection', onUnhandledRejection)
+    process.prependListener('uncaughtException', onUncaughtException)
+
+    try {
+      const subject = await import('./clipboard-autopaste-automation')
+      ClipboardAutopasteAutomation = subject.ClipboardAutopasteAutomation
+      parseClipboardFileList = subject.parseClipboardFileList
+      await drainUnhandledProcessErrors()
+      assertNoUnhandledProcessErrors()
+    } catch (error) {
+      removeUnhandledProcessErrorGuards()
+      throw error
+    }
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.getAutoPasteCapabilityPatch.mockResolvedValue({ supportLevel: 'supported' })
     mocks.sendPlatformShortcut.mockResolvedValue(undefined)
+  })
+
+  afterEach(async () => {
+    await drainUnhandledProcessErrors()
+    assertNoUnhandledProcessErrors()
+  })
+
+  afterAll(async () => {
+    try {
+      await drainUnhandledProcessErrors()
+      assertNoUnhandledProcessErrors()
+    } finally {
+      removeUnhandledProcessErrorGuards()
+    }
+  })
+
+  it('keeps the process error guards attached and observable', () => {
+    expect(process.listeners('unhandledRejection')).toContain(onUnhandledRejection)
+    expect(process.listeners('uncaughtException')).toContain(onUncaughtException)
+
+    onUnhandledRejection(new Error('unhandled rejection sentinel'))
+    onUncaughtException(new Error('uncaught exception sentinel'))
+
+    expect(() => assertNoUnhandledProcessErrors()).toThrow('test leaked an unhandled process error')
+    expect(unhandledProcessErrors).toEqual([])
   })
 
   it('parses JSON file lists and rejects invalid entries', () => {
@@ -232,6 +272,23 @@ describe('clipboard-autopaste-automation', () => {
       message: 'Clipboard history item not found: 99',
       code: 'CLIPBOARD_ITEM_NOT_FOUND'
     })
+  })
+
+  it('executes the supported auto paste path', async () => {
+    const options = createOptions()
+    const automation = new ClipboardAutopasteAutomation(options)
+
+    const result = await automation.handleCopyAndPasteRequest(
+      { text: 'hello', delayMs: 0 },
+      createContext()
+    )
+
+    expect(result).toEqual({ success: true })
+    expect(mocks.clipboardWrite).toHaveBeenCalledWith({ text: 'hello', html: undefined })
+    expect(mocks.coreBoxTrigger).toHaveBeenCalledWith(false)
+    expect(mocks.getAutoPasteCapabilityPatch).toHaveBeenCalledOnce()
+    expect(mocks.sendPlatformShortcut).toHaveBeenCalledWith('paste')
+    expect(mocks.showInternalSystemNotification).not.toHaveBeenCalled()
   })
 
   it('normalizes copy-and-paste payloads and reports auto paste failures', async () => {

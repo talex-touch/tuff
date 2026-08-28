@@ -1,7 +1,10 @@
 import type { AgentContextSource, McpToolEntry } from './agent-context-source'
 import type { ToolDefinition } from './tool-registry'
 import { describe, expect, it, vi } from 'vitest'
+import { createMcpFailure } from '../ai/intelligence-mcp-failure'
 import { createToolRegistry, mcpRiskToToolRisk } from './tool-registry'
+
+const CANARY = 'sk-live-secret@/Users/private/native-stack.ts:42'
 
 function agentContext(overrides: Partial<AgentContextSource> = {}): AgentContextSource {
   return {
@@ -64,8 +67,11 @@ describe('tuff_skill_read', () => {
       .get('tuff_skill_read')!
       .execute({ id: 'x' })
 
-    expect(result).toMatchObject({ isError: true })
-    expect(result.output).toContain('not an active imported skill')
+    expect(result).toEqual({
+      output: 'Tool execution failed.',
+      isError: true,
+      code: 'TOOL_EXECUTION_FAILED'
+    })
   })
 
   it('requires an id rather than guessing', async () => {
@@ -120,7 +126,7 @@ describe('tuff_mcp_list_tools', () => {
         { id: 'empty', name: 'Empty' }
       ],
       listMcpTools: async (serverId) => {
-        if (serverId === 'broken') throw new Error('spawn npx ENOENT')
+        if (serverId === 'broken') throw createMcpFailure('server-unavailable', CANARY)
         if (serverId === 'empty') return []
         return [toolEntry()]
       }
@@ -130,8 +136,11 @@ describe('tuff_mcp_list_tools', () => {
 
     expect(result.isError).toBe(false)
     expect(result.output).toContain('fs\tread_text_file')
-    expect(result.output).toContain('broken\tunavailable: spawn npx ENOENT')
+    expect(result.output).toContain(
+      'broken\tunavailable: MCP_SERVER_UNAVAILABLE: MCP server is unavailable.'
+    )
     expect(result.output).toContain('empty\t(no tools)')
+    expect(result.output).not.toContain(CANARY)
   })
 })
 
@@ -209,12 +218,16 @@ describe('tuff_mcp_call', () => {
 
     const failing = await registryWith({
       callMcpTool: async () => {
-        throw new Error('tool exploded')
+        throw createMcpFailure('tool-failed', CANARY)
       }
     })
       .get('tuff_mcp_call')!
       .execute({ server: 'fs', tool: 'now' })
-    expect(failing).toMatchObject({ isError: true })
-    expect(failing.output).toContain('tool exploded')
+    expect(failing).toEqual({
+      output: 'MCP tool execution failed.',
+      isError: true,
+      code: 'MCP_TOOL_FAILED'
+    })
+    expect(JSON.stringify(failing)).not.toContain(CANARY)
   })
 })

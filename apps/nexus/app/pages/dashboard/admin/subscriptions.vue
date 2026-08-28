@@ -3,9 +3,11 @@ import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TuffInput } from '@talex-touch/tuffex/input'
+import AccountTabs from '~/components/dashboard/admin/AccountTabs.vue'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
@@ -19,9 +21,21 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
+
+/**
+ * ofetch puts the whole request line in `err.message`
+ * (`[GET] "/api/admin/codes": <no response> Failed to fetch`), so using it as
+ * the fallback prints an internal route at the operator and says nothing they
+ * can act on. Only `err.data.message` — what the endpoint chose to say — is
+ * safe to surface.
+ */
+function resolveErrorMessage(err: unknown, fallback: string) {
+  const message = (err as { data?: { message?: unknown } })?.data?.message
+  return typeof message === 'string' && message.trim() ? message.trim() : fallback
+}
 
 // Admin check - redirect if not admin
 const isAdmin = computed(() => {
@@ -113,10 +127,12 @@ const planOptions = [
   { value: 'TEAM', label: 'Team', color: 'text-green-500' },
 ]
 
-const subscriptionStatusLabels: Record<string, string> = {
+// Computed, not a plain object: resolving t() once at setup freezes the English
+// strings into the table, so switching language leaves every badge behind.
+const subscriptionStatusLabels = computed<Record<string, string>>(() => ({
   active: t('dashboard.sections.subscriptions.status.active', 'Active'),
   expired: t('dashboard.sections.subscriptions.status.expired', 'Expired'),
-}
+}))
 
 const grantForm = reactive({
   target: '',
@@ -132,6 +148,10 @@ const codesLoading = ref(false)
 const codesGenerating = ref(false)
 const codesError = ref<string | null>(null)
 const codesActionPendingId = ref<string | null>(null)
+const revokeArmedId = ref<string | null>(null)
+const copiedCodeId = ref<string | null>(null)
+let revokeArmTimer: ReturnType<typeof setTimeout> | null = null
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
 // Generation form
 const genForm = reactive({
@@ -194,8 +214,8 @@ async function fetchSubscriptions(options: { resetPage?: boolean } = {}) {
       subscriptionPagination.totalPages = res.pagination.totalPages
     }
   }
-  catch (err: any) {
-    subscriptionError.value = err?.data?.message || err?.message || t('dashboard.sections.subscriptions.errors.loadFailed', 'Failed to load subscriptions.')
+  catch (err: unknown) {
+    subscriptionError.value = resolveErrorMessage(err, t('dashboard.sections.subscriptions.errors.loadFailed', 'Failed to load subscriptions.'))
   }
   finally {
     subscriptionLoading.value = false
@@ -207,10 +227,11 @@ async function fetchCodes() {
   codesError.value = null
   try {
     const res = await rawFetch<{ codes: ActivationCode[] }>('/api/admin/codes')
-    codes.value = res.codes
+    codes.value = res.codes ?? []
   }
-  catch (e: any) {
-    codesError.value = e.data?.message || e.message || 'Failed to load codes'
+  catch (err: unknown) {
+    // Fallback is untranslated: sections.codes has no errors.loadFailed key.
+    codesError.value = resolveErrorMessage(err, 'Failed to load codes')
   }
   finally {
     codesLoading.value = false
@@ -227,22 +248,45 @@ async function generateCodes() {
     })
     await fetchCodes()
   }
-  catch (e: any) {
-    codesError.value = e.data?.message || e.message || 'Failed to generate codes'
+  catch (err: unknown) {
+    // Fallback is untranslated: sections.codes has no errors.generateFailed key.
+    codesError.value = resolveErrorMessage(err, 'Failed to generate codes')
   }
   finally {
     codesGenerating.value = false
   }
 }
 
-function copyCode(code: string) {
-  navigator.clipboard.writeText(code)
+/**
+ * writeText rejects when the clipboard permission is denied or the document is
+ * not focused. Unhandled, the button looked identical either way and the
+ * operator pasted whatever was on the clipboard before.
+ *
+ * The confirmation is an icon swap rather than a toast because a message would
+ * need copySuccess / copyFailed keys, which sections.codes does not have.
+ */
+async function copyCode(id: string, code: string) {
+  try {
+    await navigator.clipboard.writeText(code)
+    copiedCodeId.value = id
+  }
+  catch {
+    copiedCodeId.value = null
+  }
+  if (copyResetTimer)
+    clearTimeout(copyResetTimer)
+  copyResetTimer = setTimeout(() => {
+    copiedCodeId.value = null
+  }, 2000)
 }
 
 function formatDate(date: string | null) {
   if (!date)
     return '-'
-  return new Date(date).toLocaleDateString('en-US', {
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime()))
+    return date
+  return parsed.toLocaleDateString(locale.value, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -304,9 +348,8 @@ async function grantSubscription() {
     grantForm.target = ''
     await fetchSubscriptions({ resetPage: true })
   }
-  catch (err: any) {
-    const fallback = t('dashboard.sections.subscriptions.grant.errors.failed', 'Failed to grant subscription.')
-    const message = err?.data?.message || err?.message || fallback
+  catch (err: unknown) {
+    const message = resolveErrorMessage(err, t('dashboard.sections.subscriptions.grant.errors.failed', 'Failed to grant subscription.'))
     grantError.value = message
     toast.warning(message)
   }
@@ -346,6 +389,10 @@ watch([() => subscriptionFilters.status, () => subscriptionFilters.role], () => 
 onBeforeUnmount(() => {
   if (subscriptionSearchTimer)
     clearTimeout(subscriptionSearchTimer)
+  if (revokeArmTimer)
+    clearTimeout(revokeArmTimer)
+  if (copyResetTimer)
+    clearTimeout(copyResetTimer)
 })
 
 onMounted(() => {
@@ -353,9 +400,32 @@ onMounted(() => {
   fetchCodes()
 })
 
+/**
+ * Revoking is irreversible and the codes may already be in circulation, so the
+ * first click only arms the button. It disarms itself so a stray click cannot
+ * sit there waiting to be completed by an unrelated one later.
+ */
+function requestRevoke(code: ActivationCode) {
+  if (codesActionPendingId.value)
+    return
+  if (revokeArmedId.value === code.id) {
+    void revokeCode(code)
+    return
+  }
+  revokeArmedId.value = code.id
+  if (revokeArmTimer)
+    clearTimeout(revokeArmTimer)
+  revokeArmTimer = setTimeout(() => {
+    revokeArmedId.value = null
+  }, 5000)
+}
+
 async function revokeCode(code: ActivationCode) {
   if (codesActionPendingId.value)
     return
+  if (revokeArmTimer)
+    clearTimeout(revokeArmTimer)
+  revokeArmedId.value = null
   codesActionPendingId.value = code.id
   try {
     await rawFetch(`/api/admin/codes/${code.id}`, {
@@ -365,9 +435,8 @@ async function revokeCode(code: ActivationCode) {
     toast.success(t('dashboard.sections.codes.revokeSuccess', 'Activation code revoked.'))
     await fetchCodes()
   }
-  catch (err: any) {
-    const fallback = t('dashboard.sections.codes.revokeFailed', 'Failed to revoke activation code.')
-    toast.warning(err?.data?.message || err?.message || fallback)
+  catch (err: unknown) {
+    toast.warning(resolveErrorMessage(err, t('dashboard.sections.codes.revokeFailed', 'Failed to revoke activation code.')))
   }
   finally {
     codesActionPendingId.value = null
@@ -474,7 +543,11 @@ async function revokeCode(code: ActivationCode) {
       </p>
     </section>
 
-    <div v-if="subscriptionError" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+    <!--
+      Only while rows are still on screen, to mark them as stale. With no rows
+      the error owns the card below and repeating it here says it twice.
+    -->
+    <div v-if="subscriptionError && subscriptionList.length" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
       {{ subscriptionError }}
     </div>
 
@@ -490,22 +563,44 @@ async function revokeCode(code: ActivationCode) {
         </div>
       </div>
 
-      <div v-if="subscriptionLoading && !subscriptionList.length" class="space-y-3 p-5">
-        <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
-          <TxSpinner :size="16" />
-          {{ t('dashboard.sections.subscriptions.loading', 'Loading...') }}
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
+      <div
+        v-if="subscriptionLoading && !subscriptionList.length"
+        class="p-5"
+        role="status"
+        :aria-label="t('dashboard.sections.subscriptions.loading', 'Loading...')"
+      >
+        <TxRowSkeleton :rows="5" description separated trailing />
       </div>
 
-      <div v-else-if="!subscriptionList.length" class="p-8 text-center text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.subscriptions.empty', 'No subscription records found.') }}
-      </div>
+      <!--
+        Ordered before the empty state: a failed request that falls through to
+        "No subscription records found." reads as nobody having a plan.
+      -->
+      <TxEmptyState
+        v-else-if="subscriptionError"
+        variant="error"
+        size="small"
+        layout="vertical"
+        :title="t('dashboard.sections.subscriptions.errors.loadFailed', 'Failed to load subscriptions.')"
+        :description="subscriptionError"
+        :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat' }"
+        @primary="fetchSubscriptions()"
+      />
+
+      <!--
+        A filtered-out list and an empty one still share this copy: telling them
+        apart needs `emptyFiltered` / `filters.clear`, which do not exist in
+        i18n/locales/route/{en,zh}/dashboard.ts yet.
+      -->
+      <TxEmptyState
+        v-else-if="!subscriptionList.length"
+        variant="empty"
+        size="small"
+        layout="vertical"
+        icon="i-carbon-license"
+        :title="t('dashboard.sections.subscriptions.empty', 'No subscription records found.')"
+        description=""
+      />
 
       <div v-else class="overflow-x-auto">
         <TxDataTable :columns="subscriptionColumns" :data="subscriptionList" :row-key="entry => entry.user.id" class="min-w-[760px]">
@@ -569,6 +664,11 @@ async function revokeCode(code: ActivationCode) {
       </h3>
 
       <div class="grid grid-cols-1 gap-4 mb-4 md:grid-cols-3 lg:grid-cols-5">
+        <!--
+          These five labels stay English in both locales: sections.codes has no
+          form.* keys, and half-mapping them onto the table.* headers would drop
+          the "max"/"in days"/"count" distinctions the fields depend on.
+        -->
         <div>
           <label class="apple-section-title mb-1 block">Plan</label>
           <TuffSelect v-model="genForm.plan" class="w-full">
@@ -608,7 +708,7 @@ async function revokeCode(code: ActivationCode) {
       </TxButton>
     </section>
 
-    <div v-if="codesError" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+    <div v-if="codesError && codes.length" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
       {{ codesError }}
     </div>
 
@@ -626,29 +726,54 @@ async function revokeCode(code: ActivationCode) {
         </div>
       </div>
 
-      <div v-if="codesLoading && !codes.length" class="space-y-3 p-5">
-        <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
-          <TxSpinner :size="16" />
-          {{ t('dashboard.sections.codes.loading', 'Loading...') }}
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
+      <div
+        v-if="codesLoading && !codes.length"
+        class="p-5"
+        role="status"
+        :aria-label="t('dashboard.sections.codes.loading', 'Loading...')"
+      >
+        <TxRowSkeleton :rows="4" description separated trailing />
       </div>
 
-      <div v-else-if="!codes.length" class="p-8 text-center text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.codes.empty', 'No activation codes yet. Generate some above.') }}
-      </div>
+      <!--
+        Ordered before the empty state, which reads "Generate some above" — an
+        instruction that is actively wrong when the list simply failed to load.
+      -->
+      <TxEmptyState
+        v-else-if="codesError"
+        variant="error"
+        size="small"
+        layout="vertical"
+        :title="codesError"
+        :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat' }"
+        @primary="fetchCodes"
+      />
+
+      <TxEmptyState
+        v-else-if="!codes.length"
+        variant="blank-slate"
+        size="small"
+        layout="vertical"
+        icon="i-carbon-ticket"
+        :title="t('dashboard.sections.codes.empty', 'No activation codes yet. Generate some above.')"
+        description=""
+      />
 
       <div v-else class="overflow-x-auto">
         <TxDataTable :columns="codeColumns" :data="codes" row-key="id" class="min-w-[700px]">
           <template #cell-code="{ row: code }">
             <div class="flex items-center gap-2">
               <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white">{{ code.code }}</code>
-              <TxButton variant="bare" size="mini" native-type="button" icon="i-carbon-copy" class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70" :title="t('dashboard.sections.codes.copy', 'Copy')" @click="copyCode(code.code)" />
+              <TxButton
+                variant="bare"
+                size="mini"
+                native-type="button"
+                :icon="copiedCodeId === code.id ? 'i-carbon-checkmark' : 'i-carbon-copy'"
+                class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70"
+                :class="copiedCodeId === code.id ? 'text-green-600 dark:text-green-400' : ''"
+                :title="t('dashboard.sections.codes.copy', 'Copy')"
+                @click="copyCode(code.id, code.code)"
+              />
             </div>
           </template>
           <template #cell-plan="{ row: code }">
@@ -676,12 +801,14 @@ async function revokeCode(code: ActivationCode) {
           <template #cell-actions="{ row: code }">
             <TxButton
               v-if="code.status === 'active'"
-              variant="secondary"
+              :variant="revokeArmedId === code.id ? 'danger' : 'secondary'"
               size="mini"
               :disabled="codesActionPendingId === code.id"
-              @click="revokeCode(code)"
+              @click="requestRevoke(code)"
             >
-              {{ t('dashboard.sections.codes.revoke', 'Revoke') }}
+              {{ revokeArmedId === code.id
+                ? t('common.confirm', 'Confirm')
+                : t('dashboard.sections.codes.revoke', 'Revoke') }}
             </TxButton>
           </template>
         </TxDataTable>

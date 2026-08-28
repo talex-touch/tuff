@@ -16,16 +16,6 @@
     "source": true,
     "address": "http://127.0.0.1:5174/"
   },
-  "build": {
-    "index": {
-      "entry": "index.js",
-      "format": "cjs",
-      "target": "node24",
-      "external": ["electron"],
-      "minify": true,
-      "sourcemap": false
-    }
-  },
   "permissions": {
     "required": ["intelligence.basic", "search.root-results", "storage.plugin"],
     "optional": ["clipboard.write"]

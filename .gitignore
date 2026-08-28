@@ -75,6 +75,8 @@ apps/core-app/resources/release-notes/catalog.json
 .parcel-cache/
 .temp/
 tmp/
+# Local DSH plugin-hub staging, cloned installs, and inspection artifacts.
+/.dsh-plugin-hub-*
 .grunt/
 .lock-wscript
 .rpt2_cache/

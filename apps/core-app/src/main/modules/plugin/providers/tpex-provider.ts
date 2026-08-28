@@ -15,9 +15,13 @@ import { getEnabledApiSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
 import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { createProviderLogger } from './logger'
-import { downloadToTempFile } from './utils'
+import { downloadToTempFile, mergeHeadersCaseInsensitive, stripAuthorizationHeader } from './utils'
 
 const tpexProviderLog = createProviderLogger(PluginProviderType.TPEX)
+
+function hasAuthorizationHeader(headers: Readonly<Record<string, string>>): boolean {
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')
+}
 
 /**
  * Get the primary tpexApi base URL from user-configured sources
@@ -108,6 +112,35 @@ export class TpexPluginProvider implements PluginProvider {
 
   constructor(private readonly options: TpexPluginProviderOptions = {}) {}
 
+  private getExplicitRequestHeaders(
+    requestHeaders?: Readonly<Record<string, string>>
+  ): Record<string, string> {
+    return mergeHeadersCaseInsensitive(this.options.getRequestHeaders?.(), requestHeaders)
+  }
+
+  private async resolveRequestHeaders(
+    requestUrl: URL,
+    headers: Readonly<Record<string, string>>
+  ): Promise<Record<string, string>> {
+    const resolvedHeaders = mergeHeadersCaseInsensitive(headers)
+    if (hasAuthorizationHeader(resolvedHeaders)) return resolvedHeaders
+    if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') return resolvedHeaders
+
+    let runtimeUrl: URL
+    try {
+      runtimeUrl = new URL(getRuntimeNexusBaseUrl())
+    } catch {
+      return resolvedHeaders
+    }
+    if (runtimeUrl.protocol !== 'http:' && runtimeUrl.protocol !== 'https:') return resolvedHeaders
+    if (requestUrl.origin !== runtimeUrl.origin) return resolvedHeaders
+
+    const { getAuthToken } = await import('../../auth')
+    const token = getAuthToken()
+    if (token) resolvedHeaders.Authorization = `Bearer ${token}`
+    return resolvedHeaders
+  }
+
   /** Get the primary tpexApi base URL from user-configured sources */
   private get apiBase(): string {
     return this.options.apiBase?.replace(/\/$/, '') ?? getPrimaryApiBase()
@@ -144,7 +177,13 @@ export class TpexPluginProvider implements PluginProvider {
 
       if (isRemote(request.source)) {
         this.log.debug('Detected remote TPEX resource, starting download')
-        filePath = await downloadToTempFile(request.source, '.tpex', context?.downloadOptions)
+        const requestHeaders = this.getExplicitRequestHeaders(context?.downloadOptions?.headers)
+        filePath = await downloadToTempFile(request.source, '.tpex', {
+          ...context?.downloadOptions,
+          headers: requestHeaders,
+          resolveHeadersForUrl: (requestUrl, headers) =>
+            this.resolveRequestHeaders(requestUrl, headers)
+        })
       } else {
         filePath = path.resolve(request.source)
         const exists = await fse.pathExists(filePath)
@@ -209,13 +248,16 @@ export class TpexPluginProvider implements PluginProvider {
     })
 
     const detailUrl = new URL(`/api/store/plugins/${encodeURIComponent(slug)}`, `${this.apiBase}/`)
-    if (this.options.channel === 'BETA') detailUrl.searchParams.set('channel', 'BETA')
-    const requestHeaders = this.options.getRequestHeaders?.() ?? {}
+    const requestedChannel =
+      request.metadata?.channel === 'BETA' ? 'BETA' : (this.options.channel ?? 'RELEASE')
+    if (requestedChannel === 'BETA') detailUrl.searchParams.set('channel', 'BETA')
+    const providerHeaders = this.getExplicitRequestHeaders()
+    const requestHeaders = await this.resolveRequestHeaders(detailUrl, providerHeaders)
     this.log.debug('Fetching plugin details', {
-      meta: { slug, channel: this.options.channel ?? 'RELEASE' }
+      meta: { slug, channel: requestedChannel }
     })
 
-    const detailRes = await getNetworkService().request<TpexDetailResponse>({
+    const detailRes = await getNetworkService().requestNoRedirect<TpexDetailResponse>({
       method: 'GET',
       url: detailUrl.toString(),
       timeoutMs: 30_000,
@@ -243,9 +285,8 @@ export class TpexPluginProvider implements PluginProvider {
     }
 
     // Construct full download URL
-    const downloadUrl = targetVersion.packageUrl.startsWith('http')
-      ? targetVersion.packageUrl
-      : `${this.apiBase}${targetVersion.packageUrl}`
+    const parsedDownloadUrl = new URL(targetVersion.packageUrl, `${this.apiBase}/`)
+    const downloadUrl = parsedDownloadUrl.toString()
 
     this.log.debug('Starting plugin package download', {
       meta: {
@@ -256,13 +297,20 @@ export class TpexPluginProvider implements PluginProvider {
       }
     })
 
+    const packageProviderHeaders =
+      parsedDownloadUrl.origin === detailUrl.origin
+        ? providerHeaders
+        : stripAuthorizationHeader(providerHeaders)
+    const downloadHeaders = mergeHeadersCaseInsensitive(
+      packageProviderHeaders,
+      context?.downloadOptions?.headers
+    )
+
     // Use Node.js stream download instead of fetch + arrayBuffer
     const filePath = await downloadToTempFile(downloadUrl, '.tpex', {
       ...context?.downloadOptions,
-      headers: {
-        ...context?.downloadOptions?.headers,
-        ...requestHeaders
-      }
+      headers: downloadHeaders,
+      resolveHeadersForUrl: (requestUrl, headers) => this.resolveRequestHeaders(requestUrl, headers)
     })
 
     // Peek manifest from downloaded file

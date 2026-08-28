@@ -176,10 +176,10 @@ Reviewers should check:
 
 ```js
 // Wrong: packages whichever generated seed happens to be in resources.
-execFileSync("pnpm.cmd", ["--filter", packageName, "run", "build"]);
-electronViteBuild();
-electronBuilderDir();
-startModuleManager();
+execFileSync('pnpm.cmd', ['--filter', packageName, 'run', 'build'])
+electronViteBuild()
+electronBuilderDir()
+startModuleManager()
 ```
 
 #### Correct
@@ -190,20 +190,19 @@ buildOfficialPluginPackages({
   projectRoot,
   workspaceRoot,
   runPackageBuild(packageName) {
-    const { executable, args } = resolvePnpmBuildInvocation(packageName);
-    execFileSync(executable, args);
+    const { executable, args } = resolvePnpmBuildInvocation(packageName)
+    execFileSync(executable, args)
   },
-});
+})
 const results = syncOfficialPluginBundledRuntimes({
   projectRoot,
   workspaceRoot,
-});
-if (results.some((result) => !result.synced))
-  throw new Error("Official plugin seed sync failed");
-electronViteBuild();
-electronBuilderDir();
-installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot });
-startModuleManager();
+})
+if (results.some(result => !result.synced)) throw new Error('Official plugin seed sync failed')
+electronViteBuild()
+electronBuilderDir()
+installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot })
+startModuleManager()
 ```
 
 ## Scenario: Electron Main Singleton Cycle Safety
@@ -248,19 +247,19 @@ startModuleManager();
 
 ```ts
 // module.ts can execute during a cycle before Service is initialized.
-import { Service, setService } from "./service";
-export const serviceModule = new Service();
-setService(serviceModule);
+import { Service, setService } from './service'
+export const serviceModule = new Service()
+setService(serviceModule)
 ```
 
 #### Correct
 
 ```ts
 // service.ts, after the class and accessor declarations.
-export const serviceModule = getService();
+export const serviceModule = getService()
 
 // module.ts
-export { serviceModule } from "./service";
+export { serviceModule } from './service'
 ```
 
 ## Scenario: Opaque Intelligence Caller Aggregation
@@ -290,7 +289,7 @@ export { serviceModule } from "./service";
 #### Wrong
 
 ```ts
-const [caller, periodType, period] = key.split(":");
+const [caller, periodType, period] = key.split(':')
 ```
 
 #### Correct
@@ -338,13 +337,13 @@ for (const { callerId, callerType, periodType, period, summary } of buckets) {
 #### Wrong
 
 ```ts
-if (nextEstimate > budget && selected.length > 0) continue;
+if (nextEstimate > budget && selected.length > 0) continue
 ```
 
 #### Correct
 
 ```ts
-if (nextEstimate > budget) continue;
+if (nextEstimate > budget) continue
 ```
 
 ## Scenario: Assistant Floating-Ball Display Restore
@@ -378,16 +377,16 @@ if (nextEstimate > budget) continue;
 #### Wrong
 
 ```ts
-const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-const x = saved.x >= 0 ? saved.x : defaultX;
+const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+const x = saved.x >= 0 ? saved.x : defaultX
 ```
 
 #### Correct
 
 ```ts
-const hasSavedPosition = saved.x !== -1 || saved.y !== -1;
-const anchor = hasSavedPosition ? saved : screen.getCursorScreenPoint();
-const display = screen.getDisplayNearestPoint(anchor);
+const hasSavedPosition = saved.x !== -1 || saved.y !== -1
+const anchor = hasSavedPosition ? saved : screen.getCursorScreenPoint()
+const display = screen.getDisplayNearestPoint(anchor)
 ```
 
 ## Scenario: Mode-Isolated Renderer Surface Loading
@@ -416,15 +415,13 @@ const display = screen.getDisplayNearestPoint(anchor);
 #### Wrong
 
 ```ts
-import VoicePanel from "./views/assistant/VoicePanel.vue";
+import VoicePanel from './views/assistant/VoicePanel.vue'
 ```
 
 #### Correct
 
 ```ts
-const VoicePanel = defineAsyncComponent(
-  () => import("./views/assistant/VoicePanel.vue"),
-);
+const VoicePanel = defineAsyncComponent(() => import('./views/assistant/VoicePanel.vue'))
 ```
 
 ## Scenario: Context Execution Degraded Secret Fallback
@@ -494,16 +491,13 @@ catch {
 #### Wrong
 
 ```ts
-const privacyLevel =
-  input.privacyLevel ?? (containsSecret(input.input) ? "secret" : "normal");
+const privacyLevel = input.privacyLevel ?? (containsSecret(input.input) ? 'secret' : 'normal')
 ```
 
 #### Correct
 
 ```ts
-const privacyLevel = containsSecret(input.input)
-  ? "secret"
-  : (input.privacyLevel ?? "normal");
+const privacyLevel = containsSecret(input.input) ? 'secret' : (input.privacyLevel ?? 'normal')
 ```
 
 ## Scenario: Ollama NDJSON Stream Integrity
@@ -519,7 +513,8 @@ const privacyLevel = containsSecret(input.input)
 - Keep an independent newline buffer for Ollama NDJSON. Parse only complete lines during streaming, then process the final buffered line after decoder flush.
 - A final `done: true` line without trailing newline emits any content delta followed by exactly one terminal chunk carrying Ollama prompt/completion/total usage.
 - If Ollama omits `done`, emit one synthetic terminal chunk after all buffered text. Preserve the existing newline-terminated done and typed pre-output HTTP 404 compatibility fallback.
-- Treat the first non-empty Ollama delta as the provider-internal compatibility commit point. Compatibility fallback requires `NetworkHttpStatusError.status === 404` before that point; arbitrary parser/provider messages containing `404`, post-delta 404s, and every other error propagate unchanged without fallback deltas or synthetic success.
+- Treat the first non-empty Ollama delta as the provider-internal compatibility commit point. Compatibility fallback requires `NetworkHttpStatusError.status === 404` before that point; arbitrary parser/transport messages containing `404` and post-delta typed 404s propagate unchanged without fallback deltas or synthetic success.
+- A valid Ollama `{ error: ... }` protocol frame is projected to a stable `MODEL_UNSUPPORTED` or `OLLAMA_REQUEST_FAILED` error with identical fixed code/message. The original body must not be retained in the Error property graph, cause, response data, logs, or evidence. Apply the same projection to newline-delimited and final buffered frames, before or after a delta; a post-delta frame never triggers compatibility fallback.
 - Do not claim built-in llama.cpp/GGUF management from this compatibility path; runtime binaries, model lifecycle UI, packaging, and device smoke need separate evidence.
 
 ### Validation
@@ -528,19 +523,20 @@ const privacyLevel = containsSecret(input.input)
 - End a usage-bearing done frame without `\n`; assert final delta, exact usage, and a single done chunk.
 - Keep focused non-stream chat, model discovery, OCR, and 404 fallback coverage green.
 - Cover all sides of fallback classification: typed pre-output HTTP 404 returns compatibility chunks; a generic error message containing `404` propagates unchanged; post-delta typed 404 returns the original error, never calls compatibility, and emits no second-backend/done chunk.
+- Cover generic and unsupported Ollama error frames, including a final frame without `\n` and a frame after a delta; assert stable classification, full Error-graph redaction, and no compatibility fallback after output.
 
 ### Wrong vs Correct
 
 #### Wrong
 
 ```ts
-buffer += chunk.toString("utf8");
+buffer += chunk.toString('utf8')
 ```
 
 #### Correct
 
 ```ts
-buffer += decoder.write(toStreamBuffer(chunk));
+buffer += decoder.write(toStreamBuffer(chunk))
 // EOF: buffer += decoder.end()
 ```
 
@@ -572,17 +568,17 @@ buffer += decoder.write(toStreamBuffer(chunk));
 #### Wrong
 
 ```ts
-const result = await openStream();
-guard.recordSuccess(key);
-return result;
+const result = await openStream()
+guard.recordSuccess(key)
+return result
 ```
 
 #### Correct
 
 ```ts
-stream.once("end", settleSuccess);
-stream.once("error", settleFailure);
-stream.once("close", cleanupWithoutSettlement);
+stream.once('end', settleSuccess)
+stream.once('error', settleFailure)
+stream.once('close', cleanupWithoutSettlement)
 ```
 
 ## Scenario: Usage Statistics Single-Writer Integrity
@@ -651,14 +647,14 @@ DbUtils.incrementUsageStats(
 #### Wrong
 
 ```ts
-const sourceId = usageLog.source; // source type, not provider id
-executeCount = sql`${itemUsageStats.executeCount} + ${replayedCount}`;
+const sourceId = usageLog.source // source type, not provider id
+executeCount = sql`${itemUsageStats.executeCount} + ${replayedCount}`
 ```
 
 #### Correct
 
 ```ts
-usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, "execute");
+usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'execute')
 // Periodic maintenance does not write item_usage_stats.
 ```
 
@@ -705,11 +701,11 @@ usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, "execute");
 ### 2. Signatures
 
 ```ts
-fileFilterService.getTraversalExclusionReason(path, options);
-fileFilterService.getIndexExclusionReason(target, options);
-fileFilterService.getManualIndexExclusionReason(target);
-fileFilterService.getSearchExclusionReason(target);
-fileFilterService.filterSearchItems(items);
+fileFilterService.getTraversalExclusionReason(path, options)
+fileFilterService.getIndexExclusionReason(target, options)
+fileFilterService.getManualIndexExclusionReason(target)
+fileFilterService.getSearchExclusionReason(target)
+fileFilterService.filterSearchItems(items)
 ```
 
 ### 3. Contracts
@@ -749,17 +745,17 @@ fileFilterService.filterSearchItems(items);
 #### Wrong
 
 ```ts
-const items = (await provider.onSearch(query, signal)).items;
-publish(items.slice(0, 50)); // provider opt-in and late filtering
+const items = (await provider.onSearch(query, signal)).items
+publish(items.slice(0, 50)) // provider opt-in and late filtering
 ```
 
 #### Correct
 
 ```ts
-const backendItems = filterEarly(await provider.onSearch(query, signal));
-const visibleItems = fileFilterService.filterSearchItems(backendItems);
-recordProviderCount(visibleItems.length);
-publish(visibleItems.slice(0, 50));
+const backendItems = filterEarly(await provider.onSearch(query, signal))
+const visibleItems = fileFilterService.filterSearchItems(backendItems)
+recordProviderCount(visibleItems.length)
+publish(visibleItems.slice(0, 50))
 ```
 
 ## Scenario: App/File Search Index Single-Writer Atomicity
@@ -844,36 +840,34 @@ IndexedSourceDelta.mutationLeaseId?: string
 #### Wrong
 
 ```ts
-await searchIndex.removeByProvider(sourceId);
-void worker.indexFiles(files);
-await searchIndex.indexItems(nextItems);
-return { success: true };
+await searchIndex.removeByProvider(sourceId)
+void worker.indexFiles(files)
+await searchIndex.indexItems(nextItems)
+return { success: true }
 ```
 
 #### Correct
 
 ```ts
-return sourceMutationGate.run(sourceId, async (lease) => {
-  await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease.id });
-  await source.drainMutations?.({ leaseId: lease.id, reason: "scan" });
-});
+return sourceMutationGate.run(sourceId, async lease => {
+  await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease.id })
+  await source.drainMutations?.({ leaseId: lease.id, reason: 'scan' })
+})
 ```
 
 #### Wrong: Provider-owned shared DDL and unscoped evidence
 
 ```ts
-await providerDb.run(
-  sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`,
-);
-const parity = sourceIndexedRows === allFilesRows;
+await providerDb.run(sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`)
+const parity = sourceIndexedRows === allFilesRows
 ```
 
 #### Correct: Writer-owned DDL and source-scoped evidence
 
 ```ts
-await searchIndexWriter.initialize(databasePath);
-const sourceFilesRows = await countFilesByType("file");
-const parity = sourceIndexedRows === sourceFilesRows;
+await searchIndexWriter.initialize(databasePath)
+const sourceFilesRows = await countFilesByType('file')
+const parity = sourceIndexedRows === sourceFilesRows
 ```
 
 ## Scenario: Operational Error Privacy and SQLite Rebuild Recovery
@@ -948,13 +942,13 @@ const parity = sourceIndexedRows === sourceFilesRows;
 
 ```ts
 try {
-  await resetIndex();
+  await resetIndex()
 } catch (error) {
-  Sentry.captureException(error);
+  Sentry.captureException(error)
   return {
     success: false,
     error: error instanceof Error ? error.message : String(error),
-  };
+  }
 }
 ```
 
@@ -962,24 +956,22 @@ try {
 
 ```ts
 try {
-  return await resetIndexWithWriterBarrier();
+  return await resetIndexWithWriterBarrier()
 } catch (error) {
   const report = operationalErrorService.report({
-    domain: "indexing",
-    operation: "indexed-source.reset.local",
+    domain: 'indexing',
+    operation: 'indexed-source.reset.local',
     error,
-    code: isSqliteBusyError(error)
-      ? "FILE_INDEX_DATABASE_BUSY"
-      : "FILE_INDEX_REBUILD_FAILED",
+    code: isSqliteBusyError(error) ? 'FILE_INDEX_DATABASE_BUSY' : 'FILE_INDEX_REBUILD_FAILED',
     retryable: isSqliteBusyError(error),
-    userImpact: "blocked",
-  });
+    userImpact: 'blocked',
+  })
   return {
     success: false,
     errorCode: report.code,
     retryable: report.retryable,
     reportId: report.id,
-  };
+  }
 }
 ```
 
@@ -1050,17 +1042,15 @@ The lifecycle invariant is `transaction count = O(write phases)`, never `O(scann
 
 ```ts
 for (const app of scannedApps) {
-  await db.transaction(async (tx) => persistApp(tx, app));
+  await db.transaction(async tx => persistApp(tx, app))
 }
 ```
 
 #### Correct
 
 ```ts
-const statements = updates.flatMap((update) =>
-  buildAppUpdateStatements(db, update),
-);
-await db.batch(statements as [AppDbBatchItem, ...AppDbBatchItem[]]);
+const statements = updates.flatMap(update => buildAppUpdateStatements(db, update))
+await db.batch(statements as [AppDbBatchItem, ...AppDbBatchItem[]])
 ```
 
 Use one addition transaction only when returned file IDs are required for atomic extension writes.
@@ -1128,12 +1118,12 @@ StorageEvents.app.save: TuffEvent<StorageSaveRequest, StorageSaveResponse>;
 #### Wrong
 
 ```ts
-appSetting.beginner.init = true;
+appSetting.beginner.init = true
 await transport.send(StorageEvents.app.save, {
   key: StorageList.APP_SETTING,
   value: appSetting,
-});
-closeGuide();
+})
+closeGuide()
 ```
 
 #### Correct
@@ -1143,8 +1133,8 @@ const result = await transport.send(StorageEvents.app.save, {
   key: StorageList.APP_SETTING,
   value: structuredClone(completedSettings),
   persist: true,
-});
-if (!result.success) return keepGuideOpen();
-appSetting.beginner.init = true;
-closeGuide();
+})
+if (!result.success) return keepGuideOpen()
+appSetting.beginner.init = true
+closeGuide()
 ```

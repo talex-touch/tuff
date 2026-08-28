@@ -731,6 +731,147 @@ describe('plugin Prelude Intelligence facade', () => {
     runtime.shutdown()
   })
 
+  it('constructs context stream callback errors from every stable Intelligence code', async () => {
+    const codes = [
+      'PROVIDER_UNAVAILABLE',
+      'QUOTA_EXHAUSTED',
+      'MODEL_UNSUPPORTED',
+      'CAPABILITY_UNSUPPORTED',
+      'PERMISSION_DENIED',
+      'NETWORK_FAILURE',
+      'QUOTA_CHECK_UNAVAILABLE',
+      'NEXUS_AUTH_REQUIRED',
+      'INVALID_REQUEST',
+      'UNKNOWN'
+    ] as const
+    const token = Object.freeze(Object.create(null))
+    const disposeResource = vi.fn(async () => undefined)
+    let callIndex = 0
+    const invokeCapability = vi.fn(async (_capability: string, request: unknown) => {
+      const onEvent = (request as { onEvent: (event: unknown) => Promise<void> }).onEvent
+      const code = codes[callIndex++]!
+      await onEvent({
+        type: 'error',
+        capabilityId: 'text.chat',
+        code,
+        message: 'raw provider secret at /private/provider',
+        reason: 'apiKey=provider-secret',
+        recovery: '/Users/private/.config'
+      })
+      return token
+    })
+    const runtime = loadPluginPrelude(
+      payload(
+        `
+          module.exports = {
+            async onInit() {
+              const errors = []
+              const request = {
+                capabilityId: 'text.chat',
+                input: 'hello',
+                payload: { messages: [{ role: 'user', content: 'hello' }] },
+                options: {
+                  metadata: {
+                    contextEntrypoint: {
+                      id: 'corebox.ai-ask',
+                      owner: 'corebox',
+                      mode: 'new'
+                    }
+                  }
+                },
+                context: { mode: 'new', owner: 'corebox', scope: 'retrieval' }
+              }
+              for (let index = 0; index < ${codes.length}; index += 1) {
+                await intelligence.contextStream(request, {
+                  onError(error) {
+                    errors.push({ code: error.code, message: error.message })
+                  }
+                })
+              }
+              return errors
+            }
+          }
+        `,
+        false,
+        false,
+        true
+      ),
+      {
+        invokeCapability,
+        inspectResource: (value) =>
+          value === token ? { id: 'intelligence-stream-error', kind: 'stream' } : null,
+        disposeResource
+      }
+    )
+
+    const projected = await runtime.callLifecycle('onInit', []).promise
+    expect(projected).toEqual(codes.map((code) => ({ code, message: code })))
+    expect(JSON.stringify(projected)).not.toMatch(/provider-secret|apiKey|private|config/i)
+    expect(disposeResource).toHaveBeenCalledTimes(codes.length)
+    runtime.shutdown()
+  })
+
+  it('fails closed when a context stream event forges a non-Intelligence error code', async () => {
+    const token = Object.freeze(Object.create(null))
+    const disposeResource = vi.fn(async () => undefined)
+    const runtime = loadPluginPrelude(
+      payload(
+        `
+          module.exports = {
+            async onInit() {
+              let projected = null
+              await intelligence.contextStream({
+                capabilityId: 'text.chat',
+                input: 'hello',
+                payload: { messages: [{ role: 'user', content: 'hello' }] },
+                options: {
+                  metadata: {
+                    contextEntrypoint: {
+                      id: 'corebox.ai-ask',
+                      owner: 'corebox',
+                      mode: 'new'
+                    }
+                  }
+                },
+                context: { mode: 'new', owner: 'corebox', scope: 'retrieval' }
+              }, {
+                onError(error) {
+                  projected = { code: error.code, message: error.message }
+                }
+              })
+              return projected
+            }
+          }
+        `,
+        false,
+        false,
+        true
+      ),
+      {
+        invokeCapability: async (_capability, request) => {
+          const onEvent = (request as { onEvent: (event: unknown) => Promise<void> }).onEvent
+          await onEvent({
+            type: 'error',
+            capabilityId: 'text.chat',
+            code: 'FORGED_PROVIDER_SECRET',
+            message: 'secret at /private/provider'
+          })
+          return token
+        },
+        inspectResource: (value) =>
+          value === token ? { id: 'intelligence-stream-forged-error', kind: 'stream' } : null,
+        disposeResource
+      }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      code: 'INTELLIGENCE_STREAM_CALLBACK_FAILED',
+      message: 'INTELLIGENCE_STREAM_CALLBACK_FAILED'
+    })
+    expect(disposeResource).toHaveBeenCalledOnce()
+    runtime.shutdown()
+  })
+
   it('rejects missing and spoofed context stream entrypoints before host dispatch', async () => {
     const invokeCapability = vi.fn()
     const runtime = loadPluginPrelude(

@@ -3,6 +3,7 @@ import type {
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { StorePluginListItem } from './useStoreData'
+import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { useI18n } from 'vue-i18n'
@@ -50,37 +51,6 @@ export function useStoreInstall() {
 
   function isPluginInstalling(pluginId?: string, providerId?: string): boolean {
     return installManager.isActiveStage(getInstallTask(pluginId, providerId)?.stage)
-  }
-
-  async function confirmUntrusted(plugin: StorePluginListItem): Promise<boolean> {
-    if (plugin.trusted) return true
-
-    let confirmed = false
-
-    await forTouchTip(
-      t('store.installation.confirmTitle'),
-      t('store.installation.confirmMessage', { name: plugin.name }),
-      [
-        {
-          content: t('store.installation.confirmInstall'),
-          type: 'success',
-          onClick: async () => {
-            confirmed = true
-            return true
-          }
-        },
-        {
-          content: t('store.installation.confirmReject'),
-          type: 'warning',
-          onClick: async () => {
-            // Return true to close the dialog (confirmed remains false)
-            return true
-          }
-        }
-      ]
-    )
-
-    return confirmed
   }
 
   /**
@@ -141,16 +111,9 @@ export function useStoreInstall() {
     if (isPluginInstalling(plugin.id, plugin.providerId)) return
 
     try {
-      // For upgrades, show upgrade confirmation
       if (options?.isUpgrade) {
         const upgradeConfirmed = await confirmUpgrade(plugin)
         if (!upgradeConfirmed) {
-          return
-        }
-      } else {
-        // If not trusted, user must confirm first
-        const userConfirmed = await confirmUntrusted(plugin)
-        if (!userConfirmed) {
           return
         }
       }
@@ -160,20 +123,23 @@ export function useStoreInstall() {
         throw new Error('STORE_INSTALL_NO_SOURCE')
       }
 
-      // After user confirmation, mark as trusted to skip backend confirmation
-      const isTrusted = plugin.trusted === true || true // User already confirmed
+      const registrySource =
+        plugin.providerType === 'tpexApi' && plugin.id && plugin.version
+          ? `tpex:${plugin.id}@${plugin.version}`
+          : null
 
       const payload: PluginInstallSourceRequest = {
-        source: downloadUrl,
+        source: registrySource ?? downloadUrl,
+        hintType: registrySource ? PluginProviderType.TPEX : undefined,
         metadata: {
           officialId: plugin.id,
           officialVersion: plugin.version,
           officialSource: 'talex-touch/tuff-official-plugins',
           official: plugin.official === true,
+          channel: plugin.metadata?.channel,
           providerId: plugin.providerId,
           providerName: plugin.providerName,
           providerType: plugin.providerType,
-          trusted: isTrusted,
           // Upgrade options
           forceUpdate: options?.isUpgrade ?? false,
           autoReEnable: options?.autoReEnable ?? true

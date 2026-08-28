@@ -13,6 +13,7 @@ import type {
   AiAgentProfile,
   AiAutomationApproveRequest,
   AiAutomationDefinition,
+  AiAutomationPolicy,
   AiAutomationRunNowRequest,
   AiAutomationRunRecord,
   AiImportApplyRequest,
@@ -35,43 +36,31 @@ import { createHash, randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
-import { AgentStatus } from '@talex-touch/utils'
+import { AgentStatus, structuredStrictStringify } from '@talex-touch/utils'
 import { createLogger } from '../../utils/logger'
 import { agentManager, toolRegistry } from './agents'
+import { normalizeAutomationPolicy } from './ai-automation-policy'
 import { aiAutomationScheduler } from './ai-automation-scheduler'
 import { aiCliImportService } from './ai-cli-import-service'
 import { aiImportedConfigRuntime } from './ai-imported-config-runtime'
 import { aiOrchestratorStore, DEFAULT_PROFILE_ID } from './ai-orchestrator-store'
-import { PiAgentRuntimeHost, resolvePiRuntimeToolSpecs } from './pi-agent-runtime-host'
+import {
+  PiAgentRuntimeHost,
+  resolvePiRuntimeToolSpecs,
+  sanitizeToolOutputForRuntime
+} from './pi-agent-runtime-host'
+import {
+  approvalRequirementFromControlError,
+  createApprovalRequiredError,
+  createRunInterruptedError,
+  INTERRUPTED_TOOL_CALL_PREFIX,
+  isInterruptedToolCallControlError,
+  isRunCancelledControlError,
+  isRunInterruptedControlError
+} from './pi-agent-runtime-control-error'
+import { formatStableToolError, projectToolErrorCode } from './tool-error-projection'
 
 const orchestratorLog = createLogger('Intelligence').child('AiCliOrchestrator')
-
-type ApprovalRequirement = {
-  fingerprint: string
-  kind: string
-  reason: string
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function parseApprovalRequirement(message: string): ApprovalRequirement | undefined {
-  if (!message.startsWith('APPROVAL_REQUIRED:')) return undefined
-  const raw = message.slice('APPROVAL_REQUIRED:'.length).trim()
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    const fingerprint = typeof parsed.fingerprint === 'string' ? parsed.fingerprint.trim() : ''
-    if (!fingerprint) return undefined
-    return {
-      fingerprint,
-      kind: typeof parsed.kind === 'string' && parsed.kind.trim() ? parsed.kind : 'unknown',
-      reason: typeof parsed.reason === 'string' && parsed.reason.trim() ? parsed.reason : raw
-    }
-  } catch {
-    return undefined
-  }
-}
 
 function delegationApprovalFingerprint(plan: AiDelegationPlan): string {
   const fingerprintInput = {
@@ -91,34 +80,191 @@ function delegationApprovalFingerprint(plan: AiDelegationPlan): string {
   return `delegation:${createHash('sha256').update(JSON.stringify(fingerprintInput)).digest('hex')}`
 }
 
-const SENSITIVE_EVENT_KEY =
-  /token|api.?key|secret|password|credential|authorization|cookie|authref/i
-const INTERRUPTED_TOOL_CALL_PREFIX = 'INTERRUPTED_TOOL_CALL:'
+const AI_RUN_FAILED = 'AI_RUN_FAILED: AI run failed.'
+const AI_RUN_CANCELLED = 'AI_RUN_CANCELLED: AI run was cancelled.'
+const AI_RUN_INTERRUPTED = 'AI_RUN_INTERRUPTED: AI run was interrupted.'
+const AI_RUN_INPUT_UNAVAILABLE = 'AI_RUN_INPUT_UNAVAILABLE: AI run input is no longer available.'
+const AI_RUN_AUTHORITY_CHANGED = 'AI_RUN_AUTHORITY_CHANGED: AI run authority changed.'
+const AI_RUN_PRIVACY_DELETION_FENCED = 'AI_RUN_PRIVACY_DELETION_FENCED: AI run is being deleted.'
+const AI_RUN_METADATA_SCHEMA_VERSION = 1
+const STABLE_PERSISTED_TOOL_ERROR = formatStableToolError(
+  projectToolErrorCode('TOOL_EXECUTION_FAILED')
+)
+const PI_EVENT_MESSAGE_ROLES = new Set(['assistant', 'system', 'toolResult', 'user'])
+const PI_EVENT_STOP_REASONS = new Set(['aborted', 'error', 'length', 'pending', 'stop', 'toolUse'])
+const PI_EVENT_UPDATE_TYPES = new Set([
+  'done',
+  'error',
+  'start',
+  'text_delta',
+  'text_end',
+  'text_start',
+  'thinking_delta',
+  'thinking_end',
+  'thinking_start',
+  'toolcall_delta',
+  'toolcall_end',
+  'toolcall_start'
+])
 
-function sanitizePiEventPayload(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[truncated]'
-  if (typeof value === 'string') return value.slice(0, 32_000)
-  if (!value || typeof value !== 'object') return value
-  if (Array.isArray(value))
-    return value.slice(0, 100).map((item) => sanitizePiEventPayload(item, depth + 1))
-  const record = value as Record<string, unknown>
-  if (record.role === 'toolResult') {
-    return {
-      role: 'toolResult',
-      toolCallId: record.toolCallId,
-      toolName: record.toolName,
-      isError: record.isError,
-      timestamp: record.timestamp
-    }
+function opaqueRuntimeReference(namespace: 'pi-call' | 'pi-tool', value: string): string {
+  const digest = createHash('sha256').update(`${namespace}\0${value}`).digest('hex').slice(0, 32)
+  return `${namespace}:${digest}`
+}
+
+function createOrchestratorRunId(): string {
+  return `run_${randomUUID().replaceAll('-', '')}`
+}
+
+function digestStructuredValue(value: unknown): string {
+  return createHash('sha256').update(structuredStrictStringify(value)).digest('hex')
+}
+
+function profileAuthorityDigest(profile: AiAgentProfile): string {
+  return digestStructuredValue({
+    id: profile.id,
+    runtimeProvider: profile.runtimeProvider,
+    enabled: profile.enabled,
+    allowedToolIds: profile.allowedToolIds,
+    enabledSkillIds: profile.enabledSkillIds,
+    permissionPolicy: profile.permissionPolicy,
+    timeoutMs: profile.timeoutMs,
+    updatedAt: profile.updatedAt
+  })
+}
+
+function automationPolicyDigest(policy: AiAutomationPolicy): string {
+  return digestStructuredValue(policy)
+}
+
+function toAllowedToolRefs(toolIds: readonly string[]): string[] {
+  return Array.from(
+    new Set(toolIds.map((toolId) => opaqueRuntimeReference('pi-tool', toolId)))
+  ).sort()
+}
+
+function resolvePersistedAllowedToolIds(
+  metadata: Record<string, unknown>,
+  profile: AiAgentProfile
+): string[] {
+  if (metadata.schemaVersion !== AI_RUN_METADATA_SCHEMA_VERSION) {
+    throw new Error(AI_RUN_AUTHORITY_CHANGED)
   }
-  return Object.fromEntries(
-    Object.entries(record)
-      .slice(0, 100)
-      .map(([key, nested]) => [
-        key,
-        SENSITIVE_EVENT_KEY.test(key) ? '[redacted]' : sanitizePiEventPayload(nested, depth + 1)
-      ])
-  )
+  if (
+    metadata.profileAuthorityVersion !== profile.updatedAt ||
+    metadata.profileAuthorityDigest !== profileAuthorityDigest(profile)
+  ) {
+    throw new Error(AI_RUN_AUTHORITY_CHANGED)
+  }
+
+  const refs = Array.isArray(metadata.allowedToolRefs) ? metadata.allowedToolRefs : []
+  if (
+    refs.some((ref) => !isOpaqueRuntimeReference('pi-tool', ref)) ||
+    new Set(refs).size !== refs.length ||
+    refs.some((ref, index) => index > 0 && String(refs[index - 1]) > String(ref))
+  ) {
+    throw new Error(AI_RUN_AUTHORITY_CHANGED)
+  }
+
+  const byRef = new Map<string, string>()
+  for (const toolId of profile.allowedToolIds) {
+    const ref = opaqueRuntimeReference('pi-tool', toolId)
+    if (byRef.has(ref)) throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    byRef.set(ref, toolId)
+  }
+  return refs.map((ref) => {
+    const toolId = byRef.get(String(ref))
+    if (!toolId) throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    return toolId
+  })
+}
+
+function isOpaqueRuntimeReference(
+  namespace: 'pi-call' | 'pi-tool',
+  value: unknown
+): value is string {
+  if (typeof value !== 'string' || !value.startsWith(`${namespace}:`)) return false
+  return /^[a-f0-9]{32}$/.test(value.slice(namespace.length + 1))
+}
+
+function boundedCount(value: unknown): number {
+  return Array.isArray(value) ? Math.min(value.length, 10_000) : 0
+}
+
+function boundedIndex(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000
+    ? value
+    : undefined
+}
+
+function stableEnum(value: unknown, allowed: ReadonlySet<string>): string | undefined {
+  return typeof value === 'string' && allowed.has(value) ? value : undefined
+}
+
+function projectPiMessage(payload: Record<string, unknown>): Record<string, unknown> {
+  const message = toRecord(payload.message)
+  const role = stableEnum(message.role, PI_EVENT_MESSAGE_ROLES)
+  const stopReason = stableEnum(message.stopReason, PI_EVENT_STOP_REASONS)
+  return {
+    ...(role ? { role } : {}),
+    ...(stopReason ? { stopReason } : {}),
+    contentBlockCount: boundedCount(message.content),
+    hasError: typeof message.errorMessage === 'string' || stopReason === 'error'
+  }
+}
+
+function projectPiEvent(
+  type: string,
+  payload: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  const record = toRecord(payload)
+  switch (type) {
+    case 'agent_start':
+    case 'turn_start':
+      return {}
+    case 'agent_end':
+      return { messageCount: boundedCount(record.messages) }
+    case 'turn_end':
+      return {
+        ...projectPiMessage(record),
+        toolResultCount: boundedCount(record.toolResults)
+      }
+    case 'message_start':
+    case 'message_end':
+      return projectPiMessage(record)
+    case 'message_update': {
+      const update = toRecord(record.assistantMessageEvent)
+      const updateType = stableEnum(update.type, PI_EVENT_UPDATE_TYPES)
+      const contentIndex = boundedIndex(update.contentIndex)
+      const reason = stableEnum(update.reason, PI_EVENT_STOP_REASONS)
+      return {
+        ...(updateType ? { updateType } : {}),
+        ...(contentIndex === undefined ? {} : { contentIndex }),
+        ...(reason ? { reason } : {})
+      }
+    }
+    case 'tool_execution_start':
+    case 'tool_execution_update':
+    case 'tool_execution_end': {
+      const toolCallId = typeof record.toolCallId === 'string' ? record.toolCallId : ''
+      const toolName = typeof record.toolName === 'string' ? record.toolName : ''
+      return {
+        ...(toolCallId ? { toolCallRef: opaqueRuntimeReference('pi-call', toolCallId) } : {}),
+        ...(toolName ? { toolRef: opaqueRuntimeReference('pi-tool', toolName) } : {}),
+        ...(type === 'tool_execution_start' || type === 'tool_execution_update'
+          ? { argumentCount: Math.min(Object.keys(toRecord(record.args)).length, 10_000) }
+          : {}),
+        ...(type === 'tool_execution_update'
+          ? { hasPartialResult: Object.hasOwn(record, 'partialResult') }
+          : {}),
+        ...(type === 'tool_execution_end' && typeof record.isError === 'boolean'
+          ? { isError: record.isError }
+          : {})
+      }
+    }
+    default:
+      return undefined
+  }
 }
 
 function toObjective(task: AgentTask): string {
@@ -169,6 +315,76 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {}
+}
+
+const RUN_METADATA_KEYS = [
+  'schemaVersion',
+  'executionBudget',
+  'allowedToolRefs',
+  'requestInputPresent',
+  'requestInputDigest',
+  'profileAuthorityVersion',
+  'profileAuthorityDigest',
+  'automationPolicyVersion',
+  'automationPolicyDigest',
+  'automationAuthorityVersion',
+  'pendingApprovalFingerprint',
+  'pendingApprovalKind',
+  'pendingApprovalReason',
+  'approvalGrantFingerprint',
+  'approvalGrantAt'
+] as const
+
+function projectPersistedRunMetadata(value: unknown): Record<string, unknown> {
+  const source = toRecord(value)
+  const projected = Object.fromEntries(
+    RUN_METADATA_KEYS.filter((key) => Object.hasOwn(source, key)).map((key) => [key, source[key]])
+  )
+
+  const rawStates = toRecord(source.toolCallStates)
+  const stateEntries: Array<[string, Record<string, unknown>]> = []
+  for (const [rawCallRef, rawState] of Object.entries(rawStates).slice(0, 10_000)) {
+    const state = toRecord(rawState)
+    if (state.state !== 'started' && state.state !== 'completed') continue
+    const toolCallRef = isOpaqueRuntimeReference('pi-call', rawCallRef)
+      ? rawCallRef
+      : opaqueRuntimeReference('pi-call', rawCallRef)
+    const toolRef = isOpaqueRuntimeReference('pi-tool', state.toolRef)
+      ? state.toolRef
+      : typeof state.toolId === 'string' && state.toolId
+        ? opaqueRuntimeReference('pi-tool', state.toolId)
+        : undefined
+    stateEntries.push([
+      toolCallRef,
+      {
+        state: state.state,
+        ...(toolRef ? { toolRef } : {}),
+        ...(typeof state.startedAt === 'number' ? { startedAt: state.startedAt } : {}),
+        ...(typeof state.completedAt === 'number' ? { completedAt: state.completedAt } : {})
+      }
+    ])
+  }
+  const projectedStates = Object.fromEntries(stateEntries)
+  if (Object.keys(rawStates).length > 0) projected.toolCallStates = projectedStates
+
+  const rawResults = toRecord(source.completedToolCallResults)
+  const resultEntries: Array<[string, { error: string } | { output: unknown }]> = []
+  for (const [rawCallRef, rawResult] of Object.entries(rawResults).slice(0, 10_000)) {
+    const result = toRecord(rawResult)
+    const toolCallRef = isOpaqueRuntimeReference('pi-call', rawCallRef)
+      ? rawCallRef
+      : opaqueRuntimeReference('pi-call', rawCallRef)
+    if (typeof result.error === 'string') {
+      resultEntries.push([toolCallRef, { error: STABLE_PERSISTED_TOOL_ERROR }])
+    } else if (Object.hasOwn(result, 'output')) {
+      resultEntries.push([toolCallRef, { output: sanitizeToolOutputForRuntime(result.output) }])
+    }
+  }
+  const projectedResults = Object.fromEntries(resultEntries)
+  if (Object.keys(rawResults).length > 0) {
+    projected.completedToolCallResults = projectedResults
+  }
+  return projected
 }
 
 function normalizeInlineWorkflow(payload: unknown): WorkflowDefinition {
@@ -253,67 +469,207 @@ function toPromptWorkflowExecution(run: WorkflowRunRecord): PromptWorkflowExecut
 
 export class AiCliOrchestrator {
   private initialized = false
+  private closing = false
+  private shutdownPromise: Promise<void> | null = null
+  private readonly activeExecutions = new Set<Promise<unknown>>()
   private readonly toolCallMetadataMutations = new Map<string, Promise<unknown>>()
+  private readonly privacyRunDeletionFences = new Set<string>()
+  private readonly runWriteLeaseCounts = new Map<string, number>()
+  private readonly volatileRunInputs = new Map<string, { digest: string; input: unknown }>()
+  private readonly trustedAllowedToolIds = new Map<string, readonly string[]>()
+  private readonly trustedAutomationPolicies = new Map<string, AiAutomationPolicy>()
+  private readonly agentTaskRunIds = new Map<string, string>()
   private readonly runtimeHost = new PiAgentRuntimeHost({
     onEvent: async (event) => {
-      await aiOrchestratorStore.appendOrchestratorEvent(
-        event.runId,
-        event.type,
-        sanitizePiEventPayload(event.payload) as Record<string, unknown>,
-        event.level ?? 'info'
-      )
+      const payload = projectPiEvent(event.type, event.payload)
+      if (!payload) return
+      await this.withRunWriteLease(event.runId, async () => {
+        await aiOrchestratorStore.appendOrchestratorEvent(event.runId, event.type, payload, 'info')
+      })
     },
-    loadToolCallResult: async (runId, toolCallId) => {
-      const run = await aiOrchestratorStore.getOrchestratorRun(runId)
-      const metadata = toRecord(run?.metadata)
-      const result = toRecord(toRecord(metadata.completedToolCallResults)[toolCallId])
-      if (typeof result.error === 'string') return { error: result.error }
-      if (Object.prototype.hasOwnProperty.call(result, 'output')) return { output: result.output }
-      const state = toRecord(toRecord(metadata.toolCallStates)[toolCallId])
-      if (state.state === 'started')
-        return { error: `${INTERRUPTED_TOOL_CALL_PREFIX}${toolCallId}` }
-      return undefined
+    loadToolCallResult: async (runId, toolCallId, toolId) => {
+      const toolCallRef = opaqueRuntimeReference('pi-call', toolCallId)
+      const toolRef = opaqueRuntimeReference('pi-tool', toolId)
+      return await this.mutateToolCallMetadata(runId, (metadata) => {
+        const completedToolCallResults = { ...toRecord(metadata.completedToolCallResults) }
+        const toolCallStates = { ...toRecord(metadata.toolCallStates) }
+        const hasOpaqueResult = Object.hasOwn(completedToolCallResults, toolCallRef)
+        const hasLegacyResult = Object.hasOwn(completedToolCallResults, toolCallId)
+        const hasOpaqueState = Object.hasOwn(toolCallStates, toolCallRef)
+        const hasLegacyState = Object.hasOwn(toolCallStates, toolCallId)
+        const sourceResult = toRecord(
+          hasOpaqueResult
+            ? completedToolCallResults[toolCallRef]
+            : completedToolCallResults[toolCallId]
+        )
+        const sourceState = toRecord(
+          hasOpaqueState ? toolCallStates[toolCallRef] : toolCallStates[toolCallId]
+        )
+
+        delete completedToolCallResults[toolCallId]
+        delete toolCallStates[toolCallId]
+
+        const persistedToolRef = isOpaqueRuntimeReference('pi-tool', sourceState.toolRef)
+          ? sourceState.toolRef
+          : typeof sourceState.toolId === 'string'
+            ? opaqueRuntimeReference('pi-tool', sourceState.toolId)
+            : undefined
+        const hasDurableOutcome = hasOpaqueResult || hasLegacyResult
+        const hasDurableState = hasOpaqueState || hasLegacyState
+        const toolIdentityMatches = persistedToolRef === toolRef
+        const projectedResult =
+          typeof sourceResult.error === 'string'
+            ? { error: STABLE_PERSISTED_TOOL_ERROR }
+            : Object.hasOwn(sourceResult, 'output')
+              ? { output: sanitizeToolOutputForRuntime(sourceResult.output) }
+              : undefined
+
+        if ((hasDurableOutcome || hasDurableState) && !toolIdentityMatches) {
+          if (hasDurableOutcome) {
+            completedToolCallResults[toolCallRef] = { error: STABLE_PERSISTED_TOOL_ERROR }
+          }
+          metadata.completedToolCallResults = completedToolCallResults
+          metadata.toolCallStates = toolCallStates
+          return {
+            value: { error: STABLE_PERSISTED_TOOL_ERROR },
+            event: {
+              type: 'tool.call.replay_rejected',
+              payload: { toolCallRef, toolRef, reason: 'tool_identity_mismatch' }
+            }
+          }
+        }
+
+        if (hasDurableState) {
+          toolCallStates[toolCallRef] = {
+            state: sourceState.state === 'completed' ? 'completed' : 'started',
+            toolRef,
+            ...(typeof sourceState.startedAt === 'number'
+              ? { startedAt: sourceState.startedAt }
+              : {}),
+            ...(typeof sourceState.completedAt === 'number'
+              ? { completedAt: sourceState.completedAt }
+              : {})
+          }
+        }
+        if (projectedResult) completedToolCallResults[toolCallRef] = projectedResult
+        metadata.completedToolCallResults = completedToolCallResults
+        metadata.toolCallStates = toolCallStates
+
+        const value =
+          sourceState.state === 'started'
+            ? { error: `${INTERRUPTED_TOOL_CALL_PREFIX}${toolCallId}` }
+            : sourceState.state === 'completed' && projectedResult
+              ? projectedResult
+              : hasDurableOutcome || hasDurableState
+                ? { error: STABLE_PERSISTED_TOOL_ERROR }
+                : undefined
+        return {
+          value,
+          persist: hasDurableOutcome || hasDurableState,
+          event:
+            hasLegacyResult || hasLegacyState
+              ? {
+                  type: 'tool.call.legacy_migrated',
+                  payload: { toolCallRef, toolRef }
+                }
+              : undefined
+        }
+      })
     },
     persistToolCallResult: async (runId, toolCallId, result) => {
+      const toolCallRef = opaqueRuntimeReference('pi-call', toolCallId)
       await this.mutateToolCallMetadata(runId, (metadata) => {
-        const completedToolCallResults = {
-          ...toRecord(metadata.completedToolCallResults),
-          [toolCallId]: toRecord(result)
+        const completedToolCallResults = { ...toRecord(metadata.completedToolCallResults) }
+        const toolCallStates = { ...toRecord(metadata.toolCallStates) }
+        const currentState = toRecord(
+          Object.hasOwn(toolCallStates, toolCallRef)
+            ? toolCallStates[toolCallRef]
+            : toolCallStates[toolCallId]
+        )
+        if (
+          currentState.state !== 'started' ||
+          !isOpaqueRuntimeReference('pi-tool', currentState.toolRef)
+        ) {
+          throw new Error('Tool call result has no matching durable start state')
         }
-        const currentState = toRecord(toRecord(metadata.toolCallStates)[toolCallId])
+        delete completedToolCallResults[toolCallId]
+        delete toolCallStates[toolCallId]
+        completedToolCallResults[toolCallRef] =
+          typeof toRecord(result).error === 'string'
+            ? { error: STABLE_PERSISTED_TOOL_ERROR }
+            : { output: sanitizeToolOutputForRuntime(toRecord(result).output) }
         metadata.completedToolCallResults = completedToolCallResults
-        metadata.toolCallStates = {
-          ...toRecord(metadata.toolCallStates),
-          [toolCallId]: { ...currentState, state: 'completed', completedAt: Date.now() }
+        toolCallStates[toolCallRef] = {
+          state: 'completed',
+          ...(isOpaqueRuntimeReference('pi-tool', currentState.toolRef)
+            ? { toolRef: currentState.toolRef }
+            : {}),
+          ...(typeof currentState.startedAt === 'number'
+            ? { startedAt: currentState.startedAt }
+            : {}),
+          completedAt: Date.now()
         }
+        metadata.toolCallStates = toolCallStates
         return {
           value: undefined,
           event: {
             type: 'tool.call.completed',
-            payload: { toolCallId, hasError: typeof toRecord(result).error === 'string' }
+            payload: { toolCallRef, hasError: typeof toRecord(result).error === 'string' }
           }
         }
       })
     },
-    beginToolCall: async (runId, toolCallId, toolId) =>
-      await this.mutateToolCallMetadata(runId, (metadata) => {
-        const toolCallStates = toRecord(metadata.toolCallStates)
-        const currentState = toRecord(toolCallStates[toolCallId])
+    beginToolCall: async (runId, toolCallId, toolId) => {
+      const toolCallRef = opaqueRuntimeReference('pi-call', toolCallId)
+      const toolRef = opaqueRuntimeReference('pi-tool', toolId)
+      return await this.mutateToolCallMetadata(runId, (metadata) => {
+        const toolCallStates = { ...toRecord(metadata.toolCallStates) }
+        const currentState = toRecord(
+          Object.hasOwn(toolCallStates, toolCallRef)
+            ? toolCallStates[toolCallRef]
+            : toolCallStates[toolCallId]
+        )
+        delete toolCallStates[toolCallId]
         if (currentState.state === 'started' || currentState.state === 'completed') {
+          const persistedToolRef = isOpaqueRuntimeReference('pi-tool', currentState.toolRef)
+            ? currentState.toolRef
+            : typeof currentState.toolId === 'string'
+              ? opaqueRuntimeReference('pi-tool', currentState.toolId)
+              : undefined
+          if (persistedToolRef !== toolRef) {
+            metadata.toolCallStates = toolCallStates
+            return {
+              value: 'interrupted' as const,
+              event: {
+                type: 'tool.call.replay_rejected',
+                payload: { toolCallRef, toolRef, reason: 'tool_identity_mismatch' }
+              }
+            }
+          }
+          toolCallStates[toolCallRef] = {
+            state: currentState.state,
+            toolRef,
+            ...(typeof currentState.startedAt === 'number'
+              ? { startedAt: currentState.startedAt }
+              : {}),
+            ...(typeof currentState.completedAt === 'number'
+              ? { completedAt: currentState.completedAt }
+              : {})
+          }
+          metadata.toolCallStates = toolCallStates
           return {
             value: 'interrupted' as const,
-            event: { type: 'tool.call.replay_blocked', payload: { toolCallId, toolId } }
+            event: { type: 'tool.call.replay_blocked', payload: { toolCallRef, toolRef } }
           }
         }
-        metadata.toolCallStates = {
-          ...toolCallStates,
-          [toolCallId]: { state: 'started', toolId, startedAt: Date.now() }
-        }
+        toolCallStates[toolCallRef] = { state: 'started', toolRef, startedAt: Date.now() }
+        metadata.toolCallStates = toolCallStates
         return {
           value: 'execute' as const,
-          event: { type: 'tool.call.started', payload: { toolCallId, toolId } }
+          event: { type: 'tool.call.started', payload: { toolCallRef, toolRef } }
         }
-      }),
+      })
+    },
     onApprovalConsumed: async (runId, fingerprint) => {
       const run = await aiOrchestratorStore.getOrchestratorRun(runId)
       if (!run) throw new Error(`Orchestrator run ${runId} not found`)
@@ -325,19 +681,28 @@ export class AiCliOrchestrator {
     runId: string,
     mutate: (metadata: Record<string, unknown>) => {
       value: T
-      event: { type: string; payload: Record<string, unknown> }
+      persist?: boolean
+      event?: { type: string; payload: Record<string, unknown> }
     }
   ): Promise<T> {
+    const releaseWriteLease = this.acquireRunWriteLease(runId)
     const previous = this.toolCallMetadataMutations.get(runId) ?? Promise.resolve()
     const operation = previous
       .catch(() => undefined)
       .then(async () => {
         const run = await aiOrchestratorStore.getOrchestratorRun(runId)
         if (!run) throw new Error(`Orchestrator run ${runId} not found`)
-        const metadata = { ...(run.metadata ?? {}) }
-        const { value, event } = mutate(metadata)
-        await aiOrchestratorStore.updateOrchestratorRun(runId, { metadata, updatedAt: Date.now() })
-        await aiOrchestratorStore.appendOrchestratorEvent(runId, event.type, event.payload)
+        const metadata = projectPersistedRunMetadata(run.metadata)
+        const { value, persist = true, event } = mutate(metadata)
+        if (persist) {
+          await aiOrchestratorStore.updateOrchestratorRun(runId, {
+            metadata,
+            updatedAt: Date.now()
+          })
+        }
+        if (event) {
+          await aiOrchestratorStore.appendOrchestratorEvent(runId, event.type, event.payload)
+        }
         return value
       })
     this.toolCallMetadataMutations.set(runId, operation)
@@ -346,11 +711,72 @@ export class AiCliOrchestrator {
     } finally {
       if (this.toolCallMetadataMutations.get(runId) === operation)
         this.toolCallMetadataMutations.delete(runId)
+      releaseWriteLease()
+    }
+  }
+
+  private trackExecution<T>(operation: () => Promise<T>): Promise<T> {
+    const unavailableReason = this.closing
+      ? 'AI CLI orchestrator is shutting down'
+      : 'AI CLI orchestrator is not initialized'
+    if (this.closing || !this.initialized) return Promise.reject(new Error(unavailableReason))
+
+    const execution = Promise.resolve().then(async () => {
+      if (this.closing) throw new Error('AI CLI orchestrator is shutting down')
+      return await operation()
+    })
+    this.activeExecutions.add(execution)
+    const release = (): void => {
+      this.activeExecutions.delete(execution)
+    }
+    void execution.then(release, release)
+    return execution
+  }
+
+  private async drainExecutions(): Promise<void> {
+    while (this.activeExecutions.size > 0) {
+      await Promise.allSettled(Array.from(this.activeExecutions))
+    }
+    while (this.toolCallMetadataMutations.size > 0) {
+      await Promise.allSettled(Array.from(this.toolCallMetadataMutations.values()))
+    }
+  }
+
+  private assertPrivacyRunWritable(runId: string): void {
+    if (this.privacyRunDeletionFences.has(runId)) {
+      throw new Error(AI_RUN_PRIVACY_DELETION_FENCED)
+    }
+  }
+
+  private acquireRunWriteLease(runId: string): () => void {
+    this.assertPrivacyRunWritable(runId)
+    this.runWriteLeaseCounts.set(runId, (this.runWriteLeaseCounts.get(runId) ?? 0) + 1)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      const remaining = (this.runWriteLeaseCounts.get(runId) ?? 1) - 1
+      if (remaining > 0) this.runWriteLeaseCounts.set(runId, remaining)
+      else this.runWriteLeaseCounts.delete(runId)
+    }
+  }
+
+  private async withRunWriteLease<T>(runId: string, operation: () => Promise<T>): Promise<T> {
+    const release = this.acquireRunWriteLease(runId)
+    try {
+      return await operation()
+    } finally {
+      release()
     }
   }
 
   async initialize(): Promise<void> {
+    if (this.shutdownPromise) {
+      await this.shutdownPromise
+      this.shutdownPromise = null
+    }
     if (this.initialized) return
+    this.closing = false
     await aiOrchestratorStore.initialize()
     await aiImportedConfigRuntime.initialize()
     await this.recoverPersistedRuns()
@@ -360,6 +786,7 @@ export class AiCliOrchestrator {
       this.execute(request, automationId)
     )
     try {
+      if (this.closing) throw new Error('AI CLI orchestrator is shutting down')
       this.initialized = true
       await aiAutomationScheduler.initialize()
       orchestratorLog.info('AI CLI orchestrator control plane initialized')
@@ -382,33 +809,237 @@ export class AiCliOrchestrator {
     const interruptedAt = Date.now()
     for (const run of recoverable.values()) {
       const error = `Run was interrupted by application restart while ${run.status}`
-      await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-        status: 'interrupted',
-        error,
-        completedAt: interruptedAt,
-        updatedAt: interruptedAt
-      })
-      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.interrupted', {
-        reason: 'application_restart',
-        previousStatus: run.status
+      await this.withRunWriteLease(run.id, async () => {
+        await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+          status: 'interrupted',
+          error,
+          metadata: projectPersistedRunMetadata(run.metadata),
+          completedAt: interruptedAt,
+          updatedAt: interruptedAt
+        })
+        await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.interrupted', {
+          reason: 'application_restart',
+          previousStatus: run.status
+        })
       })
     }
   }
 
-  async shutdown(): Promise<void> {
-    await aiAutomationScheduler.stop()
-    await this.runtimeHost.stop()
+  shutdown(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise
+    this.closing = true
     this.initialized = false
+    this.shutdownPromise = this.performShutdown()
+    return this.shutdownPromise
+  }
+
+  private async performShutdown(): Promise<void> {
+    const failures: unknown[] = []
+    try {
+      await aiAutomationScheduler.stop()
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      await this.runtimeHost.stop()
+    } catch (error) {
+      failures.push(error)
+    }
+    await this.drainExecutions()
+    this.volatileRunInputs.clear()
+    this.trustedAllowedToolIds.clear()
+    this.trustedAutomationPolicies.clear()
+    this.agentTaskRunIds.clear()
+    if (failures.length > 0) throw failures[0]
   }
 
   isReady(): boolean {
     return this.initialized && this.runtimeHost.isReady()
   }
 
-  async execute(
+  isPrivacyRunProtected(runId: string): boolean {
+    return (
+      this.privacyRunDeletionFences.has(runId) ||
+      this.runtimeHost.isRunActive(runId) ||
+      this.toolCallMetadataMutations.has(runId) ||
+      (this.runWriteLeaseCounts.get(runId) ?? 0) > 0
+    )
+  }
+
+  acquirePrivacyRunDeletionFence(runId: string): (() => void) | null {
+    if (this.isPrivacyRunProtected(runId)) return null
+    this.privacyRunDeletionFences.add(runId)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.privacyRunDeletionFences.delete(runId)
+    }
+  }
+
+  private clearVolatileRunState(runId: string): void {
+    this.volatileRunInputs.delete(runId)
+    this.trustedAllowedToolIds.delete(runId)
+    this.trustedAutomationPolicies.delete(runId)
+  }
+
+  private async interruptPendingRun(
+    run: AiOrchestratorRunRecord,
+    publicError: string
+  ): Promise<AiOrchestratorRunRecord> {
+    const interruptedAt = Date.now()
+    const metadata = projectPersistedRunMetadata(run.metadata)
+    delete metadata.pendingApprovalFingerprint
+    delete metadata.pendingApprovalKind
+    delete metadata.pendingApprovalReason
+    delete metadata.approvalGrantFingerprint
+    delete metadata.approvalGrantAt
+    const interrupted: AiOrchestratorRunRecord = {
+      ...run,
+      status: 'interrupted',
+      error: publicError,
+      approvalReason: undefined,
+      metadata,
+      completedAt: interruptedAt,
+      updatedAt: interruptedAt
+    }
+    await this.withRunWriteLease(run.id, async () => {
+      await aiOrchestratorStore.updateOrchestratorRun(run.id, interrupted)
+      await aiOrchestratorStore.appendOrchestratorEvent(
+        run.id,
+        'run.interrupted',
+        {
+          reason:
+            publicError === AI_RUN_INPUT_UNAVAILABLE ? 'input_unavailable' : 'authority_changed'
+        },
+        'warn'
+      )
+    })
+    this.clearVolatileRunState(run.id)
+    return interrupted
+  }
+
+  private async restoreRunAuthority(run: AiOrchestratorRunRecord): Promise<{
+    profile: AiAgentProfile
+    allowedToolIds: string[]
+    automationPolicy?: AiAutomationPolicy
+    input?: unknown
+  }> {
+    const metadata = toRecord(run.metadata)
+    const profile = await aiOrchestratorStore.getProfile(run.profileId)
+    if (!profile || !profile.enabled) throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    const allowedToolIds = resolvePersistedAllowedToolIds(metadata, profile)
+
+    let automationPolicy = this.trustedAutomationPolicies.get(run.id)
+    const expectedPolicyDigest =
+      typeof metadata.automationPolicyDigest === 'string'
+        ? metadata.automationPolicyDigest
+        : undefined
+    if (run.automationId) {
+      const definition = await aiOrchestratorStore.getAutomation(run.automationId)
+      if (!definition || !definition.enabled) throw new Error(AI_RUN_AUTHORITY_CHANGED)
+      const currentPolicy = normalizeAutomationPolicy(definition, definition.policy)
+      if (
+        metadata.automationAuthorityVersion !== definition.updatedAt ||
+        metadata.automationPolicyVersion !== currentPolicy.version ||
+        expectedPolicyDigest !== automationPolicyDigest(currentPolicy)
+      ) {
+        throw new Error(AI_RUN_AUTHORITY_CHANGED)
+      }
+      automationPolicy = currentPolicy
+    } else if (expectedPolicyDigest) {
+      if (
+        !automationPolicy ||
+        metadata.automationPolicyVersion !== automationPolicy.version ||
+        expectedPolicyDigest !== automationPolicyDigest(automationPolicy)
+      ) {
+        throw new Error(AI_RUN_AUTHORITY_CHANGED)
+      }
+    } else if (automationPolicy) {
+      throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    }
+
+    const inputPresent = metadata.requestInputPresent
+    if (typeof inputPresent !== 'boolean') throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    let input: unknown
+    if (inputPresent) {
+      const expectedInputDigest =
+        typeof metadata.requestInputDigest === 'string' ? metadata.requestInputDigest : ''
+      if (!/^[a-f0-9]{64}$/.test(expectedInputDigest)) {
+        throw new Error(AI_RUN_AUTHORITY_CHANGED)
+      }
+      const volatileInput = this.volatileRunInputs.get(run.id)
+      if (
+        volatileInput &&
+        volatileInput.digest === expectedInputDigest &&
+        digestStructuredValue(volatileInput.input) === expectedInputDigest
+      ) {
+        input = volatileInput.input
+      } else if (run.automationId) {
+        const definition = await aiOrchestratorStore.getAutomation(run.automationId)
+        if (
+          !definition ||
+          definition.input === undefined ||
+          digestStructuredValue(definition.input) !== expectedInputDigest
+        ) {
+          throw new Error(AI_RUN_INPUT_UNAVAILABLE)
+        }
+        input = definition.input
+        this.volatileRunInputs.set(run.id, { digest: expectedInputDigest, input })
+      } else {
+        throw new Error(AI_RUN_INPUT_UNAVAILABLE)
+      }
+    } else if (metadata.requestInputDigest !== undefined) {
+      throw new Error(AI_RUN_AUTHORITY_CHANGED)
+    }
+
+    this.trustedAllowedToolIds.set(run.id, Object.freeze([...allowedToolIds]))
+    if (automationPolicy) this.trustedAutomationPolicies.set(run.id, automationPolicy)
+    return { profile, allowedToolIds, automationPolicy, input }
+  }
+
+  execute(
     request: AiOrchestratorExecuteRequest,
     automationId?: string
   ): Promise<AiOrchestratorRunRecord> {
+    return this.trackExecution(() => this.executeInternal(request, automationId))
+  }
+
+  private async executeInternal(
+    request: AiOrchestratorExecuteRequest,
+    automationId?: string
+  ): Promise<AiOrchestratorRunRecord> {
+    if (!automationId) return await this.executeWithAuthority(request)
+    const definition = await aiOrchestratorStore.getAutomation(automationId)
+    if (!definition || !definition.enabled) {
+      throw new Error(`Automation ${automationId} is unavailable`)
+    }
+    const policy = normalizeAutomationPolicy(definition, definition.policy)
+    return await this.executeWithAuthority(
+      {
+        ...request,
+        objective: definition.objective,
+        input: definition.input,
+        profileId: definition.profileId,
+        cwd: definition.cwd,
+        timeoutMs: Math.min(definition.timeoutMs ?? policy.timeoutMs, policy.timeoutMs),
+        allowedToolIds: policy.allowedToolIds,
+        budget: policy.budget
+      },
+      automationId,
+      policy,
+      definition.updatedAt
+    )
+  }
+
+  private async executeWithAuthority(
+    request: AiOrchestratorExecuteRequest,
+    automationId?: string,
+    automationPolicy?: AiAutomationPolicy,
+    automationAuthorityVersion?: number,
+    admittedRunId?: string
+  ): Promise<AiOrchestratorRunRecord> {
+    if (this.closing) throw createRunInterruptedError()
     if (!this.initialized) throw new Error('AI CLI orchestrator is not initialized')
     const objective = String(request.objective || '').trim()
     if (!objective) throw new Error('Objective is required')
@@ -417,17 +1048,22 @@ export class AiCliOrchestrator {
       throw new Error(`Agent profile ${request.profileId || DEFAULT_PROFILE_ID} is unavailable`)
     }
     const runtimeProvider = profile.runtimeProvider
-    const allowedToolIds = intersectTools(profile.allowedToolIds, request.allowedToolIds)
+    const authorityToolIds = automationPolicy
+      ? intersectTools(automationPolicy.allowedToolIds, request.allowedToolIds)
+      : request.allowedToolIds
+    const allowedToolIds = intersectTools(profile.allowedToolIds, authorityToolIds)
     const requestedCwd = resolve(request.cwd || process.cwd())
     const cwd = await realpath(requestedCwd).catch(() => requestedCwd)
     await aiImportedConfigRuntime.assertAgentProfileVisible(profile.id, cwd)
     const budget = resolveExecutionBudget(request)
     const now = Date.now()
+    const runId = admittedRunId ?? createOrchestratorRunId()
+    const requestInputPresent = request.input !== undefined
+    const requestInputDigest = requestInputPresent
+      ? digestStructuredValue(request.input)
+      : undefined
     const run: AiOrchestratorRunRecord = {
-      id:
-        typeof request.metadata?.orchestratorRunId === 'string'
-          ? request.metadata.orchestratorRunId
-          : randomUUID(),
+      id: runId,
       automationId,
       sessionId: request.sessionId || randomUUID(),
       objective,
@@ -436,50 +1072,85 @@ export class AiCliOrchestrator {
       cwd,
       status: 'queued',
       metadata: {
-        ...Object.fromEntries(
-          Object.entries(request.metadata ?? {}).filter(
-            ([key]) =>
-              key !== 'approved' &&
-              key !== 'approvalGranted' &&
-              key !== 'approvedAt' &&
-              key !== 'pendingApprovalFingerprint' &&
-              key !== 'pendingApprovalKind' &&
-              key !== 'pendingApprovalReason' &&
-              key !== 'approvalGrantFingerprint'
-          )
-        ),
+        schemaVersion: AI_RUN_METADATA_SCHEMA_VERSION,
         executionBudget: budget,
-        allowedToolIds,
-        requestInput: request.input
+        allowedToolRefs: toAllowedToolRefs(allowedToolIds),
+        requestInputPresent,
+        ...(requestInputDigest ? { requestInputDigest } : {}),
+        profileAuthorityVersion: profile.updatedAt,
+        profileAuthorityDigest: profileAuthorityDigest(profile),
+        ...(automationPolicy
+          ? {
+              automationPolicyVersion: automationPolicy.version,
+              automationPolicyDigest: automationPolicyDigest(automationPolicy),
+              ...(automationAuthorityVersion === undefined ? {} : { automationAuthorityVersion })
+            }
+          : {})
       },
       parentRunId: request.parentRunId,
       createdAt: now,
       updatedAt: now
     }
-    await aiOrchestratorStore.createOrchestratorRun(run)
-    await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.queued', {
-      runtimeProvider,
-      profileId: profile.id,
-      automationId
+    if (requestInputPresent && requestInputDigest) {
+      this.volatileRunInputs.set(run.id, { digest: requestInputDigest, input: request.input })
+    }
+    this.trustedAllowedToolIds.set(run.id, Object.freeze([...allowedToolIds]))
+    if (automationPolicy) this.trustedAutomationPolicies.set(run.id, automationPolicy)
+    await this.withRunWriteLease(run.id, async () => {
+      try {
+        await aiOrchestratorStore.createOrchestratorRun(run)
+      } catch (error) {
+        this.clearVolatileRunState(run.id)
+        throw error
+      }
+      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.queued', {
+        runtimeProvider,
+        profileId: profile.id,
+        automationId
+      })
     })
 
     return await this.executePreparedRun(
       run,
-      { ...request, objective, cwd, approved: false, allowedToolIds, budget },
+      {
+        ...request,
+        objective,
+        cwd,
+        approved: false,
+        allowedToolIds,
+        budget,
+        metadata: automationPolicy ? { automationPolicy } : undefined
+      },
       profile,
       allowedToolIds,
       budget
     )
   }
 
-  async approveRun(runId: string): Promise<AiOrchestratorRunRecord> {
+  approveRun(runId: string): Promise<AiOrchestratorRunRecord> {
+    return this.trackExecution(() => this.approveRunInternal(runId))
+  }
+
+  private async approveRunInternal(runId: string): Promise<AiOrchestratorRunRecord> {
     const run = await aiOrchestratorStore.getOrchestratorRun(runId)
     if (!run) throw new Error(`Orchestrator run ${runId} not found`)
     if (run.status !== 'pending_approval')
       throw new Error(`Orchestrator run ${runId} is not pending approval`)
-    const profile = await aiOrchestratorStore.getProfile(run.profileId)
-    if (!profile || !profile.enabled)
-      throw new Error(`Agent profile ${run.profileId} is unavailable`)
+    let authority: {
+      profile: AiAgentProfile
+      allowedToolIds: string[]
+      automationPolicy?: AiAutomationPolicy
+      input?: unknown
+    }
+    try {
+      authority = await this.restoreRunAuthority(run)
+    } catch (error) {
+      const publicError =
+        error instanceof Error && error.message === AI_RUN_INPUT_UNAVAILABLE
+          ? AI_RUN_INPUT_UNAVAILABLE
+          : AI_RUN_AUTHORITY_CHANGED
+      return await this.interruptPendingRun(run, publicError)
+    }
     const pendingFingerprint =
       typeof run.metadata?.pendingApprovalFingerprint === 'string'
         ? run.metadata.pendingApprovalFingerprint
@@ -487,7 +1158,7 @@ export class AiCliOrchestrator {
     if (!pendingFingerprint)
       throw new Error(`Orchestrator run ${runId} has no approvable pending requirement`)
     const approvedAt = Date.now()
-    const metadata = { ...(run.metadata ?? {}) }
+    const metadata = projectPersistedRunMetadata(run.metadata)
     delete metadata.approved
     delete metadata.approvalGranted
     delete metadata.approvedAt
@@ -500,9 +1171,7 @@ export class AiCliOrchestrator {
       objective: run.objective,
       budget: toRecord(metadata.executionBudget) as Partial<AiExecutionBudget>
     })
-    const allowedToolIds = Array.isArray(metadata.allowedToolIds)
-      ? metadata.allowedToolIds.filter((value): value is string => typeof value === 'string')
-      : profile.allowedToolIds
+    const allowedToolIds = authority.allowedToolIds
     const pendingKind =
       typeof run.metadata?.pendingApprovalKind === 'string' ? run.metadata.pendingApprovalKind : ''
     const approvedRun: AiOrchestratorRunRecord = {
@@ -517,27 +1186,32 @@ export class AiCliOrchestrator {
       metadata,
       updatedAt: approvedAt
     }
-    await aiOrchestratorStore.updateOrchestratorRun(run.id, approvedRun)
-    await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.approved', {
-      approvalFingerprint: pendingFingerprint,
-      approvalKind: pendingKind || 'unknown',
-      delegationPlanId: approvedRun.delegationPlan?.planId
+    await this.withRunWriteLease(run.id, async () => {
+      await aiOrchestratorStore.updateOrchestratorRun(run.id, approvedRun)
+      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.approved', {
+        approvalFingerprint: pendingFingerprint,
+        approvalKind: pendingKind || 'unknown',
+        delegationPlanId: approvedRun.delegationPlan?.planId
+      })
     })
     return await this.executePreparedRun(
       approvedRun,
       {
         objective: run.objective,
-        input: metadata.requestInput,
+        input: authority.input,
         profileId: run.profileId,
         cwd: run.cwd,
         approved: false,
         allowedToolIds,
         sessionId: run.sessionId,
-        metadata,
+        metadata: {
+          ...(authority.automationPolicy ? { automationPolicy: authority.automationPolicy } : {}),
+          approvalGrantFingerprint: pendingFingerprint
+        },
         parentRunId: run.parentRunId,
         budget
       },
-      profile,
+      authority.profile,
       allowedToolIds,
       budget
     )
@@ -550,121 +1224,130 @@ export class AiCliOrchestrator {
     allowedToolIds: string[],
     budget: AiExecutionBudget
   ): Promise<AiOrchestratorRunRecord> {
-    const startedAt = Date.now()
+    const releaseWriteLease = this.acquireRunWriteLease(run.id)
     try {
-      await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-        status: 'running',
-        startedAt,
-        metadata: run.metadata,
-        delegationPlan: run.delegationPlan
-      })
-      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.started')
+      const startedAt = Date.now()
+      try {
+        await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+          status: 'running',
+          startedAt,
+          metadata: run.metadata,
+          delegationPlan: run.delegationPlan
+        })
+        await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.started')
 
-      const history = await aiOrchestratorStore.listSessionHistory(run.sessionId, run.id)
-      const importedSystemPrompt = await aiImportedConfigRuntime.buildSystemPrompt(
-        profile,
-        run.cwd,
-        run.objective
-      )
-      const runtimeProfile: AiAgentProfile = {
-        ...profile,
-        systemPrompt: [profile.systemPrompt, importedSystemPrompt].filter(Boolean).join('\n\n')
-      }
-      const result = await this.runtimeHost.execute({
-        run: { ...run, status: 'running', startedAt, updatedAt: startedAt },
-        request,
-        profile: runtimeProfile,
-        tools: resolvePiRuntimeToolSpecs(allowedToolIds),
-        history,
-        budget
-      })
-      const completedAt = Date.now()
-      const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
-      const metadata = { ...(persisted?.metadata ?? run.metadata ?? {}) }
-      delete metadata.approvalGrantFingerprint
-      delete metadata.approvalGrantAt
-      await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-        status: 'completed',
-        output: result.output,
-        usage: result.usage,
-        metadata,
-        completedAt
-      })
-      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.completed', {
-        outputLength: result.output.length,
-        usage: result.usage
-      })
-      return {
-        ...run,
-        status: 'completed',
-        output: result.output,
-        usage: result.usage,
-        startedAt,
-        completedAt,
-        updatedAt: completedAt
-      }
-    } catch (error) {
-      const message = toErrorMessage(error)
-      const approvalRequirement = parseApprovalRequirement(message)
-      const status = message.startsWith('APPROVAL_REQUIRED:')
-        ? approvalRequirement
+        const history = await aiOrchestratorStore.listSessionHistory(run.sessionId, run.id)
+        const importedSystemPrompt = await aiImportedConfigRuntime.buildSystemPrompt(
+          profile,
+          run.cwd,
+          run.objective
+        )
+        const runtimeProfile: AiAgentProfile = {
+          ...profile,
+          systemPrompt: [profile.systemPrompt, importedSystemPrompt].filter(Boolean).join('\n\n')
+        }
+        if (this.closing) throw createRunInterruptedError()
+        const result = await this.runtimeHost.execute({
+          run: { ...run, status: 'running', startedAt, updatedAt: startedAt },
+          request,
+          profile: runtimeProfile,
+          tools: resolvePiRuntimeToolSpecs(allowedToolIds),
+          history,
+          budget
+        })
+        const completedAt = Date.now()
+        const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
+        const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
+        delete metadata.approvalGrantFingerprint
+        delete metadata.approvalGrantAt
+        await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+          status: 'completed',
+          output: result.output,
+          usage: result.usage,
+          metadata,
+          completedAt
+        })
+        await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.completed', {
+          outputLength: result.output.length,
+          usage: result.usage
+        })
+        this.clearVolatileRunState(run.id)
+        return {
+          ...run,
+          status: 'completed',
+          output: result.output,
+          usage: result.usage,
+          startedAt,
+          completedAt,
+          updatedAt: completedAt
+        }
+      } catch (error) {
+        const approvalRequirement = approvalRequirementFromControlError(error)
+        const status = approvalRequirement
           ? 'pending_approval'
-          : 'failed'
-        : /cancel/i.test(message)
-          ? 'cancelled'
-          : message.startsWith(INTERRUPTED_TOOL_CALL_PREFIX) ||
-              /Pi runtime utility process exited|Pi runtime stopped/i.test(message)
-            ? 'interrupted'
-            : 'failed'
-      const approvalReason = status === 'pending_approval' ? approvalRequirement?.reason : undefined
-      const completedAt = status === 'pending_approval' ? undefined : Date.now()
-      const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
-      const metadata = { ...(persisted?.metadata ?? run.metadata ?? {}) }
-      delete metadata.approved
-      delete metadata.approvalGranted
-      delete metadata.approvedAt
-      delete metadata.approvalGrantFingerprint
-      if (approvalRequirement && status === 'pending_approval') {
-        metadata.pendingApprovalFingerprint = approvalRequirement.fingerprint
-        metadata.pendingApprovalKind = approvalRequirement.kind
-        metadata.pendingApprovalReason = approvalRequirement.reason
-      } else {
-        delete metadata.pendingApprovalFingerprint
-        delete metadata.pendingApprovalKind
-        delete metadata.pendingApprovalReason
-      }
-      await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-        status,
-        error:
-          message.startsWith('APPROVAL_REQUIRED:') && !approvalRequirement
-            ? 'Malformed approval requirement: stable fingerprint is required'
-            : message,
-        approvalReason,
-        metadata,
-        delegationPlan: persisted?.delegationPlan,
-        ...(completedAt ? { completedAt } : {})
-      })
-      await aiOrchestratorStore.appendOrchestratorEvent(
-        run.id,
-        `run.${status}`,
-        {
-          error: message,
+          : isRunCancelledControlError(error)
+            ? 'cancelled'
+            : isInterruptedToolCallControlError(error) || isRunInterruptedControlError(error)
+              ? 'interrupted'
+              : 'failed'
+        const approvalReason =
+          status === 'pending_approval' ? approvalRequirement?.reason : undefined
+        const publicError = approvalRequirement
+          ? approvalRequirement.reason
+          : status === 'cancelled'
+            ? AI_RUN_CANCELLED
+            : status === 'interrupted'
+              ? AI_RUN_INTERRUPTED
+              : AI_RUN_FAILED
+        const completedAt = status === 'pending_approval' ? undefined : Date.now()
+        const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
+        const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
+        delete metadata.approved
+        delete metadata.approvalGranted
+        delete metadata.approvedAt
+        delete metadata.approvalGrantFingerprint
+        if (approvalRequirement && status === 'pending_approval') {
+          metadata.pendingApprovalFingerprint = approvalRequirement.fingerprint
+          metadata.pendingApprovalKind = approvalRequirement.kind
+          metadata.pendingApprovalReason = approvalRequirement.reason
+        } else {
+          delete metadata.pendingApprovalFingerprint
+          delete metadata.pendingApprovalKind
+          delete metadata.pendingApprovalReason
+        }
+        await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+          status,
+          error: publicError,
           approvalReason,
-          approvalFingerprint: approvalRequirement?.fingerprint,
-          approvalKind: approvalRequirement?.kind
-        },
-        status === 'failed' ? 'error' : 'warn'
-      )
-      return {
-        ...run,
-        status,
-        error: message,
-        approvalReason,
-        delegationPlan: persisted?.delegationPlan,
-        startedAt,
-        completedAt,
-        updatedAt: completedAt ?? Date.now()
+          metadata,
+          delegationPlan: persisted?.delegationPlan,
+          ...(completedAt ? { completedAt } : {})
+        })
+        await aiOrchestratorStore.appendOrchestratorEvent(
+          run.id,
+          `run.${status}`,
+          {
+            error: publicError,
+            approvalReason,
+            approvalFingerprint: approvalRequirement?.fingerprint,
+            approvalKind: approvalRequirement?.kind
+          },
+          status === 'failed' ? 'error' : 'warn'
+        )
+        if (status !== 'pending_approval') this.clearVolatileRunState(run.id)
+        return {
+          ...run,
+          status,
+          error: publicError,
+          approvalReason,
+          delegationPlan: persisted?.delegationPlan,
+          startedAt,
+          completedAt,
+          updatedAt: completedAt ?? Date.now()
+        }
       }
+    } finally {
+      releaseWriteLease()
     }
   }
 
@@ -698,18 +1381,22 @@ export class AiCliOrchestrator {
     if (this.cancel(runId)) return true
     if (run.status !== 'pending_approval' && run.status !== 'queued') return false
     const now = Date.now()
-    await aiOrchestratorStore.updateOrchestratorRun(runId, {
-      status: 'cancelled',
-      error: 'Cancelled by user',
-      completedAt: now,
-      updatedAt: now
+    await this.withRunWriteLease(runId, async () => {
+      await aiOrchestratorStore.updateOrchestratorRun(runId, {
+        status: 'cancelled',
+        error: 'Cancelled by user',
+        metadata: projectPersistedRunMetadata(run.metadata),
+        completedAt: now,
+        updatedAt: now
+      })
+      await aiOrchestratorStore.appendOrchestratorEvent(
+        runId,
+        'run.cancelled',
+        { reason: 'Cancelled by user' },
+        'warn'
+      )
     })
-    await aiOrchestratorStore.appendOrchestratorEvent(
-      runId,
-      'run.cancelled',
-      { reason: 'Cancelled by user' },
-      'warn'
-    )
+    this.clearVolatileRunState(runId)
     return true
   }
 
@@ -875,8 +1562,7 @@ export class AiCliOrchestrator {
       metadata: {
         ...metadata,
         workflowId: context.workflow.id,
-        workflowRunId: context.run.id,
-        orchestratorRunId: `workflow:${context.run.id}`
+        workflowRunId: context.run.id
       }
     })
     const completed = run.status === 'completed'
@@ -947,7 +1633,11 @@ export class AiCliOrchestrator {
     }
   }
 
-  async executeAgentTask(task: AgentTask): Promise<AgentResult> {
+  executeAgentTask(task: AgentTask): Promise<AgentResult> {
+    return this.trackExecution(() => this.executeAgentTaskInternal(task))
+  }
+
+  private async executeAgentTaskInternal(task: AgentTask): Promise<AgentResult> {
     const taskId = task.id || randomUUID()
     const descriptor = agentManager.getAgent(task.agentId)
     if (!descriptor) {
@@ -958,56 +1648,69 @@ export class AiCliOrchestrator {
     }
 
     const metadata = task.context?.metadata ?? {}
-    const run = await this.execute({
-      objective: `${descriptor.description}\n\n${toObjective(task)}`,
-      input: task.input,
-      profileId: typeof metadata.profileId === 'string' ? metadata.profileId : undefined,
-      cwd: task.context?.workingDirectory,
-      timeoutMs: task.timeout || descriptor.config?.timeout,
-      approved: metadata.approved === true,
-      allowedToolIds: descriptor.tools?.map((tool) => tool.toolId),
-      sessionId: task.context?.sessionId,
-      metadata: {
-        ...metadata,
-        taskId,
-        orchestratorRunId: taskId,
-        agentId: task.agentId,
-        taskType: task.type
-      }
-    })
+    if (this.agentTaskRunIds.has(taskId)) {
+      return this.agentError(taskId, task.agentId, 'Agent task is already running')
+    }
+    const runId = createOrchestratorRunId()
+    this.agentTaskRunIds.set(taskId, runId)
+    try {
+      const run = await this.executeWithAuthority(
+        {
+          objective: `${descriptor.description}\n\n${toObjective(task)}`,
+          input: task.input,
+          profileId: typeof metadata.profileId === 'string' ? metadata.profileId : undefined,
+          cwd: task.context?.workingDirectory,
+          timeoutMs: task.timeout || descriptor.config?.timeout,
+          approved: metadata.approved === true,
+          allowedToolIds: descriptor.tools?.map((tool) => tool.toolId),
+          sessionId: task.context?.sessionId
+        },
+        undefined,
+        undefined,
+        undefined,
+        runId
+      )
 
-    const duration = (run.completedAt ?? Date.now()) - (run.startedAt ?? run.createdAt)
-    const usage: AgentUsage = {
-      promptTokens: run.usage?.promptTokens ?? 0,
-      completionTokens: run.usage?.completionTokens ?? 0,
-      totalTokens: run.usage?.totalTokens ?? 0,
-      toolCalls: 0,
-      duration,
-      cost: run.usage?.cost
-    }
-    const trace: AgentTraceStep[] = [
-      {
-        type: run.status === 'completed' ? 'output' : 'thought',
-        timestamp: run.completedAt ?? Date.now(),
-        content: run.output || run.error || run.status
+      const duration = (run.completedAt ?? Date.now()) - (run.startedAt ?? run.createdAt)
+      const usage: AgentUsage = {
+        promptTokens: run.usage?.promptTokens ?? 0,
+        completionTokens: run.usage?.completionTokens ?? 0,
+        totalTokens: run.usage?.totalTokens ?? 0,
+        toolCalls: 0,
+        duration,
+        cost: run.usage?.cost
       }
-    ]
-    return {
-      success: run.status === 'completed',
-      taskId,
-      agentId: task.agentId,
-      output: run.output,
-      error: run.error,
-      status:
-        run.status === 'completed'
-          ? AgentStatus.COMPLETED
-          : run.status === 'cancelled'
-            ? AgentStatus.CANCELLED
-            : AgentStatus.FAILED,
-      usage,
-      trace,
-      timestamp: Date.now()
+      const trace: AgentTraceStep[] = [
+        {
+          type: run.status === 'completed' ? 'output' : 'thought',
+          timestamp: run.completedAt ?? Date.now(),
+          content: run.output || run.error || run.status
+        }
+      ]
+      return {
+        success: run.status === 'completed',
+        taskId,
+        agentId: task.agentId,
+        output: run.output,
+        error: run.error,
+        status:
+          run.status === 'completed'
+            ? AgentStatus.COMPLETED
+            : run.status === 'cancelled'
+              ? AgentStatus.CANCELLED
+              : AgentStatus.FAILED,
+        usage,
+        trace,
+        timestamp: Date.now()
+      }
+    } finally {
+      if (this.agentTaskRunIds.get(taskId) === runId) this.agentTaskRunIds.delete(taskId)
     }
+  }
+
+  cancelAgentTask(taskId: string): boolean {
+    const runId = this.agentTaskRunIds.get(taskId)
+    return runId ? this.cancel(runId) : false
   }
 
   private registerImportedRuntimeTools(): void {
@@ -1132,65 +1835,64 @@ export class AiCliOrchestrator {
         permissions: []
       },
       async (input, context) => {
-        const parentRun = await aiOrchestratorStore.getOrchestratorRun(context.taskId)
-        if (!parentRun) throw new Error(`Parent orchestrator run ${context.taskId} not found`)
-        const plan = this.normalizeDelegationPlan(input, parentRun)
-        await this.assertRemainingChildBudget(plan, parentRun)
-        await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, { delegationPlan: plan })
-        await aiOrchestratorStore.appendOrchestratorEvent(
-          parentRun.id,
-          'delegation.plan.proposed',
-          {
-            planId: plan.planId,
-            nodes: plan.nodes,
-            maxConcurrency: plan.maxConcurrency
-          }
-        )
-
-        const fingerprint = delegationApprovalFingerprint(plan)
-        const policyViolation = this.delegationPolicyViolation(plan, parentRun)
-        const hasApprovalGrant = this.hasApprovalGrant(parentRun, fingerprint)
-        const approvalReason =
-          policyViolation ??
-          (hasApprovalGrant ? undefined : 'Interactive delegation plan requires user approval')
-        if (approvalReason) {
-          throw new Error(
-            `APPROVAL_REQUIRED:${JSON.stringify({
-              kind: 'delegation',
-              fingerprint,
-              reason: approvalReason,
-              plan
-            })}`
-          )
-        }
-
-        const approvedParentRun = hasApprovalGrant
-          ? await this.consumeApprovalGrant(parentRun, fingerprint)
-          : parentRun
-        const executingPlan: AiDelegationPlan = {
-          ...plan,
-          status: 'executing',
-          approvedAt: Date.now()
-        }
-        await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, {
-          delegationPlan: executingPlan
-        })
+        const releaseWriteLease = this.acquireRunWriteLease(context.taskId)
         try {
-          const results = await this.executeDelegationPlan(executingPlan, approvedParentRun)
-          await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, {
-            delegationPlan: { ...executingPlan, status: 'completed' }
-          })
+          const parentRun = await aiOrchestratorStore.getOrchestratorRun(context.taskId)
+          if (!parentRun) throw new Error(`Parent orchestrator run ${context.taskId} not found`)
+          await this.restoreRunAuthority(parentRun)
+          const plan = this.normalizeDelegationPlan(input, parentRun)
+          await this.assertRemainingChildBudget(plan, parentRun)
+          await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, { delegationPlan: plan })
           await aiOrchestratorStore.appendOrchestratorEvent(
             parentRun.id,
-            'delegation.plan.completed',
-            { planId: plan.planId, childRunIds: results.map((result) => result.runId) }
+            'delegation.plan.proposed',
+            {
+              planId: plan.planId,
+              nodes: plan.nodes,
+              maxConcurrency: plan.maxConcurrency
+            }
           )
-          return { planId: plan.planId, results }
-        } catch (error) {
+
+          const fingerprint = delegationApprovalFingerprint(plan)
+          const policyViolation = this.delegationPolicyViolation(plan, parentRun)
+          const hasApprovalGrant = this.hasApprovalGrant(parentRun, fingerprint)
+          const approvalReason =
+            policyViolation ??
+            (hasApprovalGrant ? undefined : 'Interactive delegation plan requires user approval')
+          if (approvalReason) {
+            throw createApprovalRequiredError('delegation', fingerprint)
+          }
+
+          const approvedParentRun = hasApprovalGrant
+            ? await this.consumeApprovalGrant(parentRun, fingerprint)
+            : parentRun
+          const executingPlan: AiDelegationPlan = {
+            ...plan,
+            status: 'executing',
+            approvedAt: Date.now()
+          }
           await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, {
-            delegationPlan: { ...executingPlan, status: 'failed' }
+            delegationPlan: executingPlan
           })
-          throw error
+          try {
+            const results = await this.executeDelegationPlan(executingPlan, approvedParentRun)
+            await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, {
+              delegationPlan: { ...executingPlan, status: 'completed' }
+            })
+            await aiOrchestratorStore.appendOrchestratorEvent(
+              parentRun.id,
+              'delegation.plan.completed',
+              { planId: plan.planId, childRunIds: results.map((result) => result.runId) }
+            )
+            return { planId: plan.planId, results }
+          } catch (error) {
+            await aiOrchestratorStore.updateOrchestratorRun(parentRun.id, {
+              delegationPlan: { ...executingPlan, status: 'failed' }
+            })
+            throw error
+          }
+        } finally {
+          releaseWriteLease()
         }
       }
     )
@@ -1200,28 +1902,14 @@ export class AiCliOrchestrator {
     plan: AiDelegationPlan,
     parentRun: AiOrchestratorRunRecord
   ): string | undefined {
-    const policy = toRecord(parentRun.metadata?.automationPolicy)
-    if (Object.keys(policy).length === 0) return undefined
-    const allowedProfiles = new Set(
-      Array.isArray(policy.allowedAgentProfileIds)
-        ? policy.allowedAgentProfileIds.filter(
-            (value): value is string => typeof value === 'string'
-          )
-        : []
-    )
-    const allowedTools = new Set(
-      Array.isArray(policy.allowedToolIds)
-        ? policy.allowedToolIds.filter((value): value is string => typeof value === 'string')
-        : []
-    )
-    const allowedMcpServers = new Set(
-      Array.isArray(policy.allowedMcpServerIds)
-        ? policy.allowedMcpServerIds.filter((value): value is string => typeof value === 'string')
-        : []
-    )
+    const policy = this.trustedAutomationPolicies.get(parentRun.id)
+    if (!policy) return undefined
+    const allowedProfiles = new Set(policy.allowedAgentProfileIds)
+    const allowedTools = new Set(policy.allowedToolIds)
+    const allowedMcpServers = new Set(policy.allowedMcpServerIds)
     const policyBudget = resolveExecutionBudget({
       objective: parentRun.objective,
-      budget: toRecord(policy.budget) as Partial<AiExecutionBudget>
+      budget: policy.budget
     })
     if (plan.maxConcurrency > policyBudget.maxConcurrency) {
       return `Delegation concurrency exceeds automation policy maxConcurrency=${policyBudget.maxConcurrency}`
@@ -1260,16 +1948,18 @@ export class AiCliOrchestrator {
     if (!this.hasApprovalGrant(run, fingerprint)) {
       throw new Error('Approval grant does not match the requested operation')
     }
-    const metadata = { ...(run.metadata ?? {}) }
+    const metadata = projectPersistedRunMetadata(run.metadata)
     delete metadata.approvalGrantFingerprint
     delete metadata.approvalGrantAt
     const updated = { ...run, metadata, updatedAt: Date.now() }
-    await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-      metadata,
-      updatedAt: updated.updatedAt
-    })
-    await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.approval_grant_consumed', {
-      approvalFingerprint: fingerprint
+    await this.withRunWriteLease(run.id, async () => {
+      await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+        metadata,
+        updatedAt: updated.updatedAt
+      })
+      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.approval_grant_consumed', {
+        approvalFingerprint: fingerprint
+      })
     })
     return updated
   }
@@ -1282,14 +1972,10 @@ export class AiCliOrchestrator {
       objective: parentRun.objective,
       budget: toRecord(parentRun.metadata?.executionBudget) as Partial<AiExecutionBudget>
     })
-    const policy = toRecord(parentRun.metadata?.automationPolicy)
-    const policyBudget =
-      Object.keys(policy).length > 0
-        ? resolveExecutionBudget({
-            objective: parentRun.objective,
-            budget: toRecord(policy.budget) as Partial<AiExecutionBudget>
-          })
-        : parentBudget
+    const policy = this.trustedAutomationPolicies.get(parentRun.id)
+    const policyBudget = policy
+      ? resolveExecutionBudget({ objective: parentRun.objective, budget: policy.budget })
+      : parentBudget
     const maxChildRuns = Math.min(parentBudget.maxChildRuns, policyBudget.maxChildRuns)
     const existingChildren = (await this.listRuns({ limit: 200 })).filter(
       (run) => run.parentRunId === parentRun.id && run.status !== 'cancelled'
@@ -1306,35 +1992,21 @@ export class AiCliOrchestrator {
     parentRun: AiOrchestratorRunRecord,
     node: AiDelegationNode
   ): Record<string, unknown> {
-    const parentPolicy = toRecord(parentRun.metadata?.automationPolicy)
+    const parentPolicy = this.trustedAutomationPolicies.get(parentRun.id)
     const parentBudget = resolveExecutionBudget({
       objective: parentRun.objective,
       budget: toRecord(parentRun.metadata?.executionBudget) as Partial<AiExecutionBudget>
     })
-    const policyBudget =
-      Object.keys(parentPolicy).length > 0
-        ? resolveExecutionBudget({
-            objective: parentRun.objective,
-            budget: toRecord(parentPolicy.budget) as Partial<AiExecutionBudget>
-          })
-        : parentBudget
+    const policyBudget = parentPolicy
+      ? resolveExecutionBudget({ objective: parentRun.objective, budget: parentPolicy.budget })
+      : parentBudget
     return Object.freeze({
-      version: typeof parentPolicy.version === 'number' ? parentPolicy.version : 1,
+      version: parentPolicy?.version ?? 1,
       allowedToolIds: Object.freeze([...node.requestedTools]),
       allowedMcpServerIds: Object.freeze([...node.requestedMcpServers]),
       allowedAgentProfileIds: Object.freeze([node.profileId]),
-      allowedPaths: Object.freeze(
-        Array.isArray(parentPolicy.allowedPaths)
-          ? parentPolicy.allowedPaths.filter((value): value is string => typeof value === 'string')
-          : []
-      ),
-      allowedNetworkTargets: Object.freeze(
-        Array.isArray(parentPolicy.allowedNetworkTargets)
-          ? parentPolicy.allowedNetworkTargets.filter(
-              (value): value is string => typeof value === 'string'
-            )
-          : []
-      ),
+      allowedPaths: Object.freeze(parentPolicy ? parentPolicy.allowedPaths : []),
+      allowedNetworkTargets: Object.freeze(parentPolicy ? parentPolicy.allowedNetworkTargets : []),
       budget: Object.freeze({
         maxSteps: Math.min(node.budget.maxSteps, policyBudget.maxSteps),
         maxToolCalls: Math.min(
@@ -1351,18 +2023,10 @@ export class AiCliOrchestrator {
         maxChildRuns: Math.min(node.budget.maxChildRuns, policyBudget.maxChildRuns),
         maxConcurrency: Math.min(node.budget.maxConcurrency, policyBudget.maxConcurrency)
       }),
-      timeoutMs:
-        typeof parentPolicy.timeoutMs === 'number' && parentPolicy.timeoutMs > 0
-          ? parentPolicy.timeoutMs
-          : 0,
+      timeoutMs: parentPolicy && parentPolicy.timeoutMs > 0 ? parentPolicy.timeoutMs : 0,
       maxRunsPerWindow:
-        typeof parentPolicy.maxRunsPerWindow === 'number' && parentPolicy.maxRunsPerWindow > 0
-          ? parentPolicy.maxRunsPerWindow
-          : 1,
-      windowMs:
-        typeof parentPolicy.windowMs === 'number' && parentPolicy.windowMs > 0
-          ? parentPolicy.windowMs
-          : 1
+        parentPolicy && parentPolicy.maxRunsPerWindow > 0 ? parentPolicy.maxRunsPerWindow : 1,
+      windowMs: parentPolicy && parentPolicy.windowMs > 0 ? parentPolicy.windowMs : 1
     })
   }
 
@@ -1381,13 +2045,7 @@ export class AiCliOrchestrator {
       throw new Error(`Delegation plan exceeds maxChildRuns=${parentBudget.maxChildRuns}`)
     }
 
-    const parentAllowedTools = new Set(
-      Array.isArray(parentRun.metadata?.allowedToolIds)
-        ? parentRun.metadata.allowedToolIds.filter(
-            (value): value is string => typeof value === 'string'
-          )
-        : []
-    )
+    const parentAllowedTools = new Set(this.trustedAllowedToolIds.get(parentRun.id) ?? [])
     const nodes: AiDelegationNode[] = rawNodes.map((rawNode) => {
       const node = toRecord(rawNode)
       const nodeId = typeof node.nodeId === 'string' ? node.nodeId.trim() : ''
@@ -1488,21 +2146,23 @@ export class AiCliOrchestrator {
           if (disallowedTools.length > 0) {
             throw new Error(`Delegation profile ${node.profileId} disallows requested tools`)
           }
-          const child = await this.execute({
-            objective: node.objective,
-            profileId: node.profileId,
-            cwd: parentRun.cwd,
-            approved: false,
-            allowedToolIds: node.requestedTools,
-            parentRunId: parentRun.id,
-            budget: node.budget,
-            metadata: {
-              delegationPlanId: plan.planId,
-              delegationNodeId: node.nodeId,
-              requestedMcpServers: [...node.requestedMcpServers],
-              automationPolicy: this.childAutomationPolicy(parentRun, node)
-            }
-          })
+          const childPolicy = normalizeAutomationPolicy(
+            { profileId: node.profileId, cwd: parentRun.cwd },
+            this.childAutomationPolicy(parentRun, node) as Partial<AiAutomationPolicy>
+          )
+          const child = await this.executeWithAuthority(
+            {
+              objective: node.objective,
+              profileId: node.profileId,
+              cwd: parentRun.cwd,
+              approved: false,
+              allowedToolIds: node.requestedTools,
+              parentRunId: parentRun.id,
+              budget: node.budget
+            },
+            undefined,
+            childPolicy
+          )
           if (child.status !== 'completed')
             throw new Error(child.error || `Delegation node ${node.nodeId} failed`)
           return { nodeId: node.nodeId, runId: child.id, output: child.output ?? '' }

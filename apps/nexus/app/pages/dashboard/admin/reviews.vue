@@ -3,6 +3,7 @@ import { $fetch as rawFetch } from 'ofetch'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import CommentTabs from '~/components/dashboard/admin/CommentTabs.vue'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 
@@ -79,6 +80,7 @@ async function loadPendingReviews(options: { reset?: boolean } = {}) {
 
   pendingLoading.value = true
   pendingError.value = null
+  actionError.value = null
 
   const reset = options.reset ?? false
   const offset = reset ? 0 : pendingReviews.value.length
@@ -181,6 +183,10 @@ onMounted(() => {
         </TxButton>
       </div>
 
+      <div v-if="actionError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+        {{ actionError }}
+      </div>
+
       <div v-if="pendingLoading && !pendingReviews.length" class="mt-4 space-y-3">
         <div class="flex items-center gap-2 text-sm text-black/60 dark:text-white/60">
           <TxSpinner :size="16" />
@@ -195,9 +201,6 @@ onMounted(() => {
       </div>
       <div v-else-if="pendingError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
         {{ pendingError }}
-      </div>
-      <div v-else-if="actionError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-        {{ actionError }}
       </div>
       <div v-else-if="!pendingReviews.length" class="mt-4 text-sm text-black/60 dark:text-white/60">
         {{ t('dashboard.sections.reviews.empty', 'No pending reviews yet.') }}
@@ -249,7 +252,7 @@ onMounted(() => {
         </article>
       </div>
 
-      <div v-if="hasMore" class="mt-5 flex justify-center">
+      <div v-if="hasMore && !pendingError" class="mt-5 flex justify-center">
         <TxButton size="small" type="text" :loading="pendingLoading" @click="loadMore">
           {{ t('dashboard.sections.reviews.loadMore', 'Load more') }}
         </TxButton>

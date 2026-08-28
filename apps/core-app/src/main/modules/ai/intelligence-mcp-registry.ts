@@ -7,7 +7,8 @@ import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { app } from 'electron'
 import { getSecureStoreValue, isSecureStoreAvailable } from '../../utils/secure-store'
 import { createLogger } from '../../utils/logger'
-import { createMcpFailure } from './intelligence-mcp-failure'
+import { createMcpFailure, readMcpFailureReason } from './intelligence-mcp-failure'
+import { projectToolError, projectToolErrorCode } from './tool-error-projection'
 
 const mcpLog = createLogger('Intelligence').child('McpRegistry')
 
@@ -117,6 +118,33 @@ function getCompositeToolId(profileId: string, toolName: string): string {
   return `mcp.${profileId}.${toolName}`
 }
 
+function stableMcpFailure(reason: 'server-unavailable' | 'tool-failed'): Error {
+  const projection = projectToolErrorCode(
+    reason === 'server-unavailable' ? 'MCP_SERVER_UNAVAILABLE' : 'MCP_TOOL_FAILED'
+  )
+  return createMcpFailure(reason, projection.message)
+}
+
+function normalizeMcpFailure(
+  error: unknown,
+  fallback: 'server-unavailable' | 'tool-failed'
+): Error {
+  return stableMcpFailure(readMcpFailureReason(error) ?? fallback)
+}
+
+function normalizeMcpCallFailure(error: unknown, sessionClosed: boolean): Error {
+  const declaredReason = readMcpFailureReason(error)
+  if (declaredReason) return stableMcpFailure(declaredReason)
+
+  const projectedCode = projectToolError(error).code
+  const transportFailed =
+    sessionClosed ||
+    projectedCode === 'MCP_SERVER_UNAVAILABLE' ||
+    projectedCode === 'TOOL_SERVICE_UNAVAILABLE' ||
+    projectedCode === 'TOOL_EXECUTION_TIMEOUT'
+  return stableMcpFailure(transportFailed ? 'server-unavailable' : 'tool-failed')
+}
+
 export class IntelligenceMcpRegistry {
   private readonly profiles = new Map<string, IntelligenceMcpProfile>()
   private readonly sessions = new Map<string, ConnectedMcpSession>()
@@ -171,10 +199,14 @@ export class IntelligenceMcpRegistry {
     const tools: AdaptedStructuredTool[] = []
 
     for (const profile of profiles) {
-      const session = await this.connectProfile(profile)
+      const session = await this.connectProfile(profile).catch((error: unknown) => {
+        throw normalizeMcpFailure(error, 'server-unavailable')
+      })
       const response = await this.withSessionRpc(profile.id, session, () =>
         session.client.listTools()
-      )
+      ).catch((error: unknown) => {
+        throw normalizeMcpFailure(error, 'server-unavailable')
+      })
       for (const tool of response.tools ?? []) {
         tools.push(
           McpToolAdapter.fromDefinition({
@@ -204,23 +236,21 @@ export class IntelligenceMcpRegistry {
 
   async callTool(profileId: string, toolName: string, input: unknown): Promise<unknown> {
     const profile = this.getProfile(profileId)
-    if (!profile)
-      throw createMcpFailure('server-unavailable', `MCP profile ${profileId} is not available`)
+    if (!profile) throw stableMcpFailure('server-unavailable')
 
-    const session = await this.connectProfile(profile)
+    const session = await this.connectProfile(profile).catch((error: unknown) => {
+      throw normalizeMcpFailure(error, 'server-unavailable')
+    })
     const result = await this.withSessionRpc(profileId, session, () =>
       session.client.callTool({
         name: toolName,
         arguments: input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
       })
-    )
+    ).catch((error: unknown) => {
+      throw normalizeMcpCallFailure(error, session.closed)
+    })
 
-    if (result.isError) {
-      throw createMcpFailure(
-        'tool-failed',
-        normalizeTextContent(result.content ?? []) || `MCP tool ${toolName} failed`
-      )
-    }
+    if (result.isError) throw stableMcpFailure('tool-failed')
 
     if (result.structuredContent) return result.structuredContent
 
@@ -249,7 +279,7 @@ export class IntelligenceMcpRegistry {
 
   private async connectProfile(profile: IntelligenceMcpProfile): Promise<ConnectedMcpSession> {
     const currentProfile = this.profiles.get(profile.id)
-    if (!currentProfile) throw new Error(`MCP profile ${profile.id} is not available`)
+    if (!currentProfile) throw stableMcpFailure('server-unavailable')
     if (currentProfile !== profile) return await this.connectProfile(currentProfile)
 
     const generation = this.generations.get(profile.id) ?? 0
@@ -272,7 +302,7 @@ export class IntelligenceMcpRegistry {
       ) {
         await this.closeSession(profile.id, session)
         const replacement = this.profiles.get(profile.id)
-        if (!replacement) throw new Error(`MCP profile ${profile.id} is not available`)
+        if (!replacement) throw stableMcpFailure('server-unavailable')
         return await this.connectProfile(replacement)
       }
       this.sessions.set(profile.id, session)
@@ -315,8 +345,8 @@ export class IntelligenceMcpRegistry {
     // mark. Recording it is what stops the object built below from being returned and cached
     // with closed: false, leaving the registry serving a dead transport (#777).
     let closedBeforeSessionExisted = false
-    client.onerror = (error) => {
-      mcpLog.warn(`MCP profile ${profile.id} transport error`, { error })
+    client.onerror = () => {
+      mcpLog.warn('MCP transport failed', { meta: { code: 'MCP_SERVER_UNAVAILABLE' } })
     }
     client.onclose = () => {
       if (session) {
@@ -324,7 +354,7 @@ export class IntelligenceMcpRegistry {
       } else {
         closedBeforeSessionExisted = true
       }
-      mcpLog.info(`MCP profile ${profile.id} disconnected`)
+      mcpLog.info('MCP transport disconnected')
     }
 
     await client.connect(transport)
@@ -332,10 +362,7 @@ export class IntelligenceMcpRegistry {
       // Nothing to remove -- this session was never added to this.sessions. connectProfile
       // propagates the throw and clears its pending entry in the finally, so the next caller
       // starts a fresh connect rather than awaiting a dead one.
-      throw createMcpFailure(
-        'server-unavailable',
-        `MCP profile ${profile.id} closed during connect`
-      )
+      throw stableMcpFailure('server-unavailable')
     }
     session = {
       client,
@@ -353,8 +380,7 @@ export class IntelligenceMcpRegistry {
     session: ConnectedMcpSession,
     operation: () => Promise<T>
   ): Promise<T> {
-    if (session.closed)
-      throw createMcpFailure('server-unavailable', `MCP profile ${profileId} is disconnected`)
+    if (session.closed) throw stableMcpFailure('server-unavailable')
     session.rpcCount += 1
     clearTimeout(session.idleTimer ?? undefined)
     session.idleTimer = null
@@ -394,8 +420,8 @@ export class IntelligenceMcpRegistry {
       if (session.transport instanceof StreamableHTTPClientTransport)
         await session.transport.terminateSession().catch(() => undefined)
       await session.client.close()
-    } catch (error) {
-      mcpLog.warn(`Failed to close MCP session ${profileId}`, { error })
+    } catch {
+      mcpLog.warn('MCP session close failed', { meta: { code: 'MCP_SERVER_UNAVAILABLE' } })
     }
   }
 
@@ -409,7 +435,7 @@ export class IntelligenceMcpRegistry {
         resolveSecureStoreRootPath(),
         authRef,
         'ai-import-secret',
-        (message, error) => mcpLog.warn(`${message} for MCP profile ${profile.id}`, { error })
+        () => mcpLog.warn('MCP credential resolution failed')
       )
       if (value !== null) env[key] = value
     }
@@ -426,7 +452,7 @@ export class IntelligenceMcpRegistry {
           resolveSecureStoreRootPath(),
           authRef,
           'ai-import-secret',
-          (message, error) => mcpLog.warn(`${message} for MCP profile ${profile.id}`, { error })
+          () => mcpLog.warn('MCP credential resolution failed')
         )
         if (value !== null) headers[name] = value
       }
@@ -435,12 +461,8 @@ export class IntelligenceMcpRegistry {
     if (!tokenKey || headers.Authorization) return headers
     if (!isSecureStoreAvailable(resolveSecureStoreRootPath())) return headers
 
-    const token = await getSecureStoreValue(
-      resolveSecureStoreRootPath(),
-      tokenKey,
-      (message, error) => {
-        mcpLog.warn(`${message} for MCP profile ${profile.id}`, { error })
-      }
+    const token = await getSecureStoreValue(resolveSecureStoreRootPath(), tokenKey, () =>
+      mcpLog.warn('MCP credential resolution failed')
     )
     if (token?.trim()) headers.Authorization = `Bearer ${token.trim()}`
     return headers

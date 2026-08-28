@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/release-testing.md","reason":"发布、签名、OTA 生命周期与真机验收合同"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"CI 质量门禁与测试要求"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"workflow、package、artifact、Nexus 与 runtime 一致性"}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"required check、actionlint、skip 与真实属性验证"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"复用既有 release gate 与 manifest owner"}

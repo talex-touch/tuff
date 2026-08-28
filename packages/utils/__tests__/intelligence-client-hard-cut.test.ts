@@ -187,6 +187,8 @@ describe('intelligence client hard-cut surface', () => {
     expect(typeof intelligence.workflow.execute).toBe('function')
 
     for (const method of [
+      'saveProviderConfig',
+      'deleteProviderConfig',
       'contextPrepareTurn',
       'contextCreateCompressionSnapshot',
       'contextListCompressionSnapshots',

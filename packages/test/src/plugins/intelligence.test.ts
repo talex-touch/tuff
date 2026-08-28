@@ -1597,33 +1597,49 @@ describe('intelligence plugin', () => {
     }
   })
 
-  it('preserves bounded structured reason and recovery from invoke errors', () => {
-    const detailedError = Object.assign(new Error('provider request failed'), {
+  it('uses static reason and recovery without exposing provider diagnostics', () => {
+    const rawCanary = 'provider-secret-at-/private/provider/config.json'
+    const detailedError = Object.assign(new Error(rawCanary), {
       code: 'PROVIDER_UNAVAILABLE',
-      reason: 'Provider credentials were rejected by the upstream service.',
-      recovery: 'Update the provider credentials, then retry the request.',
+      reason: `apiKey=${rawCanary}`,
+      recovery: `/Users/private/${rawCanary}`,
     })
 
-    expect(intelligenceTest.normalizeInvokeError(detailedError)).toMatchObject({
+    const normalized = intelligenceTest.normalizeInvokeError(detailedError)
+    expect(normalized).toMatchObject({
       code: 'PROVIDER_UNAVAILABLE',
-      reason: 'Provider credentials were rejected by the upstream service.',
-      recovery: 'Update the provider credentials, then retry the request.',
+      message: 'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
+      reason: '当前能力没有可用的 Provider。',
+      recovery: '在 AI 渠道设置中启用并检查 Provider 配置后重试。',
     })
+    expect(JSON.stringify(normalized)).not.toMatch(/provider-secret|apiKey|private|config\.json/i)
+  })
 
-    const oversizedDetail = 'x'.repeat(300)
-    const truncated = intelligenceTest.normalizeInvokeError(
-      Object.assign(new Error('provider request failed'), {
-        code: 'PROVIDER_UNAVAILABLE',
-        reason: oversizedDetail,
-        recovery: oversizedDetail,
+  it.each([
+    'PROVIDER_UNAVAILABLE',
+    'QUOTA_EXHAUSTED',
+    'MODEL_UNSUPPORTED',
+    'CAPABILITY_UNSUPPORTED',
+    'PERMISSION_DENIED',
+    'NETWORK_FAILURE',
+    'QUOTA_CHECK_UNAVAILABLE',
+    'NEXUS_AUTH_REQUIRED',
+    'INVALID_REQUEST',
+    'UNKNOWN',
+  ] as const)('provides non-empty static display details for %s', (code) => {
+    const normalized = intelligenceTest.normalizeInvokeError(
+      Object.assign(new Error('raw upstream message at /private/provider'), {
+        code,
+        reason: 'apiKey=provider-secret',
+        recovery: '/Users/private/.config',
       }),
     )
-    expect(truncated.reason).toBe(`${oversizedDetail.slice(0, 239)}…`)
-    expect(truncated.recovery).toBe(`${oversizedDetail.slice(0, 239)}…`)
-    expect(intelligenceTest.normalizeInvokeError(new Error('provider request failed'))).toMatchObject({
-      reason: '',
-      recovery: '',
-    })
+
+    expect(normalized).toMatchObject({ code })
+    expect(normalized.message).not.toBe('')
+    expect(normalized.reason).not.toBe('')
+    expect(normalized.recovery).not.toBe('')
+    expect(JSON.stringify(normalized)).not.toMatch(/upstream message|provider-secret|apiKey|private/i)
   })
 
   it('maps invoke result', () => {
@@ -2264,8 +2280,8 @@ describe('intelligence plugin', () => {
       .find(payload => payload?.status === 'error')
     expect(failedPayload).toMatchObject({
       errorCode: 'PROVIDER_UNAVAILABLE',
-      errorReason: 'The selected provider rejected this request.',
-      errorRecovery: 'Check the provider configuration and retry.',
+      errorReason: '当前能力没有可用的 Provider。',
+      errorRecovery: '在 AI 渠道设置中启用并检查 Provider 配置后重试。',
     })
   })
 

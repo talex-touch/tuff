@@ -128,6 +128,22 @@ export function withPermission<TReq = unknown, TRes = unknown>(
     }
 
     const declaredSdkApi = await resolvePluginDeclaredSdkApi(pluginId)
+    const authoritativePlugin = isAuthoritativePluginContext(context.plugin)
+    if (authoritativePlugin && typeof declaredSdkApi !== 'number') {
+      const message = `Plugin sdkapi authority is unavailable for '${pluginId}'`
+      if (failClosedForPlugin) {
+        throw createSerializablePermissionError(message, sdkMismatchCode, permissionId, pluginId)
+      }
+      const error = new Error(message) as Error & {
+        code?: string
+        permissionId?: string
+        pluginId?: string
+      }
+      error.code = sdkMismatchCode
+      error.permissionId = permissionId
+      error.pluginId = pluginId
+      throw error
+    }
     const sdkapi = declaredSdkApi ?? payloadSdkApi
 
     if (

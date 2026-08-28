@@ -69,6 +69,7 @@ export function normalizeIntelligenceError(
   }
 
   if (
+    explicitCode === 'MODEL_UNSUPPORTED' ||
     lower.includes('model unsupported') ||
     lower.includes('model does not support') ||
     lower.includes('unsupported model')

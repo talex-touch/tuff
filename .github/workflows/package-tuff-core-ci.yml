@@ -12,6 +12,8 @@ on:
   pull_request:
     paths:
       - "packages/tuff-core/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/package-tuff-core-ci.yml"
       - ".github/workflows/package-ci.yml"
   push:
@@ -20,6 +22,10 @@ on:
       - master
     paths:
       - "packages/tuff-core/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuff-core-ci.yml"
+      - ".github/workflows/package-ci.yml"
 
 permissions:
   contents: read
@@ -34,8 +40,7 @@ jobs:
       lint-command: pnpm lint
       # No test script in this package; enabling it would fail on arrival.
       run-test: false
-      # Unlike utils, this package does have a build (tsup, emitting types via --dts),
-      # and the publish workflow already runs it at line 176. Running it here moves that
-      # from "discovered during release" to "discovered on the PR".
+      # tsup emits declarations via --dts, so the build is this package's type gate too.
+      # Running it here moves failures from publish time to the pull request.
       run-build: true
       run-typecheck: false

@@ -47,10 +47,14 @@ describe('txToolCallCard', () => {
     expect(header.attributes('aria-expanded')).toBe('false')
     expect(header.attributes('aria-controls')).toBe(collapse.attributes('id'))
     expect(collapse.classes()).not.toContain('is-open')
+    // Closed, the 0fr grid still holds the retry button and scrollable logs —
+    // inert keeps them out of the tab order.
+    expect(collapse.attributes('inert')).toBe('true')
 
     await header.trigger('click')
     expect(header.attributes('aria-expanded')).toBe('true')
     expect(collapse.classes()).toContain('is-open')
+    expect(collapse.attributes('inert')).toBeUndefined()
     expect(wrapper.emitted('toggle')).toEqual([[true]])
   })
 

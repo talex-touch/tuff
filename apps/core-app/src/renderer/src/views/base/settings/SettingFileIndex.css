@@ -392,6 +392,22 @@
   max-width: 180px;
 }
 
+.source-recent-tasks-row {
+  width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.source-diagnostic-dialog .source-recent-task-chip {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
 .source-evidence-chip {
   max-width: 220px;
 }

@@ -78,8 +78,17 @@ export async function installFromRegistry(
   })
 
   let selected: ProviderEntry | undefined
+  const entries = Array.from(registeredProviders.values())
+  const hinted = request.hintType ? registeredProviders.get(request.hintType) : undefined
+  if (hinted) {
+    const hintedIndex = entries.indexOf(hinted)
+    if (hintedIndex > 0) {
+      entries.splice(hintedIndex, 1)
+      entries.unshift(hinted)
+    }
+  }
 
-  for (const entry of registeredProviders.values()) {
+  for (const entry of entries) {
     let handled = false
     try {
       handled = entry.provider.canHandle(request)

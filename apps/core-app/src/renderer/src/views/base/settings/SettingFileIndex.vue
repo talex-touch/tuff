@@ -1639,11 +1639,13 @@ async function triggerRebuild() {
           <div class="source-diagnostic-section-title">
             {{ t('settings.settingFileIndex.sourceRecentTasks') }}
           </div>
-          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+          <div
+            class="source-diagnostics-row source-diagnostics-row--dialog source-recent-tasks-row"
+          >
             <span
               v-for="task in resolveIndexingSourceRecentTaskChips(selectedSourceDiagnostic)"
               :key="task.id"
-              class="source-diagnostic-chip source-history-chip"
+              class="source-diagnostic-chip source-history-chip source-recent-task-chip"
               :class="`source-diagnostic-task-chip--${task.tone}`"
             >
               {{ t(task.labelKey, task.values) }}

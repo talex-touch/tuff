@@ -30,7 +30,7 @@ export interface PermissionRequestCardResult {
   result: Promise<PermissionRequestDecision>
 }
 
-export const PERMISSION_REQUEST_TIMEOUT_MS = 30_000
+export const PERMISSION_REQUEST_TIMEOUT_MS = 120_000
 
 export function resolvePermissionDisplayName(permissionId: string, t: Translate): string {
   const key = `plugin.permissions.registry.${permissionId}.name`

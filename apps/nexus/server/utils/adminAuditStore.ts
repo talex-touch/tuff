@@ -55,8 +55,15 @@ async function ensureSchema(db: D1Database) {
   adminAuditSchemaInitialized = true
 }
 
+// Recording provenance must never be the thing that fails the mutation it is
+// recording, so an unreadable header bag costs the entry its ip/user-agent
+// rather than throwing out of the caller's happy path.
+function readRequestHeaders(event: H3Event): Record<string, unknown> {
+  return event.node?.req?.headers ?? {}
+}
+
 function readRequestIp(event: H3Event): string | null {
-  const header = event.node.req.headers
+  const header = readRequestHeaders(event)
   const forwarded = header['x-forwarded-for']
   if (typeof forwarded === 'string')
     return forwarded.split(',')[0]?.trim() || null
@@ -67,7 +74,7 @@ function readRequestIp(event: H3Event): string | null {
 }
 
 function readUserAgent(event: H3Event): string | null {
-  const ua = event.node.req.headers['user-agent']
+  const ua = readRequestHeaders(event)['user-agent']
   return typeof ua === 'string' ? ua : null
 }
 

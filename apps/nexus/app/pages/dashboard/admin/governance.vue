@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import './governance.css'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem, type TxSelectModelValue } from '@talex-touch/tuffex/select'
@@ -52,6 +53,34 @@ const summaryDays = ref(30)
 const saveError = ref('')
 const saveMessage = ref('')
 const saving = ref(false)
+// The shared banner sits above a ~15000px page, so a save that fails from the
+// bottom form reports itself roughly ten viewports away from the button that
+// was clicked. Every save records which block it came from and the block
+// echoes the outcome next to its own control.
+type GovernanceSaveScope
+  = | 'analytics'
+    | 'storage'
+    | 'storageCredential'
+    | 'notification'
+    | 'notificationCredential'
+    | 'providerQuota'
+    | ''
+const saveScope = ref<GovernanceSaveScope>('')
+const configTypeSaveScope: Record<GovernanceConfigType, GovernanceSaveScope> = {
+  analytics_collection: 'analytics',
+  storage_channel: 'storage',
+  notification_channel: 'notification',
+  intelligence_provider_quota: 'providerQuota',
+}
+const scopedSaveFeedback = computed<{ scope: GovernanceSaveScope, text: string, failed: boolean } | null>(() => {
+  if (!saveScope.value)
+    return null
+  if (saveError.value)
+    return { scope: saveScope.value, text: saveError.value, failed: true }
+  if (saveMessage.value)
+    return { scope: saveScope.value, text: saveMessage.value, failed: false }
+  return null
+})
 const notificationTesting = ref(false)
 const notificationTestError = ref('')
 const notificationTestResult = ref<NotificationChannelTestResponse | null>(null)
@@ -883,7 +912,10 @@ function parseJsonObject(value: string, label: string): Record<string, unknown> 
     return parsed as Record<string, unknown>
   }
   catch (error) {
-    throw new Error(error instanceof Error ? error.message : `${label} is invalid JSON.`)
+    const detail = error instanceof Error ? error.message : `${label} is invalid JSON.`
+    // The page has eleven JSON textareas; a bare JSON.parse message names none
+    // of them, so keep the field label in front of whatever the parser said.
+    throw new Error(detail.startsWith(label) ? detail : `${label}: ${detail}`)
   }
 }
 
@@ -984,6 +1016,7 @@ async function saveConfig(
 
   saveError.value = ''
   saveMessage.value = ''
+  saveScope.value = configTypeSaveScope[configType]
   saving.value = true
 
   try {
@@ -1019,6 +1052,7 @@ async function saveStorageCredential(): Promise<void> {
 
   saveError.value = ''
   saveMessage.value = ''
+  saveScope.value = 'storageCredential'
   saving.value = true
 
   try {
@@ -1049,6 +1083,7 @@ async function saveNotificationCredential(): Promise<void> {
 
   saveError.value = ''
   saveMessage.value = ''
+  saveScope.value = 'notificationCredential'
   saving.value = true
 
   try {
@@ -1081,6 +1116,7 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
   notificationTestResult.value = null
   saveError.value = ''
   saveMessage.value = ''
+  saveScope.value = ''
   notificationTesting.value = true
 
   try {
@@ -1118,6 +1154,7 @@ async function notifyStorageAlerts(mode: 'plan' | 'send'): Promise<void> {
   storageAlertNotifyResult.value = null
   saveError.value = ''
   saveMessage.value = ''
+  saveScope.value = ''
   storageAlertNotifying.value = true
 
   try {
@@ -1152,6 +1189,7 @@ async function smokeStoragePolicy(policyId: string, mode: StorageChannelSmokeMod
   storageSmokeResult.value = null
   saveError.value = ''
   saveMessage.value = ''
+  saveScope.value = ''
   storageSmokeRunning.value = true
 
   try {
@@ -1216,7 +1254,7 @@ function exportGovernanceReport(): void {
       {{ tt('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
     </div>
 
-    <div v-if="summaryError || configsError || analyticsError || reportError || storagePoliciesError || storageChannelAnalyticsError || storageCredentialsError || notificationCredentialsError || notificationChannelsError || d1ReadinessError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+    <div v-if="summaryError || configsError || analyticsError || reportError || storagePoliciesError || storageChannelAnalyticsError || storageCredentialsError || notificationCredentialsError || notificationChannelsError || d1ReadinessError || saveError || notificationTestError || storageAlertNotifyError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
       {{ saveError || notificationTestError || storageAlertNotifyError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (reportError as any)?.message || (storagePoliciesError as any)?.message || (storageChannelAnalyticsError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message || (notificationChannelsError as any)?.message || (d1ReadinessError as any)?.message }}
     </div>
 
@@ -3415,6 +3453,9 @@ function exportGovernanceReport(): void {
             <textarea v-model="analyticsForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
             <textarea v-model="analyticsForm.configJson" class="GovernanceTextarea" spellcheck="false" />
           </div>
+          <p v-if="scopedSaveFeedback && scopedSaveFeedback.scope === 'analytics'" class="mt-3 text-xs" :class="scopedSaveFeedback.failed ? 'text-red-600 dark:text-red-200' : 'text-emerald-600 dark:text-emerald-200'">
+            {{ scopedSaveFeedback.text }}
+          </p>
         </section>
 
         <section class="apple-card-lg p-5">
@@ -3649,6 +3690,9 @@ function exportGovernanceReport(): void {
             <textarea v-model="storageForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
             <textarea v-model="storageForm.configJson" class="GovernanceTextarea" spellcheck="false" />
           </div>
+          <p v-if="scopedSaveFeedback && scopedSaveFeedback.scope === 'storage'" class="mt-3 text-xs" :class="scopedSaveFeedback.failed ? 'text-red-600 dark:text-red-200' : 'text-emerald-600 dark:text-emerald-200'">
+            {{ scopedSaveFeedback.text }}
+          </p>
         </section>
 
         <section class="apple-card-lg p-5">
@@ -3670,6 +3714,9 @@ function exportGovernanceReport(): void {
             <TuffInput v-model="storageCredentialForm.credentialType" class="w-full" />
           </div>
           <textarea v-model="storageCredentialForm.credentialsJson" class="GovernanceTextarea mt-3" spellcheck="false" />
+          <p v-if="scopedSaveFeedback && scopedSaveFeedback.scope === 'storageCredential'" class="mt-3 text-xs" :class="scopedSaveFeedback.failed ? 'text-red-600 dark:text-red-200' : 'text-emerald-600 dark:text-emerald-200'">
+            {{ scopedSaveFeedback.text }}
+          </p>
           <div class="mt-4 grid gap-2 text-sm">
             <div v-for="credential in storageCredentials.slice(0, 5)" :key="credential.authRef" class="flex items-center justify-between gap-3 rounded-xl border border-black/[0.06] px-3 py-2 dark:border-white/[0.08]">
               <div class="min-w-0">
@@ -3739,6 +3786,9 @@ function exportGovernanceReport(): void {
             <textarea v-model="notificationForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
             <textarea v-model="notificationForm.configJson" class="GovernanceTextarea" spellcheck="false" />
           </div>
+          <p v-if="scopedSaveFeedback && scopedSaveFeedback.scope === 'notification'" class="mt-3 text-xs" :class="scopedSaveFeedback.failed ? 'text-red-600 dark:text-red-200' : 'text-emerald-600 dark:text-emerald-200'">
+            {{ scopedSaveFeedback.text }}
+          </p>
         </section>
 
         <section class="apple-card-lg p-5">
@@ -3760,6 +3810,9 @@ function exportGovernanceReport(): void {
             <TuffInput v-model="notificationCredentialForm.credentialType" class="w-full" />
           </div>
           <textarea v-model="notificationCredentialForm.credentialsJson" class="GovernanceTextarea mt-3" spellcheck="false" />
+          <p v-if="scopedSaveFeedback && scopedSaveFeedback.scope === 'notificationCredential'" class="mt-3 text-xs" :class="scopedSaveFeedback.failed ? 'text-red-600 dark:text-red-200' : 'text-emerald-600 dark:text-emerald-200'">
+            {{ scopedSaveFeedback.text }}
+          </p>
           <div class="mt-4 grid gap-2 text-sm">
             <div v-for="credential in notificationCredentials.slice(0, 5)" :key="credential.authRef" class="flex items-center justify-between gap-3 rounded-xl border border-black/[0.06] px-3 py-2 dark:border-white/[0.08]">
               <div class="min-w-0">
@@ -3803,6 +3856,9 @@ function exportGovernanceReport(): void {
             <textarea v-model="providerQuotaForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
             <textarea v-model="providerQuotaForm.configJson" class="GovernanceTextarea" spellcheck="false" />
           </div>
+          <p v-if="scopedSaveFeedback && scopedSaveFeedback.scope === 'providerQuota'" class="mt-3 text-xs" :class="scopedSaveFeedback.failed ? 'text-red-600 dark:text-red-200' : 'text-emerald-600 dark:text-emerald-200'">
+            {{ scopedSaveFeedback.text }}
+          </p>
         </section>
       </div>
 
@@ -3993,31 +4049,3 @@ function exportGovernanceReport(): void {
     </section>
   </div>
 </template>
-
-<style scoped>
-.GovernanceTextarea {
-  min-height: 132px;
-  width: 100%;
-  resize: vertical;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.72);
-  padding: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--tx-text-color-primary, #111827);
-  outline: none;
-}
-
-.GovernanceTextarea:focus {
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-:root.dark .GovernanceTextarea {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.9);
-}
-</style>

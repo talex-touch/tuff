@@ -1574,13 +1574,8 @@ export class RecommendationEngine {
         return []
       }
 
-      // 过滤掉文件类型的项目
-      const filteredItems = frequentItems.filter(
-        (item) => item.sourceId !== 'file-provider' && item.sourceType !== 'file'
-      )
-
       const items = await this.itemRebuilder.rebuildItems(
-        filteredItems.map((item) => ({
+        frequentItems.map((item) => ({
           ...item,
           source: 'frequent' as const,
           score: item.usageStats.executeCount
@@ -1823,10 +1818,8 @@ export class RecommendationEngine {
     // 去重(同一 sourceId + itemId 只保留第一次出现)
     const deduplicated = this.deduplicateCandidates(candidates)
 
-    // 过滤掉文件类型的项目，推荐列表不展示文件
-    const filtered = deduplicated.filter(
-      (item) => item.sourceId !== 'file-provider' && item.sourceType !== 'file'
-    )
+    // Provider-specific rebuilders enforce whether a persisted candidate is still safe and valid.
+    const filtered = deduplicated
 
     // 统计各 source 的分布
     const sourceDistribution = new Map<string, number>()
@@ -3016,8 +3009,7 @@ export class RecommendationEngine {
     }
 
     // The quota is a preference, not a hard ceiling. A homogeneous candidate pool
-    // — the normal case, since every app candidate carries sourceType
-    // 'application' and getCandidates already drops files — used to latch both
+    // — common when a profile has only accumulated app usage — used to latch both
     // conditions at once and return exactly limit/2 items, half an empty-query
     // grid. Items skipped for diversity are put back in score order to fill the
     // remaining slots rather than left on the floor (#672).

@@ -6,6 +6,7 @@ import { createClient } from '@libsql/client'
 import type { IndexedSourceDiagnosticsSnapshot } from '@talex-touch/utils/search'
 import {
   buildArtifactPaths,
+  buildIsolatedAppSetting,
   buildLaunchFailure,
   buildPackagedAppLaunchEnv,
   buildProbeFailures,
@@ -133,12 +134,14 @@ function makeDom(
   overrides: Partial<IndexingDiagnosticsDomSnapshot> = {}
 ): IndexingDiagnosticsDomSnapshot {
   return {
-    href: 'app://tuff/#/setting?section=file-index',
+    href: 'app://tuff/#/setting/file-index',
     title: 'Tuff',
     readyState: 'complete',
     text: 'Search Source Diagnostics File Index Details Recent Scan failed',
     hasSettingsShell: true,
+    hasFileIndexPage: true,
     hasSourceDiagnosticsGroup: true,
+    targetSourceVisible: true,
     sourceRows: [
       {
         title: 'File Index',
@@ -148,11 +151,36 @@ function makeDom(
     ],
     dialog: {
       visible: true,
+      animationStable: true,
       title: 'File Index',
       text: 'Recent Scan failed indexed 8/18 duration 1234ms trigger manual reason manual-rebuild attempt 2 code SQLITE_BUSY file-provider:scan:3',
       sections: ['Overview', 'Recent'],
       recentTaskText:
         'Recent Scan failed indexed 8/18 duration 1234ms trigger manual reason manual-rebuild attempt 2 code SQLITE_BUSY file-provider:scan:3',
+      recentTaskChips: [
+        'Scan failed indexed 8/18 duration 1234ms trigger manual reason manual-rebuild attempt 2 code SQLITE_BUSY file-provider:scan:3'
+      ],
+      recentTaskChipGeometry: [
+        {
+          text: 'Scan failed indexed 8/18 duration 1234ms trigger manual reason manual-rebuild attempt 2 code SQLITE_BUSY file-provider:scan:3',
+          clientWidth: 560,
+          scrollWidth: 560,
+          clientHeight: 40,
+          scrollHeight: 40,
+          rectWidth: 560,
+          rectHeight: 40,
+          display: 'inline-flex',
+          visibility: 'visible',
+          opacity: 1,
+          withinSection: true,
+          withinDialog: true,
+          withinOverlayContent: true,
+          withinViewport: true,
+          intrinsicTruncated: false,
+          fullyVisible: true,
+          truncated: false
+        }
+      ],
       hasRecentTasks: true
     },
     ...overrides
@@ -288,6 +316,16 @@ describe('packaged indexing diagnostics probe helpers', () => {
       mode: 'isolated-launch',
       profileMutationPolicy: 'isolated-controlled'
     })
+  })
+
+  it('enables current developer mode in the isolated app setting seed', () => {
+    const setting = buildIsolatedAppSetting()
+
+    expect(setting).toEqual({
+      beginner: { init: true },
+      dev: { developerMode: true }
+    })
+    expect(setting).not.toHaveProperty('dev.advancedSettings')
   })
 
   it('builds low-sensitive launch failure envelopes for cold-start blockers', () => {
@@ -530,6 +568,15 @@ describe('packaged indexing diagnostics probe helpers', () => {
     }
   })
 
+  it('uses a disposable HOME for isolated launches without an explicit fixture root', () => {
+    const env = buildPackagedAppLaunchEnv({
+      userDataDir: '/tmp/tuff-r3-user-data'
+    })
+
+    expect(env.HOME).toBe('/tmp/tuff-r3-user-data/home')
+    expect(env.TUFF_FILE_PROVIDER_BASE_WATCH_PATHS).toBe('/tmp/tuff-r3-user-data/home')
+  })
+
   it('passes when diagnostics, verifier, DOM, and screenshots are present', () => {
     const diagnostics = makeDiagnostics()
     const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
@@ -547,6 +594,251 @@ describe('packaged indexing diagnostics probe helpers', () => {
         detailScreenshotPath: 'detail.png'
       })
     ).toEqual([])
+  })
+
+  it('does not accept a longer job id that only contains the expected id as a substring', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChips = detailDom.dialog.recentTaskChips.map((chip) =>
+      chip.replace('file-provider:scan:3', 'file-provider:scan:30')
+    )
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual(['Source diagnostic detail dialog is missing recent task ids: file-provider:scan:3.'])
+  })
+
+  it('matches audit values from diagnostics in the same exact task chip', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChips = [
+      detailDom.dialog.recentTaskChips[0]
+        .replace('duration 1234ms', 'duration 0ms')
+        .replace('code SQLITE_BUSY', 'code WRONG'),
+      'duration 1234ms trigger manual reason manual-rebuild attempt 2 code SQLITE_BUSY file-provider:scan:30'
+    ]
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual([
+      'Source diagnostic detail dialog is missing visible audit fields: duration, errorCode.'
+    ])
+  })
+
+  it('fails when typed audit fields do not reach visible recent task chips', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChips = ['Scan failed file-provider:scan:3']
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual([
+      'Source diagnostic detail dialog is missing visible audit fields: duration, trigger, reason, attempt, errorCode.'
+    ])
+  })
+
+  it('fails when a recent task chip is visually clipped', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChipGeometry[0] = {
+      ...detailDom.dialog.recentTaskChipGeometry[0],
+      clientWidth: 180,
+      scrollWidth: 740,
+      intrinsicTruncated: true,
+      truncated: true
+    }
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual(['Source diagnostic detail dialog clips 1 recent task chip(s).'])
+  })
+
+  it('fails when section containment is true but a required chip is outside a visibility boundary', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChipGeometry[0] = {
+      ...detailDom.dialog.recentTaskChipGeometry[0],
+      withinSection: true,
+      withinDialog: false,
+      fullyVisible: false
+    }
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual([
+      'Source diagnostic detail dialog does not fully show 1 required recent task chip(s).'
+    ])
+  })
+
+  it('fails closed for zero-sized or hidden required task chips', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+
+    for (const geometryOverride of [{ clientWidth: 0, rectWidth: 0 }, { visibility: 'hidden' }]) {
+      const detailDom = makeDom()
+      detailDom.dialog.recentTaskChipGeometry[0] = {
+        ...detailDom.dialog.recentTaskChipGeometry[0],
+        ...geometryOverride
+      }
+
+      expect(
+        buildProbeFailures({
+          sourceId: 'file-provider',
+          diagnostics,
+          verification,
+          settingsDom: makeDom(),
+          detailDom,
+          settingsScreenshotPath: 'settings.png',
+          detailScreenshotPath: 'detail.png'
+        })
+      ).toEqual([
+        'Source diagnostic detail dialog does not fully show 1 required recent task chip(s).'
+      ])
+    }
+  })
+
+  it('only requires the minRecentTasks target geometry to be fully visible', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    const targetChip = detailDom.dialog.recentTaskChips[0]
+    const targetGeometry = detailDom.dialog.recentTaskChipGeometry[0]
+    const hiddenGeometry = {
+      ...targetGeometry,
+      fullyVisible: false,
+      withinDialog: false
+    }
+    detailDom.dialog.recentTaskChips = [
+      targetChip,
+      targetChip.replace('file-provider:scan:3', 'file-provider:scan:4'),
+      targetChip.replace('file-provider:scan:3', 'file-provider:scan:5')
+    ]
+    detailDom.dialog.recentTaskChipGeometry = [
+      targetGeometry,
+      {
+        ...hiddenGeometry,
+        text: hiddenGeometry.text.replace('file-provider:scan:3', 'file-provider:scan:4')
+      },
+      {
+        ...hiddenGeometry,
+        text: hiddenGeometry.text.replace('file-provider:scan:3', 'file-provider:scan:5')
+      }
+    ]
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual([])
+  })
+
+  it('fails closed when target task geometry is missing', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChipGeometry = []
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual([
+      'Source diagnostic detail dialog is missing geometry for recent task ids: file-provider:scan:3.'
+    ])
+  })
+
+  it('fails closed when the detail overlay animation has not stabilized', () => {
+    const diagnostics = makeDiagnostics()
+    const verification = verifySettingsIndexingDiagnosticsEvidence(diagnostics.sources, {
+      sourceId: 'file-provider'
+    })
+    const detailDom = makeDom()
+    detailDom.dialog.animationStable = false
+
+    expect(
+      buildProbeFailures({
+        sourceId: 'file-provider',
+        diagnostics,
+        verification,
+        settingsDom: makeDom(),
+        detailDom,
+        settingsScreenshotPath: 'settings.png',
+        detailScreenshotPath: 'detail.png'
+      })
+    ).toEqual(['Source diagnostic detail dialog animation did not stabilize before capture.'])
   })
 
   it('fails fixture evidence when source roots escape the fixture root', () => {
@@ -579,6 +871,17 @@ describe('packaged indexing diagnostics probe helpers', () => {
       sourceId: 'file-provider',
       requiredAuditFields: ['duration', 'trigger', 'reason']
     })
+    const detailDom = makeDom()
+    detailDom.dialog.recentTaskChips = [
+      'Reset done duration 0ms trigger user-clear reason user-clear file-provider:reset:1'
+    ]
+    detailDom.dialog.recentTaskChipGeometry[0] = {
+      ...detailDom.dialog.recentTaskChipGeometry[0],
+      text: detailDom.dialog.recentTaskChipGeometry[0].text.replace(
+        'file-provider:scan:3',
+        'file-provider:reset:1'
+      )
+    }
 
     expect(verification.gate).toMatchObject({
       passed: true,
@@ -590,7 +893,7 @@ describe('packaged indexing diagnostics probe helpers', () => {
         diagnostics,
         verification,
         settingsDom: makeDom(),
-        detailDom: makeDom(),
+        detailDom,
         settingsScreenshotPath: 'settings.png',
         detailScreenshotPath: 'detail.png'
       })
@@ -615,7 +918,7 @@ describe('packaged indexing diagnostics probe helpers', () => {
     })
 
     expect(failures).toEqual([
-      'Diagnostics did not include recent task history.',
+      'Diagnostics did not include recent task history for file-provider.',
       expect.stringContaining('Settings diagnostics verifier failed:'),
       'Settings source diagnostics group is not visible.',
       'Source diagnostic detail dialog is not visible.',

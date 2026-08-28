@@ -151,7 +151,8 @@ export class TpexApiProvider extends BaseStoreProvider {
         installs: entry.installs,
         badges: entry.badges,
         isOfficial: entry.isOfficial,
-        homepage: entry.homepage
+        homepage: entry.homepage,
+        channel: entry.latestVersion?.channel
       },
       manifest: normalizeManifestMeta(entry.latestVersion?.manifest),
       readmeUrl,

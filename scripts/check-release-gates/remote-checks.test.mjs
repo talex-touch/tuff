@@ -169,7 +169,7 @@ function installReleaseFetchMock({
   const manifestUrl = `https://github.example.test/${tag}/tuff-release-manifest.json`
   const releaseUrl = `${baseUrl}/api/releases/${tag}?assets=true`
   const latestUrl = `${baseUrl}/api/releases/latest?channel=BETA`
-  const rollbackHistoryUrl = `${baseUrl}/api/releases?channel=BETA&status=published&limit=100`
+  const rollbackHistoryUrl = `${baseUrl}/api/releases?channel=BETA&status=published&limit=50`
   const githubHistoryUrl
     = 'https://api.github.com/repos/talex-touch/tuff/releases?per_page=100'
 
@@ -239,6 +239,8 @@ function installReleaseFetchMock({
         const path = new URL(textUrl).pathname
         const pair = path.split('/').slice(-2).join('/')
         const override = downloadResponses[pair] ?? downloadResponses.default
+        if (override === 'throw')
+          throw new Error(`download request failed: ${textUrl}`)
         if (override instanceof Response)
           return override
         if (override) {
@@ -312,6 +314,7 @@ async function runCheck(options = {}) {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('check-release-gates remote checks', () => {
@@ -374,6 +377,159 @@ describe('check-release-gates remote checks', () => {
     assert.equal(downloadSummary.includes('1700000000'), false)
     assert.equal(downloadSummary.includes(signedDownloadSig), false)
     assert.equal(downloadSummary.includes('?exp='), false)
+  })
+
+  it('redacts redirect credentials and query values while retaining location diagnostics', async () => {
+    const redirectSecrets = {
+      username: 'redirect-user-secret',
+      password: 'redirect-password-secret',
+      exp: '1900000000',
+      sig: 'redirect-signature-secret',
+      token: 'redirect-token-secret',
+      credential: 'redirect-credential-secret',
+    }
+    const redirectPath
+      = '/github-production-release-asset/123456/tuff-core.exe'
+    const redirectLocation
+      = `https://${redirectSecrets.username}:${redirectSecrets.password}@release-assets.githubusercontent.com${redirectPath}?exp=${redirectSecrets.exp}&sig=${redirectSecrets.sig}&token=${redirectSecrets.token}&X-Amz-Credential=${redirectSecrets.credential}#download`
+    installReleaseFetchMock({
+      downloadResponses: {
+        'win32/x64': new Response('', {
+          status: 302,
+          headers: { Location: redirectLocation },
+        }),
+      },
+    })
+
+    const checks = await runCheck()
+    const result = checks
+      .find(item => item.name === 'remote-download-endpoint')
+      ?.results
+      .find(item => item.platform === 'win32' && item.arch === 'x64')
+
+    assert.equal(
+      result?.location,
+      `https://release-assets.githubusercontent.com${redirectPath}`,
+    )
+    const resultSummary = JSON.stringify(result)
+    assert.equal(resultSummary.includes('?'), false)
+    assert.equal(resultSummary.includes('#download'), false)
+    for (const secret of Object.values(redirectSecrets))
+      assert.equal(resultSummary.includes(secret), false)
+  })
+
+  it('redacts signed URL query values from download request errors', async () => {
+    installReleaseFetchMock({
+      downloadResponses: {
+        'win32/x64': 'throw',
+      },
+    })
+
+    const checks = await runCheck()
+    const result = checks
+      .find(item => item.name === 'remote-download-endpoint')
+      ?.results
+      .find(item => item.platform === 'win32' && item.arch === 'x64')
+
+    assert.equal(result?.status, 'error')
+    assert.equal(
+      result?.error,
+      `download request failed: ${baseUrl}/api/releases/${tag}/download/win32/x64`,
+    )
+    const resultSummary = JSON.stringify(result)
+    assert.equal(resultSummary.includes('1700000000'), false)
+    assert.equal(resultSummary.includes(signedDownloadSig), false)
+    assert.equal(resultSummary.includes('?exp='), false)
+  })
+
+  it('scopes an optional GitHub token to API requests only', async () => {
+    const token = 'synthetic-github-token'
+    vi.stubEnv('GITHUB_TOKEN', token)
+    installReleaseFetchMock()
+
+    await runCheck()
+
+    const calls = vi.mocked(fetch).mock.calls
+    const githubApiCalls = calls.filter(([url]) =>
+      String(url).startsWith('https://api.github.com/'),
+    )
+    assert.ok(githubApiCalls.length > 0)
+    for (const [, options] of githubApiCalls) {
+      assert.equal(options?.headers?.Authorization, `Bearer ${token}`)
+    }
+
+    const nonApiCalls = calls.filter(([url]) =>
+      !String(url).startsWith('https://api.github.com/'),
+    )
+    assert.ok(nonApiCalls.length > 0)
+    for (const [, options] of nonApiCalls) {
+      assert.equal(options?.headers?.Authorization, undefined)
+    }
+  })
+
+  it('validates an optional Intel macOS artifact when the release publishes it', async () => {
+    const sha256 = 'd'.repeat(64)
+    const name = 'tuff-core-2.4.12-beta.8-darwin-x64.dmg'
+    const signature = `${name}.sig`
+    const manifest = buildManifest()
+
+    installReleaseFetchMock({
+      manifest: {
+        ...manifest,
+        artifacts: [
+          ...manifest.artifacts,
+          {
+            component: 'core',
+            name,
+            platform: 'darwin',
+            arch: 'x64',
+            sha256,
+            signature,
+          },
+        ],
+      },
+      assets: [
+        ...buildAssets(),
+        {
+          platform: 'darwin',
+          arch: 'x64',
+          filename: name,
+          downloadUrl: `${baseUrl}/api/releases/${tag}/download/darwin/x64?exp=1700000000&sig=${signedDownloadSig}`,
+          sha256,
+          signatureUrl: `${baseUrl}/api/releases/${tag}/signature/darwin/x64`,
+        },
+      ],
+      githubAssets: buildGithubAssets([
+        {
+          name,
+          browser_download_url: `https://github.example.test/${tag}/${name}`,
+          digest: `sha256:${sha256}`,
+          state: 'uploaded',
+        },
+        {
+          name: signature,
+          browser_download_url: `https://github.example.test/${tag}/${signature}`,
+          state: 'uploaded',
+        },
+      ]),
+    })
+
+    const checks = await runCheck()
+
+    for (const name of [
+      'remote-manifest-integrity',
+      'remote-manifest-nexus-matrix',
+      'remote-github-asset-inventory',
+    ]) {
+      assert.equal(checks.find(item => item.name === name)?.status, 'pass')
+    }
+    assert.equal(
+      checks
+        .find(item => item.name === 'remote-download-endpoint')
+        ?.results
+        .some(item => item.platform === 'darwin' && item.arch === 'x64'),
+      true,
+    )
   })
 
   it('fails gate-e when the GitHub release manifest asset is not uploaded', async () => {

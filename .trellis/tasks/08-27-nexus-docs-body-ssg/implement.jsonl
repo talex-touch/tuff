@@ -1,0 +1,6 @@
+{"file": "apps/nexus/AGENTS.md", "reason": "Nexus package-level conventions for any edit under apps/nexus"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend guidelines index; routes to package conventions for the Nuxt app"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality bar for the docs page component changes (naming, comments, structure)"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Ref/composable state conventions relevant to fullDocError and per-mount adoptServerBody state"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TS conventions for the touched page/utils files"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "Guard/fallback thinking for the retry + error-state design (bounded retry, never-silent failure)"}

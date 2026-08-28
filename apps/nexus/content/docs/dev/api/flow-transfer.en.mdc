@@ -137,6 +137,11 @@ code: |
       await flow.reportError(sessionId, 'Failed to handle payload')
     }
   })
+
+  // Unregister when the component unmounts
+  onUnmounted(() => {
+    unsubscribe()
+  })
 ---
 :::
 
@@ -182,21 +187,39 @@ code: |
 ---
 :::
 
-## Native System Sharing
 
-Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
+## Native System Share
+
+Flow Transfer integrates the system's native share capabilities, so data can be shared to system apps such as AirDrop, Mail, and Messages. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
+
+**Using native share**
 
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  await flow.nativeShare({
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+
+  // Share via the system
+  const result = await flow.nativeShare({
     type: 'text',
-    data: 'Share via system dialog'
+    data: 'Hello World!'
   })
+
+  // Specify a share target
+  const result = await flow.nativeShare(
+    { type: 'text', data: 'Hello!' },
+    'airdrop'  // Optional: 'system' | 'airdrop' | 'mail' | 'messages'
+  )
+
+  if (result.success) {
+    console.log('Share succeeded:', result.target)
+  } else {
+    console.error('Share failed:', result.error)
+  }
 ---
 :::
 
-**Native targets**
+**Supported native targets**
 
 | Platform | Target | Notes |
 | --- | --- | --- |
@@ -270,7 +293,6 @@ Prefer the `FlowEvents` constants over these literals — the SDK builds the nam
 ## Technical Notes
 - Target list is maintained by the main process and merged with native share targets.
 - Plugins are registered via `flow:plugin:register-targets`; missing registration means targets won’t appear.
-
 ## Related Docs
 - [QuickActions SDK](./quick-actions.en.mdc)
 - [DivisionBox API](./division-box.en.mdc)
