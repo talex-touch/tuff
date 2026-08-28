@@ -408,3 +408,56 @@ describe('auth device reactivation', () => {
     expect(device.tokenVersion).toBe(5)
   })
 })
+
+describe('auth device insert race', () => {
+  // A page's first burst of parallel requests all miss the SELECT, and every
+  // loser's INSERT hits the primary key. Before the retry this surfaced as a
+  // 500 from /api/user/me on a brand-new browser session.
+  it('retries as an update when a concurrent request wins the initial insert', async () => {
+    const db = new MockD1Database()
+    const originalRun = db.run.bind(db)
+    let insertAttempts = 0
+    db.run = async (sql: string, args: any[]) => {
+      if (sql.includes('INSERT INTO auth_devices')) {
+        insertAttempts += 1
+        if (insertAttempts === 1) {
+          // The concurrent winner lands between this request's SELECT and INSERT.
+          await originalRun(sql, [args[0], args[1], 'Winner Browser', ...args.slice(3)])
+          throw new Error('D1_ERROR: UNIQUE constraint failed: auth_devices.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)')
+        }
+      }
+      return originalRun(sql, args)
+    }
+
+    const { upsertDevice } = await import('../authStore')
+    const device = await upsertDevice(createEvent(db), 'user-1', 'device-1', {
+      deviceName: 'Loser Browser',
+      platform: 'MacIntel',
+      clientType: 'app',
+    })
+
+    expect(insertAttempts).toBe(1)
+    expect(device.userId).toBe('user-1')
+    expect(device.deviceName).toBe('Loser Browser')
+  })
+
+  it('rethrows when the conflict persists after one retry', async () => {
+    const db = new MockD1Database()
+    const originalRun = db.run.bind(db)
+    db.run = async (sql: string, args: any[]) => {
+      if (sql.includes('INSERT INTO auth_devices')) {
+        throw new Error('D1_ERROR: UNIQUE constraint failed: auth_devices.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)')
+      }
+      return originalRun(sql, args)
+    }
+
+    const { upsertDevice } = await import('../authStore')
+    await expect(
+      upsertDevice(createEvent(db), 'user-1', 'device-1', {
+        deviceName: 'Loser Browser',
+        platform: 'MacIntel',
+        clientType: 'app',
+      }),
+    ).rejects.toThrow('UNIQUE constraint failed')
+  })
+})

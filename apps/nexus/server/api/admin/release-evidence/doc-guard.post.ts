@@ -1,5 +1,6 @@
 import type { ReleaseEvidenceItemStatus } from '../../../utils/releaseEvidenceStore'
 import { readBody } from 'h3'
+import { logAdminAudit } from '../../../utils/adminAuditStore'
 import { requireAdminOrApiKey } from '../../../utils/auth'
 import { createReleaseEvidenceRun, upsertReleaseEvidenceItem, validateReleaseEvidenceItemInput } from '../../../utils/releaseEvidenceStore'
 
@@ -12,7 +13,7 @@ function runStatusFromItemStatus(status: ReleaseEvidenceItemStatus) {
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAdminOrApiKey(event, ['release:evidence'])
+  const { userId, authType } = await requireAdminOrApiKey(event, ['release:evidence'])
   const body = await readBody(event)
   const status = (body?.status ?? 'passed') as ReleaseEvidenceItemStatus
   const itemInput = {
@@ -39,6 +40,22 @@ export default defineEventHandler(async (event) => {
   })
 
   const item = await upsertReleaseEvidenceItem(event, run.id, itemInput)
+
+  await logAdminAudit(event, {
+    adminUserId: userId,
+    action: 'release.evidence.doc-guard.record',
+    targetType: 'release_evidence_run',
+    targetId: run.id,
+    targetLabel: `${run.version} / docs-guard`,
+    metadata: {
+      authType,
+      after: {
+        version: run.version,
+        runStatus: run.status,
+        itemStatus: item.status,
+      },
+    },
+  })
 
   return { run, item }
 })

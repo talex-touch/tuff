@@ -1,5 +1,6 @@
 import type { SubscriptionPlan } from '../../../utils/subscriptionStore'
 import { requireAdmin } from '../../../utils/auth'
+import { logAdminAudit } from '../../../utils/adminAuditStore'
 import { createActivationCode } from '../../../utils/subscriptionStore'
 
 export default defineEventHandler(async (event) => {
@@ -19,11 +20,24 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Duration must be between 1 and 365 days' })
   }
 
+  // Validate max uses
+  if (maxUses !== undefined && maxUses !== null
+    && (typeof maxUses !== 'number' || !Number.isInteger(maxUses) || maxUses < 1 || maxUses > 1000)) {
+    throw createError({ statusCode: 400, statusMessage: 'Max uses must be between 1 and 1000' })
+  }
+
+  // Validate expiry window
+  if (expiresInDays !== undefined && expiresInDays !== null
+    && (typeof expiresInDays !== 'number' || !Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365)) {
+    throw createError({ statusCode: 400, statusMessage: 'Expiry must be between 1 and 365 days' })
+  }
+
   // Validate count
   const codeCount = Math.min(Math.max(1, count || 1), 100)
 
+  const codes: Awaited<ReturnType<typeof createActivationCode>>[] = []
+
   try {
-    const codes = []
     for (let i = 0; i < codeCount; i++) {
       const code = await createActivationCode(event, {
         plan: plan as SubscriptionPlan,
@@ -34,11 +48,6 @@ export default defineEventHandler(async (event) => {
       })
       codes.push(code)
     }
-
-    return {
-      success: true,
-      codes,
-    }
   }
   catch (error: any) {
     console.error('[admin/codes/generate] Error:', error)
@@ -46,5 +55,28 @@ export default defineEventHandler(async (event) => {
       statusCode: 500,
       statusMessage: error.message || 'Failed to generate activation codes',
     })
+  }
+
+  // One entry for the batch rather than one per code: the admin performed a
+  // single action, and the redeemable reach of it is codeCount * maxUses.
+  await logAdminAudit(event, {
+    adminUserId: userId,
+    action: 'activation_code.generate',
+    targetType: 'activation_code',
+    targetId: null,
+    targetLabel: `${plan} x${codeCount}`,
+    metadata: {
+      plan,
+      durationDays,
+      count: codeCount,
+      maxUses: maxUses || 1,
+      expiresInDays: expiresInDays ?? null,
+      codeIds: codes.map(code => code.id),
+    },
+  })
+
+  return {
+    success: true,
+    codes,
   }
 })

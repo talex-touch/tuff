@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { networkClient } from '@talex-touch/utils/network'
+import { NetworkHttpStatusError, NetworkTimeoutError, networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, ref, watch } from 'vue'
 import { TxBaseSurface } from '@talex-touch/tuffex/base-surface'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
 definePageMeta({
@@ -28,8 +29,15 @@ interface ChatStreamEvent {
   message?: string
 }
 
-const { user } = useAuthUser()
+const { user, pending, status } = useAuthUser()
 const isAdmin = computed(() => user.value?.role === 'admin')
+// `!isAdmin` is also true before the session resolves, so gating the template on it
+// alone told a signed-in admin they were not allowed in until the profile landed.
+const sessionResolving = computed(() => {
+  if (status.value === 'loading' || pending.value)
+    return true
+  return status.value === 'authenticated' && !user.value
+})
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin) {
@@ -45,6 +53,10 @@ const loadError = ref('')
 const activeAnswerId = ref<string | null>(null)
 
 let streamAbortController: AbortController | null = null
+// A stream that closes without `done`/`error` (dropped connection, proxy cutting an
+// idle SSE body) used to leave `running` pinned true, disabling the composer for the
+// rest of the session with nothing on screen to explain why.
+let sawTerminalEvent = false
 
 const canSend = computed(() => draftMessage.value.trim().length > 0 && !running.value)
 
@@ -86,6 +98,7 @@ async function loadHistory() {
       headers: {
         accept: 'application/json',
       },
+      captureErrorResponseData: true,
     })
     const data = response.data
     const history = Array.isArray(data) ? data : []
@@ -96,7 +109,7 @@ async function loadHistory() {
       timestamp: item.timestamp || Date.now(),
     }))
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : '历史记录加载失败。'
+    loadError.value = `${await describeRequestError(error)}（历史记录加载失败）`
   }
 }
 
@@ -106,15 +119,61 @@ function handleStreamEvent(event: ChatStreamEvent) {
     return
   }
   if (event.type === 'error') {
+    sawTerminalEvent = true
     errorMessage.value = event.message || 'TuffIntelligence 流式输出失败。'
     running.value = false
     activeAnswerId.value = null
     return
   }
   if (event.type === 'done') {
+    sawTerminalEvent = true
     running.value = false
     activeAnswerId.value = null
   }
+}
+
+/**
+ * networkClient collapses every HTTP failure into the opaque code
+ * `NETWORK_HTTP_STATUS_<code>`, and with `responseType: 'stream'` it hands back the
+ * unread body instead of parsed JSON. The handler's statusMessage — "No enabled
+ * intelligence providers.", "Provider API key is missing." — is the only part an
+ * operator can act on, so read it back off the error body.
+ */
+async function readErrorDetail(body: unknown): Promise<string> {
+  const stream = body as ReadableStream<Uint8Array> | null
+  if (!stream || typeof stream.getReader !== 'function')
+    return ''
+  const reader = stream.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let text = ''
+  try {
+    while (text.length < 8192) {
+      const { value, done } = await reader.read()
+      if (done)
+        break
+      text += decoder.decode(value, { stream: true })
+    }
+    const parsed = JSON.parse(text) as { statusMessage?: string, message?: string }
+    return String(parsed.statusMessage || parsed.message || '').trim()
+  }
+  catch {
+    return ''
+  }
+  finally {
+    void reader.cancel().catch(() => undefined)
+  }
+}
+
+async function describeRequestError(error: unknown): Promise<string> {
+  if (error instanceof NetworkHttpStatusError) {
+    const detail = await readErrorDetail(error.responseData)
+    return detail
+      ? `${detail}（HTTP ${error.status}）`
+      : `请求失败（HTTP ${error.status}）。`
+  }
+  if (error instanceof NetworkTimeoutError)
+    return '请求超时，未收到模型响应。'
+  return error instanceof Error ? error.message : '发送失败。'
 }
 
 async function consumeSseResponse(streamBody: ReadableStream<Uint8Array> | null) {
@@ -160,7 +219,9 @@ async function sendMessage() {
     return
 
   errorMessage.value = ''
+  loadError.value = ''
   running.value = true
+  sawTerminalEvent = false
   appendMessage({
     id: makeId('user'),
     role: 'user',
@@ -182,11 +243,15 @@ async function sendMessage() {
       body: { message },
       signal: streamAbortController.signal,
       responseType: 'stream',
+      captureErrorResponseData: true,
     })
 
     await consumeSseResponse(response.data)
+    if (!sawTerminalEvent)
+      errorMessage.value = '响应流在结束前中断，本次回答可能不完整。'
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '发送失败。'
+    errorMessage.value = await describeRequestError(error)
+  } finally {
     running.value = false
     activeAnswerId.value = null
   }
@@ -208,7 +273,17 @@ onMounted(() => {
       </p>
     </header>
 
-    <div v-if="!isAdmin" class="ti-chat__alert rounded-2xl px-4 py-3 text-sm">
+    <TxBaseSurface v-if="sessionResolving" mode="mask" :opacity="0.72" class="ti-chat__surface">
+      <div class="ti-chat__scroll mb-4 space-y-3 overflow-auto rounded-2xl p-3">
+        <TxSkeleton :loading="true" :lines="3" />
+      </div>
+      <div class="ti-chat__input">
+        <TxSkeleton :loading="true" :lines="1" />
+        <TxSkeleton :loading="true" :lines="1" />
+      </div>
+    </TxBaseSurface>
+
+    <div v-else-if="!isAdmin" class="ti-chat__alert rounded-2xl px-4 py-3 text-sm">
       该页面仅管理员可访问。
     </div>
 
@@ -243,7 +318,7 @@ onMounted(() => {
             :disabled="running"
             @keyup.enter="sendMessage"
           />
-          <TxButton variant="primary" :disabled="!canSend">
+          <TxButton variant="primary" native-type="submit" :disabled="!canSend">
             <span class="inline-flex items-center gap-2">
               <TxSpinner v-if="running" :size="14" />
               发送
