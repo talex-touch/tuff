@@ -561,7 +561,9 @@ describe('packaged AI auxiliary acceptance runner', () => {
           spawnFailed: false,
           descendantsDetected: true
         })
-        await vi.waitFor(() => expect(isProcessAlive(descendantPid)).toBe(false), { timeout: 2_000 })
+        await vi.waitFor(() => expect(isProcessAlive(descendantPid)).toBe(false), {
+          timeout: 2_000
+        })
       } finally {
         if (descendantPid > 0 && isProcessAlive(descendantPid)) {
           process.kill(descendantPid, 'SIGKILL')
