@@ -414,6 +414,11 @@ jobs:
       - name: Verify zh/en doc parity
         run: pnpm -C apps/nexus check:doc-parity
 
+      # The self-test runs before the build so a broken judge is reported in seconds rather than
+      # after a full nexus build. A gate whose own logic is never exercised is what #1794 is about.
+      - name: Self-test the prerender body judge
+        run: pnpm -C apps/nexus check:prerender-bodies:self-test
+
       # Blocking. It was briefly continue-on-error because wiring it up is what discovered
       # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
       # root node_modules path that only existed under shamefully-hoist (#1151, #1099
@@ -422,6 +427,16 @@ jobs:
       # break its build silently, which is the state #552 found it in.
       - name: Build
         run: pnpm -C apps/nexus build
+
+      # The build proves the pages compile; it does not prove they rendered. This site has already
+      # shipped docs pages that prerendered to an empty shell, which produced a green build, a green
+      # fence check and a green route-list test (#1794). This reads the emitted HTML for the five
+      # evidence routes in both locales and fails when a page carries no prose.
+      #
+      # Verified against a real build before wiring: the ten pages render 423-10090 visible chars,
+      # and blanking one page's <main> drops it to 91 and fails the step by name.
+      - name: Verify prerendered docs pages carry their content
+        run: pnpm -C apps/nexus check:prerender-bodies
 
   job_app_tests:
     name: App suites (${{ matrix.app }})
