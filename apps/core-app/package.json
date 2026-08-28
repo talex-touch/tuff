@@ -108,7 +108,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@floating-ui/vue": "catalog:",
-    "@langchain/anthropic": "^0.3.34",
+    "@langchain/anthropic": "^1.5.8",
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "catalog:",
     "@langchain/openai": "catalog:",
