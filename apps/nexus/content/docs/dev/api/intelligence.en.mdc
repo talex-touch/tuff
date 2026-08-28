@@ -374,6 +374,58 @@ Stream consumers must treat event boundaries as transport details:
 - The default Nexus provider uses authenticated `/api/v1/intelligence/stream` SSE and forwards real provider token deltas plus backend route metadata and terminal usage. Retry/fallback is allowed only before the first visible delta; a post-delta failure is surfaced instead of replaying duplicate text. Never depend on delta count or chunk size.
 - Providers that do not report backend metadata remain compatible, so route fields are optional.
 
+## Complete Example
+
+**Translation Plugin**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+  const clipboard = useClipboard()
+
+  async function translateAndPaste(content: string, targetLang: string) {
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.translate' })
+  if (!status.available) return
+
+      const result = await intelligence.text.translate({
+        text: content,
+        targetLang
+      })
+
+      await clipboard.copyAndPaste({ text: result.result })
+
+  }
+
+  ## void translateAndPaste
+---
+:::
+
+**OCR Recognition Plugin**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  async function recognizeText(imageDataUrl: string) {
+  const result = await intelligence.vision.ocr({
+  source: { type: 'data-url', dataUrl: imageDataUrl },
+  includeKeywords: true
+  })
+
+      return {
+        text: result.result.text,
+        keywords: result.result.keywords
+      }
+
+  }
+
+  ## void recognizeText
+---
+:::
+
 ---
 
 ## Complete Examples

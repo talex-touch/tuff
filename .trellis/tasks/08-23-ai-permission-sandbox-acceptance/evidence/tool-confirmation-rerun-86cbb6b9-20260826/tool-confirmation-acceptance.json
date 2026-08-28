@@ -1,0 +1,157 @@
+{
+  "schema": "tuff.packaged-tool-confirmation-acceptance.v1",
+  "ok": true,
+  "checkedAt": "2026-08-26T07:26:59.170Z",
+  "scope": "isolated-controlled",
+  "app": {
+    "version": "2.4.14-beta.14",
+    "hash": "86cbb6b9f1da612aa7de30c46f4b153f33a69914e9fcb078d74f5de891186963"
+  },
+  "runtime": {
+    "launches": 1,
+    "processTerminated": true,
+    "profileRemoved": true,
+    "confirmationTimeoutMode": "controlled-override"
+  },
+  "scenarios": [
+    {
+      "name": "deny",
+      "status": "passed",
+      "toolId": "tuff_read_file",
+      "risk": "read",
+      "confirmationCount": 1,
+      "cardVisible": true,
+      "cardCleared": true,
+      "decision": "denied",
+      "resultCode": "TOOL_APPROVAL_DENIED",
+      "requestEnded": true,
+      "documentHidden": false,
+      "screenshot": "deny-confirmation.png",
+      "audit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "denied",
+        "status": "error",
+        "code": "TOOL_APPROVAL_DENIED"
+      }
+    },
+    {
+      "name": "allow",
+      "status": "passed",
+      "toolId": "tuff_read_file",
+      "risk": "read",
+      "confirmationCount": 1,
+      "cardVisible": true,
+      "cardCleared": true,
+      "decision": "approved",
+      "resultCode": "TOOL_OK",
+      "requestEnded": true,
+      "documentHidden": false,
+      "screenshot": "allow-confirmation.png",
+      "audit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "approved",
+        "status": "success",
+        "code": "TOOL_OK"
+      }
+    },
+    {
+      "name": "remember-replay",
+      "status": "passed",
+      "toolId": "tuff_read_file",
+      "risk": "read",
+      "confirmationCount": 1,
+      "cardVisible": true,
+      "cardCleared": true,
+      "decision": "approved-remembered",
+      "resultCode": "TOOL_OK",
+      "requestEnded": true,
+      "documentHidden": false,
+      "screenshot": "remember-confirmation.png",
+      "rememberReplaySkipped": true,
+      "replayConfirmationCount": 0,
+      "audit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "approved",
+        "status": "success",
+        "code": "TOOL_OK"
+      },
+      "replayAudit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "remembered",
+        "status": "success",
+        "code": "TOOL_OK"
+      }
+    },
+    {
+      "name": "reset",
+      "status": "passed",
+      "toolId": "tuff_read_file",
+      "risk": "read",
+      "confirmationCount": 1,
+      "cardVisible": true,
+      "cardCleared": true,
+      "decision": "approved-after-reset",
+      "resultCode": "TOOL_OK",
+      "requestEnded": true,
+      "documentHidden": false,
+      "screenshot": "reset-confirmation.png",
+      "audit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "approved",
+        "status": "success",
+        "code": "TOOL_OK"
+      }
+    },
+    {
+      "name": "timeout",
+      "status": "passed",
+      "toolId": "tuff_read_file",
+      "risk": "read",
+      "confirmationCount": 1,
+      "cardVisible": true,
+      "cardCleared": true,
+      "decision": "timeout",
+      "resultCode": "TOOL_APPROVAL_DENIED",
+      "requestEnded": true,
+      "documentHidden": false,
+      "screenshot": "timeout-confirmation.png",
+      "timeoutElapsedBucket": "timeout-window",
+      "audit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "denied",
+        "status": "error",
+        "code": "TOOL_APPROVAL_DENIED"
+      }
+    },
+    {
+      "name": "cancel",
+      "status": "passed",
+      "toolId": "tuff_read_file",
+      "risk": "read",
+      "confirmationCount": 1,
+      "cardVisible": true,
+      "cardCleared": true,
+      "decision": "cancelled",
+      "resultCode": "TOOL_EXECUTION_ABORTED",
+      "requestEnded": true,
+      "documentHidden": false,
+      "screenshot": "cancel-confirmation.png",
+      "audit": {
+        "ok": true,
+        "eventCount": 3,
+        "decision": "failed",
+        "status": "error",
+        "code": "TOOL_EXECUTION_ABORTED"
+      },
+      "cancelAuditElapsedMs": 64,
+      "cancelAuditMaxElapsedMs": 1500
+    }
+  ],
+  "failures": []
+}

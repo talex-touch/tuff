@@ -11,6 +11,35 @@ import {
   ScreenshotSessionEvents,
   TransportEvents,
 } from '../events'
+import {
+  intelligenceApiEvents,
+  intelligenceContextEvents,
+  intelligenceKnowledgeEvents,
+} from '../sdk/domains/intelligence'
+
+/**
+ * The complete Intelligence event surface reachable through the plugin facade.
+ *
+ * The facade delegates to the domain SDK, so these events are not visible to a
+ * source scan of `packages/utils/plugin/**`. Keep this manifest explicit: adding
+ * a domain method must not silently make another Intelligence handler plugin-facing.
+ */
+export const PLUGIN_FACING_INTELLIGENCE_EVENTS = [
+  intelligenceApiEvents.invoke,
+  intelligenceApiEvents.stream,
+  intelligenceApiEvents.ttsSpeak,
+  intelligenceApiEvents.chatLangChain,
+  intelligenceApiEvents.getCapabilityTestMeta,
+  intelligenceApiEvents.getCapabilityStatus,
+  intelligenceApiEvents.getProviderModelOptions,
+  intelligenceContextEvents.execute,
+  intelligenceContextEvents.stream,
+  intelligenceContextEvents.evaluateMemory,
+  intelligenceKnowledgeEvents.indexDocument,
+  intelligenceKnowledgeEvents.indexChunk,
+  intelligenceKnowledgeEvents.search,
+  intelligenceKnowledgeEvents.buildContext,
+] as const
 
 /**
  * Every event a plugin surface is allowed to reach on the main process.
@@ -26,11 +55,9 @@ import {
  * is named here; everything else is host-only, and a plugin asking for it gets no handler
  * rather than an answer.
  *
- * **This list is derived, not curated.** It is exactly the set of events
- * `packages/utils/plugin/**` sends — i.e. the plugin SDK's own surface, which is the only
- * way a plugin reaches the transport. `plugin-facing-events.test.ts` re-derives it from
- * those sources and fails if the two drift, so adding a plugin-facing handler means adding
- * it here and nothing else does.
+ * Direct plugin SDK sends are derived from `packages/utils/plugin/**`. Domain SDK
+ * facades are indirect and therefore use an explicit manifest above.
+ * `plugin-facing-events.test.ts` checks both sources in both directions.
  *
  * Being on this list is not authorization. It decides whether a plugin can be *heard*, not
  * whether it is *allowed* — the permission guard and each handler's own
@@ -104,6 +131,9 @@ export const PLUGIN_FACING_EVENTS = [
 
   // NetworkEvents — 1
   NetworkEvents.api.request,
+
+  // Intelligence domain facade — 14
+  ...PLUGIN_FACING_INTELLIGENCE_EVENTS,
 
   // PluginEvents — 36
   PluginEvents.communicate.index,

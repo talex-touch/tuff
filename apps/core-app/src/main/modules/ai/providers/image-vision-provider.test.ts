@@ -29,9 +29,11 @@ vi.mock('../../network', () => ({
 
 import { OpenAIProvider } from './openai-provider'
 
+const TEST_PROVIDER_ID = 'openai-vision'
+
 function createProvider() {
   return new OpenAIProvider({
-    id: 'openai-vision',
+    id: TEST_PROVIDER_ID,
     type: IntelligenceProviderType.OPENAI,
     name: 'OpenAI Vision',
     enabled: true,
@@ -63,6 +65,26 @@ function expectVisionImageInvocation(expectedUrl: string) {
 describe('OpenAIProvider vision image capabilities', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('reports the configured provider id for chat results', async () => {
+    modelMocks.invoke.mockResolvedValue({
+      content: 'configured provider identity',
+      usage_metadata: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+      response_metadata: { model_name: 'gpt-4o' }
+    })
+
+    const result = await createProvider().chat(
+      { messages: [{ role: 'user', content: 'identity check' }] },
+      { metadata: { capabilityId: 'text.chat' } }
+    )
+
+    expect(result).toMatchObject({
+      result: 'configured provider identity',
+      provider: TEST_PROVIDER_ID,
+      model: 'gpt-4o',
+      usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5 }
+    })
   })
 
   it('sends a base64 image to the vision model and returns the structured caption', async () => {

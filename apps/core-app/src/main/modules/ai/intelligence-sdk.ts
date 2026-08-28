@@ -77,7 +77,10 @@ import { NetworkCooldownError } from '@talex-touch/utils/network'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { agentManager } from './agents'
-import { intelligenceAuditLogger } from './intelligence-audit-logger'
+import {
+  intelligenceAuditLogger,
+  sanitizeIntelligenceAuditMetadata
+} from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { isOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
@@ -192,6 +195,7 @@ const EMBEDDING_CHUNK_CHARS = 2_000
 const MAX_EMBEDDING_CHUNKS = 16
 const CANCELLABLE_CAPABILITIES = new Set(['text.chat', 'vision.ocr'])
 const REDACTED_PROVIDER_FAILURE = 'INTELLIGENCE_PROVIDER_FAILED'
+const REDACTED_AUDIT_FAILURE = 'INTELLIGENCE_AUDIT_LOG_FAILED'
 const REDACTED_QUOTA_FAILURE = 'INTELLIGENCE_QUOTA_FAILED'
 
 function assertCancellableCapability(capabilityId: string, signal?: AbortSignal): void {
@@ -753,6 +757,7 @@ export class TuffIntelligenceSDK {
             capabilityId,
             caller: runtimeOptions.metadata?.caller,
             userId: runtimeOptions.metadata?.userId,
+            metadata: runtimeOptions.metadata,
             promptTemplate,
             promptVariables
           })
@@ -795,6 +800,7 @@ export class TuffIntelligenceSDK {
               capabilityId,
               caller: runtimeOptions.metadata?.caller,
               userId: runtimeOptions.metadata?.userId,
+              metadata: runtimeOptions.metadata,
               promptTemplate,
               promptVariables
             })
@@ -827,6 +833,7 @@ export class TuffIntelligenceSDK {
             providerId: strategyResult.selectedProvider.id,
             caller: runtimeOptions.metadata?.caller,
             userId: runtimeOptions.metadata?.userId,
+            metadata: runtimeOptions.metadata,
             promptTemplate,
             promptVariables
           })
@@ -842,9 +849,14 @@ export class TuffIntelligenceSDK {
   async *stream<T = unknown>(
     capabilityId: string,
     payload: unknown,
-    options: IntelligenceInvokeOptions = {}
+    options: HostIntelligenceInvokeOptions = {}
   ): AsyncGenerator<IntelligenceStreamEvent<T>> {
+    const signal = options.signal
+    throwIfIntelligenceCancelled(signal)
+    const outerGoverned = isOuterGovernedInvocation(options)
     capabilityId = this.normalizeCapabilityId(capabilityId)
+    assertCancellableCapability(capabilityId, signal)
+    const requestStartTime = Date.now()
     const payloadRecord =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
     const disposeStream = enterPerfContext('Intelligence.stream', {
@@ -856,6 +868,7 @@ export class TuffIntelligenceSDK {
       caller: options.metadata?.caller
     })
 
+    let consumerClosed = false
     try {
       const capability = intelligenceCapabilityRegistry.get(capabilityId)
       if (!capability) {
@@ -866,8 +879,11 @@ export class TuffIntelligenceSDK {
       }
 
       const caller = options.metadata?.caller
-      if (this.config.enableQuota && caller) {
-        const quotaCheck = await this.checkQuota(caller)
+      if (!outerGoverned && this.config.enableQuota && caller) {
+        const quotaCheck = await awaitIntelligenceBoundary(
+          this.checkQuota(caller, 0, signal),
+          signal
+        )
         if (!quotaCheck.allowed) {
           throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
         }
@@ -886,11 +902,80 @@ export class TuffIntelligenceSDK {
         runtimeOptions,
         true
       )
-      const strategyResult = await strategyManager.select({
-        capabilityId,
-        options: runtimeOptions,
-        availableProviders
-      })
+      const strategyResult = await awaitIntelligenceBoundary(
+        strategyManager.select({
+          capabilityId,
+          options: runtimeOptions,
+          availableProviders
+        }),
+        signal
+      )
+      const emptyUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      let terminalAttempt: {
+        provider: string
+        model?: string
+        traceId?: string
+        usage: IntelligenceInvokeResult<unknown>['usage']
+        latency?: number
+        startedAt: number
+      }
+      let terminalAuditCommitted = false
+      const beginTerminalAttempt = (providerConfig: IntelligenceProviderConfig): void => {
+        terminalAttempt = {
+          provider: providerConfig.id,
+          model: providerConfig.defaultModel,
+          usage: emptyUsage,
+          startedAt: Date.now()
+        }
+      }
+      const writeStreamSuccessAudit = async (result: unknown): Promise<void> => {
+        if (outerGoverned || terminalAuditCommitted) return
+        terminalAuditCommitted = true
+        try {
+          await this.writeSuccessAudit({
+            result: {
+              result,
+              provider: terminalAttempt.provider,
+              model: terminalAttempt.model || 'unknown',
+              traceId: terminalAttempt.traceId || intelligenceAuditLogger.generateTraceId(),
+              usage: terminalAttempt.usage,
+              latency: terminalAttempt.latency ?? Date.now() - terminalAttempt.startedAt
+            },
+            startTime: requestStartTime,
+            capabilityId,
+            caller: runtimeOptions.metadata?.caller,
+            userId: runtimeOptions.metadata?.userId,
+            metadata: runtimeOptions.metadata,
+            promptTemplate,
+            promptVariables
+          })
+        } catch {
+          logWarn('Failed to prepare stream success audit')
+        }
+      }
+      const writeStreamFailureAudit = async (): Promise<void> => {
+        if (outerGoverned || terminalAuditCommitted) return
+        terminalAuditCommitted = true
+        try {
+          await this.writeFailureAudit({
+            error: new Error(REDACTED_PROVIDER_FAILURE),
+            startTime: requestStartTime,
+            capabilityId,
+            providerId: terminalAttempt.provider,
+            traceId: terminalAttempt.traceId,
+            model: terminalAttempt.model,
+            usage: terminalAttempt.usage,
+            latency: terminalAttempt.latency ?? Date.now() - terminalAttempt.startedAt,
+            caller: runtimeOptions.metadata?.caller,
+            userId: runtimeOptions.metadata?.userId,
+            metadata: runtimeOptions.metadata,
+            promptTemplate,
+            promptVariables
+          })
+        } catch {
+          logWarn('Failed to prepare stream failure audit')
+        }
+      }
       const streamFromProvider = async function* (
         sdk: TuffIntelligenceSDK,
         providerConfig: IntelligenceProviderConfig
@@ -933,6 +1018,13 @@ export class TuffIntelligenceSDK {
         // surviving text rather than every attempt in a row.
         let committedLength = 0
         let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        terminalAttempt = {
+          provider: finalProvider,
+          model: finalModel,
+          traceId: finalTraceId,
+          usage: finalUsage,
+          startedAt: startTime
+        }
 
         yield {
           type: 'start',
@@ -947,59 +1039,94 @@ export class TuffIntelligenceSDK {
           metadata: providerRuntimeOptions.metadata
         }
 
-        for await (const chunk of provider.chatStream(nextPayload, providerRuntimeOptions)) {
-          const chunkTraceId = chunk.traceId?.trim()
-          const chunkProvider = chunk.provider?.trim()
-          const chunkModel = chunk.model?.trim()
-          if (chunkTraceId) finalTraceId = chunkTraceId
-          if (chunkProvider) finalProvider = chunkProvider
-          if (chunkModel) finalModel = chunkModel
-          if (
-            typeof chunk.latency === 'number' &&
-            Number.isFinite(chunk.latency) &&
-            chunk.latency >= 0
-          ) {
-            finalLatency = chunk.latency
-          }
-          if (chunk.usage) {
-            finalUsage = chunk.usage
-            yield {
-              type: 'usage',
-              capabilityId,
-              traceId: finalTraceId,
-              usage: chunk.usage,
+        throwIfIntelligenceCancelled(signal)
+        const providerStream = provider.chatStream(nextPayload, providerRuntimeOptions)
+        let providerStreamDone = false
+        try {
+          while (true) {
+            throwIfIntelligenceCancelled(signal)
+            const next = await awaitIntelligenceBoundary(providerStream.next(), signal)
+            if (next.done) {
+              providerStreamDone = true
+              break
+            }
+            const chunk = next.value
+            const chunkTraceId = chunk.traceId?.trim()
+            const chunkProvider = chunk.provider?.trim()
+            const chunkModel = chunk.model?.trim()
+            if (chunkTraceId) finalTraceId = chunkTraceId
+            if (chunkProvider) finalProvider = chunkProvider
+            if (chunkModel) finalModel = chunkModel
+            if (
+              typeof chunk.latency === 'number' &&
+              Number.isFinite(chunk.latency) &&
+              chunk.latency >= 0
+            ) {
+              finalLatency = chunk.latency
+            }
+            if (chunk.usage) finalUsage = chunk.usage
+            terminalAttempt = {
               provider: finalProvider,
-              model: finalModel
+              model: finalModel,
+              traceId: finalTraceId,
+              usage: finalUsage,
+              latency: finalLatency,
+              startedAt: startTime
+            }
+            if (chunk.usage) {
+              yield {
+                type: 'usage',
+                capabilityId,
+                traceId: finalTraceId,
+                usage: chunk.usage,
+                provider: finalProvider,
+                model: finalModel
+              }
+            }
+            if (chunk.partEvent) {
+              if (chunk.partEvent.kind === 'message-commit') committedLength = accumulated.length
+              else if (chunk.partEvent.kind === 'text-reset') {
+                accumulated = accumulated.slice(0, committedLength)
+              }
+              yield {
+                type: 'part',
+                capabilityId,
+                traceId: finalTraceId,
+                partEvent: chunk.partEvent,
+                provider: finalProvider,
+                model: finalModel
+              }
+            }
+            if (chunk.delta) {
+              accumulated += chunk.delta
+              yield {
+                type: 'delta',
+                capabilityId,
+                traceId: finalTraceId,
+                delta: chunk.delta,
+                content: accumulated,
+                provider: finalProvider,
+                model: finalModel
+              }
             }
           }
-          if (chunk.partEvent) {
-            if (chunk.partEvent.kind === 'message-commit') committedLength = accumulated.length
-            else if (chunk.partEvent.kind === 'text-reset') {
-              accumulated = accumulated.slice(0, committedLength)
-            }
-            yield {
-              type: 'part',
-              capabilityId,
-              traceId: finalTraceId,
-              partEvent: chunk.partEvent,
-              provider: finalProvider,
-              model: finalModel
-            }
-          }
-          if (chunk.delta) {
-            accumulated += chunk.delta
-            yield {
-              type: 'delta',
-              capabilityId,
-              traceId: finalTraceId,
-              delta: chunk.delta,
-              content: accumulated,
-              provider: finalProvider,
-              model: finalModel
-            }
+        } finally {
+          if (!providerStreamDone) {
+            const closePromise = providerStream.return(undefined)
+            if (signal?.aborted) void closePromise.catch(() => undefined)
+            else await closePromise
           }
         }
 
+        const latency = finalLatency ?? Date.now() - startTime
+        terminalAttempt = {
+          provider: finalProvider,
+          model: finalModel,
+          traceId: finalTraceId,
+          usage: finalUsage,
+          latency,
+          startedAt: startTime
+        }
         yield {
           type: 'end',
           capabilityId,
@@ -1010,36 +1137,51 @@ export class TuffIntelligenceSDK {
           provider: finalProvider,
           model: finalModel,
           metadata: {
-            latency: finalLatency ?? Date.now() - startTime
+            latency
           }
         }
       }
 
       let streamStarted = false
       let selectedProviderEmittedDelta = false
+      beginTerminalAttempt(strategyResult.selectedProvider)
       try {
         for await (const event of streamFromProvider(this, strategyResult.selectedProvider)) {
           streamStarted ||= event.type === 'start'
           selectedProviderEmittedDelta ||= event.type === 'delta'
-          yield event
+          if (event.type === 'end') {
+            throwIfIntelligenceCancelled(signal)
+            await writeStreamSuccessAudit(event.result)
+          }
+          let consumerContinued = false
+          try {
+            yield event
+            consumerContinued = true
+          } finally {
+            if (!consumerContinued) consumerClosed = true
+          }
         }
       } catch (error) {
+        if (consumerClosed) throw error
+        if (signal?.aborted) throw new IntelligenceOperationCancelledError()
         if (
           selectedProviderEmittedDelta ||
           strategyResult.fallbackProviders.length === 0 ||
           hasExplicitProviderSelection(runtimeOptions)
         ) {
+          await writeStreamFailureAudit()
           throw error
         }
 
         logWarn(
           `Stream failed before the first delta for ${capabilityId} via ${strategyResult.selectedProvider.id}, attempting fallback providers`,
-          toInvokeErrorMessage(error)
+          REDACTED_PROVIDER_FAILURE
         )
 
         let lastError: unknown = error
         for (const fallbackProvider of strategyResult.fallbackProviders) {
           let fallbackProviderEmittedDelta = false
+          beginTerminalAttempt(fallbackProvider)
           try {
             for await (const event of streamFromProvider(this, fallbackProvider)) {
               if (event.type === 'start' && streamStarted) {
@@ -1047,20 +1189,34 @@ export class TuffIntelligenceSDK {
               }
               streamStarted ||= event.type === 'start'
               fallbackProviderEmittedDelta ||= event.type === 'delta'
-              yield event
+              if (event.type === 'end') {
+                throwIfIntelligenceCancelled(signal)
+                await writeStreamSuccessAudit(event.result)
+              }
+              let consumerContinued = false
+              try {
+                yield event
+                consumerContinued = true
+              } finally {
+                if (!consumerContinued) consumerClosed = true
+              }
             }
             return
           } catch (fallbackError) {
+            if (consumerClosed) throw fallbackError
+            if (signal?.aborted) throw new IntelligenceOperationCancelledError()
             if (fallbackProviderEmittedDelta) {
+              await writeStreamFailureAudit()
               throw fallbackError
             }
             lastError = fallbackError
             logWarn(
-              `Stream fallback provider ${fallbackProvider.id} failed before the first delta: ${toInvokeErrorMessage(fallbackError)}`
+              `Stream fallback provider ${fallbackProvider.id} failed before the first delta: ${REDACTED_PROVIDER_FAILURE}`
             )
           }
         }
 
+        await writeStreamFailureAudit()
         throw lastError
       }
     } finally {
@@ -2045,14 +2201,15 @@ export class TuffIntelligenceSDK {
 
   private getAuditMeta(
     promptTemplate?: string,
-    _promptVariables?: Record<string, unknown>
+    _promptVariables?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): { promptHash?: string; metadata?: Record<string, unknown> } {
-    if (!promptTemplate) {
-      return {}
-    }
-
+    const auditMetadata = sanitizeIntelligenceAuditMetadata(metadata)
     return {
-      promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate)
+      ...(promptTemplate
+        ? { promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate) }
+        : {}),
+      ...(auditMetadata ? { metadata: auditMetadata } : {})
     }
   }
 
@@ -2062,6 +2219,7 @@ export class TuffIntelligenceSDK {
     capabilityId: string
     caller?: string
     userId?: string
+    metadata?: Record<string, unknown>
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
   }): Promise<void> {
@@ -2069,9 +2227,17 @@ export class TuffIntelligenceSDK {
       return
     }
 
-    const { result, startTime, capabilityId, caller, userId, promptTemplate, promptVariables } =
-      params
-    const auditMeta = this.getAuditMeta(promptTemplate, promptVariables)
+    const {
+      result,
+      startTime,
+      capabilityId,
+      caller,
+      userId,
+      metadata,
+      promptTemplate,
+      promptVariables
+    } = params
+    const auditMeta = this.getAuditMeta(promptTemplate, promptVariables, metadata)
 
     await this.logAudit({
       traceId: result.traceId,
@@ -2093,8 +2259,13 @@ export class TuffIntelligenceSDK {
     startTime: number
     capabilityId: string
     providerId: string
+    traceId?: string
+    model?: string
+    usage?: IntelligenceInvokeResult<unknown>['usage']
+    latency?: number
     caller?: string
     userId?: string
+    metadata?: Record<string, unknown>
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
   }): Promise<void> {
@@ -2107,12 +2278,17 @@ export class TuffIntelligenceSDK {
       startTime,
       capabilityId,
       providerId,
+      traceId,
+      model,
+      usage,
+      latency,
       caller,
       userId,
+      metadata,
       promptTemplate,
       promptVariables
     } = params
-    const auditMeta = this.getAuditMeta(promptTemplate, promptVariables)
+    const auditMeta = this.getAuditMeta(promptTemplate, promptVariables, metadata)
     const candidateCode =
       typeof error === 'object' && error !== null && 'code' in error
         ? (error as { code?: unknown }).code
@@ -2123,13 +2299,13 @@ export class TuffIntelligenceSDK {
         : 'INTELLIGENCE_PROVIDER_FAILED'
 
     await this.logAudit({
-      traceId: intelligenceAuditLogger.generateTraceId(),
+      traceId: traceId || intelligenceAuditLogger.generateTraceId(),
       timestamp: startTime,
       capabilityId,
       provider: providerId,
-      model: 'unknown',
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      latency: Date.now() - startTime,
+      model: model || 'unknown',
+      usage: usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      latency: latency ?? Date.now() - startTime,
       success: false,
       error: errorCode,
       caller,
@@ -2245,8 +2421,8 @@ export class TuffIntelligenceSDK {
   private async logAudit(log: IntelligenceAuditLogEntry): Promise<void> {
     try {
       await intelligenceAuditLogger.log(log)
-    } catch (error) {
-      logError('Failed to log audit entry:', error)
+    } catch {
+      logWarn(`Failed to log audit entry: ${REDACTED_AUDIT_FAILURE}`)
     }
   }
 

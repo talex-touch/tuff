@@ -1,0 +1,4 @@
+{"file": "apps/nexus/AGENTS.md", "reason": "Package conventions the check must enforce for apps/nexus changes"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality checklist for reviewing the docs page changes"}
+{"file": ".trellis/spec/frontend/release-testing.md", "reason": "Release/testing expectations; this task gates on full build + runtime verification"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer check: page component ↔ prerender pipeline ↔ post-build scripts ↔ CF Pages serving"}

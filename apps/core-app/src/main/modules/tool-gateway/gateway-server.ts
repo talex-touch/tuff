@@ -1,8 +1,10 @@
 import type { IncomingMessage, Server } from 'node:http'
-import type { ToolCallPlan, ToolDefinition, ToolResult } from './tool-registry'
+import type { StableToolErrorCode, StableToolErrorProjection } from '../ai/tool-error-projection'
+import type { ToolCallPlan, ToolDefinition, ToolResult, ToolRisk } from './tool-registry'
 import { Buffer } from 'node:buffer'
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
+import { projectToolError, projectToolErrorCode } from '../ai/tool-error-projection'
 import { isRememberable } from './tool-registry'
 
 /** Bodies larger than this are refused outright rather than buffered. */
@@ -21,12 +23,34 @@ export interface ConfirmationDecision {
   remember: boolean
 }
 
+type AgentToolAuditBase = {
+  schema: 'agent-tool-audit/v1'
+  callId: string
+  toolId: string
+  risk: ToolRisk | 'unknown'
+}
+
+export type AgentToolAuditEvent =
+  | (AgentToolAuditBase & { phase: 'call' })
+  | (AgentToolAuditBase & {
+      phase: 'decision'
+      decision: 'approved' | 'denied' | 'remembered' | 'failed' | 'not-required'
+    })
+  | (AgentToolAuditBase & {
+      phase: 'result'
+      status: 'success' | 'error'
+      durationMs: number
+      code: StableToolErrorCode | 'TOOL_OK'
+    })
+
 export interface ToolGatewayOptions {
   tools: Map<string, ToolDefinition>
   /** Asks the user; resolving `approved: false` denies the call. */
-  confirm: (request: ConfirmationRequest) => Promise<ConfirmationDecision>
-  /** Rejected calls answer the model rather than throwing, so the loop continues. */
+  confirm: (request: ConfirmationRequest, signal: AbortSignal) => Promise<ConfirmationDecision>
+  /** Fixed diagnostics only; raw args, summaries and native errors are forbidden. */
   onLog?: (message: string) => void
+  /** Receives only the versioned, strict audit projection. Sink failures are ignored. */
+  onAudit?: (event: AgentToolAuditEvent) => void
 }
 
 export interface ToolGatewayHandle {
@@ -56,6 +80,75 @@ async function readBody(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
+export const PI_TOOL_CALL_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/
+
+const MAX_AUDIT_DURATION_MS = 24 * 60 * 60 * 1000
+
+function normalizeCallId(value: unknown): string {
+  return typeof value === 'string' && PI_TOOL_CALL_ID_PATTERN.test(value) ? value : randomUUID()
+}
+
+function normalizeStaticToolId(value: unknown): string {
+  return typeof value === 'string' && PI_TOOL_CALL_ID_PATTERN.test(value) ? value : 'unknown'
+}
+
+function boundDurationMs(startedAt: number): number {
+  const duration = Date.now() - startedAt
+  if (!Number.isFinite(duration) || duration <= 0) return 0
+  return Math.min(Math.floor(duration), MAX_AUDIT_DURATION_MS)
+}
+
+function safeLog(options: ToolGatewayOptions, message: string): void {
+  try {
+    options.onLog?.(message)
+  } catch {
+    // Diagnostics are fail-soft and never change the tool result.
+  }
+}
+
+function emitAudit(options: ToolGatewayOptions, event: AgentToolAuditEvent): void {
+  try {
+    options.onAudit?.(event)
+  } catch {
+    safeLog(options, 'Agent tool audit sink failed')
+  }
+}
+
+function projectedFailure(projection: StableToolErrorProjection): ToolResult {
+  return { output: projection.message, isError: true, code: projection.code }
+}
+
+const CALL_ABORTED = Symbol('agent-tool-call-aborted')
+
+function waitForActiveCall<T>(
+  operation: Promise<T>,
+  signal: AbortSignal
+): Promise<T | typeof CALL_ABORTED> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+
+    const cleanup = (): void => signal.removeEventListener('abort', onAbort)
+    const settle = (result: T | typeof CALL_ABORTED): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(result)
+    }
+    const fail = (error: unknown): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onAbort = (): void => settle(CALL_ABORTED)
+
+    signal.addEventListener('abort', onAbort, { once: true })
+    void operation.then(settle, fail)
+    // Adding a listener to an already-aborted signal does not dispatch it.
+    if (signal.aborted) onAbort()
+  })
+}
+
 /**
  * A loopback HTTP endpoint the `pi` extension calls to run Tuff-owned tools.
  *
@@ -69,78 +162,231 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
   const token = randomBytes(32).toString('hex')
   /** Tools the user chose to stop being asked about, for this session only. */
   const remembered = new Set<string>()
+  const activeCalls = new Set<AbortController>()
+  let closing = false
+  let closePromise: Promise<void> | null = null
 
   const server: Server = createServer((request, response) => {
+    const clientAbortController = new AbortController()
+    activeCalls.add(clientAbortController)
+    const abortClientCall = (): void => clientAbortController.abort()
+    const abortOnPrematureResponseClose = (): void => {
+      if (!response.writableEnded) abortClientCall()
+    }
+
+    request.once('aborted', abortClientCall)
+    response.once('close', abortOnPrematureResponseClose)
+    if (closing) abortClientCall()
+
     void (async () => {
       const reply = (status: number, body: unknown): void => {
+        if (response.destroyed || response.writableEnded) return
         const payload = JSON.stringify(body)
         response.writeHead(status, {
           'content-type': 'application/json',
-          'content-length': Buffer.byteLength(payload)
+          'content-length': Buffer.byteLength(payload),
+          ...(closing ? { connection: 'close' } : {})
         })
         response.end(payload)
       }
 
+      if (request.method !== 'POST' || request.url !== '/invoke') {
+        reply(404, { error: 'Not found' })
+        return
+      }
+
+      const authorization = request.headers.authorization ?? ''
+      const presented = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
+      if (!constantTimeEquals(presented, token)) {
+        reply(401, { error: 'Unauthorized' })
+        return
+      }
+
+      const startedAt = Date.now()
+      let callId: string = randomUUID()
+      const auditCorrelationId = randomUUID()
+      let toolId = 'unknown'
+      let risk: ToolRisk | 'unknown' = 'unknown'
+      let callAudited = false
+      let decisionAudited = false
+
+      const auditCall = (): void => {
+        if (callAudited) return
+        callAudited = true
+        emitAudit(options, {
+          schema: 'agent-tool-audit/v1',
+          phase: 'call',
+          callId: auditCorrelationId,
+          toolId,
+          risk
+        })
+      }
+
+      const auditDecision = (
+        decision: Extract<AgentToolAuditEvent, { phase: 'decision' }>['decision']
+      ): void => {
+        if (decisionAudited) return
+        auditCall()
+        decisionAudited = true
+        emitAudit(options, {
+          schema: 'agent-tool-audit/v1',
+          phase: 'decision',
+          callId: auditCorrelationId,
+          toolId,
+          risk,
+          decision
+        })
+      }
+
+      const finish = (result: ToolResult): void => {
+        auditCall()
+        if (!decisionAudited) auditDecision('failed')
+        const safeResult = result.isError
+          ? projectedFailure(projectToolErrorCode(result.code))
+          : { output: result.output, isError: false }
+        emitAudit(options, {
+          schema: 'agent-tool-audit/v1',
+          phase: 'result',
+          callId: auditCorrelationId,
+          toolId,
+          risk,
+          status: safeResult.isError ? 'error' : 'success',
+          durationMs: boundDurationMs(startedAt),
+          code: safeResult.isError ? (safeResult.code ?? 'TOOL_EXECUTION_FAILED') : 'TOOL_OK'
+        })
+        reply(200, safeResult)
+      }
+
+      const finishCancelled = (): void => {
+        auditDecision('failed')
+        finish(projectedFailure(projectToolErrorCode('TOOL_EXECUTION_ABORTED')))
+      }
+
+      let body: { tool?: unknown; callId?: unknown; args?: unknown }
       try {
-        if (request.method !== 'POST' || request.url !== '/invoke') {
-          reply(404, { error: 'Not found' })
+        const bodyText = await waitForActiveCall(readBody(request), clientAbortController.signal)
+        if (bodyText === CALL_ABORTED || closing) {
+          finishCancelled()
           return
         }
+        const parsedBody: unknown = JSON.parse(bodyText)
+        if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody))
+          throw new Error()
+        body = parsedBody as typeof body
+      } catch {
+        auditDecision('failed')
+        finish(projectedFailure(projectToolErrorCode('TOOL_INPUT_INVALID')))
+        return
+      }
 
-        const authorization = request.headers.authorization ?? ''
-        const presented = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-        if (!constantTimeEquals(presented, token)) {
-          reply(401, { error: 'Unauthorized' })
-          return
-        }
+      callId = normalizeCallId(body.callId)
+      const requestedTool = typeof body.tool === 'string' ? body.tool : ''
+      const tool = requestedTool ? options.tools.get(requestedTool) : undefined
+      if (!tool) {
+        auditDecision('not-required')
+        finish(projectedFailure(projectToolErrorCode('TOOL_NOT_FOUND')))
+        return
+      }
 
-        const body = JSON.parse(await readBody(request)) as {
-          tool?: string
-          callId?: string
-          args?: Record<string, unknown>
-        }
+      toolId = normalizeStaticToolId(tool.name)
+      const args =
+        body.args && typeof body.args === 'object' && !Array.isArray(body.args)
+          ? (body.args as Record<string, unknown>)
+          : {}
 
-        const tool = body.tool ? options.tools.get(body.tool) : undefined
-        if (!tool) {
-          // Answering rather than 4xx-ing keeps a hallucinated tool name inside
-          // the model's own error-recovery loop.
-          reply(200, { output: `Unknown tool: ${body.tool ?? '(none)'}`, isError: true })
-          return
-        }
+      if (clientAbortController.signal.aborted || closing) {
+        finishCancelled()
+        return
+      }
 
-        const args = body.args && typeof body.args === 'object' ? body.args : {}
+      let plan: ToolCallPlan
+      try {
         // A forwarding tool decides its own risk per call; the rest are what
         // they declare, remembered under their own name.
-        const plan: ToolCallPlan = tool.classify
-          ? await tool.classify(args)
-          : { risk: tool.risk, summary: tool.summarize(args), rememberKey: tool.name }
-
-        if (!remembered.has(plan.rememberKey)) {
-          const decision = await options.confirm({
-            callId: body.callId ?? '',
-            tool: tool.name,
-            risk: plan.risk,
-            summary: plan.summary,
-            input: JSON.stringify(args, null, 2)
-          })
-
-          if (!decision.approved) {
-            options.onLog?.(`Tool ${tool.name} denied by user`)
-            reply(200, { output: `User denied ${tool.name}.`, isError: true })
+        if (tool.classify) {
+          const classification = await waitForActiveCall(
+            tool.classify(args),
+            clientAbortController.signal
+          )
+          if (classification === CALL_ABORTED || closing) {
+            finishCancelled()
             return
           }
-          // Write/execute tools re-ask every time no matter what the user
-          // ticked — a single yes must not become a standing grant.
-          if (decision.remember && isRememberable(plan.risk)) remembered.add(plan.rememberKey)
+          plan = classification
+        } else {
+          plan = { risk: tool.risk, summary: tool.summarize(args), rememberKey: tool.name }
+        }
+      } catch (error) {
+        risk = tool.risk
+        auditDecision('failed')
+        finish(projectedFailure(projectToolError(error)))
+        return
+      }
+
+      risk = plan.risk
+      if (clientAbortController.signal.aborted || closing) {
+        finishCancelled()
+        return
+      }
+      auditCall()
+      if (remembered.has(plan.rememberKey)) {
+        auditDecision('remembered')
+      } else {
+        let decision: ConfirmationDecision | typeof CALL_ABORTED
+        try {
+          decision = await waitForActiveCall(
+            options.confirm(
+              {
+                callId,
+                tool: tool.name,
+                risk: plan.risk,
+                summary: plan.summary,
+                input: JSON.stringify(args, null, 2)
+              },
+              clientAbortController.signal
+            ),
+            clientAbortController.signal
+          )
+        } catch (error) {
+          auditDecision('failed')
+          finish(projectedFailure(projectToolError(error)))
+          return
         }
 
-        const result: ToolResult = await tool.execute(args)
-        reply(200, result)
-      } catch (error) {
-        options.onLog?.(`Tool gateway error: ${(error as Error).message}`)
-        reply(200, { output: `Tool failed: ${(error as Error).message}`, isError: true })
+        if (decision === CALL_ABORTED || clientAbortController.signal.aborted || closing) {
+          finishCancelled()
+          return
+        }
+
+        auditDecision(decision.approved ? 'approved' : 'denied')
+        if (clientAbortController.signal.aborted || closing) {
+          finishCancelled()
+          return
+        }
+        if (!decision.approved) {
+          finish(projectedFailure(projectToolErrorCode('TOOL_APPROVAL_DENIED')))
+          return
+        }
+        // Write/execute tools re-ask every time no matter what the user
+        // ticked — a single yes must not become a standing grant.
+        if (decision.remember && isRememberable(plan.risk)) remembered.add(plan.rememberKey)
       }
-    })()
+
+      if (clientAbortController.signal.aborted || closing) {
+        finishCancelled()
+        return
+      }
+
+      try {
+        finish(await tool.execute(args))
+      } catch (error) {
+        finish(projectedFailure(projectToolError(error)))
+      }
+    })().finally(() => {
+      activeCalls.delete(clientAbortController)
+      request.removeListener('aborted', abortClientCall)
+      response.removeListener('close', abortOnPrematureResponseClose)
+    })
   })
 
   await new Promise<void>((resolveListen, reject) => {
@@ -158,9 +404,17 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
     url: `http://127.0.0.1:${port}/invoke`,
     token,
     resetSessionApprovals: () => remembered.clear(),
-    close: () =>
-      new Promise<void>((resolveClose) => {
-        server.close(() => resolveClose())
+    close: () => {
+      if (closePromise) return closePromise
+
+      closing = true
+      let resolveClose!: () => void
+      closePromise = new Promise<void>((resolve) => {
+        resolveClose = resolve
       })
+      for (const controller of activeCalls) controller.abort()
+      server.close(resolveClose)
+      return closePromise
+    }
   }
 }

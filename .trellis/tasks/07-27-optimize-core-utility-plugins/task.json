@@ -21,7 +21,8 @@
   "children": [
     "07-27-optimize-intelligence-plugin",
     "07-27-optimize-translation-plugin",
-    "07-27-optimize-clipboard-plugin"
+    "07-27-optimize-clipboard-plugin",
+    "08-22-autopaste-plugin-beta-e2e"
   ],
   "parent": null,
   "relatedFiles": [],

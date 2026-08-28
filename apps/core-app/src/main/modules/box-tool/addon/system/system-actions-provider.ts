@@ -32,6 +32,18 @@ type SystemActionType =
   | 'file-index'
   | 'screenshot-cursor-display'
 
+const SYSTEM_ACTION_TYPES: ReadonlySet<string> = new Set([
+  'dev-plugin',
+  'tpex-plugin',
+  'app-index',
+  'file-index',
+  'screenshot-cursor-display'
+])
+
+function isSystemActionType(value: string): value is SystemActionType {
+  return SYSTEM_ACTION_TYPES.has(value)
+}
+
 interface SystemActionMeta {
   action: SystemActionType
   path: string
@@ -695,6 +707,33 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
           meta: { name }
         })
       })
+  }
+
+  async rebuildItem(itemId: string): Promise<TuffItem | null> {
+    const prefix = `${this.id}:`
+    if (!itemId.startsWith(prefix)) return null
+
+    const encodedAction = itemId.slice(prefix.length)
+    const separatorIndex = encodedAction.indexOf(':')
+    if (separatorIndex <= 0) return null
+
+    const type = encodedAction.slice(0, separatorIndex)
+    const actionPath = encodedAction.slice(separatorIndex + 1)
+    if (!isSystemActionType(type) || !actionPath) return null
+
+    if (type === 'screenshot-cursor-display') {
+      if (actionPath !== SCREENSHOT_ACTION_PATH) return null
+      return this.buildActionItem({
+        type,
+        path: actionPath,
+        displayName: 'cursor-display',
+        displayPath: actionPath
+      })
+    }
+
+    const resolved = await this.resolveAction(actionPath)
+    if (!resolved || resolved.type !== type) return null
+    return this.buildActionItem(resolved)
   }
 
   private buildActionItem(action: ResolvedAction): TuffItem {

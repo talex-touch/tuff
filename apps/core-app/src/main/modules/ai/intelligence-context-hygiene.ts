@@ -41,6 +41,7 @@ import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { estimateContextTokens, normalizeContextTokenBudget } from './intelligence-token-estimate'
+import { containsCredentialLikeText } from './sensitive-text'
 
 const log = createLogger('IntelligenceContext')
 const DEFAULT_TOKEN_BUDGET = 1_600
@@ -256,17 +257,7 @@ function isExplicitNewTopic(input: string): boolean {
   )
 }
 
-function containsSecret(content: string): boolean {
-  return [
-    /\bsk-[\w-]{12,}\b/,
-    /\bghp_\w{20,}\b/,
-    /\bBearer\s+[A-Za-z0-9._~+\/-]{16,}=*(?![A-Za-z0-9._~+\/=-])/i,
-    /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
-    /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*\S+/i,
-    /(?:恢复码|口令)\s*[:=：]\s*\S+/,
-    /-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/
-  ].some((pattern) => pattern.test(content))
-}
+const containsSecret = containsCredentialLikeText
 
 export function isContextInputProviderSafe(content: string): boolean {
   return !containsSecret(content)

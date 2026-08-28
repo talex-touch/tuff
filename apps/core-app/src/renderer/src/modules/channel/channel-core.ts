@@ -204,9 +204,14 @@ class TouchChannel implements TouchClientChannelLike {
 
   send<TRequest = unknown, TResponse = unknown>(
     eventName: string,
-    arg?: TRequest
+    arg?: TRequest,
+    options?: { timeout?: number }
   ): Promise<TResponse> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
+    const requestTimeoutMs =
+      typeof options?.timeout === 'number' && Number.isFinite(options.timeout)
+        ? Math.max(1, options.timeout)
+        : CHANNEL_DEFAULT_TIMEOUT
     const startedAt = performance.now()
     const stack = new Error().stack
 
@@ -215,7 +220,7 @@ class TouchChannel implements TouchClientChannelLike {
       data: arg,
       sync: {
         timeStamp: new Date().getTime(),
-        timeout: CHANNEL_DEFAULT_TIMEOUT,
+        timeout: requestTimeoutMs,
         id: uniqueId
       },
       name: eventName,

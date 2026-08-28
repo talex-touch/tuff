@@ -51,7 +51,7 @@ mkdir -p "$(dirname "$LOG_FILE")" >/dev/null 2>&1 || exit 1
 wait_for_app_exit() {
   local pid="$1"
   local i
-  for i in $(seq 1 90); do
+  for ((i = 0; i < 90; i += 1)); do
     if ! kill -0 "$pid" >/dev/null 2>&1; then
       return 0
     fi
@@ -61,7 +61,7 @@ wait_for_app_exit() {
   if kill -0 "$pid" >/dev/null 2>&1; then
     log "pid still alive, sending TERM"
     kill -TERM "$pid" >/dev/null 2>&1 || true
-    for i in $(seq 1 10); do
+    for ((i = 0; i < 10; i += 1)); do
       if ! kill -0 "$pid" >/dev/null 2>&1; then
         return 0
       fi
@@ -78,9 +78,28 @@ wait_for_app_exit() {
 
 relaunch() {
   if [ -n "$DEST_APP" ] && [ -x "$DEST_APP" ]; then
-    ( "$DEST_APP" >> "$LOG_FILE" 2>&1 & ) || true
-    log "relaunched $DEST_APP"
+    if should_extract_and_run_appimage; then
+      ( APPIMAGE_EXTRACT_AND_RUN=1 "$DEST_APP" --appimage-extract-and-run >/dev/null 2>&1 & ) || true
+      log "AppImage relaunch requested (extract-and-run)"
+    else
+      ( "$DEST_APP" >/dev/null 2>&1 & ) || true
+      log "application relaunch requested"
+    fi
   fi
+}
+
+should_extract_and_run_appimage() {
+  if [ "$MODE" != "appimage" ] || [ -z "${APPIMAGE:-}" ] || [ "$APPIMAGE" != "$DEST_APP" ]; then
+    return 1
+  fi
+
+  # The type 2 runtime removes --appimage-extract-and-run from AppRun argv.
+  # Only the official environment switch survives as an explicit signal that
+  # the source process is running without FUSE.
+  if [ "${APPIMAGE_EXTRACT_AND_RUN+x}" = "x" ]; then
+    return 0
+  fi
+  return 1
 }
 
 install_appimage() {
@@ -89,43 +108,43 @@ install_appimage() {
     return 1
   fi
   if [ ! -f "$SOURCE_PACKAGE" ]; then
-    log "source AppImage not found: $SOURCE_PACKAGE"
+    log "source AppImage not found"
     return 1
   fi
 
   mkdir -p "$(dirname "$BACKUP_APP")" >/dev/null 2>&1 || true
-  rm -f "$BACKUP_APP" >> "$LOG_FILE" 2>&1 || true
+  rm -f "$BACKUP_APP" >/dev/null 2>&1 || true
   if [ -f "$DEST_APP" ]; then
-    cp -f "$DEST_APP" "$BACKUP_APP" >> "$LOG_FILE" 2>&1 || {
+    cp -f "$DEST_APP" "$BACKUP_APP" >/dev/null 2>&1 || {
       log "backup failed"
       return 1
     }
   fi
 
-  if cp -f "$SOURCE_PACKAGE" "$DEST_APP" >> "$LOG_FILE" 2>&1; then
-    chmod +x "$DEST_APP" >> "$LOG_FILE" 2>&1 || true
+  if cp -f "$SOURCE_PACKAGE" "$DEST_APP" >/dev/null 2>&1; then
+    chmod +x "$DEST_APP" >/dev/null 2>&1 || true
     log "AppImage replaced in place"
     return 0
   fi
 
   log "AppImage replace failed, restoring backup"
   if [ -f "$BACKUP_APP" ]; then
-    cp -f "$BACKUP_APP" "$DEST_APP" >> "$LOG_FILE" 2>&1 || true
-    chmod +x "$DEST_APP" >> "$LOG_FILE" 2>&1 || true
+    cp -f "$BACKUP_APP" "$DEST_APP" >/dev/null 2>&1 || true
+    chmod +x "$DEST_APP" >/dev/null 2>&1 || true
   fi
   return 1
 }
 
 install_deb() {
   if [ -z "$DEB_PACKAGE" ] || [ ! -f "$DEB_PACKAGE" ]; then
-    log "deb package not found: $DEB_PACKAGE"
+    log "deb package not found"
     return 1
   fi
   if ! command -v pkexec >/dev/null 2>&1; then
     log "pkexec unavailable; cannot install .deb without elevation"
     return 1
   fi
-  if pkexec dpkg -i "$DEB_PACKAGE" >> "$LOG_FILE" 2>&1; then
+  if pkexec dpkg -i "$DEB_PACKAGE" >/dev/null 2>&1; then
     log "deb installed via pkexec"
     return 0
   fi
@@ -136,7 +155,7 @@ install_deb() {
 surface_package() {
   local pkg="$1"
   if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$pkg" >> "$LOG_FILE" 2>&1 || true
+    xdg-open "$pkg" >/dev/null 2>&1 || true
   fi
 }
 

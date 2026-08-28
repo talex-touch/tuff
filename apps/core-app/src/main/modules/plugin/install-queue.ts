@@ -207,14 +207,8 @@ export class PluginInstallQueue {
       // official — officialActual is recomputed here from prepared.providerResult, not taken
       // from the request.
       //
-      // It used to also skip on a `trustedHint` read straight off `metadata.trusted` in the IPC
-      // payload. Any code running in the renderer could send `{trusted: true}` and install with
-      // no prompt (#902); the renderer's own dialog is not evidence the main process can check.
-      // The field is gone rather than merely unused, so it cannot be quietly rewired.
-      //
-      // The renderer still shows its own confirmation, so an ordinary store install now asks
-      // twice. That is worth it until the two prompts are merged: the alternative is a control
-      // anything in the renderer can switch off.
+      // Renderer metadata is display-only. Unofficial-source confirmation stays main-owned so
+      // an IPC caller cannot waive it, while verified official packages skip that one risk prompt.
       const needsConfirmation = !task.officialActual
       if (needsConfirmation) {
         await this.requestConfirmation(task, {

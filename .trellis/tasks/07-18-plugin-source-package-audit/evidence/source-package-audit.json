@@ -1,0 +1,27 @@
+{
+  "contractVersion": "talex.plugin-source-audit/v1",
+  "generatedAt": "2026-08-27T07:18:34.372Z",
+  "evidenceLevel": "release-candidate",
+  "sourceRevision": "2016af1f508702b654cee5647f6f8947a913ced4",
+  "dirty": true,
+  "dirtyAllowed": false,
+  "toolchain": {
+    "node": "v24.18.0",
+    "pnpm": "10.34.4",
+    "sourceDateEpoch": "1787728834"
+  },
+  "selectedTargets": [
+    "clipboard-history",
+    "touch-quickops",
+    "touch-snippets",
+    "touch-translation",
+    "touch-intelligence"
+  ],
+  "artifactPathBase": "report-directory",
+  "prerequisiteCommands": [],
+  "targets": [],
+  "status": "failed",
+  "blockers": [
+    "Relevant source or build tooling is dirty; pass --allow-dirty only for local evidence."
+  ]
+}

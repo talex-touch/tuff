@@ -2,6 +2,7 @@ import type {
   IntelligencePromptBinding,
   IntelligencePromptBindingUpsertPayload,
 } from '@talex-touch/tuff-intelligence/light'
+import { logAdminAudit } from '../../../utils/adminAuditStore'
 import { requireAdmin } from '../../../utils/auth'
 import { savePromptBinding } from '../../../utils/intelligenceStore'
 
@@ -42,5 +43,22 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const binding = normalizeBinding(body)
   const saved = await savePromptBinding(event, userId, binding)
+
+  await logAdminAudit(event, {
+    adminUserId: userId,
+    action: 'intelligence.prompt-binding.upsert',
+    targetType: 'intelligence_prompt_binding',
+    targetId: saved.capabilityId,
+    targetLabel: `${saved.capabilityId} -> ${saved.promptId}`,
+    metadata: {
+      after: {
+        promptId: saved.promptId,
+        promptVersion: saved.promptVersion ?? null,
+        channel: saved.channel ?? null,
+        providerId: saved.providerId ?? null,
+      },
+    },
+  })
+
   return { binding: saved }
 })

@@ -7,6 +7,7 @@ import {
   normalizeTuffItemLocalAssets
 } from '../../../../utils/local-renderable-assets'
 import { createLogger } from '../../../../utils/logger'
+import { isSelfAppIdentity } from '../../../system/self-app-identity'
 import { matchNoisySystemAppRule } from '../../addon/apps/app-noise-filter'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
@@ -109,7 +110,10 @@ export class ItemRebuilder {
       this.rebuildAppItems(grouped.get('app-provider') || []),
       this.rebuildFileItems(grouped.get('file-provider') || []),
       this.rebuildPluginFeatureItems(grouped.get('plugin-features') || []),
-      this.rebuildClipboardItems(grouped.get('clipboard-history') || [])
+      this.rebuildClipboardItems(grouped.get('clipboard-history') || []),
+      this.rebuildMainWindowItems(grouped.get('main-window-provider') || []),
+      this.rebuildSystemActionItems(grouped.get('system-actions-provider') || []),
+      this.rebuildWindowsShellItems(grouped.get('windows-shell-file-provider') || [])
     ])
 
     // Handle plugin-recommend and builtin candidates (synchronous, no DB needed)
@@ -125,6 +129,10 @@ export class ItemRebuilder {
       application: 'app-provider',
       app: 'app-provider',
       file: 'file-provider',
+      files: 'file-provider',
+      'everything-provider': 'file-provider',
+      'macos-spotlight-provider': 'file-provider',
+      'linux-native-file-provider': 'file-provider',
       clipboard: 'clipboard-history'
     }
 
@@ -143,6 +151,37 @@ export class ItemRebuilder {
     }
 
     return groups
+  }
+
+  private async rebuildMainWindowItems(items: ScoredItem[]): Promise<TuffItem[]> {
+    if (items.length === 0) return []
+
+    const { mainWindowProvider } = await import('../../addon/system/main-window-provider')
+    return items.flatMap((item) => {
+      const rebuilt = mainWindowProvider.rebuildItem(item.itemId)
+      return rebuilt ? [rebuilt] : []
+    })
+  }
+
+  private async rebuildSystemActionItems(items: ScoredItem[]): Promise<TuffItem[]> {
+    if (items.length === 0) return []
+
+    const { systemActionsProvider } = await import('../../addon/system/system-actions-provider')
+    const rebuilt = await Promise.all(
+      items.map((item) => systemActionsProvider.rebuildItem(item.itemId))
+    )
+    return rebuilt.filter((item): item is TuffItem => item !== null)
+  }
+
+  private async rebuildWindowsShellItems(items: ScoredItem[]): Promise<TuffItem[]> {
+    if (items.length === 0) return []
+
+    const { windowsShellFileProvider } =
+      await import('../../addon/system/windows-shell-file-provider')
+    return items.flatMap((item) => {
+      const rebuilt = windowsShellFileProvider.rebuildItem(item.itemId)
+      return rebuilt ? [rebuilt] : []
+    })
   }
 
   private async rebuildAppItems(items: ScoredItem[]): Promise<TuffItem[]> {
@@ -167,6 +206,10 @@ export class ItemRebuilder {
       const appsWithExtensions = await this.fetchExtensionsForApps(apps)
       const recommendationApps = appsWithExtensions.filter(
         (app) =>
+          !isSelfAppIdentity({
+            executablePath: app.path,
+            bundleId: app.extensions.bundleId
+          }) &&
           !matchNoisySystemAppRule({
             path: app.path,
             bundleId: app.extensions.bundleId,

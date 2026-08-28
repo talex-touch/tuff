@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
+import { createHash } from 'node:crypto'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
 import { getUserSubscription } from './subscriptionStore'
@@ -27,6 +28,7 @@ const CHECKIN_REWARD = 1
 const TEAM_BASE_SEATS = 5
 const TEAM_POOL_PER_SEAT = 400000
 const DEFAULT_PLAN_ID = 'default'
+const CREDIT_IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/
 
 export type TeamType = 'personal' | 'organization'
 export type TeamMemberRole = 'owner' | 'admin' | 'member'
@@ -110,6 +112,26 @@ function sumCredits(...values: number[]): number {
   return Math.round(total)
 }
 
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== 'object')
+    return JSON.stringify(value)
+  if (Array.isArray(value))
+    return `[${value.map(stableSerialize).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+  return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`).join(',')}}`
+}
+
+function digestCreditConsumptionPayload(value: unknown): string {
+  return createHash('sha256').update(stableSerialize(value)).digest('hex')
+}
+
+function normalizeCreditIdempotencyKey(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  return CREDIT_IDEMPOTENCY_KEY_PATTERN.test(trimmed) ? trimmed : null
+}
+
 function normalizeCreditBalanceRow<T extends { quota?: unknown; used?: unknown }>(
   row: T | null | undefined
 ): T | null {
@@ -185,8 +207,31 @@ async function ensureCreditsSchema(db: D1Database) {
       delta REAL NOT NULL,
       reason TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      metadata TEXT
+      metadata TEXT,
+      idempotency_key TEXT,
+      idempotency_hash TEXT
     );
+  `).run()
+
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(${CREDIT_LEDGER_TABLE});`).all<{ name?: string }>()
+    const columns = new Set((results ?? []).map(column => column.name).filter(Boolean) as string[])
+    if (!columns.has('idempotency_key')) {
+      await db.prepare(`ALTER TABLE ${CREDIT_LEDGER_TABLE} ADD COLUMN idempotency_key TEXT;`).run()
+    }
+    if (!columns.has('idempotency_hash')) {
+      await db.prepare(`ALTER TABLE ${CREDIT_LEDGER_TABLE} ADD COLUMN idempotency_hash TEXT;`).run()
+    }
+  }
+  catch {
+    // Older D1 previews may reject table introspection during first boot; the create path above
+    // already covers fresh schemas, and existing schemas keep the non-idempotent fallback.
+  }
+
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_ledger_idempotency
+    ON ${CREDIT_LEDGER_TABLE}(scope, scope_id, reason, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
   `).run()
 
   await db.prepare(`
@@ -917,6 +962,7 @@ export interface CreditConsumptionResult {
   reason: string
   createdAt: string
   metadata: Record<string, any>
+  idempotencyKey?: string
 }
 
 export interface CreditAdjustmentResult {
@@ -991,6 +1037,7 @@ export async function consumeCredits(
   amount: number,
   reason: string,
   metadata?: Record<string, any>,
+  options: { idempotencyKey?: string } = {},
 ): Promise<CreditConsumptionResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
@@ -1003,6 +1050,7 @@ export async function consumeCredits(
   }
   const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
   const month = getMonthKey()
+  const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
   const teamBalance = await db.prepare(`
     SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
   `).bind(activeCreditTeam.teamId, month).first()
@@ -1021,40 +1069,109 @@ export async function consumeCredits(
   if (nextUserUsed > userQuota)
     throw new Error('User credits exceeded.')
 
-  const teamUpdate = await db.prepare(`
-    UPDATE ${CREDIT_BALANCES_TABLE}
-    SET used = used + ?
-    WHERE scope = 'team' AND scope_id = ? AND month = ? AND used + ? <= quota
-  `).bind(normalizedAmount, activeCreditTeam.teamId, month, normalizedAmount).run()
+  const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
+  const idempotencyHash = idempotencyKey
+    ? digestCreditConsumptionPayload({
+        userId,
+        teamId: activeCreditTeam.teamId,
+        amount: normalizedAmount,
+        reason,
+        metadata: ledgerMetadata,
+      })
+    : null
 
-  if (Number((teamUpdate as any)?.meta?.changes ?? 0) < 1)
-    throw new Error('Team credits exceeded.')
+  if (idempotencyKey) {
+    const existing = await db.prepare(`
+      SELECT id, delta, created_at, metadata, idempotency_hash
+      FROM ${CREDIT_LEDGER_TABLE}
+      WHERE scope = 'team'
+        AND scope_id = ?
+        AND reason = ?
+        AND idempotency_key = ?
+      LIMIT 1
+    `).bind(activeCreditTeam.teamId, reason, idempotencyKey).first<{
+      id: string
+      delta: number
+      created_at: string
+      metadata?: string | null
+      idempotency_hash?: string | null
+    }>()
 
-  const userUpdate = await db.prepare(`
-    UPDATE ${CREDIT_BALANCES_TABLE}
-    SET used = used + ?
-    WHERE scope = 'user' AND scope_id = ? AND month = ? AND used + ? <= quota
-  `).bind(normalizedAmount, userId, month, normalizedAmount).run()
+    if (existing) {
+      if (existing.idempotency_hash && existing.idempotency_hash !== idempotencyHash)
+        throw new Error('Credit idempotency conflict.')
 
-  if (Number((userUpdate as any)?.meta?.changes ?? 0) < 1) {
-    // Compensating rollback: the team balance was already debited above. D1 has
-    // no interactive transaction, so undo the team debit before failing so a
-    // concurrent caller can't leave the team over-charged.
-    await db.prepare(`
-      UPDATE ${CREDIT_BALANCES_TABLE}
-      SET used = used - ?
-      WHERE scope = 'team' AND scope_id = ? AND month = ?
-    `).bind(normalizedAmount, activeCreditTeam.teamId, month).run()
-    throw new Error('User credits exceeded.')
+      const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
+      return {
+        ledgerId: existing.id,
+        teamId: activeCreditTeam.teamId,
+        userId,
+        amount: Math.abs(resolveCreditAmount(existing.delta)),
+        reason,
+        createdAt: existing.created_at,
+        metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
+        idempotencyKey,
+      }
+    }
   }
 
-  const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await db.prepare(`
-    INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
-    VALUES (?, 'team', ?, ?, ?, ?, ?)
-  `).bind(id, activeCreditTeam.teamId, -normalizedAmount, reason, now, JSON.stringify(ledgerMetadata)).run()
+  const batchResults = await db.batch([
+    db.prepare(`
+      INSERT INTO ${CREDIT_LEDGER_TABLE} (
+        id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
+      )
+      SELECT ?, 'team', ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+        WHERE scope = 'team' AND scope_id = ? AND month = ? AND used + ? <= quota
+      )
+      AND EXISTS (
+        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+        WHERE scope = 'user' AND scope_id = ? AND month = ? AND used + ? <= quota
+      )
+    `).bind(
+      id,
+      activeCreditTeam.teamId,
+      -normalizedAmount,
+      reason,
+      now,
+      JSON.stringify(ledgerMetadata),
+      idempotencyKey,
+      idempotencyHash,
+      activeCreditTeam.teamId,
+      month,
+      normalizedAmount,
+      userId,
+      month,
+      normalizedAmount,
+    ),
+    db.prepare(`
+    UPDATE ${CREDIT_BALANCES_TABLE}
+    SET used = used + ?
+    WHERE scope = 'team'
+      AND scope_id = ?
+      AND month = ?
+      AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+  `).bind(normalizedAmount, activeCreditTeam.teamId, month, id),
+    db.prepare(`
+    UPDATE ${CREDIT_BALANCES_TABLE}
+    SET used = used + ?
+    WHERE scope = 'user'
+      AND scope_id = ?
+      AND month = ?
+      AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+  `).bind(normalizedAmount, userId, month, id),
+  ])
+
+  const insertedLedger = Number((batchResults[0] as any)?.meta?.changes ?? 0)
+  const updatedTeam = Number((batchResults[1] as any)?.meta?.changes ?? 0)
+  const updatedUser = Number((batchResults[2] as any)?.meta?.changes ?? 0)
+  if (insertedLedger < 1)
+    throw new Error('Credits exceeded.')
+  if (updatedTeam < 1 || updatedUser < 1)
+    throw new Error('Credit balance update failed.')
 
   return {
     ledgerId: id,
@@ -1064,6 +1181,7 @@ export async function consumeCredits(
     reason,
     createdAt: now,
     metadata: ledgerMetadata,
+    idempotencyKey: idempotencyKey ?? undefined,
   }
 }
 

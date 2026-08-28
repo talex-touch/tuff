@@ -215,7 +215,10 @@ export async function requireAdminOrApiKey(event: H3Event, requiredScopes: strin
   try {
     const admin = await requireAdmin(event)
     return { ...admin, authType: 'admin' as const }
-  } catch {
+  } catch (error) {
+    // requireApiKey applies no scope check and no admin check when the scope list
+    // is empty, so falling back here would accept any active user's API key.
+    if (requiredScopes.length === 0) throw error
     const apiKey = await requireApiKey(event, requiredScopes)
     return { ...apiKey, authType: 'apiKey' as const }
   }

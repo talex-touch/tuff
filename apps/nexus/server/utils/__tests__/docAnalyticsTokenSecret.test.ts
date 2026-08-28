@@ -35,18 +35,37 @@ describe('doc token signing secret', () => {
     expect(verifyDocToken(other, minted)).toBeNull()
   })
 
+  // Which secret is at fault is asserted through `variableName`, not through the
+  // thrown message. `statusMessage` reaches the client, and some credentials are
+  // checked before the caller is authenticated, so naming the env var there told
+  // anonymous callers which secret is unset. The operator-facing identification
+  // these two cases care about now lives on the error object.
+  function credentialFailure(run: () => unknown): { variableName?: string, reason?: string } {
+    try {
+      run()
+    }
+    catch (error) {
+      return error as { variableName?: string, reason?: string }
+    }
+    throw new Error('Expected the credential check to fail closed, but it returned.')
+  }
+
   it('fails closed on a deployed runtime with no secret, instead of using a constant', () => {
     // The defect: bindings present but no secret among them meant selectRuntimeCredential
     // returned undefined, every process.env fallback was skipped by design, and the old code
     // signed with a constant published in this repository (#920).
     const event = eventWithBindings({ SOMETHING_ELSE: 'x' })
 
-    expect(() => createDocToken(event, payload)).toThrow(/NUXT_DOC_TOKEN_SECRET/)
+    const failure = credentialFailure(() => createDocToken(event, payload))
+    expect(failure.variableName).toBe('NUXT_DOC_TOKEN_SECRET')
+    expect(failure.reason).toBe('missing')
   })
 
   it('rejects a secret that is too short rather than silently accepting it', () => {
     const event = eventWithBindings({ NUXT_DOC_TOKEN_SECRET: 'short' })
 
-    expect(() => createDocToken(event, payload)).toThrow(/NUXT_DOC_TOKEN_SECRET/)
+    const failure = credentialFailure(() => createDocToken(event, payload))
+    expect(failure.variableName).toBe('NUXT_DOC_TOKEN_SECRET')
+    expect(failure.reason).toBe('too-short')
   })
 })

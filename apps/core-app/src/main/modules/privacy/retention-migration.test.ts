@@ -18,12 +18,42 @@ import {
 
 const MIGRATIONS_URL = new URL('../../../../resources/db/migrations/', import.meta.url)
 const RETENTION_INDEXES_MIGRATION = '0034_privacy_retention_indexes.sql'
+const ORCHESTRATOR_RETENTION_INDEX_MIGRATION = '0041_ai_orchestrator_run_retention.sql'
+const ORCHESTRATOR_RETENTION_INDEX = 'idx_ai_orchestrator_runs_retention'
+const STALE_ORCHESTRATOR_RETENTION_INDEX_SQL = `CREATE INDEX \`${ORCHESTRATOR_RETENTION_INDEX}\`
+ON \`ai_orchestrator_runs\` (\`created_at\`, \`id\`)
+WHERE \`status\` = 'running'`
+const ORCHESTRATOR_RETENTION_QUERY = `SELECT r.id
+FROM ai_orchestrator_runs AS r INDEXED BY idx_ai_orchestrator_runs_retention
+WHERE r.status IN ('completed', 'failed', 'cancelled', 'interrupted')
+  AND r.updated_at < 10
+  AND NOT EXISTS (
+    SELECT 1
+    FROM ai_orchestrator_events fresh_event
+    WHERE fresh_event.run_id = r.id
+      AND fresh_event.created_at >= 10
+  )
+  AND (r.updated_at > -1 OR (r.updated_at = -1 AND r.id > ''))
+ORDER BY r.updated_at, r.id
+LIMIT 10`
 const MIGRATIONS_FOLDER = fileURLToPath(MIGRATIONS_URL)
 
 interface MigrationJournal {
   version: string
   dialect: string
-  entries: Array<{ tag: string } & Record<string, unknown>>
+  entries: Array<{ tag: string; when: number } & Record<string, unknown>>
+}
+
+async function readMigrationJournal(): Promise<MigrationJournal> {
+  return JSON.parse(
+    await readFile(new URL('meta/_journal.json', MIGRATIONS_URL), 'utf8')
+  ) as MigrationJournal
+}
+
+function normalizeSql(sql: unknown): string {
+  return String(sql ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 async function stageMigrationChain(
@@ -31,9 +61,7 @@ async function stageMigrationChain(
   entryCount: number,
   lastMigrationOverride?: string
 ): Promise<void> {
-  const journal = JSON.parse(
-    await readFile(new URL('meta/_journal.json', MIGRATIONS_URL), 'utf8')
-  ) as MigrationJournal
+  const journal = await readMigrationJournal()
   const entries = journal.entries.slice(0, entryCount)
   await mkdir(join(target, 'meta'), { recursive: true })
   await writeFile(
@@ -248,6 +276,253 @@ describe('privacy retention indexes migration', () => {
       `PRAGMA table_info('intelligence_context_sessions')`
     )
     expect(contextColumns.rows.some((row) => row.name === 'is_pinned')).toBe(true)
+  })
+
+  it('replaces a conflicting 0040 retention index and preserves event cascade behavior', async () => {
+    const { client, directory } = await createPrivacyTestClient('orchestrator-retention-migration')
+    const stagedFolder = join(directory, 'migrations')
+    const migrations = await getPrivacyMigrationNames()
+    const target = migrations.indexOf(ORCHESTRATOR_RETENTION_INDEX_MIGRATION)
+    expect(
+      target,
+      `${ORCHESTRATOR_RETENTION_INDEX_MIGRATION} is missing from the chain`
+    ).toBeGreaterThan(0)
+    expect(migrations[target - 1]).toBe('0040_conversation_sync_state_migration.sql')
+
+    await stageMigrationChain(stagedFolder, target)
+    await migrate(drizzle(client), { migrationsFolder: stagedFolder })
+    const journalBeforeUpgrade = await client.execute(
+      'SELECT COUNT(*) AS count FROM __drizzle_migrations'
+    )
+    expect(Number(journalBeforeUpgrade.rows[0]?.count)).toBe(target)
+
+    await client.execute(
+      `INSERT INTO ai_orchestrator_runs
+        (id, session_id, objective, profile_id, runtime_provider, cwd, status, output,
+         error, usage, metadata, parent_run_id, delegation_plan, approval_reason,
+         created_at, started_at, completed_at, updated_at)
+       VALUES
+        ('CANARY_ORCHESTRATOR_RUN', 'session-canary', 'verify retention migration',
+         'profile-canary', 'codex', '/tmp', 'completed', 'CANARY_OUTPUT', 'CANARY_ERROR',
+         '{"tokens":7}', '{"marker":"CANARY_METADATA"}', 'CANARY_PARENT_RUN',
+         '{"steps":["CANARY_DELEGATION"]}', 'CANARY_APPROVAL', 1, 2, 3, 4)`
+    )
+    await client.execute(
+      `INSERT INTO ai_orchestrator_events
+        (id, run_id, seq, type, level, payload, created_at)
+       VALUES
+        ('CANARY_ORCHESTRATOR_EVENT', 'CANARY_ORCHESTRATOR_RUN', 1, 'trace', 'info',
+         '{"marker":"CANARY_EVENT"}', 5)`
+    )
+    await client.execute(STALE_ORCHESTRATOR_RETENTION_INDEX_SQL)
+
+    await expect(
+      client.execute(`EXPLAIN QUERY PLAN ${ORCHESTRATOR_RETENTION_QUERY}`)
+    ).rejects.toThrow(/no query solution/i)
+
+    await stageMigrationChain(stagedFolder, target + 1)
+    await migrate(drizzle(client), { migrationsFolder: stagedFolder })
+
+    const journalRows = await client.execute('SELECT COUNT(*) AS count FROM __drizzle_migrations')
+    expect(Number(journalRows.rows[0]?.count)).toBe(target + 1)
+
+    const run = await client.execute(
+      `SELECT session_id, objective, profile_id, runtime_provider, cwd, status, output,
+              error, usage, metadata, parent_run_id, delegation_plan, approval_reason,
+              created_at, started_at, completed_at, updated_at
+       FROM ai_orchestrator_runs WHERE id = 'CANARY_ORCHESTRATOR_RUN'`
+    )
+    expect(run.rows[0]).toMatchObject({
+      session_id: 'session-canary',
+      objective: 'verify retention migration',
+      profile_id: 'profile-canary',
+      runtime_provider: 'codex',
+      cwd: '/tmp',
+      status: 'completed',
+      output: 'CANARY_OUTPUT',
+      error: 'CANARY_ERROR',
+      usage: '{"tokens":7}',
+      metadata: '{"marker":"CANARY_METADATA"}',
+      parent_run_id: 'CANARY_PARENT_RUN',
+      delegation_plan: '{"steps":["CANARY_DELEGATION"]}',
+      approval_reason: 'CANARY_APPROVAL',
+      created_at: 1,
+      started_at: 2,
+      completed_at: 3,
+      updated_at: 4
+    })
+    const event = await client.execute(
+      `SELECT run_id, seq, type, level, payload, created_at
+       FROM ai_orchestrator_events WHERE id = 'CANARY_ORCHESTRATOR_EVENT'`
+    )
+    expect(event.rows[0]).toMatchObject({
+      run_id: 'CANARY_ORCHESTRATOR_RUN',
+      seq: 1,
+      type: 'trace',
+      level: 'info',
+      payload: '{"marker":"CANARY_EVENT"}',
+      created_at: 5
+    })
+
+    const runColumns = await client.execute(`PRAGMA table_info('ai_orchestrator_runs')`)
+    expect(runColumns.rows.map((row) => String(row.name))).toEqual(
+      expect.arrayContaining(['parent_run_id', 'delegation_plan', 'approval_reason'])
+    )
+    const eventForeignKeys = await client.execute(
+      `PRAGMA foreign_key_list('ai_orchestrator_events')`
+    )
+    expect(eventForeignKeys.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'ai_orchestrator_runs',
+          from: 'run_id',
+          to: 'id',
+          on_delete: 'CASCADE'
+        })
+      ])
+    )
+
+    const index = await client.execute(
+      `SELECT name, sql FROM sqlite_master
+       WHERE type = 'index' AND name = '${ORCHESTRATOR_RETENTION_INDEX}'`
+    )
+    expect(index.rows).toHaveLength(1)
+    expect(index.rows[0]?.name).toBe(ORCHESTRATOR_RETENTION_INDEX)
+    expect(normalizeSql(index.rows[0]?.sql)).toBe(
+      `CREATE INDEX \`${ORCHESTRATOR_RETENTION_INDEX}\` ON \`ai_orchestrator_runs\` ` +
+        "(\`updated_at\`, \`id\`) WHERE \`status\` IN ('completed', 'failed', 'cancelled', 'interrupted')"
+    )
+
+    const indexColumns = await client.execute(
+      `PRAGMA index_xinfo('${ORCHESTRATOR_RETENTION_INDEX}')`
+    )
+    expect(
+      indexColumns.rows
+        .filter((row) => Number(row.key) === 1)
+        .map((row) => ({ name: String(row.name), descending: Number(row.desc) }))
+    ).toEqual([
+      { name: 'updated_at', descending: 0 },
+      { name: 'id', descending: 0 }
+    ])
+
+    const plan = await client.execute(`EXPLAIN QUERY PLAN ${ORCHESTRATOR_RETENTION_QUERY}`)
+    const detail = plan.rows.map((row) => String(row.detail)).join(' ')
+    expect(detail).toContain(ORCHESTRATOR_RETENTION_INDEX)
+    expect(detail).not.toContain('USE TEMP B-TREE')
+    const retentionRows = await client.execute(ORCHESTRATOR_RETENTION_QUERY)
+    expect(retentionRows.rows.map((row) => String(row.id))).toEqual(['CANARY_ORCHESTRATOR_RUN'])
+
+    const deletedRun = await client.execute(
+      `DELETE FROM ai_orchestrator_runs WHERE id = 'CANARY_ORCHESTRATOR_RUN'`
+    )
+    expect(Number(deletedRun.rowsAffected)).toBe(1)
+    const remainingCanaries = await client.execute(
+      `SELECT
+         (SELECT COUNT(*) FROM ai_orchestrator_runs
+          WHERE id = 'CANARY_ORCHESTRATOR_RUN') AS run_count,
+         (SELECT COUNT(*) FROM ai_orchestrator_events
+          WHERE id = 'CANARY_ORCHESTRATOR_EVENT') AS event_count`
+    )
+    expect(remainingCanaries.rows[0]).toMatchObject({ run_count: 0, event_count: 0 })
+  })
+
+  it('rolls back 0041 schema, data, index, and journal changes atomically', async () => {
+    const { client, directory } = await createPrivacyTestClient(
+      'orchestrator-retention-migration-rollback'
+    )
+    const stagedFolder = join(directory, 'migrations')
+    const migrations = await getPrivacyMigrationNames()
+    const target = migrations.indexOf(ORCHESTRATOR_RETENTION_INDEX_MIGRATION)
+    expect(
+      target,
+      `${ORCHESTRATOR_RETENTION_INDEX_MIGRATION} is missing from the chain`
+    ).toBeGreaterThan(0)
+
+    const journal = await readMigrationJournal()
+    const previousEntry = journal.entries[target - 1]
+    expect(previousEntry?.tag).toBe('0040_conversation_sync_state_migration')
+
+    await stageMigrationChain(stagedFolder, target)
+    await migrate(drizzle(client), { migrationsFolder: stagedFolder })
+    await client.execute(
+      `INSERT INTO ai_orchestrator_runs
+        (id, session_id, objective, profile_id, runtime_provider, cwd, status, output,
+         created_at, updated_at)
+       VALUES
+        ('ROLLBACK_ORCHESTRATOR_RUN', 'rollback-session', 'CANARY_OBJECTIVE_BEFORE',
+         'rollback-profile', 'codex', '/tmp', 'completed', 'CANARY_OUTPUT_BEFORE', 1, 2)`
+    )
+    await client.execute(
+      `INSERT INTO ai_orchestrator_events
+        (id, run_id, seq, type, level, payload, created_at)
+       VALUES
+        ('ROLLBACK_ORCHESTRATOR_EVENT', 'ROLLBACK_ORCHESTRATOR_RUN', 1, 'trace', 'info',
+         '{"marker":"CANARY_EVENT_BEFORE"}', 3)`
+    )
+    await client.execute(STALE_ORCHESTRATOR_RETENTION_INDEX_SQL)
+
+    const migrationSql = await readFile(
+      new URL(ORCHESTRATOR_RETENTION_INDEX_MIGRATION, MIGRATIONS_URL),
+      'utf8'
+    )
+    await stageMigrationChain(
+      stagedFolder,
+      target + 1,
+      `${migrationSql}
+--> statement-breakpoint
+ALTER TABLE ai_orchestrator_runs ADD COLUMN rollback_probe text;
+--> statement-breakpoint
+UPDATE ai_orchestrator_runs
+SET objective = 'CANARY_OBJECTIVE_MUTATED', output = 'CANARY_OUTPUT_MUTATED'
+WHERE id = 'ROLLBACK_ORCHESTRATOR_RUN';
+--> statement-breakpoint
+CREATE INDEX impossible_orchestrator_retention_index ON missing_orchestrator_table (id);`
+    )
+
+    await expect(migrate(drizzle(client), { migrationsFolder: stagedFolder })).rejects.toThrow(
+      /missing_orchestrator_table/
+    )
+
+    const index = await client.execute(
+      `SELECT name, sql FROM sqlite_master
+       WHERE type = 'index' AND name = '${ORCHESTRATOR_RETENTION_INDEX}'`
+    )
+    expect(index.rows).toHaveLength(1)
+    expect(index.rows[0]?.name).toBe(ORCHESTRATOR_RETENTION_INDEX)
+    expect(normalizeSql(index.rows[0]?.sql)).toBe(
+      normalizeSql(STALE_ORCHESTRATOR_RETENTION_INDEX_SQL)
+    )
+    const indexColumns = await client.execute(
+      `PRAGMA index_xinfo('${ORCHESTRATOR_RETENTION_INDEX}')`
+    )
+    expect(
+      indexColumns.rows.filter((row) => Number(row.key) === 1).map((row) => String(row.name))
+    ).toEqual(['created_at', 'id'])
+    await expect(
+      client.execute(`EXPLAIN QUERY PLAN ${ORCHESTRATOR_RETENTION_QUERY}`)
+    ).rejects.toThrow(/no query solution/i)
+    const runColumns = await client.execute(`PRAGMA table_info('ai_orchestrator_runs')`)
+    expect(runColumns.rows.some((row) => row.name === 'rollback_probe')).toBe(false)
+
+    const run = await client.execute(
+      `SELECT objective, output FROM ai_orchestrator_runs
+       WHERE id = 'ROLLBACK_ORCHESTRATOR_RUN'`
+    )
+    expect(run.rows[0]).toMatchObject({
+      objective: 'CANARY_OBJECTIVE_BEFORE',
+      output: 'CANARY_OUTPUT_BEFORE'
+    })
+    const event = await client.execute(
+      `SELECT payload FROM ai_orchestrator_events
+       WHERE id = 'ROLLBACK_ORCHESTRATOR_EVENT'`
+    )
+    expect(event.rows[0]).toMatchObject({ payload: '{"marker":"CANARY_EVENT_BEFORE"}' })
+
+    const journalRows = await client.execute(
+      'SELECT created_at FROM __drizzle_migrations ORDER BY created_at'
+    )
+    expect(journalRows.rows).toHaveLength(target)
+    expect(Number(journalRows.rows.at(-1)?.created_at)).toBe(previousEntry?.when)
   })
 
   it('upgrades a journaled 0033 database while preserving existing rows', async () => {

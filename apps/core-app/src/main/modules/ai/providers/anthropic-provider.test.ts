@@ -17,7 +17,9 @@ vi.mock('@langchain/anthropic', () => ({
 
 import { AnthropicProvider } from './anthropic-provider'
 
-function createProvider() {
+function createProvider(
+  overrides: Partial<ConstructorParameters<typeof AnthropicProvider>[0]> = {}
+) {
   return new AnthropicProvider({
     id: 'anthropic-vision',
     type: IntelligenceProviderType.ANTHROPIC,
@@ -28,6 +30,8 @@ function createProvider() {
     defaultModel: 'claude-3-5-sonnet-20241022',
     models: ['claude-3-5-sonnet-20241022'],
     capabilities: ['image.caption', 'image.analyze'],
+    timeout: 22_000,
+    ...overrides,
     priority: 1
   })
 }
@@ -49,6 +53,39 @@ function expectAnthropicBase64ImageInvocation(call: number) {
     ])
   )
 }
+
+describe('AnthropicProvider timeout resolution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it.each([
+    { name: 'provider timeout', overrides: {}, options: {}, expectedTimeout: 22_000 },
+    {
+      name: 'call-level override',
+      overrides: {},
+      options: { timeout: 4_321 },
+      expectedTimeout: 4_321
+    },
+    {
+      name: 'bounded default',
+      overrides: { timeout: undefined },
+      options: {},
+      expectedTimeout: 30_000
+    }
+  ])('uses the $name', async ({ overrides, options, expectedTimeout }) => {
+    modelMocks.invoke.mockResolvedValueOnce({ content: 'response' })
+
+    await createProvider(overrides).chat(
+      { messages: [{ role: 'user', content: 'timeout probe' }] },
+      options
+    )
+
+    expect(modelMocks.construct).toHaveBeenCalledWith(
+      expect.objectContaining({ timeout: expectedTimeout })
+    )
+  })
+})
 
 describe('AnthropicProvider vision image capabilities', () => {
   beforeEach(() => {

@@ -14,9 +14,10 @@ import type {
   AiOrchestratorRunStatus,
   AiSessionHistoryMessage
 } from '@talex-touch/utils/types/ai-orchestrator'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { and, asc, desc, eq, gte, inArray, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, notExists, or, sql } from 'drizzle-orm'
+import type { MainDatabase } from '../../db/db-write'
 import { scheduleDbWrite } from '../../db/db-write'
 import {
   aiAgentProfiles,
@@ -64,6 +65,86 @@ export interface ManualImportedItemInput {
   fingerprint: string
 }
 
+export interface AiOrchestratorRunPrivacySnapshot {
+  runId: string
+  status: AiOrchestratorRunStatus
+  revision: string
+  eventCount: number
+}
+
+export type AiOrchestratorRunPrivacyDeleteDisposition =
+  | 'deleted'
+  | 'not-found'
+  | 'stale'
+  | 'protected'
+
+export interface AiOrchestratorRunPrivacyDeleteResult {
+  disposition: AiOrchestratorRunPrivacyDeleteDisposition
+  deletedEventCount: number
+}
+
+export interface AiOrchestratorRunRetentionCursor {
+  updatedAt: number
+  runId: string
+}
+
+export interface AiOrchestratorRunRetentionCandidate {
+  runId: string
+  updatedAt: number
+  eventCount: number
+  byteCount: number
+}
+
+export interface AiOrchestratorRunRetentionPage {
+  candidates: AiOrchestratorRunRetentionCandidate[]
+  cursor?: AiOrchestratorRunRetentionCursor
+  hasMore: boolean
+}
+
+export interface AiOrchestratorRunRetentionDeleteResult {
+  deletedRunIds: string[]
+  deletedEventCountByRunId: Record<string, number>
+  deletedEventCount: number
+}
+
+export interface AiOrchestratorRunRetentionSummary {
+  eligibleRunCount: number
+  eligibleByteCount: number
+  protectedRunCount: number
+  bounded: boolean
+}
+
+export interface AiOrchestratorStorePrivacyDependencies {
+  readonly getDb: () => MainDatabase
+  readonly scheduleWrite: typeof scheduleDbWrite
+}
+
+const DEFAULT_PRIVACY_DEPENDENCIES: AiOrchestratorStorePrivacyDependencies = Object.freeze({
+  getDb: () => databaseModule.getDb(),
+  scheduleWrite: scheduleDbWrite
+})
+
+const TERMINAL_ORCHESTRATOR_RUN_STATUSES: AiOrchestratorRunStatus[] = [
+  'completed',
+  'failed',
+  'cancelled',
+  'interrupted'
+]
+const MAX_RETENTION_PAGE_SIZE = 200
+
+type OrchestratorRunPrivacyState = typeof aiOrchestratorRuns.$inferSelect & {
+  eventCount: number
+  maxEventSeq: number
+  maxEventCreatedAt: number
+}
+
+interface OrchestratorRunRetentionCandidateRow {
+  runId: string
+  updatedAt: number
+  eventCount: number
+  byteCount: number
+}
+
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback
   try {
@@ -107,6 +188,138 @@ async function removeSecureStoreRefs(authRefs: Iterable<string>): Promise<() => 
 function normalizeLimit(limit?: number): number {
   if (!Number.isFinite(limit)) return 50
   return Math.max(1, Math.min(200, Math.floor(limit as number)))
+}
+
+function normalizeRetentionLimit(limit: number): number {
+  if (!Number.isFinite(limit)) return 50
+  return Math.max(1, Math.min(MAX_RETENTION_PAGE_SIZE, Math.floor(limit)))
+}
+
+function isTerminalOrchestratorRunStatus(status: string): status is AiOrchestratorRunStatus {
+  return TERMINAL_ORCHESTRATOR_RUN_STATUSES.includes(status as AiOrchestratorRunStatus)
+}
+
+async function readOrchestratorRunPrivacyState(
+  db: Pick<MainDatabase, 'all'>,
+  runId: string
+): Promise<OrchestratorRunPrivacyState | null> {
+  const rows = await db.all<OrchestratorRunPrivacyState>(sql`
+    SELECT
+      r.id AS "id",
+      r.automation_id AS "automationId",
+      r.session_id AS "sessionId",
+      r.objective AS "objective",
+      r.profile_id AS "profileId",
+      r.runtime_provider AS "runtimeProvider",
+      r.cwd AS "cwd",
+      r.status AS "status",
+      r.output AS "output",
+      r.error AS "error",
+      r.usage AS "usage",
+      r.metadata AS "metadata",
+      r.parent_run_id AS "parentRunId",
+      r.delegation_plan AS "delegationPlan",
+      r.approval_reason AS "approvalReason",
+      r.created_at AS "createdAt",
+      r.started_at AS "startedAt",
+      r.completed_at AS "completedAt",
+      r.updated_at AS "updatedAt",
+      (SELECT COUNT(*) FROM ai_orchestrator_events e WHERE e.run_id = r.id) AS "eventCount",
+      COALESCE((SELECT MAX(e.seq) FROM ai_orchestrator_events e WHERE e.run_id = r.id), 0) AS "maxEventSeq",
+      COALESCE((SELECT MAX(e.created_at) FROM ai_orchestrator_events e WHERE e.run_id = r.id), 0) AS "maxEventCreatedAt"
+    FROM ai_orchestrator_runs r
+    WHERE r.id = ${runId}
+    LIMIT 1
+  `)
+  const row = rows[0]
+  if (!row) return null
+  return {
+    ...row,
+    eventCount: Math.max(0, Number(row.eventCount)),
+    maxEventSeq: Math.max(0, Number(row.maxEventSeq)),
+    maxEventCreatedAt: Math.max(0, Number(row.maxEventCreatedAt))
+  }
+}
+
+function createOrchestratorRunPrivacyRevision(state: OrchestratorRunPrivacyState): string {
+  const rootFields = [
+    state.id,
+    state.automationId,
+    state.sessionId,
+    state.objective,
+    state.profileId,
+    state.runtimeProvider,
+    state.cwd,
+    state.status,
+    state.output,
+    state.error,
+    state.usage,
+    state.metadata,
+    state.parentRunId,
+    state.delegationPlan,
+    state.approvalReason,
+    state.createdAt,
+    state.startedAt,
+    state.completedAt,
+    state.updatedAt,
+    state.eventCount,
+    state.maxEventSeq,
+    state.maxEventCreatedAt
+  ]
+  return createHash('sha256').update(JSON.stringify(rootFields)).digest('hex')
+}
+
+async function queryOrchestratorRunRetentionCandidates(
+  db: Pick<MainDatabase, 'all'>,
+  cutoffMs: number,
+  cursor: AiOrchestratorRunRetentionCursor | undefined,
+  limit: number
+): Promise<{ candidates: AiOrchestratorRunRetentionCandidate[]; hasMore: boolean }> {
+  const normalizedLimit = normalizeRetentionLimit(limit)
+  const cursorClause = cursor
+    ? sql`AND (r.updated_at > ${cursor.updatedAt} OR (r.updated_at = ${cursor.updatedAt} AND r.id > ${cursor.runId}))`
+    : sql``
+  const rows = await db.all<OrchestratorRunRetentionCandidateRow>(sql`
+    SELECT
+      r.id AS "runId",
+      r.updated_at AS "updatedAt",
+      (SELECT COUNT(*) FROM ai_orchestrator_events e WHERE e.run_id = r.id) AS "eventCount",
+      length(CAST(COALESCE(r.objective, '') AS BLOB)) +
+        length(CAST(COALESCE(r.cwd, '') AS BLOB)) +
+        length(CAST(COALESCE(r.output, '') AS BLOB)) +
+        length(CAST(COALESCE(r.error, '') AS BLOB)) +
+        length(CAST(COALESCE(r.usage, '') AS BLOB)) +
+        length(CAST(COALESCE(r.metadata, '') AS BLOB)) +
+        length(CAST(COALESCE(r.delegation_plan, '') AS BLOB)) +
+        length(CAST(COALESCE(r.approval_reason, '') AS BLOB)) +
+        COALESCE((
+          SELECT SUM(length(CAST(COALESCE(e.payload, '') AS BLOB)))
+          FROM ai_orchestrator_events e
+          WHERE e.run_id = r.id
+        ), 0) AS "byteCount"
+    FROM ai_orchestrator_runs AS r INDEXED BY idx_ai_orchestrator_runs_retention
+    WHERE r.status IN ('completed', 'failed', 'cancelled', 'interrupted')
+      AND r.updated_at < ${cutoffMs}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM ai_orchestrator_events fresh_event
+        WHERE fresh_event.run_id = r.id
+          AND fresh_event.created_at >= ${cutoffMs}
+      )
+      ${cursorClause}
+    ORDER BY r.updated_at, r.id
+    LIMIT ${normalizedLimit + 1}
+  `)
+  const hasMore = rows.length > normalizedLimit
+  return {
+    candidates: rows.slice(0, normalizedLimit).map((row) => ({
+      runId: String(row.runId),
+      updatedAt: Number(row.updatedAt),
+      eventCount: Math.max(0, Number(row.eventCount)),
+      byteCount: Math.max(0, Number(row.byteCount))
+    })),
+    hasMore
+  }
 }
 
 function mapProfile(row: typeof aiAgentProfiles.$inferSelect): AiAgentProfile {
@@ -227,6 +440,10 @@ function mapAutomationRun(row: typeof aiAutomationRuns.$inferSelect): AiAutomati
 
 export class AiOrchestratorStore {
   private readonly eventSeq = new Map<string, number>()
+
+  constructor(
+    private readonly privacyDependencies: AiOrchestratorStorePrivacyDependencies = DEFAULT_PRIVACY_DEPENDENCIES
+  ) {}
 
   async initialize(): Promise<void> {
     const db = databaseModule.getDb()
@@ -1168,6 +1385,201 @@ export class AiOrchestratorStore {
       .where(eq(aiOrchestratorRuns.id, runId))
       .limit(1)
     return rows[0] ? mapOrchestratorRun(rows[0]) : null
+  }
+
+  async getOrchestratorRunPrivacySnapshot(
+    runId: string
+  ): Promise<AiOrchestratorRunPrivacySnapshot | null> {
+    const state = await readOrchestratorRunPrivacyState(this.privacyDependencies.getDb(), runId)
+    if (!state) return null
+    return {
+      runId: state.id,
+      status: state.status as AiOrchestratorRunStatus,
+      revision: createOrchestratorRunPrivacyRevision(state),
+      eventCount: state.eventCount
+    }
+  }
+
+  async deleteOrchestratorRunForPrivacy(
+    runId: string,
+    expectedRevision: string
+  ): Promise<AiOrchestratorRunPrivacyDeleteResult> {
+    const result = await this.privacyDependencies.scheduleWrite(
+      'ai-orchestrator.run.privacy-delete',
+      async () => {
+        return await this.privacyDependencies.getDb().transaction(async (tx) => {
+          const state = await readOrchestratorRunPrivacyState(tx, runId)
+          if (!state) return { disposition: 'not-found' as const, deletedEventCount: 0 }
+          if (!isTerminalOrchestratorRunStatus(state.status)) {
+            return { disposition: 'protected' as const, deletedEventCount: 0 }
+          }
+          if (createOrchestratorRunPrivacyRevision(state) !== expectedRevision) {
+            return { disposition: 'stale' as const, deletedEventCount: 0 }
+          }
+
+          await tx
+            .update(aiOrchestratorRuns)
+            .set({ parentRunId: null })
+            .where(eq(aiOrchestratorRuns.parentRunId, runId))
+          await tx
+            .update(aiAutomationRuns)
+            .set({ orchestratorRunId: null })
+            .where(eq(aiAutomationRuns.orchestratorRunId, runId))
+          const deletedRows = await tx
+            .delete(aiOrchestratorRuns)
+            .where(eq(aiOrchestratorRuns.id, runId))
+            .returning({ runId: aiOrchestratorRuns.id })
+          if (deletedRows.length === 0) {
+            return { disposition: 'not-found' as const, deletedEventCount: 0 }
+          }
+          return { disposition: 'deleted' as const, deletedEventCount: state.eventCount }
+        })
+      },
+      { priority: 'interactive' }
+    )
+    if (result.disposition === 'deleted') this.eventSeq.delete(runId)
+    return result
+  }
+
+  async listOrchestratorRunRetentionCandidates(
+    cutoffMs: number,
+    cursor: AiOrchestratorRunRetentionCursor | undefined,
+    limit: number
+  ): Promise<AiOrchestratorRunRetentionPage> {
+    const { candidates, hasMore } = await queryOrchestratorRunRetentionCandidates(
+      this.privacyDependencies.getDb(),
+      cutoffMs,
+      cursor,
+      limit
+    )
+    const last = candidates.at(-1)
+    return {
+      candidates,
+      ...(last ? { cursor: { updatedAt: last.updatedAt, runId: last.runId } } : {}),
+      hasMore
+    }
+  }
+
+  async getOrchestratorRunRetentionSummary(
+    cutoffMs: number,
+    limit: number
+  ): Promise<AiOrchestratorRunRetentionSummary> {
+    const db = this.privacyDependencies.getDb()
+    const [{ candidates, hasMore }, protectedRows] = await Promise.all([
+      queryOrchestratorRunRetentionCandidates(db, cutoffMs, undefined, limit),
+      db.all<{ protectedRunCount: number }>(sql`
+        SELECT COUNT(*) AS "protectedRunCount"
+        FROM ai_orchestrator_runs r
+        WHERE r.updated_at < ${cutoffMs}
+          AND (
+            r.status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')
+            OR EXISTS (
+              SELECT 1
+              FROM ai_orchestrator_events fresh_event
+              WHERE fresh_event.run_id = r.id
+                AND fresh_event.created_at >= ${cutoffMs}
+            )
+          )
+      `)
+    ])
+    return {
+      eligibleRunCount: candidates.length,
+      eligibleByteCount: candidates.reduce((total, candidate) => total + candidate.byteCount, 0),
+      protectedRunCount: Math.max(0, Number(protectedRows[0]?.protectedRunCount ?? 0)),
+      bounded: hasMore
+    }
+  }
+
+  async deleteOrchestratorRunsForRetention(
+    runIds: readonly string[],
+    cutoffMs: number
+  ): Promise<AiOrchestratorRunRetentionDeleteResult> {
+    const uniqueRunIds = [...new Set(runIds.filter(Boolean))].slice(0, MAX_RETENTION_PAGE_SIZE)
+    if (uniqueRunIds.length === 0) {
+      return {
+        deletedRunIds: [],
+        deletedEventCountByRunId: {},
+        deletedEventCount: 0
+      }
+    }
+
+    const result = await this.privacyDependencies.scheduleWrite(
+      'ai-orchestrator.run.retention-delete',
+      async () => {
+        return await this.privacyDependencies.getDb().transaction(async (tx) => {
+          const freshEvent = tx
+            .select({ present: sql<number>`1` })
+            .from(aiOrchestratorEvents)
+            .where(
+              and(
+                eq(aiOrchestratorEvents.runId, aiOrchestratorRuns.id),
+                gte(aiOrchestratorEvents.createdAt, cutoffMs)
+              )
+            )
+          const eligibleRows = await tx
+            .select({ runId: aiOrchestratorRuns.id })
+            .from(aiOrchestratorRuns)
+            .where(
+              and(
+                inArray(aiOrchestratorRuns.id, uniqueRunIds),
+                inArray(aiOrchestratorRuns.status, TERMINAL_ORCHESTRATOR_RUN_STATUSES),
+                lt(aiOrchestratorRuns.updatedAt, cutoffMs),
+                notExists(freshEvent)
+              )
+            )
+          const eligibleSet = new Set(eligibleRows.map((row) => row.runId))
+          const eligibleRunIds = uniqueRunIds.filter((runId) => eligibleSet.has(runId))
+          if (eligibleRunIds.length === 0) {
+            return {
+              deletedRunIds: [],
+              deletedEventCountByRunId: {},
+              deletedEventCount: 0
+            }
+          }
+
+          const eventCountRows = await tx
+            .select({
+              runId: aiOrchestratorEvents.runId,
+              eventCount: sql<number>`COUNT(*)`
+            })
+            .from(aiOrchestratorEvents)
+            .where(inArray(aiOrchestratorEvents.runId, eligibleRunIds))
+            .groupBy(aiOrchestratorEvents.runId)
+          const eventCountByRunId = new Map(
+            eventCountRows.map((row) => [row.runId, Math.max(0, Number(row.eventCount))])
+          )
+
+          await tx
+            .update(aiOrchestratorRuns)
+            .set({ parentRunId: null })
+            .where(inArray(aiOrchestratorRuns.parentRunId, eligibleRunIds))
+          await tx
+            .update(aiAutomationRuns)
+            .set({ orchestratorRunId: null })
+            .where(inArray(aiAutomationRuns.orchestratorRunId, eligibleRunIds))
+          const deletedRows = await tx
+            .delete(aiOrchestratorRuns)
+            .where(inArray(aiOrchestratorRuns.id, eligibleRunIds))
+            .returning({ runId: aiOrchestratorRuns.id })
+          const deletedSet = new Set(deletedRows.map((row) => row.runId))
+          const deletedRunIds = eligibleRunIds.filter((runId) => deletedSet.has(runId))
+          const deletedEventCountByRunId = Object.fromEntries(
+            deletedRunIds.map((runId) => [runId, eventCountByRunId.get(runId) ?? 0])
+          )
+          return {
+            deletedRunIds,
+            deletedEventCountByRunId,
+            deletedEventCount: Object.values(deletedEventCountByRunId).reduce(
+              (total, count) => total + count,
+              0
+            )
+          }
+        })
+      },
+      { priority: 'background' }
+    )
+    for (const runId of result.deletedRunIds) this.eventSeq.delete(runId)
+    return result
   }
 
   async saveAutomation(definition: AiAutomationDefinition): Promise<AiAutomationDefinition> {

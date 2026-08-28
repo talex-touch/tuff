@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"全链路质量门禁与完成定义"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"插件权限、沙盒与身份安全合同"}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"数据、遥测、AI 与隐私生命周期合同"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"跨包、发布和运行时投影一致性"}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"防止假绿和代理式验收"}

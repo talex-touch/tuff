@@ -166,19 +166,29 @@
     {
       "id": "intelligence-audit-context-memory",
       "classification": "behavioral-and-user-content",
-      "owner": "IntelligencePrivacyDataOwner",
-      "storageLocations": ["primary database: intelligence audit/context/memory tables"],
-      "writers": ["Intelligence runtime metadata projections"],
-      "readers": ["Intelligence runtime and audit UI"],
-      "exportPolicy": "ordinary bounded metadata export; prompts/responses/endpoints/native errors forbidden",
-      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has independent explicit lifecycle",
-      "retentionPolicy": "user policy for audit/context; active/pinned context and memory/tombstones protected",
-      "rendererExposure": "typed product/audit DTOs with sensitive-field redaction",
+      "owner": "IntelligencePrivacyDataOwner/AiCliOrchestrator/AiOrchestratorStore",
+      "storageLocations": [
+        "primary database: intelligence audit/context/memory tables",
+        "primary database: ai_orchestrator_runs/events objective, cwd, output, usage, and allowlisted redacted metadata",
+        "process memory: volatile raw orchestrator request input and reconstructed authority"
+      ],
+      "writers": ["Intelligence runtime, Pi orchestrator, and stable tool-result metadata projections"],
+      "readers": ["Intelligence runtime, Pi orchestrator, typed run handlers, and audit UI"],
+      "exportPolicy": "ordinary audit export is bounded metadata only; owner-visible typed run DTO may expose objective, cwd, and output; raw request input, tool arguments, credentials, endpoints, native errors, and stacks forbidden",
+      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has an independent explicit lifecycle; host-only typed Privacy deletion removes one terminal orchestrator run after an opaque one-shot authority/revision preview, detaches child and automation references, and cascades its events; queued, pending-approval, running, runtime-active, and in-flight-write runs are protected",
+      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected",
+      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; raw request input, stored objective/cwd/output/error/usage/metadata, event payloads, and raw tool records are excluded",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [
         "apps/core-app/src/main/modules/privacy/owners/intelligence-retention-owner.ts#symbol=createIntelligenceRetentionOwner",
-        "apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts#symbol=sanitizeIntelligenceAuditEntry"
+        "apps/core-app/src/main/modules/privacy/owners/orchestrator-run-privacy-lifecycle.ts#symbol=createOrchestratorRunPrivacyLifecycle",
+        "apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts#symbol=sanitizeIntelligenceAuditEntry",
+        "apps/core-app/src/main/modules/ai/ai-orchestrator-store.ts#symbol=AiOrchestratorStore",
+        "apps/core-app/src/main/modules/ai/ai-orchestrator-store.privacy.test.ts#test=revalidates the opaque revision, protects non-terminal runs, and detaches references before cascade delete",
+        "apps/core-app/src/main/modules/ai/ai-cli-orchestrator.ts#symbol=projectPersistedRunMetadata",
+        "apps/core-app/src/main/modules/ai/ai-cli-orchestrator.test.ts#test=keeps the run protected while terminal root and event persistence are in flight",
+        "apps/core-app/src/main/modules/ai/pi-agent-runtime-host.ts#symbol=sanitizeToolOutputForRuntime"
       ]
     },
     {

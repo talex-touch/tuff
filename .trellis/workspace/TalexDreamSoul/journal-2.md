@@ -256,3 +256,45 @@ Implemented SDK 260817 application resolution, permission-gated tfile previews, 
 ### Next Steps
 
 - None - task complete
+
+---
+
+## 2026-08-27 — tuffex/nexus docs+components advance & full smoothness pass
+
+### Summary
+
+Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction defect surfaced by a timing-masked red test, emptied the doc-parity offender list via three sourced dev/api translations plus phantom-API corrections in both locales, wired two new CI gates (check:demo-registry with self-test, check:doc-parity), deleted 7 orphaned demos, and smoothness-tested all 159 component doc pages plus the anchor family interactively.
+
+### Main Changes
+
+- tuffex: TxSources/TxToolCallCard collapse `inert`; TxTypingIndicator/TxSpinner reduced-motion (spinner SVG fallback needs static 23.562px arc — frozen dash offset is invisible); TxContextMenu owns outside-close (anchor + virtual reference cannot recognize the sibling trigger; 60ms grace window masked it in fast test runs).
+- nexus: check-demo-registry-orphans.mjs (three-way registry/files/content agreement, helper-import exemption, --self-test); 7 dead demos deleted (2 AutoSizer, 5 FusionFusionTwo*); doc-parity graduated to CI gate; dev/api division-box/flow-transfer/intelligence en gaps translated against source; phantom claims corrected in both locales (division-box lifecycle events→real setState wiring, error codes, `closed`, sessionId format, 2 invalid mermaid edges; flow-transfer 12 stale two-segment IPC names→FlowEvents three-segment, en ctx-handshake example→real (payload, sessionId, senderInfo)).
+- tooling: component-docs-smoothness-audit.mjs (159-page sweep: demo mounts vs content-declared counts, console/exceptions/failed requests, scroll frame/longtask probe) + anchor-interaction-probe.mjs (open-choreography frames).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `40e98fd10` | fix(tuffex): inert collapsed bodies, reduced-motion for spinner and typing loaders |
+| `242bc7bee` | fix(tuffex): context-menu outside-close bypassed the trigger's own rules |
+| `c734c3b9f` | ci(nexus): gate demo registry and doc parity, drop seven orphaned demos |
+| `d2bcba8a4` | docs(nexus): close the zh/en dev-api gaps and correct phantom claims to source |
+| `0acd609fa` | ref(nexus): harden the smoothness sweep against dead evaluate responses |
+
+### Testing
+
+- [OK] tuffex: 1841/1841 tests (was 1838+1 deterministic red in full-suite: context-menu), vue-tsc, eslint, build, all five audits green.
+- [OK] Reduced-motion verified bidirectionally in a real browser (normal: 8 animations; reduced: 0, arc visible, ball hidden).
+- [OK] check:demo-registry + --self-test, check:doc-parity (first-ever clean run), check:mdc-fences.
+- [OK] 159/159 component doc pages swept: every flagged page re-verified in a fresh run — all transients of the long-lived dev server (chunk-compile windows, stale content D1 on /api/docs/component-sync — production endpoint healthy). No reproducible page defect; typical scroll worst-frame 9–27ms, 0 dropped.
+- [OK] Anchor interaction probe: 11 panel-opens across 6 components smooth (worst single frame 142ms once on context-menu first open; rest ≤27ms). tooltip (hover-trigger) and flat-*/tree-select (custom trigger/panel markup) are probe blind spots, not defects.
+- [WARN] `pnpm -C apps/nexus typecheck` exits 2 solely from another session's dirty `governance.test.ts:415` (line absent at HEAD); zero errors in files touched here.
+
+### Status
+
+[OK] **Completed** (commits local on docs/maintenance-audit-2026-08-27, not pushed)
+
+### Next Steps
+
+- Dev server owner: content-DB wipe + restart ritual will clear the stale `__nuxt_content` 500 and hydration noise seen during the sweep.
+- PR #1777 (icon-collections gate) still open — my demo-registry/doc-parity steps were placed to merge cleanly alongside it.

@@ -1,3 +1,5 @@
+import { isFeatureFlagEnabled } from '#shared/utils/feature-flags'
+
 function isRiskRoute(path: string): boolean {
   if (!path)
     return false
@@ -10,7 +12,7 @@ function isRiskRoute(path: string): boolean {
 
 export default defineNuxtRouteMiddleware((to) => {
   const runtimeConfig = useRuntimeConfig()
-  const riskControlEnabled = runtimeConfig.public?.riskControl?.enabled === true
+  const riskControlEnabled = isFeatureFlagEnabled(runtimeConfig.public?.riskControl?.enabled)
 
   if (!riskControlEnabled && isRiskRoute(to.path)) {
     if (to.path.startsWith('/dashboard/'))

@@ -438,4 +438,21 @@ const circleDashStyle = computed(() => ({
     opacity: 1;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  // Every loader here is decoration — all variants are aria-hidden and the
+  // role="status" text carries the meaning — so freezing loses nothing. Each
+  // variant's base rules paint a legible resting frame (solid dots, full bars,
+  // static arcs, the still ai mask) without its keyframes.
+  .tx-typing-indicator__dot,
+  .tx-typing-indicator__bar,
+  .tx-typing-indicator__pure,
+  .tx-typing-indicator__ring,
+  .tx-typing-indicator__circle-dash,
+  .tx-typing-indicator__ai,
+  .tx-typing-indicator__ai-mask,
+  .tx-typing-indicator__ai-mask polygon {
+    animation: none;
+  }
+}
 </style>

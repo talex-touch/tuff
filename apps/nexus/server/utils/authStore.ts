@@ -2347,7 +2347,8 @@ export async function upsertDevice(
   event: H3Event,
   userId: string,
   deviceId: string,
-  data?: { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null, reactivateRevoked?: boolean | null }
+  data?: { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null, reactivateRevoked?: boolean | null },
+  retriedAfterConflict = false
 ): Promise<AuthDevice> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -2440,33 +2441,45 @@ export async function upsertDevice(
     ).run()
   }
   else {
-    await db.prepare(`
-      INSERT INTO ${DEVICES_TABLE} (
-        id, user_id, device_name, platform, client_type, user_agent,
-        last_seen_at, last_seen_ip, last_seen_country_code, last_seen_region_code,
-        last_seen_region_name, last_seen_city, last_seen_latitude, last_seen_longitude,
-        last_seen_timezone, last_seen_geo_source, created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      deviceId,
-      userId,
-      data?.deviceName ?? null,
-      data?.platform ?? null,
-      data?.clientType ?? null,
-      getUserAgent(event),
-      now,
-      requestIp,
-      geo.countryCode,
-      geo.regionCode,
-      geo.regionName,
-      geo.city,
-      geo.latitude,
-      geo.longitude,
-      geo.timezone,
-      geo.source,
-      now
-    ).run()
+    try {
+      await db.prepare(`
+        INSERT INTO ${DEVICES_TABLE} (
+          id, user_id, device_name, platform, client_type, user_agent,
+          last_seen_at, last_seen_ip, last_seen_country_code, last_seen_region_code,
+          last_seen_region_name, last_seen_city, last_seen_latitude, last_seen_longitude,
+          last_seen_timezone, last_seen_geo_source, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        deviceId,
+        userId,
+        data?.deviceName ?? null,
+        data?.platform ?? null,
+        data?.clientType ?? null,
+        getUserAgent(event),
+        now,
+        requestIp,
+        geo.countryCode,
+        geo.regionCode,
+        geo.regionName,
+        geo.city,
+        geo.latitude,
+        geo.longitude,
+        geo.timezone,
+        geo.source,
+        now
+      ).run()
+    }
+    catch (error) {
+      // A page's first burst of parallel requests all pass the SELECT above
+      // before any of them inserts; the losers land here. One retry re-reads
+      // the row the winner created and takes the UPDATE branch instead.
+      const message = error instanceof Error ? error.message : String(error)
+      if (retriedAfterConflict || !message.includes('UNIQUE constraint failed')) {
+        throw error
+      }
+      return upsertDevice(event, userId, deviceId, data, true)
+    }
   }
 
   const activeDeviceCountRow = await db.prepare(`

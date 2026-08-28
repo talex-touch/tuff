@@ -1,55 +1,72 @@
 import { onCoreBoxInputChange, useBox } from '@talex-touch/utils/plugin/sdk'
+import { onBeforeUnmount, onMounted } from 'vue'
 
-/**
- * 从 CoreBox SDK 事件中提取文本内容
- */
 function extractText(data: any): string {
   const payload = data?.data ?? data
-
-  // 优先级: query.text > input > inputs 数组
-  if (payload?.query?.text) {
+  if (typeof payload?.query?.text === 'string')
     return payload.query.text
-  }
-  if (payload?.input) {
+  if (typeof payload?.input === 'string')
     return payload.input
-  }
-  if (Array.isArray(payload?.inputs) && payload.inputs.length > 0) {
-    return payload.inputs
-      .map((item: any) => item?.text || '')
-      .filter(Boolean)
-      .join('\n')
-  }
-  if (Array.isArray(payload?.query?.inputs) && payload.query.inputs.length > 0) {
-    return payload.query.inputs
-      .map((item: any) => item?.text || '')
-      .filter(Boolean)
-      .join('\n')
-  }
-  return ''
+
+  const inputs = Array.isArray(payload?.inputs)
+    ? payload.inputs
+    : Array.isArray(payload?.query?.inputs)
+      ? payload.query.inputs
+      : []
+
+  return inputs
+    .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
+    .filter(Boolean)
+    .join('\n')
 }
 
 /**
- * 监听 CoreBox 输入变化的 composable
+ * 订阅 CoreBox 输入并用 Bridge 缓存回放恢复激活前的完整查询。
  */
-export function useCoreBoxInput(onInput: (text: string) => void) {
+export function useCoreBoxInput(onInput: (text: string) => void): void {
+  const box = useBox()
+  let active = true
+  let bridgeInputSeen = false
+  let inputGeneration = 0
+
+  const applyInput = (text: string): void => {
+    inputGeneration += 1
+    onInput(text)
+  }
+
   onCoreBoxInputChange((data: any) => {
-    try {
-      onInput(extractText(data))
-    }
-    catch (e) {
-      console.error('[useCoreBoxInput] Error:', e)
-    }
+    if (!active)
+      return
+    bridgeInputSeen = true
+    applyInput(extractText(data))
+  })
+
+  onMounted(() => {
+    const initialGeneration = inputGeneration
+    void box.getInput()
+      .then((text) => {
+        if (active && !bridgeInputSeen && inputGeneration === initialGeneration) {
+          onInput(text)
+        }
+      })
+      .catch((error) => {
+        console.warn('[useCoreBoxInput] Initial input read failed:', error)
+      })
+  })
+
+  onBeforeUnmount(() => {
+    active = false
   })
 }
 
 /**
- * 请求 CoreBox 使用最大展开高度展示编辑器界面
+ * 请求 CoreBox 使用最大展开高度展示编辑器界面。
  */
-export async function forceMaxCoreBox() {
+export async function forceMaxCoreBox(): Promise<void> {
   try {
     await useBox().expand({ forceMax: true })
   }
-  catch (e) {
-    console.warn('[useCoreBoxInput] Expand failed:', e)
+  catch (error) {
+    console.warn('[useCoreBoxInput] Expand failed:', error)
   }
 }

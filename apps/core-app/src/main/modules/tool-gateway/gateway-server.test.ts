@@ -1,7 +1,12 @@
 import type { AgentContextSource } from './agent-context-source'
-import type { ToolGatewayHandle } from './gateway-server'
+import type {
+  AgentToolAuditEvent,
+  ConfirmationDecision,
+  ConfirmationRequest,
+  ToolGatewayHandle
+} from './gateway-server'
 import type { PluginFeatureSource } from './plugin-feature-source'
-import type { ToolDefinition } from './tool-registry'
+import type { ToolCallPlan, ToolDefinition } from './tool-registry'
 import { Buffer } from 'node:buffer'
 import { request as httpRequest } from 'node:http'
 import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
@@ -89,6 +94,7 @@ function call(
  */
 interface GatewayJson {
   [key: string]: unknown
+  code?: string
   isError?: boolean
   output?: string
 }
@@ -105,16 +111,82 @@ async function invoke(
   }
 }
 
+function startInvocation(
+  gateway: ToolGatewayHandle,
+  body: unknown
+): {
+  abort: () => void
+  closed: Promise<void>
+} {
+  const target = new URL(gateway.url)
+  const payload = JSON.stringify(body)
+  let closeRequest: (() => void) | null = null
+  const closed = new Promise<void>((resolve) => {
+    closeRequest = resolve
+  })
+  const request = httpRequest(
+    {
+      hostname: target.hostname,
+      port: target.port,
+      path: target.pathname,
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${gateway.token}`,
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload)
+      }
+    },
+    (response) => response.resume()
+  )
+  request.on('error', () => {})
+  request.once('close', () => closeRequest?.())
+  request.end(payload)
+  return { abort: () => request.destroy(), closed }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 describe('tool gateway', () => {
   it('runs an approved tool and echoes its result', async () => {
-    const confirm = vi.fn(async () => ({ approved: true, remember: false }))
-    handle = await startToolGateway({ tools: new Map([['echo', echoTool()]]), confirm })
+    const audits: AgentToolAuditEvent[] = []
+    const confirm = vi.fn(async (_request: ConfirmationRequest, _signal: AbortSignal) => ({
+      approved: true,
+      remember: false
+    }))
+    handle = await startToolGateway({
+      tools: new Map([['echo', echoTool()]]),
+      confirm,
+      onAudit: (event) => audits.push(event)
+    })
 
-    const { status, json } = await invoke(handle, { tool: 'echo', args: { value: 'hi' } })
+    const { status, json } = await invoke(handle, {
+      tool: 'echo',
+      callId: 'pi.call-1:stable',
+      args: { value: 'hi' }
+    })
     expect(status).toBe(200)
     expect(json).toEqual({ output: 'hi', isError: false })
     expect(confirm).toHaveBeenCalledTimes(1)
-    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tool: 'echo', risk: 'read' }))
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: 'pi.call-1:stable', tool: 'echo', risk: 'read' }),
+      expect.any(AbortSignal)
+    )
+    const confirmationSignal = confirm.mock.calls[0]![1]
+    expect(confirmationSignal.aborted).toBe(false)
+    expect(audits.map((event) => event.phase)).toEqual(['call', 'decision', 'result'])
+    expect(audits.every((event) => event.callId === audits[0]!.callId)).toBe(true)
+    expect(audits[0]!.callId).not.toBe('pi.call-1:stable')
+
+    await handle.close()
+    expect(confirmationSignal.aborted).toBe(false)
   })
 
   it('rejects a wrong or missing token before doing anything', async () => {
@@ -123,9 +195,28 @@ describe('tool gateway', () => {
     handle = await startToolGateway({ tools: new Map([['echo', echoTool({ execute })]]), confirm })
 
     const bad = await invoke(handle, { tool: 'echo', args: {} }, 'not-the-token')
+    const missing = await invoke(handle, { tool: 'echo', args: {} }, '')
     expect(bad.status).toBe(401)
+    expect(missing.status).toBe(401)
     expect(execute).not.toHaveBeenCalled()
     expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it.each([null, [], 'not-an-object'])('rejects non-object JSON bodies safely', async (body) => {
+    const audits: AgentToolAuditEvent[] = []
+    handle = await startToolGateway({
+      tools: new Map([['echo', echoTool()]]),
+      confirm: async () => ({ approved: true, remember: false }),
+      onAudit: (event) => audits.push(event)
+    })
+
+    const response = await invoke(handle, body)
+
+    expect(response).toMatchObject({
+      status: 200,
+      json: { isError: true, code: 'TOOL_INPUT_INVALID' }
+    })
+    expect(audits.map((event) => event.phase)).toEqual(['call', 'decision', 'result'])
   })
 
   it('answers a denial to the model instead of failing the request', async () => {
@@ -139,6 +230,116 @@ describe('tool gateway', () => {
     expect(status).toBe(200)
     expect(json.isError).toBe(true)
     expect(json.output).toContain('denied')
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('aborts a pending confirmation when the loopback client disconnects', async () => {
+    const execute = vi.fn(async () => ({ output: 'must-not-run', isError: false }))
+    const audits: AgentToolAuditEvent[] = []
+    let receivedSignal!: AbortSignal
+    let resolveConfirmation!: () => void
+    let resolveAbort!: () => void
+    const aborted = new Promise<void>((resolve) => {
+      resolveAbort = resolve
+    })
+    const confirm = vi.fn(
+      (_request: ConfirmationRequest, signal: AbortSignal) =>
+        new Promise<ConfirmationDecision>((resolve) => {
+          receivedSignal = signal
+          signal.addEventListener('abort', resolveAbort, { once: true })
+          resolveConfirmation = () => resolve({ approved: true, remember: false })
+        })
+    )
+    handle = await startToolGateway({
+      tools: new Map([['echo', echoTool({ execute })]]),
+      confirm,
+      onAudit: (event) => audits.push(event)
+    })
+
+    const invocation = startInvocation(handle, { tool: 'echo', args: { value: 'cancelled' } })
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
+    invocation.abort()
+    await aborted
+
+    expect(receivedSignal.aborted).toBe(true)
+    resolveConfirmation()
+    await invocation.closed
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(execute).not.toHaveBeenCalled()
+    expect(audits.map((event) => event.phase)).toEqual(['call', 'decision', 'result'])
+    expect(audits[1]).toMatchObject({ decision: 'failed' })
+    expect(audits[2]).toMatchObject({ status: 'error', code: 'TOOL_EXECUTION_ABORTED' })
+  })
+
+  it('closes promptly without confirming or executing a call blocked in classification', async () => {
+    const classifyStarted = deferred<void>()
+    const classification = deferred<ToolCallPlan>()
+    const confirm = vi.fn(async () => ({ approved: true, remember: false }))
+    const execute = vi.fn(async () => ({ output: 'must-not-run', isError: false }))
+    handle = await startToolGateway({
+      tools: new Map([
+        [
+          'echo',
+          echoTool({
+            classify: async () => {
+              classifyStarted.resolve()
+              return classification.promise
+            },
+            execute
+          })
+        ]
+      ]),
+      confirm
+    })
+
+    const invocation = invoke(handle, { tool: 'echo', args: { value: 'shutdown' } })
+    await classifyStarted.promise
+
+    let closeDeadline: ReturnType<typeof setTimeout> | undefined
+    const closePromise = handle.close()
+    const closeOutcome = await Promise.race([
+      closePromise.then(() => 'closed' as const),
+      new Promise<'blocked'>((resolve) => {
+        closeDeadline = setTimeout(() => resolve('blocked'), 500)
+      })
+    ])
+    if (closeDeadline) clearTimeout(closeDeadline)
+
+    classification.resolve({ risk: 'read', summary: 'late', rememberKey: 'echo' })
+    await closePromise
+    const response = await invocation
+    await Promise.resolve()
+
+    expect(closeOutcome).toBe('closed')
+    expect(response).toMatchObject({
+      status: 200,
+      json: { isError: true, code: 'TOOL_EXECUTION_ABORTED' }
+    })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('does not execute when shutdown races an immediate full-style approval', async () => {
+    const execute = vi.fn(async () => ({ output: 'must-not-run', isError: false }))
+    let closePromise: Promise<void> | null = null
+    const confirm = vi.fn(async () => {
+      closePromise = handle!.close()
+      return { approved: true, remember: false }
+    })
+    handle = await startToolGateway({
+      tools: new Map([['echo', echoTool({ execute })]]),
+      confirm
+    })
+
+    const response = await invoke(handle, { tool: 'echo', args: { value: 'full' } })
+    await closePromise
+
+    expect(response).toMatchObject({
+      status: 200,
+      json: { isError: true, code: 'TOOL_EXECUTION_ABORTED' }
+    })
+    expect(confirm).toHaveBeenCalledTimes(1)
     expect(execute).not.toHaveBeenCalled()
   })
 
@@ -184,7 +385,8 @@ describe('tool gateway', () => {
 
     await invoke(handle, { tool: 'proxy', args: { value: 'safe' } })
     expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ risk: 'read', summary: 'proxying safe' })
+      expect.objectContaining({ risk: 'read', summary: 'proxying safe' }),
+      expect.any(AbortSignal)
     )
   })
 
@@ -221,6 +423,36 @@ describe('tool gateway', () => {
     expect(confirm).toHaveBeenCalledTimes(4)
   })
 
+  it('does not execute a remembered call after shutdown starts', async () => {
+    const confirm = vi.fn(async () => ({ approved: true, remember: true }))
+    const execute = vi.fn(async (args) => ({ output: String(args.value ?? ''), isError: false }))
+    let closePromise: Promise<void> | null = null
+    handle = await startToolGateway({
+      tools: new Map([['echo', echoTool({ execute })]]),
+      confirm,
+      onAudit: (event) => {
+        if (event.phase === 'decision' && event.decision === 'remembered') {
+          closePromise = handle!.close()
+        }
+      }
+    })
+
+    await expect(invoke(handle, { tool: 'echo', args: { value: 'first' } })).resolves.toMatchObject(
+      {
+        json: { output: 'first', isError: false }
+      }
+    )
+    const response = await invoke(handle, { tool: 'echo', args: { value: 'remembered' } })
+    await closePromise
+
+    expect(response).toMatchObject({
+      status: 200,
+      json: { isError: true, code: 'TOOL_EXECUTION_ABORTED' }
+    })
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
   it('drops remembered approvals on reset', async () => {
     const confirm = vi.fn(async () => ({ approved: true, remember: true }))
     handle = await startToolGateway({ tools: new Map([['echo', echoTool()]]), confirm })
@@ -232,15 +464,26 @@ describe('tool gateway', () => {
   })
 
   it('reports an unknown tool back to the model', async () => {
+    const confirm = vi.fn(async () => ({ approved: true, remember: false }))
+    const audits: AgentToolAuditEvent[] = []
+    const canary = 'unknown/tool?apiKey=sk-private'
     handle = await startToolGateway({
       tools: new Map([['echo', echoTool()]]),
-      confirm: async () => ({ approved: true, remember: false })
+      confirm,
+      onAudit: (event) => audits.push(event)
     })
 
-    const { status, json } = await invoke(handle, { tool: 'nope', args: {} })
+    const { status, json } = await invoke(handle, { tool: canary, args: {} })
     expect(status).toBe(200)
-    expect(json).toMatchObject({ isError: true })
-    expect(json.output).toContain('Unknown tool')
+    expect(json).toEqual({
+      output: 'Tool is not available.',
+      isError: true,
+      code: 'TOOL_NOT_FOUND'
+    })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(audits.map((event) => event.phase)).toEqual(['call', 'decision', 'result'])
+    expect(audits.every((event) => event.toolId === 'unknown')).toBe(true)
+    expect(JSON.stringify({ json, audits })).not.toContain(canary)
   })
 
   it('turns a throwing tool into an error result, not a dead request', async () => {
@@ -260,8 +503,124 @@ describe('tool gateway', () => {
 
     const { status, json } = await invoke(handle, { tool: 'echo', args: {} })
     expect(status).toBe(200)
-    expect(json).toMatchObject({ isError: true })
-    expect(json.output).toContain('boom')
+    expect(json).toEqual({
+      output: 'Tool execution failed.',
+      isError: true,
+      code: 'TOOL_EXECUTION_FAILED'
+    })
+    expect(JSON.stringify(json)).not.toContain('boom')
+  })
+
+  it.each(['sk_live_secret_123', 'C:Users.private.api-key'])(
+    'keeps a valid external call id %s out of audit events',
+    async (externalCallId) => {
+      const audits: AgentToolAuditEvent[] = []
+      const confirm = vi.fn(async () => ({ approved: true, remember: false }))
+      handle = await startToolGateway({
+        tools: new Map([['echo', echoTool()]]),
+        confirm,
+        onAudit: (event) => audits.push(event)
+      })
+
+      await expect(
+        invoke(handle, { tool: 'echo', callId: externalCallId, args: { value: 'ok' } })
+      ).resolves.toMatchObject({ json: { output: 'ok', isError: false } })
+
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({ callId: externalCallId }),
+        expect.any(AbortSignal)
+      )
+      expect(audits.map((event) => event.phase)).toEqual(['call', 'decision', 'result'])
+      expect(new Set(audits.map((event) => event.callId)).size).toBe(1)
+      expect(audits[0]!.callId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      )
+      expect(JSON.stringify(audits)).not.toContain(externalCallId)
+    }
+  )
+
+  it('emits strict correlated audits and redacts invalid ids, args and native failures', async () => {
+    const canary = 'sk-live-secret@/Users/private/native-stack.ts:42'
+    const audits: AgentToolAuditEvent[] = []
+    const logs: string[] = []
+    handle = await startToolGateway({
+      tools: new Map([
+        [
+          'echo',
+          echoTool({
+            execute: async () => {
+              throw Object.assign(new Error(canary), { code: 'EACCES' })
+            }
+          })
+        ]
+      ]),
+      confirm: async () => ({ approved: true, remember: false }),
+      onAudit: (event) => audits.push(event),
+      onLog: (message) => logs.push(message)
+    })
+
+    const { json } = await invoke(handle, {
+      tool: 'echo',
+      callId: `invalid/${canary}`,
+      args: { apiKey: canary, path: `/tmp/${canary}` }
+    })
+
+    expect(json).toEqual({
+      output: 'Access to the requested resource was denied.',
+      isError: true,
+      code: 'TOOL_RESOURCE_ACCESS_DENIED'
+    })
+    expect(audits.map((event) => event.phase)).toEqual(['call', 'decision', 'result'])
+    expect(audits.every((event) => /^[A-Za-z0-9_.:-]{1,128}$/.test(event.callId))).toBe(true)
+    expect(new Set(audits.map((event) => event.callId)).size).toBe(1)
+    expect(audits[0]).toEqual({
+      schema: 'agent-tool-audit/v1',
+      phase: 'call',
+      callId: audits[0]!.callId,
+      toolId: 'echo',
+      risk: 'read'
+    })
+    expect(audits[1]).toEqual({
+      schema: 'agent-tool-audit/v1',
+      phase: 'decision',
+      callId: audits[0]!.callId,
+      toolId: 'echo',
+      risk: 'read',
+      decision: 'approved'
+    })
+    expect(audits[2]).toMatchObject({
+      schema: 'agent-tool-audit/v1',
+      phase: 'result',
+      callId: audits[0]!.callId,
+      toolId: 'echo',
+      risk: 'read',
+      status: 'error',
+      code: 'TOOL_RESOURCE_ACCESS_DENIED'
+    })
+    expect(
+      (audits[2] as Extract<AgentToolAuditEvent, { phase: 'result' }>).durationMs
+    ).toBeGreaterThanOrEqual(0)
+    expect(
+      (audits[2] as Extract<AgentToolAuditEvent, { phase: 'result' }>).durationMs
+    ).toBeLessThanOrEqual(24 * 60 * 60 * 1000)
+    expect(JSON.stringify({ json, audits, logs })).not.toContain(canary)
+  })
+
+  it('keeps execution fail-soft when the audit sink throws', async () => {
+    handle = await startToolGateway({
+      tools: new Map([['echo', echoTool()]]),
+      confirm: async () => ({ approved: true, remember: false }),
+      onAudit: () => {
+        throw new Error('audit sink unavailable')
+      }
+    })
+
+    await expect(
+      invoke(handle, { tool: 'echo', args: { value: 'still-runs' } })
+    ).resolves.toMatchObject({
+      status: 200,
+      json: { output: 'still-runs', isError: false }
+    })
   })
 
   it('serves nothing but POST /invoke', async () => {
@@ -300,8 +659,11 @@ describe('tool registry', () => {
   it('refuses binaries and oversized reads', async () => {
     const read = registry.get('tuff_read_file')!
     const binary = await read.execute({ path: '/tmp/image.png' })
-    expect(binary).toMatchObject({ isError: true })
-    expect(binary.output).toContain('binary')
+    expect(binary).toEqual({
+      output: 'Tool input is invalid.',
+      isError: true,
+      code: 'TOOL_INPUT_INVALID'
+    })
 
     const missing = await read.execute({ path: '/tmp/definitely-not-here-9f8a7.txt' })
     expect(missing.isError).toBe(true)

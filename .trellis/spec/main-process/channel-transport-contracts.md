@@ -137,3 +137,125 @@ transport.broadcast(AppEvents.lifecycle.beforeQuit, undefined)
 await quiesceRenderersBeforeQuit()
 await touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent)
 ```
+
+## Scenario: Owner-Bound Stream And MessagePort Lifecycle
+
+### 1. Scope / Trigger
+
+- Trigger: registering a main-process stream handler, accepting a stream start or
+  cancel envelope, upgrading a MessagePort, rotating plugin activation authority,
+  destroying a sender, or unregistering the handler.
+- This contract spans the raw MAIN/PLUGIN lanes, authoritative plugin identity,
+  server stream runtime, MessagePort registry, and Electron `WebContents` lifecycle.
+
+### 2. Signatures
+
+```ts
+type ServerStreamOwnerKey = object
+
+interface ServerStreamRequest<TReq, TSender, TPlugin = unknown> {
+  streamId: string
+  ownerKey: ServerStreamOwnerKey
+  portId?: string
+  payload: TReq
+  sender: TSender
+  plugin?: TPlugin
+}
+
+interface ServerStreamCancelRequest {
+  streamId?: string | null
+  ownerKey: ServerStreamOwnerKey
+}
+
+interface ServerStreamRuntime<TReq, TSender, TPlugin = unknown> {
+  handleStart(request: ServerStreamRequest<TReq, TSender, TPlugin>): void
+  handleCancel(request: ServerStreamCancelRequest): void
+  cancelOwner(ownerKey: ServerStreamOwnerKey): void
+  cancelAll(): void
+  dispose(): void
+}
+```
+
+`ownerKey` is a host-only opaque object. It is never accepted from a renderer or
+plugin payload.
+
+### 3. Contracts
+
+- Resolve ownership from the concrete sender object plus the host-selected lane.
+  Each sender has separate MAIN and unverified-PLUGIN owners. Each authoritative
+  plugin activation has another owner keyed by its current host-issued activation
+  key; actor name alone is insufficient.
+- The same `streamId` may exist for different owners. A second active id for the
+  same owner throws `stream_id_conflict` and leaves the original stream active.
+- Cancel resolves the owner again from the real sender, lane, and current branded
+  identity. Ignore caller-authored owner fields. A foreign sender, lane, activation,
+  or unverified caller cannot cancel another owner's stream.
+- Terminal `end`/`error`, explicit cancel, activation invalidation, sender destroy,
+  and handler unregister all remove forward and reverse indexes exactly once.
+  Cancel aborts the owned `AbortSignal`; late `emit`/`end`/`error` callbacks are
+  silent and cannot recreate state or send data.
+- Sender destruction cancels all MAIN, unverified-PLUGIN, and authoritative plugin
+  owners for that exact `WebContents`. Handler unregister removes channel handlers,
+  invalidation watchers, and sender listeners before disposing all active state.
+- A plugin MessagePort is confirmed, resolved, used, and closed only when the
+  concrete sender object, channel, scope, port id, and complete authoritative
+  activation provenance match. A numeric sender id is not ownership.
+- Plugin activation invalidation physically closes ports with the exact activation
+  key, clears pending confirm timers, and removes both global and sender indexes.
+  MAIN/window ports and other plugin activations remain open.
+
+### 4. Validation & Error Matrix
+
+| Condition                                    | Required result                                                  |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| Duplicate active id under one owner          | `stream_id_conflict`; original remains active                    |
+| Same id under another sender/lane/activation | Independent stream accepted                                      |
+| Foreign sender/lane/activation cancel        | No effect on target stream                                       |
+| Current owner cancel                         | Exact signal aborts; later callbacks are silent                  |
+| Activation rotates or revokes                | Exact plugin streams abort and ports close                       |
+| Sender is destroyed                          | All streams/ports for that object close; foreign object survives |
+| Handler unregisters                          | Handlers/watchers/listeners removed; all active streams abort    |
+| Same numeric sender id, different object     | No port confirmation, lookup, use, or close                      |
+| Port terminal send fails                     | Fallback may run; stream state still cleans up                   |
+
+### 5. Good / Base / Bad Cases
+
+- Good: two senders reuse one stream id; cancelling one aborts only its signal, and
+  rotating one plugin activation closes only its streams and MessagePorts.
+- Base: a current owner reaches `end`; its state is removed and the same id can be
+  reused by that owner later.
+- Bad: index streams globally by id, trust `ownerKey` from the payload, compare only
+  `sender.id`, or leave watchers/ports alive after revoke or handler unregister.
+
+### 6. Tests Required
+
+- Runtime tests cover same-owner duplicate rejection, cross-owner id reuse, exact
+  cancel, cancel-all/dispose, terminal cleanup, send failure, and late callbacks.
+- Transport tests cover MAIN vs raw PLUGIN lanes, verified vs unverified plugin
+  owners, activation rotation/revoke, sender destruction, and unregister cleanup.
+- MessagePort tests use two sender objects with the same numeric id and cover
+  confirm/use/close isolation, complete activation provenance, physical close on
+  invalidation, confirm-timer cleanup, and no collateral close.
+- Every regression asserts both the target was cleaned up and an unrelated stream
+  or port stayed live; a one-sided cleanup assertion is insufficient.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const activeStreams = new Map<string, StreamState>()
+activeStreams.get(payload.streamId)?.abortController.abort()
+if (record.sender.id === event.sender.id) record.confirmed = true
+```
+
+#### Correct
+
+```ts
+const ownerKey = resolveOwnerKey(channelType, event.sender, authoritativePlugin, true)
+runtime.handleStart({ streamId, ownerKey, payload, sender: event.sender, plugin })
+
+const cancelOwnerKey = resolveOwnerKey(channelType, event.sender, authoritativePlugin, false)
+if (cancelOwnerKey) runtime.handleCancel({ streamId, ownerKey: cancelOwnerKey })
+if (record.sender === event.sender) record.confirmed = true
+```

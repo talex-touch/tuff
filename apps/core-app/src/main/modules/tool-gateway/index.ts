@@ -11,15 +11,17 @@ import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   AgentToolConfirmRequest,
+  AgentToolConfirmSettlementReason,
+  AgentToolGatewayState,
   AgentToolPermissionMode
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ConfirmationDecision, ToolGatewayHandle } from './gateway-server'
 import { randomUUID } from 'node:crypto'
-import { getLogger } from '@talex-touch/utils/common/logger'
 import { AgentToolEvents } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { shell } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { aiImportContentStore } from '../ai/ai-import-content-store'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
@@ -38,10 +40,21 @@ export * from './gateway-server'
 export * from './plugin-feature-source'
 export * from './tool-registry'
 
-const toolLog = getLogger('agent-tools')
+const toolLog = createLogger('agent-tools')
 
 /** A user who never answers must not wedge the agent loop forever. */
-const CONFIRMATION_TIMEOUT_MS = 2 * 60 * 1000
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 2 * 60 * 1000
+const MIN_CONFIRMATION_TIMEOUT_MS = 250
+const CONFIRMATION_TIMEOUT_ENV = 'TUFF_AGENT_TOOL_CONFIRM_TIMEOUT_MS'
+
+function resolveConfirmationTimeoutMs(): number {
+  const candidate = Number(process.env[CONFIRMATION_TIMEOUT_ENV])
+  return Number.isInteger(candidate) &&
+    candidate >= MIN_CONFIRMATION_TIMEOUT_MS &&
+    candidate < DEFAULT_CONFIRMATION_TIMEOUT_MS
+    ? candidate
+    : DEFAULT_CONFIRMATION_TIMEOUT_MS
+}
 
 function assertHostOwned(context: HandlerContext): void {
   const pluginId = context?.plugin?.name
@@ -69,7 +82,10 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
    * a sender that knows nothing about modes never widens permissions.
    */
   private mode: AgentToolPermissionMode = 'review'
-  private pending = new Map<string, (decision: ConfirmationDecision) => void>()
+  private pending = new Map<
+    string,
+    (decision: ConfirmationDecision, reason?: AgentToolConfirmSettlementReason) => void
+  >()
   /**
    * MCP servers run in this process, under the registry the orchestrator
    * already owns — the agent process never gets a server of its own, so every
@@ -105,6 +121,16 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
       url: this.handle.url,
       token: this.handle.token,
       tools: [...createToolRegistry(this.registryOptions()).keys()]
+    }
+  }
+
+  private getGatewayState(): AgentToolGatewayState {
+    const config = this.getRuntimeConfig()
+    return {
+      enabled: this.enabled,
+      mode: this.mode,
+      ready: this.enabled && this.handle !== null,
+      tools: config?.tools ?? []
     }
   }
 
@@ -146,13 +172,14 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
 
     this.starting = startToolGateway({
       tools: createToolRegistry(this.registryOptions()),
-      onLog: (message) => toolLog.info(message),
-      confirm: async (request) => {
+      onLog: (message) => toolLog.warn(message),
+      onAudit: (event) => toolLog.info(`Agent tool audit ${JSON.stringify(event)}`),
+      confirm: async (request, signal) => {
+        if (signal.aborted) return { approved: false, remember: false }
         // Read per call, so a mode change lands on the next call only: requests
         // already waiting in `this.pending` still need the user's answer rather
         // than being settled retroactively by the switch.
         if (this.mode === 'full') {
-          toolLog.info(`Auto-approved (full-allow): ${request.tool} — ${request.summary}`)
           // Never remembered: the standing grant lives in the mode, so switching
           // back to review restores the prompt for every tool.
           return { approved: true, remember: false }
@@ -168,18 +195,48 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
         }
 
         return new Promise<ConfirmationDecision>((resolveDecision) => {
-          const timer = setTimeout(() => {
-            this.pending.delete(requestId)
-            toolLog.warn(`Confirmation for ${request.tool} timed out`)
-            resolveDecision({ approved: false, remember: false })
-          }, CONFIRMATION_TIMEOUT_MS)
-
-          this.pending.set(requestId, (decision) => {
+          let settled = false
+          const notifySettlement = (reason: AgentToolConfirmSettlementReason): void => {
+            try {
+              runtimeTransport.broadcast(AgentToolEvents.confirmSettled, { requestId, reason })
+            } catch {
+              toolLog.warn('Agent tool confirmation settlement broadcast failed')
+            }
+          }
+          const settle = (
+            decision: ConfirmationDecision,
+            reason?: AgentToolConfirmSettlementReason
+          ): void => {
+            if (settled) return
+            settled = true
             clearTimeout(timer)
+            signal.removeEventListener('abort', onAbort)
+            this.pending.delete(requestId)
+            if (reason) notifySettlement(reason)
             resolveDecision(decision)
-          })
+          }
+          const onAbort = (): void => {
+            settle({ approved: false, remember: false }, 'cancelled')
+          }
+          const timer = setTimeout(() => {
+            toolLog.warn('Agent tool confirmation timed out')
+            settle({ approved: false, remember: false }, 'timeout')
+          }, resolveConfirmationTimeoutMs())
 
-          runtimeTransport.broadcast(AgentToolEvents.confirmRequest, payload)
+          this.pending.set(requestId, settle)
+          signal.addEventListener('abort', onAbort, { once: true })
+
+          if (signal.aborted) {
+            onAbort()
+            return
+          }
+
+          try {
+            runtimeTransport.broadcast(AgentToolEvents.confirmRequest, payload)
+          } catch {
+            toolLog.warn('Agent tool confirmation request broadcast failed')
+            settle({ approved: false, remember: false }, 'cancelled')
+          }
         })
       }
     })
@@ -191,7 +248,7 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
       this.starting = null
     }
 
-    toolLog.info(`Tool gateway listening on ${this.handle.url}`)
+    toolLog.info('Tool gateway listening')
   }
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
@@ -202,6 +259,11 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
     }
 
     this.disposers.push(
+      transport.on(AgentToolEvents.getState, ((_payload: void, context: HandlerContext) => {
+        assertHostOwned(context)
+        return this.getGatewayState()
+      }) as never),
+
       transport.on(AgentToolEvents.setEnabled, (async (
         payload: { enabled: boolean; mode?: AgentToolPermissionMode },
         context: HandlerContext
@@ -251,10 +313,18 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
     this.disposers = []
     // Every waiting call is answered before the socket goes: a pending promise
     // would otherwise keep an agent loop hanging past shutdown.
-    for (const settle of this.pending.values()) settle({ approved: false, remember: false })
-    this.pending.clear()
+    for (const settle of [...this.pending.values()]) {
+      settle({ approved: false, remember: false }, 'cancelled')
+    }
+    try {
+      await this.starting
+    } catch {
+      // A failed start has no handle to close; teardown still resets module state.
+    }
     await this.handle?.close()
     this.handle = null
+    this.enabled = false
+    this.mode = 'review'
   }
 }
 

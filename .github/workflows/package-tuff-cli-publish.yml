@@ -17,6 +17,11 @@ on:
       - "packages/unplugin-export-plugin/package.json"
       - "packages/unplugin-export-plugin/src/**"
       - "packages/unplugin-export-plugin/tsup.config.ts"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/package-publish.config.mjs"
+      - "scripts/validate-publish-manifests.mjs"
+      - "scripts/publish-package.mjs"
       - ".github/workflows/package-tuff-cli-publish.yml"
 
 concurrency:
@@ -150,7 +155,24 @@ jobs:
               continue
             fi
 
+            echo "Linting ${package}..."
+            pnpm --filter "${package}" run lint
+
             if [ "${package}" = "@talex-touch/unplugin-export-plugin" ]; then
+              echo "Testing ${package}..."
+              pnpm --filter "${package}" run test
+            fi
+
+            if [ "${package}" = "@talex-touch/tuff-cli" ]; then
+              echo "Linting @talex-touch/tuff-cli-core for CLI bundle..."
+              pnpm --filter "@talex-touch/tuff-cli-core" run lint
+              echo "Testing @talex-touch/tuff-cli-core for CLI bundle..."
+              pnpm --filter "@talex-touch/tuff-cli-core" run test
+              echo "Linting @talex-touch/unplugin-export-plugin for CLI bundle..."
+              pnpm --filter "@talex-touch/unplugin-export-plugin" run lint
+              echo "Testing @talex-touch/unplugin-export-plugin for CLI bundle..."
+              pnpm --filter "@talex-touch/unplugin-export-plugin" run test
+
               utils_version=$(node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8'));console.log(pkg.version)")
               for attempt in {1..12}; do
                 if npm view "@talex-touch/utils@${utils_version}" version >/dev/null 2>&1; then
@@ -171,10 +193,15 @@ jobs:
               pnpm --filter "@talex-touch/tuff-cli-core" run build
               echo "Building @talex-touch/unplugin-export-plugin for CLI bundle..."
               pnpm --filter "@talex-touch/unplugin-export-plugin" run build
+              echo "Testing @talex-touch/tuff-cli..."
+              pnpm --filter "@talex-touch/tuff-cli" run test
             fi
 
             echo "Building ${package}..."
             pnpm --filter "${package}" run build
+
+            echo "Validating the packed manifest for ${package}..."
+            node scripts/validate-publish-manifests.mjs --filter "${package}" --pack
 
             echo "Publishing ${package}@${version} with dist-tag ${dist_tag}..."
             publish_log="$(mktemp)"

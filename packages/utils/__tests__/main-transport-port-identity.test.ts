@@ -5,10 +5,16 @@ import type {
 } from "../transport/main";
 import { TuffMainTransport } from "../transport/sdk/main-transport";
 import { ClipboardEvents, TransportEvents } from "../transport/events";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { ipcHandle, FakeMessageChannelMain, browserWindowMock } = vi.hoisted(
+const {
+  ipcHandle,
+  FakeMessageChannelMain,
+  browserWindowMock,
+  messageChannels,
+} = vi.hoisted(
   () => {
+    const messageChannels: FakeMessageChannelMain[] = [];
     class FakeMessagePortMain {
       on = vi.fn();
       start = vi.fn();
@@ -18,10 +24,15 @@ const { ipcHandle, FakeMessageChannelMain, browserWindowMock } = vi.hoisted(
     class FakeMessageChannelMain {
       port1 = new FakeMessagePortMain();
       port2 = new FakeMessagePortMain();
+
+      constructor() {
+        messageChannels.push(this);
+      }
     }
     return {
       ipcHandle: vi.fn(),
       FakeMessageChannelMain,
+      messageChannels,
       browserWindowMock: {
         getFocusedWindow: vi.fn(() => null),
         getAllWindows: vi.fn(() => []),
@@ -61,6 +72,9 @@ function createHarness() {
     broadcastPlugin: vi.fn(),
   };
   let current: PluginActivationIdentity | undefined = activation();
+  const invalidationListeners = new Set<
+    (identity: Readonly<PluginActivationIdentity>) => void
+  >();
   const keyManager = {
     requestKey: vi.fn(),
     revokeKey: vi.fn(),
@@ -71,9 +85,28 @@ function createHarness() {
     ),
     resolveCurrentIdentity: vi.fn(() => current),
     resolveSenderIdentity: vi.fn(),
+    watchIdentityInvalidated: vi.fn(
+      (listener: (identity: Readonly<PluginActivationIdentity>) => void) => {
+        invalidationListeners.add(listener);
+        return () => invalidationListeners.delete(listener);
+      },
+    ),
   };
   const transport = new TuffMainTransport(channel as never, keyManager);
-  return { transport, handlers, revoke: () => (current = undefined) };
+  return {
+    transport,
+    handlers,
+    reset: () => (current = activation()),
+    revoke: () => {
+      const invalidated = current;
+      current = undefined;
+      if (invalidated) {
+        for (const listener of [...invalidationListeners]) {
+          listener(invalidated);
+        }
+      }
+    },
+  };
 }
 
 function sender(id: number) {
@@ -101,6 +134,11 @@ function upgradePayload(pluginSender: ReturnType<typeof sender>) {
 
 describe("TuffMainTransport plugin port identity", () => {
   const harness = createHarness();
+
+  beforeEach(() => {
+    harness.reset();
+    messageChannels.length = 0;
+  });
 
   it("rejects plugin-scoped upgrade without authoritative sender identity", async () => {
     const { handlers } = harness;
@@ -130,6 +168,8 @@ describe("TuffMainTransport plugin port identity", () => {
     expect(upgrade).toMatchObject({ accepted: true, scope: "plugin" });
     const portId = (upgrade as { portId?: string }).portId;
     expect(portId).toBeTypeOf("string");
+    const serverPort = messageChannels.at(-1)?.port2;
+    expect(serverPort).toBeDefined();
 
     const confirm = handlers.get(
       `plugin:${TransportEvents.port.confirm.toEventName()}`,
@@ -139,9 +179,9 @@ describe("TuffMainTransport plugin port identity", () => {
       data: { channel: ClipboardEvents.change.toEventName(), portId },
     });
 
-    let streamContext: StreamContext<ClipboardChangePayload> | undefined;
+    const streamContexts: StreamContext<ClipboardChangePayload>[] = [];
     transport.onStream(ClipboardEvents.change, (_payload, context) => {
-      streamContext = context;
+      streamContexts.push(context);
     });
     const start = handlers.get(
       `plugin:${ClipboardEvents.change.toEventName()}:stream:start`,
@@ -151,7 +191,7 @@ describe("TuffMainTransport plugin port identity", () => {
       data: { streamId: "plugin-stream", __transportPortId: portId },
     });
 
-    expect(streamContext?.plugin?.identity).toMatchObject({
+    expect(streamContexts[0]?.plugin?.identity).toMatchObject({
       authority: "message-port",
       pluginName: "plugin-a",
       pluginInstanceId: "instance-a",
@@ -160,20 +200,110 @@ describe("TuffMainTransport plugin port identity", () => {
       portId,
     });
 
+    await start?.({
+      ...data,
+      pluginIdentity: undefined,
+      data: { streamId: "plugin-stream", __transportPortId: portId },
+    });
+    expect(streamContexts[1]?.plugin?.identity).toBeUndefined();
+    streamContexts[1]?.emit({ latest: null, history: [] });
+    expect(data.header.event.sender.send).toHaveBeenCalledOnce();
+
+    const cancel = handlers.get(
+      `plugin:${ClipboardEvents.change.toEventName()}:stream:cancel`,
+    );
+    await cancel?.({
+      ...data,
+      pluginIdentity: undefined,
+      data: { streamId: "plugin-stream", __transportPortId: portId },
+    });
+    expect(streamContexts[0]?.signal.aborted).toBe(false);
+    expect(streamContexts[1]?.signal.aborted).toBe(true);
+
     revoke();
-    streamContext = undefined;
+    expect(serverPort?.close).toHaveBeenCalledOnce();
+    expect(streamContexts[0]?.signal.aborted).toBe(true);
     await start?.({
       ...data,
       data: { streamId: "stale-plugin-stream", __transportPortId: portId },
     });
-    expect(
-      (streamContext as StreamContext<ClipboardChangePayload> | undefined)?.plugin
-        ?.identity,
-    ).toBeUndefined();
+    expect(streamContexts[2]?.plugin?.identity).toBeUndefined();
 
     expect(await handleUpgrade!(data)).toMatchObject({
       accepted: false,
       error: { code: "plugin_identity_required" },
     });
+    streamContexts[0]?.end();
+    streamContexts[2]?.end();
+  });
+
+  it("binds port confirmation, use, and close to the exact sender object", async () => {
+    const { handlers, transport } = harness;
+    const firstSender = sender(83);
+    const sameIdForeignSender = sender(83);
+    const firstData = upgradePayload(firstSender);
+    const foreignData = upgradePayload(sameIdForeignSender);
+    const handleUpgrade = handlers.get(
+      `plugin:${TransportEvents.port.upgrade.toEventName()}`,
+    );
+    const upgrade = await handleUpgrade!(firstData);
+    const portId = (upgrade as { portId?: string }).portId;
+    expect(portId).toBeTypeOf("string");
+
+    const confirm = handlers.get(
+      `plugin:${TransportEvents.port.confirm.toEventName()}`,
+    );
+    await confirm?.({
+      ...foreignData,
+      data: { channel: ClipboardEvents.change.toEventName(), portId },
+    });
+
+    const contexts: StreamContext<ClipboardChangePayload>[] = [];
+    transport.onStream(ClipboardEvents.change, (_payload, context) => {
+      contexts.push(context);
+    });
+    const start = handlers.get(
+      `plugin:${ClipboardEvents.change.toEventName()}:stream:start`,
+    );
+    await start?.({
+      ...firstData,
+      data: { streamId: "unconfirmed-port", __transportPortId: portId },
+    });
+    expect(contexts[0]?.plugin?.identity?.authority).toBe("web-contents");
+    contexts[0]?.end();
+    expect(firstSender.send).toHaveBeenCalledOnce();
+
+    await confirm?.({
+      ...firstData,
+      data: { channel: ClipboardEvents.change.toEventName(), portId },
+    });
+    const close = handlers.get(
+      `plugin:${TransportEvents.port.close.toEventName()}`,
+    );
+    expect(close).toBeTypeOf("function");
+    await close?.({
+      ...foreignData,
+      data: { portId, reason: "closed" },
+    });
+
+    await start?.({
+      ...firstData,
+      data: { streamId: "shared-sender-id", __transportPortId: portId },
+    });
+    await start?.({
+      ...foreignData,
+      data: { streamId: "shared-sender-id", __transportPortId: portId },
+    });
+
+    expect(contexts[1]?.plugin?.identity).toMatchObject({
+      authority: "message-port",
+      portId,
+    });
+    expect(contexts[2]?.plugin?.identity?.authority).toBe("web-contents");
+    contexts[2]?.emit({ latest: null, history: [] });
+    expect(sameIdForeignSender.send).toHaveBeenCalledOnce();
+    expect(contexts[1]?.signal.aborted).toBe(false);
+    contexts[1]?.end();
+    contexts[2]?.end();
   });
 });

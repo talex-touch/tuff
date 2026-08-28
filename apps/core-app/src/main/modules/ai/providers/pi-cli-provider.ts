@@ -33,6 +33,8 @@ const piCliLog = createLogger('Intelligence').child('PiCli')
 
 /** Enough stderr to identify a failure without letting a chatty run grow unbounded in memory. */
 const STDERR_TAIL_LIMIT = 4_000
+const CHILD_TERMINATION_GRACE_MS = 150
+const CHILD_FORCE_KILL_TIMEOUT_MS = 750
 
 export interface PiToolRuntimeConfig {
   url: string
@@ -86,6 +88,10 @@ interface PiRunState {
   stopReason?: string
   /** The failure `pi` last reported, kept so a dead run can say why rather than just going quiet. */
   failure?: string
+}
+
+type PiCliRuntimeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -156,9 +162,16 @@ export class PiCliProvider extends IntelligenceProvider {
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
+    const signal = (options as PiCliRuntimeOptions).signal
+    if (signal?.aborted) return
+
     // Written before the spawn and removed in the `finally` below: the files exist only for the
     // length of this run, which is the whole window in which `pi` can read them.
     const attachments = await spillAttachments(collectMessageAttachments(payload.messages))
+    if (signal?.aborted) {
+      await attachments.cleanup()
+      return
+    }
 
     let child: ChildProcessByStdio<null, Readable, Readable>
     try {
@@ -178,21 +191,86 @@ export class PiCliProvider extends IntelligenceProvider {
     let stderrTail = ''
 
     child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
+    const onStderrData = (chunk: string): void => {
       stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT)
-    })
+    }
+    child.stderr.on('data', onStderrData)
 
     const exited = new Promise<number | null>((resolve, reject) => {
-      child.once('error', reject)
-      child.once('close', (code) => resolve(code))
+      const onError = (error: Error): void => reject(error)
+      child.on('error', onError)
+      child.once('close', (code) => {
+        child.removeListener('error', onError)
+        resolve(code)
+      })
     })
+    // A consumer can return from the async generator before the normal `await exited` path. Keep
+    // the rejection observed in that teardown path while preserving it for normal error propagation.
+    void exited.catch(() => undefined)
+
+    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
+    const hasExited = (): boolean => child.exitCode !== null || child.signalCode !== null
+    const waitForChildExit = (timeoutMs: number): Promise<boolean> => {
+      if (hasExited()) return Promise.resolve(true)
+
+      return new Promise<boolean>((resolve) => {
+        const onExit = (): void => {
+          child.removeListener('exit', onExit)
+          clearTimeout(timer)
+          resolve(true)
+        }
+        const timer = setTimeout(() => {
+          child.removeListener('exit', onExit)
+          resolve(hasExited())
+        }, timeoutMs)
+        child.once('exit', onExit)
+        if (hasExited()) onExit()
+      })
+    }
+    let termination: Promise<boolean> | null = null
+    const terminateChild = (): Promise<boolean> => {
+      if (termination) return termination
+      termination = (async () => {
+        if (hasExited()) return true
+        try {
+          child.kill('SIGTERM')
+        } catch {
+          // The exit event below is still the authoritative process state.
+        }
+        if (await waitForChildExit(CHILD_TERMINATION_GRACE_MS)) return true
+        if (!hasExited()) {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // Report the bounded failure after the final wait.
+          }
+        }
+        return await waitForChildExit(CHILD_FORCE_KILL_TIMEOUT_MS)
+      })()
+      return termination
+    }
+    let resolveAbort: (() => void) | null = null
+    const aborted = signal
+      ? new Promise<undefined>((resolve) => {
+          resolveAbort = () => resolve(undefined)
+        })
+      : null
+    const onAbort = (): void => {
+      resolveAbort?.()
+      void terminateChild()
+      // AsyncGenerator.return() cannot preempt a pending readline next(), so close both the
+      // interface and its input here instead of waiting for the child exit event.
+      lines.close()
+      child.stdout.destroy()
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) onAbort()
 
     try {
-      const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
-
       let protocolChecked = false
 
       for await (const line of lines) {
+        if (signal?.aborted) return
         // `pi` is an external CLI with no version constraint in this repo, so an upgrade can change
         // the stream contract with nothing to announce it. Its first line carries the protocol
         // version; a mismatch means the shapes this provider parses were read off a different
@@ -262,7 +340,10 @@ export class PiCliProvider extends IntelligenceProvider {
         }
       }
 
-      const code = await exited
+      if (signal?.aborted) return
+      const code = aborted ? await Promise.race([aborted, exited]) : await exited
+      if (signal?.aborted) return
+      if (code === undefined) return
       // `pi --mode json` exits 0 however the run went — the non-zero path exists only in text mode —
       // so its own terminal state is the only trustworthy failure signal. Text that was never
       // committed does not rescue the run: it belongs to an attempt pi discarded, which is exactly
@@ -289,15 +370,26 @@ export class PiCliProvider extends IntelligenceProvider {
         ...(state.usage ? { usage: state.usage } : {})
       }
     } finally {
+      signal?.removeEventListener('abort', onAbort)
       // Reached both on cancellation (the consumer breaks, which returns the generator) and on
       // failure. Without it a stopped turn leaves `pi` running and still billing.
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGTERM')
-      }
+      const childTerminated = await terminateChild()
+      lines.close()
       child.stdout.destroy()
-      // After the kill, so a cancelled run never has its images pulled out from under a `pi` that
-      // is still reading them.
+      child.stderr.removeListener('data', onStderrData)
+      child.stderr.destroy()
+      if (!childTerminated) {
+        piCliLog.warn('pi child did not exit after forced termination')
+        child.unref()
+      }
       await attachments.cleanup()
+      if (!childTerminated) {
+        const error = new Error('PI_CLI_TERMINATION_FAILED') as NodeJS.ErrnoException
+        error.code = 'PI_CLI_TERMINATION_FAILED'
+        // A live child can keep using tools and billing, so this teardown failure must override return().
+        // eslint-disable-next-line no-unsafe-finally
+        throw error
+      }
     }
   }
 

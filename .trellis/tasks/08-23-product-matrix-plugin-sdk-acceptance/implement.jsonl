@@ -1,0 +1,9 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend/Nexus/plugin spec routing and required pre-development checks for docs, SDK and plugin surfaces."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Plugin manifest, permission, trusted view and fail-closed runtime contracts."}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Privacy, retention, telemetry and sensitive-data constraints that affect SDK/plugin evidence."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Cross-layer matrix contracts spanning docs, SDK, manifest, package and runtime evidence."}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"Guard design for executable matrix checks that fail on real drift."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Avoid duplicate SDK capability mappings and scattered payload contract logic."}
+{"file":".trellis/tasks/08-23-product-matrix-plugin-sdk-acceptance/research/official-plugin-sdk-matrix.md","reason":"Current plugin SDK marker/docs/smoke baseline generated from repository facts."}
+{"file":".trellis/tasks/08-23-product-matrix-plugin-sdk-acceptance/research/upstream-sdk-outdated-2026-08-28.md","reason":"Registry-backed latest SDK/framework delta snapshot and migration risk classification."}
+{"file":"apps/nexus/app/data/search/featureIndex.test.ts","reason":"Nexus SDK card docs route and explicit owner-only guard for tuffSdkItems."}

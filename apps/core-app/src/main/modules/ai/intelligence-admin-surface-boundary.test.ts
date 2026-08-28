@@ -106,7 +106,7 @@ type AdminHandler = (payload: unknown, context: HandlerContext) => Promise<unkno
 type AdminEventKey = keyof typeof intelligenceApiEvents
 
 interface AdminChannelRegistrar {
-  registerCapabilityChannels: (register: unknown) => void
+  registerCapabilityChannels: (register: unknown, registerProtected: unknown) => void
   registerStatsChannels: (register: unknown) => void
   registerEnvironmentChannels: (register: unknown) => void
 }
@@ -124,7 +124,16 @@ function captureAdminHandlers() {
   )
   const module = new IntelligenceModule() as unknown as AdminChannelRegistrar
 
-  module.registerCapabilityChannels(register)
+  const registerProtected = vi.fn(
+    (
+      event: TuffEvent<unknown, unknown> & { toEventName: () => string },
+      action: string,
+      _permissionId: string,
+      handler: AdminHandler
+    ) => register(event, action, handler)
+  )
+
+  module.registerCapabilityChannels(register, registerProtected)
   module.registerStatsChannels(register)
   module.registerEnvironmentChannels(register)
 

@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
+import { createHash } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
@@ -24,11 +25,26 @@ import {
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
 const TELEMETRY_QUARANTINE_TABLE = 'telemetry_events_quarantine'
+const TELEMETRY_BATCH_RECEIPTS_TABLE = 'telemetry_batch_receipts'
 
 const SEARCH_FIRST_RESULT_SLOW_THRESHOLD_MS = 300
 const SEARCH_TOTAL_SLOW_THRESHOLD_MS = 800
 
 let telemetrySchemaInitialized = false
+
+export interface TelemetryRecordResult {
+  status: 'accepted' | 'quarantined' | 'dropped'
+  reason?: string
+}
+
+export interface TelemetryBatchReceipt<TResponse extends Record<string, unknown> = Record<string, unknown>> {
+  scope: string
+  idempotencyKey: string
+  payloadHash: string
+  response: TResponse
+  createdAt: string
+  expiresAt: string
+}
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
@@ -92,6 +108,18 @@ async function ensureTelemetrySchema(db: D1Database) {
     );
   `).run()
 
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
+      scope TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      payload_hash TEXT NOT NULL,
+      response_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      PRIMARY KEY (scope, idempotency_key)
+    );
+  `).run()
+
   await ensureTelemetryColumns(db)
 
   // Indexes for efficient queries
@@ -130,7 +158,104 @@ async function ensureTelemetrySchema(db: D1Database) {
     CREATE INDEX IF NOT EXISTS idx_telemetry_quarantine_created_at ON ${TELEMETRY_QUARANTINE_TABLE}(created_at);
   `).run()
 
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_telemetry_batch_receipts_expires_at
+    ON ${TELEMETRY_BATCH_RECEIPTS_TABLE}(expires_at);
+  `).run()
+
   telemetrySchemaInitialized = true
+}
+
+export function digestTelemetryBatchPayload(payload: unknown): string {
+  return createHash('sha256').update(stableSerialize(payload)).digest('hex')
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== 'object')
+    return JSON.stringify(value)
+  if (Array.isArray(value))
+    return `[${value.map(stableSerialize).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+  return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`).join(',')}}`
+}
+
+export async function getTelemetryBatchReceipt<TResponse extends Record<string, unknown>>(
+  event: H3Event,
+  scope: string,
+  idempotencyKey: string,
+): Promise<TelemetryBatchReceipt<TResponse> | null> {
+  const db = getD1Database(event)
+  if (!db)
+    throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
+
+  await ensureTelemetrySchema(db)
+
+  const row = await db.prepare(`
+    SELECT scope, idempotency_key, payload_hash, response_json, created_at, expires_at
+    FROM ${TELEMETRY_BATCH_RECEIPTS_TABLE}
+    WHERE scope = ?1 AND idempotency_key = ?2
+    LIMIT 1;
+  `).bind(scope, idempotencyKey).first<{
+    scope: string
+    idempotency_key: string
+    payload_hash: string
+    response_json: string
+    created_at: string
+    expires_at: string
+  }>()
+
+  if (!row)
+    return null
+
+  try {
+    const response = JSON.parse(row.response_json) as TResponse
+    return {
+      scope: row.scope,
+      idempotencyKey: row.idempotency_key,
+      payloadHash: row.payload_hash,
+      response,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    }
+  }
+  catch {
+    throw createError({ statusCode: 500, statusMessage: 'Telemetry idempotency receipt is invalid' })
+  }
+}
+
+export async function storeTelemetryBatchReceipt(
+  event: H3Event,
+  input: {
+    scope: string
+    idempotencyKey: string
+    payloadHash: string
+    response: Record<string, unknown>
+    now?: Date
+    retentionDays?: number
+  },
+): Promise<void> {
+  const db = getD1Database(event)
+  if (!db)
+    throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
+
+  await ensureTelemetrySchema(db)
+
+  const now = input.now ?? new Date()
+  const retentionDays = Number.isFinite(input.retentionDays) ? Math.max(14, Number(input.retentionDays)) : 14
+  const expiresAt = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000).toISOString()
+  await db.prepare(`
+    INSERT INTO ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
+      scope, idempotency_key, payload_hash, response_json, created_at, expires_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    ON CONFLICT(scope, idempotency_key) DO NOTHING;
+  `).bind(
+    input.scope,
+    input.idempotencyKey,
+    input.payloadHash,
+    JSON.stringify(input.response),
+    now.toISOString(),
+    expiresAt,
+  ).run()
 }
 
 async function ensureTelemetryColumns(db: D1Database): Promise<void> {
@@ -200,12 +325,12 @@ async function recordTelemetryQuarantine(
 export async function recordTelemetryEvent(
   event: H3Event,
   telemetry: TelemetryEventInput,
-): Promise<void> {
+): Promise<TelemetryRecordResult> {
   const db = getD1Database(event)
   if (!db) {
     if (shouldUseCloudflareBindings())
       console.warn('Telemetry: Database not available')
-    return
+    return { status: 'dropped', reason: 'database_unavailable' }
   }
 
   await ensureTelemetrySchema(db)
@@ -215,9 +340,10 @@ export async function recordTelemetryEvent(
   const ip = resolveRequestIp(event)
   const normalized = normalizeTelemetryInput(telemetry)
   if (!normalized.telemetry) {
-    await recordTelemetryQuarantine(db, telemetry, normalized.reason || 'invalid_event', ip)
-    await incrementDailyStat(db, today, 'events_quarantined', normalized.reason || 'invalid_event', 1)
-    return
+    const reason = normalized.reason || 'invalid_event'
+    await recordTelemetryQuarantine(db, telemetry, reason, ip)
+    await incrementDailyStat(db, today, 'events_quarantined', reason, 1)
+    return { status: 'quarantined', reason }
   }
 
   const id = crypto.randomUUID()
@@ -643,6 +769,7 @@ export async function recordTelemetryEvent(
   }
 
   scheduleTelemetryRetentionMaintenance(event, db)
+  return { status: 'accepted' }
 }
 
 async function incrementDailyStat(

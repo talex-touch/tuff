@@ -88,6 +88,57 @@ const AI_ERROR_MESSAGES = {
   UNKNOWN: 'AI 调用失败',
 }
 
+const AI_ERROR_DETAILS = {
+  NEXUS_AUTH_REQUIRED: {
+    reason: '当前 Nexus Provider 需要已登录账号。',
+    recovery: '登录 Nexus，或切换到其他已启用 Provider 后重试。',
+  },
+  PERMISSION_DENIED: {
+    reason: '插件未获准使用所需的 Intelligence 能力。',
+    recovery: '在插件权限中授予 intelligence.basic 后重试。',
+  },
+  OCR_EMPTY: {
+    reason: 'OCR 没有返回可用文字。',
+    recovery: '更换清晰图片或直接输入文字后重试。',
+  },
+  PROVIDER_UNAVAILABLE: {
+    reason: '当前能力没有可用的 Provider。',
+    recovery: '在 AI 渠道设置中启用并检查 Provider 配置后重试。',
+  },
+  QUOTA_EXHAUSTED: {
+    reason: '当前调用方的请求、Token 或费用配额已耗尽。',
+    recovery: '等待配额重置、降低用量或调整配额设置后重试。',
+  },
+  QUOTA_CHECK_UNAVAILABLE: {
+    reason: '配额状态无法可靠校验，因此请求已被阻止。',
+    recovery: '等待配额存储恢复，或检查 Intelligence 配额配置后重试。',
+  },
+  MODEL_UNSUPPORTED: {
+    reason: '所选模型不支持当前请求。',
+    recovery: '切换到支持当前能力的模型后重试。',
+  },
+  CAPABILITY_UNSUPPORTED: {
+    reason: '所选 Provider 不支持当前能力。',
+    recovery: '切换到声明支持当前能力的 Provider 或模型后重试。',
+  },
+  NETWORK_FAILURE: {
+    reason: 'Provider 请求未能返回有效响应。',
+    recovery: '检查网络、代理和 Provider endpoint 后重试。',
+  },
+  INVALID_REQUEST: {
+    reason: '当前请求不符合该能力的输入要求。',
+    recovery: '检查输入内容和调用参数后重试。',
+  },
+  EMPTY_RESPONSE: {
+    reason: 'Provider 没有返回可显示内容。',
+    recovery: '调整输入或切换 Provider 后重试。',
+  },
+  UNKNOWN: {
+    reason: 'Intelligence 请求以未分类错误结束。',
+    recovery: '重试请求；若持续失败，请检查 AI 渠道状态。',
+  },
+}
+
 const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
 const AI_COMMAND_VERSION = '1.0.0'
 const CUSTOM_AI_COMMANDS_FILE = 'ai-commands.json'
@@ -1403,8 +1454,9 @@ function normalizeInvokeError(error) {
   const rawMessage = toErrorMessage(error)
   const lower = rawMessage.toLowerCase()
 
-  let code = AI_ERROR_MESSAGES[rawCode] ? rawCode : 'UNKNOWN'
-  if (code === 'UNKNOWN') {
+  const hasStableCode = Object.prototype.hasOwnProperty.call(AI_ERROR_MESSAGES, rawCode)
+  let code = hasStableCode ? rawCode : 'UNKNOWN'
+  if (!hasStableCode) {
     if (
       lower.includes('not authenticated')
       || lower.includes('auth required')
@@ -1471,12 +1523,12 @@ function normalizeInvokeError(error) {
   }
 
   const fallback = AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN
-  const detail = rawMessage && rawMessage !== fallback ? `：${truncateText(rawMessage, 120)}` : ''
+  const details = AI_ERROR_DETAILS[code] || AI_ERROR_DETAILS.UNKNOWN
   return {
     code,
-    message: `${fallback}${detail}`,
-    reason: truncateText(normalizeText(error?.reason), 240),
-    recovery: truncateText(normalizeText(error?.recovery), 240),
+    message: fallback,
+    reason: details.reason,
+    recovery: details.recovery,
   }
 }
 

@@ -171,7 +171,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       temperature: params.temperature ?? 0.7,
       maxTokens: params.maxTokens ?? 1024,
       streaming: params.streaming,
-      timeout: params.options.timeout,
+      timeout: params.options.timeout ?? this.config.timeout ?? 30_000,
       anthropicApiUrl: baseUrl,
       clientOptions: {
         baseURL: baseUrl

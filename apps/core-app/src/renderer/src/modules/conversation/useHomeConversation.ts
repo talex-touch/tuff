@@ -143,6 +143,7 @@ export function useHomeConversation(
     const routing = options.routing?.()
     const metadata: IntelligenceHomeSurfaceMetadata = {
       surface: INTELLIGENCE_HOME_SURFACE,
+      operation: INTELLIGENCE_HOME_SURFACE,
       autoContext: options.autoContext?.() !== false
     }
     // The surface marker rides every turn, pinned model or not: it is what tells main this is a
@@ -154,7 +155,6 @@ export function useHomeConversation(
     }
   }
 
-  let activeController: StreamController | null = null
   let activeTurn: { cancel: () => void } | null = null
 
   /**
@@ -402,7 +402,9 @@ export function useHomeConversation(
     })
 
     let settled = false
-    let received = false
+    let hasProviderActivity = false
+    let controller: StreamController | null = null
+    let cancelRequested = false
 
     const conclude = (): void => {
       settled = true
@@ -417,7 +419,6 @@ export function useHomeConversation(
         }
       }
       recordMeta({ latencyMs: Date.now() - startedAt })
-      activeController = null
       activeTurn = null
       streaming.value = false
       // A `compaction_end` lost to a dying process must not strand the badge.
@@ -446,8 +447,8 @@ export function useHomeConversation(
 
     /**
      * Streaming fails in ways plain invocation survives — a provider without `chatStream` raises
-     * before the first delta. Retrying after deltas landed would duplicate them into the same
-     * message, so the zero-delta condition is what makes this safe, not the error's shape.
+     * before it produces any activity. Retrying after content, structured parts, or usage landed
+     * can bill the same request twice, so provider inactivity makes this safe, not the error shape.
      */
     const fallback = async (streamError: unknown): Promise<void> => {
       try {
@@ -470,7 +471,7 @@ export function useHomeConversation(
       },
       onDelta: (delta, event) => {
         if (settled || !delta) return
-        received = true
+        hasProviderActivity = true
         assistant.content += delta
         // Only messages that carry structured parts maintain the parallel
         // parts view — a plain text turn stays a plain `content` string.
@@ -494,13 +495,14 @@ export function useHomeConversation(
           handlePartEvent(partEvent)
           return
         }
-        received = true
+        hasProviderActivity = true
         // The first structured event upgrades the message to parts mode; the
         // text accumulated so far becomes the leading text part.
         seedParts()
         handlePartEvent(partEvent)
       },
       onUsage: (usage) => {
+        hasProviderActivity = true
         recordUsage(usage)
       },
       onEnd: (event) => {
@@ -510,7 +512,7 @@ export function useHomeConversation(
       },
       onError: (error) => {
         if (settled) return
-        if (received) {
+        if (hasProviderActivity) {
           fail(error)
           return
         }
@@ -521,7 +523,8 @@ export function useHomeConversation(
     activeTurn = {
       cancel: () => {
         if (settled) return
-        activeController?.cancel()
+        cancelRequested = true
+        controller?.cancel()
         if (assistant.content.trim()) {
           assistant.status = 'complete'
         } else {
@@ -533,11 +536,15 @@ export function useHomeConversation(
     }
 
     try {
-      activeController = await sdk.stream(CHAT_CAPABILITY_ID, payload, handlers, invokeOptions)
+      controller = await sdk.stream(CHAT_CAPABILITY_ID, payload, handlers, invokeOptions)
+      if (cancelRequested) controller.cancel()
     } catch (error) {
       // `stream()` rejects when the stream never starts (no stream-capable transport, handshake
-      // failure). Nothing was emitted, so the non-streaming path is still worth trying.
-      await fallback(error)
+      // failure). A defensive activity check also prevents a non-conforming transport from
+      // triggering a second billable request after invoking a handler before rejecting.
+      if (settled) return
+      if (hasProviderActivity) fail(error)
+      else await fallback(error)
       return
     }
 
@@ -610,7 +617,6 @@ export function useHomeConversation(
     //
     // cancel() is a no-op on an already-settled turn, so this stays safe to call at any time.
     activeTurn?.cancel()
-    activeController = null
     activeTurn = null
     streaming.value = false
   }
@@ -630,7 +636,6 @@ export function useHomeConversation(
       // Same reason as discardActiveTurn: cancelling the controller alone leaves `await finished`
       // pending, which retains the turn closure past the scope that owned it.
       activeTurn?.cancel()
-      activeController = null
       activeTurn = null
     })
   }

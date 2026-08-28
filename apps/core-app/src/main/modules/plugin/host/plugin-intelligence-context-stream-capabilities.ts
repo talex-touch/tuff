@@ -1,10 +1,15 @@
 import type { IntelligenceContextStreamEvent } from '@talex-touch/utils/types/intelligence'
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
+import {
+  isIntelligenceErrorCode,
+  type IntelligenceErrorCode
+} from '@talex-touch/utils/transport/events/types'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
 import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
 import {
   type PluginIntelligenceContextRequest,
   type PluginIntelligenceContextSummary,
@@ -73,7 +78,7 @@ export type PluginIntelligenceContextStreamEvent =
   | {
       readonly type: 'error'
       readonly capabilityId: 'text.chat'
-      readonly code: 'INTELLIGENCE_STREAM_FAILED'
+      readonly code: IntelligenceErrorCode | 'INTELLIGENCE_STREAM_FAILED'
     }
 
 interface PluginIntelligenceContextStreamRequest {
@@ -105,6 +110,35 @@ const MAX_EVENT_TEXT_BYTES = 64 * 1024
 const MAX_FINAL_TEXT_BYTES = 256 * 1024
 const MAX_TOKENS = 100_000_000
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+
+function projectStreamErrorCode(error: unknown): IntelligenceErrorCode {
+  if (error && typeof error === 'object') {
+    if (utilTypes.isProxy(error)) return 'UNKNOWN'
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
+      if (descriptor && 'value' in descriptor && isIntelligenceErrorCode(descriptor.value)) {
+        return descriptor.value
+      }
+    } catch {
+      return 'UNKNOWN'
+    }
+  }
+  try {
+    return normalizeIntelligenceError(error, { capabilityId: 'text.chat' }).code
+  } catch {
+    return 'UNKNOWN'
+  }
+}
+
+function streamErrorEvent(
+  code: IntelligenceErrorCode | 'INTELLIGENCE_STREAM_FAILED'
+): PluginIntelligenceContextStreamEvent {
+  return Object.freeze({
+    type: 'error',
+    capabilityId: 'text.chat',
+    code
+  })
+}
 
 function invalid(): never {
   throw new Error('PLUGIN_INTELLIGENCE_CONTEXT_STREAM_INVALID')
@@ -412,20 +446,33 @@ function startStreamPump(
   if (parentSignal.aborted) onAbort()
   const handle = resources.register('stream', dispose)
 
+  const failClosed = async (
+    code: IntelligenceErrorCode | 'INTELLIGENCE_STREAM_FAILED'
+  ): Promise<void> => {
+    try {
+      await request.onEvent(streamErrorEvent(code))
+    } catch {
+      // Callback failure cannot reopen the stream or expose its thrown value.
+    }
+    await dispose().catch(() => undefined)
+  }
+
   setImmediate(() => {
     void (async () => {
       try {
         while (!disposed && !streamController.signal.aborted) {
-          const step = await iterator.next()
+          let step: IteratorResult<IntelligenceContextStreamEvent<unknown>>
+          try {
+            step = await iterator.next()
+          } catch (error) {
+            if (!disposed && !streamController.signal.aborted) {
+              await failClosed(projectStreamErrorCode(error))
+            }
+            return
+          }
           if (disposed || streamController.signal.aborted) break
           if (step.done) {
-            await request.onEvent(
-              Object.freeze({
-                type: 'error',
-                capabilityId: 'text.chat',
-                code: 'INTELLIGENCE_STREAM_FAILED'
-              })
-            )
+            await request.onEvent(streamErrorEvent('INTELLIGENCE_STREAM_FAILED'))
             break
           }
           const event = validateEvent(step.value)
@@ -434,18 +481,7 @@ function startStreamPump(
         }
       } catch {
         if (!disposed && !streamController.signal.aborted) {
-          try {
-            await request.onEvent(
-              Object.freeze({
-                type: 'error',
-                capabilityId: 'text.chat',
-                code: 'INTELLIGENCE_STREAM_FAILED'
-              })
-            )
-          } catch {
-            // The resource disposer remains the authoritative cleanup path.
-          }
-          await dispose().catch(() => undefined)
+          await failClosed('INTELLIGENCE_STREAM_FAILED')
         }
       }
     })()

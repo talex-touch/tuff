@@ -35,9 +35,13 @@ export interface RuntimeCredentialOptions {
 }
 
 function invalidCredential(variableName: string, reason: string): never {
+  // `statusMessage` reaches the client in production, unlike `stack`, and some of
+  // these credentials are checked before the caller is authenticated. Naming the
+  // env var there told anonymous callers which secret is unset; operators still
+  // get it from `variableName` / `reason` on the error object and from logs.
   const error = createError({
     statusCode: 500,
-    statusMessage: `${variableName} rejected by ${RUNTIME_CREDENTIAL_ERROR_CODE}.`,
+    statusMessage: `Server credential misconfigured (${RUNTIME_CREDENTIAL_ERROR_CODE}).`,
   }) as ReturnType<typeof createError> & {
     code: string
     reason: string

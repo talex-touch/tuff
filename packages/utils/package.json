@@ -50,7 +50,7 @@
     "node": ">=24.15.0"
   },
   "scripts": {
-    "build": "tsup account/index.ts analytics/index.ts auth/index.ts base/index.ts cloud-share/index.ts cloud-sync/index.ts common/index.ts core-box/index.ts electron/index.ts env/index.ts eventbus/index.ts i18n/index.ts icons/index.ts index.ts intelligence/index.ts network/index.ts permission/index.ts plugin/index.ts plugin/preload.ts plugin/sdk/box-sdk.ts plugin/sdk/clipboard.ts plugin/sdk/index.ts plugin/sdk/service/index.ts plugin/sdk/storage.ts plugin/sdk/system.ts plugin/sdk/types.ts preload/index.ts search/index.ts service/index.ts service/protocol/index.ts store/index.ts transport/events/types/index.ts transport/index.ts types/index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "build": "tsup account/index.ts analytics/index.ts auth/index.ts base/index.ts cloud-share/index.ts cloud-sync/index.ts common/index.ts core-box/index.ts electron/index.ts env/index.ts eventbus/index.ts i18n/index.ts icons/index.ts index.ts intelligence/index.ts network/index.ts permission/index.ts plugin/index.ts plugin/preload.ts plugin/theme.ts plugin/sdk/box-sdk.ts plugin/sdk/clipboard.ts plugin/sdk/index.ts plugin/sdk/service/index.ts plugin/sdk/storage.ts plugin/sdk/system.ts plugin/sdk/types.ts preload/index.ts search/index.ts service/index.ts service/protocol/index.ts store/index.ts transport/events/types/index.ts transport/index.ts types/index.ts --format esm --dts --target node24 --platform neutral --clean --out-dir dist --tsconfig tsconfig.build.json",
     "benchmark:preview": "vitest run \"__tests__/core-box/preview-sdk.benchmark.test.ts\" --reporter verbose",
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
@@ -181,6 +181,11 @@
         "types": "./dist/plugin/preload.d.mts",
         "import": "./dist/plugin/preload.mjs",
         "default": "./dist/plugin/preload.mjs"
+      },
+      "./plugin/theme": {
+        "types": "./dist/plugin/theme.d.mts",
+        "import": "./dist/plugin/theme.mjs",
+        "default": "./dist/plugin/theme.mjs"
       },
       "./plugin/sdk": {
         "types": "./dist/plugin/sdk/index.d.mts",

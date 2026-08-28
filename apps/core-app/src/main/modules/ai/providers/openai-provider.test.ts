@@ -5,6 +5,36 @@ const networkMocks = vi.hoisted(() => ({
   request: vi.fn()
 }))
 
+const modelMocks = vi.hoisted(() => ({
+  chatConstruct: vi.fn(),
+  invoke: vi.fn(),
+  stream: vi.fn(),
+  embeddingConstruct: vi.fn(),
+  embedDocuments: vi.fn(),
+  embedQuery: vi.fn()
+}))
+
+vi.mock('@langchain/openai', () => ({
+  ChatOpenAI: class {
+    constructor(config: unknown) {
+      modelMocks.chatConstruct(config)
+      return {
+        invoke: modelMocks.invoke,
+        stream: modelMocks.stream
+      }
+    }
+  },
+  OpenAIEmbeddings: class {
+    constructor(config: unknown) {
+      modelMocks.embeddingConstruct(config)
+      return {
+        embedDocuments: modelMocks.embedDocuments,
+        embedQuery: modelMocks.embedQuery
+      }
+    }
+  }
+}))
+
 vi.mock('../../network', () => ({
   getNetworkService: () => networkMocks
 }))
@@ -55,6 +85,49 @@ function createSiliconflowProvider() {
     capabilities: ['audio.tts'],
     priority: 1
   })
+}
+
+function createTimeoutProvider(timeout?: number) {
+  return new OpenAIProvider({
+    id: 'openai-timeout',
+    type: IntelligenceProviderType.OPENAI,
+    name: 'OpenAI Timeout',
+    enabled: true,
+    apiKey: 'test-api-key',
+    baseUrl: 'https://openai.example.test/v1',
+    defaultModel: 'gpt-4o-mini',
+    models: ['gpt-4o-mini', 'text-embedding-3-small'],
+    capabilities: ['text.chat', 'text.embedding'],
+    timeout,
+    priority: 1
+  })
+}
+
+function createTextStream() {
+  return (async function* () {
+    yield { content: 'streamed response' }
+  })()
+}
+
+async function invokeTextCapabilities(
+  provider: OpenAIProvider,
+  options: Parameters<OpenAIProvider['chat']>[1]
+) {
+  modelMocks.invoke.mockResolvedValueOnce({ content: 'chat response' })
+  modelMocks.stream.mockResolvedValueOnce(createTextStream())
+  modelMocks.embedQuery.mockResolvedValueOnce([0.25, 0.75])
+
+  await provider.chat({ messages: [{ role: 'user', content: 'chat timeout probe' }] }, options)
+  for await (const _chunk of provider.chatStream(
+    { messages: [{ role: 'user', content: 'stream timeout probe' }] },
+    options
+  )) {
+    // Consume the stream so the provider completes its normal lifecycle.
+  }
+  await provider.embedding(
+    { text: 'embedding timeout probe', model: 'text-embedding-3-small' },
+    options
+  )
 }
 
 function getProviderRequest() {
@@ -109,6 +182,46 @@ function expectBlobPart(
 function expectAudioFile(body: FormData, expectedType: string) {
   expectBlobPart(body, 'file', expectedType, /\.wav$/)
 }
+
+describe('OpenAI-compatible timeout resolution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it.each([
+    {
+      name: 'provider timeout',
+      providerTimeout: 12_345,
+      options: {},
+      expectedTimeout: 12_345
+    },
+    {
+      name: 'call-level override',
+      providerTimeout: 12_345,
+      options: { timeout: 4_321 },
+      expectedTimeout: 4_321
+    },
+    {
+      name: 'bounded default',
+      providerTimeout: undefined,
+      options: {},
+      expectedTimeout: 30_000
+    }
+  ])(
+    'uses the $name for chat, stream, and embedding',
+    async ({ providerTimeout, options, expectedTimeout }) => {
+      await invokeTextCapabilities(createTimeoutProvider(providerTimeout), options)
+
+      expect(modelMocks.chatConstruct).toHaveBeenCalledTimes(2)
+      for (const [config] of modelMocks.chatConstruct.mock.calls) {
+        expect(config).toMatchObject({ timeout: expectedTimeout })
+      }
+      expect(modelMocks.embeddingConstruct).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: expectedTimeout })
+      )
+    }
+  )
+})
 
 describe('OpenAIProvider audio transcription capabilities', () => {
   beforeEach(() => {

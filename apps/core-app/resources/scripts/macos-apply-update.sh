@@ -64,9 +64,7 @@ EXTRACT_DIR="$STAGE_ROOT/extract"
 MOUNT_DIR="$STAGE_ROOT/mount"
 
 cleanup_mount() {
-  if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then
-    /usr/bin/hdiutil detach "$MOUNT_DIR" -quiet >/dev/null 2>&1 || true
-  fi
+  /usr/bin/hdiutil detach "$MOUNT_DIR" -quiet >/dev/null 2>&1 || true
 }
 
 
