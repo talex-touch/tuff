@@ -122,6 +122,17 @@ export interface PrivacyCategoryDeleteRequest {
   readonly previewId: string
 }
 
+export interface PrivacyOrchestratorRunDeletePreviewRequest {
+  readonly operation: 'orchestrator-run.delete-preview'
+  readonly runId: string
+}
+
+export interface PrivacyOrchestratorRunDeleteRequest {
+  readonly operation: 'orchestrator-run.delete'
+  readonly confirmation: 'delete-orchestrator-run'
+  readonly previewId: string
+}
+
 export interface PrivacyProviderDisclosureRequest {
   readonly operation: 'provider-disclosure.get'
 }
@@ -158,6 +169,8 @@ export type PrivacyRequest =
   | PrivacyCategoryExportRequest
   | PrivacyCategoryDeletePreviewRequest
   | PrivacyCategoryDeleteRequest
+  | PrivacyOrchestratorRunDeletePreviewRequest
+  | PrivacyOrchestratorRunDeleteRequest
   | PrivacyProviderDisclosureRequest
   | PrivacySecretBackupPreviewRequest
   | PrivacySecretBackupWriteRequest
@@ -213,6 +226,18 @@ export interface PrivacyCategoryDeleteSummary {
     readonly deletedItemCount: number
   }[]
   readonly partial: boolean
+}
+
+export type PrivacyOrchestratorRunDeleteDisposition = 'eligible' | 'protected' | 'not-found'
+
+export interface PrivacyOrchestratorRunDeletePreview {
+  readonly disposition: PrivacyOrchestratorRunDeleteDisposition
+  readonly eventCount: number
+  readonly previewId?: string
+}
+
+export interface PrivacyOrchestratorRunDeleteSummary {
+  readonly deletedEventCount: number
 }
 
 export type PrivacyProviderDestinationClass = 'local' | 'remote' | 'nexus-managed'
@@ -280,6 +305,8 @@ export type PrivacyCleanupRunResult = PrivacyResult<PrivacyCleanupRunSummary>
 export type PrivacyCategoryExportResult = PrivacyResult<PrivacyCategoryExportSummary>
 export type PrivacyCategoryDeletePreviewResult = PrivacyResult<PrivacyCategoryDeletePreview>
 export type PrivacyCategoryDeleteResult = PrivacyResult<PrivacyCategoryDeleteSummary>
+export type PrivacyOrchestratorRunDeletePreviewResult = PrivacyResult<PrivacyOrchestratorRunDeletePreview>
+export type PrivacyOrchestratorRunDeleteResult = PrivacyResult<PrivacyOrchestratorRunDeleteSummary>
 export type PrivacyProviderDisclosureResult = PrivacyResult<{
   readonly providers: readonly PrivacyProviderDisclosure[]
 }>
@@ -318,6 +345,8 @@ export const PRIVACY_SECRET_PASSWORD_MAX_BYTES = 1024
 export const PRIVACY_SECRET_PASSWORD_MIN_CODE_POINTS = 12
 const MAX_RESTORE_ID_BYTES = 96
 const MAX_PREVIEW_ID_BYTES = 96
+const MAX_ORCHESTRATOR_RUN_LOOKUP_ID_BYTES = 1024
+const PUBLIC_ID_PATTERN = /^[A-Z0-9][\w.:-]{0,127}$/i
 
 function invalidPrivacyRequest(): never {
   throw new Error('PRIVACY_REQUEST_INVALID')
@@ -469,6 +498,22 @@ function normalizePreviewId(value: unknown): string {
   return value
 }
 
+function normalizeOrchestratorRunLookupId(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    utf8Bytes(value, MAX_ORCHESTRATOR_RUN_LOOKUP_ID_BYTES) > MAX_ORCHESTRATOR_RUN_LOOKUP_ID_BYTES ||
+    !isWellFormedUnicode(value) ||
+    [...value].some(character => {
+      const codeUnit = character.charCodeAt(0)
+      return codeUnit <= 0x1f || (codeUnit >= 0x7f && codeUnit <= 0x9f)
+    })
+  ) {
+    invalidPrivacyRequest()
+  }
+  return value
+}
+
 function normalizeCategoryList<T extends string>(value: unknown, allowed: ReadonlySet<string>): readonly T[] {
   const input = exactArray(value, MAX_CATEGORY_SELECTIONS)
   if (input.length === 0) invalidPrivacyRequest()
@@ -504,7 +549,17 @@ export function normalizePrivacyRequest(value: unknown): PrivacyRequest
 export function normalizePrivacyRequest(value: unknown): PrivacyRequest {
   const request = exactRecord(
     value,
-    ['operation', 'policy', 'categories', 'confirmation', 'previewId', 'password', 'restoreId', 'conflictPolicy'],
+    [
+      'operation',
+      'policy',
+      'categories',
+      'confirmation',
+      'previewId',
+      'password',
+      'restoreId',
+      'conflictPolicy',
+      'runId',
+    ],
     ['operation'],
   )
   const finalize = <T extends PrivacyRequest>(normalized: T): T => {
@@ -579,6 +634,32 @@ export function normalizePrivacyRequest(value: unknown): PrivacyRequest {
         }),
       )
     }
+    case 'orchestrator-run.delete-preview': {
+      const exact = exactRecord(value, ['operation', 'runId'], ['operation', 'runId'])
+      return finalize(
+        Object.freeze({
+          operation: 'orchestrator-run.delete-preview',
+          runId: normalizeOrchestratorRunLookupId(exact.runId),
+        }),
+      )
+    }
+    case 'orchestrator-run.delete': {
+      const exact = exactRecord(
+        value,
+        ['operation', 'confirmation', 'previewId'],
+        ['operation', 'confirmation', 'previewId'],
+      )
+      if (exact.confirmation !== 'delete-orchestrator-run') {
+        invalidPrivacyRequest()
+      }
+      return finalize(
+        Object.freeze({
+          operation: 'orchestrator-run.delete',
+          confirmation: 'delete-orchestrator-run',
+          previewId: normalizePreviewId(exact.previewId),
+        }),
+      )
+    }
     case 'provider-disclosure.get': {
       exactRecord(value, ['operation'], ['operation'])
       return finalize(Object.freeze({ operation: 'provider-disclosure.get' }))
@@ -624,6 +705,8 @@ export interface PrivacyResultByOperation {
   readonly 'category.export': PrivacyCategoryExportResult
   readonly 'category.delete-preview': PrivacyCategoryDeletePreviewResult
   readonly 'category.delete': PrivacyCategoryDeleteResult
+  readonly 'orchestrator-run.delete-preview': PrivacyOrchestratorRunDeletePreviewResult
+  readonly 'orchestrator-run.delete': PrivacyOrchestratorRunDeleteResult
   readonly 'provider-disclosure.get': PrivacyProviderDisclosureResult
   readonly 'secret-backup.preview': PrivacySecretBackupPreviewResult
   readonly 'secret-backup.write': PrivacySecretBackupWriteResult
@@ -635,8 +718,12 @@ const MAX_RESULT_ITEMS = 256
 const MAX_PROVIDER_DISCLOSURES = 128
 const MAX_PROVIDER_CAPABILITIES = 64
 const MAX_PUBLIC_STRING_BYTES = 256
-const PUBLIC_ID_PATTERN = /^[A-Z0-9][\w.:-]{0,127}$/i
 const REPORT_ID_PATTERN = /^[\w-]{8,96}$/
+const ORCHESTRATOR_RUN_DELETE_DISPOSITION_SET = new Set<PrivacyOrchestratorRunDeleteDisposition>([
+  'eligible',
+  'protected',
+  'not-found',
+])
 
 function normalizeSafeCount(value: unknown): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0) invalidPrivacyRequest()
@@ -946,6 +1033,31 @@ function normalizePrivacySuccessData(operation: keyof PrivacyResultByOperation, 
         invalidPrivacyRequest()
       }
       return Object.freeze({ categories: Object.freeze(categories), partial: normalizeBoolean(data.partial) })
+    }
+    case 'orchestrator-run.delete-preview': {
+      const data = exactRecord(value, ['disposition', 'eventCount', 'previewId'], ['disposition', 'eventCount'])
+      const disposition = data.disposition
+      if (typeof disposition !== 'string') {
+        invalidPrivacyRequest()
+      }
+      if (!ORCHESTRATOR_RUN_DELETE_DISPOSITION_SET.has(disposition as PrivacyOrchestratorRunDeleteDisposition)) {
+        invalidPrivacyRequest()
+      }
+      const hasPreviewId = Object.hasOwn(data, 'previewId')
+      if ((disposition === 'eligible') !== hasPreviewId) {
+        invalidPrivacyRequest()
+      }
+      return Object.freeze({
+        disposition: disposition as PrivacyOrchestratorRunDeleteDisposition,
+        eventCount: normalizeSafeCount(data.eventCount),
+        ...(hasPreviewId ? { previewId: normalizePreviewId(data.previewId) } : {}),
+      })
+    }
+    case 'orchestrator-run.delete': {
+      const data = exactRecord(value, ['deletedEventCount'], ['deletedEventCount'])
+      return Object.freeze({
+        deletedEventCount: normalizeSafeCount(data.deletedEventCount),
+      })
     }
     case 'provider-disclosure.get': {
       const data = exactRecord(value, ['providers'], ['providers'])

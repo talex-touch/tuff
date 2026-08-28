@@ -2,6 +2,7 @@ import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { describe, expect, it } from 'vitest'
 import {
   aggregateUsageStatsByCallerAndPeriod,
+  IntelligenceAuditLogger,
   sanitizeIntelligenceAuditEntry
 } from './intelligence-audit-logger'
 import './intelligence-test-harness'
@@ -70,6 +71,46 @@ const logs: IntelligenceAuditLogEntry[] = [
 ]
 
 describe('usage aggregation by caller and period', () => {
+  it('prefers explicit and provider-reported cost before model estimation', async () => {
+    const logger = new IntelligenceAuditLogger()
+    const baseEntry: IntelligenceAuditLogEntry = {
+      traceId: 'cost-base',
+      timestamp: Date.parse('2026-07-02T10:00:00.000Z'),
+      capabilityId: 'text.chat',
+      provider: 'test-provider',
+      model: 'gpt-4o',
+      usage: { promptTokens: 1000, completionTokens: 1000, totalTokens: 2000 },
+      latency: 10,
+      success: true
+    }
+
+    await logger.log({
+      ...baseEntry,
+      traceId: 'cost-local-zero',
+      model: 'smollm2:135m',
+      usage: { promptTokens: 83, completionTokens: 32, totalTokens: 115, cost: 0 }
+    })
+    await logger.log({
+      ...baseEntry,
+      traceId: 'cost-provider-nonzero',
+      usage: { ...baseEntry.usage, cost: 0.123 }
+    })
+    await logger.log({ ...baseEntry, traceId: 'cost-model-estimate' })
+    await logger.log({
+      ...baseEntry,
+      traceId: 'cost-explicit-override',
+      estimatedCost: 0.5,
+      usage: { ...baseEntry.usage, cost: 0.123 }
+    })
+
+    expect(logger.getRecentLogs(4).map((entry) => [entry.traceId, entry.estimatedCost])).toEqual([
+      ['cost-local-zero', 0],
+      ['cost-provider-nonzero', 0.123],
+      ['cost-model-estimate', 0.02],
+      ['cost-explicit-override', 0.5]
+    ])
+  })
+
   it('drops prompt, response, path, SQL, Secret, and native-error detail at audit ingress', () => {
     const sanitized = sanitizeIntelligenceAuditEntry({
       traceId: 'trace-safe',
@@ -86,6 +127,7 @@ describe('usage aggregation by caller and period', () => {
       error: 'CANARY_SECRET',
       metadata: {
         promptId: 'prompt-safe',
+        operation: 'home-conversation',
         retryCount: 1,
         source: '/CANARY/PATH',
         promptTemplate: 'CANARY_PROMPT_TEMPLATE',
@@ -102,7 +144,11 @@ describe('usage aggregation by caller and period', () => {
       caller: 'unknown',
       userId: 'unknown',
       error: 'INTELLIGENCE_INVOCATION_FAILED',
-      metadata: { promptId: 'prompt-safe', retryCount: 1 }
+      metadata: {
+        promptId: 'prompt-safe',
+        operation: 'home-conversation',
+        retryCount: 1
+      }
     })
     expect(JSON.stringify(sanitized)).not.toMatch(/CANARY_|password|SELECT|\/CANARY/i)
   })

@@ -130,7 +130,7 @@ describe('form spec validation', () => {
     const result = await formTool().execute({ fields: [{ key: 'a', type: 'slider' }] })
 
     expect(result.isError).toBe(true)
-    expect(result.output).toContain('Invalid form:')
+    expect(result.code).toBe('TOOL_INPUT_INVALID')
     expect(result.output).not.toContain(FORM_RESULT_PREFIX)
   })
 

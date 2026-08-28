@@ -29,6 +29,8 @@ export type PrivacyTransportService = Pick<
   | 'previewCategoryDelete'
   | 'exportCategories'
   | 'deleteCategories'
+  | 'previewOrchestratorRunDelete'
+  | 'deleteOrchestratorRun'
   | 'getProviderDisclosure'
   | 'backupSecretsPreview'
   | 'backupSecretsWrite'
@@ -45,6 +47,8 @@ const SERVICE_METHODS = [
   'previewCategoryDelete',
   'exportCategories',
   'deleteCategories',
+  'previewOrchestratorRunDelete',
+  'deleteOrchestratorRun',
   'getProviderDisclosure',
   'backupSecretsPreview',
   'backupSecretsWrite',
@@ -54,6 +58,16 @@ const SERVICE_METHODS = [
 
 const TRANSPORT_SNAPSHOT_MAX_DEPTH = 8
 const TRANSPORT_SNAPSHOT_MAX_ENTRIES = 4_096
+let nextHostAuthorityId = 1
+
+function allocateHostAuthorityId(): number {
+  if (!Number.isSafeInteger(nextHostAuthorityId)) {
+    throw new Error('PRIVACY_TRANSPORT_AUTHORITY_EXHAUSTED')
+  }
+  const authorityId = nextHostAuthorityId
+  nextHostAuthorityId += 1
+  return authorityId
+}
 
 function snapshotTransportData(
   value: unknown,
@@ -226,6 +240,16 @@ export function registerPrivacyTransportHandlers(
   const on = onMethod.bind(transport) as PrivacyTransportAdapter['on']
   const service = snapshotService(serviceSource)
   const disposers: Array<() => void> = []
+  const hostAuthorities = new WeakMap<object, number>()
+
+  function authorityIdFor(context: HandlerContext): number {
+    const sender = context.sender as object
+    const existing = hostAuthorities.get(sender)
+    if (existing !== undefined) return existing
+    const authorityId = allocateHostAuthorityId()
+    hostAuthorities.set(sender, authorityId)
+    return authorityId
+  }
 
   function disposeAll(): void {
     const errors: unknown[] = []
@@ -244,7 +268,10 @@ export function registerPrivacyTransportHandlers(
   function register<T extends keyof PrivacyResultByOperation>(
     event: TuffEvent<unknown, unknown>,
     operation: T,
-    invoke: (request: Extract<PrivacyRequest, { operation: T }>) => Promise<unknown>
+    invoke: (
+      request: Extract<PrivacyRequest, { operation: T }>,
+      authorityId: number
+    ) => Promise<unknown>
   ): void {
     try {
       disposers.push(
@@ -260,7 +287,10 @@ export function registerPrivacyTransportHandlers(
           try {
             return normalizeOperationResult(
               operation,
-              await invoke(request as Extract<PrivacyRequest, { operation: T }>)
+              await invoke(
+                request as Extract<PrivacyRequest, { operation: T }>,
+                authorityIdFor(context)
+              )
             )
           } catch {
             return normalizeOperationResult(operation, unsupported())
@@ -309,6 +339,17 @@ export function registerPrivacyTransportHandlers(
     'category.delete',
     (request) =>
       service.deleteCategories(request.categories, request.confirmation, request.previewId)
+  )
+  register(
+    PrivacyEvents.orchestratorRun.deletePreview as TuffEvent<unknown, unknown>,
+    'orchestrator-run.delete-preview',
+    (request, authorityId) => service.previewOrchestratorRunDelete(request.runId, authorityId)
+  )
+  register(
+    PrivacyEvents.orchestratorRun.delete as TuffEvent<unknown, unknown>,
+    'orchestrator-run.delete',
+    (request, authorityId) =>
+      service.deleteOrchestratorRun(request.confirmation, request.previewId, authorityId)
   )
   register(
     PrivacyEvents.provider.disclosure as TuffEvent<unknown, unknown>,

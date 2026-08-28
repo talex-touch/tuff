@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PluginChannelKeyRegistry } from './plugin-channel-key-registry'
 
 /**
@@ -142,5 +143,128 @@ describe('key revocation', () => {
 
     expect(registry.isValidKey(beta)).toBe(true)
     expect(registry.resolveKey(beta)).toBe('beta')
+  })
+})
+
+describe('identity invalidation notifications', () => {
+  let registry: PluginChannelKeyRegistry
+
+  beforeEach(() => {
+    registry = new PluginChannelKeyRegistry()
+  })
+
+  it('notifies only a real rotation or revocation', () => {
+    const listener = vi.fn()
+    registry.watchIdentityInvalidated(listener)
+
+    const first = registry.requestKey('demo', activation('instance-1', 1))
+    expect(registry.requestKey('demo', activation('instance-1', 1))).toBe(first)
+    expect(registry.requestKey('demo')).toBe(first)
+    expect(registry.revokeKey('0'.repeat(32))).toBe(false)
+    expect(listener).not.toHaveBeenCalled()
+
+    const second = registry.requestKey('demo', activation('instance-1', 2))
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({ key: first, activationGeneration: 1 })
+    )
+
+    expect(registry.revokeKey(second)).toBe(true)
+    expect(registry.revokeKey(second)).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({ key: second, activationGeneration: 2 })
+    )
+  })
+
+  it('publishes rotation only after the replacement identity is current', () => {
+    const listener = vi.fn((identity: Readonly<PluginActivationIdentity>) => {
+      expect(Object.isFrozen(identity)).toBe(true)
+      expect(registry.resolveIdentity(identity.key)).toBeUndefined()
+      expect(registry.resolveCurrentIdentity(identity.name)).toMatchObject({
+        activationGeneration: 2
+      })
+      expect(registry.resolveCurrentIdentity(identity.name)?.key).not.toBe(identity.key)
+    })
+    registry.watchIdentityInvalidated(listener)
+
+    const first = registry.requestKey('demo', activation('instance-1', 1))
+    registry.requestKey('demo', activation('instance-1', 2))
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener.mock.calls[0]?.[0].key).toBe(first)
+  })
+
+  it('publishes revocation only after every lookup is invalid', () => {
+    const listener = vi.fn((identity: Readonly<PluginActivationIdentity>) => {
+      expect(registry.resolveIdentity(identity.key)).toBeUndefined()
+      expect(registry.resolveKey(identity.key)).toBeUndefined()
+      expect(registry.resolveCurrentIdentity(identity.name)).toBeUndefined()
+      expect(registry.keyForName(identity.name)).toBeUndefined()
+    })
+    registry.watchIdentityInvalidated(listener)
+
+    const key = registry.requestKey('demo', activation('instance-1', 1))
+    expect(registry.revokeKey(key)).toBe(true)
+    expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it('isolates mutation and errors from later listeners', () => {
+    const observed = vi.fn()
+    registry.watchIdentityInvalidated((identity) => {
+      expect(Object.isFrozen(identity)).toBe(true)
+      try {
+        ;(identity as PluginActivationIdentity).key = 'tampered-key'
+      } catch {
+        // The explicit throw below also verifies listener-error isolation.
+      }
+      throw new Error('faulty listener')
+    })
+    registry.watchIdentityInvalidated(observed)
+
+    const first = registry.requestKey('demo', activation('instance-1', 1))
+    registry.requestKey('demo', activation('instance-1', 2))
+
+    expect(observed).toHaveBeenCalledOnce()
+    expect(observed.mock.calls[0]?.[0]).toMatchObject({
+      key: first,
+      activationGeneration: 1
+    })
+  })
+
+  it('rejects reentrant key mutations without invalidating the outer result', () => {
+    const reentrantKeys: string[] = []
+    registry.watchIdentityInvalidated(() => {
+      expect(() => registry.requestKey('demo', activation('instance-1', 3))).toThrow(
+        'Plugin channel key mutation is not allowed during identity invalidation'
+      )
+      expect(() => registry.revokeKey(reentrantKeys[0])).toThrow(
+        'Plugin channel key mutation is not allowed during identity invalidation'
+      )
+    })
+
+    const first = registry.requestKey('demo', activation('instance-1', 1))
+    reentrantKeys.push(first)
+    const second = registry.requestKey('demo', activation('instance-1', 2))
+
+    expect(second).not.toBe(first)
+    expect(registry.isValidKey(second)).toBe(true)
+    expect(registry.keyForName('demo')).toBe(second)
+    expect(registry.resolveCurrentIdentity('demo')).toMatchObject({
+      key: second,
+      activationGeneration: 2
+    })
+  })
+
+  it('unsubscribes idempotently', () => {
+    const listener = vi.fn()
+    const unsubscribe = registry.watchIdentityInvalidated(listener)
+    registry.requestKey('demo', activation('instance-1', 1))
+
+    unsubscribe()
+    unsubscribe()
+    registry.requestKey('demo', activation('instance-1', 2))
+
+    expect(listener).not.toHaveBeenCalled()
   })
 })

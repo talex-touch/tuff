@@ -9,6 +9,10 @@ import type {
   PrivacyCleanupPreviewResult,
   PrivacyCleanupRunRequest,
   PrivacyCleanupRunResult,
+  PrivacyOrchestratorRunDeletePreviewRequest,
+  PrivacyOrchestratorRunDeletePreviewResult,
+  PrivacyOrchestratorRunDeleteRequest,
+  PrivacyOrchestratorRunDeleteResult,
   PrivacyPolicyGetRequest,
   PrivacyPolicyGetResult,
   PrivacyPolicyUpdateRequest,
@@ -62,6 +66,16 @@ export const PrivacyEvents = {
       .module('category')
       .event('delete')
       .define<PrivacyCategoryDeleteRequest, PrivacyCategoryDeleteResult>(),
+  },
+  orchestratorRun: {
+    deletePreview: defineEvent('privacy')
+      .module('orchestrator-run')
+      .event('delete-preview')
+      .define<PrivacyOrchestratorRunDeletePreviewRequest, PrivacyOrchestratorRunDeletePreviewResult>(),
+    delete: defineEvent('privacy')
+      .module('orchestrator-run')
+      .event('delete')
+      .define<PrivacyOrchestratorRunDeleteRequest, PrivacyOrchestratorRunDeleteResult>(),
   },
   provider: {
     disclosure: defineEvent('privacy')

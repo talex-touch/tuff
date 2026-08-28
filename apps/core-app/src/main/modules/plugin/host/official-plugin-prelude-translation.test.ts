@@ -8,6 +8,7 @@ const pluginsRoot = path.resolve(process.cwd(), '../../plugins')
 const scriptContent = readFileSync(path.join(pluginsRoot, 'touch-translation', 'index.js'), 'utf8')
 const capabilities = [
   'feature.items.push',
+  'feature.items.widget.push',
   'feature.items.clear',
   'clipboard.write',
   'intelligence.invoke'
@@ -31,7 +32,7 @@ function createHarness(generation: number, options: HarnessOptions = {}) {
         state.items = []
         return { removed }
       }
-      if (capability === 'feature.items.push') {
+      if (capability === 'feature.items.push' || capability === 'feature.items.widget.push') {
         state.items = (payload as { items: Array<Record<string, unknown>> }).items
         return { ok: true }
       }

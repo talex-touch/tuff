@@ -51,18 +51,26 @@ describe('stream client error cleanup', () => {
     }
   })
 
-  async function startStream() {
+  async function startStream(callbacks?: {
+    onError?: (error: Error) => void
+    onEnd?: () => void
+  }) {
     const { channel, handlers } = createChannel()
     const transport = createPluginTuffTransport(channel as any)
-    const onError = vi.fn()
+    const onError = vi.fn<(error: Error) => void>(
+      callbacks?.onError ?? (() => {}),
+    )
+    const onEnd = vi.fn<() => void>(callbacks?.onEnd ?? (() => {}))
     const controller = await transport.stream(ClipboardEvents.change, undefined, {
       onData: () => {},
       onError,
+      onEnd,
     })
 
     return {
       handlers,
       onError,
+      onEnd,
       eventName: ClipboardEvents.change.toEventName(),
       streamId: controller.streamId,
     }
@@ -103,6 +111,25 @@ describe('stream client error cleanup', () => {
     expect(handlers.size).toBe(0)
   })
 
+  it('preserves a stable permission code independently from its message', async () => {
+    const { handlers, onError, eventName, streamId } = await startStream()
+
+    handlers.get(`${eventName}:stream:error:${streamId}`)?.({
+      header: { status: 'request' },
+      data: {
+        error: 'permission denied',
+        code: 'INTELLIGENCE_PERMISSION_DENIED',
+      },
+    })
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0]?.[0]).toMatchObject({
+      message: 'permission denied',
+      code: 'INTELLIGENCE_PERMISSION_DENIED',
+    })
+    expect(handlers.size).toBe(0)
+  })
+
   it('still delivers data chunks without tearing the stream down', async () => {
     const { handlers, eventName, streamId } = await startStream()
 
@@ -113,5 +140,33 @@ describe('stream client error cleanup', () => {
 
     // A fix that cleaned up on every data message would break streaming entirely.
     expect(handlers.size).toBe(3)
+  })
+
+  it.each([
+    ['data', (eventName: string, streamId: string) => `${eventName}:stream:data:${streamId}`],
+    ['dedicated', (eventName: string, streamId: string) => `${eventName}:stream:error:${streamId}`],
+  ])('releases channel registrations when the %s error callback throws', async (_label, channelName) => {
+    const callbackError = new Error('consumer error callback failed')
+    const onError = vi.fn(() => {
+      throw callbackError
+    })
+    const { handlers, eventName, streamId } = await startStream({ onError })
+
+    expect(() => handlers.get(channelName(eventName, streamId))?.({
+      header: { status: 'request' },
+      data: { error: 'permission denied' },
+    })).toThrow(callbackError)
+    expect(handlers.size).toBe(0)
+  })
+
+  it('releases channel registrations when the end callback throws', async () => {
+    const callbackError = new Error('consumer end callback failed')
+    const onEnd = vi.fn(() => {
+      throw callbackError
+    })
+    const { handlers, eventName, streamId } = await startStream({ onEnd })
+
+    expect(() => handlers.get(`${eventName}:stream:end:${streamId}`)?.({})).toThrow(callbackError)
+    expect(handlers.size).toBe(0)
   })
 })

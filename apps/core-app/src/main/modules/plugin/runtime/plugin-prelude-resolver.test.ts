@@ -49,6 +49,17 @@ describe('plugin Prelude artifact resolution', () => {
     })
   })
 
+  it('rejects manifests that declare both Prelude owners', () => {
+    const root = fixture()
+
+    expect(() =>
+      resolvePluginPrelude(root, {
+        main: 'index.js',
+        buildIndexEntry: 'index/main.ts'
+      })
+    ).toThrowError(new PluginPreludeResolutionError('PLUGIN_RUNTIME_PRELUDE_CONTRACT_INVALID'))
+  })
+
   it('selects the canonical build when the build source entry exists', () => {
     const root = fixture()
     fs.mkdirSync(path.join(root, 'index'), { recursive: true })

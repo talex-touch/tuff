@@ -3,6 +3,7 @@ import {
   inferCoreArtifactIdentity,
   isCorePackageFileName,
   REQUIRED_CORE_PAIRS,
+  SUPPORTED_CORE_PAIRS,
 } from '../lib/release-artifacts.mjs'
 import { validateRollbackContract } from '../lib/update-rollback-contract.mjs'
 
@@ -43,7 +44,11 @@ function inferCoreArtifactArch(filename) {
 }
 
 function createHttpErrorPayload(error) {
-  return error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(
+    /https?:\/\/\S+/gi,
+    value => summarizeHttpUrl(value) ?? '<redacted-url>',
+  )
 }
 
 function normalizeSha(value) {
@@ -55,6 +60,37 @@ function normalizeSha(value) {
 
 function normalizeText(value) {
   return String(value || '').trim()
+}
+
+function summarizeHttpUrl(value) {
+  const text = normalizeText(value)
+  if (!text)
+    return null
+
+  try {
+    const fallbackOrigin = 'https://redirect.invalid'
+    const parsed = new URL(text, `${fallbackOrigin}/`)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+      return '<unsupported-redirect-url>'
+
+    const path = normalizePathname(parsed.pathname) || '/'
+    return parsed.origin === fallbackOrigin ? path : `${parsed.origin}${path}`
+  }
+  catch {
+    return '<invalid-redirect-url>'
+  }
+}
+
+function githubApiRequestOptions() {
+  const token = normalizeText(
+    process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
+  )
+  return {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  }
 }
 
 function classifySignaturePayload(response, bytes) {
@@ -124,17 +160,17 @@ function classifySignaturePayload(response, bytes) {
 
 function classifyDownloadResponse(response, bytes = new Uint8Array()) {
   const status = response.status
-  const location = normalizeText(response.headers.get('location'))
+  const rawLocation = normalizeText(response.headers.get('location'))
   const contentType = normalizeText(
     response.headers.get('content-type'),
   ).toLowerCase()
 
   if ([302, 307, 308].includes(status)) {
     return {
-      validResponse: Boolean(location),
+      validResponse: Boolean(rawLocation),
       responseKind: 'redirect',
-      location: location || null,
-      ...(location ? {} : { reason: 'missing-redirect-location' }),
+      location: summarizeHttpUrl(rawLocation),
+      ...(rawLocation ? {} : { reason: 'missing-redirect-location' }),
     }
   }
 
@@ -660,7 +696,7 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
       issues.push(`artifacts must include required platform/arch ${pair}`)
   }
   for (const pair of matrix.keys()) {
-    if (!REQUIRED_CORE_PAIRS.includes(pair))
+    if (!SUPPORTED_CORE_PAIRS.includes(pair))
       issues.push(`artifacts contains unsupported core platform/arch ${pair}`)
   }
 
@@ -738,7 +774,11 @@ async function fetchGithubManifestPayload(githubAssets, { tag, timeoutMs }) {
 async function checkGithubFallbackManifest({ tag, timeoutMs, pushCheck }) {
   const githubReleaseUrl = `https://api.github.com/repos/talex-touch/tuff/releases/tags/${encodeURIComponent(tag)}`
   try {
-    const response = await fetchWithTimeout(githubReleaseUrl, {}, timeoutMs)
+    const response = await fetchWithTimeout(
+      githubReleaseUrl,
+      githubApiRequestOptions(),
+      timeoutMs,
+    )
     if (!response.ok) {
       pushCheck(
         'remote-github-fallback-contract',
@@ -788,7 +828,11 @@ async function checkGithubFallbackManifest({ tag, timeoutMs, pushCheck }) {
     let rollbackIssues = []
     let expectedRollbackFromVersion = null
     try {
-      const historyResponse = await fetchWithTimeout(historyUrl, {}, timeoutMs)
+      const historyResponse = await fetchWithTimeout(
+        historyUrl,
+        githubApiRequestOptions(),
+        timeoutMs,
+      )
       if (!historyResponse.ok) {
         pushCheck(
           'remote-github-fallback-rollback',
@@ -1528,7 +1572,7 @@ export async function checkRemoteRelease({
   try {
     const githubReleaseResp = await fetchWithTimeout(
       githubReleaseUrl,
-      {},
+      githubApiRequestOptions(),
       timeoutMs,
     )
     githubManifestStatus = githubReleaseResp.status
@@ -1621,7 +1665,7 @@ export async function checkRemoteRelease({
   }
   else if (githubManifestPayload) {
     const manifestRelease = githubManifestPayload.release ?? {}
-    const rollbackHistoryUrl = `${baseUrl}/api/releases?channel=${encodeURIComponent(normalizeText(manifestRelease.channel))}&status=published&limit=100`
+    const rollbackHistoryUrl = `${baseUrl}/api/releases?channel=${encodeURIComponent(normalizeText(manifestRelease.channel))}&status=published&limit=50`
     try {
       const rollbackHistoryResponse = await fetchWithTimeout(
         rollbackHistoryUrl,

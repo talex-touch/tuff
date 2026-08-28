@@ -382,6 +382,7 @@ export class DownloadWorker {
         headers,
         responseType: 'stream',
         signal: idle.signal,
+        streamTimeoutMode: 'caller-signal',
         retryPolicy: { maxRetries: 0 }
       })
     } catch (error) {

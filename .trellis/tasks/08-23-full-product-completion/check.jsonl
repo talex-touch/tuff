@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"复核最终质量与证据完整性"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"复核 privileged path 与 fail-closed 边界"}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"复核敏感数据、清理与披露"}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"复核测试在被保护属性破坏时会失败"}

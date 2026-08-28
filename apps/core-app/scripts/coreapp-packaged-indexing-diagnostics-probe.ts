@@ -49,7 +49,9 @@ export interface IndexingDiagnosticsDomSnapshot {
   readyState: string
   text: string
   hasSettingsShell: boolean
+  hasFileIndexPage: boolean
   hasSourceDiagnosticsGroup: boolean
+  targetSourceVisible: boolean
   sourceRows: Array<{
     title: string
     description: string
@@ -57,10 +59,31 @@ export interface IndexingDiagnosticsDomSnapshot {
   }>
   dialog: {
     visible: boolean
+    animationStable: boolean
     title: string
     text: string
     sections: string[]
     recentTaskText: string
+    recentTaskChips: string[]
+    recentTaskChipGeometry: Array<{
+      text: string
+      clientWidth: number
+      scrollWidth: number
+      clientHeight: number
+      scrollHeight: number
+      rectWidth: number
+      rectHeight: number
+      display: string
+      visibility: string
+      opacity: number
+      withinSection: boolean
+      withinDialog: boolean
+      withinOverlayContent: boolean
+      withinViewport: boolean
+      intrinsicTruncated: boolean
+      fullyVisible: boolean
+      truncated: boolean
+    }>
     hasRecentTasks: boolean
   }
 }
@@ -278,16 +301,20 @@ export function resolveIndexedSourceDetailTargetText(
   sourceId: string,
   rows: Array<{ text: string; hasDetailAction: boolean }>
 ): string | undefined {
+  const expectedTitles = resolveIndexedSourceTitles(sourceId)
+  return rows
+    .filter((row) => row.hasDetailAction)
+    .filter((row) => expectedTitles.some((title) => row.text.includes(title)))
+    .sort((left, right) => left.text.length - right.text.length)[0]?.text
+}
+
+function resolveIndexedSourceTitles(sourceId: string): string[] {
   const sourceTitles: Record<string, string[]> = {
     'file-provider': ['File Index', '文件索引'],
     'app-provider': ['Applications', 'Application Index', '应用索引'],
     everything: ['Everything']
   }
-  const expectedTitles = sourceTitles[sourceId] || [sourceId]
-  return rows
-    .filter((row) => row.hasDetailAction)
-    .filter((row) => expectedTitles.some((title) => row.text.includes(title)))
-    .sort((left, right) => left.text.length - right.text.length)[0]?.text
+  return sourceTitles[sourceId] || [sourceId]
 }
 
 function printUsage(): void {
@@ -507,20 +534,25 @@ export function buildArtifactPaths(options: Pick<CliOptions, 'outputDir' | 'date
 async function prepareIsolatedUserData(options: CliOptions): Promise<void> {
   await rm(options.userDataDir, { recursive: true, force: true })
   const configDir = path.join(options.userDataDir, 'tuff', 'modules', 'config')
+  const isolatedHome = options.fixtureRoot
+    ? resolveCoreAppPath(options.fixtureRoot)
+    : path.resolve(options.userDataDir, 'home')
   await mkdir(configDir, { recursive: true })
   await writeFile(
     path.join(configDir, 'app-setting.ini'),
-    JSON.stringify({
-      beginner: {
-        init: true
-      },
-      dev: {
-        advancedSettings: true
-      }
-    })
+    JSON.stringify(buildIsolatedAppSetting())
   )
-  if (options.fixtureRoot) {
-    await prepareFixtureRoot(resolveCoreAppPath(options.fixtureRoot))
+  await prepareFixtureRoot(isolatedHome)
+}
+
+export function buildIsolatedAppSetting(): Record<string, unknown> {
+  return {
+    beginner: {
+      init: true
+    },
+    dev: {
+      developerMode: true
+    }
   }
 }
 
@@ -674,36 +706,70 @@ function inspectTargetExpression(): string {
     href: location.href,
     readyState: document.readyState,
     hasRouter: Boolean(window.__VUE_ROUTER__?.push),
-    hasIpcInvoke: Boolean(window.electron?.ipcRenderer?.invoke),
-    hasSettingsShell: Boolean(document.querySelector('.AppSettings-Container')),
+    hasChannelSend: Boolean((window.$channel || window.touchChannel || window.$touchChannel)?.send),
+    hasSettingsShell: Boolean(document.querySelector('.SettingsPage')),
     text: document.body?.innerText?.slice(0, 1000) || ''
   }))()`
 }
 
 function openFileIndexSettingsExpression(): string {
   return `async () => {
-    if (window.__VUE_ROUTER__?.push) {
-      await window.__VUE_ROUTER__.push({ path: '/setting', query: { section: 'file-index' } })
-    } else {
-      location.hash = '#/setting?section=file-index'
+    const waitFor = async (predicate, timeoutMs = 12000) => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < timeoutMs) {
+        if (predicate()) return true
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+      return false
     }
-    await new Promise((resolve) => setTimeout(resolve, 2400))
-    document.querySelector('[data-settings-section="file-index"]')?.scrollIntoView({ block: 'start' })
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    if (window.__VUE_ROUTER__?.push) {
+      await window.__VUE_ROUTER__.push('/setting/file-index')
+    } else {
+      location.hash = '#/setting/file-index'
+    }
+    const ready = await waitFor(
+      () =>
+        location.hash.startsWith('#/setting/file-index') &&
+        Boolean(document.querySelector('.SettingsPage'))
+    )
+    document.querySelector('.SettingsPage')?.scrollIntoView({ block: 'start' })
     return {
+      ready,
       href: location.href,
       text: document.body?.innerText?.slice(0, 2000) || ''
     }
   }`
 }
 
+function waitForSourceDiagnosticsExpression(sourceId: string): string {
+  const expectedTitles = resolveIndexedSourceTitles(sourceId)
+  return `async () => {
+    const textOf = (node) => (node?.textContent || '').replace(/\\s+/g, ' ').trim()
+    const expectedTitles = ${JSON.stringify(expectedTitles)}
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 12000) {
+      const visible = Array.from(
+        document.querySelectorAll('.source-diagnostic-detail-button')
+      ).some((button) => {
+        const row = button.closest('.TBlockSlot-Container')
+        const text = textOf(row)
+        return Boolean(row) && expectedTitles.some((title) => text.includes(title))
+      })
+      if (visible) return true
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+    return false
+  }`
+}
+
 function loadDiagnosticsExpression(sourceId: string): string {
   return `async () => {
-    const invoke = window.electron?.ipcRenderer?.invoke?.bind(window.electron.ipcRenderer)
-    if (!invoke) throw new Error('window.electron.ipcRenderer.invoke is unavailable')
+    const channel = window.$channel || window.touchChannel || window.$touchChannel
+    const send = channel?.send?.bind(channel)
+    if (!send) throw new Error('renderer channel send is unavailable')
     const invokeWithTimeout = (payload, timeoutMs = 12000) =>
       Promise.race([
-        invoke(${JSON.stringify(INDEXED_SOURCE_DIAGNOSTICS_EVENT)}, payload),
+        send(${JSON.stringify(INDEXED_SOURCE_DIAGNOSTICS_EVENT)}, payload),
         new Promise((resolve) => setTimeout(() => resolve({ sources: [], summary: { total: 0 }, timeout: true }), timeoutMs))
       ])
     const allDiagnostics = await invokeWithTimeout(undefined)
@@ -735,80 +801,160 @@ function runMaintenanceActionExpression(
           }
 
   return `async () => {
-    const invoke = window.electron?.ipcRenderer?.invoke?.bind(window.electron.ipcRenderer)
-    if (!invoke) throw new Error('window.electron.ipcRenderer.invoke is unavailable')
+    const channel = window.$channel || window.touchChannel || window.$touchChannel
+    const send = channel?.send?.bind(channel)
+    if (!send) throw new Error('renderer channel send is unavailable')
     return await Promise.race([
-      invoke(${JSON.stringify(eventName)}, ${JSON.stringify(payload)}),
+      send(${JSON.stringify(eventName)}, ${JSON.stringify(payload)}),
       new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 45000))
     ])
   }`
 }
 
 function clickSourceDetailExpression(sourceId: string): string {
+  const expectedTitles = resolveIndexedSourceTitles(sourceId)
   return `async () => {
     const textOf = (node) => (node?.textContent || '').replace(/\\s+/g, ' ').trim()
-    const sourceId = ${JSON.stringify(sourceId)}
-    const sourceTitles = {
-      'file-provider': ['File Index', '文件索引'],
-      'app-provider': ['Applications', 'Application Index', '应用索引'],
-      'everything': ['Everything']
+    const expectedTitles = ${JSON.stringify(expectedTitles)}
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+    const waitForValue = async (read, timeoutMs = 12000) => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < timeoutMs) {
+        const value = read()
+        if (value) return value
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+      return null
     }
-    const expectedTitles = sourceTitles[sourceId] || [sourceId]
-    const isDetailButton = (button) => {
-      const text = textOf(button)
-      return text.includes('Details') || text.includes('详情')
+    const waitForStableGeometry = async (dialog, timeoutMs = 8000) => {
+      const overlayContent = dialog.closest('.TxFlipOverlay-Content')
+      const overlayCard = dialog.closest('.TxFlipOverlay-Card')
+      if (!overlayContent || !overlayCard) return false
+
+      const startedAt = performance.now()
+      let previousSignature = ''
+      let stableFrames = 0
+      while (performance.now() - startedAt < timeoutMs) {
+        await nextFrame()
+        const dialogRect = dialog.getBoundingClientRect()
+        const contentRect = overlayContent.getBoundingClientRect()
+        const cardRect = overlayCard.getBoundingClientRect()
+        const cardStyle = getComputedStyle(overlayCard)
+        const animations = typeof overlayCard.getAnimations === 'function'
+          ? overlayCard.getAnimations({ subtree: true })
+          : []
+        const hasRunningAnimation = animations.some(
+          (animation) => animation.playState === 'running' || animation.playState === 'pending'
+        )
+        const signature = [
+          dialogRect.left,
+          dialogRect.top,
+          dialogRect.width,
+          dialogRect.height,
+          contentRect.left,
+          contentRect.top,
+          contentRect.width,
+          contentRect.height,
+          cardRect.left,
+          cardRect.top,
+          cardRect.width,
+          cardRect.height
+        ]
+          .map((value) => Number(value).toFixed(2))
+          .concat(cardStyle.transform, cardStyle.opacity, cardStyle.filter)
+          .join('|')
+        const settledLongEnough = performance.now() - startedAt >= 520
+        if (settledLongEnough && !hasRunningAnimation && signature === previousSignature) {
+          stableFrames += 1
+        } else {
+          stableFrames = 0
+        }
+        previousSignature = signature
+        if (stableFrames >= 2) return true
+      }
+      return false
     }
-    const scoreRow = (element) => {
-      const text = textOf(element)
-      const hasTitle = expectedTitles.some((title) => text.includes(title))
-      const detailButtons = Array.from(element.querySelectorAll('button')).filter(isDetailButton)
-      if (!hasTitle || detailButtons.length === 0) return null
-      return { element, text, detailButton: detailButtons[0], score: text.length }
+    const findTarget = () => {
+      const candidates = Array.from(
+        document.querySelectorAll('.source-diagnostic-detail-button')
+      )
+        .map((button) => {
+          const row = button.closest('.TBlockSlot-Container')
+          const text = textOf(row)
+          if (!row || !expectedTitles.some((title) => text.includes(title))) return null
+          return { row, text, button, score: text.length }
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.score - right.score)
+      return candidates[0] || null
     }
-    const group = Array.from(document.querySelectorAll('.tuff-group-block, [class*="TuffGroupBlock"], section, div')).find((element) => {
-      const text = textOf(element)
-      return text.includes('Search Source Diagnostics') || text.includes('搜索源诊断')
-    })
-    const candidates = Array.from((group || document).querySelectorAll('.tuff-block-slot, [class*="TuffBlock"], li, article, [role="listitem"], div'))
-      .map(scoreRow)
-      .filter(Boolean)
-      .sort((left, right) => left.score - right.score)
-    const targetRow = candidates[0]
-    const targetButton = targetRow?.detailButton || null
-    if (!targetButton) {
+    const target = await waitForValue(findTarget)
+    if (!target) {
       return {
         opened: false,
         reason: 'source-detail-button-not-found',
         expectedTitles,
-        candidates: Array.from((group || document).querySelectorAll('button'))
+        candidates: Array.from(document.querySelectorAll('.source-diagnostic-detail-button'))
           .map((button) => textOf(button))
           .filter(Boolean)
           .slice(0, 20),
         text: document.body?.innerText?.slice(0, 2500) || ''
       }
     }
-    targetButton.click()
-    await new Promise((resolve) => setTimeout(resolve, 1600))
+    target.button.click()
+    const dialog = await waitForValue(() => document.querySelector('.source-diagnostic-dialog'), 8000)
+    const animationStable = dialog ? await waitForStableGeometry(dialog) : false
     return {
-      opened: Boolean(document.querySelector('.source-diagnostic-dialog')),
-      targetText: targetRow?.text?.slice(0, 500) || '',
+      opened: Boolean(dialog),
+      animationStable,
+      targetText: target.text.slice(0, 500),
       text: document.body?.innerText?.slice(0, 2500) || ''
     }
   }`
 }
 
-function inspectSettingsDomExpression(): string {
-  return `(() => {
+function inspectSettingsDomExpression(
+  sourceId: string,
+  targetRecentTaskJobIds: string[] = [],
+  detailAnimationStable = false
+): string {
+  const expectedTitles = resolveIndexedSourceTitles(sourceId)
+  return `(async () => {
     const textOf = (node) => (node?.textContent || '').replace(/\\s+/g, ' ').trim()
+    const tokenBoundaries = new Set([' ', '\\t', '\\n', '\\r', '·', '/', '(', ')', '[', ']', '{', '}', ',', ';'])
+    const isTokenBoundary = (character) => !character || tokenBoundaries.has(character)
+    const containsExactToken = (text, token) => {
+      let offset = 0
+      while (offset <= text.length - token.length) {
+        const index = text.indexOf(token, offset)
+        if (index < 0) return false
+        if (
+          isTokenBoundary(text[index - 1]) &&
+          isTokenBoundary(text[index + token.length])
+        ) {
+          return true
+        }
+        offset = index + 1
+      }
+      return false
+    }
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+    const containsRect = (container, target) =>
+      target.left >= container.left - 1 &&
+      target.right <= container.right + 1 &&
+      target.top >= container.top - 1 &&
+      target.bottom <= container.bottom + 1
     const bodyText = document.body?.innerText || ''
-    const sourceRows = Array.from(document.querySelectorAll('button'))
-      .filter((button) => {
-        const text = textOf(button)
-        return text.includes('Details') || text.includes('详情')
-      })
+    const expectedTitles = ${JSON.stringify(expectedTitles)}
+    const targetRecentTaskJobIds = ${JSON.stringify(targetRecentTaskJobIds)}
+    const detailAnimationStable = ${JSON.stringify(detailAnimationStable)}
+    const detailButtons = Array.from(
+      document.querySelectorAll('.source-diagnostic-detail-button')
+    )
+    const sourceRows = detailButtons
       .map((button) => {
-        const row = button.closest('.tuff-block-slot, [class*="TuffBlock"], div')
-        const title = textOf(row?.querySelector('strong, .title, [class*="title"]')) || textOf(row).slice(0, 120)
+        const row = button.closest('.TBlockSlot-Container')
+        const title = textOf(row?.querySelector('.TBlockSlot-TitleRow, h5'))
         return {
           title,
           description: textOf(row).slice(0, 500),
@@ -816,6 +962,9 @@ function inspectSettingsDomExpression(): string {
         }
       })
       .slice(0, 12)
+    const targetSourceVisible = sourceRows.some((row) =>
+      expectedTitles.some((title) => row.title.includes(title) || row.description.includes(title))
+    )
     const dialog = document.querySelector('.source-diagnostic-dialog')
     const dialogText = textOf(dialog)
     const sections = Array.from(dialog?.querySelectorAll('.source-diagnostic-section-title') || [])
@@ -827,21 +976,122 @@ function inspectSettingsDomExpression(): string {
         return title === 'Recent' || title === 'Recent Tasks' || title === '最近' || title === '最近任务'
       })
     const recentTaskText = textOf(recentSection)
+    const recentTaskElements = Array.from(
+      recentSection?.querySelectorAll('.source-history-chip') || []
+    )
+    const recentTaskChips = recentTaskElements.map(textOf).filter(Boolean)
+    const overlayContent = dialog?.closest('.TxFlipOverlay-Content')
+    const overlayCard = dialog?.closest('.TxFlipOverlay-Card')
+    const hasRunningAnimation = Boolean(
+      overlayCard &&
+      typeof overlayCard.getAnimations === 'function' &&
+      overlayCard
+        .getAnimations({ subtree: true })
+        .some((animation) => animation.playState === 'running' || animation.playState === 'pending')
+    )
+    const readChipGeometry = (chip) => {
+      const rect = chip.getBoundingClientRect()
+      const style = getComputedStyle(chip)
+      const opacity = Number.parseFloat(style.opacity)
+      const recentSectionRect = recentSection?.getBoundingClientRect()
+      const dialogRect = dialog?.getBoundingClientRect()
+      const overlayContentRect = overlayContent?.getBoundingClientRect()
+      const viewportRect = {
+        left: 0,
+        top: 0,
+        right: window.innerWidth,
+        bottom: window.innerHeight
+      }
+      const hasVisibleSize = rect.width > 0 && rect.height > 0
+      let styleVisible = Boolean(overlayCard)
+      let reachedOverlayCard = false
+      let styleNode = chip
+      while (styleVisible && styleNode) {
+        const nodeStyle = getComputedStyle(styleNode)
+        const nodeOpacity = Number.parseFloat(nodeStyle.opacity)
+        styleVisible =
+          nodeStyle.display !== 'none' &&
+          nodeStyle.visibility !== 'hidden' &&
+          nodeStyle.visibility !== 'collapse' &&
+          Number.isFinite(nodeOpacity) &&
+          nodeOpacity > 0
+        if (styleNode === overlayCard) {
+          reachedOverlayCard = true
+          break
+        }
+        styleNode = styleNode.parentElement
+      }
+      styleVisible = styleVisible && reachedOverlayCard
+      const withinSection = Boolean(recentSectionRect && containsRect(recentSectionRect, rect))
+      const withinDialog = Boolean(dialogRect && containsRect(dialogRect, rect))
+      const withinOverlayContent = Boolean(
+        overlayContentRect && containsRect(overlayContentRect, rect)
+      )
+      const withinViewport = containsRect(viewportRect, rect)
+      const intrinsicTruncated =
+        chip.scrollWidth > chip.clientWidth + 1 || chip.scrollHeight > chip.clientHeight + 1
+      return {
+        text: textOf(chip).slice(0, 1500),
+        clientWidth: chip.clientWidth,
+        scrollWidth: chip.scrollWidth,
+        clientHeight: chip.clientHeight,
+        scrollHeight: chip.scrollHeight,
+        rectWidth: rect.width,
+        rectHeight: rect.height,
+        display: style.display,
+        visibility: style.visibility,
+        opacity,
+        withinSection,
+        withinDialog,
+        withinOverlayContent,
+        withinViewport,
+        intrinsicTruncated,
+        fullyVisible:
+          hasVisibleSize &&
+          styleVisible &&
+          withinSection &&
+          withinDialog &&
+          withinOverlayContent &&
+          withinViewport,
+        truncated: intrinsicTruncated
+      }
+    }
+    const capturedTargetGeometry = new Map()
+    for (const jobId of targetRecentTaskJobIds) {
+      const chip = recentTaskElements.find((element) => containsExactToken(textOf(element), jobId))
+      if (!chip) continue
+      chip.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      await nextFrame()
+      await nextFrame()
+      capturedTargetGeometry.set(chip, readChipGeometry(chip))
+    }
+    const recentTaskChipGeometry = recentTaskElements.map(
+      (chip) => capturedTargetGeometry.get(chip) || readChipGeometry(chip)
+    )
     return {
       href: location.href,
       title: document.title,
       readyState: document.readyState,
       text: bodyText.slice(0, 5000),
-      hasSettingsShell: Boolean(document.querySelector('.AppSettings-Container')) || bodyText.includes('设置') || bodyText.includes('Settings'),
-      hasSourceDiagnosticsGroup: bodyText.includes('Search Source Diagnostics') || bodyText.includes('搜索源诊断'),
+      hasSettingsShell: Boolean(document.querySelector('.SettingsPage')),
+      hasFileIndexPage:
+        location.hash.startsWith('#/setting/file-index') &&
+        Boolean(document.querySelector('.SettingsPage-Title')),
+      hasSourceDiagnosticsGroup: Boolean(
+        detailButtons[0]?.closest('.TGroupBlock-Container')
+      ),
+      targetSourceVisible,
       sourceRows,
       dialog: {
         visible: Boolean(dialog),
+        animationStable: Boolean(dialog && detailAnimationStable && !hasRunningAnimation),
         title: textOf(document.querySelector('.source-diagnostic-dialog')?.parentElement?.querySelector('[class*="title"], strong')),
         text: dialogText.slice(0, 5000),
         sections,
         recentTaskText: recentTaskText.slice(0, 1500),
-        hasRecentTasks: recentTaskText.includes('Recent') || recentTaskText.includes('最近')
+        recentTaskChips: recentTaskChips.slice(0, 3),
+        recentTaskChipGeometry: recentTaskChipGeometry.slice(0, 3),
+        hasRecentTasks: recentTaskChips.length > 0
       }
     }
   })()`
@@ -850,25 +1100,48 @@ function inspectSettingsDomExpression(): string {
 export function selectSettingsTarget(
   snapshots: Array<{
     target: DevToolsTarget
-    snapshot: { hasRouter: boolean; hasIpcInvoke: boolean; hasSettingsShell: boolean; text: string }
-  }>
+    snapshot: {
+      hasRouter: boolean
+      hasChannelSend: boolean
+      hasSettingsShell: boolean
+      text: string
+    }
+  }>,
+  options: { allowAppShell?: boolean } = {}
 ): DevToolsTarget | undefined {
-  return snapshots.find((entry) => {
+  const interactiveTargets = snapshots.filter((entry) => {
     return (
       entry.target.type === 'page' &&
       Boolean(entry.target.webSocketDebuggerUrl) &&
       entry.snapshot.hasRouter &&
-      entry.snapshot.hasIpcInvoke &&
-      (entry.snapshot.hasSettingsShell ||
-        entry.snapshot.text.includes('应用设置') ||
-        entry.snapshot.text.includes('App Settings'))
+      entry.snapshot.hasChannelSend
     )
-  })?.target
+  })
+  const settingsTarget = interactiveTargets.find(
+    (entry) =>
+      entry.snapshot.hasSettingsShell ||
+      entry.snapshot.text.includes('应用设置') ||
+      entry.snapshot.text.includes('App Settings')
+  )
+  if (settingsTarget) return settingsTarget.target
+  if (!options.allowAppShell) return undefined
+
+  const excludedRoutes = [
+    '#/meta-overlay',
+    '#/core-box',
+    '#/division-box',
+    '#/assistant',
+    '#/voice'
+  ]
+  return interactiveTargets.find(
+    (entry) => !excludedRoutes.some((route) => entry.target.url.includes(route))
+  )?.target
 }
 
 async function pickInteractiveSettingsTarget(
   remoteDebuggingUrl: string,
-  timeoutMs: number
+  timeoutMs: number,
+  allowAppShell: boolean
 ): Promise<{ target: DevToolsTarget | undefined; targets: DevToolsTarget[] }> {
   const startedAt = Date.now()
   let latestTargets: DevToolsTarget[] = []
@@ -886,7 +1159,7 @@ async function pickInteractiveSettingsTarget(
       target: DevToolsTarget
       snapshot: {
         hasRouter: boolean
-        hasIpcInvoke: boolean
+        hasChannelSend: boolean
         hasSettingsShell: boolean
         text: string
       }
@@ -896,7 +1169,7 @@ async function pickInteractiveSettingsTarget(
         const snapshot = await withTarget(target, (send) =>
           evaluate<{
             hasRouter: boolean
-            hasIpcInvoke: boolean
+            hasChannelSend: boolean
             hasSettingsShell: boolean
             text: string
           }>(send, inspectTargetExpression(), 5000)
@@ -907,7 +1180,7 @@ async function pickInteractiveSettingsTarget(
       }
     }
 
-    const selected = selectSettingsTarget(snapshots)
+    const selected = selectSettingsTarget(snapshots, { allowAppShell })
     if (selected) return { target: selected, targets: latestTargets }
     await sleep(750)
   }
@@ -919,6 +1192,7 @@ export function buildPackagedAppLaunchEnv(
   options: Pick<CliOptions, 'userDataDir' | 'fixtureRoot'>
 ): NodeJS.ProcessEnv {
   const fixtureRoot = options.fixtureRoot ? resolveCoreAppPath(options.fixtureRoot) : undefined
+  const isolatedHome = fixtureRoot ?? path.resolve(options.userDataDir, 'home')
   const env: NodeJS.ProcessEnv = { ...process.env }
   for (const key of Object.keys(env)) {
     if (
@@ -941,15 +1215,11 @@ export function buildPackagedAppLaunchEnv(
   return {
     ...env,
     FORCE_COLOR: '0',
+    HOME: isolatedHome,
+    TUFF_FILE_PROVIDER_BASE_WATCH_PATHS: isolatedHome,
     TUFF_STARTUP_BENCHMARK_ONCE: '1',
     TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS: '120000',
-    TUFF_STARTUP_BENCHMARK_USER_DATA_DIR: options.userDataDir,
-    ...(fixtureRoot
-      ? {
-          HOME: fixtureRoot,
-          TUFF_FILE_PROVIDER_BASE_WATCH_PATHS: fixtureRoot
-        }
-      : {})
+    TUFF_STARTUP_BENCHMARK_USER_DATA_DIR: options.userDataDir
   }
 }
 
@@ -1082,8 +1352,143 @@ async function terminateProcessAndWait(child: ChildProcess | null): Promise<void
   }
 }
 
-function sourceHasRecentTask(diagnostics: IndexedSourceDiagnosticsSnapshot | undefined): boolean {
-  return Boolean(diagnostics?.sources?.some((source) => (source.recentTasks?.length ?? 0) > 0))
+function sourceHasRecentTask(
+  diagnostics: IndexedSourceDiagnosticsSnapshot | undefined,
+  sourceId: string
+): boolean {
+  const source = diagnostics?.sources?.find((entry) => entry.descriptor.id === sourceId)
+  return (source?.recentTasks?.length ?? 0) > 0
+}
+
+type RecentTask = NonNullable<
+  IndexedSourceDiagnosticsSnapshot['sources'][number]['recentTasks']
+>[number]
+
+interface ExpectedRecentTask {
+  jobId: string
+  auditMarkers: Partial<Record<SettingsIndexingDiagnosticsAuditField, string>>
+}
+
+function normalizeVisibleAuditValue(value: unknown): string | number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  return undefined
+}
+
+function resolveRecentTaskAuditMarker(
+  task: RecentTask,
+  field: SettingsIndexingDiagnosticsAuditField
+): string | undefined {
+  const summary = task.summary ?? {}
+  const value = normalizeVisibleAuditValue(
+    field === 'duration'
+      ? (summary.durationMs ?? task.durationMs)
+      : field === 'errorCode'
+        ? (summary.errorCode ?? task.errorCode)
+        : field === 'trigger'
+          ? (summary.trigger ?? task.trigger)
+          : field === 'reason'
+            ? (summary.reason ?? task.reason)
+            : (summary.attempt ?? task.attempt)
+  )
+  if (value === undefined) return undefined
+  if (field === 'duration') return `duration ${value}ms`
+  if (field === 'errorCode') return `code ${value}`
+  return `${field} ${value}`
+}
+
+function resolveExpectedRecentTasks(
+  diagnostics: IndexedSourceDiagnosticsSnapshot | undefined,
+  sourceId: string,
+  limit: number
+): ExpectedRecentTask[] {
+  const source = diagnostics?.sources?.find((entry) => entry.descriptor.id === sourceId)
+  return (source?.recentTasks ?? []).slice(0, limit).flatMap((task) => {
+    const jobId = typeof task.jobId === 'string' ? task.jobId.trim() : ''
+    if (!jobId) return []
+    const auditMarkers: ExpectedRecentTask['auditMarkers'] = {}
+    for (const field of DEFAULT_REQUIRED_AUDIT_FIELDS) {
+      const marker = resolveRecentTaskAuditMarker(task, field)
+      if (marker) auditMarkers[field] = marker
+    }
+    return [{ jobId, auditMarkers }]
+  })
+}
+
+const tokenBoundaries = new Set([
+  ' ',
+  '\t',
+  '\n',
+  '\r',
+  '·',
+  '/',
+  '(',
+  ')',
+  '[',
+  ']',
+  '{',
+  '}',
+  ',',
+  ';'
+])
+
+function containsExactVisibleToken(text: string, token: string): boolean {
+  let offset = 0
+  while (offset <= text.length - token.length) {
+    const index = text.indexOf(token, offset)
+    if (index < 0) return false
+    const before = text[index - 1]
+    const after = text[index + token.length]
+    if ((!before || tokenBoundaries.has(before)) && (!after || tokenBoundaries.has(after))) {
+      return true
+    }
+    offset = index + 1
+  }
+  return false
+}
+
+function resolveMissingVisibleAuditFields(
+  detailDom: IndexingDiagnosticsDomSnapshot,
+  verification: SettingsIndexingDiagnosticsVerificationResult,
+  expectedTasks: ExpectedRecentTask[]
+): SettingsIndexingDiagnosticsAuditField[] {
+  const missingFields = new Set<SettingsIndexingDiagnosticsAuditField>()
+  for (const task of expectedTasks) {
+    const chip = detailDom.dialog.recentTaskChips.find((text) =>
+      containsExactVisibleToken(text, task.jobId)
+    )
+    if (!chip) continue
+    for (const field of verification.options.requiredAuditFields) {
+      const marker = task.auditMarkers[field]
+      if (!marker || !containsExactVisibleToken(chip, marker)) {
+        missingFields.add(field)
+      }
+    }
+  }
+  return verification.options.requiredAuditFields.filter((field) => missingFields.has(field))
+}
+
+type RecentTaskChipGeometry =
+  IndexingDiagnosticsDomSnapshot['dialog']['recentTaskChipGeometry'][number]
+
+function isRecentTaskChipFullyVisible(geometry: RecentTaskChipGeometry): boolean {
+  return (
+    geometry.fullyVisible === true &&
+    geometry.clientWidth > 0 &&
+    geometry.clientHeight > 0 &&
+    geometry.rectWidth > 0 &&
+    geometry.rectHeight > 0 &&
+    geometry.display !== 'none' &&
+    geometry.visibility !== 'hidden' &&
+    geometry.visibility !== 'collapse' &&
+    Number.isFinite(geometry.opacity) &&
+    geometry.opacity > 0 &&
+    geometry.withinSection === true &&
+    geometry.withinDialog === true &&
+    geometry.withinOverlayContent === true &&
+    geometry.withinViewport === true
+  )
 }
 
 export function buildProbeFailures(input: {
@@ -1103,22 +1508,106 @@ export function buildProbeFailures(input: {
   if (!input.diagnostics?.sources?.some((source) => source.descriptor.id === input.sourceId)) {
     failures.push(`Diagnostics did not include source: ${input.sourceId}`)
   }
-  if (!sourceHasRecentTask(input.diagnostics)) {
-    failures.push('Diagnostics did not include recent task history.')
+  if (!sourceHasRecentTask(input.diagnostics, input.sourceId)) {
+    failures.push(`Diagnostics did not include recent task history for ${input.sourceId}.`)
   }
   if (!input.verification?.gate.passed) {
     failures.push(
       `Settings diagnostics verifier failed: ${input.verification?.gate.failures.join('; ') || 'missing verification'}`
     )
   }
+  if (!input.settingsDom?.hasSettingsShell) {
+    failures.push('Settings page shell is not visible.')
+  }
+  if (!input.settingsDom?.hasFileIndexPage) {
+    failures.push('Canonical File Index settings page is not visible.')
+  }
   if (!input.settingsDom?.hasSourceDiagnosticsGroup) {
     failures.push('Settings source diagnostics group is not visible.')
+  }
+  if (!input.settingsDom?.targetSourceVisible) {
+    failures.push(`Settings diagnostics row is not visible for ${input.sourceId}.`)
   }
   if (!input.detailDom?.dialog.visible) {
     failures.push('Source diagnostic detail dialog is not visible.')
   }
+  if (input.detailDom?.dialog.visible && input.detailDom.dialog.animationStable !== true) {
+    failures.push('Source diagnostic detail dialog animation did not stabilize before capture.')
+  }
   if (!input.detailDom?.dialog.hasRecentTasks) {
     failures.push('Source diagnostic detail dialog does not show recent task chips.')
+  }
+  if (input.detailDom?.dialog.visible && input.detailDom.dialog.hasRecentTasks) {
+    const minRecentTasks = input.verification?.options.minRecentTasks ?? 1
+    if (input.detailDom.dialog.recentTaskChips.length < minRecentTasks) {
+      failures.push(
+        `Source diagnostic detail dialog shows ${input.detailDom.dialog.recentTaskChips.length} recent task chips; expected at least ${minRecentTasks}.`
+      )
+    }
+    const expectedTasks = resolveExpectedRecentTasks(
+      input.diagnostics,
+      input.sourceId,
+      minRecentTasks
+    )
+    const missingJobIds = expectedTasks
+      .filter(
+        (task) =>
+          !input.detailDom!.dialog.recentTaskChips.some((chip) =>
+            containsExactVisibleToken(chip, task.jobId)
+          )
+      )
+      .map((task) => task.jobId)
+    if (missingJobIds.length > 0) {
+      failures.push(
+        `Source diagnostic detail dialog is missing recent task ids: ${missingJobIds.join(', ')}.`
+      )
+    }
+    if (input.verification) {
+      const missingAuditFields = resolveMissingVisibleAuditFields(
+        input.detailDom,
+        input.verification,
+        expectedTasks
+      )
+      if (missingAuditFields.length > 0) {
+        failures.push(
+          `Source diagnostic detail dialog is missing visible audit fields: ${missingAuditFields.join(', ')}.`
+        )
+      }
+    }
+
+    const geometryEntries = Array.isArray(input.detailDom.dialog.recentTaskChipGeometry)
+      ? input.detailDom.dialog.recentTaskChipGeometry
+      : []
+    const expectedGeometry = expectedTasks.map((task) => ({
+      task,
+      geometry: geometryEntries.find((geometry) =>
+        containsExactVisibleToken(geometry.text, task.jobId)
+      )
+    }))
+    const missingGeometryJobIds = expectedGeometry
+      .filter((entry) => !entry.geometry)
+      .map((entry) => entry.task.jobId)
+    if (missingGeometryJobIds.length > 0) {
+      failures.push(
+        `Source diagnostic detail dialog is missing geometry for recent task ids: ${missingGeometryJobIds.join(', ')}.`
+      )
+    }
+    const intrinsicTruncations = expectedGeometry.filter(
+      (entry) => entry.geometry?.intrinsicTruncated === true || entry.geometry?.truncated === true
+    )
+    if (intrinsicTruncations.length > 0) {
+      failures.push(
+        `Source diagnostic detail dialog clips ${intrinsicTruncations.length} recent task chip(s).`
+      )
+    }
+    const invisibleTaskChips = expectedGeometry.filter(
+      (entry) => entry.geometry && !isRecentTaskChipFullyVisible(entry.geometry)
+    )
+    if (invisibleTaskChips.length > 0) {
+      failures.push(
+        `Source diagnostic detail dialog does not fully show ${invisibleTaskChips.length} required recent task chip(s).`
+      )
+    }
   }
   if (!input.settingsScreenshotPath) {
     failures.push('No Settings diagnostics screenshot artifact path was provided.')
@@ -1183,7 +1672,7 @@ async function runProbe(options: CliOptions): Promise<IndexingDiagnosticsProbeRe
   }
 
   await mkdir(outputDir, { recursive: true })
-  if (options.fixtureRoot) {
+  if (!attachOnly) {
     result.fixtureRootPreflight = await verifyFixtureRootBundlePreflight(appBundle)
     if (!result.fixtureRootPreflight.passed) {
       result.failures.push(
@@ -1227,7 +1716,8 @@ async function runProbe(options: CliOptions): Promise<IndexingDiagnosticsProbeRe
     }
     const targetSelection = await pickInteractiveSettingsTarget(
       remoteDebuggingUrl,
-      options.launchTimeoutMs
+      options.launchTimeoutMs,
+      !attachOnly
     )
     result.targets = targetSelection.targets.map(({ id, title, type, url }) => ({
       id,
@@ -1286,27 +1776,42 @@ async function runProbe(options: CliOptions): Promise<IndexingDiagnosticsProbeRe
           }
         )
       }
+      const targetRecentTaskJobIds = resolveExpectedRecentTasks(
+        result.diagnostics,
+        options.sourceId,
+        result.verification.options.minRecentTasks
+      ).map((task) => task.jobId)
       await writeFile(artifactPaths.diagnostics, JSON.stringify(result.diagnostics, null, 2))
       await writeFile(artifactPaths.verification, JSON.stringify(result.verification, null, 2))
 
+      await evaluate<boolean>(
+        send,
+        `(${waitForSourceDiagnosticsExpression(options.sourceId)})()`,
+        15_000
+      )
       result.settingsDom = await evaluate<IndexingDiagnosticsDomSnapshot>(
         send,
-        inspectSettingsDomExpression()
+        inspectSettingsDomExpression(options.sourceId)
       )
       await writeFile(artifactPaths.settingsDom, JSON.stringify(result.settingsDom, null, 2))
       await captureScreenshot(send, artifactPaths.settingsScreenshot)
 
-      const openResult = await evaluate<{ opened: boolean; reason?: string; text?: string }>(
-        send,
-        `(${clickSourceDetailExpression(options.sourceId)})()`,
-        15_000
-      )
+      const openResult = await evaluate<{
+        opened: boolean
+        animationStable: boolean
+        reason?: string
+        text?: string
+      }>(send, `(${clickSourceDetailExpression(options.sourceId)})()`, 15_000)
       if (!openResult.opened) {
         result.failures.push(openResult.reason || 'source diagnostic detail did not open')
       }
       result.detailDom = await evaluate<IndexingDiagnosticsDomSnapshot>(
         send,
-        inspectSettingsDomExpression()
+        inspectSettingsDomExpression(
+          options.sourceId,
+          targetRecentTaskJobIds,
+          openResult.animationStable
+        )
       )
       await writeFile(artifactPaths.detailDom, JSON.stringify(result.detailDom, null, 2))
       await captureScreenshot(send, artifactPaths.detailScreenshot)
@@ -1321,7 +1826,9 @@ async function runProbe(options: CliOptions): Promise<IndexingDiagnosticsProbeRe
         detailDom: result.detailDom,
         settingsScreenshotPath: result.artifactPaths.settingsScreenshot,
         detailScreenshotPath: result.artifactPaths.detailScreenshot,
-        fixtureRoot: options.fixtureRoot ? resolveCoreAppPath(options.fixtureRoot) : undefined
+        fixtureRoot: options.fixtureRoot
+          ? resolveCoreAppPath(options.fixtureRoot)
+          : path.resolve(options.userDataDir, 'home')
       })
     )
     result.ok = result.failures.length === 0

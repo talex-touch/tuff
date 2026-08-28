@@ -237,6 +237,7 @@ function toError(error: unknown): Error {
 
 const TRANSLATION_RUNTIME_CAPABILITIES = Object.freeze([
   'feature.items.push',
+  'feature.items.widget.push',
   'feature.items.clear',
   'clipboard.write',
   'intelligence.invoke'

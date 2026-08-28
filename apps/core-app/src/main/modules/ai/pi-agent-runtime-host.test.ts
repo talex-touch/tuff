@@ -11,8 +11,9 @@ import {
 } from './pi-agent-runtime-protocol'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { PiAgentRuntimeHost } from './pi-agent-runtime-host'
+import { PiAgentRuntimeHost, sanitizeToolOutputForRuntime } from './pi-agent-runtime-host'
 import { AgentPermission } from '@talex-touch/utils'
+import { isRunInterruptedControlError } from './pi-agent-runtime-control-error'
 
 const hostMocks = vi.hoisted(() => {
   const listeners = new Map<string, Array<(payload: unknown) => void>>()
@@ -26,8 +27,8 @@ const hostMocks = vi.hoisted(() => {
     }),
     postMessage: vi.fn(),
     kill: vi.fn(),
-    stdout: { on: vi.fn() },
-    stderr: { on: vi.fn() }
+    stdout: { on: vi.fn((_event: string, _listener: (payload: unknown) => void) => undefined) },
+    stderr: { on: vi.fn((_event: string, _listener: (payload: unknown) => void) => undefined) }
   }
   const emit = (event: string, payload: unknown) => {
     for (const listener of listeners.get(event) ?? []) listener(payload)
@@ -63,6 +64,19 @@ const mcpMocks = vi.hoisted(() => ({
   getProfile: vi.fn()
 }))
 
+const runtimeLoggerMocks = vi.hoisted(() => ({
+  debug: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn()
+}))
+
+const CANARY = 'sk-live-token@/Users/private/native-stack.ts:42'
+const NESTED_JSON_CREDENTIAL = JSON.stringify({
+  nested: JSON.stringify({ token: 'opaque-secret' })
+})
+const DEEPLY_NESTED_JSON_CREDENTIAL = JSON.stringify({ nested: NESTED_JSON_CREDENTIAL })
+
 vi.mock('electron', () => ({
   app: {
     isReady: vi.fn(() => true),
@@ -78,7 +92,7 @@ vi.mock('node:fs', () => ({
 
 vi.mock('../../utils/logger', () => ({
   createLogger: () => ({
-    child: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() })
+    child: () => runtimeLoggerMocks
   })
 }))
 
@@ -201,6 +215,157 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     toolMocks.executeTool.mockResolvedValue({ success: true, output: { ready: true } })
   })
 
+  it.each([
+    ['GitHub token', 'ghp_abcdefghijklmnopqrstuvwxyz123456'],
+    ['AWS access key', 'AKIA1234567890ABCDEF'],
+    ['Slack token', 'xoxb-1234567890-abcdefghij'],
+    ['Google API key', 'AIzaSyA1234567890abcdefghijklmn'],
+    ['Stripe key', 'sk_live_1234567890abcdef'],
+    ['PEM key', '-----BEGIN PRIVATE KEY-----'],
+    ['quoted JSON token', '{"token":"opaque-secret"}'],
+    ['quoted JSON compound token key', '{"apiToken":"opaque-secret"}'],
+    ['nested quoted JSON token', NESTED_JSON_CREDENTIAL],
+    [
+      'nested quoted JSON compound token key',
+      JSON.stringify({ nested: JSON.stringify({ apiToken: 'opaque-secret' }) })
+    ],
+    ['deeply nested quoted JSON token', DEEPLY_NESTED_JSON_CREDENTIAL]
+  ])('redacts a standalone %s canary', (_name, credential) => {
+    expect(sanitizeToolOutputForRuntime(credential)).toBe('[redacted]')
+  })
+
+  it.each([
+    ['POSIX workspace path', '/workspace/private/release.md'],
+    ['POSIX application path', '/Applications/Tuff.app/Contents/MacOS/Tuff'],
+    ['home-relative path', '~/private/release.md'],
+    ['dot-relative path', './private/release.md'],
+    ['parent-relative path', '../private/release.md'],
+    ['Windows drive path', 'C:\\Users\\owner\\private.txt'],
+    ['Windows UNC path', '\\\\server\\share\\private.txt'],
+    ['local file URI', 'file:///Users/owner/private.txt'],
+    ['hosted file URI', 'file://server/share/private.txt'],
+    ['bracketed POSIX path', 'files=[/Users/owner/private.txt]'],
+    ['braced Windows path', 'result,{C:\\Users\\owner\\private.txt}'],
+    ['bracketed file URI', 'source=[file:///Users/owner/private.txt]'],
+    ['quoted JSON compound path key', '{"workspacePath":"private/release.md"}']
+  ])('redacts a standalone %s canary', (_name, path) => {
+    expect(sanitizeToolOutputForRuntime(path)).toBe('[redacted]')
+  })
+
+  it.each([
+    ['ordinary URL', 'https://example.test/docs/releases/latest'],
+    ['ordinary text', 'Published release notes successfully.'],
+    ['non-secret token wording', 'The token count is 12.'],
+    ['ordinary JSON', JSON.stringify({ message: 'Published.', tokenCount: 12 })]
+  ])('preserves %s', (_name, value) => {
+    expect(sanitizeToolOutputForRuntime(value)).toBe(value)
+  })
+
+  it('fails closed when a JSON string exceeds the bounded inspection budget', () => {
+    const oversizedJson = JSON.stringify({ message: 'x'.repeat(33 * 1024) })
+    expect(sanitizeToolOutputForRuntime(oversizedJson)).toBe('[redacted]')
+  })
+
+  it('fails closed before scanning an oversized non-JSON scalar', () => {
+    expect(sanitizeToolOutputForRuntime('x'.repeat(65 * 1024))).toBe('[redacted]')
+  })
+
+  it('does not invoke throwing accessors while sanitizing tool output', () => {
+    const objectOutput = Object.defineProperty({}, 'message', {
+      enumerable: true,
+      get() {
+        throw new Error(CANARY)
+      }
+    })
+    const arrayOutput: unknown[] = []
+    Object.defineProperty(arrayOutput, '0', {
+      enumerable: true,
+      get() {
+        throw new Error(CANARY)
+      }
+    })
+
+    expect(sanitizeToolOutputForRuntime(objectOutput)).toEqual({ message: '[redacted]' })
+    expect(sanitizeToolOutputForRuntime(arrayOutput)).toEqual(['[redacted]'])
+  })
+
+  it('does not retain tool-owned serialization hooks or boxed sensitive text', () => {
+    const toJSON = vi.fn(() => ({ message: CANARY }))
+    const sanitized = sanitizeToolOutputForRuntime({ message: 'Published.', toJSON })
+
+    expect(sanitized).toEqual({ message: 'Published.', toJSON: '[redacted]' })
+    expect(JSON.stringify(sanitized)).not.toContain(CANARY)
+    expect(toJSON).not.toHaveBeenCalled()
+    expect(sanitizeToolOutputForRuntime(new String('/Users/private/release.md'))).toBe('[redacted]')
+  })
+
+  it.each([
+    ['container entries', JSON.stringify(Array.from({ length: 101 }, () => 0))],
+    ['inspected nodes', JSON.stringify(Array.from({ length: 100 }, () => Array(5).fill(0)))],
+    [
+      'decode depth',
+      Array.from({ length: 10 }).reduce((encoded) => JSON.stringify(encoded), 'ordinary text')
+    ]
+  ])('fails closed when the JSON %s budget is exhausted', (_name, value) => {
+    expect(sanitizeToolOutputForRuntime(value)).toBe('[redacted]')
+  })
+
+  it('never exposes values beyond the bounded tool-output graph budget', () => {
+    const output = Array.from({ length: 100 }, () => Array(6).fill('safe'))
+    output.at(-1)![5] = CANARY
+
+    const serialized = JSON.stringify(sanitizeToolOutputForRuntime(output))
+    expect(serialized).toContain('[truncated]')
+    expect(serialized).not.toContain(CANARY)
+  })
+
+  it('bounds recursive JSON parsing attempts and fails closed when the budget is exhausted', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const invalidJsonStrings = Array.from({ length: 20 }, (_, index) => `{"item-${index}"}`)
+
+    try {
+      expect(sanitizeToolOutputForRuntime(JSON.stringify(invalidJsonStrings))).toBe('[redacted]')
+      expect(parseSpy).toHaveBeenCalledTimes(16)
+    } finally {
+      parseSpy.mockRestore()
+    }
+  })
+
+  it('redacts nested values, path-like fields, and malicious keys while preserving safe fields', () => {
+    const maliciousKey = 'ghp_abcdefghijklmnopqrstuvwxyz123456'
+    expect(
+      sanitizeToolOutputForRuntime({
+        message: 'Published.',
+        file_name: 'release.md',
+        nested: [{ value: 'xoxb-1234567890-abcdefghij' }],
+        [maliciousKey]: 'unsafe'
+      })
+    ).toEqual({
+      message: 'Published.',
+      file_name: '[redacted]',
+      nested: [{ value: '[redacted]' }],
+      redactedKey3: '[redacted]'
+    })
+  })
+
+  it('preserves token usage metadata while redacting credential and directory fields', () => {
+    expect(
+      sanitizeToolOutputForRuntime({
+        tokenCount: 12,
+        promptTokens: 3,
+        totalTokens: 15,
+        passwordHash: 'opaque-secret',
+        outputDir: 'private/release'
+      })
+    ).toEqual({
+      tokenCount: 12,
+      promptTokens: 3,
+      totalTokens: 15,
+      passwordHash: '[redacted]',
+      outputDir: '[redacted]'
+    })
+  })
+
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -283,7 +448,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
         }
       })
     )
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'model.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({
@@ -305,6 +470,169 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       }
     })
     await expect(execution).resolves.toMatchObject({ runId: payload.run.id, output: 'done' })
+  })
+
+  it('projects provider failures before they cross into the runtime worker', async () => {
+    const payload = startPayload()
+    intelligenceMocks.invoke.mockRejectedValue(new Error(CANARY))
+    const host = new PiAgentRuntimeHost()
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-failed-4',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: '',
+        messages: [{ role: 'user', content: 'Is it ready?' }],
+        tools: [],
+        modelPreference: []
+      }
+    })
+    await settleAsyncWork()
+
+    const response = hostMocks.child.postMessage.mock.calls.at(-1)?.[0]
+    expect(response).toEqual({
+      type: 'model.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-failed-4',
+        runId: payload.run.id,
+        error: 'MODEL_REQUEST_FAILED: Model request failed.'
+      }
+    })
+    expect(JSON.stringify(response)).not.toContain(CANARY)
+    await completeRun(payload, execution)
+  })
+
+  it('uses fixed diagnostics for worker errors and process output', async () => {
+    const payload = startPayload()
+    const host = new PiAgentRuntimeHost()
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+
+    hostMocks.emit('message', {
+      type: 'runtime.error',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      error: CANARY
+    })
+    const stdoutListener = hostMocks.child.stdout.on.mock.calls[0]?.[1]
+    const stderrListener = hostMocks.child.stderr.on.mock.calls[0]?.[1]
+    stdoutListener?.(CANARY)
+    stderrListener?.(CANARY)
+    hostMocks.emit('error', new Error(CANARY))
+
+    const serializedLogs = JSON.stringify({
+      debug: runtimeLoggerMocks.debug.mock.calls,
+      error: runtimeLoggerMocks.error.mock.calls,
+      warn: runtimeLoggerMocks.warn.mock.calls
+    })
+    expect(serializedLogs).toContain('Pi runtime worker error')
+    expect(serializedLogs).toContain('Pi runtime utility process emitted stderr')
+    expect(serializedLogs).not.toContain(CANARY)
+    await completeRun(payload, execution)
+  })
+
+  it('forwards runtime events only while their run is active', async () => {
+    const payload = startPayload()
+    const onEvent = vi.fn()
+    const host = new PiAgentRuntimeHost({ onEvent })
+    expect(host.isRunActive(payload.run.id)).toBe(false)
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+    expect(host.isRunActive(payload.run.id)).toBe(true)
+
+    const event = {
+      runId: payload.run.id,
+      type: 'turn_start',
+      payload: { type: 'turn_start' }
+    }
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.event',
+      payload: event
+    })
+    await settleAsyncWork()
+    expect(onEvent).toHaveBeenCalledOnce()
+
+    await completeRun(payload, execution)
+    expect(host.isRunActive(payload.run.id)).toBe(false)
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.event',
+      payload: event
+    })
+    await settleAsyncWork()
+    expect(onEvent).toHaveBeenCalledOnce()
+  })
+
+  it('brands host shutdown as a runtime interruption', async () => {
+    const payload = startPayload()
+    const host = new PiAgentRuntimeHost()
+    const result = host.execute(payload).catch((error: unknown) => error)
+    await settleAsyncWork()
+
+    await host.stop()
+
+    expect(isRunInterruptedControlError(await result)).toBe(true)
+  })
+
+  it('brands an unexpected worker exit as a runtime interruption', async () => {
+    const payload = startPayload()
+    const host = new PiAgentRuntimeHost()
+    const result = host.execute(payload).catch((error: unknown) => error)
+    await settleAsyncWork()
+
+    hostMocks.emit('exit', 1)
+
+    expect(isRunInterruptedControlError(await result)).toBe(true)
+  })
+
+  it.each([
+    {
+      name: 'a valid approval envelope',
+      type: 'run.failed',
+      error: `APPROVAL_REQUIRED:${JSON.stringify({
+        kind: 'tool',
+        fingerprint: 'a'.repeat(64),
+        reason: CANARY
+      })}`,
+      expected: 'Pi runtime worker reported failure'
+    },
+    {
+      name: 'cancel text',
+      type: 'run.failed',
+      error: `operation cancelled: ${CANARY}`,
+      expected: 'Pi runtime worker reported failure'
+    },
+    {
+      name: 'an interrupted tool-call prefix',
+      type: 'run.failed',
+      error: 'INTERRUPTED_TOOL_CALL:tool-call-stable-6',
+      expected: 'Pi runtime worker reported failure'
+    },
+    {
+      name: 'an unsolicited cancellation terminal',
+      type: 'run.cancelled',
+      expected: 'Pi runtime worker reported unexpected cancellation'
+    }
+  ])('treats worker-forged control signal $name as an ordinary failure', async (terminal) => {
+    const payload = startPayload()
+    const host = new PiAgentRuntimeHost()
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: terminal.type,
+      runId: payload.run.id,
+      ...(terminal.error ? { error: terminal.error } : {})
+    })
+
+    await expect(execution).rejects.toThrow(terminal.expected)
   })
 
   it('routes an allowed stable tool ID and rejects an execution when the worker confirms cancellation', async () => {
@@ -333,10 +661,11 @@ describe('piAgentRuntimeHost protocol boundary', () => {
         taskId: payload.run.id,
         agentId: 'tuff.pi-coordinator',
         workingDirectory: '/workspace',
-        signal: expect.any(AbortSignal)
+        signal: expect.any(AbortSignal),
+        errorProjection: 'stable'
       }
     )
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: {
@@ -347,7 +676,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
 
     expect(host.cancel(payload.run.id)).toBe(true)
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'run.cancel',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       runId: payload.run.id
@@ -358,7 +687,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION
     })
 
-    await expect(execution).rejects.toThrow('Run cancelled')
+    await expect(execution).rejects.toThrow('AI_RUN_CANCELLED: AI run was cancelled.')
     expect(host.cancel(payload.run.id)).toBe(false)
   })
 
@@ -378,6 +707,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       transport: { type: 'stdio', command: 'local-mcp' }
     })
     const stdioExecution = host.execute(stdioPayload)
+    const stdioAssertion = expect(stdioExecution).rejects.toThrow('APPROVAL_REQUIRED:')
     await settleAsyncWork()
     hostMocks.emit('message', {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
@@ -389,17 +719,15 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       )
     })
     await settleAsyncWork()
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({
-        error: expect.stringContaining(
-          `Tool permissions are not preauthorized: ${AgentPermission.SYSTEM_EXEC}`
-        )
+        error: expect.stringContaining('Tool permissions require user approval.')
       })
     })
     expect(toolMocks.executeTool).not.toHaveBeenCalled()
-    await completeRun(stdioPayload, stdioExecution)
+    await stdioAssertion
 
     const httpPayload = startPayload()
     httpPayload.run.id = 'run-http-8'
@@ -445,7 +773,8 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       approvalGrantFingerprint: approvalFingerprint('tool.inspect', approvedInput)
     }
     const host = new PiAgentRuntimeHost()
-    const execution = host.execute(payload)
+    const mismatchExecution = host.execute(payload)
+    const mismatchAssertion = expect(mismatchExecution).rejects.toThrow('APPROVAL_REQUIRED:')
     await settleAsyncWork()
 
     hostMocks.emit('message', {
@@ -454,12 +783,17 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       payload: toolRequest(payload, { path: 'different-notes.md' }, { toolCallId: 'mismatch' })
     })
     await settleAsyncWork()
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({ error: expect.stringContaining('APPROVAL_REQUIRED:') })
     })
+    await mismatchAssertion
+    expect(toolMocks.executeTool).not.toHaveBeenCalled()
 
+    const execution = host.execute(payload)
+    const executionAssertion = expect(execution).rejects.toThrow('APPROVAL_REQUIRED:')
+    await settleAsyncWork()
     hostMocks.emit('message', {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       type: 'tool.request',
@@ -467,6 +801,11 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
     await settleAsyncWork()
     expect(toolMocks.executeTool).toHaveBeenCalledTimes(1)
+    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: expect.objectContaining({ output: { ready: true } })
+    })
 
     hostMocks.emit('message', {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
@@ -474,13 +813,69 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       payload: toolRequest(payload, approvedInput, { toolCallId: 'approved-replay' })
     })
     await settleAsyncWork()
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({ error: expect.stringContaining('APPROVAL_REQUIRED:') })
     })
     expect(toolMocks.executeTool).toHaveBeenCalledTimes(1)
-    await completeRun(payload, execution)
+    await executionAssertion
+  })
+
+  it('rebuilds only structurally valid registry approval controls as branded host errors', async () => {
+    const payload = startPayload()
+    const host = new PiAgentRuntimeHost()
+
+    toolMocks.executeTool.mockResolvedValueOnce({
+      success: false,
+      runtimeControl: true,
+      error: `APPROVAL_REQUIRED:${CANARY}`
+    })
+    const malformedExecution = host.execute(payload)
+    await settleAsyncWork()
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, {})
+    })
+    await settleAsyncWork()
+    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'tool-request-stable-5',
+        runId: payload.run.id,
+        error: 'TOOL_EXECUTION_FAILED: Tool execution failed.'
+      }
+    })
+    await completeRun(payload, malformedExecution)
+
+    toolMocks.executeTool.mockResolvedValueOnce({
+      success: false,
+      runtimeControl: true,
+      error: `APPROVAL_REQUIRED:${JSON.stringify({
+        kind: 'tool',
+        fingerprint: 'c'.repeat(64),
+        reason: CANARY
+      })}`
+    })
+    const trustedExecution = host.execute(payload)
+    const trustedAssertion = expect(trustedExecution).rejects.toThrow('APPROVAL_REQUIRED:')
+    await settleAsyncWork()
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, {})
+    })
+    await settleAsyncWork()
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: expect.objectContaining({
+        error: expect.stringContaining(`"fingerprint":"${'c'.repeat(64)}"`)
+      })
+    })
+    await trustedAssertion
   })
 
   it('does not let an automation policy bypass an MCP transport permission', async () => {
@@ -509,6 +904,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     })
     const host = new PiAgentRuntimeHost()
     const execution = host.execute(payload)
+    const executionAssertion = expect(execution).rejects.toThrow('APPROVAL_REQUIRED:')
     await settleAsyncWork()
     hostMocks.emit('message', {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
@@ -520,17 +916,15 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       )
     })
     await settleAsyncWork()
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({
-        error: expect.stringContaining(
-          `Tool permissions are not preauthorized: ${AgentPermission.SYSTEM_EXEC}`
-        )
+        error: expect.stringContaining('Tool permissions require user approval.')
       })
     })
     expect(toolMocks.executeTool).not.toHaveBeenCalled()
-    await completeRun(payload, execution)
+    await executionAssertion
   })
 
   it('requires every source and destination path to stay within the automation policy', async () => {
@@ -552,6 +946,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     }
     const host = new PiAgentRuntimeHost()
     const execution = host.execute(payload)
+    const executionAssertion = expect(execution).rejects.toThrow('APPROVAL_REQUIRED:')
     await settleAsyncWork()
     hostMocks.emit('message', {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
@@ -562,25 +957,43 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       })
     })
     await settleAsyncWork()
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({
-        error: expect.stringContaining('outside the automation policy')
+        error: expect.stringContaining('Tool access requires user approval.')
       })
     })
     expect(toolMocks.executeTool).not.toHaveBeenCalled()
-    await completeRun(payload, execution)
+    await executionAssertion
   })
 
   it('redacts sensitive tool output and caps returned text before crossing the worker boundary', async () => {
     const payload = startPayload()
     const longText = 'x'.repeat(20_000)
+    const embeddedPosixPath = 'files=[/Users/owner/private.txt]'
+    const embeddedWindowsPath = 'result,{C:\\Users\\owner\\private.txt}'
+    const embeddedFileUri = 'source=[file:///Users/owner/private.txt]'
+    const embeddedJsonToken = '{"token":"opaque-secret"}'
     toolMocks.executeTool.mockResolvedValue({
       success: true,
-      output: { apiToken: 'secret-value', contents: longText }
+      output: {
+        apiToken: 'secret-value',
+        contents: longText,
+        result: CANARY,
+        path: '/Users/private/release.md',
+        safeMessage: 'Published.',
+        safeUrl: 'https://example.test/docs/releases/latest',
+        embeddedPosixPath,
+        embeddedWindowsPath,
+        embeddedFileUri,
+        embeddedJsonToken,
+        nested: { summary: `${embeddedPosixPath} ${embeddedJsonToken}` },
+        [CANARY]: 'malicious-key'
+      }
     })
-    const host = new PiAgentRuntimeHost()
+    const persistToolCallResult = vi.fn()
+    const host = new PiAgentRuntimeHost({ persistToolCallResult })
     const execution = host.execute(payload)
     await settleAsyncWork()
     hostMocks.emit('message', {
@@ -589,20 +1002,104 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       payload: toolRequest(payload, { path: 'release-notes.md' })
     })
     await settleAsyncWork()
+    const response = hostMocks.child.postMessage.mock.calls.at(-1)?.[0]
+    expect(response).toEqual({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'tool-request-stable-5',
+        runId: payload.run.id,
+        output: expect.objectContaining({
+          apiToken: '[redacted]',
+          contents: 'x'.repeat(16_000),
+          result: '[redacted]',
+          path: '[redacted]',
+          safeMessage: 'Published.',
+          safeUrl: 'https://example.test/docs/releases/latest',
+          embeddedPosixPath: '[redacted]',
+          embeddedWindowsPath: '[redacted]',
+          embeddedFileUri: '[redacted]',
+          embeddedJsonToken: '[redacted]',
+          nested: { summary: '[redacted]' }
+        })
+      }
+    })
+    expect(persistToolCallResult).toHaveBeenCalledWith(
+      payload.run.id,
+      'tool-call-stable-6',
+      expect.objectContaining({
+        output: expect.objectContaining({
+          result: '[redacted]',
+          path: '[redacted]',
+          safeMessage: 'Published.',
+          safeUrl: 'https://example.test/docs/releases/latest',
+          embeddedPosixPath: '[redacted]',
+          embeddedWindowsPath: '[redacted]',
+          embeddedFileUri: '[redacted]',
+          embeddedJsonToken: '[redacted]',
+          nested: { summary: '[redacted]' }
+        })
+      })
+    )
+    const projectedBoundary = JSON.stringify({
+      response,
+      persisted: persistToolCallResult.mock.calls
+    })
+    for (const sensitiveValue of [
+      CANARY,
+      '/Users/private/release.md',
+      '/Users/owner/private.txt',
+      'C:\\Users\\owner\\private.txt',
+      'file:///Users/owner/private.txt',
+      'opaque-secret'
+    ]) {
+      expect(projectedBoundary).not.toContain(sensitiveValue)
+    }
+    await completeRun(payload, execution)
+  })
+
+  it.each([
+    { name: 'sensitive scalar', output: CANARY, expected: '[redacted]' },
+    { name: 'safe scalar', output: 'Published.', expected: 'Published.' }
+  ])('projects $name tool output without changing safe text', async ({ output, expected }) => {
+    const payload = startPayload()
+    const persistToolCallResult = vi.fn()
+    toolMocks.executeTool.mockResolvedValue({ success: true, output })
+    const host = new PiAgentRuntimeHost({ persistToolCallResult })
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, {})
+    })
+    await settleAsyncWork()
+
     expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
-      payload: expect.objectContaining({
-        output: { apiToken: '[redacted]', contents: 'x'.repeat(16_000) }
-      })
+      payload: {
+        requestId: 'tool-request-stable-5',
+        runId: payload.run.id,
+        output: expected
+      }
     })
+    expect(persistToolCallResult).toHaveBeenCalledWith(payload.run.id, 'tool-call-stable-6', {
+      output: expected
+    })
+    if (output === CANARY) {
+      expect(JSON.stringify(hostMocks.child.postMessage.mock.calls)).not.toContain(CANARY)
+      expect(JSON.stringify(persistToolCallResult.mock.calls)).not.toContain(CANARY)
+    }
     await completeRun(payload, execution)
   })
 
   it('returns completed tool-call results without repeating their side effect', async () => {
     const payload = startPayload()
+    const loadToolCallResult = vi.fn().mockResolvedValue({ output: { recovered: true } })
     const host = new PiAgentRuntimeHost({
-      loadToolCallResult: vi.fn().mockResolvedValue({ output: { recovered: true } }),
+      loadToolCallResult,
       beginToolCall: vi.fn()
     })
     const execution = host.execute(payload)
@@ -618,13 +1115,18 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({ output: { recovered: true } })
     })
+    expect(loadToolCallResult).toHaveBeenCalledWith(
+      payload.run.id,
+      'tool-call-stable-6',
+      'tool.inspect'
+    )
     expect(toolMocks.executeTool).not.toHaveBeenCalled()
     await completeRun(payload, execution)
   })
 
   it('returns a persistence failure instead of reporting an unrecorded tool call as successful', async () => {
     const payload = startPayload()
-    const persistToolCallResult = vi.fn().mockRejectedValue(new Error('durable write failed'))
+    const persistToolCallResult = vi.fn().mockRejectedValue(new Error(CANARY))
     const host = new PiAgentRuntimeHost({ persistToolCallResult })
     const execution = host.execute(payload)
     await settleAsyncWork()
@@ -643,9 +1145,10 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       payload: {
         requestId: 'tool-request-stable-5',
         runId: payload.run.id,
-        error: 'Tool call result could not be persisted: durable write failed'
+        error: 'TOOL_EXECUTION_FAILED: Tool execution failed.'
       }
     })
+    expect(JSON.stringify(runtimeLoggerMocks.error.mock.calls)).not.toContain(CANARY)
 
     expect(host.cancel(payload.run.id)).toBe(true)
     hostMocks.emit('message', {
@@ -653,7 +1156,7 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       type: 'run.cancelled',
       runId: payload.run.id
     })
-    await expect(execution).rejects.toThrow('Run cancelled')
+    await expect(execution).rejects.toThrow('AI_RUN_CANCELLED: AI run was cancelled.')
   })
 
   it('surfaces a started but uncompleted tool call as interrupted without executing it', async () => {
@@ -661,6 +1164,9 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     const beginToolCall = vi.fn().mockResolvedValue('interrupted')
     const host = new PiAgentRuntimeHost({ beginToolCall })
     const execution = host.execute(payload)
+    const executionAssertion = expect(execution).rejects.toThrow(
+      'INTERRUPTED_TOOL_CALL:tool-call-stable-6'
+    )
     await settleAsyncWork()
     hostMocks.emit('message', {
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
@@ -674,12 +1180,109 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       'tool.inspect',
       { path: 'release-notes.md' }
     )
-    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
       type: 'tool.response',
       protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
       payload: expect.objectContaining({ error: 'INTERRUPTED_TOOL_CALL:tool-call-stable-6' })
     })
     expect(toolMocks.executeTool).not.toHaveBeenCalled()
+    await executionAssertion
+  })
+
+  it('uses only registry-declared stable error codes in tool responses', async () => {
+    const payload = startPayload()
+    toolMocks.executeTool.mockResolvedValue({
+      success: false,
+      error: CANARY,
+      errorCode: 'MCP_TOOL_FAILED'
+    })
+    const host = new PiAgentRuntimeHost()
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, { path: CANARY })
+    })
+    await settleAsyncWork()
+
+    const response = hostMocks.child.postMessage.mock.calls.at(-1)?.[0]
+    expect(response).toEqual({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'tool-request-stable-5',
+        runId: payload.run.id,
+        error: 'MCP_TOOL_FAILED: MCP tool execution failed.'
+      }
+    })
+    expect(JSON.stringify(response)).not.toContain(CANARY)
+    await completeRun(payload, execution)
+  })
+
+  it('projects callback and persisted-result failures without retaining raw text', async () => {
+    const payload = startPayload()
+    const loadToolCallResult = vi.fn().mockResolvedValue({ error: CANARY })
+    const host = new PiAgentRuntimeHost({ loadToolCallResult })
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, {})
+    })
+    await settleAsyncWork()
+
+    const response = hostMocks.child.postMessage.mock.calls.at(-1)?.[0]
+    expect(response).toEqual({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'tool-request-stable-5',
+        runId: payload.run.id,
+        error: 'TOOL_EXECUTION_FAILED: Tool execution failed.'
+      }
+    })
+    expect(JSON.stringify(response)).not.toContain(CANARY)
+    expect(loadToolCallResult).toHaveBeenCalledWith(
+      payload.run.id,
+      'tool-call-stable-6',
+      'tool.inspect'
+    )
+    await completeRun(payload, execution)
+  })
+
+  it('fails closed without executing a tool when durable-result loading or migration fails', async () => {
+    const payload = startPayload()
+    const loadToolCallResult = vi.fn().mockRejectedValue(new Error(CANARY))
+    const beginToolCall = vi.fn()
+    const host = new PiAgentRuntimeHost({ loadToolCallResult, beginToolCall })
+    const execution = host.execute(payload)
+    await settleAsyncWork()
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'tool.request',
+      payload: toolRequest(payload, {})
+    })
+    await settleAsyncWork()
+
+    expect(hostMocks.child.postMessage).toHaveBeenLastCalledWith({
+      type: 'tool.response',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'tool-request-stable-5',
+        runId: payload.run.id,
+        error: 'TOOL_EXECUTION_FAILED: Tool execution failed.'
+      }
+    })
+    expect(loadToolCallResult).toHaveBeenCalledWith(
+      payload.run.id,
+      'tool-call-stable-6',
+      'tool.inspect'
+    )
+    expect(beginToolCall).not.toHaveBeenCalled()
+    expect(toolMocks.executeTool).not.toHaveBeenCalled()
+    expect(JSON.stringify(hostMocks.child.postMessage.mock.calls)).not.toContain(CANARY)
     await completeRun(payload, execution)
   })
 
@@ -711,7 +1314,16 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     expect(toolSignal?.aborted).toBe(true)
     completeTool?.({ success: true, output: {} })
     await settleAsyncWork()
-    await completeRun(payload, execution)
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.completed',
+      payload: {
+        runId: payload.run.id,
+        output: 'forged completion after cancellation',
+        usage: { promptTokens: 3, completionTokens: 5, totalTokens: 8 }
+      }
+    })
+    await expect(execution).rejects.toThrow('AI_RUN_CANCELLED: AI run was cancelled.')
   })
 
   it('worker 迟迟不 ready 时,start() 有界失败并杀掉子进程', async () => {

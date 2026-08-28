@@ -31,7 +31,11 @@ import { assertTuffEvent } from "../event/builder";
 import { TransportEvents } from "../events";
 import { isPluginFacingEvent } from "../security/plugin-facing-events";
 import { isPortChannelEnabled } from "./port-policy";
-import { createServerStreamRuntime } from "./stream/server-runtime";
+import {
+  createServerStreamRuntime,
+  type ServerStreamOwnerKey,
+  type ServerStreamRuntime,
+} from "./stream/server-runtime";
 import {
   isAuthoritativePluginContext,
   issuePluginSecurityContext,
@@ -90,6 +94,7 @@ type InvokeHandler<TReq, TRes> = (
 const NORMAL_PORT_CLOSE_REASONS = new Set([
   "closed",
   "port_closed",
+  "plugin_identity_invalidated",
   "sender_destroyed",
 ]);
 const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>();
@@ -215,7 +220,7 @@ interface PortRecord {
 
 const PORT_CONFIRM_TIMEOUT_MS = 10000;
 const portRegistry = new Map<string, PortRecord>();
-const portsBySenderId = new Map<number, Set<string>>();
+const portsBySender = new WeakMap<WebContents, Set<string>>();
 const senderCleanupRegistered = new WeakSet<WebContents>();
 let portHandlersRegistered = false;
 
@@ -251,12 +256,13 @@ function resolvePortRecord(
   requestedPortId?: string,
   pluginContext?: PluginSecurityContext,
 ): PortLookup | null {
-  const portIds = portsBySenderId.get(sender.id);
+  const portIds = portsBySender.get(sender);
   if (!portIds) return null;
 
   const resolveCandidate = (portId: string): PortLookup | null => {
     const record = portRegistry.get(portId);
     if (!record || !record.confirmed) return null;
+    if (record.sender !== sender) return null;
     if (record.channel !== channel) return null;
     if (scope && record.scope !== scope) return null;
     if (
@@ -329,11 +335,11 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     } catch {}
 
     portRegistry.delete(portId);
-    const senderPorts = portsBySenderId.get(record.sender.id);
+    const senderPorts = portsBySender.get(record.sender);
     if (senderPorts) {
       senderPorts.delete(portId);
       if (senderPorts.size === 0) {
-        portsBySenderId.delete(record.sender.id);
+        portsBySender.delete(record.sender);
       }
     }
 
@@ -342,16 +348,27 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     }
   };
 
+  transport.keyManager.watchIdentityInvalidated?.((identity) => {
+    for (const [portId, record] of [...portRegistry]) {
+      if (
+        record.scope === "plugin" &&
+        record.pluginContext?.uniqueKey === identity.key
+      ) {
+        removePort(portId, "plugin_identity_invalidated");
+      }
+    }
+  });
+
   const ensureSenderCleanup = (sender: WebContents) => {
     if (senderCleanupRegistered.has(sender)) return;
     senderCleanupRegistered.add(sender);
     sender.once("destroyed", () => {
-      const portIds = portsBySenderId.get(sender.id);
+      const portIds = portsBySender.get(sender);
       if (!portIds) return;
       for (const portId of portIds) {
         removePort(portId, "sender_destroyed");
       }
-      portsBySenderId.delete(sender.id);
+      portsBySender.delete(sender);
     });
   };
 
@@ -472,9 +489,9 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     };
 
     portRegistry.set(portId, record);
-    const senderPorts = portsBySenderId.get(sender.id) ?? new Set<string>();
+    const senderPorts = portsBySender.get(sender) ?? new Set<string>();
     senderPorts.add(portId);
-    portsBySenderId.set(sender.id, senderPorts);
+    portsBySender.set(sender, senderPorts);
     ensureSenderCleanup(sender);
 
     port2.on("close", () => {
@@ -528,7 +545,7 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     if (!record) return;
     if (
       context.sender &&
-      record.sender.id !== (context.sender as WebContents).id
+      record.sender !== (context.sender as WebContents)
     ) {
       return;
     }
@@ -549,14 +566,14 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     const sender = context.sender as WebContents | undefined;
     const portId = payload?.portId;
     if (portId) {
-      if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
+      if (!sender || portRegistry.get(portId)?.sender === sender) {
         removePort(portId, payload?.reason ?? "closed");
       }
       return;
     }
 
     if (!sender) return;
-    const portIds = portsBySenderId.get(sender.id);
+    const portIds = portsBySender.get(sender);
     if (!portIds) return;
     for (const id of portIds) {
       const record = portRegistry.get(id);
@@ -573,7 +590,7 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     }
     if (!portId) return;
     const sender = context.sender as WebContents | undefined;
-    if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
+    if (!sender || portRegistry.get(portId)?.sender === sender) {
       removePort(portId, "error");
     }
   });
@@ -596,11 +613,66 @@ function isSameActivation(
  * Adapts the current TouchChannel bridge to the TuffTransportMain interface.
  */
 export class TuffMainTransport implements ITuffTransportMain {
+  private readonly streamOwnerCleanupsBySender = new WeakMap<
+    WebContents,
+    Set<() => void>
+  >();
+  private readonly streamSenderDestroyedHandlers = new WeakMap<
+    WebContents,
+    () => void
+  >();
+
   constructor(
     private channel: MainChannelBridge,
     public readonly keyManager: PluginKeyManager,
   ) {
     registerPortHandlers(this);
+  }
+
+  private registerStreamOwnerCleanup(
+    sender: WebContents,
+    cleanup: () => void,
+  ): () => void {
+    let cleanups = this.streamOwnerCleanupsBySender.get(sender);
+    if (!cleanups) {
+      cleanups = new Set();
+      this.streamOwnerCleanupsBySender.set(sender, cleanups);
+    }
+    cleanups.add(cleanup);
+
+    if (!this.streamSenderDestroyedHandlers.has(sender)) {
+      const handleDestroyed = () => {
+        const senderCleanups = this.streamOwnerCleanupsBySender.get(sender);
+        this.streamOwnerCleanupsBySender.delete(sender);
+        this.streamSenderDestroyedHandlers.delete(sender);
+        for (const cancel of [...(senderCleanups ?? [])]) {
+          try {
+            cancel();
+          } catch {
+            // One stream runtime must not block cleanup of sibling handlers.
+          }
+        }
+      };
+      this.streamSenderDestroyedHandlers.set(sender, handleDestroyed);
+      sender.once("destroyed", handleDestroyed);
+    }
+
+    let registered = true;
+    return () => {
+      if (!registered) return;
+      registered = false;
+      const senderCleanups = this.streamOwnerCleanupsBySender.get(sender);
+      senderCleanups?.delete(cleanup);
+      if (senderCleanups?.size === 0) {
+        this.streamOwnerCleanupsBySender.delete(sender);
+        const handleDestroyed =
+          this.streamSenderDestroyedHandlers.get(sender);
+        if (handleDestroyed) {
+          sender.removeListener("destroyed", handleDestroyed);
+          this.streamSenderDestroyedHandlers.delete(sender);
+        }
+      }
+    };
   }
 
   private resolveActivation(
@@ -776,8 +848,132 @@ export class TuffMainTransport implements ITuffTransportMain {
     const portEnabled = isPortChannelEnabled(eventName);
     const startEventName = `${eventName}:stream:start`;
     const cancelEventName = `${eventName}:stream:cancel`;
+    type PluginStreamOwnerRecord = {
+      sender: WebContents;
+      keys: StreamOwnerKeys;
+      pluginKey: string;
+      ownerKey: ServerStreamOwnerKey;
+    };
+    type StreamOwnerKeys = {
+      main: ServerStreamOwnerKey;
+      unverifiedPlugin: ServerStreamOwnerKey;
+      plugins: Map<string, PluginStreamOwnerRecord>;
+    };
 
-    const runtime = createServerStreamRuntime<
+    const ownerKeysBySender = new Map<WebContents, StreamOwnerKeys>();
+    const ownerRecordsByPluginKey = new Map<
+      string,
+      Set<PluginStreamOwnerRecord>
+    >();
+    const senderCleanupUnsubscribers = new Set<() => void>();
+    let registered = true;
+    let runtime: ServerStreamRuntime<
+      TReq,
+      WebContents,
+      StreamContext<TChunk>["plugin"]
+    >;
+
+    const indexPluginOwner = (record: PluginStreamOwnerRecord) => {
+      const ownerRecords =
+        ownerRecordsByPluginKey.get(record.pluginKey) ?? new Set();
+      ownerRecords.add(record);
+      ownerRecordsByPluginKey.set(record.pluginKey, ownerRecords);
+    };
+
+    const detachPluginOwner = (record: PluginStreamOwnerRecord) => {
+      if (record.keys.plugins.get(record.pluginKey) === record) {
+        record.keys.plugins.delete(record.pluginKey);
+      }
+
+      const ownerRecords = ownerRecordsByPluginKey.get(record.pluginKey);
+      if (!ownerRecords) return;
+      ownerRecords.delete(record);
+      if (ownerRecords.size === 0) {
+        ownerRecordsByPluginKey.delete(record.pluginKey);
+      }
+    };
+
+    const cancelPluginOwner = (record: PluginStreamOwnerRecord) => {
+      detachPluginOwner(record);
+      runtime.cancelOwner(record.ownerKey);
+    };
+
+    const cancelSenderOwners = (
+      sender: WebContents,
+      keys: StreamOwnerKeys,
+    ) => {
+      if (ownerKeysBySender.get(sender) === keys) {
+        ownerKeysBySender.delete(sender);
+      }
+      runtime.cancelOwner(keys.main);
+      runtime.cancelOwner(keys.unverifiedPlugin);
+      for (const record of [...keys.plugins.values()]) {
+        cancelPluginOwner(record);
+      }
+      keys.plugins.clear();
+    };
+
+    const resolveOwnerKey = (
+      channelType: BridgeChannelType,
+      sender: WebContents,
+      plugin: PluginSecurityContext | undefined,
+      create: boolean,
+    ): ServerStreamOwnerKey | null => {
+      if (!registered || sender.isDestroyed?.()) {
+        return null;
+      }
+
+      let keys = ownerKeysBySender.get(sender);
+      if (!keys) {
+        if (!create) return null;
+        keys = { main: {}, unverifiedPlugin: {}, plugins: new Map() };
+        ownerKeysBySender.set(sender, keys);
+
+        const senderKeys = keys;
+        let unregisterSenderCleanup = NOOP_UNREGISTER;
+        const cleanupSender = () => {
+          unregisterSenderCleanup();
+          senderCleanupUnsubscribers.delete(unregisterSenderCleanup);
+          cancelSenderOwners(sender, senderKeys);
+        };
+        unregisterSenderCleanup = this.registerStreamOwnerCleanup(
+          sender,
+          cleanupSender,
+        );
+        senderCleanupUnsubscribers.add(unregisterSenderCleanup);
+      }
+
+      if (channelType === BRIDGE_CHANNEL.MAIN) {
+        return keys.main;
+      }
+
+      if (!isAuthoritativePluginContext(plugin)) {
+        return keys.unverifiedPlugin;
+      }
+
+      const identity = plugin.identity;
+      if (identity.senderId !== undefined && identity.senderId !== sender.id) {
+        return null;
+      }
+
+      const pluginKey = plugin.uniqueKey;
+      if (!pluginKey) return null;
+      let ownerRecord = keys.plugins.get(pluginKey);
+      if (!ownerRecord) {
+        if (!create) return null;
+        ownerRecord = {
+          sender,
+          keys,
+          pluginKey,
+          ownerKey: {},
+        };
+        keys.plugins.set(pluginKey, ownerRecord);
+        indexPluginOwner(ownerRecord);
+      }
+      return ownerRecord.ownerKey;
+    };
+
+    runtime = createServerStreamRuntime<
       TReq,
       TChunk,
       WebContents,
@@ -860,51 +1056,92 @@ export class TuffMainTransport implements ITuffTransportMain {
       },
     });
 
-    const startHandler = (data: any) => {
-      const rawPayload = data?.data as
-        | {
-            streamId?: string;
-            __transportPortId?: string;
-            [key: string]: any;
-          }
-        | undefined;
-      const streamId = rawPayload?.streamId;
-      const portId = rawPayload?.__transportPortId;
-      const sender = data?.header?.event?.sender as WebContents | undefined;
+    const unregisterIdentityInvalidation =
+      this.keyManager.watchIdentityInvalidated?.((identity) => {
+        const ownerRecords = ownerRecordsByPluginKey.get(identity.key);
+        if (!ownerRecords) return;
+        for (const record of [...ownerRecords]) {
+          cancelPluginOwner(record);
+        }
+      }) ?? NOOP_UNREGISTER;
 
-      if (!streamId || !sender) {
-        throw new Error(
-          `[TuffTransport] Invalid stream start for \"${eventName}\"`,
-        );
-      }
+    const createStartHandler =
+      (channelType: BridgeChannelType) => (data: any) => {
+        if (!registered) return;
+        const rawPayload = data?.data as
+          | {
+              streamId?: string;
+              __transportPortId?: string;
+              [key: string]: any;
+            }
+          | undefined;
+        const streamId = rawPayload?.streamId;
+        const portId = rawPayload?.__transportPortId;
+        const sender = data?.header?.event?.sender as WebContents | undefined;
+        const plugin =
+          channelType === BRIDGE_CHANNEL.PLUGIN
+            ? this.resolveChannelPluginContext(data)
+            : undefined;
+        const ownerKey = sender
+          ? resolveOwnerKey(channelType, sender, plugin, true)
+          : null;
 
-      const payload = rawPayload ? { ...rawPayload } : {};
-      delete (payload as any).streamId;
-      delete (payload as any).__transportPortId;
+        if (!streamId || !sender || !ownerKey) {
+          throw new Error(
+            `[TuffTransport] Invalid stream start for \"${eventName}\"`,
+          );
+        }
 
-      runtime.handleStart({
-        streamId,
-        portId,
-        payload: payload as TReq,
-        sender,
-        plugin: this.resolveChannelPluginContext(data),
-      });
-    };
+        const payload = rawPayload ? { ...rawPayload } : {};
+        delete (payload as any).streamId;
+        delete (payload as any).__transportPortId;
 
-    const cancelHandler = (data: any) => {
-      const rawPayload = data?.data as { streamId?: string } | undefined;
-      runtime.handleCancel(rawPayload?.streamId);
-    };
+        runtime.handleStart({
+          streamId,
+          ownerKey,
+          portId,
+          payload: payload as TReq,
+          sender,
+          plugin,
+        });
+      };
+
+    const createCancelHandler =
+      (channelType: BridgeChannelType) => (data: any) => {
+        if (!registered) return;
+        const rawPayload = data?.data as { streamId?: string } | undefined;
+        const streamId = rawPayload?.streamId;
+        const sender = data?.header?.event?.sender as WebContents | undefined;
+        if (!streamId || !sender) {
+          return;
+        }
+
+        const plugin =
+          channelType === BRIDGE_CHANNEL.PLUGIN
+            ? this.resolveChannelPluginContext(data)
+            : undefined;
+        const ownerKey = resolveOwnerKey(channelType, sender, plugin, false);
+        if (!ownerKey) {
+          return;
+        }
+
+        runtime.handleCancel({ streamId, ownerKey });
+      };
+
+    const startHandlerMain = createStartHandler(BRIDGE_CHANNEL.MAIN);
+    const cancelHandlerMain = createCancelHandler(BRIDGE_CHANNEL.MAIN);
+    const startHandlerPlugin = createStartHandler(BRIDGE_CHANNEL.PLUGIN);
+    const cancelHandlerPlugin = createCancelHandler(BRIDGE_CHANNEL.PLUGIN);
 
     const startCleanupMain = this.channel.regChannel(
       BRIDGE_CHANNEL.MAIN,
       startEventName,
-      startHandler,
+      startHandlerMain,
     );
     const cancelCleanupMain = this.channel.regChannel(
       BRIDGE_CHANNEL.MAIN,
       cancelEventName,
-      cancelHandler,
+      cancelHandlerMain,
     );
     // Same gate as `on()`. Covering only `on()` would leave the entire stream surface bound
     // to the plugin channel, which is the half that is easy to miss (#688).
@@ -913,18 +1150,31 @@ export class TuffMainTransport implements ITuffTransportMain {
       ? this.channel.regChannel(
           BRIDGE_CHANNEL.PLUGIN,
           startEventName,
-          startHandler,
+          startHandlerPlugin,
         )
       : NOOP_UNREGISTER;
     const cancelCleanupPlugin = pluginFacing
       ? this.channel.regChannel(
           BRIDGE_CHANNEL.PLUGIN,
           cancelEventName,
-          cancelHandler,
+          cancelHandlerPlugin,
         )
       : NOOP_UNREGISTER;
 
     return () => {
+      if (!registered) return;
+      registered = false;
+      unregisterIdentityInvalidation();
+      for (const unregisterSenderCleanup of senderCleanupUnsubscribers) {
+        unregisterSenderCleanup();
+      }
+      senderCleanupUnsubscribers.clear();
+      for (const [sender, keys] of [...ownerKeysBySender]) {
+        cancelSenderOwners(sender, keys);
+      }
+      ownerKeysBySender.clear();
+      ownerRecordsByPluginKey.clear();
+      runtime.dispose();
       startCleanupMain();
       cancelCleanupMain();
       startCleanupPlugin();

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { types as utilTypes } from 'node:util'
 import vm from 'node:vm'
+import { INTELLIGENCE_ERROR_CODES } from '@talex-touch/utils/transport/events/types'
 import {
   DEFAULT_HOST_WIRE_LIMITS,
   decodeHostWireValue,
@@ -1338,8 +1339,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
     hasDeclaredCapability('feature.items.remove') ||
     hasDeclaredCapability('feature.items.clear') ||
     hasDeclaredCapability('feature.items.list')
-  const hasWidgetItemFacade =
-    !isTranslationPrelude && hasDeclaredCapability('feature.items.widget.push')
+  const hasWidgetItemFacade = hasDeclaredCapability('feature.items.widget.push')
   const hasStorageFacade =
     !isTranslationPrelude &&
     (hasDeclaredCapability('storage.file.read') ||
@@ -1405,6 +1405,9 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
   const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
   const fixedIntelligenceCapabilities = new setConstructor(['text.chat', 'vision.ocr'])
+  const fixedIntelligenceStreamErrorCodes = new setConstructor(
+    ${JSON.stringify(['INTELLIGENCE_STREAM_FAILED', ...INTELLIGENCE_ERROR_CODES])}
+  )
   const fixedSnipasteActions = new setConstructor(${JSON.stringify(PLUGIN_SNIPASTE_ACTION_IDS)})
   const fixedSystemActions = new setConstructor(${JSON.stringify(PLUGIN_SYSTEM_ACTION_IDS)})
   const fixedWindowPresetActions = new setConstructor(${JSON.stringify(PLUGIN_WINDOW_PRESET_ACTION_IDS)})
@@ -2140,10 +2143,14 @@ const CONTEXT_BOOTSTRAP = String.raw`
             await disposeCurrent()
             return
           }
-          if (event.type === 'error' && event.code === 'INTELLIGENCE_STREAM_FAILED') {
+          if (
+            event.type === 'error' &&
+            typeof event.code === 'string' &&
+            hasSetValue(fixedIntelligenceStreamErrorCodes, event.code)
+          ) {
             terminal = true
             if (callbacks.onError) {
-              await callbacks.onError(createCapabilityError('INTELLIGENCE_STREAM_FAILED'))
+              await callbacks.onError(createCapabilityError(event.code))
             }
             await disposeCurrent()
             return

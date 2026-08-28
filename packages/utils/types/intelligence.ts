@@ -458,9 +458,14 @@ export interface IntelligenceInvokeOptions {
  */
 export const INTELLIGENCE_HOME_SURFACE = "home-conversation" as const;
 
+/** Audit operation emitted by the low-stakes conversation title request. */
+export const INTELLIGENCE_CONVERSATION_TITLE_OPERATION = "conversation-title" as const;
+
 /** `IntelligenceInvokeOptions.metadata` shape the home conversation sends. */
 export interface IntelligenceHomeSurfaceMetadata {
   surface: typeof INTELLIGENCE_HOME_SURFACE;
+  /** Stable audit discriminator for a user-visible Home turn. */
+  operation: typeof INTELLIGENCE_HOME_SURFACE;
   /**
    * Live value of `appSetting.tools.autoContext`, read at send time.
    *

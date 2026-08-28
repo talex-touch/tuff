@@ -135,7 +135,7 @@ describe('tuff_invoke_feature', () => {
       .execute({ plugin: 'com.talex.translate', feature: 'invented' })
 
     expect(result.isError).toBe(true)
-    expect(result.output).toContain('tuff_list_features')
+    expect(result.code).toBe('TOOL_NOT_FOUND')
     expect(invokeFeature).not.toHaveBeenCalled()
   })
 
@@ -144,8 +144,7 @@ describe('tuff_invoke_feature', () => {
       .get('tuff_invoke_feature')!
       .execute({ plugin: 'com.talex.translate' })
 
-    expect(result).toMatchObject({ isError: true })
-    expect(result.output).toContain('plugin and feature are required')
+    expect(result).toMatchObject({ isError: true, code: 'TOOL_INPUT_INVALID' })
   })
 
   it('reports a refusal and a failure to the model instead of throwing', async () => {
@@ -157,18 +156,20 @@ describe('tuff_invoke_feature', () => {
       .execute({ plugin: 'com.talex.translate', feature: 'translate' })
 
     expect(refused.isError).toBe(true)
-    expect(refused.output).toContain('declined the request')
+    expect(refused.code).toBe('TOOL_APPROVAL_DENIED')
 
+    const canary = 'sk-live-secret@/Users/private/plugin-stack.ts:42'
     const failed = await registryWith({
       listFeatures: () => [entry()],
       invokeFeature: async () => {
-        throw new Error('plugin view failed to load')
+        throw new Error(canary)
       }
     })
       .get('tuff_invoke_feature')!
       .execute({ plugin: 'com.talex.translate', feature: 'translate' })
 
     expect(failed.isError).toBe(true)
-    expect(failed.output).toContain('plugin view failed to load')
+    expect(failed.code).toBe('TOOL_EXECUTION_FAILED')
+    expect(JSON.stringify(failed)).not.toContain(canary)
   })
 })

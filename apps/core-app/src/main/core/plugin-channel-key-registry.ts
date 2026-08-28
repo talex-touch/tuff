@@ -1,6 +1,8 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
 import { randomBytes } from 'node:crypto'
 
+type IdentityInvalidationListener = (identity: Readonly<PluginActivationIdentity>) => void
+
 /**
  * Per-plugin channel keys and the activation they belong to.
  *
@@ -25,6 +27,37 @@ export class PluginChannelKeyRegistry {
   private readonly keyToName = new Map<string, string>()
   private readonly nameToKey = new Map<string, string>()
   private readonly keyToIdentity = new Map<string, PluginActivationIdentity>()
+  private readonly identityInvalidationListeners = new Set<IdentityInvalidationListener>()
+  private notifyingIdentityInvalidation = false
+
+  private assertMutationAllowed(): void {
+    if (this.notifyingIdentityInvalidation) {
+      throw new Error('Plugin channel key mutation is not allowed during identity invalidation')
+    }
+  }
+
+  private notifyIdentityInvalidated(identity: PluginActivationIdentity): void {
+    const snapshot = Object.freeze({ ...identity })
+    this.notifyingIdentityInvalidation = true
+    try {
+      for (const listener of [...this.identityInvalidationListeners]) {
+        try {
+          listener(snapshot)
+        } catch {
+          // Identity invalidation must complete even when one host listener is faulty.
+        }
+      }
+    } finally {
+      this.notifyingIdentityInvalidation = false
+    }
+  }
+
+  watchIdentityInvalidated(listener: IdentityInvalidationListener): () => void {
+    this.identityInvalidationListeners.add(listener)
+    return () => {
+      this.identityInvalidationListeners.delete(listener)
+    }
+  }
 
   /**
    * Returns the plugin's current key, minting a new one when the activation has changed.
@@ -37,9 +70,10 @@ export class PluginChannelKeyRegistry {
     name: string,
     activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>
   ): string {
+    this.assertMutationAllowed()
     const existingKey = this.nameToKey.get(name)
+    const existingIdentity = existingKey ? this.keyToIdentity.get(existingKey) : undefined
     if (existingKey) {
-      const existingIdentity = this.keyToIdentity.get(existingKey)
       const sameActivation =
         existingIdentity &&
         (!activation ||
@@ -48,30 +82,38 @@ export class PluginChannelKeyRegistry {
       if (sameActivation) {
         return existingKey
       }
+    }
+
+    const key = randomBytes(16).toString('hex')
+    const identity: PluginActivationIdentity = Object.freeze({
+      name,
+      pluginInstanceId: activation?.pluginInstanceId ?? `legacy:${name}`,
+      activationGeneration: activation?.activationGeneration ?? 1,
+      key
+    })
+
+    if (existingKey) {
       // All three maps move together. A key dropped from one but left in another is exactly
       // the stale-key injection this rotation exists to prevent.
       this.keyToName.delete(existingKey)
       this.keyToIdentity.delete(existingKey)
       this.nameToKey.delete(name)
     }
-
-    const key = randomBytes(16).toString('hex')
-    const identity: PluginActivationIdentity = {
-      name,
-      pluginInstanceId: activation?.pluginInstanceId ?? `legacy:${name}`,
-      activationGeneration: activation?.activationGeneration ?? 1,
-      key
-    }
     this.keyToName.set(key, name)
     this.nameToKey.set(name, key)
     this.keyToIdentity.set(key, identity)
+    if (existingIdentity) {
+      this.notifyIdentityInvalidated(existingIdentity)
+    }
 
     return key
   }
 
   /** Returns whether a key existed to revoke, so a caller can tell a real key from a made-up one. */
   revokeKey(key: string): boolean {
+    this.assertMutationAllowed()
     const name = this.keyToName.get(key)
+    const identity = this.keyToIdentity.get(key)
     if (!name) {
       return false
     }
@@ -79,6 +121,9 @@ export class PluginChannelKeyRegistry {
     this.keyToName.delete(key)
     this.nameToKey.delete(name)
     this.keyToIdentity.delete(key)
+    if (identity) {
+      this.notifyIdentityInvalidated(identity)
+    }
 
     return true
   }

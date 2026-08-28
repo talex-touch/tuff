@@ -19,6 +19,12 @@ import { databaseModule } from '../database'
 import { agentManager } from './agents'
 import { toolRegistry } from './agents/tool-registry'
 import { tuffIntelligence } from './intelligence-sdk'
+import {
+  formatStableToolError,
+  projectToolError,
+  projectToolErrorCode,
+  type StableToolErrorCode
+} from './tool-error-projection'
 
 type SessionStatus = TuffIntelligenceSession['status']
 
@@ -48,14 +54,17 @@ interface ToolCallExecutionResult {
   success: boolean
   output?: unknown
   error?: string
+  errorCode?: StableToolErrorCode
   approvalTicket?: TuffIntelligenceApprovalTicket
   traceEvent: TuffIntelligenceTraceEvent
 }
 
 interface StoredToolCallResult {
+  toolId?: string
   success: boolean
   output?: unknown
   error?: string
+  errorCode?: StableToolErrorCode
   timestamp: number
 }
 
@@ -154,6 +163,26 @@ const DEFAULT_TOOL_TIMEOUT_MS = 45_000
 const DEFAULT_TOOL_RETRY = 1
 const DEFAULT_TRACE_QUERY_LIMIT = 200
 const MAX_TRACE_EVENTS = 1000
+const SAFE_RUNTIME_IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/
+
+const TRACE_MESSAGES = {
+  'session.started': 'Session started',
+  'session.resumed': 'Session resumed',
+  'session.paused': 'Session paused',
+  'session.cancelled': 'Session cancelled',
+  'plan.created': 'Plan created',
+  'plan.updated': 'Plan updated',
+  'execution.started': 'Execution started',
+  'execution.completed': 'Execution completed',
+  'execution.failed': 'Execution failed',
+  'tool.called': 'Tool call started',
+  'tool.completed': 'Tool call completed',
+  'tool.approval_required': 'Tool approval required',
+  'tool.approved': 'Tool call approved',
+  'tool.rejected': 'Tool call rejected',
+  'reflection.completed': 'Reflection completed',
+  'state.snapshot': 'Runtime state updated'
+} as const satisfies Record<TuffIntelligenceTraceEvent['type'], string>
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -180,12 +209,173 @@ function now(): number {
   return Date.now()
 }
 
+function toSafeRuntimeIdentifier(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const normalized = value.trim()
+  return SAFE_RUNTIME_IDENTIFIER.test(normalized) ? normalized : fallback
+}
+
+function readSafeRuntimeIdentifier(value: unknown): string | undefined {
+  const identifier = toSafeRuntimeIdentifier(value, '')
+  return identifier || undefined
+}
+
+function normalizeCallId(value: unknown): string {
+  return readSafeRuntimeIdentifier(value) ?? generateId('tool')
+}
+
+function stableToolFailure(code: StableToolErrorCode): {
+  error: string
+  errorCode: StableToolErrorCode
+} {
+  return {
+    error: formatStableToolError(projectToolErrorCode(code)),
+    errorCode: code
+  }
+}
+
+function toBoundedCount(value: unknown): number | undefined {
+  const count = Number(value)
+  if (!Number.isFinite(count)) return undefined
+  return Math.min(Math.max(Math.floor(count), 0), Number.MAX_SAFE_INTEGER)
+}
+
+function compactPayload(value: Record<string, unknown>): Record<string, unknown> | undefined {
+  const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function projectTracePayload(
+  type: TuffIntelligenceTraceEvent['type'],
+  value: unknown
+): Record<string, unknown> | undefined {
+  const payload = asRecord(value)
+  switch (type) {
+    case 'session.started':
+    case 'session.resumed':
+    case 'session.paused':
+    case 'session.cancelled':
+      return { status: type.slice('session.'.length) }
+    case 'plan.created':
+      return { status: 'planning' }
+    case 'plan.updated':
+      return compactPayload({
+        status: 'planned',
+        actionCount: toBoundedCount(payload.actionCount)
+      })
+    case 'execution.started':
+      return compactPayload({
+        status: 'started',
+        maxSteps: toBoundedCount(payload.maxSteps),
+        toolBudget: toBoundedCount(payload.toolBudget)
+      })
+    case 'execution.completed':
+    case 'execution.failed':
+      return compactPayload({
+        status: type === 'execution.completed' ? 'succeeded' : 'failed',
+        actionId: readSafeRuntimeIdentifier(payload.actionId),
+        executedSteps: toBoundedCount(payload.executedSteps),
+        toolCalls: toBoundedCount(payload.toolCalls),
+        errorCode:
+          type === 'execution.failed' ? projectToolErrorCode(payload.errorCode).code : undefined
+      })
+    case 'tool.called':
+    case 'tool.completed':
+    case 'tool.approval_required':
+      return compactPayload({
+        callId: readSafeRuntimeIdentifier(payload.callId),
+        ticketId: readSafeRuntimeIdentifier(payload.ticketId),
+        toolId: readSafeRuntimeIdentifier(payload.toolId),
+        riskLevel:
+          payload.riskLevel === 'low' ||
+          payload.riskLevel === 'medium' ||
+          payload.riskLevel === 'high' ||
+          payload.riskLevel === 'critical'
+            ? payload.riskLevel
+            : undefined,
+        status:
+          type === 'tool.called'
+            ? 'started'
+            : type === 'tool.approval_required'
+              ? 'pending'
+              : payload.status === 'succeeded' || payload.status === 'failed'
+                ? payload.status
+                : undefined,
+        durationMs: toBoundedCount(payload.durationMs),
+        errorCode:
+          payload.status === 'failed' ? projectToolErrorCode(payload.errorCode).code : undefined,
+        cached: payload.cached === true ? true : undefined
+      })
+    case 'tool.approved':
+    case 'tool.rejected':
+      return compactPayload({
+        ticketId: readSafeRuntimeIdentifier(payload.ticketId),
+        toolId: readSafeRuntimeIdentifier(payload.toolId),
+        decision: type === 'tool.approved' ? 'approved' : 'rejected'
+      })
+    case 'reflection.completed':
+      return compactPayload({
+        status: 'completed',
+        summaryLength: toBoundedCount(payload.summaryLength)
+      })
+    case 'state.snapshot':
+      return compactPayload({
+        status: 'updated',
+        actionCount: toBoundedCount(payload.actionCount)
+      })
+  }
+}
+
+function projectApprovalTicket(
+  ticket: TuffIntelligenceApprovalTicket
+): TuffIntelligenceApprovalTicket {
+  return {
+    id: toSafeRuntimeIdentifier(ticket.id, 'unknown'),
+    sessionId: toSafeRuntimeIdentifier(ticket.sessionId, 'unknown'),
+    turnId: ticket.turnId ? toSafeRuntimeIdentifier(ticket.turnId, 'unknown') : undefined,
+    actionId: ticket.actionId ? toSafeRuntimeIdentifier(ticket.actionId, 'unknown') : undefined,
+    toolId: toSafeRuntimeIdentifier(ticket.toolId, 'unknown'),
+    riskLevel: ticket.riskLevel,
+    reason: `Tool approval is required for a ${ticket.riskLevel}-risk operation.`,
+    status: ticket.status,
+    requestedAt: ticket.requestedAt,
+    resolvedAt: ticket.resolvedAt,
+    resolvedBy: ticket.resolvedBy ? 'user' : undefined
+  }
+}
+
 function toSafeSeq(value: unknown): number | null {
   const seq = Number(value)
   if (!Number.isFinite(seq)) {
     return null
   }
   return Math.max(1, Math.floor(seq))
+}
+
+function projectTraceEvent(event: TuffIntelligenceTraceEvent): TuffIntelligenceAgentTraceEvent {
+  const type = Object.hasOwn(TRACE_MESSAGES, event.type) ? event.type : 'state.snapshot'
+  const level =
+    event.level === 'debug' ||
+    event.level === 'info' ||
+    event.level === 'warn' ||
+    event.level === 'error'
+      ? event.level
+      : 'info'
+  const timestamp = Number(event.timestamp)
+  return {
+    id: toSafeRuntimeIdentifier(event.id, 'unknown'),
+    sessionId: toSafeRuntimeIdentifier(event.sessionId, 'unknown'),
+    seq: toSafeSeq(event.seq) ?? undefined,
+    turnId: event.turnId ? toSafeRuntimeIdentifier(event.turnId, 'unknown') : undefined,
+    type,
+    level,
+    message: TRACE_MESSAGES[type],
+    payload: projectTracePayload(type, event.payload),
+    timestamp: Number.isFinite(timestamp)
+      ? Math.min(Math.max(Math.floor(timestamp), 0), Number.MAX_SAFE_INTEGER)
+      : 0,
+    contractVersion: 3
+  }
 }
 
 function resolveRiskLevel(
@@ -673,19 +863,22 @@ export class TuffIntelligenceRuntime {
     if (matchedNode) {
       matchedNode.status = payload.success ? 'completed' : 'failed'
       matchedNode.output = payload.output
-      matchedNode.error = payload.error
+      matchedNode.error = payload.success
+        ? undefined
+        : formatStableToolError(projectToolError(payload.error))
       matchedNode.updatedAt = now()
     }
 
     this.pushTrace(stored, {
-      type: payload.success ? 'tool.completed' : 'execution.failed',
+      type: 'tool.completed',
       level: payload.success ? 'info' : 'error',
       message: payload.success
         ? `External tool result accepted for ${payload.toolId}`
         : `External tool failure reported for ${payload.toolId}`,
       payload: {
-        toolId: payload.toolId,
-        metadata: payload.metadata
+        toolId: toSafeRuntimeIdentifier(payload.toolId, 'unknown'),
+        status: payload.success ? 'succeeded' : 'failed',
+        errorCode: payload.success ? undefined : projectToolError(payload.error).code
       }
     })
     stored.session.updatedAt = now()
@@ -700,15 +893,12 @@ export class TuffIntelligenceRuntime {
     if (!stored) return null
 
     const ticket = stored.approvals.find((item) => item.id === payload.ticketId)
-    if (!ticket || ticket.status !== 'pending') return ticket ?? null
+    if (!ticket) return null
+    if (ticket.status !== 'pending') return projectApprovalTicket(ticket)
 
     ticket.status = payload.approved ? 'approved' : 'rejected'
     ticket.resolvedAt = now()
-    ticket.resolvedBy = payload.approvedBy || 'system'
-    ticket.metadata = {
-      ...(ticket.metadata ?? {}),
-      decisionReason: payload.reason
-    }
+    ticket.resolvedBy = payload.approvedBy ? 'user' : 'system'
 
     this.pushTrace(stored, {
       type: payload.approved ? 'tool.approved' : 'tool.rejected',
@@ -717,43 +907,66 @@ export class TuffIntelligenceRuntime {
         ? `Approval granted for ticket ${ticket.id}`
         : `Approval rejected for ticket ${ticket.id}`,
       payload: {
-        toolId: ticket.toolId,
-        reason: payload.reason
+        ticketId: ticket.id,
+        toolId: toSafeRuntimeIdentifier(ticket.toolId, 'unknown')
       }
     })
 
     const deferredCall = asRecord(ticket.metadata?.deferredCall)
     if (payload.approved && Object.keys(deferredCall).length > 0) {
-      await this.executeToolCall(stored, {
-        sessionId: ticket.sessionId,
-        turnId: ticket.turnId,
-        actionId: ticket.actionId,
-        toolId: ticket.toolId,
-        input: deferredCall.input,
-        callId: typeof deferredCall.callId === 'string' ? deferredCall.callId : undefined,
-        timeoutMs:
-          typeof deferredCall.timeoutMs === 'number'
-            ? deferredCall.timeoutMs
-            : DEFAULT_TOOL_TIMEOUT_MS,
-        riskLevel: ticket.riskLevel
-      })
+      const result = await this.executeToolCall(
+        stored,
+        {
+          sessionId: ticket.sessionId,
+          turnId: ticket.turnId,
+          actionId: ticket.actionId,
+          toolId: ticket.toolId,
+          input: deferredCall.input,
+          callId: typeof deferredCall.callId === 'string' ? deferredCall.callId : undefined,
+          timeoutMs:
+            typeof deferredCall.timeoutMs === 'number'
+              ? deferredCall.timeoutMs
+              : DEFAULT_TOOL_TIMEOUT_MS,
+          riskLevel: ticket.riskLevel
+        },
+        { approvalGranted: true }
+      )
+
+      const actionNode = ticket.actionId
+        ? stored.actionGraph.nodes.find((node) => node.id === ticket.actionId)
+        : undefined
+      if (actionNode) {
+        actionNode.status = result.success ? 'completed' : 'failed'
+        actionNode.output = result.success ? result.output : undefined
+        actionNode.error = result.success ? undefined : result.error
+        actionNode.updatedAt = now()
+      }
 
       const turn = ticket.turnId
         ? stored.turns.find((item) => item.id === ticket.turnId)
         : undefined
-      if (turn && turn.status === 'waiting_approval') {
+      if (turn && turn.status === 'waiting_approval' && result.success) {
         turn.status = 'executing'
       }
-      if (stored.session.status === 'waiting_approval') {
+      if (stored.session.status === 'waiting_approval' && result.success) {
         stored.session.status = 'executing'
       }
+      if (!result.success) {
+        if (turn) {
+          turn.status = 'failed'
+          turn.error = result.error
+          turn.completedAt = now()
+        }
+        stored.session.status = 'failed'
+      }
     } else if (!payload.approved) {
+      const failure = stableToolFailure('TOOL_APPROVAL_DENIED')
       const actionNode = ticket.actionId
         ? stored.actionGraph.nodes.find((node) => node.id === ticket.actionId)
         : undefined
       if (actionNode) {
         actionNode.status = 'failed'
-        actionNode.error = payload.reason || 'tool approval rejected'
+        actionNode.error = failure.error
         actionNode.updatedAt = now()
       }
       const turn = ticket.turnId
@@ -761,7 +974,7 @@ export class TuffIntelligenceRuntime {
         : undefined
       if (turn && turn.status !== 'cancelled') {
         turn.status = 'failed'
-        turn.error = payload.reason || 'tool approval rejected'
+        turn.error = failure.error
         turn.completedAt = now()
       }
       stored.session.status = 'failed'
@@ -769,7 +982,7 @@ export class TuffIntelligenceRuntime {
 
     stored.session.updatedAt = now()
     await this.persistSession(stored)
-    return ticket
+    return projectApprovalTicket(ticket)
   }
 
   async getSessionHistory(
@@ -859,11 +1072,7 @@ export class TuffIntelligenceRuntime {
       return left.timestamp - right.timestamp
     })
     const limit = Math.max(1, payload.limit ?? DEFAULT_TRACE_QUERY_LIMIT)
-    return trace.slice(-limit).map((event) => ({
-      ...event,
-      seq: toSafeSeq(event.seq) ?? undefined,
-      contractVersion: 3
-    }))
+    return trace.slice(-limit).map(projectTraceEvent)
   }
 
   async exportTrace(
@@ -918,7 +1127,8 @@ export class TuffIntelligenceRuntime {
           return { success: true, toolCall: true, awaitingApproval: true }
         }
         if (!result.success) {
-          throw new Error(result.error || `Tool ${node.toolId} failed`)
+          const failure = stableToolFailure(result.errorCode ?? 'TOOL_EXECUTION_FAILED')
+          throw Object.assign(new Error(failure.error), { code: failure.errorCode })
         }
         node.status = 'completed'
         node.output = result.output
@@ -980,15 +1190,16 @@ export class TuffIntelligenceRuntime {
       node.updatedAt = now()
       return { success: true, toolCall: false }
     } catch (error) {
+      const failure = projectToolError(error)
       node.status = 'failed'
-      node.error = error instanceof Error ? error.message : String(error)
+      node.error = formatStableToolError(failure)
       node.updatedAt = now()
       turn.error = node.error
       this.pushTrace(stored, {
         type: 'execution.failed',
         level: 'error',
         message: `Action ${node.id} failed`,
-        payload: { actionId: node.id, error: node.error }
+        payload: { actionId: node.id, errorCode: failure.code }
       })
       return { success: false, toolCall: node.type === 'tool' }
     }
@@ -996,28 +1207,68 @@ export class TuffIntelligenceRuntime {
 
   private async executeToolCall(
     stored: StoredRuntimeSession,
-    request: ToolCallExecutionRequest
+    request: ToolCallExecutionRequest,
+    options: { approvalGranted?: boolean } = {}
   ): Promise<ToolCallExecutionResult> {
     const timestamp = now()
-    const riskLevel = resolveRiskLevel(request.toolId, request.riskLevel)
-    const callId = request.callId || generateId('tool')
+    const safeToolId = toSafeRuntimeIdentifier(request.toolId, '')
+    const riskLevel = resolveRiskLevel(safeToolId, request.riskLevel)
+    const callId = normalizeCallId(request.callId)
     const cached = stored.toolCallCache[callId]
-    if (cached) {
+    if (cached?.toolId === safeToolId) {
       const cachedEvent = this.pushTrace(stored, {
         type: 'tool.completed',
         level: cached.success ? 'info' : 'warn',
         message: `Tool ${request.toolId} returned cached result`,
-        payload: { callId }
+        payload: {
+          callId,
+          toolId: safeToolId,
+          status: cached.success ? 'succeeded' : 'failed',
+          errorCode: cached.errorCode,
+          durationMs: 0,
+          cached: true
+        }
       })
       return {
         success: cached.success,
         output: cached.output,
         error: cached.error,
+        errorCode: cached.errorCode,
         traceEvent: cachedEvent
       }
     }
 
-    if (isApprovalRequired(riskLevel)) {
+    const tool = safeToolId ? toolRegistry.getTool(safeToolId) : null
+    if (!tool) {
+      const failure = stableToolFailure('TOOL_NOT_FOUND')
+      const traceEvent = this.pushTrace(stored, {
+        type: 'tool.completed',
+        level: 'error',
+        message: 'Tool is unavailable',
+        payload: {
+          callId,
+          toolId: safeToolId || 'unknown',
+          status: 'failed',
+          errorCode: failure.errorCode,
+          durationMs: now() - timestamp
+        }
+      })
+      stored.toolCallCache[callId] = {
+        toolId: safeToolId,
+        success: false,
+        error: failure.error,
+        errorCode: failure.errorCode,
+        timestamp
+      }
+      return {
+        success: false,
+        error: failure.error,
+        errorCode: failure.errorCode,
+        traceEvent
+      }
+    }
+
+    if (isApprovalRequired(riskLevel) && options.approvalGranted !== true) {
       const ticket: TuffIntelligenceApprovalTicket = {
         id: generateId('approval'),
         sessionId: request.sessionId,
@@ -1025,16 +1276,14 @@ export class TuffIntelligenceRuntime {
         actionId: request.actionId,
         toolId: request.toolId,
         riskLevel,
-        reason: `Tool ${request.toolId} is ${riskLevel} risk and requires approval`,
+        reason: `Tool approval is required for a ${riskLevel}-risk operation.`,
         status: 'pending',
         requestedAt: timestamp,
         metadata: {
           deferredCall: {
-            toolId: request.toolId,
             input: request.input,
             callId,
-            timeoutMs: request.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS,
-            metadata: request.metadata
+            timeoutMs: request.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
           }
         }
       }
@@ -1046,38 +1295,15 @@ export class TuffIntelligenceRuntime {
         message: `Approval required for tool ${request.toolId}`,
         payload: {
           ticketId: ticket.id,
-          toolId: request.toolId,
+          toolId: safeToolId,
           riskLevel,
-          callId,
-          toolSource: request.metadata?.toolSource,
-          approvalContext: request.metadata?.approvalContext,
-          contextSources: request.metadata?.contextSources
+          callId
         }
       })
       return {
         success: false,
         error: 'approval required',
-        approvalTicket: ticket,
-        traceEvent
-      }
-    }
-
-    const tool = toolRegistry.getTool(request.toolId)
-    if (!tool) {
-      const traceEvent = this.pushTrace(stored, {
-        type: 'execution.failed',
-        level: 'error',
-        message: `Tool ${request.toolId} not found`,
-        payload: { callId }
-      })
-      stored.toolCallCache[callId] = {
-        success: false,
-        error: `Tool ${request.toolId} not found`,
-        timestamp
-      }
-      return {
-        success: false,
-        error: `Tool ${request.toolId} not found`,
+        approvalTicket: projectApprovalTicket(ticket),
         traceEvent
       }
     }
@@ -1088,12 +1314,8 @@ export class TuffIntelligenceRuntime {
       message: `Calling tool ${request.toolId}`,
       payload: {
         callId,
-        toolId: request.toolId,
-        input: request.input,
-        riskLevel,
-        toolSource: request.metadata?.toolSource,
-        approvalContext: request.metadata?.approvalContext,
-        contextSources: request.metadata?.contextSources
+        toolId: safeToolId,
+        riskLevel
       }
     })
 
@@ -1103,20 +1325,23 @@ export class TuffIntelligenceRuntime {
       workingDirectory:
         typeof request.metadata?.workingDirectory === 'string'
           ? request.metadata.workingDirectory
-          : undefined
+          : undefined,
+      errorProjection: 'stable'
     }
 
     const result = await this.executeToolWithRetry(
-      request.toolId,
+      safeToolId,
       request.input,
       context,
       request.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS
     )
 
     stored.toolCallCache[callId] = {
+      toolId: safeToolId,
       success: result.success,
       output: result.output,
       error: result.error,
+      errorCode: result.errorCode,
       timestamp
     }
 
@@ -1128,13 +1353,11 @@ export class TuffIntelligenceRuntime {
         : `Tool ${request.toolId} failed`,
       payload: {
         callId,
-        toolId: request.toolId,
-        output: result.output,
-        error: result.error,
+        toolId: safeToolId,
         riskLevel,
-        toolSource: request.metadata?.toolSource,
-        approvalContext: request.metadata?.approvalContext,
-        contextSources: request.metadata?.contextSources
+        status: result.success ? 'succeeded' : 'failed',
+        errorCode: result.errorCode,
+        durationMs: now() - timestamp
       }
     })
 
@@ -1142,6 +1365,7 @@ export class TuffIntelligenceRuntime {
       success: result.success,
       output: result.output,
       error: result.error,
+      errorCode: result.errorCode,
       traceEvent
     }
   }
@@ -1151,29 +1375,38 @@ export class TuffIntelligenceRuntime {
     input: unknown,
     context: ToolExecutionContext,
     timeoutMs: number
-  ): Promise<{ success: boolean; output?: unknown; error?: string }> {
-    let lastError: string | undefined
+  ): Promise<{
+    success: boolean
+    output?: unknown
+    error?: string
+    errorCode?: StableToolErrorCode
+  }> {
+    let lastFailure = stableToolFailure('TOOL_EXECUTION_FAILED')
     for (let attempt = 0; attempt <= DEFAULT_TOOL_RETRY; attempt += 1) {
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined
       try {
         const execution = toolRegistry.executeTool(toolId, input, context)
-        const result = await Promise.race([
-          execution,
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Tool ${toolId} timeout after ${timeoutMs}ms`)),
-              timeoutMs
-            )
-          )
-        ])
+        const timeout = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            reject(Object.assign(new Error('Tool execution timed out'), { code: 'ETIMEDOUT' }))
+          }, timeoutMs)
+        })
+        const result = await Promise.race([execution, timeout])
         if (result.success) {
           return {
             success: true,
             output: result.output
           }
         }
-        lastError = result.error || `Tool ${toolId} failed`
+        lastFailure = stableToolFailure(result.errorCode ?? 'TOOL_EXECUTION_FAILED')
       } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error)
+        const projection = projectToolError(error)
+        lastFailure = {
+          error: formatStableToolError(projection),
+          errorCode: projection.code
+        }
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle)
       }
 
       if (attempt < DEFAULT_TOOL_RETRY) {
@@ -1184,7 +1417,7 @@ export class TuffIntelligenceRuntime {
 
     return {
       success: false,
-      error: lastError || `Tool ${toolId} failed`
+      ...lastFailure
     }
   }
 
@@ -1292,11 +1525,10 @@ export class TuffIntelligenceRuntime {
     for (const subscriber of Array.from(subscribers)) {
       try {
         subscriber(envelope)
-      } catch (error) {
+      } catch {
         runtimeLog.warn('trace subscriber callback failed', {
-          error,
           meta: {
-            sessionId: event.sessionId
+            code: 'TRACE_SUBSCRIBER_FAILED'
           }
         })
       }
@@ -1310,23 +1542,23 @@ export class TuffIntelligenceRuntime {
     }
   ): TuffIntelligenceTraceEvent {
     const seq = this.getNextTraceSeq(stored)
-    const event: TuffIntelligenceTraceEvent = {
+    const event = projectTraceEvent({
       id: generateId('trace'),
       sessionId: stored.session.id,
       seq,
-      turnId: payload.turnId,
+      turnId: payload.turnId ? toSafeRuntimeIdentifier(payload.turnId, 'unknown') : undefined,
       type: payload.type,
       level: payload.level,
       message: payload.message,
       payload: payload.payload,
       timestamp: payload.timestamp ?? now()
-    }
+    })
     stored.trace.push(event)
     stored.session.lastEventSeq = seq
     if (stored.trace.length > MAX_TRACE_EVENTS) {
       stored.trace = stored.trace.slice(stored.trace.length - MAX_TRACE_EVENTS)
     }
-    this.notifyTraceSubscribers({ ...event, contractVersion: 3 })
+    this.notifyTraceSubscribers(event)
     return event
   }
 
@@ -1337,8 +1569,12 @@ export class TuffIntelligenceRuntime {
       status: stored.session.status,
       currentTurn,
       actionGraph: stored.actionGraph,
-      pendingApprovals: stored.approvals.filter((ticket) => ticket.status === 'pending'),
-      lastTraceEvent: stored.trace[stored.trace.length - 1],
+      pendingApprovals: stored.approvals
+        .filter((ticket) => ticket.status === 'pending')
+        .map(projectApprovalTicket),
+      lastTraceEvent: stored.trace[stored.trace.length - 1]
+        ? projectTraceEvent(stored.trace[stored.trace.length - 1]!)
+        : undefined,
       updatedAt: stored.session.updatedAt
     }
   }

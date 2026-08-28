@@ -41,6 +41,9 @@
   "include": [
     "electron.vite.config.*",
     "scripts/coreapp-packaged-ai-ask-probe*.ts",
+    "scripts/coreapp-packaged-ai-failure-matrix*.ts",
+    "scripts/coreapp-packaged-ai-provider-acceptance*.ts",
+    "scripts/coreapp-packaged-tool-confirmation-acceptance*.ts",
     "scripts/coreapp-visible-app-index-workbench-probe*.ts",
     "scripts/coreapp-packaged-login-recovery-probe*.ts",
     "scripts/quickops-evidence-*.ts",

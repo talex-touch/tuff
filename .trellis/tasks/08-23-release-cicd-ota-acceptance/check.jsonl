@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/release-testing.md","reason":"复核发布与 OTA executable contract"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"复核 lint/typecheck/test/build 门禁"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"复核同 SHA、版本和产物投影"}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"复核门禁在破坏属性时确实失败"}

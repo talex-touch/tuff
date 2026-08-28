@@ -207,6 +207,7 @@ describe('invokeIntelligenceCapability', () => {
         workflowRunId: 'run_1',
         workflowStepId: 'step_1',
       }),
+      { idempotencyKey: `intelligence-invoke:${result.traceId}` },
     )
     const creditMetadata = JSON.stringify(creditStoreMocks.consumeCredits.mock.calls[0]?.[4])
     expect(creditMetadata).not.toContain('hello')

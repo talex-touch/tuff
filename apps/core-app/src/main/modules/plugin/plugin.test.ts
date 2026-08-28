@@ -2367,6 +2367,7 @@ describe('touchPlugin.enable', () => {
       ])
       expect(translationStart.capabilityAllowlist).toEqual([
         'feature.items.push',
+        'feature.items.widget.push',
         'feature.items.clear',
         'clipboard.write',
         'intelligence.invoke'

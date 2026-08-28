@@ -6,7 +6,12 @@ on:
       - main
       - master
     paths:
-      - "packages/utils/package.json"
+      - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/package-publish.config.mjs"
+      - "scripts/validate-publish-manifests.mjs"
+      - "scripts/publish-package.mjs"
       - ".github/workflows/package-utils-publish.yml"
 
 concurrency:
@@ -91,7 +96,17 @@ jobs:
 
       - name: Run utils tests
         if: steps.version_check.outputs.should_publish == 'true'
-        run: pnpm -C "packages/utils" test
+        run: |
+          pnpm -C "packages/utils" exec vitest run --exclude "**/*.benchmark.test.ts"
+          pnpm -C "packages/utils" benchmark:preview
+
+      - name: Lint utils package
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: pnpm -C "packages/utils" lint
+
+      - name: Build and type-check utils package
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: pnpm -C "packages/utils" build
 
       - name: Verify npm token
         if: steps.version_check.outputs.should_publish == 'true'
@@ -115,4 +130,4 @@ jobs:
         if: steps.version_check.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: node scripts/publish-package.mjs --filter "@talex-touch/utils" --skip-git-check --skip-tests
+        run: node scripts/publish-package.mjs --filter "@talex-touch/utils" --skip-git-check --skip-tests --skip-build

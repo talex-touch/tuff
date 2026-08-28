@@ -6,6 +6,8 @@ import type {
   PrivacyCleanupPreviewResult,
   PrivacyCleanupRunResult,
   PrivacyDataCategory,
+  PrivacyOrchestratorRunDeletePreviewResult,
+  PrivacyOrchestratorRunDeleteResult,
   PrivacyPolicyGetResult,
   PrivacyPolicyUpdateResult,
   PrivacyProviderDisclosureResult,
@@ -29,6 +31,7 @@ import type { PrivacyCategoryExporter } from './privacy-export'
 import type { PrivacySecretService } from './privacy-secret-service'
 import type { PrivacyProviderDisclosureService } from './provider-disclosure'
 import type { PrivacyRetentionPolicyStore } from './retention-policy-store'
+import type { OrchestratorRunPrivacyLifecycle } from './owners/orchestrator-run-privacy-lifecycle'
 import { randomUUID } from 'node:crypto'
 import { isProxy } from 'node:util/types'
 import {
@@ -57,6 +60,7 @@ export interface PrivacyLifecycleServiceOptions {
   readonly exporter: PrivacyCategoryExporter
   readonly disclosure: PrivacyProviderDisclosureService
   readonly secrets: PrivacySecretService
+  readonly orchestratorRuns: OrchestratorRunPrivacyLifecycle
   readonly reportError: (report: PrivacyLifecycleErrorReport) => unknown
   readonly now?: () => number
   readonly operationTimeoutMs?: number
@@ -82,6 +86,15 @@ export interface PrivacyLifecycleService {
     confirmation: 'delete-selected-data',
     previewId: string
   ) => Promise<PrivacyCategoryDeleteResult>
+  previewOrchestratorRunDelete: (
+    runId: string,
+    authorityId: number
+  ) => Promise<PrivacyOrchestratorRunDeletePreviewResult>
+  deleteOrchestratorRun: (
+    confirmation: 'delete-orchestrator-run',
+    previewId: string,
+    authorityId: number
+  ) => Promise<PrivacyOrchestratorRunDeleteResult>
   exportCategories: (
     categories: readonly PrivacyDataCategory[]
   ) => Promise<PrivacyCategoryExportResult>
@@ -104,6 +117,7 @@ const OPTION_KEYS = new Set([
   'exporter',
   'disclosure',
   'secrets',
+  'orchestratorRuns',
   'reportError',
   'now',
   'operationTimeoutMs'
@@ -118,6 +132,8 @@ const REPORT_ID = /^[A-Z0-9][\w.:-]{7,127}$/i
 const DELETE_PREVIEW_ID = /^preview_[\w-]{12,80}$/
 const DELETE_PREVIEW_TTL_MS = 5 * 60 * 1_000
 const MAX_DELETE_PREVIEWS = 16
+const ORCHESTRATOR_RUN_CATEGORY = 'intelligence-context' as const
+const ORCHESTRATOR_RUN_REVISION = /^[a-f0-9]{64}$/
 
 function snapshotExact(
   value: unknown,
@@ -276,6 +292,11 @@ export function createPrivacyLifecycleService(
     ['backupPreview', 'backupWrite', 'restorePreview', 'restoreApply', 'destroy'],
     'PRIVACY_LIFECYCLE_OPTIONS_INVALID'
   )
+  const orchestratorRunMethods = snapshotMethods(
+    values.orchestratorRuns,
+    ['previewDelete', 'delete', 'previewRetention', 'applyRetention'],
+    'PRIVACY_LIFECYCLE_OPTIONS_INVALID'
+  )
   if (typeof values.reportError !== 'function' || isProxy(values.reportError)) {
     throw new Error('PRIVACY_LIFECYCLE_OPTIONS_INVALID')
   }
@@ -305,6 +326,14 @@ export function createPrivacyLifecycleService(
   const restoreSecretsApply =
     secretMethods.restoreApply as unknown as PrivacySecretService['restoreApply']
   const destroySecrets = secretMethods.destroy as unknown as PrivacySecretService['destroy']
+  const previewOrchestratorRun =
+    orchestratorRunMethods.previewDelete as unknown as OrchestratorRunPrivacyLifecycle['previewDelete']
+  const deleteOrchestratorRun =
+    orchestratorRunMethods.delete as unknown as OrchestratorRunPrivacyLifecycle['delete']
+  const previewOrchestratorRunRetention =
+    orchestratorRunMethods.previewRetention as unknown as OrchestratorRunPrivacyLifecycle['previewRetention']
+  const applyOrchestratorRunRetention =
+    orchestratorRunMethods.applyRetention as unknown as OrchestratorRunPrivacyLifecycle['applyRetention']
   const reportError = (values.reportError as PrivacyLifecycleServiceOptions['reportError']).bind(
     options
   )
@@ -327,6 +356,7 @@ export function createPrivacyLifecycleService(
   }
 
   let closing = false
+  let destroyPromise: Promise<void> | null = null
   let admissionTail: Promise<unknown> = Promise.resolve()
   let admissionCount = 0
   const controllers = new Set<AbortController>()
@@ -334,6 +364,15 @@ export function createPrivacyLifecycleService(
   const deletePreviews = new Map<
     string,
     { readonly categories: readonly PrivacyDataCategory[]; readonly expiresAt: number }
+  >()
+  const orchestratorRunDeletePreviews = new Map<
+    string,
+    {
+      readonly runId: string
+      readonly authorityId: number
+      readonly revision: string
+      readonly expiresAt: number
+    }
   >()
 
   function pruneDeletePreviews(operationNowMs: number): void {
@@ -344,6 +383,17 @@ export function createPrivacyLifecycleService(
       const oldest = deletePreviews.keys().next().value
       if (typeof oldest !== 'string') break
       deletePreviews.delete(oldest)
+    }
+  }
+
+  function pruneOrchestratorRunDeletePreviews(operationNowMs: number): void {
+    for (const [previewId, preview] of orchestratorRunDeletePreviews) {
+      if (preview.expiresAt <= operationNowMs) orchestratorRunDeletePreviews.delete(previewId)
+    }
+    while (orchestratorRunDeletePreviews.size >= MAX_DELETE_PREVIEWS) {
+      const oldest = orchestratorRunDeletePreviews.keys().next().value
+      if (typeof oldest !== 'string') break
+      orchestratorRunDeletePreviews.delete(oldest)
     }
   }
 
@@ -376,6 +426,40 @@ export function createPrivacyLifecycleService(
       preview.categories.length === categories.length &&
       preview.categories.every((category, index) => category === categories[index])
     )
+  }
+
+  function issueOrchestratorRunDeletePreview(
+    runId: string,
+    authorityId: number,
+    revision: string,
+    operationNowMs: number
+  ): string {
+    pruneOrchestratorRunDeletePreviews(operationNowMs)
+    const previewId = `preview_${randomUUID().replaceAll('-', '')}`
+    orchestratorRunDeletePreviews.set(
+      previewId,
+      Object.freeze({
+        runId,
+        authorityId,
+        revision,
+        expiresAt: operationNowMs + DELETE_PREVIEW_TTL_MS
+      })
+    )
+    return previewId
+  }
+
+  function consumeOrchestratorRunDeletePreview(
+    previewId: string,
+    authorityId: number,
+    operationNowMs: number
+  ): { readonly runId: string; readonly revision: string } | null {
+    pruneOrchestratorRunDeletePreviews(operationNowMs)
+    const preview = orchestratorRunDeletePreviews.get(previewId)
+    if (!preview) return null
+    orchestratorRunDeletePreviews.delete(previewId)
+    return preview.authorityId === authorityId
+      ? Object.freeze({ runId: preview.runId, revision: preview.revision })
+      : null
   }
 
   function report(
@@ -434,8 +518,14 @@ export function createPrivacyLifecycleService(
       }
     }
     const runImmediately = admissionCount === 0
+    const previousTail = admissionTail
+    let resolveOperation!: (value: T | PromiseLike<T>) => void
+    let rejectOperation!: (reason?: unknown) => void
+    const operation = new Promise<T>((resolve, reject) => {
+      resolveOperation = resolve
+      rejectOperation = reject
+    })
     admissionCount += 1
-    const operation = runImmediately ? run() : admissionTail.then(run)
     admissionTail = operation.catch(() => undefined)
     operations.add(operation)
     const releaseOperation = () => {
@@ -445,6 +535,11 @@ export function createPrivacyLifecycleService(
       externalSignal?.removeEventListener('abort', onExternalAbort)
     }
     void operation.then(releaseOperation, releaseOperation)
+    const start = () => {
+      void run().then(resolveOperation, rejectOperation)
+    }
+    if (runImmediately) start()
+    else void previousTail.then(start)
     return operation
   }
 
@@ -488,6 +583,72 @@ export function createPrivacyLifecycleService(
         safeCount(result.deletedByteCount) > 0 ||
         safeCount(result.batches) > 0
     )
+  }
+
+  function addCounts(left: unknown, right: unknown): number {
+    return Math.min(Number.MAX_SAFE_INTEGER, safeCount(left) + safeCount(right))
+  }
+
+  function mergeDeleteResults(
+    primary: PrivacyOwnerDeleteResult,
+    runHistory: PrivacyOwnerDeleteResult
+  ): PrivacyOwnerDeleteResult {
+    const cancelledResult = primary.cancelled
+      ? primary
+      : runHistory.cancelled
+        ? runHistory
+        : undefined
+    const failedResult =
+      cancelledResult ?? (!primary.ok ? primary : !runHistory.ok ? runHistory : undefined)
+    const ok = primary.ok && runHistory.ok
+    return Object.freeze({
+      ok,
+      code: ok ? ('PRIVACY_OWNER_COMPLETED' as const) : failedResult!.code,
+      retryable: primary.retryable || runHistory.retryable,
+      category: ORCHESTRATOR_RUN_CATEGORY,
+      deletedItemCount: addCounts(primary.deletedItemCount, runHistory.deletedItemCount),
+      deletedByteCount: addCounts(primary.deletedByteCount, runHistory.deletedByteCount),
+      failedItemCount: addCounts(primary.failedItemCount, runHistory.failedItemCount),
+      protectedItemCount: addCounts(primary.protectedItemCount, runHistory.protectedItemCount),
+      batches: addCounts(primary.batches, runHistory.batches),
+      partial: primary.partial || runHistory.partial,
+      cancelled: cancelledResult !== undefined
+    })
+  }
+
+  function mergePreviewResults(
+    primary: PrivacyOwnerPreviewResult,
+    runHistory: PrivacyOwnerPreviewResult
+  ): PrivacyOwnerPreviewResult {
+    const ok = primary.ok && runHistory.ok
+    const failed = !primary.ok ? primary : !runHistory.ok ? runHistory : undefined
+    return Object.freeze({
+      ok,
+      code: ok ? ('PRIVACY_OWNER_COMPLETED' as const) : failed!.code,
+      retryable: primary.retryable || runHistory.retryable,
+      category: ORCHESTRATOR_RUN_CATEGORY,
+      eligibleItemCount: addCounts(primary.eligibleItemCount, runHistory.eligibleItemCount),
+      eligibleByteCount: addCounts(primary.eligibleByteCount, runHistory.eligibleByteCount),
+      protectedItemCount: addCounts(primary.protectedItemCount, runHistory.protectedItemCount),
+      bounded: primary.bounded || runHistory.bounded
+    })
+  }
+
+  async function applyRunHistoryRetention(
+    policy: PrivacyRetentionCategoryPolicy,
+    operationNowMs: number,
+    signal: AbortSignal
+  ): Promise<PrivacyOwnerDeleteResult> {
+    try {
+      return normalizePrivacyOwnerDeleteResult(
+        await applyOrchestratorRunRetention(policy, operationNowMs, signal),
+        ORCHESTRATOR_RUN_CATEGORY
+      )
+    } catch {
+      return signal.aborted
+        ? cancelledOwnerDelete(ORCHESTRATOR_RUN_CATEGORY)
+        : failedOwnerDelete(ORCHESTRATOR_RUN_CATEGORY)
+    }
   }
 
   function normalizeOwnerDeleteResults(
@@ -543,7 +704,7 @@ export function createPrivacyLifecycleService(
       const owner = ownerFor(category)
       if (!owner) break
       try {
-        const result = await owner.delete(
+        const ownerResult = await owner.delete(
           Object.freeze({
             category,
             policy: policyForCategory(policy, category),
@@ -553,7 +714,18 @@ export function createPrivacyLifecycleService(
           }),
           signal
         )
-        results.push(normalizePrivacyOwnerDeleteResult(result, category))
+        let result = normalizePrivacyOwnerDeleteResult(ownerResult, category)
+        if (category === ORCHESTRATOR_RUN_CATEGORY && mode === 'retention') {
+          result = mergeDeleteResults(
+            result,
+            await applyRunHistoryRetention(
+              policy.categories[ORCHESTRATOR_RUN_CATEGORY],
+              nowMs,
+              signal
+            )
+          )
+        }
+        results.push(result)
       } catch {
         results.push(signal.aborted ? cancelledOwnerDelete(category) : failedOwnerDelete(category))
       }
@@ -765,7 +937,19 @@ export function createPrivacyLifecycleService(
               }),
               signal
             )
-            impacts.push(normalizePrivacyOwnerPreviewResult(ownerImpact, category))
+            let impact = normalizePrivacyOwnerPreviewResult(ownerImpact, category)
+            if (category === ORCHESTRATOR_RUN_CATEGORY) {
+              const runHistoryImpact = normalizePrivacyOwnerPreviewResult(
+                await previewOrchestratorRunRetention(
+                  policy.categories[ORCHESTRATOR_RUN_CATEGORY],
+                  operationNowMs,
+                  signal
+                ),
+                ORCHESTRATOR_RUN_CATEGORY
+              )
+              impact = mergePreviewResults(impact, runHistoryImpact)
+            }
+            impacts.push(impact)
           }
           if (signal.aborted) return cancelled()
           const failed = impacts.filter((impact) => !impact.ok)
@@ -903,6 +1087,24 @@ export function createPrivacyLifecycleService(
             const byCategory = new Map(ownerResults?.map((result) => [result.category, result]))
             for (const category of expectedCategories) {
               results.push(byCategory?.get(category) ?? failedOwnerDelete(category))
+            }
+          }
+          if (
+            categories.includes(ORCHESTRATOR_RUN_CATEGORY) &&
+            policy.categories[ORCHESTRATOR_RUN_CATEGORY].enabled
+          ) {
+            const runHistoryResult = await applyRunHistoryRetention(
+              policy.categories[ORCHESTRATOR_RUN_CATEGORY],
+              operationNowMs,
+              signal
+            )
+            const contextIndex = results.findIndex(
+              (result) => result.category === ORCHESTRATOR_RUN_CATEGORY
+            )
+            if (contextIndex >= 0) {
+              results[contextIndex] = mergeDeleteResults(results[contextIndex]!, runHistoryResult)
+            } else {
+              results.push(runHistoryResult)
             }
           }
           const interrupted = signal.aborted
@@ -1078,6 +1280,141 @@ export function createPrivacyLifecycleService(
       })
     },
 
+    previewOrchestratorRunDelete: (runId, authorityId) => {
+      if (!Number.isSafeInteger(authorityId) || authorityId < 0) {
+        return Promise.resolve(invalidRequest())
+      }
+      let normalizedRunId: string
+      try {
+        const request = normalizePrivacyRequest({
+          operation: 'orchestrator-run.delete-preview',
+          runId
+        })
+        if (request.operation !== 'orchestrator-run.delete-preview') {
+          throw new Error('PRIVACY_REQUEST_INVALID')
+        }
+        normalizedRunId = request.runId
+      } catch {
+        return Promise.resolve(invalidRequest())
+      }
+      return withAdmission(async (signal, operationNowMs) => {
+        try {
+          const preview = await previewOrchestratorRun(normalizedRunId, signal)
+          if (signal.aborted) return cancelled()
+          if (
+            preview.disposition !== 'eligible' &&
+            preview.disposition !== 'protected' &&
+            preview.disposition !== 'not-found'
+          ) {
+            throw new Error('PRIVACY_ORCHESTRATOR_RUN_PREVIEW_INVALID')
+          }
+          const eventCount = safeCount(preview.eventCount)
+          if (preview.disposition === 'eligible') {
+            if (
+              typeof preview.revision !== 'string' ||
+              !ORCHESTRATOR_RUN_REVISION.test(preview.revision)
+            ) {
+              throw new Error('PRIVACY_ORCHESTRATOR_RUN_PREVIEW_INVALID')
+            }
+            return normalizePrivacyResult('orchestrator-run.delete-preview', {
+              ok: true,
+              data: {
+                disposition: 'eligible',
+                eventCount,
+                previewId: issueOrchestratorRunDeletePreview(
+                  normalizedRunId,
+                  authorityId,
+                  preview.revision,
+                  operationNowMs
+                )
+              }
+            })
+          }
+          return normalizePrivacyResult('orchestrator-run.delete-preview', {
+            ok: true,
+            data: {
+              disposition: preview.disposition,
+              eventCount
+            }
+          })
+        } catch (error) {
+          if (signal.aborted) return cancelled()
+          const reportId = report(
+            'PRIVACY_ORCHESTRATOR_RUN_PREVIEW_FAILED',
+            'orchestrator-run.delete-preview',
+            [],
+            [],
+            error
+          )
+          return Object.freeze({
+            ok: false as const,
+            code: 'PRIVACY_OPERATION_FAILED' as const,
+            retryable: true,
+            ...(reportId ? { reportId } : {})
+          })
+        }
+      })
+    },
+
+    deleteOrchestratorRun: (confirmation, previewId, authorityId) => {
+      if (!Number.isSafeInteger(authorityId) || authorityId < 0) {
+        return Promise.resolve(invalidRequest())
+      }
+      let normalized: Extract<
+        ReturnType<typeof normalizePrivacyRequest>,
+        { operation: 'orchestrator-run.delete' }
+      >
+      try {
+        const request = normalizePrivacyRequest({
+          operation: 'orchestrator-run.delete',
+          confirmation,
+          previewId
+        })
+        if (request.operation !== 'orchestrator-run.delete') {
+          throw new Error('PRIVACY_REQUEST_INVALID')
+        }
+        normalized = request
+      } catch {
+        return Promise.resolve(invalidRequest())
+      }
+      return withAdmission(async (signal, operationNowMs) => {
+        const admission = consumeOrchestratorRunDeletePreview(
+          normalized.previewId,
+          authorityId,
+          operationNowMs
+        )
+        if (!admission) return invalidRequest()
+        try {
+          const result = await deleteOrchestratorRun(admission.runId, admission.revision, signal)
+          if (result.disposition === 'deleted') {
+            return normalizePrivacyResult('orchestrator-run.delete', {
+              ok: true,
+              data: {
+                deletedEventCount: safeCount(result.deletedEventCount)
+              }
+            })
+          }
+          if (signal.aborted) return cancelled()
+          return invalidRequest()
+        } catch (error) {
+          if (signal.aborted) return cancelled()
+          const reportId = report(
+            'PRIVACY_ORCHESTRATOR_RUN_DELETE_FAILED',
+            'orchestrator-run.delete',
+            [],
+            [],
+            error
+          )
+          return Object.freeze({
+            ok: false as const,
+            code: 'PRIVACY_DELETE_FAILED' as const,
+            retryable: true,
+            ...(reportId ? { reportId } : {})
+          })
+        }
+      })
+    },
+
     exportCategories: (selected) => {
       const categories = categoryList(selected, DATA_CATEGORY_SET, [])
       if (!categories || !allOwned(categories)) return Promise.resolve(unavailable())
@@ -1210,17 +1547,30 @@ export function createPrivacyLifecycleService(
       })
     },
 
-    destroy: async () => {
-      if (closing) {
-        await Promise.allSettled([...operations])
-        return
-      }
+    destroy: () => {
+      if (destroyPromise) return destroyPromise
       closing = true
       deletePreviews.clear()
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      for (const controller of controllers) controller.abort(new Error('PRIVACY_SERVICE_DESTROYED'))
-      await Promise.allSettled([...operations])
-      await destroySecrets()
+      orchestratorRunDeletePreviews.clear()
+      const activeControllers = [...controllers]
+      let resolveDestroy!: () => void
+      let rejectDestroy!: (reason?: unknown) => void
+      destroyPromise = new Promise<void>((resolve, reject) => {
+        resolveDestroy = resolve
+        rejectDestroy = reject
+      })
+      for (const controller of activeControllers) {
+        controller.abort(new Error('PRIVACY_SERVICE_DESTROYED'))
+      }
+      void (async () => {
+        // Let synchronously reentrant admissions finish enrolling before taking the drain snapshot.
+        await Promise.resolve()
+        await Promise.allSettled([...operations])
+        deletePreviews.clear()
+        orchestratorRunDeletePreviews.clear()
+        await destroySecrets()
+      })().then(resolveDestroy, rejectDestroy)
+      return destroyPromise
     }
   }
 

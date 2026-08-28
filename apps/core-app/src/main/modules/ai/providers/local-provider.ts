@@ -6,6 +6,7 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceStreamChunk,
+  IntelligenceUsageInfo,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
@@ -21,6 +22,7 @@ import { getNetworkService } from '../../network'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 
 interface OllamaChatResponse {
+  error?: unknown
   model?: string
   message?: {
     content?: string
@@ -34,6 +36,60 @@ interface OllamaChatStreamResponse extends OllamaChatResponse {
 }
 
 const LOCAL_DIRECT_PROXY = { mode: 'direct' as const }
+
+type LocalProviderErrorCode = 'MODEL_UNSUPPORTED' | 'OLLAMA_REQUEST_FAILED'
+
+type LocalProviderRuntimeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
+}
+
+function createLocalProviderError(code: LocalProviderErrorCode): Error & { code: string } {
+  const error = new Error(code) as Error & { code: string }
+  error.code = code
+  return error
+}
+
+function readOllamaErrorMessage(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const rawError = (value as { error?: unknown }).error
+  if (typeof rawError === 'string' && rawError.trim()) return rawError.trim()
+  if (!rawError || typeof rawError !== 'object' || Array.isArray(rawError)) return undefined
+  const message = (rawError as { message?: unknown }).message
+  return typeof message === 'string' && message.trim() ? message.trim() : undefined
+}
+
+function throwIfOllamaFailure(value: unknown): void {
+  const message = readOllamaErrorMessage(value)
+  if (!message) return
+  const lower = message.toLowerCase()
+  const modelUnsupported =
+    lower.includes('unsupported model') ||
+    lower.includes('model unsupported') ||
+    lower.includes('model does not support') ||
+    (lower.includes('model') && lower.includes('not found'))
+  throw createLocalProviderError(modelUnsupported ? 'MODEL_UNSUPPORTED' : 'OLLAMA_REQUEST_FAILED')
+}
+
+function parseOllamaStreamResponse(value: string): OllamaChatStreamResponse {
+  const parsed = JSON.parse(value) as OllamaChatStreamResponse
+  throwIfOllamaFailure(parsed)
+  return parsed
+}
+
+function withLocalUsageCost(usage?: IntelligenceUsageInfo): IntelligenceUsageInfo {
+  return {
+    promptTokens: usage?.promptTokens ?? 0,
+    completionTokens: usage?.completionTokens ?? 0,
+    totalTokens: usage?.totalTokens ?? 0,
+    cost: 0
+  }
+}
+
+function withLocalStreamCost(chunk: IntelligenceStreamChunk): IntelligenceStreamChunk {
+  if (!chunk.done && !chunk.usage) return chunk
+  return { ...chunk, usage: withLocalUsageCost(chunk.usage) }
+}
+
 function isHttpNotFound(error: unknown): error is NetworkHttpStatusError {
   return error instanceof NetworkHttpStatusError && error.status === 404
 }
@@ -96,7 +152,7 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
       },
       body: this.buildOllamaChatBody(payload, options, stream),
       proxyOverride: LOCAL_DIRECT_PROXY,
-      timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
+      timeoutMs: this.resolveRequestTimeout(options, 60_000),
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
@@ -127,14 +183,15 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
         responseType: 'json'
       })
 
+      throwIfOllamaFailure(response.data)
       const content = response.data.message?.content ?? ''
       return {
         result: content,
-        usage: {
+        usage: withLocalUsageCost({
           promptTokens: response.data.prompt_eval_count ?? 0,
           completionTokens: response.data.eval_count ?? 0,
           totalTokens: (response.data.prompt_eval_count ?? 0) + (response.data.eval_count ?? 0)
-        },
+        }),
         model: response.data.model || model,
         latency: Date.now() - startedAt,
         traceId,
@@ -144,7 +201,8 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
       if (!isHttpNotFound(error)) {
         throw error
       }
-      return await super.chat(payload, options)
+      const result = await super.chat(payload, options)
+      return { ...result, usage: withLocalUsageCost(result.usage) }
     }
   }
 
@@ -154,68 +212,78 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
   ): AsyncGenerator<IntelligenceStreamChunk> {
     let emittedDelta = false
     try {
-      const response = await getNetworkService().requestStream(
-        this.buildOllamaChatRequest(payload, options, true)
-      )
-      const decoder = new StringDecoder('utf8')
-      let buffer = ''
-      for await (const chunk of response.stream) {
-        buffer += decoder.write(toStreamBuffer(chunk))
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) continue
-          const parsed = JSON.parse(trimmed) as OllamaChatStreamResponse
+      const response = await getNetworkService().requestStream({
+        ...this.buildOllamaChatRequest(payload, options, true),
+        signal: (options as LocalProviderRuntimeOptions).signal
+      })
+      try {
+        const decoder = new StringDecoder('utf8')
+        let buffer = ''
+        for await (const chunk of response.stream.iterator({ destroyOnReturn: false })) {
+          buffer += decoder.write(toStreamBuffer(chunk))
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed) continue
+            const parsed = parseOllamaStreamResponse(trimmed)
+            const delta = parsed.message?.content ?? ''
+            if (delta) {
+              emittedDelta = true
+              yield { delta, done: false }
+            }
+            if (parsed.done) {
+              response.complete()
+              yield {
+                delta: '',
+                done: true,
+                usage: withLocalUsageCost({
+                  promptTokens: parsed.prompt_eval_count ?? 0,
+                  completionTokens: parsed.eval_count ?? 0,
+                  totalTokens: (parsed.prompt_eval_count ?? 0) + (parsed.eval_count ?? 0)
+                })
+              }
+              return
+            }
+          }
+        }
+
+        buffer += decoder.end()
+
+        const trimmed = buffer.trim()
+        if (trimmed) {
+          const parsed = parseOllamaStreamResponse(trimmed)
           const delta = parsed.message?.content ?? ''
           if (delta) {
             emittedDelta = true
             yield { delta, done: false }
           }
           if (parsed.done) {
+            response.complete()
             yield {
               delta: '',
               done: true,
-              usage: {
+              usage: withLocalUsageCost({
                 promptTokens: parsed.prompt_eval_count ?? 0,
                 completionTokens: parsed.eval_count ?? 0,
                 totalTokens: (parsed.prompt_eval_count ?? 0) + (parsed.eval_count ?? 0)
-              }
+              })
             }
             return
           }
         }
+        response.complete()
+        yield withLocalStreamCost({ delta: '', done: true })
+      } finally {
+        response.cancel()
       }
-
-      buffer += decoder.end()
-
-      const trimmed = buffer.trim()
-      if (trimmed) {
-        const parsed = JSON.parse(trimmed) as OllamaChatStreamResponse
-        const delta = parsed.message?.content ?? ''
-        if (delta) {
-          emittedDelta = true
-          yield { delta, done: false }
-        }
-        if (parsed.done) {
-          yield {
-            delta: '',
-            done: true,
-            usage: {
-              promptTokens: parsed.prompt_eval_count ?? 0,
-              completionTokens: parsed.eval_count ?? 0,
-              totalTokens: (parsed.prompt_eval_count ?? 0) + (parsed.eval_count ?? 0)
-            }
-          }
-          return
-        }
-      }
-      yield { delta: '', done: true }
     } catch (error) {
       if (emittedDelta || !isHttpNotFound(error)) {
         throw error
       }
-      yield* super.chatStream(payload, options)
+      for await (const chunk of super.chatStream(payload, options)) {
+        yield withLocalStreamCost(chunk)
+      }
     }
   }
 
@@ -257,11 +325,7 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
 
     return {
       result,
-      usage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0
-      },
+      usage: withLocalUsageCost(),
       model: 'system-ocr',
       latency: Date.now() - startedAt,
       traceId,

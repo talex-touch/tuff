@@ -19,6 +19,7 @@ export default defineConfig({
     })
   ],
   resolve: {
+    dedupe: ['electron'],
     alias: [
       {
         find: /^~\//,

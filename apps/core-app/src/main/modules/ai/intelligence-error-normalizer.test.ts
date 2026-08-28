@@ -47,6 +47,11 @@ describe('intelligence error normalization', () => {
     })
     expect(
       normalizeIntelligenceError(
+        Object.assign(new Error('MODEL_UNSUPPORTED'), { code: 'MODEL_UNSUPPORTED' })
+      )
+    ).toMatchObject({ code: 'MODEL_UNSUPPORTED' })
+    expect(
+      normalizeIntelligenceError(
         Object.assign(new Error('permission denied for text.chat'), {
           code: 'INTELLIGENCE_PERMISSION_DENIED'
         }),

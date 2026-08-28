@@ -41,8 +41,40 @@ const GATEWAY_TOKEN = process.env.TUFF_TOOL_GATEWAY_TOKEN?.trim()
 /** A hung app must not hang the agent turn behind it. */
 const REQUEST_TIMEOUT_MS = 3 * 60 * 1000
 
+// This extension is bundled for pi and cannot import CoreApp internals. Keep
+// the accepted wire codes explicit so an older or compromised gateway cannot
+// smuggle arbitrary error text back into the model.
+const SAFE_GATEWAY_ERRORS = {
+  TOOL_NOT_FOUND: 'Tool is not available.',
+  TOOL_INPUT_INVALID: 'Tool input is invalid.',
+  TOOL_APPROVAL_DENIED: 'Tool request was denied.',
+  TOOL_EXECUTION_ABORTED: 'Tool execution was cancelled.',
+  TOOL_EXECUTION_TIMEOUT: 'Tool execution timed out.',
+  TOOL_RESOURCE_NOT_FOUND: 'The requested resource was not found.',
+  TOOL_RESOURCE_ALREADY_EXISTS: 'The requested resource already exists.',
+  TOOL_RESOURCE_ACCESS_DENIED: 'Access to the requested resource was denied.',
+  TOOL_SERVICE_UNAVAILABLE: 'The required service is unavailable.',
+  MCP_SERVER_UNAVAILABLE: 'MCP server is unavailable.',
+  MCP_TOOL_FAILED: 'MCP tool execution failed.',
+  TOOL_EXECUTION_FAILED: 'Tool execution failed.',
+  TOOL_GATEWAY_UNAVAILABLE: 'Tuff tool gateway is not available.',
+  TOOL_GATEWAY_UNAUTHORIZED: 'Tuff tool gateway authorization failed.',
+  TOOL_GATEWAY_TIMEOUT: 'Tuff tool gateway request timed out.',
+  TOOL_GATEWAY_RESPONSE_INVALID: 'Tuff tool gateway returned an invalid response.',
+} as const
+
+type SafeGatewayErrorCode = keyof typeof SAFE_GATEWAY_ERRORS
+
 function text(body: string, isError = false): ToolResultBlock {
   return { content: [{ type: 'text', text: body }], isError }
+}
+
+function gatewayFailure(code: unknown): ToolResultBlock {
+  const safeCode
+    = typeof code === 'string' && Object.hasOwn(SAFE_GATEWAY_ERRORS, code)
+      ? code as SafeGatewayErrorCode
+      : 'TOOL_EXECUTION_FAILED'
+  return text(`${safeCode}: ${SAFE_GATEWAY_ERRORS[safeCode]}`, true)
 }
 
 async function callGateway(
@@ -51,7 +83,7 @@ async function callGateway(
   args: Record<string, unknown>,
 ): Promise<ToolResultBlock> {
   if (!GATEWAY_URL || !GATEWAY_TOKEN)
-    return text('Tuff tool gateway is not available.', true)
+    return gatewayFailure('TOOL_GATEWAY_UNAVAILABLE')
 
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS)
@@ -69,15 +101,34 @@ async function callGateway(
       signal: abort.signal,
     })
 
-    if (!response.ok)
-      return text(`Tuff gateway returned ${response.status}.`, true)
+    if (!response.ok) {
+      return gatewayFailure(
+        response.status === 401 ? 'TOOL_GATEWAY_UNAUTHORIZED' : 'TOOL_GATEWAY_UNAVAILABLE',
+      )
+    }
 
-    const result = (await response.json()) as { output?: string, isError?: boolean }
-    return text(result.output ?? '', result.isError === true)
+    let rawResult: unknown
+    try {
+      rawResult = await response.json()
+    }
+    catch {
+      return gatewayFailure('TOOL_GATEWAY_RESPONSE_INVALID')
+    }
+    if (!rawResult || typeof rawResult !== 'object' || Array.isArray(rawResult))
+      return gatewayFailure('TOOL_GATEWAY_RESPONSE_INVALID')
+    const result = rawResult as Record<string, unknown>
+    if (result.isError === true)
+      return gatewayFailure(result.code)
+    if (result.isError !== false || typeof result.output !== 'string')
+      return gatewayFailure('TOOL_GATEWAY_RESPONSE_INVALID')
+    return text(result.output)
   }
   catch (error) {
-    const reason = (error as Error).name === 'AbortError' ? 'timed out' : (error as Error).message
-    return text(`Tuff gateway call failed: ${reason}`, true)
+    return gatewayFailure(
+      error instanceof Error && error.name === 'AbortError'
+        ? 'TOOL_GATEWAY_TIMEOUT'
+        : 'TOOL_GATEWAY_UNAVAILABLE',
+    )
   }
   finally {
     clearTimeout(timer)

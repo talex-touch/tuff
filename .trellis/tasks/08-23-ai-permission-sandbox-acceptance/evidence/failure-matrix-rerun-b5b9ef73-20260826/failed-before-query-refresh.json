@@ -1,0 +1,365 @@
+{
+  "schema": "tuff.packaged-ai-failure-matrix.v2",
+  "ok": false,
+  "checkedAt": "2026-08-27T03:54:32.432Z",
+  "app": {
+    "version": "2.4.14-beta.14",
+    "hash": "b5b9ef73979a89437f34354cc8d0f3d4868a702803877f9b7cd01f023ffc1c10"
+  },
+  "runtime": {
+    "appBundle": "tuff.app",
+    "freshProfiles": 5,
+    "cleanupRequested": true,
+    "cleanupComplete": true
+  },
+  "scenarios": [
+    {
+      "name": "no-provider",
+      "ok": false,
+      "profile": "fresh-isolated",
+      "fixture": {
+        "requests": 0,
+        "responseHeadersSent": false,
+        "partialDeltaSent": false,
+        "bodyHeldOpen": false,
+        "boundToLoopback": true,
+        "closed": true
+      },
+      "ui": {
+        "code": "UNKNOWN",
+        "reasonPresent": false,
+        "recoveryPresent": false,
+        "noticeVisible": false,
+        "busyCleared": false,
+        "retryVisible": false,
+        "intelligenceSettingsVisible": false,
+        "permissionSettingsVisible": false
+      },
+      "ledger": {
+        "auditDelta": 0,
+        "auditSuccessDelta": 0,
+        "auditFailureDelta": 0,
+        "auditTokenDelta": 0,
+        "auditCostDelta": 0,
+        "day": {
+          "requestDelta": 0,
+          "successDelta": 0,
+          "failureDelta": 0,
+          "tokenDelta": 0,
+          "costDelta": 0
+        },
+        "month": {
+          "requestDelta": 0,
+          "successDelta": 0,
+          "failureDelta": 0,
+          "tokenDelta": 0,
+          "costDelta": 0
+        }
+      },
+      "prerequisites": {
+        "requiredPermissionsGranted": true,
+        "searchProviderEnabled": true,
+        "pluginEnabled": true,
+        "intelligencePermissionRevoked": false,
+        "quotaDisabled": false
+      },
+      "interaction": {
+        "queryAccepted": false,
+        "candidateFeatureIds": [],
+        "selectedFeatureId": "",
+        "widgetFeatureId": "",
+        "promptAccepted": false,
+        "sendReady": false
+      },
+      "processStopped": true,
+      "profileRemoved": true,
+      "failures": [
+        {
+          "stage": "scenario:no-provider:widget",
+          "code": "INTELLIGENCE_WIDGET_NOT_READY"
+        }
+      ]
+    },
+    {
+      "name": "quota-exhausted",
+      "ok": true,
+      "profile": "fresh-isolated",
+      "fixture": {
+        "requests": 0,
+        "responseHeadersSent": false,
+        "partialDeltaSent": false,
+        "bodyHeldOpen": false,
+        "boundToLoopback": true,
+        "closed": true
+      },
+      "ui": {
+        "code": "QUOTA_EXHAUSTED",
+        "reasonPresent": true,
+        "recoveryPresent": true,
+        "noticeVisible": true,
+        "busyCleared": true,
+        "retryVisible": true,
+        "intelligenceSettingsVisible": false,
+        "permissionSettingsVisible": false
+      },
+      "ledger": {
+        "auditDelta": 0,
+        "auditSuccessDelta": 0,
+        "auditFailureDelta": 0,
+        "auditTokenDelta": 0,
+        "auditCostDelta": 0,
+        "day": {
+          "requestDelta": 0,
+          "successDelta": 0,
+          "failureDelta": 0,
+          "tokenDelta": 0,
+          "costDelta": 0
+        },
+        "month": {
+          "requestDelta": 0,
+          "successDelta": 0,
+          "failureDelta": 0,
+          "tokenDelta": 0,
+          "costDelta": 0
+        }
+      },
+      "prerequisites": {
+        "requiredPermissionsGranted": true,
+        "searchProviderEnabled": true,
+        "pluginEnabled": true,
+        "intelligencePermissionRevoked": false,
+        "quotaDisabled": true
+      },
+      "interaction": {
+        "queryAccepted": true,
+        "candidateFeatureIds": [
+          "intelligence-rewrite",
+          "intelligence-summarize",
+          "intelligence-explain",
+          "intelligence-command-registry",
+          "intelligence-ask"
+        ],
+        "selectedFeatureId": "intelligence-ask",
+        "widgetFeatureId": "intelligence-ask",
+        "promptAccepted": true,
+        "sendReady": true
+      },
+      "processStopped": true,
+      "profileRemoved": true,
+      "failures": []
+    },
+    {
+      "name": "unsupported-model",
+      "ok": true,
+      "profile": "fresh-isolated",
+      "fixture": {
+        "requests": 1,
+        "responseHeadersSent": true,
+        "partialDeltaSent": false,
+        "bodyHeldOpen": false,
+        "boundToLoopback": true,
+        "closed": true
+      },
+      "ui": {
+        "code": "MODEL_UNSUPPORTED",
+        "reasonPresent": true,
+        "recoveryPresent": true,
+        "noticeVisible": true,
+        "busyCleared": true,
+        "retryVisible": true,
+        "intelligenceSettingsVisible": false,
+        "permissionSettingsVisible": false
+      },
+      "ledger": {
+        "auditDelta": 1,
+        "auditSuccessDelta": 0,
+        "auditFailureDelta": 1,
+        "auditTokenDelta": 0,
+        "auditCostDelta": 0,
+        "day": {
+          "requestDelta": 1,
+          "successDelta": 0,
+          "failureDelta": 1,
+          "tokenDelta": 0,
+          "costDelta": 0
+        },
+        "month": {
+          "requestDelta": 1,
+          "successDelta": 0,
+          "failureDelta": 1,
+          "tokenDelta": 0,
+          "costDelta": 0
+        }
+      },
+      "prerequisites": {
+        "requiredPermissionsGranted": true,
+        "searchProviderEnabled": true,
+        "pluginEnabled": true,
+        "intelligencePermissionRevoked": false,
+        "quotaDisabled": false
+      },
+      "interaction": {
+        "queryAccepted": true,
+        "candidateFeatureIds": [
+          "intelligence-rewrite",
+          "intelligence-summarize",
+          "intelligence-explain",
+          "intelligence-command-registry",
+          "intelligence-ask"
+        ],
+        "selectedFeatureId": "intelligence-ask",
+        "widgetFeatureId": "intelligence-ask",
+        "promptAccepted": true,
+        "sendReady": true
+      },
+      "processStopped": true,
+      "profileRemoved": true,
+      "failures": []
+    },
+    {
+      "name": "permission-denied",
+      "ok": false,
+      "profile": "fresh-isolated",
+      "fixture": {
+        "requests": 0,
+        "responseHeadersSent": false,
+        "partialDeltaSent": false,
+        "bodyHeldOpen": false,
+        "boundToLoopback": true,
+        "closed": true
+      },
+      "ui": {
+        "code": "UNKNOWN",
+        "reasonPresent": false,
+        "recoveryPresent": false,
+        "noticeVisible": false,
+        "busyCleared": false,
+        "retryVisible": false,
+        "intelligenceSettingsVisible": false,
+        "permissionSettingsVisible": false
+      },
+      "ledger": {
+        "auditDelta": 0,
+        "auditSuccessDelta": 0,
+        "auditFailureDelta": 0,
+        "auditTokenDelta": 0,
+        "auditCostDelta": 0,
+        "day": {
+          "requestDelta": 0,
+          "successDelta": 0,
+          "failureDelta": 0,
+          "tokenDelta": 0,
+          "costDelta": 0
+        },
+        "month": {
+          "requestDelta": 0,
+          "successDelta": 0,
+          "failureDelta": 0,
+          "tokenDelta": 0,
+          "costDelta": 0
+        }
+      },
+      "prerequisites": {
+        "requiredPermissionsGranted": true,
+        "searchProviderEnabled": true,
+        "pluginEnabled": true,
+        "intelligencePermissionRevoked": false,
+        "quotaDisabled": false
+      },
+      "interaction": {
+        "queryAccepted": false,
+        "candidateFeatureIds": [],
+        "selectedFeatureId": "",
+        "widgetFeatureId": "",
+        "promptAccepted": false,
+        "sendReady": false
+      },
+      "processStopped": true,
+      "profileRemoved": true,
+      "failures": [
+        {
+          "stage": "scenario:permission-denied:widget",
+          "code": "INTELLIGENCE_WIDGET_NOT_READY"
+        }
+      ]
+    },
+    {
+      "name": "timeout",
+      "ok": true,
+      "profile": "fresh-isolated",
+      "fixture": {
+        "requests": 1,
+        "responseHeadersSent": true,
+        "partialDeltaSent": true,
+        "bodyHeldOpen": true,
+        "boundToLoopback": true,
+        "closed": true
+      },
+      "ui": {
+        "code": "NETWORK_FAILURE",
+        "reasonPresent": true,
+        "recoveryPresent": true,
+        "noticeVisible": true,
+        "busyCleared": true,
+        "retryVisible": true,
+        "intelligenceSettingsVisible": true,
+        "permissionSettingsVisible": false
+      },
+      "ledger": {
+        "auditDelta": 1,
+        "auditSuccessDelta": 0,
+        "auditFailureDelta": 1,
+        "auditTokenDelta": 0,
+        "auditCostDelta": 0,
+        "day": {
+          "requestDelta": 1,
+          "successDelta": 0,
+          "failureDelta": 1,
+          "tokenDelta": 0,
+          "costDelta": 0
+        },
+        "month": {
+          "requestDelta": 1,
+          "successDelta": 0,
+          "failureDelta": 1,
+          "tokenDelta": 0,
+          "costDelta": 0
+        }
+      },
+      "prerequisites": {
+        "requiredPermissionsGranted": true,
+        "searchProviderEnabled": true,
+        "pluginEnabled": true,
+        "intelligencePermissionRevoked": false,
+        "quotaDisabled": false
+      },
+      "interaction": {
+        "queryAccepted": true,
+        "candidateFeatureIds": [
+          "intelligence-rewrite",
+          "intelligence-summarize",
+          "intelligence-explain",
+          "intelligence-command-registry",
+          "intelligence-ask"
+        ],
+        "selectedFeatureId": "intelligence-ask",
+        "widgetFeatureId": "intelligence-ask",
+        "promptAccepted": true,
+        "sendReady": true
+      },
+      "processStopped": true,
+      "profileRemoved": true,
+      "failures": []
+    }
+  ],
+  "failures": [
+    {
+      "stage": "scenario:no-provider:widget",
+      "code": "INTELLIGENCE_WIDGET_NOT_READY"
+    },
+    {
+      "stage": "scenario:permission-denied:widget",
+      "code": "INTELLIGENCE_WIDGET_NOT_READY"
+    }
+  ]
+}

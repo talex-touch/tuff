@@ -84,6 +84,17 @@ export interface SendOptions {
 export type StreamMessageType = "data" | "error" | "end";
 
 /**
+ * Stable error projection shared by stream transports.
+ */
+export interface StreamErrorPayload {
+  /** Safe error message for display or logging. */
+  message: string;
+
+  /** Optional stable machine-readable error code. */
+  code?: string;
+}
+
+/**
  * Message structure for stream communication via MessagePort.
  *
  * @typeParam T - Type of the data payload
@@ -100,9 +111,9 @@ export interface StreamMessage<T = unknown> {
   chunk?: T;
 
   /**
-   * Error message (only for 'error' type).
+   * Error projection (only for 'error' type).
    */
-  error?: string;
+  error?: StreamErrorPayload;
 
   /**
    * Stream identifier.
@@ -423,6 +434,11 @@ export interface PluginKeyManager {
   resolveCurrentIdentity?: (
     pluginName: string,
   ) => PluginActivationIdentity | undefined;
+
+  /** Subscribes to host-owned revocation or rotation of an activation identity. */
+  watchIdentityInvalidated?: (
+    listener: (identity: Readonly<PluginActivationIdentity>) => void,
+  ) => () => void;
 
   /** Resolves a plugin activation from the real Electron sender. */
   resolveSenderIdentity?: (

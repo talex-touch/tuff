@@ -1593,6 +1593,7 @@ async function consumeIntelligenceInvokeCredits(
       tokens,
       "intelligence-invoke",
       buildInvokeCreditMetadata(invocation, usage, audit),
+      { idempotencyKey: `intelligence-invoke:${invocation.traceId}` },
     );
     return {
       ledgerId: consumption.ledgerId,

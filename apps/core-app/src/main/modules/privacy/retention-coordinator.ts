@@ -5,6 +5,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { PrivacyLifecycleService } from './privacy-lifecycle-service'
 import { isProxy } from 'node:util/types'
+import { getStartupDegradeWindowRemainingMs } from '../../db/runtime-flags'
 
 const RETENTION_POLLING_TASK_ID = 'privacy.retention.cleanup'
 
@@ -15,7 +16,7 @@ export interface PrivacyRetentionPollingAdapter {
     options: {
       readonly interval: number
       readonly unit: 'hours'
-      readonly runImmediately: boolean
+      readonly initialDelayMs: number
       readonly lane: 'maintenance'
       readonly backpressure: 'coalesce'
       readonly maxInFlight: 1
@@ -144,7 +145,8 @@ export function createPrivacyRetentionCoordinator(
           Object.freeze({
             interval: 24,
             unit: 'hours' as const,
-            runImmediately: true,
+            // Keep the first maintenance write outside the startup write-storm window.
+            initialDelayMs: getStartupDegradeWindowRemainingMs(),
             lane: 'maintenance' as const,
             backpressure: 'coalesce' as const,
             maxInFlight: 1 as const

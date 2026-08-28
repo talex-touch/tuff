@@ -1,17 +1,14 @@
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
-const repositoryRoot = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../../../..',
-)
-const tuffEntrypoint = join(repositoryRoot, 'packages', 'tuff-cli', 'src', 'bin', 'tuff.ts')
-const viteNodeEntrypoint = join(repositoryRoot, 'node_modules', '.bin', 'vite-node')
+const tuffEntrypoint = fileURLToPath(new URL('../../bin/tuff.ts', import.meta.url))
+const viteNodeEntrypoint = createRequire(import.meta.url).resolve('vite-node/vite-node.mjs')
 const temporaryRoots: string[] = []
 
 interface CliFixture {
@@ -56,7 +53,7 @@ async function runTuffPublish(
   baseUrl: string,
 ): Promise<CliRunResult> {
   return await new Promise((resolveRun, rejectRun) => {
-    const child = spawn(viteNodeEntrypoint, [tuffEntrypoint, 'publish', ...args], {
+    const child = spawn(process.execPath, [viteNodeEntrypoint, tuffEntrypoint, 'publish', ...args], {
       cwd: fixture.root,
       env: {
         ...process.env,
