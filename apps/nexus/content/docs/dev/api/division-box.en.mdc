@@ -236,19 +236,22 @@ The state machine is `prepare → attach → active → inactive → detach → 
 The initial state of a session, between the `open()` call and window creation.
 
 **Entered when**
-- `divisionBox.open(config)` is called.
-- The main process validates the config, assigns a session id, and constructs the session.
+- `divisionBox.open(config)` is called **and** passes the preflight checks below. A rejected open never reaches this state.
+- The main process then assigns a session id and constructs the session.
 
 **Resources**
-- A session id is allocated.
+- The global session cap is checked *before* anything is allocated.
+- A session id is generated and the session registered in the session map.
 - The config is validated and defaults applied; the plugin owner is resolved before any window is constructed.
-- Session state storage is initialized.
-- With `keepAlive`, the session is registered with the LRU cache.
+- With `keepAlive`, a state-change handler is installed. It does not put the session in the LRU cache yet — the cache entry is added when the session first reaches `inactive`, refreshed on return to `active`, and removed on `destroy`.
 
 **Failures**
-- Global session cap reached → `DivisionBoxError(LIMIT_EXCEEDED)`.
-- Missing or unauthorized plugin owner → `DivisionBoxError(PERMISSION_DENIED)`.
-- Malformed configuration → `DivisionBoxError(CONFIG_ERROR)`.
+
+All three reject the `open()` call; none of them produce a session that then transitions.
+
+- Global session cap reached → `DivisionBoxError(LIMIT_EXCEEDED)`, thrown before the session id is generated.
+- A UI view requested without an owning `pluginId`, or with a `pluginId` that resolves to no loaded plugin → `DivisionBoxError(CONFIG_ERROR)`.
+- A non-authoritative caller requesting a UI view, or a `pluginId` that does not match the calling plugin → `DivisionBoxError(PERMISSION_DENIED)`, raised at the IPC boundary before the manager is reached.
 
 ### attach
 
@@ -306,7 +309,7 @@ The window closed, or the session was explicitly detached.
 - A resource limit forces teardown.
 
 **Resources**
-- With `keepAlive: true`, the session enters the LRU cache and can be restored.
+- With `keepAlive: true`, the session is already in the LRU cache from its first `inactive`, and can be restored from there.
 - With `keepAlive: false`, it proceeds straight to `destroy`.
 - The view and its associated resources are released.
 
@@ -346,7 +349,7 @@ stateDiagram-v2
     attach --> detach: close() / reclaim
     detach --> [*]: keepAlive=false
     detach --> prepare: keepAlive=true, restored
-    prepare --> destroy: load failure / limit exceeded
+    prepare --> destroy: load failure
     attach --> destroy: load failure / crash
     active --> destroy: crash
     inactive --> destroy: LRU eviction / memory pressure

@@ -410,6 +410,10 @@ code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
   async function recognizeText(imageDataUrl: string) {
+  // 与上例相同的能力发现门：未配置 provider 时该能力不可用。
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'vision.ocr' })
+  if (!status.available) return null
+
   const result = await intelligence.vision.ocr({
   source: { type: 'data-url', dataUrl: imageDataUrl },
   includeKeywords: true
