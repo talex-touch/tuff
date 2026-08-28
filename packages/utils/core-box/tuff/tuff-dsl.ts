@@ -1645,6 +1645,17 @@ export interface ISearchProvider<C> {
    * @param context The context of the provider.
    */
   onLoad?: (context: C) => Promise<void>
+
+  /**
+   * Optional teardown, called once when the provider is removed from the registry.
+   *
+   * Returns `void | Promise<void>` because implementations do both: `AppProvider`'s is `async` and
+   * awaits `prepareForSearchIndexShutdown()`, while `EverythingProvider`'s and
+   * `FileSystemWatcher`'s are synchronous. Declaring it `() => void` would make the async one look
+   * settled at the call site, so teardown could resolve before the search index had finished
+   * shutting down, with the floating promise invisible to TypeScript (#334, #1725).
+   */
+  onDestroy?: () => void | Promise<void>
 }
 
 // ==================== 插件接口预览 ====================
