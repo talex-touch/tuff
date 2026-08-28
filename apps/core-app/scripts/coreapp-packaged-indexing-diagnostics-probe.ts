@@ -1144,7 +1144,8 @@ export function selectSettingsTarget(
       hasSettingsShell: boolean
       text: string
     }
-  }>
+  }>,
+  options: { allowAppShell?: boolean } = {}
 ): DevToolsTarget | undefined {
   const interactiveTargets = snapshots.filter((entry) => {
     return (
