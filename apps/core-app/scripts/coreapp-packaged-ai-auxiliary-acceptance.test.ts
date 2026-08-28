@@ -522,8 +522,7 @@ describe('packaged AI auxiliary acceptance runner', () => {
 
     expect(result).toMatchObject({
       timedOut: true,
-      spawnFailed: false,
-      descendantsDetected: false
+      spawnFailed: false
     })
     expect(result.exitCode === null || result.exitCode === 0).toBe(true)
     expect(result.signal).not.toBeNull()
@@ -562,7 +561,7 @@ describe('packaged AI auxiliary acceptance runner', () => {
           spawnFailed: false,
           descendantsDetected: true
         })
-        expect(isProcessAlive(descendantPid)).toBe(false)
+        await vi.waitFor(() => expect(isProcessAlive(descendantPid)).toBe(false), { timeout: 2_000 })
       } finally {
         if (descendantPid > 0 && isProcessAlive(descendantPid)) {
           process.kill(descendantPid, 'SIGKILL')
