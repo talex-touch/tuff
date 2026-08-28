@@ -1,6 +1,6 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import { describe, expect, it } from 'vitest'
-import { FileProviderIndexPersistEntryMapperService } from './file-provider-index-persist-entry-mapper-service'
+import { IndexedWorkerPersistEntryMapperService } from '@talex-touch/utils/search'
 
 function createResult(overrides: Partial<IndexWorkerFileResult> = {}): IndexWorkerFileResult {
   return {
@@ -39,9 +39,16 @@ function createResult(overrides: Partial<IndexWorkerFileResult> = {}): IndexWork
   }
 }
 
-describe('file-provider-index-persist-entry-mapper-service', () => {
+/**
+ * The shared mapper is exercised here with file-provider's own worker record shape
+ * (`IndexWorkerFileResult`), which carries `type`, `taskId` and `indexItem` that must not reach
+ * persistence. `packages/utils` covers the mapper against a minimal record; this covers it against
+ * the record the file provider actually hands it, which is what the deleted core-app forwarder
+ * class was standing in for (#343).
+ */
+describe('file-provider index persist entry mapping', () => {
   it('maps worker result file updates and progress into persist entries', () => {
-    const mapper = new FileProviderIndexPersistEntryMapperService()
+    const mapper = new IndexedWorkerPersistEntryMapperService()
 
     const entries = mapper.map([createResult()])
 
@@ -74,7 +81,7 @@ describe('file-provider-index-persist-entry-mapper-service', () => {
   })
 
   it('preserves null file updates for skipped or failed parser results', () => {
-    const mapper = new FileProviderIndexPersistEntryMapperService()
+    const mapper = new IndexedWorkerPersistEntryMapperService()
 
     const entries = mapper.map([
       createResult({

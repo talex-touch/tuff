@@ -110,6 +110,7 @@ import {
   type IndexedWriteDeleteRecord
 } from '../../search-engine/indexing-write-delete-executor-service'
 import {
+  IndexedWorkerPersistEntryMapperService,
   IndexedWriteInsertExecutorService,
   IndexedWriteUpdateExecutorService
 } from '@talex-touch/utils/search'
@@ -165,7 +166,6 @@ import {
 import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
 import { FileProviderIndexSchedulerService } from './services/file-provider-index-scheduler-service'
-import { FileProviderIndexPersistEntryMapperService } from './services/file-provider-index-persist-entry-mapper-service'
 import { FileProviderReconciliationInsertService } from './services/file-provider-reconciliation-insert-service'
 import { FileProviderCleanupDeleteService } from './services/file-provider-cleanup-delete-service'
 import { FileProviderFullScanInsertService } from './services/file-provider-full-scan-insert-service'
@@ -557,7 +557,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     FileIndexRunOptions | undefined
   >
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
-  private readonly indexPersistEntryMapper: FileProviderIndexPersistEntryMapperService
+  private readonly indexPersistEntryMapper: IndexedWorkerPersistEntryMapperService
   private readonly assetService: FileProviderAssetService
   private readonly searchResultService: FileProviderSearchResultService
   private readonly pathNormalizationService = new FileProviderPathNormalizationService({
@@ -956,7 +956,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.fileIndexWorker.indexFiles(dbPath, providerId, providerType, files),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
-    this.indexPersistEntryMapper = new FileProviderIndexPersistEntryMapperService()
+    this.indexPersistEntryMapper = new IndexedWorkerPersistEntryMapperService()
     this.indexRuntimeService = new FileProviderIndexRuntimeService({
       flushBatchScheduler: this.flushBatchScheduler,
       getDbUtils: () => this.dbUtils,
