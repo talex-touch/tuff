@@ -236,8 +236,8 @@ The state machine is `prepare → attach → active → inactive → detach → 
 The initial state of a session, between the `open()` call and window creation.
 
 **Entered when**
-- `divisionBox.open(config)` is called.
-- The main process validates the config, assigns a session id, and constructs the session.
+- `divisionBox.open(config)` is called **and** passes the preflight checks below. A rejected open never reaches this state.
+- The main process then assigns a session id and constructs the session.
 
 **Resources**
 - The global session cap is checked *before* anything is allocated.
@@ -309,7 +309,7 @@ The window closed, or the session was explicitly detached.
 - A resource limit forces teardown.
 
 **Resources**
-- With `keepAlive: true`, the session enters the LRU cache and can be restored.
+- With `keepAlive: true`, the session is already in the LRU cache from its first `inactive`, and can be restored from there.
 - With `keepAlive: false`, it proceeds straight to `destroy`.
 - The view and its associated resources are released.
 

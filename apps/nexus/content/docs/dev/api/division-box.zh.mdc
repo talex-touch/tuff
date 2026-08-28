@@ -406,8 +406,8 @@ code: |
 `prepare` 是 DivisionBox 会话的初始状态，发生在 `open()` 调用后、窗口创建前。
 
 **触发时机**：
-- 调用 `divisionBox.open(config)` 时立即进入
-- 主进程验证配置、分配 sessionId、创建 DivisionBoxSession 实例
+- 调用 `divisionBox.open(config)` 且通过下述前置检查后进入；被拒绝的 open 不会到达该状态
+- 随后主进程分配 sessionId、创建 DivisionBoxSession 实例
 
 **资源管理**：
 - 先检查全局会话上限，通过后才分配任何资源
@@ -481,7 +481,7 @@ code: |
 - 资源超限触发的强制销毁
 
 **资源管理**：
-- 如果 `keepAlive=true`，会话进入 LRU 缓存等待恢复
+- 如果 `keepAlive=true`，会话在首次 `inactive` 时就已进入 LRU 缓存，此处从缓存中等待恢复
 - 如果 `keepAlive=false`，直接进入 `destroy` 阶段
 - 释放 WebContentsView 和关联资源
 

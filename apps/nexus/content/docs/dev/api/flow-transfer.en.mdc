@@ -127,12 +127,14 @@ code: |
 
   const flow = createFlowSDK(channel, 'my-plugin-id')
 
-  flow.onFlowTransfer(async (payload, ctx) => {
+  const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
+    console.log(`Received ${payload.type} from ${sender.senderName}`)
+
     try {
-      await handlePayload(payload)
-      ctx.acknowledge({ success: true })
+      const result = await handlePayload(payload)
+      await flow.acknowledge(sessionId, { success: true, result })
     } catch (error) {
-      ctx.reportError({ message: 'Failed to handle payload' })
+      await flow.reportError(sessionId, 'Failed to handle payload')
     }
   })
 ---
@@ -160,7 +162,7 @@ code: |
 
 ## Error Handling
 
-`ctx.reportError()` and failed dispatches carry a `FlowErrorCode`. Treat any unrecognised value as `INTERNAL_ERROR` rather than assuming the list is closed.
+`flow.reportError(sessionId, message)` and failed dispatches carry a `FlowErrorCode`. Treat any unrecognised value as `INTERNAL_ERROR` rather than assuming the list is closed.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
