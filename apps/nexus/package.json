@@ -48,7 +48,7 @@
     "@langchain/langgraph": "catalog:",
     "@langchain/openai": "catalog:",
     "@number-flow/vue": "^0.5.1",
-    "@nuxtjs/mdc": "^0.22.1",
+    "@nuxtjs/mdc": "^0.22.2",
     "@panva/hkdf": "1.2.1",
     "@sentry/nuxt": "catalog:",
     "@sidebase/nuxt-auth": "^0.9.4",
