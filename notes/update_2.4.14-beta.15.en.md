@@ -31,7 +31,7 @@
 
 - Consolidated Nexus documentation routes, bilingual API content, and demo/icon gates. Release downloads now handle HEAD/download responses and validate version artifacts server-side.
 - Expanded macOS/Linux updater-script regression tests and package-level CI/publish workflow validation to reduce platform-specific release drift.
-- Updated native `napi-derive` and `symphonia` dependencies while retaining the verified compatible `napi` version. The Anthropic major upgrade was intentionally excluded because its `@langchain/core` peer range is incompatible with this repository.
+- Retained verified `napi` and `symphonia` native-audio versions. The `napi-derive` and Anthropic major upgrades are intentionally excluded because they are incompatible with the current `napi` API and `@langchain/core` peer range, respectively.
 
 ### Verification
 

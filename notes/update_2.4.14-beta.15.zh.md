@@ -31,7 +31,7 @@
 
 - Nexus 文档页面、双语 API 内容和 demo/图标门禁同步收口；发布下载新增 HEAD/下载响应处理并强化版本工件的服务端校验。
 - 更新更新器脚本和交接助手的 macOS/Linux 回归测试；发布工作流拆分并校验各包的 CI/发布配置，减少平台特定脚本漂移。
-- 升级 `napi-derive` 与 `symphonia` 原生依赖，并保留已验证的 `napi` 兼容版本；未纳入与现有 `@langchain/core` peer 范围不兼容的 Anthropic major 升级。
+- 保留已验证的 `napi` 与 `symphonia` 原生音频依赖版本；未纳入分别与当前 `napi` API 和 `@langchain/core` peer 范围不兼容的 `napi-derive` 与 Anthropic major 升级。
 
 ### 验证
 
