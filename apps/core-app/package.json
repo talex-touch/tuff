@@ -15,6 +15,7 @@
     "test:core-main": "vitest run \"src/main/core\" \"src/main/channel\" \"src/main/modules/tray\"",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "corepack pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "scan:memory:benchmark": "pnpm exec tsx scripts/file-scan-memory-benchmark.mjs",
     "typecheck": "corepack pnpm run typecheck:node && corepack pnpm run typecheck:web",
     "test:omnipanel": "vitest run src/main/modules/omni-panel/index.test.ts src/renderer/src/views/omni-panel/filter-features.test.ts src/renderer/src/views/omni-panel/interaction.test.ts",
     "test:shortcut-lifecycle": "vitest run src/main/modules/global-shortcon.test.ts src/main/modules/division-box/shortcut-trigger.test.ts src/main/modules/omni-panel/index.test.ts",

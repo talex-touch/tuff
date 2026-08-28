@@ -12,12 +12,19 @@
  * next batch, so it holds at most one unacknowledged batch — the bound this measures is the
  * floor, and the worker cannot exceed it.
  *
- * Usage:
- *   node apps/core-app/scripts/file-scan-memory-benchmark.mjs
- *   node apps/core-app/scripts/file-scan-memory-benchmark.mjs --counts 20000,50000,100000 --batch 500
- *   node apps/core-app/scripts/file-scan-memory-benchmark.mjs --cancel-at 5000
+ * Usage — must run under tsx, not plain node:
  *
- * Run with --expose-gc for stable heap numbers.
+ *   pnpm -C apps/core-app scan:memory:benchmark
+ *   pnpm -C apps/core-app scan:memory:benchmark -- --counts 20000,50000,100000 --batch 500
+ *   pnpm -C apps/core-app scan:memory:benchmark -- --cancel-at 5000
+ *
+ * `node <this file>` fails with ERR_UNSUPPORTED_DIR_IMPORT: it reaches
+ * `packages/utils/common/file-scan-utils.ts`, which imports `../env` — a directory index that
+ * plain node ESM does not resolve. The header said `node` until 2026-08-27 and had been wrong
+ * since `f03cc7c3f` added that import on 2026-07-16; the measurement recorded three weeks later
+ * in `07-13-search-crossplatform-audit/prd.md` must already have used a loader.
+ *
+ * Add `--expose-gc` for stable heap numbers: `NODE_OPTIONS=--expose-gc pnpm -C apps/core-app …`.
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
