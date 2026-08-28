@@ -443,6 +443,13 @@ export class IntelligenceQuotaManager {
     this.admissions.set(key, [...(this.admissions.get(key) ?? []), now])
   }
 
+  invalidateUsageCache(
+    callerId: string,
+    callerType: 'plugin' | 'user' | 'system' = 'plugin'
+  ): void {
+    this.usageCache.delete(`usage:${callerType}:${callerId}`)
+  }
+
   clearCache(): void {
     this.admissions.clear()
     this.quotaCache.clear()

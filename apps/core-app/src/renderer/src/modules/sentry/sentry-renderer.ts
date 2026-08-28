@@ -73,6 +73,11 @@ export async function initSentryRenderer(): Promise<void> {
           }
         }
         return sanitizeRendererSentryEvent(event)
+      },
+      // Renderer breadcrumbs are mirrored into the main-process scope before upload. Drop them
+      // here so console payload previews never reach Sentry's local scope cache.
+      beforeBreadcrumb() {
+        return null
       }
     })
 

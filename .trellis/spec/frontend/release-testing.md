@@ -491,6 +491,8 @@ UpdateHandoffPlanV1 := {
   handoff: UpdateHandoffCommand
   recovery: UpdateHandoffCommand | null
 }
+
+HelperChildEnv := process.env - { ELECTRON_RUN_AS_NODE }
 ```
 
 ### 3. Contracts
@@ -499,7 +501,10 @@ UpdateHandoffPlanV1 := {
 - `user-normal` may hand off only when `installOnNormalQuit=true`; `update-now` may hand off only an `install-now` lifecycle. System shutdown, startup failure, duplicate instance, and other exits never prepare or launch OTA.
 - `ModuleManager` awaits `BEFORE_MODULES_UNLOAD` before stop/destroy. OTA hash, cached detached-signature verification, plan persistence, previous selection, and `handoff-started` CAS complete there while SQLite is writable.
 - Actual `will-quit` performs only detached helper spawn/unref. The helper waits for the parent PID to exit, rejects escaped/stale/mismatched/replayed plans, and performs at most one recovery.
+- The installed source version owns and launches the helper for both handoff and recovery. A helper fix shipped only inside target N+1 cannot change the N -> N+1 transition; packaged acceptance for a helper change requires an official source N containing the fix and a distinct official target N+1.
+- Every waited or detached helper child inherits the source environment except `ELECTRON_RUN_AS_NODE`, which must be deleted before spawn. Preserve unrelated variables, including isolated profile paths; otherwise Electron may execute the target app in Node mode and exit without startup health.
 - macOS uses DownloadCenter plus apply/restore scripts and a retained `.app` backup. Windows resolves interactive NSIS/MSI commands. Linux accepts only executable AppImage or `xdg-open` deb handoff. Unsupported formats fail closed.
+- macOS mount cleanup always attempts best-effort `hdiutil detach "$MOUNT_DIR"`; it must not preflight with textual `mount` output because the same path may be rendered as `/tmp/...` or `/private/tmp/...`.
 - A detached signature is fetched and cached during verification; install preflight re-verifies package bytes against the local cache and pinned key without network access.
 - Target startup moves `handoff-started -> awaiting-health`; only target-version match plus completed renderer/main/module readiness and writable repository moves to `healthy` and writes the token-bound ack.
 - Healthy startup atomically promotes exactly one verified package as future previous. A recovery marker plus old-version startup moves `recovery-required -> recovering -> recovered`; helper/runtime JSON never overrides another SQLite attempt or token.
@@ -517,12 +522,15 @@ UpdateHandoffPlanV1 := {
 | Unrelated version or recovery unavailable                                          | Stay `recovery-required`; never mark healthy                  |
 | Health timeout with previous asset                                                 | Write marker and launch previous once                         |
 | Health timeout without previous asset                                              | Write `recovery-required`; no fake rollback success           |
+| Child spawn would inherit `ELECTRON_RUN_AS_NODE`                                   | Remove it before handoff/recovery spawn; preserve other env   |
+| `mount` renders the stage path through `/private/tmp`                               | Still attempt detach by `MOUNT_DIR`; cleanup remains bounded  |
+| Helper fix exists only in target N+1                                               | N -> N+1 is not proof; wait for fixed official N -> N+1 pair  |
 
 ### 5. Good / Base / Bad Cases
 
 - **Good:** verified task schedules typed update quit, pre-unload persists the plan, will-quit launches one helper, target startup becomes healthy, and one previous package remains.
-- **Base:** first Windows/Linux install has no previous package; timeout records recovery-required without repeating an installer.
-- **Bad:** call `shell.openPath`/`autoUpdater.quitAndInstall` from the action, infer success from UAC/process spawn, fetch signatures during quit, or unload SQLite before coordinator preflight.
+- **Base:** first Windows/Linux install has no previous package; timeout records recovery-required without repeating an installer. A failed macOS attempt with no compatible previous asset preserves its marker, backup, and authoritative SQLite phase for diagnosis.
+- **Bad:** call `shell.openPath`/`autoUpdater.quitAndInstall` from the action, infer success from UAC/process spawn, fetch signatures during quit, unload SQLite before coordinator preflight, inherit `ELECTRON_RUN_AS_NODE` into the target, or skip detach because `/tmp` and `/private/tmp` strings differ.
 
 ### 6. Tests Required
 
@@ -532,6 +540,9 @@ UpdateHandoffPlanV1 := {
 - Plan/store path escape, schema/token mismatch, replay, one-previous atomic rotation, and stale-marker isolation.
 - macOS/NSIS/MSI/AppImage/deb command selection and unsupported-format rejection.
 - Helper parent wait, matching healthy/recovered ack, timeout recovery once, and no-previous marker using only temp fixtures.
+- Waited and detached child tests set `ELECTRON_RUN_AS_NODE=1`, assert the child observes it as absent, and assert an unrelated isolated-profile sentinel survives. Mutation must prove removing the env scrub makes the test fail.
+- macOS script contracts assert detach is attempted without a `mount | grep` gate and exercise a `/tmp` stage path whose system projection may be `/private/tmp`.
+- Packaged helper changes are accepted only with two post-fix official versions: the source package proves it owns the fixed helper, and the target package proves startup reaches token-bound `healthy`.
 - Detached-signature cache proves first download plus second offline verification and tamper failures.
 
 ### 7. Wrong vs Correct
@@ -549,8 +560,13 @@ return { success: true }; // process launch is not install/health success
 ```ts
 await updateInstallCoordinator.scheduleInstallNow(taskId);
 // BEFORE_MODULES_UNLOAD: verify local bytes/cache, persist plan, CAS handoff-started
-// will-quit: spawn detached helper once
+// will-quit: spawn detached helper once; helper strips ELECTRON_RUN_AS_NODE
 // target startup readiness: CAS healthy, then write token-bound ack
+```
+
+```bash
+# Always attempt the concrete detach; hdiutil owns path normalization.
+/usr/bin/hdiutil detach "$MOUNT_DIR" -quiet >/dev/null 2>&1 || true
 ```
 
 ## Scenario: Ready Notification and Strict Silent macOS Update

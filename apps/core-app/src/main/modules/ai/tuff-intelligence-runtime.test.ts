@@ -6,7 +6,12 @@ import type {
   TuffIntelligenceTraceEvent,
   TuffIntelligenceTurn
 } from '@talex-touch/tuff-intelligence'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  toolRegistry,
+  type ToolExecutionContext,
+  type ToolExecutorFn
+} from './agents/tool-registry'
 
 vi.mock('./agents', () => ({
   agentManager: {
@@ -23,6 +28,9 @@ vi.mock('./agents', () => ({
 const intelligenceSdkMocks = vi.hoisted(() => ({
   invoke: vi.fn()
 }))
+
+const CANARY = 'sk-live-token@/Users/private/native-stack.ts:42'
+const registeredToolIds = new Set<string>()
 
 vi.mock('./intelligence-sdk', () => ({
   tuffIntelligence: intelligenceSdkMocks
@@ -83,6 +91,29 @@ type TuffIntelligenceRuntimeHarness = {
     turnId?: string
     metadata?: Record<string, unknown>
   }) => Promise<TuffIntelligenceTurn>
+  startSession: (payload: { sessionId: string }) => Promise<unknown>
+  callTool: (payload: {
+    sessionId: string
+    toolId: string
+    input?: unknown
+    riskLevel?: TuffIntelligenceApprovalTicket['riskLevel']
+    callId?: string
+    timeoutMs?: number
+    metadata?: Record<string, unknown>
+  }) => Promise<{
+    success: boolean
+    output?: unknown
+    error?: string
+    errorCode?: string
+    approvalTicket?: TuffIntelligenceApprovalTicket
+    traceEvent: TuffIntelligenceTraceEvent
+  }>
+  approveTool: (payload: {
+    ticketId: string
+    approved: boolean
+    approvedBy?: string
+    reason?: string
+  }) => Promise<TuffIntelligenceApprovalTicket | null>
   getSessionState: (sessionId: string) => Promise<TuffIntelligenceStateSnapshot | null>
 }
 let TuffIntelligenceRuntimeCtor: new () => TuffIntelligenceRuntimeHarness
@@ -96,6 +127,26 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks()
 })
+
+afterEach(() => {
+  for (const toolId of registeredToolIds) {
+    toolRegistry.unregisterTool(toolId)
+  }
+  registeredToolIds.clear()
+})
+
+function registerRuntimeTool(toolId: string, executor: ToolExecutorFn): void {
+  registeredToolIds.add(toolId)
+  toolRegistry.registerTool(
+    {
+      id: toolId,
+      name: toolId,
+      description: 'Runtime security test tool.',
+      inputSchema: { type: 'object', properties: {} }
+    },
+    executor
+  )
+}
 
 function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
   const now = Date.now()
@@ -195,6 +246,53 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     expect(replay).toEqual([])
   })
 
+  it('reprojects persisted legacy trace payloads before replay', async () => {
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const stored = createStoredSession('session_legacy_trace')
+    stored.session.lastEventSeq = 1
+    stored.trace = [
+      {
+        id: 'trace_legacy_1',
+        sessionId: 'session_legacy_trace',
+        seq: 1,
+        type: 'tool.completed',
+        level: 'error',
+        message: CANARY,
+        payload: {
+          callId: 'call.legacy.1',
+          toolId: 'runtime.read.legacy',
+          status: 'failed',
+          errorCode: CANARY,
+          input: { token: CANARY },
+          output: { path: CANARY },
+          error: CANARY
+        },
+        timestamp: 1
+      }
+    ]
+    runtime.loadSession = vi.fn().mockResolvedValue(stored)
+
+    const replay = await runtime.queryTrace({
+      sessionId: 'session_legacy_trace',
+      fromSeq: 1,
+      limit: 10
+    })
+
+    expect(replay).toEqual([
+      expect.objectContaining({
+        message: 'Tool call completed',
+        contractVersion: 3,
+        payload: {
+          callId: 'call.legacy.1',
+          toolId: 'runtime.read.legacy',
+          status: 'failed',
+          errorCode: 'TOOL_EXECUTION_FAILED'
+        }
+      })
+    ])
+    expect(JSON.stringify(replay)).not.toContain(CANARY)
+  })
+
   it('releases session trace subscribers after unsubscribe', () => {
     const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
     const stored = createStoredSession('session_subscribe')
@@ -220,6 +318,235 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     })
 
     expect(onTrace).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('TuffIntelligenceRuntime tool evidence boundary', () => {
+  it('uses stable registry errors and allowlisted trace fields for hostile failures', async () => {
+    const toolId = 'runtime.read.failure'
+    const executor = vi.fn(async (_input: unknown, context: ToolExecutionContext) => {
+      expect(context.errorProjection).toBe('stable')
+      throw Object.assign(new Error(CANARY), { code: 'ENOENT' })
+    })
+    registerRuntimeTool(toolId, executor)
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const sessionId = 'session_tool_failure'
+    await runtime.startSession({ sessionId })
+
+    const result = await runtime.callTool({
+      sessionId,
+      toolId,
+      input: { [CANARY]: CANARY, path: CANARY },
+      callId: 'call.failure.1',
+      metadata: {
+        workingDirectory: CANARY,
+        approvalContext: { reason: CANARY },
+        contextSources: [{ path: CANARY }]
+      }
+    })
+    const missing = await runtime.callTool({
+      sessionId,
+      toolId: CANARY,
+      input: { value: CANARY },
+      callId: 'call.missing.1'
+    })
+
+    expect(executor).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({
+      success: false,
+      error: 'TOOL_RESOURCE_NOT_FOUND: The requested resource was not found.',
+      errorCode: 'TOOL_RESOURCE_NOT_FOUND'
+    })
+    expect(missing).toMatchObject({
+      success: false,
+      error: 'TOOL_NOT_FOUND: Tool is not available.',
+      errorCode: 'TOOL_NOT_FOUND'
+    })
+
+    const trace = await runtime.queryTrace({ sessionId, limit: 100 })
+    const serialized = JSON.stringify(trace)
+    expect(serialized).not.toContain(CANARY)
+    expect(serialized).not.toContain('approvalContext')
+    expect(serialized).not.toContain('contextSources')
+    expect(serialized).not.toContain('workingDirectory')
+    expect(trace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool.called',
+          message: 'Tool call started',
+          payload: expect.objectContaining({
+            callId: 'call.failure.1',
+            toolId,
+            status: 'started'
+          })
+        }),
+        expect.objectContaining({
+          type: 'tool.completed',
+          message: 'Tool call completed',
+          payload: expect.objectContaining({
+            callId: 'call.failure.1',
+            toolId,
+            status: 'failed',
+            errorCode: 'TOOL_RESOURCE_NOT_FOUND',
+            durationMs: expect.any(Number)
+          })
+        }),
+        expect.objectContaining({
+          type: 'tool.completed',
+          payload: expect.objectContaining({
+            callId: 'call.missing.1',
+            toolId: 'unknown',
+            status: 'failed',
+            errorCode: 'TOOL_NOT_FOUND'
+          })
+        })
+      ])
+    )
+  })
+
+  it('keeps safe success output for the caller but never copies it into trace evidence', async () => {
+    const toolId = 'runtime.read.success'
+    const output = { content: CANARY, nested: { path: CANARY } }
+    const executor = vi.fn(async () => output)
+    registerRuntimeTool(toolId, executor)
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const sessionId = 'session_tool_success'
+    await runtime.startSession({ sessionId })
+
+    const result = await runtime.callTool({
+      sessionId,
+      toolId,
+      input: { token: CANARY },
+      callId: 'call.success.1'
+    })
+
+    expect(result).toMatchObject({ success: true, output })
+    expect(executor).toHaveBeenCalledTimes(1)
+    const trace = await runtime.queryTrace({ sessionId, limit: 100 })
+    expect(JSON.stringify(trace)).not.toContain(CANARY)
+    expect(trace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool.completed',
+          payload: expect.objectContaining({
+            callId: 'call.success.1',
+            toolId,
+            status: 'succeeded'
+          })
+        })
+      ])
+    )
+  })
+
+  it('correlates approval and result without exposing the deferred input or decision reason', async () => {
+    const toolId = 'runtime.write.approved'
+    const executor = vi.fn(async () => ({ accepted: true }))
+    registerRuntimeTool(toolId, executor)
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const sessionId = 'session_tool_approval'
+    await runtime.startSession({ sessionId })
+
+    const pending = await runtime.callTool({
+      sessionId,
+      toolId,
+      input: { path: CANARY, token: CANARY },
+      callId: 'call.approval.1',
+      metadata: { approvalContext: CANARY, contextSources: [CANARY] }
+    })
+    expect(pending.approvalTicket).toMatchObject({
+      toolId,
+      riskLevel: 'high',
+      status: 'pending'
+    })
+    expect(pending.approvalTicket?.metadata).toBeUndefined()
+    const ticketId = pending.approvalTicket?.id
+    expect(ticketId).toEqual(expect.any(String))
+
+    const approved = await runtime.approveTool({
+      ticketId: ticketId!,
+      approved: true,
+      approvedBy: CANARY,
+      reason: CANARY
+    })
+
+    expect(approved).toMatchObject({
+      id: ticketId,
+      toolId,
+      status: 'approved',
+      resolvedBy: 'user'
+    })
+    expect(approved?.metadata).toBeUndefined()
+    expect(executor).toHaveBeenCalledTimes(1)
+    expect((await runtime.getSessionState(sessionId))?.pendingApprovals).toEqual([])
+
+    const trace = await runtime.queryTrace({ sessionId, limit: 100 })
+    const serialized = JSON.stringify({ approved, trace })
+    expect(serialized).not.toContain(CANARY)
+    expect(trace.filter((event) => event.type === 'tool.approval_required')).toHaveLength(1)
+    expect(trace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool.approval_required',
+          payload: expect.objectContaining({
+            ticketId,
+            callId: 'call.approval.1',
+            toolId,
+            status: 'pending'
+          })
+        }),
+        expect.objectContaining({
+          type: 'tool.approved',
+          payload: { ticketId, toolId, decision: 'approved' }
+        }),
+        expect.objectContaining({
+          type: 'tool.completed',
+          payload: expect.objectContaining({
+            callId: 'call.approval.1',
+            toolId,
+            status: 'succeeded'
+          })
+        })
+      ])
+    )
+  })
+
+  it('projects retry timeouts to one stable code', async () => {
+    const toolId = 'runtime.read.timeout'
+    const executor = vi.fn(() => new Promise<never>(() => undefined))
+    registerRuntimeTool(toolId, executor)
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const sessionId = 'session_tool_timeout'
+    await runtime.startSession({ sessionId })
+
+    const result = await runtime.callTool({
+      sessionId,
+      toolId,
+      input: { value: CANARY },
+      callId: 'call.timeout.1',
+      timeoutMs: 1
+    })
+
+    expect(executor).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({
+      success: false,
+      error: 'TOOL_EXECUTION_TIMEOUT: Tool execution timed out.',
+      errorCode: 'TOOL_EXECUTION_TIMEOUT'
+    })
+    const trace = await runtime.queryTrace({ sessionId, limit: 100 })
+    expect(JSON.stringify(trace)).not.toContain(CANARY)
+    expect(trace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool.completed',
+          payload: expect.objectContaining({
+            callId: 'call.timeout.1',
+            toolId,
+            status: 'failed',
+            errorCode: 'TOOL_EXECUTION_TIMEOUT'
+          })
+        })
+      ])
+    )
   })
 })
 

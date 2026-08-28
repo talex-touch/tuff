@@ -1,13 +1,16 @@
 import type {
+  IntelligenceInvokeOptions,
   IntelligenceProviderConfig,
   IntelligenceStreamChunk
 } from '@talex-touch/tuff-intelligence'
+import { ChildProcess } from 'node:child_process'
+import { getEventListeners } from 'node:events'
 import { existsSync, readdirSync } from 'node:fs'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PiCliProvider } from './pi-cli-provider'
 import { PI_CLI_ORIGIN, PI_CLI_PROVIDER_ID, resetPiExecutableCache } from './pi-cli-runtime'
 
@@ -168,6 +171,149 @@ describe('PiCliProvider.chatStream', () => {
     await new Promise((resolve) => setTimeout(resolve, 150))
     // `kill(pid, 0)` throws ESRCH once the process is gone; a live process returns cleanly.
     expect(() => process.kill(childPid, 0)).toThrow()
+  })
+
+  it('reports a stable failure and detaches streams when both termination signals fail', async () => {
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: String(process.pid) } })
+      setInterval(() => {}, 1000)
+    `)
+
+    const iterator = provider().chatStream(userTurn(), {})
+    const first = await iterator.next()
+    const childPid = Number(first.value?.delta)
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    let spawnedChild: ChildProcess | undefined
+    const killSpy = vi.spyOn(ChildProcess.prototype, 'kill').mockImplementation(function (
+      this: ChildProcess
+    ): boolean {
+      spawnedChild = this
+      this.emit(
+        'error',
+        Object.assign(new Error('simulated child kill failure'), { code: 'EPERM' })
+      )
+      return false
+    })
+    const unrefSpy = vi.spyOn(ChildProcess.prototype, 'unref')
+
+    try {
+      await expect(iterator.return(undefined)).rejects.toMatchObject({
+        code: 'PI_CLI_TERMINATION_FAILED',
+        message: 'PI_CLI_TERMINATION_FAILED'
+      })
+      await new Promise<void>((resolve) => setImmediate(resolve))
+
+      expect(killSpy).toHaveBeenCalledTimes(2)
+      expect(unrefSpy).toHaveBeenCalledTimes(1)
+      expect(unhandled).toEqual([])
+      expect(() => process.kill(childPid, 0)).not.toThrow()
+      const stderr = spawnedChild?.stderr
+      expect(stderr?.destroyed).toBe(true)
+      expect(stderr ? getEventListeners(stderr, 'data') : []).toHaveLength(0)
+    } finally {
+      process.removeListener('unhandledRejection', onUnhandled)
+      killSpy.mockRestore()
+      unrefSpy.mockRestore()
+      if (childPid > 0) {
+        try {
+          process.kill(childPid, 'SIGKILL')
+        } catch (error) {
+          expect((error as NodeJS.ErrnoException).code).toBe('ESRCH')
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150))
+      }
+    }
+
+    expect(() => process.kill(childPid, 0)).toThrow()
+  })
+
+  it('prefers abort when SIGTERM errors but SIGKILL terminates the child', async () => {
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: String(process.pid) } })
+      setInterval(() => {}, 1000)
+    `)
+
+    const controller = new AbortController()
+    const iterator = provider().chatStream(userTurn(), {
+      signal: controller.signal
+    } as IntelligenceInvokeOptions & { signal: AbortSignal })
+    const first = await iterator.next()
+    const childPid = Number(first.value?.delta)
+    const pending = iterator.next()
+    const originalKill = ChildProcess.prototype.kill
+    const killSpy = vi.spyOn(ChildProcess.prototype, 'kill').mockImplementation(function (
+      this: ChildProcess,
+      signal?: NodeJS.Signals | number
+    ): boolean {
+      if (signal === 'SIGTERM') {
+        this.emit(
+          'error',
+          Object.assign(new Error('simulated child kill failure'), { code: 'EPERM' })
+        )
+        return false
+      }
+      return originalKill.call(this, signal)
+    })
+
+    controller.abort()
+    try {
+      await expect(pending).resolves.toMatchObject({ done: true })
+      expect(killSpy).toHaveBeenCalledTimes(2)
+      expect(() => process.kill(childPid, 0)).toThrow()
+    } finally {
+      killSpy.mockRestore()
+      try {
+        process.kill(childPid, 'SIGKILL')
+      } catch (error) {
+        expect((error as NodeJS.ErrnoException).code).toBe('ESRCH')
+      }
+    }
+  })
+
+  it('aborts a child that is blocked while the provider next call is pending', async () => {
+    await writeStub(`
+      const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+      process.on('SIGTERM', () => {})
+      emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: String(process.pid) } })
+      setInterval(() => {}, 1000)
+    `)
+
+    const controller = new AbortController()
+    const iterator = provider().chatStream(userTurn(), {
+      signal: controller.signal
+    } as IntelligenceInvokeOptions & { signal: AbortSignal })
+    const first = await iterator.next()
+    const childPid = Number(first.value?.delta)
+    const pending = iterator.next()
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    const startedAt = Date.now()
+
+    controller.abort()
+    try {
+      const settled = await Promise.race([
+        pending,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Pi child ignored stream cancellation')),
+            1000
+          )
+        })
+      ])
+      expect(settled.done).toBe(true)
+    } finally {
+      if (timeout) clearTimeout(timeout)
+    }
+
+    expect(Date.now() - startedAt).toBeLessThan(1000)
+    expect(childPid).toBeGreaterThan(0)
+    expect(() => process.kill(childPid, 0)).toThrow()
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
   })
 })
 

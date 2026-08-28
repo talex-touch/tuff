@@ -10,6 +10,7 @@ import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { databaseModule } from '../database'
+import { intelligenceQuotaManager } from './intelligence-quota-manager'
 
 /**
  * Extended audit log with additional tracking fields
@@ -175,7 +176,9 @@ function boundedAuditNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-function sanitizeAuditMetadata(value: unknown): Record<string, unknown> | undefined {
+export function sanitizeIntelligenceAuditMetadata(
+  value: unknown
+): Record<string, unknown> | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const output: Record<string, unknown> = {}
   try {
@@ -228,7 +231,7 @@ export function sanitizeIntelligenceAuditEntry(
     success,
     error,
     estimatedCost: boundedAuditNumber(entry.estimatedCost),
-    metadata: sanitizeAuditMetadata(entry.metadata)
+    metadata: sanitizeIntelligenceAuditMetadata(entry.metadata)
   }
 }
 
@@ -300,7 +303,8 @@ export class IntelligenceAuditLogger {
    * Log an audit entry
    */
   async log(entry: IntelligenceAuditLogEntry): Promise<void> {
-    const estimatedCost = entry.estimatedCost ?? this.estimateCost(entry.model, entry.usage)
+    const estimatedCost =
+      entry.estimatedCost ?? entry.usage.cost ?? this.estimateCost(entry.model, entry.usage)
     const sanitized = sanitizeIntelligenceAuditEntry({ ...entry, estimatedCost })
     if (sanitized.traceId === 'trace-redacted') {
       sanitized.traceId = this.generateTraceId()
@@ -405,8 +409,11 @@ export class IntelligenceAuditLogger {
    * Flush buffered logs to database
    */
   async flushToDB(): Promise<void> {
+    // Re-check after every awaited owner. Multiple explicit flush callers can resume from the
+    // same completed Promise while new logs are queued; an `if` here lets each waiter start a
+    // competing drain and overwrite flushPromise.
+    while (this.flushPromise) await this.flushPromise
     if (this.pendingLogs.length === 0) return
-    if (this.flushPromise) return this.flushPromise
 
     this.flushPromise = (async () => {
       while (this.pendingLogs.length > 0) {
@@ -503,6 +510,14 @@ export class IntelligenceAuditLogger {
           await this.updateUsageStats(tx, logsToFlush)
         })
       })
+      const callers = new Map<string, 'plugin' | 'system'>()
+      for (const log of logsToFlush) {
+        const callerId = log.caller || 'system'
+        callers.set(callerId, callerId === 'system' ? 'system' : 'plugin')
+      }
+      for (const [callerId, callerType] of callers) {
+        intelligenceQuotaManager.invalidateUsageCache(callerId, callerType)
+      }
       return true
     } catch (error) {
       this.logFlushError(error, logsToFlush.length)

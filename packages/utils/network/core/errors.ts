@@ -1,9 +1,19 @@
 export const NETWORK_ERROR_CODE = {
   TIMEOUT: 'NETWORK_TIMEOUT',
+  ABORTED: 'NETWORK_ABORTED',
   COOLDOWN_ACTIVE: 'NETWORK_COOLDOWN_ACTIVE',
   FILE_FORBIDDEN: 'NETWORK_FILE_FORBIDDEN',
   FILE_UNSUPPORTED_SOURCE: 'NETWORK_UNSUPPORTED_FILE_SOURCE',
 } as const
+
+export class NetworkAbortError extends Error {
+  readonly code = NETWORK_ERROR_CODE.ABORTED
+
+  constructor() {
+    super(NETWORK_ERROR_CODE.ABORTED)
+    this.name = 'NetworkAbortError'
+  }
+}
 
 export class NetworkTimeoutError extends Error {
   readonly code = NETWORK_ERROR_CODE.TIMEOUT
@@ -44,7 +54,7 @@ export function isTimeoutLikeError(error: unknown): boolean {
     return true
   }
 
-  return /timeout|aborted|etimedout/i.test(error.message)
+  return /timeout|etimedout/i.test(error.message)
 }
 
 export function parseHttpStatusCode(error: unknown): number | null {

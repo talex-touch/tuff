@@ -12,7 +12,7 @@
  * (#519), and at the point of this rewrite two upstream types were reachable from neither the
  * forward list nor a local re-declaration -- invisible to the renderer until someone noticed.
  *
- * `export type *` forwards types only, so the seven value exports are listed explicitly. That
+ * `export type *` forwards types only, so the nine value exports are listed explicitly. That
  * list is the one thing here that still needs maintaining, and it is short enough to see.
  */
 
@@ -22,6 +22,7 @@ export {
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
+  INTELLIGENCE_CONVERSATION_TITLE_OPERATION,
   INTELLIGENCE_HOME_SURFACE,
   IntelligenceCapabilityType,
   IntelligenceProviderType,

@@ -1,26 +1,9 @@
 <script lang="ts" name="IntelligenceRateLimitConfig" setup>
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-
-interface IntelligenceProviderConfig {
-  id: string
-  type: string
-  name: string
-  enabled: boolean
-  apiKey?: string
-  baseUrl?: string
-  models?: string[]
-  defaultModel?: string
-  instructions?: string
-  timeout?: number
-  rateLimit?: {
-    requestsPerMinute?: number
-    tokensPerMinute?: number
-  }
-  priority?: number
-}
 
 const props = defineProps<{
   modelValue: IntelligenceProviderConfig

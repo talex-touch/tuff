@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Verify privacy gates, export/delete owners, retention, redaction, and evidence boundaries."}
+{"file":".trellis/tasks/08-23-data-telemetry-billing-acceptance/research/data-telemetry-billing-audit.md","reason":"Check every confirmed false-success, partial-write, and reconciliation gap against the acceptance matrix."}
+{"file":"apps/core-app/src/main/modules/sentry/sentry-service.test.ts","reason":"Assert disabled telemetry drops Nexus outbox rows without network upload or startup analytics cross-consumption."}
+{"file":"apps/nexus/test/api/telemetryBatchIdempotency.api.test.ts","reason":"Assert logged-in privacy settings reject disallowed telemetry categories before writes while preserving ACK semantics."}

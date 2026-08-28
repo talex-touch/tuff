@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - "packages/pi-extension-tuff/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/package-pi-extension-ci.yml"
       - ".github/workflows/package-ci.yml"
   push:
@@ -14,6 +16,10 @@ on:
       - master
     paths:
       - "packages/pi-extension-tuff/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-pi-extension-ci.yml"
+      - ".github/workflows/package-ci.yml"
 
 permissions:
   contents: read

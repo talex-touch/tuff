@@ -8,6 +8,7 @@ import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { isProxy } from 'node:util/types'
 import * as Sentry from '@sentry/electron/main'
@@ -437,6 +438,21 @@ export class SentryServiceModule extends BaseModule {
     return metadata?.kind === NEXUS_TELEMETRY_OUTBOX_KIND
   }
 
+  private async discardQueuedNexusTelemetryOutbox(): Promise<void> {
+    const store = this.getReportQueueStore()
+    if (!store) return
+
+    try {
+      const queued = await store.list()
+      const telemetryItems = queued.filter((item) => this.isNexusBatchPayload(item.payload))
+      await Promise.allSettled(telemetryItems.map((item) => store.remove(item.id)))
+    } catch (error) {
+      this.recordTelemetryFailure('Telemetry outbox discard failed', {
+        code: stableTelemetryFailureCode(error, 'TELEMETRY_OUTBOX_DISCARD_FAILED')
+      })
+    }
+  }
+
   private schedulePersistTelemetryStats(): void {
     if (this.telemetryStatsPersistTimer) return
     this.telemetryStatsPersistTimer = setTimeout(() => {
@@ -569,8 +585,12 @@ export class SentryServiceModule extends BaseModule {
     if (enabledChanged) {
       if (this.config.enabled && !this.isInitialized) {
         this.initializeSentry()
-      } else if (!this.config.enabled && this.isInitialized) {
-        this.shutdownSentry()
+      } else if (!this.config.enabled) {
+        this.nexusTelemetryBuffer = []
+        void this.discardQueuedNexusTelemetryOutbox()
+        if (this.isInitialized) {
+          this.shutdownSentry()
+        }
       }
 
       this.syncPerformanceMonitors()
@@ -814,9 +834,10 @@ export class SentryServiceModule extends BaseModule {
 
           return sanitizeSentryEvent(event)
         },
-        // Before breadcrumb hook
-        beforeBreadcrumb(breadcrumb) {
-          return breadcrumb
+        // Breadcrumbs are removed before upload. Drop them at collection time too so the
+        // Electron SDK cannot persist console payload previews in its local scope cache.
+        beforeBreadcrumb() {
+          return null
         },
         ...(isDevelopmentRuntime
           ? {
@@ -1291,7 +1312,7 @@ export class SentryServiceModule extends BaseModule {
       eventType: 'telemetry_batch',
       metadata: {
         kind: NEXUS_TELEMETRY_OUTBOX_KIND,
-        idempotencyKey: `sentry:${Date.now()}:${events.length}`,
+        idempotencyKey: `sentry:${randomUUID()}`,
         count: events.length
       },
       events
@@ -1327,6 +1348,12 @@ export class SentryServiceModule extends BaseModule {
   }
 
   private async flushQueuedNexusTelemetryOutbox(): Promise<void> {
+    if (!this.config.enabled) {
+      this.nexusTelemetryBuffer = []
+      await this.discardQueuedNexusTelemetryOutbox()
+      return
+    }
+
     const store = this.getReportQueueStore()
     if (!store) return
     if (this.telemetryCooldownUntil && Date.now() < this.telemetryCooldownUntil) {

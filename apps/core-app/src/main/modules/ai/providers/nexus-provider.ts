@@ -53,6 +53,10 @@ interface NexusTransportFailure {
 
 type NexusStreamEventType = 'start' | 'delta' | 'usage' | 'end' | 'error'
 
+type NexusProviderRuntimeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
+}
+
 interface NexusStreamEvent extends NexusTransportFailure {
   type: NexusStreamEventType
   delta?: string
@@ -349,6 +353,7 @@ export class NexusProvider extends IntelligenceProvider {
         }
       },
       timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
+      signal: (options as NexusProviderRuntimeOptions).signal,
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
@@ -371,8 +376,6 @@ export class NexusProvider extends IntelligenceProvider {
     let model = this.config.defaultModel || this.config.models?.[0] || 'nexus'
     let latency = 0
     let ended = false
-    // NetworkStreamResponse exposes a Node Readable without its async-iterator generic.
-    const stream = response.stream as unknown as AsyncIterable<unknown>
 
     const applyMetadata = (event: NexusStreamEvent): void => {
       traceId = event.traceId ?? traceId
@@ -407,6 +410,7 @@ export class NexusProvider extends IntelligenceProvider {
       }
       if (event.type === 'end') {
         ended = true
+        response.complete()
         yield {
           delta: '',
           done: true,
@@ -419,19 +423,23 @@ export class NexusProvider extends IntelligenceProvider {
       }
     }
 
-    for await (const chunk of stream) {
-      buffer = `${buffer}${decoder.write(toBuffer(chunk))}`.replaceAll('\r\n', '\n')
-      const frames = buffer.split('\n\n')
-      buffer = frames.pop() ?? ''
-      for (const frame of frames) {
-        yield* consumeFrame(frame)
-        if (ended) return
+    try {
+      for await (const chunk of response.stream.iterator({ destroyOnReturn: false })) {
+        buffer = `${buffer}${decoder.write(toBuffer(chunk))}`.replaceAll('\r\n', '\n')
+        const frames = buffer.split('\n\n')
+        buffer = frames.pop() ?? ''
+        for (const frame of frames) {
+          yield* consumeFrame(frame)
+          if (ended) return
+        }
       }
-    }
 
-    buffer = `${buffer}${decoder.end()}`.replaceAll('\r\n', '\n')
-    if (buffer.trim()) yield* consumeFrame(buffer)
-    if (!ended) throw new Error('NEXUS_AI_STREAM_INCOMPLETE')
+      buffer = `${buffer}${decoder.end()}`.replaceAll('\r\n', '\n')
+      if (buffer.trim()) yield* consumeFrame(buffer)
+      if (!ended) throw new Error('NEXUS_AI_STREAM_INCOMPLETE')
+    } finally {
+      response.cancel()
+    }
   }
 
   embedding(

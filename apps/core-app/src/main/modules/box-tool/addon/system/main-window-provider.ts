@@ -128,7 +128,7 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
       return this.createEmptyResult(query, startTime)
     }
 
-    const item = this.buildMainWindowItem(query)
+    const item = this.buildMainWindowItem(query.text ?? '')
     const duration = performance.now() - startTime
 
     return new TuffSearchResultBuilder(query)
@@ -157,10 +157,14 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
     return MAIN_WINDOW_QUERY_ALIASES.has(normalizedQuery)
   }
 
-  private buildMainWindowItem(query: TuffQuery): TuffItem {
+  rebuildItem(itemId: string): TuffItem | null {
+    return itemId === 'main-window' ? this.buildMainWindowItem('') : null
+  }
+
+  private buildMainWindowItem(queryText: string): TuffItem {
     const title = t('tray.showWindow')
     const subtitle = t('tray.tooltip')
-    const matchResult = this.resolveTitleMatchRanges(title, query.text ?? '')
+    const matchResult = this.resolveTitleMatchRanges(title, queryText)
 
     return new TuffItemBuilder('main-window', this.type, this.id)
       .setKind('app')

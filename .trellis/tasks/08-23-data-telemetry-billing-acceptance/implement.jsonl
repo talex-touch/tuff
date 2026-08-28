@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Preserve typed privacy controls, fixed data owners, redacted export/delete results, and retention semantics."}
+{"file":".trellis/tasks/08-23-data-telemetry-billing-acceptance/research/data-telemetry-billing-audit.md","reason":"Use the verified telemetry, privacy, sync, and Credits gap inventory and file anchors."}
+{"file":"apps/core-app/src/main/modules/sentry/sentry-service.ts","reason":"CoreApp Nexus telemetry collection/outbox privacy gate and outbox discard behavior."}
+{"file":"apps/core-app/src/main/modules/sentry/sentry-service.test.ts","reason":"Focused CoreApp telemetry-disabled outbox drain regression coverage."}
+{"file":"apps/nexus/server/api/telemetry/batch.post.ts","reason":"Nexus telemetry batch ingest privacy settings gate before event writes."}
+{"file":"apps/nexus/test/api/telemetryBatchIdempotency.api.test.ts","reason":"Focused Nexus telemetry privacy gate and idempotency ACK coverage."}

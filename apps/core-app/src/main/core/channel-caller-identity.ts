@@ -45,15 +45,8 @@ export function resolveChannelCallerIdentity(
     return { pluginName: registration.name, pluginIdentity: current }
   }
 
-  // No registration means no plugin identity, whatever the message claims. The key travelling in
-  // the payload used to be accepted here as an identity source, so any webContents holding a plugin
-  // key impersonated that plugin on the PLUGIN channel — pluginIdentity stayed empty, so the strict
-  // check in main-transport rejected, but every handler reading only `data.plugin` was fooled:
-  // storage namespacing, quota accounting, permission lookups (#698).
-  //
-  // Safe to drop because both production registration sites — plugin-view-controller and
-  // plugin-window-transport-service — register the webContents immediately after creating it and
-  // before loading any content, so a real plugin surface is never unregistered while it can send.
-  // declaredKey survives above purely as a consistency check that rejects on mismatch.
+  // No registration means no authoritative plugin name, whatever the message claims. ChannelCore
+  // preserves a trusted raw PLUGIN lane separately with a fixed unverified scope; this resolver
+  // never derives a plugin name from a caller-supplied key or payload (#698).
   return {}
 }

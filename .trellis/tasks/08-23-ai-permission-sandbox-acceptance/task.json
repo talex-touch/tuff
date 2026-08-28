@@ -1,0 +1,30 @@
+{
+  "id": "ai-permission-sandbox-acceptance",
+  "name": "ai-permission-sandbox-acceptance",
+  "title": "AI 权限与沙盒全链路验收",
+  "description": "验收真实 AI 调用、工具确认、失败路径、权限与沙盒边界。",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-23-full-product-completion",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "仅在显式 opt-in 后执行真实 MCP smoke；为 durable orchestrator objective/cwd/output 补 typed Privacy delete 与自动 retention 后，再复验整体终态。",
+    "blocker": "真实 MCP 当前未显式 opt-in；durable orchestrator objective/cwd/output 仍缺 typed Privacy delete 与自动 retention。",
+    "evidence": "evidence/packaged-ai-evidence-manifest-86cbb6b9-20260826-final.json 将 2.4.14-beta.14 / 86cbb6b9f1da612aa7de30c46f4b153f33a69914e9fcb078d74f5de891186963 的三份报告与六张截图绑定为 packagedEvidenceSet=passed、overallAcceptance=partial/blocked；verifier 21/21、Node typecheck、Prettier、privacy inventory 14/35、git diff --check 均通过。"
+  }
+}

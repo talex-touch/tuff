@@ -10,6 +10,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { snapshotIntelligenceProviderConfig } from '~/modules/intelligence/provider-config-snapshot'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
@@ -280,9 +281,7 @@ async function handleTestProvider(): Promise<void> {
   try {
     // The provider comes from Vue reactive state. Detach it before the strict SDK DTO boundary,
     // which intentionally rejects Proxy objects and accessor-backed records.
-    const providerSnapshot = JSON.parse(
-      JSON.stringify(selectedProvider.value)
-    ) as IntelligenceProviderConfig
+    const providerSnapshot = snapshotIntelligenceProviderConfig(selectedProvider.value)
     const response = (await aiClient.testProvider(providerSnapshot)) as TestResult
     testResult.value = response
   } catch (error) {

@@ -276,6 +276,7 @@ export default defineConfig({
           'search-index-worker':
             'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts',
           'pi-agent-runtime-worker': 'src/main/modules/ai/pi-agent-runtime-worker.ts',
+          'live-mcp-smoke': 'src/main/live-mcp-smoke.ts',
           'privacy-lifecycle-smoke': 'src/main/privacy-lifecycle-smoke.ts'
         },
         output: {
@@ -300,6 +301,8 @@ export default defineConfig({
               return 'plugin-sqlite-worker.js'
             } else if (chunkInfo.name === 'pi-agent-runtime-worker') {
               return 'pi-agent-runtime-worker.js'
+            } else if (chunkInfo.name === 'live-mcp-smoke') {
+              return 'live-mcp-smoke.js'
             } else if (chunkInfo.name === 'privacy-lifecycle-smoke') {
               return 'privacy-lifecycle-smoke.js'
             } else if (chunkInfo.name === 'index') {

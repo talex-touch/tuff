@@ -92,6 +92,9 @@ describe('a single-stream download does not damage the destination', () => {
 
     await run(createWorker(['hello-', 'world']), dir)
 
+    expect(requestStream).toHaveBeenCalledWith(
+      expect.objectContaining({ streamTimeoutMode: 'caller-signal' })
+    )
     expect(await fs.readFile(path.join(dir, 'payload.bin'), 'utf8')).toBe('hello-world')
     expect((await fs.readdir(dir)).filter((name) => name.endsWith('.part'))).toEqual([])
   })

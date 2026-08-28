@@ -115,4 +115,5 @@ jobs:
         with:
           name: ${{ inputs.package-name }}-dist
           path: ${{ inputs.package-path }}/dist
+          if-no-files-found: error
           retention-days: 7

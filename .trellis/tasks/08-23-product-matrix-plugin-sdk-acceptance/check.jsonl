@@ -1,0 +1,7 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Verify Nexus/docs/plugin quality gates selected for matrix and SDK work."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Check plugin permission and sandbox acceptance against executable contracts."}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Check sensitive data and retention evidence boundaries."}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"Review matrix guards for positive controls and non-decorative assertions."}
+{"file":".trellis/tasks/08-23-product-matrix-plugin-sdk-acceptance/research/official-plugin-sdk-matrix.md","reason":"Review the concrete plugin matrix gaps and completion boundary."}
+{"file":".trellis/tasks/08-23-product-matrix-plugin-sdk-acceptance/research/upstream-sdk-outdated-2026-08-28.md","reason":"Review latest registry deltas and ensure breaking SDK migrations stay out of this slice."}
+{"file":"apps/nexus/app/data/search/featureIndex.test.ts","reason":"Verify every SDK card has a localized docs route or explicit existing SDK owner file."}

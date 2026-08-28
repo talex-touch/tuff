@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"复核凭据、重定向和插件边界"}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"复核 Token 不跨域、不记录"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"复核测试与门禁可信"}
+{"file":".trellis/spec/guides/guard-thinking-guide.md","reason":"复核测试在安全属性破坏时会失败"}

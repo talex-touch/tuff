@@ -11,6 +11,12 @@ import { describe, expect, it } from 'vitest'
 interface PluginManifest {
   name: string
   sdkapi?: number
+  main?: string
+  build?: {
+    index?: {
+      entry?: string
+    }
+  }
   permissions?: {
     required?: string[]
     optional?: string[]
@@ -42,6 +48,19 @@ interface LoadedPluginPackage {
   packageJson: PluginPackageJson
 }
 const pluginsRoot = new URL('../../../../plugins/', import.meta.url)
+const pluginDocsRoot = new URL('../../../../apps/nexus/content/docs/guide/features/plugins/', import.meta.url)
+
+const EXPECTED_PLUGIN_DOC_GAPS = new Set([
+  'clipboard-history',
+  'json-formatter',
+  'touch-browser-data',
+  'touch-dictation',
+  'touch-emoji-symbols',
+  'touch-quickops',
+  'touch-snipaste',
+  'touch-snippets',
+  'touch-text-tools',
+])
 
 function loadOfficialManifests(): LoadedManifest[] {
   return readdirSync(pluginsRoot, { withFileTypes: true })
@@ -89,6 +108,16 @@ function pushFeatureIds(manifest: PluginManifest): string[] {
   return (manifest.features ?? []).filter(feature => feature.push === true).map(feature => feature.id)
 }
 
+function pluginDocSlug(dirName: string): string {
+  return dirName.startsWith('touch-') ? dirName.slice('touch-'.length) : dirName
+}
+
+function hasLocalizedPluginDocs(dirName: string): boolean {
+  const slug = pluginDocSlug(dirName)
+  return existsSync(join(pluginDocsRoot.pathname, `${slug}.zh.mdc`))
+    && existsSync(join(pluginDocsRoot.pathname, `${slug}.en.mdc`))
+}
+
 describe('official plugin manifest trust boundary', () => {
   const manifests = loadOfficialManifests()
   const pluginPackages = loadOfficialPluginPackages()
@@ -116,6 +145,19 @@ describe('official plugin manifest trust boundary', () => {
     }
   })
 
+  it('keeps repository plugin Prelude ownership unambiguous', () => {
+    for (const { manifest } of manifests) {
+      const hasMain = typeof manifest.main === 'string' && manifest.main.trim().length > 0
+      const buildIndexEntry = manifest.build?.index?.entry
+      const hasBuildIndex = typeof buildIndexEntry === 'string' && buildIndexEntry.trim().length > 0
+
+      expect(hasMain && hasBuildIndex, `${manifest.name} declares both Prelude owners`).toBe(false)
+      if (hasBuildIndex) {
+        expect(buildIndexEntry, `${manifest.name} build source must not be packaged index.js`).not.toBe('index.js')
+      }
+    }
+  })
+
   it('keeps repository plugins off the newest SDK marker until runtime migration expands', () => {
     const currentMarkerPlugins = manifests
       .filter(({ manifest }) => manifest.sdkapi === CURRENT_SDK_VERSION)
@@ -128,6 +170,14 @@ describe('official plugin manifest trust boundary', () => {
     // Other migrated plugins stay on the 260713 localization baseline until they use a newer API.
     expect(currentMarkerPlugins).toEqual(['clipboard-history'])
     expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
+  })
+
+  it('keeps official plugin docs coverage gaps explicit', () => {
+    const actualGaps = manifests
+      .filter(({ dirName }) => !hasLocalizedPluginDocs(dirName))
+      .map(({ dirName }) => dirName)
+
+    expect(actualGaps).toEqual([...EXPECTED_PLUGIN_DOC_GAPS].sort())
   })
 
   it('requires a permission reason for every declared plugin permission', () => {

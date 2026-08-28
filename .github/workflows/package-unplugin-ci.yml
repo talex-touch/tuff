@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "packages/unplugin-export-plugin/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/package-unplugin-ci.yml"
       - ".github/workflows/package-ci.yml"
   push:
@@ -12,6 +14,10 @@ on:
       - master
     paths:
       - "packages/unplugin-export-plugin/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-unplugin-ci.yml"
+      - ".github/workflows/package-ci.yml"
 
 permissions:
   contents: read

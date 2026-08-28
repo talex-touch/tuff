@@ -60,7 +60,11 @@ interface ITouchClientChannel {
     eventName: string,
     callback: (data: StandardChannelData) => unknown,
   ) => boolean;
-  send: (eventName: string, arg?: unknown) => Promise<unknown>;
+  send: (
+    eventName: string,
+    arg?: unknown,
+    options?: { timeout?: number },
+  ) => Promise<unknown>;
 }
 
 type PluginWindow = Window & {

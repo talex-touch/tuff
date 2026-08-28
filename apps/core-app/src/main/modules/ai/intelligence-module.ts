@@ -30,6 +30,7 @@ import {
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
+import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import {
   intelligenceApiEvents,
   intelligenceContextEvents,
@@ -40,7 +41,7 @@ import {
 import { createHash } from 'node:crypto'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
-import { safeApiHandler, withPermissionSafeApi } from '../../utils/safe-handler'
+import { safeApiHandler } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
 import { withPermission } from '../permission/channel-guard'
 import {
@@ -60,7 +61,10 @@ import {
 } from './intelligence-config'
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
 import { contextHygieneService } from './intelligence-context-hygiene'
-import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
+import {
+  normalizeIntelligenceError,
+  toNormalizedIntelligenceError
+} from './intelligence-error-normalizer'
 import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
@@ -96,6 +100,18 @@ import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 const intelligenceLog = createLogger('Intelligence')
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
 const INTELLIGENCE_STREAM_REPLAY_LIMIT = 1_000
+const INTELLIGENCE_PLUGIN_PERMISSION_OPTIONS = {
+  failClosedForPlugin: true,
+  requireVerifiedPlugin: true,
+  unavailableCode: 'INTELLIGENCE_PERMISSION_UNAVAILABLE',
+  deniedCode: 'INTELLIGENCE_PERMISSION_DENIED',
+  sdkMismatchCode: 'SDKAPI_MISMATCH'
+} as const
+const INTELLIGENCE_PLUGIN_PERMISSION_ERROR_CODES = new Set<string>([
+  INTELLIGENCE_PLUGIN_PERMISSION_OPTIONS.unavailableCode,
+  INTELLIGENCE_PLUGIN_PERMISSION_OPTIONS.deniedCode,
+  INTELLIGENCE_PLUGIN_PERMISSION_OPTIONS.sdkMismatchCode
+])
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
@@ -312,6 +328,48 @@ function assertHostOwnedIntelligenceControlPlane(context: HandlerContext): void 
   if (context.plugin) {
     throw new Error('INTELLIGENCE_HOST_ONLY_CAPABILITY')
   }
+}
+
+function createPluginIntelligencePermissionGuard<TReq>(
+  permissionId: string
+): (payload: TReq, context: HandlerContext) => Promise<void> {
+  const guard = withPermission<TReq, void>(
+    {
+      permissionId,
+      ...INTELLIGENCE_PLUGIN_PERMISSION_OPTIONS
+    },
+    async () => undefined
+  )
+  return async (payload, context) => {
+    try {
+      await guard(payload, context)
+    } catch (error) {
+      throw toIntelligenceStreamError(error)
+    }
+  }
+}
+
+function toStableIntelligenceErrorCode(error: unknown): string {
+  try {
+    const explicitCode =
+      error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : ''
+    if (
+      INTELLIGENCE_PLUGIN_PERMISSION_ERROR_CODES.has(explicitCode) ||
+      isIntelligenceErrorCode(explicitCode)
+    ) {
+      return explicitCode
+    }
+    return normalizeIntelligenceError(error).code
+  } catch {
+    return 'UNKNOWN'
+  }
+}
+
+function toIntelligenceStreamError(error: unknown): Error {
+  const code = toStableIntelligenceErrorCode(error)
+  return Object.assign(new Error(code), { code })
 }
 
 function resolveContextActor(context: Pick<HandlerContext, 'plugin'>) {
@@ -702,9 +760,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       this.skillLocalCleanup()
       this.skillLocalCleanup = null
     }
-    await aiCliOrchestrator.shutdown()
+    await Promise.all([agentManager.shutdown(), aiCliOrchestrator.shutdown()])
     await intelligenceMcpRegistry.closeAll()
-    await agentManager.shutdown()
     intelligenceTtsService.clear()
     this.manager?.clear()
     this.manager = null
@@ -735,7 +792,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     agentManager.setTaskRuntime(
       (task) => aiCliOrchestrator.executeAgentTask(task),
-      (taskId) => aiCliOrchestrator.cancel(taskId)
+      (taskId) => aiCliOrchestrator.cancelAgentTask(taskId)
     )
 
     await aiCliOrchestrator.initialize()
@@ -1164,7 +1221,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerInvokeChannels(registerProtectedSafe, registerProtectedStream)
     this.registerKnowledgeChannels(registerProtectedSafe)
     this.registerContextChannels(registerProtectedSafe)
-    this.registerCapabilityChannels(registerSafe)
+    this.registerCapabilityChannels(registerSafe, registerProtectedSafe)
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
     this.registerAiCliOrchestratorChannels(registerSafe)
@@ -1181,7 +1238,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private createChannelRegistrars(transport: NonNullable<IntelligenceModule['transport']>) {
     const createErrorLogger = (action: string) => {
       return (error: unknown) => {
-        intelligenceLog.error(`${action} failed:`, { error })
+        intelligenceLog.error(`${action} failed`, {
+          meta: { code: toStableIntelligenceErrorCode(error) }
+        })
       }
     }
 
@@ -1215,12 +1274,22 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       permissionId: string,
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => {
-      transport.on(
-        event,
-        withPermissionSafeApi({ permissionId }, handler, {
-          onError: (error) => createErrorLogger(action)(error)
-        })
-      )
+      const guardPlugin = createPluginIntelligencePermissionGuard<TReq>(permissionId)
+      const safeHandler = safeApiHandler(handler, {
+        onError: (error) => createErrorLogger(action)(error)
+      })
+      transport.on(event, async (payload, context) => {
+        if (context.plugin) {
+          try {
+            await guardPlugin(payload, context)
+          } catch (error) {
+            const code = toStableIntelligenceErrorCode(error)
+            createErrorLogger(action)(error)
+            return { ok: false, error: code }
+          }
+        }
+        return safeHandler(payload, context)
+      })
     }
 
     const registerProtectedStream = <TReq, TChunk>(
@@ -1229,14 +1298,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       permissionId: string,
       handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
     ) => {
+      const guardPlugin = createPluginIntelligencePermissionGuard<TReq>(permissionId)
       transport.onStream(event, async (payload, context) => {
         try {
-          await withPermission({ permissionId }, async (nextPayload: TReq, nextContext) => {
-            await handler(nextPayload, nextContext as unknown as StreamContext<TChunk>)
-          })(payload, context as unknown as HandlerContext)
+          if (context.plugin) {
+            await guardPlugin(payload, context as unknown as HandlerContext)
+          }
+          await handler(payload, context)
         } catch (error) {
           createErrorLogger(action)(error)
-          context.error(error instanceof Error ? error : new Error(String(error)))
+          context.error(toIntelligenceStreamError(error))
         }
       })
     }
@@ -1320,11 +1391,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           Boolean(streamContext.plugin)
         )
         intelligenceLog.info(`Streaming capability: ${capabilityId}`)
+        const runtimeOptions = streamContext.signal
+          ? { ...(scopedOptions ?? {}), signal: streamContext.signal }
+          : scopedOptions
         try {
           for await (const event of tuffIntelligence.stream(
             capabilityId,
             streamPayload,
-            scopedOptions
+            runtimeOptions
           )) {
             if (streamContext.isCancelled()) break
             streamContext.emit(event)
@@ -1352,10 +1426,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'intelligence.basic',
       async (data, streamContext) => {
         ensureIntelligenceConfigLoaded()
-        for await (const event of intelligenceContextExecutionService.stream(
-          data,
-          resolveContextActor(streamContext)
-        )) {
+        const actor = resolveContextActor(streamContext)
+        const stream = streamContext.signal
+          ? intelligenceContextExecutionService.stream(data, actor, {
+              signal: streamContext.signal
+            })
+          : intelligenceContextExecutionService.stream(data, actor)
+        for await (const event of stream) {
           if (streamContext.isCancelled()) break
           streamContext.emit(event)
         }
@@ -1580,6 +1657,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void,
+    registerProtectedSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
     registerSafe(
@@ -1620,9 +1703,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       return result
     })
 
-    registerSafe(
+    registerProtectedSafe(
       intelligenceApiEvents.getCapabilityTestMeta,
       'Get capability test metadata',
+      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
           throw new Error('Invalid capability ID')
@@ -1645,9 +1729,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(
+    registerProtectedSafe(
       intelligenceApiEvents.getCapabilityStatus,
       'Get capability status',
+      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
           throw new Error('Invalid capability ID')
@@ -1657,9 +1742,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(
+    registerProtectedSafe(
       intelligenceApiEvents.getProviderModelOptions,
       'Get provider model options',
+      'intelligence.basic',
       async (data) => {
         const capabilityId =
           data && typeof data === 'object' && typeof data.capabilityId === 'string'
@@ -1966,7 +2052,6 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           },
           metadata: {
             ...(scopedAutoRunMetadata ?? {}),
-            orchestratorRunId: `session:${session.id}`,
             legacySessionId: session.id
           }
         })

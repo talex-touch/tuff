@@ -60,6 +60,7 @@ function request(onEvent: (event: unknown) => unknown | Promise<unknown>) {
 function createControlledStream() {
   const waiters: Array<{
     resolve(value: IteratorResult<IntelligenceContextStreamEvent<unknown>>): void
+    reject(reason?: unknown): void
   }> = []
   let closed = false
   const next = vi.fn(async () => {
@@ -68,9 +69,11 @@ function createControlledStream() {
         IntelligenceContextStreamEvent<unknown>
       >
     }
-    return await new Promise<IteratorResult<IntelligenceContextStreamEvent<unknown>>>((resolve) => {
-      waiters.push({ resolve })
-    })
+    return await new Promise<IteratorResult<IntelligenceContextStreamEvent<unknown>>>(
+      (resolve, reject) => {
+        waiters.push({ resolve, reject })
+      }
+    )
   })
   const close = vi.fn(async () => {
     if (closed) {
@@ -104,6 +107,12 @@ function createControlledStream() {
       if (!waiter) throw new Error('stream is not waiting')
       closed = true
       waiter.resolve({ done: true, value: undefined })
+    },
+    fail(error: unknown) {
+      const waiter = waiters.shift()
+      if (!waiter) throw new Error('stream is not waiting')
+      closed = true
+      waiter.reject(error)
     }
   }
 }
@@ -243,6 +252,139 @@ describe('plugin Intelligence context stream capability', () => {
     const resource = harness.resources.inspect(handle)!
     await harness.resources.dispose(resource.id, resource.kind)
     expect(harness.resources.size).toBe(0)
+  })
+
+  it.each([
+    'PROVIDER_UNAVAILABLE',
+    'QUOTA_EXHAUSTED',
+    'MODEL_UNSUPPORTED',
+    'CAPABILITY_UNSUPPORTED',
+    'PERMISSION_DENIED',
+    'NETWORK_FAILURE',
+    'QUOTA_CHECK_UNAVAILABLE',
+    'NEXUS_AUTH_REQUIRED',
+    'INVALID_REQUEST',
+    'UNKNOWN'
+  ] as const)('projects the allowlisted provider failure %s without diagnostics', async (code) => {
+    const harness = createHarness()
+    const onEvent = vi.fn(async () => undefined)
+    await harness.registry.dispatch('intelligence.stream', request(onEvent))
+    await waitUntil(() => harness.controlled.next.mock.calls.length === 1)
+
+    harness.controlled.fail(
+      Object.assign(new Error('raw provider secret at /private/provider/config.json'), {
+        code,
+        reason: 'apiKey=provider-secret',
+        recovery: 'read /Users/private/.config',
+        path: '/private/provider/config.json'
+      })
+    )
+
+    await waitUntil(() => onEvent.mock.calls.length === 1)
+    expect(onEvent).toHaveBeenCalledWith({ type: 'error', capabilityId: 'text.chat', code })
+    expect(JSON.stringify(onEvent.mock.calls)).not.toMatch(
+      /provider-secret|apiKey|private|config\.json|raw provider/i
+    )
+    await waitUntil(() => harness.controlled.close.mock.calls.length === 1)
+  })
+
+  it('normalizes raw provider failures before projecting only their stable code', async () => {
+    const cases = [
+      {
+        error: new Error('No enabled providers for text.chat at /private/provider'),
+        code: 'PROVIDER_UNAVAILABLE'
+      },
+      {
+        error: new Error('Quota exceeded: daily limit contains apiKey=provider-secret'),
+        code: 'QUOTA_EXHAUSTED'
+      },
+      {
+        error: new Error(
+          'Unexpected JSON response: {"error":"unsupported model","path":"/private/model"}'
+        ),
+        code: 'MODEL_UNSUPPORTED'
+      },
+      {
+        error: Object.assign(new Error('Provider network timeout after 1000ms'), {
+          name: 'NetworkTimeoutError'
+        }),
+        code: 'NETWORK_FAILURE'
+      }
+    ] as const
+
+    for (const { error, code } of cases) {
+      const harness = createHarness()
+      const onEvent = vi.fn(async () => undefined)
+      await harness.registry.dispatch('intelligence.stream', request(onEvent))
+      await waitUntil(() => harness.controlled.next.mock.calls.length === 1)
+      harness.controlled.fail(error)
+
+      await waitUntil(() => onEvent.mock.calls.length === 1)
+      expect(onEvent).toHaveBeenCalledWith({ type: 'error', capabilityId: 'text.chat', code })
+      expect(JSON.stringify(onEvent.mock.calls)).not.toMatch(
+        /provider-secret|apiKey|private|unexpected json|network timeout|daily limit/i
+      )
+      await waitUntil(() => harness.controlled.close.mock.calls.length === 1)
+    }
+  })
+
+  it('maps forged and accessor-backed provider codes to UNKNOWN without reading diagnostics', async () => {
+    const rawCanary = 'secret-token-at-/private/provider'
+    const cases = [
+      Object.assign(new Error(rawCanary), {
+        code: 'PROVIDER_UNAVAILABLE_WITH_SECRET',
+        reason: rawCanary,
+        recovery: rawCanary
+      }),
+      Object.defineProperty(new Error(rawCanary), 'code', {
+        enumerable: true,
+        get() {
+          throw new Error(rawCanary)
+        }
+      })
+    ]
+
+    for (const providerError of cases) {
+      const harness = createHarness()
+      const onEvent = vi.fn(async () => undefined)
+      await harness.registry.dispatch('intelligence.stream', request(onEvent))
+      await waitUntil(() => harness.controlled.next.mock.calls.length === 1)
+      harness.controlled.fail(providerError)
+
+      await waitUntil(() => onEvent.mock.calls.length === 1)
+      expect(onEvent).toHaveBeenCalledWith({
+        type: 'error',
+        capabilityId: 'text.chat',
+        code: 'UNKNOWN'
+      })
+      expect(JSON.stringify(onEvent.mock.calls)).not.toContain(rawCanary)
+      await waitUntil(() => harness.controlled.close.mock.calls.length === 1)
+    }
+  })
+
+  it('keeps callback failures fail-closed instead of trusting their error code', async () => {
+    const harness = createHarness()
+    const onEvent = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        throw Object.assign(new Error('callback secret at /private/callback'), {
+          code: 'PROVIDER_UNAVAILABLE'
+        })
+      })
+      .mockResolvedValue(undefined)
+    await harness.registry.dispatch('intelligence.stream', request(onEvent))
+    await waitUntil(() => harness.controlled.next.mock.calls.length === 1)
+
+    harness.controlled.emit({ type: 'delta', capabilityId: 'text.chat', delta: 'hello' })
+
+    await waitUntil(() => onEvent.mock.calls.length === 2)
+    expect(onEvent.mock.calls[1]?.[0]).toEqual({
+      type: 'error',
+      capabilityId: 'text.chat',
+      code: 'INTELLIGENCE_STREAM_FAILED'
+    })
+    expect(JSON.stringify(onEvent.mock.calls)).not.toMatch(/callback secret|private\/callback/i)
+    await waitUntil(() => harness.controlled.close.mock.calls.length === 1)
   })
 
   it('fails permission and stale authority before stream work', async () => {

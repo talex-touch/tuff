@@ -12,6 +12,10 @@ import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath 
 
 const DOCS_FULL_BODY_IDLE_DELAY_MS = 180
 const DOCS_FULL_BODY_IDLE_TIMEOUT_MS = 1200
+// Two retries, then the reader gets an error with a retry button instead of a blank page.
+// The API behind this is dynamic and has been measured resetting connections on slow links,
+// so a single rejection is far more often a flaky hop than an answer.
+const DOCS_FULL_BODY_RETRY_DELAYS_MS = [800, 2400] as const
 const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
 const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 const DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS = 3200
@@ -88,9 +92,15 @@ function shouldSplitDocsPageBody(path: string) {
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => shouldSplitDocsPageBody(activeRoutePath.value))
-const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value)
-const currentDocsPageBodyMode = computed(() => (shouldRequestMetadataOnlyDocBody.value ? '0' : '1'))
-const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${currentDocsPageBodyMode.value}`)
+// Whatever renders the HTML asks for the body with it. A prerendered doc has to be
+// readable from its own markup, and splitting the request here made every page ship an
+// empty shell whose text arrived over a second round trip — seconds on a slow link, and
+// nothing at all on a failing one. Client-side navigation still fetches metadata first
+// and streams the body in afterwards; that path runs through loadActiveDocForRoute, not
+// this one, so it is unaffected. Hydration must send the same value the server sent, or
+// the payload key stops matching and the rendered body is discarded into a skeleton.
+const DOCS_PAGE_RENDER_BODY_MODE = '1'
+const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${DOCS_PAGE_RENDER_BODY_MODE}`)
 const docsNavigationScope = computed(() => (docPath.value.includes('/docs/dev/components') ? 'components' : undefined))
 const docsNavigationEndpoint = computed(() => `/api/docs/navigation/${docsLocale.value}/${docsNavigationScope.value ?? 'all'}`)
 
@@ -178,7 +188,7 @@ const { data: docPayload, status } = await useTypedFetch<Record<string, any> | n
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
-      body: currentDocsPageBodyMode.value,
+      body: DOCS_PAGE_RENDER_BODY_MODE,
     })),
     default: () => null,
     immediate: import.meta.server || !shouldSplitDocBody.value,
@@ -199,6 +209,7 @@ const doc = shallowRef<Record<string, any> | null>(
 const fullDocCacheKey = computed(() => resolveDocsFullBodyCacheKey(docPath.value, docsLocale.value))
 const fullDoc = shallowRef<Record<string, any> | null>(null)
 const fullDocLoading = ref(false)
+const fullDocError = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
@@ -208,6 +219,8 @@ const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLo
 let activeDocFetchId = 0
 let fullDocIdleId: number | null = null
 let fullDocTimer: ReturnType<typeof setTimeout> | null = null
+let fullDocRetryTimer: ReturnType<typeof setTimeout> | null = null
+let fullDocRetryResume: (() => void) | null = null
 
 function clearFullDocFetchSchedule() {
   if (import.meta.server)
@@ -221,6 +234,29 @@ function clearFullDocFetchSchedule() {
     clearTimeout(fullDocTimer)
     fullDocTimer = null
   }
+  if (fullDocRetryTimer) {
+    clearTimeout(fullDocRetryTimer)
+    fullDocRetryTimer = null
+  }
+  // Waking the backoff is part of cancelling it: the retry loop is suspended on that promise
+  // and can only re-check staleness once it resolves.
+  fullDocRetryResume?.()
+}
+
+/**
+ * Backoff between body-fetch attempts. It hangs off `clearFullDocFetchSchedule` like every
+ * other pending timer here so a navigation mid-wait cannot leave the loop suspended past the
+ * unmount.
+ */
+function waitBeforeDocBodyRetry(delay: number) {
+  return new Promise<void>((resolve) => {
+    fullDocRetryResume = () => {
+      fullDocRetryTimer = null
+      fullDocRetryResume = null
+      resolve()
+    }
+    fullDocRetryTimer = setTimeout(() => fullDocRetryResume?.(), delay)
+  })
 }
 
 function isStaleDocFetch(fetchId: number, path: string, locale: 'en' | 'zh') {
@@ -240,6 +276,8 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   if (import.meta.server || !shouldSplitDocBody.value)
     return
 
+  fullDocError.value = false
+
   const cacheKey = resolveDocsFullBodyCacheKey(path, locale)
   if (hasCachedDocsFullBody(cacheKey)) {
     settleFullDoc(readCachedDocsFullBody(cacheKey) ?? null)
@@ -249,16 +287,38 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   fullDocLoading.value = true
 
   try {
-    const nextFullDoc = await requestDocsPage({ path, locale, body: '1' })
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const nextFullDoc = await requestDocsPage({ path, locale, body: '1' })
 
-    if (isStaleDocFetch(fetchId, path, locale))
-      return
+        if (isStaleDocFetch(fetchId, path, locale))
+          return
 
-    settleFullDoc(cacheDocsFullBody(nextFullDoc))
-  }
-  catch {
-    if (!isStaleDocFetch(fetchId, path, locale))
-      fullDoc.value = null
+        settleFullDoc(cacheDocsFullBody(nextFullDoc))
+        return
+      }
+      catch {
+        if (isStaleDocFetch(fetchId, path, locale))
+          return
+
+        // Only a rejected request lands here. A document with no body answers 204 and
+        // resolves, so it settles above as an answer rather than being retried into the
+        // same 204 twice more.
+        const retryDelay = DOCS_FULL_BODY_RETRY_DELAYS_MS[attempt]
+        if (retryDelay === undefined) {
+          fullDoc.value = null
+          fullDocError.value = true
+          return
+        }
+
+        await waitBeforeDocBodyRetry(retryDelay)
+
+        // Cancelling the schedule resolves the wait early, so the loop can resume on a
+        // route the reader has already left — exactly the slow link this retry serves.
+        if (isStaleDocFetch(fetchId, path, locale))
+          return
+      }
+    }
   }
   finally {
     // Never leave the spinner up: every exit from the body fetch resolves the view.
@@ -311,8 +371,24 @@ function startFullDocFetchForRoute() {
   if (seedFullDocFromCurrentDoc())
     return
 
-  const fetchId = ++activeDocFetchId
+  // Joins the navigation already in flight instead of starting a new generation. This runs
+  // from onMounted, which lands between loadActiveDocForRoute's own bump and its awaited
+  // metadata response — bumping here made that response test stale, so `doc` was never
+  // assigned and the page depended entirely on the body fetch to fill it in. When the body
+  // fetch then failed, the reader was told the document does not exist.
+  const fetchId = activeDocFetchId
   scheduleFullDocFetchForRoute(fetchId, docPath.value, docsLocale.value)
+}
+
+// A reader who asked for the body already waited out the backoff, so this skips the idle
+// scheduling that the automatic path uses and requests immediately.
+function retryFullDocFetch() {
+  if (import.meta.server || fullDocLoading.value)
+    return
+
+  clearFullDocFetchSchedule()
+  const fetchId = ++activeDocFetchId
+  void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
 }
 
 function prefetchDocMetadataForTarget(normalized: string, locale: 'en' | 'zh') {
@@ -417,6 +493,7 @@ async function loadActiveDocForRoute() {
 
   clearFullDocFetchSchedule()
   fullDocLoading.value = false
+  fullDocError.value = false
 
   const cachedFullDoc = splitBody ? readCachedDocsFullBody(fullDocCacheKey.value) : undefined
   if (cachedFullDoc !== undefined) {
@@ -1980,6 +2057,20 @@ watch(
               class="docs-prose docs-prose--deferred markdown-body max-w-none prose prose-neutral dark:prose-invert"
             />
           </template>
+          <div v-else-if="fullDocError" class="docs-body-error" role="alert">
+            <span class="docs-body-error__icon i-carbon-warning" aria-hidden="true" />
+            <div class="docs-body-error__content">
+              <p class="docs-body-error__title">
+                {{ t('docs.bodyErrorTitle') }}
+              </p>
+              <p class="docs-body-error__desc">
+                {{ t('docs.bodyErrorDescription') }}
+              </p>
+            </div>
+            <button type="button" class="docs-body-error__retry" @click="retryFullDocFetch">
+              {{ t('docs.bodyErrorRetry') }}
+            </button>
+          </div>
           <div v-else class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
             <span class="docs-prose-skeleton__line is-wide" />
             <span class="docs-prose-skeleton__line" />
@@ -2312,6 +2403,64 @@ watch(
 
 .docs-sync-banner[data-status='migrated'] .docs-sync-banner__icon {
   color: color-mix(in srgb, var(--tx-color-warning) 70%, var(--tx-text-color-primary));
+}
+
+.docs-body-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--tx-color-warning) 45%, var(--tx-border-color));
+  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+  padding: 14px 16px;
+}
+
+.docs-body-error__icon {
+  margin-top: 2px;
+  font-size: 18px;
+  color: color-mix(in srgb, var(--tx-color-warning) 85%, var(--tx-text-color-primary));
+}
+
+.docs-body-error__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-body-error__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+}
+
+.docs-body-error__desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tx-text-color-regular);
+}
+
+.docs-body-error__retry {
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 70%, transparent);
+  background: color-mix(in srgb, var(--tx-fill-color-light) 88%, transparent);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+  cursor: pointer;
+  transition:
+    background var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out),
+    border-color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
+}
+
+.docs-body-error__retry:hover,
+.docs-body-error__retry:focus-visible {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  outline: none;
 }
 
 .docs-prose-skeleton {

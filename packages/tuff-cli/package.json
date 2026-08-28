@@ -25,6 +25,7 @@
     "build": "tsup",
     "prepublishOnly": "pnpm run build",
     "dev": "tsup --watch",
+    "test": "vitest run",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "clean": "rimraf dist"
@@ -49,7 +50,9 @@
     "eslint": "^9.39.4",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite-node": "^3.2.4",
+    "vitest": "^3.2.7"
   },
   "publishConfig": {
     "access": "public"

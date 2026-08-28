@@ -269,7 +269,11 @@ export class TuffRendererTransport implements ITuffTransport {
     this.cache.set(cacheKey, { value, expiresAt })
   }
 
-  private async sendRaw<TReq, TRes>(eventName: string, payload?: TReq | void): Promise<TRes> {
+  private async sendRaw<TReq, TRes>(
+    eventName: string,
+    payload?: TReq | void,
+    timeout?: number,
+  ): Promise<TRes> {
     if (this.destroyed) {
       throw new Error(`[TuffTransport] Renderer transport has been destroyed; cannot send "${eventName}".`)
     }
@@ -282,7 +286,11 @@ export class TuffRendererTransport implements ITuffTransport {
     }
 
     const shouldPassPayload = payload !== undefined
-    return await this.channel.send(eventName, shouldPassPayload ? payload : undefined)
+    return await this.channel.send(
+      eventName,
+      shouldPassPayload ? payload : undefined,
+      timeout === undefined ? undefined : { timeout },
+    )
   }
 
   private unwrapChannelPayload<T>(data: unknown): T {
@@ -348,7 +356,11 @@ export class TuffRendererTransport implements ITuffTransport {
 
     try {
       const shouldPassPayload = payload !== undefined
-      const result = await this.sendRaw<TReq, TRes>(eventName, shouldPassPayload ? payload : undefined)
+      const result = await this.sendRaw<TReq, TRes>(
+        eventName,
+        shouldPassPayload ? payload : undefined,
+        options?.timeout,
+      )
       if (cacheConfig && cacheKey !== null) {
         this.writeCache(cacheKey, result, cacheConfig.ttlMs)
       }

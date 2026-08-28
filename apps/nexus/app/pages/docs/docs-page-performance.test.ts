@@ -717,9 +717,13 @@ describe('docs page performance boundaries', () => {
     expect.soft(page).toContain("DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX = 'docs-current-page'")
     expect.soft(page).not.toContain('DOCS_CURRENT_FULL_BODY_FETCH_KEY')
     expect.soft(docsPageClientCache).toContain('const docsFullBodyCache = new Map<string, DocsPageRecord>()')
-    expect.soft(page).toContain('const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value)')
-    expect.soft(page).toContain("const currentDocsPageBodyMode = computed(() => (shouldRequestMetadataOnlyDocBody.value ? '0' : '1'))")
-    expect.soft(page).toMatch(/const currentDocsPageFetchKey = computed\(\(\) => `\$\{DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX\}:\$\{docPath\.value\}:\$\{docsLocale\.value\}:\$\{currentDocsPageBodyMode\.value\}`\)/)
+    // Whatever renders the HTML asks for the body with it, so there is no metadata-only
+    // mode left to compute — and the hydrating client must send the server's value or the
+    // payload key stops matching and the rendered body is discarded into a skeleton.
+    expect.soft(page).toContain("const DOCS_PAGE_RENDER_BODY_MODE = '1'")
+    expect.soft(page).not.toContain('shouldRequestMetadataOnlyDocBody')
+    expect.soft(page).not.toContain('currentDocsPageBodyMode')
+    expect.soft(page).toMatch(/const currentDocsPageFetchKey = computed\(\(\) => `\$\{DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX\}:\$\{docPath\.value\}:\$\{docsLocale\.value\}:\$\{DOCS_PAGE_RENDER_BODY_MODE\}`\)/)
     // The rendered-body cache lives at module scope in the util, so it survives the
     // page remount that every docs navigation performs.
     expect.soft(page).not.toContain('const docsFullBodyCache = new Map')
@@ -743,8 +747,7 @@ describe('docs page performance boundaries', () => {
     expect.soft(page).toContain('const fullDocLoading = ref(false)')
     expect.soft(page).toContain('key: currentDocsPageFetchKey')
     expect.soft(page).toMatch(/key: currentDocsPageFetchKey,[\s\S]*immediate: import\.meta\.server \|\| !shouldSplitDocBody\.value,[\s\S]*watch: false/)
-    expect.soft(page).toContain('body: currentDocsPageBodyMode.value')
-    expect.soft(page).toContain("const currentDocsPageBodyMode = computed(() => (shouldRequestMetadataOnlyDocBody.value ? '0' : '1'))")
+    expect.soft(page).toContain('body: DOCS_PAGE_RENDER_BODY_MODE,')
     expect.soft(page).not.toContain('key: DOCS_CURRENT_PAGE_FETCH_KEY')
     expect.soft(page).toMatch(/const renderDoc = computed\(\(\) => \(shouldSplitDocBody\.value \? fullDoc\.value \?\? doc\.value : doc\.value\)\)/)
     expect.soft(page).toContain('let activeDocFetchId = 0')
@@ -770,7 +773,13 @@ describe('docs page performance boundaries', () => {
     expect.soft(page).toMatch(/function scheduleFullDocFetchForRoute\(fetchId: number, path: string, locale: 'en' \| 'zh'\) \{[\s\S]*clearFullDocFetchSchedule\(\)[\s\S]*const load = \(\) => \{[\s\S]*if \(isStaleDocFetch\(fetchId, path, locale\)\)[\s\S]*return[\s\S]*void loadFullDocForRoute\(fetchId, path, locale\)/)
     expect.soft(page).toMatch(/fullDocTimer = setTimeout\(\(\) => \{[\s\S]*window\.requestIdleCallback\(load, \{ timeout: DOCS_FULL_BODY_IDLE_TIMEOUT_MS \}\)[\s\S]*load\(\)[\s\S]*DOCS_FULL_BODY_IDLE_DELAY_MS/)
     expect.soft(page).toContain('function startFullDocFetchForRoute()')
-    expect.soft(page).toMatch(/function startFullDocFetchForRoute\(\) \{[\s\S]*if \(seedFullDocFromCurrentDoc\(\)\)[\s\S]*return[\s\S]*const fetchId = \+\+activeDocFetchId[\s\S]*scheduleFullDocFetchForRoute\(fetchId, docPath\.value, docsLocale\.value\)[\s\S]*\}/)
+    // Reads the generation instead of bumping it. This runs from onMounted, which lands
+    // between loadActiveDocForRoute's bump and its awaited metadata response; bumping made
+    // that response test stale, so `doc` was never assigned and a failed body fetch left the
+    // reader looking at "document not found" for a document that exists. Line-scoped on
+    // purpose — a `[\s\S]*` version matches the `++activeDocFetchId` in a later function.
+    expect.soft(page).toMatch(/if \(seedFullDocFromCurrentDoc\(\)\)\n[ \t]*return\n/)
+    expect.soft(page).toMatch(/\n[ \t]*const fetchId = activeDocFetchId\n[ \t]*scheduleFullDocFetchForRoute\(fetchId, docPath\.value, docsLocale\.value\)\n/)
     expect.soft(page).toContain('async function loadActiveDocForRoute()')
     expect.soft(page).toMatch(/const fetchId = \+\+activeDocFetchId[\s\S]*const path = docPath\.value[\s\S]*const locale = docsLocale\.value/)
     // A cached rendered body short-circuits straight to content; otherwise a document
@@ -904,5 +913,35 @@ describe('docs page performance boundaries', () => {
     expect.soft(docsSidebar).toContain("requestDocsPage({ path: normalized, locale, body: '1' })")
     expect.soft(docsSidebar).toMatch(/const prefetchFullDoc = \(\) => \{[\s\S]*void requestDocsPage\(\{ path: normalized, locale, body: '1' \}\)/)
     expect.soft(docsSidebar).not.toMatch(/void requestDocsPage\(\{ path: normalized, locale, body: '0' \}\)\.catch\(\(\) => \{\}\)\n\s*void requestDocsPage\(\{ path: normalized, locale, body: '1' \}\)/)
+  })
+
+  it('retries a failed docs body fetch before surfacing an inline retry affordance', () => {
+    expect.soft(page).toContain('const DOCS_FULL_BODY_RETRY_DELAYS_MS = [800, 2400] as const')
+    expect.soft(page).toContain('const fullDocError = ref(false)')
+    expect.soft(page).toContain('let fullDocRetryTimer: ReturnType<typeof setTimeout> | null = null')
+    expect.soft(page).toContain('let fullDocRetryResume: (() => void) | null = null')
+    // The backoff is cancelled through the same schedule clearer as every other pending
+    // timer here, so a navigation mid-wait cannot leave the loop suspended past unmount.
+    expect.soft(page).toContain('function waitBeforeDocBodyRetry(delay: number)')
+    expect.soft(page).toMatch(/if \(fullDocRetryTimer\) \{\n[ \t]*clearTimeout\(fullDocRetryTimer\)\n[ \t]*fullDocRetryTimer = null\n[ \t]*\}\n(?:[ \t]*(?:\/\/[^\n]*)?\n)*[ \t]*fullDocRetryResume\?\.\(\)\n/)
+    // Both ends of the backoff re-check staleness. Cancelling wakes the wait immediately,
+    // so without the second check a navigation still costs one request for the page the
+    // reader just left. Line-scoped so deleting either check fails rather than matching
+    // one of the other isStaleDocFetch calls further down the file.
+    expect.soft(page).toMatch(/catch \{\n[ \t]*if \(isStaleDocFetch\(fetchId, path, locale\)\)\n[ \t]*return\n/)
+    expect.soft(page).toMatch(/await waitBeforeDocBodyRetry\(retryDelay\)\n(?:[ \t]*(?:\/\/[^\n]*)?\n)*[ \t]*if \(isStaleDocFetch\(fetchId, path, locale\)\)\n[ \t]*return\n/)
+    // Only a rejection retries: a document with no body answers 204 and resolves, so it must
+    // settle as an answer instead of costing three requests and a false error banner.
+    expect.soft(page).toContain('const retryDelay = DOCS_FULL_BODY_RETRY_DELAYS_MS[attempt]')
+    expect.soft(page).toMatch(/if \(retryDelay === undefined\) \{\n[ \t]*fullDoc\.value = null\n[ \t]*fullDocError\.value = true\n[ \t]*return\n[ \t]*\}\n\n[ \t]*await waitBeforeDocBodyRetry\(retryDelay\)\n/)
+    expect.soft(page).toContain('function retryFullDocFetch()')
+    expect.soft(page).toMatch(/function retryFullDocFetch\(\) \{\n[\s\S]{0,200}?clearFullDocFetchSchedule\(\)\n[ \t]*const fetchId = \+\+activeDocFetchId\n[ \t]*void loadFullDocForRoute\(fetchId, docPath\.value, docsLocale\.value\)\n/)
+    expect.soft(page).toMatch(/clearFullDocFetchSchedule\(\)\n {2}fullDocLoading\.value = false\n {2}fullDocError\.value = false/)
+    expect.soft(page).toContain('v-else-if="fullDocError"')
+    expect.soft(page).toContain('class="docs-body-error"')
+    expect.soft(page).toContain('@click="retryFullDocFetch"')
+    expect.soft(page).toContain("{{ t('docs.bodyErrorRetry') }}")
+    expect.soft(i18nEn).toContain("bodyErrorRetry: 'Retry'")
+    expect.soft(i18nZh).toContain("bodyErrorRetry: '重试'")
   })
 })

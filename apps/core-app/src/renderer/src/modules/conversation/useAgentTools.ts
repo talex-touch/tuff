@@ -1,5 +1,6 @@
 import type {
   AgentToolConfirmRequest,
+  AgentToolConfirmSettlement,
   AgentToolPermissionMode
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { Ref } from 'vue'
@@ -45,6 +46,8 @@ export function useAgentTools(): UseAgentToolsReturn {
 
   const pending = ref<AgentToolConfirmRequest | null>(null)
   const queued = ref<AgentToolConfirmRequest[]>([])
+  const decisionsInFlight = new Set<string>()
+  const settledWhileDeciding = new Set<string>()
 
   /** Shows the request now if nothing is being answered, otherwise lines it up behind. */
   function enqueue(request: AgentToolConfirmRequest): void {
@@ -52,17 +55,32 @@ export function useAgentTools(): UseAgentToolsReturn {
     else pending.value = request
   }
 
-  const dispose = transport.on(AgentToolEvents.confirmRequest, enqueue)
-
   function advance(): void {
     const [next, ...rest] = queued.value
     pending.value = next ?? null
     queued.value = rest
   }
 
+  function removeSettled(settlement: AgentToolConfirmSettlement): void {
+    if (decisionsInFlight.has(settlement.requestId)) {
+      settledWhileDeciding.add(settlement.requestId)
+    }
+    if (pending.value?.requestId === settlement.requestId) {
+      advance()
+      return
+    }
+    queued.value = queued.value.filter((request) => request.requestId !== settlement.requestId)
+  }
+
+  const disposers = [
+    transport.on(AgentToolEvents.confirmRequest, enqueue),
+    transport.on(AgentToolEvents.confirmSettled, removeSettled)
+  ]
+
   async function settle(approved: boolean, remember: boolean): Promise<void> {
     const request = pending.value
     if (!request) return
+    decisionsInFlight.add(request.requestId)
     // The queue advances first: the gateway answering slowly must not leave a
     // dead card on screen taking clicks.
     advance()
@@ -75,15 +93,18 @@ export function useAgentTools(): UseAgentToolsReturn {
       //
       // Re-queued rather than awaited before advancing: awaiting would undo the fast advance
       // above and put the dead card back. The request returns to the same place a fresh one
-      // would, so the user can answer it again.
+      // would, so the user can answer it again unless main already settled it.
       agentToolsLog.error(`Failed to answer tool confirmation ${request.requestId}`, error)
-      enqueue(request)
+      if (!settledWhileDeciding.has(request.requestId)) enqueue(request)
+    } finally {
+      decisionsInFlight.delete(request.requestId)
+      settledWhileDeciding.delete(request.requestId)
     }
   }
 
   if (getCurrentScope()) {
     onScopeDispose(() => {
-      dispose()
+      for (const dispose of disposers) dispose()
     })
   }
 

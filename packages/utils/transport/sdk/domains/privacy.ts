@@ -5,6 +5,8 @@ import type {
   PrivacyCleanupPreviewResult,
   PrivacyCleanupRunResult,
   PrivacyDataCategory,
+  PrivacyOrchestratorRunDeletePreviewResult,
+  PrivacyOrchestratorRunDeleteResult,
   PrivacyPolicyGetResult,
   PrivacyPolicyUpdateResult,
   PrivacyProviderDisclosureResult,
@@ -41,6 +43,10 @@ export interface PrivacySdk {
       confirmation: 'delete-selected-data',
       previewId: string,
     ) => Promise<PrivacyCategoryDeleteResult>
+  }
+  readonly orchestratorRun: {
+    previewDelete: (runId: string) => Promise<PrivacyOrchestratorRunDeletePreviewResult>
+    delete: (confirmation: 'delete-orchestrator-run', previewId: string) => Promise<PrivacyOrchestratorRunDeleteResult>
   }
   readonly provider: {
     getDisclosure: () => Promise<PrivacyProviderDisclosureResult>
@@ -130,6 +136,28 @@ export function createPrivacySdk(transport: ITuffTransport): PrivacySdk {
             normalizePrivacyRequest({
               operation: 'category.delete',
               categories,
+              confirmation,
+              previewId,
+            }),
+          ),
+        ),
+    },
+    orchestratorRun: {
+      previewDelete: async runId =>
+        normalizePrivacyResult(
+          'orchestrator-run.delete-preview',
+          await transport.send(
+            PrivacyEvents.orchestratorRun.deletePreview,
+            normalizePrivacyRequest({ operation: 'orchestrator-run.delete-preview', runId }),
+          ),
+        ),
+      delete: async (confirmation, previewId) =>
+        normalizePrivacyResult(
+          'orchestrator-run.delete',
+          await transport.send(
+            PrivacyEvents.orchestratorRun.delete,
+            normalizePrivacyRequest({
+              operation: 'orchestrator-run.delete',
               confirmation,
               previewId,
             }),
