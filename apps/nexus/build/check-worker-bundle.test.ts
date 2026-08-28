@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { createGenerator } from 'unocss'
 import enLocale from '../i18n/locales/en'
 import zhLocale from '../i18n/locales/zh'
+import unoConfig from '../uno.config'
 
 const nexusRoot = join(import.meta.dirname, '..')
 const shotsRoot = join(nexusRoot, 'public/shots')
@@ -91,21 +93,45 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('unprefixed Attributify selectors leaked into production CSS')
   })
 
+  /**
+   * This used to assert specific icon *names* in ten route files, and the list had gone wrong in
+   * both directions (#1768): it required `i-simple-icons-apple`, `i-ri-safari-line`,
+   * `i-ri-edge-line`, `i-ri-figma-fill` and `i-ri-fingerprint-2-line` -- names from `ri` and
+   * `simple-icons`, which this app does not install and which therefore draw nothing -- while
+   * forbidding `i-cib-*`, the only brand collection it does install. `build/check-icon-collections.mjs`
+   * now owns that question and answers it from `package.json`, so those lists are not just stale,
+   * they contradict a guard in the same directory: any file satisfying the old "must contain" list
+   * would fail the new collection check.
+   *
+   * What is left here is the part that check cannot see. A shortcut rewrites a class *after* it is
+   * written, so `i-carbon-settings` -- a perfectly valid installed-collection name -- passed the
+   * collection guard while being redirected to `i-ri-settings-line` and rendering nothing, in 12
+   * files. Asserting on generated CSS is immune to that indirection in a way that any name-based
+   * allowlist is not.
+   */
+  it('emits real CSS for every icon shortcut, so none can redirect onto an uninstalled collection', async () => {
+    const uno = await createGenerator(unoConfig)
+    const iconShortcuts = (unoConfig.shortcuts ?? []).filter(
+      (entry): entry is [string, string] => Array.isArray(entry) && entry[0].startsWith('i-'),
+    )
+
+    for (const [from] of iconShortcuts) {
+      const { css } = await uno.generate(from, { preflights: false })
+      expect(css.length, `shortcut ${from} emits no CSS`).toBeGreaterThan(0)
+    }
+
+    // The loop above is vacuous while there are no icon shortcuts, and a broken generator would
+    // read the same way. Prove the check discriminates: an installed collection resolves, and a
+    // name from a collection absent from package.json does not.
+    const installed = await uno.generate('i-carbon-settings', { preflights: false })
+    expect(installed.css.length, 'i-carbon-settings should resolve from @iconify-json/carbon').toBeGreaterThan(0)
+    const uninstalled = await uno.generate('i-ri-settings-line', { preflights: false })
+    expect(uninstalled.css.length, 'i-ri-settings-line should not resolve — ri is not a dependency').toBe(0)
+  })
+
   it('keeps oversized route-local icon paths out of the shared entry CSS', () => {
     const unoSource = readFileSync(unoConfigPath, 'utf8')
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
-    const iconSources = [
-      'app/pages/dashboard/overview.vue',
-      'app/pages/dashboard/devices.vue',
-      'app/pages/sign-in/components/SignInPasskeyStep.vue',
-      'app/pages/sign-in/components/SignInEmailStep.vue',
-      'app/pages/new/components/NewNexusHero.vue',
-      'app/pages/new/components/NewLandingStats.vue',
-      'app/components/tuff/landing/TuffLandingPlugins.vue',
-      'app/components/tuff/landing/TuffLandingStats.vue',
-      'app/components/tuff/landing/TuffLandingAiOverview.vue',
-      'app/components/dashboard/DashboardNav.vue',
-    ].map(file => readFileSync(join(nexusRoot, file), 'utf8')).join('\n')
 
     // This block used to require nine `uno.config.ts` aliases and a specific set
     // of `i-ri-*` / `i-simple-icons-*` class names, on the theory that funnelling
@@ -141,6 +167,8 @@ describe('Nexus deploy asset budget', () => {
     ]) {
       expect(iconSources).toContain(icon)
     }
+    expect(unoSource).not.toContain("['i-carbon-circle-dash', 'i-ri-loader-4-line']")
+    expect(unoSource).not.toContain("['i-carbon-color-palette', 'i-ri-palette-line']")
     expect(guardSource).toContain('const sharedEntryCssBudget')
     expect(guardSource).toContain('maxBytes: 278_000')
     expect(guardSource).toContain('maxGzipBytes: 50_000')
