@@ -1,0 +1,38 @@
+/*
+ * Imported from governance.vue's script instead of living in an SFC <style>
+ * block. @vitejs/plugin-vue's `load` hook returns nothing when
+ * `descriptor.styles[index]` is missing from its cache, and Vite then falls
+ * back to reading the .vue file off disk, so PostCSS gets the whole SFC and
+ * dies on the first script token ("Unknown word TxButton" -- line 2, column 10
+ * is `import { TxButton }`). That drops the page's styles and 404-spams every
+ * admin route that prefetches this chunk. It is a cache/write race, not an
+ * offset bug: parsing this file yields a byte-identical style block every time.
+ * Size only widens the window, because a 246KB file spends longer half-written.
+ * A plain CSS import has no descriptor at all, so the race cannot happen.
+ * Selectors are page-unique, so scoping is not load-bearing.
+ */
+.GovernanceTextarea {
+  min-height: 132px;
+  width: 100%;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx-text-color-primary, #111827);
+  outline: none;
+}
+
+.GovernanceTextarea:focus {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+:root.dark .GovernanceTextarea {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.9);
+}

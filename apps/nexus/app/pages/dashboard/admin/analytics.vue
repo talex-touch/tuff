@@ -3,6 +3,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { defineAsyncComponent } from 'vue'
 import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
@@ -416,12 +417,40 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </ClientOnly>
     </header>
 
-    <div v-if="loading" class="apple-card-lg flex items-center justify-center py-12">
-      <TxSpinner :size="22" />
+    <div v-if="loading" class="apple-card-lg p-6 space-y-5">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          v-for="card in 4"
+          :key="`realtime-skeleton-${card}`"
+          class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]"
+        >
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-black/[0.02] p-2 dark:bg-white/[0.03]">
+        <TxSkeleton v-for="tab in analyticsSections.length" :key="`tab-skeleton-${tab}`" :loading="true" :lines="1" class="w-20" />
+      </div>
+      <div class="grid gap-4 lg:grid-cols-4">
+        <div
+          v-for="card in 4"
+          :key="`overview-skeleton-${card}`"
+          class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
+        >
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+      </div>
+      <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <TxSkeleton :loading="true" :lines="6" />
+      </div>
     </div>
 
-    <div v-else-if="error" class="apple-card-lg bg-red-500/10 p-4 text-center text-red-500">
-      {{ error }}
+    <div v-else-if="error" class="apple-card-lg p-6 text-center space-y-3">
+      <p class="text-sm text-red-500">
+        {{ error }}
+      </p>
+      <TxButton variant="secondary" size="small" native-type="button" @click="fetchAnalytics">
+        {{ t('common.retry', 'Retry') }}
+      </TxButton>
     </div>
 
     <section v-else-if="analytics" class="apple-card-lg p-6">
@@ -746,10 +775,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
         <div v-else>
           <div class="flex items-end gap-1" style="height: 100px">
+            <!-- h-full is load-bearing: the bar's percentage height resolves
+                 against this column, and an auto-height column collapses it to 0. -->
             <div
               v-for="hour in hourlySeries.series"
               :key="hour.key"
-              class="flex-1"
+              class="h-full flex-1 flex items-end"
             >
               <div
                 class="w-full rounded-t bg-blue-500/60 transition-all"

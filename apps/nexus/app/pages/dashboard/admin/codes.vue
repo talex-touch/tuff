@@ -13,11 +13,14 @@ const { user } = useAuthUser()
 watch(() => user.value, (current) => {
   if (!current)
     return
+  // `replace` matters: this route only forwards, so leaving it in history means
+  // Back lands here and is immediately forwarded again — the reader cannot get
+  // out of the subscriptions page with the Back button.
   if (current.role === 'admin') {
-    navigateTo('/dashboard/admin/subscriptions')
+    navigateTo('/dashboard/admin/subscriptions', { replace: true })
     return
   }
-  navigateTo('/dashboard/overview')
+  navigateTo('/dashboard/overview', { replace: true })
 }, { immediate: true })
 </script>
 

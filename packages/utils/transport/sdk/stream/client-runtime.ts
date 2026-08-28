@@ -132,14 +132,20 @@ export async function startClientStream<TReq, TChunk>(
       }
 
       if (message.type === "error") {
-        options.onError?.(toStreamError(message.error));
-        cleanup();
+        try {
+          options.onError?.(toStreamError(message.error));
+        } finally {
+          cleanup();
+        }
         return;
       }
 
       if (message.type === "end") {
-        options.onEnd?.();
-        cleanup();
+        try {
+          options.onEnd?.();
+        } finally {
+          cleanup();
+        }
       }
     };
 
@@ -182,17 +188,24 @@ export async function startClientStream<TReq, TChunk>(
         return;
       }
 
-      const data = unwrapChannelPayload<{ chunk?: TChunk; error?: string }>(
-        raw,
-      );
-      if (data?.error) {
+      const data = unwrapChannelPayload<{
+        chunk?: TChunk;
+        error?: string;
+        code?: string;
+      }>(raw);
+      if (data?.error !== undefined) {
         // A handler may report failure on the data channel rather than the error channel.
         // Without this cleanup the controller stayed in adapter.streamControllers and the
         // data/end/error registrations for this streamId stayed attached forever, so every
         // such failure leaked one controller and three listeners. Matches the dedicated error
         // handler below and the MessagePort path above.
-        options.onError?.(new Error(data.error));
-        cleanup();
+        try {
+          options.onError?.(
+            toStreamError({ message: data.error, code: data.code }),
+          );
+        } finally {
+          cleanup();
+        }
         return;
       }
 
@@ -206,8 +219,11 @@ export async function startClientStream<TReq, TChunk>(
     if (cancelled || portActive) {
       return;
     }
-    options.onEnd?.();
-    cleanup();
+    try {
+      options.onEnd?.();
+    } finally {
+      cleanup();
+    }
   });
 
   const errorCleanup = adapter.registerChannel(
@@ -216,9 +232,18 @@ export async function startClientStream<TReq, TChunk>(
       if (cancelled || portActive) {
         return;
       }
-      const data = unwrapChannelPayload<{ error?: string }>(raw);
-      options.onError?.(new Error(data?.error ?? "Stream error"));
-      cleanup();
+      const data = unwrapChannelPayload<{ error?: string; code?: string }>(raw);
+      try {
+        options.onError?.(
+          toStreamError(
+            data?.error === undefined
+              ? data?.code
+              : { message: data.error, code: data.code },
+          ),
+        );
+      } finally {
+        cleanup();
+      }
     },
   );
 
@@ -252,7 +277,7 @@ export async function startClientStream<TReq, TChunk>(
     );
   } catch (error) {
     controller.cancel();
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = toStreamError(error).message;
     throw new Error(
       `[TuffTransport] Failed to start stream \"${eventName}\": ${errorMessage}`,
     );

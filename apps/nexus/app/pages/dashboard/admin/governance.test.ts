@@ -401,4 +401,32 @@ describe('dashboard data governance UI contract', () => {
       'dashboard.governance.analytics.providerQuotaProjectedExhaustion',
     ])
   })
+
+  it('renders every page-local error ref behind some template condition', () => {
+    const script = page.slice(0, page.indexOf('<template>'))
+    const template = page.slice(page.indexOf('<template>'))
+    const declared = [...script.matchAll(/const (\w*Error) = ref\(/g)].map(match => match[1] ?? '')
+    const conditions = [...template.matchAll(/v-if="([^"]*)"/g)].map(match => match[1] ?? '').join(' ; ')
+
+    // Regression guard: storageAlertNotifyError was interpolated into the
+    // shared banner but left out of its v-if, so a failed alert dispatch
+    // rendered nothing at all unless some other request happened to be broken.
+    expect(declared.length).toBeGreaterThan(0)
+    expect(declared.filter(name => !conditions.includes(name))).toEqual([])
+  })
+
+  it('echoes each save outcome inside the block that produced it', () => {
+    const scopes = ['analytics', 'storage', 'storageCredential', 'notification', 'notificationCredential', 'providerQuota']
+
+    for (const scope of scopes)
+      expect(page).toContain(`scopedSaveFeedback.scope === '${scope}'`)
+
+    // Handlers that share saveError/saveMessage but belong to no block must
+    // release the scope, or their message surfaces under an unrelated form.
+    const unscopedHandlers = ['testNotificationChannel', 'notifyStorageAlerts', 'smokeStoragePolicy']
+    for (const handler of unscopedHandlers) {
+      const body = page.slice(page.indexOf(`async function ${handler}`))
+      expect(body.slice(0, body.indexOf('try {'))).toContain('saveScope.value = \'\'')
+    }
+  })
 })

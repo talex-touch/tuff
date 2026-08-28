@@ -1,12 +1,20 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { TuffEvent } from '../transport/event/types'
+import type { StreamController } from '../transport/types'
+import { createPluginIntelligenceFacade } from '../plugin/sdk/intelligence'
 import {
   isPluginFacingEvent,
+  PLUGIN_FACING_INTELLIGENCE_EVENTS,
   pluginFacingEventNames,
 } from '../transport/security/plugin-facing-events'
 import { ClipboardEvents, PluginEvents, StorageEvents } from '../transport/events'
 import { TuffMainTransport } from '../transport/sdk/main-transport'
+import {
+  createIntelligenceSdk,
+  type IntelligenceSdkTransport,
+} from '../transport/sdk/domains/intelligence'
 
 const { ipcHandle, browserWindowMock } = vi.hoisted(() => ({
   ipcHandle: vi.fn(),
@@ -87,6 +95,53 @@ const PROTOCOL_EVENTS = [
   'TransportEvents.port.error',
 ]
 
+const APPROVED_INTELLIGENCE_FACADE_METHOD_PATHS = [
+  'agent.run',
+  'audio.stt',
+  'audio.transcribe',
+  'audio.tts',
+  'chatLangChain',
+  'code.debug',
+  'code.explain',
+  'code.generate',
+  'code.refactor',
+  'code.review',
+  'content.extract',
+  'contextEvaluateMemory',
+  'contextInvoke',
+  'contextStream',
+  'embedding.generate',
+  'getCapabilityStatus',
+  'getCapabilityTestMeta',
+  'getProviderModelOptions',
+  'image.analyze',
+  'image.caption',
+  'image.edit',
+  'image.generate',
+  'image.translateE2e',
+  'intent.detect',
+  'invoke',
+  'keywords.extract',
+  'knowledgeBuildContext',
+  'knowledgeIndexChunk',
+  'knowledgeIndexDocument',
+  'knowledgeSearch',
+  'rag.query',
+  'search.rerank',
+  'search.semantic',
+  'sentiment.analyze',
+  'stream',
+  'text.chat',
+  'text.classify',
+  'text.grammar',
+  'text.rewrite',
+  'text.summarize',
+  'text.translate',
+  'ttsSpeak',
+  'vision.ocr',
+  'workflow.execute',
+] as const
+
 function sourceFiles(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = path.join(dir, entry)
@@ -103,7 +158,7 @@ function sourceFiles(dir: string, found: string[] = []): string[] {
 
 /** The event constants the plugin SDK hands to the transport, as written. */
 function sdkSentConstants(): Set<string> {
-  const found = new Set(PROTOCOL_EVENTS)
+  const found = new Set<string>(PROTOCOL_EVENTS)
   for (const root of PLUGIN_SDK_ROOTS) {
     for (const file of sourceFiles(path.join(UTILS_ROOT, root))) {
       for (const [, constant] of readFileSync(file, 'utf8').matchAll(SEND_SHAPES))
@@ -119,15 +174,98 @@ function allowlistConstants(): Set<string> {
     path.join(UTILS_ROOT, 'transport/security/plugin-facing-events.ts'),
     'utf8',
   )
-  const body = source.slice(
-    source.indexOf('export const PLUGIN_FACING_EVENTS'),
-    source.indexOf('] as const'),
-  )
+  const body = source.slice(source.indexOf('export const PLUGIN_FACING_EVENTS'))
   return new Set(
     [...body.matchAll(/^\s{2}([A-Z][A-Za-z0-9]*Events\.[A-Za-z0-9_.]+),$/gm)].map(
       ([, constant]) => constant,
     ),
   )
+}
+
+interface FacadeMethod {
+  path: string
+  invoke: (...args: unknown[]) => unknown
+}
+
+function collectFacadeMethods(root: object): FacadeMethod[] {
+  const methods: FacadeMethod[] = []
+  const visited = new WeakSet<object>()
+
+  const visit = (value: object, prefix: string): void => {
+    if (visited.has(value)) return
+    visited.add(value)
+    for (const property of Reflect.ownKeys(value)) {
+      if (typeof property !== 'string') continue
+      const path = prefix ? `${prefix}.${property}` : property
+      const member = Reflect.get(value, property)
+      if (typeof member === 'function') {
+        methods.push({ path, invoke: member as (...args: unknown[]) => unknown })
+      } else if (member && typeof member === 'object') {
+        visit(member, path)
+      }
+    }
+  }
+
+  visit(root, '')
+  return methods.sort((left, right) => left.path.localeCompare(right.path))
+}
+
+function probeArgs(methodPath: string): unknown[] {
+  const streamOptions = {
+    onStart: vi.fn(),
+    onDelta: vi.fn(),
+    onMessage: vi.fn(),
+    onUsage: vi.fn(),
+    onMetadata: vi.fn(),
+    onPartEvent: vi.fn(),
+    onEnd: vi.fn(),
+    onError: vi.fn(),
+  }
+  const payload = {
+    capabilityId: 'probe.capability',
+    messages: [],
+    payload: {},
+  }
+
+  if (methodPath === 'invoke') return ['probe.capability', payload, {}]
+  if (methodPath === 'stream') return ['probe.capability', payload, streamOptions, {}]
+  if (methodPath === 'contextStream') return [payload, streamOptions]
+  return [payload, {}]
+}
+
+async function probeIntelligenceFacade() {
+  const calls: Array<{ methodPath: string; eventName: string; mode: 'send' | 'stream' }> = []
+  let activeMethodPath = ''
+  const record = (event: TuffEvent<unknown, unknown>, mode: 'send' | 'stream'): void => {
+    calls.push({ methodPath: activeMethodPath, eventName: event.toEventName(), mode })
+  }
+  const controller: StreamController = {
+    cancel: vi.fn(),
+    cancelled: false,
+    streamId: 'intelligence-facade-probe',
+  }
+  const transport = {
+    send: vi.fn(async (event: TuffEvent<unknown, unknown>) => {
+      record(event, 'send')
+      return { ok: true, result: {} }
+    }),
+    stream: vi.fn(async (event: TuffEvent<unknown, unknown>) => {
+      record(event, 'stream')
+      return controller
+    }),
+  } as unknown as IntelligenceSdkTransport
+  const sdk = createIntelligenceSdk(transport)
+  const facade = createPluginIntelligenceFacade(() => sdk)
+  const methods = collectFacadeMethods(facade)
+
+  for (const method of methods) {
+    activeMethodPath = method.path
+    const previousCallCount = calls.length
+    await method.invoke(...probeArgs(method.path))
+    expect(calls.slice(previousCallCount).map(call => call.methodPath)).toEqual([method.path])
+  }
+
+  return { calls, methodPaths: methods.map(method => method.path) }
 }
 
 describe('plugin-facing event allowlist', () => {
@@ -149,6 +287,37 @@ describe('plugin-facing event allowlist', () => {
     const extra = [...listed].filter(constant => !sent.has(constant)).sort()
 
     expect({ missing, extra }).toEqual({ missing: [], extra: [] })
+  })
+
+  it('derives the Intelligence allowlist from every real plugin facade method', async () => {
+    const { calls, methodPaths } = await probeIntelligenceFacade()
+    const reachedEventNames = [...new Set(calls.map(call => call.eventName))].sort()
+    const listedEventNames = PLUGIN_FACING_INTELLIGENCE_EVENTS
+      .map(event => event.toEventName())
+      .sort()
+
+    expect(methodPaths).toEqual(APPROVED_INTELLIGENCE_FACADE_METHOD_PATHS)
+    expect(reachedEventNames).toEqual(listedEventNames)
+    expect(
+      pluginFacingEventNames().filter(name => name.startsWith('intelligence:')),
+    ).toEqual(reachedEventNames)
+  })
+
+  it('detects newly exposed root and nested Intelligence facade methods', () => {
+    const transport = {
+      send: vi.fn(async () => ({ ok: true, result: {} })),
+    } as unknown as IntelligenceSdkTransport
+    const sdk = createIntelligenceSdk(transport) as ReturnType<typeof createIntelligenceSdk> & {
+      futureRootMethod?: () => void
+    }
+    sdk.futureRootMethod = vi.fn()
+    Object.assign(sdk.text, { futureNestedMethod: vi.fn() })
+    const facade = createPluginIntelligenceFacade(() => sdk)
+    const methodPaths = collectFacadeMethods(facade).map(method => method.path)
+
+    expect(methodPaths).toContain('futureRootMethod')
+    expect(methodPaths).toContain('text.futureNestedMethod')
+    expect(methodPaths).not.toEqual(APPROVED_INTELLIGENCE_FACADE_METHOD_PATHS)
   })
 
   it('every listed constant resolves to a real event name', () => {

@@ -5,9 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { registerPrivacyTransportHandlers } from './privacy-transport-handlers'
 
 const DELETE_PREVIEW_ID = 'preview_0123456789abcdef'
+const NEXT_DELETE_PREVIEW_ID = 'preview_fedcba9876543210'
 
-function hostContext(event: TuffEvent<unknown, unknown>) {
-  return { sender: { id: 41 }, eventName: event.toEventName(), plugin: undefined }
+function hostContext(event: TuffEvent<unknown, unknown>, sender: object = { id: 41 }) {
+  return { sender, eventName: event.toEventName(), plugin: undefined }
 }
 
 function createTransportHarness() {
@@ -52,6 +53,24 @@ function createService() {
       }
     })),
     deleteCategories: vi.fn(async () => ({ ok: true, data: { categories: [], partial: false } })),
+    previewOrchestratorRunDelete: vi.fn(async (_runId: string, _authorityId: number) => ({
+      ok: true,
+      data: {
+        disposition: 'eligible',
+        eventCount: 2,
+        previewId: DELETE_PREVIEW_ID
+      }
+    })),
+    deleteOrchestratorRun: vi.fn(
+      async (
+        _confirmation: 'delete-orchestrator-run',
+        _previewId: string,
+        _authorityId: number
+      ): Promise<unknown> => ({
+        ok: true,
+        data: { deletedEventCount: 2 }
+      })
+    ),
     getProviderDisclosure: vi.fn(async () => ({ ok: true, data: { providers: [] } })),
     backupSecretsPreview: vi.fn(async () => ({
       ok: true,
@@ -94,6 +113,8 @@ describe('privacy typed transport handlers', () => {
         PrivacyEvents.category.export,
         PrivacyEvents.category.deletePreview,
         PrivacyEvents.category.delete,
+        PrivacyEvents.orchestratorRun.deletePreview,
+        PrivacyEvents.orchestratorRun.delete,
         PrivacyEvents.provider.disclosure,
         PrivacyEvents.secret.backupPreview,
         PrivacyEvents.secret.backupWrite,
@@ -103,6 +124,7 @@ describe('privacy typed transport handlers', () => {
         .map((event) => event.toEventName())
         .sort()
     )
+    expect(harness.disposers).toHaveLength(15)
     dispose()
     expect(harness.disposers.every((entry) => entry.mock.calls.length === 1)).toBe(true)
   })
@@ -148,7 +170,7 @@ describe('privacy typed transport handlers', () => {
 
     const transport = new PrototypeTransport()
     const dispose = registerPrivacyTransportHandlers(transport as never, createService() as never)
-    expect(transport.handlers.size).toBe(13)
+    expect(transport.handlers.size).toBe(15)
     dispose()
   })
 
@@ -169,32 +191,31 @@ describe('privacy typed transport handlers', () => {
         path: '/Users/private/export.json'
       })
     ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+    for (const plugin of [
+      { name: '__unverified_plugin_caller__', uniqueKey: 'raw-plugin-key' },
+      { name: 'forged-plugin' }
+    ]) {
+      await expect(
+        invoke(
+          PrivacyEvents.orchestratorRun.deletePreview,
+          { operation: 'orchestrator-run.delete-preview', runId: 'run-plugin-preview' },
+          {
+            ...hostContext(PrivacyEvents.orchestratorRun.deletePreview),
+            plugin
+          }
+        )
+      ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+    }
     await expect(
       invoke(
-        PrivacyEvents.category.delete,
+        PrivacyEvents.orchestratorRun.delete,
         {
-          operation: 'category.delete',
-          categories: ['clipboard-history'],
-          confirmation: 'delete-selected-data',
+          operation: 'orchestrator-run.delete',
+          confirmation: 'delete-orchestrator-run',
           previewId: DELETE_PREVIEW_ID
         },
         {
-          ...hostContext(PrivacyEvents.category.delete),
-          plugin: { name: 'forged-plugin' }
-        }
-      )
-    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
-    await expect(
-      invoke(
-        PrivacyEvents.category.delete,
-        {
-          operation: 'category.delete',
-          categories: ['clipboard-history'],
-          confirmation: 'delete-selected-data',
-          previewId: DELETE_PREVIEW_ID
-        },
-        {
-          ...hostContext(PrivacyEvents.category.delete),
+          ...hostContext(PrivacyEvents.orchestratorRun.delete),
           plugin: createTrustedTestPluginContext({ name: 'trusted-plugin' })
         }
       )
@@ -206,7 +227,158 @@ describe('privacy typed transport handlers', () => {
 
     expect(service.exportCategories).not.toHaveBeenCalled()
     expect(service.deleteCategories).not.toHaveBeenCalled()
+    expect(service.previewOrchestratorRunDelete).not.toHaveBeenCalled()
+    expect(service.deleteOrchestratorRun).not.toHaveBeenCalled()
     expect(service.getPolicy).not.toHaveBeenCalled()
+  })
+
+  it('binds orchestrator run preview and delete authority to sender object identity', async () => {
+    const harness = createTransportHarness()
+    const service = createService()
+    registerPrivacyTransportHandlers(harness.transport as never, service as never)
+    const firstSender = { id: 41 }
+    const sameNumericIdSender = { id: 41 }
+    const previewHandler = harness.handlers.get(
+      PrivacyEvents.orchestratorRun.deletePreview.toEventName()
+    )!
+    const deleteHandler = harness.handlers.get(PrivacyEvents.orchestratorRun.delete.toEventName())!
+
+    await previewHandler(
+      { operation: 'orchestrator-run.delete-preview', runId: 'run-authority-first' },
+      hostContext(PrivacyEvents.orchestratorRun.deletePreview, firstSender)
+    )
+    const firstAuthority = service.previewOrchestratorRunDelete.mock.calls[0]?.[1]
+    expect(firstAuthority).toEqual(expect.any(Number))
+
+    await previewHandler(
+      { operation: 'orchestrator-run.delete-preview', runId: 'run-authority-second' },
+      hostContext(PrivacyEvents.orchestratorRun.deletePreview, sameNumericIdSender)
+    )
+    await previewHandler(
+      { operation: 'orchestrator-run.delete-preview', runId: 'run-authority-reused' },
+      hostContext(PrivacyEvents.orchestratorRun.deletePreview, firstSender)
+    )
+    const secondAuthority = service.previewOrchestratorRunDelete.mock.calls[1]?.[1]
+    const reusedAuthority = service.previewOrchestratorRunDelete.mock.calls[2]?.[1]
+    expect(secondAuthority).not.toBe(firstAuthority)
+    expect(reusedAuthority).toBe(firstAuthority)
+
+    await deleteHandler(
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: DELETE_PREVIEW_ID
+      },
+      hostContext(PrivacyEvents.orchestratorRun.delete, firstSender)
+    )
+    await deleteHandler(
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: NEXT_DELETE_PREVIEW_ID
+      },
+      hostContext(PrivacyEvents.orchestratorRun.delete, sameNumericIdSender)
+    )
+    expect(service.deleteOrchestratorRun).toHaveBeenNthCalledWith(
+      1,
+      'delete-orchestrator-run',
+      DELETE_PREVIEW_ID,
+      firstAuthority
+    )
+    expect(service.deleteOrchestratorRun).toHaveBeenNthCalledWith(
+      2,
+      'delete-orchestrator-run',
+      NEXT_DELETE_PREVIEW_ID,
+      secondAuthority
+    )
+  })
+
+  it('does not reuse sender authority or old preview tokens across handler registrations', async () => {
+    const service = createService()
+    const previewAuthorities = new Map<string, number>()
+    let previewCount = 0
+    service.previewOrchestratorRunDelete.mockImplementation(async (_runId, authorityId) => {
+      const previewId = previewCount === 0 ? DELETE_PREVIEW_ID : NEXT_DELETE_PREVIEW_ID
+      previewCount += 1
+      previewAuthorities.set(previewId, authorityId)
+      return {
+        ok: true,
+        data: { disposition: 'eligible', eventCount: 2, previewId }
+      }
+    })
+    service.deleteOrchestratorRun.mockImplementation(
+      async (_confirmation, previewId, authorityId) => {
+        if (previewAuthorities.get(previewId) !== authorityId) {
+          return { ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false }
+        }
+        previewAuthorities.delete(previewId)
+        return { ok: true, data: { deletedEventCount: 2 } }
+      }
+    )
+
+    const firstHarness = createTransportHarness()
+    const disposeFirst = registerPrivacyTransportHandlers(
+      firstHarness.transport as never,
+      service as never
+    )
+    const firstSender = { id: 41 }
+    const firstPreview = await firstHarness.handlers.get(
+      PrivacyEvents.orchestratorRun.deletePreview.toEventName()
+    )!(
+      { operation: 'orchestrator-run.delete-preview', runId: 'legacy/first-run' },
+      hostContext(PrivacyEvents.orchestratorRun.deletePreview, firstSender)
+    )
+    expect(firstPreview).toEqual({
+      ok: true,
+      data: { disposition: 'eligible', eventCount: 2, previewId: DELETE_PREVIEW_ID }
+    })
+    const firstAuthority = service.previewOrchestratorRunDelete.mock.calls[0]?.[1]
+    disposeFirst()
+
+    const secondHarness = createTransportHarness()
+    const disposeSecond = registerPrivacyTransportHandlers(
+      secondHarness.transport as never,
+      service as never
+    )
+    const secondSender = { id: 41 }
+    const replay = await secondHarness.handlers.get(
+      PrivacyEvents.orchestratorRun.delete.toEventName()
+    )!(
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: DELETE_PREVIEW_ID
+      },
+      hostContext(PrivacyEvents.orchestratorRun.delete, secondSender)
+    )
+    expect(replay).toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    const secondPreview = await secondHarness.handlers.get(
+      PrivacyEvents.orchestratorRun.deletePreview.toEventName()
+    )!(
+      { operation: 'orchestrator-run.delete-preview', runId: 'legacy/second-run' },
+      hostContext(PrivacyEvents.orchestratorRun.deletePreview, secondSender)
+    )
+    expect(secondPreview).toEqual({
+      ok: true,
+      data: { disposition: 'eligible', eventCount: 2, previewId: NEXT_DELETE_PREVIEW_ID }
+    })
+    const replayAuthority = service.deleteOrchestratorRun.mock.calls[0]?.[2]
+    const secondAuthority = service.previewOrchestratorRunDelete.mock.calls[1]?.[1]
+    expect(replayAuthority).toBe(secondAuthority)
+    expect(secondAuthority).not.toBe(firstAuthority)
+
+    await expect(
+      secondHarness.handlers.get(PrivacyEvents.orchestratorRun.delete.toEventName())!(
+        {
+          operation: 'orchestrator-run.delete',
+          confirmation: 'delete-orchestrator-run',
+          previewId: NEXT_DELETE_PREVIEW_ID
+        },
+        hostContext(PrivacyEvents.orchestratorRun.delete, secondSender)
+      )
+    ).resolves.toEqual({ ok: true, data: { deletedEventCount: 2 } })
+    disposeSecond()
   })
 
   it('does not invoke accessor-backed payloads and maps valid exact requests', async () => {

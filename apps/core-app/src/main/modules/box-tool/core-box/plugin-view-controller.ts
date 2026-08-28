@@ -213,13 +213,11 @@ export class PluginViewController {
 
           if (query) {
             const normalizedQuery: TuffQuery = { ...query }
-            void transport
-              .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
-                input: normalizedQuery.text ?? '',
-                query: normalizedQuery,
-                source: 'initial'
-              })
-              .catch(() => {})
+            this.sendChannelMessageToUIView(CoreBoxEvents.input.change.toEventName(), {
+              input: normalizedQuery.text ?? '',
+              query: normalizedQuery,
+              source: 'initial'
+            })
           }
 
           this.broadcastCoreBoxUiResume(plugin.name, {
@@ -403,8 +401,8 @@ export class PluginViewController {
         }
       }
 
-      this.uiView.webContents.once('dom-ready', () => {
-        void transport.sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
+      this.uiView.webContents.once('did-finish-load', () => {
+        this.sendChannelMessageToUIView(CoreBoxEvents.input.change.toEventName(), {
           input: normalizedQuery.text ?? '',
           query: normalizedQuery,
           source: 'initial'
@@ -419,7 +417,7 @@ export class PluginViewController {
     }
 
     if (!query && plugin) {
-      this.uiView.webContents.once('dom-ready', () => {
+      this.uiView.webContents.once('did-finish-load', () => {
         this.broadcastCoreBoxUiResume(plugin.name, {
           source: 'attach',
           featureId: feature?.id,

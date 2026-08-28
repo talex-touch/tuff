@@ -10,7 +10,9 @@ import type {
 } from '~/utils/provider-registry-admin'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDataTable } from '@talex-touch/tuffex/data-table'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
@@ -441,6 +443,61 @@ async function submitSceneDrawer() {
 function filterLabel(option: { value: string, label: string }) {
   return t(`dashboard.providerRegistry.filters.${option.value}`, option.label)
 }
+
+// Deleting a provider cascades to its capability declarations, and deleting a
+// scene takes its strategy bindings with it, so the counts go in the prompt:
+// the row only shows the first three capability chips, and the bindings are not
+// on screen at all when the trash icon is.
+const deleteConfirmVisible = ref(false)
+const deleteConfirmTitle = ref('')
+const deleteConfirmMessage = ref('')
+const pendingDeleteAction = ref<(() => Promise<void>) | null>(null)
+
+function requestDeleteConfirm(title: string, message: string, action: () => Promise<void>) {
+  deleteConfirmTitle.value = title
+  deleteConfirmMessage.value = message
+  pendingDeleteAction.value = action
+  deleteConfirmVisible.value = true
+}
+
+async function executeDeleteConfirm(): Promise<boolean> {
+  const action = pendingDeleteAction.value
+  pendingDeleteAction.value = null
+  if (action)
+    await action()
+  return true
+}
+
+function closeDeleteConfirm() {
+  deleteConfirmVisible.value = false
+  pendingDeleteAction.value = null
+}
+
+function confirmDeleteProvider(provider: ProviderRegistryRecord) {
+  const count = provider.capabilities.length
+  requestDeleteConfirm(
+    t('dashboard.providerRegistry.providers.deleteTitle', 'Delete provider'),
+    t(
+      'dashboard.providerRegistry.providers.deleteConfirm',
+      { provider: provider.displayName, count },
+      `Delete "${provider.displayName}" and its ${count} capability declaration(s)? This cannot be undone.`,
+    ),
+    () => deleteProvider(provider),
+  )
+}
+
+function confirmDeleteScene(scene: SceneRegistryRecord) {
+  const count = scene.bindings.length
+  requestDeleteConfirm(
+    t('dashboard.providerRegistry.scenes.deleteTitle', 'Delete capability route'),
+    t(
+      'dashboard.providerRegistry.scenes.deleteConfirm',
+      { scene: scene.displayName, count },
+      `Delete "${scene.displayName}" and its ${count} provider binding(s)? This cannot be undone.`,
+    ),
+    () => deleteScene(scene),
+  )
+}
 </script>
 
 <template>
@@ -468,7 +525,25 @@ function filterLabel(option: { value: string, label: string }) {
       {{ error }}
     </div>
 
-    <section class="grid gap-4 md:grid-cols-5">
+    <!-- Until the first fetch lands there is nothing to count, and rendering the
+         real cards would report a confident "0 Providers" for the seconds the
+         registry takes to load — which reads as "nothing is registered" and
+         invites the operator to create a duplicate. One bar per line of the
+         loaded card, so the grid does not resize when the numbers arrive. -->
+    <section v-if="loading && !providers.length" class="grid gap-4 md:grid-cols-5">
+      <div
+        v-for="card in 5"
+        :key="card"
+        class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]"
+      >
+        <TxSkeleton :loading="true" :lines="1" :height="34" width="48px" :radius="10" />
+        <div class="mt-3 space-y-2">
+          <TxSkeleton :loading="true" :lines="1" :height="12" width="60%" />
+          <TxSkeleton :loading="true" :lines="1" :height="10" width="80%" />
+        </div>
+      </div>
+    </section>
+    <section v-else class="grid gap-4 md:grid-cols-5">
       <TxStatCard
         :value="providers.length"
         :label="t('dashboard.providerRegistry.summary.providers', 'Providers')"
@@ -584,7 +659,7 @@ function filterLabel(option: { value: string, label: string }) {
             </div>
 
             <div
-              v-if="providerObservabilityEmptyState"
+              v-if="providerObservabilityEmptyState && !loading"
               class="rounded-xl border p-4 text-sm"
               :class="{
                 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': providerObservabilityEmptyState.tone === 'success',
@@ -754,7 +829,7 @@ function filterLabel(option: { value: string, label: string }) {
                       icon="i-carbon-trash-can"
                       :title="t('common.delete', 'Delete')"
                       :aria-label="t('common.delete', 'Delete')"
-                      @click="deleteProvider(provider)"
+                      @click="confirmDeleteProvider(provider)"
                     />
                   </div>
                 </template>
@@ -802,7 +877,7 @@ function filterLabel(option: { value: string, label: string }) {
             </div>
 
             <div
-              v-if="sceneObservabilityEmptyState"
+              v-if="sceneObservabilityEmptyState && !loading"
               class="rounded-xl border p-4 text-sm"
               :class="{
                 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': sceneObservabilityEmptyState.tone === 'success',
@@ -895,7 +970,7 @@ function filterLabel(option: { value: string, label: string }) {
                     <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || scene.status === 'disabled'" @click="updateSceneStatus(scene, 'disabled')">
                       {{ t('dashboard.providerRegistry.actions.disable', 'Disable') }}
                     </TxButton>
-                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="deleteScene(scene)">
+                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="confirmDeleteScene(scene)">
                       {{ t('common.delete', 'Delete') }}
                     </TxButton>
                   </div>
@@ -987,7 +1062,7 @@ function filterLabel(option: { value: string, label: string }) {
             </div>
 
             <div
-              v-if="usageLedgerEmptyState"
+              v-if="usageLedgerEmptyState && !loading"
               class="rounded-xl border p-4 text-sm"
               :class="{
                 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': usageLedgerEmptyState.tone === 'success',
@@ -1103,7 +1178,7 @@ function filterLabel(option: { value: string, label: string }) {
             </div>
 
             <div
-              v-if="healthCheckEmptyState"
+              v-if="healthCheckEmptyState && !loading"
               class="rounded-xl border p-4 text-sm"
               :class="{
                 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': healthCheckEmptyState.tone === 'success',
@@ -2091,6 +2166,17 @@ function filterLabel(option: { value: string, label: string }) {
         </div>
       </template>
     </TxDrawer>
+
+    <TxBottomDialog
+      v-if="deleteConfirmVisible"
+      :title="deleteConfirmTitle"
+      :message="deleteConfirmMessage"
+      :btns="[
+        { content: t('common.cancel', 'Cancel'), type: 'info', onClick: () => true },
+        { content: t('common.delete', 'Delete'), type: 'error', onClick: executeDeleteConfirm },
+      ]"
+      :close="closeDeleteConfirm"
+    />
   </div>
 </template>
 

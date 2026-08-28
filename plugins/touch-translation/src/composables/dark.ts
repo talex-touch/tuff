@@ -1,2 +1,3 @@
-export const isDark = useDark()
-export const toggleDark = useToggle(isDark)
+import { initializePluginTheme } from '@talex-touch/utils/plugin/theme'
+
+initializePluginTheme()

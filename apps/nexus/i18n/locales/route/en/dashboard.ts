@@ -68,6 +68,13 @@ export default {
         summary: '{ready}/{total} adapter-ready, {missing} missing',
       },
       providers: {
+        deleteTitle: 'Delete provider',
+        // Names the cascade: deleting a provider takes its capability rows with it.
+        deleteConfirm: 'Delete "{provider}" and its {count} capability declaration(s)? This cannot be undone.',
+        created: 'Provider created.',
+        updated: 'Provider updated.',
+        checkSucceeded: 'Provider check succeeded.',
+        checkFailed: 'Provider check failed.',
         createTitle: 'Create provider',
         createHint: 'Credentials are saved in secure storage when this provider needs authentication.',
         create: 'Create provider',
@@ -107,6 +114,12 @@ export default {
         emptyUnknownDetail: 'Every provider in this set already has health or usage evidence.',
       },
       scenes: {
+        deleteTitle: 'Delete capability route',
+        deleteConfirm: 'Delete "{scene}" and its {count} provider binding(s)? This cannot be undone.',
+        created: 'Scene created.',
+        updated: 'Scene updated.',
+        dryRunCompleted: 'Scene dry run completed.',
+        runCompleted: 'Scene run completed.',
         createTitle: 'Create scene',
         createHint: 'Bind a scene to provider capabilities. Runtime orchestration is implemented separately.',
         create: 'Create scene',
@@ -185,6 +198,7 @@ export default {
         emptyAttentionDetail: 'No degraded or unhealthy health checks match this view.',
       },
       quota: {
+        saved: 'Provider quota saved.',
         title: 'Provider quota',
         editTitle: 'Provider quota',
         editHint: 'Limit direct Intelligence invokes and scene runs before provider dispatch.',
@@ -266,6 +280,7 @@ export default {
         empty: 'No capabilities declared yet.',
       },
       values: {
+        'ai': 'AI',
         'api_key': 'API key',
         'app': 'App',
         'balanced': 'Balanced',
@@ -525,6 +540,7 @@ export default {
     storage: {
       title: 'Storage & Sync',
       description: 'Manage synchronization quotas, connected devices, and view active logs.',
+      refresh: 'Refresh',
       systemOperational: 'System Operational',
       systemAttention: 'Needs Attention',
       justNow: 'just now',
@@ -995,6 +1011,9 @@ export default {
       plugins: {
         title: 'Assets',
         subtitle: 'Manage plugins, layout presets, and other publishable assets from one place.',
+        deleteTitle: 'Delete Plugin',
+        deleteVersionTitle: 'Delete Version',
+        cancel: 'Cancel',
         cta: 'Explore store',
         loading: 'Loading assets…',
         empty: 'No assets yet. Publish your first asset to see it here.',
@@ -1047,6 +1066,21 @@ export default {
         assetCreate: {
           title: 'Create Asset',
           subtitle: 'Start with a type picker, then expand into its dedicated publishing flow.',
+          manualFirstHint: 'Manual mode skips package parsing. Continue to fill metadata and upload an icon if needed.',
+          steps: {
+            package: {
+              title: 'Package',
+              description: 'Upload .tpex or choose manual input.',
+            },
+            metadata: {
+              title: 'Metadata',
+              description: 'Confirm identifier, name, type, category, and icon.',
+            },
+            content: {
+              title: 'Content',
+              description: 'Complete README and submit for review.',
+            },
+          },
           back: 'Back',
           backToTypes: 'Back to Type Selection',
           betaTitle: 'Beta Asset Type',
@@ -1411,6 +1445,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       images: {
         title: 'Resource library',
         subtitle: 'Manage shared assets used by dashboard plugins and updates.',
+        confirmDeleteTitle: 'Delete Resource',
+        delete: 'Delete',
+        cancel: 'Cancel',
         uploadTitle: 'Upload resource',
         uploadSubtitle: 'PNG, JPEG, WebP, GIF, SVG, or other approved attachments up to 5 MB.',
         selectFile: 'Select file',
@@ -1508,6 +1545,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       updates: {
         title: 'Updates & News',
         subtitle: 'Manage official news and release updates together.',
+        deleteTitle: 'Delete Update',
+        delete: 'Delete',
+        cancel: 'Cancel',
         listTitle: 'Updates & News',
         listSubtitle: 'Manage news and release updates together.',
         empty: 'No updates or news yet. Check again soon.',
@@ -1641,6 +1681,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       docComments: {
         title: 'Doc Comments',
         subtitle: 'Moderate and manage documentation comments.',
+        analytics: 'View docs analytics',
+        analyticsPath: 'Analytics',
         listTitle: 'All comments',
         totalCount: '{count} total',
         loading: 'Loading comments...',
@@ -1824,6 +1866,22 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           subscriptionGrant: 'Subscription granted',
           codeRevoke: 'Activation code revoked',
           auditExport: 'Audit exported',
+          userRoleBootstrap: 'Administrator bootstrapped',
+          userProfileUpdate: 'User profile updated',
+          userCreditsAdjust: 'User credits adjusted',
+          codeGenerate: 'Activation codes generated',
+          docCommentDelete: 'Doc comment deleted',
+          storeReviewStatus: 'Store review status updated',
+          scanWaiverCreate: 'Plugin scan waiver created',
+          scanWaiverRevoke: 'Plugin scan waiver revoked',
+          telemetryRetentionRun: 'Telemetry retention run',
+          promptUpsert: 'Agent prompt saved',
+          promptDelete: 'Agent prompt deleted',
+          promptBindingUpsert: 'Agent prompt binding saved',
+          promptBindingDelete: 'Agent prompt binding deleted',
+          evidenceRunCreate: 'Release evidence run created',
+          evidenceItemUpsert: 'Release evidence item saved',
+          evidenceDocGuard: 'Release doc guard recorded',
         },
         export: {
           label: 'Export CSV',
@@ -1878,6 +1936,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           overview: 'Overview',
           serviceChannels: 'Service Channels',
           audits: 'Audits',
+          chat: 'Chat Probe',
         },
         overview: {
           title: 'Intelligence Overview',
@@ -1910,6 +1969,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           ipBans: {
             title: 'IP Ban List',
             subtitle: 'Block suspicious sources and proxy abuse',
+            enabled: 'Enabled',
+            disabled: 'Disabled',
             refresh: 'Refresh',
             ipPlaceholder: 'Enter IP',
             reasonPlaceholder: 'Reason (optional)',

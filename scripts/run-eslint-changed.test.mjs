@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it } from 'vitest'
 import {
   buildRootArgs,
@@ -7,6 +10,22 @@ import {
   parseFileList,
   selectLintableFiles,
 } from './run-eslint-changed.mjs'
+
+const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+function isIgnoredByGit(relativePath) {
+  const result = spawnSync(
+    'git',
+    ['check-ignore', '--no-index', '--quiet', '--', relativePath],
+    { cwd: workspaceRoot, encoding: 'utf8' },
+  )
+
+  if (result.status !== 0 && result.status !== 1) {
+    throw new Error(result.stderr || result.error?.message || 'git check-ignore failed')
+  }
+
+  return result.status === 0
+}
 
 // Mirrors collectWorkspaceDirectories()'s contract: longest prefix first.
 const WORKSPACES = [
@@ -68,6 +87,24 @@ describe('groupByWorkspace', () => {
 })
 
 describe('file collection', () => {
+  it('excludes local DSH plugin-hub staging and install outputs from Git candidates', () => {
+    const generatedPaths = [
+      '.dsh-plugin-hub-adapter-staging/index.mjs',
+      '.dsh-plugin-hub-config-dump.yml',
+      '.dsh-plugin-hub-install/site/app.js',
+      '.dsh-plugin-hub-root.html',
+    ]
+
+    for (const generatedPath of generatedPaths) {
+      assert.equal(isIgnoredByGit(generatedPath), true, generatedPath)
+    }
+  })
+
+  it('keeps ordinary untracked source paths as Git candidates', () => {
+    assert.equal(isIgnoredByGit('scripts/brand-new.mjs'), false)
+    assert.deepEqual(selectLintableFiles([], ['scripts/brand-new.mjs']), ['scripts/brand-new.mjs'])
+  })
+
   it('keeps an untracked file that the tracked diff never reported', () => {
     // The bug: `git diff HEAD` lists tracked changes only, so a new file that has not been
     // `git add`ed yields an empty list and the gate exits green having linted nothing.

@@ -1,13 +1,8 @@
-export type NetworkMethod
-  = | 'GET'
-    | 'POST'
-    | 'PUT'
-    | 'PATCH'
-    | 'DELETE'
-    | 'HEAD'
-    | 'OPTIONS'
+export type NetworkMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
 export type NetworkResponseType = 'json' | 'text' | 'arrayBuffer' | 'stream'
+
+export type NetworkStreamTimeoutMode = 'deadline' | 'caller-signal'
 
 export interface NetworkRetryPolicy {
   maxRetries?: number
@@ -48,6 +43,8 @@ export interface NetworkRequestOptions<TBody = unknown> {
   query?: Record<string, string | number | boolean | null | undefined>
   timeoutMs?: number
   signal?: AbortSignal
+  /** Streaming only. Defaults to one request-lifetime deadline. */
+  streamTimeoutMode?: NetworkStreamTimeoutMode
   retryPolicy?: NetworkRetryPolicy
   cooldownPolicy?: NetworkCooldownPolicy
   skipCooldownCheck?: boolean

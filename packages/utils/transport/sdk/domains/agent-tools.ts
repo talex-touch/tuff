@@ -10,6 +10,14 @@ export type AgentToolRisk = 'read' | 'write' | 'execute'
  */
 export type AgentToolPermissionMode = 'review' | 'full'
 
+/** Main-owned snapshot of whether the tool gateway can serve the next turn. */
+export interface AgentToolGatewayState {
+  enabled: boolean
+  mode: AgentToolPermissionMode
+  ready: boolean
+  tools: string[]
+}
+
 /**
  * Marks a tool result as a renderable chart rather than text. Lives here
  * because both sides read it: the main-process tool writes it, the renderer
@@ -88,6 +96,14 @@ export interface AgentToolConfirmDecision {
   remember: boolean
 }
 
+export type AgentToolConfirmSettlementReason = 'timeout' | 'cancelled'
+
+/** Main-owned terminal state for a confirmation that no longer accepts a decision. */
+export interface AgentToolConfirmSettlement {
+  requestId: string
+  reason: AgentToolConfirmSettlementReason
+}
+
 export const AgentToolEvents = {
   /** Main → renderer: a tool wants to run and needs the user's say-so. */
   confirmRequest: defineEvent('agent-tools')
@@ -99,6 +115,16 @@ export const AgentToolEvents = {
     .module('api')
     .event('confirm-decision')
     .define<AgentToolConfirmDecision, { accepted: boolean }>(),
+  /** Main → renderer: remove a confirmation settled without a user decision. */
+  confirmSettled: defineEvent('agent-tools')
+    .module('api')
+    .event('confirm-settled')
+    .define<AgentToolConfirmSettlement, void>(),
+  /** Renderer -> main: read the authoritative gateway state. */
+  getState: defineEvent('agent-tools')
+    .module('api')
+    .event('get-state')
+    .define<void, AgentToolGatewayState>(),
   /**
    * Renderer → main: whether the agent may use tools at all, and which.
    * `mode` rides along so enabling and picking a gate behaviour stay one
@@ -121,6 +147,7 @@ export const AgentToolEvents = {
 
 export interface AgentToolsSdk {
   decide: (decision: AgentToolConfirmDecision) => Promise<{ accepted: boolean }>
+  getState: () => Promise<AgentToolGatewayState>
   setEnabled: (
     enabled: boolean,
     mode?: AgentToolPermissionMode,
@@ -134,6 +161,7 @@ export function createAgentToolsSdk(
   return {
     decide: decision =>
       transport.send(AgentToolEvents.confirmDecision, decision),
+    getState: () => transport.send(AgentToolEvents.getState),
     setEnabled: (enabled, mode) =>
       transport.send(AgentToolEvents.setEnabled, { enabled, mode }),
     resetApprovals: () =>

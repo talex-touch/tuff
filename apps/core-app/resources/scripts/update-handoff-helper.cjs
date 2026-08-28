@@ -1,9 +1,10 @@
 'use strict'
 
-const fs = require('node:fs/promises')
-const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
+const fs = require('node:fs/promises')
+const path = require('node:path')
+const process = require('node:process')
 
 const SCHEMA_VERSION = 1
 const POLL_INTERVAL_MS = 250
@@ -112,9 +113,12 @@ async function waitForParentExit(pid, timeoutMs = PARENT_EXIT_TIMEOUT_MS) {
 }
 
 async function launchCommand(command) {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+
   if (command.waitForExit) {
     await new Promise((resolve, reject) => {
-      const child = spawn(command.command, command.args, { stdio: 'ignore' })
+      const child = spawn(command.command, command.args, { stdio: 'ignore', env })
       child.once('error', reject)
       child.once('exit', (code, signal) => {
         if (code === 0) resolve()
@@ -130,7 +134,8 @@ async function launchCommand(command) {
   await new Promise((resolve, reject) => {
     const child = spawn(command.command, command.args, {
       detached: true,
-      stdio: 'ignore'
+      stdio: 'ignore',
+      env
     })
     child.once('error', reject)
     child.once('spawn', () => {

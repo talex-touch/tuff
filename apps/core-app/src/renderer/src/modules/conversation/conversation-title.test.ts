@@ -1,4 +1,5 @@
 import type { IntelligenceInvokeResult } from '@talex-touch/utils/types/intelligence'
+import { INTELLIGENCE_CONVERSATION_TITLE_OPERATION } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it, vi } from 'vitest'
 import type { TitleChatSdk } from './conversation-title'
 import {
@@ -126,6 +127,7 @@ describe('generateConversationTitle', () => {
     expect(payload.temperature).toBeLessThanOrEqual(0.5)
     expect(payload.maxTokens).toBeLessThanOrEqual(64)
     expect(options?.timeout).toBeLessThanOrEqual(15_000)
+    expect(options?.metadata).toEqual({ operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION })
   })
 
   it('clips long transcripts before they reach the prompt', async () => {

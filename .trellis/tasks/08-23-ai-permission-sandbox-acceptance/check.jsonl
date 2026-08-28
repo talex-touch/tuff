@@ -1,0 +1,5 @@
+{"file":".trellis/spec/main-process/database-write-contracts.md","reason":"Verify audit and usage writes remain scheduled, transactional, and single-writer safe."}
+{"file":".trellis/spec/main-process/agent-tool-gateway-contracts.md","reason":"Verify tool decisions, timeouts, scopes, and redacted errors preserve gateway contracts."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Verify plugin Intelligence routes fail closed before Provider execution."}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Verify no credential, prompt, response, path, or raw native error leaks into state or evidence."}
+{"file":".trellis/tasks/08-23-ai-permission-sandbox-acceptance/research/ai-permission-audit.md","reason":"Check every confirmed gap and evidence boundary against the acceptance matrix."}

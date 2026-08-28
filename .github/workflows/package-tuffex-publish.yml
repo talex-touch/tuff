@@ -97,6 +97,10 @@ jobs:
         if: steps.version_check.outputs.should_publish == 'true'
         run: pnpm -C "packages/tuffex" test
 
+      - name: Lint package
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: pnpm -C "packages/tuffex" lint
+
       - name: Type-check package
         if: steps.version_check.outputs.should_publish == 'true'
         run: pnpm -C "packages/tuffex" typecheck
@@ -105,6 +109,28 @@ jobs:
         if: steps.version_check.outputs.should_publish == 'true'
         working-directory: packages/tuffex
         run: pnpm build
+
+      - name: Audit built package surface
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: pnpm -C "packages/tuffex" audit:exports && pnpm -C "packages/tuffex" audit:readme && pnpm -C "packages/tuffex" audit:types && pnpm -C "packages/tuffex" audit:size
+
+      - name: Wait for utils dependency
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: |
+          set -euo pipefail
+
+          utils_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/utils/package.json','utf8')); console.log(pkg.version)")
+          for attempt in {1..12}; do
+            if npm view "@talex-touch/utils@${utils_version}" version >/dev/null 2>&1; then
+              echo "@talex-touch/utils@${utils_version} is available."
+              exit 0
+            fi
+            echo "Waiting for @talex-touch/utils@${utils_version} to be available on npm (${attempt}/12)..."
+            sleep 10
+          done
+
+          echo "@talex-touch/utils@${utils_version} is not available on npm."
+          exit 1
 
       - name: Verify npm token
         if: steps.version_check.outputs.should_publish == 'true'

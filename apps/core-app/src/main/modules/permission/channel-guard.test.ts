@@ -75,9 +75,10 @@ describe('withPermission privileged plugin mode', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
-  it('rejects a payload sdkapi that disagrees with the declared plugin version', async () => {
+  it('rejects a forged payload sdkapi that disagrees with the declared plugin version', async () => {
+    const checkPermission = vi.fn(() => ({ allowed: true }))
     mocks.getPermissionModule.mockReturnValue({
-      checkPermission: vi.fn(() => ({ allowed: true }))
+      checkPermission
     })
     const callback = vi.fn()
     const handler = withPermission(
@@ -94,6 +95,59 @@ describe('withPermission privileged plugin mode', () => {
       permissionId: 'window.create',
       pluginId: 'touch-test'
     })
+    expect(checkPermission).not.toHaveBeenCalled()
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', () => undefined],
+    [
+      'throws',
+      () => {
+        throw new Error('plugin metadata lookup secret')
+      }
+    ]
+  ])('fails closed when authoritative sdkapi metadata %s', async (_case, resolvePlugin) => {
+    const checkPermission = vi.fn(() => ({ allowed: true }))
+    mocks.getPermissionModule.mockReturnValue({ checkPermission })
+    mocks.getPluginByName.mockImplementation(resolvePlugin)
+    const callback = vi.fn()
+    const handler = withPermission(
+      {
+        permissionId: 'window.create',
+        failClosedForPlugin: true,
+        sdkMismatchCode: 'SDKAPI_MISMATCH'
+      },
+      callback
+    )
+
+    await expect(handler({ _sdkapi: 260615 }, pluginContext)).rejects.toMatchObject({
+      code: 'SDKAPI_MISMATCH',
+      permissionId: 'window.create',
+      pluginId: 'touch-test'
+    })
+    expect(checkPermission).not.toHaveBeenCalled()
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('uses an outdated declared sdkapi instead of a forged current payload', async () => {
+    const checkPermission = vi.fn((_pluginId, _permissionId, sdkapi) => ({
+      allowed: sdkapi !== 250101,
+      code: sdkapi === 250101 ? 'SDKAPI_BLOCKED' : undefined,
+      reason: sdkapi === 250101 ? 'incompatible-sdk' : undefined
+    }))
+    mocks.getPermissionModule.mockReturnValue({ checkPermission })
+    mocks.getPluginByName.mockReturnValue({ sdkapi: 250101 })
+    const callback = vi.fn()
+    const handler = withPermission(
+      { permissionId: 'window.create', failClosedForPlugin: true },
+      callback
+    )
+
+    await expect(handler({ _sdkapi: 260615 }, pluginContext)).rejects.toMatchObject({
+      code: 'SDKAPI_BLOCKED'
+    })
+    expect(checkPermission).toHaveBeenCalledWith('touch-test', 'window.create', 250101)
     expect(callback).not.toHaveBeenCalled()
   })
 
@@ -106,6 +160,22 @@ describe('withPermission privileged plugin mode', () => {
     )
 
     await expect(handler({}, {} as HandlerContext)).resolves.toBe('ok')
+    expect(callback).toHaveBeenCalledOnce()
+  })
+
+  it('does not resolve plugin sdkapi metadata for host callers', async () => {
+    mocks.getPermissionModule.mockReturnValue({ checkPermission: vi.fn() })
+    mocks.getPluginByName.mockImplementation(() => {
+      throw new Error('host must not resolve plugin metadata')
+    })
+    const callback = vi.fn(() => 'ok')
+    const handler = withPermission(
+      { permissionId: 'window.create', failClosedForPlugin: true },
+      callback
+    )
+
+    await expect(handler({ _sdkapi: 260615 }, {} as HandlerContext)).resolves.toBe('ok')
+    expect(mocks.getPluginByName).not.toHaveBeenCalled()
     expect(callback).toHaveBeenCalledOnce()
   })
 

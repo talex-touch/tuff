@@ -244,7 +244,7 @@ function isEventInsideMenuLayer(e: Event): boolean {
 }
 
 function handlePointerDown(e: MouseEvent) {
-  if (!props.closeOnAnyPointerDown && !props.closeOnTriggerPointerDown)
+  if (!props.closeOnAnyPointerDown && !props.closeOnTriggerPointerDown && !props.closeOnClickOutside)
     return
   if (!open.value)
     return
@@ -254,8 +254,17 @@ function handlePointerDown(e: MouseEvent) {
   if (isEventInsideMenuLayer(e))
     return
 
+  if (props.closeOnAnyPointerDown) {
+    close()
+    return
+  }
+
+  // Outside-close lives here, not in the anchor: the anchor only sees its
+  // virtual reference, so a press on our sibling trigger element would count
+  // as "outside" there and close menus that shouldCloseFromTriggerPointerDown
+  // says must stay open (click-triggered menus, right-press repositioning).
   const inTrigger = isEventInside(e, triggerRef.value)
-  if (props.closeOnAnyPointerDown || (inTrigger && shouldCloseFromTriggerPointerDown(e)))
+  if (inTrigger ? shouldCloseFromTriggerPointerDown(e) : props.closeOnClickOutside)
     close()
 }
 
@@ -325,6 +334,9 @@ defineExpose({
     </slot>
   </div>
 
+  <!-- close-on-click-outside stays false: the anchor only sees its virtual
+       reference, so it cannot tell our sibling trigger from "outside".
+       handlePointerDown owns the closeOnClickOutside prop instead. -->
   <TxPopover
     ref="anchorRef"
     class="tx-context-menu"
@@ -351,7 +363,7 @@ defineExpose({
     :panel-padding="panelPadding"
     :panel-card="panelCard"
     :keep-alive-content="keepAliveContent"
-    :close-on-click-outside="closeOnClickOutside"
+    :close-on-click-outside="false"
     :close-on-esc="closeOnEsc"
     :toggle-on-reference-click="false"
     @update:model-value="onAnchorUpdate"

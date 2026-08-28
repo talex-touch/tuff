@@ -231,6 +231,38 @@ function deferred<T>(): {
   return { promise, resolve, reject }
 }
 
+function createStreamingSdk(
+  providers: TestProvider[],
+  config: { enableAudit?: boolean; enableQuota?: boolean } = {}
+): TuffIntelligenceSDK {
+  intelligenceCapabilityRegistry.register({
+    id: 'text.chat',
+    type: IntelligenceCapabilityType.CHAT,
+    name: 'Chat',
+    description: 'test streaming capability',
+    supportedProviders: Array.from(new Set(providers.map((provider) => provider.getConfig().type)))
+  })
+  setIntelligenceProviderManager(new FakeProviderManager(providers))
+
+  return new TuffIntelligenceSDK({
+    enableAudit: config.enableAudit ?? true,
+    enableQuota: config.enableQuota ?? false,
+    enableCache: false,
+    capabilities: {
+      'text.chat': {
+        providers: providers.map((provider, index) => {
+          const providerConfig = provider.getConfig()
+          return {
+            providerId: providerConfig.id,
+            priority: providerConfig.priority ?? index + 1,
+            enabled: providerConfig.enabled
+          }
+        })
+      }
+    }
+  })
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   intelligenceCapabilityRegistry.clear()
@@ -410,7 +442,11 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
     expect(auditLog).not.toHaveBeenCalled()
 
     const directResult = await sdk.invoke<string>('text.chat', payload, {
-      metadata: { caller: 'workflow:outer-governed' }
+      metadata: {
+        caller: 'workflow:outer-governed',
+        operation: 'conversation-title',
+        response: 'must-not-enter-audit'
+      }
     })
 
     expect(directResult.result).toBe('direct response')
@@ -420,7 +456,8 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
       expect.objectContaining({
         capabilityId: 'text.chat',
         caller: 'workflow:outer-governed',
-        success: true
+        success: true,
+        metadata: { operation: 'conversation-title' }
       })
     )
   })
@@ -2844,6 +2881,520 @@ describe('tuffIntelligenceSDK invoke', () => {
     expect(fallbackChat).toHaveBeenCalledOnce()
     expect(primaryChat.mock.calls[0]?.[0].messages).toEqual(expectedMessages)
     expect(fallbackChat.mock.calls[0]?.[0].messages).toEqual(expectedMessages)
+  })
+
+  describe('stream audit finalization', () => {
+    it('writes one fail-soft primary success audit from final provider metadata', async () => {
+      const usage = { promptTokens: 7, completionTokens: 5, totalTokens: 12 }
+      async function* streamChunks() {
+        yield {
+          delta: 'response-secret-canary',
+          done: false,
+          traceId: 'trace-primary-terminal',
+          provider: 'routed-primary',
+          model: 'primary-terminal-model',
+          latency: 73
+        }
+        yield { delta: '', done: true, usage }
+      }
+
+      const provider = createProvider(
+        {
+          id: 'primary-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Primary Stream',
+          enabled: true,
+          priority: 1,
+          defaultModel: 'primary-default-model',
+          models: ['primary-default-model'],
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      provider.chatStream = vi.fn(() => streamChunks())
+      const sdk = createStreamingSdk([provider])
+      const warningLog = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const auditLog = vi
+        .spyOn(intelligenceAuditLogger, 'log')
+        .mockRejectedValueOnce(new Error('token=audit-secret /private/audit-store'))
+
+      const events: IntelligenceStreamEvent<string>[] = []
+      for await (const event of sdk.stream<string>(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'prompt-secret-canary' }] },
+        {
+          promptTemplate: 'System secret {{secret}}',
+          promptVariables: { secret: 'prompt-variable-secret-canary' },
+          metadata: {
+            caller: 'plugin:primary-stream',
+            operation: 'home-conversation',
+            response: 'must-not-enter-audit'
+          }
+        }
+      )) {
+        events.push(event)
+      }
+
+      expect(events.at(-1)).toMatchObject({ type: 'end', result: 'response-secret-canary' })
+      expect(auditLog).toHaveBeenCalledOnce()
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          capabilityId: 'text.chat',
+          caller: 'plugin:primary-stream',
+          provider: 'routed-primary',
+          model: 'primary-terminal-model',
+          traceId: 'trace-primary-terminal',
+          usage,
+          latency: 73,
+          metadata: { operation: 'home-conversation' }
+        })
+      )
+      expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(
+        /prompt-secret-canary|prompt-variable-secret-canary|response-secret-canary/i
+      )
+      expect(JSON.stringify(warningLog.mock.calls)).toContain('INTELLIGENCE_AUDIT_LOG_FAILED')
+      expect(JSON.stringify(warningLog.mock.calls)).not.toMatch(
+        /audit-secret|private\/audit-store/i
+      )
+    })
+
+    it('awaits the success audit before publishing the end event', async () => {
+      async function* streamChunks() {
+        yield { delta: 'ordered', done: false }
+        yield {
+          delta: '',
+          done: true,
+          usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 }
+        }
+      }
+
+      const provider = createProvider(
+        {
+          id: 'ordered-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Ordered Stream',
+          enabled: true,
+          priority: 1,
+          defaultModel: 'ordered-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      provider.chatStream = vi.fn(() => streamChunks())
+      const sdk = createStreamingSdk([provider])
+      const auditCommit = deferred<void>()
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockReturnValue(auditCommit.promise)
+      const iterator = sdk.stream<string>('text.chat', {
+        messages: [{ role: 'user', content: 'ordered request' }]
+      })
+
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'start' } })
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'delta' } })
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'usage' } })
+      let endPublished = false
+      const pendingEnd = iterator.next().then((value) => {
+        endPublished = true
+        return value
+      })
+      await vi.waitFor(() => expect(auditLog).toHaveBeenCalledOnce())
+
+      expect(endPublished).toBe(false)
+
+      auditCommit.resolve()
+      await expect(pendingEnd).resolves.toMatchObject({ value: { type: 'end', result: 'ordered' } })
+      await iterator.next()
+    })
+
+    it('writes only the fallback success audit after a recoverable primary failure', async () => {
+      const primaryError = new Error('token=primary-secret /private/provider')
+      async function* primaryChunks() {
+        throw primaryError
+      }
+      const usage = { promptTokens: 11, completionTokens: 9, totalTokens: 20 }
+      async function* fallbackChunks() {
+        yield {
+          delta: 'fallback answer',
+          done: false,
+          traceId: 'trace-fallback-terminal',
+          provider: 'routed-fallback',
+          model: 'fallback-terminal-model',
+          latency: 41
+        }
+        yield { delta: '', done: true, usage }
+      }
+
+      const primary = createProvider(
+        {
+          id: 'primary-failing-stream',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Primary Failing Stream',
+          enabled: true,
+          priority: 1,
+          apiKey: 'primary-key',
+          defaultModel: 'primary-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      primary.chatStream = vi.fn(() => primaryChunks())
+      const fallback = createProvider(
+        {
+          id: 'fallback-success-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Fallback Success Stream',
+          enabled: true,
+          priority: 2,
+          defaultModel: 'fallback-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      fallback.chatStream = vi.fn(() => fallbackChunks())
+      const sdk = createStreamingSdk([primary, fallback])
+      const warningLog = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+
+      const events: IntelligenceStreamEvent<string>[] = []
+      for await (const event of sdk.stream<string>(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'fallback request' }] },
+        { metadata: { caller: 'plugin:fallback-stream' } }
+      )) {
+        events.push(event)
+      }
+
+      expect(events.at(-1)).toMatchObject({
+        type: 'end',
+        result: 'fallback answer',
+        provider: 'routed-fallback'
+      })
+      expect(auditLog).toHaveBeenCalledOnce()
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          provider: 'routed-fallback',
+          model: 'fallback-terminal-model',
+          traceId: 'trace-fallback-terminal',
+          usage,
+          latency: 41
+        })
+      )
+      expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(/primary-secret|private\/provider/i)
+      expect(JSON.stringify(warningLog.mock.calls)).toContain('INTELLIGENCE_PROVIDER_FAILED')
+      expect(JSON.stringify(warningLog.mock.calls)).not.toMatch(/primary-secret|private\/provider/i)
+    })
+
+    it('writes one redacted failure audit when every provider fails before a delta', async () => {
+      const primaryError = new Error('apiKey=primary-secret /private/primary')
+      const fallbackError = new Error('token=fallback-secret /private/fallback')
+      async function* primaryChunks() {
+        throw primaryError
+      }
+      async function* fallbackChunks() {
+        throw fallbackError
+      }
+
+      const primary = createProvider(
+        {
+          id: 'primary-terminal-failure',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Primary Terminal Failure',
+          enabled: true,
+          priority: 1,
+          apiKey: 'primary-key',
+          defaultModel: 'primary-failure-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      primary.chatStream = vi.fn(() => primaryChunks())
+      const fallback = createProvider(
+        {
+          id: 'fallback-terminal-failure',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Fallback Terminal Failure',
+          enabled: true,
+          priority: 2,
+          defaultModel: 'fallback-failure-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      fallback.chatStream = vi.fn(() => fallbackChunks())
+      const sdk = createStreamingSdk([primary, fallback])
+      const warningLog = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+
+      const consume = async (): Promise<void> => {
+        for await (const _event of sdk.stream('text.chat', {
+          messages: [{ role: 'user', content: 'secret prompt' }]
+        })) {
+          // Consume until the terminal provider failure.
+        }
+      }
+
+      await expect(consume()).rejects.toBe(fallbackError)
+      expect(auditLog).toHaveBeenCalledOnce()
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'INTELLIGENCE_PROVIDER_FAILED',
+          provider: 'fallback-terminal-failure',
+          model: 'fallback-failure-model',
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+        })
+      )
+      expect(auditLog.mock.calls[0]?.[0].traceId).toMatch(/^trace-/)
+      expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(
+        /primary-secret|fallback-secret|private\/primary|private\/fallback|secret prompt/i
+      )
+      expect(JSON.stringify(warningLog.mock.calls)).toContain('INTELLIGENCE_PROVIDER_FAILED')
+      expect(JSON.stringify(warningLog.mock.calls)).not.toMatch(
+        /primary-secret|fallback-secret|private\/primary|private\/fallback/i
+      )
+    })
+
+    it('writes one redacted failure audit from the interrupted post-delta provider', async () => {
+      const streamError = new Error('token=post-delta-secret /private/interrupted')
+      const usage = { promptTokens: 3, completionTokens: 2, totalTokens: 5 }
+      async function* primaryChunks() {
+        yield {
+          delta: 'partial',
+          done: false,
+          traceId: 'trace-post-delta',
+          provider: 'routed-interrupted',
+          model: 'interrupted-model',
+          usage,
+          latency: 29
+        }
+        throw streamError
+      }
+      async function* fallbackChunks() {
+        yield { delta: 'must not run', done: false }
+      }
+
+      const primary = createProvider(
+        {
+          id: 'post-delta-primary',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Post Delta Primary',
+          enabled: true,
+          priority: 1,
+          apiKey: 'primary-key',
+          defaultModel: 'primary-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      primary.chatStream = vi.fn(() => primaryChunks())
+      const fallback = createProvider(
+        {
+          id: 'unused-post-delta-fallback',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Unused Post Delta Fallback',
+          enabled: true,
+          priority: 2,
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      fallback.chatStream = vi.fn(() => fallbackChunks())
+      const sdk = createStreamingSdk([primary, fallback])
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+
+      const consume = async (): Promise<void> => {
+        for await (const _event of sdk.stream('text.chat', {
+          messages: [{ role: 'user', content: 'interrupt request' }]
+        })) {
+          // Consume until the selected provider interrupts after its delta.
+        }
+      }
+
+      await expect(consume()).rejects.toBe(streamError)
+      expect(fallback.chatStream).not.toHaveBeenCalled()
+      expect(auditLog).toHaveBeenCalledOnce()
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'INTELLIGENCE_PROVIDER_FAILED',
+          provider: 'routed-interrupted',
+          model: 'interrupted-model',
+          traceId: 'trace-post-delta',
+          usage,
+          latency: 29
+        })
+      )
+      expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(
+        /post-delta-secret|private\/interrupted/i
+      )
+    })
+
+    it('cancels a pending provider iteration without writing a failure audit', async () => {
+      const releaseProvider = deferred<void>()
+      async function* streamChunks() {
+        yield { delta: 'partial', done: false }
+        await releaseProvider.promise
+        yield { delta: '', done: true }
+      }
+
+      const provider = createProvider(
+        {
+          id: 'cancelled-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Cancelled Stream',
+          enabled: true,
+          priority: 1,
+          defaultModel: 'cancelled-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      provider.chatStream = vi.fn(() => streamChunks())
+      const sdk = createStreamingSdk([provider])
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+      const controller = new AbortController()
+      const iterator = sdk.stream(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'cancel request' }] },
+        {
+          signal: controller.signal,
+          metadata: { caller: 'plugin:cancelled-stream' }
+        } as IntelligenceInvokeOptions & { signal: AbortSignal }
+      )
+
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'start' } })
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'delta' } })
+      const pending = iterator.next()
+      const cancelled = expect(pending).rejects.toMatchObject({
+        code: 'INTELLIGENCE_OPERATION_CANCELLED'
+      })
+      controller.abort()
+      await cancelled
+      releaseProvider.resolve()
+      await Promise.resolve()
+
+      expect(auditLog).not.toHaveBeenCalled()
+    })
+
+    it('does not start provider work when cancelled after the start event', async () => {
+      async function* streamChunks() {
+        yield { delta: 'must not run', done: false }
+      }
+
+      const provider = createProvider(
+        {
+          id: 'cancelled-before-provider-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Cancelled Before Provider Stream',
+          enabled: true,
+          priority: 1,
+          defaultModel: 'cancelled-before-provider-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      provider.chatStream = vi.fn(() => streamChunks())
+      const sdk = createStreamingSdk([provider])
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+      const controller = new AbortController()
+      const iterator = sdk.stream(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'cancel before provider' }] },
+        { signal: controller.signal } as IntelligenceInvokeOptions & { signal: AbortSignal }
+      )
+
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'start' } })
+      controller.abort()
+      await expect(iterator.next()).rejects.toMatchObject({
+        code: 'INTELLIGENCE_OPERATION_CANCELLED'
+      })
+
+      expect(provider.chatStream).not.toHaveBeenCalled()
+      expect(auditLog).not.toHaveBeenCalled()
+    })
+
+    it('treats consumer early-return as uncommitted instead of a failure', async () => {
+      const providerClosed = vi.fn()
+      async function* streamChunks() {
+        try {
+          yield { delta: 'partial', done: false }
+          yield { delta: '', done: true }
+        } finally {
+          providerClosed()
+        }
+      }
+
+      const provider = createProvider(
+        {
+          id: 'early-return-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Early Return Stream',
+          enabled: true,
+          priority: 1,
+          defaultModel: 'early-return-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      provider.chatStream = vi.fn(() => streamChunks())
+      const sdk = createStreamingSdk([provider])
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+      const iterator = sdk.stream('text.chat', {
+        messages: [{ role: 'user', content: 'stop consuming' }]
+      })
+
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'start' } })
+      await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'delta' } })
+      await iterator.return(undefined)
+
+      expect(providerClosed).toHaveBeenCalledOnce()
+      expect(auditLog).not.toHaveBeenCalled()
+    })
+
+    it('skips inner quota and audit for an outer-governed stream', async () => {
+      async function* streamChunks() {
+        yield { delta: 'governed', done: false }
+        yield {
+          delta: '',
+          done: true,
+          usage: { promptTokens: 2, completionTokens: 1, totalTokens: 3 }
+        }
+      }
+
+      const provider = createProvider(
+        {
+          id: 'outer-governed-stream',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Outer Governed Stream',
+          enabled: true,
+          priority: 1,
+          defaultModel: 'outer-governed-model',
+          capabilities: ['text.chat']
+        },
+        vi.fn()
+      )
+      provider.chatStream = vi.fn(() => streamChunks())
+      const sdk = createStreamingSdk([provider], { enableQuota: true })
+      const quotaCheck = vi.spyOn(sdk, 'checkQuota')
+      const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+      const options = markOuterGovernedInvocation({
+        metadata: { caller: 'workflow:outer-governed-stream' }
+      })
+
+      const events: IntelligenceStreamEvent<string>[] = []
+      for await (const event of sdk.stream<string>(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'governed request' }] },
+        options
+      )) {
+        events.push(event)
+      }
+
+      expect(events.at(-1)).toMatchObject({ type: 'end', result: 'governed' })
+      expect(quotaCheck).not.toHaveBeenCalled()
+      expect(auditLog).not.toHaveBeenCalled()
+    })
   })
 
   it('streams text.chat deltas from provider chatStream', async () => {

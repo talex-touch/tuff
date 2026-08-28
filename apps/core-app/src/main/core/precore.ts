@@ -258,9 +258,13 @@ if (process.platform === 'win32' && release().startsWith('6.1')) app.disableHard
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 const startupBenchmarkMode = parseBooleanEnv(process.env.TUFF_STARTUP_BENCHMARK_ONCE)
+const isolatedAcceptanceMode =
+  parseBooleanEnv(process.env.TUFF_PACKAGED_ACCEPTANCE_ISOLATED) &&
+  Boolean(process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR?.trim())
 const hasSingleInstanceLock = setupSingleInstanceGuard({
   app,
   startupBenchmarkMode,
+  isolatedAcceptanceMode,
   emitSecondaryLaunch: (eventName, payload) => touchEventBus.emit(eventName, payload),
   onDuplicateInstance: () => setQuitIntent('duplicate-instance', 'single-instance-lock-denied'),
   createSecondaryLaunchEvent: (event, argv, workingDirectory, additionalData) =>

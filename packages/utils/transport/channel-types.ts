@@ -66,7 +66,7 @@ export interface ITouchClientChannel {
     eventName: string,
     callback: (data: StandardChannelData) => any,
   ) => boolean;
-  send: (eventName: string, arg?: any) => Promise<any>;
+  send: (eventName: string, arg?: any, options?: { timeout?: number }) => Promise<any>;
 }
 
 export interface RawChannelSyncData {

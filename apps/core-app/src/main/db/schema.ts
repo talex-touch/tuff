@@ -1598,6 +1598,9 @@ export const aiOrchestratorRuns = sqliteTable(
   },
   (table) => ({
     statusIdx: index('idx_ai_orchestrator_runs_status').on(table.status, table.updatedAt),
+    retentionIdx: index('idx_ai_orchestrator_runs_retention')
+      .on(table.updatedAt, table.id)
+      .where(sql`${table.status} IN ('completed', 'failed', 'cancelled', 'interrupted')`),
     automationIdx: index('idx_ai_orchestrator_runs_automation').on(
       table.automationId,
       table.createdAt

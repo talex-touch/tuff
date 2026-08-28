@@ -612,6 +612,13 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return this.config.apiKey || 'tuff-local-key'
   }
 
+  protected resolveRequestTimeout(
+    options: IntelligenceInvokeOptions,
+    defaultTimeout = 30_000
+  ): number {
+    return options.timeout ?? this.config.timeout ?? defaultTimeout
+  }
+
   protected resolveChatModel(options: IntelligenceInvokeOptions): string {
     const model = options.modelPreference?.[0] || this.config.defaultModel || this.defaultChatModel
     this.validateModel(model, {
@@ -673,7 +680,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       temperature: params.temperature,
       maxTokens: params.maxTokens,
       streaming: params.streaming,
-      timeout: params.options.timeout,
+      timeout: this.resolveRequestTimeout(params.options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
         fetch: createNetworkServiceFetch()
@@ -707,7 +714,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       model: resolveModelName(rawMessage, modelName),
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type,
+      provider: this.config.id,
       reasoning: extractReasoningContent(rawMessage)
     }
   }
@@ -756,7 +763,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     const embeddings = new OpenAIEmbeddings({
       apiKey: this.resolveApiKey(),
       model: modelName,
-      timeout: options.timeout,
+      timeout: this.resolveRequestTimeout(options),
       configuration: {
         baseURL: this.resolveBaseUrl(),
         fetch: createNetworkServiceFetch()
@@ -986,7 +993,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
           ? { seed: Math.floor(payload.seed) }
           : {})
       },
-      timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
+      timeoutMs: this.resolveRequestTimeout(options, 60_000),
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
@@ -1050,7 +1057,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         Authorization: `Bearer ${this.resolveApiKey()}`
       },
       body: form,
-      timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
+      timeoutMs: this.resolveRequestTimeout(options, 60_000),
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
@@ -1118,7 +1125,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         ...(speed ? { speed } : {})
       },
       responseType: 'arrayBuffer',
-      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
+      timeoutMs: this.resolveRequestTimeout(options),
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
@@ -1251,7 +1258,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         Authorization: `Bearer ${this.resolveApiKey()}`
       },
       body: form,
-      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
+      timeoutMs: this.resolveRequestTimeout(options),
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,

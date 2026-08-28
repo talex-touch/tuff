@@ -218,7 +218,6 @@ export class TouchStorage<T extends object> {
   readonly originalData: T
   private readonly _onUpdate: Array<() => void> = []
   #transportInitialized = false
-  #skipNextWatchTrigger = false
   #currentVersion = 0
   #isRemoteUpdate = false
   #hydrated = false
@@ -598,8 +597,9 @@ export class TouchStorage<T extends object> {
 
       if (result.success) {
         this.#currentVersion = result.version
-        this.#lastSyncedSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
-        this.#localDirty = false
+        const currentData = toPlainStorageValue(this.data)
+        this.#lastSyncedSnapshot = cloneValue(rawData as T) as T
+        this.#localDirty = !isEqual(rawData, currentData)
       }
       else if (result.conflict) {
         console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
@@ -718,11 +718,6 @@ export class TouchStorage<T extends object> {
           return
         }
 
-        if (this.#skipNextWatchTrigger) {
-          this.#skipNextWatchTrigger = false
-          return
-        }
-
         this.#runAutoSavePipeline()
       },
       { deep: true },
@@ -765,7 +760,6 @@ export class TouchStorage<T extends object> {
     applyPatch(this.data as Record<string, unknown>, patch)
 
     if (this.#autoSave) {
-      this.#skipNextWatchTrigger = true
       const resetAssigning = () => {
         this.#assigning = false
       }
@@ -837,7 +831,6 @@ export class TouchStorage<T extends object> {
     Object.assign(this.data, newData)
 
     if (stopWatch && this.#autoSave) {
-      this.#skipNextWatchTrigger = true
       const resetAssigning = () => {
         this.#assigning = false
       }

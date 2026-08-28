@@ -20,6 +20,10 @@ import {
 import { AssistantEvents } from "../transport/events/assistant";
 import { createAgentsSdk } from "../transport/sdk/domains/agents";
 import { createAgentStoreSdk } from "../transport/sdk/domains/agents-store";
+import {
+  AgentToolEvents,
+  createAgentToolsSdk,
+} from "../transport/sdk/domains/agent-tools";
 import { createAppSdk } from "../transport/sdk/domains/app";
 import { createIntelligenceSdk } from "../transport/sdk/domains/intelligence";
 import {
@@ -45,6 +49,18 @@ function createTransportMock() {
 }
 
 describe("transport domain sdk mappings", () => {
+  it("agent tools sdk maps the authoritative gateway state event", async () => {
+    const transport = createTransportMock();
+    const sdk = createAgentToolsSdk(transport as any);
+
+    await sdk.getState();
+
+    expect(AgentToolEvents.getState.toEventName()).toBe(
+      "agent-tools:api:get-state",
+    );
+    expect(transport.send).toHaveBeenCalledWith(AgentToolEvents.getState);
+  });
+
   it("update sdk maps check and settings events", async () => {
     const transport = createTransportMock();
     const sdk = createUpdateSdk(transport as any);
@@ -1007,6 +1023,17 @@ describe("transport domain sdk mappings", () => {
     await expect(sdk.invoke("text.chat", { messages: [] })).rejects.toThrow(
       "quota exceeded",
     );
+
+    transport.send.mockResolvedValueOnce({
+      ok: false,
+      error: "INTELLIGENCE_PERMISSION_DENIED",
+    });
+    await expect(
+      sdk.invoke("text.chat", { messages: [] }),
+    ).rejects.toMatchObject({
+      message: "INTELLIGENCE_PERMISSION_DENIED",
+      code: "INTELLIGENCE_PERMISSION_DENIED",
+    });
   });
 
   it("intelligence sdk maps core API calls through typed api events", async () => {

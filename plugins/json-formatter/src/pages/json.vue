@@ -2,6 +2,7 @@
 import type { editor as MonacoEditorNamespace } from 'monaco-editor'
 import type { Component } from 'vue'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
+import { isDark } from '~/composables/dark'
 import { forceMaxCoreBox, useCoreBoxInput } from '~/composables/useCoreBoxInput'
 import { useJsonFormatter } from '~/composables/useJsonFormatter'
 import { waitForMonacoReady } from '~/modules/monaco'
@@ -46,8 +47,6 @@ useCoreBoxInput((text) => {
   focusInputEditor()
 })
 
-// Dark mode detection
-const isDark = useDark()
 const editorTheme = computed(() => isDark.value ? 'vs-dark' : 'vs')
 const MonacoEditor = shallowRef<Component | null>(null)
 const inputEditor = shallowRef<MonacoEditorNamespace.IStandaloneCodeEditor | null>(null)

@@ -10,6 +10,7 @@ import {
 import { createPrivacySdk } from '../transport/sdk/domains/privacy'
 
 const PREVIEW_ID = 'preview_0123456789abcdef'
+const ORCHESTRATOR_RUN_LOCATOR = 'legacy/run folder/历史 记录'
 
 function createTransportMock() {
   return {
@@ -26,6 +27,8 @@ describe('privacy typed transport contracts', () => {
     expect(PrivacyEvents.policy.get.toEventName()).toBe('privacy:policy:get')
     expect(PrivacyEvents.cleanup.preview.toEventName()).toBe('privacy:cleanup:preview')
     expect(PrivacyEvents.category.deletePreview.toEventName()).toBe('privacy:category:delete-preview')
+    expect(PrivacyEvents.orchestratorRun.deletePreview.toEventName()).toBe('privacy:orchestrator-run:delete-preview')
+    expect(PrivacyEvents.orchestratorRun.delete.toEventName()).toBe('privacy:orchestrator-run:delete')
     expect(PrivacyEvents.secret.restoreApply.toEventName()).toBe('privacy:secret:restore-apply')
     expect(PrivacyEvents.secret.restoreApply).toMatchObject({
       namespace: 'privacy',
@@ -54,6 +57,8 @@ describe('privacy typed transport contracts', () => {
     await sdk.category.export(['clipboard-history'])
     await sdk.category.previewDelete(['clipboard-history', 'search-history'])
     await sdk.category.delete(['clipboard-history'], 'delete-selected-data', PREVIEW_ID)
+    await sdk.orchestratorRun.previewDelete(ORCHESTRATOR_RUN_LOCATOR)
+    await sdk.orchestratorRun.delete('delete-orchestrator-run', PREVIEW_ID)
     await sdk.provider.getDisclosure()
     await sdk.secret.backupPreview()
     await sdk.secret.backupWrite('correct horse battery staple')
@@ -80,6 +85,21 @@ describe('privacy typed transport contracts', () => {
           operation: 'category.delete',
           categories: ['clipboard-history'],
           confirmation: 'delete-selected-data',
+          previewId: PREVIEW_ID,
+        },
+      ],
+      [
+        PrivacyEvents.orchestratorRun.deletePreview,
+        {
+          operation: 'orchestrator-run.delete-preview',
+          runId: ORCHESTRATOR_RUN_LOCATOR,
+        },
+      ],
+      [
+        PrivacyEvents.orchestratorRun.delete,
+        {
+          operation: 'orchestrator-run.delete',
+          confirmation: 'delete-orchestrator-run',
           previewId: PREVIEW_ID,
         },
       ],
@@ -123,6 +143,19 @@ describe('privacy typed transport contracts', () => {
         previewId: PREVIEW_ID,
       },
       {
+        operation: 'orchestrator-run.delete-preview',
+        runId: ORCHESTRATOR_RUN_LOCATOR,
+      },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: `${'界'.repeat(341)}a`,
+      },
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: PREVIEW_ID,
+      },
+      {
         operation: 'secret-restore.apply',
         restoreId: 'restore_0123456789abcdef',
         password: 'correct horse battery staple',
@@ -149,6 +182,54 @@ describe('privacy typed transport contracts', () => {
         confirmation: 'delete-selected-data',
       },
       { operation: 'category.delete', categories: ['search-history'], sql: 'DELETE FROM x' },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: ORCHESTRATOR_RUN_LOCATOR,
+        objective: 'sensitive objective',
+      },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: 'legacy/run\0folder',
+      },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: 'legacy/run\u001ffolder',
+      },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: 'legacy/run\u0085folder',
+      },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: 'legacy/run\uD800folder',
+      },
+      {
+        operation: 'orchestrator-run.delete-preview',
+        runId: '界'.repeat(342),
+      },
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-selected-data',
+        previewId: PREVIEW_ID,
+      },
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: PREVIEW_ID,
+        runId: ORCHESTRATOR_RUN_LOCATOR,
+      },
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: PREVIEW_ID,
+        locator: ORCHESTRATOR_RUN_LOCATOR,
+      },
+      {
+        operation: 'orchestrator-run.delete',
+        confirmation: 'delete-orchestrator-run',
+        previewId: PREVIEW_ID,
+        output: 'sensitive output',
+      },
       {
         operation: 'category.export',
         categories: ['search-history'],
@@ -257,6 +338,82 @@ describe('privacy typed transport contracts', () => {
         reportId: 'report_export_0001',
       },
     })
+    expect(
+      normalizePrivacyResult('orchestrator-run.delete-preview', {
+        ok: true,
+        data: {
+          disposition: 'eligible',
+          eventCount: 4,
+          previewId: PREVIEW_ID,
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      data: {
+        disposition: 'eligible',
+        eventCount: 4,
+        previewId: PREVIEW_ID,
+      },
+    })
+    expect(
+      normalizePrivacyResult('orchestrator-run.delete-preview', {
+        ok: true,
+        data: {
+          disposition: 'protected',
+          eventCount: 2,
+        },
+      }),
+    ).toMatchObject({ ok: true })
+    expect(
+      normalizePrivacyResult('orchestrator-run.delete', {
+        ok: true,
+        data: {
+          deletedEventCount: 4,
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      data: {
+        deletedEventCount: 4,
+      },
+    })
+
+    for (const [operation, data] of [
+      [
+        'orchestrator-run.delete-preview',
+        {
+          disposition: 'eligible',
+          eventCount: 4,
+          previewId: PREVIEW_ID,
+          runId: ORCHESTRATOR_RUN_LOCATOR,
+        },
+      ],
+      [
+        'orchestrator-run.delete-preview',
+        {
+          disposition: 'eligible',
+          eventCount: 4,
+          previewId: PREVIEW_ID,
+          locator: ORCHESTRATOR_RUN_LOCATOR,
+        },
+      ],
+      [
+        'orchestrator-run.delete',
+        {
+          deletedEventCount: 4,
+          runId: ORCHESTRATOR_RUN_LOCATOR,
+        },
+      ],
+      [
+        'orchestrator-run.delete',
+        {
+          deletedEventCount: 4,
+          locator: ORCHESTRATOR_RUN_LOCATOR,
+        },
+      ],
+    ] as const) {
+      expect(() => normalizePrivacyResult(operation, { ok: true, data })).toThrow('PRIVACY_REQUEST_INVALID')
+    }
 
     for (const result of [
       {

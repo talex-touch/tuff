@@ -1488,7 +1488,12 @@ function assertApiResponse<T>(
   fallbackMessage: string,
 ): T {
   if (!response?.ok) {
-    throw new Error(response?.error || fallbackMessage);
+    const message = response?.error || fallbackMessage;
+    const error = new Error(message) as Error & { code?: string };
+    if (/^[A-Z][A-Z0-9_]{2,127}$/.test(message)) {
+      error.code = message;
+    }
+    throw error;
   }
   return response.result as T;
 }

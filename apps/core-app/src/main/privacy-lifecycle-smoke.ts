@@ -15,6 +15,11 @@ import { PORTABLE_SECRET_CATALOG_V1 } from './modules/privacy/portable-secret-ca
 import { createPrivacyCategoryExporter } from './modules/privacy/privacy-export'
 import { createPrivacyLifecycleService } from './modules/privacy/privacy-lifecycle-service'
 import {
+  runOrchestratorPrivacyAcceptance,
+  withOrchestratorPrivacyTransportFixture,
+  type OrchestratorPrivacyTransportFixture
+} from './modules/privacy/orchestrator-run-privacy-acceptance'
+import {
   createMainPrivacySecretFileAdapter,
   createPrivacySecretService
 } from './modules/privacy/privacy-secret-service'
@@ -26,7 +31,7 @@ import { getSecureStoreValueStrict, setSecureStoreValue } from './utils/secure-s
 const PASSWORD = 'synthetic-smoke-password'
 const SECRET_CANARY = 'synthetic-smoke-provider-secret'
 const ENDPOINT_CANARY = 'https://user:password@example.invalid/v1?token=synthetic'
-const TIMEOUT_MS = 20_000
+const TIMEOUT_MS = 50_000
 const ISOLATED_PROFILE_PATH = fsSync.mkdtempSync(
   path.join(os.tmpdir(), 'tuff-privacy-electron-profile-')
 )
@@ -50,7 +55,10 @@ function assertNotAborted(signal: AbortSignal): void {
 }
 
 async function verifyBuiltEntrypoint(): Promise<boolean> {
-  const expected = path.resolve(process.cwd(), 'out/main/privacy-lifecycle-smoke.js')
+  const expected = path.resolve(
+    process.env.TUFF_PRIVACY_SMOKE_EXPECTED_ENTRYPOINT ||
+      path.join(process.cwd(), 'out/main/privacy-lifecycle-smoke.js')
+  )
   const launched = path.resolve(process.argv[1] ?? '')
   const [expectedReal, launchedReal, stats] = await Promise.all([
     fs.realpath(expected),
@@ -60,8 +68,21 @@ async function verifyBuiltEntrypoint(): Promise<boolean> {
   return expectedReal === launchedReal && stats.isFile() && stats.size > 0
 }
 
-async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
-  const rootPath = await fs.mkdtemp(path.join(ISOLATED_PROFILE_PATH, 'lifecycle-'))
+async function resolvePackagedMigrationsFolder(): Promise<string> {
+  const launched = await fs.realpath(path.resolve(process.argv[1] ?? ''))
+  const appAsarRoot = path.resolve(path.dirname(launched), '..', '..')
+  const migrationsFolder = path.join(appAsarRoot, 'resources', 'db', 'migrations')
+  const journal = await fs.stat(path.join(migrationsFolder, 'meta', '_journal.json'))
+  if (!journal.isFile() || journal.size <= 0) throw new Error('SMOKE_MIGRATIONS_MISSING')
+  return migrationsFolder
+}
+
+async function runSmokeWithOrchestratorFixture(
+  signal: AbortSignal,
+  rootPath: string,
+  packagedPrivacyChecks: Awaited<ReturnType<typeof runOrchestratorPrivacyAcceptance>>,
+  orchestratorFixture: OrchestratorPrivacyTransportFixture
+): Promise<Record<string, unknown>> {
   const exportPath = path.join(rootPath, 'privacy-export.json')
   const secretBackupPath = path.join(rootPath, 'secret-backup.json')
   const expectedEventNames = collectPrivacyEventNames(PrivacyEvents)
@@ -194,6 +215,7 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
     exporter,
     disclosure,
     secrets,
+    orchestratorRuns: orchestratorFixture.lifecycle,
     reportError: (report) => {
       reports.push(report.code)
     },
@@ -214,7 +236,7 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
     },
     service
   )
-  const transport = {
+  const createTransport = (sender: { id: number }) => ({
     send: async (event: { toEventName: () => string }, payload: unknown) => {
       assertNotAborted(signal)
       const name = event.toEventName()
@@ -222,14 +244,15 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
       if (!handler) throw new Error('SMOKE_TYPED_HANDLER_MISSING')
       invokedHandlers.add(name)
       return await handler(payload, {
-        sender: { id: 301 },
+        sender,
         eventName: name,
         plugin: undefined
       })
     }
-  }
-  const sdk = createPrivacySdk(transport as never)
-  let evidence: Record<string, boolean | number | string | string[]> | undefined
+  })
+  const sdk = createPrivacySdk(createTransport({ id: 301 }) as never)
+  const crossAuthoritySdk = createPrivacySdk(createTransport({ id: 301 }) as never)
+  let evidence: Record<string, unknown> | undefined
 
   try {
     const profileReal = await fs.realpath(ISOLATED_PROFILE_PATH)
@@ -263,6 +286,38 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
       ['clipboard-history'],
       'delete-selected-data',
       deletePreview.data.previewId
+    )
+    const firstOrchestratorPreview = await sdk.orchestratorRun.previewDelete(
+      orchestratorFixture.runId
+    )
+    if (
+      !firstOrchestratorPreview.ok ||
+      firstOrchestratorPreview.data.disposition !== 'eligible' ||
+      !firstOrchestratorPreview.data.previewId
+    ) {
+      throw new Error('SMOKE_ORCHESTRATOR_RUN_DELETE_PREVIEW_FAILED')
+    }
+    const crossAuthorityDelete = await crossAuthoritySdk.orchestratorRun.delete(
+      'delete-orchestrator-run',
+      firstOrchestratorPreview.data.previewId
+    )
+    const authorizedOrchestratorPreview = await sdk.orchestratorRun.previewDelete(
+      orchestratorFixture.runId
+    )
+    if (
+      !authorizedOrchestratorPreview.ok ||
+      authorizedOrchestratorPreview.data.disposition !== 'eligible' ||
+      !authorizedOrchestratorPreview.data.previewId
+    ) {
+      throw new Error('SMOKE_ORCHESTRATOR_RUN_DELETE_PREVIEW_FAILED')
+    }
+    const orchestratorRunDeletion = await sdk.orchestratorRun.delete(
+      'delete-orchestrator-run',
+      authorizedOrchestratorPreview.data.previewId
+    )
+    const replayedOrchestratorDelete = await sdk.orchestratorRun.delete(
+      'delete-orchestrator-run',
+      authorizedOrchestratorPreview.data.previewId
     )
     const exported = await sdk.category.export(['clipboard-history'])
     const providers = await sdk.provider.getDisclosure()
@@ -309,6 +364,27 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
     const handlerInvocationExact =
       invokedHandlers.size === expectedEventNames.size &&
       [...expectedEventNames].every((name) => invokedHandlers.has(name))
+    const typedDeletePreview =
+      firstOrchestratorPreview.ok &&
+      firstOrchestratorPreview.data.disposition === 'eligible' &&
+      firstOrchestratorPreview.data.eventCount === 2 &&
+      authorizedOrchestratorPreview.ok &&
+      authorizedOrchestratorPreview.data.disposition === 'eligible' &&
+      authorizedOrchestratorPreview.data.eventCount === 2
+    const authorityBoundOneShotDelete =
+      !crossAuthorityDelete.ok &&
+      crossAuthorityDelete.code === 'PRIVACY_REQUEST_INVALID' &&
+      orchestratorRunDeletion.ok &&
+      orchestratorRunDeletion.data.deletedEventCount === 2 &&
+      !replayedOrchestratorDelete.ok &&
+      replayedOrchestratorDelete.code === 'PRIVACY_REQUEST_INVALID' &&
+      (await orchestratorFixture.verifyDeleted())
+    const orchestratorRunDeleteProven = typedDeletePreview && authorityBoundOneShotDelete
+    const packagedPrivacyGates = Object.freeze({
+      ...packagedPrivacyChecks,
+      typedDeletePreview,
+      authorityBoundOneShotDelete
+    })
 
     evidence = {
       builtEntrypoint,
@@ -324,6 +400,8 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
       cleanup: cleanup.ok,
       deletePreviewProven,
       deleteRunProven,
+      orchestratorRunDeleteProven,
+      packagedPrivacyGates,
       ownerDeleteCalls: deletedCount,
       exported: exported.ok,
       exportFormat: exported.ok && exported.data.format === 'talex.touch.privacy-export/v1',
@@ -339,15 +417,32 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
       noReports: reports.length === 0,
       syntheticOnly:
         !exportText.includes(SECRET_CANARY) &&
-        !JSON.stringify({ policy, summary, providers, backup, restore, reports }).includes(
-          SECRET_CANARY
-        ),
+        !JSON.stringify({
+          policy,
+          summary,
+          providers,
+          backup,
+          restore,
+          firstOrchestratorPreview,
+          crossAuthorityDelete,
+          authorizedOrchestratorPreview,
+          orchestratorRunDeletion,
+          replayedOrchestratorDelete,
+          reports
+        }).includes(SECRET_CANARY),
       reports
     }
     const failed = Object.entries(evidence).filter(
       ([key, value]) =>
-        key !== 'handlerCount' && key !== 'ownerDeleteCalls' && key !== 'reports' && value !== true
+        key !== 'handlerCount' &&
+        key !== 'ownerDeleteCalls' &&
+        key !== 'reports' &&
+        key !== 'packagedPrivacyGates' &&
+        value !== true
     )
+    if (Object.values(packagedPrivacyGates).some((value) => value !== true)) {
+      failed.push(['packagedPrivacyGates', packagedPrivacyGates])
+    }
     if (failed.length > 0) {
       throw new Error(
         `SMOKE_ASSERTION_FAILED:${JSON.stringify({ failed: failed.map(([key]) => key) })}`
@@ -356,13 +451,33 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
   } finally {
     disposeHandlers()
     await service.destroy()
-    await fs.rm(rootPath, { recursive: true, force: true })
   }
 
   if (handlers.size !== 0) throw new Error('SMOKE_TYPED_HANDLER_TEARDOWN_FAILED')
-  if (fsSync.existsSync(rootPath)) throw new Error('SMOKE_RUN_ARTIFACT_CLEANUP_FAILED')
   if (!evidence) throw new Error('SMOKE_EVIDENCE_MISSING')
-  return { ...evidence, handlerTeardown: true, runArtifactsRemoved: true }
+  return { ...evidence, handlerTeardown: true }
+}
+
+async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
+  const rootPath = await fs.mkdtemp(path.join(ISOLATED_PROFILE_PATH, 'lifecycle-'))
+  let result: Record<string, unknown> | undefined
+  try {
+    const migrationsFolder = await resolvePackagedMigrationsFolder()
+    const packagedPrivacyChecks = await runOrchestratorPrivacyAcceptance({
+      migrationsFolder,
+      temporaryRoot: rootPath
+    })
+    result = await withOrchestratorPrivacyTransportFixture(
+      { migrationsFolder, temporaryRoot: rootPath },
+      async (fixture) =>
+        await runSmokeWithOrchestratorFixture(signal, rootPath, packagedPrivacyChecks, fixture)
+    )
+  } finally {
+    await fs.rm(rootPath, { recursive: true, force: true })
+  }
+  if (!result) throw new Error('SMOKE_EVIDENCE_MISSING')
+  if (fsSync.existsSync(rootPath)) throw new Error('SMOKE_RUN_ARTIFACT_CLEANUP_FAILED')
+  return { ...result, runArtifactsRemoved: true }
 }
 
 async function main(): Promise<void> {
@@ -394,8 +509,8 @@ async function main(): Promise<void> {
   app.quit()
 }
 
-void main().catch(async (error) => {
+void main().catch(async () => {
   await fs.rm(ISOLATED_PROFILE_PATH, { recursive: true, force: true }).catch(() => undefined)
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`)
+  process.stderr.write('PRIVACY_LIFECYCLE_SMOKE_FAILED\n')
   app.exit(1)
 })

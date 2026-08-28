@@ -117,7 +117,14 @@ watch(
       </span>
     </button>
 
-    <div :id="bodyId" class="tx-tool-call-card__collapse" :class="{ 'is-open': expanded }">
+    <!-- `inert` while closed: a 0fr grid still leaves the retry button and
+         scrollable logs in the tab order -->
+    <div
+      :id="bodyId"
+      class="tx-tool-call-card__collapse"
+      :class="{ 'is-open': expanded }"
+      :inert="expanded ? undefined : true"
+    >
       <div class="tx-tool-call-card__body">
         <div v-if="toolCall.input" class="tx-tool-call-card__section">
           <span class="tx-tool-call-card__section-label">{{ inputLabel }}</span>

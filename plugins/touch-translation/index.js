@@ -112,20 +112,73 @@ function resultItem(featureId, requestId, index, sourceText, result) {
     .build()
 }
 
+function compactPluginDto(value) {
+  if (value === undefined) return undefined
+  if (Array.isArray(value)) {
+    return value.map(compactPluginDto).filter(entry => entry !== undefined)
+  }
+  if (value && typeof value === 'object') {
+    const output = {}
+    for (const key of Object.keys(value)) {
+      const compacted = compactPluginDto(value[key])
+      if (compacted !== undefined) output[key] = compacted
+    }
+    return output
+  }
+  return value
+}
+
+function translationWidgetItem(featureId, requestId, sourceText, providers, error) {
+  const status = providers.some(provider => provider.status === 'success') ? 'complete' : 'error'
+  const primary = providers.find(provider => provider.status === 'success' && provider.translatedText)
+  const builder = new TuffItemBuilder(`${featureId}-widget`)
+    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setTitle(`翻译：${truncateText(sourceText, 160)}`)
+    .setSubtitle(status === 'complete' ? '受控智能服务已返回译文' : error || '翻译服务暂不可用')
+    .setIcon(ICON)
+    .setCustomRender('vue', `${PLUGIN_NAME}::${featureId}`, {
+      requestId,
+      query: sourceText,
+      detectedLang: detectLanguage(sourceText),
+      targetLang: targetLanguage(detectLanguage(sourceText)),
+      status,
+      providers,
+      ...(error ? { error } : {}),
+      updatedAt: Date.now(),
+    })
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      status,
+      keepCoreBoxOpen: true,
+      ...(primary ? { defaultAction: COPY_ACTION_ID } : {}),
+    })
+
+  if (primary) {
+    builder.createAndAddAction(COPY_ACTION_ID, 'plugin', '复制译文', {
+      requestId,
+      text: primary.translatedText,
+    })
+  }
+  return builder.build()
+}
+
+
 function isCurrent(featureId, requestId, generation) {
   return (
     runtimeGeneration === generation && activeRequest?.featureId === featureId && activeRequest?.requestId === requestId
   )
 }
 
-function publish(featureId, requestId, generation, items, signal) {
+function publish(featureId, requestId, generation, items, signal, useWidget = false) {
   const task = publishQueue
     .catch(() => undefined)
     .then(async () => {
       if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return false
       await plugin.feature.clearItems()
       if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return false
-      await plugin.feature.pushItems(items)
+      if (useWidget) await plugin.widget.pushItems(items.map(compactPluginDto))
+      else await plugin.feature.pushItems(items)
       return true
     })
   publishQueue = task.then(
@@ -260,8 +313,11 @@ const lifecycle = {
 
       const items = []
       const copyTexts = []
+      const widgetProviders = []
+      let widgetError = ''
       for (let index = 0; index < settled.length; index += 1) {
         const result = settled[index]
+        const provider = providers[index]
         if (result.status === 'fulfilled' && typeof result.value?.result === 'string') {
           const translatedText = truncateText(result.value.result, MAX_RESULT_LENGTH)
           items.push(
@@ -270,15 +326,46 @@ const lifecycle = {
               result: translatedText,
             }),
           )
+          widgetProviders.push({
+            id: provider?.providerId || `provider-${index}`,
+            name: provider?.providerName || provider?.providerId || `Provider ${index + 1}`,
+            status: 'success',
+            translatedText,
+            from: detectLanguage(text),
+            to: targetLanguage(detectLanguage(text)),
+            provider: result.value.provider,
+            model: result.value.model,
+            traceId: result.value.traceId,
+          })
           if (translatedText) copyTexts.push(translatedText)
+        } else {
+          const failure = failureKind(result.status === 'rejected' ? result.reason : null)
+          widgetError ||= failure.subtitle
+          widgetProviders.push({
+            id: provider?.providerId || `provider-${index}`,
+            name: provider?.providerName || provider?.providerId || `Provider ${index + 1}`,
+            status: 'error',
+            error: failure.subtitle,
+          })
         }
       }
       if (items.length === 0) {
         const rejected = settled.find(result => result.status === 'rejected')
         const failure = failureKind(rejected && rejected.status === 'rejected' ? rejected.reason : null)
+        widgetError ||= failure.subtitle
         items.push(infoItem(`${featureId}-failed`, featureId, failure.title, failure.subtitle))
       }
-      const published = await publish(featureId, requestId, generation, items, signal)
+      const useWidget = featureId === 'touch-translate'
+      const published = await publish(
+        featureId,
+        requestId,
+        generation,
+        useWidget
+          ? [translationWidgetItem(featureId, requestId, text, widgetProviders, widgetError)]
+          : items,
+        signal,
+        useWidget,
+      )
       if (published && isCurrent(featureId, requestId, generation) && copyTexts.length > 0) {
         approvedCopies.set(featureId, { requestId, texts: new Set(copyTexts) })
       }

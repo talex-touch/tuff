@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/package-utils-ci.yml"
       - ".github/workflows/package-ci.yml"
   push:
@@ -12,6 +14,10 @@ on:
       - master
     paths:
       - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-utils-ci.yml"
+      - ".github/workflows/package-ci.yml"
 
 permissions:
   contents: read
@@ -22,9 +28,14 @@ jobs:
     with:
       package-name: utils
       package-path: packages/utils
-      run-typecheck: false # No build step for utils (TypeScript source)
       run-lint: true
       lint-command: pnpm lint
       run-test: true
-      test-command: pnpm test
-      run-build: false # Utils is TypeScript source, no build needed
+      # Keep the wall-clock benchmark isolated from Vitest's parallel file scheduling.
+      test-command: |
+        pnpm exec vitest run --exclude "**/*.benchmark.test.ts"
+        pnpm benchmark:preview
+      # The build emits every public JS entry plus declarations, so it is also the package's
+      # effective typecheck. Skipping it leaves new publishConfig exports unverified.
+      run-build: true
+      build-command: pnpm build

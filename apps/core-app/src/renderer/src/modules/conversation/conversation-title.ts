@@ -3,6 +3,7 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult
 } from '@talex-touch/utils/types/intelligence'
+import { INTELLIGENCE_CONVERSATION_TITLE_OPERATION } from '@talex-touch/utils/types/intelligence'
 
 /**
  * Generates the short conversation title HomePage's working title stands in for (#969).
@@ -161,7 +162,10 @@ export async function generateConversationTitle(
         temperature: 0.2,
         maxTokens: 32
       },
-      { timeout: 10_000 }
+      {
+        timeout: 10_000,
+        metadata: { operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION }
+      }
     )
     return normalizeGeneratedTitle(result?.result ?? null)
   } catch {

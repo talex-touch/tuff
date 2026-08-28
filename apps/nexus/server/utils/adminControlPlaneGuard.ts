@@ -9,6 +9,7 @@ import type { AdminRiskScope } from './adminEmergencyToken'
 import { parseBearerToken, verifyAdminEmergencyToken } from './adminEmergencyToken'
 import { requireAdminOobAuth } from './adminOobGuard'
 import { enforceAdminRateLimit } from './adminRateLimitStore'
+import { RUNTIME_CREDENTIAL_ERROR_CODE } from './runtimeCredentialPolicy'
 import { isControlPlanePreservedPath, isExtremeMode } from './defenseModeController'
 import { resolveRequestIp } from './ipSecurityStore'
 
@@ -134,7 +135,27 @@ async function tryEmergencyChannel(
     })
   }
 
-  const claims = verifyAdminEmergencyToken(event, bearer)
+  // A misconfigured signing secret cannot authenticate anybody, so it means the
+  // same thing to this caller as an unverifiable token: no emergency channel.
+  // Letting the credential error escape instead answered an *unauthenticated*
+  // caller — this runs before session auth — with the secret's env var name and
+  // the fact that break-glass exists. `Authorization: Bearer <garbage>` returned
+  // 500 while no header at all returned 401, which is a configuration oracle.
+  // The variable name still reaches operators through error.variableName.
+  let claims: ReturnType<typeof verifyAdminEmergencyToken>
+  try {
+    claims = verifyAdminEmergencyToken(event, bearer)
+  }
+  catch (error) {
+    if ((error as { code?: string })?.code !== RUNTIME_CREDENTIAL_ERROR_CODE)
+      throw error
+    console.error(
+      '[admin-control-plane] emergency channel unavailable:',
+      (error as { variableName?: string }).variableName,
+      (error as { reason?: string }).reason,
+    )
+    return null
+  }
   if (!claims)
     return null
 

@@ -346,7 +346,7 @@ return privacySdk.category.delete(selectedCategories, 'delete-selected-data', pr
 
 ### 1. Scope / Trigger
 
-- Trigger: changing Intelligence Provider configuration, Provider test/model fetch, `StorageList.IntelligenceConfig`, the legacy `intelligence/providers` row, Plugin Secret fields, official Translation `providers_config`, portable catalog membership, or the sensitive-data inventory.
+- Trigger: changing Intelligence Provider configuration, Provider test/model fetch, `StorageList.IntelligenceConfig`, the legacy `intelligence/providers` row, Plugin Secret fields, official Translation `providers_config`, portable catalog membership, packaged Provider/secure-store acceptance evidence, or the sensitive-data inventory.
 - Ordinary metadata may remain in app/plugin config. Credential values belong to the main-owned secure store and may enter a renderer only as an operation-local password/credential input or an authorized Plugin Secret runtime result.
 
 ### 2. Signatures
@@ -364,7 +364,91 @@ migrateTranslationProviderCredentials(dependencies): Promise<{
 
 secret.setMany(entries): Promise<PluginStorageSecretMutationResponse>
 redactProviderConfigDocument(value): Record<string, unknown>
+
+type PackagedProviderAcceptanceReport = {
+  schema: 'tuff.packaged-ai-provider-acceptance.v1'
+  ok: boolean
+  checkedAt: string
+  app: { version: string; hash: string }
+  provider: {
+    id: string
+    type: 'custom'
+    endpoint: 'loopback-ollama'
+    model: string
+  }
+  runtime: {
+    appBundle: string
+    cdpPort?: number
+    launches: 3
+    targetReacquired: boolean
+    profileRetained: false
+    cleanupRequested: true
+  }
+  checks: {
+    ollamaReachable: boolean
+    modelAvailable: boolean
+    credentialSaved: boolean
+    credentialSavedExact: boolean
+    connectionTested: boolean
+    firstHomeStreamCompleted: boolean
+    firstHomeObservedBusyDelta: boolean
+    titleRequestStabilized: boolean
+    credentialRestoredAfterRelaunch: boolean
+    credentialRestoredExact: boolean
+    secondHomeStreamCompleted: boolean
+    secondHomeObservedBusyDelta: boolean
+    cancellationObservedBusyDelta: boolean
+    cancellationSettled: boolean
+    cancellationFlushWindowObserved: boolean
+    cancellationHomeAuditAbsent: boolean
+    cancellationBackgroundTitleRequests: number
+    cancellationLedgerAccounted: boolean
+    providerDeletedThroughUi: boolean
+    secureStoreEnvelopeValid: boolean
+    secureStoreKeyDeleted: boolean
+    localSecretFilePresent: boolean
+    credentialCanaryAbsent: boolean
+    audit?: {
+      matched: number
+      success: number
+      failure: number
+      uniqueTraceCount: number
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+      estimatedCost: number
+      invalidNumericRows: number
+      invalidIdentityRows: number
+      invalidOperationRows: number
+      homeConversationRequests: number
+      conversationTitleRequests: number
+      expectedSuccessfulRequests: number
+      expectedHomeConversationRequests: number
+      expectedConversationTitleRequests: number
+      passed: boolean
+    }
+    usage?: {
+      dayRows: number
+      monthRows: number
+      requestCount: number
+      successCount: number
+      failureCount: number
+      totalTokens: number
+      promptTokens: number
+      completionTokens: number
+      totalCost: number
+      invalidRows: number
+      passed: boolean
+    }
+  }
+  failures: readonly AcceptanceFailure[]
+}
 ```
+
+`ok: true` requires the exact three-launch cleanup lifecycle, every required
+boolean above, a non-negative integer `cancellationBackgroundTitleRequests`, and
+present `audit` / `usage` summaries with `passed: true`. A failed report may omit
+either summary when execution stops before the corresponding ledger stage.
 
 The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. Persisted Provider DTOs contain no `apiKey`; they expose only `authRef` and `hasCredential`.
 
@@ -381,6 +465,11 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 - `PORTABLE_SECRET_CATALOG_V1` contains only fixed product-approved credentials. Nexus/session/account tokens, sync keys, machine seeds, device identity, dynamic custom Provider keys, unknown Plugin Secrets, and caller-selected secure-store names are non-portable.
 - `docs/engineering/sensitive-data-inventory.json` is the executable source for sensitive owners, physical storage, writers/readers, export, deletion, retention, renderer exposure, portability, migration status, and evidence. Any affected code change updates the inventory and passes `corepack pnpm privacy:inventory:verify`.
 - The isolated Electron Privacy lifecycle smoke uses synthetic fixtures, a temporary user-data root, fake Provider and dialog owners, built production handlers/services, no real network/provider/account data, and a hard timeout. Passing evidence must cover at least typed policy/summary, export dialog ownership, Secret backup/restore, provider disclosure redaction, and cleanup/delete lifecycle.
+- Packaged Tool, fixed-failure, and real-Provider reports form one evidence set only when all record the exact same application version and physical `Contents/Resources/app.asar` SHA-256. A matching version, bundle name, build directory, or stale canonical report is insufficient. If a runner cannot fail-before-launch on an expected hash, the verifier checks the physical hash immediately before and after the run and compares the report hash explicitly.
+- A passing real-Provider lifecycle run uses a runner-created isolated profile and only runner-owned processes. It saves a generated credential through UI, verifies the exact main-owned secure value, reacquires the UI after relaunch, deletes through UI, proves the secure envelope valid and key absent, requests cleanup, and reports that the profile was not retained. A caller-supplied real profile or retained profile is diagnostic-only evidence.
+- Credential canary checks traverse every non-symlink regular file below the isolated profile while the credential is encrypted at rest and again after deletion. The traversal has fixed file/byte bounds and no Sentry or telemetry subtree exemption, so `sentry/scope_v3.json` is covered when present. Exposed canaries, unreadable traversal, or exceeded bounds fail closed. An aggregate `credentialCanaryAbsent` result proves scan coverage, not that a particular optional file existed.
+- Provider acceptance reconciles unique request audit rows with day/month usage for request, success/failure, prompt/completion/total token, and cost fields. Cancellation must settle without a false Home failure audit; any allowed background title request remains explicitly accounted.
+- Live MCP is a separate opt-in gate. An environment without explicit opt-in remains `partial/blocked`; synthetic MCP, local tool fixtures, or the Provider report cannot promote it to passed.
 
 ### 4. Validation & Error Matrix
 
@@ -400,18 +489,26 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 | Catalog request names Nexus/session/sync/machine/custom identity | Reject as forbidden/non-portable                                                            |
 | Inventory entry/evidence/lifecycle field missing                 | Verifier exits non-zero                                                                     |
 | Smoke fixture touches real account/network/native user data      | Fail the harness before lifecycle action                                                    |
+| Tool, failure, and Provider reports have different app hashes    | Reject the combined evidence set even when every individual report says `ok: true`          |
+| Runner retains or uses a caller-supplied real profile            | Classify as diagnostic-only; never count as packaged lifecycle acceptance                   |
+| Profile canary is found or scan bounds are exceeded              | Fail with a stable canary/scan code; never truncate into a pass                             |
+| Aggregate scan result is used to claim an optional file existed  | Report only traversal coverage; do not claim per-file presence without separate evidence    |
+| Live MCP has no explicit environment opt-in                      | Keep the MCP row blocked and the overall permission/sandbox result partial                  |
 
 ### 5. Good/Base/Bad Cases
 
 - Good: startup finds a legacy OpenAI key, writes the allowlisted secure entry, commits a revision-bound config containing `hasCredential`, and injects the key only while constructing the main Provider runtime. A Translation legacy mirror is removed without replacing a newer secure value.
+- Good: one physical `app.asar` hash passes Tool confirmation, fixed failures, and a three-launch real Provider lifecycle; the generated profile is removed and audit/usage/canary checks reconcile.
 - Base: a fresh install has disabled Providers and no secure entries; initialization performs no writes.
-- Bad: autosave `apiKey` on each keystroke, sanitize the only legacy copy after a failed Secret write, republish a credential cache after rollback failure, overwrite a non-blank secure Translation Secret from legacy config, expose a secure-store key to renderer, or add login/sync/machine material to the portable catalog.
+- Base: all runnable packaged gates pass but MCP is not explicitly enabled; retain the evidence and report the overall task as partial/blocked.
+- Bad: autosave `apiKey` on each keystroke, sanitize the only legacy copy after a failed Secret write, republish a credential cache after rollback failure, overwrite a non-blank secure Translation Secret from legacy config, expose a secure-store key to renderer, add login/sync/machine material to the portable catalog, or combine passing reports from different `app.asar` hashes.
 
 ### 6. Tests Required
 
 - Provider tests cover fresh, legacy, secure failure, config failure plus rollback, rollback-failure cache clearing, restart idempotency, concurrent initialization, replacement, deletion, strict save DTO validation, renderer/config redaction, and sensitive canaries in errors/results.
 - Translation tests cover fixed-field extraction, secure-value authority, one batch, secure failure, config failure plus rollback, activation-fatal rollback failure, restart, sanitized projection, main-side legacy fallback, duplicate batch denial, and renderer Secret-SDK-only loading.
 - Storage/SDK tests cover typed provider save/delete, typed Plugin Secret batch, ordinary `apiKey` rejection, redacted get/getVersioned, runtime injection, and no raw Privacy/uninstall event duplicates.
+- Packaged runner tests cover missing first search observation recovery, request/session/revision identity changes, consecutive candidate/readiness samples, single activation, exact save/relaunch/delete checks, scan-limit failure, cross-chunk canary matching, and aggregate audit/usage equality. A final verifier asserts the shared version/hash, cleanup state, empty failure arrays, and every required lifecycle boolean rather than trusting exit code or top-level `ok` alone.
 - Inventory verification and scoped lint/typecheck/tests are mandatory. Production Electron smoke is an evidence level above mocked service tests; a smoke blocked by environment must be reported as blocked, never silently counted as passed.
 
 ### 7. Wrong vs Correct
@@ -435,6 +532,21 @@ await intelligenceSdk.saveProviderConfig({
 await secret.setMany(fixedCredentialEntries)
 // Main migration/save owns atomic secure mutation, sanitized persistence, rollback,
 // and fail-closed cache/activation state when compensation cannot be proved.
+```
+
+For packaged evidence, checking three unrelated top-level booleans is also wrong:
+
+```ts
+if (tool.ok && failures.ok && provider.ok) markPermissionSandboxPassed()
+```
+
+The verifier binds identity, lifecycle fields, and the explicit MCP gate:
+
+```ts
+assertSameVersionAndPhysicalAsarHash(tool.app, failures.app, provider.app)
+assertProviderLifecycleAndCleanup(provider)
+assertFailureArraysEmpty(tool, failures, provider)
+markPermissionSandbox(mcpExplicitlyEnabled ? 'passed' : 'partial/blocked')
 ```
 
 ---

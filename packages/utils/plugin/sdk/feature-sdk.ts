@@ -11,7 +11,7 @@ import { hasWindow } from '../../env'
 import { createPluginTuffTransport } from '../../transport'
 import { CoreBoxEvents } from '../../transport/events'
 import { createDisposableBag } from '../../transport/sdk'
-import { useBoxItems } from './box-items'
+import { getBoxItems } from './box-items'
 import { ensureRendererChannel } from './channel'
 
 /**
@@ -330,7 +330,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
  * ```
  */
 export function useFeature(): FeatureSDK {
-  const boxItemsAPI = useBoxItems()
+  const boxItemsAPI = getBoxItems()
   const channel = ensureRendererChannel(
     '[Feature SDK] Channel not available. Make sure this is called in a plugin context.',
   )

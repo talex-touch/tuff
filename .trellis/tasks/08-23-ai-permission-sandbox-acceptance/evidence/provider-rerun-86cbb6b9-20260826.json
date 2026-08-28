@@ -1,0 +1,81 @@
+{
+  "schema": "tuff.packaged-ai-provider-acceptance.v1",
+  "ok": true,
+  "checkedAt": "2026-08-26T07:31:17.041Z",
+  "app": {
+    "version": "2.4.14-beta.14",
+    "hash": "86cbb6b9f1da612aa7de30c46f4b153f33a69914e9fcb078d74f5de891186963"
+  },
+  "provider": {
+    "id": "acceptance-ollama",
+    "type": "custom",
+    "endpoint": "loopback-ollama",
+    "model": "smollm2:135m"
+  },
+  "runtime": {
+    "appBundle": "tuff.app",
+    "launches": 3,
+    "targetReacquired": true,
+    "profileRetained": false,
+    "cleanupRequested": true,
+    "cdpPort": 9681
+  },
+  "checks": {
+    "ollamaReachable": true,
+    "modelAvailable": true,
+    "credentialSaved": true,
+    "credentialSavedExact": true,
+    "connectionTested": true,
+    "firstHomeStreamCompleted": true,
+    "firstHomeObservedBusyDelta": true,
+    "titleRequestStabilized": true,
+    "credentialRestoredAfterRelaunch": true,
+    "credentialRestoredExact": true,
+    "secondHomeStreamCompleted": true,
+    "secondHomeObservedBusyDelta": true,
+    "cancellationObservedBusyDelta": true,
+    "cancellationSettled": true,
+    "cancellationFlushWindowObserved": true,
+    "cancellationHomeAuditAbsent": true,
+    "cancellationBackgroundTitleRequests": 1,
+    "cancellationLedgerAccounted": true,
+    "providerDeletedThroughUi": true,
+    "secureStoreEnvelopeValid": true,
+    "secureStoreKeyDeleted": true,
+    "localSecretFilePresent": true,
+    "credentialCanaryAbsent": true,
+    "audit": {
+      "matched": 4,
+      "success": 4,
+      "failure": 0,
+      "promptTokens": 234,
+      "completionTokens": 64,
+      "totalTokens": 298,
+      "estimatedCost": 0.000362,
+      "invalidNumericRows": 0,
+      "invalidIdentityRows": 0,
+      "invalidOperationRows": 0,
+      "homeConversationRequests": 2,
+      "conversationTitleRequests": 2,
+      "uniqueTraceCount": 4,
+      "expectedSuccessfulRequests": 4,
+      "expectedHomeConversationRequests": 2,
+      "expectedConversationTitleRequests": 2,
+      "passed": true
+    },
+    "usage": {
+      "dayRows": 1,
+      "monthRows": 1,
+      "requestCount": 4,
+      "successCount": 4,
+      "failureCount": 0,
+      "totalTokens": 298,
+      "promptTokens": 234,
+      "completionTokens": 64,
+      "totalCost": 0.000362,
+      "invalidRows": 0,
+      "passed": true
+    }
+  },
+  "failures": []
+}

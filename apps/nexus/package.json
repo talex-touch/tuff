@@ -12,6 +12,7 @@
     "audit:contrast:self-test": "node scripts/contrast-audit.mjs --self-test",
     "check:mdc-fences": "node build/check-mdc-fences.mjs",
     "check:doc-parity": "node build/check-doc-translation-parity.mjs",
+    "check:demo-registry": "node build/check-demo-registry-orphans.mjs",
     "check:icon-collections": "node build/check-icon-collections.mjs",
     "check:preview-secrets": "node scripts/preview-secret-preflight.mjs",
     "check:runtime-evidence": "node build/check-runtime-evidence.mjs",

@@ -28,6 +28,27 @@ import { agentManager, toolRegistry } from './agents'
 import { tuffIntelligence } from './intelligence-sdk'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { PI_RUNTIME_PROTOCOL_VERSION } from './pi-agent-runtime-protocol'
+import {
+  createApprovalRequiredError,
+  createInterruptedToolCallError,
+  createRunCancelledError,
+  createRunInterruptedError,
+  isInterruptedToolCallMessage,
+  isPiRuntimeControlError,
+  parseApprovalRequirement
+} from './pi-agent-runtime-control-error'
+import {
+  formatStableToolError,
+  projectToolError,
+  projectToolErrorCode,
+  type StableToolErrorCode
+} from './tool-error-projection'
+import {
+  containsCredentialLikeText,
+  containsLocalPathLikeText,
+  isCredentialLikeKey,
+  isLocalPathLikeKey
+} from './sensitive-text'
 
 export type PiRuntimeToolCallOutcome = {
   error?: string
@@ -51,7 +72,8 @@ export interface PiAgentRuntimeHostOptions {
   onEvent?: (event: PiRuntimeRunEvent) => void | Promise<void>
   loadToolCallResult?: (
     runId: string,
-    toolCallId: string
+    toolCallId: string,
+    toolId: string
   ) => Promise<PiRuntimeToolCallOutcome | undefined>
   persistToolCallResult?: (
     runId: string,
@@ -75,13 +97,30 @@ When a tool is required, reply with exactly one JSON object and no markdown:
 Call one tool at a time. Use only a listed tool and provide valid arguments.
 When no more tools are needed, return the final answer as plain text or {"type":"final","text":"..."}.`
 
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+const MODEL_REQUEST_FAILED = 'MODEL_REQUEST_FAILED: Model request failed.'
+
+function stableToolFailure(code: StableToolErrorCode): PiRuntimeToolCallOutcome {
+  return { error: formatStableToolError(projectToolErrorCode(code)) }
 }
 
-const SENSITIVE_TOOL_OUTPUT_KEY =
-  /token|api.?key|secret|password|credential|authorization|cookie|authref/i
+function projectRuntimeToolFailure(error: unknown): string {
+  return formatStableToolError(projectToolError(error))
+}
+
+const PATH_LIKE_TOOL_OUTPUT_KEY =
+  /^(?:path|file|folder|directory|dir|cwd|root|source|destination)$|(?:^|[_-])(?:path|file|folder|directory|dir|cwd|root|source|destination)(?:$|[_-])/i
+const CAMEL_CASE_PATH_LIKE_TOOL_OUTPUT_KEY =
+  /(?:Path|File|Folder|Directory|Dir|Cwd|Root|Source|Destination)$/
+const MAX_TOOL_OUTPUT_CONTAINER_ENTRIES = 100
+const MAX_TOOL_OUTPUT_DEPTH = 8
+const MAX_TOOL_OUTPUT_NODES = 512
+const MAX_TOOL_OUTPUT_STRING_CHARS = 16_000
 const MAX_SERIALIZED_TOOL_OUTPUT_CHARS = 64 * 1024
+const REDACTED_TOOL_OUTPUT_ACCESSOR = Symbol('redacted-tool-output-accessor')
+
+interface ToolOutputSanitizationState {
+  inspectedNodes: number
+}
 
 /**
  * How long the forked worker gets to post `runtime.ready`.
@@ -109,33 +148,123 @@ function approvalFingerprint(request: PiRuntimeToolRequest): string {
     .digest('hex')
 }
 
-function approvalRequired(
-  kind: 'mcp' | 'permission' | 'tool',
-  reason: string,
-  fingerprint: string
-): Error {
-  return new Error(`APPROVAL_REQUIRED:${JSON.stringify({ kind, reason, fingerprint })}`)
+function isSensitiveToolOutputKey(key: string): boolean {
+  return isCredentialLikeKey(key) || containsCredentialLikeText(key)
 }
 
-function sanitizeToolOutput(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[truncated]'
-  if (typeof value === 'string') return value.slice(0, 16_000)
-  if (typeof value === 'bigint') return value.toString()
-  if (!value || typeof value !== 'object') return value
-  if (Array.isArray(value))
-    return value.slice(0, 100).map((item) => sanitizeToolOutput(item, depth + 1))
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .slice(0, 100)
-      .map(([key, nested]) => [
-        key,
-        SENSITIVE_TOOL_OUTPUT_KEY.test(key) ? '[redacted]' : sanitizeToolOutput(nested, depth + 1)
-      ])
+function isPathLikeToolOutputKey(key: string): boolean {
+  return (
+    PATH_LIKE_TOOL_OUTPUT_KEY.test(key) ||
+    CAMEL_CASE_PATH_LIKE_TOOL_OUTPUT_KEY.test(key) ||
+    isLocalPathLikeKey(key) ||
+    containsLocalPathLikeText(key)
   )
 }
 
+function readBoundedToolOutputEntries(
+  value: object
+): Array<[key: string, value: unknown]> | undefined {
+  try {
+    return Object.keys(value)
+      .slice(0, MAX_TOOL_OUTPUT_CONTAINER_ENTRIES)
+      .map((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)
+        return [
+          key,
+          descriptor && 'value' in descriptor ? descriptor.value : REDACTED_TOOL_OUTPUT_ACCESSOR
+        ]
+      })
+  } catch {
+    return undefined
+  }
+}
+
+function readBoundedToolOutputArray(value: unknown[]): unknown[] | undefined {
+  try {
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length')
+    if (
+      !lengthDescriptor ||
+      !('value' in lengthDescriptor) ||
+      typeof lengthDescriptor.value !== 'number' ||
+      !Number.isSafeInteger(lengthDescriptor.value) ||
+      lengthDescriptor.value < 0
+    ) {
+      return undefined
+    }
+
+    const length = Math.min(lengthDescriptor.value, MAX_TOOL_OUTPUT_CONTAINER_ENTRIES)
+    return Array.from({ length }, (_, index) => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
+      if (!descriptor) return undefined
+      return 'value' in descriptor ? descriptor.value : REDACTED_TOOL_OUTPUT_ACCESSOR
+    })
+  } catch {
+    return undefined
+  }
+}
+
+function isPlainToolOutputRecord(value: object): boolean {
+  try {
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === null || prototype === Object.prototype
+  } catch {
+    return false
+  }
+}
+
+function sanitizeToolOutputValue(
+  value: unknown,
+  depth: number,
+  state: ToolOutputSanitizationState
+): unknown {
+  state.inspectedNodes += 1
+  if (state.inspectedNodes > MAX_TOOL_OUTPUT_NODES || depth > MAX_TOOL_OUTPUT_DEPTH) {
+    return '[truncated]'
+  }
+  if (typeof value === 'string') {
+    return containsCredentialLikeText(value) || containsLocalPathLikeText(value)
+      ? '[redacted]'
+      : value.slice(0, MAX_TOOL_OUTPUT_STRING_CHARS)
+  }
+  if (typeof value === 'function' || typeof value === 'symbol') return '[redacted]'
+  if (typeof value === 'bigint') return value.toString()
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    const items = readBoundedToolOutputArray(value)
+    if (!items) return '[redacted]'
+    return items.map((item) =>
+      item === REDACTED_TOOL_OUTPUT_ACCESSOR
+        ? '[redacted]'
+        : sanitizeToolOutputValue(item, depth + 1, state)
+    )
+  }
+  if (!isPlainToolOutputRecord(value)) return '[redacted]'
+  const entries = readBoundedToolOutputEntries(value)
+  if (!entries) return '[redacted]'
+  return Object.fromEntries(
+    entries.map(([key, nested], index) => {
+      const safeKey =
+        containsCredentialLikeText(key) || containsLocalPathLikeText(key)
+          ? `redactedKey${index}`
+          : key.slice(0, 256)
+      return [
+        safeKey,
+        nested === REDACTED_TOOL_OUTPUT_ACCESSOR ||
+        isSensitiveToolOutputKey(key) ||
+        isPathLikeToolOutputKey(key)
+          ? '[redacted]'
+          : sanitizeToolOutputValue(nested, depth + 1, state)
+      ]
+    })
+  )
+}
+
+export function sanitizeToolOutputForRuntime(value: unknown, depth = 0): unknown {
+  return sanitizeToolOutputValue(value, depth, { inspectedNodes: 0 })
+}
+
 function serializeToolOutput(value: unknown): unknown {
-  const sanitized = sanitizeToolOutput(value)
+  const sanitized = sanitizeToolOutputForRuntime(value)
   try {
     const serialized = JSON.stringify(sanitized)
     if (serialized === undefined) return null
@@ -334,6 +463,10 @@ export class PiAgentRuntimeHost {
     return this.ready
   }
 
+  isRunActive(runId: string): boolean {
+    return this.activeRuns.has(runId)
+  }
+
   private clearReadyTimeout(): void {
     if (!this.readyTimeout) return
     clearTimeout(this.readyTimeout)
@@ -357,7 +490,7 @@ export class PiAgentRuntimeHost {
     this.readyTimeout = setTimeout(() => {
       this.readyTimeout = null
       const error = new Error(`Pi runtime was not ready within ${READY_TIMEOUT_MS}ms`)
-      runtimeLog.error(error.message, { error })
+      runtimeLog.error('Pi runtime readiness timed out')
       this.readyReject?.(error)
       this.readyResolve = null
       this.readyReject = null
@@ -371,8 +504,8 @@ export class PiAgentRuntimeHost {
     })
     this.child = child
     child.on('message', (message) => {
-      void this.handleMessage(message as PiRuntimeParentMessage).catch((error) => {
-        runtimeLog.error('Failed to handle Pi runtime message', { error })
+      void this.handleMessage(message as PiRuntimeParentMessage).catch(() => {
+        runtimeLog.error('Failed to handle Pi runtime message')
         child.kill()
       })
     })
@@ -382,14 +515,14 @@ export class PiAgentRuntimeHost {
     child.on('exit', (code) => {
       this.handleExit(code)
     })
-    child.on('error', (error) => {
-      runtimeLog.error('Pi runtime utility process fatal error', { error })
+    child.on('error', () => {
+      runtimeLog.error('Pi runtime utility process fatal error')
     })
-    child.stdout?.on('data', (chunk) => {
-      runtimeLog.debug(String(chunk).trim())
+    child.stdout?.on('data', () => {
+      runtimeLog.debug('Pi runtime utility process emitted stdout')
     })
-    child.stderr?.on('data', (chunk) => {
-      runtimeLog.warn(String(chunk).trim())
+    child.stderr?.on('data', () => {
+      runtimeLog.warn('Pi runtime utility process emitted stderr')
     })
     return this.readyPromise
   }
@@ -464,7 +597,7 @@ export class PiAgentRuntimeHost {
     for (const context of this.activeRuns.values()) {
       clearTimeout(context.timeout)
       context.controller.abort()
-      context.reject(new Error('Pi runtime stopped'))
+      context.reject(createRunInterruptedError())
     }
     this.activeRuns.clear()
     this.clearReadyTimeout()
@@ -496,7 +629,7 @@ export class PiAgentRuntimeHost {
         runtimeLog.info('Pi runtime utility process ready')
         return
       case 'runtime.error':
-        runtimeLog.error('Pi runtime worker error', { error: new Error(message.error) })
+        runtimeLog.error('Pi runtime worker error')
         return
       case 'model.request':
         await this.handleModelRequest(message.payload)
@@ -505,16 +638,37 @@ export class PiAgentRuntimeHost {
         await this.handleToolRequest(message.payload)
         return
       case 'run.event':
+        if (!this.activeRuns.has(message.payload.runId)) return
         await this.onEvent?.(message.payload)
         return
-      case 'run.completed':
-        this.settleRun(message.payload.runId, undefined, message.payload)
+      case 'run.completed': {
+        const context = this.activeRuns.get(message.payload.runId)
+        this.settleRun(
+          message.payload.runId,
+          context?.controller.signal.aborted ? createRunCancelledError() : undefined,
+          message.payload
+        )
         return
-      case 'run.failed':
-        this.settleRun(message.runId, new Error(message.error))
+      }
+      case 'run.failed': {
+        const context = this.activeRuns.get(message.runId)
+        this.settleRun(
+          message.runId,
+          context?.controller.signal.aborted
+            ? createRunCancelledError()
+            : new Error('Pi runtime worker reported failure')
+        )
         return
-      case 'run.cancelled':
-        this.settleRun(message.runId, new Error('Run cancelled'))
+      }
+      case 'run.cancelled': {
+        const context = this.activeRuns.get(message.runId)
+        this.settleRun(
+          message.runId,
+          context?.controller.signal.aborted
+            ? createRunCancelledError()
+            : new Error('Pi runtime worker reported unexpected cancellation')
+        )
+      }
     }
   }
 
@@ -556,11 +710,11 @@ export class PiAgentRuntimeHost {
         provider: result.provider,
         model: result.model
       }
-    } catch (error) {
+    } catch {
       response = {
         requestId: request.requestId,
         runId: request.runId,
-        error: toErrorMessage(error)
+        error: MODEL_REQUEST_FAILED
       }
     }
     this.post({ type: 'model.response', payload: response })
@@ -569,6 +723,7 @@ export class PiAgentRuntimeHost {
   private async handleToolRequest(request: PiRuntimeToolRequest): Promise<void> {
     const context = this.activeRuns.get(request.runId)
     let response: PiRuntimeToolResponse
+    let controlError: Error | undefined
     try {
       if (!context) throw new Error('Run not found')
       let operation = context.toolCalls.get(request.toolCallId)
@@ -579,30 +734,52 @@ export class PiAgentRuntimeHost {
       const outcome = await operation
       response = { requestId: request.requestId, runId: request.runId, ...outcome }
     } catch (error) {
+      if (isPiRuntimeControlError(error)) controlError = error
       response = {
         requestId: request.requestId,
         runId: request.runId,
-        error: toErrorMessage(error)
+        error: isPiRuntimeControlError(error) ? error.message : projectRuntimeToolFailure(error)
       }
     }
-    this.post({ type: 'tool.response', payload: response })
+    if (!controlError) {
+      this.post({ type: 'tool.response', payload: response })
+      return
+    }
+    try {
+      this.post({ type: 'tool.response', payload: response })
+    } finally {
+      try {
+        if (this.child) this.post({ type: 'run.cancel', runId: request.runId })
+      } finally {
+        this.settleRun(request.runId, controlError)
+      }
+    }
   }
 
   private async executeToolCall(
     context: ActiveRunContext,
     request: PiRuntimeToolRequest
   ): Promise<PiRuntimeToolCallOutcome> {
-    const persisted = await this.loadToolCallResult?.(request.runId, request.toolCallId)
+    const persisted = await this.loadToolCallResult?.(
+      request.runId,
+      request.toolCallId,
+      request.toolId
+    )
     if (persisted) {
+      if (persisted.error) {
+        if (isInterruptedToolCallMessage(persisted.error, request.toolCallId)) {
+          throw createInterruptedToolCallError(request.toolCallId)
+        }
+        return stableToolFailure('TOOL_EXECUTION_FAILED')
+      }
       return {
-        ...(persisted.error ? { error: persisted.error } : {}),
-        ...(persisted.error ? {} : { output: serializeToolOutput(persisted.output) })
+        output: serializeToolOutput(persisted.output)
       }
     }
 
-    if (context.controller.signal.aborted) throw new Error(`Run ${request.runId} is cancelled`)
+    if (context.controller.signal.aborted) return stableToolFailure('TOOL_EXECUTION_ABORTED')
     if (!context.allowedToolIds.has(request.toolId)) {
-      throw new Error(`Tool ${request.toolId} is not allowed by the active profile`)
+      return stableToolFailure('TOOL_APPROVAL_DENIED')
     }
     if (request.toolId === 'skill.read' && context.profile.enabledSkillIds.length > 0) {
       const input =
@@ -611,11 +788,11 @@ export class PiAgentRuntimeHost {
           : {}
       const skillId = typeof input.skillId === 'string' ? input.skillId : ''
       if (!skillId || !context.profile.enabledSkillIds.includes(skillId))
-        throw new Error(`Skill ${skillId || '<missing>'} is not enabled for the active profile`)
+        return stableToolFailure('TOOL_APPROVAL_DENIED')
     }
 
     const definition = toolRegistry.getTool(request.toolId)
-    if (!definition) throw new Error(`Tool ${request.toolId} not found`)
+    if (!definition) return stableToolFailure('TOOL_NOT_FOUND')
 
     const requiredPermissions = new Set((definition.permissions ?? []).map(String))
     if (request.toolId === 'mcp.call' || request.toolId === 'mcp.listTools') {
@@ -625,7 +802,7 @@ export class PiAgentRuntimeHost {
           : {}
       const profileId = typeof input.profileId === 'string' ? input.profileId : ''
       const profile = profileId ? intelligenceMcpRegistry.getProfile(profileId) : undefined
-      if (!profile) throw new Error(`MCP profile ${profileId || '<missing>'} is not available`)
+      if (!profile) return stableToolFailure('MCP_SERVER_UNAVAILABLE')
       requiredPermissions.add(
         profile.transport.type === 'stdio'
           ? AgentPermission.SYSTEM_EXEC
@@ -634,15 +811,12 @@ export class PiAgentRuntimeHost {
     }
 
     const fingerprint = approvalFingerprint(request)
-    let approval: { kind: 'mcp' | 'permission' | 'tool'; reason: string } | undefined
+    let approval: { kind: 'mcp' | 'permission' | 'tool' } | undefined
     const automationPolicy = context.request.metadata?.automationPolicy
     if (automationPolicy && typeof automationPolicy === 'object') {
       const policy = automationPolicy as AiAutomationPolicy
       if (!policy.allowedToolIds.includes(request.toolId)) {
-        approval = {
-          kind: 'tool',
-          reason: `Tool ${request.toolId} is outside the automation policy`
-        }
+        approval = { kind: 'tool' }
       } else if (request.toolId === 'mcp.call' || request.toolId === 'mcp.listTools') {
         const input =
           request.input && typeof request.input === 'object'
@@ -650,17 +824,14 @@ export class PiAgentRuntimeHost {
             : {}
         const profileId = typeof input.profileId === 'string' ? input.profileId : ''
         if (!profileId || !policy.allowedMcpServerIds.includes(profileId)) {
-          approval = {
-            kind: 'mcp',
-            reason: `MCP profile ${profileId || '<missing>'} is outside the automation policy`
-          }
+          approval = { kind: 'mcp' }
         }
       }
       if (!approval) {
         try {
           assertAutomationToolPolicy(policy, request.input, context.run.cwd)
-        } catch (error) {
-          approval = { kind: 'tool', reason: toErrorMessage(error) }
+        } catch {
+          approval = { kind: 'tool' }
         }
       }
     }
@@ -672,16 +843,10 @@ export class PiAgentRuntimeHost {
           (permission) => !allowed.has(permission)
         )
         if (missing.length > 0) {
-          approval = {
-            kind: 'permission',
-            reason: `Tool permissions are not preauthorized: ${missing.join(', ')}`
-          }
+          approval = { kind: 'permission' }
         }
       } else {
-        approval = {
-          kind: 'permission',
-          reason: `Tool ${request.toolId} requires user approval`
-        }
+        approval = { kind: 'permission' }
       }
     }
     if (approval) await this.consumeApproval(context, request, approval, fingerprint)
@@ -693,24 +858,36 @@ export class PiAgentRuntimeHost {
       request.input
     )
     if (startState !== undefined && startState !== 'execute') {
-      throw new Error(`INTERRUPTED_TOOL_CALL:${request.toolCallId}`)
+      throw createInterruptedToolCallError(request.toolCallId)
     }
 
     const result = await toolRegistry.executeTool(request.toolId, request.input, {
       taskId: request.runId,
       agentId: 'tuff.pi-coordinator',
       workingDirectory: context.run.cwd,
-      signal: context.controller.signal
+      signal: context.controller.signal,
+      errorProjection: 'stable'
     })
-    if (!result.success) throw new Error(result.error || `Tool ${request.toolId} failed`)
+    if (!result.success) {
+      if (result.runtimeControl && result.error) {
+        const approvalRequirement = parseApprovalRequirement(result.error)
+        if (approvalRequirement) {
+          throw createApprovalRequiredError(
+            approvalRequirement.kind,
+            approvalRequirement.fingerprint
+          )
+        }
+      }
+      return stableToolFailure(result.errorCode ?? 'TOOL_EXECUTION_FAILED')
+    }
 
     const outcome = { output: serializeToolOutput(result.output) }
     if (this.persistToolCallResult) {
       try {
         await this.persistToolCallResult(request.runId, request.toolCallId, outcome)
-      } catch (error) {
-        runtimeLog.error('Failed to persist Pi tool-call result', { error })
-        throw new Error(`Tool call result could not be persisted: ${toErrorMessage(error)}`)
+      } catch {
+        runtimeLog.error('Failed to persist Pi tool-call result')
+        return stableToolFailure('TOOL_EXECUTION_FAILED')
       }
     }
     return outcome
@@ -719,14 +896,14 @@ export class PiAgentRuntimeHost {
   private async consumeApproval(
     context: ActiveRunContext,
     request: PiRuntimeToolRequest,
-    approval: { kind: 'mcp' | 'permission' | 'tool'; reason: string },
+    approval: { kind: 'mcp' | 'permission' | 'tool' },
     fingerprint: string
   ): Promise<void> {
     if (
       context.request.metadata?.approvalGrantFingerprint !== fingerprint ||
       context.consumedApprovalFingerprints.has(fingerprint)
     ) {
-      throw approvalRequired(approval.kind, approval.reason, fingerprint)
+      throw createApprovalRequiredError(approval.kind, fingerprint)
     }
     context.consumedApprovalFingerprints.add(fingerprint)
     try {
@@ -750,14 +927,15 @@ export class PiAgentRuntimeHost {
 
   private handleExit(code: number): void {
     const error = new Error(`Pi runtime utility process exited with code ${code}`)
-    if (!this.shuttingDown) runtimeLog.error(error.message, { error })
+    const interruptedError = createRunInterruptedError()
+    if (!this.shuttingDown) runtimeLog.error('Pi runtime utility process exited unexpectedly')
     this.ready = false
     this.clearReadyTimeout()
     this.readyReject?.(error)
     for (const context of this.activeRuns.values()) {
       clearTimeout(context.timeout)
       context.controller.abort()
-      context.reject(error)
+      context.reject(interruptedError)
     }
     this.activeRuns.clear()
     this.child = null
@@ -773,8 +951,8 @@ export class PiAgentRuntimeHost {
     this.restartAttempts += 1
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null
-      void this.start().catch((error) => {
-        runtimeLog.error('Pi runtime restart failed', { error })
+      void this.start().catch(() => {
+        runtimeLog.error('Pi runtime restart failed')
         this.scheduleRestart()
       })
     }, delayMs)
