@@ -13,8 +13,6 @@
     "check:mdc-fences": "node build/check-mdc-fences.mjs",
     "check:doc-parity": "node build/check-doc-translation-parity.mjs",
     "check:icon-collections": "node build/check-icon-collections.mjs",
-    "check:prerender-bodies": "node build/check-prerender-bodies.mjs",
-    "check:prerender-bodies:self-test": "node build/check-prerender-bodies.mjs --self-test",
     "check:preview-secrets": "node scripts/preview-secret-preflight.mjs",
     "check:runtime-evidence": "node build/check-runtime-evidence.mjs",
     "check:runtime-evidence:deployed": "node build/check-runtime-evidence.mjs --require-deployed-preview",
