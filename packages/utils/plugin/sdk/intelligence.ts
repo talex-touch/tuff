@@ -14,7 +14,9 @@ type PluginChannelWithMain = PluginChannelClient & {
 };
 
 type HostOnlyIntelligenceMethod
-  = | 'contextPrepareTurn'
+  = | 'saveProviderConfig'
+    | 'deleteProviderConfig'
+    | 'contextPrepareTurn'
     | 'contextListCheckpoints'
     | 'contextListPackageLogs'
     | 'contextCreateCompressionSnapshot'
@@ -83,6 +85,8 @@ type HostOnlyIntelligenceMethod
     | 'workflowReviewUpdate'
 
 const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> = {
+  saveProviderConfig: true,
+  deleteProviderConfig: true,
   contextPrepareTurn: true,
   contextListCheckpoints: true,
   contextListPackageLogs: true,

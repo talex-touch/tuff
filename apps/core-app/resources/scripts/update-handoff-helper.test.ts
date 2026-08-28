@@ -2,10 +2,12 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { setTimeout as delay } from 'node:timers/promises'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { recoverOnce, runHelper } = require('./update-handoff-helper.cjs') as {
+const { launchCommand, recoverOnce, runHelper } = require('./update-handoff-helper.cjs') as {
+  launchCommand: (command: HelperCommand) => Promise<void>
   recoverOnce: (root: string, plan: HelperPlan, reason: string) => Promise<boolean>
   runHelper: (root: string, planPath: string) => Promise<{ status: string }>
 }
@@ -28,9 +30,30 @@ type HelperPlan = {
   ackPath: string
   markerPath: string
   cleanupPaths: string[]
-  handoff: { command: string; args: string[]; waitForExit: boolean }
-  recovery: { command: string; args: string[]; waitForExit: boolean } | null
+  handoff: HelperCommand
+  recovery: HelperCommand | null
   recoveryAvailable: boolean
+}
+
+interface HelperCommand {
+  command: string
+  args: string[]
+  waitForExit: boolean
+}
+
+async function waitForFile(filePath: string): Promise<string> {
+  const deadline = Date.now() + 2_000
+  while (Date.now() < deadline) {
+    try {
+      return await readFile(filePath, 'utf8')
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+        throw error
+      }
+    }
+    await delay(20)
+  }
+  throw new Error(`Timed out waiting for helper child output: ${filePath}`)
 }
 
 async function createPlan(
@@ -67,12 +90,39 @@ async function createPlan(
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(
     temporaryRoots.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
   )
 })
 
 describe('update handoff helper', () => {
+  it.each([true, false])(
+    'does not leak ELECTRON_RUN_AS_NODE into a waitForExit=%s child',
+    async (waitForExit) => {
+      const root = await mkdtemp(path.join(tmpdir(), 'tuff-update-helper-env-'))
+      temporaryRoots.push(root)
+      const outputPath = path.join(root, 'child-env.txt')
+      vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
+      vi.stubEnv('TUFF_OTA_PROFILE_SENTINEL', 'isolated-profile')
+
+      await launchCommand({
+        command: process.execPath,
+        args: [
+          '-e',
+          `require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ electronRunAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null, profile: process.env.TUFF_OTA_PROFILE_SENTINEL }))`,
+          outputPath
+        ],
+        waitForExit
+      })
+
+      await expect(waitForFile(outputPath).then(JSON.parse)).resolves.toEqual({
+        electronRunAsNode: null,
+        profile: 'isolated-profile'
+      })
+    }
+  )
+
   it('waits for an already-exited parent and accepts a matching health acknowledgement', async () => {
     const { root, planPath, plan } = await createPlan()
     const acknowledgement = JSON.stringify({

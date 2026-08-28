@@ -1,0 +1,32 @@
+{
+  "id": "full-product-completion",
+  "name": "full-product-completion",
+  "title": "Tuff 全链路完成与真实验收",
+  "description": "以可重复证据收口发布、OTA、AI、数据链路、权限沙盒、官网功能矩阵与插件 SDK，并完成最终集成验收。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-23-plugin-install-security-hardening",
+    "08-23-release-cicd-ota-acceptance",
+    "08-23-ai-permission-sandbox-acceptance",
+    "08-23-data-telemetry-billing-acceptance",
+    "08-23-product-matrix-plugin-sdk-acceptance"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

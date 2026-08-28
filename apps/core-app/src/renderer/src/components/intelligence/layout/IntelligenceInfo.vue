@@ -134,12 +134,16 @@ function handleEditBasic() {
  * Handle configuration changes
  * Emits update event with the modified provider
  */
-function handleChange() {
+function handleStoredChange() {
   const liveProvider = intelligenceSettings
     .get()
     .providers.find((p) => p.id === localProvider.value.id)
 
   emits('update', liveProvider ?? localProvider.value)
+}
+
+function handleLocalChange(provider: IntelligenceProviderConfig) {
+  emits('update', provider)
 }
 
 async function handleLogin() {
@@ -235,7 +239,7 @@ function handleSyncFromNexus() {
           active-icon="i-carbon-key"
           memory-name="aisdk-api-config"
         >
-          <IntelligenceApiConfig v-model="localProvider" @change="handleChange" />
+          <IntelligenceApiConfig v-model="localProvider" @change="handleStoredChange" />
         </TuffGroupBlock>
 
         <TuffGroupBlock
@@ -248,7 +252,7 @@ function handleSyncFromNexus() {
           <IntelligenceModelConfig
             v-model="localProvider"
             :disabled="isModelConfigDisabled"
-            @change="handleChange"
+            @change="handleStoredChange"
           />
         </TuffGroupBlock>
       </template>
@@ -263,7 +267,7 @@ function handleSyncFromNexus() {
         <IntelligenceAdvancedConfig
           v-model="localProvider"
           :priority-only="isNexusManagedProvider"
-          @change="handleChange"
+          @update:model-value="handleLocalChange"
         />
       </TuffGroupBlock>
 
@@ -275,7 +279,10 @@ function handleSyncFromNexus() {
         active-icon="i-carbon-time"
         memory-name="aisdk-ratelimit-config"
       >
-        <IntelligenceRateLimitConfig v-model="localProvider" @change="handleChange" />
+        <IntelligenceRateLimitConfig
+          v-model="localProvider"
+          @update:model-value="handleLocalChange"
+        />
       </TuffGroupBlock>
     </div>
   </TxScroll>

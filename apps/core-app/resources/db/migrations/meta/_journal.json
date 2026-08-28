@@ -288,6 +288,13 @@
       "when": 1785888000000,
       "tag": "0040_conversation_sync_state_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1785974400000,
+      "tag": "0041_ai_orchestrator_run_retention",
+      "breakpoints": true
     }
   ]
 }

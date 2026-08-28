@@ -320,6 +320,19 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
     )
   }
 
+  rebuildItem(itemId: string): TuffItem | null {
+    if (process.platform !== 'win32') return null
+
+    const prefix = `${this.id}:`
+    if (!itemId.startsWith(prefix)) return null
+
+    const entryId = itemId.slice(prefix.length)
+    const entry = WINDOWS_SHELL_ENTRIES.find((candidate) => candidate.id === entryId)
+    if (!entry) return null
+
+    return this.buildEntryItem({ entry, highlights: [], score: 0 })
+  }
+
   private buildEntryItem(match: WindowsShellMatch): TuffItem {
     const { entry, highlights, score } = match
 

@@ -17,11 +17,13 @@ import { describe, expect, it, vi } from 'vitest'
 // Electron at module scope.
 import '../modules/ai/intelligence-test-harness'
 
+import { ipcMain } from 'electron'
 import {
   registerPluginWebContents,
   resolvePluginViewNonce,
   unregisterPluginWebContents
 } from '../modules/plugin/runtime/plugin-view-registry'
+import { RAW_MAIN_PROCESS_CHANNEL, RAW_PLUGIN_PROCESS_CHANNEL } from '../../shared/ipc/raw-channel'
 import { genTouchChannel } from './channel-core'
 
 interface ChannelInternals {
@@ -38,6 +40,11 @@ interface ChannelInternals {
     event: unknown,
     arg: unknown
   ) => { header: { uniqueKey?: string; declaredKey?: string }; plugin?: string }
+  requestKey: (
+    name: string,
+    activation: { pluginInstanceId: string; activationGeneration: number }
+  ) => string
+  revokeKey: (key: string) => boolean
   resolveIdentity: (key: string) => unknown
 }
 
@@ -108,6 +115,12 @@ const channel = genTouchChannel({
 
 function sentKey(sent: Array<{ channel: string; payload: unknown }>): unknown {
   return (sent[0]?.payload as { header?: { uniqueKey?: unknown } } | undefined)?.header?.uniqueKey
+}
+
+function rawChannelListener(channelName: string): (event: unknown, arg: unknown) => void {
+  const registration = vi.mocked(ipcMain.on).mock.calls.find(([name]) => name === channelName)
+  expect(registration?.[1]).toBeTypeOf('function')
+  return registration?.[1] as unknown as (event: unknown, arg: unknown) => void
 }
 
 describe('outbound messages carry the alias, not the key', () => {
@@ -292,5 +305,112 @@ describe('inbound messages resolve the alias back to the key', () => {
     })
 
     expect(parsed.header.uniqueKey).toBe('some-other-key')
+  })
+
+  it('keeps an unregistered raw plugin sender on the plugin lane without trusting claims', () => {
+    const eventName = 'demo:unregistered-plugin-lane'
+    const mainHandler = vi.fn()
+    const pluginHandler = vi.fn()
+    const unregisterMain = channel.regChannel('main', eventName, mainHandler)
+    const unregisterPlugin = channel.regChannel('plugin', eventName, pluginHandler)
+    const { event } = fakeReplyEvent(7406)
+
+    try {
+      rawChannelListener(RAW_PLUGIN_PROCESS_CHANNEL)(event, {
+        name: eventName,
+        header: { status: 'request', type: 'main', uniqueKey: ACTIVATION.key },
+        code: 0,
+        data: {},
+        plugin: ACTIVATION.name
+      })
+
+      expect(mainHandler).not.toHaveBeenCalled()
+      expect(pluginHandler).toHaveBeenCalledTimes(1)
+      const received = pluginHandler.mock.calls[0]?.[0] as {
+        header?: { type?: string }
+        plugin?: string
+        pluginIdentity?: unknown
+      }
+      expect(received.header?.type).toBe('plugin')
+      expect(received.plugin).toBe('__unverified_plugin_caller__')
+      expect(received.plugin).not.toBe(ACTIVATION.name)
+      expect(received.pluginIdentity).toBeUndefined()
+    } finally {
+      unregisterMain()
+      unregisterPlugin()
+    }
+  })
+
+  it('keeps an unregistered valid-key sender on the plugin lane from the raw main listener', () => {
+    const eventName = 'demo:unregistered-valid-key-main-lane'
+    const key = channel.requestKey(ACTIVATION.name, ACTIVATION)
+    const mainHandler = vi.fn()
+    const pluginHandler = vi.fn()
+    const unregisterMain = channel.regChannel('main', eventName, mainHandler)
+    const unregisterPlugin = channel.regChannel('plugin', eventName, pluginHandler)
+    const { event } = fakeReplyEvent(7408)
+
+    try {
+      rawChannelListener(RAW_MAIN_PROCESS_CHANNEL)(event, {
+        name: eventName,
+        header: { status: 'request', type: 'main', uniqueKey: key },
+        code: 0,
+        data: {},
+        plugin: ACTIVATION.name
+      })
+
+      expect(mainHandler).not.toHaveBeenCalled()
+      expect(pluginHandler).toHaveBeenCalledTimes(1)
+      const received = pluginHandler.mock.calls[0]?.[0] as {
+        header?: { type?: string }
+        plugin?: string
+        pluginIdentity?: unknown
+      }
+      expect(received.header?.type).toBe('plugin')
+      expect(received.plugin).toBe('__unverified_plugin_caller__')
+      expect(received.plugin).not.toBe(ACTIVATION.name)
+      expect(received.pluginIdentity).toBeUndefined()
+    } finally {
+      unregisterMain()
+      unregisterPlugin()
+      channel.revokeKey(key)
+    }
+  })
+
+  it('routes a registered plugin sender through the plugin lane from the raw main listener', () => {
+    const eventName = 'demo:registered-plugin-main-lane'
+    const key = channel.requestKey(ACTIVATION.name, ACTIVATION)
+    const activation = { ...ACTIVATION, key }
+    const token = registerPluginWebContents(7407, activation)
+    const mainHandler = vi.fn()
+    const pluginHandler = vi.fn()
+    const unregisterMain = channel.regChannel('main', eventName, mainHandler)
+    const unregisterPlugin = channel.regChannel('plugin', eventName, pluginHandler)
+    const { event } = fakeReplyEvent(7407)
+
+    try {
+      rawChannelListener(RAW_MAIN_PROCESS_CHANNEL)(event, {
+        name: eventName,
+        header: { status: 'request', type: 'main', uniqueKey: key },
+        code: 0,
+        data: {}
+      })
+
+      expect(mainHandler).not.toHaveBeenCalled()
+      expect(pluginHandler).toHaveBeenCalledTimes(1)
+      const received = pluginHandler.mock.calls[0]?.[0] as {
+        header?: { type?: string }
+        plugin?: string
+        pluginIdentity?: unknown
+      }
+      expect(received.header?.type).toBe('plugin')
+      expect(received.plugin).toBe(ACTIVATION.name)
+      expect(received.pluginIdentity).toEqual(activation)
+    } finally {
+      unregisterMain()
+      unregisterPlugin()
+      unregisterPluginWebContents(7407, token)
+      channel.revokeKey(key)
+    }
   })
 })

@@ -13,6 +13,23 @@ interface RegisteredTool {
   execute: (toolCallId: string, params: Record<string, unknown>) => Promise<unknown>
 }
 
+interface ToolResultBlock {
+  content: Array<{ type: 'text', text: string }>
+  isError?: boolean
+}
+
+function gatewayResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: vi.fn(async () => body),
+  } as unknown as Response
+}
+
+function resultText(result: unknown): string {
+  return (result as ToolResultBlock).content[0]?.text ?? ''
+}
+
 /**
  * The gateway address is read at module load, so each case re-imports the
  * extension with the environment it wants to describe.
@@ -30,6 +47,7 @@ async function loadTools(env: { url?: string, token?: string } = {}): Promise<Re
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
 /**
@@ -59,6 +77,96 @@ describe('pi extension executor contract', () => {
     const tools = await loadTools()
     expect(tools.length).toBeGreaterThan(0)
     for (const tool of tools) expect(tool.execute).toHaveLength(2)
+  })
+})
+
+describe('gateway response projection', () => {
+  it('does not expose fetch failures containing token and path canaries', async () => {
+    const canary = 'sk_live_secret_123@/Users/private/native-stack.ts:42'
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error(canary)
+    }))
+    const tool = (await loadTools()).find(entry => entry.name === 'tuff_search_files')!
+
+    const result = await tool.execute('call-1', { query: 'report' }) as ToolResultBlock
+
+    expect(result).toMatchObject({ isError: true })
+    expect(resultText(result)).toBe(
+      'TOOL_GATEWAY_UNAVAILABLE: Tuff tool gateway is not available.',
+    )
+    expect(JSON.stringify(result)).not.toContain(canary)
+  })
+
+  it('maps aborts to a fixed timeout without exposing the native error', async () => {
+    const canary = 'AbortError at /Users/private/native-stack.ts:42'
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw Object.assign(new Error(canary), { name: 'AbortError' })
+    }))
+    const tool = (await loadTools()).find(entry => entry.name === 'tuff_search_files')!
+
+    const result = await tool.execute('call-1', { query: 'report' }) as ToolResultBlock
+
+    expect(resultText(result)).toBe(
+      'TOOL_GATEWAY_TIMEOUT: Tuff tool gateway request timed out.',
+    )
+    expect(JSON.stringify(result)).not.toContain(canary)
+  })
+
+  it('classifies malformed JSON as an invalid gateway response', async () => {
+    const canary = 'gateway-json-canary@/Users/private/response.json'
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ...gatewayResponse(null),
+      json: vi.fn(async () => {
+        throw new SyntaxError(canary)
+      }),
+    })))
+    const tool = (await loadTools()).find(entry => entry.name === 'tuff_search_files')!
+
+    const result = await tool.execute('call-1', { query: 'report' }) as ToolResultBlock
+
+    expect(resultText(result)).toBe(
+      'TOOL_GATEWAY_RESPONSE_INVALID: Tuff tool gateway returned an invalid response.',
+    )
+    expect(JSON.stringify(result)).not.toContain(canary)
+  })
+
+  it('ignores raw gateway error output and allowlists only declared codes', async () => {
+    const canary = 'sk_live_gateway_error@/Users/private/gateway.ts:42'
+    vi.stubGlobal('fetch', vi.fn(async () => gatewayResponse({
+      output: canary,
+      isError: true,
+      code: canary,
+    })))
+    const tool = (await loadTools()).find(entry => entry.name === 'tuff_search_files')!
+
+    const result = await tool.execute('call-1', { query: 'report' }) as ToolResultBlock
+
+    expect(resultText(result)).toBe('TOOL_EXECUTION_FAILED: Tool execution failed.')
+    expect(JSON.stringify(result)).not.toContain(canary)
+  })
+
+  it('preserves successful output exactly', async () => {
+    const output = 'exact output\nwith structured-looking {"text":"content"}'
+    vi.stubGlobal('fetch', vi.fn(async () => gatewayResponse({ output, isError: false })))
+    const tool = (await loadTools()).find(entry => entry.name === 'tuff_search_files')!
+
+    const result = await tool.execute('call-1', { query: 'report' }) as ToolResultBlock
+
+    expect(result).toEqual({ content: [{ type: 'text', text: output }], isError: false })
+  })
+
+  it.each([
+    [401, 'TOOL_GATEWAY_UNAUTHORIZED: Tuff tool gateway authorization failed.'],
+    [503, 'TOOL_GATEWAY_UNAVAILABLE: Tuff tool gateway is not available.'],
+  ] as const)('maps HTTP %i to a fixed error', async (status, expected) => {
+    const canary = 'sk_live_http_body@/Users/private/http.log'
+    vi.stubGlobal('fetch', vi.fn(async () => gatewayResponse({ error: canary }, status)))
+    const tool = (await loadTools()).find(entry => entry.name === 'tuff_search_files')!
+
+    const result = await tool.execute('call-1', { query: 'report' }) as ToolResultBlock
+
+    expect(resultText(result)).toBe(expected)
+    expect(JSON.stringify(result)).not.toContain(canary)
   })
 })
 

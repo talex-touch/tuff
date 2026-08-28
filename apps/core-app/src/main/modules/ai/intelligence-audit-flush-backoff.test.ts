@@ -12,6 +12,7 @@ import { IntelligenceAuditLogger } from './intelligence-audit-logger'
 
 interface LoggerInternals {
   pendingLogs: IntelligenceAuditLogEntry[]
+  flushPromise: Promise<void> | null
   consecutiveFlushFailures: number
   maxPendingLogs: number
   flushDelayMs: number
@@ -19,6 +20,8 @@ interface LoggerInternals {
   nextFlushDelayMs: () => number
   trimPendingLogs: () => void
   log: (entry: IntelligenceAuditLogEntry) => void
+  flushToDB: () => Promise<void>
+  flushBatch: (logs: IntelligenceAuditLogEntry[]) => Promise<boolean>
 }
 
 function createLogger(): LoggerInternals {
@@ -96,5 +99,71 @@ describe('audit flush backs off and stops growing without bound', () => {
     logger.trimPendingLogs()
 
     expect(logger.pendingLogs).toHaveLength(10)
+  })
+
+  it('显式 flush 会等待已取走 batch 的自动 flush 完成', async () => {
+    const logger = createLogger()
+    let releaseFlush!: () => void
+    const flushGate = new Promise<void>((resolve) => {
+      releaseFlush = resolve
+    })
+    logger.flushBatch = vi.fn(async () => {
+      await flushGate
+      return true
+    })
+    logger.pendingLogs.push(entry(0))
+    const automaticFlush = logger.flushToDB()
+
+    let settled = false
+    const explicitFlush = logger.flushToDB().then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+
+    releaseFlush()
+    await Promise.all([automaticFlush, explicitFlush])
+    expect(settled).toBe(true)
+  })
+
+  it('多个等待者恢复时仍只运行一个 flush drain', async () => {
+    const logger = createLogger()
+    let releaseFirstBatch!: () => void
+    const firstBatchGate = new Promise<void>((resolve) => {
+      releaseFirstBatch = resolve
+    })
+    let batchCalls = 0
+    let activeBatches = 0
+    let maxActiveBatches = 0
+    logger.flushBatch = vi.fn(async () => {
+      batchCalls += 1
+      activeBatches += 1
+      maxActiveBatches = Math.max(maxActiveBatches, activeBatches)
+      if (batchCalls === 1) await firstBatchGate
+      else await Promise.resolve()
+      activeBatches -= 1
+      return true
+    })
+
+    logger.pendingLogs.push(entry(0))
+    const ownerFlush = logger.flushToDB()
+    const activeOwner = logger.flushPromise
+    expect(activeOwner).not.toBeNull()
+
+    // Queue work after the current drain resolves but before both waiters resume. Without the
+    // post-await re-check, both waiters splice and flush a separate batch concurrently.
+    void activeOwner?.then(() => {
+      for (let index = 1; index <= 40; index += 1) logger.pendingLogs.push(entry(index))
+    })
+    const firstWaiter = logger.flushToDB()
+    const secondWaiter = logger.flushToDB()
+
+    releaseFirstBatch()
+    await Promise.all([ownerFlush, firstWaiter, secondWaiter])
+
+    expect(logger.pendingLogs).toHaveLength(0)
+    expect(batchCalls).toBe(3)
+    expect(maxActiveBatches).toBe(1)
   })
 })

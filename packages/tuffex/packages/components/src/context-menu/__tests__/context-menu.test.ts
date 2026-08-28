@@ -294,6 +294,30 @@ describe('txContextMenu', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
+  it('closes on outside pointerdown', async () => {
+    // Controlled mount: openAt never ran, so the post-open grace window is
+    // already expired and the outside press must close deterministically.
+    const wrapper = mountMenu({ modelValue: true })
+    await nextTick()
+
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await nextTick()
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('leaves outside pointerdown alone when closeOnClickOutside is off', async () => {
+    const wrapper = mountMenu({ modelValue: true, closeOnClickOutside: false })
+    await nextTick()
+
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await nextTick()
+
+    const closeEmissions = (wrapper.emitted('update:modelValue') ?? []).filter(([value]) => value === false)
+    expect(closeEmissions).toHaveLength(0)
+  })
+
   it('keeps the menu open when pointer down originates inside its own panel', async () => {
     const wrapper = mountMenu({ modelValue: true, closeOnAnyPointerDown: true })
     await nextTick()

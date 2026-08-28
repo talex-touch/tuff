@@ -1,0 +1,30 @@
+{
+  "id": "release-cicd-ota-acceptance",
+  "name": "release-cicd-ota-acceptance",
+  "title": "CI/CD 发布与 OTA 真实验收",
+  "description": "补齐必需检查、发布依赖、三平台产物与 OTA N/N+1 真机证据。",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-23",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-23-full-product-completion",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "Requires current beta artifacts and N/N+1 OTA evidence after release publication.",
+    "evidence": "The task records local release preflight and prior beta updater evidence.",
+    "nextAction": "Validate the published beta artifacts and collect controlled OTA evidence."
+  }
+}

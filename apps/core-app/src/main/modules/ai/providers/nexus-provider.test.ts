@@ -1,5 +1,8 @@
-import type { IntelligenceStreamChunk } from '@talex-touch/tuff-intelligence'
-import { Readable } from 'node:stream'
+import type {
+  IntelligenceInvokeOptions,
+  IntelligenceStreamChunk
+} from '@talex-touch/tuff-intelligence'
+import { PassThrough, Readable } from 'node:stream'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -28,6 +31,44 @@ vi.mock('../../nexus/scene-client', () => ({
   runNexusScene: sceneMocks.runNexusScene,
   extractTranslatedImageFromSceneRun: sceneMocks.extractTranslatedImageFromSceneRun
 }))
+
+function createPendingStreamResponse(
+  stream: Readable,
+  hooks: { onComplete?: () => void; onCancel?: () => void } = {}
+) {
+  return {
+    status: 200,
+    statusText: 'OK',
+    headers: { 'content-type': 'text/event-stream' },
+    url: 'https://nexus.example.com/api/v1/intelligence/stream',
+    stream,
+    complete: vi.fn(hooks.onComplete),
+    cancel: vi.fn(hooks.onCancel)
+  }
+}
+
+async function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs = 250
+): Promise<
+  | { status: 'fulfilled'; value: T }
+  | { status: 'rejected'; reason: unknown }
+  | { status: 'timeout' }
+> {
+  return await new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timeout)
+        resolve({ status: 'fulfilled', value })
+      },
+      (reason: unknown) => {
+        clearTimeout(timeout)
+        resolve({ status: 'rejected', reason })
+      }
+    )
+  })
+}
 
 describe('nexusProvider', () => {
   beforeEach(() => {
@@ -220,7 +261,9 @@ describe('nexusProvider', () => {
         encoded.subarray(0, utf8Offset + 1),
         encoded.subarray(utf8Offset + 1, utf8Offset + 2),
         encoded.subarray(utf8Offset + 2)
-      ])
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -296,6 +339,111 @@ describe('nexusProvider', () => {
     )
   })
 
+  it('completes a Nexus terminal event while the physical response body remains open', async () => {
+    const body = new PassThrough()
+    const lifecycle: string[] = []
+    let completed = false
+    const response = createPendingStreamResponse(body, {
+      onComplete: () => {
+        completed = true
+        lifecycle.push('complete')
+      },
+      onCancel: () => {
+        lifecycle.push('cancel')
+        if (!completed) body.destroy()
+      }
+    })
+    networkMocks.requestStream.mockResolvedValueOnce(response)
+    body.write('event: end\ndata: {"type":"end"}\n\n')
+    const provider = new NexusProvider({
+      id: 'tuff-nexus-default',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Tuff Nexus',
+      enabled: true,
+      apiKey: 'app-token',
+      defaultModel: 'configured-chat-model',
+      priority: 1,
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+    })
+
+    const iterator = provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] }, {})
+    const terminal = await iterator.next()
+    lifecycle.push('yield')
+    const finalNext = iterator.next()
+    const finalOutcome = await settleWithin(finalNext)
+    const destroyedBeforeCleanup = body.destroyed
+    if (finalOutcome.status === 'timeout') {
+      body.destroy()
+      await finalNext.catch(() => undefined)
+    } else {
+      body.destroy()
+    }
+
+    expect(terminal).toEqual({
+      value: {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        traceId: expect.any(String),
+        provider: 'tuff-nexus-default',
+        model: 'configured-chat-model',
+        latency: 0
+      },
+      done: false
+    })
+    expect(finalOutcome).toEqual({ status: 'fulfilled', value: { value: undefined, done: true } })
+    expect(lifecycle).toEqual(['complete', 'yield', 'cancel'])
+    expect(response.complete).toHaveBeenCalledOnce()
+    expect(response.cancel).toHaveBeenCalledOnce()
+    expect(destroyedBeforeCleanup).toBe(false)
+  })
+
+  it('forwards runtime cancellation while waiting for the next Nexus delta', async () => {
+    const controller = new AbortController()
+    const body = new PassThrough()
+    const cancelError = Object.assign(new Error('NETWORK_ABORTED'), { code: 'NETWORK_ABORTED' })
+    const response = createPendingStreamResponse(body)
+    networkMocks.requestStream.mockImplementationOnce(async (request: { signal?: AbortSignal }) => {
+      request.signal?.addEventListener('abort', () => body.destroy(cancelError), { once: true })
+      return response
+    })
+    body.write('event: delta\ndata: {"type":"delta","delta":"partial"}\n\n')
+    const provider = new NexusProvider({
+      id: 'tuff-nexus-default',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Tuff Nexus',
+      enabled: true,
+      apiKey: 'app-token',
+      defaultModel: 'configured-chat-model',
+      priority: 1,
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+    })
+
+    const iterator = provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] }, {
+      signal: controller.signal
+    } as IntelligenceInvokeOptions & { signal: AbortSignal })
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { delta: 'partial', done: false },
+      done: false
+    })
+
+    const pendingNext = iterator.next()
+    controller.abort()
+    const outcome = await settleWithin(pendingNext)
+    if (outcome.status === 'timeout') {
+      body.destroy(cancelError)
+      await pendingNext.catch(() => undefined)
+    }
+
+    expect(networkMocks.requestStream).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal })
+    )
+    expect(outcome.status).toBe('rejected')
+    if (outcome.status === 'rejected') expect(outcome.reason).toBe(cancelError)
+    expect(response.complete).not.toHaveBeenCalled()
+    expect(response.cancel).toHaveBeenCalledOnce()
+  })
+
   it('retains a structured Nexus SSE error before any delta', async () => {
     const sse = [
       'event: error',
@@ -314,7 +462,9 @@ describe('nexusProvider', () => {
         encoded.subarray(0, fieldOffset),
         encoded.subarray(fieldOffset, fieldOffset + 9),
         encoded.subarray(fieldOffset + 9)
-      ])
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -358,7 +508,9 @@ describe('nexusProvider', () => {
       stream: Readable.from([
         encoded.subarray(0, errorOffset + 18),
         encoded.subarray(errorOffset + 18)
-      ])
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -393,7 +545,9 @@ describe('nexusProvider', () => {
       statusText: 'OK',
       headers: { 'content-type': 'text/event-stream' },
       url: 'https://nexus.example.com/api/v1/intelligence/stream',
-      stream: Readable.from([encoded.subarray(0, 29), encoded.subarray(29)])
+      stream: Readable.from([encoded.subarray(0, 29), encoded.subarray(29)]),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',

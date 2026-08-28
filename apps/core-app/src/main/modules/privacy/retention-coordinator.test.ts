@@ -3,6 +3,13 @@ import type {
   PrivacyRetentionSelectionV1
 } from '@talex-touch/utils/transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
+
+const getStartupDegradeWindowRemainingMsMock = vi.hoisted(() => vi.fn((): number => 0))
+
+vi.mock('../../db/runtime-flags', () => ({
+  getStartupDegradeWindowRemainingMs: getStartupDegradeWindowRemainingMsMock
+}))
+
 import { createPrivacyRetentionCoordinator } from './retention-coordinator'
 
 const SELECTION: PrivacyRetentionSelectionV1 = {
@@ -56,7 +63,7 @@ function createHarness() {
 }
 
 describe('privacy retention coordinator', () => {
-  it('registers one immediate daily maintenance task only after storage readiness', async () => {
+  it('registers one daily maintenance task only after storage readiness', async () => {
     const harness = createHarness()
 
     await expect(harness.coordinator.runManualCleanup()).resolves.toMatchObject({
@@ -73,7 +80,7 @@ describe('privacy retention coordinator', () => {
       {
         interval: 24,
         unit: 'hours',
-        runImmediately: true,
+        initialDelayMs: 0,
         lane: 'maintenance',
         backpressure: 'coalesce',
         maxInFlight: 1
@@ -82,6 +89,25 @@ describe('privacy retention coordinator', () => {
     await expect(harness.coordinator.initializeAfterStorageReady()).rejects.toThrow(
       'PRIVACY_RETENTION_COORDINATOR_ALREADY_INITIALIZED'
     )
+  })
+
+  it('defers the boot-path scheduled cleanup past the startup degrade window', async () => {
+    getStartupDegradeWindowRemainingMsMock.mockReturnValueOnce(90_000)
+    const harness = createHarness()
+
+    await harness.coordinator.initializeAfterStorageReady()
+
+    expect(harness.polling.register).toHaveBeenCalledWith(
+      'privacy.retention.cleanup',
+      expect.any(Function),
+      expect.objectContaining({
+        interval: 24,
+        unit: 'hours',
+        initialDelayMs: 90_000,
+        lane: 'maintenance'
+      })
+    )
+    expect(harness.service.runScheduledCleanup).not.toHaveBeenCalled()
   })
 
   it('returns and awaits the scheduled service cleanup with one lifecycle signal', async () => {

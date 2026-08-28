@@ -374,7 +374,6 @@ Stream consumers must treat event boundaries as transport details:
 - The default Nexus provider uses authenticated `/api/v1/intelligence/stream` SSE and forwards real provider token deltas plus backend route metadata and terminal usage. Retry/fallback is allowed only before the first visible delta; a post-delta failure is surfaced instead of replaying duplicate text. Never depend on delta count or chunk size.
 - Providers that do not report backend metadata remain compatible, so route fields are optional.
 
----
 
 ## Complete Examples
 

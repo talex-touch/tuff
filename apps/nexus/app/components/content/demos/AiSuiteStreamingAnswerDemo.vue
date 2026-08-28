@@ -5,6 +5,7 @@
 // controlled primitives that only render what they are handed.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { hasWindow } from '@talex-touch/utils/env'
 
 interface Token {
   text: string
@@ -72,7 +73,7 @@ const visible = computed(() => tokens.value.slice(0, count.value))
 
 // JS timers are not covered by the reduced-motion media query, so the loop has
 // to check for itself and settle on the finished state instead.
-const still = typeof window !== 'undefined'
+const still = hasWindow()
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 let timer: ReturnType<typeof setTimeout> | undefined

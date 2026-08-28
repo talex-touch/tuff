@@ -1,0 +1,6 @@
+{"file":".trellis/spec/main-process/index.md","reason":"Load the main-process ownership and quality-check index before changing Intelligence runtime code."}
+{"file":".trellis/spec/main-process/database-write-contracts.md","reason":"Preserve the single-writer scheduler and transaction rules for audit, usage, and quota persistence."}
+{"file":".trellis/spec/main-process/agent-tool-gateway-contracts.md","reason":"Preserve tool confirmation, remember-scope, timeout, and gateway security contracts."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Apply authoritative plugin identity, sdkapi, permission, and fail-closed runtime boundaries."}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Keep credentials, provider data, audit projections, and evidence within the privacy lifecycle contract."}
+{"file":".trellis/tasks/08-23-ai-permission-sandbox-acceptance/research/ai-permission-audit.md","reason":"Use the verified gap inventory and file anchors that define the implementation order."}

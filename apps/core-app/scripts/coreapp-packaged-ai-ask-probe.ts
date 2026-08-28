@@ -115,6 +115,9 @@ export interface CoreBoxSubmitPreparation {
 }
 
 type CdpResponse = {
+  error?: {
+    message?: string
+  }
   result?: {
     data?: string
     result?: {
@@ -212,8 +215,13 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function loadTargets(remoteDebuggingUrl: string): Promise<DevToolsTarget[]> {
-  const response = await fetch(remoteDebuggingUrl)
+export async function loadTargets(
+  remoteDebuggingUrl: string,
+  timeoutMs = 5_000
+): Promise<DevToolsTarget[]> {
+  const response = await fetch(remoteDebuggingUrl, {
+    signal: AbortSignal.timeout(timeoutMs)
+  })
   if (!response.ok) {
     throw new Error(`Remote debugging endpoint returned HTTP ${response.status}`)
   }
@@ -237,7 +245,7 @@ function isDevToolsTarget(value: unknown): value is DevToolsTarget {
   )
 }
 
-async function withTarget<T>(
+export async function withTarget<T>(
   target: DevToolsTarget,
   callback: (send: CdpSend) => Promise<T>
 ): Promise<T> {
@@ -247,26 +255,90 @@ async function withTarget<T>(
 
   const socket = new WebSocket(target.webSocketDebuggerUrl)
   let id = 0
-  const pending = new Map<number, (value: CdpResponse) => void>()
+  const commandTimeoutMs = 12_000
+  const pending = new Map<
+    number,
+    {
+      method: string
+      resolve: (value: CdpResponse) => void
+      reject: (error: Error) => void
+      timer: ReturnType<typeof setTimeout>
+    }
+  >()
+
+  const rejectPending = (error: Error): void => {
+    for (const request of pending.values()) {
+      clearTimeout(request.timer)
+      request.reject(error)
+    }
+    pending.clear()
+  }
 
   socket.onmessage = (event) => {
-    const message = JSON.parse(String(event.data)) as CdpResponse & { id?: number }
-    if (typeof message.id === 'number' && pending.has(message.id)) {
-      pending.get(message.id)?.(message)
+    let message: CdpResponse & { id?: number }
+    try {
+      message = JSON.parse(String(event.data)) as CdpResponse & { id?: number }
+    } catch {
+      rejectPending(new Error(`CDP target returned an invalid response: ${target.id}`))
+      return
+    }
+    if (typeof message.id === 'number') {
+      const request = pending.get(message.id)
+      if (!request) return
       pending.delete(message.id)
+      clearTimeout(request.timer)
+      if (message.error) {
+        request.reject(
+          new Error(
+            `CDP command ${request.method} failed: ${message.error.message || 'unknown error'}`
+          )
+        )
+        return
+      }
+      request.resolve(message)
     }
   }
 
   await new Promise<void>((resolve, reject) => {
-    socket.onopen = () => resolve()
-    socket.onerror = () => reject(new Error(`Failed to connect CDP target: ${target.id}`))
+    const timer = setTimeout(() => {
+      const error = new Error(`Timed out connecting to CDP target: ${target.id}`)
+      rejectPending(error)
+      if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+        socket.close()
+      }
+      reject(error)
+    }, commandTimeoutMs)
+    socket.onopen = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    socket.onerror = () => {
+      clearTimeout(timer)
+      const error = new Error(`Failed to connect CDP target: ${target.id}`)
+      rejectPending(error)
+      reject(error)
+    }
+    socket.onclose = () => {
+      clearTimeout(timer)
+      rejectPending(new Error(`CDP target closed before the command completed: ${target.id}`))
+    }
   })
 
   const send: CdpSend = (method, params = {}) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const nextId = ++id
-      pending.set(nextId, resolve)
-      socket.send(JSON.stringify({ id: nextId, method, params }))
+      const timer = setTimeout(() => {
+        pending.delete(nextId)
+        reject(new Error(`CDP command timed out after ${commandTimeoutMs}ms: ${method}`))
+      }, commandTimeoutMs)
+      pending.set(nextId, { method, resolve, reject, timer })
+      try {
+        socket.send(JSON.stringify({ id: nextId, method, params }))
+      } catch (error) {
+        clearTimeout(timer)
+        pending.delete(nextId)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
@@ -275,7 +347,13 @@ async function withTarget<T>(
     await send('Page.enable')
     return await callback(send)
   } finally {
-    socket.close()
+    rejectPending(new Error(`CDP target session ended: ${target.id}`))
+    socket.onmessage = null
+    socket.onerror = null
+    socket.onclose = null
+    if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+      socket.close()
+    }
   }
 }
 

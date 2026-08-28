@@ -27,6 +27,32 @@ describe('setupSingleInstanceGuard', () => {
     expect(onDuplicateInstance).not.toHaveBeenCalled()
   })
 
+  it('skips the lock for an isolated packaged acceptance process without benchmark shutdown', () => {
+    const requestSingleInstanceLock = vi.fn()
+    const on = vi.fn()
+    const quit = vi.fn()
+    const logger = { info: vi.fn(), warn: vi.fn() }
+
+    const result = setupSingleInstanceGuard({
+      app: { requestSingleInstanceLock, on, quit },
+      startupBenchmarkMode: false,
+      isolatedAcceptanceMode: true,
+      onDuplicateInstance: vi.fn(),
+      emitSecondaryLaunch: vi.fn(),
+      createSecondaryLaunchEvent: vi.fn(),
+      secondaryLaunchEventName: 'app-secondary-launch' as never,
+      logger
+    })
+
+    expect(result).toBe(true)
+    expect(requestSingleInstanceLock).not.toHaveBeenCalled()
+    expect(on).not.toHaveBeenCalled()
+    expect(quit).not.toHaveBeenCalled()
+    expect(logger.info).toHaveBeenCalledWith(
+      'Isolated packaged acceptance mode enabled, skip single-instance lock'
+    )
+  })
+
   it('registers second-instance listener on the primary process', () => {
     const requestSingleInstanceLock = vi.fn(() => true)
     const on = vi.fn()

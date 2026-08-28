@@ -34,8 +34,8 @@
 1. `packages/components/src/components.ts` — full-path ASCII order (`-` sorts before `/`: `card-item` < `card/`).
 2. `README.md` + `README_ZHCN.md` — total count line + category line (entries per line must equal the parenthesised count; `audit:readme` gates CI).
 3. `apps/nexus/app/plugins/tuffex.ts` — `from*` loader + `GLOBAL_TUFFEX_COMPONENTS` entry. **Composables are NOT registered** (useTokenMenu, useSelectionAnchor, useIndicatorBox, useElapsed — plain imports). Beware: an mdc demo using an unregistered global tag fails only at render time, silently in CI.
-4. `apps/nexus/app/components/content/demo-registry.ts` — alphabetical.
-5. Doc pair `content/docs/dev/components/<kebab>.{zh,en}.mdc` — 8-field frontmatter, `since: 2.5.0`+ for new adds, 中文段名, zh/en equal section counts.
+4. `apps/nexus/app/components/content/demo-registry.ts` — alphabetical. CI-gated since 2026-08-27: `check:demo-registry` fails on registry↔file↔content divergence (a helper .vue imported by another demo is exempt; anything else unreferenced is an orphan).
+5. Doc pair `content/docs/dev/components/<kebab>.{zh,en}.mdc` — 8-field frontmatter, `since: 2.5.0`+ for new adds, 中文段名, zh/en equal section counts. CI-gated since 2026-08-27: `check:doc-parity` fails on zh/en heading-shape divergence.
 6. `pnpm -C packages/tuffex build` before any downstream typecheck (exports resolve to `dist/`), then `pnpm -C apps/nexus typecheck` (wrapper, not `:raw`).
 
 ## Traps confirmed during this port
@@ -44,4 +44,5 @@
 - Suites mounting components with document-level listeners need `enableAutoUnmount(afterEach)` — a mounted leftover consumes events and corrupts the *next* test.
 - jsdom: no `isContentEditable` (pair the property check with a `closest('[contenteditable]')` walk), no `PointerEvent` constructor, `getContext('2d')` returns null (keep canvas painting in a separate testable module).
 - eslint must run per-package (`pnpm -C packages/tuffex exec eslint`, same for nexus) — the root config cannot parse either package's SFCs.
+- A component whose popup anchors a **virtual reference** while its trigger is a sibling element (TxContextMenu's shape) must own outside-close itself and pass `close-on-click-outside: false` to the anchor — the anchor cannot tell the trigger from "outside". The anchor's 60ms post-open grace window masks this class in fast single-file test runs and unmasks it under a slow full suite: never rely on real wall-clock inside open/close logic tests; controlled mounts (`modelValue: true`) start with the window already expired.
 - `TxScroll`'s default (BetterScroll transform) kills `position: sticky` descendants — sticky tables need native `overflow: auto`.

@@ -1,6 +1,7 @@
-import { Readable } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
+  IntelligenceInvokeOptions,
   IntelligenceStreamChunk,
   IntelligenceVisionOcrPayload
 } from '@talex-touch/tuff-intelligence'
@@ -38,6 +39,71 @@ function createProvider() {
     capabilities: ['vision.ocr'],
     timeout: 30000,
     rateLimit: {}
+  })
+}
+
+function serializeOwnPropertyGraph(value: unknown): string {
+  const seen = new Set<object>()
+  const parts: string[] = []
+
+  const visit = (current: unknown): void => {
+    if (typeof current === 'string') {
+      parts.push(current)
+      return
+    }
+    if (current === null || (typeof current !== 'object' && typeof current !== 'function')) {
+      if (current !== undefined) parts.push(String(current))
+      return
+    }
+    if (seen.has(current)) return
+    seen.add(current)
+
+    for (const key of Reflect.ownKeys(current)) {
+      parts.push(String(key))
+      const descriptor = Reflect.getOwnPropertyDescriptor(current, key)
+      if (descriptor && 'value' in descriptor) visit(descriptor.value)
+    }
+  }
+
+  visit(value)
+  return parts.join('\n')
+}
+
+function createPendingStreamResponse(
+  stream: Readable,
+  hooks: { onComplete?: () => void; onCancel?: () => void } = {}
+) {
+  return {
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    url: 'http://localhost:11434/api/chat',
+    stream,
+    complete: vi.fn(hooks.onComplete),
+    cancel: vi.fn(hooks.onCancel)
+  }
+}
+
+async function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs = 250
+): Promise<
+  | { status: 'fulfilled'; value: T }
+  | { status: 'rejected'; reason: unknown }
+  | { status: 'timeout' }
+> {
+  return await new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timeout)
+        resolve({ status: 'fulfilled', value })
+      },
+      (reason: unknown) => {
+        clearTimeout(timeout)
+        resolve({ status: 'rejected', reason })
+      }
+    )
   })
 }
 
@@ -82,6 +148,12 @@ describe('LocalProvider.visionOcr', () => {
     expect(result.result.durationMs).toBe(42)
     expect(result.result.blocks?.[0]?.type).toBe('line')
     expect(result.result.keywords).toContain('hello')
+    expect(result.usage).toEqual({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cost: 0
+    })
     expect(mockedRecognizeImageText).toHaveBeenCalledOnce()
   })
 
@@ -119,7 +191,9 @@ describe('LocalProvider.chat', () => {
         '{"message":{"content":"hel"},"done":false}\n',
         '{"message":{"content":"lo"},"done":false}\n',
         '{"done":true,"prompt_eval_count":3,"eval_count":2}\n'
-      ])
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
 
     const provider = new LocalProvider({
@@ -149,7 +223,7 @@ describe('LocalProvider.chat', () => {
       {
         delta: '',
         done: true,
-        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5 }
+        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 0 }
       }
     ])
     expect(networkMocks.requestStream).toHaveBeenCalledWith(
@@ -163,6 +237,140 @@ describe('LocalProvider.chat', () => {
         })
       })
     )
+  })
+
+  it('completes an Ollama terminal frame while the physical response body remains open', async () => {
+    const body = new PassThrough()
+    const lifecycle: string[] = []
+    let completed = false
+    const response = createPendingStreamResponse(body, {
+      onComplete: () => {
+        completed = true
+        lifecycle.push('complete')
+      },
+      onCancel: () => {
+        lifecycle.push('cancel')
+        if (!completed) body.destroy()
+      }
+    })
+    networkMocks.requestStream.mockResolvedValueOnce(response)
+    body.write('{"done":true,"prompt_eval_count":3,"eval_count":2}\n')
+
+    const iterator = createProvider().chatStream(
+      { messages: [{ role: 'user', content: 'ping' }] },
+      {}
+    )
+    const terminal = await iterator.next()
+    lifecycle.push('yield')
+    const finalNext = iterator.next()
+    const finalOutcome = await settleWithin(finalNext)
+    const destroyedBeforeCleanup = body.destroyed
+    if (finalOutcome.status === 'timeout') {
+      body.destroy()
+      await finalNext.catch(() => undefined)
+    } else {
+      body.destroy()
+    }
+
+    expect(terminal).toEqual({
+      value: {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 0 }
+      },
+      done: false
+    })
+    expect(finalOutcome).toEqual({ status: 'fulfilled', value: { value: undefined, done: true } })
+    expect(lifecycle).toEqual(['complete', 'yield', 'cancel'])
+    expect(response.complete).toHaveBeenCalledOnce()
+    expect(response.cancel).toHaveBeenCalledOnce()
+    expect(destroyedBeforeCleanup).toBe(false)
+  })
+
+  it('forwards runtime cancellation while waiting for the next Ollama delta', async () => {
+    const controller = new AbortController()
+    const body = new PassThrough()
+    const cancelError = Object.assign(new Error('NETWORK_ABORTED'), { code: 'NETWORK_ABORTED' })
+    const response = createPendingStreamResponse(body)
+    networkMocks.requestStream.mockImplementationOnce(async (request: { signal?: AbortSignal }) => {
+      request.signal?.addEventListener('abort', () => body.destroy(cancelError), { once: true })
+      return response
+    })
+    body.write('{"message":{"content":"partial"},"done":false}\n')
+
+    const iterator = createProvider().chatStream(
+      { messages: [{ role: 'user', content: 'ping' }] },
+      { signal: controller.signal } as IntelligenceInvokeOptions & { signal: AbortSignal }
+    )
+    await expect(iterator.next()).resolves.toEqual({
+      value: { delta: 'partial', done: false },
+      done: false
+    })
+
+    const pendingNext = iterator.next()
+    controller.abort()
+    const outcome = await settleWithin(pendingNext)
+    if (outcome.status === 'timeout') {
+      body.destroy(cancelError)
+      await pendingNext.catch(() => undefined)
+    }
+
+    expect(networkMocks.requestStream).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal })
+    )
+    expect(outcome.status).toBe('rejected')
+    if (outcome.status === 'rejected') expect(outcome.reason).toBe(cancelError)
+    expect(response.complete).not.toHaveBeenCalled()
+    expect(response.cancel).toHaveBeenCalledOnce()
+  })
+
+  it('projects a valid Ollama stream error envelope to a stable model code', async () => {
+    networkMocks.requestStream.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'http://localhost:11434/api/chat',
+      stream: Readable.from([
+        `${JSON.stringify({ error: 'unsupported model apiKey=secret under /private/model' })}\n`
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
+    })
+
+    const provider = createProvider()
+    const iterator = provider.chatStream({ messages: [{ role: 'user', content: 'ping' }] }, {})
+    const next = iterator.next()
+
+    const error = await next.catch((cause: unknown) => cause)
+    expect(error).toMatchObject({
+      code: 'MODEL_UNSUPPORTED',
+      message: 'MODEL_UNSUPPORTED'
+    })
+    expect(serializeOwnPropertyGraph(error)).not.toMatch(/secret|\/private\/model/)
+  })
+
+  it('projects a final Ollama error frame without a trailing newline', async () => {
+    networkMocks.requestStream.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'http://localhost:11434/api/chat',
+      stream: Readable.from([
+        JSON.stringify({ error: 'unsupported model apiKey=no-newline-secret /private/no-newline' })
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
+    })
+
+    const provider = createProvider()
+    const iterator = provider.chatStream({ messages: [{ role: 'user', content: 'ping' }] }, {})
+    const error = await iterator.next().catch((cause: unknown) => cause)
+
+    expect(error).toMatchObject({
+      code: 'MODEL_UNSUPPORTED',
+      message: 'MODEL_UNSUPPORTED'
+    })
+    expect(serializeOwnPropertyGraph(error)).not.toMatch(/no-newline-secret|\/private\/no-newline/)
   })
 
   it('reconstructs UTF-8 NDJSON deltas split inside CJK and emoji code points', async () => {
@@ -197,7 +405,9 @@ describe('LocalProvider.chat', () => {
       statusText: 'OK',
       headers: {},
       url: 'http://localhost:11434/api/chat',
-      stream: Readable.from(streamChunks)
+      stream: Readable.from(streamChunks),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
 
     const provider = new LocalProvider({
@@ -226,7 +436,7 @@ describe('LocalProvider.chat', () => {
       {
         delta: '',
         done: true,
-        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5 }
+        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 0 }
       }
     ])
     expect(chunks.map((chunk) => chunk.delta).join('')).not.toContain('\uFFFD')
@@ -249,7 +459,9 @@ describe('LocalProvider.chat', () => {
           }),
           'utf8'
         )
-      ])
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
 
     const provider = new LocalProvider({
@@ -276,7 +488,7 @@ describe('LocalProvider.chat', () => {
       {
         delta: '',
         done: true,
-        usage: { promptTokens: 7, completionTokens: 4, totalTokens: 11 }
+        usage: { promptTokens: 7, completionTokens: 4, totalTokens: 11, cost: 0 }
       }
     ])
     expect(chunks.filter((chunk) => chunk.done)).toHaveLength(1)
@@ -314,7 +526,12 @@ describe('LocalProvider.chat', () => {
 
     expect(result.result).toBe('pong')
     expect(result.model).toBe('llama3.1:8b')
-    expect(result.usage.totalTokens).toBe(5)
+    expect(result.usage).toEqual({
+      promptTokens: 3,
+      completionTokens: 2,
+      totalTokens: 5,
+      cost: 0
+    })
     expect(networkMocks.request).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'POST',
@@ -326,6 +543,38 @@ describe('LocalProvider.chat', () => {
         })
       })
     )
+  })
+
+  it('projects a non-stream Ollama error body without retaining provider text', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      data: { error: 'unsupported model apiKey=secret under /private/model' }
+    })
+
+    const provider = createProvider()
+    const request = provider.chat({ messages: [{ role: 'user', content: 'ping' }] }, {})
+
+    const error = await request.catch((cause: unknown) => cause)
+    expect(error).toMatchObject({
+      code: 'MODEL_UNSUPPORTED',
+      message: 'MODEL_UNSUPPORTED'
+    })
+    expect(serializeOwnPropertyGraph(error)).not.toMatch(/secret|\/private\/model/)
+  })
+
+  it('projects other non-stream Ollama error bodies to a stable request code', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      data: { error: 'provider exploded apiKey=generic-secret under /private/generic-model' }
+    })
+
+    const provider = createProvider()
+    const request = provider.chat({ messages: [{ role: 'user', content: 'ping' }] }, {})
+    const error = await request.catch((cause: unknown) => cause)
+
+    expect(error).toMatchObject({
+      code: 'OLLAMA_REQUEST_FAILED',
+      message: 'OLLAMA_REQUEST_FAILED'
+    })
+    expect(serializeOwnPropertyGraph(error)).not.toMatch(/generic-secret|\/private\/generic-model/)
   })
 
   it('marks test-run chat requests as cooldown probes', async () => {
@@ -376,7 +625,11 @@ describe('LocalProvider fallback behavior', () => {
   it('returns compatibility chunks when Ollama returns 404 before emitting output', async () => {
     const compatibilityChunks: IntelligenceStreamChunk[] = [
       { delta: 'compatible answer', done: false },
-      { delta: '', done: true }
+      {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 1 }
+      }
     ]
     compatibilitySpy = vi
       .spyOn(OpenAiCompatibleLangChainProvider.prototype, 'chatStream')
@@ -397,7 +650,14 @@ describe('LocalProvider fallback behavior', () => {
       chunks.push(chunk)
     }
 
-    expect(chunks).toEqual(compatibilityChunks)
+    expect(chunks).toEqual([
+      { delta: 'compatible answer', done: false },
+      {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 0 }
+      }
+    ])
     expect(compatibilitySpy).toHaveBeenCalledOnce()
   })
 
@@ -421,12 +681,14 @@ describe('LocalProvider fallback behavior', () => {
       statusText: 'OK',
       headers: {},
       url: 'http://localhost:11434/api/chat',
-      stream: {
-        async *[Symbol.asyncIterator]() {
+      stream: Readable.from(
+        (async function* () {
           yield '{"message":{"content":"Ollama output"},"done":false}\n'
           throw streamError
-        }
-      }
+        })()
+      ),
+      complete: vi.fn(),
+      cancel: vi.fn()
     })
 
     const provider = createProvider()
@@ -437,6 +699,41 @@ describe('LocalProvider fallback behavior', () => {
       done: false
     })
     await expect(iterator.next()).rejects.toBe(streamError)
+    expect(compatibilitySpy).not.toHaveBeenCalled()
+  })
+
+  it('projects an Ollama error frame after a delta without compatibility fallback', async () => {
+    compatibilitySpy = vi
+      .spyOn(OpenAiCompatibleLangChainProvider.prototype, 'chatStream')
+      .mockImplementation(async function* () {
+        yield { delta: 'compatible answer', done: false }
+      })
+    networkMocks.requestStream.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'http://localhost:11434/api/chat',
+      stream: Readable.from([
+        '{"message":{"content":"Ollama output"},"done":false}\n',
+        `${JSON.stringify({ error: 'provider failed apiKey=post-delta-secret /private/post-delta' })}\n`
+      ]),
+      complete: vi.fn(),
+      cancel: vi.fn()
+    })
+
+    const provider = createProvider()
+    const iterator = provider.chatStream({ messages: [{ role: 'user', content: 'ping' }] }, {})
+
+    await expect(iterator.next()).resolves.toEqual({
+      value: { delta: 'Ollama output', done: false },
+      done: false
+    })
+    const error = await iterator.next().catch((cause: unknown) => cause)
+    expect(error).toMatchObject({
+      code: 'OLLAMA_REQUEST_FAILED',
+      message: 'OLLAMA_REQUEST_FAILED'
+    })
+    expect(serializeOwnPropertyGraph(error)).not.toMatch(/post-delta-secret|\/private\/post-delta/)
     expect(compatibilitySpy).not.toHaveBeenCalled()
   })
 
@@ -459,7 +756,7 @@ describe('LocalProvider fallback behavior', () => {
   it('returns compatibility output when Ollama returns a typed HTTP 404', async () => {
     const compatibilityResult = {
       result: 'compatible answer',
-      usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5 },
+      usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 1 },
       model: 'compatible-model',
       latency: 12,
       traceId: 'compatible-trace',
@@ -476,7 +773,10 @@ describe('LocalProvider fallback behavior', () => {
 
     await expect(
       provider.chat({ messages: [{ role: 'user', content: 'ping' }] }, {})
-    ).resolves.toBe(compatibilityResult)
+    ).resolves.toEqual({
+      ...compatibilityResult,
+      usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5, cost: 0 }
+    })
     expect(compatibilitySpy).toHaveBeenCalledOnce()
   })
 

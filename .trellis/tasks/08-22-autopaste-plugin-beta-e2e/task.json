@@ -1,0 +1,30 @@
+{
+  "id": "autopaste-plugin-beta-e2e",
+  "name": "autopaste-plugin-beta-e2e",
+  "title": "收敛 AutoPaste 并验收三个插件 Beta",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-22",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-optimize-core-utility-plugins",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "Requires three official-plugin beta end-to-end acceptance runs.",
+    "evidence": "The task artifacts define the AutoPaste convergence and plugin acceptance matrix.",
+    "nextAction": "Execute the packaged beta matrix and record the three plugin outcomes."
+  }
+}

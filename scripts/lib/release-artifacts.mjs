@@ -12,6 +12,11 @@ export const REQUIRED_CORE_PAIRS = Object.freeze([
   'linux/x64',
 ])
 
+export const SUPPORTED_CORE_PAIRS = Object.freeze([
+  ...REQUIRED_CORE_PAIRS,
+  'darwin/x64',
+])
+
 export function corePairKey(platform, arch) {
   return `${platform}/${arch}`
 }

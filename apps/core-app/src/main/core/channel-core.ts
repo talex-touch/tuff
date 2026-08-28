@@ -49,6 +49,7 @@ const ChannelType = {
   MAIN: 'main',
   PLUGIN: 'plugin'
 } as const
+const UNVERIFIED_PLUGIN_CALLER = '__unverified_plugin_caller__'
 const DataCode = {
   SUCCESS: 200,
   NETWORK_ERROR: 500,
@@ -179,8 +180,12 @@ class TouchChannel {
     this.channelMap.set(ChannelType.MAIN, new Map())
     this.channelMap.set(ChannelType.PLUGIN, new Map())
 
-    ipcMain.on(RAW_MAIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
-    ipcMain.on(RAW_PLUGIN_PROCESS_CHANNEL, this.__handle_main.bind(this))
+    ipcMain.on(RAW_MAIN_PROCESS_CHANNEL, (event, arg) => {
+      this.__handle_main(event, arg, ChannelType.MAIN)
+    })
+    ipcMain.on(RAW_PLUGIN_PROCESS_CHANNEL, (event, arg) => {
+      this.__handle_main(event, arg, ChannelType.PLUGIN)
+    })
     ipcMain.on(PLUGIN_VIEW_NONCE_CHANNEL, (event) => {
       // The alias belongs to the asking surface and nothing else, so it is looked up by sender id
       // rather than accepted from the payload. An unregistered sender gets null, which the plugin
@@ -222,6 +227,12 @@ class TouchChannel {
     return this.keyRegistry.resolveCurrentIdentity(name)
   }
 
+  watchIdentityInvalidated(
+    listener: (identity: Readonly<PluginActivationIdentity>) => void
+  ): () => void {
+    return this.keyRegistry.watchIdentityInvalidated(listener)
+  }
+
   resolveSenderIdentity(sender: Electron.WebContents): PluginActivationIdentity | undefined {
     const registration = resolvePluginRegistrationByWebContents(sender.id)
     if (!registration) {
@@ -235,7 +246,11 @@ class TouchChannel {
     }
   }
 
-  __parse_raw_data(e: Electron.IpcMainEvent, arg: unknown): RawStandardChannelData {
+  __parse_raw_data(
+    e: Electron.IpcMainEvent,
+    arg: unknown,
+    sourceLane?: ChannelType
+  ): RawStandardChannelData {
     if (arg && typeof arg === 'object' && arg !== null) {
       const { name, header, code, data, sync } = arg as Record<string, unknown>
 
@@ -258,12 +273,20 @@ class TouchChannel {
           registration: resolvePluginRegistrationByWebContents(e.sender?.id),
           resolveIdentity: (key) => this.resolveIdentity(key)
         })
+        const presentsCurrentPluginKey =
+          typeof uniqueKey === 'string' && this.resolveIdentity(uniqueKey) !== undefined
+        const pluginName =
+          caller.pluginName ??
+          (sourceLane === ChannelType.PLUGIN || presentsCurrentPluginKey
+            ? UNVERIFIED_PLUGIN_CALLER
+            : undefined)
+        const channelType = pluginName ? ChannelType.PLUGIN : ChannelType.MAIN
 
         const parsed: RawStandardChannelData = {
           header: {
             status:
               ((header as Record<string, unknown>).status as 'reply' | 'request') || 'request',
-            type: caller.pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
+            type: channelType,
             _originData: arg,
             event: e,
             uniqueKey,
@@ -272,7 +295,7 @@ class TouchChannel {
           sync: sync as RawChannelSyncData | undefined,
           code: code as DataCode,
           data: data as IChannelData,
-          plugin: caller.pluginName,
+          plugin: pluginName,
           name: name as string
         }
         if (caller.pluginIdentity) {
@@ -291,7 +314,7 @@ class TouchChannel {
     throw new Error('Invalid message!')
   }
 
-  __handle_main(e: Electron.IpcMainEvent, arg: unknown) {
+  __handle_main(e: Electron.IpcMainEvent, arg: unknown, sourceLane?: ChannelType) {
     // ipcMain.on listeners run inside an EventEmitter, so anything thrown here becomes an
     // uncaught main-process exception -- and the only uncaughtException handler in the tree
     // (dev-process-manager) returns early when app.isPackaged. Before this guard, any renderer
@@ -299,7 +322,7 @@ class TouchChannel {
     // (#784).
     let rawData: RawStandardChannelData
     try {
-      rawData = this.__parse_raw_data(e, arg)
+      rawData = this.__parse_raw_data(e, arg, sourceLane)
     } catch (error) {
       channelLog.error('[Channel] Dropped an unparseable message', { error })
       // A sendSync caller would otherwise block waiting for a value nobody sets. Guarded the

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { isFeatureFlagEnabled } from '#shared/utils/feature-flags'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 const { t } = useI18n()
@@ -100,7 +101,7 @@ const isTeamAdmin = computed(() => {
   return team?.type === 'organization' && (role === 'owner' || role === 'admin')
 })
 const canManageOauthApps = computed(() => isAdmin.value || isTeamAdmin.value)
-const riskControlEnabled = computed(() => runtimeConfig.public?.riskControl?.enabled === true)
+const riskControlEnabled = computed(() => isFeatureFlagEnabled(runtimeConfig.public?.riskControl?.enabled))
 const notificationUnreadBadgeText = computed(() => notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value))
 const notificationUnreadBadgeLabel = computed(() => t('dashboard.notifications.unreadBadgeLabel', {
   count: notificationUnreadCount.value,
@@ -338,6 +339,18 @@ const activeSection = computed(() => {
     return section
   return 'overview'
 })
+
+/**
+ * Every dashboard route used to render `document.title` as `Tuff Docs` — the
+ * global `appName` default from app.vue, i.e. the docs site's name on the admin
+ * console. Deriving it from `activeLabel` rather than from a second table is
+ * what keeps the tab title and the highlighted menu entry from drifting apart:
+ * they are the same string. Pages that need something more specific still win,
+ * because their own `useHead` registers after this one.
+ */
+useHead(() => ({
+  title: `${activeLabel.value} · Tuff Nexus`,
+}))
 </script>
 
 <template>

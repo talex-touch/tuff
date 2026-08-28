@@ -10,6 +10,7 @@ import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { isNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
+import { snapshotIntelligenceProviderConfig } from '~/modules/intelligence/provider-config-snapshot'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
@@ -147,7 +148,7 @@ async function handleApiKeyBlur() {
     return
   }
 
-  const { apiKey: _apiKey, ...provider } = props.modelValue
+  const { apiKey: _apiKey, ...provider } = snapshotIntelligenceProviderConfig(props.modelValue)
   const credential = credentialInput.value
   const hasCredentialInput = credential.trim().length > 0
   isSavingCredential.value = true
@@ -183,28 +184,26 @@ async function handleTest() {
   try {
     // Build from trusted local form state, then detach Vue reactivity and omit `undefined`
     // fields before the strict credential DTO boundary. The SDK intentionally rejects both.
-    const testProvider = JSON.parse(
-      JSON.stringify({
-        id: props.modelValue.id,
-        type: props.modelValue.type,
-        name: props.modelValue.name,
-        enabled: true,
-        apiKey: localApiKey.value.trim() ? localApiKey.value : undefined,
-        baseUrl: localBaseUrl.value.trim() || undefined,
-        models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
-        defaultModel: props.modelValue.defaultModel || undefined,
-        instructions: props.modelValue.instructions || undefined,
-        metadata: props.modelValue.metadata ? { ...props.modelValue.metadata } : undefined,
-        timeout: Number(props.modelValue.timeout) || 30000,
-        rateLimit: props.modelValue.rateLimit
-          ? {
-              requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
-              tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
-            }
-          : undefined,
-        priority: Number(props.modelValue.priority) || 1
-      })
-    ) as IntelligenceProviderConfig
+    const testProvider = snapshotIntelligenceProviderConfig({
+      id: props.modelValue.id,
+      type: props.modelValue.type,
+      name: props.modelValue.name,
+      enabled: true,
+      apiKey: localApiKey.value.trim() ? localApiKey.value : undefined,
+      baseUrl: localBaseUrl.value.trim() || undefined,
+      models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
+      defaultModel: props.modelValue.defaultModel || undefined,
+      instructions: props.modelValue.instructions || undefined,
+      metadata: props.modelValue.metadata ? { ...props.modelValue.metadata } : undefined,
+      timeout: Number(props.modelValue.timeout) || 30000,
+      rateLimit: props.modelValue.rateLimit
+        ? {
+            requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
+            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
+          }
+        : undefined,
+      priority: Number(props.modelValue.priority) || 1
+    })
 
     const result = (await aiClient.testProvider(testProvider)) as {
       success?: boolean

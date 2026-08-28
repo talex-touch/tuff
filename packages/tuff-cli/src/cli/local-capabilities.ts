@@ -351,7 +351,7 @@ async function resolveSkillSummary(skillId: string, skillsRoot: string): Promise
 async function resolveSkillProviders(paths: RuntimePaths): Promise<LocalSkillSummary[]> {
   const skillsRoot = join(paths.codexHome || resolveCodexHome(paths.homeDir), 'skills')
   const localSkillIds = await listSkillDirectories(skillsRoot)
-  const recommendedSkillIds = new Set(RECOMMENDED_SKILLS.map(skill => skill.id))
+  const recommendedSkillIds = new Set<string>(RECOMMENDED_SKILLS.map(skill => skill.id))
   const externalSkillIds = []
   for (const skillId of localSkillIds) {
     if (recommendedSkillIds.has(skillId)) {

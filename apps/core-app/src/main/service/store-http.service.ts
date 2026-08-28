@@ -1,5 +1,6 @@
 import type { StoreHttpRequestOptions, StoreHttpResponse } from '@talex-touch/utils/store'
 import { getNetworkService } from '../modules/network'
+import { getRuntimeNexusBaseUrl } from '../modules/nexus/runtime-base'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 const DEFAULT_STORE_HTTP_TIMEOUT_MS = 20_000
@@ -41,6 +42,29 @@ function mapResponseType(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function withRuntimeNexusAuth(
+  options: StoreHttpRequestOptions,
+  requestUrl: URL
+): Promise<StoreHttpRequestOptions> {
+  const { getAuthToken } = await import('../modules/auth')
+  const token = getAuthToken()
+  if (!token) return options
+
+  let runtimeUrl: URL
+  try {
+    runtimeUrl = new URL(getRuntimeNexusBaseUrl())
+  } catch {
+    return options
+  }
+
+  if (requestUrl.origin !== runtimeUrl.origin) return options
+
+  const headers = { ...(options.headers ?? {}) }
+  const hasAuthorization = Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')
+  if (!hasAuthorization) headers.Authorization = `Bearer ${token}`
+  return { ...options, headers }
 }
 
 function isRetryableStoreHttpError(error: unknown): boolean {
@@ -111,18 +135,21 @@ export async function performStoreHttpRequest<T = unknown>(
     throw new Error('STORE_HTTP_UNSUPPORTED_PROTOCOL')
   }
 
-  const method = (options.method ?? 'GET').toUpperCase()
+  const requestOptions = await withRuntimeNexusAuth(options, parsed)
+  const method = (requestOptions.method ?? 'GET').toUpperCase()
   const timeout =
-    typeof options.timeout === 'number' ? options.timeout : DEFAULT_STORE_HTTP_TIMEOUT_MS
+    typeof requestOptions.timeout === 'number'
+      ? requestOptions.timeout
+      : DEFAULT_STORE_HTTP_TIMEOUT_MS
 
   try {
-    return await executeStoreHttpRequest<T>(options, method, timeout)
+    return await executeStoreHttpRequest<T>(requestOptions, method, timeout)
   } catch (firstError: unknown) {
     let error = firstError
     if (method === 'GET' && isRetryableStoreHttpError(firstError)) {
       await delay(STORE_HTTP_RETRY_DELAY_MS)
       try {
-        return await executeStoreHttpRequest<T>(options, method, timeout)
+        return await executeStoreHttpRequest<T>(requestOptions, method, timeout)
       } catch (retryError) {
         error = retryError
       }

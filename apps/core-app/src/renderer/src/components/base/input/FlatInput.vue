@@ -20,7 +20,11 @@ const props = withDefaults(
     area: false
   }
 )
-const emits = defineEmits(['update:modelValue'])
+const emits = defineEmits<{
+  'update:modelValue': [value: string]
+  focus: [event: FocusEvent]
+  blur: [event: FocusEvent]
+}>()
 
 const lapsLock = ref(false)
 const value = computed({
@@ -52,13 +56,23 @@ function onKeyDown(e: KeyboardEvent) {
         <RemixIcon :name="icon || ''" :style="'line'" />
       </slot>
     </span>
-    <textarea v-if="area" v-model="value" resize="false" :placeholder="placeholder" relative />
+    <textarea
+      v-if="area"
+      v-model="value"
+      resize="false"
+      :placeholder="placeholder"
+      relative
+      @focus="emits('focus', $event)"
+      @blur="emits('blur', $event)"
+    />
     <input
       v-else
       v-model="value"
       :placeholder="placeholder"
       relative
       :type="password ? 'password' : 'text'"
+      @focus="emits('focus', $event)"
+      @blur="emits('blur', $event)"
     />
     <TxTag v-if="password" v-show="lapsLock" color="var(--tx-color-danger)" size="sm">
       Caps Lock

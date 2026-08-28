@@ -442,13 +442,17 @@ function parseUsage(value: unknown): IntelligenceUsageInfo | undefined {
   if (!promptTokens && !completionTokens && !totalTokens) return undefined
 
   const cost = asRecord(usage.cost)
-  const total = cost ? readCount(cost.total) : 0
+  const totalCost = cost?.total
+  const reportedCost =
+    typeof totalCost === 'number' && Number.isFinite(totalCost) && totalCost >= 0
+      ? totalCost
+      : undefined
 
   return {
     promptTokens,
     completionTokens,
     totalTokens,
-    ...(total > 0 ? { cost: total } : {})
+    ...(reportedCost !== undefined ? { cost: reportedCost } : {})
   }
 }
 

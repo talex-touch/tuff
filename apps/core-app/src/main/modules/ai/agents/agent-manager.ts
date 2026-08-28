@@ -9,11 +9,11 @@ import type {
   AgentMessage,
   AgentPlan,
   AgentResult,
-  AgentStatus,
   AgentTask,
   AgentTool,
   TaskProgress
 } from '@talex-touch/utils'
+import { AgentStatus } from '@talex-touch/utils'
 import type { AgentImpl, AgentRegistry, AgentRegistryStats } from './agent-registry'
 import type { ToolExecutorFn, ToolRegistry, ToolRegistryStats } from './tool-registry'
 import { randomUUID } from 'node:crypto'
@@ -68,6 +68,7 @@ export class AgentManager extends EventEmitter {
   private taskExecutor: ((task: AgentTask) => Promise<AgentResult>) | null = null
   private taskCanceller: ((taskId: string) => boolean) | null = null
   private readonly activeTaskIds = new Set<string>()
+  private readonly taskObservers = new Map<string, Promise<void>>()
   private completedTaskCount = 0
   private failedTaskCount = 0
   private totalExecutionTime = 0
@@ -162,32 +163,58 @@ export class AgentManager extends EventEmitter {
     if (!this.registry.hasAgent(task.agentId)) throw new Error(`Agent ${task.agentId} not found`)
 
     const taskId = task.id || `task_${randomUUID()}`
+    if (this.activeTaskIds.has(taskId)) {
+      throw new Error(`Agent task ${taskId} is already active`)
+    }
+
     const runtimeTask: AgentTask = { ...task, id: taskId }
     const startedAt = Date.now()
     this.activeTaskIds.add(taskId)
     this.emit('task:started', { taskId, agentId: task.agentId })
-    void Promise.resolve()
-      .then(() => this.executeWithRuntime(runtimeTask))
-      .then((result) => {
-        if (result.success) {
-          this.completedTaskCount += 1
-          this.emit('task:completed', { taskId, result })
-        } else {
+    let execution: Promise<AgentResult>
+    try {
+      execution = Promise.resolve(this.executeWithRuntime(runtimeTask))
+    } catch (error) {
+      execution = Promise.reject(error)
+    }
+
+    let observer!: Promise<void>
+    observer = execution
+      .then(
+        (result) => {
+          if (result.status === AgentStatus.CANCELLED) {
+            this.emit('task:cancelled', { taskId })
+          } else if (result.success) {
+            this.completedTaskCount += 1
+            this.emit('task:completed', { taskId, result })
+          } else {
+            this.failedTaskCount += 1
+            this.emit('task:failed', { taskId, error: result.error })
+          }
+        },
+        (error) => {
           this.failedTaskCount += 1
-          this.emit('task:failed', { taskId, error: result.error })
+          this.emit('task:failed', {
+            taskId,
+            error: error instanceof Error ? error.message : String(error)
+          })
         }
-      })
-      .catch((error) => {
-        this.failedTaskCount += 1
-        this.emit('task:failed', {
-          taskId,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      })
+      )
       .finally(() => {
         this.totalExecutionTime += Date.now() - startedAt
         this.activeTaskIds.delete(taskId)
+        if (this.taskObservers.get(taskId) === observer) {
+          this.taskObservers.delete(taskId)
+        }
       })
+    this.taskObservers.set(taskId, observer)
+    void observer.catch((error) => {
+      logWarn(
+        'Agent task observer failed:',
+        taskId,
+        error instanceof Error ? error.message : String(error)
+      )
+    })
     return taskId
   }
 
@@ -264,12 +291,7 @@ export class AgentManager extends EventEmitter {
    * Cancel a task
    */
   async cancelTask(taskId: string): Promise<boolean> {
-    const cancelled = this.taskCanceller?.(taskId) ?? false
-    if (cancelled) {
-      this.activeTaskIds.delete(taskId)
-      this.emit('task:cancelled', { taskId })
-    }
-    return cancelled
+    return this.taskCanceller?.(taskId) ?? false
   }
 
   /**
@@ -359,7 +381,23 @@ export class AgentManager extends EventEmitter {
   async shutdown(): Promise<void> {
     logInfo('Shutting down AgentManager')
 
-    for (const taskId of this.activeTaskIds) this.taskCanceller?.(taskId)
+    this.initialized = false
+    const activeTaskIds = [...this.activeTaskIds]
+    const observers = [...this.taskObservers.values()]
+    for (const taskId of activeTaskIds) {
+      try {
+        this.taskCanceller?.(taskId)
+      } catch (error) {
+        logWarn(
+          'Failed to cancel task during AgentManager shutdown:',
+          taskId,
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    await Promise.allSettled(observers)
+
+    this.taskObservers.clear()
     this.activeTaskIds.clear()
     // Clear registries
     this.registry.clear()
@@ -367,7 +405,6 @@ export class AgentManager extends EventEmitter {
     this.taskExecutor = null
     this.taskCanceller = null
 
-    this.initialized = false
     logInfo('AgentManager shutdown complete')
   }
 }

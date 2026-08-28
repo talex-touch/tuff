@@ -6,7 +6,8 @@ import type {
   NetworkProxyConfig,
   NetworkRequestOptions,
   NetworkResponse,
-  NetworkRetryPolicy
+  NetworkRetryPolicy,
+  NetworkStreamTimeoutMode
 } from '@talex-touch/utils/network'
 import type {
   NetworkLifecycleReason,
@@ -26,6 +27,7 @@ import {
   createNetworkGuard,
   isHttpSource,
   isTimeoutLikeError,
+  NetworkAbortError,
   NetworkCooldownError,
   NetworkHttpStatusError,
   NetworkTimeoutError,
@@ -76,10 +78,20 @@ interface NetworkStreamResponse {
   headers: Record<string, string>
   url: string
   stream: Readable
+  complete: () => void
+  cancel: () => void
 }
 interface NetworkPolicySettlement {
   success: () => void
   failure: () => void
+  neutral: () => void
+}
+
+interface NetworkAbortContext {
+  readonly signal: AbortSignal
+  readonly timeoutMs: number
+  getAbortError: () => NetworkAbortError | NetworkTimeoutError | null
+  dispose: () => void
 }
 
 export interface PinnedNetworkRequestPolicy {
@@ -319,6 +331,9 @@ function requestInitHeadersToRecord(headers?: HeadersInit): Record<string, strin
   }
 
   const normalized = new Headers(headers)
+  // Chromium derives this from the final body. Node-oriented SDKs may set it,
+  // but Electron session.fetch rejects an explicit value before sending.
+  normalized.delete('content-length')
   return normalizeHeaders(normalized)
 }
 
@@ -327,6 +342,120 @@ function isSuccessStatus(status: number, validateStatus?: number[]): boolean {
     return validateStatus.includes(status)
   }
   return status >= 200 && status < 300
+}
+
+function resolveRequestTimeoutMs(requestedTimeoutMs: unknown, fallbackTimeoutMs: number): number {
+  return typeof requestedTimeoutMs === 'number' && Number.isFinite(requestedTimeoutMs)
+    ? Math.max(100, Math.floor(requestedTimeoutMs))
+    : fallbackTimeoutMs
+}
+
+function createNetworkAbortContext(
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  mode: NetworkStreamTimeoutMode = 'deadline'
+): NetworkAbortContext {
+  if (mode === 'caller-signal' && !callerSignal) {
+    throw new Error('NETWORK_CALLER_SIGNAL_REQUIRED')
+  }
+
+  const callerController = callerSignal ? new AbortController() : null
+  const deadlineController = mode === 'deadline' ? new AbortController() : null
+  const callerError = callerController ? new NetworkAbortError() : null
+  const deadlineError = deadlineController ? new NetworkTimeoutError(timeoutMs) : null
+
+  const onCallerAbort = () => {
+    callerController?.abort(callerError ?? undefined)
+  }
+  if (callerSignal?.aborted) {
+    onCallerAbort()
+  } else {
+    callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
+  }
+
+  const sourceSignals = [callerController?.signal, deadlineController?.signal].filter(
+    (signal): signal is AbortSignal => Boolean(signal)
+  )
+  const signal = sourceSignals.length === 1 ? sourceSignals[0]! : AbortSignal.any(sourceSignals)
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  let disposed = false
+
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    if (timeout) clearTimeout(timeout)
+    timeout = null
+    callerSignal?.removeEventListener('abort', onCallerAbort)
+    signal.removeEventListener('abort', dispose)
+  }
+
+  if (deadlineController && deadlineError) {
+    timeout = setTimeout(() => deadlineController.abort(deadlineError), timeoutMs)
+    timeout.unref()
+  }
+
+  if (signal.aborted) {
+    dispose()
+  } else {
+    signal.addEventListener('abort', dispose, { once: true })
+  }
+
+  return {
+    signal,
+    timeoutMs,
+    getAbortError: () => {
+      if (!signal.aborted) return null
+      if (
+        deadlineController?.signal.aborted &&
+        signal.reason === deadlineController.signal.reason
+      ) {
+        return deadlineError
+      }
+      if (callerController?.signal.aborted && signal.reason === callerController.signal.reason) {
+        return callerError
+      }
+      return null
+    },
+    dispose
+  }
+}
+
+function projectNetworkRequestError(error: unknown, context: NetworkAbortContext): unknown {
+  const abortError = context.getAbortError()
+  if (abortError) return abortError
+  if (isTimeoutLikeError(error)) return new NetworkTimeoutError(context.timeoutMs)
+  return error
+}
+
+function throwIfCallerAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new NetworkAbortError()
+}
+
+async function waitForRetryDelay(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
+  if (delayMs <= 0) {
+    throwIfCallerAborted(signal)
+    return
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout)
+      timeout = null
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const onAbort = () => {
+      cleanup()
+      reject(new NetworkAbortError())
+    }
+
+    timeout = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, delayMs)
+    if (signal?.aborted) onAbort()
+    else signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -572,17 +701,28 @@ export class NetworkService {
     }
 
     return await this.executeWithPolicies(options, async () => {
-      const response = await this.executeFetch(options)
-      const headers = normalizeHeaders(response.headers)
-      const data = (await this.parseResponseBody(response, responseType)) as T
+      const timeoutMs = resolveRequestTimeoutMs(
+        options.timeoutMs,
+        this.getConfigFromSettings().timeoutMs
+      )
+      const abortContext = createNetworkAbortContext(options.signal, timeoutMs)
+      try {
+        const response = await this.executeFetch(options, 'follow', abortContext)
+        const headers = normalizeHeaders(response.headers)
+        const data = (await this.parseResponseBody(response, responseType)) as T
 
-      return {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-        data,
-        url: response.url,
-        ok: response.ok
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+          data,
+          url: response.url,
+          ok: response.ok
+        }
+      } catch (error) {
+        throw projectNetworkRequestError(error, abortContext)
+      } finally {
+        abortContext.dispose()
       }
     })
   }
@@ -596,17 +736,28 @@ export class NetworkService {
     }
 
     return await this.executeWithPolicies(options, async () => {
-      const response = await this.executeFetch(options, 'error')
-      const headers = normalizeHeaders(response.headers)
-      const data = (await this.parseResponseBody(response, responseType)) as T
+      const timeoutMs = resolveRequestTimeoutMs(
+        options.timeoutMs,
+        this.getConfigFromSettings().timeoutMs
+      )
+      const abortContext = createNetworkAbortContext(options.signal, timeoutMs)
+      try {
+        const response = await this.executeFetch(options, 'error', abortContext)
+        const headers = normalizeHeaders(response.headers)
+        const data = (await this.parseResponseBody(response, responseType)) as T
 
-      return {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-        data,
-        url: response.url,
-        ok: response.ok
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+          data,
+          url: response.url,
+          ok: response.ok
+        }
+      } catch (error) {
+        throw projectNetworkRequestError(error, abortContext)
+      } finally {
+        abortContext.dispose()
       }
     })
   }
@@ -628,58 +779,129 @@ export class NetworkService {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
 
-    return await this.executeFetch({
+    const options: NetworkRequestOptions = {
       method,
       url,
       headers: requestInitHeadersToRecord(init.headers),
       body: init.body,
       signal: init.signal ?? undefined,
       validateStatus: Array.from({ length: 600 }, (_, status) => status)
-    })
+    }
+    const timeoutMs = resolveRequestTimeoutMs(undefined, this.getConfigFromSettings().timeoutMs)
+    const abortContext = createNetworkAbortContext(options.signal, timeoutMs)
+    try {
+      return await this.executeFetch(options, 'follow', abortContext)
+    } catch (error) {
+      abortContext.dispose()
+      throw error
+    }
   }
 
   async requestStream(options: NetworkRequestOptions): Promise<NetworkStreamResponse> {
+    return await this.requestStreamWithRedirect(options, 'follow', false)
+  }
+
+  async requestStreamManualRedirect(
+    options: NetworkRequestOptions
+  ): Promise<NetworkStreamResponse> {
+    return await this.requestStreamWithRedirect(options, 'manual', true)
+  }
+
+  private async requestStreamWithRedirect(
+    options: NetworkRequestOptions,
+    redirect: RequestRedirect,
+    allowEmptyBody: boolean
+  ): Promise<NetworkStreamResponse> {
+    const timeoutMode = options.streamTimeoutMode ?? 'deadline'
+    if (timeoutMode === 'caller-signal' && !options.signal) {
+      throw new Error('NETWORK_CALLER_SIGNAL_REQUIRED')
+    }
+
+    let successfulAttemptContext: NetworkAbortContext | null = null
     return await this.executeWithPolicies(
       options,
       async () => {
-        const response = await this.executeFetch(options)
-        const stream = response.body
-          ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
-          : null
-        if (!stream) {
-          throw new Error('NETWORK_EMPTY_STREAM_BODY')
-        }
+        const timeoutMs = resolveRequestTimeoutMs(
+          options.timeoutMs,
+          this.getConfigFromSettings().timeoutMs
+        )
+        const abortContext = createNetworkAbortContext(options.signal, timeoutMs, timeoutMode)
+        try {
+          const response = await this.executeFetch(options, redirect, abortContext)
+          const stream = response.body
+            ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
+            : allowEmptyBody && response.status >= 300 && response.status < 400
+              ? Readable.from([])
+              : null
+          if (!stream) {
+            throw new Error('NETWORK_EMPTY_STREAM_BODY')
+          }
+          successfulAttemptContext = abortContext
 
-        return {
-          status: response.status,
-          statusText: response.statusText,
-          headers: normalizeHeaders(response.headers),
-          url: response.url,
-          stream
+          return {
+            status: response.status,
+            statusText: response.statusText,
+            headers: normalizeHeaders(response.headers),
+            url: response.url,
+            stream,
+            complete: (): void => {},
+            cancel: (): void => {}
+          }
+        } catch (error) {
+          abortContext.dispose()
+          throw projectNetworkRequestError(error, abortContext)
         }
       },
       (result, settlement) => {
+        if (!successfulAttemptContext) {
+          throw new Error('NETWORK_STREAM_TIMEOUT_CONTEXT_MISSING')
+        }
+        const abortContext = successfulAttemptContext
+        let state: 'pending' | 'success' | 'failure' | 'neutral' = 'pending'
         const cleanup = () => {
+          abortContext.dispose()
+          abortContext.signal.removeEventListener('abort', onAbort)
           result.stream.off('end', onEnd)
           result.stream.off('error', onError)
           result.stream.off('close', onClose)
         }
-        const onEnd = () => {
+        const settle = (outcome: Exclude<typeof state, 'pending'>): boolean => {
+          if (state !== 'pending') return false
+          state = outcome
           cleanup()
-          settlement.success()
+          if (outcome === 'success') settlement.success()
+          else if (outcome === 'failure') settlement.failure()
+          else settlement.neutral()
+          return true
+        }
+        const complete = () => {
+          if (!settle('success')) return
+          if (!result.stream.destroyed) result.stream.destroy()
+        }
+        const cancel = () => {
+          if (!settle('neutral')) return
+          if (!result.stream.destroyed) result.stream.destroy()
+        }
+        const onEnd = () => {
+          settle('success')
         }
         const onError = () => {
-          cleanup()
-          settlement.failure()
+          settle(abortContext.getAbortError() instanceof NetworkAbortError ? 'neutral' : 'failure')
         }
         const onClose = () => {
-          cleanup()
+          settle('neutral')
+        }
+        const onAbort = () => {
+          const error = abortContext.getAbortError()
+          if (error && !result.stream.destroyed) result.stream.destroy(error)
         }
 
         result.stream.once('end', onEnd)
         result.stream.once('error', onError)
         result.stream.once('close', onClose)
-        return result
+        if (abortContext.signal.aborted) onAbort()
+        else abortContext.signal.addEventListener('abort', onAbort, { once: true })
+        return { ...result, complete, cancel }
       }
     )
   }
@@ -696,6 +918,7 @@ export class NetworkService {
     const cooldownPolicy = mergeCooldownPolicy(baseConfig.cooldown, options.cooldownPolicy)
     const cooldownKey = cooldownPolicy.key || `${method}:${url}`
 
+    throwIfCallerAborted(options.signal)
     if (!options.skipCooldownCheck) {
       const gate = this.guard.canRequest(cooldownKey)
       if (!gate.allowed) {
@@ -705,28 +928,35 @@ export class NetworkService {
 
     let attempt = 0
     while (true) {
+      throwIfCallerAborted(options.signal)
       attempt += 1
       try {
         const result = await executor()
         if (attachLifecycle) {
           let settled = false
-          const settle = (outcome: 'success' | 'failure') => {
+          const settle = (outcome: 'success' | 'failure' | 'neutral') => {
             if (settled) return
             settled = true
             if (outcome === 'success') {
               this.guard.recordSuccess(cooldownKey, cooldownPolicy)
               return
             }
-            this.guard.recordFailure(cooldownKey, cooldownPolicy)
+            if (outcome === 'failure') {
+              this.guard.recordFailure(cooldownKey, cooldownPolicy)
+            }
           }
           return attachLifecycle(result, {
             success: () => settle('success'),
-            failure: () => settle('failure')
+            failure: () => settle('failure'),
+            neutral: () => settle('neutral')
           })
         }
         this.guard.recordSuccess(cooldownKey, cooldownPolicy)
         return result
       } catch (error) {
+        if (error instanceof NetworkAbortError) {
+          throw error
+        }
         const shouldRetry = this.shouldRetry(error, attempt, retryPolicy)
         if (!shouldRetry) {
           this.guard.recordFailure(cooldownKey, cooldownPolicy)
@@ -734,9 +964,7 @@ export class NetworkService {
         }
 
         const delay = this.getRetryDelay(attempt, retryPolicy)
-        if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay))
-        }
+        await waitForRetryDelay(delay, options.signal)
       }
     }
   }
@@ -799,7 +1027,7 @@ export class NetworkService {
       return false
     }
 
-    if (error instanceof NetworkCooldownError) {
+    if (error instanceof NetworkCooldownError || error instanceof NetworkAbortError) {
       return false
     }
 
@@ -879,7 +1107,7 @@ export class NetworkService {
       }
       const fail = (error: unknown): void => finish(() => reject(error))
       const onAbort = (): void => {
-        request.destroy(new Error('NETWORK_REQUEST_ABORTED'))
+        request.destroy(new NetworkAbortError())
       }
       const requestOptions: NodeHttpRequestOptions = {
         protocol: parsed.protocol,
@@ -946,9 +1174,7 @@ export class NetworkService {
       })
       request.once('error', (error) => {
         if (signal?.aborted) {
-          fail(
-            signal.reason instanceof Error ? signal.reason : new Error('NETWORK_REQUEST_ABORTED')
-          )
+          fail(new NetworkAbortError())
           return
         }
         fail(error)
@@ -962,15 +1188,12 @@ export class NetworkService {
 
   private async executeFetch(
     options: NetworkRequestOptions,
-    redirect: RequestRedirect = 'follow'
+    redirect: RequestRedirect,
+    abortContext: NetworkAbortContext
   ): Promise<Response> {
     const config = this.getConfigFromSettings()
     const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
     const targetUrl = appendQuery(options.url, options.query)
-    const timeoutMs =
-      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
-        ? Math.max(100, Math.floor(options.timeoutMs))
-        : config.timeoutMs
 
     const sessionInstance = await this.getSession(proxyConfig)
     const method = (options.method ?? 'GET').toUpperCase()
@@ -984,13 +1207,10 @@ export class NetworkService {
         headers,
         body,
         redirect,
-        signal: options.signal ?? AbortSignal.timeout(timeoutMs)
+        signal: abortContext.signal
       })
     } catch (error) {
-      if (isTimeoutLikeError(error)) {
-        throw new NetworkTimeoutError(timeoutMs)
-      }
-      throw error
+      throw projectNetworkRequestError(error, abortContext)
     }
 
     if (!isSuccessStatus(response.status, options.validateStatus)) {

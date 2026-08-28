@@ -1,8 +1,9 @@
 import { requireAdmin } from '../../../utils/auth'
+import { logAdminAudit } from '../../../utils/adminAuditStore'
 import { deleteComment, ensureCommentsSchema, getCommentOwner, getD1Database } from '../../../utils/docCommentsStore'
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event)
+  const { userId: adminId } = await requireAdmin(event)
 
   const id = getRouterParam(event, 'id')
   if (!id || typeof id !== 'string') {
@@ -22,5 +23,17 @@ export default defineEventHandler(async (event) => {
   }
 
   await deleteComment(db, id)
+
+  await logAdminAudit(event, {
+    adminUserId: adminId,
+    action: 'doc_comment.delete',
+    targetType: 'doc_comment',
+    targetId: id,
+    targetLabel: ownerId,
+    metadata: {
+      before: { ownerId },
+    },
+  })
+
   return { success: true }
 })

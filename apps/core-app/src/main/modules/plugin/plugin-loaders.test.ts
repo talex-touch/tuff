@@ -272,13 +272,14 @@ describe('createPluginLoader', () => {
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 
-  it('sanitizes manifest build metadata before exposing runtime plugin state', async () => {
+  it('sanitizes build metadata without resolving ambiguous Prelude ownership', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
       version: '1.0.0',
       description: 'test',
       icon: { type: 'emoji', value: 'x' },
       sdkapi: CURRENT_SDK_VERSION,
+      main: 'index.js',
       build: {
         index: { entry: 'index/main.ts' },
         widgets: [
@@ -310,8 +311,25 @@ describe('createPluginLoader', () => {
     })
     expect(plugin.build).not.toHaveProperty('internalOnly')
     expect(Reflect.get(plugin, 'preludeContract')).toEqual({
+      main: 'index.js',
       buildIndexEntry: 'index/main.ts'
     })
+  })
+
+  it('uses legacy main when no build index entry is declared', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      main: 'index.js'
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(Reflect.get(plugin, 'preludeContract')).toEqual({ main: 'index.js' })
   })
 
   it('resolves localized manifest metadata for runtime display without changing plugin id', async () => {

@@ -86,7 +86,11 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     if (recordId == null) return false
 
     try {
-      await transport.send(ClipboardEvents.apply, { id: recordId, autoPaste })
+      const result = await transport.send(ClipboardEvents.apply, { id: recordId, autoPaste })
+      if (result?.success === false) {
+        toast.error(result.message || t('corebox.actionUnsupported', '暂不支持该操作'))
+        return true
+      }
       if (!autoPaste) {
         toast.success(t('corebox.copied', '已复制'))
       }

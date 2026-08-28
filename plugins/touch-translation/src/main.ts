@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import routes from './router'
+import './composables/dark'
 
 import '@unocss/reset/tailwind.css'
 import './styles/main.css'

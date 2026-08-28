@@ -171,6 +171,55 @@ describe('useHomeConversation', () => {
     expect(conversation.messages.value[0]?.role).toBe('user')
   })
 
+  it('cancels a stream controller that resolves after stop was requested', async () => {
+    const pendingStart: { resolve?: (controller: StreamController) => void } = {}
+    const lateCancel = vi.fn()
+    const double = createSdkDouble({
+      startStream: () =>
+        new Promise<StreamController>((resolve) => {
+          pendingStart.resolve = resolve
+        })
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    conversation.stop()
+
+    expect(conversation.isStreaming.value).toBe(false)
+    expect(conversation.messages.value).toHaveLength(1)
+
+    pendingStart.resolve?.({
+      cancel: lateCancel,
+      cancelled: false,
+      streamId: 'late-stream-controller'
+    })
+    await turn
+
+    expect(lateCancel).toHaveBeenCalledTimes(1)
+    expect(double.chatPayloads).toHaveLength(0)
+  })
+
+  it('does not fall back when a pending stream start rejects after stop', async () => {
+    const pendingStart: { reject?: (error: unknown) => void } = {}
+    const double = createSdkDouble({
+      startStream: () =>
+        new Promise<StreamController>((_resolve, reject) => {
+          pendingStart.reject = reject
+        })
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    conversation.stop()
+    pendingStart.reject?.(new Error('stream start failed after cancellation'))
+    await turn
+
+    expect(double.chatPayloads).toHaveLength(0)
+    expect(conversation.messages.value).toHaveLength(1)
+  })
+
   it('falls back to a non-streaming call when the stream fails before any delta', async () => {
     const double = createSdkDouble()
     const conversation = useHomeConversation({ sdk: double.sdk })
@@ -219,6 +268,30 @@ describe('useHomeConversation', () => {
       content: 'half ',
       status: 'failed',
       error: { code: 'NETWORK_FAILURE', detail: 'socket hang up' }
+    })
+  })
+
+  it('does not fall back after the stream reports usage without text', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    const turn = conversation.send('hello')
+    await flush()
+    double
+      .emit()
+      .onUsage?.(
+        { promptTokens: 7, completionTokens: 0, totalTokens: 7 },
+        { type: 'usage', capabilityId: 'text.chat' }
+      )
+    double.emit().onError?.(new Error('[NETWORK_FAILURE:text.chat] socket hang up'))
+    await turn
+
+    expect(double.chatPayloads).toHaveLength(0)
+    expect(conversation.messages.value[1]).toMatchObject({
+      content: '',
+      status: 'failed',
+      error: { code: 'NETWORK_FAILURE', detail: 'socket hang up' },
+      meta: { promptTokens: 7, completionTokens: 0, totalTokens: 7 }
     })
   })
 
@@ -487,7 +560,11 @@ describe('routing', () => {
     expect(double.invokeOptions[0]).toEqual({
       preferredProviderId: 'pi-cli-default',
       modelPreference: ['gpt-5.6-terra'],
-      metadata: { surface: INTELLIGENCE_HOME_SURFACE, autoContext: true }
+      metadata: {
+        surface: INTELLIGENCE_HOME_SURFACE,
+        operation: INTELLIGENCE_HOME_SURFACE,
+        autoContext: true
+      }
     })
   })
 
@@ -502,7 +579,11 @@ describe('routing', () => {
 
     // The surface marker still goes out — it is what separates a user turn from a capability test.
     expect(double.invokeOptions[0]).toEqual({
-      metadata: { surface: INTELLIGENCE_HOME_SURFACE, autoContext: true }
+      metadata: {
+        surface: INTELLIGENCE_HOME_SURFACE,
+        operation: INTELLIGENCE_HOME_SURFACE,
+        autoContext: true
+      }
     })
   })
 })
@@ -527,8 +608,16 @@ describe('auto context', () => {
     expect(
       double.invokeOptions.map((options) => (options as IntelligenceInvokeOptions).metadata)
     ).toEqual([
-      { surface: INTELLIGENCE_HOME_SURFACE, autoContext: true },
-      { surface: INTELLIGENCE_HOME_SURFACE, autoContext: false }
+      {
+        surface: INTELLIGENCE_HOME_SURFACE,
+        operation: INTELLIGENCE_HOME_SURFACE,
+        autoContext: true
+      },
+      {
+        surface: INTELLIGENCE_HOME_SURFACE,
+        operation: INTELLIGENCE_HOME_SURFACE,
+        autoContext: false
+      }
     ])
   })
 })

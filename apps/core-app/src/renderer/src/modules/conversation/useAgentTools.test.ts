@@ -9,27 +9,33 @@
  * clicks"), so the failed request is re-queued instead — recovery without a dead card. The last
  * test pins the advance so a later reading of this file does not quietly reintroduce it.
  */
-import type { AgentToolConfirmRequest } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import type {
+  AgentToolConfirmRequest,
+  AgentToolConfirmSettlement
+} from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   decide: vi.fn(async () => undefined),
-  /** The handler the composable registered for confirmRequest. */
-  emitRequest: null as null | ((request: AgentToolConfirmRequest) => void)
+  events: {
+    confirmRequest: Symbol('agent-tools:confirm-request'),
+    confirmSettled: Symbol('agent-tools:confirm-settled')
+  },
+  handlers: new Map<unknown, (payload: unknown) => void>()
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
-    on: (_event: unknown, handler: (request: AgentToolConfirmRequest) => void) => {
-      mocks.emitRequest = handler
-      return vi.fn()
+    on: (event: unknown, handler: (payload: unknown) => void) => {
+      mocks.handlers.set(event, handler)
+      return vi.fn(() => mocks.handlers.delete(event))
     },
     send: vi.fn()
   })
 }))
 
 vi.mock('@talex-touch/utils/transport/sdk/domains/agent-tools', () => ({
-  AgentToolEvents: { confirmRequest: { toEventName: () => 'agent-tools:confirm-request' } },
+  AgentToolEvents: mocks.events,
   createAgentToolsSdk: () => ({
     decide: mocks.decide,
     setEnabled: vi.fn(async () => ({ tools: [] })),
@@ -40,20 +46,34 @@ vi.mock('@talex-touch/utils/transport/sdk/domains/agent-tools', () => ({
 import { useAgentTools } from './useAgentTools'
 
 function request(requestId: string): AgentToolConfirmRequest {
-  return { requestId, toolName: 'fs.read', input: {} } as unknown as AgentToolConfirmRequest
+  return {
+    requestId,
+    tool: 'fs.read',
+    risk: 'read',
+    summary: 'Read a file',
+    input: '{}'
+  }
+}
+
+function emitRequest(request: AgentToolConfirmRequest): void {
+  mocks.handlers.get(mocks.events.confirmRequest)?.(request)
+}
+
+function emitSettlement(settlement: AgentToolConfirmSettlement): void {
+  mocks.handlers.get(mocks.events.confirmSettled)?.(settlement)
 }
 
 describe('a failed tool decision is recoverable', () => {
   beforeEach(() => {
     mocks.decide.mockReset()
     mocks.decide.mockResolvedValue(undefined)
-    mocks.emitRequest = null
+    mocks.handlers.clear()
   })
 
   it('decide 失败时不产生未处理的 rejection', async () => {
     mocks.decide.mockRejectedValue(new Error('transport destroyed'))
     const tools = useAgentTools()
-    mocks.emitRequest?.(request('r1'))
+    emitRequest(request('r1'))
 
     await expect(tools.approve(false)).resolves.toBeUndefined()
   })
@@ -61,7 +81,7 @@ describe('a failed tool decision is recoverable', () => {
   it('失败的请求会回到队列,用户可以重答', async () => {
     mocks.decide.mockRejectedValue(new Error('transport destroyed'))
     const tools = useAgentTools()
-    mocks.emitRequest?.(request('r1'))
+    emitRequest(request('r1'))
 
     await tools.approve(false)
 
@@ -72,8 +92,8 @@ describe('a failed tool decision is recoverable', () => {
   it('已有别的请求占着卡片时,失败的那个排到后面而不是顶掉它', async () => {
     mocks.decide.mockRejectedValue(new Error('transport destroyed'))
     const tools = useAgentTools()
-    mocks.emitRequest?.(request('r1'))
-    mocks.emitRequest?.(request('r2'))
+    emitRequest(request('r1'))
+    emitRequest(request('r2'))
 
     await tools.approve(false)
 
@@ -85,7 +105,7 @@ describe('a failed tool decision is recoverable', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     mocks.decide.mockRejectedValue(new Error('transport destroyed'))
     const tools = useAgentTools()
-    mocks.emitRequest?.(request('r1'))
+    emitRequest(request('r1'))
 
     await tools.approve(false)
 
@@ -95,8 +115,8 @@ describe('a failed tool decision is recoverable', () => {
 
   it('成功时请求不会回流,队列正常前进(否则上面几条会掩盖"永远重排")', async () => {
     const tools = useAgentTools()
-    mocks.emitRequest?.(request('r1'))
-    mocks.emitRequest?.(request('r2'))
+    emitRequest(request('r1'))
+    emitRequest(request('r2'))
 
     await tools.approve(true)
 
@@ -118,8 +138,8 @@ describe('a failed tool decision is recoverable', () => {
         })
     )
     const tools = useAgentTools()
-    mocks.emitRequest?.(request('r1'))
-    mocks.emitRequest?.(request('r2'))
+    emitRequest(request('r1'))
+    emitRequest(request('r2'))
 
     const settling = tools.approve(true)
     // decide has not resolved yet, and the next card is already up.
@@ -127,5 +147,64 @@ describe('a failed tool decision is recoverable', () => {
 
     releaseDecide?.()
     await settling
+  })
+})
+
+describe('main-owned confirmation settlement', () => {
+  beforeEach(() => {
+    mocks.decide.mockReset()
+    mocks.decide.mockResolvedValue(undefined)
+    mocks.handlers.clear()
+  })
+
+  it.each(['timeout', 'cancelled'] as const)(
+    'removes the visible card after %s and advances exactly once',
+    (reason) => {
+      const tools = useAgentTools()
+      emitRequest(request('r1'))
+      emitRequest(request('r2'))
+
+      emitSettlement({ requestId: 'r1', reason })
+      emitSettlement({ requestId: 'r1', reason })
+
+      expect(tools.pending.value?.requestId).toBe('r2')
+      expect(tools.queued.value).toEqual([])
+    }
+  )
+
+  it.each(['timeout', 'cancelled'] as const)(
+    'removes a queued card after %s without disturbing the visible request',
+    (reason) => {
+      const tools = useAgentTools()
+      emitRequest(request('r1'))
+      emitRequest(request('r2'))
+      emitRequest(request('r3'))
+
+      emitSettlement({ requestId: 'r2', reason })
+
+      expect(tools.pending.value?.requestId).toBe('r1')
+      expect(tools.queued.value.map((entry) => entry.requestId)).toEqual(['r3'])
+    }
+  )
+
+  it('does not resurrect a settled card when its decision request rejects later', async () => {
+    let rejectDecision!: (error: Error) => void
+    mocks.decide.mockImplementation(
+      () =>
+        new Promise<undefined>((_resolve, reject) => {
+          rejectDecision = reject
+        })
+    )
+    const tools = useAgentTools()
+    emitRequest(request('r1'))
+    emitRequest(request('r2'))
+
+    const deciding = tools.approve(false)
+    emitSettlement({ requestId: 'r1', reason: 'cancelled' })
+    rejectDecision(new Error('transport closed after cancellation'))
+    await deciding
+
+    expect(tools.pending.value?.requestId).toBe('r2')
+    expect(tools.queued.value).toEqual([])
   })
 })

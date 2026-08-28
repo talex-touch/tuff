@@ -657,7 +657,15 @@ export class ClipboardModule extends BaseModule {
         'image_preview_url',
         'image_content_kind',
         'image_size',
-        'image_file_size'
+        'image_file_size',
+        'ocr_status',
+        'ocr_text',
+        'ocr_excerpt',
+        'ocr_language',
+        'ocr_confidence',
+        'ocr_keywords',
+        'ocr_provider',
+        'ocr_model'
       ]) {
         const value = (clientItem.meta as Record<string, unknown>)[key]
         if (value !== undefined && value !== null) {

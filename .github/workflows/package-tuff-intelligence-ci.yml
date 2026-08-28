@@ -5,6 +5,8 @@ on:
     paths:
       - "packages/tuff-intelligence/**"
       - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/package-tuff-intelligence-ci.yml"
       - ".github/workflows/package-ci.yml"
   push:
@@ -14,6 +16,10 @@ on:
     paths:
       - "packages/tuff-intelligence/**"
       - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuff-intelligence-ci.yml"
+      - ".github/workflows/package-ci.yml"
 
 permissions:
   contents: read
@@ -26,6 +32,9 @@ jobs:
       package-path: packages/tuff-intelligence
       run-lint: true
       lint-command: pnpm lint
-      run-test: false
+      run-test: true
+      # package-exports.test.ts shells out to npm pack and exceeds Vitest's 5s default on CI.
+      test-command: pnpm exec vitest run --testTimeout 120000
+      # tsup emits declarations, so this build is the package's type gate as well.
       run-build: true
       build-command: pnpm build

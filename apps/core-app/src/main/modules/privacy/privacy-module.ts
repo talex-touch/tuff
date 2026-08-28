@@ -25,6 +25,7 @@ import {
 } from './owners/clipboard-retention-owner'
 import { createDiagnosticsRetentionOwner } from './owners/diagnostics-retention-owner'
 import { createIntelligenceRetentionOwner } from './owners/intelligence-retention-owner'
+import { createOrchestratorRunPrivacyLifecycle } from './owners/orchestrator-run-privacy-lifecycle'
 import { createOcrScreenshotRetentionOwner } from './owners/ocr-screenshot-retention-owner'
 import { createSearchRetentionOwner } from './owners/search-retention-owner'
 import { createPrivacyCategoryExporter } from './privacy-export'
@@ -144,7 +145,9 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     { operationalErrorService },
     { getMainConfig },
     { default: searchEngineCore },
-    { getSentryService }
+    { getSentryService },
+    { aiCliOrchestrator },
+    { aiOrchestratorStore }
   ] = await Promise.all([
     import('electron'),
     import('../../core/precore'),
@@ -156,7 +159,9 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     import('../observability'),
     import('../storage'),
     import('../box-tool/search-engine/search-core'),
-    import('../sentry')
+    import('../sentry'),
+    import('../ai/ai-cli-orchestrator'),
+    import('../ai/ai-orchestrator-store')
   ])
   const { coreClient, auxiliaryClient } = requireDatabaseClients(databaseModule)
   const sentryService = getSentryService()
@@ -218,6 +223,14 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     }
   })
   const secrets = createPrivacySecretService({ rootPath: innerRootPath, files: secretFiles })
+  const orchestratorRuns = createOrchestratorRunPrivacyLifecycle({
+    store: aiOrchestratorStore,
+    fence: Object.freeze({
+      isRunProtected: aiCliOrchestrator.isPrivacyRunProtected.bind(aiCliOrchestrator),
+      acquireRunDeletionFence:
+        aiCliOrchestrator.acquirePrivacyRunDeletionFence.bind(aiCliOrchestrator)
+    })
+  })
 
   return createPrivacyLifecycleService({
     ownerRegistry,
@@ -225,6 +238,7 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     exporter,
     disclosure,
     secrets,
+    orchestratorRuns,
     reportError: (report) =>
       operationalErrorService.report({
         domain: 'privacy',
@@ -256,6 +270,8 @@ function defaultDependencies(): PrivacyLifecycleModuleDependencies {
           previewCategoryDelete: service.previewCategoryDelete,
           exportCategories: service.exportCategories,
           deleteCategories: service.deleteCategories,
+          previewOrchestratorRunDelete: service.previewOrchestratorRunDelete,
+          deleteOrchestratorRun: service.deleteOrchestratorRun,
           getProviderDisclosure: service.getProviderDisclosure,
           backupSecretsPreview: service.backupSecretsPreview,
           backupSecretsWrite: service.backupSecretsWrite,

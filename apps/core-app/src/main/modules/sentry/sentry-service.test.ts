@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { app, BrowserWindow } from 'electron'
+import * as Sentry from '@sentry/electron/main'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
+
+const networkRequestMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   app: {
@@ -65,7 +68,7 @@ vi.mock('../storage', () => ({
 
 vi.mock('../network', () => ({
   getNetworkService: vi.fn(() => ({
-    request: vi.fn()
+    request: networkRequestMock
   }))
 }))
 
@@ -89,6 +92,27 @@ type TestableSentryService = {
   lastTelemetryFailureAt: number
   lastTelemetryFailureMessage: string
   persistTelemetryStats: () => Promise<void>
+}
+
+type TestReportQueueItem = {
+  id: number
+  endpoint: string
+  payload: Record<string, unknown>
+  createdAt: number
+  retryCount: number
+  lastAttemptAt?: number
+  lastError?: string | null
+}
+
+type TestableNexusTelemetryOutbox = {
+  getReportQueueStore: () => {
+    list: ReturnType<typeof vi.fn<() => Promise<TestReportQueueItem[]>>>
+    remove: ReturnType<typeof vi.fn<(id: number) => Promise<void>>>
+    markAttempt: ReturnType<typeof vi.fn<(id: number, error?: string) => Promise<void>>>
+  }
+  flushQueuedNexusTelemetryOutbox: () => Promise<void>
+  saveConfig: (config: { enabled?: boolean; anonymous?: boolean }) => void
+  nexusTelemetryBuffer: unknown[]
 }
 
 function deferred<T>() {
@@ -117,6 +141,23 @@ function telemetryRecord(
 }
 
 describe('SentryServiceModule telemetry sanitizer', () => {
+  it('drops breadcrumbs before the Electron SDK can persist sensitive payload previews', () => {
+    vi.mocked(Sentry.init).mockClear()
+    const service = new SentryServiceModule()
+
+    service.preInitBeforeReady()
+
+    const options = vi.mocked(Sentry.init).mock.calls.at(-1)?.[0]
+    expect(
+      options?.beforeBreadcrumb?.({
+        category: 'console',
+        data: {
+          arguments: ['Save provider credential config', { payloadPreview: 'acceptance-canary' }]
+        }
+      })
+    ).toBeNull()
+  })
+
   it('associates signed-in telemetry by user id without sending device fingerprint or sensitive fields', () => {
     const event = sanitizeNexusTelemetryEvent({
       eventType: 'search',
@@ -251,6 +292,53 @@ describe('SentryServiceModule telemetry sanitizer', () => {
     expect(event.message).toBe('redacted')
     expect(event.exception?.values?.[0]?.value).toBe('redacted')
     expect(event.exception?.values?.[0]?.stacktrace?.frames?.[0]).toEqual({ function: 'run' })
+  })
+})
+
+describe('SentryServiceModule Nexus telemetry privacy gates', () => {
+  beforeEach(() => {
+    networkRequestMock.mockReset()
+  })
+
+  it('drops queued Nexus telemetry instead of uploading while telemetry is disabled', async () => {
+    const list = vi.fn(async () => [
+      {
+        id: 1,
+        endpoint: 'https://nexus.local/api/telemetry/batch',
+        payload: {
+          metadata: { kind: 'sentry.nexus.batch' },
+          events: [{ eventType: 'feature_use' }]
+        },
+        createdAt: 1,
+        retryCount: 0,
+        lastError: null
+      },
+      {
+        id: 2,
+        endpoint: 'https://nexus.local/api/analytics/startup',
+        payload: {
+          metadata: { kind: 'startup.analytics' },
+          events: [{ eventType: 'startup' }]
+        },
+        createdAt: 2,
+        retryCount: 0,
+        lastError: null
+      }
+    ])
+    const remove = vi.fn(async () => {})
+    const markAttempt = vi.fn(async () => {})
+    const service = new SentryServiceModule() as unknown as TestableNexusTelemetryOutbox
+    service.getReportQueueStore = () => ({ list, remove, markAttempt })
+    service.nexusTelemetryBuffer = [{ eventType: 'search' }]
+
+    service.saveConfig({ enabled: false })
+    await service.flushQueuedNexusTelemetryOutbox()
+
+    expect(networkRequestMock).not.toHaveBeenCalled()
+    expect(service.nexusTelemetryBuffer).toEqual([])
+    expect(remove).toHaveBeenCalledWith(1)
+    expect(remove).not.toHaveBeenCalledWith(2)
+    expect(markAttempt).not.toHaveBeenCalled()
   })
 })
 

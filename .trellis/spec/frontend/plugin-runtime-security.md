@@ -178,7 +178,22 @@ registerProtectedWindowChannel(PluginEvents.window.new, protectedWindowOptions, 
   transport context construction, port ownership, privileged middleware, and test
   fixtures.
 
-### 2. Contracts
+### 2. Signatures
+
+```ts
+type IdentityInvalidationListener = (
+  identity: Readonly<PluginActivationIdentity>,
+) => void
+
+PluginChannelKeyRegistry.watchIdentityInvalidated(
+  listener: IdentityInvalidationListener,
+): () => void
+```
+
+The invalidation payload is the revoked activation snapshot. It is host-issued,
+frozen, and contains `{ name, pluginInstanceId, activationGeneration, key }`.
+
+### 3. Contracts
 
 - A plugin name is actor scope, not authentication. A non-empty `uniqueKey`,
   payload plugin name, port scope, child-process plugin name, or caller-authored
@@ -194,6 +209,10 @@ activationGeneration, key }`. A plugin instance id is stable for one runtime
   current activation, plugin name, instance, generation, and any supplied key must
   agree before the channel supplies an identity candidate. A stale or mismatched
   registration remains an unverified plugin caller; it never falls back to MAIN.
+- The raw PLUGIN IPC listener always stays on the PLUGIN lane. An unregistered
+  raw MAIN sender presenting a current plugin key also stays on that lane. Both
+  use the fixed `__unverified_plugin_caller__` actor and receive no branded
+  identity; caller payloads never select the real plugin name.
 - `TuffMainTransport` issues a runtime-branded `PluginCallerIdentity`. Privileged
   code calls `isAuthoritativePluginContext()`; it does not inspect a boolean.
   Structurally copied or caller-authored identity objects fail the runtime brand.
@@ -203,7 +222,17 @@ activationGeneration, key }`. A plugin instance id is stable for one runtime
 - A plugin-scoped port can be upgraded and confirmed only by an authoritative
   sender. Its record binds sender, plugin instance, and generation; stream context
   derives `message-port` authority with the concrete port id. Revocation or
-  re-enable makes an old record unusable even before physical close.
+  re-enable physically closes every matching plugin-scoped port, clears its confirm
+  timer and both port indexes, and makes an old record unusable. Match the exact
+  activation key; do not close MAIN/window ports or another activation's port.
+- Compare the concrete `WebContents` object for port confirmation, lookup, close,
+  and stream ownership. Reusing a numeric sender id in another object grants no
+  access to the first sender's port or stream.
+- Key rotation/revoke first commits all registry-map changes, then publishes one
+  frozen identity snapshot to a snapshot of the listener set. A throwing listener
+  cannot block later listeners. `requestKey()` and `revokeKey()` reject synchronous
+  reentry during notification so a listener cannot invalidate the outer mutation's
+  newly returned key; the guard is restored in `finally`.
 - Plugin-host SDK calls use a cryptographically random main-issued handle plus the
   current host generation. The child cannot select a main SDK context by declaring
   a plugin name. Reload, host restart, exit, or stop invalidates stale handles.
@@ -214,7 +243,7 @@ activationGeneration, key }`. A plugin instance id is stable for one runtime
 - Activation keys, host handles, and branded proof never enter logs, audit,
   persistence, renderer replies, or plugin-visible payloads.
 
-### 3. Validation Matrix
+### 4. Validation Matrix
 
 | Condition                                          | Required result                           |
 | -------------------------------------------------- | ----------------------------------------- |
@@ -222,22 +251,40 @@ activationGeneration, key }`. A plugin instance id is stable for one runtime
 | Registered current sender, matching activation     | `web-contents` authority                  |
 | Registered sender with mismatched/stale generation | PLUGIN lane, unverified                   |
 | Unregistered sender presenting a valid plugin key  | PLUGIN lane, unverified                   |
+| Unregistered sender on the raw PLUGIN listener     | Fixed sentinel PLUGIN lane, unverified    |
 | Destroyed registered sender                        | PLUGIN lane, unverified                   |
 | Valid current local lookup                         | `local-host` authority                    |
 | Caller passes `verified: true` or copied identity  | Unverified                                |
 | Current plugin port confirmed                      | `message-port` authority bound to port id |
 | Port reused after revoke/re-enable                 | Reject/fallback; no plugin port delivery  |
+| Activation identity invalidated                    | Matching plugin ports close and de-index  |
+| Same numeric sender id on another object           | No confirm/use/close authority            |
+| Invalidation listener throws                       | Later listeners still observe snapshot    |
+| Listener calls `requestKey` or `revokeKey`         | Synchronous rejection; outer result valid |
 | Unknown or stale plugin-host handle/generation     | SDK result error; no context lookup       |
 | Trusted-test factory outside test runtime          | Throw before identity issuance            |
 
-### 4. Tests Required
+### 5. Good / Base / Bad Cases
+
+- Good: rotation commits the replacement identity, rejects listener reentry, aborts
+  the old activation's streams, and physically closes only its plugin ports.
+- Base: a listener only reads the frozen invalidation snapshot and current registry
+  state; every listener runs even if a sibling throws.
+- Bad: key listeners rotate/revoke synchronously, port ownership compares only
+  `sender.id`, or revocation leaves a confirmed stale port in either index.
+
+### 6. Tests Required
 
 - Channel resolver table tests cover omitted/mismatched/stolen keys, unknown and
-  destroyed senders, stale generation, and unregistered valid-key holders.
-- Registry tests cover activation snapshots and tokenized replacement cleanup.
+  destroyed senders, stale generation, raw PLUGIN callers, and unregistered
+  valid-key holders on raw MAIN.
+- Registry tests cover activation snapshots, tokenized replacement cleanup, frozen
+  listener payloads, throwing-listener isolation, and rejected reentrant mutation.
 - Main transport tests cover raw channel, `ipcMain.handle`, current/stale local
   lookup, runtime branding, explicit test issuance, port upgrade/confirm, and
-  message-port stream provenance.
+  message-port stream provenance. Port tests use distinct sender objects with the
+  same numeric id and prove exact activation invalidation closes and de-indexes only
+  matching plugin ports.
 - Plugin lifecycle tests prove stable instance id, generation increment, key
   rotation, and revoke-on-disable.
 - Plugin-window boundary tests prove CoreBox, DivisionBox, and public plugin windows
@@ -247,13 +294,16 @@ activationGeneration, key }`. A plugin instance id is stable for one runtime
 - Plugin-host tests cover current, unknown, stale-generation, reload, and
   cross-plugin handle behavior.
 
-### 5. Wrong vs Correct
+### 7. Wrong vs Correct
 
 #### Wrong
 
 ```ts
 const plugin = data.plugin ? { name: data.plugin, uniqueKey: data.header.uniqueKey, verified: true } : undefined
 if (plugin?.verified) allowPrivilegedOperation()
+
+registry.watchIdentityInvalidated(() => registry.requestKey(name, nextActivation))
+if (record.sender.id === context.sender.id) confirmPort(record)
 ```
 
 #### Correct
@@ -261,6 +311,114 @@ if (plugin?.verified) allowPrivilegedOperation()
 ```ts
 const plugin = resolveHandlerPluginContext(realSender, currentActivation)
 if (!isAuthoritativePluginContext(plugin)) denyPrivilegedOperation()
+
+registry.watchIdentityInvalidated(identity => closePortsForExactKey(identity.key))
+if (record.sender === context.sender) confirmPort(record)
+```
+
+## Scenario: Plugin Intelligence Facade Admission And Stream Errors
+
+### 1. Scope / Trigger
+
+- Trigger: the renderer plugin facade delegates to an Intelligence domain SDK,
+  or a plugin receives an invoke/stream terminal failure through typed transport.
+- This boundary spans the explicit event manifest, raw channel lane,
+  authoritative identity, SDK version, `intelligence.basic`, registrar,
+  MessagePort envelope, channel fallback, and consumer cleanup.
+
+### 2. Signatures
+
+```ts
+const PLUGIN_FACING_INTELLIGENCE_EVENTS: readonly TuffEvent[]
+
+interface StreamErrorPayload {
+  message: string
+  code?: string
+}
+
+registerProtectedSafe(event, action, 'intelligence.basic', handler)
+registerProtectedStream(event, action, 'intelligence.basic', handler)
+```
+
+The manifest contains exactly the 14 facade-reachable invoke, stream, TTS,
+compatibility chat, safe capability discovery, Context, and Knowledge events.
+
+### 3. Contracts
+
+- Indirect domain SDK calls are not discoverable by scanning
+  `packages/utils/plugin/**`; keep their complete event set in the explicit
+  manifest and verify it in both directions against the facade.
+- Every manifest event uses the protected registrar. A plugin call must have a
+  runtime-branded current identity, authoritative declared SDK API, and a fresh
+  `intelligence.basic` decision on every call. Missing runtime, denial, revoke,
+  mismatch, stale identity, and forged structural identity fail before Provider,
+  Context, Knowledge, audit, or quota work.
+- Host callers preserve existing behavior. Provider configuration, quota/admin,
+  audit/usage, local-environment, and low-level Agent/workflow control events stay
+  outside the plugin facade even when `intelligence.basic` is granted.
+- Invoke failures expose only a stable uppercase code. Stream errors keep the
+  generic port envelope `error.code = 'stream_error'`; the optional uppercase
+  business code travels in `payload.code` beside the safe human message.
+- Port normalization accepts only `/^[A-Z][A-Z0-9_]{2,127}$/` as a business
+  code. It creates a new `Error` and never mutates caller-owned, frozen, or
+  sealed failures; throwing getters and `toString()` fall back safely.
+- Synchronous handler throws and rejected Promises emit at most one terminal
+  failure. Server send/fallback failure and consumer `onError`/`onEnd` failure
+  still release stream state, listeners, controller, and owned port handle.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                | Required result                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| Facade adds/removes a domain event without manifest sync | Contract test fails                                           |
+| Permission runtime unavailable                           | `INTELLIGENCE_PERMISSION_UNAVAILABLE`; dependencies untouched |
+| Permission denied or revoked                             | `INTELLIGENCE_PERMISSION_DENIED`; Provider untouched          |
+| Declared SDK unavailable/mismatched                      | `SDKAPI_MISMATCH`; permission/Provider untouched              |
+| Caller supplies `verified: true` or stale identity       | Stable denial; no privileged work                             |
+| Explicit code plus different message                     | Message and business code both round-trip                     |
+| Lowercase/internal code                                  | Not exposed as consumer `Error.code`                          |
+| Handler throws synchronously or rejects                  | One terminal error and cleanup                                |
+| Port/fallback send or consumer callback throws           | Cleanup still completes                                       |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a current plugin with `intelligence.basic` streams text; a permission
+  failure arrives as human text plus `INTELLIGENCE_PERMISSION_DENIED`, while the
+  wire envelope retains its generic `stream_error` classification.
+- Base: a host settings renderer uses the complete Intelligence SDK without a
+  plugin permission lookup.
+- Bad: append an Intelligence event to the facade but not the manifest, trust a
+  payload key/name, register through `registerSafe`, or replace the generic port
+  error code with a business code.
+
+### 6. Tests Required
+
+- Bidirectional facade/manifest tests pin all 14 events and prove host-only
+  methods remain absent and unregistered for plugins.
+- Registrar tests cover host success plus unavailable, deny, revoke, forged
+  identity, stale identity, and SDK mismatch with zero Provider/dependency calls.
+- Synthetic typed-transport tests cover invoke/stream success, fallback,
+  terminal failure, cancellation, audit, usage, and quota against a temporary DB.
+- Stream protocol tests cover generic envelope code, explicit business-code
+  round-trip, frozen/sealed/throwing failures, sync/rejected handlers, send
+  failures, throwing callbacks, and listener/controller/port cleanup.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+PLUGIN_FACING_EVENTS.push(...scanDirectPluginImports())
+registerSafe(intelligenceApiEvents.stream, handler)
+envelope.error.code = providerError.code
+```
+
+#### Correct
+
+```ts
+registerProtectedStream(intelligenceApiEvents.stream, 'Stream', 'intelligence.basic', handler)
+envelope.error = { code: 'stream_error', message: projected.message }
+envelope.payload = { error: projected.message, code: projected.code }
 ```
 
 ## Scenario: Isolated Plugin Prelude Runtime
@@ -3182,8 +3340,8 @@ try {
 ### 1. Scope / Trigger
 
 - Trigger: the exact isolated `touch-translation` activation needs text translation,
-  screenshot OCR-to-text, public provider enumeration, feature-item publication, and an
-  explicit copy action.
+  screenshot OCR-to-text, public provider enumeration, bounded active-feature/widget item
+  publication, and an explicit copy action.
 - This boundary does not authorize direct network access, provider configuration, provider
   credentials, generic Intelligence, image translation output, or window/control-plane APIs.
 
@@ -3212,10 +3370,13 @@ type PluginTranslationFacade = Readonly<{
   activation, bound to its main-issued activation identity and host generation, and limits it
   to `text.translate`, `vision.ocr`, and public `text.translate` provider enumeration.
 - The child exposes a frozen null-prototype `plugin.translation` facade only when both the
-  manifest name and declaration match. For Translation, raw `hostCapabilities`, generic
-  Intelligence, HTTP/open-url, Secret, Storage, permission, channel, process, filesystem,
-  system, QuickOps, Flow, feature-registry, voice, and widget facades remain absent even if
-  shared host definitions exist in the activation manifest.
+  manifest name and declaration match. Translation additionally receives the declaration-gated
+  `plugin.widget.pushItems()` facade only when `feature.items.widget.push` is present in its exact
+  activation allowlist. Raw `hostCapabilities`, generic Intelligence, HTTP/open-url, Secret,
+  Storage, permission, channel, process, filesystem, system, QuickOps, Flow, feature-registry,
+  and voice facades remain absent even if shared host definitions exist in the activation manifest.
+  Widget publication remains `active-feature` only, owner-bound, custom-render-only, and guarded
+  by `search.root-results`; it does not expand Translation's provider or control-plane authority.
 - Translation options admit only provider/model preference plus exact diagnostic metadata.
   OCR options admit diagnostic metadata only. Caller, credentials, endpoints, headers,
   tokens, quota identity, prompt templates/variables, and generic AI command fields fail
@@ -3227,9 +3388,11 @@ type PluginTranslationFacade = Readonly<{
   The current Intelligence SDK does not accept a provider signal for this capability, so the
   host adapter must not pass one; cancel/revoke releases the host await and discards observed
   late settlement. OCR continues to receive the supported host signal.
-- The Prelude owns one current request across all Translation features. Every item publication
-  is serialized and rechecks request/generation/signal after `clearItems()` and before
-  `pushItems()`, preventing an old request from erasing or replacing newer output.
+- The Prelude owns one current request across all Translation features. Every standard or widget
+  item publication is serialized and rechecks request/generation/signal after `clearItems()` and
+  before `pushItems()`, preventing an old request from erasing or replacing newer output. A widget
+  result keeps the bounded source query in its searchable title so the active result cannot be
+  filtered out before its translated payload renders.
 - Input and result bounds are UTF-8 byte bounds, not JavaScript code-unit counts. Screenshot
   results contain OCR/translation text only and never the source image or translated image.
 - A copy action is accepted only when its activation-generation request id and exact bounded
@@ -3245,14 +3408,16 @@ type PluginTranslationFacade = Readonly<{
 | Non-canonical, oversized, mismatched-signature, or unsupported image data URL | Invalid request before OCR/provider work |
 | Permission revoke or lifecycle cancellation during provider wait | Stable cancellation/permission result; late value discarded |
 | Older feature request settles after a newer feature begins | No old clear/push or copy authority may affect current output |
+| Translation widget capability undeclared or custom DTO invalid | No `plugin.widget` publication; reject before active-feature mutation |
 | Forged copy text with a current request id | `invalid-payload`; no clipboard write |
 | Previous activation-generation copy item | `stale-request`; no clipboard write |
 | SDK result contains usage/reasoning/raw OCR/provider internals | Reject or project them away before child delivery |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: a current Translation activation uses only the fixed facade, awaits serialized item
-  publication and accepts copy only for its own generation-bound result.
+- Good: a current Translation activation uses only the fixed translation and widget facades,
+  awaits serialized custom-item publication and accepts copy only for its own generation-bound
+  result.
 - Base: a denied provider or unsupported OCR input returns a stable blocked result without
   feature mutation, provider detail or native image output.
 - Bad: expose generic Intelligence/network/storage, let the child select a credential or
@@ -3264,10 +3429,10 @@ type PluginTranslationFacade = Readonly<{
   bounds, hostile records/arrays, extra control fields, authority, permission, revoke,
   cancellation, and late settlement.
 - Child tests declare unrelated shared capabilities deliberately and still prove only the
-  Translation-specific facade plus required feature/clipboard surfaces are reachable.
+  Translation-specific facade plus declared feature/widget/clipboard surfaces are reachable.
 - Prelude tests cover text, multi-source cap, screenshot OCR-to-text, cross-feature races,
-  serialized clear/push, forged/stale copy actions, destroy invalidation, redaction, and UTF-8
-  bounds.
+  serialized clear/push, custom widget payload/query matching, forged/stale copy actions, destroy
+  invalidation, redaction, and UTF-8 bounds.
 - Real Electron smoke runs two activation generations with fake providers only and proves
   generation rotation, stale action rejection, no image return, no network/native action,
   and awaited shutdown.
@@ -3286,7 +3451,7 @@ return tuffIntelligence.invoke('text.translate', payload, { ...options, signal }
 ```ts
 const providers = await plugin.translation.listProviders()
 const result = await activationRegistry.dispatch('intelligence.invoke', exactRequest, signal)
-if (isCurrentRequest()) await serializedPublish(result)
+if (isCurrentRequest()) await plugin.widget.pushItems([buildBoundedTranslationWidget(result)])
 ```
 
 ## Scenario: Production Plugin Prelude Hard Cut
@@ -3535,4 +3700,79 @@ await typedTransport.invoke(NetworkEvents.api.request, request, {
   plugin: { name: activation.name, uniqueKey: activation.key }
 })
 await runtime.callLifecycle('onFeatureTriggered', [id, query, snapshotLifecycleFeature(feature)])
+```
+
+## Scenario: TPEX Acquisition Credential Boundary
+
+### 1. Scope / Trigger
+
+- Trigger: CoreApp resolves a `tpex:slug`, downloads a remote `.tpex`, or follows a package
+  redirect through `TpexPluginProvider`.
+- This boundary spans Store API sources, Nexus login state, provider/request headers,
+  `NetworkService`, redirect handling, and temporary-file cleanup.
+
+### 2. Contracts
+
+- The CoreApp Nexus login Token is automatic authority, not a generic download credential. Add
+  it only when the actual request URL and `getRuntimeNexusBaseUrl()` have exactly equal URL
+  origins. Invalid bases, non-HTTP(S) URLs, external direct packages, custom external API
+  sources, and cross-origin package URLs receive no automatic Token.
+- Header lookup and merging are case-insensitive. A caller-supplied Authorization header wins
+  for its initial origin and is never overwritten by the automatic Nexus Token.
+- Registry detail and package download calculate headers independently. Detail requests reject
+  redirects. Resolve `packageUrl` with `new URL(packageUrl, apiBase)`; provider Authorization may
+  carry to the package only when detail and package origins match. Download-specific explicit
+  headers remain scoped to the package request.
+- Authenticated stream downloads use the NetworkService manual-redirect path. Accept only
+  HTTP(S), require a valid Location, cap redirects, and strip Authorization before a
+  cross-origin next hop. Recompute only automatic authority for the next actual URL; do not
+  restore an explicit credential stripped from a previous origin.
+- A redirect response may have no body. The manual stream API still returns its status and
+  headers so the provider can decide the next hop without buffering a package.
+- Stream and writer failures close both sides before deleting the partial file. Use the standard
+  pipeline lifecycle so Windows file handles cannot turn cleanup into a swallowed `EBUSY`.
+- Logs and errors expose stable codes and sanitized source metadata, never Authorization,
+  Token values, signed query strings, or temporary package contents.
+
+### 3. Validation Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Runtime-origin detail or relative package, no explicit auth | Automatic Nexus Token |
+| External direct `.tpex` or custom external API source | No automatic Nexus Token |
+| Absolute/protocol-relative cross-origin package | No inherited registry Authorization or automatic Token |
+| Existing `authorization` with any casing | Preserve one explicit value; do not add Token |
+| Same-origin package redirect | Preserve allowed Authorization and continue |
+| Cross-origin package redirect | Strip Authorization before the next request |
+| Missing Location, unsupported protocol, or redirect overflow | Stable failure before file write |
+| Source stream or file writer fails | Error propagated; writer closed; no partial file |
+
+### 4. Tests Required
+
+- Provider tests cover runtime-origin detail/package, external direct package, custom API source,
+  absolute and protocol-relative package URLs, provider-to-package origin changes, explicit
+  Authorization precedence, and invalid runtime base.
+- Download tests inspect the actual headers sent on same-origin and cross-origin hops, cover
+  missing/invalid/overflow redirects, and simulate Windows `EBUSY` until the writer closes.
+- NetworkService tests prove the manual stream path uses `redirect: 'manual'` and exposes a
+  bodyless redirect. A mutation that reverses the origin check must make the security suite red.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const headers = { Authorization: `Bearer ${getAuthToken()}` }
+await downloadToTempFile(packageUrl, '.tpex', { headers })
+```
+
+#### Correct
+
+```ts
+const headers = await resolveHeadersForUrl(actualUrl, explicitHeaders)
+const response = await networkService.requestStreamManualRedirect({
+  url: actualUrl.toString(),
+  headers,
+  validateStatus: allowedDownloadStatuses
+})
 ```

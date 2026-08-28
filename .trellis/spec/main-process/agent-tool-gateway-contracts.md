@@ -143,3 +143,132 @@ for (const tool of await listAll()) registry.set(`mcp_${tool.name}`, ...)
 registry.set('tuff_mcp_list_tools', ...)
 registry.set('tuff_mcp_call', { classify: perCallPlan, ... })
 ```
+
+## Scenario: Durable Pi Tool Result Replay Without Raw Inputs
+
+### 1. Scope / Trigger
+
+- Trigger: a Pi-backed orchestrator run can pause for approval, resume in the
+  same process, recover after restart, or observe a tool call whose side effect
+  may already have happened.
+- This contract covers run metadata, authority reconstruction, tool-call
+  replay, model-facing output, and durable audit projections. It does not make
+  arbitrary interactive input restart-durable.
+
+### 2. Signatures
+
+```ts
+loadToolCallResult(
+  runId: string,
+  toolCallId: string,
+  toolId: string,
+): Promise<PiRuntimeToolCallOutcome | undefined>
+
+beginToolCall(
+  runId: string,
+  toolCallId: string,
+  toolId: string,
+  input: unknown,
+): Promise<'execute' | 'interrupted'>
+
+persistToolCallResult(
+  runId: string,
+  toolCallId: string,
+  result: PiRuntimeToolCallOutcome,
+): Promise<void>
+```
+
+Persisted run metadata is an allowlisted versioned projection. It contains
+`schemaVersion`, execution budgets, `allowedToolRefs`, input
+presence/digest, profile and automation authority versions/digests, bounded
+approval state, and opaque `toolCallStates` / `completedToolCallResults`.
+
+### 3. Contracts
+
+- Raw request input stays in `volatileRunInputs`. SQLite receives only
+  `requestInputPresent` and a SHA-256 `requestInputDigest`. A non-automation
+  run that loses volatile input after restart settles with
+  `AI_RUN_INPUT_UNAVAILABLE`; it never resumes with invented or persisted raw
+  input.
+- Reconstruct allowed tools and automation policy from the current enabled
+  profile/definition, then require the persisted version and digest to match.
+  Any drift settles with `AI_RUN_AUTHORITY_CHANGED` before runtime execution.
+- Persist tool and call identity only as namespace-separated opaque SHA-256
+  references. Raw tool names, raw call IDs, caller metadata, tool inputs,
+  tool-derived paths/credentials, native errors, and stacks are not durable
+  metadata or event payloads.
+- `objective`, `cwd`, and terminal `output` remain separate, owner-visible
+  durable run fields. They are user-content state, not proof that raw
+  `request.input` or tool payloads may be copied into metadata; inventory and
+  retention claims must distinguish the two.
+- Load durable call state before permission lookup or tool execution. A load
+  failure, mismatched tool reference, or prior `started` state blocks replay;
+  it must not reach the tool side effect.
+- Commit `started` before executing the tool. Persist a sanitized terminal
+  outcome before returning it to the worker/model. If terminal persistence
+  fails, return only the stable `TOOL_EXECUTION_FAILED` projection.
+- Sanitize tool output at both the worker/model and persistence boundaries.
+  Credential/path keys and values, including nested or repeatedly JSON-encoded
+  strings, become `[redacted]`; container/depth/parse budgets fail closed.
+- Legacy raw tool-call keys may be rewritten to opaque references on read. The
+  metadata row is authoritative; the following migration event is telemetry,
+  not a transactional source of truth.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                     | Required result                                             |
+| ------------------------------------------------------------- | ----------------------------------------------------------- |
+| Interactive raw input missing after restart                   | `AI_RUN_INPUT_UNAVAILABLE`; no runtime/tool execution       |
+| Profile, allowed tools, automation version, or digest changed | `AI_RUN_AUTHORITY_CHANGED`; no runtime/tool execution       |
+| Durable result load throws                                    | Fail closed before permission lookup and tool side effect   |
+| Durable state is `started`                                    | `AI_RUN_INTERRUPTED`; do not replay the tool                |
+| Stored call points at another tool reference                  | Stable replay rejection; do not execute either tool         |
+| Tool result persistence fails after execution                 | Stable error to worker/model; no raw output or native error |
+| Credential/path canary is nested or JSON-encoded              | `[redacted]` before model and SQLite                        |
+| JSON inspection exceeds a configured budget                   | Fail closed as sensitive                                    |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a tool result is saved under opaque call/tool references; retry loads
+  the sanitized result and never repeats the side effect.
+- Base: a run without input stores `requestInputPresent: false` and no digest.
+- Bad: persist `request.input`, `allowedToolIds`, `toolCallId`, tool name, raw
+  output, or an exception message so approval can survive a restart.
+
+### 6. Tests Required
+
+- Run metadata tests assert the exact allowlist, input digest-only storage,
+  profile/automation drift rejection, same-process approval resume, and
+  restart input-unavailable behavior.
+- Tool replay tests assert load-before-execute ordering, durable-start failure,
+  started/completed replay, mismatched identity, legacy opaque migration, and
+  persistence-failure containment.
+- Output tests cover credential and Unix/Windows/file-URL paths, punctuation
+  wrappers, JSON credential keys, multi-encoded JSON, throwing accessors, and
+  every inspection budget boundary.
+- Serialized run rows and events must reject secret/path/raw-id canaries. The
+  focused suite, Node typecheck, scoped ESLint, privacy inventory verifier, and
+  `git diff --check` must pass.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+run.metadata.requestInput = request.input
+run.metadata.completedToolCallResults[toolCallId] = result
+await executeTool(toolId, request.input)
+```
+
+#### Correct
+
+```ts
+run.metadata.requestInputDigest = digestStructuredValue(request.input)
+const prior = await loadToolCallResult(run.id, toolCallId, toolId)
+if (prior) return prior
+if ((await beginToolCall(run.id, toolCallId, toolId, request.input)) !== 'execute') {
+  throw createInterruptedToolCallError(toolCallId)
+}
+const result = sanitizeToolOutputForRuntime(await executeTool(toolId, request.input))
+await persistToolCallResult(run.id, toolCallId, result)
+```

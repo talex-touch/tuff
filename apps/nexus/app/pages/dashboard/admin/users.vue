@@ -4,12 +4,13 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
+import AccountTabs from '~/components/dashboard/admin/AccountTabs.vue'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxRowSkeleton, TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
 
@@ -22,9 +23,21 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
+
+/**
+ * ofetch puts the whole request line in `err.message`
+ * (`[GET] "/api/admin/users?page=1&limit=20": <no response> Failed to fetch`),
+ * so using it as the fallback prints an internal route at the operator and says
+ * nothing they can act on. Only `err.data.message` — what the endpoint chose to
+ * say — is safe to surface.
+ */
+function resolveErrorMessage(err: unknown, fallback: string) {
+  const message = (err as { data?: { message?: unknown } })?.data?.message
+  return typeof message === 'string' && message.trim() ? message.trim() : fallback
+}
 
 const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -134,6 +147,9 @@ const hasPrev = computed(() => pagination.page > 1)
 const hasNext = computed(() => pagination.page < pagination.totalPages)
 const actionsLocked = computed(() => loading.value || actionPendingId.value !== null)
 const selectedUserLocked = computed(() => !selectedUser.value || selectedUser.value.status === 'merged' || selectedUser.value.id === user.value?.id)
+// NOTE: Save still applies a demotion or a disable with no second step and no
+// warning. The copy for one needs editor.warnTitle / warnDemote / warnDisable,
+// which do not exist in i18n/locales/route/{en,zh}/dashboard.ts yet.
 const userCreditBalance = computed(() => userCredits.value?.summary.user ?? null)
 const userCreditRemaining = computed(() => {
   const balance = userCreditBalance.value
@@ -180,17 +196,20 @@ const creditDirectionOptions = computed(() => ([
   { value: 'subtract', label: t('dashboard.sections.users.credits.subtract', 'Subtract') },
 ]))
 
-const statusLabels: Record<string, string> = {
+// Computed, not a plain object: resolving t() once at setup freezes the English
+// strings into the table for the lifetime of the page, so switching language
+// leaves every badge behind.
+const statusLabels = computed<Record<string, string>>(() => ({
   active: t('dashboard.sections.users.status.active', 'Active'),
   disabled: t('dashboard.sections.users.status.disabled', 'Disabled'),
   merged: t('dashboard.sections.users.status.merged', 'Merged'),
-}
+}))
 
-const emailStateLabels: Record<string, string> = {
+const emailStateLabels = computed<Record<string, string>>(() => ({
   verified: t('dashboard.sections.users.emailState.verified', 'Verified'),
   unverified: t('dashboard.sections.users.emailState.unverified', 'Unverified'),
   missing: t('dashboard.sections.users.emailState.missing', 'Missing'),
-}
+}))
 
 const userColumns = computed<DataTableColumn<AdminUser>[]>(() => [
   { key: 'user', title: t('dashboard.sections.users.table.user', 'User'), width: '46%' },
@@ -231,8 +250,8 @@ async function fetchUsers(options: { resetPage?: boolean } = {}) {
       pagination.totalPages = res.pagination.totalPages
     }
   }
-  catch (err: any) {
-    error.value = err?.data?.message || err?.message || t('dashboard.sections.users.errors.loadFailed', 'Failed to load users.')
+  catch (err: unknown) {
+    error.value = resolveErrorMessage(err, t('dashboard.sections.users.errors.loadFailed', 'Failed to load users.'))
   }
   finally {
     loading.value = false
@@ -242,7 +261,10 @@ async function fetchUsers(options: { resetPage?: boolean } = {}) {
 function formatDate(value: string | null) {
   if (!value)
     return '-'
-  return new Date(value).toLocaleDateString('en-US', {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime()))
+    return value
+  return date.toLocaleDateString(locale.value, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -253,7 +275,7 @@ function formatDateTime(value: string | null) {
   if (!value)
     return '-'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale.value)
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -332,8 +354,8 @@ async function fetchSelectedUserCredits(options: { resetPage?: boolean } = {}) {
     })
     applyUserCreditsResponse(res)
   }
-  catch (err: any) {
-    userCreditsError.value = err?.data?.message || err?.message || t('dashboard.sections.users.credits.loadFailed', 'Failed to load credits.')
+  catch (err: unknown) {
+    userCreditsError.value = resolveErrorMessage(err, t('dashboard.sections.users.credits.loadFailed', 'Failed to load credits.'))
   }
   finally {
     userCreditsLoading.value = false
@@ -375,9 +397,8 @@ async function adjustSelectedUserCredits() {
     creditAdjustmentForm.reason = ''
     toast.success(t('dashboard.sections.users.credits.adjustSuccess', 'Credits updated.'))
   }
-  catch (err: any) {
-    const fallback = t('dashboard.sections.users.credits.adjustFailed', 'Failed to update credits.')
-    toast.warning(err?.data?.message || err?.message || fallback)
+  catch (err: unknown) {
+    toast.warning(resolveErrorMessage(err, t('dashboard.sections.users.credits.adjustFailed', 'Failed to update credits.')))
   }
   finally {
     userCreditsSaving.value = false
@@ -405,8 +426,13 @@ function openEditor(entry: AdminUser) {
   void fetchSelectedUserCredits({ resetPage: true })
 }
 
+// `actionsLocked` deliberately does NOT gate this: it folds in the list-level
+// `loading` flag, and the only caller is saveEditor. A list refresh in flight
+// (search debounce, filter change, pagination) would make this return without
+// writing anything while saveEditor still reports success — the role change
+// would be dropped silently. Re-entry is already guarded by `editorSaving`.
 async function updateUserRole(entry: AdminUser, nextRole: string) {
-  if (actionsLocked.value || entry.role === nextRole)
+  if (entry.role === nextRole)
     return
   actionPendingId.value = entry.id
   try {
@@ -418,9 +444,8 @@ async function updateUserRole(entry: AdminUser, nextRole: string) {
       applyUserUpdate(res.user)
     toast.success(t('dashboard.sections.users.actions.roleSuccess', 'Role updated.'))
   }
-  catch (err: any) {
-    const fallback = t('dashboard.sections.users.actions.roleFailed', 'Failed to update role.')
-    toast.warning(err?.data?.message || err?.message || fallback)
+  catch (err: unknown) {
+    toast.warning(resolveErrorMessage(err, t('dashboard.sections.users.actions.roleFailed', 'Failed to update role.')))
     throw err
   }
   finally {
@@ -428,8 +453,10 @@ async function updateUserRole(entry: AdminUser, nextRole: string) {
   }
 }
 
+// See updateUserRole: the list-level lock must not decide whether the editor's
+// status change is written.
 async function updateUserStatus(entry: AdminUser, nextStatus: string) {
-  if (actionsLocked.value || entry.status === nextStatus)
+  if (entry.status === nextStatus)
     return
   actionPendingId.value = entry.id
   try {
@@ -441,9 +468,8 @@ async function updateUserStatus(entry: AdminUser, nextStatus: string) {
       applyUserUpdate(res.user)
     toast.success(t('dashboard.sections.users.actions.statusSuccess', 'Status updated.'))
   }
-  catch (err: any) {
-    const fallback = t('dashboard.sections.users.actions.statusFailed', 'Failed to update status.')
-    toast.warning(err?.data?.message || err?.message || fallback)
+  catch (err: unknown) {
+    toast.warning(resolveErrorMessage(err, t('dashboard.sections.users.actions.statusFailed', 'Failed to update status.')))
     throw err
   }
   finally {
@@ -488,6 +514,15 @@ async function saveEditor() {
     return
   }
 
+  // Validated up front: the writes below are not a transaction, so failing this
+  // check after the profile PATCH would leave the name saved while telling the
+  // operator the whole save failed.
+  if (editorForm.grantSubscription
+    && (!Number.isFinite(Number(editorForm.durationDays)) || Number(editorForm.durationDays) <= 0)) {
+    toast.warning(t('dashboard.sections.users.editor.invalidDuration', 'Invalid subscription duration.'))
+    return
+  }
+
   editorSaving.value = true
   try {
     await updateUserProfile(entry)
@@ -496,8 +531,6 @@ async function saveEditor() {
       await updateUserStatus(entry, editorForm.status)
     }
     if (editorForm.grantSubscription) {
-      if (!Number.isFinite(Number(editorForm.durationDays)) || Number(editorForm.durationDays) <= 0)
-        throw new Error(t('dashboard.sections.users.editor.invalidDuration', 'Invalid subscription duration.'))
       await grantSubscription(entry)
       toast.success(t('dashboard.sections.users.editor.subscriptionSuccess', 'Subscription granted.'))
     }
@@ -505,9 +538,8 @@ async function saveEditor() {
     editorOpen.value = false
     await fetchUsers()
   }
-  catch (err: any) {
-    const fallback = t('dashboard.sections.users.editor.saveFailed', 'Failed to update user.')
-    toast.warning(err?.data?.message || err?.message || fallback)
+  catch (err: unknown) {
+    toast.warning(resolveErrorMessage(err, t('dashboard.sections.users.editor.saveFailed', 'Failed to update user.')))
   }
   finally {
     editorSaving.value = false
@@ -608,7 +640,12 @@ onMounted(() => {
       </div>
     </section>
 
-    <div v-if="error" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+    <!--
+      Only shown when the table still has rows: it tells the reader the list
+      they are looking at is stale. With no rows the error owns the card below,
+      so repeating it here would state the same failure twice.
+    -->
+    <div v-if="error && users.length" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
       {{ error }}
     </div>
 
@@ -624,22 +661,50 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="loading && !users.length" class="space-y-3 p-5">
-        <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
-          <TxSpinner :size="16" />
-          {{ t('dashboard.sections.users.loading', 'Loading...') }}
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
+      <!--
+        Row-shaped rather than two generic blocks: each row is a name over an
+        email with a trailing control, which is the table that lands here, so
+        nothing jumps when it does.
+      -->
+      <div
+        v-if="loading && !users.length"
+        class="p-5"
+        role="status"
+        :aria-label="t('dashboard.sections.users.loading', 'Loading...')"
+      >
+        <TxRowSkeleton :rows="5" description separated trailing />
       </div>
 
-      <div v-else-if="!users.length" class="p-8 text-center text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.users.empty', 'No users found.') }}
-      </div>
+      <!--
+        Ordered before the empty state: a failed request that falls through to
+        "No users found." tells the operator the account list is empty when the
+        truth is we could not ask.
+      -->
+      <TxEmptyState
+        v-else-if="error"
+        variant="error"
+        size="small"
+        layout="vertical"
+        :title="t('dashboard.sections.users.errors.loadFailed', 'Failed to load users.')"
+        :description="error"
+        :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat' }"
+        @primary="fetchUsers()"
+      />
+
+      <!--
+        A filtered-out list and an empty one still share this copy: telling them
+        apart needs `emptyFiltered` / `filters.clear`, which do not exist in
+        i18n/locales/route/{en,zh}/dashboard.ts yet.
+      -->
+      <TxEmptyState
+        v-else-if="!users.length"
+        variant="empty"
+        size="small"
+        layout="vertical"
+        icon="i-carbon-user-multiple"
+        :title="t('dashboard.sections.users.empty', 'No users found.')"
+        description=""
+      />
 
       <div v-else class="overflow-x-auto">
         <TxDataTable :columns="userColumns" :data="users" row-key="id" class="min-w-[720px]">
@@ -806,14 +871,39 @@ onMounted(() => {
             </TxButton>
           </div>
 
-          <div v-if="userCreditsError" class="rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200">
+          <div v-if="userCreditsError && userCredits" class="rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200">
             {{ userCreditsError }}
           </div>
 
-          <div v-if="userCreditsLoading && !userCredits" class="flex items-center justify-center gap-2 rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.04] dark:text-white/50">
-            <TxSpinner :size="16" />
-            {{ t('dashboard.sections.users.credits.loading', 'Loading credits...') }}
+          <div
+            v-if="userCreditsLoading && !userCredits"
+            class="space-y-3"
+            role="status"
+            :aria-label="t('dashboard.sections.users.credits.loading', 'Loading credits...')"
+          >
+            <div class="grid grid-cols-3 gap-2">
+              <div v-for="tile in 3" :key="tile" class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
+                <TxSkeleton :loading="true" :lines="2" />
+              </div>
+            </div>
+            <TxSkeleton :loading="true" variant="rect" height="8px" radius="9999px" />
           </div>
+
+          <!--
+            Before the panel, not beside it: with no balance loaded the tiles
+            below format `null` as 0, so a failed request reads as a user with
+            no credits left.
+          -->
+          <TxEmptyState
+            v-else-if="userCreditsError"
+            variant="error"
+            size="small"
+            layout="vertical"
+            :title="t('dashboard.sections.users.credits.loadFailed', 'Failed to load credits.')"
+            :description="userCreditsError"
+            :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat' }"
+            @primary="fetchSelectedUserCredits({ resetPage: true })"
+          />
 
           <div v-else class="space-y-3">
             <div class="grid grid-cols-3 gap-2">

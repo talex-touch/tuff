@@ -191,6 +191,191 @@ describe("renderer storage transport bootstrap", () => {
     );
   });
 
+  it.each([
+    { caseName: "matching defaults", initialMode: "off" },
+    { caseName: "replaced defaults", initialMode: "initial" },
+  ])(
+    "auto-saves the first local edit after hydration ($caseName)",
+    async ({ caseName, initialMode }) => {
+      const storageKey = `first-auto-save-${caseName.replace(" ", "-")}.ini`;
+      const transport = createTransportMock();
+      let saveCalls = 0;
+
+      transport.send.mockImplementation(
+        async (event: unknown, payload?: { key?: string }) => {
+          if (event === StorageEvents.app.save) {
+            saveCalls++;
+            return { success: true, version: 2 };
+          }
+          if (
+            event === StorageEvents.app.getVersioned &&
+            payload?.key === storageKey
+          ) {
+            return { data: { mode: "off" }, version: 1 };
+          }
+          return null;
+        },
+      );
+
+      initializeRendererStorage(transport as any);
+      const storage = new TouchStorage(storageKey, {
+        mode: initialMode,
+      }).setAutoSave(true);
+
+      await storage.whenHydrated();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(saveCalls).toBe(0);
+
+      storage.data.mode = "review";
+
+      await vi.waitFor(() => expect(saveCalls).toBe(1), { timeout: 1500 });
+      expect(transport.send).toHaveBeenLastCalledWith(StorageEvents.app.save, {
+        key: storageKey,
+        value: { mode: "review" },
+        clear: false,
+        version: 1,
+      });
+    },
+  );
+
+  it("preserves edits made while a save is in flight across a newer remote snapshot", async () => {
+    const transport = createTransportMock();
+    let getVersionedCalls = 0;
+    let saveCalls = 0;
+    let resolveFirstSave:
+      | ((result: { success: boolean; version: number }) => void)
+      | undefined;
+    const firstSaveResult = new Promise<{
+      success: boolean;
+      version: number;
+    }>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+
+    transport.send.mockImplementation(
+      async (event: unknown, payload?: { key?: string }) => {
+        if (event === StorageEvents.app.save) {
+          saveCalls++;
+          if (saveCalls === 1) {
+            return await firstSaveResult;
+          }
+          return { success: true, version: 4 };
+        }
+        if (
+          event === StorageEvents.app.getVersioned &&
+          payload?.key === "in-flight-save.ini"
+        ) {
+          getVersionedCalls++;
+          return getVersionedCalls === 1
+            ? {
+                data: { mode: "off", serverMarker: "initial" },
+                version: 1,
+              }
+            : {
+                data: { mode: "off", serverMarker: "remote" },
+                version: 3,
+              };
+        }
+        return null;
+      },
+    );
+
+    initializeRendererStorage(transport as any);
+    const storage = new TouchStorage("in-flight-save.ini", {
+      mode: "off",
+      serverMarker: "initial",
+    });
+
+    await storage.whenHydrated();
+    storage.data.mode = "review";
+    const firstSave = storage.saveToRemote({ force: true });
+    await vi.waitFor(() => expect(saveCalls).toBe(1));
+
+    storage.data.mode = "full";
+    resolveFirstSave?.({ success: true, version: 2 });
+    await firstSave;
+
+    const storageStreamCall = transport.stream.mock.calls.at(-1) as unknown[];
+    const streamOptions = storageStreamCall[2] as {
+      onData(payload: { key: string; version: number }): void;
+    };
+    streamOptions.onData({ key: "in-flight-save.ini", version: 3 });
+
+    await vi.waitFor(() => expect(getVersionedCalls).toBe(2));
+    await vi.waitFor(() => {
+      expect(storage.data).toMatchObject({
+        mode: "full",
+        serverMarker: "remote",
+      });
+    });
+    await vi.waitFor(() => expect(saveCalls).toBe(2), { timeout: 2000 });
+    expect(transport.send).toHaveBeenLastCalledWith(
+      StorageEvents.app.save,
+      expect.objectContaining({
+        key: "in-flight-save.ini",
+        value: { mode: "full", serverMarker: "remote" },
+        version: 3,
+      }),
+    );
+  });
+
+  it("applies a newer remote snapshot without resaving unchanged acknowledged data", async () => {
+    const transport = createTransportMock();
+    let getVersionedCalls = 0;
+    let saveCalls = 0;
+
+    transport.send.mockImplementation(
+      async (event: unknown, payload?: { key?: string }) => {
+        if (event === StorageEvents.app.save) {
+          saveCalls++;
+          return { success: true, version: 2 };
+        }
+        if (
+          event === StorageEvents.app.getVersioned &&
+          payload?.key === "acknowledged-save.ini"
+        ) {
+          getVersionedCalls++;
+          return getVersionedCalls === 1
+            ? {
+                data: { mode: "off", serverMarker: "initial" },
+                version: 1,
+              }
+            : {
+                data: { mode: "full", serverMarker: "remote" },
+                version: 3,
+              };
+        }
+        return null;
+      },
+    );
+
+    initializeRendererStorage(transport as any);
+    const storage = new TouchStorage("acknowledged-save.ini", {
+      mode: "off",
+      serverMarker: "initial",
+    });
+
+    await storage.whenHydrated();
+    storage.data.mode = "review";
+    await storage.saveToRemote({ force: true });
+
+    const storageStreamCall = transport.stream.mock.calls.at(-1) as unknown[];
+    const streamOptions = storageStreamCall[2] as {
+      onData(payload: { key: string; version: number }): void;
+    };
+    streamOptions.onData({ key: "acknowledged-save.ini", version: 3 });
+
+    await vi.waitFor(() => expect(getVersionedCalls).toBe(2));
+    await vi.waitFor(() => {
+      expect(storage.data).toMatchObject({
+        mode: "full",
+        serverMarker: "remote",
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(saveCalls).toBe(1);
+  });
+
   // TouchStorage is published and instantiated by external plugins. It used to print three
   // unconditional console.debug lines per hydrate/save, each probing `background.source` -- a
   // field belonging to one specific app store. Consumers could neither disable nor interpret

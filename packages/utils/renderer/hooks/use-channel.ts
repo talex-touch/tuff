@@ -6,6 +6,7 @@ export interface TouchChannel {
   send: <TRequest = any, TResponse = any>(
     eventName: string,
     data?: TRequest,
+    options?: { timeout?: number },
   ) => Promise<TResponse>;
 
   regChannel?: <TRequest = any>(

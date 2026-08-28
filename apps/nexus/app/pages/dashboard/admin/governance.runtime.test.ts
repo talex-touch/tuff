@@ -14,7 +14,10 @@ interface GovernancePageContext {
   summaryDays: { value: number }
   refreshAll: () => Promise<void>
   notifyStorageAlerts: (mode: 'plan' | 'send') => Promise<void>
+  saveConfig: (configType: string, form: Record<string, string>) => Promise<void>
   saveMessage: { value: string }
+  saveError: { value: string }
+  saveScope: { value: string }
   storageAlertNotifyError: { value: string }
   storageAlertNotifying: { value: boolean }
   storageAlertNotifyResult: { value: unknown }
@@ -83,7 +86,10 @@ ${governancePageScriptWithoutImports}
     summaryDays,
     refreshAll,
     notifyStorageAlerts,
+    saveConfig,
     saveMessage,
+    saveError,
+    saveScope,
     storageAlertNotifyError,
     storageAlertNotifying,
     storageAlertNotifyResult,
@@ -334,6 +340,45 @@ describe('dashboard governance page runtime contract', () => {
       expect(page.context.storageAlertNotifyResult.value).toBeNull()
     else
       expect(page.context.storageAlertNotifyResult.value).toMatchObject({ mode: 'send' })
+
+    page.dispose()
+  })
+
+  it.each([
+    { field: 'limits', form: { limitsJson: '{ not json', configJson: '{}' } },
+    { field: 'config', form: { limitsJson: '{}', configJson: '{ not json' } },
+  ])('names the $field textarea when its JSON does not parse', async ({ field, form }) => {
+    const page = await createGovernancePage({ role: 'admin' })
+    page.requestJson.mockClear()
+
+    await page.context.saveConfig('analytics_collection', {
+      name: 'Analytics', channel: 'app', warningThreshold: '80', ...form,
+    })
+
+    // The raw JSON.parse message names no field, and this page has eleven JSON
+    // textareas, so the label has to survive the rethrow.
+    expect(page.context.saveError.value).toContain(field)
+    expect(page.context.saveMessage.value).toBe('')
+    // Unparseable input must never reach the server.
+    expect(page.requestJson).not.toHaveBeenCalled()
+
+    page.dispose()
+  })
+
+  it('tags a failed save with the block that issued it', async () => {
+    const page = await createGovernancePage({ role: 'admin' })
+
+    await page.context.saveConfig('intelligence_provider_quota', {
+      name: 'Quota', warningThreshold: '80', limitsJson: '{ not json', configJson: '{}',
+    })
+
+    expect(page.context.saveScope.value).toBe('providerQuota')
+
+    await page.context.notifyStorageAlerts('plan')
+
+    // Shared-banner handlers own no block, so they must release the scope
+    // instead of leaving their message under the provider quota form.
+    expect(page.context.saveScope.value).toBe('')
 
     page.dispose()
   })

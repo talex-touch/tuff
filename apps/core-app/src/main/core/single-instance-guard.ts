@@ -23,6 +23,7 @@ export interface SingleInstanceGuardLogger {
 export interface SetupSingleInstanceGuardOptions {
   app: SingleInstanceAppLike
   startupBenchmarkMode: boolean
+  isolatedAcceptanceMode?: boolean
   emitSecondaryLaunch: (eventName: TalexEvents, payload: AppSecondaryLaunch) => void
   onDuplicateInstance: () => void
   createSecondaryLaunchEvent: (
@@ -38,14 +39,19 @@ export interface SetupSingleInstanceGuardOptions {
 export function setupSingleInstanceGuard({
   app,
   startupBenchmarkMode,
+  isolatedAcceptanceMode = false,
   emitSecondaryLaunch,
   createSecondaryLaunchEvent,
   secondaryLaunchEventName,
   onDuplicateInstance,
   logger
 }: SetupSingleInstanceGuardOptions): boolean {
-  if (startupBenchmarkMode) {
-    logger?.info?.('Startup benchmark mode enabled, skip single-instance lock')
+  if (startupBenchmarkMode || isolatedAcceptanceMode) {
+    logger?.info?.(
+      isolatedAcceptanceMode
+        ? 'Isolated packaged acceptance mode enabled, skip single-instance lock'
+        : 'Startup benchmark mode enabled, skip single-instance lock'
+    )
     return true
   }
 

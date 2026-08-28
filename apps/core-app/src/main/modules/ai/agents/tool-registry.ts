@@ -13,6 +13,14 @@ import type {
 import { createToolKit } from '@talex-touch/tuff-intelligence'
 import { z } from 'zod'
 import { createLogger } from '../../../utils/logger'
+import {
+  formatStableToolError,
+  projectToolError,
+  projectToolErrorCode,
+  type StableToolErrorCode,
+  type StableToolErrorProjection
+} from '../tool-error-projection'
+import { isApprovalRequiredControlError } from '../pi-agent-runtime-control-error'
 
 const toolRegistryLog = createLogger('Intelligence').child('ToolRegistry')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
@@ -28,6 +36,7 @@ export interface ToolExecutionContext {
   agentId: string
   workingDirectory?: string
   signal?: AbortSignal
+  errorProjection?: 'stable'
 }
 
 /**
@@ -38,6 +47,11 @@ export type ToolExecutorFn = (input: unknown, ctx: ToolExecutionContext) => Prom
 export interface ToolRegistryStats {
   total: number
   byCategory: Record<string, number>
+}
+
+export interface ToolExecutionResult extends ToolResult {
+  errorCode?: StableToolErrorCode
+  runtimeControl?: true
 }
 
 /**
@@ -65,7 +79,7 @@ export class ToolRegistry {
    */
   registerTool(definition: AgentTool, executor: ToolExecutorFn): void {
     if (this.tools.has(definition.id)) {
-      logWarn(`Tool ${definition.id} already registered, replacing`)
+      logWarn('Replacing an already registered tool')
     }
 
     this.tools.set(definition.id, {
@@ -74,7 +88,7 @@ export class ToolRegistry {
       registeredAt: Date.now()
     })
 
-    logInfo(`Registered tool: ${definition.id} (${definition.name})`)
+    logInfo('Registered agent tool')
   }
 
   registerTuffTool(tool: AnyTuffTool): void {
@@ -87,12 +101,12 @@ export class ToolRegistry {
    */
   unregisterTool(toolId: string): boolean {
     if (!this.tools.has(toolId)) {
-      logWarn(`Tool ${toolId} not found`)
+      logWarn('Agent tool was not registered')
       return false
     }
 
     this.tools.delete(toolId)
-    logInfo(`Unregistered tool: ${toolId}`)
+    logInfo('Unregistered agent tool')
     return true
   }
 
@@ -139,16 +153,20 @@ export class ToolRegistry {
     toolId: string,
     input: unknown,
     context: ToolExecutionContext
-  ): Promise<ToolResult> {
+  ): Promise<ToolExecutionResult> {
     const tool = this.tools.get(toolId)
     if (!tool) {
       return {
         success: false,
-        error: `Tool ${toolId} not found`
+        error:
+          context.errorProjection === 'stable'
+            ? formatStableToolError(projectToolErrorCode('TOOL_NOT_FOUND'))
+            : `Tool ${toolId} not found`,
+        ...(context.errorProjection === 'stable' ? { errorCode: 'TOOL_NOT_FOUND' as const } : {})
       }
     }
 
-    logDebug(`Executing tool ${toolId}`)
+    logDebug('Executing agent tool')
     const startTime = Date.now()
 
     try {
@@ -157,26 +175,47 @@ export class ToolRegistry {
       if (validationError) {
         return {
           success: false,
-          error: `Input validation failed: ${validationError}`
+          error:
+            context.errorProjection === 'stable'
+              ? formatStableToolError(projectToolErrorCode('TOOL_INPUT_INVALID'))
+              : `Input validation failed: ${validationError}`,
+          ...(context.errorProjection === 'stable'
+            ? { errorCode: 'TOOL_INPUT_INVALID' as const }
+            : {})
         }
       }
 
       // Execute the tool
       const output = await tool.executor(input, context)
 
-      logDebug(`Tool ${toolId} completed in ${Date.now() - startTime}ms`)
+      logDebug(`Agent tool completed in ${Date.now() - startTime}ms`)
 
       return {
         success: true,
         output
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logWarn(`Tool ${toolId} failed: ${errorMessage}`)
+      if (isApprovalRequiredControlError(error)) {
+        logWarn('Agent tool requires runtime control handling')
+        return {
+          success: false,
+          error: error.message,
+          runtimeControl: true
+        }
+      }
+
+      const projection = projectRegistryError(error)
+      logWarn(`Agent tool failed: ${formatStableToolError(projection)}`)
 
       return {
         success: false,
-        error: errorMessage
+        error:
+          context.errorProjection === 'stable'
+            ? formatStableToolError(projection)
+            : error instanceof Error
+              ? error.message
+              : String(error),
+        ...(context.errorProjection === 'stable' ? { errorCode: projection.code } : {})
       }
     }
   }
@@ -332,6 +371,24 @@ export function tuffToolResultToAgentToolResult(result: TuffToolInvocationResult
   }
 }
 
+function projectRegistryError(error: unknown): StableToolErrorProjection {
+  let declaredCode: unknown
+  try {
+    declaredCode =
+      error && typeof error === 'object' ? (error as Record<string, unknown>).code : undefined
+  } catch {
+    declaredCode = undefined
+  }
+  const declaredProjection = projectToolErrorCode(declaredCode)
+  if (
+    declaredProjection.code !== 'TOOL_EXECUTION_FAILED' ||
+    declaredCode === 'TOOL_EXECUTION_FAILED'
+  ) {
+    return declaredProjection
+  }
+  return projectToolError(error)
+}
+
 function tuffToolToAgentTool(tool: AnyTuffTool): {
   definition: AgentTool
   executor: ToolExecutorFn
@@ -365,7 +422,9 @@ function tuffToolToAgentTool(tool: AnyTuffTool): {
         }
       })
       if (!result.ok) {
-        throw new Error(result.error?.message || `Tool ${tool.id} failed`)
+        throw Object.assign(new Error(result.error?.message || `Tool ${tool.id} failed`), {
+          code: result.error?.code
+        })
       }
       return result.output
     }
