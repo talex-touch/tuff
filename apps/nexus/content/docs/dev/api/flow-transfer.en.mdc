@@ -187,45 +187,6 @@ code: |
 ---
 :::
 
-## Native System Sharing
-
-Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  type FlowSessionState =
-    | 'INIT'             // Initialized
-    | 'TARGET_SELECTING' // User is selecting a target
-    | 'TARGET_SELECTED'  // Target selected
-    | 'DELIVERING'       // Delivering
-    | 'DELIVERED'        // Delivered
-    | 'PROCESSING'       // Target is processing
-    | 'ACKED'            // Acknowledged
-    | 'FAILED'           // Failed
-    | 'CANCELLED'        // Cancelled
----
-:::
-
-## Error Handling
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  enum FlowErrorCode {
-    SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
-    TARGET_NOT_FOUND = 'TARGET_NOT_FOUND',
-    TARGET_OFFLINE = 'TARGET_OFFLINE',
-    PAYLOAD_INVALID = 'PAYLOAD_INVALID',
-    PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
-    TYPE_NOT_SUPPORTED = 'TYPE_NOT_SUPPORTED',
-    PERMISSION_DENIED = 'PERMISSION_DENIED',
-    TIMEOUT = 'TIMEOUT',
-    CANCELLED = 'CANCELLED',
-    INTERNAL_ERROR = 'INTERNAL_ERROR'
-  }
----
-:::
 
 ## Native System Share
 
