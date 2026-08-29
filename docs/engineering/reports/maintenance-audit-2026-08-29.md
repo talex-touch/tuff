@@ -13,6 +13,7 @@
 - **正式发行包是否必须包含截图 native addon 仍未决。** [#321](https://github.com/talex-touch/tuff/issues/321) 所述 release workflow 仍未构建或强制检查 Cargo screenshot addon，且无软件截图 fallback。应作出产品决策；推荐 release-only 构建并硬要求模块存在，再以真实 tag 三平台产物验证。
 - **OTA 的跨平台真机验收仍未闭环。** [#326](https://github.com/talex-touch/tuff/issues/326) 要先泛化 runtime-evidence schema/host-pair 校验，再采集 Windows/Linux N/N+1；macOS 官方 post-fix N/N+1 health acknowledgement 也尚未完成。当前 `08-23-release-cicd-ota-acceptance` 的 AC5–AC8 仍是 partial/blocked，不能发布为已验证。
 - **生产依赖安全门仍依赖将于 2026-11-09 到期的 Nuxt High allowlist。** [#1098](https://github.com/talex-touch/tuff/issues/1098) 的 `unhead` 2→3 迁移未完成；到期会令 prod-audit 直接失败。迁移前先固定并复查 Nuxt family 的兼容目标，不能继续以 allowlist 代替修复。
+- **默认分支仍有 34 个 Dependabot 告警。** GitHub push 回执报告 6 high、21 moderate、7 low；这些告警由 [#483](https://github.com/talex-touch/tuff/issues/483) 统一完成 reachability 与发布影响归类，不能只依赖 Nuxt allowlist 项作为全量依赖安全结论。
 - **Renderer CSP 仍为 report-only。** [#689](https://github.com/talex-touch/tuff/issues/689) 要先对 widget、Nexus、Sentry 等真实路径处理违规，再收紧 `default-src`/`connect-src`；字符串执行尚在时不可直接移除 `unsafe-eval`。
 
 ## 文档、路线图与工作治理
