@@ -16,7 +16,7 @@
 //     so nothing here ships to `dist/`.
 //
 // Runtime `withInstall`/`.install` registration is guarded separately by the
-// per-component install tests (grid/flat-button/progress/rating/timeline), which
+// per-component install tests (grid/progress/rating/timeline), which
 // `vitest run` can actually execute.
 //
 // MAINTENANCE — the scope of this file, and how to decide what to add:
@@ -67,7 +67,6 @@ import type {
 } from './src/context-menu/index'
 import type { DatePickerVariant } from './src/date-picker/index'
 import type { DividerGradient, DividerProps } from './src/divider/index'
-import type { FlatButtonProps, TuffFlatButtonInstance } from './src/flat-button/index'
 import type { FlatInputEmits, FlatInputProps, TxFlatInputInstance } from './src/flat-input/index'
 import type { TxFlatRadioContext, TxFlatRadioSize } from './src/flat-radio/index'
 import type {
@@ -85,7 +84,7 @@ import type {
   TxGridInstance,
   TxGridItemInstance,
 } from './src/grid/index'
-import type { TxIconButtonProps } from './src/icon-button/index'
+import type { TxIconButtonProps } from './src/button/index'
 import type { TxImageGalleryInstance } from './src/image-gallery/index'
 import type { KbdProps } from './src/kbd/index'
 import type { PopoverPlacement } from './src/popover/index'
@@ -138,9 +137,6 @@ export type MissingExportContract = [
   // divider
   DividerGradient,
   DividerProps,
-  // flat-button
-  FlatButtonProps,
-  TuffFlatButtonInstance,
   // flat-input
   FlatInputEmits,
   FlatInputProps,
@@ -161,7 +157,7 @@ export type MissingExportContract = [
   Responsive<number>,
   TxGridInstance,
   TxGridItemInstance,
-  // icon-button
+  // button (icon-button lives in the button entry)
   TxIconButtonProps,
   // image-gallery
   TxImageGalleryInstance,

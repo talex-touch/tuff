@@ -67,7 +67,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**152**。
+当前源码导出模块总数：**148**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -81,7 +81,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 通用、表单、布局、导航、数据展示、反馈与状态占位组件，从 `@talex-touch/tuffex/base` 引入。
 
-- `通用 (13)`: `button`, `flat-button`, `icon-button`, `copy-button`, `icon`, `os-icon`, `icon-chip`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
+- `通用 (9)`: `button`, `icon`, `icon-chip`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
 - `表单 (24)`: `form`, `input`, `flat-input`, `textarea`, `number-input`, `search-input`, `tag-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
 - `布局 (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `导航 (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`

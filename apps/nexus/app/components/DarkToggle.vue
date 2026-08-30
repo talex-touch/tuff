@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { TxIconButton } from '@talex-touch/tuffex/icon-button'
+import { TxIconButton } from '@talex-touch/tuffex/button'
 import { computed, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 

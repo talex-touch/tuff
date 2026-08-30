@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import TxIconButton from '../src/TxIconButton.vue'
+import TxIconButton from '../src/icon-button.vue'
 
 describe('txIconButton accessible name', () => {
   afterEach(() => {

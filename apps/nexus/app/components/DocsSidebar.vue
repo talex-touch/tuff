@@ -213,17 +213,13 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/utils',
     // base — Basic
     '/docs/dev/components/button',
-    '/docs/dev/components/flat-button',
-    '/docs/dev/components/icon-button',
-    '/docs/dev/components/copy-button',
     '/docs/dev/components/icon',
-    '/docs/dev/components/os-icon',
-    '/docs/dev/components/icon-chip',
     '/docs/dev/components/avatar',
     '/docs/dev/components/avatar-variants',
     '/docs/dev/components/tag',
     '/docs/dev/components/badge',
     '/docs/dev/components/status-badge',
+    '/docs/dev/components/icon-chip',
     '/docs/dev/components/kbd',
     '/docs/dev/components/divider',
     // base — Form
