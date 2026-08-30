@@ -187,13 +187,15 @@ prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after res
 
 ---
 
-## TuffEx Suite Taxonomy (base / pro / ai)
+## TuffEx Suite Taxonomy (concepts / base / pro / ai / data)
 
-Since 2026-08-30 every tuffex component belongs to exactly one suite; four places must stay in sync (they are test-gated, not convention-gated):
+Since 2026-08-30 every tuffex component belongs to exactly one docs suite; four places must stay in sync (they are test-gated, not convention-gated):
 
-- `apps/nexus/scripts/recategorize-component-docs.py` — `TAXONOMY` is the single source of truth for `category` frontmatter (17 categories; suites: base = Foundations/Basic/Form/Layout/Navigation/Data/Feedback/Status, pro = Advanced/Visualization/Effects/Primitives, ai = AiSuite/AiChat/AiAgent/AiReasoning/AiContext). Rerun with `--apply`; it errors on docs missing from the table.
-- `apps/nexus/app/components/DocsSidebar.vue` — `SUITES` + `CATEGORY_SUITE_MAP` + `SECTION_ORDER['/docs/dev/components']` drive the two-level sidebar (组件/扩展 underline tabs + 基础/进阶/AI suite switcher). The `misc`/其他 bucket must stay empty — it is the canary for taxonomy drift. Dark-mode rules in this file must use the `:global(.dark .selector)` whole-selector form; `:global(.dark) .selector` compiles to nothing here.
-- `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts` — category entry barrels; their union must equal `components.ts` with no overlap, guarded by `packages/components/src/__tests__/suite-barrels.test.ts`.
-- Hub `content/docs/dev/components/index.{zh,en}.mdc` — three suite H2 sections; every documented slug must keep a link (coverage test).
+- `apps/nexus/scripts/recategorize-component-docs.py` — `TAXONOMY` is the single source of truth for `category` frontmatter (20 categories; suites: concepts = Foundations, base = BaseSuite/Basic/Form/Layout/Navigation/Data/Feedback/Status, pro = ProSuite/Advanced/Effects/Primitives, ai = AiSuite/AiChat/AiAgent/AiReasoning/AiContext, data = Charts/Visualization). Rerun with `--apply`; it errors on docs missing from the table.
+- `apps/nexus/app/components/DocsSidebar.vue` — `SUITES` + `CATEGORY_SUITE_MAP` + `SECTION_ORDER['/docs/dev/components']` drive the two-level sidebar (组件/扩展 underline tabs + 理念/基础/进阶/AI/数据 suite switcher). The `misc`/其他 bucket must stay empty — it is the canary for taxonomy drift. Dark-mode rules in this file must use the `:global(.dark .selector)` whole-selector form; `:global(.dark) .selector` compiles to nothing here.
+- `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts` — category entry barrels; their union must equal `components.ts` with no overlap, guarded by `packages/components/src/__tests__/suite-barrels.test.ts`. The barrels stay three-way: the `data` suite is docs-level only — Visualization components keep importing from the pro barrel, and the chart family is the standalone `@talex-touch/tuffex-charts` package.
+- Hub `content/docs/dev/components/index.{zh,en}.mdc` — one H2 section per component suite (Basics/Advanced/AI/Data); every documented slug must keep a link (coverage test).
 
-Adding a component now also means: add its slug to `TAXONOMY` (pick the suite/category), add the dir to the matching suite barrel, and keep `SECTION_ORDER` in the same order as `TAXONOMY`. New chart components go to pro/Visualization.
+Every suite's first sidebar entry is its overview page (`standalonePages` in `SUITES`): concepts-suite (category `Foundations`), base-suite (`BaseSuite`), pro-suite (`ProSuite`), ai-suite (`AiSuite`); the data suite reuses `charts.mdc` (category `Charts` — the standalone slot consumes it before the group renders, so it never duplicates). Overview pages embed `::DocsComponentsGallery{suite="…"}` for a per-suite specimen grid.
+
+Adding a component now also means: add its slug to `TAXONOMY` (pick the suite/category), add the dir to the matching suite barrel (base/pro/ai only), and keep `SECTION_ORDER` in the same order as `TAXONOMY`. New chart components go to data/Visualization in the docs, with their import staying in the pro barrel — or into `@talex-touch/tuffex-charts` if they belong to the chart family.

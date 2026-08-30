@@ -1,0 +1,25 @@
+---
+title: Concepts Overview
+description: "The three concept blocks behind Tuffex: library positioning, design foundations, and utils"
+category: Foundations
+status: beta
+since: 0.3.9
+tags: [concepts, overview, foundations, utils]
+syncStatus: reviewed
+verified: false
+---
+
+## Tuffex Components
+
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Advanced** carries rich interaction and visual expression, **AI** carries AI-native interfaces, and **Data** carries visualization plus the standalone charts package. The suite switcher at the top of the sidebar follows this split, and the first entry of every suite is its overview page.
+
+- Live specimens: every cell in the [component preview](/docs/dev/components/index) is a real, interactive component; click its name to open the docs.
+- Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships as the standalone `@talex-touch/tuffex-charts` package.
+
+## Design Foundations
+
+The bottom layer of every component's visual is a set of `--tx-*` design tokens: the font stack with its size/weight scale, and color semantics for both light and dark themes (primary, success/warning/danger, layered text and fill). Components never define their own visuals — they consume this layer, so re-theming means changing tokens, and app-side customization should land on the same layer. The full inventory lives in [Design Foundations](/docs/dev/components/foundations).
+
+## Utils
+
+Public helper functions that ship alongside the components, exported from the root entry and the `./utils` subpath: `nextZIndex` for unified overlay stacking, `toast` notifications, dialog orchestration, environment guards (`hasWindow` and friends), haptics and animation helpers. The components themselves go through this same layer, so reusing it keeps app behavior consistent. The full API lives in [Utils](/docs/dev/components/utils).

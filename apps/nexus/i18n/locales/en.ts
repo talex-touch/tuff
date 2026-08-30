@@ -573,6 +573,7 @@ export default {
       base: 'Basics',
       pro: 'Advanced',
       ai: 'AI',
+      data: 'Data',
     },
     categories: {
       basic: 'General',

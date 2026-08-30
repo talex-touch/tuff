@@ -82,13 +82,16 @@ code: |
 
 | 套件 | 分组 | 组件数 | 引入入口 |
 |------|------|--------|----------|
-| 基础组件 | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 95 | `@talex-touch/tuffex/base` |
-| 进阶套件 | 高级交互 / 可视化 / 视觉效果 / 底层原语 | 31 | `@talex-touch/tuffex/pro` |
-| AI 套件 | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
+| [基础组件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 95 | `@talex-touch/tuffex/base` |
+| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
+| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
+| [数据](./charts.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化）+ `@talex-touch/tuffex-charts`（图表） |
+
+理念套件（组件库定位、设计基础与工具函数）见《[理念总览](./concepts-suite.zh.mdc)》。
 
 ## 基础组件
 
-日常界面的主体组件，通过 `@talex-touch/tuffex/base` 分类入口引入。设计基础见《[Foundations 设计基础](./foundations.zh.mdc)》，工具函数见《[Utils 工具函数](./utils.zh.mdc)》。
+日常界面的主体组件，通过 `@talex-touch/tuffex/base` 分类入口引入。套件总览见《[基础套件总览](./base-suite.zh.mdc)》，设计基础见《[Foundations 设计基础](./foundations.zh.mdc)》，工具函数见《[Utils 工具函数](./utils.zh.mdc)》。
 
 ### 通用
 
@@ -204,7 +207,7 @@ code: |
 
 ## 进阶套件
 
-高级交互、可视化、视觉效果与底层原语，通过 `@talex-touch/tuffex/pro` 分类入口引入。
+高级交互、视觉效果与底层原语，通过 `@talex-touch/tuffex/pro` 分类入口引入。套件总览见《[进阶套件总览](./pro-suite.zh.mdc)》。
 
 ### 高级交互
 
@@ -214,24 +217,6 @@ code: |
 - [CodeEditor 代码编辑器](./code-editor.zh.mdc)
 - [VirtualList 虚拟列表](./virtual-list.zh.mdc)
 - [VersionCapsule 版本胶囊](./version-capsule.zh.mdc)
-
-### 可视化
-
-- [SparkChart 迷你折线图](./spark-chart.zh.mdc)
-- [AllocationBar 占比条](./allocation-bar.zh.mdc)
-- [DiffTable 变更表格](./diff-table.zh.mdc)
-- [SignalMeter 信号量表](./signal-meter.zh.mdc)
-
-### 图表
-
-独立图表包 `@talex-touch/tuffex-charts`（kumo）的文档，与 tuffex 主包分开安装。
-
-- [Charts 图表](./charts.zh.mdc)
-- [Chart Colors 图表色板](./chart-colors.zh.mdc)
-- [TimeseriesChart 时序图](./timeseries-chart.zh.mdc)
-- [Maps 地图](./maps.zh.mdc)
-- [SankeyChart 桑基图](./sankey-chart.zh.mdc)
-- [Custom Chart 自定义图表](./custom-chart.zh.mdc)
 
 ### 视觉效果
 
@@ -304,6 +289,28 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 - [InsightCards 洞察卡](./insight-cards.zh.mdc)
 - [RecommendationCard 建议卡](./recommendation-card.zh.mdc)
 - [FineTuneCard 属性检查器](./fine-tune-card.zh.mdc)
+
+## 数据
+
+数据可视化与图表：tuffex 主包的可视化组件（经 `@talex-touch/tuffex/pro` 引入）+ 独立图表包 `@talex-touch/tuffex-charts`（kumo 同构、无 echarts）。套件总览即《[Charts 图表](./charts.zh.mdc)》。
+
+### 图表
+
+独立图表包 `@talex-touch/tuffex-charts`（kumo）的文档，与 tuffex 主包分开安装。
+
+- [Charts 图表](./charts.zh.mdc)
+- [Chart Colors 图表色板](./chart-colors.zh.mdc)
+- [TimeseriesChart 时序图](./timeseries-chart.zh.mdc)
+- [Maps 地图](./maps.zh.mdc)
+- [SankeyChart 桑基图](./sankey-chart.zh.mdc)
+- [Custom Chart 自定义图表](./custom-chart.zh.mdc)
+
+### 可视化
+
+- [SparkChart 迷你折线图](./spark-chart.zh.mdc)
+- [AllocationBar 占比条](./allocation-bar.zh.mdc)
+- [DiffTable 变更表格](./diff-table.zh.mdc)
+- [SignalMeter 信号量表](./signal-meter.zh.mdc)
 
 ## 审阅说明
 

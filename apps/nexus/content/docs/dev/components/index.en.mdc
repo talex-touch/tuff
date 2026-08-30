@@ -82,13 +82,16 @@ code: |
 
 | Suite | Groups | Components | Entry |
 |-------|--------|------------|-------|
-| Basics | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
-| Advanced | Interaction / Visualization / Effects / Primitives | 31 | `@talex-touch/tuffex/pro` |
-| AI Suite | Chat / Agents / Reasoning / Context & Insight | 29 | `@talex-touch/tuffex/ai` |
+| [Basics](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
+| [Advanced](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 29 | `@talex-touch/tuffex/ai` |
+| [Data](./charts.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization) + `@talex-touch/tuffex-charts` (charts) |
+
+The Concepts suite (library positioning, design foundations and utils) lives in the [Concepts Overview](./concepts-suite.en.mdc).
 
 ## Basics
 
-The everyday building blocks, importable through the `@talex-touch/tuffex/base` category entry. Design foundations live in [Foundations](./foundations.en.mdc); shared helpers in [Utils](./utils.en.mdc).
+The everyday building blocks, importable through the `@talex-touch/tuffex/base` category entry. Suite overview: [Basics Suite Overview](./base-suite.en.mdc). Design foundations live in [Foundations](./foundations.en.mdc); shared helpers in [Utils](./utils.en.mdc).
 
 ### General
 
@@ -204,7 +207,7 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 
 ## Advanced
 
-Rich interaction, visualization, visual effects and low-level primitives, importable through the `@talex-touch/tuffex/pro` category entry.
+Rich interaction, visual effects and low-level primitives, importable through the `@talex-touch/tuffex/pro` category entry. Suite overview: [Advanced Suite Overview](./pro-suite.en.mdc).
 
 ### Interaction
 
@@ -214,24 +217,6 @@ Rich interaction, visualization, visual effects and low-level primitives, import
 - [CodeEditor](./code-editor.en.mdc)
 - [VirtualList](./virtual-list.en.mdc)
 - [VersionCapsule](./version-capsule.en.mdc)
-
-### Visualization
-
-- [SparkChart](./spark-chart.en.mdc)
-- [AllocationBar](./allocation-bar.en.mdc)
-- [DiffTable](./diff-table.en.mdc)
-- [SignalMeter](./signal-meter.en.mdc)
-
-### Charts
-
-Docs for the standalone `@talex-touch/tuffex-charts` package (kumo), installed separately from the main tuffex package.
-
-- [Charts](./charts.en.mdc)
-- [Chart Colors](./chart-colors.en.mdc)
-- [TimeseriesChart](./timeseries-chart.en.mdc)
-- [Maps](./maps.en.mdc)
-- [SankeyChart](./sankey-chart.en.mdc)
-- [Custom Chart](./custom-chart.en.mdc)
 
 ### Effects
 
@@ -304,6 +289,28 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 - [InsightCards](./insight-cards.en.mdc)
 - [RecommendationCard](./recommendation-card.en.mdc)
 - [FineTuneCard](./fine-tune-card.en.mdc)
+
+## Data
+
+Data visualization and charts: the main package's visualization components (imported through `@talex-touch/tuffex/pro`) plus the standalone `@talex-touch/tuffex-charts` package (kumo-shaped, no echarts). The suite overview is the [Charts overview](./charts.en.mdc) itself.
+
+### Charts
+
+Docs for the standalone `@talex-touch/tuffex-charts` package (kumo), installed separately from the main tuffex package.
+
+- [Charts](./charts.en.mdc)
+- [Chart Colors](./chart-colors.en.mdc)
+- [TimeseriesChart](./timeseries-chart.en.mdc)
+- [Maps](./maps.en.mdc)
+- [SankeyChart](./sankey-chart.en.mdc)
+- [Custom Chart](./custom-chart.en.mdc)
+
+### Visualization
+
+- [SparkChart](./spark-chart.en.mdc)
+- [AllocationBar](./allocation-bar.en.mdc)
+- [DiffTable](./diff-table.en.mdc)
+- [SignalMeter](./signal-meter.en.mdc)
 
 ## Review Notes
 
