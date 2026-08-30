@@ -1,0 +1,30 @@
+{
+  "id": "docs-suite-split",
+  "name": "docs-suite-split",
+  "title": "Nexus 开发者文档三套件重构与 tuffex 分包",
+  "description": "开发者文档侧边栏改为下划线 tab 风格；组件文档拆分为基础组件/进阶套件/AI 套件（二级切换）；tuffex 提供 /base /pro /ai 三个分类入口",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-30",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "docs/maintenance-audit-2026-08-27",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-30-suite-taxonomy",
+    "08-30-sidebar-suite-tabs",
+    "08-30-tuffex-suite-entries"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
