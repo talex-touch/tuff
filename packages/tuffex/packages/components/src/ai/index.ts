@@ -1,0 +1,32 @@
+// Category entry: @talex-touch/tuffex/ai
+// ai AI 套件 — chat, agent, reasoning and context components for AI-native interfaces.
+// Membership mirrors the docs suite taxonomy
+// (apps/nexus/scripts/recategorize-component-docs.py); the union of the
+// base/pro/ai barrels must equal components.ts, with no overlap.
+export * from '../agent-trace/index'
+export * from '../agents/index'
+export * from '../ai-elements/index'
+export * from '../approval-card/index'
+export * from '../attachment-tray/index'
+export * from '../chain-of-thought/index'
+export * from '../chat/index'
+export * from '../code-stream/index'
+export * from '../context-cards/index'
+export * from '../context-indicator/index'
+export * from '../conversation-stream/index'
+export * from '../fine-tune-card/index'
+export * from '../inline-citation/index'
+export * from '../insight-cards/index'
+export * from '../message-actions/index'
+export * from '../prompt-bar/index'
+export * from '../reasoning-disclosure/index'
+export * from '../recommendation-card/index'
+export * from '../sources/index'
+export * from '../stream-markdown/index'
+export * from '../suggestion-chips/index'
+export * from '../task-rows/index'
+export * from '../thinking-orb/index'
+export * from '../tool-call-card/index'
+export * from '../tool-chips/index'
+export * from '../tool-confirmation/index'
+export * from '../working-indicator/index'
