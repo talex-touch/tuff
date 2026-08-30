@@ -46,6 +46,19 @@ export type {
   MapColors,
 } from './palette'
 
+export { computeSankeyLayout, resolveEdgeInset, TxSankeyChart } from './sankey'
+export type {
+  PositionedSankeyLink,
+  PositionedSankeyNode,
+  SankeyChartProps,
+  SankeyLayoutOptions,
+  SankeyLayoutResult,
+  SankeyLinkData,
+  SankeyNodeData,
+  SankeyTooltipParams,
+  TxSankeyChartInstance,
+} from './sankey'
+
 export {
   TxArcSeries,
   TxAreaSeries,
