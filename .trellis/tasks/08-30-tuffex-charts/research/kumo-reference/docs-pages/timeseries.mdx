@@ -1,0 +1,230 @@
+---
+layout: ~/layouts/MdxDocLayout.astro
+title: "Timeseries Chart"
+description: "A specialized chart for displaying time-based data."
+sourceFile: "components/chart"
+---
+
+import ComponentSection from "~/components/docs/ComponentSection.astro";
+import ComponentExample from "~/components/docs/ComponentExample.astro";
+import {
+  BasicLineChartDemo,
+  BarChartDemo,
+  ReferenceMarkersChartDemo,
+  ThresholdsChartDemo,
+  CustomAxisLabelFormatDemo,
+  GradientLineChartDemo,
+  IncompleteDataChartDemo,
+  LegendHighlightDemo,
+  LegendOnClickDemo,
+  LoadingChartDemo,
+  LoadingBarChartDemo,
+  TimeRangeSelectionChartDemo,
+  TooltipFollowCursorDemo,
+  TooltipBoundaryDemo,
+} from "~/components/demos/Chart/ChartDemo";
+
+<p>
+  The timeseries chart is a specialized chart for displaying time-based data.
+  Each data point is a tuple of <code>[timestamp_in_ms, value]</code>.
+</p>
+
+<ComponentSection>
+
+## Basic Line Chart
+
+<p>A simple line chart displaying multiple data series over time.</p>
+
+  <ComponentExample demo="BasicLineChartDemo">
+    <BasicLineChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Reference Markers
+
+<p>
+  Use the <code>markers</code> prop to render vertical reference lines at specific
+  timestamps, such as deployments, releases, or configuration changes. Markers
+  can include short labels, descriptions for tooltips, colors, and line styles.
+</p>
+
+  <ComponentExample demo="ReferenceMarkersChartDemo">
+    <ReferenceMarkersChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Thresholds
+
+<p>
+  Use the <code>thresholds</code> prop to render horizontal reference lines on the
+  value axis, such as memory limits or quota boundaries. Thresholds include a
+  value and color, with an optional label.
+</p>
+
+  <ComponentExample demo="ThresholdsChartDemo">
+    <ThresholdsChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Custom X-Axis Label Format
+
+<p>
+  Use the <code>xAxisTickLabelFormat</code> prop to control how x-axis tick
+  labels are rendered. The formatter receives the raw timestamp in milliseconds
+  and returns a display string, overriding ECharts' built-in time formatting.
+</p>
+
+  <ComponentExample demo="CustomAxisLabelFormatDemo">
+    <CustomAxisLabelFormatDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Gradient Fill
+
+<p>
+  Set <code>gradient</code> to <code>true</code> to render a vertical gradient
+  fill beneath each line series. The fill fades from the series color at the top
+  to transparent at the bottom, giving the chart a polished area-chart look
+  without losing the clarity of individual lines.
+</p>
+
+  <ComponentExample demo="GradientLineChartDemo">
+    <GradientLineChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Incomplete Data
+
+<p>
+  Use the <code>incomplete</code> prop to indicate regions where data may be
+  incomplete or still being collected.
+</p>
+
+  <ComponentExample demo="IncompleteDataChartDemo">
+    <IncompleteDataChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Time Range Selection
+
+<p>
+  Enable time range selection by providing the <code>onTimeRangeChange</code>
+  callback. Users can click and drag on the chart to select a time range.
+</p>
+
+  <ComponentExample demo="TimeRangeSelectionChartDemo">
+    <TimeRangeSelectionChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Tooltip Cursor Tracking
+
+<p>
+  Use the <code>tooltipFollowCursor</code> prop to control which axis the tooltip
+  tracks the cursor on. The default is <code>"both"</code>, which follows the
+  cursor freely. Set it to <code>"x"</code> for a Recharts-style axis-locked
+  tooltip that only moves horizontally.
+</p>
+
+  <ComponentExample demo="TooltipFollowCursorDemo">
+    <TooltipFollowCursorDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Tooltip Boundary
+
+<p>
+  Use the <code>tooltipBoundary</code> prop to constrain the tooltip to a
+  specific container element. By default the tooltip avoids overflowing any
+  clipping ancestor (scroll containers, viewports). Pass a DOM element to
+  restrict it further — useful when the chart lives inside a card or panel
+  and the tooltip shouldn't escape it.
+</p>
+
+  <ComponentExample demo="TooltipBoundaryDemo">
+    <TooltipBoundaryDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Bar Chart
+
+<p>
+  Set <code>type="bar"</code> to render series as stacked bars instead of lines.
+  All other props — axes, tooltips, colors — work identically.
+</p>
+
+  <ComponentExample demo="BarChartDemo">
+    <BarChartDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Legend Highlight
+
+<p>
+  Hovering a legend item highlights the corresponding series on the chart and
+  fades the others. Use <code>onPointerEnter</code> and{" "}
+  <code>onPointerLeave</code> on <code>ChartLegend</code> items together with{" "}
+  <code>dispatchAction</code> on the chart ref.
+</p>
+
+  <ComponentExample demo="LegendHighlightDemo">
+    <LegendHighlightDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Legend Click
+
+<p>
+  Clicking a <code>ChartLegend</code> item isolates that series, showing only
+  it and hiding the rest. Clicking the already-isolated series restores them
+  all.
+</p>
+
+  <ComponentExample demo="LegendOnClickDemo">
+    <LegendOnClickDemo client:visible />
+  </ComponentExample>
+</ComponentSection>
+
+<ComponentSection>
+
+## Loading State
+
+<p>
+  Set <code>loading</code> to <code>true</code> to show a skeleton that matches
+  the chart's <code>type</code> while data loads.
+</p>
+
+### Line
+
+  <ComponentExample demo="LoadingChartDemo">
+    <LoadingChartDemo client:only="react" />
+  </ComponentExample>
+
+### Bar
+
+  <ComponentExample demo="LoadingBarChartDemo">
+    <LoadingBarChartDemo client:only="react" />
+  </ComponentExample>
+</ComponentSection>

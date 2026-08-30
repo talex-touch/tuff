@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/08-30-tuffex-charts/design.md", "reason": "§5 props/emits/v-model 全表与行为移植清单"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/TimeseriesChart.tsx", "reason": "主实现参照（含二分/切分/骨架/兜底关闭）"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/timeseries-markers.ts", "reason": "聚簇算法移植源"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/timeseries-thresholds.ts", "reason": "阈值 extent 与标注"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/timeseries-tooltip.tsx", "reason": "tooltip rows 结构"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/docs-pages/timeseries.mdx", "reason": "14 个场景清单"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}
