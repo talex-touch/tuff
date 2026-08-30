@@ -395,7 +395,7 @@ describe('docs page performance boundaries', () => {
     expect.soft(docSection).not.toContain('<TxButton')
     expect.soft(docSection).not.toContain('<TxAutoSizer')
     expect.soft(docSection).toContain('<button\n      v-else')
-    expect.soft(docSection).toContain('class="DocSection-Header bg-transparent"')
+    expect.soft(docSection).toContain('class="DocSection-Header DocSection-Header--group bg-transparent"')
     expect.soft(docSection).toContain('class="DocSection-Body"')
     expect.soft(docSection).toContain('grid-template-rows: 0fr')
     expect.soft(docSection).toContain('grid-template-rows: 1fr')

@@ -186,6 +186,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/extensions/layout',
     '/docs/dev/extensions/search-sorting',
     '/docs/dev/extensions/toast',
+    '/docs/dev/extensions/cloud-sync',
     '/docs/dev/extensions/unplugin-export-plugin',
   ],
   '/docs/dev/intelligence': [
@@ -929,19 +930,37 @@ const sections = computed(() => {
   // Otherwise, show the files directly as a flat list
   const hasSubdirs = filtered.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
 
-  if (hasSubdirs) {
-    return filtered
-  }
+  const list = hasSubdirs
+    ? filtered
+    : // For flat file lists, wrap them in a single section
+      [
+        {
+          title: data.title,
+          path: data.path,
+          children: filtered,
+          page: false,
+        },
+      ]
 
-  // For flat file lists, wrap them in a single section
-  return [
-    {
-      title: data.title,
-      path: data.path,
-      children: filtered,
-      page: false,
-    },
-  ]
+  // Locale-suffixed index docs (e.g. index.zh) self-nest in the navigation tree:
+  // the node carries one child with the same title, which rendered as a group
+  // label duplicating its only link. Flatten those into a single page link.
+  return list.map((section: any) => {
+    const sectionChildren = Array.isArray(section.children) ? section.children : []
+    if (sectionChildren.length !== 1) return section
+
+    const child = sectionChildren[0]
+    const sectionTitle = itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined)
+    const childTitle = itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)
+    if (sectionTitle !== childTitle) return section
+
+    return {
+      title: child.title,
+      path: normalizeContentPath(child.path),
+      children: [],
+      page: true,
+    }
+  })
 })
 
 const expandedSections = ref<Record<string, boolean>>({})
@@ -1273,6 +1292,13 @@ onBeforeUnmount(() => {
   transform: scaleX(1);
 }
 
+/* Click focus otherwise leaves the UA blue focus ring on the tab; hover/active
+   styles carry the affordance instead. */
+.docs-tab-link:focus,
+.docs-tab-link:focus-visible {
+  outline: none;
+}
+
 .docs-tab-link--sub {
   padding: 5px 1px 7px;
   font-size: 12px;
@@ -1364,7 +1390,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 7px 8px 7px calc(2px + var(--wm-jitter-x2, 0px));
+  padding: 5px 8px 5px calc(2px + var(--wm-jitter-x2, 0px));
   font-size: 13px;
   line-height: 1.45;
   color: rgba(15, 23, 42, 0.6);
@@ -1390,6 +1416,12 @@ onBeforeUnmount(() => {
 :deep(.docs-nav-link.router-link-exact-active) {
   background: transparent !important;
   box-shadow: none !important;
+}
+
+/* Click focus otherwise leaves the UA blue focus ring on the active item. */
+:deep(.docs-nav-link:focus),
+:deep(.docs-nav-link:focus-visible) {
+  outline: none;
 }
 
 :global(.dark .docs-nav-list),

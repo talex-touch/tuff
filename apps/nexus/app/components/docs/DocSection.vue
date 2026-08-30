@@ -74,7 +74,7 @@ function handleToggle() {
 <style scoped>
 .DocSection {
   gap: 4px;
-  margin-block: 10px;
+  margin-block: 8px;
   transition: gap 0.2s ease, margin 0.2s ease;
 }
 
@@ -107,6 +107,12 @@ function handleToggle() {
   text-decoration: none;
 }
 
+/* Click focus otherwise leaves the UA blue focus ring on the header. */
+.DocSection-Header:focus,
+.DocSection-Header:focus-visible {
+  outline: none;
+}
+
 /* Group headers read as small uppercase muted labels (reference: Tailwind-docs
    style). text-transform only affects latin titles; zh labels share size/color. */
 .DocSection-Header--group {
@@ -124,7 +130,7 @@ function handleToggle() {
 /* Standalone page links are ordinary nav items, not labels. */
 .DocSection-Header--page {
   font-size: 13px;
-  padding-block: 6px;
+  padding-block: 5px;
   color: rgba(15, 23, 42, 0.6);
   transition: color 0.2s ease;
 }
