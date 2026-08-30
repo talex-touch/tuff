@@ -1,7 +1,7 @@
 ---
 title: "ContextCards"
 description: "Retrieved knowledge chunks shown with the sources they came from."
-category: Data
+category: AiContext
 status: beta
 since: 0.3.9
 tags: [rag, context, chunk, source, retrieval]

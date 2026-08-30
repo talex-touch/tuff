@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/08-30-tuffex-charts/design.md", "reason": "总体设计：§1 包结构、§2 依赖、§3 色彩系统"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/Color.ts", "reason": "ChartPalette 与色值的逐行移植源"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/Legend.tsx", "reason": "Legend Small/Large/loading 行为参照"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "包组织约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}

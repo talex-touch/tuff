@@ -9,19 +9,9 @@ verified: true
 
 ## 组件预览
 
-::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div class="tuff-demo-row">
-      <TxButton size="sm">操作</TxButton>
-      <TuffSwitch :model-value="true" />
-      <TxStatusBadge text="在线" status="success" />
-      <TxTag label="专注" />
-      <TxProgressBar :percentage="62" style="width: 140px;" />
-    </div>
-  </template>
----
+每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+
+::DocsComponentsGallery
 ::
 
 ## 组合工作台 Demo
@@ -88,27 +78,167 @@ code: |
 ::DocsComponentSyncTable
 ::
 
-## 章节总览
+## 套件总览
 
-| 章节 | 核心范围 | 当前状态 |
-|------|----------|----------|
-| 设计模式 | Surface / Motion / 组合样式 | ✅ migrated |
-| 设计案例 | 实战页面与复合范式 | ✅ migrated |
-| 暗黑模式与主题 | Token、深浅色与主题约束 | ✅ migrated |
-| 基础与操作 | Button / Icon / Avatar / Tag | ✅ migrated |
-| 表单与输入 | Input / Select / Form / Uploader | ✅ migrated |
-| 反馈与状态 | Dialog / Toast / Progress / Empty | ✅ migrated |
-| 布局与导航 | Grid / Container / Tabs / Menu | ✅ migrated |
-| 数据与列表 | DataTable / Tree / VirtualList | ✅ migrated |
-| 内容与媒体 | Chat / Markdown / Image | ✅ migrated |
+| 套件 | 分组 | 组件数 | 引入入口 |
+|------|------|--------|----------|
+| 基础组件 | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 95 | `@talex-touch/tuffex/base` |
+| 进阶套件 | 高级交互 / 可视化 / 视觉效果 / 底层原语 | 31 | `@talex-touch/tuffex/pro` |
+| AI 套件 | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
 
-## 设计模式
+## 基础组件
 
-- [Foundations 设计基础](./foundations.zh.mdc)
-- [BaseSurface 基础表面](./base-surface.zh.mdc)
+日常界面的主体组件，通过 `@talex-touch/tuffex/base` 分类入口引入。设计基础见《[Foundations 设计基础](./foundations.zh.mdc)》，工具函数见《[Utils 工具函数](./utils.zh.mdc)》。
+
+### 通用
+
+- [Button 按钮](./button.zh.mdc)
+- [Icon 图标](./icon.zh.mdc)
+- [Avatar 头像](./avatar.zh.mdc)
+- [Avatar Variants 头像变体](./avatar-variants.zh.mdc)
+- [Tag 标签](./tag.zh.mdc)
+- [Badge 徽标](./badge.zh.mdc)
+- [StatusBadge 状态徽标](./status-badge.zh.mdc)
+- [IconChip 图标角标](./icon-chip.zh.mdc)
+- [Kbd 快捷键](./kbd.zh.mdc)
+- [Divider 分割线](./divider.zh.mdc)
+
+### 表单
+
+- [Form 表单](./form.zh.mdc)
+- [Input 输入](./input.zh.mdc)
+- [FlatInput 扁平输入](./flat-input.zh.mdc)
+- [Textarea 多行输入](./textarea.zh.mdc)
+- [NumberInput 数字输入](./number-input.zh.mdc)
+- [SearchInput 搜索输入框](./search-input.zh.mdc)
+- [TagInput 标签输入](./tag-input.zh.mdc)
+- [ScrubField 拖拽数值域](./scrub-field.zh.mdc)
+- [Select 选择器](./select.zh.mdc)
+- [FlatSelect 扁平选择](./flat-select.zh.mdc)
+- [SearchSelect 搜索选择器](./search-select.zh.mdc)
+- [TreeSelect 树选择器](./tree-select.zh.mdc)
+- [Cascader 级联选择](./cascader.zh.mdc)
+- [Picker 滚轮选择](./picker.zh.mdc)
+- [DatePicker 日期选择](./date-picker.zh.mdc)
+- [Radio 单选框](./radio.zh.mdc)
+- [FlatRadio 平铺单选](./flat-radio.zh.mdc)
+- [Checkbox 复选框](./checkbox.zh.mdc)
+- [Switch 开关](./switch.zh.mdc)
+- [Slider 滑块](./slider.zh.mdc)
+- [SegmentedSlider 分段滑块](./segmented-slider.zh.mdc)
+- [Rating 评分](./rating.zh.mdc)
+- [FileUploader 文件上传](./file-uploader.zh.mdc)
+- [ImageUploader 图片上传](./image-uploader.zh.mdc)
+
+### 布局
+
+- [Container 容器](./container.zh.mdc)
+- [Flex 弹性布局](./flex.zh.mdc)
+- [Grid 栅格](./grid.zh.mdc)
+- [GridLayout 网格布局](./grid-layout.zh.mdc)
+- [Stack 堆叠](./stack.zh.mdc)
+- [Splitter 分割面板](./splitter.zh.mdc)
+- [Scroll 滚动](./scroll.zh.mdc)
+- [Collapse 折叠](./collapse.zh.mdc)
+- [Card 卡片](./card.zh.mdc)
+- [CardItem 卡片项](./card-item.zh.mdc)
+- [GroupBlock 分组块](./group-block.zh.mdc)
+
+### 导航
+
+- [Tabs 标签页](./tabs.zh.mdc)
+- [TabBar 底部导航](./tab-bar.zh.mdc)
+- [NavBar 导航栏](./nav-bar.zh.mdc)
+- [SidebarNav 侧边导航](./sidebar-nav.zh.mdc)
+- [Breadcrumb 面包屑](./breadcrumb.zh.mdc)
+- [Steps 步骤条](./steps.zh.mdc)
+- [Pagination 分页](./pagination.zh.mdc)
+- [DropdownMenu 下拉菜单](./dropdown-menu.zh.mdc)
+- [FlatDropdown 扁平下拉](./flat-dropdown.zh.mdc)
+- [ContextMenu 右键菜单](./context-menu.zh.mdc)
+
+### 数据展示
+
+- [DataTable 数据表格](./data-table.zh.mdc)
+- [Tree 树形](./tree.zh.mdc)
+- [SortableList 拖拽排序](./sortable-list.zh.mdc)
+- [Timeline 时间线](./timeline.zh.mdc)
+- [Transfer 穿梭框](./transfer.zh.mdc)
+- [StatCard 指标卡片](./stat-card.zh.mdc)
+- [CellLink 单元格链接](./cell-link.zh.mdc)
+- [DotIndicator 圆点指示器](./dot-indicator.zh.mdc)
+- [FilterChips 筛选胶囊](./filter-chips.zh.mdc)
+- [MarkdownView Markdown 渲染](./markdown-view.zh.mdc)
+- [ImageGallery 图片预览](./image-gallery.zh.mdc)
+
+### 反馈
+
+- [Dialog 弹窗](./dialog.zh.mdc)
+- [Modal 模态框](./modal.zh.mdc)
+- [Drawer 抽屉](./drawer.zh.mdc)
+- [Popover 弹出层](./popover.zh.mdc)
+- [Tooltip 提示](./tooltip.zh.mdc)
+- [Toast 提示](./toast.zh.mdc)
+- [Alert 提示条](./alert.zh.mdc)
+- [Progress 进度](./progress.zh.mdc)
+- [ProgressBar 进度条](./progress-bar.zh.mdc)
+- [Spinner 加载](./spinner.zh.mdc)
+- [LoadingOverlay 加载遮罩](./loading-overlay.zh.mdc)
+- [SelectionActions 划词工具条](./selection-actions.zh.mdc)
+
+### 状态占位
+
+- [Empty 空状态](./empty.zh.mdc)
+- [EmptyState 空态引导](./empty-state.zh.mdc)
+- [NoData 无数据](./no-data.zh.mdc)
+- [NoSelection 未选择](./no-selection.zh.mdc)
+- [SearchEmpty 搜索空态](./search-empty.zh.mdc)
+- [ErrorState 错误状态](./error-state.zh.mdc)
+- [OfflineState 离线](./offline-state.zh.mdc)
+- [PermissionState 权限不足](./permission-state.zh.mdc)
+- [GuideState 引导状态](./guide-state.zh.mdc)
+- [BlankSlate 空白页](./blank-slate.zh.mdc)
+- [LoadingState 加载态](./loading-state.zh.mdc)
+- [Skeleton 骨架屏](./skeleton.zh.mdc)
+- [LayoutSkeleton 布局骨架](./layout-skeleton.zh.mdc)
+
+## 进阶套件
+
+高级交互、可视化、视觉效果与底层原语，通过 `@talex-touch/tuffex/pro` 分类入口引入。
+
+### 高级交互
+
+- [CommandPalette 命令面板](./command-palette.zh.mdc)
+- [SearchPanel 内联搜索面板](./search-panel.zh.mdc)
+- [MarkdownEditor Markdown 编辑器](./markdown-editor.zh.mdc)
+- [CodeEditor 代码编辑器](./code-editor.zh.mdc)
+- [VirtualList 虚拟列表](./virtual-list.zh.mdc)
+- [VersionCapsule 版本胶囊](./version-capsule.zh.mdc)
+
+### 可视化
+
+- [SparkChart 迷你折线图](./spark-chart.zh.mdc)
+- [AllocationBar 占比条](./allocation-bar.zh.mdc)
+- [DiffTable 变更表格](./diff-table.zh.mdc)
+- [SignalMeter 信号量表](./signal-meter.zh.mdc)
+
+### 图表
+
+独立图表包 `@talex-touch/tuffex-charts`（kumo）的文档，与 tuffex 主包分开安装。
+
+- [Charts 图表](./charts.zh.mdc)
+- [Chart Colors 图表色板](./chart-colors.zh.mdc)
+- [TimeseriesChart 时序图](./timeseries-chart.zh.mdc)
+- [Maps 地图](./maps.zh.mdc)
+- [SankeyChart 桑基图](./sankey-chart.zh.mdc)
+- [Custom Chart 自定义图表](./custom-chart.zh.mdc)
+
+### 视觉效果
+
 - [GlassSurface 玻璃拟态](./glass-surface.zh.mdc)
 - [GradientBorder 渐变边框](./gradient-border.zh.mdc)
 - [OutlineBorder 描边容器](./outline-border.zh.mdc)
+- [BorderBeam 流光边框](./border-beam.zh.mdc)
 - [CornerOverlay 角标容器](./corner-overlay.zh.mdc)
 - [GradualBlur 渐变模糊](./gradual-blur.zh.mdc)
 - [EdgeFadeMask 边缘渐隐遮罩](./edge-fade-mask.zh.mdc)
@@ -118,182 +248,61 @@ code: |
 - [TextTransformer 文本变换](./text-transformer.zh.mdc)
 - [Transition 动效](./transition.zh.mdc)
 - [Stagger 依次进入](./stagger.zh.mdc)
-- [Floating 浮动层](./floating.zh.mdc)
 - [Fusion 交融](./fusion.zh.mdc)
-- [BorderBeam 流光边框](./border-beam.zh.mdc)
 - [Liquid 液态流体](./liquid.zh.mdc)
-- [Avatar Variants 头像变体](./avatar-variants.zh.mdc)
-
-## 设计案例
-
-- [Agents 智能体列表](./agents.zh.mdc)
-- [Chat 消息列表](./chat.zh.mdc)
-- [AI Elements AI 对话元素](./ai-elements.zh.mdc)
-- [SuggestionChips 建议胶囊](./suggestion-chips.zh.mdc)
-- [ContextIndicator 上下文用量](./context-indicator.zh.mdc)
-- [ReasoningDisclosure 推理过程](./reasoning-disclosure.zh.mdc)
-- [MessageActions 消息操作条](./message-actions.zh.mdc)
-- [Sources 引用来源](./sources.zh.mdc)
-- [ToolConfirmation 工具授权](./tool-confirmation.zh.mdc)
-- [ChainOfThought 推理时间线](./chain-of-thought.zh.mdc)
-- [ThinkingOrb 思考指示球](./thinking-orb.zh.mdc)
-- [ToolCallCard 工具调用卡片](./tool-call-card.zh.mdc)
-- [AttachmentTray 附件区](./attachment-tray.zh.mdc)
-- [ConversationStream 会话流](./conversation-stream.zh.mdc)
-- [StreamMarkdown 流式 Markdown](./stream-markdown.zh.mdc)
-- [ChatComposer 消息输入](./chat-composer.zh.mdc)
-- [MarkdownView Markdown 渲染](./markdown-view.zh.mdc)
-- [ImageGallery 图片预览](./image-gallery.zh.mdc)
-- [GroupBlock 分组块](./group-block.zh.mdc)
-- [Card 卡片](./card.zh.mdc)
-
-## 暗黑模式与主题
-
-- [Foundations 设计基础](./foundations.zh.mdc)（含亮暗色 token 与主题约束）
-- [StatusBadge 状态徽标](./status-badge.zh.mdc)
-- [EmptyState 空态引导](./empty-state.zh.mdc)
-- [ErrorState 错误状态](./error-state.zh.mdc)
-- [GuideState 引导状态](./guide-state.zh.mdc)
-
-## 基础与操作
-
-- [Button 按钮](./button.zh.mdc)
-- [FlatButton 扁平按钮](./flat-button.zh.mdc)
-- [Icon 图标](./icon.zh.mdc)
-- [Avatar 头像](./avatar.zh.mdc)
-- [Tag 标签](./tag.zh.mdc)
-- [Divider 分割线](./divider.zh.mdc)
-- [StatCard 指标卡片](./stat-card.zh.mdc)
-- [IconButton 图标按钮](./icon-button.zh.mdc)
-- [CopyButton 复制按钮](./copy-button.zh.mdc)
-- [Kbd 快捷键](./kbd.zh.mdc)
-- [OS Icon 系统图标](./os-icon.zh.mdc)
-- [Badge 徽标](./badge.zh.mdc)
-
-## 表单与输入
-
-- [Input 输入](./input.zh.mdc)
-- [CodeEditor 代码编辑器](./code-editor.zh.mdc)
-- [Textarea 多行输入](./textarea.zh.mdc)
-- [NumberInput 数字输入](./number-input.zh.mdc)
-- [FlatInput 扁平输入](./flat-input.zh.mdc)
-- [Select 选择器](./select.zh.mdc)
-- [MarkdownEditor Markdown 编辑器](./markdown-editor.zh.mdc)
-- [FlatRadio 平铺单选](./flat-radio.zh.mdc)
-- [FlatDropdown 扁平下拉](./flat-dropdown.zh.mdc)
-- [FlatSelect 扁平选择](./flat-select.zh.mdc)
-- [SearchInput 搜索输入框](./search-input.zh.mdc)
-- [SearchSelect 搜索选择器](./search-select.zh.mdc)
-- [Checkbox 复选框](./checkbox.zh.mdc)
-- [Radio 单选框](./radio.zh.mdc)
-- [Switch 开关](./switch.zh.mdc)
-- [Slider 滑块](./slider.zh.mdc)
-- [SegmentedSlider 分段滑块](./segmented-slider.zh.mdc)
-- [DatePicker 日期选择](./date-picker.zh.mdc)
-- [Picker 滚轮选择](./picker.zh.mdc)
-- [Cascader 级联选择](./cascader.zh.mdc)
-- [TagInput 标签输入](./tag-input.zh.mdc)
-- [Form 表单](./form.zh.mdc)
-- [FileUploader 文件上传](./file-uploader.zh.mdc)
-- [ImageUploader 图片上传](./image-uploader.zh.mdc)
-
-## 反馈与状态
-
-- [Dialog 弹窗](./dialog.zh.mdc)
-- [Alert 提示条](./alert.zh.mdc)
-- [Drawer 抽屉](./drawer.zh.mdc)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.mdc)
-- [Modal 模态框](./modal.zh.mdc)
-- [Toast 提示](./toast.zh.mdc)
-- [Tooltip 提示](./tooltip.zh.mdc)
-- [Popover 弹出层](./popover.zh.mdc)
+
+### 底层原语
+
+- [BaseSurface 基础表面](./base-surface.zh.mdc)
 - [BaseAnchor 锚点定位](./base-anchor.zh.mdc)
-- [LoadingState 加载态](./loading-state.zh.mdc)
-- [LoadingOverlay 加载遮罩](./loading-overlay.zh.mdc)
-- [Progress 进度](./progress.zh.mdc)
-- [ProgressBar 进度条](./progress-bar.zh.mdc)
-- [Spinner 加载](./spinner.zh.mdc)
-- [Empty 空状态](./empty.zh.mdc)
-- [EmptyState 空态引导](./empty-state.zh.mdc)
-- [OfflineState 离线](./offline-state.zh.mdc)
-- [PermissionState 权限不足](./permission-state.zh.mdc)
-- [SearchEmpty 搜索空态](./search-empty.zh.mdc)
-- [Skeleton 骨架屏](./skeleton.zh.mdc)
-- [Collapse 折叠](./collapse.zh.mdc)
-- [LayoutSkeleton 布局骨架](./layout-skeleton.zh.mdc)
-- [NoData 无数据](./no-data.zh.mdc)
-- [NoSelection 未选择](./no-selection.zh.mdc)
-- [BlankSlate 空白页](./blank-slate.zh.mdc)
-
-## 布局与导航
-
-- [Grid 栅格](./grid.zh.mdc)
-- [CardItem 卡片项](./card-item.zh.mdc)
-- [GridLayout 网格布局](./grid-layout.zh.mdc)
-- [Flex 弹性布局](./flex.zh.mdc)
-- [Stack 堆叠](./stack.zh.mdc)
-- [Container 容器](./container.zh.mdc)
-- [Splitter 分割面板](./splitter.zh.mdc)
-- [Scroll 滚动](./scroll.zh.mdc)
+- [Floating 浮动层](./floating.zh.mdc)
 - [AutoSizer 自适应尺寸](./auto-sizer.zh.mdc)
 - [ResizeBox 显式尺寸动画](./resize-box.zh.mdc)
-- [NavBar 导航栏](./nav-bar.zh.mdc)
-- [TabBar 底部导航](./tab-bar.zh.mdc)
-- [Tabs 标签页](./tabs.zh.mdc)
-- [Breadcrumb 面包屑](./breadcrumb.zh.mdc)
-- [DropdownMenu 下拉菜单](./dropdown-menu.zh.mdc)
-- [CommandPalette 命令面板](./command-palette.zh.mdc)
-- [ContextMenu 右键菜单](./context-menu.zh.mdc)
-- [VersionCapsule 版本胶囊](./version-capsule.zh.mdc)
 
-## 数据与列表
+## AI 套件
 
-- [DataTable 数据表格](./data-table.zh.mdc)
-- [Pagination 分页](./pagination.zh.mdc)
-- [Tree 树形](./tree.zh.mdc)
-- [TreeSelect 树选择器](./tree-select.zh.mdc)
-- [SortableList 拖拽排序](./sortable-list.zh.mdc)
-- [VirtualList 虚拟列表](./virtual-list.zh.mdc)
-- [Steps 步骤条](./steps.zh.mdc)
-- [Rating 评分](./rating.zh.mdc)
-- [Timeline 时间线](./timeline.zh.mdc)
-- [Transfer 穿梭框](./transfer.zh.mdc)
+AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifului.dev)（MIT），完整案例见《[AI 套件总览](./ai-suite.zh.mdc)》，通过 `@talex-touch/tuffex/ai` 分类入口引入。
 
-## 内容与媒体
+### 对话
 
 - [Chat 消息列表](./chat.zh.mdc)
 - [ChatComposer 消息输入](./chat-composer.zh.mdc)
+- [PromptBar 提示条](./prompt-bar.zh.mdc)
+- [AttachmentTray 附件区](./attachment-tray.zh.mdc)
+- [MessageActions 消息操作条](./message-actions.zh.mdc)
+- [SuggestionChips 建议胶囊](./suggestion-chips.zh.mdc)
 - [TypingIndicator 打字中](./typing-indicator.zh.mdc)
-- [MarkdownView Markdown 渲染](./markdown-view.zh.mdc)
-- [ImageGallery 图片预览](./image-gallery.zh.mdc)
+- [ConversationStream 会话流](./conversation-stream.zh.mdc)
 
-## AI 套件（Beautiful UI）
+### 智能体
 
-移植自 [Beautiful UI](https://www.beautifului.dev)（MIT）的 AI 原生界面组件族，完整案例见《[AI 套件总览](./ai-suite.zh.mdc)》。
-
-- [WorkingIndicator 工作指示器](./working-indicator.zh.mdc)
+- [Agents 智能体列表](./agents.zh.mdc)
 - [AgentTrace 智能体轨迹](./agent-trace.zh.mdc)
 - [TaskRows 任务行](./task-rows.zh.mdc)
+- [ToolCallCard 工具调用卡片](./tool-call-card.zh.mdc)
+- [ToolChips 工具调用流](./tool-chips.zh.mdc)
+- [ToolConfirmation 工具授权](./tool-confirmation.zh.mdc)
+- [ApprovalCard 澄清问卷卡](./approval-card.zh.mdc)
+- [WorkingIndicator 工作指示器](./working-indicator.zh.mdc)
+
+### 推理与生成
+
+- [AI Elements AI 对话元素](./ai-elements.zh.mdc)
+- [ChainOfThought 推理时间线](./chain-of-thought.zh.mdc)
+- [ReasoningDisclosure 推理过程](./reasoning-disclosure.zh.mdc)
+- [ThinkingOrb 思考指示球](./thinking-orb.zh.mdc)
+- [StreamMarkdown 流式 Markdown](./stream-markdown.zh.mdc)
 - [CodeStream 流式代码块](./code-stream.zh.mdc)
 - [InlineCitation 行内引用](./inline-citation.zh.mdc)
-- [PromptBar 提示条](./prompt-bar.zh.mdc)
-- [ApprovalCard 澄清问卷卡](./approval-card.zh.mdc)
-- [ToolChips 工具调用流](./tool-chips.zh.mdc)
-- [SignalMeter 信号量表](./signal-meter.zh.mdc)
-- [RecommendationCard 建议卡](./recommendation-card.zh.mdc)
-- [SelectionActions 划词工具条](./selection-actions.zh.mdc)
-- [DiffTable 变更表格](./diff-table.zh.mdc)
-- [FilterChips 筛选胶囊](./filter-chips.zh.mdc)
-- [DotIndicator 圆点指示器](./dot-indicator.zh.mdc)
-- [CellLink 单元格链接](./cell-link.zh.mdc)
+- [Sources 引用来源](./sources.zh.mdc)
+
+### 上下文与洞察
+
 - [ContextCards 检索片段卡](./context-cards.zh.mdc)
-- [SidebarNav 侧边导航](./sidebar-nav.zh.mdc)
-- [SearchPanel 内联搜索面板](./search-panel.zh.mdc)
-- [IconChip 图标角标](./icon-chip.zh.mdc)
-- [SparkChart 迷你折线图](./spark-chart.zh.mdc)
-- [AllocationBar 占比条](./allocation-bar.zh.mdc)
+- [ContextIndicator 上下文用量](./context-indicator.zh.mdc)
 - [InsightCards 洞察卡](./insight-cards.zh.mdc)
-- [ScrubField 拖拽数值域](./scrub-field.zh.mdc)
+- [RecommendationCard 建议卡](./recommendation-card.zh.mdc)
 - [FineTuneCard 属性检查器](./fine-tune-card.zh.mdc)
 
 ## 审阅说明
@@ -301,4 +310,5 @@ code: |
 - 中心页范围：本页是组件文档索引和组合 Demo 指南；单组件 API、Props、最佳实践细节由各组件详情页承载。
 - 源码注册表：`packages/tuffex/packages/components/src/components.ts` 定义文档覆盖测试使用的导出组件 slug 集合。
 - Demo 注册表：`apps/nexus/app/components/content/demo-registry.ts` 把本页每个 `TuffDemoWrapper` demo 映射到独立 Vue demo 文件。
+- 预览网格：`apps/nexus/app/components/docs/DocsComponentsGallery.vue` 渲染顶部「组件预览」网格。
 - **实测覆盖:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 校验导出组件具备中英文文档、本地化中心页链接已文档化组件、所有 demo 引用都能解析到已注册 Vue 文件。

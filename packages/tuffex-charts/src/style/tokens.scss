@@ -1,0 +1,87 @@
+// Chart color tokens. Values adapted from Cloudflare kumo (https://github.com/cloudflare/kumo),
+// © Cloudflare, Inc., MIT — packages/kumo/src/components/chart/Color.ts.
+//
+// Components read colors exclusively through these variables, so charts follow
+// the host theme with no `isDarkMode` prop. The JS `ChartPalette` mirrors the
+// same values for consumers that need literal hex strings outside a chart.
+// Both dark selectors are supported on purpose — tuffex hosts toggle either
+// `.dark` or `[data-theme='dark']` (see tuffex bui-tokens.scss).
+
+:root {
+  // Categorical palette, indexed by series position (wraps modulo 6).
+  --tx-chart-categorical-1: #4290f0; // Blue
+  --tx-chart-categorical-2: #f5b647; // Yellow
+  --tx-chart-categorical-3: #e8649d; // Pink
+  --tx-chart-categorical-4: #8d58ee; // Purple
+  --tx-chart-categorical-5: #50c3b6; // Teal
+  --tx-chart-categorical-6: #d37536; // Orange
+
+  // Semantic colors — convey status/severity, not series identity.
+  --tx-chart-semantic-attention: #fc574a;
+  --tx-chart-semantic-warning: #f8a054;
+  --tx-chart-semantic-success: #00a63e;
+  --tx-chart-semantic-neutral: #b9d6ff;
+  --tx-chart-semantic-disabled: #cbcbcb;
+  --tx-chart-semantic-skeleton: #dddddd;
+
+  // Sequential ramp (low → high), base color at position 3.
+  --tx-chart-sequential-blues-1: #e1eaf4;
+  --tx-chart-sequential-blues-2: #8ebcf6;
+  --tx-chart-sequential-blues-3: #4290f0;
+  --tx-chart-sequential-blues-4: #0e58b4;
+  --tx-chart-sequential-blues-5: #03254f;
+
+  // Axis/label text.
+  --tx-chart-text-primary: #6b7280;
+  --tx-chart-text-secondary: #9ca3af;
+
+  // Grid lines: primary text at 20% opacity.
+  --tx-chart-grid-line: color-mix(in srgb, var(--tx-chart-text-primary) 20%, transparent);
+
+  // GeoJSON maps: neutral land fill and the choropleth shading ramp
+  // (low → high), anchored on the shared chart blue.
+  --tx-chart-map-area: #e5e7eb;
+  --tx-chart-map-scale-1: #c8defb;
+  --tx-chart-map-scale-2: #8fbdf6;
+  --tx-chart-map-scale-3: #4290f0;
+  --tx-chart-map-scale-4: #1e60be;
+  --tx-chart-map-scale-5: #0a3a7a;
+
+  // Base color for loading placeholders. Name intentionally matches the tuffex
+  // skeleton override hook so a themed host restyles both with one variable.
+  --tx-skeleton-base-color: var(--tx-chart-semantic-skeleton);
+
+  // Halo behind marker/threshold labels so they stay readable over series.
+  --tx-chart-marker-label-bg: rgb(255 255 255 / 60%);
+}
+
+[data-theme='dark'],
+.dark {
+  // Only Yellow differs from light mode in the categorical set.
+  --tx-chart-categorical-2: #eeb720;
+
+  --tx-chart-semantic-neutral: #8ec5ff;
+  --tx-chart-semantic-disabled: #878787;
+  --tx-chart-semantic-skeleton: #5c5c5c;
+
+  // Reversed direction with the same base color; step 4 is tuned for dark
+  // backgrounds rather than being a mirror of light step 2.
+  --tx-chart-sequential-blues-1: #03254f;
+  --tx-chart-sequential-blues-2: #0e58b4;
+  --tx-chart-sequential-blues-3: #4290f0;
+  --tx-chart-sequential-blues-4: #a6bfdd;
+  --tx-chart-sequential-blues-5: #e1eaf4;
+
+  --tx-chart-text-primary: #9ca3af;
+  --tx-chart-text-secondary: #6b7280;
+
+  --tx-chart-marker-label-bg: rgb(0 0 0 / 50%);
+
+  --tx-chart-map-area: #2b2c31;
+  // Higher values read brighter against the dark base.
+  --tx-chart-map-scale-1: #26456c;
+  --tx-chart-map-scale-2: #2c68be;
+  --tx-chart-map-scale-3: #4290f0;
+  --tx-chart-map-scale-4: #79aef4;
+  --tx-chart-map-scale-5: #bbd6fa;
+}

@@ -175,11 +175,14 @@ const middleware = computed(() => [
   arrow({ element: arrowRef, padding: 6 }),
 ])
 
-const { floatingStyles, middlewareData, placement, update } = useFloating(floatingReference as any, floatingRef, {
+const { floatingStyles, middlewareData, placement, update, isPositioned } = useFloating(floatingReference as any, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
   transform: false,
   middleware,
+  // Lets `isPositioned` reset on close, so each open can wait for its own
+  // first positioning pass before animating.
+  open,
 })
 
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
@@ -295,6 +298,11 @@ function scheduleResizeUpdate() {
   resizeUpdateFrame = window.requestAnimationFrame(() => {
     resizeUpdateFrame = null
     syncOutlineSize()
+    // The box-grow timeline resizes the panel every frame, so the
+    // ResizeObserver fires continuously during it; repositioning against those
+    // transient heights would let flip bounce the panel between sides.
+    if (hasActiveTimeline())
+      return
     void update()
     refreshLiquidStage()
   })
@@ -805,6 +813,52 @@ function handleEsc(e: KeyboardEvent) {
   close()
 }
 
+/**
+ * Flip resolves asynchronously: animating before floating-ui's first
+ * positioning pass lands would start the expand on the *requested* side (and
+ * scale from that side's origin), then visibly jump when the panel flips to
+ * the other side. The timeout keeps a stalled pass degrading to the old
+ * behaviour instead of never showing the panel.
+ */
+function waitForFirstPosition(): Promise<void> {
+  if (isPositioned.value)
+    return Promise.resolve()
+  return new Promise((resolve) => {
+    let stop: (() => void) | null = null
+    const timer = setTimeout(() => {
+      stop?.()
+      resolve()
+    }, 150)
+    stop = watch(isPositioned, (positioned) => {
+      if (!positioned)
+        return
+      clearTimeout(timer)
+      stop?.()
+      resolve()
+    })
+  })
+}
+
+/**
+ * Panel content is commonly async (lazy-registered components), so the first
+ * positioning pass can run against a near-empty panel whose height then grows —
+ * flipping the resolved side after the expand has already started. Hold the
+ * animation until the panel keeps the same height for two consecutive frames,
+ * with a frame cap so pathological content can't stall the open.
+ */
+async function waitForStablePanelSize(): Promise<void> {
+  let last = -1
+  for (let i = 0; i < 10; i++) {
+    await new Promise<number>(resolve => requestAnimationFrame(resolve))
+    const height = floatingRef.value?.offsetHeight ?? 0
+    // Two consecutive frames at the same height count as stable even at 0 —
+    // layoutless environments (jsdom) never report a height at all.
+    if (i > 0 && height === last)
+      return
+    last = height
+  }
+}
+
 /* ─── watch open state ─── */
 watch(
   open,
@@ -843,6 +897,8 @@ watch(
       cleanupAutoUpdate.value?.()
       if (props.virtualReference) {
         const updatePosition = () => {
+          if (hasActiveTimeline())
+            return
           update()
           refreshLiquidStage()
         }
@@ -858,6 +914,13 @@ watch(
           reference,
           floatingRef.value,
           () => {
+            // The expand/collapse timeline animates the panel's *real* height,
+            // and flip would read that mid-animation height: opened near the
+            // viewport bottom, a half-grown panel "fits below" and the side
+            // bounces bottom→top while it grows. Hold repositioning until the
+            // timeline settles; the next frame's tick re-syncs everything.
+            if (hasActiveTimeline())
+              return
             const referenceMoved = hasReferenceMoved()
             update()
             if (referenceMoved && open.value && props.panelBackground !== 'refraction') {
@@ -873,6 +936,12 @@ watch(
     }
 
     await nextTick()
+    await waitForFirstPosition()
+    if (currentRunId !== runId)
+      return
+    await waitForStablePanelSize()
+    if (currentRunId !== runId)
+      return
     lastReferenceRect = readReferenceRect()
     syncOutlineSize()
     animateOpen(currentRunId)

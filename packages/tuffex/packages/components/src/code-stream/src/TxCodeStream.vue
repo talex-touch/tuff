@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import type { CodeStreamProps } from './types'
 import { computed, ref, useSlots, watch } from 'vue'
-import TxCopyButton from '../../copy-button/src/TxCopyButton.vue'
+import TxCopyButton from '../../button/src/copy-button.vue'
 import { highlightToHtml } from '../../stream-markdown/src/shiki-runtime'
 import { useAutoTheme } from '../../stream-markdown/src/use-auto-theme'
 
