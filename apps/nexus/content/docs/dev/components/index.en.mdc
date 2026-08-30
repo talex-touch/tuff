@@ -9,19 +9,9 @@ verified: true
 
 ## Preview
 
-::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div class="tuff-demo-row">
-      <TxButton size="sm">Action</TxButton>
-      <TuffSwitch :model-value="true" />
-      <TxStatusBadge text="Online" status="success" />
-      <TxTag label="Focus" />
-      <TxProgressBar :percentage="62" style="width: 140px;" />
-    </div>
-  </template>
----
+Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+
+::DocsComponentsGallery
 ::
 
 ## Composed Workspace Demo
@@ -301,5 +291,6 @@ AI-native interface components adapted from [Beautiful UI](https://www.beautiful
 - Hub scope: this page is a component documentation index and composed-demo guide; per-component API / props / best-practice details live in the linked component pages.
 - Source registry: `packages/tuffex/packages/components/src/components.ts` defines the exported component slug set used by docs coverage.
 - Demo registry: `apps/nexus/app/components/content/demo-registry.ts` maps each `TuffDemoWrapper` demo on this page to a standalone Vue demo file.
+- Preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders the "Preview" grid at the top of this page.
 - **Verified coverage:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies exported components have English and Chinese docs, localized hubs link documented components, and all demo references resolve to registered Vue files.
 

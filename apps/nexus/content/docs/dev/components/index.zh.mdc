@@ -9,19 +9,9 @@ verified: true
 
 ## 组件预览
 
-::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div class="tuff-demo-row">
-      <TxButton size="sm">操作</TxButton>
-      <TuffSwitch :model-value="true" />
-      <TxStatusBadge text="在线" status="success" />
-      <TxTag label="专注" />
-      <TxProgressBar :percentage="62" style="width: 140px;" />
-    </div>
-  </template>
----
+每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+
+::DocsComponentsGallery
 ::
 
 ## 组合工作台 Demo
@@ -301,4 +291,5 @@ code: |
 - 中心页范围：本页是组件文档索引和组合 Demo 指南；单组件 API、Props、最佳实践细节由各组件详情页承载。
 - 源码注册表：`packages/tuffex/packages/components/src/components.ts` 定义文档覆盖测试使用的导出组件 slug 集合。
 - Demo 注册表：`apps/nexus/app/components/content/demo-registry.ts` 把本页每个 `TuffDemoWrapper` demo 映射到独立 Vue demo 文件。
+- 预览网格：`apps/nexus/app/components/docs/DocsComponentsGallery.vue` 渲染顶部「组件预览」网格。
 - **实测覆盖:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 校验导出组件具备中英文文档、本地化中心页链接已文档化组件、所有 demo 引用都能解析到已注册 Vue 文件。
