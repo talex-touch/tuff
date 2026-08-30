@@ -6,18 +6,19 @@ this field, so it is the single source of truth for sidebar structure.
 
 Categories roll up into three suites via DocsSidebar's CATEGORY_SUITE_MAP:
 
+- concepts 理念: Foundations (foundations, utils — standalone pages)
 - base 基础组件: Basic, Form, Layout, Navigation, Data, Feedback, Status
-- pro  进阶套件: Advanced, Visualization, Effects, Primitives
+- pro  进阶套件: Advanced, Visualization, Charts, Effects, Primitives
 - ai   AI 套件:  AiChat, AiAgent, AiReasoning, AiContext
 
 The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
 keep this file, DocsSidebar.vue and the tuffex base/pro/ai entry barrels in sync.
 
-`Foundations` (foundations, utils → base) and `AiSuite` (ai-suite → ai) are special
+`Foundations` (foundations, utils → concepts) and `AiSuite` (ai-suite → ai) are special
 cases: the sidebar renders them as standalone links inside their suite rather than
 as collapsible groups.
 
-Future chart components (tuffex-charts work) belong in pro / "Visualization".
+Chart docs (standalone @talex-touch/tuffex-charts package) live in pro / "Charts".
 """
 
 from __future__ import annotations
@@ -111,6 +112,7 @@ TAXONOMY: dict[str, list[str]] = {
         "markdown-view",
         "image-gallery",
     ],
+    # @talex-touch/tuffex-charts (independent package; kumo-parity chart family)
     "Feedback": [
         "dialog",
         "modal",
@@ -172,6 +174,15 @@ TAXONOMY: dict[str, list[str]] = {
         "fusion",
         "liquid",
         "flip-overlay",
+    ],
+    # Docs for the standalone @talex-touch/tuffex-charts package (kumo).
+    "Charts": [
+        "charts",
+        "chart-colors",
+        "timeseries-chart",
+        "maps",
+        "sankey-chart",
+        "custom-chart",
     ],
     # Infrastructure that other components are built on; rarely used directly.
     "Primitives": [

@@ -1,0 +1,198 @@
+---
+title: "TimeseriesChart 时序图"
+description: "时序折线与堆叠柱：标记聚簇、阈值线、刷选时间范围、tooltip 全功能。"
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, timeseries, line, bar]
+syncStatus: reviewed
+verified: true
+---
+# TimeseriesChart 时序图
+
+## 基础用法
+
+`data` 是序列数组，每条序列的 `data` 是按时间排序的 `[timestamp_ms, value]` 元组。`color` 可省略——按序列位次落到分类色板，位次固定，隐藏某条序列不会让其余序列换色。悬停出 tooltip：多序列按值降序，同名序列去重，二分查找最近采样点。
+
+### 双序列折线
+
+:::TuffDemoWrapper{demo="TimeseriesChartBasicDemo" code-lang="vue" title="折线 + 轴格式化" description="xAxisTickFormat / tooltipValueFormat 自定义刻度与数值文本。"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+
+  const data = [
+    { name: 'Requests', data: requests },
+    { name: 'Cache hits', data: cacheHits },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      x-axis-name="Time"
+      y-axis-name="Count"
+      :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
+      :tooltip-value-format="(v) => `${v} req/s`"
+    />
+  </template>
+---
+:::
+
+## 标记与阈值
+
+`markers` 在时间轴上画竖虚线；挤在一起的标记按可视跨度自动聚簇成一条线，标签变成「N changes」（`clusterLabel` 可换文案），悬停标记线可见每条的 `label` 与 `description`。`thresholds` 在数值轴上画水平线，y 轴范围会自动扩到覆盖阈值。
+
+### 部署标记 + SLO 线
+
+:::TuffDemoWrapper{demo="TimeseriesChartMarkersDemo" code-lang="vue" title="Markers + Thresholds" description="后两个标记相距很近，被聚成一簇。"}
+---
+code: |
+  <script setup lang="ts">
+  const markers = [
+    { timestamp: t1, label: 'Deploy v2.4', description: 'Rollout to 50%.' },
+    { timestamp: t2, label: 'Config change' },
+    { timestamp: t2 + tiny, label: 'Alert fired' },
+  ]
+  const thresholds = [
+    { value: 300, label: 'SLO 300ms', color: ChartPalette.semantic('Attention') },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart :data="data" :markers="markers" :thresholds="thresholds" />
+  </template>
+---
+:::
+
+## 渐变与不完整数据
+
+`gradient` 给折线加纵向渐变填充（序列色 40% → 透明）。`incomplete` 声明 `[before, after]` 之外的数据不完整：边界外的段画成虚线，且与实线段重叠一个采样点保证连线不断。
+
+### 渐变 + 两端虚线
+
+:::TuffDemoWrapper{demo="TimeseriesChartGradientDemo" code-lang="vue" title="Gradient + Incomplete" description="首尾各三小时是不完整周期。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      gradient
+      :incomplete="{ before: start + 3 * hour, after: start + 20 * hour }"
+    />
+  </template>
+---
+:::
+
+## 柱状堆叠
+
+`type="bar"` 下所有序列自动堆叠（同 kumo 的 `stack: 'total'`），y 轴范围按每个时间点的堆叠总量计算。
+
+### 按天堆叠
+
+:::TuffDemoWrapper{demo="TimeseriesChartBarDemo" code-lang="vue" title="Stacked bars" description="三条序列堆在同一根柱上。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart type="bar" :data="data" :x-axis-tick-format="formatDay" />
+  </template>
+---
+:::
+
+## 刷选时间范围
+
+监听 `time-range-change` 即自动启用横向刷选：在绘图区拖拽出选区，松手回调 `(from, to)` 毫秒时间戳并清除选区。太短的拖拽（< 3px）视为点击不触发。
+
+### 拖拽选段
+
+:::TuffDemoWrapper{demo="TimeseriesChartRangeDemo" code-lang="vue" title="Brush selection" description="拖拽后下方显示所选区间。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart :data="data" @time-range-change="(from, to) => (range = [from, to])" />
+  </template>
+---
+:::
+
+## 图例联动
+
+`v-model:hidden-series` 双向绑定被隐藏的序列名数组：隐藏的序列不画、tooltip 也跳过。`highlighted-series` 高亮一条序列，其余降到 30% 不透明度。两者配合 `TxChartLegendItem` 即得可点击、可悬停高亮的图例。
+
+### 点击隐藏 + 悬停高亮
+
+:::TuffDemoWrapper{demo="TimeseriesChartLegendDemo" code-lang="vue" title="Legend interplay" description="点图例项切换显隐，悬停高亮对应序列。"}
+---
+code: |
+  <template>
+    <TxChartLegendItem
+      v-for="(name, i) in names"
+      :key="name"
+      :name="name"
+      :color="ChartPalette.categoricalVar(i)"
+      value=""
+      :inactive="hidden.includes(name)"
+      @click="toggle(name)"
+      @pointerenter="highlighted = name"
+      @pointerleave="highlighted = null"
+    />
+    <TxTimeseriesChart v-model:hidden-series="hidden" :data="data" :highlighted-series="highlighted" />
+  </template>
+---
+:::
+
+## 加载骨架
+
+`loading` 用谐波波形骨架替换图表，折线与柱状两种形态共享同一条轮廓；shimmer 尊重 `prefers-reduced-motion`。
+
+### 骨架轮播
+
+:::TuffDemoWrapper{demo="TimeseriesChartLoadingDemo" code-lang="vue" title="Loading skeleton" description="loading 循环开关，交替展示 line / bar 两种骨架。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart :data="data" :type="type" :loading="loading" />
+  </template>
+---
+:::
+
+## API
+
+### TimeseriesChart Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `data` | `TimeseriesData[]` | — | `{ name, data: [ts, value][], color? }`；`color` 缺省按位次取分类色。 |
+| `type` | `'line' \| 'bar'` | `'line'` | 柱状自动堆叠。 |
+| `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`。 |
+| `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`，y 轴自动扩展覆盖。 |
+| `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
+| `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | 建议刻度数。 |
+| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。 |
+| `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
+| `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
+| `tooltipMaxItems` | `number` | `10` | 超出折叠为「+N more」。 |
+| `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` 时垂直位置固定，避免抖动。 |
+| `incomplete` | `{ before?, after? }` | — | 不完整周期（仅 line）。 |
+| `gradient` | `boolean` | `false` | 折线渐变填充。 |
+| `loading` | `boolean` | `false` | 骨架态。 |
+| `highlightedSeries` | `string \| null` | — | 高亮序列，其余 30% 不透明度。 |
+| `height` | `number` | `350` | 像素高度。 |
+| `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
+| `ariaDescription` | `string` | — | 无障碍描述（svg `role="img"`）。 |
+| `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | 聚簇标签文案。 |
+| `timestampFormat` | `(ts: number) => string` | 紧凑本地化 | tooltip 时间行格式。 |
+
+### TimeseriesChart Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `time-range-change` | `(from: number, to: number)` | 刷选完成。挂上即启用刷选。 |
+| `update:hiddenSeries` | `(names: string[])` | `v-model:hidden-series` 写回。 |
+
+## 与 kumo 的差异
+
+- `enableLegendSelection` + echarts 命令式 action → `v-model:hidden-series` 声明式绑定；高亮用 `highlighted-series`。
+- `tooltipBoundary`（clipping-ancestors 碰撞）简化为容器钳制 + 视口翻转。
+- 刷选拖拽过程中不做选区外 30% 变淡（kumo 的 outOfBrush 瞬态），只画选区矩形。
+- 建议每条序列 ≤ 5k 点：SVG 渲染在万点级会出现掉帧。

@@ -222,6 +222,17 @@ code: |
 - [DiffTable 变更表格](./diff-table.zh.mdc)
 - [SignalMeter 信号量表](./signal-meter.zh.mdc)
 
+### 图表
+
+独立图表包 `@talex-touch/tuffex-charts`（kumo）的文档，与 tuffex 主包分开安装。
+
+- [Charts 图表](./charts.zh.mdc)
+- [Chart Colors 图表色板](./chart-colors.zh.mdc)
+- [TimeseriesChart 时序图](./timeseries-chart.zh.mdc)
+- [Maps 地图](./maps.zh.mdc)
+- [SankeyChart 桑基图](./sankey-chart.zh.mdc)
+- [Custom Chart 自定义图表](./custom-chart.zh.mdc)
+
 ### 视觉效果
 
 - [GlassSurface 玻璃拟态](./glass-surface.zh.mdc)

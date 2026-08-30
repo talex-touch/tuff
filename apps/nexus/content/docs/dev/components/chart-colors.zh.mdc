@@ -1,0 +1,70 @@
+---
+title: "Chart Colors 图表色板"
+description: "分类、语义、顺序与地图色板：CSS 变量随主题自动切换，ChartPalette 提供字面值。"
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, color, palette, theme]
+syncStatus: reviewed
+verified: true
+---
+# Chart Colors 图表色板
+
+## 双轨取色
+
+图表组件内部**只**读 `--tx-chart-*` CSS 变量，`.dark` 或 `[data-theme='dark']` 下自动换成暗色值——所以没有 `isDarkMode` prop。`ChartPalette` 则给包外场景（周边 UI 对色、导出图片、canvas）提供十六进制字面值，函数签名与 kumo 同名同形，带 `isDark` 参数。
+
+### 色板总览
+
+:::TuffDemoWrapper{demo="ChartColorsPaletteDemo" code-lang="vue" title="分类 / 语义 / 顺序" description="切换站点主题可见变量自动翻转。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex-charts'
+
+  const sequential = ChartPalette.sequential('blues')
+  </script>
+
+  <template>
+    <span
+      v-for="index in 6"
+      :key="index"
+      :style="{ background: ChartPalette.categoricalVar(index - 1) }"
+    />
+  </template>
+---
+:::
+
+## 三套色板
+
+- **分类（categorical）**：6 色按序列位次轮转（模 6 回绕），第 1 位蓝 `#4290F0` 同时是全家族的锚色。暗色下只有 Yellow 换值。
+- **语义（semantic）**：`Attention` / `Warning` / `Success` / `Neutral` / `Disabled` / `Skeleton`，表达状态而非序列身份；暗色下 Neutral / Disabled / Skeleton 换值。
+- **顺序（sequential）**：`blues` 五档，低→高；暗色是方向反转的一套（第 4 档为暗底单独调过，不是简单镜像）。
+
+地图另有一套 `--tx-chart-map-*`（陆地底色 + 五档分级色阶），见 [Maps](/docs/dev/components/maps)。
+
+## API
+
+### ChartPalette
+
+| 方法 | 返回 | 说明 |
+|------|------|------|
+| `categorical(index, isDark?)` | `string` | 第 `index` 位分类色（模 6 回绕）。 |
+| `categoricalVar(index)` | `string` | 同一位次的 `var(--tx-chart-categorical-N, #hex)` 引用，跟随主题。 |
+| `semantic(name, isDark?)` | `string` | 语义色，`name` 为 `'Attention'` 等六个之一。 |
+| `sequential('blues', isDark?)` | `string[]` | 顺序色板五档（每次返回新数组）。 |
+| `text('primary' \| 'secondary', isDark?)` | `string` | 轴与标签文本色。 |
+| `mapColors(isDark?)` | `MapColors` | `{ area, bubble, scale[] }` 地图配色。 |
+
+### CSS 变量
+
+| 变量 | 说明 |
+|------|------|
+| `--tx-chart-categorical-1..6` | 分类色板。 |
+| `--tx-chart-semantic-attention/-warning/-success/-neutral/-disabled/-skeleton` | 语义色。 |
+| `--tx-chart-sequential-blues-1..5` | 顺序色阶。 |
+| `--tx-chart-text-primary/-secondary` | 文本色。 |
+| `--tx-chart-grid-line` | 网格线（主文本色 20% 透明度）。 |
+| `--tx-chart-map-area` / `--tx-chart-map-scale-1..5` | 地图陆地与分级色阶。 |
+
+所有变量都带亮色 fallback，包可以脱离 tuffex 独立使用；宿主想换品牌色时覆盖变量即可，组件零改动。
