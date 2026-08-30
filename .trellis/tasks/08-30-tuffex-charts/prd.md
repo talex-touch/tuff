@@ -35,13 +35,13 @@
 - 不改 spark-chart / signal-meter；不在本任务里替换 nexus dashboard 现有 echarts 用法（可作后续任务）。
 - GeoJSON 不打进包里，由调用方提供（与 kumo 一致）；docs demo 可带一份小体积世界地图数据。
 
-## Acceptance Criteria
+## Acceptance Criteria（2026-08-30 终审全过）
 
-- [ ] `pnpm --filter @talex-touch/tuffex-charts build` 产出 es + lib + d.ts + css；包的依赖树中无 echarts。
-- [ ] 六板块组件按各子任务验收全部通过；`typecheck` / `lint` / `vitest` 全绿（tuffex 弱检查与 nexus 严格检查两侧都过）。
-- [ ] nexus 文档六页 zh/en 可渲染，demo 不 import echarts。
-- [ ] design.md 的 kumo 对照表逐项核对：每个 kumo prop/行为标注 同名实现 / 改名 / 有意改进 / 显式缓议，无静默缺项。
-- [ ] 所有子任务归档后，父任务做最终集成审查（barrel 导出完整、文档与实现一致）。
+- [x] `pnpm --filter @talex-touch/tuffex-charts build` 产出 es + lib + d.ts + css；`pnpm why echarts` 为空（阳性对照 `why vue` 有输出、nexus 的 `why echarts` 能找到它自己的 —— 扫描本身被证明有效）。
+- [x] 六板块组件全部落地；包内 76 用例全绿，typecheck 0 错，CI 同款逐包 lint 干净；nexus 严格侧 typecheck 0 错（按 CI 规定先 build tuffex）。
+- [x] nexus 文档六页 zh/en 在 dev server 实测渲染出正文；15 个 demo 全部直接 import 本包，无 echarts。
+- [x] design.md §12 对照表：预登记 7 项偏离 + Timeseries/Sankey/Maps 落地条目逐项更新，无静默缺项。
+- [x] 终审：barrel 导出完整（typecheck 兜底）、文档按实现撰写并经 typecheck+实渲双重校验；spec 已沉淀至 .trellis/spec/frontend/tuffex-charts-package.md。
 
 ## Task Map（children）
 
