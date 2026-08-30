@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { AvatarGroupProps } from './types'
-import { cloneVNode, computed, defineComponent, h, isVNode } from 'vue'
+import type { VNode } from 'vue'
+import { cloneVNode, computed, defineComponent, Fragment, h, isVNode } from 'vue'
 import TxAvatar from './TxAvatar.vue'
 
 export default defineComponent({
@@ -15,8 +16,21 @@ export default defineComponent({
       return typeof props.overlap === 'number' ? `${props.overlap}px` : props.overlap
     })
 
+    // `v-for` slot content arrives as a single Fragment vnode; counting it as one
+    // node would defeat `max` (and the per-item overlap/ring injection) for the
+    // most common way of rendering an avatar list.
+    const flattenNodes = (vnodes: unknown[]): VNode[] => {
+      return vnodes.flatMap((node) => {
+        if (!isVNode(node))
+          return []
+        if (node.type === Fragment && Array.isArray(node.children))
+          return flattenNodes(node.children)
+        return [node]
+      })
+    }
+
     return () => {
-      const nodes = (slots.default?.() ?? []).filter(n => isVNode(n))
+      const nodes = flattenNodes(slots.default?.() ?? [])
       const maxVisible = typeof props.max === 'number' ? Math.max(0, props.max) : nodes.length
       const extraCount = typeof props.max === 'number' ? Math.max(0, nodes.length - maxVisible) : 0
       const visible = nodes.slice(0, maxVisible)

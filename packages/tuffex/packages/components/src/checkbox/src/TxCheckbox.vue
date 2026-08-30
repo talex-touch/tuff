@@ -138,6 +138,10 @@ function toggle() {
       box-shadow 0.18s ease;
 
     svg {
+      /* Out of the flex flow: when the indeterminate dash is also rendered,
+         a static 100%-wide svg would sit beside it and shove it off-center. */
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
     }
