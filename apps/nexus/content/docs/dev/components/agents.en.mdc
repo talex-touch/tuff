@@ -1,7 +1,7 @@
 ---
 title: "Agents"
 description: "Selectable agent list with enabled/disabled grouping, loading skeletons, empty state, selection, and badges."
-category: Data
+category: AiAgent
 status: beta
 since: 1.0.0
 tags: [agents, list, selection]

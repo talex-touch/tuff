@@ -1,0 +1,79 @@
+---
+title: "Charts 图表"
+description: "@talex-touch/tuffex-charts 总览：kumo 同构的 API 面，Vue 直渲 SVG，无 echarts。"
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, svg, d3, overview]
+syncStatus: reviewed
+verified: true
+---
+# Charts 图表
+
+## 安装与引入
+
+图表家族在独立包 `@talex-touch/tuffex-charts` 里，API 面对标 Cloudflare kumo 的 Charts 族，但渲染层是 Vue 直出的 SVG——不依赖 echarts，也不依赖任何整图表框架，数学只用可摇树的 d3 微模块（`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`）。
+
+```bash
+pnpm add @talex-touch/tuffex-charts
+```
+
+```ts
+import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+import '@talex-touch/tuffex-charts/style.css'
+```
+
+## 可用图表
+
+| 组件 | 板块 | 说明 |
+|------|------|------|
+| `TxTimeseriesChart` | [Timeseries](/docs/dev/components/timeseries-chart) | 时序折线/堆叠柱，标记、阈值、刷选、tooltip 全家桶。 |
+| `TxBubbleMap` / `TxChoroplethMap` | [Maps](/docs/dev/components/maps) | GeoJSON 地图：气泡与分级填色。 |
+| `TxSankeyChart` | [Sankey](/docs/dev/components/sankey-chart) | 桑基流向图。 |
+| `TxChart` + 系列原语 | [Custom Chart](/docs/dev/components/custom-chart) | 组合式逃生舱：折线/面积/柱/散点/环形自由拼装。 |
+| `ChartPalette` / CSS 变量 | [Colors](/docs/dev/components/chart-colors) | 分类、语义、顺序、地图色板，明暗自动。 |
+
+## 图例
+
+`TxChartLegendItem` 提供两种图例项版式：`small` 单行（多序列图例），`large` 堆叠大数值（仪表卡单指标）。`loading` 渲染骨架占位；挂了 `click` 监听时它会渲染成原生 `button`，回车/空格开箱可用。
+
+### 图例项
+
+:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Large / Loading" description="点击第一项切换第二项的 inactive 态。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex-charts'
+  import { ref } from 'vue'
+
+  const inactive = ref(false)
+  </script>
+
+  <template>
+    <TxChartLegendItem name="Requests" :color="ChartPalette.categoricalVar(0)" value="1,234" @click="inactive = !inactive" />
+    <TxChartLegendItem name="Errors" :color="ChartPalette.categoricalVar(2)" value="87" :inactive="inactive" />
+    <TxChartLegendItem loading />
+    <TxChartLegendItem variant="large" name="Latency" :color="ChartPalette.categoricalVar(3)" value="42" unit="ms" />
+  </template>
+---
+:::
+
+## API
+
+### ChartLegendItem Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `variant` | `'small' \| 'large'` | `'small'` | 单行 / 堆叠大数值两种版式。 |
+| `name` | `string` | — | 序列名。`loading` 时可省略。 |
+| `color` | `string` | — | 色点颜色，接受任意 CSS 颜色（含 `var()`）。 |
+| `value` | `string` | — | 已格式化的数值文本。 |
+| `unit` | `string` | — | 数值后的单位（仅 `large`）。 |
+| `inactive` | `boolean` | `false` | 半透明表示被反选。 |
+| `loading` | `boolean` | `false` | 渲染骨架占位（`aria-hidden`，不可聚焦）。 |
+
+## 与 kumo 的差异
+
+- 没有 `echarts` 实例 prop——渲染层自研，调用方不需要也不能传 echarts。
+- 没有 `isDarkMode` prop——取色全部走 `--tx-chart-*` CSS 变量，跟随宿主 `.dark` / `[data-theme='dark']` 自动切换。
+- 所有 HTML 字符串 formatter 一律改为插槽（VNode），不存在 XSS 转义面。

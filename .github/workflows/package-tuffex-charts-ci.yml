@@ -1,0 +1,36 @@
+name: Tuffex Charts Package CI
+
+on:
+  pull_request:
+    paths:
+      - "packages/tuffex-charts/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuffex-charts-ci.yml"
+      - ".github/workflows/package-ci.yml"
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "packages/tuffex-charts/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuffex-charts-ci.yml"
+      - ".github/workflows/package-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuffex-charts
+      package-path: packages/tuffex-charts
+      run-typecheck: true
+      # The package defines no lint script; repo-wide eslint covers it.
+      run-lint: false
+      run-test: true
+      run-build: true
+      build-command: pnpm build

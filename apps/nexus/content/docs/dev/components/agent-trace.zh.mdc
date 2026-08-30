@@ -1,7 +1,7 @@
 ---
 title: "AgentTrace 智能体轨迹"
 description: "可展开的智能体轨迹，覆盖步骤、推理、检索、工具四种形态。"
-category: Status
+category: AiAgent
 status: beta
 since: 0.3.9
 tags: [ai, agent, trace, disclosure]

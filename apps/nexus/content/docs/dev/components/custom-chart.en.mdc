@@ -1,0 +1,107 @@
+---
+title: "Custom Chart"
+description: "The composable escape hatch: a TxChart container plus axis/grid/series primitives for lines, areas, bars, scatter and donuts."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, custom, composable, primitives]
+syncStatus: reviewed
+verified: true
+---
+# Custom Chart
+
+## Basic Usage
+
+kumo's escape hatch pipes raw echarts options into a low-level `Chart`; without echarts, the escape hatch here is **composition**: `TxChart` establishes the coordinate system (measures the container, derives scales, allocates palette slots) and axes/grid/series mount as children in its default slot. Series read data through accessors (a key or `(d, i) => v`); without `color` they take categorical slots in mount order. The x/y domains derive from the union of all series data, and `xDomain`/`yDomain` override explicitly.
+
+### Bars + line composed
+
+:::TuffDemoWrapper{demo="CustomChartComposedDemo" code-lang="vue" title="Band axis + bars + line" description="Bars and a line share one coordinate system; band values map to band centers."}
+---
+code: |
+  <template>
+    <TxChart x-type="band" :height="280" :padding="{ top: 24, right: 24, bottom: 36, left: 56 }">
+      <TxGrid y />
+      <TxAxis position="bottom" />
+      <TxAxis position="left" :format="(v) => `${v}k`" />
+      <TxBarSeries :data="rows" x="month" y="revenue" :radius="3" />
+      <TxLineSeries :data="rows" x="month" y="growth" curve="monotone" show-symbol />
+    </TxChart>
+  </template>
+---
+:::
+
+### Donut
+
+:::TuffDemoWrapper{demo="CustomChartDonutDemo" code-lang="vue" title="TxArcSeries" description="Axis-free mode: TxChart acts as a sized surface and the arc series lays itself out."}
+---
+code: |
+  <template>
+    <TxChart :height="260" :padding="8">
+      <TxArcSeries :data="data" value="count" name="label" :inner-radius="0.65" @slice-click="onSlice" />
+    </TxChart>
+  </template>
+---
+:::
+
+### Custom tooltip
+
+:::TuffDemoWrapper{demo="CustomChartTooltipDemo" code-lang="vue" title="Overlay slot + TxChartTooltip" description="With follow='x' the tooltip pins vertically and only tracks horizontally."}
+---
+code: |
+  <template>
+    <TxChart :height="260">
+      <TxScatterSeries :data="points" x="x" y="y" :r="(d) => d.size" />
+      <template #overlay>
+        <TxChartTooltip follow="x" :fixed-y="8">
+          <template #default="{ pointerX }">
+            <span>cursor at {{ Math.round(pointerX) }}px</span>
+          </template>
+        </TxChartTooltip>
+      </template>
+    </TxChart>
+  </template>
+---
+:::
+
+## Composition Rules
+
+- Series/axes/grid must be descendants of `<TxChart>` — they read scales from the injected chart context and throw when used standalone.
+- Multiple `TxBarSeries`: without `stack` they lay out side by side; sharing a `stack` key stacks them, and the y domain covers stacked totals automatically.
+- `TxArcSeries` needs no coordinate system and works in an axis-free `TxChart`.
+- The `#overlay` slot is a DOM layer above the SVG (`pointer-events: none`) for tooltips and annotations.
+- For deep customization, call `useChartContext()` in your own layer, or read scales from the `context` exposed on the `TxChart` instance.
+
+## API
+
+### Chart Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `height` | `number` | `350` | Pixel height; ignored when `aspectRatio` is set. |
+| `aspectRatio` | `number \| string` | — | Container aspect ratio. |
+| `width` | `number` | measured | Explicit width (SSR/tests). |
+| `padding` | `number \| Partial<ChartPadding>` | `24` | Inner padding reserved for axes and labels. |
+| `xType` | `'linear' \| 'time' \| 'band'` | `'linear'` | Kind of x scale. |
+| `xDomain` / `yDomain` | arrays | auto union | Explicit domains. |
+| `yNice` | `boolean` | `true` | Round the derived y domain. |
+| `ariaDescription` | `string` | — | Accessible description. |
+
+### Series Props (shared)
+
+| Prop | Type | Description |
+|------|------|------|
+| `data` | `T[]` | Data rows. |
+| `x` / `y` | `keyof T \| (d, i) => v` | Accessors. |
+| `color` | `string` | Defaults to categorical slots in mount order. |
+
+`TxLineSeries` adds `curve` (`linear/monotone/natural/step`), `strokeWidth`, `showSymbol`, `dashed`; `TxAreaSeries` adds `gradient` (on by default) and `fillOpacity`; `TxBarSeries` adds `stack`, `barWidth`, `radius`; `TxScatterSeries` adds `r` (constant or accessor); `TxArcSeries` takes `value/name?/color?` accessors plus `innerRadius/padAngle/cornerRadius` and emits `slice-click`.
+
+### ChartTooltip Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `open` | `boolean \| 'auto'` | `'auto'` | `'auto'` shows while the pointer is inside; a boolean is controlled mode. |
+| `follow` | `'both' \| 'x'` | `'both'` | `x` pins the vertical position. |
+| `offset` | `number` | `12` | Gap between pointer and tooltip. |
+| `title` / `rows` / `hiddenCount` | — | — | Default content; the slot replaces it entirely. |

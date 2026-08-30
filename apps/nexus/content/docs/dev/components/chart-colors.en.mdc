@@ -1,0 +1,70 @@
+---
+title: "Chart Colors"
+description: "Categorical, semantic, sequential and map palettes: CSS variables switch with the theme, ChartPalette provides literals."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, color, palette, theme]
+syncStatus: reviewed
+verified: true
+---
+# Chart Colors
+
+## Two Tracks
+
+Chart components read **only** the `--tx-chart-*` CSS variables, which flip automatically under `.dark` or `[data-theme='dark']` — hence no `isDarkMode` prop. `ChartPalette` serves the out-of-chart cases (matching series colors in surrounding UI, image export, canvas) with hex literals; its functions are name-compatible with kumo and take an `isDark` flag.
+
+### Palette overview
+
+:::TuffDemoWrapper{demo="ChartColorsPaletteDemo" code-lang="vue" title="Categorical / Semantic / Sequential" description="Toggle the site theme to watch the variables flip."}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex-charts'
+
+  const sequential = ChartPalette.sequential('blues')
+  </script>
+
+  <template>
+    <span
+      v-for="index in 6"
+      :key="index"
+      :style="{ background: ChartPalette.categoricalVar(index - 1) }"
+    />
+  </template>
+---
+:::
+
+## The Three Palettes
+
+- **Categorical**: 6 colors cycled by series position (modulo 6); slot 1 blue `#4290F0` anchors the whole family. Only Yellow changes in dark mode.
+- **Semantic**: `Attention` / `Warning` / `Success` / `Neutral` / `Disabled` / `Skeleton` — status, not series identity; Neutral / Disabled / Skeleton change in dark mode.
+- **Sequential**: `blues`, five steps low → high; dark mode reverses direction with a dark-tuned step 4 (not a plain mirror).
+
+Maps carry their own `--tx-chart-map-*` set (land fill + five-step shading ramp) — see [Maps](/docs/dev/components/maps).
+
+## API
+
+### ChartPalette
+
+| Method | Returns | Description |
+|------|------|------|
+| `categorical(index, isDark?)` | `string` | Categorical color at `index` (wraps modulo 6). |
+| `categoricalVar(index)` | `string` | Same slot as a theme-following `var(--tx-chart-categorical-N, #hex)` reference. |
+| `semantic(name, isDark?)` | `string` | Semantic color; `name` is one of the six names. |
+| `sequential('blues', isDark?)` | `string[]` | Five sequential steps (a fresh array each call). |
+| `text('primary' \| 'secondary', isDark?)` | `string` | Axis/label text colors. |
+| `mapColors(isDark?)` | `MapColors` | `{ area, bubble, scale[] }` for maps. |
+
+### CSS Variables
+
+| Variable | Description |
+|------|------|
+| `--tx-chart-categorical-1..6` | Categorical palette. |
+| `--tx-chart-semantic-attention/-warning/-success/-neutral/-disabled/-skeleton` | Semantic colors. |
+| `--tx-chart-sequential-blues-1..5` | Sequential ramp. |
+| `--tx-chart-text-primary/-secondary` | Text colors. |
+| `--tx-chart-grid-line` | Grid lines (primary text at 20% opacity). |
+| `--tx-chart-map-area` / `--tx-chart-map-scale-1..5` | Map land fill and shading ramp. |
+
+Every variable ships a light-mode fallback, so the package works standalone; hosts rebrand by overriding variables with zero component changes.

@@ -1,7 +1,7 @@
 ---
 title: "TaskRows 任务行"
 description: "智能体任务状态行：环形序号、状态药丸、可展开的执行明细。"
-category: Status
+category: AiAgent
 status: beta
 since: 0.3.9
 tags: [ai, agent, task, status]

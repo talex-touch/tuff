@@ -1,7 +1,7 @@
 ---
 title: "CommandPalette"
 description: "Command palette for global shortcuts, plugin entries, and search actions."
-category: Navigation
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [command, palette, launcher, shortcut]

@@ -1,0 +1,79 @@
+---
+title: "Charts"
+description: "@talex-touch/tuffex-charts overview: a kumo-shaped API surface, Vue-rendered SVG, no echarts."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, svg, d3, overview]
+syncStatus: reviewed
+verified: true
+---
+# Charts
+
+## Install & Import
+
+The chart family lives in the standalone `@talex-touch/tuffex-charts` package. Its API surface mirrors Cloudflare kumo's chart family, but the renderer is Vue-emitted SVG — no echarts and no chart framework; math comes from tree-shakeable d3 micro-modules only (`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`).
+
+```bash
+pnpm add @talex-touch/tuffex-charts
+```
+
+```ts
+import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+import '@talex-touch/tuffex-charts/style.css'
+```
+
+## Available Charts
+
+| Component | Section | Description |
+|------|------|------|
+| `TxTimeseriesChart` | [Timeseries](/docs/dev/components/timeseries-chart) | Time-series lines / stacked bars with markers, thresholds, brushing and tooltips. |
+| `TxBubbleMap` / `TxChoroplethMap` | [Maps](/docs/dev/components/maps) | GeoJSON maps: proportional bubbles and shaded regions. |
+| `TxSankeyChart` | [Sankey](/docs/dev/components/sankey-chart) | Flow diagrams. |
+| `TxChart` + series primitives | [Custom Chart](/docs/dev/components/custom-chart) | The composable escape hatch: line/area/bar/scatter/donut, freely combined. |
+| `ChartPalette` / CSS variables | [Colors](/docs/dev/components/chart-colors) | Categorical, semantic, sequential and map palettes, auto light/dark. |
+
+## Legend
+
+`TxChartLegendItem` ships two legend layouts: `small` inline rows (multi-series legends) and `large` stacked metrics (dashboard cards). `loading` renders skeleton placeholders; with a `click` listener attached it renders as a native `button`, so Enter/Space work out of the box.
+
+### Legend items
+
+:::TuffDemoWrapper{demo="ChartsLegendItemsDemo" code-lang="vue" title="Small / Large / Loading" description="Click the first item to toggle the second one's inactive state."}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette, TxChartLegendItem } from '@talex-touch/tuffex-charts'
+  import { ref } from 'vue'
+
+  const inactive = ref(false)
+  </script>
+
+  <template>
+    <TxChartLegendItem name="Requests" :color="ChartPalette.categoricalVar(0)" value="1,234" @click="inactive = !inactive" />
+    <TxChartLegendItem name="Errors" :color="ChartPalette.categoricalVar(2)" value="87" :inactive="inactive" />
+    <TxChartLegendItem loading />
+    <TxChartLegendItem variant="large" name="Latency" :color="ChartPalette.categoricalVar(3)" value="42" unit="ms" />
+  </template>
+---
+:::
+
+## API
+
+### ChartLegendItem Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `variant` | `'small' \| 'large'` | `'small'` | Inline row / stacked metric layout. |
+| `name` | `string` | — | Series name. Optional while `loading`. |
+| `color` | `string` | — | Indicator dot color; any CSS color including `var()`. |
+| `value` | `string` | — | Pre-formatted value text. |
+| `unit` | `string` | — | Unit label after the value (`large` only). |
+| `inactive` | `boolean` | `false` | Renders at half opacity for a deselected state. |
+| `loading` | `boolean` | `false` | Skeleton placeholders (`aria-hidden`, not focusable). |
+
+## Differences from kumo
+
+- No `echarts` instance prop — the renderer is built in; consumers neither need nor can pass echarts.
+- No `isDarkMode` prop — every color reads `--tx-chart-*` CSS variables and follows the host's `.dark` / `[data-theme='dark']` automatically.
+- Every HTML-string formatter became a slot (VNodes), so there is no XSS-escaping surface.

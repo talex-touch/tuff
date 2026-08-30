@@ -1,0 +1,107 @@
+---
+title: "Custom Chart 自定义图表"
+description: "组合式逃生舱：TxChart 容器 + 轴/网格/系列原语，自由拼装折线、面积、柱、散点与环形。"
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, custom, composable, primitives]
+syncStatus: reviewed
+verified: true
+---
+# Custom Chart 自定义图表
+
+## 基础用法
+
+kumo 的逃生舱是把原始 echarts options 透传给低层 `Chart`；这里没有 echarts，逃生舱是**组合**：`TxChart` 建立坐标系（测量容器、推导比例尺、分配色板），轴/网格/系列作为子组件挂进它的默认插槽。系列统一 accessor 取数（key 或 `(d, i) => v`），不给 `color` 时按挂载顺序取分类色。x/y 值域缺省由所有系列的数据并集推导，`xDomain`/`yDomain` 可显式覆盖。
+
+### 柱线复合
+
+:::TuffDemoWrapper{demo="CustomChartComposedDemo" code-lang="vue" title="band 轴 + 柱 + 折线" description="同一坐标系里柱状与折线共存；band 值映射到带中心。"}
+---
+code: |
+  <template>
+    <TxChart x-type="band" :height="280" :padding="{ top: 24, right: 24, bottom: 36, left: 56 }">
+      <TxGrid y />
+      <TxAxis position="bottom" />
+      <TxAxis position="left" :format="(v) => `${v}k`" />
+      <TxBarSeries :data="rows" x="month" y="revenue" :radius="3" />
+      <TxLineSeries :data="rows" x="month" y="growth" curve="monotone" show-symbol />
+    </TxChart>
+  </template>
+---
+:::
+
+### 环形图
+
+:::TuffDemoWrapper{demo="CustomChartDonutDemo" code-lang="vue" title="TxArcSeries" description="无轴模式：TxChart 只当尺寸容器，弧形系列自己布局。"}
+---
+code: |
+  <template>
+    <TxChart :height="260" :padding="8">
+      <TxArcSeries :data="data" value="count" name="label" :inner-radius="0.65" @slice-click="onSlice" />
+    </TxChart>
+  </template>
+---
+:::
+
+### 自定义提示框
+
+:::TuffDemoWrapper{demo="CustomChartTooltipDemo" code-lang="vue" title="overlay 插槽 + TxChartTooltip" description="follow='x' 时提示框垂直位置固定，只横向跟随。"}
+---
+code: |
+  <template>
+    <TxChart :height="260">
+      <TxScatterSeries :data="points" x="x" y="y" :r="(d) => d.size" />
+      <template #overlay>
+        <TxChartTooltip follow="x" :fixed-y="8">
+          <template #default="{ pointerX }">
+            <span>cursor at {{ Math.round(pointerX) }}px</span>
+          </template>
+        </TxChartTooltip>
+      </template>
+    </TxChart>
+  </template>
+---
+:::
+
+## 组合规则
+
+- 系列/轴/网格必须是 `<TxChart>` 的子孙——它们通过注入的图表上下文拿比例尺，游离使用会抛错。
+- 多个 `TxBarSeries`：无 `stack` 并排分道，同 `stack` 键堆叠；y 值域自动覆盖堆叠总量。
+- `TxArcSeries` 不依赖坐标系，可与无轴 `TxChart` 单独使用。
+- `#overlay` 插槽是 SVG 之上的 DOM 层（`pointer-events: none`），放提示框与标注。
+- 深度定制可 `useChartContext()` 自写图层，或从 `TxChart` 实例的 `context` 暴露读取比例尺。
+
+## API
+
+### Chart Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `height` | `number` | `350` | 像素高；设 `aspectRatio` 时忽略。 |
+| `aspectRatio` | `number \| string` | — | 容器宽高比。 |
+| `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
+| `padding` | `number \| Partial<ChartPadding>` | `24` | 留给轴与标签的内边距。 |
+| `xType` | `'linear' \| 'time' \| 'band'` | `'linear'` | x 比例尺类型。 |
+| `xDomain` / `yDomain` | 数组 | 自动并集 | 显式值域。 |
+| `yNice` | `boolean` | `true` | y 值域取整。 |
+| `ariaDescription` | `string` | — | 无障碍描述。 |
+
+### 系列 Props（共同）
+
+| 属性名 | 类型 | 说明 |
+|------|------|------|
+| `data` | `T[]` | 数据行。 |
+| `x` / `y` | `keyof T \| (d, i) => v` | accessor。 |
+| `color` | `string` | 缺省按挂载顺序取分类色。 |
+
+`TxLineSeries` 另有 `curve`（`linear/monotone/natural/step`）、`strokeWidth`、`showSymbol`、`dashed`；`TxAreaSeries` 有 `gradient`（默认开）与 `fillOpacity`；`TxBarSeries` 有 `stack`、`barWidth`、`radius`；`TxScatterSeries` 有 `r`（常量或 accessor）；`TxArcSeries` 用 `value/name?/color?` accessor 加 `innerRadius/padAngle/cornerRadius`，点击发 `slice-click`。
+
+### ChartTooltip Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `open` | `boolean \| 'auto'` | `'auto'` | `'auto'` 指针在图内即显示；布尔为受控。 |
+| `follow` | `'both' \| 'x'` | `'both'` | `x` 固定垂直位置。 |
+| `offset` | `number` | `12` | 指针与提示框间距。 |
+| `title` / `rows` / `hiddenCount` | — | — | 默认内容；插槽整体替换。 |

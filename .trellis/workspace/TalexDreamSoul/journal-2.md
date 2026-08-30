@@ -298,3 +298,12 @@ Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction d
 
 - Dev server owner: content-DB wipe + restart ritual will clear the stale `__nuxt_content` 500 and hydration noise seen during the sweep.
 - PR #1777 (icon-collections gate) still open — my demo-registry/doc-parity steps were placed to merge cleanly alongside it.
+
+## 2026-08-30 tuffex button/icon 收拢（08-30-tuffex-button-icon-consolidation）
+
+- Basic 组 7 条目收拢为 button + icon：TxIconButton/TxCopyButton 迁入 button/、TxOsIcon 迁入 icon/（TxSplitButton/TxStatusIcon 先例）；TuffFlatButton 删除（与 TxButton variant="flat" 完全重复，含样式细节 8px/120px 一致）；icon-chip 组件不动、文档移到 badge 族。
+- 深子路径 ./flat-button ./icon-button ./copy-button ./os-icon 移除 = 0.x breaking（npm 已发布 0.3.9），根桶不变，CHANGELOG 已记。
+- 发现并修复存量红门禁：98e5d5327 加 base/pro/ai 套件桶时没同步 audit:size，聚合 CSS 撞 96KiB 单组件预算（该任务门禁清单刻意漏了 audit:size）；改为聚合桶按 fullCssBytes 上限。
+- TxCopyButton 并非零使用：tuffex 内部 code-stream/stream-markdown 直接 SFC 引用——「生产零使用」结论要区分应用层和库内部。
+- docs-page-performance.test.ts 的 chrome 边界断言（禁 tuffex/button 入口）与收拢直接矛盾，按边界意图改为禁 <TxButton> 标签、放行入口 import。
+- 并发协作：talex-touch-bc 批量提交存量脏文件期间，我用普通 mv（不入暂存区）+ 推迟争用文件（DocsSidebar/性能测试/README）到其提交落地后再动，零冲突。

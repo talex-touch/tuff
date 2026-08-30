@@ -67,19 +67,51 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **152**.
+Current source-of-truth export modules: **148**.
 
-- `Foundation & Navigation (27)`: `alert`, `avatar`, `badge`, `base-anchor`, `base-surface`, `breadcrumb`, `button`, `copy-button`, `corner-overlay`, `divider`, `icon`, `icon-button`, `kbd`, `nav-bar`, `os-icon`, `outline-border`, `status-badge`, `tab-bar`, `tabs`, `tag`, `tooltip`, `popover`, `dropdown-menu`, `context-menu`, `version-capsule`, `icon-chip`, `sidebar-nav`
-- `Form & Input (29)`: `cascader`, `checkbox`, `code-editor`, `date-picker`, `flat-button`, `flat-dropdown`, `flat-input`, `flat-radio`, `flat-select`, `form`, `input`, `markdown-editor`, `number-input`, `picker`, `radio`, `rating`, `search-input`, `search-select`, `segmented-slider`, `select`, `slider`, `switch`, `textarea`, `tag-input`, `tree-select`, `transfer`, `scrub-field`, `fine-tune-card`, `search-panel`
-- `Layout & Structure (13)`: `agents`, `auto-sizer`, `card-item`, `container`, `flex`, `grid`, `grid-layout`, `group-block`, `resize-box`, `scroll`, `splitter`, `stack`, `virtual-list`
-- `Data & State (30)`: `blank-slate`, `card`, `collapse`, `context-indicator`, `data-table`, `empty`, `empty-state`, `error-state`, `guide-state`, `layout-skeleton`, `loading-state`, `markdown-view`, `no-data`, `no-selection`, `offline-state`, `pagination`, `permission-state`, `search-empty`, `stat-card`, `steps`, `timeline`, `tree`, `allocation-bar`, `cell-link`, `diff-table`, `dot-indicator`, `filter-chips`, `insight-cards`, `signal-meter`, `spark-chart`
-- `Feedback & Overlay (12)`: `command-palette`, `dialog`, `drawer`, `flip-overlay`, `floating`, `loading-overlay`, `modal`, `progress`, `progress-bar`, `skeleton`, `spinner`, `toast`
-- `AI & Content (27)`: `ai-elements`, `attachment-tray`, `chain-of-thought`, `chat`, `conversation-stream`, `file-uploader`, `image-gallery`, `image-uploader`, `message-actions`, `reasoning-disclosure`, `sources`, `stream-markdown`, `suggestion-chips`, `thinking-orb`, `tool-call-card`, `tool-confirmation`, `agent-trace`, `approval-card`, `code-stream`, `context-cards`, `inline-citation`, `prompt-bar`, `recommendation-card`, `selection-actions`, `task-rows`, `tool-chips`, `working-indicator`
-- `Animation & Visual (14)`: `border-beam`, `edge-fade-mask`, `fusion`, `glass-surface`, `glow-text`, `gradient-border`, `gradual-blur`, `keyframe-stroke-text`, `liquid`, `sortable-list`, `stagger`, `text-transformer`, `transition`, `tuff-logo-stroke`
+Every module ships in exactly one of three suites, each exposed as its own category entry:
+
+```ts
+import { TxButton } from '@talex-touch/tuffex/base'
+import { TxCommandPalette } from '@talex-touch/tuffex/pro'
+import { TxPromptBar } from '@talex-touch/tuffex/ai'
+```
+
+### base — Basics
+
+General, form, layout, navigation, data, feedback and status components. Import from `@talex-touch/tuffex/base`.
+
+- `General (9)`: `button`, `icon`, `icon-chip`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
+- `Form (24)`: `form`, `input`, `flat-input`, `textarea`, `number-input`, `search-input`, `tag-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
+- `Layout (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
+- `Navigation (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
+- `Data Display (11)`: `data-table`, `tree`, `sortable-list`, `timeline`, `transfer`, `stat-card`, `cell-link`, `dot-indicator`, `filter-chips`, `markdown-view`, `image-gallery`
+- `Feedback (12)`: `dialog`, `modal`, `drawer`, `popover`, `tooltip`, `toast`, `alert`, `progress`, `progress-bar`, `spinner`, `loading-overlay`, `selection-actions`
+- `Status & Empty (13)`: `empty`, `empty-state`, `no-data`, `no-selection`, `search-empty`, `error-state`, `offline-state`, `permission-state`, `guide-state`, `blank-slate`, `loading-state`, `skeleton`, `layout-skeleton`
+
+### pro — Advanced
+
+Advanced interaction, visualization, effects and low-level primitives. Import from `@talex-touch/tuffex/pro`.
+
+- `Interaction (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
+- `Visualization (4)`: `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
+- `Effects (16)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-transformer`, `transition`, `stagger`, `fusion`, `liquid`, `flip-overlay`
+- `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
+
+### ai — AI
+
+Chat, agent, reasoning and context components for AI-native interfaces. Import from `@talex-touch/tuffex/ai`.
+
+- `Chat (6)`: `chat`, `prompt-bar`, `attachment-tray`, `message-actions`, `suggestion-chips`, `conversation-stream`
+- `Agents (8)`: `agents`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`
+- `Reasoning (8)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
+- `Context & Insight (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`
 
 Reference:
 
 - Export entry: `packages/components/src/components.ts`
+- Suite entries: `packages/components/src/{base,pro,ai}/index.ts`
+- Suite taxonomy: `apps/nexus/scripts/recategorize-component-docs.py`
 - Public docs: `apps/nexus/content/docs/dev/tools/tuffex.en.mdc`
 
 ## Export Convention

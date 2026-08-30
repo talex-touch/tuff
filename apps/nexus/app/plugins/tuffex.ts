@@ -63,7 +63,6 @@ const fromErrorState = () => import('@tuffex-components/error-state')
 const fromFileUploader = () => import('@tuffex-components/file-uploader')
 const fromFilterChips = () => import('@tuffex-components/filter-chips')
 const fromFineTuneCard = () => import('@tuffex-components/fine-tune-card')
-const fromFlatButton = () => import('@tuffex-components/flat-button')
 const fromFlatDropdown = () => import('@tuffex-components/flat-dropdown')
 const fromFlatRadio = () => import('@tuffex-components/flat-radio')
 const fromFlatSelect = () => import('@tuffex-components/flat-select')
@@ -81,7 +80,6 @@ const fromGridLayout = () => import('@tuffex-components/grid-layout')
 const fromGroupBlock = () => import('@tuffex-components/group-block')
 const fromGuideState = () => import('@tuffex-components/guide-state')
 const fromIcon = () => import('@tuffex-components/icon')
-const fromIconButton = () => import('@tuffex-components/icon-button')
 const fromIconChip = () => import('@tuffex-components/icon-chip')
 const fromImageGallery = () => import('@tuffex-components/image-gallery')
 const fromImageUploader = () => import('@tuffex-components/image-uploader')
@@ -99,7 +97,6 @@ const fromNavBar = () => import('@tuffex-components/nav-bar')
 const fromNoData = () => import('@tuffex-components/no-data')
 const fromNoSelection = () => import('@tuffex-components/no-selection')
 const fromOfflineState = () => import('@tuffex-components/offline-state')
-const fromOsIcon = () => import('@tuffex-components/os-icon')
 const fromOutlineBorder = () => import('@tuffex-components/outline-border')
 const fromPagination = () => import('@tuffex-components/pagination')
 const fromPermissionState = () => import('@tuffex-components/permission-state')
@@ -159,7 +156,6 @@ const fromVirtualList = () => import('@tuffex-components/virtual-list')
 const fromWorkingIndicator = () => import('@tuffex-components/working-indicator')
 
 const GLOBAL_TUFFEX_COMPONENTS = {
-  TuffFlatButton: asyncTuffexComponent(fromFlatButton, 'TuffFlatButton'),
   TuffIcon: asyncTuffexComponent(fromIcon, 'TuffIcon'),
   TuffInput: asyncTuffexComponent(fromInput, 'TuffInput'),
   TuffProgress: asyncTuffexComponent(fromProgress, 'TuffProgress'),
@@ -251,7 +247,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxGroupBlock: asyncTuffexComponent(fromGroupBlock, 'TxGroupBlock'),
   TxGuideState: asyncTuffexComponent(fromGuideState, 'TxGuideState'),
   TxIcon: asyncTuffexComponent(fromIcon, 'TxIcon'),
-  TxIconButton: asyncTuffexComponent(fromIconButton, 'TxIconButton'),
+  TxIconButton: asyncTuffexComponent(fromButton, 'TxIconButton'),
   TxIconChip: asyncTuffexComponent(fromIconChip, 'TxIconChip'),
   TxImageGallery: asyncTuffexComponent(fromImageGallery, 'TxImageGallery'),
   TxImageUploader: asyncTuffexComponent(fromImageUploader, 'TxImageUploader'),
@@ -270,7 +266,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxNoData: asyncTuffexComponent(fromNoData, 'TxNoData'),
   TxNoSelection: asyncTuffexComponent(fromNoSelection, 'TxNoSelection'),
   TxOfflineState: asyncTuffexComponent(fromOfflineState, 'TxOfflineState'),
-  TxOsIcon: asyncTuffexComponent(fromOsIcon, 'TxOsIcon'),
+  TxOsIcon: asyncTuffexComponent(fromIcon, 'TxOsIcon'),
   TxOutlineBorder: asyncTuffexComponent(fromOutlineBorder, 'TxOutlineBorder'),
   TxPagination: asyncTuffexComponent(fromPagination, 'TxPagination'),
   TxPermissionState: asyncTuffexComponent(fromPermissionState, 'TxPermissionState'),

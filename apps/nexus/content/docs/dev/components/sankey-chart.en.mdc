@@ -1,0 +1,100 @@
+---
+title: "SankeyChart"
+description: "Flow diagrams on the d3-sankey layout: gradient links, node value labels, drill affordances and slot tooltips."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, sankey, flow, d3-sankey]
+syncStatus: reviewed
+verified: true
+---
+# SankeyChart
+
+## Basic Usage
+
+`nodes` is the node array; `links` connect nodes **by index** (`source`/`target` index into `nodes`). Node color precedence: `node.color` > `defaultNodeColor` > the categorical palette by index. Links blend source → target colors by default; `link-color="gray"` switches to a flat gray. Value labels turn on automatically when any node carries a `value` (`showNodeValues` forces either way).
+
+### Traffic distribution
+
+:::TuffDemoWrapper{demo="SankeyChartBasicDemo" code-lang="vue" title="Gradient links + tooltip" description="Hover nodes for value and tooltipData rows; drillable nodes get a pointer cursor."}
+---
+code: |
+  <script setup lang="ts">
+  const nodes = [
+    { name: 'Organic', value: 5200 },
+    { name: 'Referral', value: 2100 },
+    { name: 'Landing', value: 8700, tooltipData: { Sessions: 8700, 'Bounce rate': '32%' } },
+    { name: 'Signup', value: 2600, isDrillable: true, childCount: 4 },
+  ]
+  const links = [
+    { source: 0, target: 2, value: 5200 },
+    { source: 1, target: 2, value: 2100 },
+    { source: 2, target: 3, value: 2600, isDrillable: true },
+  ]
+  </script>
+
+  <template>
+    <TxSankeyChart :nodes="nodes" :links="links" @node-click="onNode" @link-click="onLink" />
+  </template>
+---
+:::
+
+### Inline labels & gray links
+
+:::TuffDemoWrapper{demo="SankeyChartLabelsDemo" code-lang="vue" title="Inline labels + gray links" description="Small nodes read better with the inline 'value name' layout."}
+---
+code: |
+  <template>
+    <TxSankeyChart
+      :nodes="nodes"
+      :links="links"
+      node-label-layout="inline"
+      link-color="gray"
+      :format-value="(v) => `${(v / 1000).toFixed(1)}k`"
+    />
+  </template>
+---
+:::
+
+## Resilience
+
+Circular links make d3-sankey throw — the component catches that, renders an empty state and logs a dev warning instead of crashing the host page.
+
+## API
+
+### SankeyChart Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `nodes` | `SankeyNodeData[]` | — | `{ name, color?, value?, tooltipData?, isDrillable?, childCount? }`. |
+| `links` | `SankeyLinkData[]` | — | `{ source, target, value, isDrillable? }`, index references. |
+| `height` | `number` | `400` | Pixel height. |
+| `width` | `number` | measured | Explicit width (SSR/tests). |
+| `nodeWidth` | `number` | `8` | Node bar width. |
+| `nodePadding` | `number` | `10` | Vertical gap between nodes in a column. |
+| `showNodeValues` | `boolean \| 'auto'` | `'auto'` | `'auto'` enables labels when any node has a `value`. |
+| `nodeLabelLayout` | `'stacked' \| 'inline'` | `'stacked'` | Value above the name / on one line. |
+| `formatValue` | `(v: number) => string` | `toLocaleString` | Value formatter. |
+| `showTooltip` | `boolean` | `true` | Hover tooltip. |
+| `defaultNodeColor` | `string` | — | Fallback before the categorical palette. |
+| `left` / `right` | `number \| string` | `'5%'` | Layout insets (px or percent). |
+| `linkColor` | `'gradient' \| 'gray'` | `'gradient'` | Link fill mode. |
+| `linkOpacity` | `number` | `0.5` | Gradient link opacity. |
+
+### SankeyChart Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `node-click` | `(node: SankeyNodeData)` | Node clicked; the original datum. |
+| `link-click` | `(link: SankeyLinkData)` | Link clicked; the original datum. |
+
+### SankeyChart Slots
+
+| Slot | Scope | Description |
+|------|------|------|
+| `tooltip` | `{ params: SankeyTooltipParams }` | Replaces the tooltip body; `params.type` is `'node' \| 'link'`. |
+
+## Differences from kumo
+
+- `tooltipFormatter` (HTML strings + manual XSS escaping) → the `tooltip` slot (VNodes).
+- kumo throws on circular input; this degrades to an empty render with a dev warning.

@@ -184,3 +184,16 @@ prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after res
 - Changing class names during semantic migrations without updating focused tests.
 - Reading browser-only state in Nexus SSR paths.
 - Using browser-native clipboard APIs inside plugin UI instead of plugin clipboard SDK gates.
+
+---
+
+## TuffEx Suite Taxonomy (base / pro / ai)
+
+Since 2026-08-30 every tuffex component belongs to exactly one suite; four places must stay in sync (they are test-gated, not convention-gated):
+
+- `apps/nexus/scripts/recategorize-component-docs.py` — `TAXONOMY` is the single source of truth for `category` frontmatter (17 categories; suites: base = Foundations/Basic/Form/Layout/Navigation/Data/Feedback/Status, pro = Advanced/Visualization/Effects/Primitives, ai = AiSuite/AiChat/AiAgent/AiReasoning/AiContext). Rerun with `--apply`; it errors on docs missing from the table.
+- `apps/nexus/app/components/DocsSidebar.vue` — `SUITES` + `CATEGORY_SUITE_MAP` + `SECTION_ORDER['/docs/dev/components']` drive the two-level sidebar (组件/扩展 underline tabs + 基础/进阶/AI suite switcher). The `misc`/其他 bucket must stay empty — it is the canary for taxonomy drift. Dark-mode rules in this file must use the `:global(.dark .selector)` whole-selector form; `:global(.dark) .selector` compiles to nothing here.
+- `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts` — category entry barrels; their union must equal `components.ts` with no overlap, guarded by `packages/components/src/__tests__/suite-barrels.test.ts`.
+- Hub `content/docs/dev/components/index.{zh,en}.mdc` — three suite H2 sections; every documented slug must keep a link (coverage test).
+
+Adding a component now also means: add its slug to `TAXONOMY` (pick the suite/category), add the dir to the matching suite barrel, and keep `SECTION_ORDER` in the same order as `TAXONOMY`. New chart components go to pro/Visualization.

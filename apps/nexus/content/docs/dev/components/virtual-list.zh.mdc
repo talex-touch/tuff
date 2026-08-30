@@ -1,7 +1,7 @@
 ---
 title: "VirtualList 虚拟列表"
 description: "固定行高虚拟列表，用更少 DOM 渲染长数据集，并提供命令式滚动方法。"
-category: Data
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [virtual-list, performance, list]

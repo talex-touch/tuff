@@ -1,0 +1,33 @@
+{
+  "id": "tuffex-charts",
+  "name": "tuffex-charts",
+  "title": "tuffex-charts 图表包（对标 kumo Charts 家族，无 echarts）",
+  "description": "新建 @talex-touch/tuffex-charts：照搬 kumo Charts 六板块能力面（Charts 总览/Colors/Timeseries/Maps/Sankey/Custom），Vue 3 渲 SVG + d3 微模块做数学，不引入 echarts。父任务管总需求、任务地图与最终验收。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-30",
+  "completedAt": "2026-08-30",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-30-tuffex-charts-foundation",
+    "08-30-tuffex-charts-primitives",
+    "08-30-tuffex-charts-timeseries",
+    "08-30-tuffex-charts-sankey",
+    "08-30-tuffex-charts-maps",
+    "08-30-tuffex-charts-docs"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

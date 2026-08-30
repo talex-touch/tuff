@@ -1,7 +1,7 @@
 ---
 title: "VersionCapsule 版本胶囊"
 description: "分段式版本胶囊：左半下载构建，右半打开历史。"
-category: Navigation
+category: Advanced
 status: beta
 since: 0.3.9
 tags: [version, release, download, history]

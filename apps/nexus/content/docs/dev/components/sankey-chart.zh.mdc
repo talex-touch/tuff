@@ -1,0 +1,100 @@
+---
+title: "SankeyChart 桑基图"
+description: "d3-sankey 布局的流向图：渐变连线、节点值标签、下钻标记与插槽提示框。"
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, sankey, flow, d3-sankey]
+syncStatus: reviewed
+verified: true
+---
+# SankeyChart 桑基图
+
+## 基础用法
+
+`nodes` 是节点数组，`links` 用**节点下标**连接（`source`/`target` 是 `nodes` 的索引）。节点色优先级：`node.color` > `defaultNodeColor` > 分类色板按下标轮转。连线默认按来源色→目标色渐变，`link-color="gray"` 换成整齐的灰。任一节点带 `value` 时值标签自动开启（`showNodeValues` 可强制开关）。
+
+### 流量分发
+
+:::TuffDemoWrapper{demo="SankeyChartBasicDemo" code-lang="vue" title="渐变连线 + tooltip" description="悬停节点可见 value 与 tooltipData 行；带 isDrillable 的节点是 pointer 光标。"}
+---
+code: |
+  <script setup lang="ts">
+  const nodes = [
+    { name: 'Organic', value: 5200 },
+    { name: 'Referral', value: 2100 },
+    { name: 'Landing', value: 8700, tooltipData: { Sessions: 8700, 'Bounce rate': '32%' } },
+    { name: 'Signup', value: 2600, isDrillable: true, childCount: 4 },
+  ]
+  const links = [
+    { source: 0, target: 2, value: 5200 },
+    { source: 1, target: 2, value: 2100 },
+    { source: 2, target: 3, value: 2600, isDrillable: true },
+  ]
+  </script>
+
+  <template>
+    <TxSankeyChart :nodes="nodes" :links="links" @node-click="onNode" @link-click="onLink" />
+  </template>
+---
+:::
+
+### 行内标签与灰连线
+
+:::TuffDemoWrapper{demo="SankeyChartLabelsDemo" code-lang="vue" title="inline 标签 + gray 连线" description="小节点用行内「值 名称」排布更紧凑。"}
+---
+code: |
+  <template>
+    <TxSankeyChart
+      :nodes="nodes"
+      :links="links"
+      node-label-layout="inline"
+      link-color="gray"
+      :format-value="(v) => `${(v / 1000).toFixed(1)}k`"
+    />
+  </template>
+---
+:::
+
+## 容错
+
+环形连接会让 d3-sankey 抛错——组件捕获后渲染空态并在控制台给出 dev 警告，不会拖垮宿主页面。
+
+## API
+
+### SankeyChart Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `nodes` | `SankeyNodeData[]` | — | `{ name, color?, value?, tooltipData?, isDrillable?, childCount? }`。 |
+| `links` | `SankeyLinkData[]` | — | `{ source, target, value, isDrillable? }`，下标引用节点。 |
+| `height` | `number` | `400` | 像素高度。 |
+| `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
+| `nodeWidth` | `number` | `8` | 节点条宽。 |
+| `nodePadding` | `number` | `10` | 同列节点垂直间距。 |
+| `showNodeValues` | `boolean \| 'auto'` | `'auto'` | `'auto'` 在任一节点有 `value` 时开启。 |
+| `nodeLabelLayout` | `'stacked' \| 'inline'` | `'stacked'` | 值在名称上方 / 同行。 |
+| `formatValue` | `(v: number) => string` | `toLocaleString` | 值格式化。 |
+| `showTooltip` | `boolean` | `true` | 悬停提示框。 |
+| `defaultNodeColor` | `string` | — | 分类色板前的兜底色。 |
+| `left` / `right` | `number \| string` | `'5%'` | 布局左右留白（px 或百分比）。 |
+| `linkColor` | `'gradient' \| 'gray'` | `'gradient'` | 连线填充模式。 |
+| `linkOpacity` | `number` | `0.5` | 渐变连线不透明度。 |
+
+### SankeyChart Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `node-click` | `(node: SankeyNodeData)` | 点击节点，回传原始数据。 |
+| `link-click` | `(link: SankeyLinkData)` | 点击连线，回传原始数据。 |
+
+### SankeyChart Slots
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `tooltip` | `{ params: SankeyTooltipParams }` | 整体替换提示框内容；`params.type` 为 `'node' \| 'link'`。 |
+
+## 与 kumo 的差异
+
+- `tooltipFormatter`（HTML 字符串 + 手工 XSS 转义）→ `tooltip` 插槽（VNode）。
+- kumo 遇环形输入直接抛错；这里降级为空渲染 + dev 警告。
