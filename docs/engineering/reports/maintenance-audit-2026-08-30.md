@@ -13,7 +13,7 @@
 - **正式发行包是否必须包含截图 native addon 仍未决。** [#321](https://github.com/talex-touch/tuff/issues/321) 确认 release workflow 既不构建 Cargo screenshot addon，也不在 release preflight/afterPack 强制要求它；运行时没有软件截图 fallback。需作出 A/B/C 产品决策；基于「缺失即全部截图功能不可用」的已证实事实，建议选择 B：release-only 构建并硬要求模块存在，再用真实 tag 三平台产物验证。
 - **OTA 的 Windows/Linux 真机验收先被 harness 自身阻断。** [#326](https://github.com/talex-touch/tuff/issues/326) 的 validator 仍把非 `darwin/arm64` runtime evidence 拒绝为 `static-only`。先泛化 evidence schema 与 host-pair 校验，再安排 Windows/Linux N/N+1；否则会生产必然被拒的证据。macOS 官方 post-fix N/N+1 health acknowledgement 也尚未闭环。
 - **Renderer CSP 仍停在 report-only 收集阶段。** [#689](https://github.com/talex-touch/tuff/issues/689) 已收紧 `script-src` 并移除 inline script，但 `default-src`/`connect-src` 的强制策略仍待真实日常使用中收集的 `[csp-report-only]` 日志；`unsafe-eval` 仍受 widget 字符串执行依赖。需人工运行覆盖 widget、Nexus、Sentry 后，根据日志提升候选策略或补白名单；不能把 report-only 当作已强制。
-- **生产依赖门虽然当前通过，但仍有五项 High 临时豁免。** `node scripts/check-prod-audit.mjs` 显示 5 个 Critical/High 均被 allowlist，另有 17 Moderate、5 Low；[ #1098 ](https://github.com/talex-touch/tuff/issues/1098) 的五项 `nuxt` High 豁免于 2026-11-09 到期。`unhead` 2→3 / Nuxt family 迁移须在到期前完成，并避免 caret 引入 Nuxt family 版本偏斜。
+- **生产依赖门虽然当前通过，但仍有五项 High 临时豁免。** `node scripts/check-prod-audit.mjs` 显示 5 个 Critical/High 均被 allowlist，另有 17 Moderate、5 Low；[#1098](https://github.com/talex-touch/tuff/issues/1098) 的五项 `nuxt` High 豁免于 2026-11-09 到期。`unhead` 2→3 / Nuxt family 迁移须在到期前完成，并避免 caret 引入 Nuxt family 版本偏斜。
 - **Issue 自动关闭防护没有覆盖 squash commit 正文。** [#1792](https://github.com/talex-touch/tuff/issues/1792) 已实证一个解释性提交正文意外关闭 #1748；现有 guard 只检查 PR body。应在合并前扫描 constituent commit bodies，并用该事故的引用文本做负向回归。
 
 ## 文档、路线图与工作治理
