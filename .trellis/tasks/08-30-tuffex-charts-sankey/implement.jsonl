@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-30-tuffex-charts/design.md", "reason": "§6 Sankey 设计"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/SankeyChart.tsx", "reason": "props/渐变连线/label 排布参照"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/SankeyChart.test.tsx", "reason": "815 行行为测试可抽等价用例"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}

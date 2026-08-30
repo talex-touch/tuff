@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-30-tuffex-charts/design.md", "reason": "§4 原语层 API 契约（ChartContext/系列/tooltip stage）"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/EChart.tsx", "reason": "被替代的低层 Chart：事件面与 resize/aspectRatio 行为"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/docs-pages/custom.mdx", "reason": "Custom Chart 板块要覆盖的用例"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}

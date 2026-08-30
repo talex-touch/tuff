@@ -746,7 +746,7 @@ onBeforeUnmount(() => {
             </template>
             <span class="tuff-select__arrow">
               <svg viewBox="0 0 24 24" width="16" height="16">
-                <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
+                <path fill="currentColor" d="M12 4.9994L7.7573 9.242L9.1715 10.6563L12 7.8278L14.8284 10.6563L16.2426 9.242L12 4.9994ZM12 19.0006L7.7573 14.758L9.1715 13.3438L12 16.1722L14.8284 13.3438L16.2426 14.758L12 19.0006Z" />
               </svg>
             </span>
           </div>
@@ -768,7 +768,7 @@ onBeforeUnmount(() => {
             <template #suffix>
               <span class="tuff-select__arrow">
                 <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
+                  <path fill="currentColor" d="M12 4.9994L7.7573 9.242L9.1715 10.6563L12 7.8278L14.8284 10.6563L16.2426 9.242L12 4.9994ZM12 19.0006L7.7573 14.758L9.1715 13.3438L12 16.1722L14.8284 13.3438L16.2426 14.758L12 19.0006Z" />
                 </svg>
               </span>
             </template>
@@ -888,7 +888,6 @@ onBeforeUnmount(() => {
     align-items: center;
     flex-shrink: 0;
     color: var(--tx-text-color-secondary, #909399);
-    transition: transform 0.16s ease;
   }
 
   &__multi-trigger {
@@ -1111,9 +1110,7 @@ onBeforeUnmount(() => {
       border-color: var(--tx-color-primary, #409eff);
     }
 
-    .tuff-select__arrow {
-      transform: rotate(180deg);
-    }
+    /* The up/down chevron pair is vertically symmetric, so no open rotation. */
 
     .tuff-select__multi-trigger {
       border-color: var(--tx-color-primary, #409eff);

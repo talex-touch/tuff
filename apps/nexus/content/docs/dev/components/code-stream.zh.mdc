@@ -1,7 +1,7 @@
 ---
 title: "CodeStream 流式代码块"
 description: "带文件名头部的代码块，按行显现，复制与语法高亮开箱可用。"
-category: Data
+category: AiReasoning
 status: beta
 since: 0.3.9
 tags: [ai, code, streaming, highlight]
@@ -114,7 +114,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`。
 - Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`。
-- Reused: `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue`、`packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`、`.../use-auto-theme.ts`。
+- Reused: `packages/tuffex/packages/components/src/button/src/copy-button.vue`、`packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`、`.../use-auto-theme.ts`。
 - **实测覆盖:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts`（22 项）验证显现夹取与已显现行不重播、光标出现条件、`complete` 只派发一次、头部去留、shiki 输出按行拆分、行数不符时回退纯文本、主题透传与复制事件转发。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 

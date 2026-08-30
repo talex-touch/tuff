@@ -25,7 +25,7 @@ const copy = computed(() => {
 <template>
   <div class="checkbox-variants-demo">
     <div class="checkbox-variants-demo__row">
-      <TxCheckbox v-model="fillChecked" :label="copy.fill" />
+      <TxCheckbox v-model="fillChecked" variant="fill" :label="copy.fill" />
       <TxCheckbox v-model="checkmarkChecked" variant="checkmark" :label="copy.checkmark" />
     </div>
     <p class="checkbox-variants-demo__hint">

@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { app } from 'electron'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
+import { app } from 'electron'
 import { buildWindowWebPreferences } from '../core/window-security-profile'
 
 // Resolve from the application root: this module may be emitted into out/main/chunks, where
