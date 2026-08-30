@@ -207,15 +207,17 @@ const SECTION_ORDER: Record<string, string[]> = {
   // scripts/recategorize-component-docs.py, and fixes the order inside each group.
   '/docs/dev/components': [
     '/docs/dev/components/index',
-    // Foundations
+    // ── suite: base — Foundations (standalone pages)
     '/docs/dev/components/foundations',
-    // Basic
+    '/docs/dev/components/utils',
+    // base — Basic
     '/docs/dev/components/button',
     '/docs/dev/components/flat-button',
     '/docs/dev/components/icon-button',
     '/docs/dev/components/copy-button',
     '/docs/dev/components/icon',
     '/docs/dev/components/os-icon',
+    '/docs/dev/components/icon-chip',
     '/docs/dev/components/avatar',
     '/docs/dev/components/avatar-variants',
     '/docs/dev/components/tag',
@@ -223,7 +225,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/status-badge',
     '/docs/dev/components/kbd',
     '/docs/dev/components/divider',
-    // Form
+    // base — Form
     '/docs/dev/components/form',
     '/docs/dev/components/input',
     '/docs/dev/components/flat-input',
@@ -231,8 +233,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/number-input',
     '/docs/dev/components/search-input',
     '/docs/dev/components/tag-input',
-    '/docs/dev/components/markdown-editor',
-    '/docs/dev/components/code-editor',
+    '/docs/dev/components/scrub-field',
     '/docs/dev/components/select',
     '/docs/dev/components/flat-select',
     '/docs/dev/components/search-select',
@@ -249,8 +250,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/rating',
     '/docs/dev/components/file-uploader',
     '/docs/dev/components/image-uploader',
-    '/docs/dev/components/chat-composer',
-    // Layout
+    // base — Layout
     '/docs/dev/components/container',
     '/docs/dev/components/flex',
     '/docs/dev/components/grid',
@@ -262,33 +262,30 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/card',
     '/docs/dev/components/card-item',
     '/docs/dev/components/group-block',
-    // Navigation
+    // base — Navigation
     '/docs/dev/components/tabs',
     '/docs/dev/components/tab-bar',
     '/docs/dev/components/nav-bar',
+    '/docs/dev/components/sidebar-nav',
     '/docs/dev/components/breadcrumb',
     '/docs/dev/components/steps',
     '/docs/dev/components/pagination',
     '/docs/dev/components/dropdown-menu',
     '/docs/dev/components/flat-dropdown',
     '/docs/dev/components/context-menu',
-    '/docs/dev/components/command-palette',
-    '/docs/dev/components/version-capsule',
-    // Data
+    // base — Data
     '/docs/dev/components/data-table',
     '/docs/dev/components/tree',
-    '/docs/dev/components/virtual-list',
     '/docs/dev/components/sortable-list',
     '/docs/dev/components/timeline',
     '/docs/dev/components/transfer',
     '/docs/dev/components/stat-card',
+    '/docs/dev/components/cell-link',
+    '/docs/dev/components/dot-indicator',
+    '/docs/dev/components/filter-chips',
     '/docs/dev/components/markdown-view',
     '/docs/dev/components/image-gallery',
-    '/docs/dev/components/agents',
-    '/docs/dev/components/chat',
-    '/docs/dev/components/typing-indicator',
-    '/docs/dev/components/ai-elements',
-    // Feedback
+    // base — Feedback
     '/docs/dev/components/dialog',
     '/docs/dev/components/modal',
     '/docs/dev/components/drawer',
@@ -300,8 +297,8 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/progress-bar',
     '/docs/dev/components/spinner',
     '/docs/dev/components/loading-overlay',
-    '/docs/dev/components/flip-overlay',
-    // Status
+    '/docs/dev/components/selection-actions',
+    // base — Status
     '/docs/dev/components/empty',
     '/docs/dev/components/empty-state',
     '/docs/dev/components/no-data',
@@ -315,10 +312,23 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/loading-state',
     '/docs/dev/components/skeleton',
     '/docs/dev/components/layout-skeleton',
-    // Effects
+    // ── suite: pro — Advanced
+    '/docs/dev/components/command-palette',
+    '/docs/dev/components/search-panel',
+    '/docs/dev/components/markdown-editor',
+    '/docs/dev/components/code-editor',
+    '/docs/dev/components/virtual-list',
+    '/docs/dev/components/version-capsule',
+    // pro — Visualization
+    '/docs/dev/components/spark-chart',
+    '/docs/dev/components/allocation-bar',
+    '/docs/dev/components/diff-table',
+    '/docs/dev/components/signal-meter',
+    // pro — Effects
     '/docs/dev/components/glass-surface',
     '/docs/dev/components/gradient-border',
     '/docs/dev/components/outline-border',
+    '/docs/dev/components/border-beam',
     '/docs/dev/components/corner-overlay',
     '/docs/dev/components/gradual-blur',
     '/docs/dev/components/edge-fade-mask',
@@ -329,14 +339,49 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/transition',
     '/docs/dev/components/stagger',
     '/docs/dev/components/fusion',
-    '/docs/dev/components/border-beam',
     '/docs/dev/components/liquid',
-    // Primitives
+    '/docs/dev/components/flip-overlay',
+    // pro — Primitives
     '/docs/dev/components/base-surface',
     '/docs/dev/components/base-anchor',
     '/docs/dev/components/floating',
     '/docs/dev/components/auto-sizer',
     '/docs/dev/components/resize-box',
+    // ── suite: ai — AiSuite (standalone page)
+    '/docs/dev/components/ai-suite',
+    // ai — AiChat
+    '/docs/dev/components/chat',
+    '/docs/dev/components/chat-composer',
+    '/docs/dev/components/prompt-bar',
+    '/docs/dev/components/attachment-tray',
+    '/docs/dev/components/message-actions',
+    '/docs/dev/components/suggestion-chips',
+    '/docs/dev/components/typing-indicator',
+    '/docs/dev/components/conversation-stream',
+    // ai — AiAgent
+    '/docs/dev/components/agents',
+    '/docs/dev/components/agent-trace',
+    '/docs/dev/components/task-rows',
+    '/docs/dev/components/tool-call-card',
+    '/docs/dev/components/tool-chips',
+    '/docs/dev/components/tool-confirmation',
+    '/docs/dev/components/approval-card',
+    '/docs/dev/components/working-indicator',
+    // ai — AiReasoning
+    '/docs/dev/components/ai-elements',
+    '/docs/dev/components/chain-of-thought',
+    '/docs/dev/components/reasoning-disclosure',
+    '/docs/dev/components/thinking-orb',
+    '/docs/dev/components/stream-markdown',
+    '/docs/dev/components/code-stream',
+    '/docs/dev/components/inline-citation',
+    '/docs/dev/components/sources',
+    // ai — AiContext
+    '/docs/dev/components/context-cards',
+    '/docs/dev/components/context-indicator',
+    '/docs/dev/components/insight-cards',
+    '/docs/dev/components/recommendation-card',
+    '/docs/dev/components/fine-tune-card',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
@@ -371,22 +416,101 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Rendered as flat links above the groups, in this order, right after the index page.
-const COMPONENT_STANDALONE_PAGES = ['/docs/dev/components/foundations', '/docs/dev/components/ai-suite']
+// Component docs are split into three suites (base / pro / ai). Categories and
+// their suite assignment mirror scripts/recategorize-component-docs.py — keep the
+// two files (and the tuffex base/pro/ai entry barrels) in sync.
+type SuiteKey = 'base' | 'pro' | 'ai'
 
-// Every remaining component page is grouped solely by its `category` frontmatter.
-// Keep these keys in sync with scripts/recategorize-component-docs.py.
-const COMPONENT_CATEGORY_ORDER = computed(() => [
-  { key: 'Basic', label: t('docsSidebar.categories.basic') },
-  { key: 'Form', label: t('docsSidebar.categories.form') },
-  { key: 'Layout', label: t('docsSidebar.categories.layout') },
-  { key: 'Navigation', label: t('docsSidebar.categories.navigation') },
-  { key: 'Data', label: t('docsSidebar.categories.data') },
-  { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
-  { key: 'Status', label: t('docsSidebar.categories.status') },
-  { key: 'Effects', label: t('docsSidebar.categories.effects') },
-  { key: 'Primitives', label: t('docsSidebar.categories.primitives') },
+interface SuiteDef {
+  key: SuiteKey
+  label: string
+  categories: { key: string; label: string }[]
+  // Rendered as flat links above the groups, right after the index page.
+  standalonePages: string[]
+}
+
+const SUITES = computed<SuiteDef[]>(() => [
+  {
+    key: 'base',
+    label: t('docsSidebar.suites.base'),
+    categories: [
+      { key: 'Basic', label: t('docsSidebar.categories.basic') },
+      { key: 'Form', label: t('docsSidebar.categories.form') },
+      { key: 'Layout', label: t('docsSidebar.categories.layout') },
+      { key: 'Navigation', label: t('docsSidebar.categories.navigation') },
+      { key: 'Data', label: t('docsSidebar.categories.data') },
+      { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
+      { key: 'Status', label: t('docsSidebar.categories.status') },
+    ],
+    standalonePages: ['/docs/dev/components/foundations', '/docs/dev/components/utils'],
+  },
+  {
+    key: 'pro',
+    label: t('docsSidebar.suites.pro'),
+    categories: [
+      { key: 'Advanced', label: t('docsSidebar.categories.advanced') },
+      { key: 'Visualization', label: t('docsSidebar.categories.visualization') },
+      { key: 'Effects', label: t('docsSidebar.categories.effects') },
+      { key: 'Primitives', label: t('docsSidebar.categories.primitives') },
+    ],
+    standalonePages: [],
+  },
+  {
+    key: 'ai',
+    label: t('docsSidebar.suites.ai'),
+    categories: [
+      { key: 'AiChat', label: t('docsSidebar.categories.aiChat') },
+      { key: 'AiAgent', label: t('docsSidebar.categories.aiAgent') },
+      { key: 'AiReasoning', label: t('docsSidebar.categories.aiReasoning') },
+      { key: 'AiContext', label: t('docsSidebar.categories.aiContext') },
+    ],
+    standalonePages: ['/docs/dev/components/ai-suite'],
+  },
 ])
+
+const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
+  Foundations: 'base',
+  Basic: 'base',
+  Form: 'base',
+  Layout: 'base',
+  Navigation: 'base',
+  Data: 'base',
+  Feedback: 'base',
+  Status: 'base',
+  Advanced: 'pro',
+  Visualization: 'pro',
+  Effects: 'pro',
+  Primitives: 'pro',
+  AiSuite: 'ai',
+  AiChat: 'ai',
+  AiAgent: 'ai',
+  AiReasoning: 'ai',
+  AiContext: 'ai',
+}
+
+// Manual suite pick; cleared on navigation so the switcher follows the route again.
+const selectedSuite = ref<SuiteKey | null>(null)
+
+const suiteOfRoute = computed<SuiteKey | null>(() => {
+  if (!isComponentDocsRoute.value) return null
+  const current = componentItems.value.find(item => item.normalizedPath === normalizedRoutePath.value)
+  const category = current?.category
+  return category ? (CATEGORY_SUITE_MAP[category] ?? null) : null
+})
+
+// SSR and the first client frame both resolve to 'base' (componentItems is a
+// client-only lazy fetch), so server and client markup agree; the suite may then
+// snap to the route's suite once metadata arrives — a reactive update, not a
+// hydration mismatch.
+const activeSuite = computed<SuiteKey>(() => selectedSuite.value ?? suiteOfRoute.value ?? 'base')
+
+const activeSuiteDef = computed<SuiteDef>(
+  () => SUITES.value.find(suite => suite.key === activeSuite.value) ?? SUITES.value[0]!,
+)
+
+function selectSuite(key: SuiteKey) {
+  selectedSuite.value = key
+}
 
 const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() => {
   if (locale.value === 'zh') {
@@ -621,7 +745,7 @@ const resolvedComponentSections = computed(() => {
     })
   }
 
-  for (const standalonePath of COMPONENT_STANDALONE_PAGES) {
+  for (const standalonePath of activeSuiteDef.value.standalonePages) {
     const item = entries.find(entry => entry.normalizedPath === standalonePath)
     if (!item) continue
     used.add(standalonePath)
@@ -633,7 +757,7 @@ const resolvedComponentSections = computed(() => {
     })
   }
 
-  for (const category of COMPONENT_CATEGORY_ORDER.value) {
+  for (const category of activeSuiteDef.value.categories) {
     const children = sortByOrder(
       entries.filter(item => item.category === category.key && !used.has(item.normalizedPath ?? '')),
       '/docs/dev/components',
@@ -641,8 +765,15 @@ const resolvedComponentSections = computed(() => {
     addSection(category.label, children)
   }
 
+  // Canary bucket: same-suite entries not covered by the groups above, plus
+  // entries whose category is unknown to CATEGORY_SUITE_MAP (visible in every
+  // suite). Stays empty while taxonomy, script and this file agree.
   const remaining = sortByOrder(
-    entries.filter(item => !used.has(item.normalizedPath ?? '')),
+    entries.filter(item => {
+      if (used.has(item.normalizedPath ?? '')) return false
+      const suite = item.category ? CATEGORY_SUITE_MAP[item.category] : undefined
+      return suite === undefined || suite === activeSuite.value
+    }),
     '/docs/dev/components',
   )
   addSection(t('docsSidebar.categories.misc'), remaining)
@@ -915,10 +1046,12 @@ watch(
   { immediate: true },
 )
 
-// When route changes, expand the section containing the active link
+// When route changes, follow the route's suite again and expand the section
+// containing the active link
 watch(
   () => normalizedRoutePath.value,
   () => {
+    selectedSuite.value = null
     for (const section of sections.value) {
       expandedSections.value[sectionKey(section)] = true
     }
@@ -950,23 +1083,38 @@ onBeforeUnmount(() => {
     @touchstart.passive="requestComponentDocsMetadataOnIntent"
   >
     <!-- Top-level section tabs (sticky within sidebar) -->
-    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm">
-      <div class="flex gap-1 rounded-xl p-1">
+    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pt-1 backdrop-blur-sm">
+      <div class="docs-tab-row">
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
           :to="localizedDocsPath(sec.entryPath || sec.basePath)"
           :prefetch="false"
-          class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
-          :class="
-            activeTopSection === sec.key
-              ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
-              : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'
-          "
+          class="docs-tab-link"
+          :class="activeTopSection === sec.key ? 'is-active' : ''"
+          :aria-current="activeTopSection === sec.key ? 'true' : undefined"
         >
           <span :class="sec.icon" class="text-sm" />
           <span>{{ sec.label }}</span>
         </NuxtLink>
+      </div>
+      <div
+        v-if="activeTopSection === 'components'"
+        class="docs-tab-row docs-tab-row--sub"
+        role="group"
+        :aria-label="t('docsSidebar.components')"
+      >
+        <button
+          v-for="suite in SUITES"
+          :key="suite.key"
+          type="button"
+          class="docs-tab-link docs-tab-link--sub"
+          :class="activeSuite === suite.key ? 'is-active' : ''"
+          :aria-pressed="activeSuite === suite.key"
+          @click="selectSuite(suite.key)"
+        >
+          {{ suite.label }}
+        </button>
       </div>
     </div>
 
@@ -1062,6 +1210,102 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.docs-tab-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 2px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.docs-tab-row--sub {
+  gap: 14px;
+  padding-top: 2px;
+  border-bottom: none;
+}
+
+.docs-tab-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 1px 9px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  color: rgba(15, 23, 42, 0.42);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.docs-tab-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0.6);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.docs-tab-link:hover {
+  color: rgba(15, 23, 42, 0.7);
+}
+
+.docs-tab-link.is-active {
+  color: rgba(15, 23, 42, 0.95);
+  font-weight: 600;
+}
+
+.docs-tab-link.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.docs-tab-link--sub {
+  padding: 5px 1px 7px;
+  font-size: 12px;
+}
+
+.docs-tab-link--sub::after {
+  bottom: 0;
+}
+
+:global(.dark .docs-tab-row),
+:global([data-theme='dark'] .docs-tab-row) {
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+:global(.dark .docs-tab-row--sub),
+:global([data-theme='dark'] .docs-tab-row--sub) {
+  border-bottom: none;
+}
+
+:global(.dark .docs-tab-link),
+:global([data-theme='dark'] .docs-tab-link) {
+  color: rgba(226, 232, 240, 0.45);
+}
+
+:global(.dark .docs-tab-link:hover),
+:global([data-theme='dark'] .docs-tab-link:hover) {
+  color: rgba(226, 232, 240, 0.75);
+}
+
+:global(.dark .docs-tab-link.is-active),
+:global([data-theme='dark'] .docs-tab-link.is-active) {
+  color: rgba(248, 250, 252, 0.98);
+}
+
 :deep(.docs-nav-list) {
   position: relative;
   margin: 0;
