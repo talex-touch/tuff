@@ -32,7 +32,7 @@ code: |
 
 ## 样式变体
 
-默认 `fill` 是纯填充样式；当需要更明确的完成/勾选反馈时，可使用 `variant="checkmark"` 显示内部勾选标记。
+默认 `checkmark` 会显示内部勾选标记；需要更收敛的纯填充样式时，可使用 `variant="fill"`。
 
 ### Checkbox variants
 :::TuffDemoWrapper{demo="CheckboxCheckboxVariantsDemo" code-lang="vue"}
@@ -47,7 +47,7 @@ code: |
 
   <template>
     <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="fillChecked" label="填充样式" />
+      <TxCheckbox v-model="fillChecked" variant="fill" label="填充样式" />
       <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="带勾选标记" />
     </div>
   </template>
@@ -150,7 +150,7 @@ code: |
 | disabled | 是否禁用。禁用后不可聚焦，且不会触发切换。 | `boolean` | `false` |
 | label | 显示在复选框旁边的文本标签。 | `string` | - |
 | labelPlacement | 标签位置：`start` 为前置，`end` 为后置。 | `'start' \| 'end'` | `'end'` |
-| variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'fill'` |
+| variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'checkmark'` |
 | ariaLabel | 无可见 `label` / 默认插槽时使用的可访问性标签。 | `string` | - |
 | indeterminate | 部分选中：所辖项目选中了一部分但不是全部。渲染横杠并上报 `aria-checked="mixed"`；此时点击会解析为「全选」而不是翻转布尔值，与原生 `indeterminate` 行为一致。 | `boolean` | `false` |
 
@@ -177,7 +177,7 @@ code: |
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` 与 `checkbox.test.ts`。
-- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、`fill` / `checkmark` 变体、点击事件与禁用阻断。
+- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、默认 `checkmark` 变体与显式 `fill` / `checkmark` 变体、点击事件与禁用阻断。
 - 可访问性说明:根节点负责 `role="checkbox"`、`aria-checked` 与键盘处理;应优先提供可见标签或默认插槽,仅在没有可见文案时使用 `ariaLabel`。
 
 ## Source

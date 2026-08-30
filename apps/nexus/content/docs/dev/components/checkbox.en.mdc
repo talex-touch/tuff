@@ -32,7 +32,7 @@ code: |
 
 ## Variants
 
-The default `fill` variant uses a pure filled square. Use `variant="checkmark"` when the checked state should include a stronger inner tick affordance.
+The default `checkmark` variant shows the inner tick. Use `variant="fill"` when you want a quieter pure filled square.
 
 ### Checkbox variants
 :::TuffDemoWrapper{demo="CheckboxCheckboxVariantsDemo" code-lang="vue"}
@@ -47,7 +47,7 @@ code: |
 
   <template>
     <div style="display: inline-flex; align-items: center; gap: 18px;">
-      <TxCheckbox v-model="fillChecked" label="Fill style" />
+      <TxCheckbox v-model="fillChecked" variant="fill" label="Fill style" />
       <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="With checkmark" />
     </div>
   </template>
@@ -150,7 +150,7 @@ code: |
 | disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
 | label | Visible text label rendered next to the checkbox. | `string` | - |
 | labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
-| variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'fill'` |
+| variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'checkmark'` |
 | ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
 | indeterminate | Partial selection: some but not all of the governed items are checked. Renders the dash and reports `aria-checked="mixed"`; activating it resolves to checked rather than flipping the boolean, matching a native input's `indeterminate` behaviour. | `boolean` | `false` |
 
@@ -177,7 +177,7 @@ code: |
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` and `checkbox.test.ts`.
-- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, `fill` and `checkmark` variants, click emits, and disabled blocking.
+- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, the default `checkmark` variant plus explicit `fill` and `checkmark` variants, click emits, and disabled blocking.
 - Accessibility note: the root element owns `role="checkbox"`, `aria-checked`, and keyboard handling; provide a visible label or default slot whenever possible, and reserve `ariaLabel` for controls with no visible text.
 
 ## Source
