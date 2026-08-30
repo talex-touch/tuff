@@ -116,7 +116,8 @@ describe('Nexus provider adapter boundary', () => {
       'user_1',
       3,
       'intelligence-invoke',
-      expect.objectContaining({ providerId: 'ip_adapter' }),
+      expect.objectContaining({ providerId: 'ip_adapter', traceId: 'trace_adapter_1' }),
+      { idempotencyKey: 'intelligence-invoke:trace_adapter_1' },
     )
   })
 
@@ -199,7 +200,8 @@ describe('Nexus provider adapter boundary', () => {
       'user_1',
       3,
       'intelligence-invoke',
-      expect.objectContaining({ providerId: 'ip_adapter', tokens: 3 }),
+      expect.objectContaining({ providerId: 'ip_adapter', tokens: 3, traceId: 'trace_stream_1' }),
+      { idempotencyKey: 'intelligence-invoke:trace_stream_1' },
     )
     expect(usageLedgerMocks.recordProviderUsageLedger).toHaveBeenCalledWith(
       expect.anything(),
