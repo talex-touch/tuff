@@ -1,7 +1,7 @@
 ---
 title: "InsightCards"
 description: "The 'Insights N ‹ ›' pager: one conclusion, one card, one follow-up, with the content supplied by slots."
-category: Data
+category: AiContext
 status: beta
 since: 0.3.9
 tags: [ai, insight, pager, data]

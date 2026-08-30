@@ -1,7 +1,7 @@
 ---
 title: MarkdownEditor
 description: 带净化、工具栏和 WYSIWYG/source/preview 模式的 Markdown 编辑器。
-category: Form
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [markdown, editor, wysiwyg]

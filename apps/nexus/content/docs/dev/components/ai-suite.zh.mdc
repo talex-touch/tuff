@@ -1,13 +1,17 @@
 ---
 title: AI 套件总览
 description: 源自 Beautiful UI 的 19 个 AI 原生界面组件案例集
-category: Foundations
+category: AiSuite
 status: beta
 since: 0.3.9
 tags: [ai, showcase, beautiful-ui, agent, primitives]
 syncStatus: reviewed
 verified: true
 ---
+
+## 套件分组
+
+AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、PromptBar、AttachmentTray、MessageActions、SuggestionChips、TypingIndicator、ConversationStream）、**智能体**（Agents、AgentTrace、TaskRows、ToolCallCard、ToolChips、ToolConfirmation、ApprovalCard、WorkingIndicator）、**推理与生成**（AiElements、ChainOfThought、ReasoningDisclosure、ThinkingOrb、StreamMarkdown、CodeStream、InlineCitation、Sources）、**上下文与洞察**（ContextCards、ContextIndicator、InsightCards、RecommendationCard、FineTuneCard）。全部组件可经 `@talex-touch/tuffex/ai` 分类入口按套件引入。
 
 ## 来源与授权
 
