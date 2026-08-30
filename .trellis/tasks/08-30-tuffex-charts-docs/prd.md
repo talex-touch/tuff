@@ -16,6 +16,12 @@
    - `sankey-chart`
    - `custom-chart`（原语组合：donut、双系列复合图、自定义 tooltip 插槽）
 2. 走通 tuffex-new-component-wiring 记忆里的接线清单（nexus plugin/registry/sidebar/index），侧栏新增「Charts」分组；demo 经 demo-registry 注册（注意该链路在 master 与 docs 分支的差异，以实际 base 分支为准先核实）。
+   **2026-08-30 补充（docs-suite-split 落地后，来自 talex-touch-bc 会话，提交 88375d842..9c3cf9980）**：tuffex-charts 是独立包 → 组件**不进** tuffex `packages/components/src/pro/index.ts` barrel（suite-barrels.test.ts 守卫并集==components.ts，别碰）；文档分组在 DocsSidebar `SUITES` 的 pro 套件下加新 category；若未来改进主包才走 recategorize-component-docs.py 的 TAXONOMY Visualization 组。约定细节见 `.trellis/spec/frontend/component-guidelines.md` 尾节「TuffEx Suite Taxonomy」。
+   **三处硬接线（bc 会话确认，缺一 sidebar 渲染错/校验报错）**：
+   - `.mdc` 放进 `content/docs/dev/components/` 后，`recategorize-component-docs.py` 严格校验要求新 category slug 同步进 TAXONOMY（suite 映射 pro），否则直接报错；
+   - DocsSidebar 三点：SUITES pro 套件 categories 数组加条目、`CATEGORY_SUITE_MAP` 加 `Charts: 'pro'`、`SECTION_ORDER['/docs/dev/components']` 按组序补路径（漏了会落「其他」兜底组，非空即漏网信号）；
+   - i18n 两个 locale 文件同步加 `docsSidebar.categories` 新键（zh/en）。
+   coverage 测试只盯 components.ts 导出，独立包不受约束。
 3. 文档规范：nexus frontmatter 8 字段（status `beta`、since 取下一未发布版）、中文段名惯例（不引入 `## Usage`）、H1 下不写导语、zh/en 段数相等、MDC 围栏同深度检查。
 4. nexus 需将 `@talex-touch/tuffex-charts` 加入依赖（workspace:*）并确认 Nuxt/vite 对 workspace 包的解析与样式引入。
 5. 禁幻影 API：每个文档示例的 prop/事件先对照包源码存在性核验。
