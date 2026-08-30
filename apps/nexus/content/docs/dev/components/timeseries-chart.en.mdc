@@ -1,0 +1,198 @@
+---
+title: "TimeseriesChart"
+description: "Time-series lines and stacked bars: clustered markers, threshold lines, range brushing, full tooltips."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, timeseries, line, bar]
+syncStatus: reviewed
+verified: true
+---
+# TimeseriesChart
+
+## Basic Usage
+
+`data` is an array of series; each series' `data` holds time-ordered `[timestamp_ms, value]` tuples. `color` is optional — series fall onto the categorical palette by position, and positions are stable, so hiding one series never recolors the rest. Hovering opens the tooltip: rows sort by value descending, duplicate names dedupe, and values resolve by binary-searching the nearest sample.
+
+### Two-series lines
+
+:::TuffDemoWrapper{demo="TimeseriesChartBasicDemo" code-lang="vue" title="Lines + axis formatting" description="xAxisTickFormat / tooltipValueFormat customize tick and value text."}
+---
+code: |
+  <script setup lang="ts">
+  import { TxTimeseriesChart } from '@talex-touch/tuffex-charts'
+
+  const data = [
+    { name: 'Requests', data: requests },
+    { name: 'Cache hits', data: cacheHits },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      x-axis-name="Time"
+      y-axis-name="Count"
+      :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
+      :tooltip-value-format="(v) => `${v} req/s`"
+    />
+  </template>
+---
+:::
+
+## Markers & Thresholds
+
+`markers` draw vertical dashed lines on the time axis; markers that crowd together cluster into one line based on the visible span, the label becomes "N changes" (`clusterLabel` overrides the wording), and hovering the line lists each marker's `label` and `description`. `thresholds` draw horizontal lines on the value axis, and the y domain extends automatically to cover them.
+
+### Deploy markers + SLO line
+
+:::TuffDemoWrapper{demo="TimeseriesChartMarkersDemo" code-lang="vue" title="Markers + Thresholds" description="The last two markers sit close together and cluster."}
+---
+code: |
+  <script setup lang="ts">
+  const markers = [
+    { timestamp: t1, label: 'Deploy v2.4', description: 'Rollout to 50%.' },
+    { timestamp: t2, label: 'Config change' },
+    { timestamp: t2 + tiny, label: 'Alert fired' },
+  ]
+  const thresholds = [
+    { value: 300, label: 'SLO 300ms', color: ChartPalette.semantic('Attention') },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart :data="data" :markers="markers" :thresholds="thresholds" />
+  </template>
+---
+:::
+
+## Gradient & Incomplete Data
+
+`gradient` adds a vertical fill under each line (series color at 40% → transparent). `incomplete` declares data outside `[before, after]` as incomplete: edge segments render dashed and overlap the solid segment by one sample so the line stays connected.
+
+### Gradient + dashed edges
+
+:::TuffDemoWrapper{demo="TimeseriesChartGradientDemo" code-lang="vue" title="Gradient + Incomplete" description="The first and last three hours are incomplete periods."}
+---
+code: |
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      gradient
+      :incomplete="{ before: start + 3 * hour, after: start + 20 * hour }"
+    />
+  </template>
+---
+:::
+
+## Stacked Bars
+
+With `type="bar"` every series stacks automatically (kumo's `stack: 'total'`), and the y domain covers each timestamp's stacked total.
+
+### Daily stacks
+
+:::TuffDemoWrapper{demo="TimeseriesChartBarDemo" code-lang="vue" title="Stacked bars" description="Three series share one bar per day."}
+---
+code: |
+  <template>
+    <TxTimeseriesChart type="bar" :data="data" :x-axis-tick-format="formatDay" />
+  </template>
+---
+:::
+
+## Time Range Selection
+
+Attaching a `time-range-change` listener enables horizontal brushing: drag on the plot to draw a selection; releasing emits `(from, to)` in milliseconds and clears the selection. Drags under 3px count as clicks and do nothing.
+
+### Drag to select
+
+:::TuffDemoWrapper{demo="TimeseriesChartRangeDemo" code-lang="vue" title="Brush selection" description="The readout below shows the selected range."}
+---
+code: |
+  <template>
+    <TxTimeseriesChart :data="data" @time-range-change="(from, to) => (range = [from, to])" />
+  </template>
+---
+:::
+
+## Legend Interplay
+
+`v-model:hidden-series` two-way binds the hidden series names: hidden series neither render nor appear in tooltips. `highlighted-series` emphasizes one series and dims the rest to 30% opacity. Combine both with `TxChartLegendItem` for a clickable, hover-highlighting legend.
+
+### Click to hide + hover to highlight
+
+:::TuffDemoWrapper{demo="TimeseriesChartLegendDemo" code-lang="vue" title="Legend interplay" description="Click legend items to toggle; hover to highlight."}
+---
+code: |
+  <template>
+    <TxChartLegendItem
+      v-for="(name, i) in names"
+      :key="name"
+      :name="name"
+      :color="ChartPalette.categoricalVar(i)"
+      value=""
+      :inactive="hidden.includes(name)"
+      @click="toggle(name)"
+      @pointerenter="highlighted = name"
+      @pointerleave="highlighted = null"
+    />
+    <TxTimeseriesChart v-model:hidden-series="hidden" :data="data" :highlighted-series="highlighted" />
+  </template>
+---
+:::
+
+## Loading Skeleton
+
+`loading` swaps the chart for a harmonic-wave skeleton; the line and bar variants share one silhouette, and the shimmer respects `prefers-reduced-motion`.
+
+### Skeleton loop
+
+:::TuffDemoWrapper{demo="TimeseriesChartLoadingDemo" code-lang="vue" title="Loading skeleton" description="Loading toggles on a loop, alternating the line and bar variants."}
+---
+code: |
+  <template>
+    <TxTimeseriesChart :data="data" :type="type" :loading="loading" />
+  </template>
+---
+:::
+
+## API
+
+### TimeseriesChart Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `data` | `TimeseriesData[]` | — | `{ name, data: [ts, value][], color? }`; missing `color` falls onto the categorical palette by position. |
+| `type` | `'line' \| 'bar'` | `'line'` | Bars stack automatically. |
+| `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`. |
+| `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`; the y domain extends to cover them. |
+| `xAxisName` / `yAxisName` | `string` | — | Axis names. |
+| `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | Suggested tick counts. |
+| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | Tick formatters. |
+| `tooltipValueFormat` | `(v: number) => string` | raw value | Tooltip value formatter. |
+| `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` shows only the series closest to the cursor's y value. |
+| `tooltipMaxItems` | `number` | `10` | Overflow folds into "+N more". |
+| `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` pins the vertical position to avoid jitter. |
+| `incomplete` | `{ before?, after? }` | — | Incomplete periods (line type only). |
+| `gradient` | `boolean` | `false` | Gradient fill under lines. |
+| `loading` | `boolean` | `false` | Skeleton state. |
+| `highlightedSeries` | `string \| null` | — | Emphasized series; the rest dim to 30% opacity. |
+| `height` | `number` | `350` | Pixel height. |
+| `width` | `number` | measured | Explicit width (SSR/tests). |
+| `ariaDescription` | `string` | — | Accessible description (svg `role="img"`). |
+| `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | Cluster label wording. |
+| `timestampFormat` | `(ts: number) => string` | compact locale | Tooltip timestamp format. |
+
+### TimeseriesChart Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `time-range-change` | `(from: number, to: number)` | Brush finished. Attaching it enables brushing. |
+| `update:hiddenSeries` | `(names: string[])` | `v-model:hidden-series` write-back. |
+
+## Differences from kumo
+
+- `enableLegendSelection` + imperative echarts actions → declarative `v-model:hidden-series`; highlighting via `highlighted-series`.
+- `tooltipBoundary` (clipping-ancestors collision) is simplified to container clamping + viewport flipping.
+- No 30% out-of-brush dimming during the drag (kumo's transient outOfBrush) — only the selection rectangle renders.
+- Keep each series under ~5k points: SVG rendering degrades in the tens of thousands.

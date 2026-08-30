@@ -105,6 +105,15 @@ TAXONOMY: dict[str, list[str]] = {
         "typing-indicator",
         "ai-elements",
     ],
+    # @talex-touch/tuffex-charts (independent package; kumo-parity chart family)
+    "Charts": [
+        "charts",
+        "chart-colors",
+        "timeseries-chart",
+        "maps",
+        "sankey-chart",
+        "custom-chart",
+    ],
     "Feedback": [
         "dialog",
         "modal",

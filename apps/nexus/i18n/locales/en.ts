@@ -574,6 +574,7 @@ export default {
       layout: 'Layout',
       navigation: 'Navigation',
       data: 'Data Display',
+      charts: 'Charts',
       feedback: 'Feedback',
       status: 'Status & Empty',
       effects: 'Effects',

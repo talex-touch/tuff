@@ -655,6 +655,9 @@ importers:
       '@talex-touch/tuffex':
         specifier: workspace:*
         version: link:../../packages/tuffex
+      '@talex-touch/tuffex-charts':
+        specifier: workspace:*
+        version: link:../../packages/tuffex-charts
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../../packages/utils
