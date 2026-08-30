@@ -207,4 +207,6 @@ v-model:hiddenSeries?: string[]          // 替代 kumo 的 enableLegendSelectio
 5. 低层 `Chart(options)` → 组合原语 `TxChart` + 子组件。
 6. `TimeseriesData.color` 必填 → 可缺省（palette 轮转）。
 7. `optionUpdateBehavior`、`onEvents`（echarts 专属）→ 删除；事件按各组件语义化 emits 提供。
+8a. **Sankey 已落地（2026-08-30）**：props 面全对齐；tooltip 改插槽；环输入降级空渲染+dev 警告（kumo 会抛）。
+8b. **Maps 已落地（2026-08-30）**：投影常量/纬度钳制/裁两极/sqrt 半径/zoom 限幅全移植；`projection` prop 接 d3-geo 实例（kumo 是 {project,unproject} 包装）、`null`=equirectangular；roam 用 SVG transform 且符号随缩放反缩（尺寸恒定）；choropleth 连续色阶 color-mix 实现、showLegend=CSS 渐变条；`tooltipFormatter`(HTML) → 插槽；choropleth 插槽作用域用 `regionName`（`name` 与 slot 属性冲突）。BubbleMap 增 `bubbleHover`/`bubbleClick` emits 同 kumo onBubbleHover/Click。
 8. **Timeseries 已落地（2026-08-30）**，两处有意简化：`tooltipBoundary`（clipping-ancestors 碰撞）→ 容器钳制+视口翻转；刷选拖拽中的 outOfBrush 30% 变淡（瞬态）→ 只画选区矩形。新增改进：`highlightedSeries` prop 替代 echarts dispatchAction 高亮、`clusterLabel`/`timestampFormat` 文案可覆盖（no-i18n 惯例）、`width` prop（SSR/测试）。其余 14 场景能力逐项有测试或实现（52 用例）。

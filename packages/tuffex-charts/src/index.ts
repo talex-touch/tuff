@@ -36,6 +36,25 @@ export { TxGrid } from './grid'
 export type { GridProps, TxGridInstance } from './grid'
 
 export {
+  DEFAULT_MAP_SCALE_VARS,
+  MERCATOR_MAX_LAT,
+  projectedAspect,
+  rampColor,
+  rampGradient,
+  TxBubbleMap,
+  TxChoroplethMap,
+} from './maps'
+export type {
+  BubbleMapProps,
+  ChoroplethMapProps,
+  MapAccessor,
+  MapBaseProps,
+  MapGeoJson,
+  MapStyle,
+  RoamState,
+} from './maps'
+
+export {
   CHART_DARK_COLORS,
   CHART_LIGHT_COLORS,
   ChartPalette,
