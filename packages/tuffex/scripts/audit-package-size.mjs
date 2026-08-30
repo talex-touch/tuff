@@ -140,6 +140,14 @@ const emptyStateStyleAliases = [
 ]
 const onDemandImportBudgets = [
   {
+    // TxAvatarGroup's overflow popover is opt-in at runtime but statically imported,
+    // so `avatar` now carries the whole anchor stack. Declared rather than left
+    // implicit: this is the edge that would otherwise grow unnoticed.
+    subpath: 'avatar',
+    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
+    forbiddenStaticSpecifierPrefixes: ['gsap'],
+  },
+  {
     subpath: 'base-anchor',
     allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'glass-surface', 'spinner'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
