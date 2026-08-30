@@ -35,6 +35,9 @@
     "vue": "^3.5.27"
   },
   "devDependencies": {
+    "@types/d3-array": "^3.2.2",
+    "@types/d3-scale": "^4.0.9",
+    "@types/d3-shape": "^3.2.0",
     "@types/node": "catalog:dev",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",
@@ -46,5 +49,10 @@
     "vitest": "^3.2.7",
     "vue": "catalog:frontend",
     "vue-tsc": "catalog:dev"
+  },
+  "dependencies": {
+    "d3-array": "^3.2.4",
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0"
   }
 }
