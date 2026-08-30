@@ -207,3 +207,4 @@ v-model:hiddenSeries?: string[]          // 替代 kumo 的 enableLegendSelectio
 5. 低层 `Chart(options)` → 组合原语 `TxChart` + 子组件。
 6. `TimeseriesData.color` 必填 → 可缺省（palette 轮转）。
 7. `optionUpdateBehavior`、`onEvents`（echarts 专属）→ 删除；事件按各组件语义化 emits 提供。
+8. **Timeseries 已落地（2026-08-30）**，两处有意简化：`tooltipBoundary`（clipping-ancestors 碰撞）→ 容器钳制+视口翻转；刷选拖拽中的 outOfBrush 30% 变淡（瞬态）→ 只画选区矩形。新增改进：`highlightedSeries` prop 替代 echarts dispatchAction 高亮、`clusterLabel`/`timestampFormat` 文案可覆盖（no-i18n 惯例）、`width` prop（SSR/测试）。其余 14 场景能力逐项有测试或实现（52 用例）。
