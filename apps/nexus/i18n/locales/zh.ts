@@ -573,6 +573,7 @@ export default {
       layout: '布局',
       navigation: '导航',
       data: '数据展示',
+      charts: '图表',
       feedback: '反馈',
       status: '状态占位',
       effects: '视觉效果',

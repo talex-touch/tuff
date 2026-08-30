@@ -337,6 +337,13 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/floating',
     '/docs/dev/components/auto-sizer',
     '/docs/dev/components/resize-box',
+    // Charts (@talex-touch/tuffex-charts) — mirrors the kumo docs order
+    '/docs/dev/components/charts',
+    '/docs/dev/components/chart-colors',
+    '/docs/dev/components/timeseries-chart',
+    '/docs/dev/components/maps',
+    '/docs/dev/components/sankey-chart',
+    '/docs/dev/components/custom-chart',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
@@ -382,6 +389,7 @@ const COMPONENT_CATEGORY_ORDER = computed(() => [
   { key: 'Layout', label: t('docsSidebar.categories.layout') },
   { key: 'Navigation', label: t('docsSidebar.categories.navigation') },
   { key: 'Data', label: t('docsSidebar.categories.data') },
+  { key: 'Charts', label: t('docsSidebar.categories.charts') },
   { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
   { key: 'Status', label: t('docsSidebar.categories.status') },
   { key: 'Effects', label: t('docsSidebar.categories.effects') },
