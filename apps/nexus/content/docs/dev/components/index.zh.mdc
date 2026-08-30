@@ -93,17 +93,13 @@ code: |
 ### 通用
 
 - [Button 按钮](./button.zh.mdc)
-- [FlatButton 扁平按钮](./flat-button.zh.mdc)
-- [IconButton 图标按钮](./icon-button.zh.mdc)
-- [CopyButton 复制按钮](./copy-button.zh.mdc)
 - [Icon 图标](./icon.zh.mdc)
-- [OS Icon 系统图标](./os-icon.zh.mdc)
-- [IconChip 图标角标](./icon-chip.zh.mdc)
 - [Avatar 头像](./avatar.zh.mdc)
 - [Avatar Variants 头像变体](./avatar-variants.zh.mdc)
 - [Tag 标签](./tag.zh.mdc)
 - [Badge 徽标](./badge.zh.mdc)
 - [StatusBadge 状态徽标](./status-badge.zh.mdc)
+- [IconChip 图标角标](./icon-chip.zh.mdc)
 - [Kbd 快捷键](./kbd.zh.mdc)
 - [Divider 分割线](./divider.zh.mdc)
 

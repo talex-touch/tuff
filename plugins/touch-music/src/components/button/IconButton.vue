@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { TxIconButton } from '@talex-touch/tuffex/icon-button'
+import { TxIconButton } from '@talex-touch/tuffex/button'
 
 defineOptions({
   name: 'IconButton',

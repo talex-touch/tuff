@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TxIconButtonProps } from './types'
+import type { TxIconButtonProps } from './icon-button'
 import { computed, getCurrentInstance, ref, useSlots } from 'vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
 

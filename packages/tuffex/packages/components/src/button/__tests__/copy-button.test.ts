@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import TxCopyButton from '../src/TxCopyButton.vue'
+import TxCopyButton from '../src/copy-button.vue'
 
 describe('txCopyButton', () => {
   it('copies text through clipboard api and shows copied state', async () => {

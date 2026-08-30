@@ -135,7 +135,8 @@ const onDemandImportBudgets = [
     subpath: 'button',
     // `tooltip` rides in behind `popover`: TxPopover is now a TxTooltip
     // specialisation, so anything reaching the popover reaches the tooltip too.
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'popover', 'spinner', 'tooltip'],
+    // `icon` rides in behind TxIconButton, which renders its glyph via TxIcon.
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap', 'v-wave'],
   },
   {
@@ -405,10 +406,16 @@ async function auditDistSizes(errors) {
 
   const componentCssFiles = await collectFiles(distEs, filePath => filePath.endsWith('/style.css'))
   const componentCssSizes = toSortedEntries(await getSizedFiles(componentCssFiles))
-  const oversizedCss = componentCssSizes.filter(entry => entry.bytes > LIMITS.componentCssBytes)
+  // Category entry barrels (base/pro/ai, added in 98e5d5327) aggregate every member
+  // component's CSS by construction, so the per-component budget can never hold
+  // them; each is a subset of the full bundle, so hold it to the full-bundle limit
+  // instead. Member components stay under the per-component budget individually.
+  const suiteAggregateCss = new Set(['ai', 'base', 'pro'].map(dir => resolve(distEs, dir, 'style.css')))
+  const cssLimitFor = file => (suiteAggregateCss.has(file) ? LIMITS.fullCssBytes : LIMITS.componentCssBytes)
+  const oversizedCss = componentCssSizes.filter(entry => entry.bytes > cssLimitFor(entry.file))
   for (const entry of oversizedCss) {
     errors.push(
-      `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(LIMITS.componentCssBytes)}`,
+      `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(cssLimitFor(entry.file))}`,
     )
   }
   for (const distDir of [distEs, distLib]) {

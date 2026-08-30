@@ -93,17 +93,13 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 ### General
 
 - [Button](./button.en.mdc)
-- [FlatButton](./flat-button.en.mdc)
-- [IconButton](./icon-button.en.mdc)
-- [CopyButton](./copy-button.en.mdc)
 - [Icon](./icon.en.mdc)
-- [OS Icon](./os-icon.en.mdc)
-- [IconChip](./icon-chip.en.mdc)
 - [Avatar](./avatar.en.mdc)
 - [Avatar Variants](./avatar-variants.en.mdc)
 - [Tag](./tag.en.mdc)
 - [Badge](./badge.en.mdc)
 - [StatusBadge](./status-badge.en.mdc)
+- [IconChip](./icon-chip.en.mdc)
 - [Kbd](./kbd.en.mdc)
 - [Divider](./divider.en.mdc)
 

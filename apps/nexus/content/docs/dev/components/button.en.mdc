@@ -292,16 +292,67 @@ rows:
 | `menu` | `{ close: () => void }` | Menu content rendered inside `TxPopover`; call `close()` from menu actions after selection. |
 | `menu-icon` | - | Replaces the default more icon in the menu trigger. |
 
+### IconButton Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `icon` | `string` | `''` | Icon class/name rendered through `TxIcon` when no default slot is provided. |
+| `label` | `string` | `''` | Accessible label. Required for icon-only actions. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Button size. |
+| `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | Hit-area silhouette. |
+| `status` | `'success' \| 'warning' \| 'danger' \| 'info'` | - | Semantic visual tone; omitted keeps the neutral style. |
+| `pressed` | `boolean` | - | Toggle state; forwarded to `aria-pressed` when defined. |
+| `disabled` | `boolean` | `false` | Native disabled state and visual disabled class. |
+| `nativeType` | `'button' \| 'submit' \| 'reset'` | `'button'` | Native `type` attribute. |
+- `status` changes the semantic icon color, hover, pressed, and focus treatments; it does not change behavior or provide authorization.
+
+### IconButton Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `click` | `(event: MouseEvent)` | Emitted for enabled clicks. |
+
+### IconButton Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | `{ hover, pressed }` | Custom icon or animated content. |
+
+### CopyButton Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string` | `''` | Text written to the clipboard. |
+| `copyLabel` | `string` | `'Copy'` | Idle label and aria-label. |
+| `copiedLabel` | `string` | `'Copied'` | Success label and aria-label. |
+| `disabled` | `boolean` | `false` | Disables the button and prevents copy. |
+| `timeout` | `number` | `1400` | Milliseconds before copied state resets. |
+| `size` | `'sm' \| 'md'` | `'sm'` | Button density. |
+
+### CopyButton Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `copy` | `(text: string)` | Emitted after successful clipboard write. |
+| `error` | `(error: unknown)` | Emitted when clipboard write fails. |
+
+### CopyButton Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | `{ copied, copying }` | Custom button label/content. |
+
 ## Types
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  import type { TxButtonEmits, TxButtonProps, TxSplitButtonEmits, TxSplitButtonProps } from '@talex-touch/tuffex'
+  import type { TxButtonEmits, TxButtonProps, TxIconButtonProps, TxSplitButtonEmits, TxSplitButtonProps } from '@talex-touch/tuffex'
 
   export interface ButtonProps extends TxButtonProps {}
   export interface ButtonEmits extends TxButtonEmits {}
   export interface SplitButtonProps extends TxSplitButtonProps {}
   export interface SplitButtonEmits extends TxSplitButtonEmits {}
+  export interface IconButtonProps extends TxIconButtonProps {}
 ---
 :::
 
@@ -366,6 +417,58 @@ code: |
 ---
 ::
 
+### Icon Button
+
+An icon-only action button: `label` supplies the accessible name, `pressed` carries a persistent toggle, and `status` adds semantic tones.
+
+::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const pinned = ref(false)
+  </script>
+
+  <template>
+    <div class="flex flex-wrap items-center gap-3">
+      <TxIconButton
+        icon="i-carbon-star"
+        label="Pin workspace"
+        shape="circle"
+        :pressed="pinned"
+        @click="pinned = !pinned"
+      />
+      <TxIconButton icon="i-carbon-edit" label="Edit item" shape="square" status="info" />
+      <TxIconButton icon="i-carbon-add" label="Add item" shape="pill" size="lg" status="success" />
+      <TxIconButton icon="i-carbon-warning" label="Action needs attention" status="warning" />
+      <TxIconButton icon="i-carbon-trash-can" label="Delete item" status="danger" disabled />
+    </div>
+  </template>
+---
+::::
+
+### Copy Button
+
+A clipboard button with copied feedback and error events.
+
+::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const installCommand = 'pnpm add @talex-touch/tuffex'
+  </script>
+
+  <template>
+    <TxCopyButton
+      :text="installCommand"
+      copy-label="Copy install command"
+      copied-label="Copied"
+    />
+  </template>
+---
+::::
+
 ## Interaction Contract
 
 - `variant` wins over semantic `type`; when `variant` is absent, `type="text"` maps to the `ghost` variant and other semantic types map to their matching variants.
@@ -375,6 +478,8 @@ code: |
 - Non-block, non-circle buttons animate loading width changes with a size FLIP transition.
 - `vibrate` is off by default. When explicitly enabled, a click invokes device vibration at the resolved strength and plays a matching button shake; the shake is skipped under `prefers-reduced-motion: reduce`.
 - `TxSplitButton` disables both action zones while loading; `menuDisabled` only disables the menu trigger.
+- `TxIconButton` maps `label` to `aria-label` — provide it for icon-only controls; boolean `pressed` emits `aria-pressed` with active styling; the default slot receives `{ hover, pressed }`.
+- `TxCopyButton` ignores clicks while `disabled` or copying; `copy` fires only after a successful clipboard write, `error` fires when both clipboard strategies fail, and `copiedLabel` shows for `timeout` milliseconds after success.
 
 ## Best Practices
 
@@ -384,18 +489,22 @@ code: |
 - Prefer `circle` only for icon-only actions; when `block` and `circle` are combined, the component intentionally keeps regular label layout.
 - Use `loadingVariant="bar"` for full-width submit bars and keep spinner loading for compact or icon buttons.
 - Keep menu actions in `TxSplitButton` responsible for calling the provided `close()` callback after a selection.
+- For `TxIconButton`, always set `label` unless visible text is supplied through the slot; use `pressed` only for persistent toggles and normal click buttons for one-shot actions.
+- Give `TxCopyButton` a `copyLabel` that names the target; handle `error` when the copied value is critical, since browsers can reject clipboard writes outside trusted gestures.
 
 
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/button/src/button.vue`, `split-button.vue`, `types.ts`, `split-button.ts`, and both button test files.
 - **Verified coverage:** `button.test.ts` covers label rendering, semantic type mapping, variant precedence, size aliases, disabled/loading click suppression, loading bar behavior, icons, shape classes, borderless mode, and native type; `split-button.test.ts` covers menu rendering, primary click, disabled/loading suppression, and `menuOpenChange`.
+- **Verified coverage (IconButton / CopyButton):** `packages/tuffex/packages/components/src/button/__tests__/icon-button.test.ts` covers accessible-name warnings and semantic status classes; `copy-button.test.ts` covers clipboard success, copied visual state, disabled no-op, and error emission.
 - Accessibility note: the native button handles base keyboard activation. For icon-only or `circle` buttons, provide an external accessible label through surrounding markup or attrs where the visual icon is not self-explanatory.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/button/src/button.vue` and `packages/tuffex/packages/components/src/button/src/split-button.vue`.
 - Types: `packages/tuffex/packages/components/src/button/src/types.ts` and `packages/tuffex/packages/components/src/button/src/split-button.ts`.
+- IconButton / CopyButton: `packages/tuffex/packages/components/src/button/src/icon-button.vue`, `copy-button.vue`, and the `icon-button.ts` types file; `button/index.ts` exports installable `TxIconButton` / `TxCopyButton` with instance types.
 - Coverage: `packages/tuffex/packages/components/src/button/__tests__/button.test.ts` verifies variants, semantic type mapping, loading/disabled click suppression, icons, shapes, borderless mode, native type, and loading bar behavior. `split-button.test.ts` verifies primary click, disabled suppression, loading state, menu rendering, and `menuOpenChange`.
 
 <TuffDocSourceLink label="View source" />
