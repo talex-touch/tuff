@@ -65,6 +65,7 @@ export const COVERAGE = [
   },
   { root: 'packages/utils', workflow: '.github/workflows/package-utils-ci.yml', command: 'pnpm exec vitest run --exclude "**/*.benchmark.test.ts"' },
   { root: 'packages/tuffex', workflow: '.github/workflows/package-tuffex-ci.yml', command: 'package-name: tuffex' },
+  { root: 'packages/tuffex-charts', workflow: '.github/workflows/package-tuffex-charts-ci.yml', command: 'package-name: tuffex-charts' },
   { root: 'packages/tuff-cli', workflow: '.github/workflows/package-tuff-cli-ci.yml', command: 'test-command: pnpm test' },
   { root: 'packages/tuff-cli-core', workflow: '.github/workflows/package-tuff-cli-ci.yml', command: 'test-command: pnpm test' },
   {
