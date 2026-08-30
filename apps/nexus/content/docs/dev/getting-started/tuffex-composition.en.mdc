@@ -9,6 +9,18 @@ verified: true
 
 This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more components; it is to structure a page as “actions → status → data” so users can understand state and act quickly.
 
+## Component Suites & Imports
+
+Tuffex is organised into three suites: Basics (`base`), Advanced (`pro`) and AI (`ai`). Besides the full package, you can import per suite from the category entries to keep dependencies organised:
+
+```ts
+import { TxButton, TxDataTable } from '@talex-touch/tuffex/base'
+import { TxCommandPalette, TxLiquid } from '@talex-touch/tuffex/pro'
+import { ChatList, TxPromptBar } from '@talex-touch/tuffex/ai'
+```
+
+The union of the three entries is identical to the main `@talex-touch/tuffex` entry; styles are still loaded from `@talex-touch/tuffex/style.css`, or per component via each `style.css`. See the [components overview](/docs/dev/components) for each component's suite.
+
 ## 1. Page Groups
 
 | Group | Recommended components | Purpose |

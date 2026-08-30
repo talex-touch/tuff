@@ -1,7 +1,7 @@
 ---
 title: "ChatComposer 消息输入"
 description: "AI 消息输入、附件 chip、键盘发送和自定义工具栏。"
-category: Form
+category: AiChat
 status: beta
 since: 1.0.0
 tags: [chat, composer, input]

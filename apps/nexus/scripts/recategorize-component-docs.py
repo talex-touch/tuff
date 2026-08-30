@@ -4,8 +4,20 @@
 The docs sidebar (app/components/DocsSidebar.vue) groups component pages purely by
 this field, so it is the single source of truth for sidebar structure.
 
-`Foundations` is a special case: the sidebar renders it as a standalone top-level
-link next to the components index rather than as a collapsible group.
+Categories roll up into three suites via DocsSidebar's CATEGORY_SUITE_MAP:
+
+- base 基础组件: Basic, Form, Layout, Navigation, Data, Feedback, Status
+- pro  进阶套件: Advanced, Visualization, Effects, Primitives
+- ai   AI 套件:  AiChat, AiAgent, AiReasoning, AiContext
+
+The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
+keep this file, DocsSidebar.vue and the tuffex base/pro/ai entry barrels in sync.
+
+`Foundations` (foundations, utils → base) and `AiSuite` (ai-suite → ai) are special
+cases: the sidebar renders them as standalone links inside their suite rather than
+as collapsible groups.
+
+Future chart components (tuffex-charts work) belong in pro / "Visualization".
 """
 
 from __future__ import annotations
@@ -18,8 +30,10 @@ COMPONENTS_DIR = Path(__file__).resolve().parent.parent / "content" / "docs" / "
 
 # Ordered: group key -> slugs, in the order they should appear inside the group.
 TAXONOMY: dict[str, list[str]] = {
+    # ── suite: base 基础组件 ──────────────────────────────────────────────
     "Foundations": [
         "foundations",
+        "utils",
     ],
     "Basic": [
         "button",
@@ -28,6 +42,7 @@ TAXONOMY: dict[str, list[str]] = {
         "copy-button",
         "icon",
         "os-icon",
+        "icon-chip",
         "avatar",
         "avatar-variants",
         "tag",
@@ -44,8 +59,7 @@ TAXONOMY: dict[str, list[str]] = {
         "number-input",
         "search-input",
         "tag-input",
-        "markdown-editor",
-        "code-editor",
+        "scrub-field",
         "select",
         "flat-select",
         "search-select",
@@ -62,7 +76,6 @@ TAXONOMY: dict[str, list[str]] = {
         "rating",
         "file-uploader",
         "image-uploader",
-        "chat-composer",
     ],
     "Layout": [
         "container",
@@ -81,29 +94,26 @@ TAXONOMY: dict[str, list[str]] = {
         "tabs",
         "tab-bar",
         "nav-bar",
+        "sidebar-nav",
         "breadcrumb",
         "steps",
         "pagination",
         "dropdown-menu",
         "flat-dropdown",
         "context-menu",
-        "command-palette",
-        "version-capsule",
     ],
     "Data": [
         "data-table",
         "tree",
-        "virtual-list",
         "sortable-list",
         "timeline",
         "transfer",
         "stat-card",
+        "cell-link",
+        "dot-indicator",
+        "filter-chips",
         "markdown-view",
         "image-gallery",
-        "agents",
-        "chat",
-        "typing-indicator",
-        "ai-elements",
     ],
     "Feedback": [
         "dialog",
@@ -117,7 +127,7 @@ TAXONOMY: dict[str, list[str]] = {
         "progress-bar",
         "spinner",
         "loading-overlay",
-        "flip-overlay",
+        "selection-actions",
     ],
     "Status": [
         "empty",
@@ -134,10 +144,26 @@ TAXONOMY: dict[str, list[str]] = {
         "skeleton",
         "layout-skeleton",
     ],
+    # ── suite: pro 进阶套件 ──────────────────────────────────────────────
+    "Advanced": [
+        "command-palette",
+        "search-panel",
+        "markdown-editor",
+        "code-editor",
+        "virtual-list",
+        "version-capsule",
+    ],
+    "Visualization": [
+        "spark-chart",
+        "allocation-bar",
+        "diff-table",
+        "signal-meter",
+    ],
     "Effects": [
         "glass-surface",
         "gradient-border",
         "outline-border",
+        "border-beam",
         "corner-overlay",
         "gradual-blur",
         "edge-fade-mask",
@@ -148,6 +174,8 @@ TAXONOMY: dict[str, list[str]] = {
         "transition",
         "stagger",
         "fusion",
+        "liquid",
+        "flip-overlay",
     ],
     # Infrastructure that other components are built on; rarely used directly.
     "Primitives": [
@@ -155,6 +183,48 @@ TAXONOMY: dict[str, list[str]] = {
         "base-anchor",
         "floating",
         "auto-sizer",
+        "resize-box",
+    ],
+    # ── suite: ai AI 套件 ────────────────────────────────────────────────
+    "AiSuite": [
+        "ai-suite",
+    ],
+    "AiChat": [
+        "chat",
+        "chat-composer",
+        "prompt-bar",
+        "attachment-tray",
+        "message-actions",
+        "suggestion-chips",
+        "typing-indicator",
+        "conversation-stream",
+    ],
+    "AiAgent": [
+        "agents",
+        "agent-trace",
+        "task-rows",
+        "tool-call-card",
+        "tool-chips",
+        "tool-confirmation",
+        "approval-card",
+        "working-indicator",
+    ],
+    "AiReasoning": [
+        "ai-elements",
+        "chain-of-thought",
+        "reasoning-disclosure",
+        "thinking-orb",
+        "stream-markdown",
+        "code-stream",
+        "inline-citation",
+        "sources",
+    ],
+    "AiContext": [
+        "context-cards",
+        "context-indicator",
+        "insight-cards",
+        "recommendation-card",
+        "fine-tune-card",
     ],
 }
 

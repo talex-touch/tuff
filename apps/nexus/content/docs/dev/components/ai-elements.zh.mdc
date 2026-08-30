@@ -1,7 +1,7 @@
 ---
 title: AI Elements
 description: 用于 AI 对话界面的会话与消息基础组件。
-category: Data
+category: AiReasoning
 status: beta
 since: 1.0.0
 tags: [ai, conversation, message]
