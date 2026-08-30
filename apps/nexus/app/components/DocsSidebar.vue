@@ -208,7 +208,7 @@ const SECTION_ORDER: Record<string, string[]> = {
   // scripts/recategorize-component-docs.py, and fixes the order inside each group.
   '/docs/dev/components': [
     '/docs/dev/components/index',
-    // ── suite: base — Foundations (standalone pages)
+    // ── suite: concepts — Foundations (standalone pages)
     '/docs/dev/components/foundations',
     '/docs/dev/components/utils',
     // base — Basic
@@ -344,6 +344,13 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/floating',
     '/docs/dev/components/auto-sizer',
     '/docs/dev/components/resize-box',
+    // pro — Charts (@talex-touch/tuffex-charts) — mirrors the kumo docs order
+    '/docs/dev/components/charts',
+    '/docs/dev/components/chart-colors',
+    '/docs/dev/components/timeseries-chart',
+    '/docs/dev/components/maps',
+    '/docs/dev/components/sankey-chart',
+    '/docs/dev/components/custom-chart',
     // ── suite: ai — AiSuite (standalone page)
     '/docs/dev/components/ai-suite',
     // ai — AiChat
@@ -413,10 +420,11 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Component docs are split into three suites (base / pro / ai). Categories and
-// their suite assignment mirror scripts/recategorize-component-docs.py — keep the
-// two files (and the tuffex base/pro/ai entry barrels) in sync.
-type SuiteKey = 'base' | 'pro' | 'ai'
+// Component docs are split into four suites (concepts / base / pro / ai).
+// Categories and their suite assignment mirror
+// scripts/recategorize-component-docs.py — keep the two files (and the tuffex
+// base/pro/ai entry barrels) in sync.
+type SuiteKey = 'concepts' | 'base' | 'pro' | 'ai'
 
 interface SuiteDef {
   key: SuiteKey
@@ -427,6 +435,12 @@ interface SuiteDef {
 }
 
 const SUITES = computed<SuiteDef[]>(() => [
+  {
+    key: 'concepts',
+    label: t('docsSidebar.suites.concepts'),
+    categories: [],
+    standalonePages: ['/docs/dev/components/foundations', '/docs/dev/components/utils'],
+  },
   {
     key: 'base',
     label: t('docsSidebar.suites.base'),
@@ -439,7 +453,7 @@ const SUITES = computed<SuiteDef[]>(() => [
       { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
       { key: 'Status', label: t('docsSidebar.categories.status') },
     ],
-    standalonePages: ['/docs/dev/components/foundations', '/docs/dev/components/utils'],
+    standalonePages: [],
   },
   {
     key: 'pro',
@@ -447,6 +461,7 @@ const SUITES = computed<SuiteDef[]>(() => [
     categories: [
       { key: 'Advanced', label: t('docsSidebar.categories.advanced') },
       { key: 'Visualization', label: t('docsSidebar.categories.visualization') },
+      { key: 'Charts', label: t('docsSidebar.categories.charts') },
       { key: 'Effects', label: t('docsSidebar.categories.effects') },
       { key: 'Primitives', label: t('docsSidebar.categories.primitives') },
     ],
@@ -466,7 +481,7 @@ const SUITES = computed<SuiteDef[]>(() => [
 ])
 
 const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
-  Foundations: 'base',
+  Foundations: 'concepts',
   Basic: 'base',
   Form: 'base',
   Layout: 'base',
@@ -476,6 +491,7 @@ const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
   Status: 'base',
   Advanced: 'pro',
   Visualization: 'pro',
+  Charts: 'pro',
   Effects: 'pro',
   Primitives: 'pro',
   AiSuite: 'ai',

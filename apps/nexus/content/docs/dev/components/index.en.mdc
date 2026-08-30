@@ -222,6 +222,17 @@ Rich interaction, visualization, visual effects and low-level primitives, import
 - [DiffTable](./diff-table.en.mdc)
 - [SignalMeter](./signal-meter.en.mdc)
 
+### Charts
+
+Docs for the standalone `@talex-touch/tuffex-charts` package (kumo), installed separately from the main tuffex package.
+
+- [Charts](./charts.en.mdc)
+- [Chart Colors](./chart-colors.en.mdc)
+- [TimeseriesChart](./timeseries-chart.en.mdc)
+- [Maps](./maps.en.mdc)
+- [SankeyChart](./sankey-chart.en.mdc)
+- [Custom Chart](./custom-chart.en.mdc)
+
 ### Effects
 
 - [GlassSurface](./glass-surface.en.mdc)

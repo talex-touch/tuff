@@ -569,6 +569,7 @@ export default {
     extensions: 'Ext',
     components: 'UI',
     suites: {
+      concepts: 'Concepts',
       base: 'Basics',
       pro: 'Advanced',
       ai: 'AI',
@@ -579,6 +580,7 @@ export default {
       layout: 'Layout',
       navigation: 'Navigation',
       data: 'Data Display',
+      charts: 'Charts',
       feedback: 'Feedback',
       status: 'Status & Empty',
       advanced: 'Interaction',

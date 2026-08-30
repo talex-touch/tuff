@@ -568,6 +568,7 @@ export default {
     extensions: '扩展',
     components: '组件',
     suites: {
+      concepts: '理念',
       base: '基础',
       pro: '进阶',
       ai: 'AI',
@@ -578,6 +579,7 @@ export default {
       layout: '布局',
       navigation: '导航',
       data: '数据展示',
+      charts: '图表',
       feedback: '反馈',
       status: '状态占位',
       advanced: '高级交互',
