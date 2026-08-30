@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/index.ts", "reason": "kumo 导出面 = 六板块验收对照清单之源"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/Color.ts", "reason": "色彩系统移植源（分类/语义/顺序/地图色，明暗两套）"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/TimeseriesChart.tsx", "reason": "Timeseries 全部 props 与行为参照"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/Maps.tsx", "reason": "投影常量、accessor 模式、Bubble/Choropleth props"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/src/SankeyChart.tsx", "reason": "Sankey props 面与渲染细节"}
+{"file": ".trellis/tasks/08-30-tuffex-charts/research/kumo-reference/docs-pages/index.mdx", "reason": "Charts 总览板块结构"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "包/目录组织约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}
