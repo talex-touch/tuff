@@ -1,7 +1,7 @@
 ---
 title: "SparkChart"
 description: "The static multi-series polyline inside a card: painted on canvas, with a DOM cursor and tooltip over it."
-category: Data
+category: Visualization
 status: beta
 since: 0.3.9
 tags: [ai, chart, canvas, data]

@@ -1,7 +1,7 @@
 ---
 title: Thinking Orb
 description: A canvas thinking indicator that shares one clock and stops when offscreen.
-category: Effects
+category: AiReasoning
 status: beta
 since: 0.3.9
 tags: [ai, loading, canvas]

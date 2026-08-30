@@ -1,7 +1,7 @@
 ---
 title: Tool Call Card
 description: A tool call's status card, with logs that follow their tail and a result surface the host can own.
-category: Data
+category: AiAgent
 status: beta
 since: 0.3.9
 tags: [ai, tool, status]

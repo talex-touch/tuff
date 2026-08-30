@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxIconButton } from '@talex-touch/tuffex/icon-button'
+import { TxIconButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 

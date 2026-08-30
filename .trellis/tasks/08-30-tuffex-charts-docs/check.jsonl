@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "质量检查基线"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端组件规范（命名/props/事件惯例）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "类型规范；双侧 typecheck 严格度差异背景"}
+{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "渲染契约核验"}

@@ -1,7 +1,7 @@
 ---
 title: "CodeEditor"
 description: "CodeMirror-based editor for JSON/YAML plus lightweight TOML, INI, and JavaScript editing, with formatting, linting, search, folding, and a toolbar slot."
-category: Form
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [code, editor, json, yaml]

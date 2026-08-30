@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import TxCopyButton from '../../copy-button/src/TxCopyButton.vue'
+import TxCopyButton from '../../button/src/copy-button.vue'
 import { highlightToHtml } from './shiki-runtime'
 
 defineOptions({ name: 'TxCodeBlock' })

@@ -9,6 +9,18 @@ verified: true
 
 本教程面向 Nexus / Dashboard / Admin 页面：目标不是堆组件，而是把页面切成“操作区 → 状态区 → 数据区”，让用户能快速判断当前状态并完成动作。
 
+## 组件套件与引入
+
+Tuffex 按三套件组织：基础组件（`base`）、进阶套件（`pro`）与 AI 套件（`ai`）。除整包引入外，可从分类入口按套件引入，便于按需组织依赖：
+
+```ts
+import { TxButton, TxDataTable } from '@talex-touch/tuffex/base'
+import { TxCommandPalette, TxLiquid } from '@talex-touch/tuffex/pro'
+import { ChatList, TxPromptBar } from '@talex-touch/tuffex/ai'
+```
+
+三个入口的导出并集与主入口 `@talex-touch/tuffex` 完全一致；样式照常从 `@talex-touch/tuffex/style.css` 全量引入，或按组件的 `style.css` 按需引入。各组件的套件归属见[组件总览](/docs/dev/components)。
+
 ## 1. 页面分组
 
 | 分组 | 推荐组件 | 说明 |

@@ -24,7 +24,7 @@ const props = withDefaults(
     modelValue: false,
     disabled: false,
     labelPlacement: 'end',
-    variant: 'fill',
+    variant: 'checkmark',
     indeterminate: false,
   },
 )
@@ -77,7 +77,7 @@ function toggle() {
         'is-indeterminate': indeterminate,
         'is-disabled': disabled,
       },
-      `tx-checkbox--${variant || 'fill'}`,
+      `tx-checkbox--${variant || 'checkmark'}`,
     ]"
     @click="toggle"
   >
@@ -90,7 +90,7 @@ function toggle() {
 
     <span class="tx-checkbox__box" aria-hidden="true">
       <span v-if="indeterminate" class="tx-checkbox__dash" />
-      <svg v-if="variant === 'checkmark'" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+      <svg v-if="variant !== 'fill'" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline
           fill="none"
           stroke-width="24"
@@ -138,6 +138,10 @@ function toggle() {
       box-shadow 0.18s ease;
 
     svg {
+      /* Out of the flex flow: when the indeterminate dash is also rendered,
+         a static 100%-wide svg would sit beside it and shove it off-center. */
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
     }

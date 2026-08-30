@@ -9,19 +9,9 @@ verified: true
 
 ## Preview
 
-::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div class="tuff-demo-row">
-      <TxButton size="sm">Action</TxButton>
-      <TuffSwitch :model-value="true" />
-      <TxStatusBadge text="Online" status="success" />
-      <TxTag label="Focus" />
-      <TxProgressBar :percentage="62" style="width: 140px;" />
-    </div>
-  </template>
----
+Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+
+::DocsComponentsGallery
 ::
 
 ## Composed Workspace Demo
@@ -88,27 +78,156 @@ code: |
 ::DocsComponentSyncTable
 ::
 
-## Chapter Overview
+## Suite Overview
 
-| Chapter | Core Scope | Status |
-|------|----------|----------|
-| Design Patterns | Surface / Motion / composition styles | ✅ migrated |
-| Design Cases | Real scenarios and composed UI patterns | ✅ migrated |
-| Dark Mode & Theme | Tokens, light/dark, and theme constraints | ✅ migrated |
-| Basics & Actions | Button / Icon / Avatar / Tag | ✅ migrated |
-| Forms & Input | Input / Select / Form / Uploader | ✅ migrated |
-| Feedback & States | Dialog / Toast / Progress / Empty | ✅ migrated |
-| Layout & Navigation | Grid / Container / Tabs / Menu | ✅ migrated |
-| Data & Lists | DataTable / Tree / VirtualList | ✅ migrated |
-| Content & Media | Chat / Markdown / Image | ✅ migrated |
+| Suite | Groups | Components | Entry |
+|-------|--------|------------|-------|
+| Basics | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
+| Advanced | Interaction / Visualization / Effects / Primitives | 31 | `@talex-touch/tuffex/pro` |
+| AI Suite | Chat / Agents / Reasoning / Context & Insight | 29 | `@talex-touch/tuffex/ai` |
 
-## Design Patterns
+## Basics
 
-- [Foundations](./foundations.en.mdc)
-- [BaseSurface](./base-surface.en.mdc)
+The everyday building blocks, importable through the `@talex-touch/tuffex/base` category entry. Design foundations live in [Foundations](./foundations.en.mdc); shared helpers in [Utils](./utils.en.mdc).
+
+### General
+
+- [Button](./button.en.mdc)
+- [Icon](./icon.en.mdc)
+- [Avatar](./avatar.en.mdc)
+- [Avatar Variants](./avatar-variants.en.mdc)
+- [Tag](./tag.en.mdc)
+- [Badge](./badge.en.mdc)
+- [StatusBadge](./status-badge.en.mdc)
+- [IconChip](./icon-chip.en.mdc)
+- [Kbd](./kbd.en.mdc)
+- [Divider](./divider.en.mdc)
+
+### Form
+
+- [Form](./form.en.mdc)
+- [Input](./input.en.mdc)
+- [FlatInput](./flat-input.en.mdc)
+- [Textarea](./textarea.en.mdc)
+- [NumberInput](./number-input.en.mdc)
+- [SearchInput](./search-input.en.mdc)
+- [TagInput](./tag-input.en.mdc)
+- [ScrubField](./scrub-field.en.mdc)
+- [Select](./select.en.mdc)
+- [FlatSelect](./flat-select.en.mdc)
+- [SearchSelect](./search-select.en.mdc)
+- [TreeSelect](./tree-select.en.mdc)
+- [Cascader](./cascader.en.mdc)
+- [Picker](./picker.en.mdc)
+- [DatePicker](./date-picker.en.mdc)
+- [Radio](./radio.en.mdc)
+- [FlatRadio](./flat-radio.en.mdc)
+- [Checkbox](./checkbox.en.mdc)
+- [Switch](./switch.en.mdc)
+- [Slider](./slider.en.mdc)
+- [SegmentedSlider](./segmented-slider.en.mdc)
+- [Rating](./rating.en.mdc)
+- [FileUploader](./file-uploader.en.mdc)
+- [ImageUploader](./image-uploader.en.mdc)
+
+### Layout
+
+- [Container](./container.en.mdc)
+- [Flex](./flex.en.mdc)
+- [Grid](./grid.en.mdc)
+- [GridLayout](./grid-layout.en.mdc)
+- [Stack](./stack.en.mdc)
+- [Splitter](./splitter.en.mdc)
+- [Scroll](./scroll.en.mdc)
+- [Collapse](./collapse.en.mdc)
+- [Card](./card.en.mdc)
+- [CardItem](./card-item.en.mdc)
+- [GroupBlock](./group-block.en.mdc)
+
+### Navigation
+
+- [Tabs](./tabs.en.mdc)
+- [TabBar](./tab-bar.en.mdc)
+- [NavBar](./nav-bar.en.mdc)
+- [SidebarNav](./sidebar-nav.en.mdc)
+- [Breadcrumb](./breadcrumb.en.mdc)
+- [Steps](./steps.en.mdc)
+- [Pagination](./pagination.en.mdc)
+- [DropdownMenu](./dropdown-menu.en.mdc)
+- [FlatDropdown](./flat-dropdown.en.mdc)
+- [ContextMenu](./context-menu.en.mdc)
+
+### Data Display
+
+- [DataTable](./data-table.en.mdc)
+- [Tree](./tree.en.mdc)
+- [SortableList](./sortable-list.en.mdc)
+- [Timeline](./timeline.en.mdc)
+- [Transfer](./transfer.en.mdc)
+- [StatCard](./stat-card.en.mdc)
+- [CellLink](./cell-link.en.mdc)
+- [DotIndicator](./dot-indicator.en.mdc)
+- [FilterChips](./filter-chips.en.mdc)
+- [MarkdownView](./markdown-view.en.mdc)
+- [ImageGallery](./image-gallery.en.mdc)
+
+### Feedback
+
+- [Dialog](./dialog.en.mdc)
+- [Modal](./modal.en.mdc)
+- [Drawer](./drawer.en.mdc)
+- [Popover](./popover.en.mdc)
+- [Tooltip](./tooltip.en.mdc)
+- [Toast](./toast.en.mdc)
+- [Alert](./alert.en.mdc)
+- [Progress](./progress.en.mdc)
+- [ProgressBar](./progress-bar.en.mdc)
+- [Spinner](./spinner.en.mdc)
+- [LoadingOverlay](./loading-overlay.en.mdc)
+- [SelectionActions](./selection-actions.en.mdc)
+
+### Status & Empty
+
+- [Empty](./empty.en.mdc)
+- [EmptyState](./empty-state.en.mdc)
+- [NoData](./no-data.en.mdc)
+- [NoSelection](./no-selection.en.mdc)
+- [SearchEmpty](./search-empty.en.mdc)
+- [ErrorState](./error-state.en.mdc)
+- [OfflineState](./offline-state.en.mdc)
+- [PermissionState](./permission-state.en.mdc)
+- [GuideState](./guide-state.en.mdc)
+- [BlankSlate](./blank-slate.en.mdc)
+- [LoadingState](./loading-state.en.mdc)
+- [Skeleton](./skeleton.en.mdc)
+- [LayoutSkeleton](./layout-skeleton.en.mdc)
+
+## Advanced
+
+Rich interaction, visualization, visual effects and low-level primitives, importable through the `@talex-touch/tuffex/pro` category entry.
+
+### Interaction
+
+- [CommandPalette](./command-palette.en.mdc)
+- [SearchPanel](./search-panel.en.mdc)
+- [MarkdownEditor](./markdown-editor.en.mdc)
+- [CodeEditor](./code-editor.en.mdc)
+- [VirtualList](./virtual-list.en.mdc)
+- [VersionCapsule](./version-capsule.en.mdc)
+
+### Visualization
+
+- [SparkChart](./spark-chart.en.mdc)
+- [AllocationBar](./allocation-bar.en.mdc)
+- [DiffTable](./diff-table.en.mdc)
+- [SignalMeter](./signal-meter.en.mdc)
+
+### Effects
+
 - [GlassSurface](./glass-surface.en.mdc)
 - [GradientBorder](./gradient-border.en.mdc)
 - [OutlineBorder](./outline-border.en.mdc)
+- [BorderBeam](./border-beam.en.mdc)
 - [CornerOverlay](./corner-overlay.en.mdc)
 - [GradualBlur](./gradual-blur.en.mdc)
 - [EdgeFadeMask](./edge-fade-mask.en.mdc)
@@ -118,182 +237,61 @@ code: |
 - [TextTransformer](./text-transformer.en.mdc)
 - [Transition](./transition.en.mdc)
 - [Stagger](./stagger.en.mdc)
-- [Floating](./floating.en.mdc)
 - [Fusion](./fusion.en.mdc)
-- [BorderBeam](./border-beam.en.mdc)
 - [Liquid](./liquid.en.mdc)
-- [Avatar Variants](./avatar-variants.en.mdc)
-
-## Design Cases
-
-- [Agents](./agents.en.mdc)
-- [Chat](./chat.en.mdc)
-- [AI Elements](./ai-elements.en.mdc)
-- [SuggestionChips](./suggestion-chips.en.mdc)
-- [ContextIndicator](./context-indicator.en.mdc)
-- [ReasoningDisclosure](./reasoning-disclosure.en.mdc)
-- [MessageActions](./message-actions.en.mdc)
-- [Sources](./sources.en.mdc)
-- [ToolConfirmation](./tool-confirmation.en.mdc)
-- [ChainOfThought](./chain-of-thought.en.mdc)
-- [ThinkingOrb](./thinking-orb.en.mdc)
-- [ToolCallCard](./tool-call-card.en.mdc)
-- [AttachmentTray](./attachment-tray.en.mdc)
-- [ConversationStream](./conversation-stream.en.mdc)
-- [StreamMarkdown](./stream-markdown.en.mdc)
-- [ChatComposer](./chat-composer.en.mdc)
-- [MarkdownView](./markdown-view.en.mdc)
-- [ImageGallery](./image-gallery.en.mdc)
-- [GroupBlock](./group-block.en.mdc)
-- [Card](./card.en.mdc)
-
-## Dark Mode & Theme
-
-- [Foundations](./foundations.en.mdc) (includes light/dark token guidance)
-- [StatusBadge](./status-badge.en.mdc)
-- [EmptyState](./empty-state.en.mdc)
-- [ErrorState](./error-state.en.mdc)
-- [GuideState](./guide-state.en.mdc)
-
-## Basics & Actions
-
-- [Button](./button.en.mdc)
-- [FlatButton](./flat-button.en.mdc)
-- [Icon](./icon.en.mdc)
-- [Avatar](./avatar.en.mdc)
-- [Tag](./tag.en.mdc)
-- [Divider](./divider.en.mdc)
-- [StatCard](./stat-card.en.mdc)
-- [IconButton](./icon-button.en.mdc)
-- [CopyButton](./copy-button.en.mdc)
-- [Kbd](./kbd.en.mdc)
-- [OS Icon](./os-icon.en.mdc)
-- [Badge](./badge.en.mdc)
-
-## Forms & Input
-
-- [Input](./input.en.mdc)
-- [CodeEditor](./code-editor.en.mdc)
-- [Textarea](./textarea.en.mdc)
-- [NumberInput](./number-input.en.mdc)
-- [FlatInput](./flat-input.en.mdc)
-- [Select](./select.en.mdc)
-- [MarkdownEditor](./markdown-editor.en.mdc)
-- [FlatRadio](./flat-radio.en.mdc)
-- [FlatDropdown](./flat-dropdown.en.mdc)
-- [FlatSelect](./flat-select.en.mdc)
-- [SearchInput](./search-input.en.mdc)
-- [SearchSelect](./search-select.en.mdc)
-- [Checkbox](./checkbox.en.mdc)
-- [Radio](./radio.en.mdc)
-- [Switch](./switch.en.mdc)
-- [Slider](./slider.en.mdc)
-- [SegmentedSlider](./segmented-slider.en.mdc)
-- [DatePicker](./date-picker.en.mdc)
-- [Picker](./picker.en.mdc)
-- [Cascader](./cascader.en.mdc)
-- [TagInput](./tag-input.en.mdc)
-- [Form](./form.en.mdc)
-- [FileUploader](./file-uploader.en.mdc)
-- [ImageUploader](./image-uploader.en.mdc)
-
-## Feedback & States
-
-- [Dialog](./dialog.en.mdc)
-- [Alert](./alert.en.mdc)
-- [Drawer](./drawer.en.mdc)
 - [FlipOverlay](./flip-overlay.en.mdc)
-- [Modal](./modal.en.mdc)
-- [Toast](./toast.en.mdc)
-- [Tooltip](./tooltip.en.mdc)
-- [Popover](./popover.en.mdc)
+
+### Primitives
+
+- [BaseSurface](./base-surface.en.mdc)
 - [BaseAnchor](./base-anchor.en.mdc)
-- [LoadingState](./loading-state.en.mdc)
-- [LoadingOverlay](./loading-overlay.en.mdc)
-- [Progress](./progress.en.mdc)
-- [ProgressBar](./progress-bar.en.mdc)
-- [Spinner](./spinner.en.mdc)
-- [Empty](./empty.en.mdc)
-- [EmptyState](./empty-state.en.mdc)
-- [OfflineState](./offline-state.en.mdc)
-- [PermissionState](./permission-state.en.mdc)
-- [SearchEmpty](./search-empty.en.mdc)
-- [Skeleton](./skeleton.en.mdc)
-- [Collapse](./collapse.en.mdc)
-- [LayoutSkeleton](./layout-skeleton.en.mdc)
-- [NoData](./no-data.en.mdc)
-- [NoSelection](./no-selection.en.mdc)
-- [BlankSlate](./blank-slate.en.mdc)
-
-## Layout & Navigation
-
-- [Grid](./grid.en.mdc)
-- [CardItem](./card-item.en.mdc)
-- [GridLayout](./grid-layout.en.mdc)
-- [Flex](./flex.en.mdc)
-- [Stack](./stack.en.mdc)
-- [Container](./container.en.mdc)
-- [Splitter](./splitter.en.mdc)
-- [Scroll](./scroll.en.mdc)
+- [Floating](./floating.en.mdc)
 - [AutoSizer](./auto-sizer.en.mdc)
 - [ResizeBox](./resize-box.en.mdc)
-- [NavBar](./nav-bar.en.mdc)
-- [TabBar](./tab-bar.en.mdc)
-- [Tabs](./tabs.en.mdc)
-- [Breadcrumb](./breadcrumb.en.mdc)
-- [DropdownMenu](./dropdown-menu.en.mdc)
-- [CommandPalette](./command-palette.en.mdc)
-- [ContextMenu](./context-menu.en.mdc)
-- [VersionCapsule](./version-capsule.en.mdc)
 
-## Data & Lists
+## AI Suite
 
-- [DataTable](./data-table.en.mdc)
-- [Pagination](./pagination.en.mdc)
-- [Tree](./tree.en.mdc)
-- [TreeSelect](./tree-select.en.mdc)
-- [SortableList](./sortable-list.en.mdc)
-- [VirtualList](./virtual-list.en.mdc)
-- [Steps](./steps.en.mdc)
-- [Rating](./rating.en.mdc)
-- [Timeline](./timeline.en.mdc)
-- [Transfer](./transfer.en.mdc)
+AI-native interface components, partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT) — see the [AI Suite Overview](./ai-suite.en.mdc) for full showcases — importable through the `@talex-touch/tuffex/ai` category entry.
 
-## Content & Media
+### Chat
 
 - [Chat](./chat.en.mdc)
 - [ChatComposer](./chat-composer.en.mdc)
+- [PromptBar](./prompt-bar.en.mdc)
+- [AttachmentTray](./attachment-tray.en.mdc)
+- [MessageActions](./message-actions.en.mdc)
+- [SuggestionChips](./suggestion-chips.en.mdc)
 - [TypingIndicator](./typing-indicator.en.mdc)
-- [MarkdownView](./markdown-view.en.mdc)
-- [ImageGallery](./image-gallery.en.mdc)
+- [ConversationStream](./conversation-stream.en.mdc)
 
-## AI Suite (Beautiful UI)
+### Agents
 
-AI-native interface components adapted from [Beautiful UI](https://www.beautifului.dev) (MIT); see the [AI Suite Overview](./ai-suite.en.mdc) for the full showcase.
-
-- [WorkingIndicator](./working-indicator.en.mdc)
+- [Agents](./agents.en.mdc)
 - [AgentTrace](./agent-trace.en.mdc)
 - [TaskRows](./task-rows.en.mdc)
+- [ToolCallCard](./tool-call-card.en.mdc)
+- [ToolChips](./tool-chips.en.mdc)
+- [ToolConfirmation](./tool-confirmation.en.mdc)
+- [ApprovalCard](./approval-card.en.mdc)
+- [WorkingIndicator](./working-indicator.en.mdc)
+
+### Reasoning
+
+- [AI Elements](./ai-elements.en.mdc)
+- [ChainOfThought](./chain-of-thought.en.mdc)
+- [ReasoningDisclosure](./reasoning-disclosure.en.mdc)
+- [ThinkingOrb](./thinking-orb.en.mdc)
+- [StreamMarkdown](./stream-markdown.en.mdc)
 - [CodeStream](./code-stream.en.mdc)
 - [InlineCitation](./inline-citation.en.mdc)
-- [PromptBar](./prompt-bar.en.mdc)
-- [ApprovalCard](./approval-card.en.mdc)
-- [ToolChips](./tool-chips.en.mdc)
-- [SignalMeter](./signal-meter.en.mdc)
-- [RecommendationCard](./recommendation-card.en.mdc)
-- [SelectionActions](./selection-actions.en.mdc)
-- [DiffTable](./diff-table.en.mdc)
-- [FilterChips](./filter-chips.en.mdc)
-- [DotIndicator](./dot-indicator.en.mdc)
-- [CellLink](./cell-link.en.mdc)
+- [Sources](./sources.en.mdc)
+
+### Context & Insight
+
 - [ContextCards](./context-cards.en.mdc)
-- [SidebarNav](./sidebar-nav.en.mdc)
-- [SearchPanel](./search-panel.en.mdc)
-- [IconChip](./icon-chip.en.mdc)
-- [SparkChart](./spark-chart.en.mdc)
-- [AllocationBar](./allocation-bar.en.mdc)
+- [ContextIndicator](./context-indicator.en.mdc)
 - [InsightCards](./insight-cards.en.mdc)
-- [ScrubField](./scrub-field.en.mdc)
+- [RecommendationCard](./recommendation-card.en.mdc)
 - [FineTuneCard](./fine-tune-card.en.mdc)
 
 ## Review Notes
@@ -301,5 +299,6 @@ AI-native interface components adapted from [Beautiful UI](https://www.beautiful
 - Hub scope: this page is a component documentation index and composed-demo guide; per-component API / props / best-practice details live in the linked component pages.
 - Source registry: `packages/tuffex/packages/components/src/components.ts` defines the exported component slug set used by docs coverage.
 - Demo registry: `apps/nexus/app/components/content/demo-registry.ts` maps each `TuffDemoWrapper` demo on this page to a standalone Vue demo file.
+- Preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders the "Preview" grid at the top of this page.
 - **Verified coverage:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies exported components have English and Chinese docs, localized hubs link documented components, and all demo references resolve to registered Vue files.
 

@@ -52,6 +52,18 @@ function cleanupAnchors() {
   document.body.innerHTML = ''
 }
 
+/**
+ * The open path now waits for floating-ui's first positioning pass and a
+ * stable panel size (two rAF frames) before starting the open motion, so
+ * "open then assert the seed frame" tests must let that pipeline drain on the
+ * real clock first.
+ */
+async function settleOpenTiming() {
+  await vi.dynamicImportSettled()
+  await new Promise(resolve => setTimeout(resolve, 90))
+  await flushPromises()
+}
+
 function mountAnchor(options: Parameters<typeof mount<typeof TxBaseAnchor>>[1] = {}) {
   const wrapper = mount(TxBaseAnchor, {
     attachTo: document.body,
@@ -219,7 +231,7 @@ describe('txBaseAnchor', () => {
 
     await boom.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({
       scale: 1.12,
@@ -237,7 +249,7 @@ describe('txBaseAnchor', () => {
 
     await opacity.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({ opacity: 0 }))
   })
@@ -381,7 +393,7 @@ describe('txBaseAnchor expand motion', () => {
 
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     // bottom-end: the panel hangs below the reference, right edges aligned —
     // so it grows around its top-right corner, drifting down from -12px. The
@@ -407,7 +419,7 @@ describe('txBaseAnchor expand motion', () => {
     const spring = mountAnchor({ props: { animation: { type: 'expand' } } })
     await spring.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     const springTo = lastTimeline()!.to
     expect(springTo).toHaveBeenCalled()
@@ -429,7 +441,7 @@ describe('txBaseAnchor expand motion', () => {
     })
     await native.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     const nativeTo = lastTimeline()!.to
     expect(nativeTo).toHaveBeenCalled()
@@ -442,7 +454,7 @@ describe('txBaseAnchor expand motion', () => {
     })
     await bezier.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     const bezierTo = lastTimeline()!.to
     expect(bezierTo).toHaveBeenCalled()
@@ -462,7 +474,7 @@ describe('txBaseAnchor expand motion', () => {
 
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     // Box mode: no clip window at all — the card crops and carries the edge.
     // All overrides are inline so the motion cannot depend on a stylesheet
@@ -500,7 +512,7 @@ describe('txBaseAnchor expand motion', () => {
     // Closing collapses the same box rather than re-clipping it.
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
     const closeTween = lastTimeline()!.to.mock.calls
       .find(call => call[0] !== content && 'p' in (call[1] as object))
     expect(closeTween).toBeTruthy()
@@ -516,7 +528,7 @@ describe('txBaseAnchor expand motion', () => {
 
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     const clip = document.body.querySelector<HTMLElement>('.tx-base-anchor__clip')!
     // The panel sits above the trigger, so the box hangs from its bottom:
@@ -537,7 +549,7 @@ describe('txBaseAnchor expand motion', () => {
     const box = mountAnchor({ props: { animation: { type: 'expand' } } })
     await box.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
     expect(box.findComponent(CardStub).props('surfaceMoving')).toBe(false)
 
     // Horizontal placements fall back to the window reveal, which still fades
@@ -547,7 +559,7 @@ describe('txBaseAnchor expand motion', () => {
     })
     await fallback.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
     expect(fallback.findComponent(CardStub).props('surfaceMoving')).toBe(true)
   })
 })
@@ -714,7 +726,7 @@ describe('txBaseAnchor drip / bead motion', () => {
 
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await vi.dynamicImportSettled()
+    await settleOpenTiming()
 
     expect(gsap.set).not.toHaveBeenCalled()
   })
@@ -759,7 +771,7 @@ describe('txBaseAnchor drip / bead motion', () => {
 
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await settleOpenTiming()
     await nextTick()
 
     const shape = document.body.querySelector('.tx-base-anchor__liquid-goo defs g rect:nth-of-type(2)')!
@@ -826,7 +838,7 @@ describe('txBaseAnchor drip / bead motion', () => {
 
     await wrapper.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await settleOpenTiming()
     await nextTick()
 
     const ghost = () => document.body.querySelector('.tx-base-anchor__liquid-goo defs g rect')!
