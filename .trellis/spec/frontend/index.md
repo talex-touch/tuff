@@ -32,6 +32,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Anchor Overlay Chain](./anchor-overlay-chain.md)             | Nested overlay chain: anchor-delay links, hover travel, outside-click, submenus      | Filled |
 | [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
 | [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
+| [TuffEx Charts Package](./tuffex-charts-package.md)           | tuffex-charts contracts: no echarts, CSS-var theming, kumo divergences               | Filled |
 | [Quality Guidelines](./quality-guidelines.md)                 | Code standards, forbidden patterns, verification                                     | Filled |
 | [Type Safety](./type-safety.md)                               | TypeScript, runtime guards, typed transport                                          | Filled |
 | [Plugin Runtime Security](./plugin-runtime-security.md)       | Privileged plugin handlers, views, preload, and Electron policy                      | Filled |
