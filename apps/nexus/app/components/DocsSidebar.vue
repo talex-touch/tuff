@@ -1159,7 +1159,11 @@ onBeforeUnmount(() => {
         <DocSection
           v-for="section in sections"
           :key="sectionKey(section)"
-          :active="isSectionExpanded(section)"
+          :active="
+            section.children?.length
+              ? isSectionExpanded(section)
+              : normalizedRoutePath === (linkTarget(section) || '')
+          "
           :link="linkTarget(section) || undefined"
           :list="section.children?.length || 0"
           @click="toggleSection(section)"
@@ -1171,9 +1175,6 @@ onBeforeUnmount(() => {
                 :title="itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined)"
               >
                 {{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}
-              </span>
-              <span v-if="section.children?.length" class="docs-nav-section-count">
-                {{ section.children.length }}
               </span>
             </span>
           </template>
@@ -1309,44 +1310,19 @@ onBeforeUnmount(() => {
 :deep(.docs-nav-list) {
   position: relative;
   margin: 0;
-  padding: 0 0 0 14px;
+  padding: 0 0 0 2px;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   background: transparent;
   box-shadow: none;
-}
-
-:deep(.docs-nav-list)::before {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  bottom: 4px;
-  width: 1px;
-  background: rgba(15, 23, 42, 0.12);
 }
 
 :deep(.docs-nav-item) {
   position: relative;
   background: transparent;
   box-shadow: none;
-}
-
-:deep(.docs-nav-section-count) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.2);
-  color: rgba(51, 65, 85, 0.9);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
 }
 
 :deep(.docs-nav-sync-badge) {
@@ -1388,10 +1364,10 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 6px 8px 6px calc(6px + var(--wm-jitter-x2, 0px));
-  font-size: 12px;
-  line-height: 1.4;
-  color: rgba(15, 23, 42, 0.58);
+  padding: 7px 8px 7px calc(2px + var(--wm-jitter-x2, 0px));
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.6);
   letter-spacing: var(--wm-letter-space-2, 0px);
   background: transparent;
   border-radius: 0;
@@ -1400,46 +1376,20 @@ onBeforeUnmount(() => {
   transition: color 0.2s ease;
 }
 
-:deep(.docs-nav-link)::before {
-  content: '';
-  position: absolute;
-  left: -10px;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0;
-  transform: scaleY(0.6);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
 :deep(.docs-nav-link:hover) {
-  color: rgba(15, 23, 42, 0.82);
+  color: rgba(15, 23, 42, 0.88);
 }
 
 :deep(.docs-nav-link.is-active) {
-  color: rgba(15, 23, 42, 0.95);
+  color: rgba(15, 23, 42, 0.96);
   font-weight: 600;
   background: transparent !important;
-}
-
-:deep(.docs-nav-link.is-active)::before {
-  opacity: 1;
-  transform: scaleY(1);
 }
 
 :deep(.docs-nav-link.router-link-active),
 :deep(.docs-nav-link.router-link-exact-active) {
   background: transparent !important;
   box-shadow: none !important;
-}
-
-:global(.dark .docs-nav-list)::before,
-:global([data-theme='dark'] .docs-nav-list)::before {
-  background: rgba(148, 163, 184, 0.16);
 }
 
 :global(.dark .docs-nav-list),
@@ -1462,12 +1412,6 @@ onBeforeUnmount(() => {
   color: rgba(226, 232, 240, 0.56);
   background: transparent;
   box-shadow: none;
-}
-
-:global(.dark .docs-nav-section-count),
-:global([data-theme='dark'] .docs-nav-section-count) {
-  background: rgba(71, 85, 105, 0.4);
-  color: rgba(226, 232, 240, 0.88);
 }
 
 :global(.dark .docs-nav-sync-badge),
@@ -1509,8 +1453,4 @@ onBeforeUnmount(() => {
   color: rgba(248, 250, 252, 0.95);
 }
 
-:global(.dark .docs-nav-link)::before,
-:global([data-theme='dark'] .docs-nav-link)::before {
-  background: currentColor;
-}
 </style>
