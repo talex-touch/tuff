@@ -208,9 +208,12 @@ const SECTION_ORDER: Record<string, string[]> = {
   // scripts/recategorize-component-docs.py, and fixes the order inside each group.
   '/docs/dev/components': [
     '/docs/dev/components/index',
-    // ── suite: concepts — Foundations (standalone pages)
+    // ── suite: concepts — Foundations (standalone pages, overview first)
+    '/docs/dev/components/concepts-suite',
     '/docs/dev/components/foundations',
     '/docs/dev/components/utils',
+    // ── suite: base — overview
+    '/docs/dev/components/base-suite',
     // base — Basic
     '/docs/dev/components/button',
     '/docs/dev/components/icon',
@@ -309,18 +312,15 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/loading-state',
     '/docs/dev/components/skeleton',
     '/docs/dev/components/layout-skeleton',
-    // ── suite: pro — Advanced
+    // ── suite: pro — overview
+    '/docs/dev/components/pro-suite',
+    // pro — Advanced
     '/docs/dev/components/command-palette',
     '/docs/dev/components/search-panel',
     '/docs/dev/components/markdown-editor',
     '/docs/dev/components/code-editor',
     '/docs/dev/components/virtual-list',
     '/docs/dev/components/version-capsule',
-    // pro — Visualization
-    '/docs/dev/components/spark-chart',
-    '/docs/dev/components/allocation-bar',
-    '/docs/dev/components/diff-table',
-    '/docs/dev/components/signal-meter',
     // pro — Effects
     '/docs/dev/components/glass-surface',
     '/docs/dev/components/gradient-border',
@@ -344,13 +344,6 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/floating',
     '/docs/dev/components/auto-sizer',
     '/docs/dev/components/resize-box',
-    // pro — Charts (@talex-touch/tuffex-charts) — mirrors the kumo docs order
-    '/docs/dev/components/charts',
-    '/docs/dev/components/chart-colors',
-    '/docs/dev/components/timeseries-chart',
-    '/docs/dev/components/maps',
-    '/docs/dev/components/sankey-chart',
-    '/docs/dev/components/custom-chart',
     // ── suite: ai — AiSuite (standalone page)
     '/docs/dev/components/ai-suite',
     // ai — AiChat
@@ -386,6 +379,18 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/insight-cards',
     '/docs/dev/components/recommendation-card',
     '/docs/dev/components/fine-tune-card',
+    // ── suite: data — Charts (@talex-touch/tuffex-charts; overview first, mirrors the kumo docs order)
+    '/docs/dev/components/charts',
+    '/docs/dev/components/chart-colors',
+    '/docs/dev/components/timeseries-chart',
+    '/docs/dev/components/maps',
+    '/docs/dev/components/sankey-chart',
+    '/docs/dev/components/custom-chart',
+    // data — Visualization
+    '/docs/dev/components/spark-chart',
+    '/docs/dev/components/allocation-bar',
+    '/docs/dev/components/diff-table',
+    '/docs/dev/components/signal-meter',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
@@ -420,11 +425,13 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Component docs are split into four suites (concepts / base / pro / ai).
+// Component docs are split into five suites (concepts / base / pro / ai / data).
 // Categories and their suite assignment mirror
-// scripts/recategorize-component-docs.py — keep the two files (and the tuffex
-// base/pro/ai entry barrels) in sync.
-type SuiteKey = 'concepts' | 'base' | 'pro' | 'ai'
+// scripts/recategorize-component-docs.py — keep the two files in sync. The
+// tuffex entry barrels stay base/pro/ai: 'data' is a docs-level split
+// (Visualization components still import from the pro barrel; the chart family
+// is the standalone @talex-touch/tuffex-charts package).
+type SuiteKey = 'concepts' | 'base' | 'pro' | 'ai' | 'data'
 
 interface SuiteDef {
   key: SuiteKey
@@ -439,7 +446,11 @@ const SUITES = computed<SuiteDef[]>(() => [
     key: 'concepts',
     label: t('docsSidebar.suites.concepts'),
     categories: [],
-    standalonePages: ['/docs/dev/components/foundations', '/docs/dev/components/utils'],
+    standalonePages: [
+      '/docs/dev/components/concepts-suite',
+      '/docs/dev/components/foundations',
+      '/docs/dev/components/utils',
+    ],
   },
   {
     key: 'base',
@@ -453,19 +464,17 @@ const SUITES = computed<SuiteDef[]>(() => [
       { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
       { key: 'Status', label: t('docsSidebar.categories.status') },
     ],
-    standalonePages: [],
+    standalonePages: ['/docs/dev/components/base-suite'],
   },
   {
     key: 'pro',
     label: t('docsSidebar.suites.pro'),
     categories: [
       { key: 'Advanced', label: t('docsSidebar.categories.advanced') },
-      { key: 'Visualization', label: t('docsSidebar.categories.visualization') },
-      { key: 'Charts', label: t('docsSidebar.categories.charts') },
       { key: 'Effects', label: t('docsSidebar.categories.effects') },
       { key: 'Primitives', label: t('docsSidebar.categories.primitives') },
     ],
-    standalonePages: [],
+    standalonePages: ['/docs/dev/components/pro-suite'],
   },
   {
     key: 'ai',
@@ -478,10 +487,23 @@ const SUITES = computed<SuiteDef[]>(() => [
     ],
     standalonePages: ['/docs/dev/components/ai-suite'],
   },
+  {
+    key: 'data',
+    label: t('docsSidebar.suites.data'),
+    categories: [
+      { key: 'Charts', label: t('docsSidebar.categories.charts') },
+      { key: 'Visualization', label: t('docsSidebar.categories.visualization') },
+    ],
+    // The charts package overview doubles as this suite's overview page; the
+    // standalone slot consumes it before the Charts group renders, so it never
+    // shows twice.
+    standalonePages: ['/docs/dev/components/charts'],
+  },
 ])
 
 const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
   Foundations: 'concepts',
+  BaseSuite: 'base',
   Basic: 'base',
   Form: 'base',
   Layout: 'base',
@@ -489,9 +511,10 @@ const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
   Data: 'base',
   Feedback: 'base',
   Status: 'base',
+  ProSuite: 'pro',
   Advanced: 'pro',
-  Visualization: 'pro',
-  Charts: 'pro',
+  Visualization: 'data',
+  Charts: 'data',
   Effects: 'pro',
   Primitives: 'pro',
   AiSuite: 'ai',
