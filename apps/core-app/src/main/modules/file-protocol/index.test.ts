@@ -7,6 +7,7 @@ const { fetchMock, handleMock, unhandleMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  app: { getAppPath: () => '/app' },
   net: {
     fetch: fetchMock
   },
