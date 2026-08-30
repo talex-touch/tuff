@@ -50,6 +50,9 @@
   // Base color for loading placeholders. Name intentionally matches the tuffex
   // skeleton override hook so a themed host restyles both with one variable.
   --tx-skeleton-base-color: var(--tx-chart-semantic-skeleton);
+
+  // Halo behind marker/threshold labels so they stay readable over series.
+  --tx-chart-marker-label-bg: rgb(255 255 255 / 60%);
 }
 
 [data-theme='dark'],
@@ -71,6 +74,8 @@
 
   --tx-chart-text-primary: #9ca3af;
   --tx-chart-text-secondary: #6b7280;
+
+  --tx-chart-marker-label-bg: rgb(0 0 0 / 50%);
 
   --tx-chart-map-area: #2b2c31;
   // Higher values read brighter against the dark base.
