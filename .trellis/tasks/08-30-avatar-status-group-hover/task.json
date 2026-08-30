@@ -12,7 +12,7 @@
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-08-30",
   "completedAt": null,
-  "branch": null,
+  "branch": "feat/tuffex-avatar-status-group",
   "base_branch": "feat/tuffex-avatar-status-group",
   "worktree_path": null,
   "commit": null,
