@@ -1264,6 +1264,42 @@ importers:
         specifier: ^3.3.6
         version: 3.3.7(typescript@5.9.3)
 
+  packages/tuffex-charts:
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.2
+        version: 24.13.2
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.7
+        version: 6.0.8(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.39(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.11
+        version: 2.4.11(@vue/compiler-dom@3.5.41)(@vue/server-renderer@3.5.39(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      sass:
+        specifier: 'catalog:'
+        version: 1.101.0
+      typescript:
+        specifier: catalog:dev
+        version: 5.9.3
+      vite:
+        specifier: 7.3.6
+        version: 7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vite-plugin-dts:
+        specifier: ^4.5.4
+        version: 4.5.4(@types/node@24.13.2)(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vue:
+        specifier: catalog:frontend
+        version: 3.5.39(typescript@5.9.3)
+      vue-tsc:
+        specifier: catalog:dev
+        version: 3.3.7(typescript@5.9.3)
+
   packages/tuffex/packages/components:
     dependencies:
       '@number-flow/vue':
