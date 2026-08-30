@@ -1,6 +1,12 @@
 import path from 'node:path'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
+import { app } from 'electron'
 import { buildWindowWebPreferences } from '../core/window-security-profile'
+
+// Resolve from the application root: this module may be emitted into out/main/chunks, where
+// __dirname-relative paths incorrectly point at out/main/preload instead of out/preload.
+const CORE_APP_ROOT = app?.getAppPath?.() ?? process.cwd()
+const CORE_APP_PRELOAD_PATH = path.join(CORE_APP_ROOT, 'out', 'preload', 'index.js')
 
 export const AppName = 'Tuff'
 
@@ -28,7 +34,7 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   // dark/contrast themes and the layout has no way to know how much room it takes — with the
   // top bar gone it would sit straight on top of each page's own top-right controls.
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'main' })
   })
@@ -49,7 +55,7 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
   show: false,
   transparent: true,
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box' })
   })
@@ -76,7 +82,7 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     symbolColor: '#1f2937'
   },
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
   })
@@ -99,7 +105,7 @@ export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructo
   transparent: true,
   hasShadow: true,
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
@@ -123,7 +129,7 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
   transparent: true,
   hasShadow: true,
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({
       touchType: 'assistant',
@@ -149,7 +155,7 @@ export const ScreenshotOverlayWindowOption: Electron.BrowserWindowConstructorOpt
   backgroundColor: '#00000000',
   enableLargerThanScreen: true,
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: false,
     additionalArguments: buildWindowArgs({
       touchType: 'screenshot',
@@ -173,7 +179,7 @@ export const ScreenshotEditorWindowOption: Electron.BrowserWindowConstructorOpti
   transparent: false,
   backgroundColor: '#111315',
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: false,
     additionalArguments: buildWindowArgs({
       touchType: 'screenshot',
@@ -197,7 +203,7 @@ export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   show: false,
   transparent: true,
   webPreferences: buildWindowWebPreferences('app', {
-    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    preload: CORE_APP_PRELOAD_PATH,
     scrollBounce: true,
     additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'omni-panel' })
   })
