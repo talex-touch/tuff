@@ -11,7 +11,7 @@ verified: false
 
 ## Tuffex Components 组件库
 
-Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与独立图表包——侧边栏顶部的套件切换即按此分组，每个套件的第一项就是该套件的总览页。
+Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库：同一套组件覆盖桌面端 CoreBox、插件 Surface 与本文档站。组件按套件划分——**基础**承载日常界面主体、**进阶**承载高级交互与视觉表达、**AI** 承载 AI 原生界面、**数据**承载可视化与独立图表包——侧边栏顶部的套件切换在这四个组件套件之外，另设「理念」作为第五个纯文档页签，每个套件的第一项就是该套件的总览页。
 
 - 全量交互标本：《[组件预览](/docs/dev/components/index)》里每个格子都是可交互的真实组件，点名称直达文档。
 - 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在独立包 `@talex-touch/tuffex-charts`。

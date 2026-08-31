@@ -82,12 +82,12 @@ code: |
 
 | 套件 | 分组 | 组件数 | 引入入口 |
 |------|------|--------|----------|
-| [基础组件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 95 | `@talex-touch/tuffex/base` |
+| [基础组件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 91 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
 | [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 29 | `@talex-touch/tuffex/ai` |
 | [数据](./charts.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化）+ `@talex-touch/tuffex-charts`（图表） |
 
-理念套件（组件库定位、设计基础与工具函数）见《[理念总览](./concepts-suite.zh.mdc)》。
+理念是第五个套件页签——纯文档性质、不对应组件入口（组件库定位、设计基础与工具函数），见《[理念总览](./concepts-suite.zh.mdc)》。
 
 ## 基础组件
 

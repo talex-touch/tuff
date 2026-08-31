@@ -82,12 +82,12 @@ code: |
 
 | Suite | Groups | Components | Entry |
 |-------|--------|------------|-------|
-| [Basics](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 95 | `@talex-touch/tuffex/base` |
+| [Basics](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 91 | `@talex-touch/tuffex/base` |
 | [Pro](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
 | [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 29 | `@talex-touch/tuffex/ai` |
 | [Data](./charts.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization) + `@talex-touch/tuffex-charts` (charts) |
 
-The Concepts suite (library positioning, design foundations and utils) lives in the [Concepts Overview](./concepts-suite.en.mdc).
+Concepts is the fifth suite tab — documentation-only, with no component entry of its own (library positioning, design foundations and utils); it lives in the [Concepts Overview](./concepts-suite.en.mdc).
 
 ## Basics
 
