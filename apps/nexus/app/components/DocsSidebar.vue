@@ -501,6 +501,24 @@ const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
   AiContext: 'ai',
 }
 
+// Same-component doc families fold into one expandable entry inside their
+// category instead of rendering as flat sibling links. Key = head doc path (its
+// doc title labels the family row); members list every folded doc in display
+// order. `labelKey` swaps a member's doc title for a docsSidebar.* message —
+// the head member needs one so it doesn't repeat the family label verbatim.
+const COMPONENT_FAMILIES: Record<string, { path: string; labelKey?: string }[]> = {
+  '/docs/dev/components/avatar': [
+    { path: '/docs/dev/components/avatar', labelKey: 'docsSidebar.families.avatarBasic' },
+    { path: '/docs/dev/components/avatar-variants' },
+  ],
+}
+
+const FAMILY_BY_MEMBER = new Map<string, string>(
+  Object.entries(COMPONENT_FAMILIES).flatMap(([head, members]) =>
+    members.map(member => [member.path, head] as const),
+  ),
+)
+
 // Manual suite pick; cleared on navigation so the switcher follows the route again.
 const selectedSuite = ref<SuiteKey | null>(null)
 
@@ -719,6 +737,53 @@ function findSectionByPath(list: any[], targetPath: string): any | null {
   return null
 }
 
+// Folds family members present in a category's flat child list into a single
+// expandable node. Rendering-only: `used` bookkeeping upstream still sees the
+// flat members, so the misc canary bucket is unaffected. A family with only one
+// member present stays a plain link.
+function groupComponentFamilies(children: any[]): any[] {
+  const familyNodes = new Map<string, any>()
+  const grouped: any[] = []
+
+  for (const child of children) {
+    const familyKey = FAMILY_BY_MEMBER.get(child.normalizedPath ?? '')
+    if (!familyKey) {
+      grouped.push(child)
+      continue
+    }
+    let node = familyNodes.get(familyKey)
+    if (!node) {
+      node = { family: true, familyKey, title: '', members: [] }
+      familyNodes.set(familyKey, node)
+      grouped.push(node)
+    }
+    node.members.push(child)
+  }
+
+  if (!familyNodes.size) return grouped
+
+  return grouped.map(entry => {
+    if (!entry.family) return entry
+
+    const defs = COMPONENT_FAMILIES[entry.familyKey] ?? []
+    const order = new Map(defs.map((def, index) => [def.path, index]))
+    const members = [...entry.members].sort(
+      (a: any, b: any) =>
+        (order.get(a.normalizedPath ?? '') ?? Number.POSITIVE_INFINITY) -
+        (order.get(b.normalizedPath ?? '') ?? Number.POSITIVE_INFINITY),
+    )
+    if (members.length === 1) return members[0]
+
+    entry.members = members.map((member: any) => ({
+      ...member,
+      familyLabelKey: defs.find(def => def.path === member.normalizedPath)?.labelKey,
+    }))
+    const headItem = members.find((member: any) => member.normalizedPath === entry.familyKey)
+    entry.title = headItem?.title ?? members[0]?.title ?? fallbackTitleFromPath(entry.familyKey)
+    return entry
+  })
+}
+
 const resolvedComponentSections = computed(() => {
   const sourceItems = componentItems.value ?? []
   if (!sourceItems.length) return []
@@ -744,7 +809,7 @@ const resolvedComponentSections = computed(() => {
     sections.push({
       title,
       path: children[0].path,
-      children,
+      children: groupComponentFamilies(children),
       page: false,
     })
   }
@@ -1021,6 +1086,28 @@ function isSectionExpanded(item: any) {
   return expandedSections.value[key] ?? true
 }
 
+// Family entries default to collapsed, except the one holding the active route.
+// Manual toggles win until the next navigation clears them.
+const expandedFamilies = ref<Record<string, boolean>>({})
+
+function familyContainsRoute(node: any) {
+  if (!Array.isArray(node?.members)) return false
+  return node.members.some((member: any) => member.normalizedPath === normalizedRoutePath.value)
+}
+
+function isFamilyExpanded(node: any) {
+  return expandedFamilies.value[node.familyKey] ?? familyContainsRoute(node)
+}
+
+function toggleFamily(node: any) {
+  expandedFamilies.value[node.familyKey] = !isFamilyExpanded(node)
+}
+
+function memberLabel(member: any) {
+  if (member?.familyLabelKey) return t(member.familyLabelKey)
+  return itemTitle(member?.title, member?.path ?? linkTarget(member) ?? undefined)
+}
+
 function findScrollableParent(element: HTMLElement) {
   let current = element.parentElement
   while (current && current !== document.body) {
@@ -1083,6 +1170,7 @@ watch(
   () => normalizedRoutePath.value,
   () => {
     selectedSuite.value = null
+    expandedFamilies.value = {}
     for (const section of sections.value) {
       expandedSections.value[sectionKey(section)] = true
     }
@@ -1209,9 +1297,64 @@ onBeforeUnmount(() => {
               </span>
             </span>
           </template>
-          <li v-for="child in section.children" :key="child.path ?? child.title" class="docs-nav-item">
+          <li v-for="child in section.children" :key="child.familyKey ?? child.path ?? child.title" class="docs-nav-item">
+            <template v-if="child.family">
+              <button
+                type="button"
+                class="docs-nav-link docs-nav-family-toggle"
+                :class="familyContainsRoute(child) ? 'is-active' : ''"
+                :aria-expanded="isFamilyExpanded(child)"
+                @click="toggleFamily(child)"
+              >
+                <span class="truncate" :title="itemTitle(child.title, child.familyKey)">
+                  {{ itemTitle(child.title, child.familyKey) }}
+                </span>
+                <span
+                  class="docs-nav-family-indicator i-carbon-chevron-down"
+                  :class="isFamilyExpanded(child) ? 'is-open' : ''"
+                  aria-hidden="true"
+                />
+              </button>
+              <div
+                class="docs-nav-family-body"
+                :class="isFamilyExpanded(child) ? 'is-open' : ''"
+                :aria-hidden="!isFamilyExpanded(child)"
+                :inert="!isFamilyExpanded(child)"
+              >
+                <div class="docs-nav-family-inner">
+                  <ul class="docs-nav-list docs-nav-family-list">
+                    <li v-for="member in child.members" :key="member.path ?? member.title" class="docs-nav-item">
+                      <NuxtLink
+                        v-if="linkTarget(member)"
+                        :to="localizedDocsPath(linkTarget(member)!)"
+                        :prefetch="false"
+                        class="docs-nav-link"
+                        :class="isLinkActive(linkTarget(member) || member.path || '') ? 'is-active' : ''"
+                        :aria-current="isLinkActive(linkTarget(member) || member.path || '') ? 'page' : undefined"
+                        @focus="prefetchDocsTarget(linkTarget(member))"
+                        @blur="cancelDocsFullBodyPrefetch(linkTarget(member))"
+                        @mouseenter="prefetchDocsTarget(linkTarget(member))"
+                        @mouseleave="cancelDocsFullBodyPrefetch(linkTarget(member))"
+                        @touchstart.passive="prefetchDocsTarget(linkTarget(member))"
+                      >
+                        <span class="truncate" :title="memberLabel(member)">
+                          {{ memberLabel(member) }}
+                        </span>
+                        <span
+                          v-if="componentSyncBadge(member)"
+                          class="docs-nav-sync-badge"
+                          :data-status="componentSyncBadge(member)?.status"
+                        >
+                          {{ componentSyncBadge(member)?.label }}
+                        </span>
+                      </NuxtLink>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </template>
             <NuxtLink
-              v-if="linkTarget(child)"
+              v-else-if="linkTarget(child)"
               :to="localizedDocsPath(linkTarget(child)!)"
               :prefetch="false"
               class="docs-nav-link"
@@ -1434,6 +1577,65 @@ onBeforeUnmount(() => {
 :deep(.docs-nav-link:focus),
 :deep(.docs-nav-link:focus-visible) {
   outline: none;
+}
+
+/* Family entry: a nav-link-shaped toggle plus a collapsible member list. */
+:deep(.docs-nav-family-toggle) {
+  width: 100%;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+:deep(.docs-nav-family-indicator) {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.45;
+  transform: rotate(-90deg);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+:deep(.docs-nav-family-toggle:hover .docs-nav-family-indicator),
+:deep(.docs-nav-family-toggle:focus-visible .docs-nav-family-indicator) {
+  opacity: 0.8;
+}
+
+:deep(.docs-nav-family-indicator.is-open) {
+  transform: rotate(0deg);
+}
+
+:deep(.docs-nav-family-body) {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.2s ease;
+}
+
+:deep(.docs-nav-family-body.is-open) {
+  grid-template-rows: 1fr;
+}
+
+:deep(.docs-nav-family-inner) {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The "|" rail from the sketch: indent members under the family toggle. */
+:deep(.docs-nav-family-list) {
+  margin-left: 5px;
+  padding-left: 9px;
+  border-left: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+:global(.dark .docs-nav-family-list),
+:global([data-theme='dark'] .docs-nav-family-list) {
+  border-left-color: rgba(148, 163, 184, 0.18);
 }
 
 :global(.dark .docs-nav-list),
