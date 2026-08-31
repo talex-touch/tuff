@@ -79,6 +79,33 @@ See `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`.
 - Prefer `@talex-touch/tuffex/base.css` plus component subpath styles in plugin UI; do not add a full `@talex-touch/tuffex/style.css` import unless working in an existing legacy full-style surface.
 - Avoid changing visual class contracts while fixing semantics.
 
+### Styling slot content from a wrapper
+
+A wrapper component that lays out children it did not render (`TxAvatarGroup`, any list/stack primitive) cannot style them with a plain scoped selector — slot vnodes carry the *parent's* scope id. The usual workaround is injecting inline styles via `cloneVNode`, and it is a trap: **an inline value outranks every selector, so anything injected inline can never have a `:hover`, `:focus-visible` or media-query variant.**
+
+`:deep()` from the wrapper's own root does reach slot content, because it compiles to `.wrapper[data-v-x] .child` and the root is rendered by the wrapper:
+
+```css
+.tx-avatar-group :deep(.tx-avatar-group__item) { margin-left: calc(var(--gap) * -1); }
+.tx-avatar-group.is-hover-lift :deep(.tx-avatar-group__item:hover) { transform: translateY(-4px); }
+```
+
+Rules of thumb:
+
+- Inject inline only what will never have a state variant (a static ring border). Everything positional goes in the stylesheet.
+- Per-item values that must vary (a stacking index) get injected as a **CSS custom property** inline and consumed by the rule; the rule's own properties stay overridable.
+- Group-wide state (a hover that fans the whole row) changes one variable on the wrapper root and lets inheritance carry it — do not re-derive it per item.
+- Content that gets **teleported** (a popover panel the wrapper renders) is no longer a descendant of the root, so `:deep()` from the root will not match it. Write those as standalone selectors; they still carry the scope id because the wrapper rendered them.
+
+### Floating layers around non-rectangular triggers
+
+`TxBaseAnchor` sets `inheritAttrs: false` and forwards attrs to the *teleported panel*, so `class`/`style` on `TxPopover` style the floating layer, not the trigger. Use the `referenceClass` prop to reach the trigger wrapper.
+
+That wrapper is a plain rectangle. Two consequences when the trigger itself is round:
+
+- `box-shadow` follows the wrapper's `border-radius`, so a hover shadow applied to it renders as a square halo around a circular trigger. Apply the shadow to the element inside.
+- A `transform` on the wrapper moves the anchor's reference rect out from under an already-open panel. Transform the inner element instead.
+
 ### Shell colour tokens
 
 The app shell has one palette, `--shell-*` in `apps/core-app/src/renderer/src/styles/shell-tokens.scss`, defined across four blocks: `:root`, `.dark`, `html.contrast`, `html.dark.contrast`. Shell surfaces read tokens only — a hex literal or `rgba()` in a renderer component is a bug, because it survives the theme swap and the high-contrast accessibility mode.

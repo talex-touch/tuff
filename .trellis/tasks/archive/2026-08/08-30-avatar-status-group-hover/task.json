@@ -1,0 +1,30 @@
+{
+  "id": "avatar-status-group-hover",
+  "name": "avatar-status-group-hover",
+  "title": "TxAvatar 状态点裁切修复与头像组悬浮/溢出 popover",
+  "description": "修复 TxAvatar 状态点被根节点 overflow:hidden + border-radius 裁切的问题；为 TxAvatarGroup 增加可配置 hover 效果与 +N 溢出 popover",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-30",
+  "completedAt": "2026-08-30",
+  "branch": "feat/tuffex-avatar-status-group",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "8142db78e",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1822",
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "None. Implementation, 196-line avatar test suite, and docs landed; the branch is merged with current master.",
+    "evidence": "Full tuffex vitest run green in this worktree (193 files / 1848 tests) after merging origin/master; PR #1822 carries CI for the workspace matrix.",
+    "nextAction": "Merge PR #1822 once its checks pass; no further implementation work is open on this task."
+  }
+}
