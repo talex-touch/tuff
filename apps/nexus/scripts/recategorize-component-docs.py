@@ -4,21 +4,26 @@
 The docs sidebar (app/components/DocsSidebar.vue) groups component pages purely by
 this field, so it is the single source of truth for sidebar structure.
 
-Categories roll up into three suites via DocsSidebar's CATEGORY_SUITE_MAP:
+Categories roll up into five suites via DocsSidebar's CATEGORY_SUITE_MAP:
 
-- concepts 理念: Foundations (foundations, utils — standalone pages)
-- base 基础组件: Basic, Form, Layout, Navigation, Data, Feedback, Status
-- pro  进阶套件: Advanced, Visualization, Charts, Effects, Primitives
-- ai   AI 套件:  AiChat, AiAgent, AiReasoning, AiContext
+- concepts 理念: Foundations (concepts-suite, foundations, utils — standalone pages)
+- base 基础组件: BaseSuite, Basic, Form, Layout, Navigation, Data, Feedback, Status
+- pro  进阶套件: ProSuite, Advanced, Effects, Primitives
+- ai   AI 套件:  AiSuite, AiChat, AiAgent, AiReasoning, AiContext
+- data 数据:     Charts, Visualization
 
 The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
-keep this file, DocsSidebar.vue and the tuffex base/pro/ai entry barrels in sync.
+keep this file and DocsSidebar.vue in sync. The tuffex entry barrels stay
+base/pro/ai: 'data' is a docs-level split (Visualization components import from
+the pro barrel; the chart family is the standalone @talex-touch/tuffex-charts
+package).
 
-`Foundations` (foundations, utils → concepts) and `AiSuite` (ai-suite → ai) are special
-cases: the sidebar renders them as standalone links inside their suite rather than
-as collapsible groups.
+`Foundations`, `BaseSuite`, `ProSuite` and `AiSuite` are special cases: the
+sidebar renders their pages as standalone links (suite overview first) rather
+than as collapsible groups.
 
-Chart docs (standalone @talex-touch/tuffex-charts package) live in pro / "Charts".
+Chart docs (standalone @talex-touch/tuffex-charts package) live in data / "Charts";
+charts.mdc doubles as the data suite's overview page.
 """
 
 from __future__ import annotations
@@ -31,10 +36,16 @@ COMPONENTS_DIR = Path(__file__).resolve().parent.parent / "content" / "docs" / "
 
 # Ordered: group key -> slugs, in the order they should appear inside the group.
 TAXONOMY: dict[str, list[str]] = {
-    # ── suite: base 基础组件 ──────────────────────────────────────────────
+    # ── suite: concepts 理念 ─────────────────────────────────────────────
     "Foundations": [
+        "concepts-suite",
         "foundations",
         "utils",
+    ],
+    # ── suite: base 基础组件 ──────────────────────────────────────────────
+    # Suite overview page: rendered as the suite's first standalone link.
+    "BaseSuite": [
+        "base-suite",
     ],
     "Basic": [
         "button",
@@ -112,7 +123,6 @@ TAXONOMY: dict[str, list[str]] = {
         "markdown-view",
         "image-gallery",
     ],
-    # @talex-touch/tuffex-charts (independent package; kumo-parity chart family)
     "Feedback": [
         "dialog",
         "modal",
@@ -143,6 +153,10 @@ TAXONOMY: dict[str, list[str]] = {
         "layout-skeleton",
     ],
     # ── suite: pro 进阶套件 ──────────────────────────────────────────────
+    # Suite overview page: rendered as the suite's first standalone link.
+    "ProSuite": [
+        "pro-suite",
+    ],
     "Advanced": [
         "command-palette",
         "search-panel",
@@ -150,12 +164,6 @@ TAXONOMY: dict[str, list[str]] = {
         "code-editor",
         "virtual-list",
         "version-capsule",
-    ],
-    "Visualization": [
-        "spark-chart",
-        "allocation-bar",
-        "diff-table",
-        "signal-meter",
     ],
     "Effects": [
         "glass-surface",
@@ -174,15 +182,6 @@ TAXONOMY: dict[str, list[str]] = {
         "fusion",
         "liquid",
         "flip-overlay",
-    ],
-    # Docs for the standalone @talex-touch/tuffex-charts package (kumo).
-    "Charts": [
-        "charts",
-        "chart-colors",
-        "timeseries-chart",
-        "maps",
-        "sankey-chart",
-        "custom-chart",
     ],
     # Infrastructure that other components are built on; rarely used directly.
     "Primitives": [
@@ -232,6 +231,23 @@ TAXONOMY: dict[str, list[str]] = {
         "insight-cards",
         "recommendation-card",
         "fine-tune-card",
+    ],
+    # ── suite: data 数据 ─────────────────────────────────────────────────
+    # Docs for the standalone @talex-touch/tuffex-charts package (kumo);
+    # charts.mdc doubles as the data suite's overview page.
+    "Charts": [
+        "charts",
+        "chart-colors",
+        "timeseries-chart",
+        "maps",
+        "sankey-chart",
+        "custom-chart",
+    ],
+    "Visualization": [
+        "spark-chart",
+        "allocation-bar",
+        "diff-table",
+        "signal-meter",
     ],
 }
 

@@ -424,7 +424,7 @@ onBeforeUnmount(() => {
       <div class="docs-layout-foreground relative flex flex-1 justify-center pb-20 pt-20">
         <div class="docs-layout-frame min-w-0 w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[230px] shrink-0 xl:block">
-            <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
+            <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto overflow-x-hidden pb-8 pr-1.5 relative z-30">
               <DocsSidebar />
             </div>
           </aside>

@@ -307,3 +307,16 @@ Closed all recorded BUI follow-up gaps, fixed a real TxContextMenu interaction d
 - TxCopyButton 并非零使用：tuffex 内部 code-stream/stream-markdown 直接 SFC 引用——「生产零使用」结论要区分应用层和库内部。
 - docs-page-performance.test.ts 的 chrome 边界断言（禁 tuffex/button 入口）与收拢直接矛盾，按边界意图改为禁 <TxButton> 标签、放行入口 import。
 - 并发协作：talex-touch-bc 批量提交存量脏文件期间，我用普通 mv（不入暂存区）+ 推迟争用文件（DocsSidebar/性能测试/README）到其提交落地后再动，零冲突。
+
+## 2026-08-30 nexus sidebar component families (PR #1818)
+- 08-30-nexus-sidebar-component-families：侧栏同族文档聚合（avatar+avatar-variants → 可展开 Avatar 条目），COMPONENT_FAMILIES 机制化，i18n docsSidebar.families.*，spec 补 component-guidelines 契约 bullet。typecheck/eslint/CDP(en+zh, 明暗, 折叠交互)全绿。已归档，PR #1818 待合。
+- 事故：提交落到 c6 的 feat/nexus-suite-overviews（分支在我 checkout 后被并发切走）。branch -f 双向修正并知会 c6；教训记入 trellis-multiagent-file-contention（提交后核对 `[branch sha]` 行）。
+- 待续：c6 在做第五套件 Data tab / 套件 overview / Concepts 讲解，会改 DocsSidebar 相邻区域；后合方跑 nexus typecheck。zh 侧栏 Basic 比 en 多 CopyButton/FlatButton/IconButton/OS Icon 四条（疑 button/icon 合并后 zh 文档未收，未在本任务扩权处理）。
+
+## 2026-08-30 nexus 五套件与 per-tab overview（08-30-nexus-suite-overviews）
+
+- 老板三项一次落地：Concepts 三组别在新「理念总览」页分节讲解；五套件 tab（理念/基础/进阶/AI/数据），每 tab 首项=套件 overview（standalonePages 先于分组消费 used 集合，charts.mdc 兼任 Data overview 不重复渲染）；Data 承载 Charts+Visualization 文档（组件条目桶仍 base/pro/ai 三分，spec 已写明 docs-level split）。
+- DocsComponentsGallery 加 suite 过滤 prop + Data band（三张可视化标本迁入）；hub zh/en 加数据 H2、套件表加行加总览链接；taxonomy 脚本 20 分类 dry-run 零改写。
+- 门禁：vitest 227 文件/1421 用例全绿、typecheck/eslint/fences/parity/demo-registry 绿；CDP 25 项断言 + 明暗截图（自起 3201 新服务）。
+- 排障：新起 dev server 仍陈旧的根因是第三个存储 `.nuxt/content` 解析缓存——`.data/contents.sqlite` 是「新建但从旧缓存灌的」，mtime 会骗人；wipe 后 bc 报的 zh 四条幽灵条目（copy/flat/icon-button、os-icon）一并消失，确认非仓库尾巴。记忆 nexus-content-dev-stale-d1 已补第三存储与 unlink 安全性。
+- 协作：bc 的 #1818 journal 段随本提交入库（其分支未含，已知会防双加）；documents 2.0.pen 老板手稿未动未提交。

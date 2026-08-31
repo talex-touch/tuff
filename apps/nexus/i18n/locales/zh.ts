@@ -572,6 +572,7 @@ export default {
       base: '基础',
       pro: '进阶',
       ai: 'AI',
+      data: '数据',
     },
     categories: {
       basic: '通用',
