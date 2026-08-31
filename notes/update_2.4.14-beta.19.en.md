@@ -12,7 +12,7 @@
 
 - Fixed the stale Clipboard History alias in CoreBox; users can enter a fresh history query immediately after the manager opens.
 - Fixed `tfile:` originals in isolated plugin views; a labeled thumbnail fallback appears only when the original genuinely fails to load.
-- Kept image OCR details visible and copyable, including terminal status, language, confidence, recognized text, and keywords.
+- Kept image OCR details visible and copyable, including final OCR status, language, confidence, recognized text, and keywords.
 - Switch and Checkbox loading states block interaction and expose busy semantics to assistive technology.
 - Switch built-in labels support either side of the control, animate text changes, and retain arbitrary default-slot content.
 - Nexus suite pages replace drift-prone hand-written samples with the same complete categorized catalog used by the sidebar.
