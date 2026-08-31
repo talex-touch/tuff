@@ -593,6 +593,9 @@ export default {
       aiContext: 'Context & Insight',
       misc: 'Misc',
     },
+    families: {
+      avatarBasic: 'Basic Avatar',
+    },
   },
   ...legal,
 }
