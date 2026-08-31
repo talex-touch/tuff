@@ -22,14 +22,8 @@ Every cell is a live, interactive component; click the name in the top-left corn
 
 ## Groups at a Glance
 
-| Group | Covers |
-|-------|--------|
-| [General](/docs/dev/components/button) | Button, Icon, Avatar, Tag, Badge, Kbd, Divider |
-| [Form](/docs/dev/components/form) | Input, Select, DatePicker, Radio, Checkbox, Switch, Slider, Rating, Uploader |
-| [Layout](/docs/dev/components/container) | Container, Flex, Grid, Stack, Splitter, Collapse, Card |
-| [Navigation](/docs/dev/components/tabs) | Tabs, NavBar, SidebarNav, Breadcrumb, Steps, Pagination, DropdownMenu |
-| [Data Display](/docs/dev/components/data-table) | DataTable, Tree, SortableList, Timeline, Transfer, StatCard |
-| [Feedback](/docs/dev/components/dialog) | Dialog, Modal, Drawer, Popover, Toast, Progress, LoadingOverlay |
-| [Status & Empty](/docs/dev/components/empty) | Empty, ErrorState, OfflineState, PermissionState, Skeleton |
+Every component in the suite, grouped by category. The list is read from each doc's `category` frontmatter, so new components appear on their own.
 
-The full inventory with every link lives in the [component hub](/docs/dev/components/index) under "Basics".
+::DocsSuiteCatalog{suite="base"}
+::
+
