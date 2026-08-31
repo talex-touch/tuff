@@ -118,6 +118,43 @@ code: |
 ---
 :::
 
+## Loading State
+
+Use `loading` when the checked state needs server confirmation: the box becomes a spinning ring, the tick, dash, and fill all stand down, and the ring's color carries the state instead — neutral grey when unchecked, primary when checked or mixed. Pointer and keyboard toggles are blocked.
+
+### Checkbox (loading)
+:::TuffDemoWrapper{demo="CheckboxCheckboxLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const asyncChecked = ref(false)
+  const committing = ref(false)
+  const loadingUnchecked = ref(false)
+  const loadingChecked = ref(true)
+  const loadingMixed = ref(false)
+
+  function commit(next: boolean) {
+    committing.value = true
+    setTimeout(() => {
+      asyncChecked.value = next
+      committing.value = false
+    }, 1200)
+  }
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox :model-value="asyncChecked" :loading="committing" label="Async commit" @change="commit" />
+      <TxCheckbox v-model="loadingUnchecked" label="Loading / unchecked" loading />
+      <TxCheckbox v-model="loadingChecked" label="Loading / checked" loading />
+      <TxCheckbox v-model="loadingMixed" label="Loading / mixed" indeterminate loading />
+    </div>
+  </template>
+---
+:::
+
 ## Using Slots
 
 The default slot replaces `label` as the visible label. Use it for rich text, helper copy, icons, or emphasis.
@@ -148,6 +185,7 @@ code: |
 |--------|------|------|--------|
 | modelValue / v-model | Checked state. Updates through click, Enter, or Space when enabled. | `boolean` | `false` |
 | disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
+| loading | Pending async commit: the box becomes a spinning ring, adds `is-loading` plus `aria-busy="true"`, and blocks toggling the way `disabled` does — without the disabled palette. | `boolean` | `false` |
 | label | Visible text label rendered next to the checkbox. | `string` | - |
 | labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
 | variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'checkmark'` |
@@ -171,14 +209,19 @@ code: |
 
 - Prefer a visible `label` or default slot. Use `ariaLabel` only for icon-only or visually label-less controls.
 - Keep `disabled` as the single source for inert state; disabled checkboxes are removed from tab order and emit neither `update:modelValue` nor `change`.
+- `loading` and `disabled` say different things: "committing" versus "unavailable". Using `disabled` for a busy control makes it look permanently inert.
+- Do not write `modelValue` back optimistically while `loading` is set. Leave the box on the old value, commit on success, and simply clear `loading` on failure so the state stays where it was.
 - Use `labelPlacement="start"` for compact settings rows where the text should align before the control.
 
 
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` and `checkbox.test.ts`.
-- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, the default `checkmark` variant plus explicit `fill` and `checkmark` variants, click emits, and disabled blocking.
+- **Loading contract:** `loading` is a purely visual and blocking state; the component owns no async logic. The ring's color still follows `modelValue` / `indeterminate`, so it sits on the old value to show that this toggle has not landed yet.
+- **Known loading trade-off:** checked and mixed look identical while loading (both draw a primary ring); `aria-checked="mixed"` is what preserves the difference. Keeping the fill and drawing a white ring on it was tried first, but the white ring is close to invisible against a light page, so ring-coloring won.
 - Accessibility note: the root element owns `role="checkbox"`, `aria-checked`, and keyboard handling; provide a visible label or default slot whenever possible, and reserve `ariaLabel` for controls with no visible text.
+- **Motion fallback:** The ring stops rotating under `prefers-reduced-motion: reduce`; its gapped border is a static glyph on its own, so the busy cue survives.
+- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, the default `checkmark` variant plus explicit `fill` and `checkmark` variants, click emits, disabled blocking, plus loading blocking, `is-loading` staying separate from `is-disabled`, a partial selection still reporting `mixed` while loading, and the `aria-busy` lifecycle.
 
 ## Source
 

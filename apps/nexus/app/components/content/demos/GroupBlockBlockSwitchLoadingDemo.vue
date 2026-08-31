@@ -8,13 +8,13 @@ const syncEnabled = ref(false)
 const labels = computed(() => locale.value === 'zh'
   ? {
       title: '同步状态',
-      description: '加载中会冻结内部控件',
+      description: '加载中滑块变为旋转环并冻结整行',
       item: '正在同步',
       itemDesc: '等待最新状态返回',
     }
   : {
       title: 'Sync status',
-      description: 'Loading freezes the inner control',
+      description: 'Loading turns the thumb into a ring and freezes the row',
       item: 'Sync status',
       itemDesc: 'Waiting for the latest state',
     })

@@ -9,6 +9,8 @@ const props = withDefaults(
   defineProps<{
     modelValue?: boolean
     disabled?: boolean
+    /** Pending async commit: morphs the thumb into a spinning ring and blocks toggling. */
+    loading?: boolean
     size?: 'small' | 'default' | 'large'
     /** Accessible name. Prefer `ariaLabelledby` when a visible label already exists. */
     ariaLabel?: string
@@ -18,6 +20,7 @@ const props = withDefaults(
   {
     modelValue: false,
     disabled: false,
+    loading: false,
     size: 'default',
     ariaLabel: 'Toggle',
     ariaLabelledby: undefined,
@@ -34,8 +37,12 @@ const isActive = computed({
   set: (val: boolean) => emit('update:modelValue', val),
 })
 
+// Loading blocks input the same way `disabled` does, but stays a separate class
+// so the ring indicator reads as "busy" instead of inheriting the dimmed look.
+const isBlocked = computed(() => props.disabled || props.loading)
+
 function toggle() {
-  if (props.disabled)
+  if (isBlocked.value)
     return
   const newVal = !isActive.value
   isActive.value = newVal
@@ -48,14 +55,16 @@ function toggle() {
     type="button"
     role="switch"
     :aria-checked="isActive"
-    :aria-disabled="disabled"
+    :aria-disabled="isBlocked"
+    :aria-busy="loading || undefined"
     :aria-label="ariaLabelledby ? undefined : ariaLabel"
     :aria-labelledby="ariaLabelledby"
-    :disabled="disabled"
+    :disabled="isBlocked"
     class="tuff-switch" :class="[
       {
         'is-active': isActive,
         'is-disabled': disabled,
+        'is-loading': loading,
         [`tuff-switch--${size}`]: size !== 'default',
       },
     ]"

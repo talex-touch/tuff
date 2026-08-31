@@ -95,6 +95,38 @@ code: |
 ---
 :::
 
+### 加载中
+`loading` 用于开关值需要等待服务端确认的场景：滑块保持在当前一侧并变成旋转环，同时屏蔽点击与键盘切换。
+:::TuffDemoWrapper{demo="SwitchLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const asyncEnabled = ref(false)
+  const committing = ref(false)
+  const loadingOff = ref(false)
+  const loadingOn = ref(true)
+
+  function commit(next: boolean) {
+    committing.value = true
+    setTimeout(() => {
+      asyncEnabled.value = next
+      committing.value = false
+    }, 1200)
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <TuffSwitch :model-value="asyncEnabled" :loading="committing" @change="commit" />
+      <TuffSwitch v-model="loadingOff" loading />
+      <TuffSwitch v-model="loadingOn" loading />
+    </div>
+  </template>
+---
+:::
+
 ### 前后 Label
 在开关前后放置状态文本，或与说明文案组成设置行。
 :::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
@@ -200,6 +232,7 @@ code: |
 | `modelValue` | `boolean` | `false` | 由 `v-model` 控制的开关状态。 |
 | `size` | `'small' \| 'default' \| 'large'` | `'default'` | 视觉尺寸。默认尺寸不添加额外 modifier class。 |
 | `disabled` | `boolean` | `false` | 移除可聚焦能力，并阻止点击、Enter、Space 切换。 |
+| `loading` | `boolean` | `false` | 异步提交中：滑块变为旋转环，添加 `is-loading` 与 `aria-busy="true"`，并阻止切换。 |
 
 ### Events
 
@@ -218,6 +251,7 @@ code: |
 
 - 根节点是原生 `<button>`，渲染 `role="switch"`、`aria-checked`、`aria-disabled`；不设置 `tabindex`——可聚焦性由按钮元素自身提供。
 - `disabled=true` 时设置原生 `disabled`（因而移出 Tab 序列）、添加 `is-disabled`，并阻止点击、Enter、Space 触发事件。
+- `loading=true` 与 `disabled` 一样设置原生 `disabled` 并阻止事件，但添加的是 `is-loading` 而非 `is-disabled`：不套用禁用态的降透明度，另外渲染 `aria-busy="true"`。两者同时为 true 时两个 class 都会出现。
 - 启用切换会同时触发 `update:modelValue` 与 `change`；组件不会在宿主未处理 `v-model` 更新时自行修改外部状态。
 - `size="small"` 与 `size="large"` 会添加尺寸 modifier；`size="default"` 只保留基础 class。
 
@@ -277,6 +311,8 @@ code: |
 ## 最佳实践
 
 - Switch 用于即时生效的布尔设置；表单提交项或多选组优先使用 Checkbox。
+- 切换需要等待服务端确认时用 `loading` 补上这个「不即时」的空档，别让开关先跳到新值再跳回来。
+- `loading` 期间不要抢先写回 `modelValue`；让滑块停在旧值上，提交成功后再更新，失败则直接撤下 loading，状态自然回到原位。
 - 在开关旁提供可读文本标签；组件本身只负责控件，不渲染内置文案。
 - 标签与开关保持垂直居中，密集设置行也要保留足够点击区域。
 - 自定义激活色只使用局部 class 覆盖，保留基础组件的禁用、焦点与尺寸样式。
@@ -285,7 +321,9 @@ code: |
 
 - **Model contract:** `TxSwitch` 由 `modelValue` 控制。用户交互会同时派发 `update:modelValue` 与 `change`，参数为下一个 boolean；视觉状态在父级回写新 prop 后更新。
 - **键盘契约:** 启用状态响应点击、Enter 与 Space（原生按钮语义）。禁用状态由原生 `disabled` 移出 Tab 序列，保持 `aria-disabled="true"`，且不派发事件。
-- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击派发、禁用阻断，并断言两种状态下均不渲染 `tabindex`。
+- **加载契约:** `loading` 是纯视觉与阻断状态，组件不持有异步逻辑。滑块位置仍由 `modelValue` 决定，因此加载中的环停在旧值一侧，表示这一次切换尚未落地。
+- **动效降级:** 环形指示器在 `prefers-reduced-motion: reduce` 下停止旋转；缺口边框本身是静态字形，提示不会消失。
+- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击派发、禁用阻断、加载中阻断与 `aria-busy` 生命周期，并断言两种状态下均不渲染 `tabindex`。
 
 ## Source
 

@@ -19,7 +19,6 @@ import type { BlockSwitchEmits, BlockSwitchProps } from './types'
  * @component
  */
 import { computed } from 'vue'
-import { TxSpinner } from '../../spinner'
 import TuffSwitch from '../../switch'
 import TxBlockSlot from './TxBlockSlot.vue'
 
@@ -67,7 +66,7 @@ function handleClick(event: MouseEvent): void {
 <template>
   <TxBlockSlot
     class="tx-block-switch"
-    :class="{ 'tx-block-switch--loading': loading }"
+    :class="{ 'tx-block-switch--loading': loading, 'tx-block-switch--disabled': disabled }"
     :title="title"
     :description="description"
     :default-icon="resolvedDefaultIcon"
@@ -81,13 +80,14 @@ function handleClick(event: MouseEvent): void {
     </template>
     <template v-if="!guidance">
       <div class="tx-block-switch__actions">
-        <TxSpinner
-          v-if="loading"
-          class="tx-block-switch__loader"
-          :size="18"
-          :stroke-width="2"
+        <!-- The switch owns the busy affordance (thumb -> ring); the row only
+             adds the shimmer, so there is no second spinner beside it. -->
+        <TuffSwitch
+          v-model="value"
+          :disabled="disabled"
+          :loading="loading"
+          @change="handleChange"
         />
-        <TuffSwitch v-model="value" :disabled="disabled || loading" @change="handleChange" />
       </div>
     </template>
     <template v-else>
@@ -103,8 +103,12 @@ function handleClick(event: MouseEvent): void {
   gap: 12px;
 }
 
-.tx-block-switch__loader {
-  color: var(--tx-text-color-secondary, #909399);
+// TxBlockSlot dims any `disabled` row to 0.5, and loading rows pass that flag in
+// to freeze pointer events. A busy row is not a dead one though, so the dim is
+// taken back here — the extra class beats the slot's own rule on specificity, so
+// stylesheet order does not matter.
+.tx-block-switch.tx-block-switch--loading:not(.tx-block-switch--disabled) {
+  opacity: 1;
 }
 
 .tx-block-switch.tx-block-switch--loading::after {

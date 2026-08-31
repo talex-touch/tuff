@@ -118,6 +118,43 @@ code: |
 ---
 :::
 
+## 加载状态
+
+`loading` 用于选中状态需要等待服务端确认的场景：方框变成旋转环，勾选标记、横杠与填充一起让位，改由环的颜色表示状态——未选中是中性灰，已选中与部分选中都是主色——同时阻止点击与键盘切换。
+
+### Checkbox (loading)
+:::TuffDemoWrapper{demo="CheckboxCheckboxLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const asyncChecked = ref(false)
+  const committing = ref(false)
+  const loadingUnchecked = ref(false)
+  const loadingChecked = ref(true)
+  const loadingMixed = ref(false)
+
+  function commit(next: boolean) {
+    committing.value = true
+    setTimeout(() => {
+      asyncChecked.value = next
+      committing.value = false
+    }, 1200)
+  }
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox :model-value="asyncChecked" :loading="committing" label="异步提交" @change="commit" />
+      <TxCheckbox v-model="loadingUnchecked" label="加载中 / 未选中" loading />
+      <TxCheckbox v-model="loadingChecked" label="加载中 / 已选中" loading />
+      <TxCheckbox v-model="loadingMixed" label="加载中 / 部分选中" indeterminate loading />
+    </div>
+  </template>
+---
+:::
+
 ## 使用插槽
 
 默认插槽会替代 `label` 作为可见标签，适合加入说明文本、图标或强调样式。
@@ -148,6 +185,7 @@ code: |
 |--------|------|------|--------|
 | modelValue / v-model | 绑定的选中状态。启用时通过点击、Enter 或 Space 更新。 | `boolean` | `false` |
 | disabled | 是否禁用。禁用后不可聚焦，且不会触发切换。 | `boolean` | `false` |
+| loading | 异步提交中：方框变为旋转环，添加 `is-loading` 与 `aria-busy="true"`，并像 `disabled` 一样阻止切换，但不套用禁用态配色。 | `boolean` | `false` |
 | label | 显示在复选框旁边的文本标签。 | `string` | - |
 | labelPlacement | 标签位置：`start` 为前置，`end` 为后置。 | `'start' \| 'end'` | `'end'` |
 | variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'checkmark'` |
@@ -171,14 +209,19 @@ code: |
 
 - 优先提供可见 `label` 或默认插槽。只有图标式/无可见文案控件才使用 `ariaLabel`。
 - 用 `disabled` 作为禁用状态的唯一来源；禁用后组件会退出 Tab 顺序，也不会触发 `update:modelValue` 或 `change`。
+- `loading` 与 `disabled` 表达不同含义：前者是「正在提交」，后者是「不可用」。用 `disabled` 表示忙碌会让控件看起来永久不可点。
+- `loading` 期间不要抢先写回 `modelValue`；让方框停在旧值上，提交成功后再更新，失败则直接撤下 loading，状态自然回到原位。
 - 紧凑设置行中需要“文案在前、控件在后”时使用 `labelPlacement="start"`。
 
 
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` 与 `checkbox.test.ts`。
-- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、默认 `checkmark` 变体与显式 `fill` / `checkmark` 变体、点击事件与禁用阻断。
+- **加载契约:** `loading` 是纯视觉与阻断状态，组件不持有异步逻辑。环的颜色仍由 `modelValue` / `indeterminate` 决定，因此它停在旧值上，表示这一次切换尚未落地。
+- **加载态的已知取舍:** 已选中与部分选中在加载期间外观一致（同为主色环），这一差异由 `aria-checked="mixed"` 承担。曾试过「保留填充 + 白色环」以区分两者，但白环压在浅色页面上几乎不可见，因此改为环着色方案。
 - 可访问性说明:根节点负责 `role="checkbox"`、`aria-checked` 与键盘处理;应优先提供可见标签或默认插槽,仅在没有可见文案时使用 `ariaLabel`。
+- **动效降级:** 环形指示器在 `prefers-reduced-motion: reduce` 下停止旋转；缺口边框本身是静态字形，提示不会消失。
+- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、默认 `checkmark` 变体与显式 `fill` / `checkmark` 变体、点击事件、禁用阻断，以及加载中阻断、`is-loading` 与 `is-disabled` 分离、部分选中在加载时仍上报 `mixed`、`aria-busy` 的出现与消失。
 
 ## Source
 
