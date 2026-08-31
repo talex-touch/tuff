@@ -937,7 +937,8 @@ function scrollToSuite(key: string) {
 .docs-gallery__bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  /* Install command anchors the left edge, version the right. */
+  justify-content: space-between;
   gap: 10px;
   padding: 12px 18px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -945,11 +946,21 @@ function scrollToSuite(key: string) {
   color: var(--docs-muted);
 }
 
+/* Green marks the published version as the healthy/current one, and separates
+   it from the neutral install command sharing the bar.
+
+   `--tx-color-success` is the same #67c23a in both themes, which is only
+   ~2.2:1 as 12px text on a light page. Mixing toward the body text color
+   darkens it under light and lightens it under dark from one declaration —
+   this style block is scoped, and `:global(.dark)` is dropped at compile time
+   here, so a theme selector is not an option. Measured at this ratio:
+   4.66:1 on white, 10.97:1 on the dark page. */
 .docs-gallery__version {
   padding: 2px 7px;
   border-radius: 6px;
-  border: 1px solid var(--docs-inline-code-border);
-  background: var(--docs-inline-code-bg);
+  border: 1px solid color-mix(in srgb, var(--tx-color-success) 40%, transparent);
+  background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
+  color: color-mix(in srgb, var(--tx-color-success) 55%, var(--tx-text-color-primary));
   line-height: 1.4;
 }
 
