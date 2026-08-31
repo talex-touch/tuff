@@ -7,6 +7,7 @@
 - Switch and Checkbox now provide loading states that block repeated input during asynchronous confirmation while preserving the current value semantics.
 - Switch now supports built-in labels, label placement, and animated text changes without requiring callers to assemble adjacent label markup.
 - Nexus component suite overviews now list every component by category and stay synchronized with component documentation.
+- Nexus component preview bars now separate the install command from the version badge and highlight the current version with an accessible green treatment.
 
 ## What's Changed
 
@@ -16,3 +17,4 @@
 - Switch and Checkbox loading states block interaction and expose busy semantics to assistive technology.
 - Switch built-in labels support either side of the control, animate text changes, and retain arbitrary default-slot content.
 - Nexus suite pages replace drift-prone hand-written samples with the same complete categorized catalog used by the sidebar.
+- Refined the component gallery preview bar: the install command anchors left, the version badge anchors right, and the success tint mixes with theme text color to remain readable in light and dark modes.
