@@ -1274,9 +1274,12 @@ onBeforeUnmount(() => {
 }
 
 .docs-tab-row--sub {
-  gap: 14px;
+  gap: 12px;
   padding-top: 2px;
   border-bottom: none;
+  /* Five tabs must never push the 230px sidebar into horizontal scroll;
+     wrapping is the safety valve for long locales. */
+  flex-wrap: wrap;
 }
 
 .docs-tab-link {
