@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { AiAttachmentFile } from '@tuffex-components/ai-elements'
 import { ref } from 'vue'
 
 interface ImageAttachment {
@@ -43,7 +44,7 @@ function onCancel(id: string) {
 }
 
 // Files only — images use the built-in viewer and emit nothing.
-function onOpen(attachment: FileAttachment) {
+function onOpen(attachment: AiAttachmentFile) {
   opened.value = attachment.name
 }
 </script>

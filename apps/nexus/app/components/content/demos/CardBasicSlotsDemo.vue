@@ -9,7 +9,7 @@
           <div class="card-demo-title">
             Card title
           </div>
-          <TxButton size="small" variant="text">
+          <TxButton size="small" variant="ghost">
             Action
           </TxButton>
         </div>
@@ -21,7 +21,7 @@
 
       <template #footer>
         <div class="card-demo-footer">
-          <TxButton size="small" variant="outline">
+          <TxButton size="small" variant="secondary">
             Cancel
           </TxButton>
           <TxButton size="small" variant="primary">
