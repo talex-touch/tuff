@@ -2,7 +2,15 @@
 import { computed, ref } from 'vue'
 import tuffexPkg from '../../../../../packages/tuffex/package.json'
 
+// Optional suite filter: suite overview pages embed only their own band and
+// hide the cross-band jump tabs; without it the full hub grid renders.
+const props = defineProps<{ suite?: 'base' | 'pro' | 'ai' | 'data' }>()
+
 const { locale } = useI18n()
+
+function bandVisible(key: 'base' | 'pro' | 'ai' | 'data') {
+  return !props.suite || props.suite === key
+}
 
 const localeKey = computed(() => (locale.value === 'zh' ? 'zh' : 'en'))
 
@@ -19,6 +27,7 @@ const copy = computed(() => (localeKey.value === 'zh'
       suiteBase: '基础',
       suitePro: '进阶',
       suiteAi: 'AI',
+      suiteData: '数据',
       createPlugin: '新建插件',
       typeSomething: '输入点什么…',
       searchPlugins: '搜索插件…',
@@ -83,8 +92,9 @@ const copy = computed(() => (localeKey.value === 'zh'
     }
   : {
       suiteBase: 'Basics',
-      suitePro: 'Advanced',
+      suitePro: 'Pro',
       suiteAi: 'AI',
+      suiteData: 'Data',
       createPlugin: 'Create Plugin',
       typeSomething: 'Type something...',
       searchPlugins: 'Search plugins...',
@@ -198,6 +208,7 @@ const suites = computed(() => [
   { key: 'base', label: copy.value.suiteBase },
   { key: 'pro', label: copy.value.suitePro },
   { key: 'ai', label: copy.value.suiteAi },
+  { key: 'data', label: copy.value.suiteData },
 ])
 
 function scrollToSuite(key: string) {
@@ -221,20 +232,20 @@ function scrollToSuite(key: string) {
       <span class="docs-gallery__version">v{{ tuffexPkg.version }}</span>
     </div>
 
-    <nav id="docs-gallery-suite-base" class="docs-gallery__suite" :aria-label="copy.suiteBase">
+    <nav v-if="!props.suite" id="docs-gallery-suite-base" class="docs-gallery__suite" :aria-label="copy.suiteBase">
       <button
-        v-for="suite in suites"
-        :key="suite.key"
+        v-for="suiteTab in suites"
+        :key="suiteTab.key"
         type="button"
         class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suite.key === 'base' }"
-        @click="scrollToSuite(suite.key)"
+        :class="{ 'is-active': suiteTab.key === 'base' }"
+        @click="scrollToSuite(suiteTab.key)"
       >
-        {{ suite.label }}
+        {{ suiteTab.label }}
       </button>
     </nav>
 
-    <div class="docs-gallery__grid">
+    <div v-if="bandVisible('base')" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('button')">
           {{ cellLabel('Button', '按钮') }}
@@ -656,20 +667,20 @@ function scrollToSuite(key: string) {
       </section>
     </div>
 
-    <nav id="docs-gallery-suite-pro" class="docs-gallery__suite" :aria-label="copy.suitePro">
+    <nav v-if="!props.suite" id="docs-gallery-suite-pro" class="docs-gallery__suite" :aria-label="copy.suitePro">
       <button
-        v-for="suite in suites"
-        :key="suite.key"
+        v-for="suiteTab in suites"
+        :key="suiteTab.key"
         type="button"
         class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suite.key === 'pro' }"
-        @click="scrollToSuite(suite.key)"
+        :class="{ 'is-active': suiteTab.key === 'pro' }"
+        @click="scrollToSuite(suiteTab.key)"
       >
-        {{ suite.label }}
+        {{ suiteTab.label }}
       </button>
     </nav>
 
-    <div class="docs-gallery__grid">
+    <div v-if="bandVisible('pro')" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('version-capsule')">
           {{ cellLabel('VersionCapsule', '版本胶囊') }}
@@ -677,57 +688,6 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <TxVersionCapsule :version="`v${tuffexPkg.version}`" channel="BETA" tone="preview" />
-            <template #fallback>
-              <div class="docs-gallery__ph" />
-            </template>
-          </ClientOnly>
-        </div>
-      </section>
-
-      <section class="docs-gallery__cell">
-        <NuxtLink class="docs-gallery__label" :to="docPath('spark-chart')">
-          {{ cellLabel('SparkChart', '迷你折线图') }}
-        </NuxtLink>
-        <div class="docs-gallery__stage">
-          <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__spark">
-              <TxSparkChart :series="sparkSeries" grid />
-            </div>
-            <template #fallback>
-              <div class="docs-gallery__ph" />
-            </template>
-          </ClientOnly>
-        </div>
-      </section>
-
-      <section class="docs-gallery__cell">
-        <NuxtLink class="docs-gallery__label" :to="docPath('allocation-bar')">
-          {{ cellLabel('AllocationBar', '占比条') }}
-        </NuxtLink>
-        <div class="docs-gallery__stage">
-          <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxAllocationBar :segments="copy.allocation" />
-            </div>
-            <template #fallback>
-              <div class="docs-gallery__ph" />
-            </template>
-          </ClientOnly>
-        </div>
-      </section>
-
-      <section class="docs-gallery__cell">
-        <NuxtLink class="docs-gallery__label" :to="docPath('signal-meter')">
-          {{ cellLabel('SignalMeter', '信号量表') }}
-        </NuxtLink>
-        <div class="docs-gallery__stage">
-          <ClientOnly>
-            <div class="docs-gallery__row docs-gallery__row--loose">
-              <div v-for="level in copy.confidence" :key="level.value" class="docs-gallery__meter">
-                <TxSignalMeter :value="level.value" :max="3" :tone="level.tone" :bar-height="16" :bar-width="5" :label="level.label" />
-                <span class="docs-gallery__meter-text">{{ level.label }}</span>
-              </div>
-            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -770,20 +730,20 @@ function scrollToSuite(key: string) {
       </section>
     </div>
 
-    <nav id="docs-gallery-suite-ai" class="docs-gallery__suite" :aria-label="copy.suiteAi">
+    <nav v-if="!props.suite" id="docs-gallery-suite-ai" class="docs-gallery__suite" :aria-label="copy.suiteAi">
       <button
-        v-for="suite in suites"
-        :key="suite.key"
+        v-for="suiteTab in suites"
+        :key="suiteTab.key"
         type="button"
         class="docs-gallery__suite-tab"
-        :class="{ 'is-active': suite.key === 'ai' }"
-        @click="scrollToSuite(suite.key)"
+        :class="{ 'is-active': suiteTab.key === 'ai' }"
+        @click="scrollToSuite(suiteTab.key)"
       >
-        {{ suite.label }}
+        {{ suiteTab.label }}
       </button>
     </nav>
 
-    <div class="docs-gallery__grid">
+    <div v-if="bandVisible('ai')" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('thinking-orb')">
           {{ cellLabel('ThinkingOrb', '思考指示球') }}
@@ -889,6 +849,72 @@ function scrollToSuite(key: string) {
                 :source="source"
                 :appear="false"
               />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+    </div>
+
+    <nav v-if="!props.suite" id="docs-gallery-suite-data" class="docs-gallery__suite" :aria-label="copy.suiteData">
+      <button
+        v-for="suiteTab in suites"
+        :key="suiteTab.key"
+        type="button"
+        class="docs-gallery__suite-tab"
+        :class="{ 'is-active': suiteTab.key === 'data' }"
+        @click="scrollToSuite(suiteTab.key)"
+      >
+        {{ suiteTab.label }}
+      </button>
+    </nav>
+
+    <div v-if="bandVisible('data')" class="docs-gallery__grid">
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('spark-chart')">
+          {{ cellLabel('SparkChart', '迷你折线图') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage">
+          <ClientOnly>
+            <div class="docs-gallery__block docs-gallery__spark">
+              <TxSparkChart :series="sparkSeries" grid />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('allocation-bar')">
+          {{ cellLabel('AllocationBar', '占比条') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <TxAllocationBar :segments="copy.allocation" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('signal-meter')">
+          {{ cellLabel('SignalMeter', '信号量表') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage">
+          <ClientOnly>
+            <div class="docs-gallery__row docs-gallery__row--loose">
+              <div v-for="level in copy.confidence" :key="level.value" class="docs-gallery__meter">
+                <TxSignalMeter :value="level.value" :max="3" :tone="level.tone" :bar-height="16" :bar-width="5" :label="level.label" />
+                <span class="docs-gallery__meter-text">{{ level.label }}</span>
+              </div>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
