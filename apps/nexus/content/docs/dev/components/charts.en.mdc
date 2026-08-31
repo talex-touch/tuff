@@ -33,6 +33,13 @@ import '@talex-touch/tuffex-charts/style.css'
 | `TxChart` + series primitives | [Custom Chart](/docs/dev/components/custom-chart) | The composable escape hatch: line/area/bar/scatter/donut, freely combined. |
 | `ChartPalette` / CSS variables | [Colors](/docs/dev/components/chart-colors) | Categorical, semantic, sequential and map palettes, auto light/dark. |
 
+## Groups at a Glance
+
+Every component in the suite, grouped by category. The list is read from each doc's `category` frontmatter, so new components appear on their own.
+
+::DocsSuiteCatalog{suite="data"}
+::
+
 ## Legend
 
 `TxChartLegendItem` ships two legend layouts: `small` inline rows (multi-series legends) and `large` stacked metrics (dashboard cards). `loading` renders skeleton placeholders; with a `click` listener attached it renders as a native `button`, so Enter/Space work out of the box.

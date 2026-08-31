@@ -13,6 +13,13 @@ verified: true
 
 AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、PromptBar、AttachmentTray、MessageActions、SuggestionChips、TypingIndicator、ConversationStream）、**智能体**（Agents、AgentTrace、TaskRows、ToolCallCard、ToolChips、ToolConfirmation、ApprovalCard、WorkingIndicator）、**推理与生成**（AiElements、ChainOfThought、ReasoningDisclosure、ThinkingOrb、StreamMarkdown、CodeStream、InlineCitation、Sources）、**上下文与洞察**（ContextCards、ContextIndicator、InsightCards、RecommendationCard、FineTuneCard）。全部组件可经 `@talex-touch/tuffex/ai` 分类入口按套件引入。
 
+## 分组一览
+
+下面按分组列出该套件的**全部**组件，数据来自每个文档的 `category` frontmatter，新增组件会自动出现。
+
+::DocsSuiteCatalog{suite="ai"}
+::
+
 ## 来源与授权
 
 本套件移植自 [Beautiful UI](https://www.beautifului.dev)（Turbo 设计工作室 / Shane Levine，© 2026，MIT 协议），共 19 个面向 AI 原生界面的组件案例：聊天、推理轨迹、human-in-the-loop 审批、agent 任务状态等。移植遵循三条原则：像素级还原其视觉语言（独立 `--tx-bui-*` token 层、发丝环阴影、13px 密度体系）；组件做成纯受控原语（演示时间轴留在 demo 层）；与 tuffex 现有组件融合而非重复造轮子——重叠处以变体或组合落地，无障碍缺口按 tuffex 标准补齐。每个组件源码文件头保留 MIT 署名。
