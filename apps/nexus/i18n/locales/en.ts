@@ -571,8 +571,9 @@ export default {
     suites: {
       concepts: 'Concepts',
       base: 'Basics',
-      pro: 'Advanced',
+      pro: 'Pro',
       ai: 'AI',
+      data: 'Data',
     },
     categories: {
       basic: 'General',

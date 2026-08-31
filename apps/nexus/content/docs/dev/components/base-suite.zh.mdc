@@ -1,0 +1,35 @@
+---
+title: 基础套件总览
+description: 日常界面的主体组件：通用、表单、布局、导航、数据展示、反馈与状态占位
+category: BaseSuite
+status: beta
+since: 0.3.9
+tags: [base, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 套件定位
+
+基础套件是日常界面的主体，七个分组从原子到路径逐层展开：**通用**（按钮、图标、头像、徽标）、**表单**（输入、选择、日期、开关、上传）、**布局**（容器、栅格、卡片）、**导航**（标签页、面包屑、菜单）、**数据展示**（表格、树形、时间线）、**反馈**（弹窗、抽屉、进度）与**状态占位**（空态、错误、骨架屏）。全部组件经 `@talex-touch/tuffex/base` 分类入口按需引入。
+
+## 组件预览
+
+每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+
+::DocsComponentsGallery{suite="base"}
+::
+
+## 分组一览
+
+| 分组 | 覆盖 |
+|------|------|
+| [通用](/docs/dev/components/button) | Button、Icon、Avatar、Tag、Badge、Kbd、Divider |
+| [表单](/docs/dev/components/form) | Input、Select、DatePicker、Radio、Checkbox、Switch、Slider、Rating、Uploader |
+| [布局](/docs/dev/components/container) | Container、Flex、Grid、Stack、Splitter、Collapse、Card |
+| [导航](/docs/dev/components/tabs) | Tabs、NavBar、SidebarNav、Breadcrumb、Steps、Pagination、DropdownMenu |
+| [数据展示](/docs/dev/components/data-table) | DataTable、Tree、SortableList、Timeline、Transfer、StatCard |
+| [反馈](/docs/dev/components/dialog) | Dialog、Modal、Drawer、Popover、Toast、Progress、LoadingOverlay |
+| [状态占位](/docs/dev/components/empty) | Empty、ErrorState、OfflineState、PermissionState、Skeleton |
+
+完整清单与全部链接见《[组件中心](/docs/dev/components/index)》的「基础组件」分节。
