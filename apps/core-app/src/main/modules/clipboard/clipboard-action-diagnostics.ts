@@ -3,6 +3,9 @@ import type { ClipboardActionErrorCode } from '@talex-touch/utils/transport/even
 export const MACOS_AUTOMATION_PERMISSION_MESSAGE =
   '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。'
 
+export const MACOS_ACCESSIBILITY_PERMISSION_MESSAGE =
+  '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 辅助功能”中允许 Tuff。'
+
 export const AUTO_PASTE_FAILED_MESSAGE =
   '已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。'
 
@@ -54,12 +57,21 @@ function getErrorDiagnosticsText(error: unknown): string {
   return parts.join('\n')
 }
 
+function isMacOsAccessibilityPermissionError(error: unknown): boolean {
+  const diagnostics = getErrorDiagnosticsText(error).toLowerCase()
+  return (
+    diagnostics.includes('not allowed to send keystrokes') ||
+    (diagnostics.includes('system events') && diagnostics.includes('(1002)'))
+  )
+}
+
 function isMacOsAutomationPermissionError(error: unknown): boolean {
   const diagnostics = getErrorDiagnosticsText(error)
+  const normalizedDiagnostics = diagnostics.toLowerCase()
   return (
     diagnostics.includes('-1743') ||
-    (diagnostics.includes('System Events') &&
-      (diagnostics.includes('未获得授权') || diagnostics.toLowerCase().includes('not authorized')))
+    (normalizedDiagnostics.includes('system events') &&
+      (diagnostics.includes('未获得授权') || normalizedDiagnostics.includes('not authorized')))
   )
 }
 
@@ -82,6 +94,14 @@ export function normalizeClipboardActionError(
 ): { code: ClipboardActionErrorCode; message: string; originalError: unknown } {
   if (error instanceof ClipboardActionRuntimeError) {
     return { code: error.code, message: error.message, originalError: error.originalError ?? error }
+  }
+
+  if (isMacOsAccessibilityPermissionError(error)) {
+    return {
+      code: 'MACOS_ACCESSIBILITY_PERMISSION_DENIED',
+      message: MACOS_ACCESSIBILITY_PERMISSION_MESSAGE,
+      originalError: error
+    }
   }
 
   if (isMacOsAutomationPermissionError(error)) {
