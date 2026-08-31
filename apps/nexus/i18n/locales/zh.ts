@@ -593,6 +593,9 @@ export default {
       aiContext: '上下文与洞察',
       misc: '其他',
     },
+    families: {
+      avatarBasic: '基础头像',
+    },
   },
   ...legal,
 }
