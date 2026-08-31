@@ -7,6 +7,7 @@ import type {
   PluginWindowNewRequest,
   PluginWindowOptions
 } from '@talex-touch/utils/transport/events/types'
+import { registerTfileProtocolForSession } from '../../file-protocol/tfile-session'
 import { PluginViewCompatibilityError } from './plugin-view-security-profile'
 import { getPermissionModule } from '../../permission/permission-module-ref'
 import fs from 'node:fs/promises'
@@ -574,6 +575,10 @@ export function installPluginViewNavigationPolicy(
   })
 
   const pluginSession = webContents.session
+  const releaseTfileProtocol =
+    typeof pluginSession.protocol?.handle === 'function'
+      ? registerTfileProtocolForSession(pluginSession)
+      : null
   pluginSession.setPermissionCheckHandler(() => false)
   pluginSession.setPermissionRequestHandler((_requestingWebContents, _permission, callback) => {
     callback(false)
@@ -588,6 +593,7 @@ export function installPluginViewNavigationPolicy(
   }
   pluginSession.on('will-download', denyDownload)
   webContents.once('destroyed', () => {
+    releaseTfileProtocol?.()
     pluginSession.removeListener('will-download', denyDownload)
   })
 }

@@ -296,6 +296,7 @@ system.resolveApplication(identifier: string): Promise<ResolvedApplication | nul
 ### 3. Contracts
 
 - A plugin manifest declares and receives `fs.tfile` before its view may request any `tfile:` URL. `isPluginViewResourceAllowed()` checks the current plugin id/sdkapi grant on every request; a grant captured only when the view is created is stale after revocation.
+- Every isolated plugin `WebContentsView` session installs the same bounded `tfile:` protocol handler before loading resources and unregisters it when the owning view is destroyed. Session registration reuses the main protocol's canonical parsing and configured managed-temp roots; it never creates a second path policy.
 - The view policy is only the control-plane gate. The `tfile` protocol still canonicalizes the path and applies `getAllowedLocalFileRoots()`; permission never widens the protocol allowlist.
 - Installed-application lookup requires `sdkapi >= 260817`, verified plugin identity, and `system.applications`. The handler accepts one trimmed exact identifier of at most 512 characters and delegates to AppProvider's exact path/bundle-id lookup.
 - AppProvider owns icon cache repair and hydration. The response contains only bounded `identifier`, `displayName`, and `icon`; it never includes executable/native paths, file records, Buffer/base64 data, launch arguments, or search-index internals.

@@ -45,6 +45,7 @@ const resolvingSourceApplicationIds = reactive(new Set<string>())
 let unsubscribeClipboard: (() => void) | null = null
 let unsubscribeInput: (() => void) | null = null
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let aliasClearRetryTimer: ReturnType<typeof setTimeout> | null = null
 let requestGeneration = 0
 
 const SEARCH_DEBOUNCE_MS = 180
@@ -246,7 +247,14 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
+function clearAliasInput(): void {
+  void box.setInput('').catch(() => {})
+}
+
 function queueSearch(input: string): void {
+  if (input === searchQuery.value) {
+    return
+  }
   searchQuery.value = input
   requestGeneration += 1
   if (searchDebounceTimer) {
@@ -421,19 +429,14 @@ async function handleDelete(): Promise<void> {
 
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown, true)
-  void box.expand({ forceMax: true }).catch(() => {})
+  await box.expand({ forceMax: true }).catch(() => {})
+  searchQuery.value = ''
+  debouncedQuery.value = ''
   unsubscribeInput = feature.onInputChange(queueSearch)
 
-  try {
-    const initialQuery = await box.getInput()
-    searchQuery.value = initialQuery
-    debouncedQuery.value = initialQuery.trim()
-  } catch {
-    searchQuery.value = ''
-    debouncedQuery.value = ''
-  }
-
   await loadHistory({ reset: true })
+  clearAliasInput()
+  aliasClearRetryTimer = setTimeout(clearAliasInput, 250)
   unsubscribeClipboard = clipboard.history.onDidChange(async () => {
     await loadHistory({ reset: true })
   })
@@ -441,6 +444,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown, true)
+  if (aliasClearRetryTimer) {
+    clearTimeout(aliasClearRetryTimer)
+  }
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
   }

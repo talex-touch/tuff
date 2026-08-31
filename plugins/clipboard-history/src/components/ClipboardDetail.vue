@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import type { ResolvedApplication } from '@talex-touch/utils/transport/events/types'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
@@ -30,6 +30,10 @@ const textInsight = computed(() => getClipboardTextInsight(props.item))
 const colorTokens = computed(() => getClipboardColorTokens(props.item))
 const ocrInsight = computed(() => getClipboardOcrInsight(props.item))
 const failedImageSources = ref<ReadonlySet<string>>(new Set())
+const retriedImageSources = ref<ReadonlySet<string>>(new Set())
+const imageRetryNonce = ref(0)
+let imageRetryTimer: ReturnType<typeof setTimeout> | null = null
+
 const imagePreview = computed(() => {
   const primary = resolveDetailImagePreview(props.item, props.resolvedImageUrl)
   if (!primary.src || !failedImageSources.value.has(primary.src)) {
@@ -43,17 +47,42 @@ const imagePreview = computed(() => {
   }
 })
 
-watch(
-  () => props.item?.id,
-  () => {
-    failedImageSources.value = new Set()
-  },
-)
+function resetImageFailureState(): void {
+  if (imageRetryTimer) {
+    clearTimeout(imageRetryTimer)
+    imageRetryTimer = null
+  }
+  failedImageSources.value = new Set()
+  retriedImageSources.value = new Set()
+  imageRetryNonce.value += 1
+}
+
+watch([() => props.item?.id, () => props.resolvedImageUrl], resetImageFailureState)
+
+onBeforeUnmount(() => {
+  if (imageRetryTimer) {
+    clearTimeout(imageRetryTimer)
+  }
+})
 
 function handleImageError(): void {
-  const failedSource = imagePreview.value.src
+  const failedPreview = imagePreview.value
+  const failedSource = failedPreview.src
   if (!failedSource) return
+
   failedImageSources.value = new Set([...failedImageSources.value, failedSource])
+  if (failedPreview.isThumbnailOnly || retriedImageSources.value.has(failedSource)) {
+    return
+  }
+
+  retriedImageSources.value = new Set([...retriedImageSources.value, failedSource])
+  imageRetryTimer = setTimeout(() => {
+    failedImageSources.value = new Set(
+      [...failedImageSources.value].filter(source => source !== failedSource),
+    )
+    imageRetryNonce.value += 1
+    imageRetryTimer = null
+  }, 160)
 }
 
 function handleSourceIconError(event: Event): void {
@@ -78,6 +107,7 @@ function handleSourceIconError(event: Event): void {
       <template v-else-if="item.type === 'image' && imagePreview.src">
         <div class="image-container">
           <img
+            :key="imageRetryNonce"
             :src="imagePreview.src || undefined"
             :alt="getClipboardTitle(item)"
             class="preview-img"
