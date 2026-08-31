@@ -22,14 +22,8 @@ verified: false
 
 ## 分组一览
 
-| 分组 | 覆盖 |
-|------|------|
-| [通用](/docs/dev/components/button) | Button、Icon、Avatar、Tag、Badge、Kbd、Divider |
-| [表单](/docs/dev/components/form) | Input、Select、DatePicker、Radio、Checkbox、Switch、Slider、Rating、Uploader |
-| [布局](/docs/dev/components/container) | Container、Flex、Grid、Stack、Splitter、Collapse、Card |
-| [导航](/docs/dev/components/tabs) | Tabs、NavBar、SidebarNav、Breadcrumb、Steps、Pagination、DropdownMenu |
-| [数据展示](/docs/dev/components/data-table) | DataTable、Tree、SortableList、Timeline、Transfer、StatCard |
-| [反馈](/docs/dev/components/dialog) | Dialog、Modal、Drawer、Popover、Toast、Progress、LoadingOverlay |
-| [状态占位](/docs/dev/components/empty) | Empty、ErrorState、OfflineState、PermissionState、Skeleton |
+下面按分组列出该套件的**全部**组件，数据来自每个文档的 `category` frontmatter，新增组件会自动出现。
 
-完整清单与全部链接见《[组件中心](/docs/dev/components/index)》的「基础组件」分节。
+::DocsSuiteCatalog{suite="base"}
+::
+

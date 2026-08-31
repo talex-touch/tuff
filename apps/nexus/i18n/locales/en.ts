@@ -598,5 +598,8 @@ export default {
       avatarBasic: 'Basic Avatar',
     },
   },
+  docsSuiteCatalog: {
+    total: '{count} components across {groups} groups',
+  },
   ...legal,
 }

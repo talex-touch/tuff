@@ -597,5 +597,8 @@ export default {
       avatarBasic: '基础头像',
     },
   },
+  docsSuiteCatalog: {
+    total: '共 {count} 个组件，分为 {groups} 个分组',
+  },
   ...legal,
 }

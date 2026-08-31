@@ -22,10 +22,8 @@ Every cell is a live, interactive component; click the name in the top-left corn
 
 ## Groups at a Glance
 
-| Group | Covers |
-|-------|--------|
-| [Interaction](/docs/dev/components/command-palette) | CommandPalette, SearchPanel, MarkdownEditor, CodeEditor, VirtualList, VersionCapsule |
-| [Effects](/docs/dev/components/glass-surface) | GlassSurface, GradientBorder, BorderBeam, GradualBlur, GlowText, Transition, Liquid |
-| [Primitives](/docs/dev/components/base-surface) | BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox |
+Every component in the suite, grouped by category. The list is read from each doc's `category` frontmatter, so new components appear on their own.
 
-The full inventory with every link lives in the [component hub](/docs/dev/components/index) under "Pro".
+::DocsSuiteCatalog{suite="pro"}
+::
+
