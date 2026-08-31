@@ -1,5 +1,5 @@
 ---
-title: Advanced Suite Overview
+title: Pro Suite Overview
 description: Rich interaction, visual effects and low-level primitives
 category: ProSuite
 status: beta
@@ -11,7 +11,7 @@ verified: false
 
 ## Positioning
 
-The Advanced suite carries heavy interaction and visual expression: **Interaction** means complete interactive pieces like the command palette, search panel, both editors and the virtual list; **Effects** is the expression layer — glass surfaces, border beams, gradual blur, text motion and liquid; **Primitives** (BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox) are the foundation the rest of the family is built on, rarely used directly by apps. Everything imports through the `@talex-touch/tuffex/pro` entry. Data visualization and the chart family moved to the **Data** suite — see the [Charts overview](/docs/dev/components/charts).
+The Pro suite carries heavy interaction and visual expression: **Interaction** means complete interactive pieces like the command palette, search panel, both editors and the virtual list; **Effects** is the expression layer — glass surfaces, border beams, gradual blur, text motion and liquid; **Primitives** (BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox) are the foundation the rest of the family is built on, rarely used directly by apps. Everything imports through the `@talex-touch/tuffex/pro` entry. Data visualization and the chart family moved to the **Data** suite — see the [Charts overview](/docs/dev/components/charts).
 
 ## Preview
 
@@ -28,4 +28,4 @@ Every cell is a live, interactive component; click the name in the top-left corn
 | [Effects](/docs/dev/components/glass-surface) | GlassSurface, GradientBorder, BorderBeam, GradualBlur, GlowText, Transition, Liquid |
 | [Primitives](/docs/dev/components/base-surface) | BaseSurface, BaseAnchor, Floating, AutoSizer, ResizeBox |
 
-The full inventory with every link lives in the [component hub](/docs/dev/components/index) under "Advanced".
+The full inventory with every link lives in the [component hub](/docs/dev/components/index) under "Pro".

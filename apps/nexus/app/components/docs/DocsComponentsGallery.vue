@@ -92,7 +92,7 @@ const copy = computed(() => (localeKey.value === 'zh'
     }
   : {
       suiteBase: 'Basics',
-      suitePro: 'Advanced',
+      suitePro: 'Pro',
       suiteAi: 'AI',
       suiteData: 'Data',
       createPlugin: 'Create Plugin',
