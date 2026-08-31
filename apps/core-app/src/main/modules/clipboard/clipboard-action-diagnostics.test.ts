@@ -5,7 +5,7 @@ import {
 } from './clipboard-action-diagnostics'
 
 describe('clipboard-action-diagnostics', () => {
-  it('maps macOS System Events permission failures to a user-readable action result', () => {
+  it('maps macOS Automation permission failures to a user-readable action result', () => {
     const error = new Error('Command failed: osascript')
     Object.assign(error, {
       stderr: 'execution error: 未获得授权将Apple事件发送给System Events。 (-1743)'
@@ -15,6 +15,20 @@ describe('clipboard-action-diagnostics', () => {
       code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
       message:
         '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。',
+      originalError: error
+    })
+  })
+
+  it('maps macOS keystroke denial to Accessibility instead of Automation', () => {
+    const error = new Error('Command failed: osascript')
+    Object.assign(error, {
+      stderr:
+        'execution error: System Events got an error: osascript is not allowed to send keystrokes. (1002)'
+    })
+
+    expect(normalizeClipboardActionError(error)).toEqual({
+      code: 'MACOS_ACCESSIBILITY_PERMISSION_DENIED',
+      message: '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 辅助功能”中允许 Tuff。',
       originalError: error
     })
   })
