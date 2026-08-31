@@ -1,0 +1,2 @@
+{"file": "apps/nexus/app/pages/docs/[...slug].vue", "reason": "Loading-state template at ~1967 and spinner CSS at ~2240; skeleton must reuse docs-surface rhythm"}
+{"file": "packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue", "reason": "Skeleton primitive: variant/width/height/radius/lines/gap props, shimmer owned here"}
