@@ -1,21 +1,49 @@
 .tuff-switch {
+  // Override points. The track visuals moved off the root when the label was
+  // added, so `.tuff-switch.is-active { background-color }` no longer reaches
+  // them — these variables are the supported way to recolor a switch.
+  --tuff-switch-track-color: var(--tx-fill-color, #f0f2f5);
+  --tuff-switch-active-color: var(--tx-color-primary, #409eff);
   --tuff-switch-thumb-color: var(--tx-text-color-secondary, #909399);
   --tuff-switch-ring-width: 2px;
+  --tuff-switch-track-width: 44px;
+  --tuff-switch-track-height: 24px;
+  --tuff-switch-track-radius: 10px;
+  --tuff-switch-thumb-radius: 6px;
 
   appearance: none;
-  position: relative;
   display: inline-flex;
   align-items: center;
-  width: 44px;
-  height: 24px;
+  gap: 8px;
   padding: 0;
   border: 0;
   cursor: pointer;
   color: inherit;
   font: inherit;
-  border-radius: 10px;
-  background-color: var(--tx-fill-color, #f0f2f5);
-  transition: all 0.25s ease-in-out;
+  text-align: inherit;
+  background: transparent;
+  user-select: none;
+  outline: none;
+
+  &__track {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    width: var(--tuff-switch-track-width);
+    height: var(--tuff-switch-track-height);
+    border-radius: var(--tuff-switch-track-radius);
+    background-color: var(--tuff-switch-track-color);
+    transition: all 0.25s ease-in-out;
+  }
+
+  &__label {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    font-size: 14px;
+    color: var(--tx-text-color-regular, #606266);
+  }
 
   &__thumb {
     position: absolute;
@@ -23,7 +51,7 @@
     aspect-ratio: 1 / 1;
     top: 15%;
     left: 10%;
-    border-radius: 6px;
+    border-radius: var(--tuff-switch-thumb-radius);
     background-color: var(--tuff-switch-thumb-color);
     transition: all 0.25s ease-in-out;
 
@@ -42,7 +70,9 @@
   }
 
   &.is-active {
-    background-color: var(--tx-color-primary, #409eff);
+    .tuff-switch__track {
+      background-color: var(--tuff-switch-active-color);
+    }
 
     .tuff-switch__thumb {
       left: 50%;
@@ -72,44 +102,56 @@
     pointer-events: none;
   }
 
-  &:hover:not(.is-disabled):not(.is-loading) {
-    box-shadow: 0 0 12px 1px var(--tx-fill-color);
+  &:hover:not(.is-disabled):not(.is-loading) .tuff-switch__track {
+    box-shadow: 0 0 12px 1px var(--tuff-switch-track-color);
   }
 
-  &.is-active:hover:not(.is-disabled):not(.is-loading) {
-    box-shadow: 0 0 16px 1px var(--tx-color-primary-light-3, #79bbff);
+  &.is-active:hover:not(.is-disabled):not(.is-loading) .tuff-switch__track {
+    box-shadow: 0 0 16px 1px color-mix(in srgb, var(--tuff-switch-active-color) 55%, white);
   }
 
   &:active:not(.is-disabled):not(.is-loading) .tuff-switch__thumb {
     transform: scale(0.85);
   }
 
+  // The outline follows border-radius. Unlabelled, the root box is exactly the
+  // track, so it keeps the pill radius; with a label it wraps both and takes a
+  // small uniform radius instead.
   &:focus-visible {
     outline: 2px solid var(--tx-color-primary-light-5, #a0cfff);
     outline-offset: 2px;
+    border-radius: var(--tuff-switch-track-radius);
+  }
+
+  &.has-label:focus-visible {
+    border-radius: 6px;
   }
 
   &--small {
     --tuff-switch-ring-width: 1.5px;
+    --tuff-switch-track-width: 36px;
+    --tuff-switch-track-height: 20px;
+    --tuff-switch-track-radius: 8px;
+    --tuff-switch-thumb-radius: 5px;
 
-    width: 36px;
-    height: 20px;
-    border-radius: 8px;
+    gap: 6px;
 
-    .tuff-switch__thumb {
-      border-radius: 5px;
+    .tuff-switch__label {
+      font-size: 13px;
     }
   }
 
   &--large {
     --tuff-switch-ring-width: 2.5px;
+    --tuff-switch-track-width: 52px;
+    --tuff-switch-track-height: 28px;
+    --tuff-switch-track-radius: 12px;
+    --tuff-switch-thumb-radius: 6px;
 
-    width: 52px;
-    height: 28px;
-    border-radius: 12px;
+    gap: 10px;
 
-    .tuff-switch__thumb {
-      border-radius: 6px;
+    .tuff-switch__label {
+      font-size: 15px;
     }
   }
 }

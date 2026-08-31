@@ -40,22 +40,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="switch-loading-demo">
-    <label class="switch-loading-demo__item">
-      <span>{{ labels.async }}</span>
-      <TuffSwitch
-        :model-value="asyncEnabled"
-        :loading="committing"
-        @change="commit"
-      />
-    </label>
-    <label class="switch-loading-demo__item">
-      <span>{{ labels.off }}</span>
-      <TuffSwitch v-model="loadingOff" loading />
-    </label>
-    <label class="switch-loading-demo__item">
-      <span>{{ labels.on }}</span>
-      <TuffSwitch v-model="loadingOn" loading />
-    </label>
+    <TuffSwitch
+      :model-value="asyncEnabled"
+      :loading="committing"
+      :label="labels.async"
+      @change="commit"
+    />
+    <TuffSwitch v-model="loadingOff" :label="labels.off" loading />
+    <TuffSwitch v-model="loadingOn" :label="labels.on" loading />
   </div>
 </template>
 
@@ -64,14 +56,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-}
-
-.switch-loading-demo__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--tx-text-color-secondary);
-  font-size: 14px;
+  gap: 18px;
 }
 </style>

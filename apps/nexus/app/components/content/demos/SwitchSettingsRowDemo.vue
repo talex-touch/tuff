@@ -40,7 +40,7 @@ const labels = computed(() => (locale.value === 'zh'
         <p>{{ labels.notificationsDesc }}</p>
       </div>
       <div class="switch-settings-demo__action">
-        <span>{{ settings.notifications ? labels.on : labels.off }}</span>
+        <TxTextTransformer :text="settings.notifications ? labels.on : labels.off" />
         <TuffSwitch v-model="settings.notifications" />
       </div>
     </div>
@@ -50,7 +50,7 @@ const labels = computed(() => (locale.value === 'zh'
         <p>{{ labels.focusModeDesc }}</p>
       </div>
       <div class="switch-settings-demo__action">
-        <span>{{ settings.focusMode ? labels.on : labels.off }}</span>
+        <TxTextTransformer :text="settings.focusMode ? labels.on : labels.off" />
         <TuffSwitch v-model="settings.focusMode" />
       </div>
     </div>
@@ -60,7 +60,7 @@ const labels = computed(() => (locale.value === 'zh'
         <p>{{ labels.autoUpdateDesc }}</p>
       </div>
       <div class="switch-settings-demo__action">
-        <span>{{ settings.autoUpdate ? labels.on : labels.off }}</span>
+        <TxTextTransformer :text="settings.autoUpdate ? labels.on : labels.off" />
         <TuffSwitch v-model="settings.autoUpdate" />
       </div>
     </div>

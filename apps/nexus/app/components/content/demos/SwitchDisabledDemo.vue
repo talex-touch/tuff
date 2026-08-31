@@ -22,18 +22,9 @@ const labels = computed(() => (locale.value === 'zh'
 
 <template>
   <div class="switch-disabled-demo">
-    <label class="switch-disabled-demo__item">
-      <span>{{ labels.enabled }}</span>
-      <TuffSwitch v-model="enabled" />
-    </label>
-    <label class="switch-disabled-demo__item is-disabled">
-      <span>{{ labels.disabledOff }}</span>
-      <TuffSwitch v-model="disabledOff" disabled />
-    </label>
-    <label class="switch-disabled-demo__item is-disabled">
-      <span>{{ labels.disabledOn }}</span>
-      <TuffSwitch v-model="disabledOn" disabled />
-    </label>
+    <TuffSwitch v-model="enabled" :label="labels.enabled" />
+    <TuffSwitch v-model="disabledOff" :label="labels.disabledOff" disabled />
+    <TuffSwitch v-model="disabledOn" :label="labels.disabledOn" disabled />
   </div>
 </template>
 
@@ -42,18 +33,6 @@ const labels = computed(() => (locale.value === 'zh'
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-}
-
-.switch-disabled-demo__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--tx-text-color-secondary);
-  font-size: 14px;
-}
-
-.switch-disabled-demo__item.is-disabled {
-  color: var(--tx-text-color-placeholder);
+  gap: 18px;
 }
 </style>

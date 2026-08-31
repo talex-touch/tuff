@@ -50,7 +50,7 @@ code: |
 :::
 
 ### Sizes
-Small works well in dense lists, default fits forms, and large highlights important settings.
+Small works well in dense lists, default fits forms, and large highlights important settings. Size also drives the label font size and the track gap.
 :::TuffDemoWrapper{demo="SwitchSizesDemo" code-lang="vue"}
 ---
 code: |
@@ -64,9 +64,9 @@ code: |
 
   <template>
     <div style="display: flex; align-items: center; gap: 14px;">
-      <TuffSwitch v-model="smallEnabled" size="small" />
-      <TuffSwitch v-model="defaultEnabled" />
-      <TuffSwitch v-model="largeEnabled" size="large" />
+      <TuffSwitch v-model="smallEnabled" label="Small" size="small" />
+      <TuffSwitch v-model="defaultEnabled" label="Default" />
+      <TuffSwitch v-model="largeEnabled" label="Large" size="large" />
     </div>
   </template>
 ---
@@ -87,9 +87,9 @@ code: |
 
   <template>
     <div style="display: flex; align-items: center; gap: 14px;">
-      <TuffSwitch v-model="enabled" />
-      <TuffSwitch v-model="disabledOff" disabled />
-      <TuffSwitch v-model="disabledOn" disabled />
+      <TuffSwitch v-model="enabled" label="Enabled" />
+      <TuffSwitch v-model="disabledOff" label="Disabled / off" disabled />
+      <TuffSwitch v-model="disabledOn" label="Disabled / on" disabled />
     </div>
   </template>
 ---
@@ -119,16 +119,16 @@ code: |
 
   <template>
     <div style="display: flex; align-items: center; gap: 14px;">
-      <TuffSwitch :model-value="asyncEnabled" :loading="committing" @change="commit" />
-      <TuffSwitch v-model="loadingOff" loading />
-      <TuffSwitch v-model="loadingOn" loading />
+      <TuffSwitch :model-value="asyncEnabled" :loading="committing" label="Async commit" @change="commit" />
+      <TuffSwitch v-model="loadingOff" label="Loading / off" loading />
+      <TuffSwitch v-model="loadingOn" label="Loading / on" loading />
     </div>
   </template>
 ---
 :::
 
 ### Labels Before and After
-Place state labels before or after the switch, or combine it with setting copy.
+`label` renders beside the track and `labelPlacement` picks the side. When the text changes it crossfades through the built-in `TxTextTransformer` instead of hard-swapping; the default slot takes arbitrary nodes and renders them as-is, with no transition.
 :::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
 ---
 code: |
@@ -136,31 +136,29 @@ code: |
   import { ref } from 'vue'
 
   const compact = ref(false)
+  const telemetry = ref(false)
   const autoSync = ref(true)
   </script>
 
   <template>
-    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px;">
-      <label style="display: inline-flex; align-items: center; gap: 10px;">
-        <span>Off</span>
-        <TuffSwitch v-model="compact" />
-        <span>On</span>
-        <strong>Compact mode</strong>
-      </label>
-      <label style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; max-width: 320px; padding: 12px 14px; border: 1px solid var(--tx-border-color-light); border-radius: 14px;">
-        <span style="display: inline-flex; flex-direction: column; gap: 4px;">
-          <strong>Auto sync</strong>
-          <small style="color: var(--tx-text-color-secondary); font-size: 12px;">{{ autoSync ? 'On' : 'Off' }}</small>
-        </span>
-        <TuffSwitch v-model="autoSync" />
-      </label>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 18px;">
+      <TuffSwitch v-model="compact" label="Compact mode" />
+      <TuffSwitch v-model="telemetry" label="Anonymous stats" label-placement="start" />
+
+      <!-- A label that flips with the value: the built-in transformer crossfades it -->
+      <TuffSwitch v-model="autoSync" :label="autoSync ? 'On' : 'Off'" />
+
+      <!-- The slot takes arbitrary nodes and renders them as-is -->
+      <TuffSwitch v-model="autoSync">
+        <strong>Auto sync</strong>
+      </TuffSwitch>
     </div>
   </template>
 ---
 :::
 
 ### Custom Colors
-Switch does not expose a color prop yet. Override the active state with CSS variables or local classes.
+Override `--tuff-switch-active-color` (and `--tuff-switch-track-color` / `--tuff-switch-thumb-color`) to recolor a switch. The track visuals live on `.tuff-switch__track`, so overriding the root's `background-color` no longer reaches them.
 :::TuffDemoWrapper{demo="SwitchCustomColorDemo" code-lang="vue"}
 ---
 code: |
@@ -204,8 +202,8 @@ code: |
     color: var(--switch-demo-color);
   }
 
-  .switch-custom-color-demo__item :deep(.tuff-switch.is-active) {
-    background-color: var(--switch-demo-color);
+  .switch-custom-color-demo__item :deep(.tuff-switch) {
+    --tuff-switch-active-color: var(--switch-demo-color);
   }
 
   .switch-custom-color-demo__item.is-success {
@@ -230,7 +228,9 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `modelValue` | `boolean` | `false` | Checked state controlled by `v-model`. |
-| `size` | `'small' \| 'default' \| 'large'` | `'default'` | Visual size variant. The default size does not add a modifier class. |
+| `label` | `string` | - | Visible text beside the track. Changes crossfade through the built-in `TxTextTransformer`; its presence adds `has-label` and suppresses `aria-label`. |
+| `labelPlacement` | `'start' \| 'end'` | `'end'` | Which side of the track the label sits on. No effect without a label. |
+| `size` | `'small' \| 'default' \| 'large'` | `'default'` | Visual size variant, which also drives the label font size and the track gap. The default size does not add a modifier class. |
 | `disabled` | `boolean` | `false` | Removes focusability and blocks click, Enter, and Space toggles. |
 | `loading` | `boolean` | `false` | Pending async commit: morphs the thumb into a spinning ring, adds `is-loading` plus `aria-busy="true"`, and blocks toggling. |
 
@@ -245,7 +245,7 @@ code: |
 
 | Slot | Props | Description |
 |------|------|-------------|
-| - | - | `TuffSwitch` has no slots. Pair it with external labels or setting-row copy. |
+| `default` | - | Custom visible text, taking precedence over `label`. It accepts arbitrary nodes, so it does **not** animate; use `label` when you want the transition. |
 
 ## Interaction Contract
 
@@ -253,12 +253,14 @@ code: |
 - `disabled=true` sets the native `disabled` attribute (which removes it from the tab order), adds `is-disabled`, and prevents click, Enter, and Space from emitting events.
 - `loading=true` sets the native `disabled` attribute and blocks events just like `disabled`, but adds `is-loading` instead of `is-disabled` — so it skips the dimmed disabled look — and renders `aria-busy="true"`. Both classes appear when both props are true.
 - Enabled toggles emit both `update:modelValue` and `change`; the component does not mutate external state without `v-model` update handling.
+- The root is a flex container; the track lives on the child `.tuff-switch__track` and the thumb on `.tuff-switch__thumb`. Every state class (`is-active` / `is-disabled` / `is-loading` / `has-label`) still sits on the root.
+- A `label` or default slot adds `has-label` and stops `aria-label` from rendering — visible text is already the accessible name, and a competing `aria-label` would override the words a speech-control user actually reads.
 - `size="small"` and `size="large"` add modifier classes; `size="default"` intentionally leaves the base class only.
 
 ## Composite Patterns
 
 ### Settings Row
-Switch paired with labels, helper copy, and live state text for settings lists.
+Switch paired with labels, helper copy, and live state text for settings lists. When the state text sits outside the component, run it through `TxTextTransformer` so it uses the same text transition.
 ::::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
@@ -279,7 +281,10 @@ code: |
           <TxTag label="Notifications" />
           <p>Receive important system and plugin alerts.</p>
         </div>
-        <TuffSwitch v-model="settings.notifications" />
+        <div class="settings-state">
+          <TxTextTransformer :text="settings.notifications ? 'On' : 'Off'" />
+          <TuffSwitch v-model="settings.notifications" />
+        </div>
       </div>
       <div class="settings-row">
         <div>
@@ -313,9 +318,10 @@ code: |
 - Use switches for immediate boolean settings. Use checkboxes when the value is part of a submitted form or multi-select group.
 - When a toggle needs server confirmation, use `loading` to cover that not-immediate gap rather than letting the switch jump to the new value and back.
 - Do not write `modelValue` back optimistically while `loading` is set. Leave the thumb on the old value, commit on success, and simply clear `loading` on failure so the state stays where it was.
-- Place a readable text label next to the switch; the component itself intentionally renders only the control.
+- Use `label` for readable text rather than hand-rolling a `<span>` beside the control — the built-in path brings the text transition and the `aria-label` suppression with it.
+- Put the control's **name** in `label` ("Compact mode"). Keep state text ("On") outside and run it through `TxTextTransformer`: that component carries its own `aria-live="polite"`, so inside the label every toggle would be announced twice.
 - Keep labels vertically centered and leave enough hit area around dense settings rows.
-- Override active colors with local classes only; preserve disabled, focus, and size classes from the base component.
+- Recolor by overriding `--tuff-switch-active-color` and friends rather than rewriting `.tuff-switch__track` rules, so disabled, focus, and size styling survives.
 
 ## Review Notes
 
@@ -323,7 +329,8 @@ code: |
 - **Keyboard contract:** Enabled switches respond to click, Enter, and Space via native button semantics. Disabled switches leave the tab order through the native `disabled` attribute, keep `aria-disabled="true"`, and emit nothing.
 - **Loading contract:** `loading` is a purely visual and blocking state; the component owns no async logic. Thumb position still follows `modelValue`, so the loading ring sits on the old side to show that this toggle has not landed yet.
 - **Motion fallback:** The ring stops rotating under `prefers-reduced-motion: reduce`; its gapped border is a static glyph on its own, so the busy cue survives.
-- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, loading blocking and the `aria-busy` lifecycle, and asserts that no `tabindex` is rendered in either state.
+- **Class contract change (2026-08-31):** the track visuals moved off the root onto `.tuff-switch__track`, so `.tuff-switch.is-active { background-color }` — the override this page used to recommend — **no longer reaches them**; use `--tuff-switch-active-color`. Root classes, `closest('.tuff-switch')` hit-testing, and every event contract are unchanged.
+- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, loading blocking and the `aria-busy` lifecycle, plus the label structure: no `__label` without one, `label` routed through `TxTextTransformer`, slot content bypassing the transformer, `labelPlacement` ordering, and `aria-label` disappearing once visible text names the control; it also asserts that no `tabindex` is rendered in either state.
 
 ## Source
 
