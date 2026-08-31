@@ -546,6 +546,61 @@ defineExpose({
   clear,
 })
 
+/**
+ * The multi trigger grows a row at a time as tags wrap, and `height: auto` is
+ * not a transitionable value — so the box snapped to its new size while the tags
+ * inside were still animating into place. Measuring the natural height and
+ * writing it back as an explicit px gives the CSS transition two numbers to
+ * interpolate, so the row appears and the box grows on the same beat.
+ */
+const multiTriggerRef = ref<HTMLElement | null>(null)
+const multiTriggerHeight = ref<number | null>(null)
+
+function syncMultiTriggerHeight(): void {
+  const el = multiTriggerRef.value
+  if (!el)
+    return
+  const pinned = el.style.height
+  el.style.height = 'auto'
+  const natural = el.offsetHeight
+  el.style.height = pinned
+  if (natural > 0 && multiTriggerHeight.value !== natural)
+    multiTriggerHeight.value = natural
+}
+
+let triggerResizeObserver: ResizeObserver | null = null
+/**
+ * Width only. Writing the height back re-fires the observer, and reacting to
+ * that would be a feedback loop; the width is the input that actually decides
+ * where the tags wrap.
+ */
+let lastTriggerWidth = -1
+
+watch(multiTriggerRef, (el) => {
+  triggerResizeObserver?.disconnect()
+  lastTriggerWidth = -1
+  if (!el || typeof ResizeObserver === 'undefined')
+    return
+  triggerResizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0]?.contentRect.width ?? -1
+    if (width === lastTriggerWidth)
+      return
+    lastTriggerWidth = width
+    syncMultiTriggerHeight()
+  })
+  triggerResizeObserver.observe(el)
+})
+
+// Tag enter/leave animates transform and opacity, never layout, so the natural
+// height one tick after the change is already the settled one.
+watch(
+  () => [visibleSelectedOptions.value.length, hiddenSelectedCount.value] as const,
+  async () => {
+    await nextTick()
+    syncMultiTriggerHeight()
+  },
+)
+
 onMounted(() => {
   syncSelectedLabelFromValue(currentValue.value)
 })
@@ -642,6 +697,8 @@ watch(
 onBeforeUnmount(() => {
   if (searchTimer.value)
     clearTimeout(searchTimer.value)
+  triggerResizeObserver?.disconnect()
+  triggerResizeObserver = null
 })
 </script>
 
@@ -680,8 +737,10 @@ onBeforeUnmount(() => {
         <div class="tuff-select__trigger">
           <div
             v-if="multiple"
+            ref="multiTriggerRef"
             class="tuff-select__multi-trigger"
             :class="{ 'is-disabled': disabled }"
+            :style="multiTriggerHeight != null ? { height: `${multiTriggerHeight}px` } : undefined"
             role="combobox"
             aria-haspopup="listbox"
             :aria-expanded="isOpen"
@@ -902,7 +961,11 @@ onBeforeUnmount(() => {
     border: 1px solid var(--tx-border-color, #dcdfe6);
     border-radius: 12px;
     background-color: var(--tx-bg-color, #fff);
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    // Matches the tag transition so a wrapping row and the box that has to make
+    // space for it move together; height is only transitionable because the
+    // script writes the measured value back as an explicit px.
+    transition: border-color 0.18s ease, box-shadow 0.18s ease,
+      height 0.18s cubic-bezier(0.22, 1, 0.36, 1);
     cursor: pointer;
 
     &:hover:not(.is-disabled) {

@@ -134,15 +134,27 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/*
+  Flex, not inline-block: as a block the container opened a line box, and the
+  inline-block layer inside sat on that strut's baseline. The strut reserved
+  descender space the text never used, so the container measured 26px around a
+  21px layer and the text rendered 2.5px above centre — visible as a switch label
+  riding high over its track, while the same label passed through the default
+  slot (no transformer) sat dead centre. A flex container has no strut, so the
+  box is exactly the text.
+*/
 .tx-text-transformer {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   overflow: hidden;
   max-width: 100%;
 }
 
 .tx-text-transformer__layer {
   display: inline-block;
+  /* Flex items floor at their content width; truncation needs the override. */
+  min-width: 0;
   transition:
     opacity var(--tx-tt-duration) cubic-bezier(0.2, 0, 0, 1),
     filter var(--tx-tt-duration) cubic-bezier(0.2, 0, 0, 1),
