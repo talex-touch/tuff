@@ -91,6 +91,43 @@ code: |
 ---
 :::
 
+### Group Hover Effects
+
+:::TuffDemoWrapper{demo="AvatarGroupHoverDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- Default lift: the hovered avatar rises above its neighbours -->
+    <TxAvatarGroup :overlap="12">
+      <TxAvatar v-for="id in 5" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
+    </TxAvatarGroup>
+
+    <!-- Fan the row apart on hover; a negative spreadOverlap leaves a gap -->
+    <TxAvatarGroup :overlap="12" spread-on-hover :spread-overlap="-4">
+      <TxAvatar v-for="id in 5" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
+    </TxAvatarGroup>
+
+    <!-- No hover effect -->
+    <TxAvatarGroup :overlap="12" hover-effect="none">
+      <TxAvatar v-for="id in 5" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
+    </TxAvatarGroup>
+  </template>
+---
+:::
+
+### Overflow Popover
+
+:::TuffDemoWrapper{demo="AvatarGroupPopoverDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAvatarGroup :max="3" :overlap="12" overflow-popover>
+      <TxAvatar v-for="id in 8" :key="id" :src="`https://avatars.githubusercontent.com/u/${id}?v=4`" />
+    </TxAvatarGroup>
+  </template>
+---
+:::
+
 ### Status
 
 :::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
@@ -116,7 +153,14 @@ code: |
 - Custom numeric sizes set CSS variables for avatar size, font size, status dot size, and status border width.
 - `backgroundColor` also sets `textColor`; when `textColor` is omitted it falls back to white.
 - `click` emits only when `clickable=true`.
+- The status dot is inset per `shape`: circles anchor to the 45 degree tangent point, squares and rounded avatars to the corner. The root does not clip (the image and fallback layers do), otherwise the shape would shave most of the dot away.
+- `--tx-avatar-status-size` is the dot's **outer** diameter including its white ring, not the diameter inside the ring.
 - `TxAvatarGroup` preserves child props, injects group `size` only into children without their own size, and renders `+N` for hidden children when `max` is lower than the child count.
+- Stacking offsets (negative margin and `z-index`) come from the group stylesheet rather than inline styles; children only receive the ring border and `--tx-avatar-group-index` inline. Callers overriding inline `margin-left` / `z-index` must switch to the CSS variables.
+- Group `z-index` increases left to right, so each avatar covers the bottom-right corner — status dot included — of the one before it; `hoverEffect="lift"` brings the hovered avatar forward and reveals it.
+- `overflowPopover` is off by default. While off, `+N` is a plain avatar with no floating layer or wrapper element; while on, `+N` is wrapped by `TxPopover` and the stacking offsets move to the popover's reference element.
+- With `overflowPopover` on but nothing overflowing (`max` at or above the child count), no popover is rendered.
+- Hover motion honours `prefers-reduced-motion: reduce`: the translate and transitions drop out, while the `z-index` promotion and shadow remain.
 
 ## API
 
@@ -143,7 +187,13 @@ code: |
 |------|------|---------|-------------|
 | `max` | `number` | child count | Maximum visible child avatars before rendering the `+N` overflow avatar. Values below zero behave as zero. |
 | `size` | `AvatarSize` | - | Size injected into child avatars that do not define their own size. |
-| `overlap` | `number \| string` | `8` | Overlap distance. Numbers become px values and are applied as negative margin between avatars. |
+| `overlap` | `number \| string` | `8` | Overlap distance. Numbers become px values, are written to `--tx-avatar-group-overlap`, and the group stylesheet turns them into negative margin between avatars. |
+| `hoverEffect` | `'none' \| 'lift'` | `'lift'` | Per-avatar hover feedback. `lift` raises the hovered avatar, adds a shadow, and promotes it above its neighbours. |
+| `spreadOnHover` | `boolean` | `false` | Ease the overlap towards `spreadOverlap` while the whole group is hovered. |
+| `spreadOverlap` | `number \| string` | `0` | Overlap once spread; negative values leave a gap between avatars. Read only when `spreadOnHover` is set. |
+| `overflowPopover` | `boolean` | `false` | Attach an overflow popover to the `+N` avatar. Off by default because it introduces a floating layer. |
+| `overflowPopoverTrigger` | `'hover' \| 'click'` | `'hover'` | How the popover opens. |
+| `overflowPopoverPlacement` | `PopoverPlacement` | `'top'` | Popover position relative to the `+N` avatar. |
 
 ### Events
 
@@ -170,6 +220,7 @@ No public events are emitted.
 | Slot | Props | Description |
 |------|------|-------------|
 | `default` | - | `TxAvatar` children or compatible avatar VNodes. |
+| `overflow` | `{ nodes: VNode[], count: number }` | Replaces the overflow popover's panel content. `nodes` are the avatar VNodes `max` cut off and `count` is how many. Rendered only when `overflowPopover` is set. |
 
 ### Exposed Methods
 
@@ -181,14 +232,17 @@ No public instance methods are exposed.
 |----------|------------|---------|
 | `--tx-avatar-size` | custom `size` | Avatar width and height. |
 | `--tx-avatar-font-size` | custom `size` | Fallback text and icon font size. |
-| `--tx-avatar-status-size` | custom `size` | Status dot diameter. |
-| `--tx-avatar-status-border` | custom `size` | Status dot border width. |
+| `--tx-avatar-status-size` | custom `size` | Status dot outer diameter, ring included. |
+| `--tx-avatar-status-border` | custom `size` | Status dot ring width. |
 | `--tx-avatar-bg` | `backgroundColor` | Fallback background color. |
 | `--tx-avatar-text` | `textColor` with `backgroundColor` | Fallback text color. |
 | `--tx-avatar-group-overlap` | `TxAvatarGroup.overlap` | Exposes the resolved overlap distance on the group root. |
+| `--tx-avatar-group-spread-overlap` | `TxAvatarGroup.spreadOverlap` | Overlap the group eases to while hovered and spread. |
+| `--tx-avatar-group-hover-z` | caller / theme | `z-index` used to promote the hovered avatar; defaults to `999`. |
+| `--tx-avatar-group-overflow-width` | caller / theme | Maximum width of the overflow popover panel before it wraps; defaults to `232px`, five medium avatars across. |
 | `--tx-avatar-group-border` | caller / theme | Border color for grouped avatar items. |
 
-Preset internals also use `--tx-avatar-size-preset`, `--tx-avatar-font-size-preset`, `--tx-avatar-status-size-preset`, and `--tx-avatar-status-border-preset`; callers should prefer the `size` prop over setting these directly.
+Preset internals also use `--tx-avatar-size-preset`, `--tx-avatar-font-size-preset`, `--tx-avatar-status-size-preset`, and `--tx-avatar-status-border-preset`; group internals also use `--tx-avatar-status-diameter`, `--tx-avatar-status-ring`, `--tx-avatar-status-inset`, `--tx-avatar-group-gap`, `--tx-avatar-group-index`, and `--tx-avatar-group-more-z`. Callers should prefer the matching prop over setting these directly.
 
 ## Best Practices
 
@@ -197,13 +251,15 @@ Preset internals also use `--tx-avatar-size-preset`, `--tx-avatar-font-size-pres
 - Use `status` only for presence or availability; use `TxStatusBadge` for textual system state.
 - Avoid relying on `clickable` for primary actions. Pair avatars with a semantic `TxButton` when keyboard accessibility or clear action semantics are required.
 - In groups, let the group inject `size` unless a specific child intentionally needs a different scale.
+- When a group also uses `status`, remember that each avatar covers the previous one's status dot: either raise `overlap` to clear the corner, or enable `spreadOnHover` so people can fan the row apart.
+- Treat the overflow popover as a glance-only affordance, not a member-management entry point; reach for a real list component when the members need to be actionable.
 
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/avatar/src/types.ts`, `TxAvatar.vue`, `TxAvatarGroup.vue`, and `avatar.test.ts`.
 - API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections so automated coverage checks and readers both find the contracts.
 - Verified source behavior: image fallback order, initials generation, custom size normalization, click gating, group `max` overflow, group size injection, and overlap CSS variable.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` covers initials/custom colors, image error fallback, slot priority, custom size normalization, click gating, and group overflow.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` covers initials/custom colors, image error fallback, slot priority, custom size normalization, click gating, group overflow, the hover class contract, stacking offsets no longer being inline, all four overflow-popover cases, and the status dot's CSS geometry constraints.
 - Accessibility boundary: the component forwards image `alt`, but the root remains a non-semantic `div`; use a real button/link when the avatar is the primary action.
 
 ## Source
