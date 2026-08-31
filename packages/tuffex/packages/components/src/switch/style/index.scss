@@ -1,4 +1,7 @@
 .tuff-switch {
+  --tuff-switch-thumb-color: var(--tx-text-color-secondary, #909399);
+  --tuff-switch-ring-width: 2px;
+
   appearance: none;
   position: relative;
   display: inline-flex;
@@ -21,8 +24,21 @@
     top: 15%;
     left: 10%;
     border-radius: 6px;
-    background-color: var(--tx-text-color-secondary, #909399);
+    background-color: var(--tuff-switch-thumb-color);
     transition: all 0.25s ease-in-out;
+
+    // The loading ring lives on a pseudo-element so the thumb -> ring morph is
+    // one coordinated transition on a single box, with no node swap to flash.
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: var(--tuff-switch-ring-width) solid var(--tuff-switch-thumb-color);
+      border-top-color: transparent;
+      opacity: 0;
+      transition: opacity 0.25s ease-in-out;
+    }
   }
 
   &.is-active {
@@ -30,7 +46,23 @@
 
     .tuff-switch__thumb {
       left: 50%;
+      // Brightens the ring stroke along with the thumb; `transparent` keeps its
+      // zero alpha, so the gap survives the filter.
       filter: brightness(2);
+    }
+  }
+
+  &.is-loading {
+    cursor: progress;
+
+    .tuff-switch__thumb {
+      border-radius: 50%;
+      background-color: transparent;
+
+      &::after {
+        opacity: 1;
+        animation: tuff-switch-ring-spin 0.7s linear infinite;
+      }
     }
   }
 
@@ -40,15 +72,15 @@
     pointer-events: none;
   }
 
-  &:hover:not(.is-disabled) {
+  &:hover:not(.is-disabled):not(.is-loading) {
     box-shadow: 0 0 12px 1px var(--tx-fill-color);
   }
 
-  &.is-active:hover:not(.is-disabled) {
+  &.is-active:hover:not(.is-disabled):not(.is-loading) {
     box-shadow: 0 0 16px 1px var(--tx-color-primary-light-3, #79bbff);
   }
 
-  &:active:not(.is-disabled) .tuff-switch__thumb {
+  &:active:not(.is-disabled):not(.is-loading) .tuff-switch__thumb {
     transform: scale(0.85);
   }
 
@@ -58,6 +90,8 @@
   }
 
   &--small {
+    --tuff-switch-ring-width: 1.5px;
+
     width: 36px;
     height: 20px;
     border-radius: 8px;
@@ -68,6 +102,8 @@
   }
 
   &--large {
+    --tuff-switch-ring-width: 2.5px;
+
     width: 52px;
     height: 28px;
     border-radius: 12px;
@@ -75,5 +111,19 @@
     .tuff-switch__thumb {
       border-radius: 6px;
     }
+  }
+}
+
+@keyframes tuff-switch-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  // The ring's transparent top border is a static glyph on its own, so freezing
+  // the rotation keeps the busy cue readable instead of erasing it.
+  .tuff-switch.is-loading .tuff-switch__thumb::after {
+    animation: none;
   }
 }

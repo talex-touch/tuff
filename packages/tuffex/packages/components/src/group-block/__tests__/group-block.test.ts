@@ -227,10 +227,13 @@ describe('group-block components', () => {
         loading: true,
       },
     })
-    expect(loading.find('.tx-block-switch__loader').exists()).toBe(true)
-    expect(loading.findComponent({ name: 'TxSpinner' }).exists()).toBe(true)
+    // The switch itself carries the busy affordance now; the row must not add a
+    // second spinner beside it.
+    expect(loading.find('.tuff-switch.is-loading').exists()).toBe(true)
+    expect(loading.find('.tuff-switch').attributes('aria-busy')).toBe('true')
+    expect(loading.find('.tx-block-switch__loader').exists()).toBe(false)
+    expect(loading.findComponent({ name: 'TxSpinner' }).exists()).toBe(false)
     expect(loading.find('.tx-block-switch--loading').exists()).toBe(true)
-    expect(loading.find('.tx-block-switch__loader.i-ri-loader-4-line').exists()).toBe(false)
     await loading.find('.tuff-switch').trigger('click')
     expect(loading.emitted('update:modelValue')).toBeUndefined()
     expect(loading.emitted('change')).toBeUndefined()

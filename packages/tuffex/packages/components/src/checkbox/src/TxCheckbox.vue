@@ -9,6 +9,8 @@ const props = withDefaults(
   defineProps<{
     modelValue?: boolean
     disabled?: boolean
+    /** Pending async commit: the box becomes a spinning ring and blocks toggling. */
+    loading?: boolean
     label?: string
     labelPlacement?: 'start' | 'end'
     variant?: 'fill' | 'checkmark'
@@ -23,6 +25,7 @@ const props = withDefaults(
   {
     modelValue: false,
     disabled: false,
+    loading: false,
     labelPlacement: 'end',
     variant: 'checkmark',
     indeterminate: false,
@@ -56,8 +59,12 @@ const ariaChecked = computed<'mixed' | boolean>(() =>
   props.indeterminate ? 'mixed' : isChecked.value,
 )
 
+// Loading blocks input the same way `disabled` does, but stays a separate class
+// so the ring reads as "busy" instead of inheriting the greyed-out disabled box.
+const isBlocked = computed(() => props.disabled || props.loading)
+
 function toggle() {
-  if (props.disabled)
+  if (isBlocked.value)
     return
   isChecked.value = props.indeterminate ? true : !isChecked.value
 }
@@ -68,14 +75,16 @@ function toggle() {
     type="button"
     role="checkbox"
     :aria-checked="ariaChecked"
-    :aria-disabled="disabled"
+    :aria-disabled="isBlocked"
+    :aria-busy="loading || undefined"
     :aria-label="effectiveAriaLabel"
-    :disabled="disabled"
+    :disabled="isBlocked"
     class="tx-checkbox" :class="[
       {
         'is-checked': isChecked,
         'is-indeterminate': indeterminate,
         'is-disabled': disabled,
+        'is-loading': loading,
       },
       `tx-checkbox--${variant || 'checkmark'}`,
     ]"
@@ -110,6 +119,8 @@ function toggle() {
 
 <style lang="scss" scoped>
 .tx-checkbox {
+  --tx-checkbox-ring-color: var(--tx-text-color-secondary, #909399);
+
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -135,7 +146,21 @@ function toggle() {
     border: 1px solid var(--tx-border-color, #dcdfe6);
     background-color: var(--tx-bg-color, #fff);
     transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease,
-      box-shadow 0.18s ease;
+      box-shadow 0.18s ease, border-radius 0.18s ease;
+
+    // Loading ring. Painted on every checkbox but transparent until `is-loading`,
+    // so the box -> ring morph is one transition with no DOM swap. `inset: -1px`
+    // lands it exactly on the box's own 1px border, whichever box-sizing applies.
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 50%;
+      border: 2px solid var(--tx-checkbox-ring-color);
+      border-top-color: transparent;
+      opacity: 0;
+      transition: opacity 0.18s ease;
+    }
 
     svg {
       /* Out of the flex flow: when the indeterminate dash is also rendered,
@@ -212,14 +237,49 @@ function toggle() {
     }
   }
 
-  &:hover:not(.is-disabled) {
+  // Must stay below every other state block: it shares their specificity and
+  // overrides `border-color` / `border-radius` by source order.
+  &.is-loading {
+    cursor: progress;
+
+    .tx-checkbox__box {
+      border-radius: 50%;
+      border-color: transparent;
+      // The fill goes with the square. A white ring drawn on the primary fill
+      // disappears against a light page at the rim, so the ring stroke — not the
+      // fill — is what carries the state through the pending commit.
+      background-color: transparent;
+
+      &::after {
+        opacity: 1;
+        animation: tx-checkbox-ring-spin 0.7s linear infinite;
+      }
+    }
+
+    // A tick or dash inside the ring would be a second, competing claim about a
+    // value that has not landed yet.
+    .tx-checkbox__tick,
+    .tx-checkbox__dash {
+      display: none;
+    }
+  }
+
+  // Selected states keep the primary hue so the ring still reads as "on";
+  // checked and mixed are indistinguishable here, and `aria-checked="mixed"`
+  // is what preserves that difference while the commit is in flight.
+  &.is-loading.is-checked,
+  &.is-loading.is-indeterminate {
+    --tx-checkbox-ring-color: var(--tx-color-primary, #409eff);
+  }
+
+  &:hover:not(.is-disabled):not(.is-loading) {
     .tx-checkbox__box {
       border-color: var(--tx-color-primary, #409eff);
       box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
     }
   }
 
-  &:active:not(.is-disabled) {
+  &:active:not(.is-disabled):not(.is-loading) {
     .tx-checkbox__box {
       transform: scale(0.96);
     }
@@ -252,6 +312,20 @@ function toggle() {
   100% {
     stroke-dashoffset: 0;
     opacity: 1;
+  }
+}
+
+@keyframes tx-checkbox-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  // The ring's transparent top border is a static glyph on its own, so freezing
+  // the rotation keeps the busy cue readable instead of erasing it.
+  .tx-checkbox.is-loading .tx-checkbox__box::after {
+    animation: none;
   }
 }
 </style>
