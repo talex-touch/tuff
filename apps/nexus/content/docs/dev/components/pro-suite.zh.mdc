@@ -22,10 +22,8 @@ verified: false
 
 ## 分组一览
 
-| 分组 | 覆盖 |
-|------|------|
-| [高级交互](/docs/dev/components/command-palette) | CommandPalette、SearchPanel、MarkdownEditor、CodeEditor、VirtualList、VersionCapsule |
-| [视觉效果](/docs/dev/components/glass-surface) | GlassSurface、GradientBorder、BorderBeam、GradualBlur、GlowText、Transition、Liquid |
-| [底层原语](/docs/dev/components/base-surface) | BaseSurface、BaseAnchor、Floating、AutoSizer、ResizeBox |
+下面按分组列出该套件的**全部**组件，数据来自每个文档的 `category` frontmatter，新增组件会自动出现。
 
-完整清单与全部链接见《[组件中心](/docs/dev/components/index)》的「进阶套件」分节。
+::DocsSuiteCatalog{suite="pro"}
+::
+

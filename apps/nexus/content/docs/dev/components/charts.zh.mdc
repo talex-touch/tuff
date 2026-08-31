@@ -33,6 +33,13 @@ import '@talex-touch/tuffex-charts/style.css'
 | `TxChart` + 系列原语 | [Custom Chart](/docs/dev/components/custom-chart) | 组合式逃生舱：折线/面积/柱/散点/环形自由拼装。 |
 | `ChartPalette` / CSS 变量 | [Colors](/docs/dev/components/chart-colors) | 分类、语义、顺序、地图色板，明暗自动。 |
 
+## 分组一览
+
+下面按分组列出该套件的**全部**组件，数据来自每个文档的 `category` frontmatter，新增组件会自动出现。
+
+::DocsSuiteCatalog{suite="data"}
+::
+
 ## 图例
 
 `TxChartLegendItem` 提供两种图例项版式：`small` 单行（多序列图例），`large` 堆叠大数值（仪表卡单指标）。`loading` 渲染骨架占位；挂了 `click` 监听时它会渲染成原生 `button`，回车/空格开箱可用。

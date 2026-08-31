@@ -13,6 +13,13 @@ verified: true
 
 In the components sidebar the AI suite is split into four groups: **Chat** (Chat, ChatComposer, PromptBar, AttachmentTray, MessageActions, SuggestionChips, TypingIndicator, ConversationStream), **Agents** (Agents, AgentTrace, TaskRows, ToolCallCard, ToolChips, ToolConfirmation, ApprovalCard, WorkingIndicator), **Reasoning** (AiElements, ChainOfThought, ReasoningDisclosure, ThinkingOrb, StreamMarkdown, CodeStream, InlineCitation, Sources) and **Context & Insight** (ContextCards, ContextIndicator, InsightCards, RecommendationCard, FineTuneCard). Every component in the suite can be imported through the `@talex-touch/tuffex/ai` category entry.
 
+## Groups at a Glance
+
+Every component in the suite, grouped by category. The list is read from each doc's `category` frontmatter, so new components appear on their own.
+
+::DocsSuiteCatalog{suite="ai"}
+::
+
 ## Source & License
 
 This suite is adapted from [Beautiful UI](https://www.beautifului.dev) (Turbo design studio / Shane Levine, © 2026, MIT license) — 19 component showcases for AI-native interfaces: chat, reasoning traces, human-in-the-loop approvals, agent task status and more. The port follows three principles: pixel-match the source visual language (a dedicated `--tx-bui-*` token layer, hairline ring shadows, the 13px density system); ship components as pure controlled primitives (demo timelines stay in the demo layer); and fuse with existing tuffex components instead of duplicating them — overlaps land as variants or compositions, and accessibility gaps are filled to tuffex standards. Every component source file carries the MIT attribution in its header.

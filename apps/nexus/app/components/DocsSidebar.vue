@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
 import { hasWindow } from '@talex-touch/utils/env'
+import type { DocsSuiteKey } from '~/utils/docs-suites'
 import { coerceJsonArray } from '~/utils/docs-api'
+import { categoryI18nKey, CATEGORY_SUITE_MAP, SUITE_CATEGORY_KEYS } from '~/utils/docs-suites'
 import { requestDocsPage } from '~/utils/docs-page-client-cache'
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
@@ -431,7 +433,7 @@ const SECTION_ORDER: Record<string, string[]> = {
 // tuffex entry barrels stay base/pro/ai: 'data' is a docs-level split
 // (Visualization components still import from the pro barrel; the chart family
 // is the standalone @talex-touch/tuffex-charts package).
-type SuiteKey = 'concepts' | 'base' | 'pro' | 'ai' | 'data'
+type SuiteKey = DocsSuiteKey
 
 interface SuiteDef {
   key: SuiteKey
@@ -441,11 +443,20 @@ interface SuiteDef {
   standalonePages: string[]
 }
 
+// Category groups come from the shared taxonomy so the sidebar and the suite
+// overview catalogs cannot list different components.
+function suiteCategories(suite: SuiteKey) {
+  return SUITE_CATEGORY_KEYS[suite].map(key => ({
+    key,
+    label: t(`docsSidebar.categories.${categoryI18nKey(key)}`),
+  }))
+}
+
 const SUITES = computed<SuiteDef[]>(() => [
   {
     key: 'concepts',
     label: t('docsSidebar.suites.concepts'),
-    categories: [],
+    categories: suiteCategories('concepts'),
     standalonePages: [
       '/docs/dev/components/concepts-suite',
       '/docs/dev/components/foundations',
@@ -455,45 +466,25 @@ const SUITES = computed<SuiteDef[]>(() => [
   {
     key: 'base',
     label: t('docsSidebar.suites.base'),
-    categories: [
-      { key: 'Basic', label: t('docsSidebar.categories.basic') },
-      { key: 'Form', label: t('docsSidebar.categories.form') },
-      { key: 'Layout', label: t('docsSidebar.categories.layout') },
-      { key: 'Navigation', label: t('docsSidebar.categories.navigation') },
-      { key: 'Data', label: t('docsSidebar.categories.data') },
-      { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
-      { key: 'Status', label: t('docsSidebar.categories.status') },
-    ],
+    categories: suiteCategories('base'),
     standalonePages: ['/docs/dev/components/base-suite'],
   },
   {
     key: 'pro',
     label: t('docsSidebar.suites.pro'),
-    categories: [
-      { key: 'Advanced', label: t('docsSidebar.categories.advanced') },
-      { key: 'Effects', label: t('docsSidebar.categories.effects') },
-      { key: 'Primitives', label: t('docsSidebar.categories.primitives') },
-    ],
+    categories: suiteCategories('pro'),
     standalonePages: ['/docs/dev/components/pro-suite'],
   },
   {
     key: 'ai',
     label: t('docsSidebar.suites.ai'),
-    categories: [
-      { key: 'AiChat', label: t('docsSidebar.categories.aiChat') },
-      { key: 'AiAgent', label: t('docsSidebar.categories.aiAgent') },
-      { key: 'AiReasoning', label: t('docsSidebar.categories.aiReasoning') },
-      { key: 'AiContext', label: t('docsSidebar.categories.aiContext') },
-    ],
+    categories: suiteCategories('ai'),
     standalonePages: ['/docs/dev/components/ai-suite'],
   },
   {
     key: 'data',
     label: t('docsSidebar.suites.data'),
-    categories: [
-      { key: 'Charts', label: t('docsSidebar.categories.charts') },
-      { key: 'Visualization', label: t('docsSidebar.categories.visualization') },
-    ],
+    categories: suiteCategories('data'),
     // The charts package overview doubles as this suite's overview page; the
     // standalone slot consumes it before the Charts group renders, so it never
     // shows twice.
@@ -501,28 +492,6 @@ const SUITES = computed<SuiteDef[]>(() => [
   },
 ])
 
-const CATEGORY_SUITE_MAP: Record<string, SuiteKey> = {
-  Foundations: 'concepts',
-  BaseSuite: 'base',
-  Basic: 'base',
-  Form: 'base',
-  Layout: 'base',
-  Navigation: 'base',
-  Data: 'base',
-  Feedback: 'base',
-  Status: 'base',
-  ProSuite: 'pro',
-  Advanced: 'pro',
-  Visualization: 'data',
-  Charts: 'data',
-  Effects: 'pro',
-  Primitives: 'pro',
-  AiSuite: 'ai',
-  AiChat: 'ai',
-  AiAgent: 'ai',
-  AiReasoning: 'ai',
-  AiContext: 'ai',
-}
 
 // Same-component doc families fold into one expandable entry inside their
 // category instead of rendering as flat sibling links. Key = head doc path (its
