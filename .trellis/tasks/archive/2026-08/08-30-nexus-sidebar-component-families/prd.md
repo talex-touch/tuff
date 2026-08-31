@@ -7,7 +7,7 @@ render as flat sibling links inside a category — today `Avatar` and `Avatar Va
 next to each other under `Basic`. The user wants such families collapsed into one
 aggregate entry that expands on click:
 
-```
+```text
 Avatar            ← family entry (click = expand, not navigate)
 | Basic Avatar    ← the base avatar doc
 | Avatar Variants

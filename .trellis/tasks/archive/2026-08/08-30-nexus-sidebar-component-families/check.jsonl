@@ -1,2 +1,2 @@
-{"file": ".trellis/tasks/08-30-nexus-sidebar-component-families/prd.md", "reason": "Acceptance criteria: family entry rendering, toggle interaction, route auto-expand, i18n, no regression to other sections"}
+{"file": ".trellis/tasks/archive/2026-08/08-30-nexus-sidebar-component-families/prd.md", "reason": "Acceptance criteria: family entry rendering, toggle interaction, route auto-expand, i18n, no regression to other sections"}
 {"file": "apps/nexus/app/components/DocsSidebar.vue", "reason": "Verify family fold only touches components branch; canary misc bucket logic untouched; hydration note at top of scrollable content still holds"}
