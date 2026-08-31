@@ -11,7 +11,7 @@ verified: false
 
 ## Tuffex Components
 
-Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Pro** carries rich interaction and visual expression, **AI** carries AI-native interfaces, and **Data** carries visualization plus the standalone charts package. The suite switcher at the top of the sidebar follows this split, and the first entry of every suite is its overview page.
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex Touch ecosystem: one set of components serves the desktop CoreBox, plugin surfaces, and this docs site itself. Components are split into suites — **Basics** carries the everyday interface body, **Pro** carries rich interaction and visual expression, **AI** carries AI-native interfaces, and **Data** carries visualization plus the standalone charts package. The suite switcher at the top of the sidebar adds Concepts as a fifth, documentation-only tab alongside these four component suites, and the first entry of every suite is its overview page.
 
 - Live specimens: every cell in the [component preview](/docs/dev/components/index) is a real, interactive component; click its name to open the docs.
 - Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships as the standalone `@talex-touch/tuffex-charts` package.
