@@ -319,11 +319,12 @@ code: |
 ### 加载状态
 
 #### BlockSwitch (loading)
+`loading` 直接透传给内部开关：滑块变成旋转环，整行冻结但不压暗，行上再叠一层 shimmer。
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxGroupBlock name="同步状态" description="加载中会冻结内部控件" default-icon="i-ri-refresh-line" :collapsible="false">
+    <TxGroupBlock name="同步状态" description="加载中滑块变为旋转环并冻结整行" default-icon="i-ri-refresh-line" :collapsible="false">
       <TxBlockSwitch
         v-model="loading"
         title="正在同步"
@@ -528,7 +529,7 @@ code: |
 | `activeIcon` | `TxIconSource \| string` | - | 开关开启时图标；未提供时回退到 `defaultIcon`。 |
 | `disabled` | `boolean` | `false` | 禁用行和内部开关。 |
 | `guidance` | `boolean` | `false` | 渲染为带箭头的导航行，而不是开关。 |
-| `loading` | `boolean` | `false` | 显示 spinner/shimmer，并临时禁用开关交互。 |
+| `loading` | `boolean` | `false` | 透传给内部 `TuffSwitch` 的 `loading`：滑块变为旋转环，行上叠加 shimmer，并临时禁用开关交互。 |
 
 ### TxBlockSwitch 事件
 
@@ -555,7 +556,8 @@ code: |
 - 用户手动切换分组后，后续 `collapsed` / `defaultExpand` prop 变化不再覆盖当前选择。
 - 分组内容始终保持挂载；展开/折叠只改变高度、透明度和 display。
 - `TxBlockLine` 默认渲染非交互 `div`，仅在 `link=true` 时渲染 `button type="button"`。
-- `TxBlockSlot` 禁用时不触发点击；`TxBlockSwitch` 在 `loading=true` 时也会禁用行和内部开关。
+- `TxBlockSlot` 禁用时不触发点击；`TxBlockSwitch` 在 `loading=true` 时同样冻结整行的指针事件，但行不会被压暗——`tx-block-switch--loading:not(.tx-block-switch--disabled)` 会把 slot 的 `opacity: .5` 收回来，让忙碌态和禁用态在视觉上分开。
+- `TxBlockSwitch` 的忙碌提示只有一处：`loading` 透传给内部 `TuffSwitch`，由滑块变成旋转环；行本身只叠加 shimmer，不再额外渲染 spinner。
 - `TxBlockSwitch` 的 guidance 模式只显示箭头并触发 `click`，不会改写 `modelValue`。
 
 ## 样式定制
@@ -564,7 +566,7 @@ code: |
 |-------------|----------|
 | `--tx-border-color-lighter` | 分组卡片边框与头部分隔线。 |
 | `--tx-fill-color-dark` / `--tx-fill-color` / `--tx-fill-color-light` | 头部、行、hover 与 touch-blur 表面。 |
-| `--tx-text-color-primary` / `--tx-text-color-secondary` | 分组标题、行标签、描述、引导箭头与加载器颜色。 |
+| `--tx-text-color-primary` / `--tx-text-color-secondary` | 分组标题、行标签、描述、引导箭头与开关加载环颜色。 |
 | `--tx-color-primary` / `--tx-color-primary-dark-2` | `TxBlockLine link` 文本色与 hover 色。 |
 | `--tx-color-white` | `TxBlockSwitch` 加载遮罩中的 shimmer 高光。 |
 
@@ -581,8 +583,9 @@ code: |
 - 已对照 `packages/tuffex/packages/components/src/group-block/src/types.ts` 以及 group-block 包内 6 个 Vue 入口核对。
 - `TxBlockLine` 只有在 `link=true` 时才具备交互语义，不应描述成通用可点击行。
 - `TxBlockSwitch` 的 loading 模式会阻止值变更；guidance 模式只触发 `click`，应按导航行说明，而不是布尔开关。
+- **忙碌态归属:** loading 的视觉由内部 `TuffSwitch` 承担（`is-loading` + `aria-busy`），`TxBlockSwitch` 自己只负责行级 shimmer 和取消压暗。改动开关的加载表现时，两个组件的文档都要同步。
 - 折叠示例刻意使用 `:default-expand="false"`；当前源码中 `collapsed` 仅在持久化状态或用户交互接管前被监听。
-- **实测覆盖:** 展开状态持久化、静态分组行为、语义化链接行、禁用 slot 点击阻断、guidance 模式和 loading 状态下的值变更守卫。
+- **实测覆盖:** 展开状态持久化、静态分组行为、语义化链接行、禁用 slot 点击阻断、guidance 模式、loading 状态下的值变更守卫，以及 loading 行内只有开关自身携带 `is-loading` / `aria-busy`、不存在第二个 spinner。
 
 ## Source
 
