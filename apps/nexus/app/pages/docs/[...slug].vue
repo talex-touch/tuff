@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, type FunctionalComponent } from 'vue'
+import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
@@ -213,6 +213,10 @@ const fullDocError = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
+
+// The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
+// import graph (docs-page-performance.test.ts guards this): async chunk only.
+const TxSkeleton = defineAsyncComponent(() => import('@talex-touch/tuffex/skeleton').then(m => m.TxSkeleton))
 
 const isLoading = ref(!doc.value)
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)

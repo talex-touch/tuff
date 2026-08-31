@@ -306,7 +306,9 @@ describe('docs page performance boundaries', () => {
     expect.soft(page).not.toContain('h(TxButton')
     expect.soft(page).not.toContain('<TxLoadingState')
     expect.soft(page).toContain("document.createElement('button')")
-    expect.soft(page).toContain('class="docs-loading-state"')
+    expect.soft(page).toContain('class="docs-surface docs-surface--skeleton"')
+    expect.soft(page).toContain("defineAsyncComponent(() => import('@talex-touch/tuffex/skeleton')")
+    expect.soft(page).not.toContain("from '@talex-touch/tuffex/skeleton'")
 
     expect.soft(docsLayout).not.toContain("import Drawer from '~/components/ui/Drawer.vue'")
     expect.soft(docsLayout).not.toContain("import BackToTop from '~/components/ui/BackToTop.vue'")
