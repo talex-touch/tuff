@@ -95,6 +95,38 @@ code: |
 ---
 :::
 
+### Loading
+Use `loading` when the value needs server confirmation: the thumb stays on its current side and morphs into a spinning ring while pointer and keyboard toggles are blocked.
+:::TuffDemoWrapper{demo="SwitchLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const asyncEnabled = ref(false)
+  const committing = ref(false)
+  const loadingOff = ref(false)
+  const loadingOn = ref(true)
+
+  function commit(next: boolean) {
+    committing.value = true
+    setTimeout(() => {
+      asyncEnabled.value = next
+      committing.value = false
+    }, 1200)
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <TuffSwitch :model-value="asyncEnabled" :loading="committing" @change="commit" />
+      <TuffSwitch v-model="loadingOff" loading />
+      <TuffSwitch v-model="loadingOn" loading />
+    </div>
+  </template>
+---
+:::
+
 ### Labels Before and After
 Place state labels before or after the switch, or combine it with setting copy.
 :::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
@@ -200,6 +232,7 @@ code: |
 | `modelValue` | `boolean` | `false` | Checked state controlled by `v-model`. |
 | `size` | `'small' \| 'default' \| 'large'` | `'default'` | Visual size variant. The default size does not add a modifier class. |
 | `disabled` | `boolean` | `false` | Removes focusability and blocks click, Enter, and Space toggles. |
+| `loading` | `boolean` | `false` | Pending async commit: morphs the thumb into a spinning ring, adds `is-loading` plus `aria-busy="true"`, and blocks toggling. |
 
 ### Events
 
@@ -218,6 +251,7 @@ code: |
 
 - The root is a native `<button>` rendering `role="switch"`, `aria-checked`, and `aria-disabled`; it sets no `tabindex` — focusability comes from the button element itself.
 - `disabled=true` sets the native `disabled` attribute (which removes it from the tab order), adds `is-disabled`, and prevents click, Enter, and Space from emitting events.
+- `loading=true` sets the native `disabled` attribute and blocks events just like `disabled`, but adds `is-loading` instead of `is-disabled` — so it skips the dimmed disabled look — and renders `aria-busy="true"`. Both classes appear when both props are true.
 - Enabled toggles emit both `update:modelValue` and `change`; the component does not mutate external state without `v-model` update handling.
 - `size="small"` and `size="large"` add modifier classes; `size="default"` intentionally leaves the base class only.
 
@@ -277,6 +311,8 @@ code: |
 ## Best Practices
 
 - Use switches for immediate boolean settings. Use checkboxes when the value is part of a submitted form or multi-select group.
+- When a toggle needs server confirmation, use `loading` to cover that not-immediate gap rather than letting the switch jump to the new value and back.
+- Do not write `modelValue` back optimistically while `loading` is set. Leave the thumb on the old value, commit on success, and simply clear `loading` on failure so the state stays where it was.
 - Place a readable text label next to the switch; the component itself intentionally renders only the control.
 - Keep labels vertically centered and leave enough hit area around dense settings rows.
 - Override active colors with local classes only; preserve disabled, focus, and size classes from the base component.
@@ -285,7 +321,9 @@ code: |
 
 - **Model contract:** `TxSwitch` is controlled by `modelValue`. User interaction emits both `update:modelValue` and `change` with the next boolean; the visual state updates after the parent writes the new prop back.
 - **Keyboard contract:** Enabled switches respond to click, Enter, and Space via native button semantics. Disabled switches leave the tab order through the native `disabled` attribute, keep `aria-disabled="true"`, and emit nothing.
-- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, and asserts that no `tabindex` is rendered in either state.
+- **Loading contract:** `loading` is a purely visual and blocking state; the component owns no async logic. Thumb position still follows `modelValue`, so the loading ring sits on the old side to show that this toggle has not landed yet.
+- **Motion fallback:** The ring stops rotating under `prefers-reduced-motion: reduce`; its gapped border is a static glyph on its own, so the busy cue survives.
+- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, loading blocking and the `aria-busy` lifecycle, and asserts that no `tabindex` is rendered in either state.
 
 ## Source
 

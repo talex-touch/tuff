@@ -19,6 +19,7 @@ describe('txSwitch', () => {
     expect(wrapper.attributes('tabindex')).toBeUndefined()
     expect(wrapper.classes()).toContain('is-active')
     expect(wrapper.classes()).toContain('tuff-switch--large')
+    expect(wrapper.attributes('aria-busy')).toBeUndefined()
   })
 
   it('emits v-model and change events on click', async () => {
@@ -73,5 +74,53 @@ describe('txSwitch', () => {
     expect(wrapper.attributes('tabindex')).toBeUndefined()
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('does not emit events while loading', async () => {
+    const wrapper = mount(TxSwitch, {
+      props: {
+        modelValue: false,
+        loading: true,
+      },
+    })
+
+    await wrapper.trigger('click')
+
+    expect(wrapper.attributes('disabled')).toBeDefined()
+    expect(wrapper.attributes('aria-busy')).toBe('true')
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('keeps loading visually distinct from disabled', () => {
+    const wrapper = mount(TxSwitch, {
+      props: {
+        modelValue: true,
+        loading: true,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-loading')
+    expect(wrapper.classes()).not.toContain('is-disabled')
+    // The thumb stays on the active side so the ring marks which state is pending.
+    expect(wrapper.classes()).toContain('is-active')
+  })
+
+  it('drops the busy state when loading resolves', async () => {
+    const wrapper = mount(TxSwitch, {
+      props: {
+        modelValue: false,
+        loading: true,
+      },
+    })
+
+    await wrapper.setProps({ loading: false })
+    await wrapper.trigger('click')
+
+    expect(wrapper.classes()).not.toContain('is-loading')
+    expect(wrapper.attributes('aria-busy')).toBeUndefined()
+    expect(wrapper.attributes('disabled')).toBeUndefined()
+    expect(wrapper.emitted('change')?.[0]).toEqual([true])
   })
 })
