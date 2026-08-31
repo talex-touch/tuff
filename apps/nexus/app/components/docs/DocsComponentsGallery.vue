@@ -9,6 +9,24 @@ import {
   TxSankeyChart,
   TxTimeseriesChart,
 } from '@talex-touch/tuffex-charts'
+import type { FileUploaderFile } from '@tuffex-components/file-uploader'
+import type { ImageUploaderFile } from '@tuffex-components/image-uploader'
+import type { AiChainStep, AiElementMessage } from '@tuffex-components/ai-elements'
+import type { OrbState } from '@tuffex-components/thinking-orb'
+import {
+  TxBlankSlate,
+  TxEmpty,
+  TxEmptyState,
+  TxErrorState,
+  TxGuideState,
+  TxLayoutSkeleton,
+  TxLoadingState,
+  TxNoData,
+  TxNoSelection,
+  TxOfflineState,
+  TxPermissionState,
+  TxSearchEmpty,
+} from '#components'
 import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { toast } from '@talex-touch/tuffex/utils'
 import tuffexPkg from '../../../../../packages/tuffex/package.json'
@@ -267,8 +285,8 @@ const treeSelectNodes = [
   },
   { key: 'account', label: 'Account', children: [{ key: 'profile', label: 'Profile' }] },
 ]
-const uploadFiles = ref<unknown[]>([])
-const uploadImages = ref<unknown[]>([])
+const uploadFiles = ref<FileUploaderFile[]>([])
+const uploadImages = ref<ImageUploaderFile[]>([])
 const formModel = ref({ name: '', email: '' })
 
 /* ── Layout band. The structural components have nothing of their own to
@@ -385,10 +403,15 @@ const promptDraft = ref('')
 const aiAttachments = ref([
   { kind: 'file' as const, id: 'a1', name: 'manifest.json', size: 2048, mime: 'application/json' },
 ])
-const chatMessages = computed(() => [
+const chatMessages = computed<AiElementMessage[]>(() => [
   { id: 'u1', role: 'user' as const, content: copy.value.suggestions[0]?.text ?? '', createdAt: 1_705_000_000_000 },
   { id: 'a1', role: 'assistant' as const, content: copy.value.aboutBody, createdAt: 1_705_000_001_000 },
 ])
+const chatListMessages = computed(() => [
+  { id: 'u1', role: 'user' as const, content: copy.value.suggestions[0]?.text ?? '', createdAt: 1_705_000_000_000 },
+  { id: 'a1', role: 'assistant' as const, content: copy.value.aboutBody, createdAt: 1_705_000_001_000 },
+])
+const aiSampleMessage = computed(() => chatMessages.value[1] ?? chatMessages.value[0]!)
 const traceRows = computed(() => [
   { id: 'read', primary: copy.value.toolRows[0]?.label ?? '', secondary: 'manifest.json', mono: true, status: 'done' as const },
   { id: 'run', primary: copy.value.toolRows[1]?.label ?? '', secondary: 'pnpm build', mono: true, status: 'active' as const },
@@ -402,15 +425,16 @@ const taskRowItems = computed(() => [
 ])
 const toolConfirmationInput = '{\n  "path": "src/main.ts"\n}'
 const toolCall = {
+  type: 'tool-call' as const,
   id: 'call-1',
   name: 'write_file',
-  status: 'success' as const,
-  input: { path: 'src/main.ts' },
+  status: 'done' as const,
+  input: toolConfirmationInput,
   output: 'ok',
 }
-const cotSteps = computed(() => [
-  { id: 's1', title: copy.value.searching, content: copy.value.aboutBody },
-  { id: 's2', title: copy.value.working, content: copy.value.installBody },
+const cotSteps = computed<AiChainStep[]>(() => [
+  { id: 's1', kind: 'thinking', title: copy.value.searching, body: copy.value.aboutBody, status: 'done' },
+  { id: 's2', kind: 'tool', title: copy.value.working, body: copy.value.installBody, status: 'active' },
 ])
 const aiSources = [
   { id: 's1', url: 'https://github.com/talex-touch/talex-touch', title: 'talex-touch' },
@@ -423,7 +447,7 @@ const insightPages = computed(() => [
   { key: 'adoption', prose: copy.value.aboutBody, suggestion: copy.value.suggestions[0]?.text },
 ])
 const fineTuneValues = {
-  layout: 'fixed' as const,
+  layout: 'grid' as const,
   width: 320,
   height: 180,
   radius: 14,
@@ -431,8 +455,8 @@ const fineTuneValues = {
   type: null,
 }
 const recommendationOptions = computed(() => [
-  { key: 'stable', short: copy.value.channels[0]?.label ?? '', text: copy.value.installBody, confidence: 'high' as const },
-  { key: 'beta', short: copy.value.channels[1]?.label ?? '', text: copy.value.aboutBody, confidence: 'medium' as const },
+  { key: 'stable', label: copy.value.channels[0]?.label ?? '', short: copy.value.installBody, text: copy.value.installBody, confidence: 'high' as const },
+  { key: 'beta', label: copy.value.channels[1]?.label ?? '', short: copy.value.aboutBody, text: copy.value.aboutBody, confidence: 'medium' as const },
 ])
 /* ── Data band. Charts come from `@talex-touch/tuffex-charts`, which is aliased
    but not globally registered, so they are imported explicitly — and never as
@@ -482,20 +506,24 @@ const diffRows = [
  * The twelve status components are all thin `TxEmptyState` wrappers differing
  * only in their pinned `variant`, so they share one cell shape driven off this
  * table rather than twelve near-identical blocks.
+ *
+ * The components are imported rather than named as strings: `<component :is>`
+ * resolves a string against the runtime registry, and tuffex components are
+ * auto-imported at compile time now, so a string would resolve to nothing.
  */
 const statusStates = computed(() => [
-  { slug: 'blank-slate', is: 'TxBlankSlate', en: 'BlankSlate', zh: '空白板' },
-  { slug: 'empty', is: 'TxEmpty', en: 'Empty', zh: '空' },
-  { slug: 'empty-state', is: 'TxEmptyState', en: 'EmptyState', zh: '空状态' },
-  { slug: 'error-state', is: 'TxErrorState', en: 'ErrorState', zh: '错误态' },
-  { slug: 'guide-state', is: 'TxGuideState', en: 'GuideState', zh: '引导态' },
-  { slug: 'layout-skeleton', is: 'TxLayoutSkeleton', en: 'LayoutSkeleton', zh: '布局骨架' },
-  { slug: 'loading-state', is: 'TxLoadingState', en: 'LoadingState', zh: '加载态' },
-  { slug: 'no-data', is: 'TxNoData', en: 'NoData', zh: '无数据' },
-  { slug: 'no-selection', is: 'TxNoSelection', en: 'NoSelection', zh: '未选择' },
-  { slug: 'offline-state', is: 'TxOfflineState', en: 'OfflineState', zh: '离线态' },
-  { slug: 'permission-state', is: 'TxPermissionState', en: 'PermissionState', zh: '权限态' },
-  { slug: 'search-empty', is: 'TxSearchEmpty', en: 'SearchEmpty', zh: '搜索无结果' },
+  { slug: 'blank-slate', is: TxBlankSlate, en: 'BlankSlate', zh: '空白板' },
+  { slug: 'empty', is: TxEmpty, en: 'Empty', zh: '空' },
+  { slug: 'empty-state', is: TxEmptyState, en: 'EmptyState', zh: '空状态' },
+  { slug: 'error-state', is: TxErrorState, en: 'ErrorState', zh: '错误态' },
+  { slug: 'guide-state', is: TxGuideState, en: 'GuideState', zh: '引导态' },
+  { slug: 'layout-skeleton', is: TxLayoutSkeleton, en: 'LayoutSkeleton', zh: '布局骨架' },
+  { slug: 'loading-state', is: TxLoadingState, en: 'LoadingState', zh: '加载态' },
+  { slug: 'no-data', is: TxNoData, en: 'NoData', zh: '无数据' },
+  { slug: 'no-selection', is: TxNoSelection, en: 'NoSelection', zh: '未选择' },
+  { slug: 'offline-state', is: TxOfflineState, en: 'OfflineState', zh: '离线态' },
+  { slug: 'permission-state', is: TxPermissionState, en: 'PermissionState', zh: '权限态' },
+  { slug: 'search-empty', is: TxSearchEmpty, en: 'SearchEmpty', zh: '搜索无结果' },
 ])
 
 const sparkSeries = [{
@@ -503,7 +531,7 @@ const sparkSeries = [{
   data: [4, 6, 5, 8, 7, 10, 9, 12, 11].map((value, time) => ({ time, value })),
 }]
 
-const orbStates = ['working', 'searching', 'solving']
+const orbStates: OrbState[] = ['working', 'searching', 'solving']
 
 const citeSources = [
   { id: 'repo', url: 'https://github.com/talex-touch/talex-touch' },
@@ -1617,7 +1645,7 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxStack direction="column" :gap="8">
+              <TxStack direction="vertical" :gap="8">
                 <div v-for="tile in [1, 2, 3]" :key="tile" class="docs-gallery__tile">
                   {{ tile }}
                 </div>
@@ -2068,7 +2096,7 @@ function scrollToSuite(key: string) {
                 :value="1284"
                 :label="copy.online"
                 icon-class="i-carbon-analytics"
-                :insight="{ from: 1100, to: 1284, type: 'up' }"
+                :insight="{ from: 1100, to: 1284, type: 'percent' }"
               />
             </div>
             <template #fallback>
@@ -2214,7 +2242,7 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__code">
-              <TxCodeEditor :model-value="codeSample" language="typescript" read-only line-numbers />
+              <TxCodeEditor :model-value="codeSample" language="javascript" read-only line-numbers />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2320,7 +2348,7 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxEdgeFadeMask axis="x" :size="32">
+              <TxEdgeFadeMask axis="horizontal" :size="32">
                 <div class="docs-gallery__fade-row">
                   <div v-for="tileIndex in 10" :key="tileIndex" class="docs-gallery__tile">
                     {{ tileIndex }}
@@ -2808,7 +2836,7 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxChatList :messages="chatMessages" markdown />
+              <TxChatList :messages="chatListMessages" markdown />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2840,7 +2868,7 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__stream">
-              <TxConversationStream :items="chatMessages" :item-key="(item: { id: string }) => item.id">
+              <TxConversationStream :items="chatMessages" :item-key="(item: AiElementMessage) => item.id">
                 <template #item="{ item }">
                   <p class="docs-gallery__muted">
                     {{ item.content }}
@@ -2981,7 +3009,7 @@ function scrollToSuite(key: string) {
             <div class="docs-gallery__block">
               <TxToolConfirmation
                 tool-name="write_file"
-                risk="medium"
+                risk="write"
                 :summary="copy.dialogMessage"
                 :input="toolConfirmationInput"
               />
@@ -3000,7 +3028,7 @@ function scrollToSuite(key: string) {
         <div class="docs-gallery__stage">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxAiMessage :message="chatMessages[1]" :show-avatar="false" compact />
+              <TxAiMessage :message="aiSampleMessage" :show-avatar="false" compact />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
