@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-intelligence",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "LangGraph-powered intelligence orchestration for Tuff (providers, prompts, quotas, audit)",
   "license": "MIT",
   "keywords": [
