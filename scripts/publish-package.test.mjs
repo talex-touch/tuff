@@ -51,6 +51,24 @@ describe('verifyRegistryManifest', () => {
     assert.ok(calls >= 3, 'expected the read to be retried')
   })
 
+  it('refuses a non-positive attempt count instead of passing without reading', () => {
+    // With attempts <= 0 the loop never runs, so nothing is read and the
+    // forbidden-protocol regex would test `undefined` and find it clean.
+    let calls = 0
+    const readField = () => {
+      calls += 1
+      return '{"gsap":"catalog:"}'
+    }
+
+    for (const attempts of [0, -1, 1.5, Number.NaN]) {
+      assert.throws(
+        () => verifyRegistryManifest(pkg, '1.0.51', readField, { attempts, sleep: () => {} }),
+        /attempts must be a positive integer/,
+      )
+    }
+    assert.equal(calls, 0)
+  })
+
   it('still fails when the manifest never becomes readable', () => {
     let calls = 0
     const readField = () => {

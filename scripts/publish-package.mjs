@@ -182,6 +182,13 @@ function readRegistryField(packageName, version, field) {
 export function verifyRegistryManifest(packageInfo, version, readField = readRegistryField, options = {}) {
   const { attempts = 6, delayMs = 5_000, sleep: sleepFn = sleep } = options
 
+  // A non-positive `attempts` would skip the loop entirely, leaving `value`
+  // undefined and `lastError` unset — and the regex below would then test the
+  // string "undefined", find nothing forbidden, and report a manifest clean
+  // without ever having read one. That is #560 again through another door.
+  if (!Number.isSafeInteger(attempts) || attempts < 1)
+    throw new TypeError(`verifyRegistryManifest: attempts must be a positive integer, got ${String(attempts)}`)
+
   for (const field of REGISTRY_MANIFEST_FIELDS) {
     let value
     let lastError
