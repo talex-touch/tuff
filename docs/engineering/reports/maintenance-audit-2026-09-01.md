@@ -17,6 +17,7 @@
 - **CSP report-only 尚未提升为 enforce。** [#689](https://github.com/talex-touch/tuff/issues/689) 仍缺真实使用期间 `[csp-report-only]` 日志；在候选策略安静之前，`default-src` / `connect-src` 通配符不能收紧。`unsafe-eval` 由已编译 widget 的 `new Function` 依赖，需独立设计模块加载和作用域注入替代，而不是直接删除指令。
 - **五条 High 的生产依赖豁免有硬截止期。** `check-prod-audit` 当前允许 5 条 High（另有 17 Moderate、5 Low）；[#1098](https://github.com/talex-touch/tuff/issues/1098) 的五个 `nuxt` 豁免均于 2026-11-09 到期。仍需完成 `unhead` 2→3 / Nuxt family 收敛，并避免 caret 把 `@nuxt/kit` 单独漂移到更高 4.x。
 - **Squash commit 正文可意外关闭 issue。** [#1792](https://github.com/talex-touch/tuff/issues/1792) 仍只扫描 PR body，未扫描 GitHub 实际消费的 constituent commit bodies；需让引述的 `close #N` 也失败，并以 `6448f5f9c` 的重建文本做负向回归。
+- **默认分支仍有 34 条 Dependabot alerts。** 本次 GitHub push receipt 报 6 High、21 Moderate、7 Low；这只是警报计数基线，不代表可达性或可利用性。[#483](https://github.com/talex-touch/tuff/issues/483) 仍负责非生产闭包与 Moderate/Low 的处置；不要用它替代 `check-prod-audit` 的 5 High 生产门禁口径。
 
 ## 工作、文档与路线图治理
 
