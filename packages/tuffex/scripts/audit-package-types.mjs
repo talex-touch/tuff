@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -134,14 +134,46 @@ const workspace = await mkdtemp(join(tmpdir(), 'tuffex-types-'))
 // running; nothing in CI ran it, so nothing said so (#1555). `pnpm pack` rewrites workspace
 // specifiers to the versions a published consumer resolves, which is also what this audit
 // is supposed to be checking.
-await runPnpm(['pack', '--pack-destination', workspace], root)
-const packed = (await readdir(workspace)).filter(entry => entry.endsWith('.tgz'))
-if (packed.length !== 1) {
-  throw new Error(
-    `[audit-package-types] expected exactly one tarball in the scratch workspace, found ${packed.length}`,
+/** Packs one workspace package into `workspace` and returns its tarball path. */
+async function packWorkspacePackage(packageRoot) {
+  const before = new Set(await readdir(workspace))
+  await runPnpm(['pack', '--pack-destination', workspace], packageRoot)
+  const added = (await readdir(workspace)).filter(
+    entry => entry.endsWith('.tgz') && !before.has(entry),
   )
+  if (added.length !== 1) {
+    throw new Error(
+      `[audit-package-types] expected one new tarball from ${packageRoot}, found ${added.length}`,
+    )
+  }
+  return join(workspace, added[0])
 }
-const tarball = join(workspace, packed[0])
+
+const tarball = await packWorkspacePackage(root)
+
+/*
+ * Sibling `@talex-touch/*` dependencies are packed too, and pinned through
+ * `pnpm.overrides`.
+ *
+ * `pnpm pack` rewrites `workspace:^` to the version a published consumer would
+ * resolve, which is the whole point of packing rather than installing the source
+ * directory — but it uses the version currently in the workspace. During a
+ * release that version does not exist on the registry yet, so the scratch
+ * install 404s and the audit fails for a reason that has nothing to do with the
+ * type surface it exists to check. Resolving siblings from the workspace makes
+ * the audit answer the question it is actually asking: do these declarations
+ * compile against the code being shipped alongside them.
+ */
+const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+const siblings = Object.keys(manifest.dependencies ?? {}).filter(name =>
+  name.startsWith('@talex-touch/'),
+)
+
+const overrides = {}
+for (const name of siblings) {
+  const siblingRoot = resolve(root, '..', name.slice('@talex-touch/'.length))
+  overrides[name] = `file:${await packWorkspacePackage(siblingRoot)}`
+}
 
 await writeFile(
   join(workspace, 'package.json'),
@@ -152,8 +184,24 @@ await writeFile(
       typescript: '^5.9.3',
       vue: '^3.5.33',
     },
+    ...(Object.keys(overrides).length ? { pnpm: { overrides } } : {}),
   }),
 )
+
+/*
+ * The same overrides again, in the other place pnpm looks for them.
+ *
+ * pnpm 10 reads the `pnpm` field in package.json; pnpm 11 ignores it and reads
+ * `pnpm-workspace.yaml` instead ("The 'pnpm' field in package.json is no longer
+ * read by pnpm"). Writing both keeps this audit working either side of that
+ * migration rather than silently losing the overrides and 404ing again.
+ */
+if (Object.keys(overrides).length) {
+  const yaml = ['overrides:']
+  for (const [name, spec] of Object.entries(overrides))
+    yaml.push(`  '${name}': '${spec}'`)
+  await writeFile(join(workspace, 'pnpm-workspace.yaml'), `${yaml.join('\n')}\n`)
+}
 
 await writeFile(join(workspace, 'index.ts'), SAMPLE_SOURCE)
 
