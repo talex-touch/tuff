@@ -89,7 +89,13 @@ const LIMITS = {
   // 623.8 KiB after the full family landed (the BUI styles run well above the old 2.8 KiB
   // median — pixel-matched surfaces are style-heavy), so this is actuals plus minimal
   // headroom, same contract as the notes above: growth from here fails.
-  fullCssBytes: 640 * 1024,
+  // 640 -> 656 on 2026-08-31: the 16.2 KiB of headroom left in August was already spent —
+  // master measured 639.8 KiB against the 640 limit, so any style change at all failed the
+  // gate, not just a large one. Switch loading (breathing fill, travelling border line) and
+  // the slider's dissolve add 4.8 KiB on top, measured at 644.6 KiB. Same contract as every
+  // note above: actuals plus minimal headroom, growth from here fails, and #1555 still owns
+  // whether the total should be coming down instead.
+  fullCssBytes: 656 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.

@@ -1,0 +1,386 @@
+/*
+ * Styles for DocsComponentsGallery.vue.
+ *
+ * They live beside the SFC rather than inside it because the component is
+ * past the 3000-line mark where Vite's separate dev sub-request for a style
+ * block can resolve against a misaligned descriptor slice — reporting a
+ * PostCSS error for CSS that is valid on disk and dropping the page's
+ * styling entirely. `test/guards/sfc-size-budget.test.ts` enforces this.
+ *
+ * Unscoped as a consequence, which is safe here: every selector is under the
+ * `.docs-gallery` namespace and the block used no `:deep()`.
+ */
+
+.docs-gallery {
+  --docs-gallery-line: color-mix(in srgb, var(--docs-border) 72%, transparent);
+  border: 1px solid var(--docs-gallery-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.docs-gallery__bar {
+  display: flex;
+  align-items: center;
+  /* Install command anchors the left edge, version the right. */
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--docs-muted);
+}
+
+/* Green marks the published version as the healthy/current one, and separates
+   it from the neutral install command sharing the bar.
+
+   `--tx-color-success` is the same #67c23a in both themes, which is only
+   ~2.2:1 as 12px text on a light page. Mixing toward the body text color
+   darkens it under light and lightens it under dark from one declaration —
+   this style block is scoped, and `:global(.dark)` is dropped at compile time
+   here, so a theme selector is not an option. Measured at this ratio:
+   4.66:1 on white, 10.97:1 on the dark page. */
+.docs-gallery__version {
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--tx-color-success) 40%, transparent);
+  background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
+  color: color-mix(in srgb, var(--tx-color-success) 55%, var(--tx-text-color-primary));
+  line-height: 1.4;
+}
+
+/* Echoes the sidebar's underlined suite tabs (Basics / Advanced / AI). */
+.docs-gallery__suite {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 18px 20px 14px;
+  border-top: 1px solid var(--docs-gallery-line);
+  /* Keeps the tab row visible below the fixed site header when a suite tab
+     scrolls its section into view. */
+  scroll-margin-top: 90px;
+}
+
+.docs-gallery__suite-tab {
+  padding: 0 0 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--docs-muted);
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.docs-gallery__suite-tab.is-active {
+  color: inherit;
+  border-bottom-color: currentColor;
+}
+
+.docs-gallery__suite-tab:not(.is-active):hover {
+  color: var(--docs-accent);
+}
+
+.docs-gallery__install {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--docs-inline-code-border);
+  border-radius: 8px;
+  background: var(--docs-inline-code-bg);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.docs-gallery__install:hover {
+  color: var(--docs-accent);
+}
+
+.docs-gallery__install-prompt {
+  opacity: 0.55;
+}
+
+.docs-gallery__install-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.docs-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.docs-gallery__cell {
+  position: relative;
+  border-top: 1px solid var(--docs-gallery-line);
+}
+
+.docs-gallery__cell:nth-child(2n) {
+  border-left: 1px solid var(--docs-gallery-line);
+}
+
+/* Beats the docs prose link styling (accent color + underline) that would
+   otherwise restyle these anchors. */
+.docs-gallery .docs-gallery__cell a.docs-gallery__label {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  z-index: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--docs-muted);
+  text-decoration: none;
+  border-bottom: none;
+  transition: color 0.18s ease;
+}
+
+.docs-gallery .docs-gallery__cell a.docs-gallery__label:hover {
+  color: var(--docs-accent);
+  text-decoration: none;
+  border-bottom: none;
+}
+
+.docs-gallery__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 236px;
+  padding: 56px 28px 40px;
+}
+
+.docs-gallery__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.docs-gallery__stack--center {
+  align-items: center;
+  gap: 14px;
+}
+
+/* Wraps rather than overflows: the labelled rows are three specimens wide now,
+   and the two-column grid gets narrow before the 640px single-column switch. */
+.docs-gallery__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.docs-gallery__row--loose {
+  gap: 22px;
+}
+
+.docs-gallery__grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Neutral filler for the structural layout specimens (Flex, Grid, Stack,
+   Container, Splitter): the component under test is the arrangement, so the
+   tiles stay deliberately characterless. */
+.docs-gallery__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--docs-inline-code-bg);
+  font-size: 12px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__tile--fill {
+  height: 100%;
+}
+
+.docs-gallery__splitter {
+  height: 96px;
+}
+
+.docs-gallery__scroll {
+  height: 104px;
+}
+
+/* Chrome-only components (NavBar, TabBar) are edge-to-edge bars; the frame is
+   what makes them read as sitting inside a surface rather than floating. */
+.docs-gallery__framed {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--docs-gallery-line);
+}
+
+.docs-gallery__tabs {
+  height: 132px;
+}
+
+.docs-gallery__context-target {
+  min-height: 64px;
+  width: 100%;
+}
+
+.docs-gallery__overlay-body {
+  min-height: 84px;
+}
+
+.docs-gallery__popover-body {
+  margin: 0;
+  max-width: 200px;
+}
+
+.docs-gallery__code {
+  height: 128px;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+/* Deliberately overflows its container — that overflow is what the edge-fade
+   and gradual-blur specimens exist to show. */
+.docs-gallery__fade-row {
+  display: flex;
+  gap: 8px;
+}
+
+.docs-gallery__blur-stage {
+  position: relative;
+  overflow: hidden;
+  height: 88px;
+}
+
+.docs-gallery__flip-body {
+  margin: 0;
+  padding: 20px;
+  max-width: 260px;
+}
+
+.docs-gallery__autosizer {
+  height: 76px;
+}
+
+.docs-gallery__stream {
+  height: 128px;
+  overflow: hidden;
+}
+
+.docs-gallery__swatch {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.docs-gallery__scroll-row {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--docs-muted);
+  border-bottom: 1px solid var(--docs-gallery-line);
+}
+
+.docs-gallery__muted {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--docs-muted);
+}
+
+/* Status pip for the AvatarVariants specimen. The ring is the page colour, so
+   the dot reads as sitting on top of the avatar rather than cut into it. */
+.docs-gallery__dot {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--docs-gallery-bg, var(--tx-bg-color, #fff));
+}
+
+.docs-gallery__block {
+  width: min(240px, 100%);
+}
+
+.docs-gallery__block--wide {
+  width: min(300px, 100%);
+}
+
+.docs-gallery__spark {
+  height: 76px;
+}
+
+.docs-gallery__glow {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.docs-gallery__beam-card {
+  padding: 14px 22px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.docs-gallery__meter-text {
+  font-size: 12px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__ph {
+  width: 140px;
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--docs-muted) 8%, transparent),
+    color-mix(in srgb, var(--docs-muted) 15%, transparent),
+    color-mix(in srgb, var(--docs-muted) 8%, transparent)
+  );
+  background-size: 200% 100%;
+  animation: docs-gallery-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes docs-gallery-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-gallery__ph {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .docs-gallery__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .docs-gallery__cell:nth-child(2n) {
+    border-left: none;
+  }
+
+  .docs-gallery__stage {
+    min-height: 196px;
+    padding: 52px 20px 32px;
+  }
+}
