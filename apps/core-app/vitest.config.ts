@@ -21,9 +21,9 @@ export default defineConfig({
          * undefined and every test touching UI preference storage fails. Turning
          * the built-in off hands the global back to jsdom.
          */
-        execArgv: ['--no-experimental-webstorage'],
-      },
-    },
+        execArgv: ['--no-experimental-webstorage']
+      }
+    }
   },
   plugins: [
     vue(),
