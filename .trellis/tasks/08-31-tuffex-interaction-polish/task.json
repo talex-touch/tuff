@@ -1,0 +1,30 @@
+{
+  "id": "tuffex-interaction-polish",
+  "name": "tuffex-interaction-polish",
+  "title": "tuffex 交互细节三修：slider 拖杆尺寸 / 全量 cursor / tooltip 跟手",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-31",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "feat/gallery-live-specimens",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-31-slider-surface-size",
+    "08-31-interactive-cursor-sweep",
+    "08-31-anchor-follow-transition"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
