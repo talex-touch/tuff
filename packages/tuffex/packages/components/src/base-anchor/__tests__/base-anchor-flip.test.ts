@@ -90,10 +90,16 @@ describe('txBaseAnchor disableFlip', () => {
   })
 
   it('does not disturb the other positioning options', () => {
+    // Guards the blast radius of `disableFlip`, not the values themselves —
+    // building the middleware list conditionally must not reach the rest of the
+    // `useFloating` config. Change these on purpose and update them here; the
+    // point is that nothing changes them by accident.
     mountAnchor()
 
     expect(capturedOptions[0]?.strategy).toBe('fixed')
-    expect(capturedOptions[0]?.transform).toBe(false)
+    // Composited positioning: the panel is repositioned every frame while it is
+    // open, and `left`/`top` would invalidate layout on each one.
+    expect(capturedOptions[0]?.transform).toBe(true)
     expect(toValue(capturedOptions[0]?.placement)).toBe('bottom-start')
   })
 
