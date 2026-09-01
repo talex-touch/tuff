@@ -1,3 +1,12 @@
+// Registered so the conic gradient's start angle can be animated. An unregistered
+// custom property is an untyped token: it would jump 0deg -> 360deg on the last
+// frame instead of sweeping, and the border line would never travel.
+@property --tuff-switch-flow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .tuff-switch {
   // Override points. The track visuals moved off the root when the label was
   // added, so `.tuff-switch.is-active { background-color }` no longer reaches
@@ -5,6 +14,14 @@
   --tuff-switch-track-color: var(--tx-fill-color, #f0f2f5);
   --tuff-switch-active-color: var(--tx-color-primary, #409eff);
   --tuff-switch-thumb-color: var(--tx-text-color-secondary, #909399);
+
+  // Both loading cues read against whatever the track currently is. The grey
+  // default contrasts with the track in both themes — it darkens the near-white
+  // light-theme track and lightens the dark one — where a fixed white veil would
+  // vanish on light. `.is-active` swaps to white, which is what brightens blue.
+  --tuff-switch-breathe-color: var(--tuff-switch-thumb-color);
+  --tuff-switch-flow-color: var(--tuff-switch-thumb-color);
+  --tuff-switch-flow-width: 1.5px;
   --tuff-switch-ring-width: 2px;
   --tuff-switch-track-width: 44px;
   --tuff-switch-track-height: 24px;
@@ -35,6 +52,54 @@
     border-radius: var(--tuff-switch-track-radius);
     background-color: var(--tuff-switch-track-color);
     transition: all 0.25s ease-in-out;
+
+    // Breathing veil. Painted on every switch but fully transparent until
+    // `is-loading`, so the fade in and out is one opacity transition on a box
+    // that already exists — the same reason the loading ring lives on the thumb.
+    // Declared before the thumb so the thumb (and its ring) paints on top.
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background-color: var(--tuff-switch-breathe-color);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-in-out;
+    }
+
+    // The flowing border line. `padding` + the two-layer mask cuts the middle
+    // out of a filled box, leaving a ring exactly `--tuff-switch-flow-width`
+    // thick that still follows the pill radius — a real border cannot carry a
+    // gradient that sweeps around the box.
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: var(--tuff-switch-flow-width);
+      // Opaque for only ~90 of 360 degrees, fading out at both ends: what
+      // travels is a comet of track colour, not a ring that merely rotates.
+      background: conic-gradient(
+        from var(--tuff-switch-flow-angle),
+        transparent 0deg,
+        var(--tuff-switch-flow-color) 45deg,
+        transparent 90deg,
+        transparent 360deg
+      );
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      // Must follow the `mask` shorthand, which resets the composite mode.
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-in-out;
+    }
   }
 
   &__label {
@@ -70,6 +135,10 @@
   }
 
   &.is-active {
+    // White is what brightens the blue fill; the grey default would muddy it.
+    --tuff-switch-breathe-color: #fff;
+    --tuff-switch-flow-color: #fff;
+
     .tuff-switch__track {
       background-color: var(--tuff-switch-active-color);
     }
@@ -84,6 +153,20 @@
 
   &.is-loading {
     cursor: progress;
+
+    // Three periods that do not divide into each other, so the ring, the breath
+    // and the travelling line never resync into one pulse.
+    .tuff-switch__track {
+      &::before {
+        opacity: 0.14;
+        animation: tuff-switch-track-breathe 1.8s ease-in-out infinite;
+      }
+
+      &::after {
+        opacity: 1;
+        animation: tuff-switch-border-flow 1.6s linear infinite;
+      }
+    }
 
     .tuff-switch__thumb {
       border-radius: 50%;
@@ -128,6 +211,7 @@
   }
 
   &--small {
+    --tuff-switch-flow-width: 1px;
     --tuff-switch-ring-width: 1.5px;
     --tuff-switch-track-width: 36px;
     --tuff-switch-track-height: 20px;
@@ -142,6 +226,7 @@
   }
 
   &--large {
+    --tuff-switch-flow-width: 2px;
     --tuff-switch-ring-width: 2.5px;
     --tuff-switch-track-width: 52px;
     --tuff-switch-track-height: 28px;
@@ -162,10 +247,34 @@
   }
 }
 
+// Bottoms out well above zero: the fill should breathe, not blink back to its
+// resting colour and re-announce the state change every cycle. The peak stays
+// low because the veil is white — past ~0.2 the track stops reading as the
+// primary colour and the switch looks disabled rather than busy.
+@keyframes tuff-switch-track-breathe {
+  0%,
+  100% {
+    opacity: 0.06;
+  }
+
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes tuff-switch-border-flow {
+  to {
+    --tuff-switch-flow-angle: 360deg;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  // The ring's transparent top border is a static glyph on its own, so freezing
-  // the rotation keeps the busy cue readable instead of erasing it.
-  .tuff-switch.is-loading .tuff-switch__thumb::after {
+  // Every loading cue here is legible frozen — the ring's transparent top
+  // border, the veil's tint, and the line's gradient arc are all static glyphs —
+  // so stopping the motion keeps the busy state readable instead of erasing it.
+  .tuff-switch.is-loading .tuff-switch__thumb::after,
+  .tuff-switch.is-loading .tuff-switch__track::before,
+  .tuff-switch.is-loading .tuff-switch__track::after {
     animation: none;
   }
 }

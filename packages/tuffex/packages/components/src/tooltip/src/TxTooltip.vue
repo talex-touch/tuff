@@ -2,7 +2,7 @@
 import type { Slots } from 'vue'
 import type { BaseAnchorProps } from '../../base-anchor/src/types'
 import type { TooltipProps } from './types'
-import { computed, getCurrentInstance, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 import { useAnchorDelay } from '../../../../utils/anchor-delay'
 import { TxBaseAnchor } from '../../base-anchor'
 
@@ -234,6 +234,18 @@ watch(
     open.value = false
   },
 )
+
+/**
+ * A tooltip that mounts already open — pinned by the host, restored from saved
+ * state — gets no `open` transition, so the watcher above never registers it
+ * with the service. It would then be invisible to `hint` preempting `hint`: the
+ * next tooltip to open could not displace it, and two would sit on screen at
+ * once, which is the one thing that policy exists to prevent.
+ */
+onMounted(() => {
+  if (open.value)
+    delay.openNow()
+})
 
 onBeforeUnmount(() => {
   clearTimers()

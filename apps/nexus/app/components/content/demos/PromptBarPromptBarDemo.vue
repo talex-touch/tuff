@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PromptBarSendPayload } from '@tuffex-components/prompt-bar'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -84,7 +85,7 @@ function removeAttachment(id: string): void {
   attachments.value = attachments.value.filter(item => item.id !== id)
 }
 
-function onSend(payload: { text: string, attachments: Attachment[] }): void {
+function onSend(payload: PromptBarSendPayload): void {
   sent.value = payload.attachments.length > 0
     ? `${payload.text} · ${payload.attachments.length} attached`
     : payload.text

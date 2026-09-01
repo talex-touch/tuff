@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StatCardInsight } from '@tuffex-components/stat-card'
 import { defineAsyncComponent, ref } from 'vue'
 
 const { locale } = useI18n()
@@ -7,7 +8,7 @@ const NumberFlowComponent = import.meta.client
   : null
 
 const activeUsers = ref(18200)
-const activeInsight = ref({
+const activeInsight = ref<StatCardInsight>({
   from: 16800,
   to: activeUsers.value,
   type: 'delta',
@@ -16,7 +17,7 @@ const activeInsight = ref({
 })
 
 const resourceLoad = ref(42)
-const resourceInsight = ref({
+const resourceInsight = ref<StatCardInsight>({
   from: 35,
   to: resourceLoad.value,
   type: 'percent',

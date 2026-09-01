@@ -140,6 +140,30 @@ describe('txBaseAnchor', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
+  it('runs the open path for anchors that mount already open', async () => {
+    // The `open` watcher only fires on a change, and `:model-value="true"` from
+    // the first render never produces one. The panel used to mount into the DOM
+    // and sit at the clip's CSS `visibility: hidden` forever, because clearing
+    // that is the open path's job — a pinned tooltip rendered as nothing at all.
+    const pinned = mountAnchor({ props: { modelValue: true } })
+    await settleOpenTiming()
+
+    const pinnedClip = document.body.querySelector('.tx-base-anchor__clip') as HTMLElement
+    expect(pinnedClip.style.visibility).toBe('visible')
+
+    pinned.unmount()
+    cleanupAnchors()
+
+    // Control: the same assertion on the path that always worked.
+    const toggled = mountAnchor({ props: { modelValue: false } })
+    await settleOpenTiming()
+    await toggled.setProps({ modelValue: true })
+    await settleOpenTiming()
+
+    const toggledClip = document.body.querySelector('.tx-base-anchor__clip') as HTMLElement
+    expect(toggledClip.style.visibility).toBe('visible')
+  })
+
   it('blocks opening while disabled and closes if disabled after opening', async () => {
     const wrapper = mountAnchor({
       props: {

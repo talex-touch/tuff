@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DialogButton } from '@tuffex-components/dialog'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
@@ -20,7 +21,7 @@ const labels = computed(() => (locale.value === 'zh'
       confirm: 'Confirm',
     }))
 
-const buttons = computed(() => [
+const buttons = computed<DialogButton[]>(() => [
   { content: labels.value.cancel, type: 'info', onClick: () => true },
   { content: labels.value.confirm, type: 'success', onClick: async () => true },
 ])
