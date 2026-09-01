@@ -42,26 +42,50 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          set -uo pipefail
+
+          # `reason` is written as a single line on purpose. npm errors are
+          # multiline, and `name=value` in GITHUB_OUTPUT only supports one line —
+          # a raw multiline error makes the runner reject the whole output file,
+          # which would fail this step *and* skip the alert step below, leaving
+          # the lapse unreported. The full text stays in the job log.
+          emit_failure() {
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
+            printf 'reason=%s\n' "$(printf '%s' "$1" | tr '\n' ' ' | cut -c1-500)" >> "$GITHUB_OUTPUT"
+          }
+
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "reason=NPM_TOKEN is not set." >> "$GITHUB_OUTPUT"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
+            emit_failure "NPM_TOKEN is not set."
             exit 0
           fi
 
-          # `npm whoami` is the cheapest call that actually exercises the
-          # credential. A read-only or expired token fails here, well before a
-          # release would fail on `PUT`.
           if whoami_output="$(npm whoami 2>&1)"; then
             echo "Authenticated as ${whoami_output}"
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "${whoami_output}"
-            echo "reason=npm whoami failed: ${whoami_output}" >> "$GITHUB_OUTPUT"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
+            printf 'ok=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
+          echo "${whoami_output}"
+
+          # A granular access token can be forbidden from `/-/whoami` while still
+          # being allowed to publish — the endpoint is subject to permission
+          # checks the publish flow does not apply. Alerting on 403 would cry
+          # wolf every week for a perfectly good token, so only a clear
+          # authentication failure counts.
+          case "${whoami_output}" in
+            *E403*|*403\ Forbidden*)
+              echo "whoami is forbidden for this token, which does not imply it cannot publish."
+              printf 'ok=true\n' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              emit_failure "npm whoami failed: ${whoami_output}"
+              ;;
+          esac
+
       - name: Open or refresh the alert issue
-        if: steps.check.outputs.ok != 'true'
+        # `always()` on purpose: a bare `if:` carries an implicit success(), so a
+        # crash in the step above would skip the alert instead of reporting it.
+        if: always() && steps.check.outputs.ok != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REASON: ${{ steps.check.outputs.reason }}
@@ -95,5 +119,5 @@ jobs:
           fi
 
       - name: Fail the run when the token is unusable
-        if: steps.check.outputs.ok != 'true'
+        if: always() && steps.check.outputs.ok != 'true'
         run: exit 1
