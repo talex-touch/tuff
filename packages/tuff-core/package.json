@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-core",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Low-level build and publish primitives for Tuff",
   "license": "MIT",
   "keywords": [
