@@ -1,0 +1,99 @@
+# Catches an expired NPM_TOKEN on a schedule instead of at release time.
+#
+# The token that published these packages lapsed silently and nothing noticed
+# until six package publishes failed mid-release with `E404 ... PUT` — npm's
+# response for a scope a token cannot write to. npm granular access tokens
+# expire on a 30/60/90-day schedule by default, so this will happen again.
+#
+# This runs weekly, asks npm who the token is, and opens (or refreshes) an issue
+# when the answer is "nobody". A failing job alone is not enough: nobody reads a
+# red cron until they need it.
+name: NPM Token Watch
+
+on:
+  schedule:
+    # Mondays 02:00 UTC — a lapse is found at the start of a week rather than
+    # discovered by whoever happens to be cutting a release.
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: npm-token-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check NPM_TOKEN
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify the token can still authenticate
+        id: check
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "reason=NPM_TOKEN is not set." >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # `npm whoami` is the cheapest call that actually exercises the
+          # credential. A read-only or expired token fails here, well before a
+          # release would fail on `PUT`.
+          if whoami_output="$(npm whoami 2>&1)"; then
+            echo "Authenticated as ${whoami_output}"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "${whoami_output}"
+            echo "reason=npm whoami failed: ${whoami_output}" >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or refresh the alert issue
+        if: steps.check.outputs.ok != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ steps.check.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="NPM_TOKEN is not usable — package publishes will fail"
+
+          # Quoted heredoc: the body is full of backticks and apostrophes, and an
+          # unquoted one would try to run them. The two dynamic values are
+          # printed around it instead of interpolated into it.
+          {
+            printf '%s\n\n' "The scheduled token check could not authenticate against npm."
+            printf '```\n%s\n```\n\n' "${REASON}"
+            cat <<'BODY'
+          Every `package-*-publish.yml` workflow will fail at `npm publish` until this is
+          replaced, with `E404 ... PUT` — npm's response for a scope the token cannot write
+          to, rather than a missing package.
+
+          Replace the `NPM_TOKEN` repository secret with a token that has publish rights on
+          the `@talex-touch` scope, then re-run any failed publish runs.
+          BODY
+            printf '\nChecked by %s\n' "${RUN_URL}"
+          } > "${RUNNER_TEMP}/npm-token-alert.md"
+
+          existing="$(gh issue list --state open --search "${title} in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --body-file "${RUNNER_TEMP}/npm-token-alert.md"
+          else
+            gh issue create --title "${title}" --body-file "${RUNNER_TEMP}/npm-token-alert.md"
+          fi
+
+      - name: Fail the run when the token is unusable
+        if: steps.check.outputs.ok != 'true'
+        run: exit 1
