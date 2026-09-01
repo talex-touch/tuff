@@ -29,6 +29,7 @@
 - Long-term debt: [docs/TODO-BACKLOG-LONG-TERM.md](./TODO-BACKLOG-LONG-TERM.md)
 - Historical completion facts: [01-project/CHANGES.md](./01-project/CHANGES.md)
 - 2026-08-31 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-08-31.md).
+- 2026-09-01 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-09-01.md).
 
 ## Topical guardrails
 
