@@ -1,0 +1,126 @@
+# Catches an expired NPM_TOKEN on a schedule instead of at release time.
+#
+# The token that published these packages lapsed silently and nothing noticed
+# until six package publishes failed mid-release with `E404 ... PUT` — npm's
+# response for a scope a token cannot write to. npm granular access tokens
+# expire on a 30/60/90-day schedule by default, so this will happen again.
+#
+# This runs weekly, asks npm who the token is, and opens (or refreshes) an issue
+# when the answer is "nobody". A failing job alone is not enough: nobody reads a
+# red cron until they need it.
+name: NPM Token Watch
+
+on:
+  schedule:
+    # Mondays 02:00 UTC — a lapse is found at the start of a week rather than
+    # discovered by whoever happens to be cutting a release.
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: npm-token-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check NPM_TOKEN
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify the token can still authenticate
+        id: check
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          # `reason` is written as a single line on purpose. npm errors are
+          # multiline, and `name=value` in GITHUB_OUTPUT only supports one line —
+          # a raw multiline error makes the runner reject the whole output file,
+          # which would fail this step *and* skip the alert step below, leaving
+          # the lapse unreported. The full text stays in the job log.
+          emit_failure() {
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
+            printf 'reason=%s\n' "$(printf '%s' "$1" | tr '\n' ' ' | cut -c1-500)" >> "$GITHUB_OUTPUT"
+          }
+
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            emit_failure "NPM_TOKEN is not set."
+            exit 0
+          fi
+
+          if whoami_output="$(npm whoami 2>&1)"; then
+            echo "Authenticated as ${whoami_output}"
+            printf 'ok=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "${whoami_output}"
+
+          # A granular access token can be forbidden from `/-/whoami` while still
+          # being allowed to publish — the endpoint is subject to permission
+          # checks the publish flow does not apply. Alerting on 403 would cry
+          # wolf every week for a perfectly good token, so only a clear
+          # authentication failure counts.
+          case "${whoami_output}" in
+            *E403*|*403\ Forbidden*)
+              echo "whoami is forbidden for this token, which does not imply it cannot publish."
+              printf 'ok=true\n' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              emit_failure "npm whoami failed: ${whoami_output}"
+              ;;
+          esac
+
+      - name: Open or refresh the alert issue
+        # `always()` on purpose: a bare `if:` carries an implicit success(), so a
+        # crash in the step above would skip the alert instead of reporting it.
+        if: always() && steps.check.outputs.ok != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ steps.check.outputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="NPM_TOKEN is not usable — package publishes will fail"
+
+          # Quoted heredoc: the body is full of backticks and apostrophes, and an
+          # unquoted one would try to run them. The two dynamic values are
+          # printed around it instead of interpolated into it.
+          {
+            printf '%s\n\n' "The scheduled token check could not authenticate against npm."
+            # Fence in a variable: backticks inside a single-quoted printf format
+            # read as a command substitution to shellcheck (SC2016).
+            fence='```'
+            printf '%s\n%s\n%s\n\n' "${fence}" "${REASON}" "${fence}"
+            cat <<'BODY'
+          Every `package-*-publish.yml` workflow will fail at `npm publish` until this is
+          replaced, with `E404 ... PUT` — npm's response for a scope the token cannot write
+          to, rather than a missing package.
+
+          Replace the `NPM_TOKEN` repository secret with a token that has publish rights on
+          the `@talex-touch` scope, then re-run any failed publish runs.
+          BODY
+            printf '\nChecked by %s\n' "${RUN_URL}"
+          } > "${RUNNER_TEMP}/npm-token-alert.md"
+
+          existing="$(gh issue list --state open --search "${title} in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --body-file "${RUNNER_TEMP}/npm-token-alert.md"
+          else
+            gh issue create --title "${title}" --body-file "${RUNNER_TEMP}/npm-token-alert.md"
+          fi
+
+      - name: Fail the run when the token is unusable
+        if: always() && steps.check.outputs.ok != 'true'
+        run: exit 1
