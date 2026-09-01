@@ -13,6 +13,7 @@
 
 .docs-gallery {
   --docs-gallery-line: color-mix(in srgb, var(--docs-border) 72%, transparent);
+
   border: 1px solid var(--docs-gallery-line);
   border-radius: 14px;
   overflow: hidden;
@@ -76,7 +77,7 @@
 
 .docs-gallery__suite-tab.is-active {
   color: inherit;
-  border-bottom-color: currentColor;
+  border-bottom-color: currentcolor;
 }
 
 .docs-gallery__suite-tab:not(.is-active):hover {
