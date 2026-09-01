@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { CommandPaletteItem } from '@tuffex-components/command-palette'
 import { computed, ref } from 'vue'
 
 interface CommandItem {
@@ -135,7 +136,7 @@ const commands = computed<CommandItem[]>(() => {
 
 const selected = computed(() => commands.value.find(command => command.id === selectedId.value))
 
-function onSelect(command: CommandItem) {
+function onSelect(command: CommandPaletteItem) {
   selectedId.value = command.id
 }
 </script>

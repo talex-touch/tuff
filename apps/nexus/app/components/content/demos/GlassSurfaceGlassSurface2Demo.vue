@@ -17,7 +17,6 @@ const greenOffset = ref(10)
 const blueOffset = ref(20)
 const xChannel = ref<'R' | 'G' | 'B'>('R')
 const yChannel = ref<'R' | 'G' | 'B'>('G')
-const mixBlendMode = ref('difference')
 
 const channels = ['R', 'G', 'B']
 const blendModes = [
@@ -39,7 +38,8 @@ const blendModes = [
   'luminosity',
   'plus-darker',
   'plus-lighter',
-]
+] as const
+const mixBlendMode = ref<(typeof blendModes)[number]>('difference')
 </script>
 
 <template>

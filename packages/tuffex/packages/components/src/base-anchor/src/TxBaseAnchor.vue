@@ -860,94 +860,99 @@ async function waitForStablePanelSize(): Promise<void> {
 }
 
 /* ─── watch open state ─── */
-watch(
-  open,
-  async (v) => {
-    runId++
-    const currentRunId = runId
+/**
+ * Extracted from the `open` watcher so mounting already open can run the same
+ * path: the watcher only fires on a *change*, and an anchor whose host binds
+ * `:model-value="true"` from the first render never has one. Without this the
+ * panel mounts into the DOM and stays at the clip's CSS `visibility: hidden`,
+ * because only `animateOpen` ever clears it.
+ */
+async function applyOpenState(v: boolean) {
+  runId++
+  const currentRunId = runId
 
-    if (!v) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = null
-      cleanupResizeObserver.value?.()
-      cleanupResizeObserver.value = null
-      lastReferenceRect = null
-      // A closed panel can't be clicked; keepAliveContent keeps the element
-      // around, so deregister explicitly rather than waiting for unmount.
-      if (props.delayNode)
-        anchorDelayService.setFloatingEl(props.delayNode, null)
-      animateClose(currentRunId)
-      return
-    }
-
-    mounted.value = true
-    zIndex.value = zIndexAllocator.next()
-    lastOpenedAt.value = performance.now()
-
-    await nextTick()
+  if (!v) {
+    cleanupAutoUpdate.value?.()
+    cleanupAutoUpdate.value = null
+    cleanupResizeObserver.value?.()
+    cleanupResizeObserver.value = null
+    lastReferenceRect = null
+    // A closed panel can't be clicked; keepAliveContent keeps the element
+    // around, so deregister explicitly rather than waiting for unmount.
     if (props.delayNode)
-      anchorDelayService.setFloatingEl(props.delayNode, floatingRef.value)
-    update()
-    syncOutlineSize()
-    scheduleOutlineRemeasure()
-    setupResizeObserver()
+      anchorDelayService.setFloatingEl(props.delayNode, null)
+    animateClose(currentRunId)
+    return
+  }
 
-    const reference = floatingReference.value
-    if (reference && floatingRef.value) {
-      cleanupAutoUpdate.value?.()
-      if (props.virtualReference) {
-        const updatePosition = () => {
+  mounted.value = true
+  zIndex.value = zIndexAllocator.next()
+  lastOpenedAt.value = performance.now()
+
+  await nextTick()
+  if (props.delayNode)
+    anchorDelayService.setFloatingEl(props.delayNode, floatingRef.value)
+  update()
+  syncOutlineSize()
+  scheduleOutlineRemeasure()
+  setupResizeObserver()
+
+  const reference = floatingReference.value
+  if (reference && floatingRef.value) {
+    cleanupAutoUpdate.value?.()
+    if (props.virtualReference) {
+      const updatePosition = () => {
+        if (hasActiveTimeline())
+          return
+        update()
+        refreshLiquidStage()
+      }
+      window.addEventListener('resize', updatePosition, { passive: true })
+      window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
+      cleanupAutoUpdate.value = () => {
+        window.removeEventListener('resize', updatePosition)
+        window.removeEventListener('scroll', updatePosition, { capture: true } as EventListenerOptions)
+      }
+    }
+    else {
+      cleanupAutoUpdate.value = autoUpdate(
+        reference,
+        floatingRef.value,
+        () => {
+          // The expand/collapse timeline animates the panel's *real* height,
+          // and flip would read that mid-animation height: opened near the
+          // viewport bottom, a half-grown panel "fits below" and the side
+          // bounces bottom→top while it grows. Hold repositioning until the
+          // timeline settles; the next frame's tick re-syncs everything.
           if (hasActiveTimeline())
             return
+          const referenceMoved = hasReferenceMoved()
           update()
+          if (referenceMoved && open.value && props.panelBackground !== 'refraction') {
+            pulsePanelSurfaceMoving(120)
+          }
+          if (referenceMoved && hasActiveTimeline() && open.value)
+            settleOpenVisualStateForFollow()
           refreshLiquidStage()
-        }
-        window.addEventListener('resize', updatePosition, { passive: true })
-        window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
-        cleanupAutoUpdate.value = () => {
-          window.removeEventListener('resize', updatePosition)
-          window.removeEventListener('scroll', updatePosition, { capture: true } as EventListenerOptions)
-        }
-      }
-      else {
-        cleanupAutoUpdate.value = autoUpdate(
-          reference,
-          floatingRef.value,
-          () => {
-            // The expand/collapse timeline animates the panel's *real* height,
-            // and flip would read that mid-animation height: opened near the
-            // viewport bottom, a half-grown panel "fits below" and the side
-            // bounces bottom→top while it grows. Hold repositioning until the
-            // timeline settles; the next frame's tick re-syncs everything.
-            if (hasActiveTimeline())
-              return
-            const referenceMoved = hasReferenceMoved()
-            update()
-            if (referenceMoved && open.value && props.panelBackground !== 'refraction') {
-              pulsePanelSurfaceMoving(120)
-            }
-            if (referenceMoved && hasActiveTimeline() && open.value)
-              settleOpenVisualStateForFollow()
-            refreshLiquidStage()
-          },
-          { animationFrame: true },
-        )
-      }
+        },
+        { animationFrame: true },
+      )
     }
+  }
 
-    await nextTick()
-    await waitForFirstPosition()
-    if (currentRunId !== runId)
-      return
-    await waitForStablePanelSize()
-    if (currentRunId !== runId)
-      return
-    lastReferenceRect = readReferenceRect()
-    syncOutlineSize()
-    animateOpen(currentRunId)
-  },
-  { flush: 'post' },
-)
+  await nextTick()
+  await waitForFirstPosition()
+  if (currentRunId !== runId)
+    return
+  await waitForStablePanelSize()
+  if (currentRunId !== runId)
+    return
+  lastReferenceRect = readReferenceRect()
+  syncOutlineSize()
+  animateOpen(currentRunId)
+}
+
+watch(open, applyOpenState, { flush: 'post' })
 
 watch(
   () => props.disabled,
@@ -971,6 +976,12 @@ onMounted(async () => {
     scheduleOutlineRemeasure()
     setupResizeObserver()
   }
+
+  // Hosts that render the anchor already open — a pinned tooltip, a panel
+  // restored from persisted state — get no `open` transition for the watcher
+  // to see, so run the open path once here instead.
+  if (open.value)
+    await applyOpenState(true)
 })
 
 onBeforeUnmount(() => {
@@ -1229,6 +1240,20 @@ onBeforeUnmount(() => {
   will-change: clip-path;
   visibility: hidden;
   z-index: 2;
+}
+
+/*
+  The fade layer is a bare wrapper, but as a block box it opened an inline
+  formatting context: inline-level panel content (a tooltip is `inline-flex`)
+  then sat on the strut's baseline, which reserved descender space under the
+  text and pushed the content down — a 12px tooltip landed 5px from the panel
+  top and 0.8px from the bottom. A column flex container has no strut, so the
+  card's own padding is all that surrounds the content. Column, not row, so
+  panels with several stacked children still stack.
+*/
+.tx-base-anchor__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .tx-base-anchor__arrow {

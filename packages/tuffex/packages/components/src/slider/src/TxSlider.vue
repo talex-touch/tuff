@@ -547,18 +547,30 @@ onBeforeUnmount(() => {
   --tx-slider-track-height: 6px;
   --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 14%, transparent);
   --tx-slider-thumb-scale: 1;
+  --tx-slider-thumb-blur: 0px;
+  --tx-slider-thumb-opacity: 1;
   --tx-slider-thumb-ring: 0 0 0 0 transparent;
   --tx-slider-thumb-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
   /**
-   * Tracks the page surface, so in dark themes the thumb is dark-on-dark and reads
-   * as a hole rather than a knob — unlike `TxSwitch`, whose thumb inverts with the
-   * theme. Left as-is to avoid a silent restyle; override this to opt into a light
-   * thumb throughout.
+   * The text-colour family, not the page surface: those tokens are the ones that
+   * actually invert between themes (#111827 light, #ffffff dark), so the knob is
+   * dark on a light page and light on a dark one. Tracking `--tx-bg-color` made
+   * the thumb the same colour as the page behind it, and in dark themes it read
+   * as a hole punched through the track rather than a knob sitting on it. This
+   * is also what `TxSwitch` does with its own thumb.
    */
-  --tx-slider-thumb-color: var(--tx-bg-color, #fff);
+  --tx-slider-thumb-color: var(--tx-text-color-primary, #303133);
 
-  /** Refractive disc behind the thumb. */
-  --tx-slider-surface-size: 40px;
+  /**
+   * Refractive slab behind the thumb. Wider than it is tall and softly cornered
+   * rather than a circle: the slider reads along one axis, and a disc kept
+   * pulling the eye into a point instead of onto the stretch of track being
+   * addressed. `--tx-slider-surface-size` stays the *height* — it is a public
+   * override point, so it keeps its meaning.
+   */
+  --tx-slider-surface-size: 34px;
+  --tx-slider-surface-width: 76px;
+  --tx-slider-surface-radius: 13px;
   --tx-slider-surface-scale: 0.5;
   --tx-slider-surface-opacity: 0;
   --tx-slider-surface-blur: 0px;
@@ -569,6 +581,9 @@ onBeforeUnmount(() => {
   --tx-slider-ease: cubic-bezier(0.34, 1.5, 0.5, 1);
   --tx-slider-state-duration: 260ms;
   --tx-slider-press-duration: 460ms;
+  /* The thumb's own clock, so the hover dissolve can outrun the track's swell. */
+  --tx-slider-thumb-duration: var(--tx-slider-state-duration);
+  --tx-slider-dissolve-duration: 140ms;
 
   display: inline-flex;
   align-items: center;
@@ -579,7 +594,7 @@ onBeforeUnmount(() => {
   &.is-focused {
     --tx-slider-track-height: 8px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 20%, transparent);
-    --tx-slider-thumb-scale: 1.08;
+    --tx-slider-thumb-scale: 0.5;
     --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
     --tx-slider-surface-scale: 0.9;
     --tx-slider-surface-opacity: 1;
@@ -602,6 +617,27 @@ onBeforeUnmount(() => {
     --tx-slider-surface-blur: 10px;
     --tx-slider-surface-saturate: 190%;
     --tx-slider-surface-tint: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+  }
+
+  /**
+   * Hover hands the position over to the slab: the knob blurs, fades and shrinks
+   * away on its own faster clock, so what marks the value is the lit stretch of
+   * track rather than a dot competing with it.
+   *
+   * Excludes focus and drag deliberately. The focus ring is a `box-shadow` on the
+   * thumb, so dissolving the thumb would dissolve the a11y affordance with it;
+   * and a drag needs a hard point to aim, which a soft slab cannot give.
+   *
+   * Scoped to `.has-surface` for the same reason: `thumbSurface: false` renders
+   * no slab and falls back to accent rings, which are themselves `box-shadow` on
+   * the thumb. Dissolving it there would leave the hover state with nothing
+   * visible at all.
+   */
+  &.has-surface.is-hovering:not(.is-focused):not(.is-dragging) {
+    --tx-slider-thumb-duration: var(--tx-slider-dissolve-duration);
+    --tx-slider-thumb-scale: 0;
+    --tx-slider-thumb-blur: 5px;
+    --tx-slider-thumb-opacity: 0;
   }
 
   /**
@@ -660,9 +696,9 @@ onBeforeUnmount(() => {
   &__surface {
     position: absolute;
     top: 50%;
-    width: var(--tx-slider-surface-size);
+    width: var(--tx-slider-surface-width);
     height: var(--tx-slider-surface-size);
-    border-radius: 999px;
+    border-radius: var(--tx-slider-surface-radius);
     background: var(--tx-slider-surface-tint);
     backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
     -webkit-backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
@@ -758,8 +794,12 @@ onBeforeUnmount(() => {
       box-shadow: var(--tx-slider-thumb-ring), var(--tx-slider-thumb-shadow);
       margin-top: calc((var(--tx-slider-height) - var(--tx-slider-thumb-size)) / 2);
       transform: scale(var(--tx-slider-thumb-scale));
+      filter: blur(var(--tx-slider-thumb-blur));
+      opacity: var(--tx-slider-thumb-opacity);
       transition:
-        transform var(--tx-slider-state-duration) var(--tx-slider-ease),
+        transform var(--tx-slider-thumb-duration) var(--tx-slider-ease),
+        filter var(--tx-slider-thumb-duration) var(--tx-slider-ease),
+        opacity var(--tx-slider-thumb-duration) var(--tx-slider-ease),
         box-shadow var(--tx-slider-state-duration) var(--tx-slider-ease);
     }
   }
@@ -847,6 +887,7 @@ onBeforeUnmount(() => {
   .tx-slider {
     --tx-slider-state-duration: 0ms;
     --tx-slider-press-duration: 0ms;
+    --tx-slider-dissolve-duration: 0ms;
   }
 
   .tx-slider.is-dragging .tx-slider__input::-webkit-slider-thumb,

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const blurPx = ref('')
-const duration = ref('')
+const blurPx = ref(8)
+const duration = ref(240)
 const text = ref('')
 const toggle = () => {}
 </script>
