@@ -179,17 +179,40 @@ function readRegistryField(packageName, version, field) {
  *
  * `readField` is injectable so the failure path can be tested without a registry.
  */
-export function verifyRegistryManifest(packageInfo, version, readField = readRegistryField) {
+export function verifyRegistryManifest(packageInfo, version, readField = readRegistryField, options = {}) {
+  const { attempts = 6, delayMs = 5_000, sleep: sleepFn = sleep } = options
+
   for (const field of REGISTRY_MANIFEST_FIELDS) {
     let value
-    try {
-      value = readField(packageInfo.name, version, field)
+    let lastError
+
+    /*
+     * Retried because this runs immediately after `npm publish` and the version
+     * is not always queryable yet: tuffex@0.4.0 published correctly and then
+     * failed here seconds later with `404 No match found for version 0.4.0`,
+     * marking a good release red. Retrying only widens the window — the throw
+     * below is unchanged and deliberate (#560): an unreadable manifest must
+     * never be reported as clean.
+     */
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        value = readField(packageInfo.name, version, field)
+        lastError = undefined
+        break
+      }
+      catch (error) {
+        lastError = error
+        if (attempt < attempts)
+          sleepFn(delayMs)
+      }
     }
-    catch (error) {
+
+    if (lastError !== undefined) {
       throw new Error(
-        `Could not read the published manifest for ${packageInfo.name}@${version} (${field}): `
-        + `${String(error?.message || error)}. Refusing to treat an unreadable manifest as `
-        + `clean — this check is what stops a forbidden protocol reaching consumers.`,
+        `Could not read the published manifest for ${packageInfo.name}@${version} (${field}) `
+        + `after ${attempts} attempt(s): ${String(lastError?.message || lastError)}. Refusing `
+        + `to treat an unreadable manifest as clean — this check is what stops a forbidden `
+        + `protocol reaching consumers.`,
       )
     }
 
