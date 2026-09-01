@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,15 +17,27 @@ function quoteWindowsShellArg(value: string) {
     : value
 }
 
+const hasCorepack = ((): boolean => {
+  try {
+    return spawnSync('corepack', ['--version'], { stdio: 'ignore' }).status === 0
+  }
+  catch {
+    return false
+  }
+})()
+
 function runPnpm(args: string[]) {
   return new Promise<void>((resolve, reject) => {
+    // Same corepack caveat as `run.ts`: Node 26 does not bundle it.
+    const command = hasCorepack ? 'corepack' : (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
+    const commandArgs = hasCorepack ? ['pnpm', ...args] : args
     const child = process.platform === 'win32'
-      ? spawn('cmd.exe', ['/d', '/s', '/c', ['corepack', 'pnpm', ...args].map(quoteWindowsShellArg).join(' ')], {
+      ? spawn('cmd.exe', ['/d', '/s', '/c', [command, ...commandArgs].map(quoteWindowsShellArg).join(' ')], {
         cwd: rootPath,
         shell: false,
         stdio: 'inherit',
       })
-      : spawn('corepack', ['pnpm', ...args], {
+      : spawn(command, commandArgs, {
         cwd: rootPath,
         shell: false,
         stdio: 'inherit',
