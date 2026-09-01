@@ -1,15 +1,34 @@
 /// <reference types="node" />
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import type { SpawnOptions } from "node:child_process"
 
 const NULL_BYTE_PATTERN = /\0/
 const NEWLINE_PATTERN = /[\r\n]/
 
+/**
+ * Node 25 dropped the bundled corepack and this repo's baseline is Node 26, so
+ * `corepack` is only on PATH when someone installed it separately. CI images
+ * still ship it; a plain local checkout does not, and rewriting `pnpm` to
+ * `corepack` unconditionally made every tuffex build there die on
+ * `spawn corepack ENOENT`.
+ */
+const hasCorepack = ((): boolean => {
+  try {
+    return spawnSync("corepack", ["--version"], { stdio: "ignore" }).status === 0
+  } catch {
+    return false
+  }
+})()
+
+const isPnpm = (command: string): boolean => command.toLowerCase() === "pnpm"
+
+/** Only the corepack path takes a leading `pnpm` argument; see `spawnSafe`. */
+const usesCorepack = (command: string): boolean => isPnpm(command) && hasCorepack
+
 const resolveCommand = (command: string): string => {
-  if (command.toLowerCase() === "pnpm") return "corepack"
-  if (process.platform !== "win32") return command
-  if (command.toLowerCase() === "pnpm") return "pnpm.cmd"
-  return command
+  if (!isPnpm(command)) return command
+  if (hasCorepack) return "corepack"
+  return process.platform === "win32" ? "pnpm.cmd" : "pnpm"
 }
 
 const assertShellValue = (value: string, label: string): string => {
@@ -31,7 +50,7 @@ const spawnSafe = (
   options: SpawnOptions = {}
 ) => {
   const safeCommand = assertShellValue(resolveCommand(command), "COMMAND")
-  const resolvedArgs = command.toLowerCase() === "pnpm" ? ["pnpm", ...args] : args
+  const resolvedArgs = usesCorepack(command) ? ["pnpm", ...args] : args
   const safeArgs = resolvedArgs.map(assertShellArg)
   if (process.platform === "win32") {
     const commandLine = [safeCommand, ...safeArgs]
