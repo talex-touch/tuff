@@ -204,7 +204,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
 - Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, and global pointer-listener cleanup.
+- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, global pointer-listener cleanup, and the refractive slab's size channel (a distinct extent per state, a radius and rim that no longer scale with it, and a press bounce that lands back on the base transform).
 
 <TuffDocSourceLink />
 
