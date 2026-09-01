@@ -11,6 +11,20 @@ const rendererPath = path.join(__dirname, 'src', 'renderer', 'src')
 const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
 
 export default defineConfig({
+  test: {
+    poolOptions: {
+      forks: {
+        /**
+         * Node 26 exposes a built-in `localStorage` global that is `undefined`
+         * unless `--localstorage-file` is passed. In a jsdom environment it wins
+         * over jsdom's own implementation, so `window.localStorage` reads back
+         * undefined and every test touching UI preference storage fails. Turning
+         * the built-in off hands the global back to jsdom.
+         */
+        execArgv: ['--no-experimental-webstorage']
+      }
+    }
+  },
   plugins: [
     vue(),
     AutoImport({
