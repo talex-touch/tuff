@@ -161,6 +161,16 @@ function handleKeydown(event: KeyboardEvent): void {
   border: 1px solid var(--tx-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition: background-color 0.25s ease;
 
+  /*
+   * Keyed off the role rather than a class: `interactive` is derived from
+   * whether the host attached a click listener, and that is exactly what
+   * already switches the role between `button` and `status`. A badge that is
+   * only reporting state keeps the default cursor.
+   */
+  &[role='button'] {
+    cursor: pointer;
+  }
+
   &:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--tx-status-color, var(--tx-color-primary)) 60%, transparent);
     outline-offset: 2px;

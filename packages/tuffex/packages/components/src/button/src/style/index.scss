@@ -17,6 +17,14 @@
   height: 32px;
 
   user-select: none;
+  /*
+   * A `<button>` defaults to `cursor: default`, so without this the base button
+   * was the one control in the library that gave no pointer feedback on hover —
+   * the `disabled` / `loading` rules below were the only cursors it ever had.
+   * Both of those outrank this on specificity (`.tx-button.disabled` beats
+   * `.tx-button`), so they still win regardless of source order.
+   */
+  cursor: pointer;
   color: var(--tx-text-color);
   border-radius: var(--tx-button-radius, 12px);
   background-color: transparent;
