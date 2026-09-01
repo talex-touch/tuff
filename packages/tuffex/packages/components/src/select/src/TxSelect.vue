@@ -594,7 +594,13 @@ watch(multiTriggerRef, (el) => {
 // Tag enter/leave animates transform and opacity, never layout, so the natural
 // height one tick after the change is already the settled one.
 watch(
-  () => [visibleSelectedOptions.value.length, hiddenSelectedCount.value] as const,
+  // A signature, not a count: an edited option label or a `maxTagTextLength`
+  // change rewraps the rows without changing how many tags there are, and the
+  // width guard above would then keep the stale height pinned.
+  () => [
+    visibleSelectedOptions.value.map(opt => `${String(opt.value)}:${resolveTagLabel(opt.label)}`).join('\u0000'),
+    hiddenSelectedCount.value,
+  ].join('|'),
   async () => {
     await nextTick()
     syncMultiTriggerHeight()

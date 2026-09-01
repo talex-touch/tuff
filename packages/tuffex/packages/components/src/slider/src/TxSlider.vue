@@ -627,8 +627,13 @@ onBeforeUnmount(() => {
    * Excludes focus and drag deliberately. The focus ring is a `box-shadow` on the
    * thumb, so dissolving the thumb would dissolve the a11y affordance with it;
    * and a drag needs a hard point to aim, which a soft slab cannot give.
+   *
+   * Scoped to `.has-surface` for the same reason: `thumbSurface: false` renders
+   * no slab and falls back to accent rings, which are themselves `box-shadow` on
+   * the thumb. Dissolving it there would leave the hover state with nothing
+   * visible at all.
    */
-  &.is-hovering:not(.is-focused):not(.is-dragging) {
+  &.has-surface.is-hovering:not(.is-focused):not(.is-dragging) {
     --tx-slider-thumb-duration: var(--tx-slider-dissolve-duration);
     --tx-slider-thumb-scale: 0;
     --tx-slider-thumb-blur: 5px;
