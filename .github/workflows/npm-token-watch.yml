@@ -99,7 +99,10 @@ jobs:
           # printed around it instead of interpolated into it.
           {
             printf '%s\n\n' "The scheduled token check could not authenticate against npm."
-            printf '```\n%s\n```\n\n' "${REASON}"
+            # Fence in a variable: backticks inside a single-quoted printf format
+            # read as a command substitution to shellcheck (SC2016).
+            fence='```'
+            printf '%s\n%s\n%s\n\n' "${fence}" "${REASON}" "${fence}"
             cat <<'BODY'
           Every `package-*-publish.yml` workflow will fail at `npm publish` until this is
           replaced, with `E404 ... PUT` — npm's response for a scope the token cannot write
