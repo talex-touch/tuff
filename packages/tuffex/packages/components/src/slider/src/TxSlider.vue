@@ -567,11 +567,20 @@ onBeforeUnmount(() => {
    * pulling the eye into a point instead of onto the stretch of track being
    * addressed. `--tx-slider-surface-size` stays the *height* — it is a public
    * override point, so it keeps its meaning.
+   *
+   * The pair above is the slab at full extent; `--tx-slider-surface-extent`
+   * scales it per state. Deriving real `width`/`height` from them rather than
+   * riding `transform: scale()` is deliberate: a scaled slab drags its corner
+   * radius and its 1px rim along with it, so at rest it read as a shrunken
+   * sticker instead of a smaller window. Sized this way the radius and the rim
+   * hold at their authored values across all three states.
+   *
+   * The layout cost is bounded on purpose — see `.tx-slider__surface`.
    */
   --tx-slider-surface-size: 34px;
   --tx-slider-surface-width: 76px;
   --tx-slider-surface-radius: 13px;
-  --tx-slider-surface-scale: 0.5;
+  --tx-slider-surface-extent: 0.5;
   --tx-slider-surface-opacity: 0;
   --tx-slider-surface-blur: 0px;
   --tx-slider-surface-saturate: 100%;
@@ -596,7 +605,7 @@ onBeforeUnmount(() => {
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 20%, transparent);
     --tx-slider-thumb-scale: 0.5;
     --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
-    --tx-slider-surface-scale: 0.9;
+    --tx-slider-surface-extent: 0.9;
     --tx-slider-surface-opacity: 1;
     --tx-slider-surface-blur: 6px;
     --tx-slider-surface-saturate: 165%;
@@ -612,7 +621,7 @@ onBeforeUnmount(() => {
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 26%, transparent);
     --tx-slider-thumb-scale: 1.16;
     --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
-    --tx-slider-surface-scale: 1.18;
+    --tx-slider-surface-extent: 1.18;
     --tx-slider-surface-opacity: 1;
     --tx-slider-surface-blur: 10px;
     --tx-slider-surface-saturate: 190%;
@@ -693,11 +702,25 @@ onBeforeUnmount(() => {
     transition: background-color var(--tx-slider-state-duration) var(--tx-slider-ease);
   }
 
+  /**
+   * Sized, not scaled. The state channel is the box itself, so the radius and
+   * the rim below stay at their authored values instead of being multiplied
+   * along with everything else.
+   *
+   * Writing `width`/`height` is a layout write, which is exactly what the
+   * per-frame `left` above must never do — but this one is not per-frame. It
+   * moves on hover in/out and drag start/end, a handful of times per
+   * interaction, and `contain: layout` walls the resulting pass inside this
+   * element: an absolutely positioned, childless leaf that nothing else is
+   * sized against. The transient press bounce stays on `transform` for the
+   * same reason, since that one *does* run every frame.
+   */
   &__surface {
     position: absolute;
     top: 50%;
-    width: var(--tx-slider-surface-width);
-    height: var(--tx-slider-surface-size);
+    width: calc(var(--tx-slider-surface-width) * var(--tx-slider-surface-extent));
+    height: calc(var(--tx-slider-surface-size) * var(--tx-slider-surface-extent));
+    contain: layout;
     border-radius: var(--tx-slider-surface-radius);
     background: var(--tx-slider-surface-tint);
     backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
@@ -708,12 +731,13 @@ onBeforeUnmount(() => {
      */
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
     opacity: var(--tx-slider-surface-opacity);
-    transform: translate(-50%, -50%) scale(var(--tx-slider-surface-scale));
+    transform: translate(-50%, -50%);
     pointer-events: none;
     /* `left` is deliberately absent — it must track the thumb frame-for-frame. */
     transition:
       opacity var(--tx-slider-state-duration) var(--tx-slider-ease),
-      transform var(--tx-slider-state-duration) var(--tx-slider-ease),
+      width var(--tx-slider-state-duration) var(--tx-slider-ease),
+      height var(--tx-slider-state-duration) var(--tx-slider-ease),
       backdrop-filter var(--tx-slider-state-duration) var(--tx-slider-ease);
   }
 
@@ -861,24 +885,32 @@ onBeforeUnmount(() => {
   }
 }
 
+/**
+ * Relative to the slab's own box, which is already at the dragging extent by the
+ * time this runs — the animation only plays under `.is-dragging`. The factors are
+ * the old absolute ones divided by that 1.18, so the bounce feels identical while
+ * costing nothing but compositor work per frame. The last frame is `scale(1)`,
+ * which equals the base transform, so it hands back to the transition without a
+ * jump if it finishes mid-drag.
+ */
 @keyframes tx-slider-surface-press {
   0% {
-    transform: translate(-50%, -50%) scale(0.72);
+    transform: translate(-50%, -50%) scale(0.61);
     opacity: 0.4;
   }
 
   46% {
-    transform: translate(-50%, -50%) scale(1.5);
+    transform: translate(-50%, -50%) scale(1.271);
     opacity: 1;
   }
 
   72% {
-    transform: translate(-50%, -50%) scale(1.18);
+    transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
 
   100% {
-    transform: translate(-50%, -50%) scale(var(--tx-slider-surface-scale));
+    transform: translate(-50%, -50%) scale(1);
     opacity: var(--tx-slider-surface-opacity);
   }
 }

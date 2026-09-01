@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxSlider from '../src/TxSlider.vue'
+import txSliderSource from '../src/TxSlider.vue?raw'
 
 function setMainMetrics(wrapper: ReturnType<typeof mount>) {
   const main = wrapper.find('.tx-slider__main').element as HTMLElement
@@ -222,5 +223,103 @@ describe('txSlider', () => {
       props: { modelValue: 40, min: 0, max: 100 },
     })
     expect(plain.find('input').attributes('aria-valuetext')).toBeUndefined()
+  })
+})
+
+/**
+ * The refractive slab's state channel is a stylesheet contract, and jsdom never
+ * applies an SFC's `<style>` block — a mounted component cannot see it. So these
+ * read the source and assert on the parsed rule bodies instead.
+ *
+ * `ruleBody` matches braces rather than running a regex across the file: an
+ * unanchored `[\s\S]*` would happily walk past the rule it names and into the
+ * next one, and would still pass with the asserted line deleted.
+ */
+function ruleBody(source: string, selector: string): string {
+  const start = source.indexOf(selector)
+  if (start === -1)
+    throw new Error(`selector not found in TxSlider.vue: ${selector}`)
+
+  const open = source.indexOf('{', start)
+  if (open === -1)
+    throw new Error(`selector has no block: ${selector}`)
+
+  let depth = 0
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{')
+      depth++
+    else if (source[i] === '}') {
+      depth--
+      if (depth === 0)
+        return source.slice(open + 1, i)
+    }
+  }
+  throw new Error(`unbalanced block for selector: ${selector}`)
+}
+
+describe('txSlider refractive slab sizing', () => {
+  const source = txSliderSource
+
+  it('extracts the rules it claims to test', () => {
+    // Positive control. Every assertion below is about what a block does *not*
+    // contain or does contain; if the extractor silently returned nothing they
+    // would all pass vacuously.
+    expect(ruleBody(source, '&__surface').length).toBeGreaterThan(0)
+    expect(ruleBody(source, '&.is-dragging').length).toBeGreaterThan(0)
+  })
+
+  it('drives the slab through its own box, not a transform scale', () => {
+    const surface = ruleBody(source, '&__surface')
+
+    // The whole point: scaling dragged the corner radius and the 1px rim along
+    // with the box, so at rest the slab read as a shrunken sticker.
+    expect(surface).not.toContain('scale(')
+    expect(surface).toContain('transform: translate(-50%, -50%);')
+
+    expect(surface).toContain('width: calc(var(--tx-slider-surface-width) * var(--tx-slider-surface-extent))')
+    expect(surface).toContain('height: calc(var(--tx-slider-surface-size) * var(--tx-slider-surface-extent))')
+
+    // Radius and rim are authored values now, never multiplied.
+    expect(surface).toContain('border-radius: var(--tx-slider-surface-radius);')
+    expect(surface).toContain('box-shadow: inset 0 0 0 1px')
+  })
+
+  it('transitions the size channel and walls the layout pass in', () => {
+    const surface = ruleBody(source, '&__surface')
+
+    expect(surface).toMatch(/transition:[^;]*\bwidth\b/)
+    expect(surface).toMatch(/transition:[^;]*\bheight\b/)
+    expect(surface).not.toMatch(/transition:[^;]*\btransform\b/)
+
+    // Without containment the size write is free to escape this leaf.
+    expect(surface).toContain('contain: layout;')
+  })
+
+  it('gives rest, hover and drag three distinct extents', () => {
+    const extentOf = (block: string) => {
+      const match = block.match(/--tx-slider-surface-extent:\s*([\d.]+)/)
+      return match ? Number(match[1]) : null
+    }
+
+    const rest = extentOf(ruleBody(source, '.tx-slider {'))
+    const hover = extentOf(ruleBody(source, '&.is-hovering,'))
+    const drag = extentOf(ruleBody(source, '&.is-dragging {'))
+
+    expect(rest).not.toBeNull()
+    expect(hover).not.toBeNull()
+    expect(drag).not.toBeNull()
+    expect(new Set([rest, hover, drag]).size).toBe(3)
+    expect(rest!).toBeLessThan(hover!)
+    expect(hover!).toBeLessThan(drag!)
+  })
+
+  it('lands the press bounce back on the base transform', () => {
+    // The bounce stays on `transform` because it *does* run every frame. Its
+    // last frame must equal the base transform or it jumps when it finishes
+    // mid-drag and hands back to the transition.
+    const press = ruleBody(source, '@keyframes tx-slider-surface-press')
+
+    expect(press).toContain('transform: translate(-50%, -50%) scale(1);')
+    expect(press).not.toContain('--tx-slider-surface-extent')
   })
 })

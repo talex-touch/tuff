@@ -204,7 +204,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
 - Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` 覆盖显示值与事件值裁剪、禁用交互与 tooltip 抑制、带格式的底部 tooltip、无过渡 tooltip 渲染，以及全局指针监听器清理。
+- **实测覆盖:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` 覆盖显示值与事件值裁剪、禁用交互与 tooltip 抑制、带格式的底部 tooltip、无过渡 tooltip 渲染、全局指针监听器清理，以及折射板的尺寸通道（三态各自的 extent、圆角与描边不随状态缩放、按下回弹回到基础 transform）。
 
 <TuffDocSourceLink />
 
