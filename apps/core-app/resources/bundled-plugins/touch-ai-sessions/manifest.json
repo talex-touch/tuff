@@ -1,0 +1,98 @@
+{
+  "id": "com.tuffex.ai-sessions",
+  "name": "touch-ai-sessions",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260817,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "安全检索本地 AI 会话元数据并复制脱敏引用",
+  "main": "index.js",
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "intelligence.basic",
+      "fs.read",
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "search.root-results": "将 AI 会话检索入口展示在 CoreBox 根搜索结果",
+    "intelligence.basic": "读取宿主允许的 AI 会话元数据索引",
+    "fs.read": "读取宿主维护的会话索引元数据",
+    "clipboard.write": "在用户明确操作后复制脱敏会话引用"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-ai-sessions.sessions",
+      "displayName": "AI Sessions",
+      "featureId": "ai-sessions",
+      "kind": "plugin-data",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 85,
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "ai-sessions",
+      "name": "AI Sessions",
+      "desc": "搜索允许的 AI 会话元数据并复制脱敏引用",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "ai",
+        "session",
+        "conversation",
+        "chat",
+        "会话",
+        "对话",
+        "历史"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "ai sessions",
+            "ai 会话",
+            "会话历史"
+          ]
+        }
+      ]
+    }
+  ],
+  "_files": {
+    "index.js": "sha256-c53a2898567cb9894b18c80a1f042e60c0f63fc7897aa59254345fb06dada6c7",
+    "assets/logo.svg": "sha256-1b4a96dd5fde04f1c0379e20f574514db928678e183e564546757693cb9d622f"
+  },
+  "_signature": "2jf6A2Ro6GpGJ3hWfyGPAPZWi+5i3mFzUK7FupfGiHk=",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  }
+}

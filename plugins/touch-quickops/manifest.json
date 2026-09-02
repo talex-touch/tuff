@@ -13,11 +13,15 @@
   "main": "index.js",
   "permissions": {
     "required": ["search.root-results"],
-    "optional": ["storage.shared"]
+    "optional": ["storage.shared", "fs.read", "fs.write", "clipboard.read", "clipboard.write"]
   },
   "permissionReasons": {
     "search.root-results": "将 QuickOps 官方入口推送到 CoreBox 根搜索结果",
-    "storage.shared": "通过宿主 Flow 总线执行固定且经过验证的 QuickOps 会话控制动作"
+    "storage.shared": "通过宿主 Flow 总线执行固定且经过验证的 QuickOps 会话控制动作",
+    "fs.read": "按用户输入读取文件摘要、编码与本地目录元数据",
+    "fs.write": "在用户保存开发者预览时写入受限临时文件",
+    "clipboard.read": "仅在用户请求开发者预览且未提供输入时读取剪贴板文本",
+    "clipboard.write": "在用户保存开发者预览时复制受限临时文件路径"
   },
   "searchProviders": [
     {

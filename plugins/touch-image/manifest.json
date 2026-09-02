@@ -1,0 +1,99 @@
+{
+  "id": "com.tuffex.image-tools",
+  "name": "touch-image",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260817,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "快速修改图片分辨率、压缩并转换为 PNG、WebP、JPEG 或 ICO",
+  "main": "index.js",
+  "permissions": {
+    "required": ["search.root-results", "fs.read", "fs.write"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "search.root-results": "将图片导出工具展示在 CoreBox 根搜索结果",
+    "fs.read": "由宿主读取用户明确提供且经批准的图片输入",
+    "fs.write": "由宿主在用户确认后将转换结果保存到选定位置"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-image.image-tools",
+      "displayName": "图片工具",
+      "featureId": "image-tools",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 86,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "image-tools",
+      "name": "图片转换与压缩",
+      "desc": "调整一张图片的分辨率、质量和输出格式",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "image",
+        "picture",
+        "png",
+        "webp",
+        "jpeg",
+        "jpg",
+        "ico",
+        "resize",
+        "compress",
+        "quality",
+        "图片",
+        "图像",
+        "转换",
+        "导出",
+        "压缩",
+        "分辨率",
+        "尺寸"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["image", "files"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "image",
+            "picture",
+            "png",
+            "webp",
+            "jpeg",
+            "jpg",
+            "ico",
+            "resize",
+            "compress",
+            "图片",
+            "图像",
+            "转换",
+            "导出",
+            "压缩",
+            "分辨率"
+          ]
+        }
+      ]
+    }
+  ]
+}

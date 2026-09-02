@@ -87,6 +87,11 @@
   - 验收：隔离 Electron profile 实际水合 227 icons 并存活 2m29s，无新 `.ips`；5 个独立 native 进程各处理 125 个真实 app（625/625）；descriptor 非 Buffer；107 focused tests、native build、node typecheck、scoped ESLint 通过；icon-only hydration 的 search-index delta=0。
   - 2026-08-13 回归闭环：`v2.4.14-beta.7` 的安全白名单收窄只保留应用扫描根、`userData` 与 temp，却漏掉 `IconService` 当前写入的 `app.getPath('cache')/app-icons`；文件存在且映射为 `tfile`，渲染请求仍统一返回 403，最终全部退化成 `EmptyAppPlaceholder.svg`。修复仅放行精确 `app-icons` 子目录，未重新开放 home/cache；策略与协议 21 个 focused tests、node/web typecheck 通过，隔离 CoreBox 7/7 图标均为 256px 且空占位数为 0。
 
+- [x] **B7 — 剪贴板原图无界读取与 Base64 放大** ✅ 已修（`09-01-classic-utility-ai-plugin-suite`）
+  - 位置：`search-engine/utils/resolve-clipboard-inputs.ts` 原先对剪贴板图片路径直接 `readFile()`，搜索解析与插件 execute 又会重复进入 resolver；文件大小在读入及 Base64 膨胀前没有上限。
+  - 修复：改为 `O_NOFOLLOW` 打开、句柄 `fstat`、32 MiB 预分配上限、1 MiB 分块读取及读前/读后 dev/ino/size/mtime 复核；超限或漂移保留有界 preview，不物化原图。图片插件随后只接收 activation-local opaque token，Sharp 在可终止 Worker 内执行。
+  - 验证：边界内/超限 sparse file 回归、图片 capability/renderer 测试、Node/Web typecheck、Electron production build 与独立 plugin-host smoke。
+
 ### 🟠 高危工程风险
 
 - [ ] **R1 — Rust 截图模块已接入 CI/安装构建链** ⚠️ **契约测试已接入，发布路径未接入**（2026-08-07 复验，原判「已修 / #321 已关闭」不成立——[#321](https://github.com/talex-touch/tuff/issues/321) 仍 open）

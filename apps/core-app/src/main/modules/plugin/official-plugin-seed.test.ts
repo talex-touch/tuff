@@ -3,6 +3,7 @@ import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installBundledOfficialPluginSeeds } from './official-plugin-seed'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 
 const fixtureRoots: string[] = []
 
@@ -144,16 +145,16 @@ describe('installBundledOfficialPluginSeeds', () => {
     await expect(fs.access(path.join(localRoot, 'stale-runtime.js'))).rejects.toThrow()
   })
 
-  it('does not downgrade a newer local runtime', async () => {
+  it('does not downgrade a newer non-privileged local runtime', async () => {
     const { runtimePluginRoot, seedRoot } = await createFixture()
-    await writePlugin(seedRoot, 'touch-translation', {
+    await writePlugin(seedRoot, 'touch-example', {
       files: { 'index.js': 'older seed' },
-      signature: 'translation-1.0.11',
+      signature: 'example-1.0.11',
       version: '1.0.11'
     })
-    const localRoot = await writePlugin(runtimePluginRoot, 'touch-translation', {
+    const localRoot = await writePlugin(runtimePluginRoot, 'touch-example', {
       files: { 'index.js': 'newer local runtime' },
-      signature: 'translation-1.1.0',
+      signature: 'example-1.1.0',
       version: '1.1.0'
     })
 
@@ -167,6 +168,44 @@ describe('installBundledOfficialPluginSeeds', () => {
     await expect(fs.readFile(path.join(localRoot, 'index.js'), 'utf8')).resolves.toBe(
       'newer local runtime'
     )
+  })
+
+  it('repairs every newer privileged runtime from its bundled seed', async () => {
+    const { runtimePluginRoot, seedRoot } = await createFixture()
+
+    for (const pluginName of PRIVILEGED_PLUGIN_NAMES) {
+      await writePlugin(seedRoot, pluginName, {
+        files: { 'index.js': `bundled ${pluginName} runtime` },
+        signature: `bundled-${pluginName}-1.0.11`,
+        version: '1.0.11'
+      })
+      await writePlugin(runtimePluginRoot, pluginName, {
+        files: { 'index.js': `newer local ${pluginName} runtime` },
+        signature: `local-${pluginName}-1.1.0`,
+        version: '1.1.0'
+      })
+    }
+
+    const results = installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot })
+
+    for (const pluginName of PRIVILEGED_PLUGIN_NAMES) {
+      const result = results.find((candidate) => candidate.pluginName === pluginName)
+      const targetRoot = path.join(runtimePluginRoot, pluginName)
+      expect(result).toMatchObject({
+        localVersion: '1.1.0',
+        pluginName,
+        seedVersion: '1.0.11',
+        status: 'updated',
+        targetRoot
+      })
+      await expect(fs.readFile(path.join(targetRoot, 'index.js'), 'utf8')).resolves.toBe(
+        `bundled ${pluginName} runtime`
+      )
+      const installedManifest = JSON.parse(
+        await fs.readFile(path.join(targetRoot, 'manifest.json'), 'utf8')
+      ) as { version?: string }
+      expect(installedManifest.version).toBe('1.0.11')
+    }
   })
 
   it('repairs a newer local runtime whose manifest claims a different plugin identity', async () => {

@@ -19,14 +19,18 @@ import type {
   PluginApiGetFileTreeResponse,
   PluginApiUninstallRequest,
   PluginApiUninstallResponse,
-  PluginInstallSourceResponse
+  PluginInstallSourceResponse,
+  QuickOpsDeveloperPreviewRequest,
+  QuickOpsDeveloperPreviewSaveRequest
 } from '@talex-touch/utils/transport/events/types'
 import type { PluginWithSource } from '../../service/store-api.service'
+import type { ChildProcess } from 'node:child_process'
 import { lookup } from 'node:dns/promises'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
+import fsp from 'node:fs/promises'
 import * as util from 'node:util'
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, shell, type SaveDialogOptions } from 'electron'
 import fse from 'fs-extra'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -74,6 +78,7 @@ import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
+import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { flowBus } from '../flow-bus/flow-bus'
 import { getNetworkService } from '../network'
@@ -114,6 +119,7 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import { createQuickOpsDeveloperPreviewResponse, saveQuickOpsDeveloperPreview } from '../quick-ops'
 import type { PluginVoiceHostService } from './host/plugin-voice-capabilities'
 import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
 import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
@@ -149,6 +155,30 @@ import {
   createPluginWorkspaceScriptProcess,
   resolvePluginWorkspacePackageManagerPath
 } from './host/plugin-workspace-script-capabilities'
+import {
+  createFixedPluginHostsService,
+  createPluginHostsCapabilities,
+  type TrustedPluginHostsService
+} from './host/plugin-hosts-capabilities'
+import {
+  createFixedPluginVscodeProjectsService,
+  createPluginVscodeProjectsCapabilities,
+  type PluginVscodeProjectKind
+} from './host/plugin-vscode-projects-capabilities'
+import {
+  createDefaultPluginOrcaService,
+  createPluginOrcaCapabilities,
+  type TrustedPluginOrcaService
+} from './host/plugin-orca-capabilities'
+import {
+  createFixedPluginAiSessionsService,
+  createPluginAiSessionsCapabilities,
+  type PluginAiSessionSourceEntry,
+  type TrustedPluginAiSessionsService
+} from './host/plugin-ai-sessions-capabilities'
+import { createPluginImageToolsCapabilities } from './host/plugin-image-tools-capabilities'
+import { createWorkerPluginImageToolsRenderer } from './host/plugin-image-tools-worker-client'
+import { createLocalAiSessionMetadataReader } from './host/plugin-local-ai-session-metadata'
 import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
 import {
   PluginRuntimeService,
@@ -168,6 +198,7 @@ import {
   buildLoaderFatalPreflightFailure,
   buildRuntimeDriftPreflightFailure
 } from './plugin-preflight-helper'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 import { LocalPluginProvider } from './providers/local-provider'
 
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
@@ -199,6 +230,143 @@ const NEXUS_SUCCESS_STATUSES = Object.freeze(
   Array.from({ length: 100 }, (_value, index) => index + 200)
 )
 
+function waitForFixedChildProcess(
+  child: ChildProcess,
+  signal: AbortSignal,
+  failureCode: string
+): Promise<void> {
+  const { promise, resolve, reject } = Promise.withResolvers<void>()
+  let settled = false
+  let aborted = false
+  const finish = (error?: Error): void => {
+    if (settled) return
+    settled = true
+    signal.removeEventListener('abort', onAbort)
+    if (error) reject(error)
+    else resolve()
+  }
+  const onAbort = (): void => {
+    aborted = true
+    child.kill()
+  }
+  signal.addEventListener('abort', onAbort, { once: true })
+  if (signal.aborted) onAbort()
+  child.once('error', () =>
+    finish(new Error(aborted ? 'PLUGIN_HOST_CAPABILITY_CANCELLED' : failureCode))
+  )
+  child.once('exit', (code) => {
+    if (aborted) {
+      finish(new Error('PLUGIN_HOST_CAPABILITY_CANCELLED'))
+      return
+    }
+    finish(code === 0 ? undefined : new Error(failureCode))
+  })
+  return promise
+}
+
+function waitForFixedChildSpawn(
+  child: ChildProcess,
+  signal: AbortSignal,
+  failureCode: string
+): Promise<void> {
+  const { promise, resolve, reject } = Promise.withResolvers<void>()
+  let settled = false
+  const finish = (error?: Error): void => {
+    if (settled) return
+    settled = true
+    signal.removeEventListener('abort', onAbort)
+    if (error) reject(error)
+    else resolve()
+  }
+  const onAbort = (): void => {
+    child.kill()
+    finish(new Error('PLUGIN_HOST_CAPABILITY_CANCELLED'))
+  }
+  signal.addEventListener('abort', onAbort, { once: true })
+  if (signal.aborted) onAbort()
+  child.once('error', () =>
+    finish(new Error(signal.aborted ? 'PLUGIN_HOST_CAPABILITY_CANCELLED' : failureCode))
+  )
+  child.once('spawn', () => finish())
+  return promise
+}
+
+function waitForFixedChildOutcome(
+  child: ChildProcess,
+  signal: AbortSignal,
+  failureCode: string
+): Promise<'committed' | 'revision-conflict'> {
+  const stdout = child.stdout
+  if (!stdout) return Promise.reject(new Error(failureCode))
+  const { promise, resolve, reject } = Promise.withResolvers<'committed' | 'revision-conflict'>()
+  let settled = false
+  let output = ''
+  let overflow = false
+  const finish = (value?: 'committed' | 'revision-conflict', error?: Error): void => {
+    if (settled) return
+    settled = true
+    signal.removeEventListener('abort', onAbort)
+    if (error) reject(error)
+    else if (value) resolve(value)
+    else reject(new Error(failureCode))
+  }
+  const onAbort = (): void => {
+    child.kill()
+  }
+  stdout.on('data', (chunk: Buffer | string) => {
+    if (overflow) return
+    output += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk
+    if (Buffer.byteLength(output, 'utf8') > 64) overflow = true
+  })
+  signal.addEventListener('abort', onAbort, { once: true })
+  if (signal.aborted) onAbort()
+  child.once('error', () =>
+    finish(undefined, new Error(signal.aborted ? 'PLUGIN_HOST_CAPABILITY_CANCELLED' : failureCode))
+  )
+  child.once('close', (code) => {
+    const outcome = overflow ? '' : output.trim()
+    if (code === 0 && (outcome === 'committed' || outcome === 'revision-conflict')) {
+      finish(outcome)
+      return
+    }
+    if (signal.aborted) {
+      finish(undefined, new Error('PLUGIN_HOST_CAPABILITY_CANCELLED'))
+      return
+    }
+    finish(undefined, new Error(failureCode))
+  })
+  return promise
+}
+
+function abortablePluginImageOperation<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error('PLUGIN_HOST_CAPABILITY_CANCELLED'))
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(new Error('PLUGIN_HOST_CAPABILITY_CANCELLED'))
+    signal.addEventListener('abort', onAbort, { once: true })
+    operation.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+  })
+}
+
+function escapeAppleScriptString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function quotePosixShellArgument(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function quotePowerShellLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
+}
 async function invokeQuickOpsHostOperation(
   transport: ITuffTransportMain,
   operation: PluginQuickOpsOperationId,
@@ -266,10 +434,16 @@ async function invokeQuickOpsHostOperation(
       result = await transport.invoke(QuickOpsEvents.systemProxy.get, undefined)
       break
     case 'developer-preview.get':
-      result = await transport.invoke(QuickOpsEvents.developerPreview.get, payload as never)
+      result = await createQuickOpsDeveloperPreviewResponse(
+        payload as QuickOpsDeveloperPreviewRequest,
+        signal
+      )
       break
     case 'developer-preview.save':
-      result = await transport.invoke(QuickOpsEvents.developerPreview.save, payload as never)
+      result = await saveQuickOpsDeveloperPreview(
+        payload as QuickOpsDeveloperPreviewSaveRequest,
+        signal
+      )
       break
   }
   if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
@@ -1503,6 +1677,9 @@ function createPluginModuleInternal(
     input: PluginApiUninstallRequest
   ): Promise<PluginApiUninstallResponse> => {
     const request = normalizePluginUninstallRequest(input)
+    if (PRIVILEGED_PLUGIN_NAMES.includes(request.plugin.name)) {
+      throw new Error('PRIVILEGED_PLUGIN_UNINSTALL_DENIED')
+    }
     return pluginDataDispositionCoordinator!.uninstall(request)
   }
 
@@ -1840,6 +2017,9 @@ export class PluginModule extends BaseModule {
   private pluginBusinessCapabilities: PluginBusinessCapabilities | null = null
   private runtimeService: PluginRuntimeService | null = null
   private secureStoreRootPath = ''
+  private hostsService: TrustedPluginHostsService | null = null
+  private orcaService: TrustedPluginOrcaService | null = null
+  private aiSessionsService: TrustedPluginAiSessionsService | null = null
   private uninstallAuthorityInvalidators = new Set<(pluginName: string) => void | Promise<void>>()
 
   registerUninstallAuthorityInvalidator(
@@ -1873,7 +2053,7 @@ export class PluginModule extends BaseModule {
     })
   }
 
-  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const { file } = ctx
     registerMainRuntime('plugin-module', resolveMainRuntime(ctx, 'PluginModule.onInit'))
     const ioRuntime = resolvePluginModuleIoRuntime(ctx)
@@ -1881,6 +2061,8 @@ export class PluginModule extends BaseModule {
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
     TouchPlugin.setCapabilities(null)
+    const hostsBackupDirectory = path.join(app.getPath('userData'), 'backups', 'hosts')
+    await fse.ensureDir(hostsBackupDirectory, { mode: 0o700 })
 
     const pluginRuntime = buildPluginManagerRuntime({
       pluginRootDir: file.dirPath!,
@@ -1972,6 +2154,7 @@ export class PluginModule extends BaseModule {
           (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address)
       })
     })
+    const pluginModule = this
     const nexusService = createPluginHostNexusService({
       getBaseUrl: () => getRuntimeNexusBaseUrl(),
       getCredential: () => getAuthToken(),
@@ -2001,6 +2184,8 @@ export class PluginModule extends BaseModule {
         ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
       resolveHostGeneration: (activation) =>
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      authorizeCapability: authorizePluginCapability,
+      watchPermissionRevoked: watchPluginPermissionRevoked,
       authState: () => getSanitizedAuthSessionState(),
       nexus: nexusService,
       quickOps: Object.freeze({
@@ -2089,11 +2274,13 @@ export class PluginModule extends BaseModule {
         ])
       })
     }
-    const authorizePluginCapability = (pluginName: string, permissionId: string): boolean => {
+    function authorizePluginCapability(pluginName: string, permissionId: string): boolean {
       try {
         const permissionModule = getPermissionModule()
         const store = permissionModule?.getStore()
-        const plugin = this.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined
+        const plugin = pluginModule.pluginManager?.getPluginByName(pluginName) as
+          | ITouchPlugin
+          | undefined
         if (
           !store ||
           !plugin ||
@@ -2107,11 +2294,11 @@ export class PluginModule extends BaseModule {
         return false
       }
     }
-    const watchPluginPermissionRevoked = (
+    function watchPluginPermissionRevoked(
       pluginName: string,
       permissionId: string,
       onRevoke: () => void
-    ): (() => void) => {
+    ): () => void {
       const listener = (event: unknown): void => {
         if (!isRecord(event) || event.pluginId !== pluginName) return
         const permissionIds = Array.isArray(event.permissionIds)
@@ -2482,6 +2669,409 @@ export class PluginModule extends BaseModule {
           watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
         host: workspaceScriptHost
       })
+    this.hostsService = createFixedPluginHostsService({
+      platform: process.platform,
+      ...(process.platform === 'win32'
+        ? { windowsDirectory: process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows' }
+        : {}),
+      backupDirectory: hostsBackupDirectory,
+      confirmMutation: async (request, signal) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
+        const result = await dialog.showMessageBox(parentWindow, {
+          type: 'warning',
+          title: 'Confirm Hosts Update',
+          message:
+            request.operation === 'remove'
+              ? `Remove ${request.hostname}?`
+              : `Update ${request.hostname}?`,
+          detail:
+            request.operation === 'remove'
+              ? 'This removes the managed hostname from the system Hosts file.'
+              : `Addresses: ${request.addresses?.join(', ') ?? ''}`,
+          buttons: ['Cancel', 'Apply'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+          signal
+        })
+        return !parentWindow.isDestroyed() && !signal.aborted && result.response === 1
+      },
+      replaceFile: async (request, signal) => {
+        if (
+          signal.aborted ||
+          !/^[a-f0-9]{64}$/.test(request.expectedRevision) ||
+          !/^[a-f0-9]{64}$/.test(request.replacementRevision)
+        ) {
+          throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+        }
+        const relativeStage = path.relative(hostsBackupDirectory, request.stagedPath)
+        if (!relativeStage || relativeStage.startsWith('..') || path.isAbsolute(relativeStage)) {
+          throw new Error('PLUGIN_HOSTS_STAGE_INVALID')
+        }
+        const mode = (request.mode & 0o777).toString(8).padStart(4, '0')
+        if (process.platform === 'darwin') {
+          if (request.targetPath !== '/private/etc/hosts')
+            throw new Error('PLUGIN_HOSTS_TARGET_INVALID')
+          const privilegedTemp = `/private/etc/.tuff-hosts-${randomUUID()}`
+          const command = [
+            `trap ${quotePosixShellArgument(`/bin/rm -f ${quotePosixShellArgument(privilegedTemp)}`)} EXIT`,
+            `exec 3<${quotePosixShellArgument(request.stagedPath)}`,
+            'umask 077',
+            `/bin/cat <&3 > ${quotePosixShellArgument(privilegedTemp)}`,
+            `staged=$(/usr/bin/shasum -a 256 ${quotePosixShellArgument(privilegedTemp)} | /usr/bin/awk '{print $1}')`,
+            `[ "$staged" = ${quotePosixShellArgument(request.replacementRevision)} ]`,
+            `/usr/sbin/chown root:wheel ${quotePosixShellArgument(privilegedTemp)}`,
+            `/bin/chmod ${mode} ${quotePosixShellArgument(privilegedTemp)}`,
+            `current=$(/usr/bin/shasum -a 256 ${quotePosixShellArgument(request.targetPath)} | /usr/bin/awk '{print $1}')`,
+            `if [ "$current" != ${quotePosixShellArgument(request.expectedRevision)} ]; then printf revision-conflict; exit 0; fi`,
+            `/bin/mv -f ${quotePosixShellArgument(privilegedTemp)} ${quotePosixShellArgument(request.targetPath)}`,
+            'printf committed'
+          ].join(' && ')
+          const script = `do shell script "${escapeAppleScriptString(command)}" with administrator privileges`
+          const child = spawnSafe('/usr/bin/osascript', ['-e', script], {
+            shell: false,
+            stdio: ['ignore', 'pipe', 'ignore'],
+            windowsHide: true
+          })
+          const outcome = await waitForFixedChildOutcome(child, signal, 'PLUGIN_HOSTS_WRITE_FAILED')
+          if (outcome === 'revision-conflict') throw new Error('revision-conflict')
+          return 'committed'
+        }
+        if (process.platform === 'linux') {
+          if (request.targetPath !== '/etc/hosts') throw new Error('PLUGIN_HOSTS_TARGET_INVALID')
+          const pkexec = (await fse.pathExists('/usr/bin/pkexec'))
+            ? '/usr/bin/pkexec'
+            : '/bin/pkexec'
+          if (!(await fse.pathExists(pkexec))) throw new Error('PLUGIN_HOSTS_ELEVATION_UNAVAILABLE')
+          const sha256sum = (await fse.pathExists('/usr/bin/sha256sum'))
+            ? '/usr/bin/sha256sum'
+            : '/bin/sha256sum'
+          const privilegedTemp = `/etc/.tuff-hosts-${randomUUID()}`
+          const command = [
+            `trap ${quotePosixShellArgument(`/bin/rm -f ${quotePosixShellArgument(privilegedTemp)}`)} EXIT`,
+            `exec 3<${quotePosixShellArgument(request.stagedPath)}`,
+            'umask 077',
+            `/bin/cat <&3 > ${quotePosixShellArgument(privilegedTemp)}`,
+            `staged=$(${quotePosixShellArgument(sha256sum)} ${quotePosixShellArgument(privilegedTemp)} | /usr/bin/cut -d ' ' -f 1)`,
+            `[ "$staged" = ${quotePosixShellArgument(request.replacementRevision)} ]`,
+            `/bin/chown root:root ${quotePosixShellArgument(privilegedTemp)}`,
+            `/bin/chmod ${mode} ${quotePosixShellArgument(privilegedTemp)}`,
+            `current=$(${quotePosixShellArgument(sha256sum)} ${quotePosixShellArgument(request.targetPath)} | /usr/bin/cut -d ' ' -f 1)`,
+            `if [ "$current" != ${quotePosixShellArgument(request.expectedRevision)} ]; then printf revision-conflict; exit 0; fi`,
+            `/bin/mv -f ${quotePosixShellArgument(privilegedTemp)} ${quotePosixShellArgument(request.targetPath)}`,
+            'printf committed'
+          ].join(' && ')
+          const child = spawnSafe(pkexec, ['/bin/sh', '-c', command], {
+            shell: false,
+            stdio: ['ignore', 'pipe', 'ignore'],
+            windowsHide: true
+          })
+          const outcome = await waitForFixedChildOutcome(child, signal, 'PLUGIN_HOSTS_WRITE_FAILED')
+          if (outcome === 'revision-conflict') throw new Error('revision-conflict')
+          return 'committed'
+        }
+        if (process.platform === 'win32') {
+          const windowsRoot = process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows'
+          const powershellPath = path.win32.join(
+            windowsRoot,
+            'System32',
+            'WindowsPowerShell',
+            'v1.0',
+            'powershell.exe'
+          )
+          const expectedTarget = path.win32.join(windowsRoot, 'System32', 'drivers', 'etc', 'hosts')
+          if (
+            !(await fse.pathExists(powershellPath)) ||
+            path.win32.normalize(request.targetPath).toLowerCase() !== expectedTarget.toLowerCase()
+          ) {
+            throw new Error('PLUGIN_HOSTS_TARGET_INVALID')
+          }
+          const privilegedTemp = `${expectedTarget}.tuff-${randomUUID()}`
+          const innerScript = [
+            `$ErrorActionPreference='Stop'`,
+            `$source=[System.IO.File]::Open(${quotePowerShellLiteral(request.stagedPath)},[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,[System.IO.FileShare]::None)`,
+            `$destination=[System.IO.File]::Open(${quotePowerShellLiteral(privilegedTemp)},[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None)`,
+            `try { $source.CopyTo($destination); $destination.Flush($true) } finally { $destination.Dispose(); $source.Dispose() }`,
+            `$staged=(Get-FileHash -Algorithm SHA256 -LiteralPath ${quotePowerShellLiteral(privilegedTemp)}).Hash.ToLowerInvariant()`,
+            `if ($staged -ne ${quotePowerShellLiteral(request.replacementRevision)}) { Remove-Item -LiteralPath ${quotePowerShellLiteral(privilegedTemp)} -Force; exit 74 }`,
+            `$current=(Get-FileHash -Algorithm SHA256 -LiteralPath ${quotePowerShellLiteral(expectedTarget)}).Hash.ToLowerInvariant()`,
+            `if ($current -ne ${quotePowerShellLiteral(request.expectedRevision)}) { Remove-Item -LiteralPath ${quotePowerShellLiteral(privilegedTemp)} -Force; exit 73 }`,
+            `Move-Item -LiteralPath ${quotePowerShellLiteral(privilegedTemp)} -Destination ${quotePowerShellLiteral(expectedTarget)} -Force`
+          ].join('; ')
+          const innerEncoded = Buffer.from(innerScript, 'utf16le').toString('base64')
+          const elevate = `$p=Start-Process -FilePath ${quotePowerShellLiteral(powershellPath)} -Verb RunAs -Wait -PassThru -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand',${quotePowerShellLiteral(innerEncoded)}); if ($p.ExitCode -eq 73) { Write-Output 'revision-conflict'; exit 0 }; if ($p.ExitCode -eq 0) { Write-Output 'committed'; exit 0 }; exit $p.ExitCode`
+          const encoded = Buffer.from(elevate, 'utf16le').toString('base64')
+          const child = spawnSafe(
+            powershellPath,
+            ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+            {
+              shell: false,
+              stdio: ['ignore', 'pipe', 'ignore'],
+              windowsHide: true
+            }
+          )
+          const outcome = await waitForFixedChildOutcome(child, signal, 'PLUGIN_HOSTS_WRITE_FAILED')
+          if (outcome === 'revision-conflict') throw new Error('revision-conflict')
+          return 'committed'
+        }
+        throw new Error('PLUGIN_HOSTS_PLATFORM_UNSUPPORTED')
+      }
+    })
+    const createHostsCapability = (activation: PluginActivationIdentity) =>
+      createPluginHostsCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (value) => this.runtimeService?.resolve(value)?.owner.hostGeneration,
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeWrite: (pluginName) => authorizePluginCapability(pluginName, 'fs.write'),
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchWritePermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.write', onRevoke),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        service: this.hostsService!
+      })
+    const openVscodePath = async (
+      target: string,
+      kind: PluginVscodeProjectKind,
+      signal: AbortSignal,
+      proof: {
+        readonly canonicalPath: string
+        readonly dev: string
+        readonly ino: string
+        readonly kind: PluginVscodeProjectKind
+        readonly channel: 'stable' | 'insiders'
+      }
+    ): Promise<void> => {
+      if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+      let executable: string
+      let args: string[]
+      if (process.platform === 'darwin') {
+        executable = '/usr/bin/open'
+        args = [
+          '-a',
+          proof.channel === 'insiders' ? 'Visual Studio Code - Insiders' : 'Visual Studio Code',
+          '--args',
+          '--',
+          target
+        ]
+      } else if (process.platform === 'win32') {
+        const directory =
+          proof.channel === 'insiders' ? 'Microsoft VS Code Insiders' : 'Microsoft VS Code'
+        const binary = proof.channel === 'insiders' ? 'Code - Insiders.exe' : 'Code.exe'
+        const candidates = [
+          process.env.LOCALAPPDATA
+            ? path.win32.join(process.env.LOCALAPPDATA, 'Programs', directory, binary)
+            : '',
+          process.env.ProgramFiles
+            ? path.win32.join(process.env.ProgramFiles, directory, binary)
+            : ''
+        ]
+        const resolved = (
+          await Promise.all(
+            candidates.map(async (candidate) =>
+              candidate && (await fse.pathExists(candidate)) ? candidate : null
+            )
+          )
+        ).find((candidate): candidate is string => Boolean(candidate))
+        if (!resolved) throw new Error('PLUGIN_VSCODE_PROJECT_OPEN_FAILED')
+        executable = resolved
+        args = ['--', target]
+      } else if (process.platform === 'linux') {
+        const binary = proof.channel === 'insiders' ? 'code-insiders' : 'code'
+        const candidates = [`/usr/bin/${binary}`, `/usr/local/bin/${binary}`]
+        const resolved = (
+          await Promise.all(
+            candidates.map(async (candidate) =>
+              (await fse.pathExists(candidate)) ? candidate : null
+            )
+          )
+        ).find((candidate): candidate is string => Boolean(candidate))
+        if (!resolved) throw new Error('PLUGIN_VSCODE_PROJECT_OPEN_FAILED')
+        executable = resolved
+        args = ['--', target]
+      } else {
+        throw new Error('PLUGIN_VSCODE_PROJECT_OPEN_FAILED')
+      }
+      if (signal.aborted || !authorizePluginCapability('touch-vscode-projects', 'system.shell')) {
+        throw new Error('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+      }
+      const targetStats = await fse.lstat(target)
+      const canonicalTarget = await fse.realpath(target)
+      const afterStats = await fse.stat(canonicalTarget)
+      if (
+        targetStats.isSymbolicLink() ||
+        kind !== proof.kind ||
+        proof.canonicalPath !== canonicalTarget ||
+        String(afterStats.dev) !== proof.dev ||
+        String(afterStats.ino) !== proof.ino ||
+        (kind === 'folder' && !afterStats.isDirectory()) ||
+        (kind !== 'folder' && !afterStats.isFile())
+      ) {
+        throw new Error('PLUGIN_VSCODE_PROJECT_REPLACED')
+      }
+      if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+      const child = spawnSafe(executable, args, {
+        shell: false,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      await (process.platform === 'win32' ? waitForFixedChildSpawn : waitForFixedChildProcess)(
+        child,
+        signal,
+        'PLUGIN_VSCODE_PROJECT_OPEN_FAILED'
+      )
+    }
+    const createVscodeProjectsCapability = (activation: PluginActivationIdentity) => {
+      const service = createFixedPluginVscodeProjectsService({
+        platform: process.platform,
+        homeDirectory: app.getPath('home'),
+        appDataDirectory: process.platform === 'win32' ? app.getPath('appData') : undefined,
+        environment: process.env,
+        openPath: openVscodePath
+      })
+      return createPluginVscodeProjectsCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (value) => this.runtimeService?.resolve(value)?.owner.hostGeneration,
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeIndex: (pluginName) => authorizePluginCapability(pluginName, 'fs.index'),
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchIndexPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.index', onRevoke),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        service
+      })
+    }
+    this.orcaService = createDefaultPluginOrcaService(process.platform)
+    const createOrcaCapability = (activation: PluginActivationIdentity) =>
+      createPluginOrcaCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (value) => this.runtimeService?.resolve(value)?.owner.hostGeneration,
+        authorizeApplications: (pluginName) =>
+          authorizePluginCapability(pluginName, 'system.applications'),
+        watchApplicationsPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.applications', onRevoke),
+        service: this.orcaService!
+      })
+    const localAiSessionMetadata = createLocalAiSessionMetadataReader({
+      homeDirectory: app.getPath('home')
+    })
+    this.aiSessionsService = createFixedPluginAiSessionsService({
+      listMetadata: async (signal) => {
+        if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+        const [runs, localSnapshot] = await Promise.all([
+          aiOrchestratorStore.listOrchestratorRuns({ limit: 200 }),
+          localAiSessionMetadata(signal)
+        ])
+        const bySession = new Map<string, PluginAiSessionSourceEntry>()
+        const counts = new Map<string, number>()
+        for (const run of runs) {
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          const key = run.sessionId
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+          const project = path.basename(run.cwd).replace(/[\\/]/g, '').slice(0, 96) || '未命名项目'
+          const state =
+            run.status === 'completed'
+              ? 'completed'
+              : run.status === 'failed'
+                ? 'failed'
+                : run.status === 'cancelled' || run.status === 'interrupted'
+                  ? 'cancelled'
+                  : 'active'
+          const current = bySession.get(key)
+          if (!current || run.updatedAt > Date.parse(current.updatedAt)) {
+            bySession.set(key, {
+              platform: run.runtimeProvider === 'pi-core' ? 'trellis' : 'other',
+              project,
+              updatedAt: new Date(run.updatedAt).toISOString(),
+              state,
+              turnCount: 0,
+              sourceId: key
+            })
+          }
+        }
+        const tuffEntries = [...bySession.entries()].map(([key, entry]) =>
+          Object.freeze({ ...entry, turnCount: counts.get(key) ?? 0 })
+        )
+        return Object.freeze({
+          entries: Object.freeze([...localSnapshot.entries, ...tuffEntries]),
+          incomplete: localSnapshot.incomplete || runs.length >= 200
+        })
+      }
+    })
+    const createAiSessionsCapability = (activation: PluginActivationIdentity) =>
+      createPluginAiSessionsCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (value) => this.runtimeService?.resolve(value)?.owner.hostGeneration,
+        authorizeIntelligence: (pluginName) =>
+          authorizePluginCapability(pluginName, 'intelligence.basic'),
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        watchIntelligencePermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'intelligence.basic', onRevoke),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        service: this.aiSessionsService!
+      })
+    const imageToolsFilesystem = Object.freeze({
+      lstat: (filePath: string) => fsp.lstat(filePath),
+      realpath: (filePath: string) => fsp.realpath(filePath),
+      open: (filePath: string, flags: number, mode?: number) => fsp.open(filePath, flags, mode),
+      rename: (oldPath: string, newPath: string) => fsp.rename(oldPath, newPath),
+      unlink: (filePath: string) => fsp.unlink(filePath)
+    })
+    const imageToolsNativeSaveDialog = Object.freeze({
+      async save(
+        request: Readonly<{ defaultName: string; format: 'png' | 'webp' | 'jpeg' | 'ico' }>,
+        signal: AbortSignal
+      ): Promise<Readonly<{ cancelled: boolean; filePath?: string }>> {
+        if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+        const extensions = request.format === 'jpeg' ? ['jpg', 'jpeg'] : [request.format]
+        const options: SaveDialogOptions = {
+          defaultPath: path.join(app.getPath('pictures'), request.defaultName),
+          filters: [{ name: request.format.toUpperCase(), extensions }],
+          properties: ['createDirectory', 'showOverwriteConfirmation']
+        }
+        const owner = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!owner || owner.isDestroyed()) return Object.freeze({ cancelled: true })
+        const result = await abortablePluginImageOperation(
+          dialog.showSaveDialog(owner, options),
+          signal
+        )
+        if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+        if (result.canceled || !result.filePath) return Object.freeze({ cancelled: true })
+        return Object.freeze({ cancelled: false, filePath: result.filePath })
+      }
+    })
+    const imageToolsRenderer = createWorkerPluginImageToolsRenderer()
+    const createImageToolsCapability = (activation: PluginActivationIdentity) =>
+      createPluginImageToolsCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (value) => this.runtimeService?.resolve(value)?.owner.hostGeneration,
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeWrite: (pluginName) => authorizePluginCapability(pluginName, 'fs.write'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchWritePermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.write', onRevoke),
+        filesystem: imageToolsFilesystem,
+        nativeSaveDialog: imageToolsNativeSaveDialog,
+        imageRenderer: imageToolsRenderer
+      })
     this.runtimeService = new PluginRuntimeService({
       artifactPath: resolvePluginRuntimeArtifactPath(),
       factory: new ElectronPluginRuntimeProcessFactory(),
@@ -2507,6 +3097,11 @@ export class PluginModule extends BaseModule {
       windowManager: (activation) => createWindowManagerCapability(activation),
       windowPreset: (activation) => createWindowPresetCapability(activation),
       workspaceScript: (activation) => createWorkspaceScriptCapability(activation),
+      hosts: (activation) => createHostsCapability(activation),
+      vscodeProjects: (activation) => createVscodeProjectsCapability(activation),
+      orca: (activation) => createOrcaCapability(activation),
+      aiSessions: (activation) => createAiSessionsCapability(activation),
+      imageTools: (activation) => createImageToolsCapability(activation),
       runtimeService: shouldInstallPluginRuntimeServiceByDefault() ? this.runtimeService : null
     })
     this.storageTeardownDisposer?.()
@@ -2643,6 +3238,9 @@ export class PluginModule extends BaseModule {
     } catch (error) {
       cleanupErrors.push(error)
     }
+    this.hostsService = null
+    this.orcaService = null
+    this.aiSessionsService = null
 
     runCleanup(() => TouchPlugin.setCapabilities(null))
     runCleanup(() => TouchPlugin.setTransport(null))
