@@ -1348,6 +1348,47 @@ describe('plugin business capability adapters', () => {
     expect(JSON.stringify(result)).not.toMatch(/(?:^|["'])\/(?:Users|private|home)\//)
   })
 
+  it('accepts a safe relative file icon and forwards it to the feature host', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+    const item = {
+      id: 'relative-icon-item',
+      source: { type: 'plugin', id: 'plugin-features' },
+      render: {
+        mode: 'default',
+        basic: { title: 'Relative icon', icon: { type: 'file', value: 'assets/logo.svg' } }
+      }
+    }
+
+    await expect(
+      registry.dispatch('feature.items.push', { scope: 'active-feature', items: [item] })
+    ).resolves.toEqual({ ok: true })
+    expect(fixture.featureHost.pushItems).toHaveBeenCalledWith(
+      'active-feature',
+      [expect.objectContaining({
+        id: 'relative-icon-item',
+        render: expect.objectContaining({
+          basic: expect.objectContaining({ icon: { type: 'file', value: 'assets/logo.svg' } })
+        })
+      })],
+      expect.any(AbortSignal),
+      expect.any(Array)
+    )
+    expect(fixture.itemStore.get('relative-icon-item')).toMatchObject({
+      render: { basic: { icon: { type: 'file', value: 'assets/logo.svg' } } }
+    })
+
+    for (const value of ['/private/plugin/icon.svg', '../assets/logo.svg', 'assets/../logo.svg']) {
+      await expect(
+        registry.dispatch('feature.items.push', {
+          scope: 'active-feature',
+          items: [{ ...item, id: `invalid-${value}`, render: { ...item.render, basic: { ...item.render.basic, icon: { type: 'file', value } } } }]
+        })
+      ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+    }
+    expect(fixture.featureHost.pushItems).toHaveBeenCalledOnce()
+  })
+
   it('rejects absolute dynamic feature icons and redacts host file paths from feature results', async () => {
     const fixture = createFixture()
     const { registry } = createRegistry(fixture)

@@ -1,0 +1,7 @@
+{"file":"plugins/AGENTS.md","reason":"官方插件结构、权限、隐私源与验证约束"}
+{"file":"apps/core-app/AGENTS.md","reason":"CoreApp typed transport、系统能力、AI 与 QuickOps 边界"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"插件宿主 capability、身份、权限、资源和 packaged smoke 合同"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"跨层 payload normalizer、typed transport 与 stream/identity 约束"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"插件验证、失败态、敏感数据与证据边界"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"主进程到隔离 Prelude 的数据流和边界检查清单"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"复用现有插件能力、避免重复系统动作实现"}

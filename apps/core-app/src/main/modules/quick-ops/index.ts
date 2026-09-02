@@ -47,7 +47,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { PreviewAbilityContext } from '@talex-touch/utils/core-box/preview'
 import { extractQrSvg, isQrSvgPayload, renderQrSvgToPng } from './quick-ops-qr-png'
 import crypto from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { app, clipboard, shell } from 'electron'
 import {
@@ -1735,8 +1735,13 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
 
 export const quickOpsModule = new QuickOpsModule()
 
-async function createQuickOpsDeveloperPreviewResponse(
-  request: QuickOpsDeveloperPreviewRequest
+function assertDeveloperPreviewActive(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+}
+
+export async function createQuickOpsDeveloperPreviewResponse(
+  request: QuickOpsDeveloperPreviewRequest,
+  signal?: AbortSignal
 ): Promise<QuickOpsDeveloperPreviewResponse> {
   const query = request.query
   if (!hasQuickOpsDeveloperCommand(query)) {
@@ -1753,8 +1758,10 @@ async function createQuickOpsDeveloperPreviewResponse(
     }
   }
 
+  assertDeveloperPreviewActive(signal)
   const ability = new QuickOpsDeveloperAbility()
-  const sdkQuery = withQuickOpsDeveloperClipboardInput(query)
+  const sdkQuery = withQuickOpsDeveloperClipboardInput(query, signal)
+  assertDeveloperPreviewActive(signal)
   const canHandle = await ability.canHandle(sdkQuery)
   if (!canHandle) {
     return {
@@ -1763,13 +1770,14 @@ async function createQuickOpsDeveloperPreviewResponse(
     }
   }
 
-  const controller = new AbortController()
+  assertDeveloperPreviewActive(signal)
   const context: PreviewAbilityContext = {
     query: sdkQuery,
-    signal: controller.signal,
+    signal: signal ?? new AbortController().signal,
     locale: normalizeLocale(getLocale()) ?? 'en-US'
   }
   const result = await ability.execute(context)
+  assertDeveloperPreviewActive(signal)
   if (!result) {
     return {
       state: 'empty',
@@ -1785,9 +1793,14 @@ async function createQuickOpsDeveloperPreviewResponse(
   }
 }
 
-async function saveQuickOpsDeveloperPreview(
-  request: QuickOpsDeveloperPreviewSaveRequest
+export async function saveQuickOpsDeveloperPreview(
+  request: QuickOpsDeveloperPreviewSaveRequest,
+  signal?: AbortSignal
 ): Promise<QuickOpsDeveloperPreviewSaveResponse> {
+  assertDeveloperPreviewActive(signal)
+  if (isQuickOpsDeveloperToolsDisabled()) {
+    return { state: 'skipped', reason: QUICK_OPS_DEVELOPER_POLICY_REASON }
+  }
   if (!isQrSvgPayload(request.payload)) {
     return {
       state: 'skipped',
@@ -1812,11 +1825,18 @@ async function saveQuickOpsDeveloperPreview(
     }
   }
 
+  let filePath: string | undefined
   try {
+    assertDeveloperPreviewActive(signal)
     const outputDir = path.join(app.getPath('temp'), 'tuff-quickops')
     await mkdir(outputDir, { recursive: true })
-    const filePath = path.join(outputDir, `qr-code-${crypto.randomUUID()}.${request.format}`)
+    assertDeveloperPreviewActive(signal)
+    filePath = path.join(outputDir, `qr-code-${crypto.randomUUID()}.${request.format}`)
     await writeFile(filePath, request.format === 'svg' ? svg : data, { flag: 'wx' })
+    if (signal?.aborted) {
+      await unlink(filePath).catch(() => undefined)
+      throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+    }
     clipboard.writeText(filePath)
     return {
       state: 'saved',
@@ -1825,6 +1845,10 @@ async function saveQuickOpsDeveloperPreview(
       bytes: data.length
     }
   } catch (error) {
+    if (signal?.aborted) {
+      if (filePath) await unlink(filePath).catch(() => undefined)
+      throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+    }
     const code = (error as NodeJS.ErrnoException).code
     return {
       state: 'degraded',
@@ -1843,13 +1867,16 @@ function isQuickOpsDeveloperToolsDisabled(): boolean {
 }
 
 function withQuickOpsDeveloperClipboardInput(
-  query: QuickOpsDeveloperPreviewRequest['query']
+  query: QuickOpsDeveloperPreviewRequest['query'],
+  signal?: AbortSignal
 ): QuickOpsDeveloperPreviewRequest['query'] {
   if (query.inputs?.some((input) => input.content?.trim() || input.rawContent?.trim())) {
     return query
   }
+  assertDeveloperPreviewActive(signal)
 
   const text = clipboard.readText().trim()
+  assertDeveloperPreviewActive(signal)
   if (!text) return query
 
   return {

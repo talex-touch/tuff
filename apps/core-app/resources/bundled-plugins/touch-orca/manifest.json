@@ -1,0 +1,93 @@
+{
+  "id": "com.tuffex.orca",
+  "name": "touch-orca",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260817,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "查看 Orca 运行状态并打开 Orca",
+  "main": "index.js",
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "system.applications"
+    ]
+  },
+  "permissionReasons": {
+    "search.root-results": "将 Orca 状态入口展示在 CoreBox 根搜索结果",
+    "system.applications": "通过宿主受治理地打开已安装的 Orca 应用"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-orca.orca",
+      "displayName": "Orca",
+      "featureId": "orca",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 85,
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "orca",
+      "name": "Orca",
+      "desc": "查看 Orca 状态并打开 Orca",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "orca",
+        "worktree",
+        "terminal",
+        "task",
+        "状态",
+        "工作区"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": false,
+        "darwin": true,
+        "linux": false
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "orca",
+            "orca 状态",
+            "orca 工作区"
+          ]
+        }
+      ]
+    }
+  ],
+  "_files": {
+    "index.js": "sha256-465b9bbd56a28eb0780df7a6f160451a8a7b74dbb0b0abc5721af4fc4ed6f68c",
+    "assets/logo.svg": "sha256-16dfb011bbaad2028e1f12e21a6f3777ae5f00c6d8f01ff9e3540913dcfca58d"
+  },
+  "_signature": "oDwa36nCnmn5fABfNhMX7V39RSzkKN4l8VAlDtpWhCc=",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  }
+}
