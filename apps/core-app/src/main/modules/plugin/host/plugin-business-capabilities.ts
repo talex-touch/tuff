@@ -565,8 +565,19 @@ function validateOptionalItemString(
 function validateItemIcon(value: unknown): void {
   const icon = exactRecord(value, ITEM_ICON_KEYS)
   const type = requiredField(icon, 'type')
-  if (type !== 'class' && type !== 'emoji') invalid()
-  boundedString(requiredField(icon, 'value'), 4_096)
+  if (type !== 'class' && type !== 'emoji' && type !== 'file') invalid()
+  const iconValue = boundedString(requiredField(icon, 'value'), 4_096)
+  if (
+    type === 'file' &&
+    (iconValue.startsWith('/') ||
+      iconValue.startsWith('\\') ||
+      iconValue.startsWith('//') ||
+      /^[A-Za-z][A-Za-z0-9+.-]*:/.test(iconValue) ||
+      /^[A-Za-z]:[\\/]/.test(iconValue) ||
+      iconValue.split(/[\\/]+/).includes('..'))
+  ) {
+    invalid()
+  }
   validateOptionalItemString(icon, 'color', 128)
   if (Object.hasOwn(icon, 'colorful') && typeof icon.colorful !== 'boolean') invalid()
 }

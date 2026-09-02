@@ -1,7 +1,10 @@
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { types as utilTypes } from 'node:util'
-import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
+import {
+  PluginHostCapabilityError,
+  type PluginHostCapabilityDefinition
+} from './plugin-host-capabilities'
 
 export const PLUGIN_CHANNEL_OPERATION_IDS = Object.freeze([
   'auth.session.get-state',
@@ -58,6 +61,18 @@ export type PluginChannelOperationId = (typeof PLUGIN_CHANNEL_OPERATION_IDS)[num
 export type PluginQuickOpsOperationId = (typeof PLUGIN_QUICK_OPS_OPERATION_IDS)[number]
 export type PluginFlowOperationId = (typeof PLUGIN_FLOW_OPERATION_IDS)[number]
 
+const QUICK_OPS_PERMISSION_REQUIREMENTS = Object.freeze<
+  Partial<Record<PluginQuickOpsOperationId, readonly string[]>>
+>({
+  'directory-usage.get': Object.freeze(['fs.read']),
+  'file-hash.get': Object.freeze(['fs.read']),
+  'file-base64.get': Object.freeze(['fs.read']),
+  'recent-download.get': Object.freeze(['fs.read']),
+  'common-directory.get': Object.freeze(['fs.read']),
+  'developer-preview.get': Object.freeze(['fs.read', 'clipboard.read']),
+  'developer-preview.save': Object.freeze(['fs.write', 'clipboard.write'])
+})
+
 export interface PluginHostNexusRequest {
   readonly method: 'GET' | 'POST'
   readonly url: string
@@ -97,6 +112,8 @@ export interface PluginHostNexusServiceOptions {
 export interface PluginRequestReplyCapabilityOptions {
   resolveCurrentActivation(pluginName: string): PluginActivationIdentity | undefined
   resolveHostGeneration(activation: PluginActivationIdentity): number | undefined
+  authorizeCapability(pluginName: string, permissionId: string): boolean
+  watchPermissionRevoked(pluginName: string, permissionId: string, onRevoke: () => void): () => void
   authState(): unknown
   nexus: PluginHostNexusService
   quickOps: {
@@ -746,6 +763,22 @@ function validateQuickOpsResult(value: unknown): unknown {
   return Object.freeze({ operation: envelope.operation, data: cloneDto(envelope.payload) })
 }
 
+function isCommittedQuickOpsResult(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) {
+    return false
+  }
+  const operation = Object.getOwnPropertyDescriptor(value, 'operation')?.value
+  const data = Object.getOwnPropertyDescriptor(value, 'data')?.value
+  return Boolean(
+    operation === 'developer-preview.save' &&
+    data &&
+    typeof data === 'object' &&
+    !Array.isArray(data) &&
+    !utilTypes.isProxy(data) &&
+    Object.getOwnPropertyDescriptor(data, 'state')?.value === 'saved'
+  )
+}
+
 function validateFlowRequest(value: unknown): InvocationEnvelope<PluginFlowOperationId> {
   const envelope = validateInvocationEnvelope(value, FLOW_OPERATIONS)
   const request = exactRecord(envelope.payload, ['payload', 'options'])
@@ -979,6 +1012,8 @@ export function createPluginRequestReplyCapabilities(
   const options = exactRecord(rawOptions, [
     'resolveCurrentActivation',
     'resolveHostGeneration',
+    'authorizeCapability',
+    'watchPermissionRevoked',
     'authState',
     'nexus',
     'quickOps',
@@ -986,6 +1021,8 @@ export function createPluginRequestReplyCapabilities(
   ])
   const resolveCurrentActivation = readMethod(options, 'resolveCurrentActivation')
   const resolveHostGeneration = readMethod(options, 'resolveHostGeneration')
+  const authorizeCapability = readMethod(options, 'authorizeCapability')
+  const watchPermissionRevoked = readMethod(options, 'watchPermissionRevoked')
   const authState = readMethod(options, 'authState')
   const nexus = required(options, 'nexus')
   const listSnippets = readMethod(nexus, 'listSnippets')
@@ -1028,6 +1065,85 @@ export function createPluginRequestReplyCapabilities(
       invalid()
     }
     return current
+  }
+
+  const invokeAuthorizedQuickOps = async (
+    activation: PluginActivationIdentity,
+    envelope: ReturnType<typeof validateQuickOpsRequest>,
+    signal: AbortSignal
+  ): Promise<unknown> => {
+    const permissions = QUICK_OPS_PERMISSION_REQUIREMENTS[envelope.operation] ?? []
+    if (permissions.length === 0) {
+      return await quickOpsInvoke.call(quickOps, envelope.operation, envelope.payload, signal)
+    }
+
+    const controller = new AbortController()
+    const disposers: Array<() => void> = []
+    let abortCode: 'PLUGIN_HOST_CAPABILITY_CANCELLED' | 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' =
+      'PLUGIN_HOST_CAPABILITY_CANCELLED'
+    const onCallerAbort = (): void => controller.abort()
+    signal.addEventListener('abort', onCallerAbort, { once: true })
+    if (signal.aborted) controller.abort()
+    try {
+      for (const permissionId of permissions) {
+        let dispose: unknown
+        try {
+          dispose = watchPermissionRevoked.call(rawOptions, activation.name, permissionId, () => {
+            abortCode = 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+            controller.abort()
+          })
+        } catch {
+          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+        }
+        if (typeof dispose !== 'function' || utilTypes.isProxy(dispose)) {
+          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+        }
+        disposers.push(dispose as () => void)
+
+        let allowed: unknown
+        try {
+          allowed = authorizeCapability.call(rawOptions, activation.name, permissionId)
+        } catch {
+          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+        }
+        if (controller.signal.aborted) throw new PluginHostCapabilityError(abortCode)
+        if (typeof allowed !== 'boolean') {
+          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+        }
+        if (!allowed) {
+          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+        }
+      }
+
+      try {
+        const data = await quickOpsInvoke.call(
+          quickOps,
+          envelope.operation,
+          envelope.payload,
+          controller.signal
+        )
+        const committed =
+          envelope.operation === 'developer-preview.save' &&
+          data !== null &&
+          typeof data === 'object' &&
+          !utilTypes.isProxy(data) &&
+          Object.getOwnPropertyDescriptor(data, 'state')?.value === 'saved'
+        if (controller.signal.aborted && !committed) throw new PluginHostCapabilityError(abortCode)
+        return data
+      } catch (error) {
+        if (controller.signal.aborted) throw new PluginHostCapabilityError(abortCode)
+        throw error
+      }
+    } finally {
+      signal.removeEventListener('abort', onCallerAbort)
+      for (const dispose of disposers.splice(0)) {
+        try {
+          dispose()
+        } catch {
+          // The permission listener is already detached from this call.
+        }
+      }
+    }
   }
 
   const definitions: PluginHostCapabilityDefinition[] = [
@@ -1076,15 +1192,11 @@ export function createPluginRequestReplyCapabilities(
       maxConcurrency: 8,
       validateRequest: validateQuickOpsRequest,
       validateResult: validateQuickOpsResult,
+      isCommittedResult: isCommittedQuickOpsResult,
       async invoke(context, request, signal) {
-        assertAuthority(context)
+        const activation = assertAuthority(context)
         const envelope = request as ReturnType<typeof validateQuickOpsRequest>
-        const data = await quickOpsInvoke.call(
-          quickOps,
-          envelope.operation,
-          envelope.payload,
-          signal
-        )
+        const data = await invokeAuthorizedQuickOps(activation, envelope, signal)
         return { operation: envelope.operation, payload: data }
       }
     }),

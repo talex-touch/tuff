@@ -19,6 +19,7 @@ vi.mock('./plugin-module', () => ({
 }))
 
 import { installDevPluginFromPath } from './dev-plugin-installer'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 
 const tempDirs: string[] = []
 
@@ -49,7 +50,7 @@ describe('installDevPluginFromPath', () => {
       path.join(sourceDir, 'manifest.json'),
       JSON.stringify(
         {
-          name: 'touch-intelligence',
+          name: 'touch-example',
           version: '1.0.0',
           description: 'test',
           dev: {
@@ -67,10 +68,10 @@ describe('installDevPluginFromPath', () => {
     const result = await installDevPluginFromPath(sourceDir)
 
     expect(result.status).toBe('success')
-    expect(pluginModuleMock.pluginManager.loadPlugin).toHaveBeenCalledWith('touch-intelligence')
+    expect(pluginModuleMock.pluginManager.loadPlugin).toHaveBeenCalledWith('touch-example')
 
     const installedManifest = JSON.parse(
-      await fs.readFile(path.join(installRoot, 'touch-intelligence', 'manifest.json'), 'utf-8')
+      await fs.readFile(path.join(installRoot, 'touch-example', 'manifest.json'), 'utf-8')
     ) as { dev?: { enable?: boolean; source?: boolean; address?: string } }
 
     expect(installedManifest.dev).toEqual({
@@ -105,4 +106,47 @@ describe('installDevPluginFromPath', () => {
     expect(await fs.readFile(path.join(targetDir, 'index.js'), 'utf-8')).toBe('old-content')
     expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
   })
+
+  for (const [mode, options] of [
+    ['regular installation', undefined],
+    ['force update', { forceUpdate: true }]
+  ] as const) {
+    it(`rejects every privileged bundled name before ${mode} can copy or replace it`, async () => {
+      const sourceDir = await createTempDir('dev-plugin-reserved-source-')
+      const installRoot = await createTempDir('dev-plugin-reserved-install-')
+      pluginModuleMock.filePath = installRoot
+
+      for (const pluginName of PRIVILEGED_PLUGIN_NAMES) {
+        const targetDir = path.join(installRoot, pluginName)
+        const originalContents = `bundled ${pluginName} runtime`
+        pluginModuleMock.pluginManager.plugins.set(pluginName, {})
+        await fs.mkdir(targetDir)
+        await fs.writeFile(path.join(targetDir, 'index.js'), originalContents, 'utf-8')
+        await fs.writeFile(
+          path.join(sourceDir, 'manifest.json'),
+          JSON.stringify({
+            name: pluginName,
+            version: '2.0.0',
+            description: 'reserved runtime impersonation'
+          }),
+          'utf-8'
+        )
+        await fs.writeFile(
+          path.join(sourceDir, 'index.js'),
+          `untrusted ${pluginName} runtime`,
+          'utf-8'
+        )
+
+        const result = await installDevPluginFromPath(sourceDir, options)
+
+        expect(result).toEqual({ status: 'error', error: 'PRIVILEGED_PLUGIN_NAME_RESERVED' })
+        await expect(fs.readFile(path.join(targetDir, 'index.js'), 'utf-8')).resolves.toBe(
+          originalContents
+        )
+      }
+
+      expect(pluginModuleMock.pluginManager.unloadPlugin).not.toHaveBeenCalled()
+      expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
+    })
+  }
 })

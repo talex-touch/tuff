@@ -1,0 +1,49 @@
+{
+  "id": "com.tuffex.orca",
+  "name": "touch-orca",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260817,
+  "category": "utilities",
+  "icon": { "type": "file", "value": "assets/logo.svg" },
+  "description": "查看 Orca 运行状态并打开 Orca",
+  "main": "index.js",
+  "permissions": {
+    "required": ["search.root-results"],
+    "optional": ["system.applications"]
+  },
+  "permissionReasons": {
+    "search.root-results": "将 Orca 状态入口展示在 CoreBox 根搜索结果",
+    "system.applications": "通过宿主受治理地打开已安装的 Orca 应用"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-orca.orca",
+      "displayName": "Orca",
+      "featureId": "orca",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 85,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "orca",
+      "name": "Orca",
+      "desc": "查看 Orca 状态并打开 Orca",
+      "icon": { "type": "file", "value": "assets/logo.svg" },
+      "keywords": ["orca", "worktree", "terminal", "task", "状态", "工作区"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["text"],
+      "platform": { "win32": false, "darwin": true, "linux": false },
+      "commands": [{ "type": "over", "value": ["orca", "orca 状态", "orca 工作区"] }]
+    }
+  ]
+}

@@ -1401,9 +1401,65 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasWindowManagerFacade =
     snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowManager'))} &&
     hasDeclaredCapability('system.window-manager')
+  const hasHostsFacade =
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('hosts'))} &&
+    hasDeclaredCapability('system.hosts')
+  const hasVscodeProjectsFacade =
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('vscodeProjects'))} &&
+    hasDeclaredCapability('filesystem.vscode-projects')
+  const hasOrcaFacade =
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('orca'))} &&
+    hasDeclaredCapability('orchestration.orca')
+  const hasAiSessionsFacade =
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('aiSessions'))} &&
+    hasDeclaredCapability('intelligence.sessions')
+  const hasImageToolsFacade =
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('imageTools'))} &&
+    hasDeclaredCapability('media.image-tools')
+  const hidesRawHostCapabilities =
+    isTranslationPrelude ||
+    hasDeclaredCapability('system.hosts') ||
+    hasDeclaredCapability('filesystem.vscode-projects') ||
+    hasDeclaredCapability('orchestration.orca') ||
+    hasDeclaredCapability('intelligence.sessions') ||
+    hasDeclaredCapability('media.image-tools') ||
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('hosts'))} ||
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('vscodeProjects'))} ||
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('orca'))} ||
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('aiSessions'))} ||
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('imageTools'))}
+  const isVscodeProjectToken = (value) => {
+    if (typeof value !== 'string' || value.length !== 36 || value.slice(0, 4) !== 'vsp_') return false
+    for (let index = 4; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isImageToolsToken = (value) => {
+    if (typeof value !== 'string' || value.length !== 36 || value.slice(0, 4) !== 'img_') return false
+    for (let index = 4; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
   const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
   const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
   const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
+  const fixedImageToolsFormats = new setConstructor(['png', 'webp', 'jpeg', 'ico'])
   const fixedIntelligenceCapabilities = new setConstructor(['text.chat', 'vision.ocr'])
   const fixedIntelligenceStreamErrorCodes = new setConstructor(
     ${JSON.stringify(['INTELLIGENCE_STREAM_FAILED', ...INTELLIGENCE_ERROR_CODES])}
@@ -2350,6 +2406,107 @@ const CONTEXT_BOOTSTRAP = String.raw`
     })
   }
   objectFreeze(windowPresetFacade)
+  const hostsFacade = objectCreate(null)
+  if (hasHostsFacade) {
+    defineFacadeMethod(hostsFacade, 'read', () =>
+      mapCapabilityResult(
+        invokeCapability('system.hosts', { operation: 'read' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(hostsFacade, 'apply', (request) => {
+      const normalized = cloneLocalDto(request)
+      if (!normalized || typeof normalized !== 'object' || arrayIsArray(normalized)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.hosts', normalized),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(hostsFacade)
+
+  const vscodeProjectsFacade = objectCreate(null)
+  if (hasVscodeProjectsFacade) {
+    defineFacadeMethod(vscodeProjectsFacade, 'list', () =>
+      mapCapabilityResult(
+        invokeCapability('filesystem.vscode-projects', { operation: 'list' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(vscodeProjectsFacade, 'open', (token) => {
+      if (!isVscodeProjectToken(token)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('filesystem.vscode-projects', { operation: 'open', token }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(vscodeProjectsFacade)
+
+  const orcaFacade = objectCreate(null)
+  if (hasOrcaFacade) {
+    defineFacadeMethod(orcaFacade, 'snapshot', () =>
+      mapCapabilityResult(
+        invokeCapability('orchestration.orca', { operation: 'snapshot' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(orcaFacade, 'open', () =>
+      mapCapabilityResult(
+        invokeCapability('orchestration.orca', { operation: 'open' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+  }
+  objectFreeze(orcaFacade)
+
+  const aiSessionsFacade = objectCreate(null)
+  if (hasAiSessionsFacade) {
+    defineFacadeMethod(aiSessionsFacade, 'list', (request) => {
+      const normalized = request === undefined ? {} : cloneLocalDto(request)
+      if (!normalized || typeof normalized !== 'object' || arrayIsArray(normalized)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const payload = { operation: 'list' }
+      if (objectHasOwn(normalized, 'query')) payload.query = normalized.query
+      if (objectHasOwn(normalized, 'limit')) payload.limit = normalized.limit
+      return mapCapabilityResult(
+        invokeCapability('intelligence.sessions', payload),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(aiSessionsFacade)
+
+  const imageToolsFacade = objectCreate(null)
+  if (hasImageToolsFacade) {
+    defineFacadeMethod(imageToolsFacade, 'save', (request) => {
+      const normalized = cloneLocalDto(request)
+      if (
+        !normalized ||
+        typeof normalized !== 'object' ||
+        arrayIsArray(normalized) ||
+        !isImageToolsToken(normalized.token) ||
+        typeof normalized.format !== 'string' ||
+        !hasSetValue(fixedImageToolsFormats, normalized.format)
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const payload = { token: normalized.token, format: normalized.format }
+      for (const key of ['width', 'height', 'quality']) {
+        if (objectHasOwn(normalized, key)) payload[key] = normalized[key]
+      }
+      return mapCapabilityResult(
+        invokeCapability('media.image-tools', payload),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(imageToolsFacade)
 
   const windowManagerFacade = objectCreate(null)
   if (hasWindowManagerFacade) {
@@ -2449,6 +2606,30 @@ const CONTEXT_BOOTSTRAP = String.raw`
   if (hasWindowManagerFacade) {
     objectDefineProperty(pluginFacade, 'windowManager', {
       value: windowManagerFacade,
+      enumerable: true
+    })
+  }
+  if (hasHostsFacade) {
+    objectDefineProperty(pluginFacade, 'hosts', { value: hostsFacade, enumerable: true })
+  }
+  if (hasVscodeProjectsFacade) {
+    objectDefineProperty(pluginFacade, 'vscodeProjects', {
+      value: vscodeProjectsFacade,
+      enumerable: true
+    })
+  }
+  if (hasOrcaFacade) {
+    objectDefineProperty(pluginFacade, 'orca', { value: orcaFacade, enumerable: true })
+  }
+  if (hasAiSessionsFacade) {
+    objectDefineProperty(pluginFacade, 'aiSessions', {
+      value: aiSessionsFacade,
+      enumerable: true
+    })
+  }
+  if (hasImageToolsFacade) {
+    objectDefineProperty(pluginFacade, 'imageTools', {
+      value: imageToolsFacade,
       enumerable: true
     })
   }
@@ -2830,7 +3011,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
     crypto: { value: crypto },
     platform: { value: deepFreeze({ platform: snapshot.platform, arch: snapshot.arch }) },
     manifest: { value: deepFreeze(snapshot.manifest) },
-    hostCapabilities: { value: isTranslationPrelude ? undefined : hostCapabilities },
+    hostCapabilities: { value: hidesRawHostCapabilities ? undefined : hostCapabilities },
     plugin: { value: pluginFacade, configurable: true },
     intelligence: {
       value: hasIntelligenceFacade ? intelligenceFacade : undefined,

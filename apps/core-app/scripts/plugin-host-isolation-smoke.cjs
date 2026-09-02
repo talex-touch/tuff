@@ -160,6 +160,7 @@ async function run() {
           export { createPluginBusinessCapabilities } from '../src/main/modules/plugin/host/plugin-business-capabilities'
           export { createFixedPluginBrowserOpenService, createPluginBrowserOpenCapabilities, createPluginBrowserOpenProcess } from '../src/main/modules/plugin/host/plugin-browser-open-capabilities'
           export { createFixedPluginBrowserDataQuery, createFixedPluginBrowserDataService, createPluginBrowserDataCapabilities } from '../src/main/modules/plugin/host/plugin-browser-data-capabilities'
+          export { createPluginImageToolsCapabilities } from '../src/main/modules/plugin/host/plugin-image-tools-capabilities'
           export { createPluginBatchRenameFilesystemCapability } from '../src/main/modules/plugin/host/plugin-filesystem-capabilities'
           export { createPluginSnipasteProcessCapability, createFixedPluginSnipasteDiscovery, createFixedPluginSnipasteExecutor } from '../src/main/modules/plugin/host/plugin-process-capabilities'
           export { createPluginIntelligenceCapabilities } from '../src/main/modules/plugin/host/plugin-intelligence-capabilities'
@@ -191,6 +192,7 @@ async function run() {
       createFixedPluginBrowserDataQuery,
       createFixedPluginBrowserDataService,
       createPluginBrowserDataCapabilities,
+      createPluginImageToolsCapabilities,
       createFixedPluginBrowserOpenService,
       createPluginBrowserOpenCapabilities,
       createPluginBrowserOpenProcess,
@@ -447,6 +449,19 @@ async function run() {
         )
       }))
     )
+    const translationFeatures = Object.freeze(
+      JSON.parse(
+        readFileSync(path.join(officialPluginRoot, 'touch-translation', 'manifest.json'), 'utf8')
+      ).features.map((feature) => ({
+        ...feature,
+        platform: Object.fromEntries(
+          Object.entries(feature.platform).map(([platform, enable]) => [
+            platform === 'win32' ? 'win' : platform,
+            { enable, arch: [], os: [] }
+          ])
+        )
+      }))
+    )
     const simpleFeatureCapabilityIds = new Set([
       'permission.check',
       'feature.registry.add',
@@ -491,6 +506,9 @@ async function run() {
         browserProcessKills: 0,
         browserProcessStarts: 0,
         deniedPermissions: new Set(),
+        requestReplyPermissionWatchers: new Map(),
+        requestReplyPermissionDisposers: new Set(),
+        revokeRequestReplyPermission: null,
         intelligenceCalls: [],
         intelligenceWidgetStatuses: [],
         nexusCalls: [],
@@ -512,6 +530,43 @@ async function run() {
         workspaceScriptProcessKills: 0,
         workspaceScriptProcessStarts: 0,
         workspaceScriptSelections: 0
+      }
+      const requestReplyPermissions = new Set(
+        name === 'touch-quickops'
+          ? ['clipboard.read', 'clipboard.write', 'fs.read', 'fs.write']
+          : []
+      )
+      const authorizeRequestReplyCapability = (pluginName, permissionId) =>
+        pluginName === name &&
+        requestReplyPermissions.has(permissionId) &&
+        !state.deniedPermissions.has(permissionId)
+      const watchRequestReplyPermissionRevoked = (pluginName, permissionId, onRevoke) => {
+        if (pluginName !== name || !requestReplyPermissions.has(permissionId))
+          return () => undefined
+        let watchers = state.requestReplyPermissionWatchers.get(permissionId)
+        if (!watchers) {
+          watchers = new Set()
+          state.requestReplyPermissionWatchers.set(permissionId, watchers)
+        }
+        watchers.add(onRevoke)
+        let disposed = false
+        const dispose = () => {
+          if (disposed) return
+          disposed = true
+          state.requestReplyPermissionDisposers.delete(dispose)
+          watchers.delete(onRevoke)
+          if (watchers.size === 0) state.requestReplyPermissionWatchers.delete(permissionId)
+        }
+        state.requestReplyPermissionDisposers.add(dispose)
+        return dispose
+      }
+      state.revokeRequestReplyPermission = (permissionId) => {
+        state.deniedPermissions.add(permissionId)
+        for (const onRevoke of [
+          ...(state.requestReplyPermissionWatchers.get(permissionId) || [])
+        ]) {
+          onRevoke()
+        }
       }
       const featureHost = {
         async pushItems(_scope, items) {
@@ -558,7 +613,12 @@ async function run() {
         createBusinessFeatureHost: () => featureHost,
         addBusinessFeature: async () => false,
         removeBusinessFeature: async () => false,
-        listBusinessFeatures: () => (name === 'touch-intelligence' ? intelligenceFeatures : []),
+        listBusinessFeatures: () =>
+          name === 'touch-intelligence'
+            ? intelligenceFeatures
+            : name === 'touch-translation'
+              ? translationFeatures
+              : [],
         readBusinessFile: async (fileName) =>
           state.files.has(fileName)
             ? { found: true, value: state.files.get(fileName) }
@@ -686,6 +746,8 @@ async function run() {
       const requestReply = createPluginRequestReplyCapabilities({
         resolveCurrentActivation: () => activationIdentity,
         resolveHostGeneration: () => generation,
+        authorizeCapability: authorizeRequestReplyCapability,
+        watchPermissionRevoked: watchRequestReplyPermissionRevoked,
         authState: () => ({ isLoaded: true, isSignedIn: true, user: null }),
         nexus: {
           async listSnippets(request, signal) {
@@ -1400,6 +1462,66 @@ async function run() {
               }
             })
           : null
+      const imageToolsCapability =
+        name === 'touch-image'
+          ? createPluginImageToolsCapabilities({
+              activation: activationIdentity,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeRead: () => !state.deniedPermissions.has('fs.read'),
+              authorizeWrite: () => !state.deniedPermissions.has('fs.write'),
+              watchReadPermissionRevoked: (_pluginName, onRevoke) => {
+                state.revokeImageTools = onRevoke
+                return () => {
+                  if (state.revokeImageTools === onRevoke) state.revokeImageTools = null
+                }
+              },
+              watchWritePermissionRevoked: (_pluginName, onRevoke) => {
+                state.revokeImageTools = onRevoke
+                return () => {
+                  if (state.revokeImageTools === onRevoke) state.revokeImageTools = null
+                }
+              },
+              filesystem: {
+                async lstat() {
+                  throw new Error('data-url does not read a file')
+                },
+                async realpath() {
+                  throw new Error('data-url does not resolve a file')
+                },
+                async open() {
+                  return {
+                    async writeFile(data) {
+                      state.imageSavedData = Buffer.from(data)
+                    },
+                    async sync() {},
+                    async close() {}
+                  }
+                },
+                async rename(_stage, target) {
+                  state.imageSavedPath = target
+                },
+                async unlink() {}
+              },
+              nativeSaveDialog: {
+                async save(_request, _signal) {
+                  return { cancelled: false, filePath: `/tmp/tuff-image-smoke-${generation}.webp` }
+                }
+              },
+              imageRenderer: {
+                async inspect() {
+                  return { format: 'png', width: 1, height: 1 }
+                },
+                async render(_source, request) {
+                  return {
+                    data: Buffer.from(`image-smoke:${request.format}`),
+                    width: request.width || 1,
+                    height: request.height || 1
+                  }
+                }
+              }
+            })
+          : null
       const definitions = [
         ...business.definitions.filter((definition) =>
           simpleFeatureCapabilityIds.has(definition.id)
@@ -1414,6 +1536,7 @@ async function run() {
         ...(systemCapability ? systemCapability.definitions : []),
         ...(browserDataCapability ? browserDataCapability.definitions : []),
         ...(browserOpenCapability ? browserOpenCapability.definitions : []),
+        ...(imageToolsCapability ? imageToolsCapability.definitions : []),
         ...(windowManagerCapability ? windowManagerCapability.definitions : []),
         ...(windowPresetCapability ? windowPresetCapability.definitions : []),
         ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : [])
@@ -1462,6 +1585,7 @@ async function run() {
           await snipasteCapability?.close()
           await browserDataCapability?.close()
           await browserOpenCapability?.close()
+          await imageToolsCapability?.close()
           await windowManagerCapability?.close()
           await windowPresetCapability?.close()
           await workspaceScriptCapability?.close()
@@ -1475,6 +1599,7 @@ async function run() {
         snipasteCapability,
         browserDataCapability,
         browserOpenCapability,
+        imageToolsCapability,
         windowManagerCapability,
         windowPresetCapability,
         workspaceScriptCapability,
@@ -1568,6 +1693,10 @@ async function run() {
         readFileSync(path.join(officialPluginRoot, 'touch-browser-open', 'index.js'), 'utf8')
       ],
       [
+        'touch-image',
+        readFileSync(path.join(officialPluginRoot, 'touch-image', 'index.js'), 'utf8')
+      ],
+      [
         'touch-code-snippets',
         readFileSync(path.join(officialPluginRoot, 'touch-code-snippets', 'index.js'), 'utf8')
       ],
@@ -1659,6 +1788,7 @@ async function run() {
       'touch-browser-bookmarks',
       'touch-browser-data',
       'touch-browser-open',
+      'touch-image',
       'touch-dev-toolbox',
       'touch-dev-utils',
       'touch-dictation',
@@ -1745,6 +1875,68 @@ async function run() {
         .filter((runtime) => runtime.state === null)
         .map((runtime) => runtime.host.callLifecycle('onMessage', []))
     )
+    const firstBatchImage = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-image'
+    )
+    assert(firstBatchImage && firstBatchImage.imageToolsCapability)
+    const preparedImageQuery = await firstBatchImage.imageToolsCapability.prepareLifecycleQuery({
+      text: '64x64 q82',
+      inputs: [
+        {
+          type: 'image',
+          content: 'data:image/png;base64,aG9zdC1vbmx5LWltYWdl',
+          rawContent: 'must-not-reach-child',
+          thumbnail: 'must-not-reach-child'
+        }
+      ]
+    })
+    assert(/^img_[A-Za-z0-9_-]{32}$/.test(preparedImageQuery.inputs[0].content))
+    assert(
+      !/data:image|rawContent|thumbnail|host-only-image/.test(JSON.stringify(preparedImageQuery))
+    )
+    await firstBatchImage.host.callLifecycle('onFeatureTriggered', [
+      'image-tools',
+      preparedImageQuery
+    ])
+    const imageWebp = firstBatchImage.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'image-tools.save-webp')
+    )
+    assert(imageWebp)
+    assert(
+      JSON.stringify(
+        imageWebp.actions.find((action) => action.id === 'image-tools.save-webp').payload
+      ) ===
+        JSON.stringify({
+          token: preparedImageQuery.inputs[0].content,
+          format: 'webp',
+          width: 64,
+          height: 64,
+          quality: 82
+        })
+    )
+    assert(
+      !/data:image|rawContent|thumbnail|host-only-image/.test(
+        JSON.stringify(firstBatchImage.state.items)
+      )
+    )
+    const imageSaved = await firstBatchImage.host.callLifecycle('onItemAction', [imageWebp])
+    assert(imageSaved?.status === 'saved' && imageSaved?.success === true)
+    assert(firstBatchImage.state.imageSavedData?.toString() === 'image-smoke:webp')
+    const revokedImageQuery = await firstBatchImage.imageToolsCapability.prepareLifecycleQuery({
+      text: '',
+      inputs: [{ type: 'image', content: 'data:image/png;base64,aG9zdC1vbmx5LWltYWdl' }]
+    })
+    await firstBatchImage.host.callLifecycle('onFeatureTriggered', [
+      'image-tools',
+      revokedImageQuery
+    ])
+    const revokedImage = firstBatchImage.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'image-tools.save-png')
+    )
+    assert(revokedImage && typeof firstBatchImage.state.revokeImageTools === 'function')
+    firstBatchImage.state.revokeImageTools()
+    const revokedResult = await firstBatchImage.host.callLifecycle('onItemAction', [revokedImage])
+    assert(revokedResult?.status === 'blocked' && revokedResult?.reason === 'token-invalid')
     const firstBatchBrowserOpen = firstBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-browser-open'
     )
@@ -2406,10 +2598,17 @@ async function run() {
         }))
       )} responses=${JSON.stringify(firstTranslationCapabilityResults)}`
     )
+    assert(firstTranslationItem.render.custom.content === 'touch-translation::touch-translate')
+    assert(firstTranslationItem.render.custom.data.status === 'complete')
+    const firstTranslationProvider = firstTranslationItem.render.custom.data.providers.find(
+      (provider) => provider.id === 'fake-provider'
+    )
     assert(
-      firstTranslationItem.render.basic.title ===
+      firstTranslationProvider?.translatedText ===
         `fake-provider:hello translation:generation-${firstBatchTranslation.host.activation.activationGeneration}`
     )
+    assert(firstTranslationProvider?.provider === 'fake-provider')
+    assert(firstTranslationProvider?.model === 'fake-model')
     assert(
       firstBatchTranslation.state.intelligenceCalls.some(
         (call) =>
@@ -2455,6 +2654,15 @@ async function run() {
     assert(firstBatch.every((runtime) => runtime.host.state === 'closed'))
     assert(firstBatchSnipaste.state.snipasteKills === 1)
     assert(firstBatchWorkspaceScripts.state.workspaceScriptProcessKills === 1)
+    assert(
+      firstBatch
+        .filter((runtime) => runtime.state)
+        .every(
+          (runtime) =>
+            runtime.state.requestReplyPermissionWatchers.size === 0 &&
+            runtime.state.requestReplyPermissionDisposers.size === 0
+        )
+    )
     const firstBatchObservers = factory.observers.slice(
       firstBatchObserverOffset,
       firstBatchObserverOffset + firstBatch.length
@@ -2512,10 +2720,17 @@ async function run() {
       item.actions?.some((action) => action.id === 'copy-translation')
     )
     assert(secondTranslationItem)
+    assert(secondTranslationItem.render.custom.content === 'touch-translation::touch-translate')
+    assert(secondTranslationItem.render.custom.data.status === 'complete')
+    const secondTranslationProvider = secondTranslationItem.render.custom.data.providers.find(
+      (provider) => provider.id === 'fake-provider'
+    )
     assert(
-      secondTranslationItem.render.basic.title ===
+      secondTranslationProvider?.translatedText ===
         `fake-provider:hello translation:generation-${secondBatchTranslation.host.activation.activationGeneration}`
     )
+    assert(secondTranslationProvider?.provider === 'fake-provider')
+    assert(secondTranslationProvider?.model === 'fake-model')
     assert(
       secondBatchTranslation.host.activation.activationGeneration !==
         firstBatchTranslation.host.activation.activationGeneration
@@ -2762,10 +2977,23 @@ async function run() {
     const secondBatchQuickActions = secondBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-quick-actions'
     )
-    const secondSystemAction = await secondBatchQuickActions.host.callLifecycle(
+    const secondQuickActionsActivation = await secondBatchQuickActions.host.callLifecycle(
       'onFeatureTriggered',
       ['quick-action-lock-screen', { text: '' }, { id: 'quick-action-lock-screen' }]
     )
+    assert(secondQuickActionsActivation === true)
+    assert(secondBatchQuickActions.state.items.length === 1)
+    assert(JSON.stringify(secondBatchQuickActions.state.systemActions) === '[]')
+    const secondLockScreenItem = secondBatchQuickActions.state.items.find((item) =>
+      item.actions?.some(
+        (action) => action.id === 'run-action' && action.payload?.actionId === 'lock-screen'
+      )
+    )
+    assert(secondLockScreenItem)
+    const secondSystemAction = await secondBatchQuickActions.host.callLifecycle('onItemAction', [
+      secondLockScreenItem,
+      { actionId: 'run-action' }
+    ])
     assert(secondSystemAction?.status === 'started')
     assert(JSON.stringify(secondBatchQuickActions.state.systemActions) === '["lock-screen"]')
 
@@ -2953,6 +3181,15 @@ async function run() {
     assert(secondBatch.every((runtime) => runtime.host.state === 'closed'))
     assert(secondBatchSnipaste.state.snipasteKills === 1)
     assert(secondBatchWorkspaceScripts.state.workspaceScriptProcessKills === 1)
+    assert(
+      secondBatch
+        .filter((runtime) => runtime.state)
+        .every(
+          (runtime) =>
+            runtime.state.requestReplyPermissionWatchers.size === 0 &&
+            runtime.state.requestReplyPermissionDisposers.size === 0
+        )
+    )
 
     await first
       .callLifecycle('onMessage', ['hang'], { timeoutMs: 100 })

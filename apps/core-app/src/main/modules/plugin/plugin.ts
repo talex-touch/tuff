@@ -89,6 +89,11 @@ import type { PluginSystemActionCapabilities } from './host/plugin-system-capabi
 import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
 import type { PluginWindowPresetCapabilities } from './host/plugin-window-preset-capabilities'
 import type { PluginWorkspaceScriptCapabilities } from './host/plugin-workspace-script-capabilities'
+import type { PluginHostsCapabilities } from './host/plugin-hosts-capabilities'
+import type { PluginVscodeProjectsCapabilities } from './host/plugin-vscode-projects-capabilities'
+import type { PluginOrcaCapabilities } from './host/plugin-orca-capabilities'
+import type { PluginAiSessionsCapabilities } from './host/plugin-ai-sessions-capabilities'
+import type { PluginImageToolsCapabilities } from './host/plugin-image-tools-capabilities'
 import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
@@ -287,6 +292,13 @@ export interface TouchPluginRuntimeCapabilities {
   workspaceScript:
     | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
     | null
+  hosts: ((activation: PluginActivationIdentity) => PluginHostsCapabilities) | null
+  vscodeProjects:
+    | ((activation: PluginActivationIdentity) => PluginVscodeProjectsCapabilities)
+    | null
+  orca: ((activation: PluginActivationIdentity) => PluginOrcaCapabilities) | null
+  aiSessions: ((activation: PluginActivationIdentity) => PluginAiSessionsCapabilities) | null
+  imageTools: ((activation: PluginActivationIdentity) => PluginImageToolsCapabilities) | null
 }
 /**
  * A capability set with nothing installed.
@@ -305,7 +317,12 @@ export function emptyTouchPluginRuntimeCapabilities(): TouchPluginRuntimeCapabil
     intelligenceContext: null,
     windowManager: null,
     windowPreset: null,
-    workspaceScript: null
+    workspaceScript: null,
+    hosts: null,
+    vscodeProjects: null,
+    orca: null,
+    aiSessions: null,
+    imageTools: null
   }
 }
 
@@ -394,6 +411,11 @@ export class TouchPlugin implements ITouchPlugin {
   private windowManagerCapability: PluginWindowManagerCapabilities | null = null
   private windowPresetCapability: PluginWindowPresetCapabilities | null = null
   private workspaceScriptCapability: PluginWorkspaceScriptCapabilities | null = null
+  private hostsCapability: PluginHostsCapabilities | null = null
+  private vscodeProjectsCapability: PluginVscodeProjectsCapabilities | null = null
+  private orcaCapability: PluginOrcaCapabilities | null = null
+  private aiSessionsCapability: PluginAiSessionsCapabilities | null = null
+  private imageToolsCapability: PluginImageToolsCapabilities | null = null
 
   dev: IPluginDev
   name: string
@@ -762,9 +784,13 @@ export class TouchPlugin implements ITouchPlugin {
     let result: boolean | void = void 0
     try {
       await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
+      const lifecycleQuery = (await this.imageToolsCapability?.prepareLifecycleQuery(
+        query,
+        controller.signal
+      )) as TuffQuery | undefined
       result = this.pluginLifecycle?.onFeatureTriggered(
         feature.id,
-        query,
+        lifecycleQuery ?? query,
         snapshotLifecycleFeature(feature),
         controller.signal
       )
@@ -796,20 +822,30 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
 
+    this.featureControllers.get(feature.id)?.abort()
+    const controller = new AbortController()
+    this.featureControllers.set(feature.id, controller)
+
     try {
       await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
+      const lifecycleQuery = (await this.imageToolsCapability?.prepareLifecycleQuery(
+        query,
+        controller.signal
+      )) as TuffQuery | undefined
+      if (controller.signal.aborted || this.featureControllers.get(feature.id) !== controller)
+        return
       const result = this.pluginLifecycle?.onFeatureTriggered(
         feature.id,
-        query,
-        snapshotLifecycleFeature(feature)
+        lifecycleQuery ?? query,
+        snapshotLifecycleFeature(feature),
+        controller.signal
       )
-      if (isPromiseLike(result)) {
-        await result
-      }
+      if (isPromiseLike(result)) await result
     } catch (error) {
-      await this.handleRuntimeError('onFeatureTriggered', error)
+      if (!controller.signal.aborted) await this.handleRuntimeError('onFeatureTriggered', error)
     }
 
+    if (controller.signal.aborted || this.featureControllers.get(feature.id) !== controller) return
     try {
       this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query?.text ?? ''))
     } catch (error) {
@@ -1957,6 +1993,66 @@ export class TouchPlugin implements ITouchPlugin {
     return factory(activation)
   }
 
+  private createHostsCapability(
+    activation: PluginActivationIdentity
+  ): PluginHostsCapabilities | null {
+    if (!isPrivilegedPluginFor('hosts', this.name)) return null
+    const factory = TouchPlugin.capability('hosts')
+    if (!factory)
+      throw Object.assign(new Error('PLUGIN_HOSTS_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_HOSTS_CAPABILITY_UNAVAILABLE'
+      })
+    return factory(activation)
+  }
+
+  private createVscodeProjectsCapability(
+    activation: PluginActivationIdentity
+  ): PluginVscodeProjectsCapabilities | null {
+    if (!isPrivilegedPluginFor('vscodeProjects', this.name)) return null
+    const factory = TouchPlugin.capability('vscodeProjects')
+    if (!factory)
+      throw Object.assign(new Error('PLUGIN_VSCODE_PROJECTS_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_VSCODE_PROJECTS_CAPABILITY_UNAVAILABLE'
+      })
+    return factory(activation)
+  }
+
+  private createOrcaCapability(
+    activation: PluginActivationIdentity
+  ): PluginOrcaCapabilities | null {
+    if (!isPrivilegedPluginFor('orca', this.name)) return null
+    const factory = TouchPlugin.capability('orca')
+    if (!factory)
+      throw Object.assign(new Error('PLUGIN_ORCA_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_ORCA_CAPABILITY_UNAVAILABLE'
+      })
+    return factory(activation)
+  }
+
+  private createAiSessionsCapability(
+    activation: PluginActivationIdentity
+  ): PluginAiSessionsCapabilities | null {
+    if (!isPrivilegedPluginFor('aiSessions', this.name)) return null
+    const factory = TouchPlugin.capability('aiSessions')
+    if (!factory)
+      throw Object.assign(new Error('PLUGIN_AI_SESSIONS_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_AI_SESSIONS_CAPABILITY_UNAVAILABLE'
+      })
+    return factory(activation)
+  }
+
+  private createImageToolsCapability(
+    activation: PluginActivationIdentity
+  ): PluginImageToolsCapabilities | null {
+    if (!isPrivilegedPluginFor('imageTools', this.name)) return null
+    const factory = TouchPlugin.capability('imageTools')
+    if (!factory)
+      throw Object.assign(new Error('PLUGIN_IMAGE_TOOLS_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_IMAGE_TOOLS_CAPABILITY_UNAVAILABLE'
+      })
+    return factory(activation)
+  }
+
   private async closeRetainedActivationResources(): Promise<boolean> {
     let cleanupSucceeded = true
     const close = async (
@@ -1992,6 +2088,21 @@ export class TouchPlugin implements ITouchPlugin {
     })
     await close(this.workspaceScriptCapability, () => {
       this.workspaceScriptCapability = null
+    })
+    await close(this.hostsCapability, () => {
+      this.hostsCapability = null
+    })
+    await close(this.vscodeProjectsCapability, () => {
+      this.vscodeProjectsCapability = null
+    })
+    await close(this.orcaCapability, () => {
+      this.orcaCapability = null
+    })
+    await close(this.aiSessionsCapability, () => {
+      this.aiSessionsCapability = null
+    })
+    await close(this.imageToolsCapability, () => {
+      this.imageToolsCapability = null
     })
     return cleanupSucceeded
   }
@@ -2059,6 +2170,11 @@ export class TouchPlugin implements ITouchPlugin {
       const windowManagerCapability = this.createWindowManagerCapability(currentActivation)
       const windowPresetCapability = this.createWindowPresetCapability(currentActivation)
       const workspaceScriptCapability = this.createWorkspaceScriptCapability(currentActivation)
+      const hostsCapability = this.createHostsCapability(currentActivation)
+      const vscodeProjectsCapability = this.createVscodeProjectsCapability(currentActivation)
+      const orcaCapability = this.createOrcaCapability(currentActivation)
+      const aiSessionsCapability = this.createAiSessionsCapability(currentActivation)
+      const imageToolsCapability = this.createImageToolsCapability(currentActivation)
       this.batchRenameFilesystemCapability = filesystemCapability
       this.browserOpenCapability = browserOpenCapability
       this.browserDataCapability = browserDataCapability
@@ -2066,6 +2182,11 @@ export class TouchPlugin implements ITouchPlugin {
       this.windowManagerCapability = windowManagerCapability
       this.windowPresetCapability = windowPresetCapability
       this.workspaceScriptCapability = workspaceScriptCapability
+      this.hostsCapability = hostsCapability
+      this.vscodeProjectsCapability = vscodeProjectsCapability
+      this.orcaCapability = orcaCapability
+      this.aiSessionsCapability = aiSessionsCapability
+      this.imageToolsCapability = imageToolsCapability
       const closeActivationResources =
         filesystemCapability ||
         browserOpenCapability ||
@@ -2073,7 +2194,12 @@ export class TouchPlugin implements ITouchPlugin {
         snipasteProcessCapability ||
         windowManagerCapability ||
         windowPresetCapability ||
-        workspaceScriptCapability
+        workspaceScriptCapability ||
+        hostsCapability ||
+        vscodeProjectsCapability ||
+        orcaCapability ||
+        aiSessionsCapability ||
+        imageToolsCapability
           ? async (): Promise<void> => {
               const failures: unknown[] = []
               if (filesystemCapability) {
@@ -2146,6 +2272,49 @@ export class TouchPlugin implements ITouchPlugin {
                   failures.push(error)
                 }
               }
+              for (const [resource, release] of [
+                [
+                  hostsCapability,
+                  () => {
+                    if (this.hostsCapability === hostsCapability) this.hostsCapability = null
+                  }
+                ],
+                [
+                  vscodeProjectsCapability,
+                  () => {
+                    if (this.vscodeProjectsCapability === vscodeProjectsCapability)
+                      this.vscodeProjectsCapability = null
+                  }
+                ],
+                [
+                  orcaCapability,
+                  () => {
+                    if (this.orcaCapability === orcaCapability) this.orcaCapability = null
+                  }
+                ],
+                [
+                  aiSessionsCapability,
+                  () => {
+                    if (this.aiSessionsCapability === aiSessionsCapability)
+                      this.aiSessionsCapability = null
+                  }
+                ],
+                [
+                  imageToolsCapability,
+                  () => {
+                    if (this.imageToolsCapability === imageToolsCapability)
+                      this.imageToolsCapability = null
+                  }
+                ]
+              ] as const) {
+                if (!resource) continue
+                try {
+                  await resource.close()
+                  release()
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
               if (failures.length > 0) {
                 throw new AggregateError(failures, 'PLUGIN_ACTIVATION_RESOURCE_CLOSE_FAILED')
               }
@@ -2161,7 +2330,12 @@ export class TouchPlugin implements ITouchPlugin {
         ...(systemActionCapability ? systemActionCapability.definitions : []),
         ...(windowManagerCapability ? windowManagerCapability.definitions : []),
         ...(windowPresetCapability ? windowPresetCapability.definitions : []),
-        ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : [])
+        ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : []),
+        ...(hostsCapability ? hostsCapability.definitions : []),
+        ...(vscodeProjectsCapability ? vscodeProjectsCapability.definitions : []),
+        ...(orcaCapability ? orcaCapability.definitions : []),
+        ...(aiSessionsCapability ? aiSessionsCapability.definitions : []),
+        ...(imageToolsCapability ? imageToolsCapability.definitions : [])
       ])
       const capabilityAllowlist =
         this.name === 'touch-translation'

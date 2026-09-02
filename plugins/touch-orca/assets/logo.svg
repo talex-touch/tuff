@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Orca">
+  <rect width="64" height="64" rx="14" fill="#111827"/>
+  <path d="M13 38c4-15 13-23 25-23 8 0 13 4 14 10-4-3-8-4-12-3 7 2 11 7 11 14 0 8-6 14-15 14-11 0-20-5-23-12Z" fill="#f9fafb"/>
+  <path d="M18 39c4 4 10 6 17 6 7 0 11-3 11-8 0-4-2-7-6-9-3 8-10 12-22 11Z" fill="#60a5fa"/>
+  <circle cx="43" cy="25" r="2.5" fill="#111827"/>
+</svg>

@@ -17,6 +17,7 @@ import { viewCacheManager } from '../../box-tool/core-box/view-cache'
 import { installPluginContentPackageToLocalPlugin } from '../plugin-content-installer'
 import { TouchPlugin } from '../plugin'
 import { mergePackagedManifestMetadata } from '../plugin-runtime-integrity'
+import { PRIVILEGED_PLUGIN_NAMES } from '../privileged-plugins'
 import { pluginRuntimeTracker } from '../runtime/plugin-runtime-tracker'
 import { widgetManager } from '../widget/widget-manager'
 import type { PluginInstallQueue } from '../install-queue'
@@ -380,7 +381,11 @@ export function registerPluginApiTransportHandlers(
         if (isRecord(handlerContext) && isRecord(handlerContext.plugin)) {
           throw new Error('PLUGIN_UNINSTALL_HOST_ONLY')
         }
-        return manager.uninstallPlugin(normalizePluginUninstallRequest(payload))
+        const request = normalizePluginUninstallRequest(payload)
+        if (PRIVILEGED_PLUGIN_NAMES.includes(request.plugin.name)) {
+          throw new Error('PRIVILEGED_PLUGIN_UNINSTALL_DENIED')
+        }
+        return manager.uninstallPlugin(request)
       }
     )
   )

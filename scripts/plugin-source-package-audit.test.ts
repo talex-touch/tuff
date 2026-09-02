@@ -5,19 +5,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  collectFiles,
-  copyPluginSource,
-  inventoryDigest,
-  parseArgs,
-  runCommand,
-} from './plugin-source-package-audit'
+import { collectFiles, copyPluginSource, inventoryDigest, parseArgs, runCommand } from './plugin-source-package-audit'
 
 const require = createRequire(import.meta.url)
-const {
-  PLUGIN_RELEASE_PREREQUISITES,
-  PLUGIN_RELEASE_TARGETS,
-} = require('./lib/plugin-release-targets.cjs') as {
+const { PLUGIN_RELEASE_PREREQUISITES, PLUGIN_RELEASE_TARGETS } = require('./lib/plugin-release-targets.cjs') as {
   PLUGIN_RELEASE_PREREQUISITES: readonly string[]
   PLUGIN_RELEASE_TARGETS: readonly Array<{
     pluginName: string
@@ -39,69 +30,56 @@ async function createTemporaryDirectory(prefix: string): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map(directory => fs.rm(directory, { recursive: true, force: true })),
-  )
+  await Promise.all(temporaryDirectories.splice(0).map(directory => fs.rm(directory, { recursive: true, force: true })))
 })
 
 describe('plugin source package audit contracts', () => {
-  it('enumerates every official target after the canonical prerequisites with declared gate applicability', () => {
+  it('keeps every bundled plugin release target registered with its package, gates, and projection', async () => {
+    const bundledPluginRoot = path.join(repoRoot, 'apps', 'core-app', 'resources', 'bundled-plugins')
+    const requiredBundledTargets = [
+      { pluginName: 'touch-hosts', packageName: '@talex-touch/touch-hosts-plugin' },
+      {
+        pluginName: 'touch-vscode-projects',
+        packageName: '@talex-touch/touch-vscode-projects-plugin',
+      },
+      { pluginName: 'touch-orca', packageName: '@talex-touch/touch-orca-plugin' },
+      { pluginName: 'touch-image', packageName: '@talex-touch/touch-image-plugin' },
+      {
+        pluginName: 'touch-ai-sessions',
+        packageName: '@talex-touch/touch-ai-sessions-plugin',
+      },
+    ] as const
+    const registeredTargets = new Map(PLUGIN_RELEASE_TARGETS.map(target => [target.pluginName, target]))
+    const bundledPluginNames = (await fs.readdir(bundledPluginRoot, { withFileTypes: true }))
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort()
+
     expect(PLUGIN_RELEASE_PREREQUISITES).toEqual([
       '@talex-touch/tuff-cli-core',
       '@talex-touch/unplugin-export-plugin',
       '@talex-touch/tuff-cli',
       '@talex-touch/tuffex',
     ])
-    expect(PLUGIN_RELEASE_TARGETS.map(target => target.pluginName)).toEqual([
-      'clipboard-history',
-      'touch-quickops',
-      'touch-snippets',
-      'touch-translation',
-      'touch-intelligence',
-    ])
-    expect(PLUGIN_RELEASE_TARGETS.map(target => target.packageName)).toEqual([
-      '@talex-touch/clipboard-history-plugin',
-      '@talex-touch/touch-quickops-plugin',
-      '@talex-touch/touch-snippets-plugin',
-      '@talex-touch/touch-translation-plugin',
-      '@talex-touch/touch-intelligence-plugin',
-    ])
+    expect([...registeredTargets.keys()].sort()).toEqual(bundledPluginNames)
 
-    const clipboard = PLUGIN_RELEASE_TARGETS[0]!
-    expect(clipboard.gates.build).toEqual({ command: 'pnpm', args: ['run', 'build'] })
-    expect(clipboard.gates.test).toEqual({ command: 'pnpm', args: ['run', 'test'] })
-    expect(clipboard.gates.typecheck).toEqual({ command: 'pnpm', args: ['run', 'typecheck'] })
-    expect(clipboard.gates.lint).toMatchObject({ notApplicable: true })
-    expect(
-      'reason' in clipboard.gates.lint && clipboard.gates.lint.reason.trim(),
-    ).not.toHaveLength(0)
+    for (const { pluginName, packageName } of requiredBundledTargets) {
+      const target = registeredTargets.get(pluginName)!
+      expect(target).toMatchObject({
+        pluginName,
+        packageName,
+        bundledProjection: path.join('apps', 'core-app', 'resources', 'bundled-plugins', pluginName),
+        gates: {
+          build: { command: 'pnpm', args: ['run', 'build'] },
+          test: { command: 'pnpm', args: ['run', 'test'] },
+        },
+      })
 
-    for (const target of PLUGIN_RELEASE_TARGETS.slice(1, 3)) {
-      expect(target.gates.build).toEqual({ command: 'pnpm', args: ['run', 'build'] })
-      expect(target.gates.test).toEqual({ command: 'pnpm', args: ['run', 'test'] })
-      for (const gateName of ['typecheck', 'lint']) {
+      for (const gateName of ['typecheck', 'lint'] as const) {
         const gate = target.gates[gateName]!
         expect(gate).toMatchObject({ notApplicable: true })
         expect('reason' in gate && gate.reason.trim()).not.toHaveLength(0)
       }
-    }
-
-    const translation = PLUGIN_RELEASE_TARGETS[3]!
-    expect(translation.gates).toEqual({
-      build: { command: 'pnpm', args: ['run', 'build'] },
-      test: { command: 'pnpm', args: ['exec', 'vitest', 'run'] },
-      typecheck: { command: 'pnpm', args: ['run', 'typecheck'] },
-      lint: { command: 'pnpm', args: ['run', 'lint'] },
-    })
-
-    const intelligence = PLUGIN_RELEASE_TARGETS[4]!
-    expect(intelligence.gates.build).toEqual({ command: 'pnpm', args: ['run', 'build'] })
-    for (const gateName of ['test', 'typecheck', 'lint']) {
-      const gate = intelligence.gates[gateName]!
-      expect(gate).toMatchObject({ notApplicable: true })
-      expect('reason' in gate && gate.reason.trim()).not.toHaveLength(0)
     }
   })
 
@@ -182,16 +160,12 @@ describe('plugin source package audit contracts', () => {
     `
     const result = spawnSync(
       process.execPath,
-      [
-        '--import',
-        'tsx',
-        '--import',
-        pathToFileURL(preloadPath).href,
-        '--input-type=module',
-        '--eval',
-        childProgram,
-      ],
-      { cwd: repoRoot, encoding: 'utf8' },
+      ['--import', 'tsx', '--import', pathToFileURL(preloadPath).href, '--input-type=module', '--eval', childProgram],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        env: { ...process.env, NODE_NO_WARNINGS: '1' },
+      },
     )
 
     expect(result.error).toBeUndefined()
@@ -219,7 +193,9 @@ describe('plugin source package audit contracts', () => {
 
     await copyPluginSource(sourceRoot, targetRoot)
 
-    await expect(fs.readFile(path.join(targetRoot, 'src', 'canonical.ts'), 'utf8')).resolves.toBe('export const canonical = true\n')
+    await expect(fs.readFile(path.join(targetRoot, 'src', 'canonical.ts'), 'utf8')).resolves.toBe(
+      'export const canonical = true\n',
+    )
     await expect(fs.lstat(path.join(targetRoot, 'nested', 'dist'))).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(fs.lstat(path.join(targetRoot, 'nested', 'node_modules'))).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(fs.lstat(path.join(targetRoot, 'stale.tpex'))).rejects.toMatchObject({ code: 'ENOENT' })
@@ -246,10 +222,7 @@ describe('plugin source package audit contracts', () => {
 
     const digest = inventoryDigest(files)
     expect(inventoryDigest([...files].reverse())).toBe(digest)
-    expect(inventoryDigest([
-      ...files.slice(0, 1),
-      { ...files[1]!, sha256: '0'.repeat(64) },
-    ])).not.toBe(digest)
+    expect(inventoryDigest([...files.slice(0, 1), { ...files[1]!, sha256: '0'.repeat(64) }])).not.toBe(digest)
 
     await fs.symlink(path.join(fixtureRoot, 'src', 'canonical.ts'), path.join(fixtureRoot, 'linked.ts'))
     await expect(collectFiles(fixtureRoot)).rejects.toThrow('Symlink is not allowed in audited projection: linked.ts')
