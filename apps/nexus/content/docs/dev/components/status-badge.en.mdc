@@ -71,6 +71,7 @@ code: |
 - The root element uses `role="status"`; the visible `text` must describe the state without relying on color.
 - Explicit `status` takes precedence over `statusKey`.
 - `statusKey` maps `granted → success`, `denied → danger`, `notDetermined → warning`, `unsupported → muted`, and unknown keys to `info`.
+- Default icons are fixed per tone: success `i-carbon-checkmark-outline`, warning `i-carbon-warning`, danger `i-carbon-close-outline`, info `i-carbon-information`, muted `i-carbon-circle-dash`. All five belong to the same outline-circle family with one stroke weight, so no tone reads as "more selected" than another.
 - `icon` overrides the resolved tone icon.
 - `os` renders a platform icon before the tone icon; `osOnly` hides the tone icon but keeps the text.
 - Clicking the badge emits `click` with the original `MouseEvent`.
@@ -108,9 +109,10 @@ code: |
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue` confirms `role="status"`, explicit `status` precedence, `statusKey` tone mapping, OS icon mapping, `osOnly`, custom `icon`, and root click emission.
+- Source: `packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue` confirms `role="status"`, explicit `status` precedence, `statusKey` tone mapping, OS icon mapping, `osOnly`, the outline icon family, custom `icon`, and root click emission.
 - Type contracts: `packages/tuffex/packages/components/src/status-badge/src/types.ts` defines `StatusTone`, `StatusKey`, `TxOsType`, `StatusBadgeProps`, and `StatusBadgeEmits`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts` covers text/size/status rendering, key mapping, explicit status precedence, OS icon rendering, `osOnly`, custom icon, and click emission.
+- Visual contract: pill radius (`999px`), weight `500`, and a `1em` icon that scales with the text, matching `TxBadge`. The 12% fill / 32% border recipe is shared with `TxBadge`, `TxTag`, and `TxAlert`; dark-mode appearance comes from the explicit `--tx-color-success / warning / danger` definitions in the `.dark` block of `variables.scss`, not from a component-level override.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts` covers text/size/status rendering, key mapping, explicit status precedence, OS icon rendering, `osOnly`, custom icon, click emission, the default icon mapping for all five tones, and the pill radius plus `1em` icon; `__tests__/dark-semantic-tokens.test.ts` locks the explicit definition of the three semantic tokens in the `.dark` block, their `-rgb` triplets, and the dark-mode contrast floors.
 - Export: `packages/tuffex/packages/components/src/status-badge/index.ts` exports `StatusBadge`, `TxStatusBadge`, public types, and `TxStatusBadgeInstance`.
 
 ## Source

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "slider.{zh,en}.mdc must describe the pill thumb, the focus ring on the pill, and the new coverage; placement rules for the contract bullet."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "prefers-reduced-motion must still zero every transition; no hex literals in component styles."}
+{"file": ".trellis/tasks/09-01-tuffex-gallery-visual-polish/research/measurements.md", "reason": "Current three-state geometry, press-keyframe kinematics, Radio indicator recipe (the reference), and spring candidates with overshoot/reversal counts."}
+{"file": ".trellis/tasks/08-31-slider-surface-size/design.md", "reason": "The size-channel decision this task builds on (real width/height, contain: layout) and the press-bounce decision it supersedes."}

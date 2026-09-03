@@ -149,7 +149,7 @@ code: |
 | `disabled` | `boolean` | `false` | Disables the native range input and suppresses tooltip display. |
 | `showValue` | `boolean` | `false` | Renders the formatted current value beside the slider. |
 | `formatValue` | `(value: number) => string` | - | Formats the visible side value; also feeds tooltip text when `tooltipFormatter` is absent. |
-| `thumbSurface` | `boolean` | `true` | Refractive disc behind the thumb: fades in on hover, swells while dragging, blurring and saturating whatever the slider sits on. Pass `false` for a flat thumb and to skip the `backdrop-filter` layer. |
+| `thumbSurface` | `boolean` | `true` | Always-visible glass pill thumb, built to the same recipe as the sliding indicator of a Radio button group: translucent fill, hairline rim, top highlight, blurring and saturating the fill it sits over; grows slightly while dragging. The native thumb is reduced to a hit area. Pass `false` for a flat disc and to skip the `backdrop-filter` layer. |
 | `showTooltip` | `boolean` | `true` | Enables tooltip rendering when the trigger condition is met. |
 | `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | Controls when the tooltip is visible: while dragging, on hover/drag, or always. |
 | `tooltipFormatter` | `(value: number) => string` | - | Formats tooltip text independently from `formatValue`. |
@@ -186,6 +186,7 @@ code: |
 ## Interaction Contract
 
 - The rendered native range input clamps `modelValue` into the `min..max` range.
+- With `thumbSurface` (the default) the visible thumb is a persistent glass pill (`.tx-slider__surface`) and the native thumb is a hit area exactly as wide as the pill; the keyboard focus ring (`:focus-visible`, except for a drag-initiated focus) is drawn on the pill. `thumbSurface=false` returns to the flat disc, and the focus ring returns to it as well.
 - Native `input` emits `update:modelValue` with the clamped value; native `change` emits `change`.
 - `disabled` blocks value updates and suppresses tooltip rendering.
 - `formatValue` controls the visible side value and is also used for tooltip text when `tooltipFormatter` is absent.
@@ -199,17 +200,19 @@ code: |
 - Always show surrounding copy for units. Use `formatValue` / `tooltipFormatter` for `%`, `ms`, or quota units instead of adding unit text into `modelValue`.
 - Keep `min`, `max`, and `step` stable while the user is dragging; changing range math mid-drag can make the thumb jump.
 - Use `tooltipTilt` / jelly motion for exploratory tuning surfaces, not dense enterprise forms where motion may distract.
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
-- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, global pointer-listener cleanup, and the refractive slab's size channel (a distinct extent per state, a radius and rim that no longer scale with it, and a press bounce that lands back on the base transform).
-
-<TuffDocSourceLink />
+- Resize the pill through `--tx-slider-surface-width` / `--tx-slider-surface-size`, not by overriding `--tx-slider-thumb-size` on its own: on the default path it follows the pill width, and shrinking it alone leaves the hit area narrower than the pill and pushes the pill past the track ends. To remove the thumb entirely, pass `thumbSurface=false` first and zero it there.
 
 ## Review Notes
 
 - Source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
 - Screenshot: `.codex-screenshots/nexus-slider-release-policy-demo-playwright-2026-05-28.png`.
+- Thumb (2026-09-01): the resting state is the persistent glass pill, on the recipe of the `TxRadioGroup type="button"` indicator; the press bounce is one spring transition (stiffness 560 / damping 34, about 3% overshoot, settled at 362ms) compiled to a static `linear()` inside an `@supports` branch, with a non-overshooting ease-out fallback where `linear()` is unsupported; hover in and out ride a separate short ease-out and never bounce. The replaced design was "white disc + refractive slab fading in on hover + four-keyframe press bounce": two objects taking turns, with the velocity reversing at every keyframe boundary, which was the root of the earlier roughness.
 - Recommendation: sliders should own continuous thresholds only; release traffic, quota ratios, and sampling rates fit here, while risk tiers should use `TxSegmentedSlider`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
+- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, global pointer-listener cleanup, and the pill thumb (rest and hover share one size, drag grows it by at most 1.10×, radius and rim never scale with state, the hit width equals the pill width, the focus ring is appended to the pill's shadow list, no keyframes or disc dissolve remain, and the spring-compiled `linear()` curve is locked verbatim to the `resolveTransition` output).
+
+<TuffDocSourceLink />

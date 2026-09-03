@@ -320,6 +320,29 @@
   // `--tx-color-primary` is the same `#409eff` as light, so the same ink and the same 2.78:1.
   --tx-color-on-primary: #ffffff;
 
+  /**
+   * Dark-mode semantic hues. Until 2026-09 these were not defined here and inherited the
+   * `:root` light values (`#67c23a / #e6a23c / #f56c6c`), which are mid-saturation colours
+   * tuned for a white page: mixed at 12% / 32% onto `#141414` (the pill-family recipe shared
+   * by TxStatusBadge / TxBadge / TxTag / TxAlert) they gave olive / ochre / maroon fills and a
+   * hard dark hairline. The high-contrast dark mixin has always carried its own three.
+   *
+   * Tailwind-400 hues sit one step lighter than the light values without reaching the
+   * high-contrast pastels (`#86efac` etc. put white ink at 1.8:1 on a solid fill).
+   * Measured on `#141414` page / `#1d1e1f` overlay / as a solid fill under white ink:
+   *   success `#4ade80`  10.57 : 1  /  9.58 : 1  /  1.74 : 1  (was 8.21 / 7.44 / 2.24)
+   *   warning `#fbbf24`  11.04 : 1  / 10.00 : 1  /  1.67 : 1  (was 8.42 / 7.63 / 2.19)
+   *   danger  `#f87171`   6.66 : 1  /  6.04 : 1  /  2.77 : 1  (was 6.35 / 5.76 / 2.90)
+   * Red cannot clear 7:1 as ink here without pushing white ink on the solid
+   * `TxToolConfirmation .is-dangerous` button below 2.6:1, so danger stays just under AAA;
+   * white ink on a solid success / warning fill was already failing AA and is not a
+   * supported pairing (TxStep, TxTabBar badge — see those files).
+   * `status-badge/__tests__/dark-semantic-tokens.test.ts` locks the invariants.
+   */
+  --tx-color-success: #4ade80;
+  --tx-color-warning: #fbbf24;
+  --tx-color-danger: #f87171;
+
   --tx-text-color-primary: #e5eaf3;
   --tx-text-color-regular: #cfd3dc;
   --tx-text-color-secondary: #a3a6ad;
@@ -337,9 +360,17 @@
   --tx-fill-color-darker: #3a3a3a;
   --tx-fill-color-blank: transparent;
 
-  --tx-color-danger-light-5: #a43c3c;
-  --tx-color-danger-light-7: #7f2d2d;
-  --tx-color-danger-light-9: #4e1f1f;
+  /**
+   * Hand-tuned dark danger ramp (not a colour-mix formula: 50 / 30 / 12 % toward black would
+   * give `#7c3939 / #4a2222 / #1e0e0e` and erase every danger hover fill). Read by the
+   * danger button hover, `--tx-color-error-light-*`, and core-app store / widget chrome.
+   * Re-anchored from the pre-2026-09 `#a43c3c / #7f2d2d / #4e1f1f` by scaling each channel
+   * with the new-over-old danger base (`#f87171` / `#f56c6c`), which keeps the ladder's
+   * contrast against `#141414` (2.99 / 2.09 / 1.37).
+   */
+  --tx-color-danger-light-5: #a63f3f;
+  --tx-color-danger-light-7: #812f2f;
+  --tx-color-danger-light-9: #4f2020;
 
   --tx-bg-color: #141414;
   --tx-bg-color-page: #0a0a0a;
@@ -357,9 +388,9 @@
 
   --tx-color-white: #ffffff;
   --tx-color-primary-rgb: 64 158 255;
-  --tx-color-success-rgb: 103 194 58;
-  --tx-color-warning-rgb: 230 162 60;
-  --tx-color-danger-rgb: 245 108 108;
+  --tx-color-success-rgb: 74 222 128;
+  --tx-color-warning-rgb: 251 191 36;
+  --tx-color-danger-rgb: 248 113 113;
   --tx-color-info-rgb: 144 147 153;
 
   --tx-color-primary-light-8: color-mix(in srgb, var(--tx-color-primary) 20%, white);

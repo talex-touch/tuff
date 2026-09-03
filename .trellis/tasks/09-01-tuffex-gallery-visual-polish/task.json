@@ -1,0 +1,30 @@
+{
+  "id": "tuffex-gallery-visual-polish",
+  "name": "tuffex-gallery-visual-polish",
+  "title": "tuffex 画廊视觉三修：slider 胶囊拖钮 / progress 重设计 / status-badge 暗色",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-01",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "feat/gallery-live-specimens",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-01-slider-pill-thumb",
+    "09-01-progress-bar-redesign",
+    "09-01-status-badge-dark-tone"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
