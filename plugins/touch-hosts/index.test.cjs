@@ -93,7 +93,7 @@ function reset() {
   globalThis.plugin.feature.clearItems = async () => {
     state.items = []
   }
-  globalThis.plugin.feature.pushItems = async items => {
+  globalThis.plugin.feature.pushItems = async (items) => {
     state.items = items
   }
   globalThis.plugin.hosts = {

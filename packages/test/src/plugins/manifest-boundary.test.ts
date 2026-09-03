@@ -58,6 +58,7 @@ const EXPECTED_PLUGIN_DOC_GAPS = new Set([
   'touch-dictation',
   'touch-emoji-symbols',
   'touch-hosts',
+  'touch-image',
   'touch-orca',
   'touch-quickops',
   'touch-snipaste',
@@ -68,13 +69,13 @@ const EXPECTED_PLUGIN_DOC_GAPS = new Set([
 
 function loadOfficialManifests(): LoadedManifest[] {
   return readdirSync(pluginsRoot, { withFileTypes: true })
-    .filter(entry => {
+    .filter((entry) => {
       if (!entry.isDirectory()) {
         return false
       }
       return existsSync(join(pluginsRoot.pathname, entry.name, 'manifest.json'))
     })
-    .map(entry => {
+    .map((entry) => {
       const manifestPath = join(pluginsRoot.pathname, entry.name, 'manifest.json')
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PluginManifest
       return {
@@ -87,13 +88,13 @@ function loadOfficialManifests(): LoadedManifest[] {
 
 function loadOfficialPluginPackages(): LoadedPluginPackage[] {
   return readdirSync(pluginsRoot, { withFileTypes: true })
-    .filter(entry => {
+    .filter((entry) => {
       if (!entry.isDirectory()) {
         return false
       }
       return existsSync(join(pluginsRoot.pathname, entry.name, 'package.json'))
     })
-    .map(entry => {
+    .map((entry) => {
       const packagePath = join(pluginsRoot.pathname, entry.name, 'package.json')
       const packageJson = JSON.parse(readFileSync(packagePath, 'utf8')) as PluginPackageJson
       return {
@@ -119,8 +120,8 @@ function pluginDocSlug(dirName: string): string {
 function hasLocalizedPluginDocs(dirName: string): boolean {
   const slug = pluginDocSlug(dirName)
   return (
-    existsSync(join(pluginDocsRoot.pathname, `${slug}.zh.mdc`)) &&
-    existsSync(join(pluginDocsRoot.pathname, `${slug}.en.mdc`))
+    existsSync(join(pluginDocsRoot.pathname, `${slug}.zh.mdc`))
+    && existsSync(join(pluginDocsRoot.pathname, `${slug}.en.mdc`))
   )
 }
 
@@ -172,12 +173,13 @@ describe('official plugin manifest trust boundary', () => {
       .filter(({ manifest }) => manifest.sdkapi === SdkApi.V260713)
       .map(({ manifest }) => manifest.name)
 
-    // Clipboard History and the four newly manifested plugins consume the current SDK marker.
+    // Clipboard History and the five newly manifested plugins consume the current SDK marker.
     // Other migrated plugins stay on the 260713 localization baseline until they use a newer API.
     expect(currentMarkerPlugins).toEqual([
       'clipboard-history',
       'touch-ai-sessions',
       'touch-hosts',
+      'touch-image',
       'touch-orca',
       'touch-vscode-projects',
     ])

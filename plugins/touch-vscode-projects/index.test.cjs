@@ -187,7 +187,7 @@ test('preserves token-expired from the host open result', async () => {
 
 test('destroy invalidates every issued project token', async () => {
   opened.length = 0
-  globalThis.plugin.vscodeProjects.open = async token => {
+  globalThis.plugin.vscodeProjects.open = async (token) => {
     opened.push(token)
     return { status: 'started' }
   }

@@ -1,17 +1,19 @@
-import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { NetworkRequestOptions, NetworkResponse } from '@talex-touch/utils/network'
+import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
-import { issuePluginSecurityContext } from '@talex-touch/utils/transport/security/plugin-identity'
+import type {
+  PluginBusinessCapabilityOptions,
+  PluginBusinessFeatureHost,
+  PluginBusinessItemDto,
+  PluginBusinessPlugin
+} from './plugin-business-capabilities'
 import fs from 'node:fs'
 import path from 'node:path'
+import { issuePluginSecurityContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPluginBusinessCapabilities,
-  pluginBusinessSecretPrefix,
-  type PluginBusinessCapabilityOptions,
-  type PluginBusinessFeatureHost,
-  type PluginBusinessItemDto,
-  type PluginBusinessPlugin
+  pluginBusinessSecretPrefix
 } from './plugin-business-capabilities'
 import { PluginHostCapabilityError, PluginHostCapabilityRegistry } from './plugin-host-capabilities'
 
@@ -690,7 +692,7 @@ describe('plugin business capability adapters', () => {
     const fixture = createFixture()
     const { registry } = createRegistry(fixture)
 
-    const sparseItems = new Array(2)
+    const sparseItems = Array.from({ length: 2 })
     sparseItems[1] = {
       id: 'sparse',
       source: { type: 'plugin', id: 'plugin-features' },
@@ -1365,12 +1367,14 @@ describe('plugin business capability adapters', () => {
     ).resolves.toEqual({ ok: true })
     expect(fixture.featureHost.pushItems).toHaveBeenCalledWith(
       'active-feature',
-      [expect.objectContaining({
-        id: 'relative-icon-item',
-        render: expect.objectContaining({
-          basic: expect.objectContaining({ icon: { type: 'file', value: 'assets/logo.svg' } })
+      [
+        expect.objectContaining({
+          id: 'relative-icon-item',
+          render: expect.objectContaining({
+            basic: expect.objectContaining({ icon: { type: 'file', value: 'assets/logo.svg' } })
+          })
         })
-      })],
+      ],
       expect.any(AbortSignal),
       expect.any(Array)
     )
@@ -1382,7 +1386,16 @@ describe('plugin business capability adapters', () => {
       await expect(
         registry.dispatch('feature.items.push', {
           scope: 'active-feature',
-          items: [{ ...item, id: `invalid-${value}`, render: { ...item.render, basic: { ...item.render.basic, icon: { type: 'file', value } } } }]
+          items: [
+            {
+              ...item,
+              id: `invalid-${value}`,
+              render: {
+                ...item.render,
+                basic: { ...item.render.basic, icon: { type: 'file', value } }
+              }
+            }
+          ]
         })
       ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
     }
