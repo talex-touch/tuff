@@ -304,6 +304,7 @@ vi.mock('fs-extra', () => ({
       return {
         dev: Number(real.dev),
         ino: Number(real.ino),
+        birthtimeMs: Number(real.birthtimeMs),
         isDirectory: () => real.isDirectory(),
         isFile: () => real.isFile()
       }
