@@ -44,6 +44,7 @@ import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
+import { getLocale } from '../utils/i18n-helper'
 import { windowManager } from './box-tool/core-box/window'
 import {
   createIneligibleClipboardFreshnessState,
@@ -224,6 +225,7 @@ export class ClipboardModule extends BaseModule {
     getDatabase: () => this.db,
     getCachedItemById: (clipboardId) => this.historyPersistence.getCachedItemById(clipboardId),
     getActiveAppSnapshot: () => this.getActiveAppSnapshot(),
+    getAppLanguageHint: () => getLocale(),
     getLatestGeneration: () => this.clipboardStageBGeneration,
     enqueueOcr: async (job) => {
       await ocrService.enqueueFromClipboard(job)

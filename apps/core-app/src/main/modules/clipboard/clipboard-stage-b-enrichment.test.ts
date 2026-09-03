@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
 import {
   ClipboardStageBEnrichment,
   buildActiveAppSourcePatch,
@@ -26,10 +27,14 @@ function createJob(overrides: Partial<ClipboardStageBJob> = {}): ClipboardStageB
 }
 
 function createDb() {
+  let persistedMetadata: string | undefined
   const where = vi.fn(async () => undefined)
-  const set = vi.fn(() => ({ where }))
+  const set = vi.fn((values: { metadata?: string }) => {
+    persistedMetadata = values.metadata
+    return { where }
+  })
   const update = vi.fn(() => ({ set }))
-  return { update, set, where }
+  return { update, set, where, getPersistedMetadata: () => persistedMetadata }
 }
 
 describe('clipboard-stage-b-enrichment', () => {
@@ -37,59 +42,66 @@ describe('clipboard-stage-b-enrichment', () => {
     vi.clearAllMocks()
   })
 
-  it('builds source patch from active app metadata', () => {
-    expect(
-      buildActiveAppSourcePatch(
-        {
-          bundleId: 'com.demo.app',
-          identifier: 'demo',
-          displayName: 'Demo',
-          processId: 42,
-          executablePath: '/Applications/Demo.app',
-          icon: null
-        },
+  it('projects source application aliases from the semantic catalog', () => {
+    const apps = [
+      {
+        bundleId: 'com.tencent.xin',
+        displayName: '微信',
+        executablePath: '/Applications/WeChat.app'
+      },
+      {
+        bundleId: 'com.bytedance.feishu',
+        displayName: '飞书',
+        executablePath: '/Applications/Feishu.app'
+      }
+    ]
+
+    for (const app of apps) {
+      const sourceSearchTerms = resolveAppSemanticAliases({
+        name: app.displayName,
+        displayName: app.displayName,
+        bundleId: app.bundleId,
+        path: app.executablePath
+      })
+
+      const patch = buildActiveAppSourcePatch(
+        { ...app, identifier: null, processId: 42, icon: null },
         'fallback'
       )
-    ).toEqual({
-      sourceApp: 'com.demo.app',
-      patch: {
-        source: {
-          bundleId: 'com.demo.app',
-          displayName: 'Demo',
-          processId: 42,
-          executablePath: '/Applications/Demo.app',
-          icon: null
-        },
-        source_bundleId: 'com.demo.app',
-        source_displayName: 'Demo',
-        source_processId: 42,
-        source_executablePath: '/Applications/Demo.app'
-      },
-      entries: expect.arrayContaining([
-        { key: 'source_bundleId', value: 'com.demo.app' },
-        { key: 'source_processId', value: 42 }
-      ])
-    })
+
+      expect(patch.patch.source_search_terms).toEqual(sourceSearchTerms)
+      expect(patch.entries).toContainEqual({
+        key: 'source_search_terms',
+        value: sourceSearchTerms
+      })
+    }
   })
 
   it('enqueues OCR and patches source metadata when generation is current', async () => {
     const db = createDb()
+    const sourceSearchTerms = resolveAppSemanticAliases({
+      name: '微信',
+      displayName: '微信',
+      bundleId: 'com.tencent.xin',
+      path: '/Applications/WeChat.app'
+    })
     const enqueueOcr = vi.fn(async () => undefined)
     const patchCachedMeta = vi.fn()
     const updateCachedSource = vi.fn()
     const persistMetaEntriesSafely = vi.fn()
-    const withDbWrite = vi.fn(async (_label, operation) => await operation())
+    const withDbWrite = vi.fn(async (_label, operation) => await operation(db))
     const enrichment = new ClipboardStageBEnrichment({
       getDatabase: () => db as never,
       getCachedItemById: () => createJob().item,
       getActiveAppSnapshot: () => ({
-        bundleId: null,
+        bundleId: 'com.tencent.xin',
         identifier: null,
-        displayName: 'Notes',
+        displayName: '微信',
         processId: 10,
-        executablePath: '/Applications/Notes.app',
+        executablePath: '/Applications/WeChat.app',
         icon: null
       }),
+      getAppLanguageHint: () => 'zh-CN',
       getLatestGeneration: () => 1,
       enqueueOcr,
       patchCachedMeta,
@@ -104,21 +116,32 @@ describe('clipboard-stage-b-enrichment', () => {
     expect(enqueueOcr).toHaveBeenCalledWith({
       clipboardId: 7,
       item: createJob().item,
-      formats: ['text/plain']
+      formats: ['text/plain'],
+      languageHint: 'zh-CN'
     })
     expect(withDbWrite).toHaveBeenCalledWith('clipboard.stage-b.source', expect.any(Function), {
       dropPolicy: 'drop',
       maxQueueWaitMs: 10_000
     })
-    expect(updateCachedSource).toHaveBeenCalledWith(7, 'Notes')
+    expect(updateCachedSource).toHaveBeenCalledWith(7, 'com.tencent.xin')
     expect(patchCachedMeta).toHaveBeenCalledWith(
       7,
-      expect.objectContaining({ source_displayName: 'Notes' })
+      expect.objectContaining({
+        source_displayName: '微信',
+        source_search_terms: sourceSearchTerms
+      })
     )
+    expect(JSON.parse(db.getPersistedMetadata() ?? '{}')).toMatchObject({
+      source: expect.objectContaining({ displayName: '微信' }),
+      source_search_terms: sourceSearchTerms
+    })
     expect(persistMetaEntriesSafely).toHaveBeenCalledWith(
       7,
-      expect.objectContaining({ source_displayName: 'Notes' }),
-      expect.any(Array),
+      expect.objectContaining({
+        source_displayName: '微信',
+        source_search_terms: sourceSearchTerms
+      }),
+      expect.arrayContaining([{ key: 'source_search_terms', value: sourceSearchTerms }]),
       { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
     )
   })
@@ -129,6 +152,7 @@ describe('clipboard-stage-b-enrichment', () => {
       getDatabase: () => undefined,
       getCachedItemById: () => undefined,
       getActiveAppSnapshot: () => null,
+      getAppLanguageHint: () => undefined,
       getLatestGeneration: () => 2,
       enqueueOcr,
       patchCachedMeta: vi.fn(),
