@@ -63,7 +63,8 @@ import type {
   PluginActivationIdentity
 } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
-import type { PluginInjections } from './runtime/plugin-injections'
+import type { PluginBrowserDataCapabilities } from './host/plugin-browser-data-capabilities'
+import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
 import type {
   PluginBusinessDto,
   PluginBusinessFeatureHost,
@@ -72,44 +73,33 @@ import type {
   PluginBusinessItemScope,
   PluginBusinessRuntimeInfoDto
 } from './host/plugin-business-capabilities'
-import {
-  listPluginBusinessFiles,
-  readPluginBusinessFile,
-  removePluginBusinessFile,
-  writePluginBusinessFile
-} from './host/plugin-business-file-storage'
 import type { PluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
-import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
-import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
-import type { PluginBrowserDataCapabilities } from './host/plugin-browser-data-capabilities'
 import type { PluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
 import type { PluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
 import type { PluginSnipasteProcessCapability } from './host/plugin-process-capabilities'
-import type { PluginSystemActionCapabilities } from './host/plugin-system-capabilities'
-import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
-import type { PluginWindowPresetCapabilities } from './host/plugin-window-preset-capabilities'
-import type { PluginWorkspaceScriptCapabilities } from './host/plugin-workspace-script-capabilities'
-import type { PluginHostsCapabilities } from './host/plugin-hosts-capabilities'
-import type { PluginVscodeProjectsCapabilities } from './host/plugin-vscode-projects-capabilities'
-import type { PluginOrcaCapabilities } from './host/plugin-orca-capabilities'
-import type { PluginAiSessionsCapabilities } from './host/plugin-ai-sessions-capabilities'
-import type { PluginImageToolsCapabilities } from './host/plugin-image-tools-capabilities'
 import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
   PluginRuntimeSnapshotValue
 } from './host/plugin-runtime-service'
-import type { PluginHostCapability } from './host/plugin-host-wire'
+import type { PluginSystemActionCapabilities } from './host/plugin-system-capabilities'
+import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
+import type { PluginWindowPresetCapabilities } from './host/plugin-window-preset-capabilities'
+import type { PluginWorkspaceScriptCapabilities } from './host/plugin-workspace-script-capabilities'
+import type {
+  PluginClassicUtilityCapabilityBundle,
+  TouchPluginRuntimeCapabilities
+} from './plugin-runtime-capabilities'
+import type { PluginInjections } from './runtime/plugin-injections'
+import type { PluginPreludeManifestContract } from './runtime/plugin-prelude-resolver'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
-import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-
 import {
   createBoxSDK,
   createClipboardManager,
@@ -125,6 +115,7 @@ import {
   createQuickActionsSDK
 } from '@talex-touch/utils/plugin/sdk'
 import { isSearchProviderEnabledByConfig } from '@talex-touch/utils/search'
+
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   AppEvents,
@@ -132,6 +123,7 @@ import {
   PluginEvents,
   QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
+import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import {
@@ -142,13 +134,6 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { deviceIdleService } from '../../service/device-idle-service'
-import {
-  createRemovedChannelError,
-  createSafePluginClipboardApi,
-  createSafePluginDialogApi,
-  createSafePluginOpenUrl,
-  withPluginSdkapiPayload
-} from './plugin-safe-api'
 import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getStyles } from '../../utils/plugin-injection'
@@ -158,22 +143,37 @@ import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
 import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-provider-config'
 import { getNetworkService } from '../network'
-import { createPluginHttpClient } from './plugin-http-client'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
-import { validatePluginFeatureAdmission } from './plugin-feature-admission'
+import {
+  listPluginBusinessFiles,
+  readPluginBusinessFile,
+  removePluginBusinessFile,
+  writePluginBusinessFile
+} from './host/plugin-business-file-storage'
+import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
 import { isPromiseLike, PluginFeature, snapshotLifecycleFeature } from './plugin-feature'
+import { validatePluginFeatureAdmission } from './plugin-feature-admission'
+import { createPluginHttpClient } from './plugin-http-client'
+import {
+  createPluginClassicUtilityCapabilityBundle,
+  resolvePluginRuntimeCapabilityAllowlist
+} from './plugin-runtime-capabilities'
+import {
+  createRemovedChannelError,
+  createSafePluginClipboardApi,
+  createSafePluginDialogApi,
+  createSafePluginOpenUrl,
+  withPluginSdkapiPayload
+} from './plugin-safe-api'
+import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from './privileged-plugins'
 import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
 } from './runtime/plugin-prelude-compiler'
-import {
-  resolvePluginPrelude,
-  type PluginPreludeManifestContract
-} from './runtime/plugin-prelude-resolver'
+import { resolvePluginPrelude } from './runtime/plugin-prelude-resolver'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
-import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from './privileged-plugins'
 
 interface FeatureEventUtil {
   onFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
@@ -240,91 +240,9 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
 
-const TRANSLATION_RUNTIME_CAPABILITIES = Object.freeze([
-  'feature.items.push',
-  'feature.items.widget.push',
-  'feature.items.clear',
-  'clipboard.write',
-  'intelligence.invoke'
-] as const satisfies readonly PluginHostCapability[])
-
-const INTELLIGENCE_RUNTIME_CAPABILITIES = Object.freeze([
-  'permission.check',
-  'feature.registry.add',
-  'feature.registry.remove',
-  'feature.registry.list',
-  'feature.items.push',
-  'feature.items.widget.push',
-  'feature.items.clear',
-  'storage.file.read',
-  'storage.file.write',
-  'storage.file.list',
-  'clipboard.write',
-  'clipboard.copy-and-paste',
-  'intelligence.context.invoke',
-  'intelligence.stream'
-] as const satisfies readonly PluginHostCapability[])
-
 /**
  * Plugin implementation
  */
-/**
- * Everything plugin-module installs on TouchPlugin for the lifetime of one module generation.
- *
- * Held in a single slot so install and teardown are one call each. Transport keeps its own
- * slot: it is installed earlier in the module lifecycle than these are, and tests set it on
- * its own in about twenty places.
- */
-export interface TouchPluginRuntimeCapabilities {
-  runtimeService: PluginRuntimeService | null
-  snipasteProcess:
-    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
-    | null
-  systemAction: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
-  browserOpen: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
-  browserData: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
-  translation: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
-  intelligenceContext:
-    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
-    | null
-  windowManager: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
-  windowPreset: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
-  workspaceScript:
-    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
-    | null
-  hosts: ((activation: PluginActivationIdentity) => PluginHostsCapabilities) | null
-  vscodeProjects:
-    | ((activation: PluginActivationIdentity) => PluginVscodeProjectsCapabilities)
-    | null
-  orca: ((activation: PluginActivationIdentity) => PluginOrcaCapabilities) | null
-  aiSessions: ((activation: PluginActivationIdentity) => PluginAiSessionsCapabilities) | null
-  imageTools: ((activation: PluginActivationIdentity) => PluginImageToolsCapabilities) | null
-}
-/**
- * A capability set with nothing installed.
- *
- * A base for callers that only need a subset — chiefly tests. The return type is the full
- * interface, so an added capability is a compile error here rather than a silently missing key.
- */
-export function emptyTouchPluginRuntimeCapabilities(): TouchPluginRuntimeCapabilities {
-  return {
-    runtimeService: null,
-    snipasteProcess: null,
-    systemAction: null,
-    browserOpen: null,
-    browserData: null,
-    translation: null,
-    intelligenceContext: null,
-    windowManager: null,
-    windowPreset: null,
-    workspaceScript: null,
-    hosts: null,
-    vscodeProjects: null,
-    orca: null,
-    aiSessions: null,
-    imageTools: null
-  }
-}
 
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
@@ -411,11 +329,7 @@ export class TouchPlugin implements ITouchPlugin {
   private windowManagerCapability: PluginWindowManagerCapabilities | null = null
   private windowPresetCapability: PluginWindowPresetCapabilities | null = null
   private workspaceScriptCapability: PluginWorkspaceScriptCapabilities | null = null
-  private hostsCapability: PluginHostsCapabilities | null = null
-  private vscodeProjectsCapability: PluginVscodeProjectsCapabilities | null = null
-  private orcaCapability: PluginOrcaCapabilities | null = null
-  private aiSessionsCapability: PluginAiSessionsCapabilities | null = null
-  private imageToolsCapability: PluginImageToolsCapabilities | null = null
+  private classicUtilityCapabilityBundle: PluginClassicUtilityCapabilityBundle | null = null
 
   dev: IPluginDev
   name: string
@@ -448,6 +362,7 @@ export class TouchPlugin implements ITouchPlugin {
       readonly releaseTransferredItem: (id: string, item: TuffItem) => void
     }
   >()
+
   /**
    * SDK API version declared by the plugin.
    * Used for hard-cut runtime gating and permission enforcement.
@@ -784,10 +699,11 @@ export class TouchPlugin implements ITouchPlugin {
     let result: boolean | void = void 0
     try {
       await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
-      const lifecycleQuery = (await this.imageToolsCapability?.prepareLifecycleQuery(
-        query,
-        controller.signal
-      )) as TuffQuery | undefined
+      const lifecycleQuery =
+        (await this.classicUtilityCapabilityBundle?.imageTools?.prepareLifecycleQuery(
+          query,
+          controller.signal
+        )) as TuffQuery | undefined
       result = this.pluginLifecycle?.onFeatureTriggered(
         feature.id,
         lifecycleQuery ?? query,
@@ -828,10 +744,11 @@ export class TouchPlugin implements ITouchPlugin {
 
     try {
       await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
-      const lifecycleQuery = (await this.imageToolsCapability?.prepareLifecycleQuery(
-        query,
-        controller.signal
-      )) as TuffQuery | undefined
+      const lifecycleQuery =
+        (await this.classicUtilityCapabilityBundle?.imageTools?.prepareLifecycleQuery(
+          query,
+          controller.signal
+        )) as TuffQuery | undefined
       if (controller.signal.aborted || this.featureControllers.get(feature.id) !== controller)
         return
       const result = this.pluginLifecycle?.onFeatureTriggered(
@@ -1284,7 +1201,7 @@ export class TouchPlugin implements ITouchPlugin {
     let locale = 'en-US'
     try {
       const resolvedLocale = app.getLocale()
-      if (/^[A-Za-z0-9-]{2,64}$/.test(resolvedLocale)) locale = resolvedLocale
+      if (/^[A-Z0-9-]{2,64}$/i.test(resolvedLocale)) locale = resolvedLocale
     } catch {
       // A frozen fallback keeps locale lookup child-local when Electron locale is unavailable.
     }
@@ -1993,70 +1910,10 @@ export class TouchPlugin implements ITouchPlugin {
     return factory(activation)
   }
 
-  private createHostsCapability(
-    activation: PluginActivationIdentity
-  ): PluginHostsCapabilities | null {
-    if (!isPrivilegedPluginFor('hosts', this.name)) return null
-    const factory = TouchPlugin.capability('hosts')
-    if (!factory)
-      throw Object.assign(new Error('PLUGIN_HOSTS_CAPABILITY_UNAVAILABLE'), {
-        code: 'PLUGIN_HOSTS_CAPABILITY_UNAVAILABLE'
-      })
-    return factory(activation)
-  }
-
-  private createVscodeProjectsCapability(
-    activation: PluginActivationIdentity
-  ): PluginVscodeProjectsCapabilities | null {
-    if (!isPrivilegedPluginFor('vscodeProjects', this.name)) return null
-    const factory = TouchPlugin.capability('vscodeProjects')
-    if (!factory)
-      throw Object.assign(new Error('PLUGIN_VSCODE_PROJECTS_CAPABILITY_UNAVAILABLE'), {
-        code: 'PLUGIN_VSCODE_PROJECTS_CAPABILITY_UNAVAILABLE'
-      })
-    return factory(activation)
-  }
-
-  private createOrcaCapability(
-    activation: PluginActivationIdentity
-  ): PluginOrcaCapabilities | null {
-    if (!isPrivilegedPluginFor('orca', this.name)) return null
-    const factory = TouchPlugin.capability('orca')
-    if (!factory)
-      throw Object.assign(new Error('PLUGIN_ORCA_CAPABILITY_UNAVAILABLE'), {
-        code: 'PLUGIN_ORCA_CAPABILITY_UNAVAILABLE'
-      })
-    return factory(activation)
-  }
-
-  private createAiSessionsCapability(
-    activation: PluginActivationIdentity
-  ): PluginAiSessionsCapabilities | null {
-    if (!isPrivilegedPluginFor('aiSessions', this.name)) return null
-    const factory = TouchPlugin.capability('aiSessions')
-    if (!factory)
-      throw Object.assign(new Error('PLUGIN_AI_SESSIONS_CAPABILITY_UNAVAILABLE'), {
-        code: 'PLUGIN_AI_SESSIONS_CAPABILITY_UNAVAILABLE'
-      })
-    return factory(activation)
-  }
-
-  private createImageToolsCapability(
-    activation: PluginActivationIdentity
-  ): PluginImageToolsCapabilities | null {
-    if (!isPrivilegedPluginFor('imageTools', this.name)) return null
-    const factory = TouchPlugin.capability('imageTools')
-    if (!factory)
-      throw Object.assign(new Error('PLUGIN_IMAGE_TOOLS_CAPABILITY_UNAVAILABLE'), {
-        code: 'PLUGIN_IMAGE_TOOLS_CAPABILITY_UNAVAILABLE'
-      })
-    return factory(activation)
-  }
-
   private async closeRetainedActivationResources(): Promise<boolean> {
     let cleanupSucceeded = true
     const close = async (
-      resource: { close(): Promise<void> } | null,
+      resource: { close: () => Promise<void> } | null,
       release: () => void
     ): Promise<void> => {
       if (!resource) return
@@ -2089,20 +1946,8 @@ export class TouchPlugin implements ITouchPlugin {
     await close(this.workspaceScriptCapability, () => {
       this.workspaceScriptCapability = null
     })
-    await close(this.hostsCapability, () => {
-      this.hostsCapability = null
-    })
-    await close(this.vscodeProjectsCapability, () => {
-      this.vscodeProjectsCapability = null
-    })
-    await close(this.orcaCapability, () => {
-      this.orcaCapability = null
-    })
-    await close(this.aiSessionsCapability, () => {
-      this.aiSessionsCapability = null
-    })
-    await close(this.imageToolsCapability, () => {
-      this.imageToolsCapability = null
+    await close(this.classicUtilityCapabilityBundle, () => {
+      this.classicUtilityCapabilityBundle = null
     })
     return cleanupSucceeded
   }
@@ -2170,11 +2015,11 @@ export class TouchPlugin implements ITouchPlugin {
       const windowManagerCapability = this.createWindowManagerCapability(currentActivation)
       const windowPresetCapability = this.createWindowPresetCapability(currentActivation)
       const workspaceScriptCapability = this.createWorkspaceScriptCapability(currentActivation)
-      const hostsCapability = this.createHostsCapability(currentActivation)
-      const vscodeProjectsCapability = this.createVscodeProjectsCapability(currentActivation)
-      const orcaCapability = this.createOrcaCapability(currentActivation)
-      const aiSessionsCapability = this.createAiSessionsCapability(currentActivation)
-      const imageToolsCapability = this.createImageToolsCapability(currentActivation)
+      const classicUtilityCapabilities = createPluginClassicUtilityCapabilityBundle(
+        this.name,
+        currentActivation,
+        TouchPlugin._capabilities
+      )
       this.batchRenameFilesystemCapability = filesystemCapability
       this.browserOpenCapability = browserOpenCapability
       this.browserDataCapability = browserDataCapability
@@ -2182,11 +2027,7 @@ export class TouchPlugin implements ITouchPlugin {
       this.windowManagerCapability = windowManagerCapability
       this.windowPresetCapability = windowPresetCapability
       this.workspaceScriptCapability = workspaceScriptCapability
-      this.hostsCapability = hostsCapability
-      this.vscodeProjectsCapability = vscodeProjectsCapability
-      this.orcaCapability = orcaCapability
-      this.aiSessionsCapability = aiSessionsCapability
-      this.imageToolsCapability = imageToolsCapability
+      this.classicUtilityCapabilityBundle = classicUtilityCapabilities
       const closeActivationResources =
         filesystemCapability ||
         browserOpenCapability ||
@@ -2195,11 +2036,7 @@ export class TouchPlugin implements ITouchPlugin {
         windowManagerCapability ||
         windowPresetCapability ||
         workspaceScriptCapability ||
-        hostsCapability ||
-        vscodeProjectsCapability ||
-        orcaCapability ||
-        aiSessionsCapability ||
-        imageToolsCapability
+        classicUtilityCapabilities
           ? async (): Promise<void> => {
               const failures: unknown[] = []
               if (filesystemCapability) {
@@ -2272,45 +2109,11 @@ export class TouchPlugin implements ITouchPlugin {
                   failures.push(error)
                 }
               }
-              for (const [resource, release] of [
-                [
-                  hostsCapability,
-                  () => {
-                    if (this.hostsCapability === hostsCapability) this.hostsCapability = null
-                  }
-                ],
-                [
-                  vscodeProjectsCapability,
-                  () => {
-                    if (this.vscodeProjectsCapability === vscodeProjectsCapability)
-                      this.vscodeProjectsCapability = null
-                  }
-                ],
-                [
-                  orcaCapability,
-                  () => {
-                    if (this.orcaCapability === orcaCapability) this.orcaCapability = null
-                  }
-                ],
-                [
-                  aiSessionsCapability,
-                  () => {
-                    if (this.aiSessionsCapability === aiSessionsCapability)
-                      this.aiSessionsCapability = null
-                  }
-                ],
-                [
-                  imageToolsCapability,
-                  () => {
-                    if (this.imageToolsCapability === imageToolsCapability)
-                      this.imageToolsCapability = null
-                  }
-                ]
-              ] as const) {
-                if (!resource) continue
+              if (classicUtilityCapabilities) {
                 try {
-                  await resource.close()
-                  release()
+                  await classicUtilityCapabilities.close()
+                  if (this.classicUtilityCapabilityBundle === classicUtilityCapabilities)
+                    this.classicUtilityCapabilityBundle = null
                 } catch (error) {
                   failures.push(error)
                 }
@@ -2331,18 +2134,9 @@ export class TouchPlugin implements ITouchPlugin {
         ...(windowManagerCapability ? windowManagerCapability.definitions : []),
         ...(windowPresetCapability ? windowPresetCapability.definitions : []),
         ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : []),
-        ...(hostsCapability ? hostsCapability.definitions : []),
-        ...(vscodeProjectsCapability ? vscodeProjectsCapability.definitions : []),
-        ...(orcaCapability ? orcaCapability.definitions : []),
-        ...(aiSessionsCapability ? aiSessionsCapability.definitions : []),
-        ...(imageToolsCapability ? imageToolsCapability.definitions : [])
+        ...(classicUtilityCapabilities?.definitions ?? [])
       ])
-      const capabilityAllowlist =
-        this.name === 'touch-translation'
-          ? TRANSLATION_RUNTIME_CAPABILITIES
-          : isPrivilegedPluginFor('intelligenceContext', this.name)
-            ? INTELLIGENCE_RUNTIME_CAPABILITIES
-            : undefined
+      const capabilityAllowlist = resolvePluginRuntimeCapabilityAllowlist(this.name)
       const runtimeActivation = await activeRuntime.startActivation({
         activation: currentActivation,
         scriptContent,

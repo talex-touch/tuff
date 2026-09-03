@@ -1,6 +1,8 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
+import type { TouchPluginRuntimeCapabilities } from './plugin-runtime-capabilities'
 import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,15 +16,14 @@ import {
   QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
 import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
+
 import fse from 'fs-extra'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { getCoreBoxWindow } from '../box-tool/core-box'
-import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
 import { PluginRuntimeHostError } from './host/plugin-runtime-host'
-import type { TouchPluginRuntimeCapabilities } from './plugin'
-import { emptyTouchPluginRuntimeCapabilities, PLUGIN_CONFIG_MAX_SIZE, TouchPlugin } from './plugin'
+import { PLUGIN_CONFIG_MAX_SIZE, TouchPlugin } from './plugin'
+import { emptyTouchPluginRuntimeCapabilities } from './plugin-runtime-capabilities'
 import { widgetManager } from './widget/widget-manager'
 
 const permissionModuleMock = vi.hoisted(() => ({
@@ -2335,11 +2336,12 @@ describe('touchPlugin.enable', () => {
       if (!signal) throw new Error('IMAGE_PREPARE_SIGNAL_MISSING')
       prepareSignals.push(signal)
       if (prepareSignals.length === 1) return firstPrepared.promise
-      if (prepareSignals.length === 2)
+      if (prepareSignals.length === 2) {
         return Promise.resolve({
           text: 'new',
           inputs: [{ type: 'image', content: 'img_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' }]
         })
+      }
       signal.addEventListener(
         'abort',
         () => disabledPrepared.resolve({ text: 'disabled', inputs: [] }),
