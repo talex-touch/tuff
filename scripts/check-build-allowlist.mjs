@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Guards `pnpm.onlyBuiltDependencies` in the root package.json.
+ * Guards `allowBuilds` in the root pnpm-workspace.yaml.
  *
  * Allowlisting a package lets it execute code at install time, so the list has to stay
  * exactly as large as it needs to be. Two ways it rots:
@@ -21,6 +21,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from 'yaml'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STORE = path.join(ROOT, 'node_modules', '.pnpm')
@@ -71,6 +72,15 @@ function readJson(file) {
   }
 }
 
+function readYaml(file) {
+  try {
+    return parse(readFileSync(file, 'utf8'))
+  }
+  catch {
+    return null
+  }
+}
+
 /** Store directory names encode a scope as `@scope+name@version`. */
 function storeDirsFor(name) {
   if (!existsSync(STORE))
@@ -106,8 +116,10 @@ function workspaceManifests() {
     .filter(entry => entry.manifest)
 }
 
-const rootManifest = readJson(path.join(ROOT, 'package.json'))
-const allowlist = rootManifest?.pnpm?.onlyBuiltDependencies ?? []
+const workspaceConfig = readYaml(path.join(ROOT, 'pnpm-workspace.yaml'))
+const allowlist = Object.entries(workspaceConfig?.allowBuilds ?? {})
+  .filter(([, allowed]) => allowed === true)
+  .map(([name]) => name)
 const problems = []
 
 // 1. The allowlist and the reviewed table must name the same packages.
@@ -121,7 +133,7 @@ for (const name of allowlist) {
 }
 for (const name of reviewedNames) {
   if (!allowlist.includes(name)) {
-    problems.push(`${name} is documented in REVIEWED but missing from pnpm.onlyBuiltDependencies.`)
+    problems.push(`${name} is documented in REVIEWED but missing from pnpm-workspace.yaml allowBuilds.`)
   }
 }
 
@@ -167,7 +179,7 @@ if (existsSync(STORE)) {
 }
 
 if (problems.length > 0) {
-  console.error('[build-allowlist] pnpm.onlyBuiltDependencies needs attention:\n')
+  console.error('[build-allowlist] pnpm-workspace.yaml allowBuilds needs attention:\n')
   for (const problem of problems) console.error(`  - ${problem}`)
   console.error(`\n${problems.length} problem(s).`)
   process.exit(1)
