@@ -359,11 +359,9 @@ watch(
 
 <style lang="scss">
 /*
- * Indeterminate sweeps animate composited properties only — `transform`, plus
- * `opacity` on the `split` variant — and never `left` or `width`. Each
- * `::before` keeps a fixed width and `translateX` percentages are relative to
- * that width, so the coefficient is the travel distance divided by the sweep's
- * own width (a 40% sweep needs translateX(250%) to clear a 100% track).
+ * Indeterminate sweeps animate composited properties only (`transform`, plus
+ * `opacity` on `split`), never `left`/`width`. `translateX` is relative to the
+ * sweep's own fixed width, so the coefficient is travel/width (40% needs 250%).
  */
 @keyframes tx-progress-loading {
   0% {
@@ -604,14 +602,14 @@ watch(
   border-color: color-mix(in srgb, rgba(255, 255, 255, 0.62) 62%, var(--tx-border-color-light, #e4e7ed));
 }
 
-/*
- * The fill is a `background-image` now, not a flat colour. Downstream overrides
- * written as `background-color` on `.tx-progress-bar` therefore paint *behind*
- * the gradient and only show through where it is translucent — core-app's
- * `DownloadTask.vue` does exactly this. Known and left in place: those callers
- * should set `--tx-progress-fill` or pass `color` instead, which is a change on
- * their side.
- */
+// Silent comments on purpose: `/* */` in SCSS ships into every CSS bundle and
+// `audit:size` has ~200 bytes of headroom on the full-CSS budget.
+//
+// Known defect, deliberately left in place: the fill is a `background-image`
+// now, not a flat colour, so downstream overrides written as `background-color`
+// on `.tx-progress-bar` paint *behind* the gradient and only show through where
+// it is translucent. core-app's `DownloadTask.vue` does exactly this; those
+// callers should set `--tx-progress-fill` or pass `color` instead.
 .tx-progress-bar {
   position: absolute;
   display: block;
@@ -802,13 +800,11 @@ watch(
   margin: 0 6px;
 }
 
-/*
- * Known defect, deliberately left in place: at the default 5px height a 12px
- * label does not fit inside the track, so `textPlacement: 'inside'` (the
- * default) plus `showText` renders as a white smear on a hairline. The fix is
- * a different default placement — `top` or `outside` — which is an API default
- * change and out of scope for the redesign.
- */
+// Known defect, deliberately left in place: at the default 5px height a 12px
+// label does not fit inside the track, so `textPlacement: 'inside'` (the
+// default) plus `showText` renders as a white smear on a hairline. The fix is a
+// different default placement (`top` or `outside`), an API default change and
+// out of scope for the redesign.
 .tx-progress-bar__text {
   position: absolute;
   display: flex;

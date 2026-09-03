@@ -22,5 +22,9 @@
   "parent": "09-01-tuffex-gallery-visual-polish",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Nothing implementation-side. Awaiting the parent's commit and archive with the sibling tasks.",
+    "blocker": "None. Three pre-existing gaps are recorded as source comments rather than fixed: ::-moz-range-thumb has never been styled, dark --tx-focus-ring-color resolves to a ring darker than the pill it surrounds, and plugins/touch-music overrides --tx-slider-thumb-size against the old 18px disc.",
+    "evidence": "TxSlider renders one persistent glass pill (40x20 at rest, 1.08x on drag) on the Radio indicator recipe; the four press keyframes and the thumb dissolve are gone, replaced by a spring compiled to a static linear() inside an @supports branch. slider/__tests__/slider.test.ts passes 29 tests, 13 of them replayed red against git show HEAD:, and the authored curve is locked verbatim to resolveTransition({ stiffness: 560, damping: 34 })."
+  }
 }
