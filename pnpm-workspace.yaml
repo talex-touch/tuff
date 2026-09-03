@@ -80,7 +80,7 @@ catalogs:
     '@nuxtjs/color-mode': ^3.5.2
     '@nuxtjs/i18n': ^10.4.0
     '@pinia/nuxt': ^1.0.2
-    '@unocss/eslint-config': ^66.7.5
+    '@unocss/eslint-config': ^66.8.1
     '@unocss/nuxt': ^66.7.5
     '@unocss/preset-typography': ^66.7.5
     '@vite-pwa/nuxt': ^1.1.1
