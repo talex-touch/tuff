@@ -21,7 +21,8 @@ function text(value) {
 function hasControlCharacter(value) {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
-    if (code <= 0x1f || code === 0x7f) return true
+    if (code <= 0x1F || code === 0x7F)
+      return true
   }
   return false
 }
@@ -33,14 +34,16 @@ function getQueryText(query) {
 function isIPv4(value) {
   const parts = value.split('.')
   return (
-    parts.length === 4 &&
-    parts.every(part => /^\d{1,3}$/.test(part) && (part === '0' || !part.startsWith('0')) && Number(part) <= 255)
+    parts.length === 4
+    && parts.every(part => /^\d{1,3}$/.test(part) && (part === '0' || !part.startsWith('0')) && Number(part) <= 255)
   )
 }
 
 function isIPv6(value) {
-  if (value.length > MAX_ADDRESS_LENGTH || !value.includes(':') || !/^[0-9a-f:]+$/i.test(value)) return false
-  if ((value.match(/::/g) || []).length > 1) return false
+  if (value.length > MAX_ADDRESS_LENGTH || !value.includes(':') || !/^[0-9a-f:]+$/i.test(value))
+    return false
+  if ((value.match(/::/g) || []).length > 1)
+    return false
   const halves = value.split('::')
   const validGroup = group => /^[0-9a-f]{1,4}$/i.test(group)
   if (halves.length === 1) {
@@ -54,9 +57,12 @@ function isIPv6(value) {
 
 function isSafeHostname(value) {
   const hostname = text(value).toLowerCase()
-  if (!hostname || hostname.length > MAX_HOSTNAME_LENGTH || hostname === 'localhost') return false
-  if (hostname === '255.255.255.255' || hostname === '::' || hostname === '::1') return false
-  if (isIPv4(hostname) || isIPv6(hostname)) return false
+  if (!hostname || hostname.length > MAX_HOSTNAME_LENGTH || hostname === 'localhost')
+    return false
+  if (hostname === '255.255.255.255' || hostname === '::' || hostname === '::1')
+    return false
+  if (isIPv4(hostname) || isIPv6(hostname))
+    return false
   return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(
     hostname,
   )
@@ -66,13 +72,15 @@ function isSafeAddress(value) {
   const address = text(value)
   if (!address || address.length > MAX_ADDRESS_LENGTH || hasControlCharacter(address) || /\s/.test(address))
     return false
-  if (address === '0.0.0.0' || address === '255.255.255.255' || address === '::') return false
+  if (address === '0.0.0.0' || address === '255.255.255.255' || address === '::')
+    return false
   return isIPv4(address) || isIPv6(address)
 }
 
 function safeComment(value) {
   const comment = text(value)
-  if (!comment || hasControlCharacter(comment)) return ''
+  if (!comment || hasControlCharacter(comment))
+    return ''
   return comment
     .replace(/(?:~|\/|[A-Z]:\\)[^\s,;]*/gi, '[内容已隐藏]')
     .replace(/(secret|token|password|api[-_ ]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=[内容已隐藏]')
@@ -80,11 +88,13 @@ function safeComment(value) {
 }
 
 function normalizeEntry(entry) {
-  if (!entry || typeof entry !== 'object' || !isSafeHostname(entry.hostname)) return null
+  if (!entry || typeof entry !== 'object' || !isSafeHostname(entry.hostname))
+    return null
   const addresses = Array.isArray(entry.addresses)
     ? [...new Set(entry.addresses.filter(isSafeAddress).map(value => text(value)))]
     : []
-  if (addresses.length === 0) return null
+  if (addresses.length === 0)
+    return null
   return {
     hostname: text(entry.hostname).toLowerCase(),
     addresses,
@@ -99,25 +109,29 @@ function safeRevision(value) {
 
 function stripHostsPrefix(value) {
   return text(value)
-    .replace(/^(?:hosts?|hosts\s*配置|域名解析)(?:\s*[:：-]?\s*)/i, '')
+    .replace(/^(?:hosts?|hosts\s*配置|域名解析)\s*[:：-]?\s*/i, '')
     .trim()
 }
 
 function parseMutationQuery(query) {
   const input = stripHostsPrefix(getQueryText(query))
-  if (!input) return null
+  if (!input)
+    return null
   const tokens = input.split(/\s+/)
   const operation = tokens[0]?.toLowerCase()
   if (['remove', 'delete', 'rm', '删除', '移除'].includes(operation)) {
-    if (tokens.length !== 2 || !isSafeHostname(tokens[1])) return null
+    if (tokens.length !== 2 || !isSafeHostname(tokens[1]))
+      return null
     return { operation: 'remove', hostname: text(tokens[1]).toLowerCase() }
   }
   const values = ['add', 'set', 'upsert', 'update', '添加', '新增', '设置', '更新'].includes(operation)
     ? tokens.slice(1)
     : tokens
-  if (values.length !== 2 || !isSafeHostname(values[1])) return null
+  if (values.length !== 2 || !isSafeHostname(values[1]))
+    return null
   const addresses = values[0].split(',').map(text)
-  if (addresses.length === 0 || addresses.length > MAX_ADDRESSES || !addresses.every(isSafeAddress)) return null
+  if (addresses.length === 0 || addresses.length > MAX_ADDRESSES || !addresses.every(isSafeAddress))
+    return null
   return {
     operation: 'upsert',
     hostname: text(values[1]).toLowerCase(),
@@ -180,15 +194,24 @@ function hostsEntryItem(entry, revision, index) {
 
 function reasonCode(value, fallback = 'host-capability-failed') {
   const raw = text(value).toLowerCase()
-  if (/permission.*denied/.test(raw)) return 'permission-denied'
-  if (/permission.*unavailable|capability.*unavailable|unavailable/.test(raw)) return 'capability-unavailable'
-  if (/confirm.*denied|cancel/.test(raw)) return 'confirmation-denied'
-  if (/timeout/.test(raw)) return 'timeout'
-  if (/conflict|revision|changed/.test(raw)) return 'revision-conflict'
-  if (/unsupported|platform|path/.test(raw)) return 'unsupported'
-  if (/valid|malformed|address|hostname/.test(raw)) return 'invalid-entry'
-  if (/backup/.test(raw)) return 'backup-failed'
-  if (/atomic|write|permission/.test(raw)) return 'write-failed'
+  if (/permission.*denied/.test(raw))
+    return 'permission-denied'
+  if (/permission.*unavailable|capability.*unavailable|unavailable/.test(raw))
+    return 'capability-unavailable'
+  if (/confirm.*denied|cancel/.test(raw))
+    return 'confirmation-denied'
+  if (/timeout/.test(raw))
+    return 'timeout'
+  if (/conflict|revision|changed/.test(raw))
+    return 'revision-conflict'
+  if (/unsupported|platform|path/.test(raw))
+    return 'unsupported'
+  if (/valid|malformed|address|hostname/.test(raw))
+    return 'invalid-entry'
+  if (/backup/.test(raw))
+    return 'backup-failed'
+  if (/atomic|write|permission/.test(raw))
+    return 'write-failed'
   return fallback
 }
 
@@ -198,9 +221,9 @@ function reasonMessage(reason) {
       'permission-denied': '没有 Hosts 读写权限',
       'capability-unavailable': 'Hosts 能力不可用',
       'confirmation-denied': '操作已取消',
-      timeout: 'Hosts 操作超时',
+      'timeout': 'Hosts 操作超时',
       'revision-conflict': 'Hosts 已被其他操作修改，请刷新后重试',
-      unsupported: '当前平台不支持 Hosts 配置',
+      'unsupported': '当前平台不支持 Hosts 配置',
       'invalid-entry': 'Hosts 条目不符合安全规则',
       'backup-failed': '备份失败，未修改 Hosts',
       'write-failed': 'Hosts 写入失败，原文件未被替换',
@@ -229,7 +252,8 @@ function buildItem(id, title, subtitle, featureId = FEATURE_ID, actions = []) {
 }
 
 function copyPayload(payload) {
-  if (!payload || typeof payload !== 'object') return payload
+  if (!payload || typeof payload !== 'object')
+    return payload
   return {
     ...payload,
     ...(Array.isArray(payload.addresses) ? { addresses: [...payload.addresses] } : {}),
@@ -237,7 +261,8 @@ function copyPayload(payload) {
 }
 
 async function publishItems(items, generation) {
-  if (generation !== triggerGeneration) return true
+  if (generation !== triggerGeneration)
+    return true
   const nextActions = new Map()
   for (const item of items) {
     for (const action of item.actions || []) {
@@ -259,11 +284,14 @@ async function publishItems(items, generation) {
   }
   try {
     await clearItems.call(plugin.feature)
-    if (generation !== triggerGeneration) return true
+    if (generation !== triggerGeneration)
+      return true
     await pushItems.call(plugin.feature, items)
-    if (generation === triggerGeneration) issuedActions = nextActions
+    if (generation === triggerGeneration)
+      issuedActions = nextActions
     return true
-  } catch {
+  }
+  catch {
     issuedActions = new Map()
     return false
   }
@@ -277,47 +305,58 @@ function readError(error) {
 }
 
 function mutationResult(result) {
-  if (result?.status === 'started') return { externalAction: true, success: true, status: 'started' }
-  if (result?.status === 'blocked') return blocked(reasonCode(result.reason, 'confirmation-denied'))
+  if (result?.status === 'started')
+    return { externalAction: true, success: true, status: 'started' }
+  if (result?.status === 'blocked')
+    return blocked(reasonCode(result.reason, 'confirmation-denied'))
   return blocked(reasonCode(result?.reason, 'write-failed'), 'failed')
 }
 
 function samePayload(left, right) {
-  if (!left || !right || left.operation !== right.operation || left.hostname !== right.hostname) return false
-  if (left.actionToken !== right.actionToken || left.expectedRevision !== right.expectedRevision) return false
+  if (!left || !right || left.operation !== right.operation || left.hostname !== right.hostname)
+    return false
+  if (left.actionToken !== right.actionToken || left.expectedRevision !== right.expectedRevision)
+    return false
   if (left.operation === 'upsert') {
     return (
-      Array.isArray(left.addresses) &&
-      Array.isArray(right.addresses) &&
-      left.addresses.length === right.addresses.length &&
-      left.addresses.every((value, index) => value === right.addresses[index])
+      Array.isArray(left.addresses)
+      && Array.isArray(right.addresses)
+      && left.addresses.length === right.addresses.length
+      && left.addresses.every((value, index) => value === right.addresses[index])
     )
   }
   return !('addresses' in left) && !('addresses' in right)
 }
 
 function validPayload(payload, actionId) {
-  if (!payload || typeof payload !== 'object') return false
-  if (!isSafeHostname(payload.hostname) || !['upsert', 'remove'].includes(payload.operation)) return false
+  if (!payload || typeof payload !== 'object')
+    return false
+  if (!isSafeHostname(payload.hostname) || !['upsert', 'remove'].includes(payload.operation))
+    return false
   const keys = Object.keys(payload).sort().join(',')
-  const baseKeys =
-    payload.operation === 'upsert' ? 'actionToken,addresses,hostname,operation' : 'actionToken,hostname,operation'
+  const baseKeys
+    = payload.operation === 'upsert' ? 'actionToken,addresses,hostname,operation' : 'actionToken,hostname,operation'
   const allowedKeys = [...baseKeys.split(','), ...(payload.expectedRevision === undefined ? [] : ['expectedRevision'])]
     .sort()
     .join(',')
-  if (keys !== allowedKeys) return false
-  if (typeof payload.actionToken !== 'string' || !/^[0-9a-f-]{36}$/i.test(payload.actionToken)) return false
+  if (keys !== allowedKeys)
+    return false
+  if (typeof payload.actionToken !== 'string' || !/^[0-9a-f-]{36}$/i.test(payload.actionToken))
+    return false
   if (payload.operation === 'upsert') {
     if (!Array.isArray(payload.addresses) || payload.addresses.length === 0 || payload.addresses.length > MAX_ADDRESSES)
       return false
-    if (!payload.addresses.every(isSafeAddress)) return false
-  } else if ('addresses' in payload) {
+    if (!payload.addresses.every(isSafeAddress))
+      return false
+  }
+  else if ('addresses' in payload) {
     return false
   }
-  if (payload.expectedRevision !== undefined && !safeRevision(payload.expectedRevision)) return false
+  if (payload.expectedRevision !== undefined && !safeRevision(payload.expectedRevision))
+    return false
   return (
-    (actionId === UPSERT_ACTION_ID && payload.operation === 'upsert') ||
-    (actionId === REMOVE_ACTION_ID && payload.operation === 'remove')
+    (actionId === UPSERT_ACTION_ID && payload.operation === 'upsert')
+    || (actionId === REMOVE_ACTION_ID && payload.operation === 'remove')
   )
 }
 
@@ -328,7 +367,8 @@ const pluginLifecycle = {
   },
 
   async onFeatureTriggered(featureId, query) {
-    if (featureId !== FEATURE_ID) return false
+    if (featureId !== FEATURE_ID)
+      return false
     const generation = ++triggerGeneration
     const facade = plugin?.hosts
     if (!facade || typeof facade.read !== 'function') {
@@ -336,7 +376,8 @@ const pluginLifecycle = {
     }
     try {
       const snapshot = await facade.read()
-      if (generation !== triggerGeneration) return true
+      if (generation !== triggerGeneration)
+        return true
       if (snapshot?.status !== 'ready') {
         return await publishItems([readError(snapshot)], generation)
       }
@@ -370,7 +411,8 @@ const pluginLifecycle = {
         )
       }
       return await publishItems(items, generation)
-    } catch (error) {
+    }
+    catch (error) {
       return await publishItems([readError(error)], generation)
     }
   },
@@ -378,30 +420,32 @@ const pluginLifecycle = {
   async onItemAction(item, context = {}) {
     const selectedActionId = context?.actionId || item?.meta?.defaultAction || item?.actions?.[0]?.id
     if (
-      item?.source?.type !== 'plugin' ||
-      ![SOURCE_ID, PLUGIN_NAME].includes(item.source.id) ||
-      item.source.name !== PLUGIN_NAME
+      item?.source?.type !== 'plugin'
+      || ![SOURCE_ID, PLUGIN_NAME].includes(item.source.id)
+      || item.source.name !== PLUGIN_NAME
     ) {
       return blocked('invalid-item')
     }
     if (item?.meta?.pluginName !== PLUGIN_NAME || item?.meta?.featureId !== FEATURE_ID)
       return blocked('invalid-feature')
-    if (![UPSERT_ACTION_ID, REMOVE_ACTION_ID].includes(selectedActionId)) return blocked('invalid-action')
+    if (![UPSERT_ACTION_ID, REMOVE_ACTION_ID].includes(selectedActionId))
+      return blocked('invalid-action')
     const declared = item.actions?.find?.(action => action?.id === selectedActionId)
     const issued = issuedActions.get(declared?.payload?.actionToken)
     if (
-      !declared ||
-      declared.type !== 'plugin' ||
-      !issued ||
-      issued.id !== selectedActionId ||
-      issued.type !== declared.type ||
-      !samePayload(declared.payload, issued.payload) ||
-      !validPayload(declared.payload, selectedActionId)
+      !declared
+      || declared.type !== 'plugin'
+      || !issued
+      || issued.id !== selectedActionId
+      || issued.type !== declared.type
+      || !samePayload(declared.payload, issued.payload)
+      || !validPayload(declared.payload, selectedActionId)
     ) {
       return blocked('invalid-action')
     }
     const facade = plugin?.hosts
-    if (!facade || typeof facade.apply !== 'function') return blocked('capability-unavailable')
+    if (!facade || typeof facade.apply !== 'function')
+      return blocked('capability-unavailable')
     try {
       return mutationResult(
         await facade.apply({
@@ -411,7 +455,8 @@ const pluginLifecycle = {
           ...(declared.payload.expectedRevision ? { expectedRevision: declared.payload.expectedRevision } : {}),
         }),
       )
-    } catch (error) {
+    }
+    catch (error) {
       return blocked(reasonCode(error?.code || error?.reason, 'write-failed'), 'failed')
     }
   },

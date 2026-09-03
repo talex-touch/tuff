@@ -43,8 +43,8 @@ class FakeBuilder {
 
 function loadPlugin({ sessions, clipboard: clipboardFacade } = {}) {
   const state = { items: [], copied: [], clearCount: 0 }
-  const aiSessions =
-    sessions && typeof sessions.list === 'function'
+  const aiSessions
+    = sessions && typeof sessions.list === 'function'
       ? sessions
       : sessions
         ? {
@@ -55,7 +55,8 @@ function loadPlugin({ sessions, clipboard: clipboardFacade } = {}) {
         : undefined
   globalThis.TuffItemBuilder = FakeBuilder
   delete globalThis.clipboard
-  if (clipboardFacade !== undefined) globalThis.clipboard = clipboardFacade
+  if (clipboardFacade !== undefined)
+    globalThis.clipboard = clipboardFacade
   globalThis.plugin = {
     feature: {
       async clearItems() {
@@ -204,7 +205,8 @@ test('blocks copying when fresh session permissions are revoked', async () => {
     sessions: {
       async list() {
         listCalls++
-        if (listCalls === 1) return { status: 'ready', sessions: [fixture.sessions[0]] }
+        if (listCalls === 1)
+          return { status: 'ready', sessions: [fixture.sessions[0]] }
         throw Object.assign(new Error('permission revoked'), {
           code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
         })
@@ -266,17 +268,18 @@ test('blocks a deferred copy when a newer feature query invalidates its action',
   let clipboardCalls = 0
   let beginRevalidation
   let releaseRevalidation
-  const revalidationStarted = new Promise(resolve => {
+  const revalidationStarted = new Promise((resolve) => {
     beginRevalidation = resolve
   })
   const { plugin, state } = loadPlugin({
     sessions: {
       async list() {
         listCalls++
-        if (listCalls === 1) return { status: 'ready', sessions: [fixture.sessions[0]] }
+        if (listCalls === 1)
+          return { status: 'ready', sessions: [fixture.sessions[0]] }
         if (listCalls === 2) {
           beginRevalidation()
-          return new Promise(resolve => {
+          return new Promise((resolve) => {
             releaseRevalidation = resolve
           })
         }

@@ -10,7 +10,8 @@ let issuedTokens = new Set()
 let triggerGeneration = 0
 
 function text(value, limit = 256) {
-  if (typeof value !== 'string') return ''
+  if (typeof value !== 'string')
+    return ''
   const normalized = value.trim()
   return hasControlCharacter(normalized) ? '' : normalized.slice(0, limit)
 }
@@ -18,19 +19,26 @@ function text(value, limit = 256) {
 function hasControlCharacter(value) {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
-    if (code <= 0x1f || code === 0x7f) return true
+    if (code <= 0x1F || code === 0x7F)
+      return true
   }
   return false
 }
 
 function stableReason(error, fallback = 'capability-failed') {
   const code = error?.code
-  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') return 'permission-denied'
-  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') return 'permission-unavailable'
-  if (code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE') return 'capability-unavailable'
-  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED') return 'permission-request-failed'
-  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED' || code === 'PLUGIN_HOST_REQUEST_CANCELLED') return 'cancelled'
-  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') return 'timeout'
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    return 'permission-denied'
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return 'permission-unavailable'
+  if (code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return 'capability-unavailable'
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return 'permission-request-failed'
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED' || code === 'PLUGIN_HOST_REQUEST_CANCELLED')
+    return 'cancelled'
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT')
+    return 'timeout'
   return fallback
 }
 
@@ -44,10 +52,12 @@ function safeReason(value, fallback = 'degraded') {
 }
 
 function normalizeProject(project) {
-  if (!project || typeof project !== 'object' || Array.isArray(project)) return null
+  if (!project || typeof project !== 'object' || Array.isArray(project))
+    return null
   const token = text(project.token, 36)
   const label = text(project.label, 128)
-  if (!TOKEN_PATTERN.test(token) || !label || !['folder', 'workspace', 'file'].includes(project.kind)) return null
+  if (!TOKEN_PATTERN.test(token) || !label || !['folder', 'workspace', 'file'].includes(project.kind))
+    return null
   const lastOpenedAt = text(project.lastOpenedAt, 64)
   return {
     token,
@@ -91,27 +101,32 @@ function messageItem(title, subtitle) {
 }
 
 async function publish(items, generation) {
-  if (generation !== triggerGeneration) return false
+  if (generation !== triggerGeneration)
+    return false
   await plugin.feature.clearItems()
-  if (generation !== triggerGeneration) return false
+  if (generation !== triggerGeneration)
+    return false
   await plugin.feature.pushItems(items)
   return generation === triggerGeneration
 }
 const lifecycle = {
   async onFeatureTriggered(featureId = FEATURE_ID, query) {
-    if (featureId !== FEATURE_ID) return false
+    if (featureId !== FEATURE_ID)
+      return false
     const generation = ++triggerGeneration
     issuedTokens = new Set()
     const vscodeProjects = plugin?.vscodeProjects
     try {
       if (!vscodeProjects || typeof vscodeProjects.list !== 'function') {
-        if (generation !== triggerGeneration) return true
+        if (generation !== triggerGeneration)
+          return true
         issuedTokens = new Set()
         await publish([messageItem('VS Code 项目能力不可用', 'capability-unavailable')], generation)
         return true
       }
       const snapshot = await vscodeProjects.list()
-      if (generation !== triggerGeneration) return true
+      if (generation !== triggerGeneration)
+        return true
       if (!snapshot || !['ready', 'degraded', 'unsupported'].includes(snapshot.status)) {
         issuedTokens = new Set()
         await publish([messageItem('VS Code 项目读取失败', 'invalid-response')], generation)
@@ -137,8 +152,8 @@ const lifecycle = {
         .slice(0, MAX_ITEMS)
       const matched = projects.filter(
         project =>
-          (!kind || project.kind === kind) &&
-          (!needle || `${project.label} ${project.kind}`.toLowerCase().includes(needle)),
+          (!kind || project.kind === kind)
+          && (!needle || `${project.label} ${project.kind}`.toLowerCase().includes(needle)),
       )
       const nextTokens = new Set()
       const items = matched.map((project, index) => makeItem(project, index, nextTokens))
@@ -151,16 +166,20 @@ const lifecycle = {
         )
       }
       const published = await publish(items, generation)
-      if (!published) return true
+      if (!published)
+        return true
       issuedTokens = nextTokens
       return true
-    } catch (error) {
-      if (generation !== triggerGeneration) return true
+    }
+    catch (error) {
+      if (generation !== triggerGeneration)
+        return true
       issuedTokens = new Set()
       try {
         await publish([messageItem('VS Code 项目读取失败', stableReason(error))], generation)
         return true
-      } catch {
+      }
+      catch {
         return false
       }
     }
@@ -169,13 +188,13 @@ const lifecycle = {
   async onItemAction(target, context) {
     const selectedActionId = context?.actionId || target?.meta?.defaultAction || target?.actions?.[0]?.id
     if (
-      !target ||
-      typeof target !== 'object' ||
-      target.source?.type !== 'plugin' ||
-      ![SOURCE_ID, 'plugin-features'].includes(target.source.id) ||
-      target.meta?.defaultAction !== 'open' ||
-      target.meta?.featureId !== FEATURE_ID ||
-      selectedActionId !== 'open'
+      !target
+      || typeof target !== 'object'
+      || target.source?.type !== 'plugin'
+      || ![SOURCE_ID, 'plugin-features'].includes(target.source.id)
+      || target.meta?.defaultAction !== 'open'
+      || target.meta?.featureId !== FEATURE_ID
+      || selectedActionId !== 'open'
     ) {
       return
     }
@@ -183,8 +202,8 @@ const lifecycle = {
       ? target.actions.find(candidate => candidate?.id === selectedActionId && candidate?.type === 'plugin')
       : null
     const payload = action?.payload
-    const token =
-      payload && typeof payload === 'object' && !Array.isArray(payload) && Object.keys(payload).length === 1
+    const token
+      = payload && typeof payload === 'object' && !Array.isArray(payload) && Object.keys(payload).length === 1
         ? text(payload.token, 36)
         : ''
     if (!TOKEN_PATTERN.test(token) || !issuedTokens.has(token)) {
@@ -196,7 +215,8 @@ const lifecycle = {
     }
     try {
       const result = await vscodeProjects.open(token)
-      if (result?.status === 'started') return { externalAction: true, status: 'started' }
+      if (result?.status === 'started')
+        return { externalAction: true, status: 'started' }
       if (result?.status === 'blocked') {
         return { externalAction: true, status: 'blocked', reason: safeReason(result.reason, 'blocked') }
       }
@@ -204,7 +224,8 @@ const lifecycle = {
         return { externalAction: true, status: 'failed', reason: safeReason(result.reason, 'open-failed') }
       }
       return { externalAction: true, status: 'failed', reason: 'invalid-response' }
-    } catch (error) {
+    }
+    catch (error) {
       return { externalAction: true, status: 'blocked', reason: stableReason(error, 'open-failed') }
     }
   },
