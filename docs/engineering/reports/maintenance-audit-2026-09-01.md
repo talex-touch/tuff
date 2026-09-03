@@ -21,7 +21,7 @@
 
 ## 工作、文档与路线图治理
 
-- **四项长期 `in_progress` 记录没有可执行的收口边界。** `07-26-install-launch-v2-4-13-beta-23` 已 37 天未更新且 `meta.nextAction/blocker` 均为空；`08-05-skeleton-spec-rule` 与 `08-05-skeleton-primitives` 的 PRD 验收已全勾选却仍为 `in_progress`；`08-15-anchor-delay-service` 仅记录“由 owning session 覆盖”，16 天没有真实状态。应由各 owner 归档已完成项，或记录剩余验收和证据；不能继续以活跃状态占用路线图。
+- **三项长期 `in_progress` 记录没有可执行的收口边界。** `08-05-skeleton-spec-rule` 与 `08-05-skeleton-primitives` 的 PRD 验收已全勾选却仍为 `in_progress`；`08-15-anchor-delay-service` 仅记录“由 owning session 覆盖”，16 天没有真实状态。应由各 owner 归档已完成项，或记录剩余验收和证据；不能继续以活跃状态占用路线图。
 - **仍有需要人工/运行时证据的阻断任务。** Windows packaged CoreBox（#308）、macOS N→N+1 OTA、official-attested icon real-profile smoke、Windows/Linux screenshot capability、桌面视觉验收等都不能由静态检查结案。Trellis 当前共有 93 个 active records；报告只把上述没有行动边界或明确 runtime prerequisite 的项目视为需处理项，`_example` JSONL 是 sub-agent context 模板，不是失败证据。
 - **Nexus worker bundle gate 仍未接入 CI。** [#1776](https://github.com/talex-touch/tuff/issues/1776) 的中英文 doc parity 已解决并已接线；剩余 `build:analyze-worker` 仍因 gzip/chunk budget、图标预算和 `i-carbon-fingerprint-recognition` 规则/测试矛盾而无法直接接线。禁止以 `continue-on-error` 伪装为门禁。
 - **无归属的 DeepSeek Harness 工件仍待维护者处置。** [#1785](https://github.com/talex-touch/tuff/issues/1785) 的 `.dsh-plugin-hub-*` 是无仓库生成路径的第三方 clone/dump；忽略规则只隐藏 `git status`，不构成所有权或保留策略。其 owner 必须选择显式保留到可复现工作流，或自行删除。
