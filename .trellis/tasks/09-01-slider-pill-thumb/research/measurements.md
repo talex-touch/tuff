@@ -62,3 +62,16 @@ Tooltip 叠放：拖拽态 tooltip 的 `y = −28px` 与 21.59px 高的胶囊不
 
 
 > 2026-09-02 curation: the two `demo-4` elastic-tooltip page captures per theme (full page, ~600 KB each), `logs/coreapp-typecheck.log` (a build log) and the raw `pg-*.html` page dumps were dropped from the repo copy; `demos.mjs` regenerates the captures and `after/*/demos/metrics.log` keeps the measurements.
+
+## touch-music 的两处 `--tx-slider-thumb-size` 覆盖（源码推导，未实机渲染）
+
+由主会话在集成阶段补齐（实现 agent 在写这一节前被账号级 429 中断）。结论来自源码，不是渲染实测——两处都在 Electron 插件里，本轮没起 `core:dev`。
+
+| 站点 | 覆盖值 | `refreshMetrics()` 采纳？ | 胶囊宽 | 后果 |
+|---|---|---|---|---|
+| `plugins/touch-music/src/components/music/base/PlayProgressBar.vue:58` | `0px !important` | **否** — 守卫是 `Number.isFinite(size) && size > 0`，0 被忽略，`thumbSizePx` 保持初始 `ref(18)` | 40px（`--tx-slider-surface-width` 未被覆盖） | 命中区按 18px 算位置，胶囊按 40px 画：填充条终点与胶囊中心差 (40−18)/2 = **11px**，两端胶囊出轨道 11px |
+| `plugins/touch-music/src/components/music/FooterFunction.vue:89` | `10px !important` | 是 | 40px | 同理差 (40−10)/2 = **15px** |
+
+两处都还覆盖了 `--tx-slider-height` / `--tx-slider-track-height`（5px / 3px），是按旧的 18px 白圆钮写的"把圆钮缩掉/缩小"手法。胶囊路径下这个手法失效：它只缩命中区，不缩视觉。
+
+**插件侧的修法**（不在本任务范围，`TxSlider.vue` 里已有代码注释、slider 文档最佳实践里也写了）：先传 `thumbSurface=false` 回到扁平路径，再用 `--tx-slider-thumb-size` 定制圆钮尺寸；想完全无拖钮就 `thumbSurface=false` + `0px`，那条路径下 0px 同样被守卫忽略，需要改用 `opacity` / `display` 隐藏原生 thumb。

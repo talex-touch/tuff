@@ -359,10 +359,11 @@ watch(
 
 <style lang="scss">
 /*
- * Indeterminate sweeps animate `transform` only. Each `::before` keeps a fixed
- * width and `translateX` percentages are relative to that width, so the
- * coefficient is the travel distance divided by the sweep's own width
- * (a 40% sweep needs translateX(250%) to clear a 100% track).
+ * Indeterminate sweeps animate composited properties only — `transform`, plus
+ * `opacity` on the `split` variant — and never `left` or `width`. Each
+ * `::before` keeps a fixed width and `translateX` percentages are relative to
+ * that width, so the coefficient is the travel distance divided by the sweep's
+ * own width (a 40% sweep needs translateX(250%) to clear a 100% track).
  */
 @keyframes tx-progress-loading {
   0% {
@@ -793,6 +794,13 @@ watch(
   margin: 0 6px;
 }
 
+/*
+ * Known defect, deliberately left in place: at the default 5px height a 12px
+ * label does not fit inside the track, so `textPlacement: 'inside'` (the
+ * default) plus `showText` renders as a white smear on a hairline. The fix is
+ * a different default placement — `top` or `outside` — which is an API default
+ * change and out of scope for the redesign.
+ */
 .tx-progress-bar__text {
   position: absolute;
   display: flex;

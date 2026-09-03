@@ -174,6 +174,12 @@ describe('txStatusBadge', () => {
       expect(root.length).toBeGreaterThan(100)
       expect(declaration(ownDeclarations(root), 'font-size')).toBe('12px')
       expect(blockBody(root, '&--sm')).toMatch(/padding/)
+      // And the stripper really removes nested rules rather than being a no-op:
+      // the icon's `1em` lives one level down, so it must not leak into the
+      // root's own declarations, or the two font-size assertions here and below
+      // would be reading the same text.
+      expect(ownDeclarations(root)).not.toContain('1em')
+      expect(blockBody(root, '&__icon')).toContain('1em')
     })
 
     it('is a pill at TxBadge weight, not a button', () => {

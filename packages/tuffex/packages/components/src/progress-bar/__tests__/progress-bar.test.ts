@@ -364,7 +364,7 @@ describe('txProgressBar motion contract', () => {
       expect(blocks.has(name), name).toBe(true)
   })
 
-  it('animates indeterminate sweeps on transform only', () => {
+  it('animates indeterminate sweeps on composited properties, never left or width', () => {
     for (const [name, body] of keyframeBlocks(source)) {
       expect(body, name).not.toMatch(/\bleft\s*:/)
       expect(body, name).not.toMatch(/\bwidth\s*:/)

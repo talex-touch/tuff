@@ -186,7 +186,7 @@ code: |
 ## 交互契约
 
 - 原生 range 输入会把 `modelValue` 夹在 `min..max` 范围内展示。
-- `thumbSurface`（默认）下可见的拖钮是常驻的玻璃胶囊（`.tx-slider__surface`），原生 thumb 退化为与胶囊等宽的命中区；键盘焦点（`:focus-visible`，拖拽发起的聚焦除外）的焦点环画在胶囊上。`thumbSurface=false` 回到扁平圆钮，焦点环也回到圆钮。
+- `thumbSurface`（默认）下可见的拖钮是常驻的玻璃胶囊（`.tx-slider__surface`），原生 thumb 退化为与静止态胶囊等宽的命中区；键盘焦点（`:focus-visible`，拖拽发起的聚焦除外）的焦点环画在胶囊上。`thumbSurface=false` 回到扁平圆钮，焦点环也回到圆钮。
 - 原生 `input` 触发 `update:modelValue`，原生 `change` 触发 `change`。
 - `disabled` 会阻止值更新并隐藏 tooltip。
 - `formatValue` 控制右侧展示值；未传 `tooltipFormatter` 时也作为 tooltip 文本。
