@@ -83,6 +83,7 @@ export interface PluginVscodeProjectIdentityProof {
   readonly canonicalPath: string
   readonly dev: string
   readonly ino: string
+  readonly birthtimeMs: string
   readonly kind: PluginVscodeProjectKind
   readonly channel: 'stable' | 'insiders'
 }
@@ -108,6 +109,7 @@ interface ProjectIdentity {
   readonly kind: PluginVscodeProjectKind
   readonly dev: string
   readonly ino: string
+  readonly birthtimeMs: string
   readonly label: string
   readonly lastOpenedAt?: string
   readonly channel: 'stable' | 'insiders'
@@ -726,6 +728,7 @@ export function createFixedPluginVscodeProjectsService(
         kind,
         dev: String(after.dev),
         ino: String(after.ino),
+        birthtimeMs: String(after.birthtimeMs),
         label,
         lastOpenedAt: new Date(Math.min(now(), after.mtimeMs || now())).toISOString(),
         channel: candidate.channel
@@ -832,6 +835,7 @@ export function createFixedPluginVscodeProjectsService(
           !samePath(canonical, identity.canonicalPath, options.platform) ||
           String(after.dev) !== identity.dev ||
           String(after.ino) !== identity.ino ||
+          String(after.birthtimeMs) !== identity.birthtimeMs ||
           kindOf(canonical, after) !== identity.kind
         )
           throw new Error('project-replaced')
@@ -843,6 +847,7 @@ export function createFixedPluginVscodeProjectsService(
             canonicalPath: canonical,
             dev: identity.dev,
             ino: identity.ino,
+            birthtimeMs: identity.birthtimeMs,
             kind: identity.kind,
             channel: identity.channel
           })

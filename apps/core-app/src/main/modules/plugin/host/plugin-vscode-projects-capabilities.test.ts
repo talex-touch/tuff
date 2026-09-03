@@ -1,6 +1,6 @@
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
 import { issuePluginSecurityContext } from '@talex-touch/utils/transport/security/plugin-identity'
-import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -306,10 +306,28 @@ describe('filesystem.vscode-projects capability and fixed service', () => {
 
   it('rejects forged tokens and fails closed when a listed project is replaced', async () => {
     const data = await fixture()
+    let reuseListedDevAndIno = false
+    let listedProjectStats: Awaited<ReturnType<typeof stat>> | undefined
     const service = createFixedPluginVscodeProjectsService({
       platform: 'darwin',
       homeDirectory: data.home,
-      openPath: vi.fn()
+      openPath: vi.fn(),
+      filesystem: {
+        async stat(filePath) {
+          const current = await stat(filePath)
+          if (filePath !== data.project) return current
+          if (!reuseListedDevAndIno) {
+            listedProjectStats = current
+            return current
+          }
+          if (!listedProjectStats) throw new Error('project identity was not captured during list')
+          return Object.assign(Object.create(Object.getPrototypeOf(current)), current, {
+            dev: listedProjectStats.dev,
+            ino: listedProjectStats.ino,
+            birthtimeMs: Number(listedProjectStats.birthtimeMs) + 1
+          }) as typeof current
+        }
+      }
     })
     const result = await service.list(new AbortController().signal)
     const token = result.status === 'ready' ? result.projects[0]!.token : ''
@@ -317,6 +335,7 @@ describe('filesystem.vscode-projects capability and fixed service', () => {
       status: 'blocked',
       reason: 'project-missing'
     })
+    reuseListedDevAndIno = true
     await rm(data.project, { recursive: true })
     await mkdir(data.project)
     await expect(service.open(token, new AbortController().signal)).resolves.toEqual({
