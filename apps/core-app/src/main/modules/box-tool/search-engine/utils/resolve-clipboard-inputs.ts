@@ -1,9 +1,12 @@
 import type { TuffQueryInput } from '@talex-touch/utils'
-import { readFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { open } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { TuffInputType } from '@talex-touch/utils'
 import { resolveLocalFilePath } from '@talex-touch/utils/network'
 
+export const MAX_RESOLVED_CLIPBOARD_IMAGE_BYTES = 32 * 1024 * 1024
+const READ_CHUNK_BYTES = 1024 * 1024
 export interface ResolveClipboardInputsResult {
   resolvedCount: number
   clipboardIds: number[]
@@ -43,6 +46,46 @@ function resolveImageMimeType(source: string): string {
   }
 }
 
+async function readBoundedImageFile(filePath: string): Promise<Buffer | null> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    const noFollow = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
+    handle = await open(filePath, constants.O_RDONLY | noFollow)
+    const before = await handle.stat()
+    if (!before.isFile() || before.size < 1 || before.size > MAX_RESOLVED_CLIPBOARD_IMAGE_BYTES) {
+      return null
+    }
+
+    const buffer = Buffer.allocUnsafe(before.size)
+    let offset = 0
+    while (offset < buffer.byteLength) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        offset,
+        Math.min(READ_CHUNK_BYTES, buffer.byteLength - offset),
+        offset
+      )
+      if (bytesRead < 1) return null
+      offset += bytesRead
+    }
+
+    const after = await handle.stat()
+    if (
+      String(after.dev) !== String(before.dev) ||
+      String(after.ino) !== String(before.ino) ||
+      after.size !== before.size ||
+      after.mtimeMs !== before.mtimeMs
+    ) {
+      return null
+    }
+    return buffer
+  } catch {
+    return null
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
 async function resolveImageContent(source: string): Promise<string> {
   if (!source) return ''
   if (source.startsWith('data:image/')) return source
@@ -50,12 +93,8 @@ async function resolveImageContent(source: string): Promise<string> {
   const filePath = resolveLocalFilePath(source)
   if (!filePath) return ''
 
-  let buffer: Buffer
-  try {
-    buffer = await readFile(filePath)
-  } catch {
-    return ''
-  }
+  const buffer = await readBoundedImageFile(filePath)
+  if (!buffer) return ''
   return `data:${resolveImageMimeType(source)};base64,${buffer.toString('base64')}`
 }
 

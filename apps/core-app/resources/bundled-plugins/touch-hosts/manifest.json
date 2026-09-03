@@ -1,0 +1,99 @@
+{
+  "id": "com.tuffex.hosts",
+  "name": "touch-hosts",
+  "version": "0.1.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260817,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "受限 Hosts 配置预览与确认写入",
+  "main": "index.js",
+  "permissions": {
+    "required": [
+      "search.root-results",
+      "fs.read"
+    ],
+    "optional": [
+      "fs.write",
+      "system.shell"
+    ]
+  },
+  "permissionReasons": {
+    "search.root-results": "将 Hosts 配置入口推送到 CoreBox 根搜索结果",
+    "fs.read": "读取宿主受限的 Hosts 配置摘要",
+    "fs.write": "在确认后原子更新 Hosts 配置",
+    "system.shell": "由宿主执行受治理的 Hosts 写入流程"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-hosts.hosts",
+      "displayName": "Hosts 配置",
+      "featureId": "hosts",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 89,
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "hosts",
+      "name": "Hosts 配置",
+      "desc": "预览并确认更新受限 Hosts 条目",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "hosts",
+        "host",
+        "dns",
+        "域名",
+        "解析",
+        "配置"
+      ],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "hosts",
+            "host",
+            "hosts配置",
+            "hosts 配置",
+            "域名解析"
+          ]
+        }
+      ]
+    }
+  ],
+  "_files": {
+    "index.js": "sha256-d29ccdf3ced315f88cec97c2db7ae4df7b93c324ec5784bdcc8997ece12caa53",
+    "assets/logo.svg": "sha256-295727a4b0b87754ba780cf48c7cbf602f3ead4ef913eabda4e1f5fa0bb1283d"
+  },
+  "_signature": "RZSoZ/j6y8Z4Ywax5eJ21v5sPGDm3znRHlncCHg6Hmg=",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  }
+}

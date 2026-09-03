@@ -419,14 +419,14 @@ describe('PluginHostCapabilityRegistry', () => {
     expect(invoke).not.toHaveBeenCalled()
   })
 
-  it('does not trust capability errors thrown by authorization or handlers', async () => {
-    const injected = Object.assign(
+  it('preserves safe capability errors from handlers while masking authorization errors', async () => {
+    const authorizationInjected = Object.assign(
       new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'),
       { path: '/private/path' }
     )
     const authorizationRegistry = createRegistry({
       authorize: () => {
-        throw injected
+        throw authorizationInjected
       }
     })
     const authorizationError = await authorizationRegistry
@@ -437,10 +437,27 @@ describe('PluginHostCapabilityRegistry', () => {
     )
     expect(authorizationError).not.toHaveProperty('path')
 
+    for (const code of [
+      'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
+      'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE'
+    ] as const) {
+      const registry = createRegistry({
+        definition: stringEchoDefinition({
+          invoke: () => {
+            throw new PluginHostCapabilityError(code)
+          }
+        })
+      })
+
+      await expect(registry.dispatch('storage.file.read', 'value')).rejects.toEqual(
+        new PluginHostCapabilityError(code)
+      )
+    }
+
     const handlerRegistry = createRegistry({
       definition: stringEchoDefinition({
         invoke: () => {
-          throw injected
+          throw new Error('private handler failure')
         }
       })
     })

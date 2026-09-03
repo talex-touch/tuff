@@ -500,7 +500,7 @@ describe('isolated browser-data capability', () => {
         operation: 'scan',
         sources: ['history']
       })
-    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED' })
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' })
 
     const stale = await createHarness({ query: createFixedPluginBrowserDataQuery(query) })
     stale.rotate()

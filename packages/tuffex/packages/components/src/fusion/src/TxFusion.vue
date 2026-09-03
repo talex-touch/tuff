@@ -126,6 +126,16 @@ const matrixValues = computed(() => {
   display: inline-block;
 }
 
+/*
+ * Only the click trigger is a button; a hover-driven fusion is not something you
+ * press, and the role attribute already carries that distinction. `.is-disabled`
+ * needs no `not-allowed` — it sets `pointer-events: none`, so the cursor never
+ * resolves against this element in the first place.
+ */
+.tx-fusion[role='button'] {
+  cursor: pointer;
+}
+
 .tx-fusion:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
   outline-offset: 2px;

@@ -59,14 +59,16 @@ describe('QuickOps Flow and AI adapter audit', () => {
   })
 
   it('passes when Flow coverage, adapter contract, and runtime bridge signals are present', async () => {
-    const [moduleSource, flowBusSource, flowSelectorSource] = await Promise.all([
+    const [moduleSource, flowBusSource, flowSelectorSource, policySource] = await Promise.all([
       readRepoFile('apps/core-app/src/main/modules/quick-ops/index.ts'),
       readRepoFile('apps/core-app/src/main/modules/flow-bus/flow-bus.ts'),
-      readRepoFile('apps/core-app/src/renderer/src/components/flow/FlowSelector.vue')
+      readRepoFile('apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'),
+      readRepoFile('apps/core-app/src/main/modules/quick-ops/quick-ops-developer-preview.ts')
     ])
 
     const audit = createQuickOpsFlowAiAdapterAudit({
       moduleSource,
+      policySource,
       flowBusSource,
       flowSelectorSource,
       aiSources: [
@@ -115,10 +117,11 @@ describe('QuickOps Flow and AI adapter audit', () => {
   })
 
   it('fails when requireConfirm target coverage drifts', async () => {
-    const [moduleSource, flowBusSource, flowSelectorSource] = await Promise.all([
+    const [moduleSource, flowBusSource, flowSelectorSource, policySource] = await Promise.all([
       readRepoFile('apps/core-app/src/main/modules/quick-ops/index.ts'),
       readRepoFile('apps/core-app/src/main/modules/flow-bus/flow-bus.ts'),
-      readRepoFile('apps/core-app/src/renderer/src/components/flow/FlowSelector.vue')
+      readRepoFile('apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'),
+      readRepoFile('apps/core-app/src/main/modules/quick-ops/quick-ops-developer-preview.ts')
     ])
 
     const audit = createQuickOpsFlowAiAdapterAudit({
@@ -126,6 +129,7 @@ describe('QuickOps Flow and AI adapter audit', () => {
         '  requireConfirm: true,\n  capabilities: {\n    maxPayloadSize: 16 * 1024\n  }\n}\n\nconst QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET',
         '  capabilities: {\n    maxPayloadSize: 16 * 1024\n  }\n}\n\nconst QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET'
       ),
+      policySource,
       flowBusSource,
       flowSelectorSource,
       aiSources: [

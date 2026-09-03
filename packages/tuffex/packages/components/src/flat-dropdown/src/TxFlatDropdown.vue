@@ -310,6 +310,15 @@ onBeforeUnmount(() => {
 .tx-flat-dropdown {
   display: inline-flex;
   width: fit-content;
+  /*
+   * The wrapper *is* the trigger — hover, focus and click all land here, and the
+   * `#trigger` slot may be nothing more than a span of text. `cursor` inherits,
+   * so declaring it here reaches whatever the host put inside without the
+   * component having to touch slot content. `.is-disabled` needs no override: it
+   * sets `pointer-events: none`, so the cursor never resolves against this
+   * element at all.
+   */
+  cursor: pointer;
 
   &.is-disabled {
     pointer-events: none;

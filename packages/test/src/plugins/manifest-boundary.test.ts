@@ -53,13 +53,18 @@ const pluginDocsRoot = new URL('../../../../apps/nexus/content/docs/guide/featur
 const EXPECTED_PLUGIN_DOC_GAPS = new Set([
   'clipboard-history',
   'json-formatter',
+  'touch-ai-sessions',
   'touch-browser-data',
   'touch-dictation',
   'touch-emoji-symbols',
+  'touch-hosts',
+  'touch-image',
+  'touch-orca',
   'touch-quickops',
   'touch-snipaste',
   'touch-snippets',
   'touch-text-tools',
+  'touch-vscode-projects',
 ])
 
 function loadOfficialManifests(): LoadedManifest[] {
@@ -114,8 +119,10 @@ function pluginDocSlug(dirName: string): string {
 
 function hasLocalizedPluginDocs(dirName: string): boolean {
   const slug = pluginDocSlug(dirName)
-  return existsSync(join(pluginDocsRoot.pathname, `${slug}.zh.mdc`))
+  return (
+    existsSync(join(pluginDocsRoot.pathname, `${slug}.zh.mdc`))
     && existsSync(join(pluginDocsRoot.pathname, `${slug}.en.mdc`))
+  )
 }
 
 describe('official plugin manifest trust boundary', () => {
@@ -166,16 +173,21 @@ describe('official plugin manifest trust boundary', () => {
       .filter(({ manifest }) => manifest.sdkapi === SdkApi.V260713)
       .map(({ manifest }) => manifest.name)
 
-    // Clipboard History alone consumes the 260817 application-resolution facade.
+    // Clipboard History and the five newly manifested plugins consume the current SDK marker.
     // Other migrated plugins stay on the 260713 localization baseline until they use a newer API.
-    expect(currentMarkerPlugins).toEqual(['clipboard-history'])
+    expect(currentMarkerPlugins).toEqual([
+      'clipboard-history',
+      'touch-ai-sessions',
+      'touch-hosts',
+      'touch-image',
+      'touch-orca',
+      'touch-vscode-projects',
+    ])
     expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
   })
 
   it('keeps official plugin docs coverage gaps explicit', () => {
-    const actualGaps = manifests
-      .filter(({ dirName }) => !hasLocalizedPluginDocs(dirName))
-      .map(({ dirName }) => dirName)
+    const actualGaps = manifests.filter(({ dirName }) => !hasLocalizedPluginDocs(dirName)).map(({ dirName }) => dirName)
 
     expect(actualGaps).toEqual([...EXPECTED_PLUGIN_DOC_GAPS].sort())
   })
@@ -295,9 +307,11 @@ describe('official plugin manifest trust boundary', () => {
 
     expect(shellPlugins).toEqual([
       'touch-browser-open',
+      'touch-hosts',
       'touch-quick-actions',
       'touch-snipaste',
       'touch-system-actions',
+      'touch-vscode-projects',
       'touch-window-manager',
       'touch-window-presets',
       'touch-workspace-scripts',

@@ -23,9 +23,9 @@
     },
     {
       "file": "apps/core-app/src/main/modules/quick-ops/index.ts",
-      "ceiling": 2594,
+      "ceiling": 2467,
       "issue": "#339",
-      "note": "~2,999 when #339 was filed. Down 124 since, and this holds that."
+      "note": "~2,999 when #339 was filed; developer-preview extraction lowered this to 2,467."
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",

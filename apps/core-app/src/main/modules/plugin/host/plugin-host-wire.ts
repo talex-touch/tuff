@@ -47,7 +47,12 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'browser-data.scan',
   'system.browser-open',
   'system.window-presets',
-  'system.window-manager'
+  'system.window-manager',
+  'system.hosts',
+  'filesystem.vscode-projects',
+  'orchestration.orca',
+  'intelligence.sessions',
+  'media.image-tools'
 ] as const
 
 export const PLUGIN_HOST_LIFECYCLE_METHODS = [

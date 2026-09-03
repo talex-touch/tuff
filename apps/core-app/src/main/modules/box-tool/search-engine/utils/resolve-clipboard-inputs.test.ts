@@ -1,13 +1,22 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { TuffInputType } from '@talex-touch/utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveClipboardInputs } from './resolve-clipboard-inputs'
 
 const clipboardModuleMock = vi.hoisted(() => ({
   getItemById: vi.fn()
 }))
+const temporaryDirectories: string[] = []
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true }))
+  )
+})
 
 vi.mock('../../../clipboard', () => ({
   clipboardModule: clipboardModuleMock
@@ -40,6 +49,7 @@ describe('resolveClipboardInputs', () => {
 
   it('resolves clipboard image preview inputs to original image data urls', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'tuff-clipboard-image-'))
+    temporaryDirectories.push(dir)
     const imagePath = path.join(dir, 'clipboard.png')
     await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
     clipboardModuleMock.getItemById.mockResolvedValue({
@@ -70,6 +80,64 @@ describe('resolveClipboardInputs', () => {
       contentKind: 'original',
       resolvedFromClipboardId: 2
     })
+  })
+
+  it('does not read or base64 an oversized sparse clipboard original and preserves its preview', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tuff-clipboard-oversized-image-'))
+    temporaryDirectories.push(dir)
+    const imagePath = path.join(dir, 'oversized.png')
+    await writeFile(imagePath, Buffer.alloc(0))
+    await truncate(imagePath, 32 * 1024 * 1024 + 1)
+    clipboardModuleMock.getItemById.mockResolvedValue({ id: 22, type: 'image', content: imagePath })
+    const preview = 'data:image/png;base64,preview-only'
+    const inputs = [
+      {
+        type: TuffInputType.Image,
+        content: preview,
+        metadata: { clipboardId: 22, canResolveOriginal: true, contentKind: 'preview' }
+      }
+    ]
+
+    try {
+      await expect(resolveClipboardInputs(inputs)).resolves.toEqual({
+        resolvedCount: 0,
+        clipboardIds: [22]
+      })
+      expect(inputs[0]?.content).toBe(preview)
+      expect(inputs[0]?.metadata).toMatchObject({ contentKind: 'preview' })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves a sparse clipboard original immediately inside the 32 MiB limit', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'tuff-clipboard-bounded-image-'))
+    temporaryDirectories.push(dir)
+    const imagePath = path.join(dir, 'bounded.png')
+    await writeFile(imagePath, Buffer.alloc(0))
+    await truncate(imagePath, 32 * 1024 * 1024)
+    clipboardModuleMock.getItemById.mockResolvedValue({ id: 23, type: 'image', content: imagePath })
+    const inputs = [
+      {
+        type: TuffInputType.Image,
+        content: 'data:image/png;base64,preview-only',
+        metadata: { clipboardId: 23, canResolveOriginal: true, contentKind: 'preview' }
+      }
+    ]
+
+    try {
+      await expect(resolveClipboardInputs(inputs)).resolves.toEqual({
+        resolvedCount: 1,
+        clipboardIds: [23]
+      })
+      expect(inputs[0]?.content).toMatch(/^data:image\/png;base64,/)
+      expect(inputs[0]?.metadata).toMatchObject({
+        contentKind: 'original',
+        resolvedFromClipboardId: 23
+      })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('does not resolve image inputs that already carry full data urls', async () => {

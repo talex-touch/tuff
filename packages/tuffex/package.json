@@ -62,7 +62,9 @@
     "audit:vocab": "node ./scripts/audit-prop-vocabularies.mjs",
     "audit:vocab:self-test": "node ./scripts/audit-prop-vocabularies.mjs --self-test",
     "audit:size": "node ./scripts/audit-package-size.mjs",
-    "audit:size:self-test": "node ./scripts/audit-package-size.mjs --self-test"
+    "audit:size:self-test": "node ./scripts/audit-package-size.mjs --self-test",
+    "audit:cursor": "node ./scripts/audit-interactive-cursor.mjs",
+    "audit:cursor:self-test": "node ./scripts/audit-interactive-cursor.mjs --self-test"
   },
   "files": [
     "dist"

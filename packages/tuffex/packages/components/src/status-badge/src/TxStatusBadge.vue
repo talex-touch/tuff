@@ -32,13 +32,18 @@ const emit = defineEmits<StatusBadgeEmits>()
 
 /**
  * Mapping of status tones to their visual properties.
+ *
+ * The default icons are one outline "circle + glyph" family with a shared stroke weight so
+ * every tone carries the same visual mass. A filled success disc next to outlined warning /
+ * danger circles reads as "selected vs inactive", a hierarchy the badge does not have.
+ * (`i-carbon-warning-filled` is a triangle, so an all-filled family would scatter too.)
  */
 const toneMap: Record<StatusTone, ToneMeta> = {
-  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-filled' },
+  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-outline' },
   warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-warning' },
   danger: { color: 'var(--tx-color-danger)', icon: 'i-carbon-close-outline' },
   info: { color: 'var(--tx-color-primary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-minimize' },
+  muted: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-circle-dash' },
 }
 
 /**
@@ -148,26 +153,48 @@ function handleKeydown(event: KeyboardEvent): void {
 </template>
 
 <style lang="scss">
+/*
+ * A pill at TxBadge weight. The 8px radius + visible border + 600 weight it used to carry
+ * was indistinguishable from a quiet TxButton; the 999px cap and 500 weight put it back
+ * in the badge family. The 12% fill / 32% border recipe is shared with TxBadge / TxTag /
+ * TxAlert and must not drift here — dark-mode muddiness is a token problem (see the
+ * `.dark` block in style/variables.scss), not a recipe problem.
+ */
 .tx-status-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 8px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--tx-status-color, var(--tx-text-color-primary));
   background: var(--tx-status-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tx-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition: background-color 0.25s ease;
+
+  /*
+   * Keyed off the role rather than a class: `interactive` is derived from
+   * whether the host attached a click listener, and that is exactly what
+   * already switches the role between `button` and `status`. A badge that is
+   * only reporting state keeps the default cursor.
+   */
+  &[role='button'] {
+    cursor: pointer;
+  }
 
   &:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--tx-status-color, var(--tx-color-primary)) 60%, transparent);
     outline-offset: 2px;
   }
 
+  /*
+   * Sized with the text rather than a fixed 14px: hosts that scale icon utilities
+   * (nexus runs presetIcons at 1.2) otherwise render the glyph a third larger than
+   * the 12px label and it fills the whole badge height while the text floats.
+   */
   &__icon {
-    font-size: 14px;
+    font-size: 1em;
     line-height: 1;
   }
 
@@ -179,8 +206,9 @@ function handleKeydown(event: KeyboardEvent): void {
     padding: 2px 8px;
   }
 
+  // Horizontal padding stays >= 10px so the pill's round end caps clear the icon.
   &--md {
-    padding: 4px 12px;
+    padding: 3px 10px;
   }
 }
 </style>

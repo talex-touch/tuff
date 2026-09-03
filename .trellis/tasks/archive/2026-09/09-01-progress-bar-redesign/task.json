@@ -1,0 +1,30 @@
+{
+  "id": "progress-bar-redesign",
+  "name": "progress-bar-redesign",
+  "title": "progress-bar 重设计：去描边轨道 / 渐变填充 / 合成通道扫光",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-01",
+  "completedAt": "2026-09-03",
+  "branch": "master",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "62663b2a1fd066f4c4e809daef1f5ed9447b65e3",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-01-tuffex-gallery-visual-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Nothing implementation-side. Awaiting the parent's commit and archive with the sibling tasks.",
+    "blocker": "None. Four adjacent defects are recorded as source comments rather than fixed: the sparkle indicator and the hover glow are both clipped by the track's overflow, textPlacement 'inside' still puts a 12px label in a 5px track, and downstream background-color overrides (core-app DownloadTask.vue) now paint behind the gradient fill.",
+    "evidence": "TxProgressBar defaults to a rimless flat track with no mask node (maskVariant 'plain', maskBackground 'none'), a gradient fill, a tip glow mounted outside the track's clip, and a textPlacement 'top' row with optional detail; the five indeterminate sweeps animate composited properties only. progress-bar/__tests__/progress-bar.test.ts passes 29 tests with 18 replayed red against git show HEAD:, progress/__tests__/progress.test.ts 4; the TxProgress wrapper and both its doc pages were updated with the component."
+  }
+}

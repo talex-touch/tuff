@@ -26,6 +26,31 @@ code: |
 ---
 :::
 
+### Upload progress
+
+:::TuffDemoWrapper{demo="ProgressBarUploadDemo" code-lang="vue" description="The text row sits above the track: the label takes the fill colour and detail is muted behind a separator dot. The default track has no rim, the fill fades in toward the tip, and the tip carries a soft glow."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const percentage = ref(65)
+  </script>
+
+  <template>
+    <TxProgressBar
+      :percentage="percentage"
+      :format="p => `Uploading ${p}%`"
+      detail="1.4 MB of 2.3 MB"
+      aria-label="Uploading report.pdf"
+      show-text
+      text-placement="top"
+      height="6px"
+    />
+  </template>
+---
+:::
+
 ### Segments
 
 :::TuffDemoWrapper{demo="ProgressBarSegmentsDemo" code-lang="vue"}
@@ -80,7 +105,11 @@ code: |
 - `error` and `success` boolean props take precedence over `status`.
 - When `success` or `error` has a `message` and `percentage` is `0`, the visual width resolves to `100%` for completion-style labels.
 - `message` wins over `format`, and `format` wins over the default rounded percentage text.
-- Text renders only when `message` is present or `showText=true`; loading/indeterminate states only show text when `message` is present.
+- Text renders only when `message` is present or `showText=true`; loading/indeterminate states only show text when `message` is present. `textPlacement="top"` follows the same rule as `outside` and renders the text row above the track.
+- `detail` renders only under `textPlacement="top"`, after the label and muted behind a separator dot. It is visible text and never enters the progressbar's accessible name (still `ariaLabel` > `message` > `Progress`).
+- The default track is a flat 10% tint of the text colour: no `.tx-progress-bar__mask` node and no rim. `maskVariant="solid" | "dashed"` draws the rim; the mask layer renders only when `maskBackground` is not `'none'`.
+- The fill defaults to `linear-gradient(90deg, faded → saturated)`; a `color` that is already a gradient string is used verbatim. `.tx-progress-bar__glow` is mounted for determinate bars that are neither segmented nor given a gradient `color`, sits outside the track's clipping, and is visible only strictly between 0% and 100%.
+- Width changes ease over 480ms on `--tx-ease-out-strong`; the five indeterminate sweeps animate composited properties only (`transform`, plus `opacity` on `split`), never `left` or `width`, and stop under `prefers-reduced-motion`.
 - `segments` ignore non-positive values. The filled width uses `segmentsTotal`; segment widths inside the fill normalize by the sum of positive segment values.
 - `complete` emits once when resolved progress reaches `100`, and can emit again after progress drops below `100` and completes again.
 - `tooltip` or `tooltipContent` wraps the bar in `TxTooltip`; `tooltipProps` are forwarded to that tooltip.
@@ -98,19 +127,20 @@ code: |
 | `success` | `boolean` | `false` | Success state. Overrides `status`. |
 | `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | Visual status tone. |
 | `message` | `string` | `''` | Visible/accessible text label. |
+| `detail` | `string` | `''` | Secondary copy such as `1.4 MB of 2.3 MB`. Rendered only under `textPlacement="top"`; never part of the accessible name. |
 | `percentage` | `number` | `0` | Determinate progress value before clamping. |
 | `segments` | `ProgressSegment[]` | - | Multi-segment progress data. |
 | `segmentsTotal` | `number` | `100` | Total used to compute filled width when segments are present. |
 | `height` | `string` | `'5px'` | Progress bar height. |
 | `showText` | `boolean` | `false` | Show percentage text for determinate progress. |
-| `textPlacement` | `'inside' \| 'outside'` | `'inside'` | Location for message/percentage text. |
+| `textPlacement` | `'inside' \| 'outside' \| 'top'` | `'inside'` | Location for message/percentage text; `top` renders a text row (with optional `detail`) above the track. |
 | `format` | `(percentage: number) => string` | - | Custom percentage formatter. |
 | `flowEffect` | `'none' \| 'shimmer' \| 'wave' \| 'particles'` | `'none'` | Determinate fill overlay effect. |
 | `indicatorEffect` | `'none' \| 'sparkle'` | `'none'` | Endpoint indicator effect when progress is greater than zero. |
 | `hoverEffect` | `'none' \| 'glow'` | `'none'` | Wrapper hover effect. |
 | `color` | `string` | - | Custom fill color. Overrides state color. |
-| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Track mask style. |
-| `maskBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | Track background effect. |
+| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | Track rim style; `plain` draws no rim. |
+| `maskBackground` | `'none' \| 'blur' \| 'glass' \| 'mask'` | `'none'` | Track mask layer; `none` renders no mask node and leaves the track a flat tint. |
 | `tooltip` | `boolean` | `false` | Enable tooltip using resolved text. |
 | `tooltipContent` | `string` | - | Tooltip content override. |
 | `tooltipProps` | `Partial<TooltipProps>` | - | Extra props forwarded to `TxTooltip`. |
@@ -142,11 +172,15 @@ code: |
 - Keep `message` short because it is also used for the progressbar accessible label.
 - Use `segmentsTotal` to keep segmented bars honest when segments represent a partial total.
 - Reserve animated effects for high-value progress moments; excessive shimmer/wave usage makes dashboards noisy.
+- The default is a flat, rimless track. Pass `maskBackground` explicitly (with `maskVariant="solid"` for a rim) when you need a blurred or glass track instead of relying on the old default.
+- For uploads and downloads with a known size, put the "how much so far" copy in `textPlacement="top"` + `detail` rather than in `message`, which doubles as the accessible name.
 
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/progress-bar/src/types.ts`, `TxProgressBar.vue`, and `progress-bar.test.ts`.
 - Existing tests cover determinate clamping, progressbar ARIA state, indeterminate `aria-valuenow` omission, `complete` once-per-cycle emission, and segment normalization by positive segment sum.
+- Verified coverage (2026-09 redesign): no mask node by default and no `--bg-*` wrapper class; `--tx-progress-fill` is `linear-gradient(90deg, …)` and a gradient `color` passes through verbatim; the glow node sits outside the track and is hidden or absent at 0% / 100% / indeterminate / segments; the `top` text row's label / detail rendering and visibility rules; every `@keyframes tx-progress-*` block is free of `left` / `width` (with a positive control on the extractor); sweeps stop under `prefers-reduced-motion`.
+- Known and left in place: the `hoverEffect="glow"` box-shadow and the `indicatorEffect="sparkle"` sparks both live inside the `overflow: hidden` track and get clipped to its height; the source carries comments marking both.
 - API note: `segments` use positive values only. The outer fill width is based on `segmentsTotal`, while widths inside the fill normalize by the positive segment sum.
 - Accessibility note: keep `message` short and status-specific because it is used as the accessible progress label.
 
@@ -154,7 +188,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
 - Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` verifies determinate clamping and ARIA state, indeterminate `aria-valuenow` omission, once-per-cycle `complete` emits, and segment normalization by positive segment sum.
+- **Verified coverage:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` verifies determinate clamping and ARIA state, indeterminate `aria-valuenow` omission, once-per-cycle `complete` emits, segment normalization by positive segment sum, and the redesign: no mask node by default, gradient fill and glow placement, the `top` text row, layout-free keyframes and the reduced-motion stop.
 
 <TuffDocSourceLink />
 

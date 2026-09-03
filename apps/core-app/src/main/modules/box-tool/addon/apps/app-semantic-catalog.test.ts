@@ -24,6 +24,18 @@ describe('app semantic alias catalog', () => {
     ).toEqual(expect.arrayContaining(['ai', 'llm', 'local llm', '本地模型']))
   })
 
+  it('recognizes terminal and workspace development app aliases', () => {
+    expect(resolveAppSemanticAliases({ name: 'Ghostty' })).toEqual(
+      expect.arrayContaining(['terminal', 'shell', 'cli', 'command line'])
+    )
+    expect(resolveAppSemanticAliases({ name: 'cmux' })).toEqual(
+      expect.arrayContaining(['terminal', 'shell', 'cli', 'command line'])
+    )
+    expect(resolveAppSemanticAliases({ name: 'Orca' })).toEqual(
+      expect.arrayContaining(['dev', 'developer', 'worktree', 'workspace', 'ai tool'])
+    )
+  })
+
   it('resolves database, API and DevOps aliases without assigning git to IDEs', () => {
     expect(resolveAppSemanticAliases({ name: 'TablePlus' })).toEqual(
       expect.arrayContaining(['db', 'database', 'sql', '数据库'])

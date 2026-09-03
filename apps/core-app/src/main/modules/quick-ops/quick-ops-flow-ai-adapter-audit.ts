@@ -77,6 +77,7 @@ const EXPECTED_POLICY_REASONS = [
 export interface QuickOpsFlowAiAdapterAuditFileInput {
   repoRoot: string
   modulePath?: string
+  policyPath?: string
   flowBusPath?: string
   flowSelectorPath?: string
   aiPaths?: string[]
@@ -84,6 +85,7 @@ export interface QuickOpsFlowAiAdapterAuditFileInput {
 
 export interface QuickOpsFlowAiAdapterAuditSourceInput {
   moduleSource: string
+  policySource?: string
   flowBusSource: string
   flowSelectorSource: string
   aiSources: Array<{ path: string; source: string }>
@@ -311,7 +313,9 @@ export function createQuickOpsFlowAiAdapterAudit(
 ): QuickOpsFlowAiAdapterAuditResult {
   const registeredTargets = extractRegisteredTargets(input.moduleSource)
   const requireConfirmTargets = extractRequireConfirmTargets(input.moduleSource)
-  const policyBlockedReasons = collectPolicyReasons(input.moduleSource)
+  const policyBlockedReasons = collectPolicyReasons(
+    `${input.moduleSource}\n${input.policySource ?? ''}`
+  )
   const aiAdapterSignals = detectAiAdapterSignals(input.aiSources)
   const hasAdapterContract = hasNaturalLanguageAdapterContract(input.aiSources)
 
@@ -447,6 +451,8 @@ export async function createQuickOpsFlowAiAdapterAuditFromFiles(
 ): Promise<QuickOpsFlowAiAdapterAuditResult> {
   const repoRoot = path.resolve(input.repoRoot)
   const modulePath = input.modulePath ?? 'apps/core-app/src/main/modules/quick-ops/index.ts'
+  const policyPath =
+    input.policyPath ?? 'apps/core-app/src/main/modules/quick-ops/quick-ops-developer-preview.ts'
   const flowBusPath = input.flowBusPath ?? 'apps/core-app/src/main/modules/flow-bus/flow-bus.ts'
   const flowSelectorPath =
     input.flowSelectorPath ?? 'apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'
@@ -455,15 +461,18 @@ export async function createQuickOpsFlowAiAdapterAuditFromFiles(
     'plugins/touch-quickops/index.test.cjs'
   ]
 
-  const [moduleSource, flowBusSource, flowSelectorSource, ...aiSources] = await Promise.all([
-    readFile(path.resolve(repoRoot, modulePath), 'utf8'),
-    readFile(path.resolve(repoRoot, flowBusPath), 'utf8'),
-    readFile(path.resolve(repoRoot, flowSelectorPath), 'utf8'),
-    ...aiPaths.map((aiPath) => readFile(path.resolve(repoRoot, aiPath), 'utf8'))
-  ])
+  const [moduleSource, policySource, flowBusSource, flowSelectorSource, ...aiSources] =
+    await Promise.all([
+      readFile(path.resolve(repoRoot, modulePath), 'utf8'),
+      readFile(path.resolve(repoRoot, policyPath), 'utf8'),
+      readFile(path.resolve(repoRoot, flowBusPath), 'utf8'),
+      readFile(path.resolve(repoRoot, flowSelectorPath), 'utf8'),
+      ...aiPaths.map((aiPath) => readFile(path.resolve(repoRoot, aiPath), 'utf8'))
+    ])
 
   return createQuickOpsFlowAiAdapterAudit({
     moduleSource,
+    policySource,
     flowBusSource,
     flowSelectorSource,
     aiSources: aiPaths.map((aiPath, index) => ({
