@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuffItem } from '@talex-touch/utils'
+import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
 import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
 import type { FilePersistencePort } from '../../search-engine/search-index-writer'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
@@ -143,7 +144,8 @@ vi.mock('./services/file-provider-watch-service', () => ({
     ensureFileSystemWatchers: watchServiceEnsure,
     recordUserActivity: vi.fn(),
     shouldRunAutoIndexing: vi.fn(async () => ({ allowed: false, reason: 'test' })),
-    applyWatchPaths: vi.fn()
+    applyWatchPaths: vi.fn(),
+    dispose: vi.fn()
   }))
 }))
 
@@ -185,6 +187,7 @@ vi.mock('./workers/thumbnail-worker-client', () => ({
 }))
 
 import { operationalErrorService } from '../../../observability'
+import { FileProviderEnrichmentResumeService } from './services/file-provider-enrichment-resume-service'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
 
 interface MutableFileProvider {
@@ -655,6 +658,41 @@ describe('file-provider startup readiness', () => {
         startupErrorCode: null
       })
     )
+  })
+
+  it('stops auto indexing when shutdown starts during watcher setup', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi & {
+      runAutoIndexing: () => Promise<boolean>
+      watchService: {
+        shouldRunAutoIndexing: () => Promise<{ allowed: boolean }>
+        dispose?: () => void
+      }
+    }
+    const watcherSetup = createDeferred<void>()
+    const originalShouldRunAutoIndexing = provider.watchService.shouldRunAutoIndexing
+    const originalDispose = provider.watchService.dispose
+    let autoIndexing: Promise<boolean> | null = null
+
+    resetProviderState(provider)
+    provider.watchService.shouldRunAutoIndexing = vi.fn(async () => ({ allowed: true }))
+    provider.watchService.dispose = vi.fn()
+    watchServiceEnsure.mockImplementationOnce(() => watcherSetup.promise as never)
+
+    try {
+      autoIndexing = provider.runAutoIndexing()
+      await vi.waitFor(() => expect(watchServiceEnsure).toHaveBeenCalledTimes(1))
+
+      await provider.prepareForSearchIndexShutdown()
+      watcherSetup.resolve(undefined)
+
+      await expect(autoIndexing).resolves.toBe(false)
+      expect(runtimeScanSource).not.toHaveBeenCalled()
+    } finally {
+      watcherSetup.resolve(undefined)
+      await autoIndexing?.catch(() => undefined)
+      provider.watchService.shouldRunAutoIndexing = originalShouldRunAutoIndexing
+      provider.watchService.dispose = originalDispose
+    }
   })
 
   it('waits for deferred startup and prevents post-shutdown worker or watcher initialization', async () => {
@@ -1371,6 +1409,86 @@ describe('file-provider startup readiness', () => {
     }
   })
 
+  it('resolves preview resources only for currently indexed ordinary files', async () => {
+    const provider = fileProvider as unknown as {
+      dbUtils: unknown
+      isWithinWatchRoots: (rawPath: string) => boolean
+      resolvePreviewResourcePath: (rawPath: string) => Promise<string | null>
+    }
+    const originalDbUtils = provider.dbUtils
+    const originalIsWithinWatchRoots = provider.isWithinWatchRoots
+    const fixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-preview-resource-'))
+    const indexedFile = path.join(fixtureDir, 'indexed.txt')
+    const indexedDirectory = path.join(fixtureDir, 'indexed-directory')
+    const rows: Array<{ path: string; type: string }> = []
+    const limit = vi.fn(async () => rows)
+    const select = vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({ limit }))
+      }))
+    }))
+
+    await fs.writeFile(indexedFile, 'fixture')
+    await fs.mkdir(indexedDirectory)
+    provider.dbUtils = {
+      getFileIndexReadDb: () => ({ select })
+    }
+    provider.isWithinWatchRoots = (candidate) => candidate.startsWith(fixtureDir)
+
+    try {
+      await expect(provider.resolvePreviewResourcePath(indexedFile)).resolves.toBeNull()
+
+      rows.splice(0, rows.length, { path: indexedDirectory, type: 'file' })
+      await expect(provider.resolvePreviewResourcePath(indexedDirectory)).resolves.toBeNull()
+
+      rows.splice(0, rows.length, { path: indexedFile, type: 'file' })
+      await expect(provider.resolvePreviewResourcePath(indexedFile)).resolves.toBe(
+        await fs.realpath(indexedFile)
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.isWithinWatchRoots = originalIsWithinWatchRoots
+      await fs.rm(fixtureDir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects an indexed symlink when its canonical target is absent from the index', async () => {
+    const provider = fileProvider as unknown as {
+      dbUtils: unknown
+      isWithinWatchRoots: (rawPath: string) => boolean
+      resolvePreviewResourcePath: (rawPath: string) => Promise<string | null>
+    }
+    const originalDbUtils = provider.dbUtils
+    const originalIsWithinWatchRoots = provider.isWithinWatchRoots
+    const fixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-preview-symlink-'))
+    const canonicalTarget = path.join(fixtureDir, 'canonical-target.txt')
+    const indexedSymlink = path.join(fixtureDir, 'indexed-link.txt')
+    const limit = vi
+      .fn()
+      .mockResolvedValueOnce([{ path: indexedSymlink, type: 'file' }])
+      .mockResolvedValueOnce([])
+    const select = vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({ limit }))
+      }))
+    }))
+
+    await fs.writeFile(canonicalTarget, 'fixture')
+    await fs.symlink(canonicalTarget, indexedSymlink)
+    provider.dbUtils = {
+      getFileIndexReadDb: () => ({ select })
+    }
+    provider.isWithinWatchRoots = (candidate) => candidate.startsWith(fixtureDir)
+
+    try {
+      await expect(provider.resolvePreviewResourcePath(indexedSymlink)).resolves.toBeNull()
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.isWithinWatchRoots = originalIsWithinWatchRoots
+      await fs.rm(fixtureDir, { recursive: true, force: true })
+    }
+  })
+
   it('wires per-call split routing into the watch service for the failed-files cleanup task', async () => {
     // Regression for the 2d.3 cross-home hazard: without these deps the
     // cleanup task defaults to split-off and would read failed-file ids from
@@ -1739,7 +1857,7 @@ describe('file-provider startup readiness', () => {
     const originalCancelledLeases = provider.cancelledIndexWorkerMutationLeases
     const activeDispatchSettled = createDeferred<void>()
     const cancellationBegan = createDeferred<void>()
-    const timeout = new Error('lease A drain timed out')
+    const timeout = new Error('file-index-search-drain-timeout:indexed-source.scan')
     const events: string[] = []
     const reset = vi.fn(async () => {
       events.push('reset-progress')
@@ -1763,6 +1881,11 @@ describe('file-provider startup readiness', () => {
       })
     } as unknown as typeof provider.fileIndexWorker
     provider.resetIndexedSourceRuntimeState = reset
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation((reason) => {
+        events.push(`resume-enrichment:${reason}`)
+      })
     provider.pendingIndexWorkerResults = new Map([
       [1, { mutationLeaseId: 'lease-A' }],
       [2, { mutationLeaseId: 'lease-B' }]
@@ -1783,21 +1906,16 @@ describe('file-provider startup readiness', () => {
 
       activeDispatchSettled.resolve(undefined)
       events.push('active-dispatch-settled')
-      await expect(drain).rejects.toBe(timeout)
+      await expect(drain).resolves.toBeUndefined()
 
       expect(events).toEqual([
         'scheduler-cancel:lease-A',
         'worker-cancel:lease-A',
         'active-dispatch-settled',
-        'reset-progress'
+        'resume-enrichment:recovery.indexed-source.scan'
       ])
-      expect(reset).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sourceId: 'file-provider',
-          clearSearchIndex: false,
-          clearScanProgress: true
-        })
-      )
+      expect(reset).not.toHaveBeenCalled()
+      expect(resume).toHaveBeenCalledWith('recovery.indexed-source.scan')
       expect(provider.pendingIndexWorkerResults.has(1)).toBe(false)
       expect(provider.inflightIndexWorkerResults.has(3)).toBe(false)
       expect(provider.pendingIndexWorkerResults.get(2)).toEqual({ mutationLeaseId: 'lease-B' })
@@ -1811,9 +1929,30 @@ describe('file-provider startup readiness', () => {
       provider.indexSchedulerService = originalScheduler
       provider.fileIndexWorker = originalWorker
       provider.resetIndexedSourceRuntimeState = originalReset
+      resume.mockRestore()
       provider.pendingIndexWorkerResults = originalPending
       provider.inflightIndexWorkerResults = originalInflight
       provider.cancelledIndexWorkerMutationLeases = originalCancelledLeases
+    }
+  })
+
+  it('propagates a drain failure that is not an enrichment timeout', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const unexpected = new Error('SQLITE_BUSY: unrelated drain failure')
+    const cancelLease = vi.fn()
+    provider.indexSchedulerService = {
+      drain: vi.fn().mockRejectedValue(unexpected),
+      cancelLease
+    } as unknown as typeof provider.indexSchedulerService
+
+    try {
+      await expect(
+        provider.drainIndexedSourceMutations('indexed-source.scan', 'lease-unexpected')
+      ).rejects.toBe(unexpected)
+      expect(cancelLease).not.toHaveBeenCalled()
+    } finally {
+      provider.indexSchedulerService = originalScheduler
     }
   })
 
@@ -1852,6 +1991,87 @@ describe('file-provider startup readiness', () => {
     const notice = provider.buildStartupDegradedNotice({ text: 'report', inputs: [] })
 
     expect(notice).toBeNull()
+  })
+
+  it('never lets a throttled indexing payload overwrite completed or idle state, including for late subscribers', async () => {
+    type ProgressStream = {
+      emit: (payload: FileIndexProgressPayload) => void
+      isCancelled: () => boolean
+    }
+    const provider = fileProvider as unknown as {
+      progressStreamContexts: Set<ProgressStream>
+      lastProgressStreamPayload: FileIndexProgressPayload | null
+      lastProgressStreamEmitAt: number
+      pendingProgressStreamPayload: FileIndexProgressPayload | null
+      progressStreamFlushTimer: NodeJS.Timeout | null
+      registerProgressStream: (context: ProgressStream) => void
+      emitProgressStream: (payload: FileIndexProgressPayload) => void
+      clearProgressCleanupTimer: () => void
+    }
+    const originalLastPayload = provider.lastProgressStreamPayload
+    const originalLastEmitAt = provider.lastProgressStreamEmitAt
+    const originalPendingPayload = provider.pendingProgressStreamPayload
+    const originalFlushTimer = provider.progressStreamFlushTimer
+    const originalContexts = new Set(provider.progressStreamContexts)
+    const now = new Date('2026-09-03T00:00:00.000Z')
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+
+    const payload = (
+      stage: FileIndexProgressPayload['stage'],
+      current: number,
+      progress: number
+    ) => ({
+      stage,
+      current,
+      total: 100,
+      progress,
+      startTime: now.getTime(),
+      estimatedRemainingMs: null,
+      averageItemsPerSecond: 0
+    })
+
+    try {
+      for (const terminalStage of ['completed', 'idle'] as const) {
+        provider.progressStreamContexts.clear()
+        provider.lastProgressStreamPayload = null
+        provider.lastProgressStreamEmitAt = 0
+        provider.pendingProgressStreamPayload = null
+        if (provider.progressStreamFlushTimer) clearTimeout(provider.progressStreamFlushTimer)
+        provider.progressStreamFlushTimer = null
+
+        const subscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
+        provider.registerProgressStream(subscriber)
+        provider.emitProgressStream(payload('indexing', 10, 0.1))
+        provider.emitProgressStream(payload('indexing', 11, 0.1))
+        provider.emitProgressStream(payload(terminalStage, 100, 1))
+
+        expect(vi.mocked(subscriber.emit).mock.calls.map(([update]) => update.stage)).toEqual([
+          'indexing',
+          terminalStage
+        ])
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(vi.mocked(subscriber.emit).mock.calls.map(([update]) => update.stage)).toEqual([
+          'indexing',
+          terminalStage
+        ])
+      }
+
+      const lateSubscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
+      provider.registerProgressStream(lateSubscriber)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(vi.mocked(lateSubscriber.emit)).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'idle', progress: 1 })
+      )
+    } finally {
+      provider.clearProgressCleanupTimer()
+      provider.progressStreamContexts.clear()
+      for (const context of originalContexts) provider.progressStreamContexts.add(context)
+      provider.lastProgressStreamPayload = originalLastPayload
+      provider.lastProgressStreamEmitAt = originalLastEmitAt
+      provider.pendingProgressStreamPayload = originalPendingPayload
+      provider.progressStreamFlushTimer = originalFlushTimer
+    }
   })
 })
 

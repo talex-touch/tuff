@@ -59,7 +59,6 @@ import {
   IndexedWriteRuntimeEmitterService,
   buildIndexedWriteFlushFailureSnapshot,
   buildIndexedWriteFlushResultSnapshot,
-  isIndexedWatchPathOwned,
   mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
@@ -149,8 +148,9 @@ import {
   FileProviderIntegrityService,
   type FileProviderIntegritySnapshot
 } from './services/file-provider-integrity-service'
-import { FileProviderScanProgressService } from './services/file-provider-scan-progress-service'
 import { FileProviderRuntimeResetService } from './services/file-provider-runtime-reset-service'
+import { FileProviderScanProgressService } from './services/file-provider-scan-progress-service'
+import { FileProviderEnrichmentResumeService } from './services/file-provider-enrichment-resume-service'
 import { shouldBootstrapFileReindex } from './services/file-provider-bootstrap-reindex'
 import {
   FileProviderPathNormalizationService,
@@ -174,6 +174,7 @@ import { FileProviderReconciliationDeleteService } from './services/file-provide
 import { FileProviderReconciliationDiffService } from './services/file-provider-reconciliation-diff-service'
 import {
   FileProviderReconciliationRunService,
+  getMissingReconciliationDbFiles,
   type FileProviderReconciliationDbRecord
 } from './services/file-provider-reconciliation-run-service'
 import { FileProviderReconciliationUpdateService } from './services/file-provider-reconciliation-update-service'
@@ -399,7 +400,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private initializationContext: ProviderContext | null = null
   private readonly baseWatchPaths: string[]
   private watchPaths: string[]
-  private normalizedWatchPaths: string[]
   private databaseFilePath: string | null = null
   private searchIndex: SearchIndexService | null = null
   private embeddingService: EmbeddingService | null = null
@@ -557,6 +557,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     FileIndexRunOptions | undefined
   >
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
+  private readonly enrichmentResumeService: FileProviderEnrichmentResumeService
   private readonly indexPersistEntryMapper: IndexedWorkerPersistEntryMapperService
   private readonly assetService: FileProviderAssetService
   private readonly searchResultService: FileProviderSearchResultService
@@ -627,7 +628,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       normalizePath: (rawPath) => this.normalizePath(rawPath)
     })
     this.watchPaths = rootSet.paths
-    this.normalizedWatchPaths = rootSet.normalizedPaths
     this.watchService = new FileProviderWatchService({
       baseWatchPaths: this.baseWatchPaths,
       getDbUtils: () => this.dbUtils,
@@ -956,6 +956,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.fileIndexWorker.indexFiles(dbPath, providerId, providerType, files),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
+    this.enrichmentResumeService = new FileProviderEnrichmentResumeService({
+      getDbUtils: () => this.dbUtils,
+      isSearchIndexAvailable: () => Boolean(this.searchIndex),
+      isShuttingDown: () => this.shuttingDown,
+      scheduleIndexing: (files, reason) => this.scheduleIndexing(files, reason),
+      waitForSearchIndexDrain: (reason) => this.waitForSearchIndexDrain(reason),
+      yieldToEventLoop: async () => await new Promise<void>((resolve) => setImmediate(resolve)),
+      logInfo: (message, meta) => this.logInfo(message, meta),
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
+    })
     this.indexPersistEntryMapper = new IndexedWorkerPersistEntryMapperService()
     this.indexRuntimeService = new FileProviderIndexRuntimeService({
       flushBatchScheduler: this.flushBatchScheduler,
@@ -1068,6 +1078,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public async prepareForSearchIndexShutdown(): Promise<void> {
     this.shuttingDown = true
+    this.watchService.dispose()
     if (this.pathNormalizationTimer) {
       clearTimeout(this.pathNormalizationTimer)
       this.pathNormalizationTimer = null
@@ -1957,7 +1968,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private syncWatchServiceState(): void {
     this.fileIndexSettings = this.watchService.getCurrentSettings()
     this.watchPaths = this.watchService.getWatchPaths()
-    this.normalizedWatchPaths = this.watchService.getNormalizedWatchPaths()
     this.watchPathsRegistered = this.watchService.isWatchPathRegistered()
   }
 
@@ -2065,8 +2075,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private async runAutoIndexing(): Promise<void> {
-    if (this.shuttingDown) return
+  private async runAutoIndexing(): Promise<boolean> {
+    if (this.shuttingDown) return false
     const decision = await this.shouldRunAutoIndexing()
     if (!decision.allowed) {
       this.logDebug('Auto index scan skipped', {
@@ -2074,18 +2084,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         batteryLevel: decision.battery?.level ?? null,
         batteryCharging: decision.battery?.charging ?? null
       })
-      return
+      return false
     }
-    if (this.shuttingDown) return
+    if (this.shuttingDown) return false
 
     await this.ensureFileSystemWatchers()
+    if (this.shuttingDown) return false
     try {
       await this.requireRuntimeMutationDelegate().scanSource(IndexedSourceScanReasons.Startup)
+      return true
     } catch (error) {
       this.logWarn('Auto index scan aborted', error)
+      return false
     }
   }
-
   private async startIndexing(
     source: 'auto' | 'manual',
     options?: FileIndexRunOptions
@@ -2174,6 +2186,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return this.watchService.ownsWatchPath(rawPath)
   }
 
+  public async resolvePreviewResourcePath(rawPath: string): Promise<string | null> {
+    return await this.assetService.resolvePreviewResourcePath(rawPath)
+  }
+
   public async *streamIndexedSourceSnapshot(
     request: IndexedSourceScanRequest
   ): AsyncIterable<IndexedSourceRecordBatch> {
@@ -2251,20 +2267,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<void> {
     try {
       await this.waitForSearchIndexDrain(reason, mutationLeaseId)
+      if (!this.shuttingDown) this.enrichmentResumeService.resume(reason)
     } catch (error) {
-      // Deliberate consistency lever, with a known cost: when post-scan
-      // content/embedding enrichment cannot drain within
-      // FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS (30s), the catch below CLEARS
-      // scan_progress so the next eligible scan re-runs and re-dispatches
-      // enrichment (there is no standalone resume-from-file_index_progress
-      // path). Consequence on a large first index: the scan-completion
-      // scan_progress rows written moments earlier are wiped again each run
-      // until enrichment fits the drain window, so every eligible auto-scan
-      // re-walks all roots (observed as sp=0 in the 2026-08-05 split
-      // validation runs). Not corruption — re-scan converges — but if this
-      // loop shows up in steady-state logs ('Search index drain timed out
-      // after indexed-source scan'), the fix belongs in the enrichment
-      // contract (resume from file_index_progress), not here.
+      const message = error instanceof Error ? error.message : String(error)
+      const timedOut =
+        message.startsWith('file-index-search-drain-timeout:') ||
+        message === 'FILE_INDEX_SCHEDULER_DRAIN_TIMEOUT'
+
+      if (!timedOut) throw error
+
       if (mutationLeaseId !== undefined) {
         this.cancelledIndexWorkerMutationLeases.add(mutationLeaseId)
         this.indexSchedulerService.cancelLease(mutationLeaseId)
@@ -2280,6 +2291,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.indexSchedulerService.cancelPending()
         this.fileIndexWorker.shutdown()
       }
+
       for (const [fileId, result] of this.pendingIndexWorkerResults) {
         if (mutationLeaseId === undefined || result.mutationLeaseId === mutationLeaseId) {
           this.pendingIndexWorkerResults.delete(fileId)
@@ -2290,15 +2302,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.inflightIndexWorkerResults.delete(fileId)
         }
       }
-      await this.resetIndexedSourceRuntimeState({
-        sourceId: this.id,
-        reason: IndexedSourceResetReasons.HealthRepair,
-        clearSearchIndex: false,
-        clearScanProgress: true
-      }).catch((resetError) => {
-        this.logWarn('Failed to clear scan progress after enrichment drain failure', resetError)
-      })
-      throw error
+
+      // scan_progress records filesystem coverage and must survive a later
+      // content-enrichment timeout. Resume only unfinished file_index_progress
+      // rows under a fresh, lease-free background run.
+      if (!this.shuttingDown) this.enrichmentResumeService.resume(`recovery.${reason}`)
+      return
     }
   }
 
@@ -2998,6 +3007,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastEmitAt: this.lastProgressStreamEmitAt
       })
     ) {
+      // An immediate transition is newer than any throttled payload already
+      // waiting in the timer. Retire that payload before publishing so an old
+      // `indexing 100%` update can never overwrite `completed` or `idle`.
+      this.clearProgressStreamFlushTimer()
+      this.pendingProgressStreamPayload = null
       this.flushProgressStreamPayload(payload, now)
       return
     }
@@ -3246,26 +3260,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<FileProviderReconciliationDbRecord[]> {
     options?.signal?.throwIfAborted()
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    const queryRoot = path.normalize(rootPath)
-    const descendantPrefix = queryRoot.endsWith(path.sep) ? queryRoot : `${queryRoot}${path.sep}`
-    const escapedPrefix = descendantPrefix
-      .replace(/!/g, '!!')
-      .replace(/%/g, '!%')
-      .replace(/_/g, '!_')
-    return await this.dbUtils.getFileIndexReadDb().all<FileProviderReconciliationDbRecord>(sql`
-      SELECT f.id, f.path, f.mtime
-      FROM files AS f
-      WHERE f.type = 'file'
-        AND (f.path = ${queryRoot} OR f.path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
-        AND f.id > ${afterId}
-        AND NOT EXISTS (
-          SELECT 1
-          FROM file_reconciliation_seen_paths AS seen
-          WHERE seen.path = f.path
-        )
-      ORDER BY f.id
-      LIMIT ${limit}
-    `)
+    return await getMissingReconciliationDbFiles(this.dbUtils, rootPath, afterId, limit)
   }
 
   /**
@@ -3340,14 +3335,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private isWithinWatchRoots(rawPath: string): boolean {
-    return isIndexedWatchPathOwned({
-      rawPath,
-      normalizedWatchPaths: this.normalizedWatchPaths,
-      normalizePath: (path) => this.normalizePath(path),
-      pathSeparator: path.sep
-    })
+    return this.watchService.ownsWatchPath(rawPath)
   }
-
   /**
    * Single ingress for every non-scan path that reaches the index: watcher
    * events and manual adds both land here, and macOS hands them over

@@ -2,6 +2,7 @@ import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
 import { session } from 'electron'
 import { tempFileService } from '../../service/temp-file.service'
 import { createLogger } from '../../utils/logger'
+import { clearTfilePreviewGrants } from './tfile-preview-grant'
 import { BaseModule } from '../abstract-base-module'
 import {
   clearTfileProtocolLogState,
@@ -40,6 +41,7 @@ class FileProtocolModule extends BaseModule {
     this.releaseConfiguredRoots?.()
     this.releaseConfiguredRoots = null
     clearTfileProtocolLogState()
+    clearTfilePreviewGrants()
   }
 }
 

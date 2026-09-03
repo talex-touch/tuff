@@ -175,6 +175,7 @@ type FileIndexTransportOperation =
   | 'FAILED_FILES'
   | 'BATTERY_LEVEL'
   | 'ADD_PATH'
+  | 'PREVIEW_RESOURCE'
   | 'REBUILD'
   | 'SCAN'
   | 'RECONCILE'

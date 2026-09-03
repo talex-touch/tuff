@@ -1,8 +1,11 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { Buffer } from 'node:buffer'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
 import type { DbUtils } from '../../../../../db/utils'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
+import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
   THUMBNAIL_EXTENSIONS,
   getThumbnailUnsupportedReason,
@@ -90,6 +93,41 @@ export class FileProviderAssetService {
     this.iconExtractionPending.set(filePath, task)
     task.finally(() => this.iconExtractionPending.delete(filePath))
     return task
+  }
+  /**
+   * Resolves only an indexed live ordinary file for a renderer preview grant.
+   * The database row is authoritative; the final stat closes the stale-path
+   * window before the protocol layer receives the resource path.
+   */
+  async resolvePreviewResourcePath(rawPath: string): Promise<string | null> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils || typeof rawPath !== 'string') return null
+
+    const candidate = normalizeFsPath(rawPath.trim())
+    if (!candidate || !path.isAbsolute(candidate)) return null
+
+    const indexed = await dbUtils
+      .getFileIndexReadDb()
+      .select({ path: filesSchema.path, type: filesSchema.type })
+      .from(filesSchema)
+      .where(eq(filesSchema.path, candidate))
+      .limit(1)
+      .then((rows) => rows[0])
+    if (!indexed || indexed.type !== 'file') return null
+
+    try {
+      const realPath = normalizeFsPath(await fs.realpath(indexed.path))
+      const canonical = await dbUtils
+        .getFileIndexReadDb()
+        .select({ type: filesSchema.type })
+        .from(filesSchema)
+        .where(eq(filesSchema.path, realPath))
+        .limit(1)
+        .then((rows) => rows[0])
+      return canonical?.type === 'file' && (await fs.stat(realPath)).isFile() ? realPath : null
+    } catch {
+      return null
+    }
   }
 
   async ensureIcon(fileId: number, filePath: string, file?: FileRecord): Promise<void> {

@@ -25,7 +25,10 @@ vi.mock('../../utils/local-file-policy', () => ({
   getAllowedLocalFileRoots: () => ['/allowed'],
   isAllowedLocalFilePath: (filePath: string, roots: string[]) =>
     roots.some((root) => filePath === root || filePath.startsWith(`${root}/`)),
-  normalizeDarwinUsersPath: (filePath: string) => filePath
+  normalizeDarwinUsersPath: (filePath: string) =>
+    process.platform === 'darwin' && filePath.toLowerCase().startsWith('/users/demo/')
+      ? `/Users/demo${filePath.slice('/users/demo'.length)}`
+      : filePath
 }))
 
 vi.mock('../../service/temp-file.service', () => ({
@@ -35,10 +38,16 @@ vi.mock('../../service/temp-file.service', () => ({
 }))
 
 import { __test__, fileProtocolModule } from './index'
+import {
+  __test__ as previewGrantTest,
+  clearTfilePreviewGrants,
+  issueTfilePreviewGrant
+} from './tfile-preview-grant'
 
 describe('file-protocol canonical tfile parsing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearTfilePreviewGrants()
   })
   it('forwards allowlisted files through Electron built-in streaming fetch', async () => {
     const response = new Response('icon-bytes')
@@ -102,6 +111,79 @@ describe('file-protocol canonical tfile parsing', () => {
     expect(__test__.extractAbsolutePath('tfile:////server/share/icon.svg')).toBe(
       '//server/share/icon.svg'
     )
+  })
+
+  it('streams off-policy files only through their exact unexpired preview grant', async () => {
+    const now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    try {
+      const approvedPath = '/Users/demo/Downloads/approved.txt'
+      const grant = issueTfilePreviewGrant(approvedPath, now)
+      const response = new Response('approved preview')
+      fetchMock.mockResolvedValue(response)
+      fileProtocolModule.onInit()
+
+      const handler = handleMock.mock.calls.at(-1)?.[1] as
+        | ((request: { url: string }) => Promise<Response>)
+        | undefined
+      expect(handler).toBeTypeOf('function')
+
+      const valid = await handler?.({ url: grant.tfileUrl })
+      expect(valid).toBe(response)
+
+      const wrongPath = new URL(grant.tfileUrl)
+      wrongPath.pathname = '/Users/demo/Downloads/other.txt'
+      await expect(handler?.({ url: wrongPath.toString() })).resolves.toMatchObject({ status: 403 })
+
+      const expiredGrant = issueTfilePreviewGrant('/Users/demo/Downloads/expired.txt', now)
+      nowSpy.mockReturnValue(now + previewGrantTest.PREVIEW_GRANT_TTL_MS)
+      await expect(handler?.({ url: expiredGrant.tfileUrl })).resolves.toMatchObject({
+        status: 403
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  it('authorizes lower-case and canonical Darwin Users paths through one preview grant', async () => {
+    const now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now)
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+
+    try {
+      const grant = issueTfilePreviewGrant('/users/demo/Downloads/approved.txt', now)
+      const canonicalUrl = new URL(grant.tfileUrl)
+      canonicalUrl.pathname = '/Users/demo/Downloads/approved.txt'
+      const lowerCaseUrl = new URL(grant.tfileUrl)
+      lowerCaseUrl.pathname = '/users/demo/Downloads/approved.txt'
+      const response = new Response('canonical preview')
+      fetchMock.mockResolvedValue(response)
+      fileProtocolModule.onInit()
+
+      const handler = handleMock.mock.calls.at(-1)?.[1] as
+        | ((request: { url: string }) => Promise<Response>)
+        | undefined
+      expect(handler).toBeTypeOf('function')
+
+      await expect(handler?.({ url: canonicalUrl.toString() })).resolves.toBe(response)
+      await expect(handler?.({ url: lowerCaseUrl.toString() })).resolves.toBe(response)
+      expect(fetchMock).toHaveBeenCalledWith('file:///Users/demo/Downloads/approved.txt', {
+        bypassCustomProtocolHandlers: true
+      })
+      expect(fetchMock).toHaveBeenCalledWith('file:///Users/demo/Downloads/approved.txt', {
+        bypassCustomProtocolHandlers: true
+      })
+    } finally {
+      nowSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
   })
 })
 
