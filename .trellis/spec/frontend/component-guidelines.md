@@ -106,6 +106,28 @@ That wrapper is a plain rectangle. Two consequences when the trigger itself is r
 - `box-shadow` follows the wrapper's `border-radius`, so a hover shadow applied to it renders as a square halo around a circular trigger. Apply the shadow to the element inside.
 - A `transform` on the wrapper moves the anchor's reference rect out from under an already-open panel. Transform the inner element instead.
 
+### State motion: compile the spring, do not keyframe the bounce
+
+A press/drag bounce written as a multi-stop `@keyframes` where each segment carries its own overshooting bezier reverses velocity at **every** keyframe boundary. It reads as jitter at any amplitude, and shrinking the numbers does not fix it — the structure is the defect. `TxSlider` carried four such stops (scale 1 → 0.90 → 1.32 → 1.08 → 1.16, 43 % swing, four reversals) until 2026-09-02.
+
+The replacement is one transition whose easing *is* the spring:
+
+- Compile it with `resolveTransition({ stiffness, damping })` from `packages/tuffex/packages/components/src/liquid/src/spring.ts`, which emits a CSS `linear()` sample list plus a duration.
+- Paste that string **statically** into an `@supports (transition-timing-function: linear(0, 1))` block when the component never varies its stiffness; a runtime resolve costs a `CSS.supports` probe and a style write per instance for nothing. Lock the static string to the compiler with a unit test — `spring.ts` caches the probe module-wide, so stub `CSS.supports` before the first call or you silently assert against the bezier fallback.
+- The fallback outside that block must **not** overshoot. A bezier faking a bounce is worse than no bounce.
+- Target one visible reversal and 2–5 % overshoot. `spring.ts`'s own simulator gives you both; count reversals outside a ±0.1 % settle band, because the compiler pins the last sample to exactly 1 and that manufactures a sub-visible wiggle at the tail. Measured: 480/34 → +1.4 %, 560/34 → +3.0 % / 362 ms / 1 reversal, 580/34 → 2 reversals.
+- Give hover its own shorter, non-overshooting clock. Hover in and out must never bounce, so it cannot share the spring variable.
+
+### TuffEx semantic hues in dark mode
+
+`--tx-color-success | warning | danger` live in `packages/tuffex/packages/components/style/variables.scss`. Until 2026-09-02 the `.dark` block did not define them and inherited the `:root` light values — mid-saturation hues tuned for a white page. Mixed at the pill family's 12 % fill / 32 % border onto `#141414` they gave olive / ochre / maroon fills and a hard dark hairline on `TxStatusBadge`, `TxBadge`, `TxTag` and `TxAlert` at once.
+
+- When a whole family looks wrong in one theme, suspect the token block before the component recipe. Changing the recipe in one component splits the family; the two high-contrast mixins had carried their own three hues correctly all along, which is the tell.
+- Dark values sit one step lighter than the light ramp (Tailwind-400: `#4ade80` / `#fbbf24` / `#f87171`), not at the high-contrast pastels — white ink on `#fda4af` is 1.8:1.
+- **Ink and solid-fill pull in opposite directions and can have an empty intersection.** AAA 7:1 ink on `#141414` needs relative luminance ≥ 0.349; keeping white ink on a solid fill at 2.90:1 needs ≤ 0.312. No red satisfies both, so danger is held to AA as ink and the fill-side number is recorded, not gated. Print the feasible window before writing either bound into an acceptance criterion.
+- The hand-written `--tx-color-*-rgb` triplets in the same block do not derive from the hex. Update them together and assert the equality in a test; `rgb(var(--tx-color-success-rgb) / .2)` silently keeps the old hue otherwise.
+- Semantic colour as a **solid fill under white ink** is not a supported pairing in this library (`TxStep` completed icon 1.74:1, `TxTabBar` badge and `TxToolConfirmation .is-dangerous` 2.77:1). Lightening the token makes those slightly worse; the fix is dark ink on those three, not a darker token.
+
 ### Shell colour tokens
 
 The app shell has one palette, `--shell-*` in `apps/core-app/src/renderer/src/styles/shell-tokens.scss`, defined across four blocks: `:root`, `.dark`, `html.contrast`, `html.dark.contrast`. Shell surfaces read tokens only — a hex literal or `rgba()` in a renderer component is a bug, because it survives the theme swap and the high-contrast accessibility mode.
