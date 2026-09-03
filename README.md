@@ -16,9 +16,9 @@ Tuff (formerly TalexTouch) is a local-first, AI-native, extensible desktop comma
 
 ## Release and platform status
 
-The repository's latest stable release is `2.4.13` (see [GitHub Releases](https://github.com/talex-touch/tuff/releases)); the in-development version declared in the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) is `2.4.14-beta.2`.
+The repository's latest stable release is `2.4.13` (see [GitHub Releases](https://github.com/talex-touch/tuff/releases)); the current release candidate declared in the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) is `2.4.14-beta.14`.
 
-Preview artifacts are produced for macOS, Windows, and Linux. A stable source version does not imply identical capability maturity or complete OTA acceptance across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
+The `2.4.14` public-release gate is intentionally strict: macOS, Windows, and Linux must each pass real installation, N→N+1 update, startup health, and recovery evidence before release. Stable launch/search and individually verified official plugins are the initial public scope; AI and unfinished UI surfaces remain explicitly Beta or unavailable. See the [release-readiness roadmap](./.trellis/tasks/09-03-release-readiness-roadmap/prd.md).
 
 On Ubuntu 24.04 and later, install from the `.deb` rather than the AppImage. 24.04 restricts
 unprivileged user namespaces by default, which Electron's sandbox needs; the `.deb` registers an
