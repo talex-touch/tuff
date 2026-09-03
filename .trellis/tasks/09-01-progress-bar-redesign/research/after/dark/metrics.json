@@ -1,0 +1,714 @@
+{
+  "gallery": [
+    {
+      "cls": "W W--mask-plain",
+      "w": 240,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 148.796875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 485.796875,
+        "tipX": 485.796875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": ""
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 240,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "rgba(0, 0, 0, 0)",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 240,
+      "glow": null,
+      "head": null,
+      "text": ""
+    },
+    {
+      "cls": "W W--mask-plain W--text-outside",
+      "w": 201.984375,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 121.1875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 458.1875,
+        "tipX": 458.1875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "60%"
+    },
+    {
+      "cls": "W W--mask-plain W--text-outside",
+      "w": 202.4375,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 186.234375,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 523.234375,
+        "tipX": 523.234375,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "92%"
+    }
+  ],
+  "progress-bar": [
+    {
+      "cls": "W W--mask-plain",
+      "w": 656,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 209.90625,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 516.90625,
+        "tipX": 516.90625,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "32%"
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 656,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 446.078125,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 753.078125,
+        "tipX": 753.078125,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "68%"
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 656,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 656,
+      "glow": {
+        "opacity": "0",
+        "visible": false,
+        "parent": "tx-progress-bar__body",
+        "cx": 963,
+        "tipX": 963,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "完成"
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 656,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "rgba(0, 0, 0, 0)",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 656,
+      "glow": null,
+      "head": null,
+      "text": "同步中"
+    },
+    {
+      "cls": "W W--mask-plain W--text-top",
+      "w": 360,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 14.515625,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 321.515625,
+        "tipX": 321.515625,
+        "w": 22,
+        "h": 14
+      },
+      "head": {
+        "text": "上传中 5%0.1 MB / 2.3 MB",
+        "labelColor": "rgb(64, 158, 255)",
+        "detailColor": "rgb(163, 166, 173)"
+      },
+      "text": "上传中 5%0.1 MB / 2.3 MB"
+    },
+    {
+      "cls": "W W--mask-plain W--bg-glass",
+      "w": 0,
+      "h": 14,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": "color(srgb 0.113725 0.117647 0.121569 / 0.4)",
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 0,
+      "glow": null,
+      "head": null,
+      "text": "55%"
+    },
+    {
+      "cls": "W W--mask-dashed",
+      "w": 590,
+      "h": 10,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "1px",
+      "afterContent": "\"\"",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 507.390625,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 847.390625,
+        "tipX": 847.390625,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "86%"
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 590,
+      "h": 10,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 424.796875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 764.796875,
+        "tipX": 764.796875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "72%"
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 590,
+      "h": 10,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 283.1875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 623.1875,
+        "tipX": 623.1875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "48%"
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 656,
+      "h": 5,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 524.796875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 831.796875,
+        "tipX": 831.796875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "上传中"
+    }
+  ],
+  "progress-bar-headings": "Demo | 状态进度 | 上传进度 | 分段进度 | 后台运营进度 | 运营状态面板 | 运营状态面板 | 状态面板 | 交互契约 | API | Props | ProgressSegment | Events | Slots | 最佳实践 | 审阅说明 | Source | 菜单",
+  "uploadMidflight": {
+    "head": "上传中 71%1.6 MB / 2.3 MB",
+    "aria": "上传 report.pdf",
+    "barW": 251.046875,
+    "tipX": 558.046875,
+    "glowCx": 558.046875,
+    "glowOpacity": "1"
+  },
+  "indeterminate": {
+    "sweep": {
+      "a": {
+        "transform": "matrix(1, 0, 0, 1, 520.169, 0)",
+        "left": "0px",
+        "width": "262.391px",
+        "animation": "tx-progress-loading",
+        "origin": "131.195px 2.5px"
+      },
+      "b": {
+        "transform": "matrix(1, 0, 0, 1, 647.935, 0)",
+        "left": "0px",
+        "width": "262.391px",
+        "animation": "tx-progress-loading",
+        "origin": "131.195px 2.5px"
+      },
+      "moved": true,
+      "layoutStable": true
+    },
+    "classic": {
+      "a": {
+        "transform": "matrix(1, 0, 0, 1, -259.673, 0)",
+        "left": "0px",
+        "width": "341.109px",
+        "animation": "tx-progress-classic",
+        "origin": "170.555px 2.5px"
+      },
+      "b": {
+        "transform": "matrix(1, 0, 0, 1, -10.1698, 0)",
+        "left": "0px",
+        "width": "341.109px",
+        "animation": "tx-progress-classic",
+        "origin": "170.555px 2.5px"
+      },
+      "moved": true,
+      "layoutStable": true
+    },
+    "bounce": {
+      "a": {
+        "transform": "matrix(1, 0, 0, 1, 191.183, 0)",
+        "left": "0px",
+        "width": "183.672px",
+        "animation": "tx-progress-bounce",
+        "origin": "91.8359px 2.5px"
+      },
+      "b": {
+        "transform": "matrix(1, 0, 0, 1, 466.226, 0)",
+        "left": "0px",
+        "width": "183.672px",
+        "animation": "tx-progress-bounce",
+        "origin": "91.8359px 2.5px"
+      },
+      "moved": true,
+      "layoutStable": true
+    },
+    "elastic": {
+      "a": {
+        "transform": "matrix(1.17452, 0, 0, 1, 496.01, 0)",
+        "left": "0px",
+        "width": "144.312px",
+        "animation": "tx-progress-elastic",
+        "origin": "72.1562px 2.5px"
+      },
+      "b": {
+        "transform": "matrix(1.09273, 0, 0, 1, 458.789, 0)",
+        "left": "0px",
+        "width": "144.312px",
+        "animation": "tx-progress-elastic",
+        "origin": "72.1562px 2.5px"
+      },
+      "moved": true,
+      "layoutStable": true
+    },
+    "split": {
+      "a": {
+        "transform": "matrix(0.657132, 0, 0, 1, 0, 0)",
+        "left": "0px",
+        "width": "656px",
+        "animation": "tx-progress-split",
+        "origin": "328px 2.5px"
+      },
+      "b": {
+        "transform": "matrix(0.968156, 0, 0, 1, 0, 0)",
+        "left": "0px",
+        "width": "656px",
+        "animation": "tx-progress-split",
+        "origin": "328px 2.5px"
+      },
+      "moved": true,
+      "layoutStable": true
+    }
+  },
+  "progress": [
+    {
+      "cls": "W W--mask-plain W--text-outside",
+      "w": 617.9375,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 247.171875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 554.171875,
+        "tipX": 554.171875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "40%"
+    },
+    {
+      "cls": "W W--mask-plain W--text-outside",
+      "w": 619.328125,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 445.90625,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 752.90625,
+        "tipX": 752.90625,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "72%"
+    },
+    {
+      "cls": "W W--mask-plain W--text-outside",
+      "w": 612.0625,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 612.0625,
+      "glow": {
+        "opacity": "0",
+        "visible": false,
+        "parent": "tx-progress-bar__body",
+        "cx": 919.0625,
+        "tipX": 919.0625,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "100%"
+    },
+    {
+      "cls": "W W--mask-plain W--text-outside",
+      "w": 181.984375,
+      "h": 6,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 109.1875,
+      "glow": {
+        "opacity": "1",
+        "visible": true,
+        "parent": "tx-progress-bar__body",
+        "cx": 416.1875,
+        "tipX": 416.1875,
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "text": "60%"
+    }
+  ],
+  "progress-headings": "Demo | 进度状态 | 进度行 | 组合示例 | 自定义文本格式 | 不确定进度 | 交互契约 | API | Props | Events | Slots | 最佳实践 | 审阅说明 | Source | 菜单",
+  "downstream": {
+    "ComponentsFeedbackTaskCenterDemo": [
+      {
+        "cls": "W W--mask-plain",
+        "w": 566,
+        "h": 8,
+        "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterBorderW": "0px",
+        "afterContent": "none",
+        "mask": null,
+        "barBg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+        "barShadow": "none",
+        "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+        "barW": 407.515625,
+        "glow": {
+          "opacity": "1",
+          "visible": true,
+          "parent": "tx-progress-bar__body",
+          "cx": 759.515625,
+          "tipX": 759.515625,
+          "w": 22,
+          "h": 14
+        },
+        "head": null,
+        "text": ""
+      },
+      {
+        "cls": "W W--mask-plain",
+        "w": 566,
+        "h": 8,
+        "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterBorderW": "0px",
+        "afterContent": "none",
+        "mask": null,
+        "barBg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+        "barShadow": "none",
+        "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+        "barW": 271.671875,
+        "glow": {
+          "opacity": "1",
+          "visible": true,
+          "parent": "tx-progress-bar__body",
+          "cx": 623.671875,
+          "tipX": 623.671875,
+          "w": 22,
+          "h": 14
+        },
+        "head": null,
+        "text": ""
+      },
+      {
+        "cls": "W W--mask-plain",
+        "w": 566,
+        "h": 8,
+        "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterBorderW": "0px",
+        "afterContent": "none",
+        "mask": null,
+        "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+        "barShadow": "none",
+        "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+        "barW": 543.359375,
+        "glow": {
+          "opacity": "1",
+          "visible": true,
+          "parent": "tx-progress-bar__body",
+          "cx": 895.359375,
+          "tipX": 895.359375,
+          "w": 22,
+          "h": 14
+        },
+        "head": null,
+        "text": ""
+      }
+    ],
+    "ComponentsNavigationShellDemo": [],
+    "ComponentsReleasePolicyDemo": [
+      {
+        "cls": "W W--mask-plain",
+        "w": 266,
+        "h": 8,
+        "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterBorderW": "0px",
+        "afterContent": "none",
+        "mask": null,
+        "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+        "barShadow": "none",
+        "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+        "barW": 93.09375,
+        "glow": {
+          "opacity": "1",
+          "visible": true,
+          "parent": "tx-progress-bar__body",
+          "cx": 754.09375,
+          "tipX": 754.09375,
+          "w": 22,
+          "h": 14
+        },
+        "head": null,
+        "text": ""
+      },
+      {
+        "cls": "W W--mask-dashed",
+        "w": 266,
+        "h": 8,
+        "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterBorderW": "1px",
+        "afterContent": "\"\"",
+        "mask": null,
+        "barBg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+        "barShadow": "none",
+        "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+        "barW": 133,
+        "glow": {
+          "opacity": "1",
+          "visible": true,
+          "parent": "tx-progress-bar__body",
+          "cx": 794,
+          "tipX": 794,
+          "w": 22,
+          "h": 14
+        },
+        "head": null,
+        "text": ""
+      }
+    ],
+    "ComponentsWorkflowPanelDemo": [
+      {
+        "cls": "W W--mask-plain",
+        "w": 594,
+        "h": 10,
+        "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterBorderW": "0px",
+        "afterContent": "none",
+        "mask": null,
+        "barBg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+        "barShadow": "none",
+        "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+        "barW": 445.5,
+        "glow": {
+          "opacity": "1",
+          "visible": true,
+          "parent": "tx-progress-bar__body",
+          "cx": 783.5,
+          "tipX": 783.5,
+          "w": 22,
+          "h": 14
+        },
+        "head": null,
+        "text": "75%"
+      }
+    ]
+  },
+  "storage": {
+    "url": "http://localhost:3200/dashboard/storage",
+    "bars": 2,
+    "text": "Tuff\nNexus\n|\nDashboard\nStore\nTutorial\nDeveloper\nUpdates\nPricing\nUB\n\nWORKSPACE\n\nOverview\nAssets\nPlan & Team\n\nACCOUNT\n\nAccount & Security\nAPI Keys\nDevices\nStorage"
+  },
+  "storageBars": [
+    {
+      "cls": "W W--mask-plain",
+      "w": 429,
+      "h": 8,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, rgb(59, 130, 246), rgb(37, 99, 235))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 0,
+      "glow": null,
+      "head": null,
+      "text": ""
+    },
+    {
+      "cls": "W W--mask-plain",
+      "w": 429,
+      "h": 8,
+      "trackBg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+      "afterBorderW": "0px",
+      "afterContent": "none",
+      "mask": null,
+      "barBg": "linear-gradient(90deg, rgb(168, 85, 247), rgb(147, 51, 234))",
+      "barShadow": "none",
+      "barTransition": "width 0.48s cubic-bezier(0.23, 1, 0.32, 1)",
+      "barW": 0,
+      "glow": null,
+      "head": null,
+      "text": ""
+    }
+  ]
+}

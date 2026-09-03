@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { resolveTransition } from '../../liquid/src/spring'
 import TxSlider from '../src/TxSlider.vue'
 import txSliderSource from '../src/TxSlider.vue?raw'
 
@@ -224,6 +225,16 @@ describe('txSlider', () => {
     })
     expect(plain.find('input').attributes('aria-valuetext')).toBeUndefined()
   })
+
+  it('renders the pill by default and drops it on the flat path', () => {
+    const pill = mount(TxSlider, { props: { modelValue: 40 } })
+    expect(pill.classes()).toContain('has-surface')
+    expect(pill.find('.tx-slider__surface').exists()).toBe(true)
+
+    const flat = mount(TxSlider, { props: { modelValue: 40, thumbSurface: false } })
+    expect(flat.classes()).not.toContain('has-surface')
+    expect(flat.find('.tx-slider__surface').exists()).toBe(false)
+  })
 })
 
 /**
@@ -266,6 +277,7 @@ describe('txSlider refractive slab sizing', () => {
     // would all pass vacuously.
     expect(ruleBody(source, '&__surface').length).toBeGreaterThan(0)
     expect(ruleBody(source, '&.is-dragging').length).toBeGreaterThan(0)
+    expect(ruleBody(source, '@supports (transition-timing-function: linear(0, 1))').length).toBeGreaterThan(0)
   })
 
   it('drives the slab through its own box, not a transform scale', () => {
@@ -281,7 +293,8 @@ describe('txSlider refractive slab sizing', () => {
 
     // Radius and rim are authored values now, never multiplied.
     expect(surface).toContain('border-radius: var(--tx-slider-surface-radius);')
-    expect(surface).toContain('box-shadow: inset 0 0 0 1px')
+    expect(surface).toContain('box-shadow:')
+    expect(surface).toContain('inset 0 0 0 1px')
   })
 
   it('transitions the size channel and walls the layout pass in', () => {
@@ -294,32 +307,218 @@ describe('txSlider refractive slab sizing', () => {
     // Without containment the size write is free to escape this leaf.
     expect(surface).toContain('contain: layout;')
   })
+})
 
-  it('gives rest, hover and drag three distinct extents', () => {
-    const extentOf = (block: string) => {
-      const match = block.match(/--tx-slider-surface-extent:\s*([\d.]+)/)
-      return match ? Number(match[1]) : null
-    }
+/**
+ * The pill thumb (2026-09-01). One visual object in all three states, sized
+ * like the Radio button-group indicator, with the press bounce compiled into
+ * the transition curve itself rather than layered on as keyframes.
+ */
+describe('txSlider pill thumb', () => {
+  const source = txSliderSource
 
-    const rest = extentOf(ruleBody(source, '.tx-slider {'))
-    const hover = extentOf(ruleBody(source, '&.is-hovering,'))
-    const drag = extentOf(ruleBody(source, '&.is-dragging {'))
+  /** Value of a custom property inside a rule body, or null when it is not set there. */
+  const varIn = (block: string, name: string): string | null => {
+    const match = block.match(new RegExp(`${name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}:\\s*([^;]+);`))
+    return match ? match[1]!.trim() : null
+  }
 
-    expect(rest).not.toBeNull()
-    expect(hover).not.toBeNull()
-    expect(drag).not.toBeNull()
-    expect(new Set([rest, hover, drag]).size).toBe(3)
-    expect(rest!).toBeLessThan(hover!)
-    expect(hover!).toBeLessThan(drag!)
+  it('keeps the pill at one size across rest and hover, and grows it at most 10% on drag', () => {
+    const rest = Number(varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-extent'))
+    const hover = varIn(ruleBody(source, '&.is-hovering,'), '--tx-slider-surface-extent')
+    const drag = Number(varIn(ruleBody(source, '&.is-dragging {'), '--tx-slider-surface-extent'))
+
+    expect(rest).toBe(1)
+    // Hover must not re-declare the extent: rest and hover are the same box.
+    expect(hover).toBeNull()
+    expect(drag).toBeGreaterThan(rest)
+    expect(drag).toBeLessThanOrEqual(rest * 1.1)
   })
 
-  it('lands the press bounce back on the base transform', () => {
-    // The bounce stays on `transform` because it *does* run every frame. Its
-    // last frame must equal the base transform or it jumps when it finishes
-    // mid-drag and hands back to the transition.
-    const press = ruleBody(source, '@keyframes tx-slider-surface-press')
+  it('keeps the pill visible in every state', () => {
+    // Pre-change the slab was opacity 0 at rest and the native white disc did
+    // the resting job; now the pill is the only thumb there is.
+    expect(varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-opacity')).toBe('1')
+    expect(varIn(ruleBody(source, '&.is-hovering,'), '--tx-slider-surface-opacity')).toBeNull()
+    expect(varIn(ruleBody(source, '&.is-dragging {'), '--tx-slider-surface-opacity')).toBeNull()
+  })
 
-    expect(press).toContain('transform: translate(-50%, -50%) scale(1);')
-    expect(press).not.toContain('--tx-slider-surface-extent')
+  it('draws a capsule with the Radio indicator recipe: rim, top highlight, drop shadow', () => {
+    expect(varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-radius')).toBe('999px')
+
+    const surface = ruleBody(source, '&__surface')
+    const shadow = surface.match(/box-shadow:([^;]+);/)?.[1] ?? ''
+    expect(shadow).toContain('inset 0 0 0 1px var(--tx-slider-surface-rim)')
+    expect(shadow).toContain('inset 0 1px 0 var(--tx-slider-surface-highlight)')
+    expect(shadow).toContain('0 2px 8px')
+
+    // Neutral glass, not a primary-tinted sticker: the tint mixes the overlay
+    // surface token, and the blue comes from the fill refracting through it.
+    const tint = varIn(ruleBody(source, '.tx-slider {'), '--tx-slider-surface-tint') ?? ''
+    expect(tint).toContain('--tx-bg-color-overlay')
+    expect(tint).not.toContain('--tx-color-primary')
+  })
+
+  it('sizes the native hit area to the pill so the fill lands on its centre', () => {
+    // `refreshMetrics()` reads `--tx-slider-thumb-size`; making it equal the
+    // pill width is what keeps the pill inside the track at 0 and 100.
+    const base = ruleBody(source, '.tx-slider {')
+    expect(varIn(base, '--tx-slider-thumb-size')).toBe('var(--tx-slider-surface-width)')
+
+    const flat = ruleBody(source, '&:not(.has-surface) {')
+    expect(varIn(flat, '--tx-slider-thumb-size')).toBe('18px')
+  })
+
+  it('reduces the native thumb to a hit area on the surface path', () => {
+    const thumb = ruleBody(source, '&.has-surface .tx-slider__input::-webkit-slider-thumb')
+    expect(thumb).toContain('background: transparent;')
+    expect(thumb).toContain('border: 0;')
+    expect(thumb).toContain('box-shadow: none;')
+    expect(thumb).toContain('width: var(--tx-slider-thumb-size);')
+    expect(thumb).toContain('height: var(--tx-slider-height);')
+  })
+
+  it('appends the keyboard focus ring to the pill without dropping its rim', () => {
+    const shadowListOf = (selector: string) => {
+      const list = ruleBody(source, selector).match(/box-shadow:([^;]+);/)?.[1] ?? ''
+      // Split on top-level commas only: the ring's fallback is a nested color-mix().
+      const items: string[] = []
+      let depth = 0
+      let current = ''
+      for (const ch of list) {
+        if (ch === '(')
+          depth++
+        else if (ch === ')')
+          depth--
+        if (ch === ',' && depth === 0) {
+          items.push(current.trim())
+          current = ''
+        }
+        else {
+          current += ch
+        }
+      }
+      items.push(current.trim())
+      return items.filter(Boolean)
+    }
+
+    const base = shadowListOf('&__surface')
+    const focused = shadowListOf('&.is-focused:not(.is-dragging) .tx-slider__surface')
+
+    // Positive control: the base list is the three-part Radio recipe.
+    expect(base).toHaveLength(3)
+    // Appended to the base list, not a replacement — otherwise the rim and the
+    // highlight vanish the moment the slider gains keyboard focus.
+    expect(focused.slice(0, base.length)).toEqual(base)
+    expect(focused).toHaveLength(base.length + 1)
+    expect(focused.at(-1)).toMatch(/^0 0 0 3px var\(--tx-focus-ring-color\b/)
+  })
+
+  it('no longer carries the press keyframes or the thumb dissolve', () => {
+    // The 08-31 bounce was four keyframes each on its own overshooting bezier,
+    // reversing velocity at every boundary. The bounce is now the transition.
+    expect(source).not.toContain('tx-slider-thumb-press')
+    expect(source).not.toContain('tx-slider-surface-press')
+    expect(source).not.toContain('@keyframes')
+    expect(source).not.toContain('animation:')
+
+    // The dissolve served the white disc, which no longer exists.
+    expect(source).not.toContain('--tx-slider-thumb-blur')
+    expect(source).not.toContain('--tx-slider-thumb-opacity')
+    expect(source).not.toContain('--tx-slider-dissolve-duration')
+    expect(source).not.toContain('--tx-slider-press-duration')
+  })
+
+  it('bounces on the state transition itself, timed by the state duration', () => {
+    const surface = ruleBody(source, '&__surface')
+    const transition = surface.match(/transition:([^;]+);/)?.[1] ?? ''
+    expect(transition).toMatch(/\bwidth var\(--tx-slider-state-duration\) var\(--tx-slider-ease\)/)
+    expect(transition).toMatch(/\bheight var\(--tx-slider-state-duration\) var\(--tx-slider-ease\)/)
+    // Rim / highlight / blur changes on hover ride the non-overshooting clock.
+    expect(transition).toMatch(/\bbox-shadow var\(--tx-slider-hover-duration\) var\(--tx-slider-hover-ease\)/)
+  })
+
+  it('does not let hover in/out overshoot', () => {
+    const base = ruleBody(source, '.tx-slider {')
+    const hoverEase = varIn(base, '--tx-slider-hover-ease') ?? ''
+    const bezier = hoverEase.match(/cubic-bezier\(([^)]+)\)/)
+    expect(bezier).not.toBeNull()
+    const [, y1, , y2] = bezier![1]!.split(',').map(Number)
+    expect(y1!).toBeLessThanOrEqual(1)
+    expect(y2!).toBeLessThanOrEqual(1)
+  })
+
+  it('falls back to a non-overshooting ease-out where linear() is unsupported', () => {
+    const base = ruleBody(source, '.tx-slider {')
+    const ease = varIn(base, '--tx-slider-ease') ?? ''
+    const bezier = ease.match(/^cubic-bezier\(([^)]+)\)$/)
+    expect(bezier).not.toBeNull()
+    const [, y1, , y2] = bezier![1]!.split(',').map(Number)
+    expect(y1!).toBeLessThanOrEqual(1)
+    expect(y2!).toBeLessThanOrEqual(1)
+  })
+
+  it('zeroes every clock under reduced motion', () => {
+    const reduced = ruleBody(source, '@media (prefers-reduced-motion: reduce)')
+    expect(reduced).toContain('--tx-slider-state-duration: 0ms;')
+    expect(reduced).toContain('--tx-slider-hover-duration: 0ms;')
+    // Nothing left to switch off: there are no keyframes.
+    expect(reduced).not.toContain('animation')
+  })
+})
+
+/**
+ * The spring is compiled once, by hand, into a static `linear()` string in the
+ * SCSS. This locks that string to the compiler's output so the two cannot drift.
+ */
+describe('txSlider spring curve', () => {
+  const source = txSliderSource
+  const STIFFNESS = 560
+  const DAMPING = 34
+
+  beforeAll(() => {
+    // `spring.ts` caches the `CSS.supports` probe module-wide on first call, so
+    // the stub has to be in place before any `resolveTransition` call in this
+    // process. jsdom has no `CSS` global, so without it we would get the
+    // bezier fallback and the equality below would be meaningless.
+    vi.stubGlobal('CSS', { supports: () => true })
+  })
+
+  it('locks the authored linear() curve to resolveTransition output', () => {
+    const resolved = resolveTransition({ stiffness: STIFFNESS, damping: DAMPING })
+    // Positive control: the stub took, we are looking at a compiled spring.
+    expect(resolved.easing.startsWith('linear(')).toBe(true)
+
+    const supports = ruleBody(source, '@supports (transition-timing-function: linear(0, 1))')
+    const authored = supports.match(/--tx-slider-ease:\s*(linear\([^)]*\));/)?.[1]
+    expect(authored).toBe(resolved.easing)
+
+    const duration = supports.match(/--tx-slider-state-duration:\s*(\d+)ms;/)?.[1]
+    expect(Number(duration)).toBe(resolved.duration)
+  })
+
+  it('overshoots 2–5% and reverses once', () => {
+    const resolved = resolveTransition({ stiffness: STIFFNESS, damping: DAMPING })
+    const values = resolved.easing.slice('linear('.length, -1).split(',').map(Number)
+
+    const peak = Math.max(...values)
+    expect(peak - 1).toBeGreaterThanOrEqual(0.02)
+    expect(peak - 1).toBeLessThanOrEqual(0.05)
+    expect(resolved.duration).toBeLessThanOrEqual(420)
+
+    // Count sign changes of the sampled velocity outside the ±0.1% settle band —
+    // the compiler forces the last sample to exactly 1, which manufactures a
+    // sub-visible wiggle at the tail that a raw count would report.
+    let reversals = 0
+    let previous = 0
+    for (let i = 1; i < values.length; i++) {
+      const delta = values[i]! - values[i - 1]!
+      const sign = delta > 0 ? 1 : delta < 0 ? -1 : 0
+      if (sign !== 0 && previous !== 0 && sign !== previous && Math.abs(values[i - 1]! - 1) >= 0.001)
+        reversals++
+      if (sign !== 0)
+        previous = sign
+    }
+    expect(reversals).toBe(1)
   })
 })

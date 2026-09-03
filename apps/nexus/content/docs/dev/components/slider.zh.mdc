@@ -149,7 +149,7 @@ code: |
 | `disabled` | `boolean` | `false` | 禁用 |
 | `showValue` | `boolean` | `false` | 右侧显示当前值 |
 | `formatValue` | `(value: number) => string` | - | 格式化显示值 |
-| `thumbSurface` | `boolean` | `true` | 滑钮背后的折射圆盘：hover 淡入、拖拽胀大，对背景做模糊与增彩。传 `false` 得到扁平滑钮，同时省掉 `backdrop-filter` 图层 |
+| `thumbSurface` | `boolean` | `true` | 常驻的玻璃胶囊拖钮，配方对齐 Radio 按钮组的滑动指示条：半透明底、发丝描边、顶部高光，对压住的填充条做模糊与增彩；拖拽时轻微放大。原生 thumb 只保留命中区。传 `false` 得到扁平圆钮，同时省掉 `backdrop-filter` 图层 |
 | `showTooltip` | `boolean` | `true` | 是否显示 tooltip |
 | `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip 显示触发方式 |
 | `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化 |
@@ -186,6 +186,7 @@ code: |
 ## 交互契约
 
 - 原生 range 输入会把 `modelValue` 夹在 `min..max` 范围内展示。
+- `thumbSurface`（默认）下可见的拖钮是常驻的玻璃胶囊（`.tx-slider__surface`），原生 thumb 退化为与胶囊等宽的命中区；键盘焦点（`:focus-visible`，拖拽发起的聚焦除外）的焦点环画在胶囊上。`thumbSurface=false` 回到扁平圆钮，焦点环也回到圆钮。
 - 原生 `input` 触发 `update:modelValue`，原生 `change` 触发 `change`。
 - `disabled` 会阻止值更新并隐藏 tooltip。
 - `formatValue` 控制右侧展示值；未传 `tooltipFormatter` 时也作为 tooltip 文本。
@@ -199,17 +200,19 @@ code: |
 - 单位说明放在相邻文案中，并用 `formatValue` / `tooltipFormatter` 处理 `%`、`ms` 或配额单位，不要把单位塞进 `modelValue`。
 - 用户拖动期间保持 `min`、`max` 和 `step` 稳定；中途改变范围计算会让 thumb 跳动。
 - `tooltipTilt` / jelly 动效适合探索式调参界面，不适合高密度企业表单。
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
-- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` 覆盖显示值与事件值裁剪、禁用交互与 tooltip 抑制、带格式的底部 tooltip、无过渡 tooltip 渲染、全局指针监听器清理，以及折射板的尺寸通道（三态各自的 extent、圆角与描边不随状态缩放、按下回弹回到基础 transform）。
-
-<TuffDocSourceLink />
+- 定制胶囊尺寸改 `--tx-slider-surface-width` / `--tx-slider-surface-size`，不要单独覆盖 `--tx-slider-thumb-size`：默认路径下它跟随胶囊宽，单独改小会让命中区窄于胶囊、两端出轨道。不想要拖钮时先传 `thumbSurface=false` 再把它归零。
 
 ## 审阅说明
 
 - 源码：`packages/tuffex/packages/components/src/slider/src/TxSlider.vue`。
 - 截图：`.codex-screenshots/nexus-slider-release-policy-demo-playwright-2026-05-28.png`。
+- 拖钮（2026-09-01）：默认态即常驻玻璃胶囊，配方取自 `TxRadioGroup type="button"` 的指示条；按下回弹是一次弹簧过渡（刚度 560 / 阻尼 34，过冲约 3%，362ms 收敛），编译成静态 `linear()` 写在 `@supports` 分支，不支持的环境回退到无过冲的 ease-out；hover 进出走独立的短 ease-out，不弹。被替换的方案是"白圆钮 + hover 淡入折射板 + 四段关键帧回弹"：两个物件轮流出场，每个关键帧边界速度反向一次，这是先前不丝滑的根因。
 - 建议：滑块只表达连续阈值；发布流量、容量比例和采样率适合用它，风险档位应交给 `TxSegmentedSlider`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
+- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` 覆盖显示值与事件值裁剪、禁用交互与 tooltip 抑制、带格式的底部 tooltip、无过渡 tooltip 渲染、全局指针监听器清理，以及胶囊拖钮（rest 与 hover 同尺寸、拖拽放大不超过 1.10 倍、圆角与描边不随状态缩放、命中宽度等于胶囊宽、焦点环追加在胶囊阴影列表末尾、不再有关键帧与圆钮溶解，弹簧编译的 `linear()` 曲线与 `resolveTransition` 输出逐字锁定）。
+
+<TuffDocSourceLink />

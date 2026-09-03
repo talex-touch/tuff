@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Verify the docs page shows the pill (rendered-page check, dev-server lag trap) and that zh/en parity holds."}
+{"file": ".trellis/tasks/09-01-tuffex-gallery-visual-polish/research/measurements.md", "reason": "Acceptance thresholds: overshoot 2-5%, one velocity reversal, settle <= 420ms, drag <= 1.10x rest."}

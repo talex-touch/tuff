@@ -63,7 +63,7 @@ code: |
 - `percentage`、`status`、`indeterminate`、`showText` 和 `format` 会直接转发。
 - `strokeWidth` 会转换为类似 `"6px"` 的 CSS 高度字符串，并作为 `height` 传入。
 - 文本位置固定为 `outside`。
-- 底层进度条固定使用 `maskVariant="plain"` 和 `maskBackground="mask"`。
+- 底层进度条使用 `maskVariant="plain"`，轨道跟随 `TxProgressBar` 的默认样式（无描边平铺轨道、渐变填充）。
 - 确定进度通过 `TxProgressBar` 暴露 `role="progressbar"` 和 `aria-valuenow`。
 - 不确定进度会省略 `aria-valuenow`，并应用进度条的不确定状态类。
 - 安装入口注册组件名 `TuffProgress`。

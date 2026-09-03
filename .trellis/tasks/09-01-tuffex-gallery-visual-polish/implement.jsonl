@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Every child changes rendered output of a tuffex component; wrapper blast radius, placement rules, demo wiring and gate traps apply to all three."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Token-only colour rule, reduced-motion requirement, and the DocsSidebar dark-selector trap."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Evidence artefacts stay out of source changes unless curated; verification standards."}
+{"file": ".trellis/tasks/09-01-tuffex-gallery-visual-polish/research/measurements.md", "reason": "All measured numbers (contrast, geometry, keyframe kinematics, spring candidates, blast radius) that the three children cite."}
