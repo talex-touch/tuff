@@ -7,6 +7,7 @@ import {
   getClipboardColorTokens,
   getClipboardInfoRows,
   getClipboardOcrInsight,
+  getClipboardTagLabels,
   getClipboardTextInsight,
   getClipboardTitle,
   getClipboardTypeLabel,
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 const textInsight = computed(() => getClipboardTextInsight(props.item))
 const colorTokens = computed(() => getClipboardColorTokens(props.item))
 const ocrInsight = computed(() => getClipboardOcrInsight(props.item))
+const tagLabels = computed(() => (props.item ? getClipboardTagLabels(props.item) : []))
 const failedImageSources = ref<ReadonlySet<string>>(new Set())
 const retriedImageSources = ref<ReadonlySet<string>>(new Set())
 const imageRetryNonce = ref(0)
@@ -143,6 +145,10 @@ function handleSourceIconError(event: Event): void {
           {{ getClipboardTypeLabel(item) }}
         </p>
         <h2>{{ getClipboardTitle(item) }}</h2>
+      </div>
+
+      <div v-if="tagLabels.length > 0" class="credential-tags" aria-label="内容标签">
+        <span v-for="label in tagLabels" :key="label" class="credential-tag">{{ label }}</span>
       </div>
 
       <div class="info-grid">
@@ -369,6 +375,23 @@ function handleSourceIconError(event: Event): void {
   letter-spacing: 0.08em;
   color: var(--clipboard-text-muted);
   text-transform: uppercase;
+}
+
+.credential-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.credential-tag {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--clipboard-color-accent) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--clipboard-color-accent) 10%, transparent);
+  color: var(--clipboard-color-accent);
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 .info-grid {
