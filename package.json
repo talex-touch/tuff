@@ -176,9 +176,6 @@
     "plugins/touch-dev-utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"plugins/touch-dev-utils\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
-    "plugins/touch-image/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"plugins/touch-image\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
-    ],
     "plugins/touch-music/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"plugins/touch-music\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
