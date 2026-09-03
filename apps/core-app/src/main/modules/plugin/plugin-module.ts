@@ -163,6 +163,7 @@ import {
 import {
   createFixedPluginVscodeProjectsService,
   createPluginVscodeProjectsCapabilities,
+  type PluginVscodeProjectIdentityProof,
   type PluginVscodeProjectKind
 } from './host/plugin-vscode-projects-capabilities'
 import {
@@ -2839,13 +2840,7 @@ export class PluginModule extends BaseModule {
       target: string,
       kind: PluginVscodeProjectKind,
       signal: AbortSignal,
-      proof: {
-        readonly canonicalPath: string
-        readonly dev: string
-        readonly ino: string
-        readonly kind: PluginVscodeProjectKind
-        readonly channel: 'stable' | 'insiders'
-      }
+      proof: PluginVscodeProjectIdentityProof
     ): Promise<void> => {
       if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
       let executable: string
@@ -2909,6 +2904,7 @@ export class PluginModule extends BaseModule {
         proof.canonicalPath !== canonicalTarget ||
         String(afterStats.dev) !== proof.dev ||
         String(afterStats.ino) !== proof.ino ||
+        String(afterStats.birthtimeMs) !== proof.birthtimeMs ||
         (kind === 'folder' && !afterStats.isDirectory()) ||
         (kind !== 'folder' && !afterStats.isFile())
       ) {
