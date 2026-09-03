@@ -356,8 +356,12 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
     aliases: [...DEV_ALIASES, 'xcode', 'ios dev', 'apple dev']
   },
   {
-    match: ['terminal', 'iterm', 'warp', 'hyper', 'tabby'],
+    match: ['terminal', 'iterm', 'warp', 'hyper', 'tabby', 'ghostty', 'cmux'],
     aliases: [...DEV_ALIASES, ...TERMINAL_ALIASES]
+  },
+  {
+    match: ['orca', 'orca.app'],
+    aliases: [...DEV_ALIASES, 'orca', 'worktree', 'workspace', 'ai tool', '智能工具']
   },
   {
     match: ['apifox'],
