@@ -5,6 +5,7 @@ import {
   getClipboardColorTokens,
   getClipboardOcrInsight,
   getClipboardSizeLabel,
+  getClipboardTagLabels,
   getClipboardTextInsight,
   parseFileList,
   resolveDetailImagePreview,
@@ -238,5 +239,62 @@ describe('clipboard-items helpers', () => {
       confidence: '88%',
       keywords: ['Invoice', 'total'],
     })
+  })
+
+  it.each([
+    ['api_key', 'API 密钥'],
+    ['github', 'GitHub'],
+    ['npm', 'npm'],
+    ['openai', 'OpenAI'],
+    ['stripe', 'Stripe'],
+    ['google', 'Google'],
+    ['aws', 'AWS'],
+    ['slack', 'Slack'],
+  ])('projects the known credential tag %s into its localized label', (tag, label) => {
+    const item: PluginClipboardItem = {
+      id: 18,
+      type: 'text',
+      content: 'synthetic credential note',
+      metadata: JSON.stringify({ tags: [tag] }),
+    }
+
+    expect(getClipboardTagLabels(item)).toEqual([label])
+  })
+
+  it('preserves an unknown credential tag label', () => {
+    const item: PluginClipboardItem = {
+      id: 19,
+      type: 'text',
+      content: 'synthetic credential note',
+      meta: { tags: ['openai', 'internal_service'] },
+    }
+
+    expect(getClipboardTagLabels(item)).toEqual(['OpenAI', 'internal_service'])
+  })
+
+  it.each([
+    ['absent tags', {}],
+    ['non-array tags', { tags: 'github' }],
+    ['mixed malformed tags', { tags: [null, 42, {}] }],
+  ])('omits %s metadata', (_name, meta) => {
+    const item: PluginClipboardItem = {
+      id: 20,
+      type: 'text',
+      content: 'synthetic credential note',
+      meta,
+    }
+
+    expect(getClipboardTagLabels(item)).toEqual([])
+  })
+
+  it('omits malformed serialized tag metadata', () => {
+    const item: PluginClipboardItem = {
+      id: 21,
+      type: 'text',
+      content: 'synthetic credential note',
+      metadata: '{not-json',
+    }
+
+    expect(getClipboardTagLabels(item)).toEqual([])
   })
 })
