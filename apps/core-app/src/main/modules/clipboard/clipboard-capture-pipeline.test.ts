@@ -224,6 +224,23 @@ describe('clipboard-capture-pipeline', () => {
     )
   })
 
+  it('persists WeChat aliases with their metadata search terms', async () => {
+    const context = createPipeline()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('@wechat')
+
+    await context.pipeline.process('visible-poll')
+
+    expect(context.metaPersistence.persistMetaEntriesSafely).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({ tags: ['wechat'] }),
+      expect.arrayContaining([
+        { key: 'tags', value: ['wechat'] },
+        { key: 'tag_search_terms', value: ['wechat', 'wx', '微信'] }
+      ]),
+      { dropPolicy: 'drop', maxQueueWaitMs: 10_000 }
+    )
+  })
+
   it('captures a CoreBox show baseline image even when bootstrap already saw the same image', async () => {
     const image = createImage()
     mocks.availableFormats.mockReturnValue(['public.png'])
