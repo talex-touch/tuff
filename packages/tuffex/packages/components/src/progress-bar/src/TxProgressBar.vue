@@ -604,6 +604,14 @@ watch(
   border-color: color-mix(in srgb, rgba(255, 255, 255, 0.62) 62%, var(--tx-border-color-light, #e4e7ed));
 }
 
+/*
+ * The fill is a `background-image` now, not a flat colour. Downstream overrides
+ * written as `background-color` on `.tx-progress-bar` therefore paint *behind*
+ * the gradient and only show through where it is translucent — core-app's
+ * `DownloadTask.vue` does exactly this. Known and left in place: those callers
+ * should set `--tx-progress-fill` or pass `color` instead, which is a change on
+ * their side.
+ */
 .tx-progress-bar {
   position: absolute;
   display: block;
