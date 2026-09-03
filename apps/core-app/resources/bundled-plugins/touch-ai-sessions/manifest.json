@@ -86,10 +86,10 @@
     }
   ],
   "_files": {
-    "index.js": "sha256-c53a2898567cb9894b18c80a1f042e60c0f63fc7897aa59254345fb06dada6c7",
+    "index.js": "sha256-b83078903ea159f2d4d5b25d58f91c3b30ac1d6038c103ada2c43fa4d190dcda",
     "assets/logo.svg": "sha256-1b4a96dd5fde04f1c0379e20f574514db928678e183e564546757693cb9d622f"
   },
-  "_signature": "2jf6A2Ro6GpGJ3hWfyGPAPZWi+5i3mFzUK7FupfGiHk=",
+  "_signature": "7X+JZBWzBFB8nAgNOiJ2i+to50MY/VYrtkLDxqTEMPI=",
   "dev": {
     "enable": false,
     "address": "",
