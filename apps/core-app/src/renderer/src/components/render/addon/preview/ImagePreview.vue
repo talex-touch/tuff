@@ -2,18 +2,18 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { buildTfileUrl } from '~/utils/tfile-url'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   item: TuffItem
+  resourceUrl: string
 }>()
 
 const imageError = ref(false)
 const imageLoading = ref(true)
 
-const imageSrc = computed(() => buildTfileUrl(props.item.meta?.file?.path ?? ''))
+const imageSrc = computed(() => props.resourceUrl)
 
 function handleError() {
   imageError.value = true

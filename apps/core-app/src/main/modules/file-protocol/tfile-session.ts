@@ -8,6 +8,7 @@ import {
   normalizeDarwinUsersPath
 } from '../../utils/local-file-policy'
 import { createLogger } from '../../utils/logger'
+import { isTfilePreviewGrantAuthorized } from './tfile-preview-grant'
 
 /**
  * Deduplicate error logs -- only log each failing path once, up to a bound.
@@ -135,15 +136,18 @@ export function registerTfileProtocolForSession(
     const extractedPath = extractAbsolutePath(request.url)
     if (!extractedPath) {
       fileProtocolLog.warn('Rejected non-canonical tfile URL', {
-        meta: {
-          requestUrl: request.url
-        }
+        meta: { scheme: FILE_SCHEMA }
       })
       return new Response('Bad Request', { status: 400 })
     }
     const filePath = normalizeDarwinUsersPath(extractedPath)
     const normalizedPath = normalizeAbsolutePath(filePath)
-    if (!normalizedPath || !isAllowedLocalFilePath(normalizedPath, allowedRoots)) {
+    const previewGrantAuthorized =
+      normalizedPath !== null && isTfilePreviewGrantAuthorized(request.url, normalizedPath)
+    if (
+      !normalizedPath ||
+      (!isAllowedLocalFilePath(normalizedPath, allowedRoots) && !previewGrantAuthorized)
+    ) {
       if (shouldLogPathOnce(filePath)) {
         fileProtocolLog.warn(`Blocked path: ${filePath}`)
       }
@@ -159,8 +163,7 @@ export function registerTfileProtocolForSession(
         fileProtocolLog.error('tfile request error', {
           meta: {
             filePath: normalizedPath,
-            fileUrl,
-            url: request.url
+            fileUrl
           },
           error: error instanceof Error ? error.message : String(error)
         })

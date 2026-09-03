@@ -37,6 +37,7 @@ import {
 import { app, session } from 'electron'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { getAllowedLocalFileRoots, isAllowedLocalFilePath } from '../../utils/local-file-policy'
+import { isTfilePreviewGrantAuthorized } from '../file-protocol/tfile-preview-grant'
 import { createLogger } from '../../utils/logger'
 import { getSecureStoreValue } from '../../utils/secure-store'
 import { getMainConfig, saveMainConfig } from '../storage'
@@ -615,7 +616,8 @@ export class NetworkService {
       throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
     }
 
-    if (!isAllowedLocalFilePath(localPath, this.allowedRoots)) {
+    const previewGrantAuthorized = isTfilePreviewGrantAuthorized(source, localPath)
+    if (!isAllowedLocalFilePath(localPath, this.allowedRoots) && !previewGrantAuthorized) {
       throw new Error('NETWORK_FILE_FORBIDDEN')
     }
 
