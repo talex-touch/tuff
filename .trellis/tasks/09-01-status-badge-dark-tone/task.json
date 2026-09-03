@@ -22,5 +22,9 @@
   "parent": "09-01-tuffex-gallery-visual-polish",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Nothing implementation-side. Awaiting the parent's commit; the task moves to completed and archives with the other two children once the three-child diff lands.",
+    "blocker": "None. One accepted trade-off is recorded rather than fixed: danger is held to AA (6.66:1 as ink on #141414) because no red clears AAA as ink while keeping white ink on the solid TxToolConfirmation .is-dangerous fill at its old 2.90:1 -- the feasible luminance window is empty.",
+    "evidence": "packages/tuffex .dark block now defines --tx-color-success/warning/danger (#4ade80 / #fbbf24 / #f87171) with matching -rgb triplets and a re-anchored danger-light ramp; TxStatusBadge is a 999px / weight-500 pill with a 1em outline-circle icon family. status-badge/__tests__/status-badge.test.ts (15) and __tests__/dark-semantic-tokens.test.ts (10) pass, both with positive controls on their source extractors, and the success-icon assertion was replayed red against git show HEAD:. 32 gallery cells compared per-pixel in both themes: better 4 / unchanged 25 / mixed 2 / worse 0."
+  }
 }
