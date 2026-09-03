@@ -1,3 +1,6 @@
+import path from 'node:path'
+import { sql } from 'drizzle-orm'
+import type { DbUtils } from '../../../../../db/utils'
 import {
   mapIndexedWriteReconciliationDbPayload,
   mapIndexedWriteReconciliationDiskPayload,
@@ -15,6 +18,31 @@ export interface FileProviderReconciliationDbRecord {
   id: number
   path: string
   mtime: Date | number | string | null
+}
+
+export async function getMissingReconciliationDbFiles(
+  dbUtils: DbUtils,
+  rootPath: string,
+  afterId: number,
+  limit: number
+): Promise<FileProviderReconciliationDbRecord[]> {
+  const queryRoot = path.normalize(rootPath)
+  const descendantPrefix = queryRoot.endsWith(path.sep) ? queryRoot : `${queryRoot}${path.sep}`
+  const escapedPrefix = descendantPrefix.replace(/!/g, '!!').replace(/%/g, '!%').replace(/_/g, '!_')
+  return await dbUtils.getFileIndexReadDb().all<FileProviderReconciliationDbRecord>(sql`
+    SELECT f.id, f.path, f.mtime
+    FROM files AS f
+    WHERE f.type = 'file'
+      AND (f.path = ${queryRoot} OR f.path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
+      AND f.id > ${afterId}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM file_reconciliation_seen_paths AS seen
+        WHERE seen.path = f.path
+      )
+    ORDER BY f.id
+    LIMIT ${limit}
+  `)
 }
 
 export interface FileProviderReconciliationUpdateRecord {

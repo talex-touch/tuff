@@ -39,7 +39,7 @@ export function getIndexedWatchDepthForPath(
   const platform = input.platform ?? getCurrentPlatform();
 
   if (platform === "darwin") {
-    return 5;
+    return 8;
   }
 
   if (platform === "win32") {

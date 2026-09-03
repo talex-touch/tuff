@@ -224,8 +224,9 @@ TalexDreamSoul/app-shell-v2 @ a1431ca42); verify before use.
   search-time filter counted as stale ⇒ REAL deletion from index during search;
   root: getIndexExclusionReason checks parent only, getSearchExclusionReason checks
   all ancestors (hasHiddenSegment).
-- F-M5 · 中 · bug · indexing-watch-path-policy.ts:41 — watch depth 5 vs scan depth 24:
-  deep files indexed but never watched; deletions persist until 24h reconcile.
+- F-M5 · 中 · bug · indexing-watch-path-policy.ts:41 — scan 深度仍为 24；2026-09-03
+  将 Darwin watch 深度从 5 提升至 8，并增加每进程一次的启动对账，补齐应用关闭期间新增文件。
+  第 9 层及以下仍不能实时监听，删除和修改需等待后续对账，因此本条保持 open。
 - F-M6 · 中 · 精准 — CJK infix unsearchable (unicode61 treats han run as one token,
   prefix-only match expr; index-side split only on [-_.\s]): 「会议」/「纪要」 cannot
   find 「2026年度会议纪要.docx」.

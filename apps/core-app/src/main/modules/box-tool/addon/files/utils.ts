@@ -86,6 +86,57 @@ export async function scanDirectoryBatches(
   )
 }
 
+const FILE_MIME_TYPES: Readonly<Record<string, string>> = {
+  aac: 'audio/aac',
+  avi: 'video/x-msvideo',
+  bmp: 'image/bmp',
+  cjs: 'text/javascript',
+  conf: 'text/plain',
+  csv: 'text/csv',
+  env: 'text/plain',
+  flac: 'audio/flac',
+  gif: 'image/gif',
+  gz: 'application/gzip',
+  htm: 'text/html',
+  html: 'text/html',
+  ico: 'image/x-icon',
+  ini: 'text/plain',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  js: 'text/javascript',
+  json: 'application/json',
+  jsx: 'text/javascript',
+  log: 'text/plain',
+  md: 'text/markdown',
+  mjs: 'text/javascript',
+  mkv: 'video/x-matroska',
+  mov: 'video/quicktime',
+  mp3: 'audio/mpeg',
+  mp4: 'video/mp4',
+  ogg: 'audio/ogg',
+  pdf: 'application/pdf',
+  png: 'image/png',
+  ps1: 'text/plain',
+  sh: 'text/x-shellscript',
+  svg: 'image/svg+xml',
+  tar: 'application/x-tar',
+  toml: 'application/toml',
+  ts: 'text/typescript',
+  tsx: 'text/typescript',
+  txt: 'text/plain',
+  wav: 'audio/wav',
+  webm: 'video/webm',
+  webp: 'image/webp',
+  xml: 'application/xml',
+  yaml: 'application/yaml',
+  yml: 'application/yaml',
+  zip: 'application/zip'
+}
+
+function resolveFileMimeType(extension: string): string {
+  return FILE_MIME_TYPES[extension] ?? 'application/octet-stream'
+}
+
 export function mapFileToTuffItem(
   file: typeof filesSchema.$inferSelect,
   _extensions: Record<string, string>,
@@ -173,6 +224,7 @@ export function mapFileToTuffItem(
       file: {
         path: file.path,
         size: file.size ?? undefined,
+        mime_type: resolveFileMimeType(extension),
         created_at: file.ctime.toISOString(),
         modified_at: file.mtime.toISOString(),
         extension: (file.extension || path.extname(file.name) || '')

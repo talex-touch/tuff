@@ -38,13 +38,14 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanCheckIntervalMs: 5 * 60 * 1000,
   extraPaths: []
 }
+const STARTUP_RECONCILE_DELAY_MS = 2_500
 
 export interface FileProviderWatchServiceDeps {
   baseWatchPaths: string[]
   getDbUtils: () => DbUtils | null
   getWatchDepthForPath: (watchPath: string) => number
   normalizePath: (rawPath: string) => string
-  runAutoIndexing: () => Promise<void>
+  runAutoIndexing: () => Promise<boolean>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   logError: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
@@ -79,6 +80,9 @@ export class FileProviderWatchService {
   private autoIndexTaskRegistered = false
   private fsEventsSubscribed = false
   private watchPathsRegistered = false
+  /** Startup reconciliation covers files created while the app was offline. */
+  private startupReconcilePending = true
+  private startupReconcileTimer: NodeJS.Timeout | null = null
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
 
   constructor(deps: FileProviderWatchServiceDeps) {
@@ -231,6 +235,18 @@ export class FileProviderWatchService {
     }
   }
 
+  private async runStartupReconcile(): Promise<boolean> {
+    const completed = await this.runAutoIndexing()
+    if (!completed) return false
+
+    this.startupReconcilePending = false
+    if (this.startupReconcileTimer) {
+      clearTimeout(this.startupReconcileTimer)
+      this.startupReconcileTimer = null
+    }
+    return true
+  }
+
   initializeBackgroundTaskService(): void {
     const dbUtils = this.getDbUtils()
     if (!dbUtils) {
@@ -277,7 +293,7 @@ export class FileProviderWatchService {
         canInterrupt: true,
         estimatedDuration: 15 * 60 * 1000,
         execute: async () => {
-          await this.runAutoIndexing()
+          await this.runStartupReconcile()
         }
       })
       this.autoIndexTaskRegistered = true
@@ -295,7 +311,25 @@ export class FileProviderWatchService {
 
     this.backgroundTaskService.start()
 
+    if (this.startupReconcilePending && !this.startupReconcileTimer) {
+      this.startupReconcileTimer = setTimeout(() => {
+        this.startupReconcileTimer = null
+        if (!this.startupReconcilePending) return
+        void this.runStartupReconcile().catch((error) => {
+          this.logWarn('Startup file reconciliation failed', error)
+        })
+      }, STARTUP_RECONCILE_DELAY_MS)
+      this.startupReconcileTimer.unref()
+    }
+
     this.logDebug('Background task service initialized')
+  }
+  dispose(): void {
+    this.startupReconcilePending = false
+    if (this.startupReconcileTimer) {
+      clearTimeout(this.startupReconcileTimer)
+      this.startupReconcileTimer = null
+    }
   }
 
   async getScanEligibility(): Promise<{
@@ -365,7 +399,10 @@ export class FileProviderWatchService {
     const eligibility = await this.getScanEligibility()
     const preflight = resolveIndexedAutoScanPreflight({
       ...basePreflightInput,
-      hasEligiblePaths: eligibility.newPaths.length > 0 || eligibility.stalePaths.length > 0
+      hasEligiblePaths:
+        this.startupReconcilePending ||
+        eligibility.newPaths.length > 0 ||
+        eligibility.stalePaths.length > 0
     })
 
     if (!preflight.allowed) {
@@ -373,7 +410,9 @@ export class FileProviderWatchService {
     }
 
     const decision = await deviceIdleService.canRun({
-      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs
+      idleThresholdMs: this.startupReconcilePending
+        ? 0
+        : this.fileIndexSettings.autoScanIdleThresholdMs
     })
 
     const battery = decision.snapshot.battery

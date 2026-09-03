@@ -7,11 +7,11 @@ import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
   item: TuffItem
   searchQuery?: string
+  resourceUrl: string
 }>()
 
 const { t } = useI18n()
@@ -112,17 +112,14 @@ async function loadContent() {
 
   loading.value = true
   try {
-    const filePath = props.item.meta.file.path
+    const resourceUrl = props.resourceUrl
     if (isElectronRenderer() && transport) {
-      // Use IPC channel for file reading in Electron
-      const tfileUrl = buildTfileUrl(filePath)
       textContent.value = await transport.send(AppEvents.system.readFile, {
-        source: tfileUrl,
+        source: resourceUrl,
         timeoutMs: READ_TIMEOUT_MS
       })
     } else {
-      const url = buildTfileUrl(filePath)
-      textContent.value = await networkClient.readText(url)
+      textContent.value = await networkClient.readText(resourceUrl)
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : ''
