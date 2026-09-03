@@ -108,8 +108,8 @@ code: |
 - Text renders only when `message` is present or `showText=true`; loading/indeterminate states only show text when `message` is present. `textPlacement="top"` follows the same rule as `outside` and renders the text row above the track.
 - `detail` renders only under `textPlacement="top"`, after the label and muted behind a separator dot. It is visible text and never enters the progressbar's accessible name (still `ariaLabel` > `message` > `Progress`).
 - The default track is a flat 10% tint of the text colour: no `.tx-progress-bar__mask` node and no rim. `maskVariant="solid" | "dashed"` draws the rim; the mask layer renders only when `maskBackground` is not `'none'`.
-- The fill defaults to `linear-gradient(90deg, faded → saturated)`; a `color` that is already a gradient string is used verbatim. Between 0% and 100%, when neither indeterminate nor segmented, `.tx-progress-bar__glow` renders at the tip, outside the track's clipping.
-- Width changes ease over 480ms on `--tx-ease-out-strong`; the five indeterminate sweeps animate `transform` only and stop under `prefers-reduced-motion`.
+- The fill defaults to `linear-gradient(90deg, faded → saturated)`; a `color` that is already a gradient string is used verbatim. `.tx-progress-bar__glow` is mounted for determinate bars that are neither segmented nor given a gradient `color`, sits outside the track's clipping, and is visible only strictly between 0% and 100%.
+- Width changes ease over 480ms on `--tx-ease-out-strong`; the five indeterminate sweeps animate composited properties only (`transform`, plus `opacity` on `split`), never `left` or `width`, and stop under `prefers-reduced-motion`.
 - `segments` ignore non-positive values. The filled width uses `segmentsTotal`; segment widths inside the fill normalize by the sum of positive segment values.
 - `complete` emits once when resolved progress reaches `100`, and can emit again after progress drops below `100` and completes again.
 - `tooltip` or `tooltipContent` wraps the bar in `TxTooltip`; `tooltipProps` are forwarded to that tooltip.
@@ -188,7 +188,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
 - Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` verifies determinate clamping and ARIA state, indeterminate `aria-valuenow` omission, once-per-cycle `complete` emits, segment normalization by positive segment sum, and the redesign: no mask node by default, gradient fill and glow placement, the `top` text row, transform-only keyframes and the reduced-motion stop.
+- **Verified coverage:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` verifies determinate clamping and ARIA state, indeterminate `aria-valuenow` omission, once-per-cycle `complete` emits, segment normalization by positive segment sum, and the redesign: no mask node by default, gradient fill and glow placement, the `top` text row, layout-free keyframes and the reduced-motion stop.
 
 <TuffDocSourceLink />
 

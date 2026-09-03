@@ -108,8 +108,8 @@ code: |
 - 只有存在 `message` 或 `showText=true` 时才显示文本；loading/indeterminate 状态只有存在 `message` 时显示文本。`textPlacement="top"` 与 `outside` 遵循同一规则，只是把文案行渲染在轨道上方。
 - `detail` 只在 `textPlacement="top"` 下渲染，位于主文案之后、以分隔点弱化；它是可见文本，不进入 progressbar 的可访问名（仍为 `ariaLabel` > `message` > `Progress`）。
 - 默认轨道是文字色 10% 的平铺色块，不渲染 `.tx-progress-bar__mask`、不画描边；`maskVariant="solid" | "dashed"` 才生成描边，`maskBackground` 不为 `'none'` 时才渲染 mask 层。
-- 填充默认是 `linear-gradient(90deg, 淡 → 饱和)`；`color` 本身是渐变字符串时原样使用。0% 与 100% 之间、非 indeterminate、非 segments 时在填充前端渲染 `.tx-progress-bar__glow`，它位于轨道裁剪之外。
-- 宽度变化以 480ms `--tx-ease-out-strong` 过渡；不确定态的五种扫光只动 `transform`，`prefers-reduced-motion` 下停止扫光。
+- 填充默认是 `linear-gradient(90deg, 淡 → 饱和)`；`color` 本身是渐变字符串时原样使用。`.tx-progress-bar__glow` 只在非 indeterminate、非 segments、`color` 也不是渐变时挂载，位于轨道裁剪之外，且仅在 0% 与 100% 之间可见。
+- 宽度变化以 480ms `--tx-ease-out-strong` 过渡；不确定态的五种扫光只动合成属性（`transform`，`split` 另加 `opacity`），不动 `left` / `width`，`prefers-reduced-motion` 下停止扫光。
 - `segments` 会忽略非正数值。填充总宽度使用 `segmentsTotal`，填充区域内的各段宽度按正数 segment 总和归一化。
 - `complete` 在解析进度到达 `100` 时每个完成周期只触发一次；进度回落到 `100` 以下后再次完成可再次触发。
 - `tooltip` 或 `tooltipContent` 会把进度条包在 `TxTooltip` 中；`tooltipProps` 会透传给该 tooltip。
@@ -188,7 +188,7 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
 - Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` 验证确定进度钳制与 ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次、segment 按正数总和归一化，以及默认无 mask 节点、渐变填充与光晕位置、`top` 文案行、关键帧只动 `transform` 与 reduced-motion 停播。
+- **实测覆盖:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` 验证确定进度钳制与 ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次、segment 按正数总和归一化，以及默认无 mask 节点、渐变填充与光晕位置、`top` 文案行、关键帧不含 `left` / `width` 与 reduced-motion 停播。
 
 <TuffDocSourceLink />
 

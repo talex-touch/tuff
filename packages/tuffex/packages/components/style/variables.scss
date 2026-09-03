@@ -334,9 +334,13 @@
    *   warning `#fbbf24`  11.04 : 1  / 10.00 : 1  /  1.67 : 1  (was 8.42 / 7.63 / 2.19)
    *   danger  `#f87171`   6.66 : 1  /  6.04 : 1  /  2.77 : 1  (was 6.35 / 5.76 / 2.90)
    * Red cannot clear 7:1 as ink here without pushing white ink on the solid
-   * `TxToolConfirmation .is-dangerous` button below 2.6:1, so danger stays just under AAA;
-   * white ink on a solid success / warning fill was already failing AA and is not a
-   * supported pairing (TxStep, TxTabBar badge — see those files).
+   * `TxToolConfirmation .is-dangerous` button below 2.6:1, so danger stays just under AAA.
+   * White ink on any solid semantic fill was already failing AA before this change and is
+   * not a supported pairing: `TxStep .tx-step__icon--completed` (white on success),
+   * `TxTabBar .tx-tab-bar__badge` and `TxToolConfirmation .is-dangerous` (white on danger).
+   * Those three want a dark ink; that is a separate change and none of them carries a note.
+   * `TxTimelineItem`'s dots are solid semantic fills with no ink on them, so they simply
+   * get brighter.
    * `status-badge/__tests__/dark-semantic-tokens.test.ts` locks the invariants.
    */
   --tx-color-success: #4ade80;

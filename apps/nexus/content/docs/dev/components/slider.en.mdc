@@ -186,7 +186,7 @@ code: |
 ## Interaction Contract
 
 - The rendered native range input clamps `modelValue` into the `min..max` range.
-- With `thumbSurface` (the default) the visible thumb is a persistent glass pill (`.tx-slider__surface`) and the native thumb is a hit area exactly as wide as the pill; the keyboard focus ring (`:focus-visible`, except for a drag-initiated focus) is drawn on the pill. `thumbSurface=false` returns to the flat disc, and the focus ring returns to it as well.
+- With `thumbSurface` (the default) the visible thumb is a persistent glass pill (`.tx-slider__surface`) and the native thumb is a hit area as wide as the resting pill; the keyboard focus ring (`:focus-visible`, except for a drag-initiated focus) is drawn on the pill. `thumbSurface=false` returns to the flat disc, and the focus ring returns to it as well.
 - Native `input` emits `update:modelValue` with the clamped value; native `change` emits `change`.
 - `disabled` blocks value updates and suppresses tooltip rendering.
 - `formatValue` controls the visible side value and is also used for tooltip text when `tooltipFormatter` is absent.
