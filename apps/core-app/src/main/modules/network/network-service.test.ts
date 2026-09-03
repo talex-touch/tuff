@@ -8,6 +8,15 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NetworkService } from './network-service'
+import {
+  clearTfilePreviewGrants,
+  issueTfilePreviewGrant
+} from '../file-protocol/tfile-preview-grant'
+
+const localFileMocks = vi.hoisted(() => ({
+  isAllowedLocalFilePath: vi.fn(() => true),
+  readFile: vi.fn()
+}))
 
 const electronMocks = vi.hoisted(() => {
   const fetch = vi.fn()
@@ -40,9 +49,14 @@ vi.mock('../../utils/app-root-path', () => ({
   resolveRuntimeRootPath: vi.fn(() => '/tmp')
 }))
 
+vi.mock('node:fs', () => ({
+  promises: { readFile: localFileMocks.readFile }
+}))
+
 vi.mock('../../utils/local-file-policy', () => ({
   getAllowedLocalFileRoots: vi.fn(() => ['/tmp']),
-  isAllowedLocalFilePath: vi.fn(() => true)
+  isAllowedLocalFilePath: localFileMocks.isAllowedLocalFilePath,
+  normalizeDarwinUsersPath: (filePath: string) => filePath
 }))
 
 vi.mock('../../utils/logger', () => ({
@@ -64,6 +78,41 @@ describe('networkService cooldown policy', () => {
     electronMocks.setProxy.mockReset()
     electronMocks.session.fromPartition.mockClear()
     electronMocks.setProxy.mockResolvedValue(undefined)
+    localFileMocks.isAllowedLocalFilePath.mockReset()
+    localFileMocks.isAllowedLocalFilePath.mockReturnValue(true)
+    localFileMocks.readFile.mockReset()
+    clearTfilePreviewGrants()
+  })
+
+  it('requires the exact live preview grant before reading an otherwise forbidden download', async () => {
+    const service = new NetworkService()
+    const now = 1_000
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    localFileMocks.isAllowedLocalFilePath.mockReturnValue(false)
+    localFileMocks.readFile.mockResolvedValue('approved preview')
+
+    try {
+      await expect(
+        service.readText('tfile:///Users/demo/Downloads/without-grant.txt')
+      ).rejects.toThrow('NETWORK_FILE_FORBIDDEN')
+
+      const grant = issueTfilePreviewGrant('/Users/demo/Downloads/approved.txt', now)
+      await expect(service.readText(grant.tfileUrl)).resolves.toBe('approved preview')
+
+      const wrongPath = new URL(grant.tfileUrl)
+      wrongPath.pathname = '/Users/demo/Downloads/other.txt'
+      await expect(service.readText(wrongPath.toString())).rejects.toThrow('NETWORK_FILE_FORBIDDEN')
+
+      const expiredGrant = issueTfilePreviewGrant('/Users/demo/Downloads/expired.txt', now)
+      clock.mockReturnValue(now + 5 * 60 * 1000)
+      await expect(service.readText(expiredGrant.tfileUrl)).rejects.toThrow(
+        'NETWORK_FILE_FORBIDDEN'
+      )
+    } finally {
+      clock.mockRestore()
+    }
+
+    expect(localFileMocks.readFile).toHaveBeenCalledTimes(1)
   })
 
   it('keeps plugin-facing requests on the no-redirect network path', async () => {

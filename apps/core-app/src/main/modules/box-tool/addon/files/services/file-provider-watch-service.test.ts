@@ -5,6 +5,13 @@ import { appTaskGate } from '../../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../../service/device-idle-service'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
 
+const backgroundTaskMocks = vi.hoisted(() => ({
+  registerTask: vi.fn(),
+  on: vi.fn(),
+  start: vi.fn(),
+  recordActivity: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils', () => ({
   StorageList: {
     FILE_INDEX_SETTINGS: 'file-index-settings.json'
@@ -36,12 +43,7 @@ vi.mock('../../../../../service/background-task-service', () => ({
     }))
   },
   BackgroundTaskService: {
-    getInstance: vi.fn(() => ({
-      registerTask: vi.fn(),
-      on: vi.fn(),
-      start: vi.fn(),
-      recordActivity: vi.fn()
-    }))
+    getInstance: vi.fn(() => backgroundTaskMocks)
   }
 }))
 
@@ -141,6 +143,7 @@ function createService(
     baseWatchPaths?: string[]
     dbUtils?: unknown
     normalizePath?: (rawPath: string) => string
+    runAutoIndexing?: () => Promise<boolean>
   } = {}
 ) {
   return new FileProviderWatchService({
@@ -148,7 +151,7 @@ function createService(
     getDbUtils: () => (input.dbUtils ?? null) as never,
     getWatchDepthForPath: () => 1,
     normalizePath: input.normalizePath ?? ((rawPath) => rawPath),
-    runAutoIndexing: vi.fn(async () => undefined),
+    runAutoIndexing: input.runAutoIndexing ?? vi.fn(async () => true),
     logDebug: vi.fn(),
     logWarn: vi.fn(),
     logError: vi.fn()
@@ -300,38 +303,146 @@ describe('file-provider-watch-service', () => {
     expect(deviceIdleService.canRun).not.toHaveBeenCalled()
   })
 
-  it('skips auto indexing when no path is eligible by interval', async () => {
-    const freshTimestamp = Date.now()
-    const { dbUtils } = createDbUtils([
-      { path: '/tmp/tuff-index-a', lastScanned: freshTimestamp },
-      { path: '/tmp/tuff-index-b', lastScanned: freshTimestamp }
-    ])
-    const service = createService({ dbUtils })
+  it('schedules one startup reconcile at 2.5 seconds without duplicating or resetting it', async () => {
+    const freshTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(freshTimestamp)
 
-    await expect(
-      service.shouldRunAutoIndexing({
-        isInitializing: false,
-        hasInitializationContext: true
-      })
-    ).resolves.toEqual({ allowed: false, reason: 'interval' })
-    expect(deviceIdleService.canRun).not.toHaveBeenCalled()
+    try {
+      const { dbUtils } = createDbUtils([
+        { path: '/tmp/tuff-index-a', lastScanned: freshTimestamp },
+        { path: '/tmp/tuff-index-b', lastScanned: freshTimestamp }
+      ])
+      const runAutoIndexing = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
+      const service = createService({ dbUtils, runAutoIndexing })
+
+      service.initializeBackgroundTaskService()
+      await vi.advanceTimersByTimeAsync(1_000)
+      service.initializeBackgroundTaskService()
+
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(runAutoIndexing).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(runAutoIndexing).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(runAutoIndexing).toHaveBeenCalledTimes(1)
+      await expect(
+        service.shouldRunAutoIndexing({
+          isInitializing: false,
+          hasInitializationContext: true
+        })
+      ).resolves.toEqual({ allowed: false, reason: 'interval' })
+      expect(deviceIdleService.canRun).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('runs idle gate when auto indexing preflight and interval pass', async () => {
-    const staleTimestamp = Date.now() - 25 * 60 * 60 * 1000
-    const { dbUtils } = createDbUtils([
-      { path: '/tmp/tuff-index-a', lastScanned: staleTimestamp },
-      { path: '/tmp/tuff-index-b', lastScanned: staleTimestamp }
-    ])
-    const service = createService({ dbUtils })
+  it('cancels the pending startup reconcile when disposed before the delay', async () => {
+    const freshTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(freshTimestamp)
 
-    await expect(
-      service.shouldRunAutoIndexing({
-        isInitializing: false,
-        hasInitializationContext: true
-      })
-    ).resolves.toEqual({ allowed: true, battery: null })
-    expect(deviceIdleService.canRun).toHaveBeenCalledWith({ idleThresholdMs: 60 * 60 * 1000 })
+    try {
+      const { dbUtils } = createDbUtils([
+        { path: '/tmp/tuff-index-a', lastScanned: freshTimestamp },
+        { path: '/tmp/tuff-index-b', lastScanned: freshTimestamp }
+      ])
+      const runAutoIndexing = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
+      const service = createService({ dbUtils, runAutoIndexing })
+
+      service.initializeBackgroundTaskService()
+      service.dispose()
+
+      await vi.advanceTimersByTimeAsync(2_500)
+
+      expect(runAutoIndexing).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the startup idle gate through a failed one-shot reconcile until the recurring scan succeeds', async () => {
+    const freshTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(freshTimestamp)
+
+    try {
+      const { dbUtils } = createDbUtils([
+        { path: '/tmp/tuff-index-a', lastScanned: freshTimestamp },
+        { path: '/tmp/tuff-index-b', lastScanned: freshTimestamp }
+      ])
+      const runAutoIndexing = vi
+        .fn<() => Promise<boolean>>()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true)
+      const service = createService({ dbUtils, runAutoIndexing })
+
+      service.initializeBackgroundTaskService()
+      const autoTask = backgroundTaskMocks.registerTask.mock.calls
+        .map(([task]) => task as { id: string; execute: () => Promise<void> })
+        .find((task) => task.id === 'file-index.auto-scan')
+      expect(autoTask).toBeDefined()
+
+      await vi.advanceTimersByTimeAsync(2_499)
+      expect(runAutoIndexing).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(runAutoIndexing).toHaveBeenCalledTimes(1)
+
+      await expect(
+        service.shouldRunAutoIndexing({
+          isInitializing: false,
+          hasInitializationContext: true
+        })
+      ).resolves.toMatchObject({ allowed: true })
+      expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
+      expect(deviceIdleService.canRun).toHaveBeenNthCalledWith(1, { idleThresholdMs: 0 })
+
+      await autoTask?.execute()
+      await expect(
+        service.shouldRunAutoIndexing({
+          isInitializing: false,
+          hasInitializationContext: true
+        })
+      ).resolves.toEqual({ allowed: false, reason: 'interval' })
+      expect(runAutoIndexing).toHaveBeenCalledTimes(2)
+      expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses the normal idle gate for stale scans after startup reconcile succeeds', async () => {
+    const currentTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(currentTimestamp)
+
+    try {
+      const staleTimestamp = currentTimestamp - 25 * 60 * 60 * 1000
+      const { dbUtils } = createDbUtils([
+        { path: '/tmp/tuff-index-a', lastScanned: staleTimestamp },
+        { path: '/tmp/tuff-index-b', lastScanned: staleTimestamp }
+      ])
+      const runAutoIndexing = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
+      const service = createService({ dbUtils, runAutoIndexing })
+
+      service.initializeBackgroundTaskService()
+      await vi.advanceTimersByTimeAsync(2_500)
+      expect(runAutoIndexing).toHaveBeenCalledTimes(1)
+
+      await expect(
+        service.shouldRunAutoIndexing({
+          isInitializing: false,
+          hasInitializationContext: true
+        })
+      ).resolves.toEqual({ allowed: true, battery: null })
+      expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
+      expect(deviceIdleService.canRun).toHaveBeenCalledWith({ idleThresholdMs: 60 * 60 * 1000 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('uses shared auto scan preflight for app busy and search active reasons', async () => {
@@ -411,7 +522,7 @@ describe('file-provider-watch-service', () => {
       getDbUtils: () => null,
       getWatchDepthForPath: () => 1,
       normalizePath: (rawPath) => rawPath.toLowerCase(),
-      runAutoIndexing: vi.fn(async () => undefined),
+      runAutoIndexing: vi.fn(async () => true),
       logDebug: vi.fn(),
       logWarn: vi.fn(),
       logError: vi.fn()

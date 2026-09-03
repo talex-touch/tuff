@@ -19,19 +19,19 @@ describe("indexing watch path policy", () => {
         platform: "darwin",
         watchPath: "/Users/test/Downloads",
       }),
-    ).toBe(5);
+    ).toBe(8);
     expect(
       getIndexedWatchDepthForPath({
         platform: "darwin",
         watchPath: "/Applications",
       }),
-    ).toBe(5);
+    ).toBe(8);
     expect(
       getIndexedWatchDepthForPath({
         platform: "darwin",
         watchPath: "/Users/test/Documents",
       }),
-    ).toBe(5);
+    ).toBe(8);
   });
 
   it("uses platform defaults for non-macOS roots", () => {
