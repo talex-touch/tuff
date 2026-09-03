@@ -32,6 +32,10 @@ packages:
   - '!apps/core-app/tuff/modules/plugins/**'
 
 
+autoInstallPeers: false
+publicHoistPattern:
+  - '*electron*'
+
 # macOS releases are built for arm64 and x64 on an arm64 runner.
 supportedArchitectures:
   os:
@@ -104,3 +108,112 @@ catalogs:
   icons:
     '@iconify-json/carbon': ^1.2.24
     '@iconify-json/twemoji': ^1.2.5
+
+allowBuilds:
+  '@google/genai': true
+  '@parcel/watcher': true
+  '@sentry/cli': true
+  '@talex-touch/tuff-native': true
+  better-sqlite3: true
+  bufferutil: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  extract-file-icon: true
+  ffmpeg-static: true
+  node-pty: true
+  protobufjs: true
+  sharp: true
+  typeit: true
+  uiohook-napi: true
+  unrs-resolver: true
+  utf-8-validate: true
+  vue-demi: true
+  workerd: true
+
+overrides:
+  '@babel/core': 7.29.6
+  '@babel/plugin-transform-modules-systemjs': 7.29.4
+  '@isaacs/brace-expansion': 5.0.1
+  '@lezer/common': 1.5.2
+  '@nuxt/devtools': catalog:build
+  '@nuxt/kit': catalog:build
+  '@panva/hkdf': 1.2.1
+  '@types/node': 24.13.2
+  '@ungap/structured-clone': 1.3.1
+  '@xmldom/xmldom': 0.8.13
+  ajv@^6.0.0: 6.15.0
+  ajv@^8.0.0: 8.20.0
+  brace-expansion@^1.0.0: 1.1.18
+  brace-expansion@^2.0.0: 2.1.4
+  brace-expansion@^5.0.0: 5.0.9
+  cookie: 0.7.2
+  defu: 6.1.7
+  devalue: 5.8.1
+  diff@^4.0.0: 4.0.4
+  diff@^8.0.0: 8.0.4
+  esbuild: 0.28.1
+  fast-uri: 3.1.5
+  fast-xml-parser: 5.10.1
+  flatted: 3.4.2
+  follow-redirects: 1.16.0
+  form-data: 4.0.6
+  h3: 1.15.11
+  hono: 4.12.34
+  immutable: 5.1.9
+  ip-address: 10.3.1
+  js-cookie: 3.0.7
+  js-yaml: 4.3.1
+  langsmith: 0.6.0
+  launch-editor: 2.14.1
+  lodash: 4.18.1
+  lodash-es: 4.18.1
+  mdast-util-to-hast: 13.2.1
+  minimatch@^10.0.0: 10.2.5
+  minimatch@^3.0.0: 3.1.5
+  minimatch@^5.0.0: 5.1.9
+  minimatch@^9.0.0: 9.0.9
+  nanoid@^3.0.0: 3.3.18
+  nitropack: 2.13.4
+  node-forge: 1.4.0
+  nuxt: catalog:build
+  picomatch@^2.0.0: 2.3.2
+  picomatch@^4.0.0: 4.0.5
+  postcss: 8.5.23
+  preact: 10.29.6
+  qs: 6.15.2
+  rollup@^2.0.0: 2.80.0
+  rollup@^3.0.0: 3.30.0
+  rollup@^4.0.0: 4.62.2
+  semver@^7.0.0: 7.8.5
+  serialize-javascript: 7.0.7
+  shell-quote: 1.9.0
+  simple-git: 3.36.0
+  socket.io-parser@^4.0.0: 4.2.7
+  srvx: 0.11.21
+  svgo: 4.0.2
+  tar: 7.5.21
+  undici@^6.0.0: 6.28.0
+  undici@^7.0.0: 7.29.0
+  unhead: 2.1.15
+  unplugin: catalog:build
+  uuid: 14.0.1
+  vite: 7.3.6
+  ws: 8.21.0
+  yaml@^1.0.0: 1.10.3
+  yaml@^2.0.0: 2.9.0
+  yauzl: 3.4.0
+
+peerDependencyRules:
+  ignoreMissing:
+    - '@emnapi/core'
+    - '@emnapi/runtime'
+    - next
+    - react
+    - react-dom
+  allowedVersions:
+    citty: ^0.1.6 || ^0.2.0
+    commander: ^13.1.0 || ^14.0.0
+    nodemailer: ^6.6.5 || ^7.0.0
+    next-auth: ~4.24.15
+    vue-tsc: ^2.1.10 || ^3.2.5
