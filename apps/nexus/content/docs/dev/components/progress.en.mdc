@@ -63,7 +63,7 @@ For unknown-duration work, prefer an indeterminate state instead of showing a fa
 - `percentage`, `status`, `indeterminate`, `showText`, and `format` are forwarded directly.
 - `strokeWidth` is converted to a CSS height string such as `"6px"` and passed as `height`.
 - Text placement is fixed to `outside`.
-- The underlying bar uses `maskVariant="plain"` and `maskBackground="mask"`.
+- The underlying bar uses `maskVariant="plain"`; the track follows `TxProgressBar`'s default styling (flat rimless track, gradient fill).
 - Determinate progress exposes `role="progressbar"` and `aria-valuenow` through `TxProgressBar`.
 - Indeterminate progress omits `aria-valuenow` and applies the progress-bar indeterminate class.
 - The install entry registers the component name `TuffProgress`.

@@ -15,10 +15,6 @@ import type {
   QuickOpsCommonDirectoryGetRequest,
   QuickOpsCommonDirectoryGetResponse,
   QuickOpsDiagnosticsGetResponse,
-  QuickOpsDeveloperPreviewRequest,
-  QuickOpsDeveloperPreviewResponse,
-  QuickOpsDeveloperPreviewSaveRequest,
-  QuickOpsDeveloperPreviewSaveResponse,
   QuickOpsDirectoryUsageGetRequest,
   QuickOpsDirectoryUsageGetResponse,
   QuickOpsDiskSpaceGetResponse,
@@ -38,58 +34,56 @@ import type {
   QuickOpsPortStatusGetResponse,
   QuickOpsQueryLocalIpGetResponse,
   QuickOpsRecentDownloadGetResponse,
-  QuickOpsSessionSnapshot,
   QuickOpsSessionsGetResponse,
-  QuickOpsSystemProxyGetResponse,
-  QuickOpsSystemInfoGetResponse
+  QuickOpsSessionSnapshot,
+  QuickOpsSystemInfoGetResponse,
+  QuickOpsSystemProxyGetResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { PreviewAbilityContext } from '@talex-touch/utils/core-box/preview'
-import { extractQrSvg, isQrSvgPayload, renderQrSvgToPng } from './quick-ops-qr-png'
-import crypto from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
-import path from 'node:path'
-import { app, clipboard, shell } from 'electron'
-import {
-  QuickOpsDeveloperAbility,
-  hasQuickOpsDeveloperCommand
-} from '@talex-touch/utils/core-box/preview'
+import type { QuickOpsScreenCleanMode, QuickOpsSession } from './quick-ops-session-manager'
 import { QuickOpsEvents } from '@talex-touch/utils/transport/events'
-import { normalizeLocale, StorageList, TuffInputType, type AppSetting } from '@talex-touch/utils'
+import { clipboard, shell } from 'electron'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
-import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
+import { flowBus } from '../flow-bus/flow-bus'
+import { flowTargetRegistry } from '../flow-bus/target-registry'
+import { notificationModule } from '../notification'
 import {
-  createBatteryStatusInfo,
+  createQuickOpsDeveloperPreviewResponse,
+  QUICK_OPS_DEVELOPER_POLICY_REASON,
+  saveQuickOpsDeveloperPreview
+} from './quick-ops-developer-preview'
+import {
   computeFileHashes,
-  encodeFileBase64,
-  createDiskSpaceInfo,
+  createBatteryStatusInfo,
   createDirectoryUsageInfo,
+  createDiskSpaceInfo,
   createDnsQueryInfo,
   createFilePathInfo,
   createNetworkStatusInfo,
-  createSystemProxyInfo,
+  createPortReleaseCommand,
   createSystemInfo,
+  createSystemProxyInfo,
   createTempDirectory,
   createTempTextFile,
+  encodeFileBase64,
   findRecentDownloadFile,
   formatBatteryStatusInfo,
-  formatDiskSpaceInfo,
-  formatDirectoryUsageInfo,
-  formatDnsQueryInfo,
   formatDiagnosticsInfo,
+  formatDirectoryUsageInfo,
+  formatDiskSpaceInfo,
+  formatDnsQueryInfo,
   formatLocalIpInfo,
   formatNetworkStatusInfo,
   formatQuickOpsCapabilityInfo,
-  formatSystemProxyInfo,
   formatSystemInfo,
+  formatSystemProxyInfo,
   getLocalIpAddresses,
-  createPortReleaseCommand,
   isValidTcpPort,
   lookupPublicIp,
-  parseDurationMs,
   parseDnsQuery,
+  parseDurationMs,
   parsePortQuery,
   parseQuickOpsQuery,
   probeLocalTcpPort,
@@ -99,12 +93,7 @@ import {
   resolveFileHashPath,
   resolveFilePathTarget
 } from './quick-ops-runtime-host'
-import type { QuickOpsScreenCleanMode, QuickOpsSession } from './quick-ops-session-manager'
 import { formatDuration, getSessionDisplayDurationMs } from './quick-ops-session-manager'
-import { flowBus } from '../flow-bus/flow-bus'
-import { flowTargetRegistry } from '../flow-bus/target-registry'
-import { notificationModule } from '../notification'
-import { getMainConfig } from '../storage'
 
 const QUICK_OPS_FLOW_PLUGIN_ID = 'quickops'
 const QUICK_OPS_CAPABILITIES_FLOW_TARGET_ID = 'capabilities'
@@ -155,7 +144,6 @@ const QUICK_OPS_STATEFUL_POLICY_REASON = 'stateful-tools-disabled-by-policy'
 const QUICK_OPS_NETWORK_POLICY_REASON = 'network-tools-disabled-by-policy'
 const QUICK_OPS_FILE_POLICY_REASON = 'file-tools-disabled-by-policy'
 const QUICK_OPS_SYSTEM_POLICY_REASON = 'system-tools-disabled-by-policy'
-const QUICK_OPS_DEVELOPER_POLICY_REASON = 'developer-tools-disabled-by-policy'
 export const QUICK_OPS_CAPABILITIES_FLOW_TARGET_FULL_ID = `${QUICK_OPS_FLOW_PLUGIN_ID}.${QUICK_OPS_CAPABILITIES_FLOW_TARGET_ID}`
 export const QUICK_OPS_SESSIONS_FLOW_TARGET_FULL_ID = `${QUICK_OPS_FLOW_PLUGIN_ID}.${QUICK_OPS_SESSIONS_FLOW_TARGET_ID}`
 export const QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET_FULL_ID = `${QUICK_OPS_FLOW_PLUGIN_ID}.${QUICK_OPS_STOP_ALL_SESSIONS_FLOW_TARGET_ID}`
@@ -1735,134 +1723,7 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
 
 export const quickOpsModule = new QuickOpsModule()
 
-async function createQuickOpsDeveloperPreviewResponse(
-  request: QuickOpsDeveloperPreviewRequest
-): Promise<QuickOpsDeveloperPreviewResponse> {
-  const query = request.query
-  if (!hasQuickOpsDeveloperCommand(query)) {
-    return {
-      state: 'empty',
-      reason: 'not-developer-command'
-    }
-  }
-
-  if (isQuickOpsDeveloperToolsDisabled()) {
-    return {
-      state: 'blocked',
-      reason: QUICK_OPS_DEVELOPER_POLICY_REASON
-    }
-  }
-
-  const ability = new QuickOpsDeveloperAbility()
-  const sdkQuery = withQuickOpsDeveloperClipboardInput(query)
-  const canHandle = await ability.canHandle(sdkQuery)
-  if (!canHandle) {
-    return {
-      state: 'empty',
-      reason: 'no-preview-result'
-    }
-  }
-
-  const controller = new AbortController()
-  const context: PreviewAbilityContext = {
-    query: sdkQuery,
-    signal: controller.signal,
-    locale: normalizeLocale(getLocale()) ?? 'en-US'
-  }
-  const result = await ability.execute(context)
-  if (!result) {
-    return {
-      state: 'empty',
-      reason: 'no-preview-result'
-    }
-  }
-
-  return {
-    state: 'ready',
-    abilityId: result.abilityId,
-    confidence: result.confidence,
-    payload: result.payload
-  }
-}
-
-async function saveQuickOpsDeveloperPreview(
-  request: QuickOpsDeveloperPreviewSaveRequest
-): Promise<QuickOpsDeveloperPreviewSaveResponse> {
-  if (!isQrSvgPayload(request.payload)) {
-    return {
-      state: 'skipped',
-      reason: 'not-qr-svg-payload'
-    }
-  }
-
-  const svg = extractQrSvg(request.payload)
-  if (!svg) {
-    return {
-      state: 'skipped',
-      reason: 'invalid-qr-svg-payload'
-    }
-  }
-
-  const data = request.format === 'png' ? renderQrSvgToPng(svg) : Buffer.from(svg, 'utf8')
-  if (!data) {
-    return {
-      state: 'degraded',
-      reason: 'qr-png-render-failed',
-      message: '无法生成 QR PNG'
-    }
-  }
-
-  try {
-    const outputDir = path.join(app.getPath('temp'), 'tuff-quickops')
-    await mkdir(outputDir, { recursive: true })
-    const filePath = path.join(outputDir, `qr-code-${crypto.randomUUID()}.${request.format}`)
-    await writeFile(filePath, request.format === 'svg' ? svg : data, { flag: 'wx' })
-    clipboard.writeText(filePath)
-    return {
-      state: 'saved',
-      format: request.format,
-      path: filePath,
-      bytes: data.length
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    return {
-      state: 'degraded',
-      reason:
-        code === 'EACCES' || code === 'EPERM'
-          ? 'developer-preview-save-permission-denied'
-          : 'developer-preview-save-failed',
-      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '保存预览文件失败'
-    }
-  }
-}
-
-function isQuickOpsDeveloperToolsDisabled(): boolean {
-  const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
-  return appSetting?.quickOps?.allowDeveloperTools === false
-}
-
-function withQuickOpsDeveloperClipboardInput(
-  query: QuickOpsDeveloperPreviewRequest['query']
-): QuickOpsDeveloperPreviewRequest['query'] {
-  if (query.inputs?.some((input) => input.content?.trim() || input.rawContent?.trim())) {
-    return query
-  }
-
-  const text = clipboard.readText().trim()
-  if (!text) return query
-
-  return {
-    ...query,
-    inputs: [
-      ...(query.inputs ?? []),
-      {
-        type: TuffInputType.Text,
-        content: text
-      }
-    ]
-  }
-}
+export { createQuickOpsDeveloperPreviewResponse, saveQuickOpsDeveloperPreview }
 
 function createQuickOpsSystemInfoResponse(): QuickOpsSystemInfoGetResponse {
   const systemInfo = createSystemInfo()
@@ -2816,7 +2677,7 @@ function formatQuickOpsText(text: string, mode: QuickOpsFormatTextMode): string 
 function tokenizeFormatText(text: string): string[] {
   return text
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .split(/[^A-Za-z0-9]+/)
+    .split(/[^A-Z0-9]+/i)
     .map((token) => token.trim().toLocaleLowerCase())
     .filter(Boolean)
 }

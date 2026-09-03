@@ -6,6 +6,7 @@ import { checkDirWithCreate } from '../../utils/common-util'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 
 const devPluginInstallerLog = createLogger('PluginSystem').child('DevInstaller')
 
@@ -65,6 +66,9 @@ export async function installDevPluginFromPath(
     const manifest = await readManifest(sourceDir)
     if (!isSafePathSegment(manifest.name)) {
       return { status: 'error', error: 'INVALID_PLUGIN_NAME' }
+    }
+    if (PRIVILEGED_PLUGIN_NAMES.includes(manifest.name)) {
+      return { status: 'error', error: 'PRIVILEGED_PLUGIN_NAME_RESERVED' }
     }
 
     const pluginRoot = pluginModule.filePath

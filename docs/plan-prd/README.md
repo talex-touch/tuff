@@ -31,6 +31,7 @@ P0 稳定化三项均已关闭：
 - [`04-implementation/Stability-Architecture-Optimization-2026-07-04.md`](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)：稳定性代码落点与验证矩阵。
 - [`../engineering/security-hardening-handoff-2026-07-15.md`](../engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接。
 - [Search & Cross-Platform Audit](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索/跨平台 backlog。
+- [`03-features/window-switcher-plugin-todo.md`](./03-features/window-switcher-plugin-todo.md)：窗口切换插件的宿主契约、跨平台边界与实施 TODO。
 
 ## Evidence 入口
 

@@ -41,9 +41,9 @@ code: |
 | Token | Light | Dark | Usage |
 | --- | --- | --- | --- |
 | `--tx-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | Primary actions |
-| `--tx-color-success` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | Success states |
-| `--tx-color-warning` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | Warning states |
-| `--tx-color-danger` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | Error states |
+| `--tx-color-success` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4ade80;"></span><code>#4ade80</code></span> | Success states |
+| `--tx-color-warning` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fbbf24;"></span><code>#fbbf24</code></span> | Warning states |
+| `--tx-color-danger` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f87171;"></span><code>#f87171</code></span> | Error states |
 | `--tx-color-info` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | Informational states |
 
 ### Primary ramps

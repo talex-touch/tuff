@@ -243,6 +243,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   ProgressBarStatefulProgressDemo: () => import('./demos/ProgressBarStatefulProgressDemo.vue'),
   ProgressBarSegmentsDemo: () => import('./demos/ProgressBarSegmentsDemo.vue'),
   ProgressBarStatusPanelDemo: () => import('./demos/ProgressBarStatusPanelDemo.vue'),
+  ProgressBarUploadDemo: () => import('./demos/ProgressBarUploadDemo.vue'),
   ProgressProgressRowDemo: () => import('./demos/ProgressProgressRowDemo.vue'),
   ProgressProgressStatesDemo: () => import('./demos/ProgressProgressStatesDemo.vue'),
   PromptBarPromptBarDemo: () => import('./demos/PromptBarPromptBarDemo.vue'),

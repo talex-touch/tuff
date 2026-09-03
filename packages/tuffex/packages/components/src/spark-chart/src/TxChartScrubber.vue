@@ -140,8 +140,13 @@ function handleLeave(): void {
   // Vertical scrolling must survive a drag across the stage; only the
   // horizontal axis belongs to the scrubber.
   touch-action: pan-y;
+  // Crosshair, not grab: nothing is being picked up and moved. Sweeping the
+  // pointer reads a value off the series, and the component draws its own
+  // vertical rule to show where — the readout idiom, so the readout cursor.
+  cursor: crosshair;
 
   &.is-disabled {
+    cursor: default;
     touch-action: auto;
   }
 }

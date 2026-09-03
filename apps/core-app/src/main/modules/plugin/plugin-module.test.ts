@@ -1,6 +1,15 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import path from 'node:path'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync } from 'node:fs'
+import fse from 'fs-extra'
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PluginStatus, type IPluginManager, type ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { PluginApiUninstallRequest } from '@talex-touch/utils/transport/events/types'
@@ -9,6 +18,10 @@ import {
   issuePluginSecurityContext
 } from '@talex-touch/utils/transport/security/plugin-identity'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { app } from 'electron'
+import * as safeShell from '@talex-touch/utils/common/utils/safe-shell'
+import type { PluginVscodeProjectsSnapshot } from './host/plugin-vscode-projects-capabilities'
+import type { PluginHostCapabilityResourceContext } from './host/plugin-host-resources'
 import { teardownPluginStorage } from './runtime/plugin-storage-lifecycle'
 
 /**
@@ -104,6 +117,13 @@ const mocks = vi.hoisted(() => {
     show: vi.fn(),
     focus: vi.fn()
   }
+  const vscodeFilesystem = {
+    lstat: vi.fn(),
+    open: vi.fn(),
+    realpath: vi.fn(),
+    stat: vi.fn(),
+    restore: () => undefined
+  }
 
   return {
     buildPluginManagerRuntime: vi.fn((options: { createManager: CapturedManagerFactory }) => {
@@ -128,6 +148,8 @@ const mocks = vi.hoisted(() => {
     devWatcherRemovePlugin: vi.fn(),
     dialogShowMessageBox: vi.fn(),
     dialogShowSaveDialog: vi.fn(),
+    imageToolsInspect: vi.fn(),
+    imageToolsRender: vi.fn(),
     disposers,
     eventBusOn: vi.fn((event: unknown, handler: (payload: unknown) => void) => {
       eventHandlers.set(event, handler)
@@ -136,6 +158,7 @@ const mocks = vi.hoisted(() => {
       eventHandlers.delete(event)
     }),
     eventHandlers,
+    ensureDir: vi.fn(),
     fsPathExists: vi.fn(),
     fsRemove: vi.fn(),
     getCapturedManagerFactory: () => capturedManagerFactory,
@@ -173,7 +196,8 @@ const mocks = vi.hoisted(() => {
     setTransport: vi.fn(),
     startUpdateScheduler: vi.fn(),
     stopUpdateScheduler: vi.fn(),
-    transportOn
+    transportOn,
+    vscodeFilesystem
   }
 })
 
@@ -217,9 +241,24 @@ vi.mock('electron', () => ({
 // deletion is skipped entirely.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const restoreVscodeFilesystem = (): undefined => {
+    mocks.vscodeFilesystem.lstat.mockImplementation(actual.lstat)
+    mocks.vscodeFilesystem.open.mockImplementation(actual.open)
+    mocks.vscodeFilesystem.realpath.mockImplementation(actual.realpath)
+    mocks.vscodeFilesystem.stat.mockImplementation(actual.stat)
+    return undefined
+  }
+  mocks.vscodeFilesystem.restore = restoreVscodeFilesystem
+  restoreVscodeFilesystem()
   return {
     ...actual,
-    default: actual,
+    default: {
+      ...actual,
+      lstat: mocks.vscodeFilesystem.lstat,
+      open: mocks.vscodeFilesystem.open,
+      realpath: mocks.vscodeFilesystem.realpath,
+      stat: mocks.vscodeFilesystem.stat
+    },
     rename: vi.fn(async (from: string, to: string) => {
       mocks.renamedPaths.set(to, from)
       await actual.rename(from, to)
@@ -229,7 +268,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 vi.mock('fs-extra', () => ({
   default: {
-    ensureDir: vi.fn(),
+    ensureDir: mocks.ensureDir,
     existsSync: vi.fn(() => false),
     lstat: vi.fn(async (target: string) => {
       if (mocks.removedPaths.has(target) || !(await mocks.fsPathExists(target))) {
@@ -258,6 +297,16 @@ vi.mock('fs-extra', () => ({
         ...identity,
         isDirectory: () => !symbolic,
         isSymbolicLink: () => symbolic
+      }
+    }),
+    stat: vi.fn(async (target: string) => {
+      const real = statSync(target)
+      return {
+        dev: Number(real.dev),
+        ino: Number(real.ino),
+        birthtimeMs: Number(real.birthtimeMs),
+        isDirectory: () => real.isDirectory(),
+        isFile: () => real.isFile()
       }
     }),
     pathExists: mocks.fsPathExists,
@@ -452,6 +501,12 @@ vi.mock('./plugin', () => ({
     static setTransport = mocks.setTransport
     static setCapabilities = mocks.setCapabilities
   }
+}))
+vi.mock('./host/plugin-image-tools-worker-client', () => ({
+  createWorkerPluginImageToolsRenderer: () => ({
+    inspect: mocks.imageToolsInspect,
+    render: mocks.imageToolsRender
+  })
 }))
 vi.mock('./plugin-installer', () => ({ PluginInstaller: class {} }))
 vi.mock('./plugin-loaders', () => ({
@@ -709,11 +764,17 @@ describe('PluginModule facade', () => {
     mocks.setSecureStoreValue.mockReset()
     mocks.transportOn.mockClear()
     mocks.eventBusOn.mockClear()
+    mocks.ensureDir.mockReset()
+    mocks.ensureDir.mockResolvedValue(undefined)
     mocks.buildPluginManagerRuntime.mockClear()
     mocks.browserWindowFromId.mockReset()
     mocks.dialogShowMessageBox.mockReset()
     mocks.dialogShowSaveDialog.mockReset()
     mocks.dialogShowSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined })
+    mocks.imageToolsInspect.mockReset()
+    mocks.imageToolsInspect.mockResolvedValue({ format: 'png', width: 1, height: 1 })
+    mocks.imageToolsRender.mockReset()
+    mocks.imageToolsRender.mockResolvedValue({ data: Buffer.from('image'), width: 1, height: 1 })
     mocks.getNetworkService.mockReset()
     mocks.networkCleanup.mockReset()
     mocks.registerMainRuntime.mockReset()
@@ -748,6 +809,25 @@ describe('PluginModule facade', () => {
 
   afterAll(() => {
     rmSync(FIXTURE_ROOT, { recursive: true, force: true })
+  })
+
+  it('does not create the plugin runtime until the hosts backup directory is ready', async () => {
+    let releaseHostsBackupDirectory!: () => void
+    const hostsBackupDirectoryReady = new Promise<void>((resolve) => {
+      releaseHostsBackupDirectory = resolve
+    })
+    mocks.ensureDir.mockReturnValueOnce(hostsBackupDirectoryReady)
+
+    const initialized = initializeModule(new PluginModule())
+
+    expect(mocks.buildPluginManagerRuntime).not.toHaveBeenCalled()
+    expect(mocks.getCapturedManagerFactory()).toBeNull()
+
+    releaseHostsBackupDirectory()
+
+    await expect(initialized).resolves.toBeUndefined()
+    expect(mocks.buildPluginManagerRuntime).toHaveBeenCalledTimes(1)
+    expect(mocks.getCapturedManagerFactory()).not.toBeNull()
   })
 
   it('retries a pending plugin only after the permission-granted lifecycle event', async () => {
@@ -885,6 +965,11 @@ describe('PluginModule facade', () => {
       windowManager: expect.any(Function),
       windowPreset: expect.any(Function),
       workspaceScript: expect.any(Function),
+      hosts: expect.any(Function),
+      vscodeProjects: expect.any(Function),
+      orca: expect.any(Function),
+      aiSessions: expect.any(Function),
+      imageTools: expect.any(Function),
       runtimeService: expect.any(Object)
     })
 
@@ -909,6 +994,31 @@ describe('PluginModule facade', () => {
     expect(() => contextFactory?.({ ...intelligenceActivation, name: 'calendar' })).toThrow(
       'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_INVALID'
     )
+    const factories = mocks.setCapabilities.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    const classicFactories: ReadonlyArray<readonly [string, string, string]> = [
+      ['hosts', 'touch-hosts', 'system.hosts'],
+      ['vscodeProjects', 'touch-vscode-projects', 'filesystem.vscode-projects'],
+      ['orca', 'touch-orca', 'orchestration.orca'],
+      ['aiSessions', 'touch-ai-sessions', 'intelligence.sessions'],
+      ['imageTools', 'touch-image', 'media.image-tools']
+    ]
+    for (const [factoryName, pluginName, capabilityId] of classicFactories) {
+      const factory = factories[factoryName]
+      expect(factory).toEqual(expect.any(Function))
+      const input = Object.freeze({
+        name: pluginName,
+        pluginInstanceId: `${pluginName}-instance`,
+        activationGeneration: 1,
+        key: `${pluginName}-key`
+      })
+      const created = (
+        factory as (activation: typeof input) => { definitions: ReadonlyArray<{ id: string }> }
+      )(input)
+      expect(created.definitions.map((entry) => entry.id)).toContain(capabilityId)
+      expect(() =>
+        (factory as (activation: typeof input) => unknown)({ ...input, name: 'calendar' })
+      ).toThrow('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    }
 
     const authorize = runtimeOptions?.authorizeCapability as
       | ((pluginName: string, permissionId: string) => boolean)
@@ -935,6 +1045,351 @@ describe('PluginModule facade', () => {
     expect(authorize?.('missing', 'clipboard.read')).toBe(false)
 
     await module.onDestroy()
+  })
+
+  it('returns from a pending native image save dialog when caller abort or permission revocation wins', async () => {
+    const activation = {
+      name: 'touch-image',
+      pluginInstanceId: 'image-tools-instance',
+      activationGeneration: 1,
+      key: 'image-tools-key'
+    }
+    let releaseDialog!: (value: { canceled: boolean; filePath?: string }) => void
+    const lateDialog = new Promise<{ canceled: boolean; filePath?: string }>((resolve) => {
+      releaseDialog = resolve
+    })
+    mocks.manager.getPluginByName.mockImplementation(() => mocks.plugin)
+    mocks.plugin.declaredPermissions = { required: ['fs.read', 'fs.write'], optional: [] }
+    mocks.permissionHasPermission.mockReturnValue(true)
+    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
+    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
+    mocks.dialogShowSaveDialog.mockImplementation(() => lateDialog)
+    const module = new PluginModule()
+
+    try {
+      await initializeModule(module)
+      const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.imageTools as
+        | ((value: typeof activation) => {
+            definitions: ReadonlyArray<{
+              invoke: (
+                context: unknown,
+                request: unknown,
+                signal: AbortSignal,
+                resources: unknown
+              ) => Promise<unknown>
+            }>
+            prepareLifecycleQuery(query: unknown): Promise<unknown>
+          })
+        | undefined
+      if (!factory) throw new Error('IMAGE_TOOLS_FACTORY_MISSING')
+      const capability = factory(activation)
+      const context = issuePluginSecurityContext(activation, 'plugin-host', { hostGeneration: 7 })
+      const prepare = async (): Promise<string> => {
+        const query = (await capability.prepareLifecycleQuery({
+          inputs: [{ type: 'image', content: 'data:image/png;base64,aG9zdA==' }]
+        })) as { inputs: Array<{ content: string }> }
+        return query.inputs[0]!.content
+      }
+
+      const callerAbort = new AbortController()
+      const first = capability.definitions[0]!.invoke(
+        context,
+        { token: await prepare(), format: 'png' },
+        callerAbort.signal,
+        {}
+      )
+      await vi.waitFor(() => expect(mocks.dialogShowSaveDialog).toHaveBeenCalledTimes(1))
+      callerAbort.abort()
+      await expect(first).resolves.toEqual({ status: 'cancelled' })
+
+      const second = capability.definitions[0]!.invoke(
+        context,
+        { token: await prepare(), format: 'png' },
+        new AbortController().signal,
+        {}
+      )
+      await vi.waitFor(() => expect(mocks.dialogShowSaveDialog).toHaveBeenCalledTimes(2))
+      const permissionRevoked = mocks.eventHandlers.get('permission-revoked')
+      if (!permissionRevoked) throw new Error('PERMISSION_REVOKED_HANDLER_MISSING')
+      permissionRevoked({ pluginId: 'touch-image', permissionIds: ['fs.write'] })
+      await expect(second).resolves.toEqual({ status: 'cancelled' })
+    } finally {
+      releaseDialog({ canceled: true })
+      await module.onDestroy()
+    }
+  })
+  it('opens a factory-issued VS Code token through the fixed macOS launcher argv', async () => {
+    const home = fixturePath('vscode-home')
+    const userData = fixturePath('vscode-user-data')
+    const project = fixturePath('vscode-project')
+    const storage = path.join(
+      home,
+      'Library',
+      'Application Support',
+      'Code',
+      'User',
+      'globalStorage',
+      'storage.json'
+    )
+    mkdirSync(path.dirname(storage), { recursive: true })
+    mkdirSync(project, { recursive: true })
+    mkdirSync(userData, { recursive: true })
+    writeFileSync(
+      storage,
+      JSON.stringify({ openedPathsList: { workspaces3: [{ folderUri: `file://${project}` }] } })
+    )
+    const originalGetPath = vi.mocked(app.getPath).getMockImplementation()
+    const previousPlatform = process.platform
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn((event: string, callback: (code: number) => void) => {
+        if (event === 'exit') queueMicrotask(() => callback(0))
+        return child
+      })
+    }
+    const spawnSpy = vi.spyOn(safeShell, 'spawnSafe').mockReturnValue(child as never)
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    vi.mocked(app.getPath).mockImplementation((name) =>
+      name === 'home' ? home : name === 'userData' ? userData : '/Users/test-owner'
+    )
+    mocks.manager.getPluginByName.mockImplementation(() => mocks.plugin)
+    mocks.plugin.declaredPermissions = {
+      required: ['fs.read', 'fs.index', 'system.shell'],
+      optional: []
+    }
+    mocks.permissionHasPermission.mockReturnValue(true)
+    mocks.keyResolveCurrentIdentity.mockReturnValue({
+      name: 'touch-vscode-projects',
+      pluginInstanceId: 'vscode-instance',
+      activationGeneration: 1,
+      key: 'vscode-key'
+    })
+    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
+    const module = new PluginModule()
+    try {
+      await initializeModule(module)
+      const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.vscodeProjects as
+        | ((activation: {
+            name: string
+            pluginInstanceId: string
+            activationGeneration: number
+            key: string
+          }) => {
+            definitions: ReadonlyArray<{
+              invoke: (
+                context: unknown,
+                request: unknown,
+                signal: AbortSignal,
+                resources: unknown
+              ) => unknown
+            }>
+          })
+        | undefined
+      expect(factory).toEqual(expect.any(Function))
+      const input = {
+        name: 'touch-vscode-projects',
+        pluginInstanceId: 'vscode-instance',
+        activationGeneration: 1,
+        key: 'vscode-key'
+      }
+      const capability = factory!(input)
+      const definition = capability.definitions[0]!
+      const context = issuePluginSecurityContext(input, 'plugin-host', { hostGeneration: 7 })
+      const listed = (await definition.invoke(
+        context,
+        { operation: 'list' },
+        new AbortController().signal,
+        {} as PluginHostCapabilityResourceContext
+      )) as unknown as PluginVscodeProjectsSnapshot
+      const token = listed.status === 'ready' ? listed.projects[0]?.token : undefined
+      expect(token).toEqual(expect.any(String))
+      const opened = await definition.invoke(
+        context,
+        { operation: 'open', token },
+        new AbortController().signal,
+        {} as PluginHostCapabilityResourceContext
+      )
+      expect(opened).toEqual({ status: 'started' })
+      expect(spawnSpy).toHaveBeenCalledWith(
+        '/usr/bin/open',
+        ['-a', 'Visual Studio Code', '--args', '--', project],
+        { shell: false, stdio: 'ignore', windowsHide: true }
+      )
+      expect(spawnSpy.mock.calls[0]?.[2]).not.toHaveProperty('target')
+    } finally {
+      await module.onDestroy()
+      if (originalGetPath) vi.mocked(app.getPath).mockImplementation(originalGetPath)
+      else vi.mocked(app.getPath).mockReset()
+      Object.defineProperty(process, 'platform', { value: previousPlatform, configurable: true })
+      spawnSpy.mockRestore()
+    }
+  })
+
+  it('launches an Insiders token on Windows after spawn without waiting for the GUI to exit', async () => {
+    const home = 'C:\\vscode-home'
+    const appData = 'C:\\vscode-appdata'
+    const project = 'C:/vscode-insiders-project'
+    const storage = path.win32.join(
+      appData,
+      'Code - Insiders',
+      'User',
+      'globalStorage',
+      'storage.json'
+    )
+    const localAppData = 'C:\\Users\\owner\\AppData\\Local'
+    const executable = path.win32.join(
+      localAppData,
+      'Programs',
+      'Microsoft VS Code Insiders',
+      'Code - Insiders.exe'
+    )
+    const storageContent = JSON.stringify({
+      openedPathsList: { workspaces3: [{ folderUri: project }] }
+    })
+    const storageStats = {
+      dev: 11,
+      ino: 12,
+      size: Buffer.byteLength(storageContent, 'utf8'),
+      isFile: () => true,
+      isSymbolicLink: () => false
+    }
+    const projectStats = {
+      dev: 21,
+      ino: 22,
+      isDirectory: () => true,
+      isFile: () => false,
+      isSymbolicLink: () => false
+    }
+    const originalGetPath = vi.mocked(app.getPath).getMockImplementation()
+    const previousPlatform = process.platform
+    const previousLocalAppData = process.env.LOCALAPPDATA
+    const originalLstat = vi.mocked(fse.lstat).getMockImplementation()
+    const originalRealpath = vi.mocked(fse.realpath).getMockImplementation()
+    const originalStat = vi.mocked(fse.stat).getMockImplementation()
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn((event: string, callback: () => void) => {
+        if (event === 'spawn') queueMicrotask(callback)
+        return child
+      })
+    }
+    const spawnSpy = vi.spyOn(safeShell, 'spawnSafe').mockReturnValue(child as never)
+    mocks.manager.getPluginByName.mockImplementation(() => mocks.plugin)
+    mocks.plugin.declaredPermissions = {
+      required: ['fs.read', 'fs.index', 'system.shell'],
+      optional: []
+    }
+    mocks.permissionHasPermission.mockReturnValue(true)
+    mocks.keyResolveCurrentIdentity.mockReturnValue({
+      name: 'touch-vscode-projects',
+      pluginInstanceId: 'vscode-instance',
+      activationGeneration: 1,
+      key: 'vscode-key'
+    })
+    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
+    const module = new PluginModule()
+    try {
+      await initializeModule(module)
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+      process.env.LOCALAPPDATA = localAppData
+      vi.mocked(app.getPath).mockImplementation((name) =>
+        name === 'home'
+          ? home
+          : name === 'appData'
+            ? appData
+            : name === 'temp'
+              ? 'C:\\temp'
+              : name === 'userData'
+                ? '/Users/test-owner'
+                : 'C:\\app'
+      )
+      mocks.vscodeFilesystem.lstat.mockImplementation(async (target: string) => {
+        if (target === storage) return storageStats
+        if (target === project) return projectStats
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      })
+      mocks.vscodeFilesystem.open.mockImplementation(async (target: string) => {
+        if (target !== storage) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+        return {
+          close: async () => undefined,
+          readFile: async () => storageContent,
+          stat: async () => storageStats
+        }
+      })
+      mocks.vscodeFilesystem.realpath.mockImplementation(async (target: string) => target)
+      mocks.vscodeFilesystem.stat.mockImplementation(async (target: string) => {
+        if (target === project) return projectStats
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      })
+      vi.mocked(fse.lstat).mockImplementation(async () => projectStats as never)
+      vi.mocked(fse.realpath).mockImplementation(async () => project)
+      vi.mocked(fse.stat).mockImplementation(async () => projectStats as never)
+      const factory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.vscodeProjects as
+        | ((activation: {
+            name: string
+            pluginInstanceId: string
+            activationGeneration: number
+            key: string
+          }) => {
+            definitions: ReadonlyArray<{
+              invoke: (
+                context: unknown,
+                request: unknown,
+                signal: AbortSignal,
+                resources: unknown
+              ) => unknown
+            }>
+          })
+        | undefined
+      const input = {
+        name: 'touch-vscode-projects',
+        pluginInstanceId: 'vscode-instance',
+        activationGeneration: 1,
+        key: 'vscode-key'
+      }
+      const capability = factory!(input)
+      const definition = capability.definitions[0]!
+      const context = issuePluginSecurityContext(input, 'plugin-host', { hostGeneration: 7 })
+      const listed = (await definition.invoke(
+        context,
+        { operation: 'list' },
+        new AbortController().signal,
+        {} as PluginHostCapabilityResourceContext
+      )) as unknown as PluginVscodeProjectsSnapshot
+      expect(listed).toMatchObject({
+        status: 'ready',
+        projects: [{ label: 'vscode-insiders-project', kind: 'folder' }]
+      })
+      const token = listed.status === 'ready' ? listed.projects[0]?.token : undefined
+      const opened = await definition.invoke(
+        context,
+        { operation: 'open', token },
+        new AbortController().signal,
+        {} as PluginHostCapabilityResourceContext
+      )
+      expect(opened).toEqual({ status: 'started' })
+      expect(spawnSpy).toHaveBeenCalledWith(executable, ['--', project], {
+        shell: false,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    } finally {
+      mocks.vscodeFilesystem.restore()
+      if (originalGetPath) vi.mocked(app.getPath).mockImplementation(originalGetPath)
+      else vi.mocked(app.getPath).mockReset()
+      if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA
+      else process.env.LOCALAPPDATA = previousLocalAppData
+      Object.defineProperty(process, 'platform', { value: previousPlatform, configurable: true })
+      if (originalLstat) vi.mocked(fse.lstat).mockImplementation(originalLstat)
+      else vi.mocked(fse.lstat).mockReset()
+      if (originalRealpath) vi.mocked(fse.realpath).mockImplementation(originalRealpath)
+      else vi.mocked(fse.realpath).mockReset()
+      if (originalStat) vi.mocked(fse.stat).mockImplementation(originalStat)
+      else vi.mocked(fse.stat).mockReset()
+      spawnSpy.mockRestore()
+      await module.onDestroy()
+    }
   })
 
   it('parents destructive confirmation only to the configured live CoreApp window', async () => {
@@ -1298,6 +1753,30 @@ describe('PluginModule facade', () => {
       result
     )
     expect(mocks.manager.uninstallPlugin).toHaveBeenCalledExactlyOnceWith(request)
+  })
+
+  it('rejects a host uninstall request for the privileged hosts plugin before the manager', async () => {
+    const module = new PluginModule()
+    const request: PluginApiUninstallRequest = {
+      version: 1,
+      plugin: {
+        name: 'touch-hosts',
+        pluginInstanceId: 'hosts-instance',
+        activationGeneration: 3
+      },
+      disposition: {
+        confirmation: 'delete-plugin-and-data',
+        ordinaryExport: { enabled: false },
+        portableSecretBackup: { enabled: false }
+      }
+    }
+    await initializeModule(module)
+    await module.start()
+
+    await expect(invokeTransportHandler(PluginEvents.api.uninstall, request, {})).rejects.toThrow(
+      'PRIVILEGED_PLUGIN_UNINSTALL_DENIED'
+    )
+    expect(mocks.manager.uninstallPlugin).not.toHaveBeenCalled()
   })
 
   it('rejects plugin callers before uninstall owner resolution', async () => {

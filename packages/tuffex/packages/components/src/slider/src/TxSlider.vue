@@ -226,8 +226,10 @@ function refreshMetrics(): void {
     return
   mainWidth.value = mainRef.value.getBoundingClientRect().width
   // Read the *geometric* thumb size only. It is deliberately constant across
-  // hover/drag — the visual growth rides `--tx-slider-thumb-scale`, so the fill
-  // and the native thumb can never drift out of alignment mid-interaction.
+  // hover/drag — on the surface path it resolves to the pill's resting width,
+  // and the drag growth rides `--tx-slider-surface-extent` on the pill alone,
+  // so the fill and the native thumb can never drift out of alignment
+  // mid-interaction.
   const size = Number.parseFloat(
     getComputedStyle(mainRef.value).getPropertyValue('--tx-slider-thumb-size'),
   )
@@ -483,9 +485,10 @@ onBeforeUnmount(() => {
       </div>
 
       <!--
-        Positioned with `left` rather than a transform: `transform` carries the state scale
-        and is transitioned, and folding the per-frame X into it would make the disc lag the
-        thumb by the transition duration.
+        Positioned with `left` rather than a transform: the pill's box is what transitions on
+        drag, and folding the per-frame X into any transitioned property would make it lag the
+        native thumb by the transition duration. The pill is the whole visible thumb; the native
+        one underneath is a bare hit area on this path.
       -->
       <div
         v-if="thumbSurface"
@@ -536,124 +539,150 @@ onBeforeUnmount(() => {
 <style lang="scss">
 .tx-slider {
   /**
-   * Geometry — static on purpose. `TxSlider` measures `--tx-slider-thumb-size` to
-   * place the fill, so it must not change between states; the thumb grows through
-   * `--tx-slider-thumb-scale` instead.
+   * Geometry. `TxSlider` measures `--tx-slider-thumb-size` to place the fill,
+   * so it must not change between states. On the surface path it *is* the
+   * pill's width: the native thumb is then exactly as wide as the pill, which
+   * is what keeps the fill's end on the pill's centre and the pill inside the
+   * track at both ends. The flat path narrows it back to the 18px disc below.
    */
   --tx-slider-height: 24px;
-  --tx-slider-thumb-size: 18px;
+  --tx-slider-thumb-size: var(--tx-slider-surface-width);
 
-  /** State surface — the four rows below are the whole visual language. */
+  /** State surface — the rows below are the whole visual language. */
   --tx-slider-track-height: 6px;
   --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 14%, transparent);
+
+  /**
+   * The pill. One object in every state: the native thumb is a hit area and
+   * nothing more (see the `.has-surface` thumb rule), and this is the whole
+   * thumb the user sees. Wider than tall because the slider reads along one
+   * axis, and a disc kept pulling the eye into a point instead of onto the
+   * stretch of track being addressed. `--tx-slider-surface-size` stays the
+   * *height* — it is a public override point, so it keeps its meaning.
+   *
+   * The pair is the pill at rest; `--tx-slider-surface-extent` scales it on
+   * drag. Deriving real `width`/`height` rather than riding `transform: scale()`
+   * is deliberate: a scaled pill drags its radius and its 1px rim along with
+   * it. Sized this way both hold at their authored values in every state. The
+   * layout cost is bounded on purpose — see `.tx-slider__surface`.
+   */
+  --tx-slider-surface-size: 20px;
+  --tx-slider-surface-width: 40px;
+  --tx-slider-surface-radius: 999px;
+  --tx-slider-surface-extent: 1;
+  --tx-slider-surface-opacity: 1;
+
+  /**
+   * Glass recipe, shared with the Radio button-group indicator: a translucent
+   * tint of the overlay surface, a backdrop blur, a 1px rim from the light
+   * border family and a 1px top highlight. Neutral on purpose — the blue is
+   * the fill refracting through the blur where the pill overlaps it, not a
+   * tint of its own, so the pill reads as glass over the track rather than a
+   * sticker on it.
+   */
+  --tx-slider-surface-blur: 8px;
+  --tx-slider-surface-saturate: 160%;
+  --tx-slider-surface-tint: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 22%, transparent);
+  --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 55%, transparent);
+  --tx-slider-surface-highlight: color-mix(in srgb, var(--tx-color-white, #fff) 17%, transparent);
+
+  /**
+   * Flat-path thumb (`thumbSurface: false`): the native disc, visible, growing
+   * and ringing to separate its states. All of this is inert on the surface path.
+   */
   --tx-slider-thumb-scale: 1;
-  --tx-slider-thumb-blur: 0px;
-  --tx-slider-thumb-opacity: 1;
   --tx-slider-thumb-ring: 0 0 0 0 transparent;
   --tx-slider-thumb-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
   /**
    * The text-colour family, not the page surface: those tokens are the ones that
-   * actually invert between themes (#111827 light, #ffffff dark), so the knob is
+   * actually invert between themes (#111827 light, #ffffff dark), so the disc is
    * dark on a light page and light on a dark one. Tracking `--tx-bg-color` made
-   * the thumb the same colour as the page behind it, and in dark themes it read
-   * as a hole punched through the track rather than a knob sitting on it. This
-   * is also what `TxSwitch` does with its own thumb.
+   * it the same colour as the page behind it, and in dark themes it read as a
+   * hole punched through the track rather than a knob sitting on it. This is
+   * also what `TxSwitch` does with its own thumb.
    */
   --tx-slider-thumb-color: var(--tx-text-color-primary, #303133);
 
   /**
-   * Refractive slab behind the thumb. Wider than it is tall and softly cornered
-   * rather than a circle: the slider reads along one axis, and a disc kept
-   * pulling the eye into a point instead of onto the stretch of track being
-   * addressed. `--tx-slider-surface-size` stays the *height* — it is a public
-   * override point, so it keeps its meaning.
+   * Two clocks. The state clock drives the one step that has mass — the pill's
+   * size on drag — and is a spring compiled to `linear()` in the `@supports`
+   * block after this rule; the bezier here is the fallback for engines without
+   * `linear()`, and it does not overshoot, because a bezier faking a bounce is
+   * worse than no bounce. Everything else (rim, saturation, track thickness,
+   * focus ring) rides the hover clock, a plain ease-out: hover in and out must
+   * never bounce.
    */
-  --tx-slider-surface-size: 34px;
-  --tx-slider-surface-width: 76px;
-  --tx-slider-surface-radius: 13px;
-  --tx-slider-surface-scale: 0.5;
-  --tx-slider-surface-opacity: 0;
-  --tx-slider-surface-blur: 0px;
-  --tx-slider-surface-saturate: 100%;
-  --tx-slider-surface-tint: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
-
-  /* Overshoots on purpose — the settle is what makes the state change read as physical. */
-  --tx-slider-ease: cubic-bezier(0.34, 1.5, 0.5, 1);
-  --tx-slider-state-duration: 260ms;
-  --tx-slider-press-duration: 460ms;
-  /* The thumb's own clock, so the hover dissolve can outrun the track's swell. */
-  --tx-slider-thumb-duration: var(--tx-slider-state-duration);
-  --tx-slider-dissolve-duration: 140ms;
+  --tx-slider-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tx-slider-state-duration: 360ms;
+  --tx-slider-hover-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tx-slider-hover-duration: 180ms;
 
   display: inline-flex;
   align-items: center;
   gap: 10px;
   width: 100%;
 
+  &:not(.has-surface) {
+    --tx-slider-thumb-size: 18px;
+  }
+
+  /*
+   * Known downstream trap, not fixed here: `plugins/touch-music` overrides
+   * `--tx-slider-thumb-size` (0px / 10px !important) on sliders that keep the
+   * default `thumbSurface`. Those overrides were written against the old
+   * 18px disc; with the pill they leave a 40px thumb over a 0–10px hit area,
+   * and `refreshMetrics()` ignores a 0px value and keeps its 18px fallback.
+   * The fix belongs in the plugin: pass `thumbSurface=false` there, then
+   * size the disc (see the slider docs' best practices).
+   */
+
+  /* Hover brightens the rim and lifts the saturation. The pill does not grow. */
   &.is-hovering,
   &.is-focused {
     --tx-slider-track-height: 8px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 20%, transparent);
-    --tx-slider-thumb-scale: 0.5;
+    --tx-slider-surface-saturate: 180%;
+    --tx-slider-surface-rim: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 75%, transparent);
     --tx-slider-thumb-shadow: 0 2px 6px color-mix(in srgb, #000 22%, transparent);
-    --tx-slider-surface-scale: 0.9;
-    --tx-slider-surface-opacity: 1;
-    --tx-slider-surface-blur: 6px;
-    --tx-slider-surface-saturate: 165%;
   }
 
   /**
-   * Dragging is deliberately loud: thicker track, darker rail, larger thumb and a swollen
-   * refractive disc, all at once. Driven by the `dragging` ref rather than `:active`,
-   * because the pointer routinely leaves the element mid-drag.
+   * Dragging: thicker track, darker rail, a slightly larger pill with a deeper
+   * blur and a rim that picks up the accent. The size step is the whole press
+   * bounce — it runs on the spring, so it overshoots by a few percent and
+   * settles once. Driven by the `dragging` ref rather than `:active`, because
+   * the pointer routinely leaves the element mid-drag.
    */
   &.is-dragging {
     --tx-slider-track-height: 10px;
     --tx-slider-track-color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 26%, transparent);
-    --tx-slider-thumb-scale: 1.16;
-    --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
-    --tx-slider-surface-scale: 1.18;
-    --tx-slider-surface-opacity: 1;
+    --tx-slider-surface-extent: 1.08;
     --tx-slider-surface-blur: 10px;
     --tx-slider-surface-saturate: 190%;
-    --tx-slider-surface-tint: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+    --tx-slider-surface-rim: color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 75%, transparent));
+    --tx-slider-thumb-shadow: 0 4px 12px color-mix(in srgb, #000 30%, transparent);
   }
 
   /**
-   * Hover hands the position over to the slab: the knob blurs, fades and shrinks
-   * away on its own faster clock, so what marks the value is the lit stretch of
-   * track rather than a dot competing with it.
-   *
-   * Excludes focus and drag deliberately. The focus ring is a `box-shadow` on the
-   * thumb, so dissolving the thumb would dissolve the a11y affordance with it;
-   * and a drag needs a hard point to aim, which a soft slab cannot give.
-   *
-   * Scoped to `.has-surface` for the same reason: `thumbSurface: false` renders
-   * no slab and falls back to accent rings, which are themselves `box-shadow` on
-   * the thumb. Dissolving it there would leave the hover state with nothing
-   * visible at all.
-   */
-  &.has-surface.is-hovering:not(.is-focused):not(.is-dragging) {
-    --tx-slider-thumb-duration: var(--tx-slider-dissolve-duration);
-    --tx-slider-thumb-scale: 0;
-    --tx-slider-thumb-blur: 5px;
-    --tx-slider-thumb-opacity: 0;
-  }
-
-  /**
-   * With the disc on, an accent ring around the thumb would just be a second halo inside
-   * the first. Only sliders opting out of the surface fall back to rings to separate
-   * their states.
+   * With the pill on, a ring around the native thumb would sit inside an
+   * invisible box. Only sliders opting out of the surface fall back to the
+   * disc growing and ringing to separate their states.
    */
   &:not(.has-surface).is-hovering {
+    --tx-slider-thumb-scale: 1.08;
     --tx-slider-thumb-ring: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
   }
 
   &:not(.has-surface).is-dragging {
+    --tx-slider-thumb-scale: 1.16;
     --tx-slider-thumb-ring: 0 0 0 6px color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent);
   }
 
-  /* Keyboard focus keeps a crisp ring regardless — a soft disc is not an a11y affordance. */
+  /**
+   * Keyboard focus keeps a crisp ring regardless, on whichever thumb is
+   * visible: the disc on the flat path, through its ring variable; the pill on
+   * the surface path, through the dedicated rule below `.tx-slider__surface`.
+   */
   &.is-focused:not(.is-dragging) {
     --tx-slider-thumb-ring: 0 0 0 3px var(--tx-focus-ring-color, color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
   }
@@ -678,8 +707,8 @@ onBeforeUnmount(() => {
     background: var(--tx-slider-track-color);
     pointer-events: none;
     transition:
-      height var(--tx-slider-state-duration) var(--tx-slider-ease),
-      background-color var(--tx-slider-state-duration) var(--tx-slider-ease);
+      height var(--tx-slider-hover-duration) var(--tx-slider-hover-ease),
+      background-color var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
   }
 
   &__range {
@@ -690,31 +719,66 @@ onBeforeUnmount(() => {
     border-radius: inherit;
     background: var(--tx-color-primary, #409eff);
     /* Width is driven per-frame from the pointer — never transition it. */
-    transition: background-color var(--tx-slider-state-duration) var(--tx-slider-ease);
+    transition: background-color var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
   }
 
+  /**
+   * Sized, not scaled, so the radius and the rim below hold their authored
+   * values. Writing `width`/`height` is a layout write, which is exactly what
+   * the per-frame `left` must never do — but this one is not per-frame. It
+   * moves on drag start and drag end, once each per interaction, and
+   * `contain: layout` walls the resulting pass inside this element: an
+   * absolutely positioned, childless leaf that nothing else is sized against.
+   */
   &__surface {
     position: absolute;
     top: 50%;
-    width: var(--tx-slider-surface-width);
-    height: var(--tx-slider-surface-size);
+    width: calc(var(--tx-slider-surface-width) * var(--tx-slider-surface-extent));
+    height: calc(var(--tx-slider-surface-size) * var(--tx-slider-surface-extent));
+    contain: layout;
     border-radius: var(--tx-slider-surface-radius);
     background: var(--tx-slider-surface-tint);
     backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
     -webkit-backdrop-filter: blur(var(--tx-slider-surface-blur)) saturate(var(--tx-slider-surface-saturate));
     /*
-     * Rim, not decoration: on a flat card there is nothing behind the disc for the blur to
-     * refract, so without an edge the surface would read as a formless smudge.
+     * Rim, highlight, lift — the Radio indicator's list. The rim is not
+     * decoration: on a flat card there is nothing behind the pill for the blur
+     * to refract, and without an edge it would be a formless smudge.
      */
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+    box-shadow:
+      inset 0 0 0 1px var(--tx-slider-surface-rim),
+      inset 0 1px 0 var(--tx-slider-surface-highlight),
+      0 2px 8px rgba(15, 23, 42, 0.08);
     opacity: var(--tx-slider-surface-opacity);
-    transform: translate(-50%, -50%) scale(var(--tx-slider-surface-scale));
+    transform: translate(-50%, -50%);
     pointer-events: none;
     /* `left` is deliberately absent — it must track the thumb frame-for-frame. */
     transition:
-      opacity var(--tx-slider-state-duration) var(--tx-slider-ease),
-      transform var(--tx-slider-state-duration) var(--tx-slider-ease),
-      backdrop-filter var(--tx-slider-state-duration) var(--tx-slider-ease);
+      width var(--tx-slider-state-duration) var(--tx-slider-ease),
+      height var(--tx-slider-state-duration) var(--tx-slider-ease),
+      box-shadow var(--tx-slider-hover-duration) var(--tx-slider-hover-ease),
+      backdrop-filter var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
+  }
+
+  /*
+   * Keyboard focus, drawn on the pill: the native thumb is invisible on this
+   * path, so a ring on it would be a ring on nothing. Appended to the list
+   * above rather than replacing it — the rim and the highlight must survive
+   * focus — and restated in full because `box-shadow` is not additive. The
+   * first three entries are the same as `.tx-slider__surface`; the test holds
+   * them equal.
+   *
+   * Not fixed here: in the dark theme `--tx-focus-ring-color` resolves to
+   * `--tx-color-primary-light-7` (rgb(33, 61, 91)), a ring darker than the
+   * pill it surrounds. It reads, but only just; that is a token-level value
+   * shared by every focusable control, so it is out of this component's scope.
+   */
+  &.is-focused:not(.is-dragging) .tx-slider__surface {
+    box-shadow:
+      inset 0 0 0 1px var(--tx-slider-surface-rim),
+      inset 0 1px 0 var(--tx-slider-surface-highlight),
+      0 2px 8px rgba(15, 23, 42, 0.08),
+      0 0 0 3px var(--tx-focus-ring-color, color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
   }
 
   &__tooltip {
@@ -783,6 +847,11 @@ onBeforeUnmount(() => {
       background: transparent;
     }
 
+    /*
+     * The flat-path disc. Only WebKit/Blink are styled here; `::-moz-range-thumb`
+     * has never been, so Firefox shows its stock thumb on both paths — a
+     * pre-existing gap, left as is.
+     */
     &::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
@@ -794,28 +863,28 @@ onBeforeUnmount(() => {
       box-shadow: var(--tx-slider-thumb-ring), var(--tx-slider-thumb-shadow);
       margin-top: calc((var(--tx-slider-height) - var(--tx-slider-thumb-size)) / 2);
       transform: scale(var(--tx-slider-thumb-scale));
-      filter: blur(var(--tx-slider-thumb-blur));
-      opacity: var(--tx-slider-thumb-opacity);
       transition:
-        transform var(--tx-slider-thumb-duration) var(--tx-slider-ease),
-        filter var(--tx-slider-thumb-duration) var(--tx-slider-ease),
-        opacity var(--tx-slider-thumb-duration) var(--tx-slider-ease),
-        box-shadow var(--tx-slider-state-duration) var(--tx-slider-ease);
+        transform var(--tx-slider-hover-duration) var(--tx-slider-hover-ease),
+        box-shadow var(--tx-slider-hover-duration) var(--tx-slider-hover-ease);
     }
   }
 
   /**
-   * Press bounce. Keyed off `is-dragging` rather than a JS timer: the class is added on
-   * every pointerdown and removed on release, so the keyframes restart per press for free.
-   * `animation-fill-mode` stays `none`, and the last keyframe equals the base transform, so
-   * it hands back to the transition without a jump when it finishes mid-drag.
+   * On the surface path the native thumb is a hit area and nothing else. It
+   * exists so the browser handles pointer, keyboard and the value↔px mapping;
+   * the pill is what the user sees. As wide as the pill (that is what
+   * `--tx-slider-thumb-size` resolves to here) and as tall as the row, so the
+   * whole pill is grabbable.
    */
-  &.is-dragging .tx-slider__input::-webkit-slider-thumb {
-    animation: tx-slider-thumb-press var(--tx-slider-press-duration) cubic-bezier(0.22, 1.2, 0.36, 1);
-  }
-
-  &.is-dragging .tx-slider__surface {
-    animation: tx-slider-surface-press var(--tx-slider-press-duration) cubic-bezier(0.22, 1.2, 0.36, 1);
+  &.has-surface .tx-slider__input::-webkit-slider-thumb {
+    width: var(--tx-slider-thumb-size);
+    height: var(--tx-slider-height);
+    margin-top: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    transform: none;
+    transition: none;
   }
 
   &__value {
@@ -839,60 +908,26 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes tx-slider-thumb-press {
-  0% {
-    transform: scale(1);
-  }
-
-  16% {
-    transform: scale(0.9);
-  }
-
-  46% {
-    transform: scale(1.32);
-  }
-
-  72% {
-    transform: scale(1.08);
-  }
-
-  100% {
-    transform: scale(var(--tx-slider-thumb-scale));
+/**
+ * The press bounce, compiled. `resolveTransition({ stiffness: 560, damping: 34 })`
+ * from `../../liquid/src/spring` emits exactly this list — ζ ≈ 0.72, +3%
+ * overshoot, one reversal, settled at 362ms — and `slider.test.ts` holds the
+ * two together so they cannot drift. Authored statically rather than resolved
+ * at runtime because the slider never changes its stiffness, so a
+ * `CSS.supports` probe and a style write per instance would buy nothing.
+ */
+@supports (transition-timing-function: linear(0, 1)) {
+  .tx-slider {
+    --tx-slider-ease: linear(0, 0.0526, 0.1183, 0.2419, 0.377, 0.4661, 0.5913, 0.6664, 0.7645, 0.8442, 0.8874, 0.9388, 0.9759, 0.9939, 1.0126, 1.0235, 1.0275, 1.0297, 1.0295, 1.0273, 1.0239, 1.0212, 1.0172, 1.0134, 1.011, 1.0079, 1.0054, 1.004, 1.0023, 1.0014, 1.0004, 0.9998, 0.9995, 1);
+    --tx-slider-state-duration: 362ms;
   }
 }
 
-@keyframes tx-slider-surface-press {
-  0% {
-    transform: translate(-50%, -50%) scale(0.72);
-    opacity: 0.4;
-  }
-
-  46% {
-    transform: translate(-50%, -50%) scale(1.5);
-    opacity: 1;
-  }
-
-  72% {
-    transform: translate(-50%, -50%) scale(1.18);
-    opacity: 1;
-  }
-
-  100% {
-    transform: translate(-50%, -50%) scale(var(--tx-slider-surface-scale));
-    opacity: var(--tx-slider-surface-opacity);
-  }
-}
-
+/* After the `@supports` block on purpose: same specificity, so source order is what makes this win. */
 @media (prefers-reduced-motion: reduce) {
   .tx-slider {
     --tx-slider-state-duration: 0ms;
-    --tx-slider-press-duration: 0ms;
-    --tx-slider-dissolve-duration: 0ms;
-  }
-
-  .tx-slider.is-dragging .tx-slider__input::-webkit-slider-thumb,
-  .tx-slider.is-dragging .tx-slider__surface {
-    animation: none;
+    --tx-slider-hover-duration: 0ms;
   }
 }
 </style>

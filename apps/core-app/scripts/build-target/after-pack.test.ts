@@ -16,14 +16,18 @@ const { verifyPackagedEverythingNative, verifyPackagedOfficialPluginSeeds } =
       packager: { projectDir: string }
     }) => void
   }
+const { OFFICIAL_PLUGIN_BUILD_TARGETS } = require('../lib/touch-translation-runtime-sync.js') as {
+  OFFICIAL_PLUGIN_BUILD_TARGETS: readonly Array<{
+    packageName: string
+    pluginName: string
+  }>
+}
 
-const officialPlugins = [
-  { pluginName: 'clipboard-history', version: '1.1.10' },
-  { pluginName: 'touch-quickops', version: '0.1.0' },
-  { pluginName: 'touch-snippets', version: '1.0.0' },
-  { pluginName: 'touch-translation', version: '1.0.11' },
-  { pluginName: 'touch-intelligence', version: '1.2.0' }
-] as const
+const officialPlugins = OFFICIAL_PLUGIN_BUILD_TARGETS.map(({ packageName, pluginName }, index) => ({
+  packageName,
+  pluginName,
+  version: `1.0.${index + 1}`
+}))
 const fixtureRoots: string[] = []
 
 type PackagedSeedFixture = {
@@ -46,14 +50,14 @@ async function createPackagedSeedFixture(): Promise<PackagedSeedFixture> {
   await fs.mkdir(resourcesDir, { recursive: true })
   await fs.writeFile(path.join(resourcesDir, 'app.asar'), 'fixture')
 
-  for (const { pluginName, version } of officialPlugins) {
+  for (const { packageName, pluginName, version } of officialPlugins) {
     const canonicalRoot = path.join(workspaceRoot, 'plugins', pluginName)
     const packagedSeedRoot = path.join(resourcesDir, 'bundled-plugins', pluginName)
     await fs.mkdir(canonicalRoot, { recursive: true })
     await fs.mkdir(packagedSeedRoot, { recursive: true })
     await fs.writeFile(
       path.join(canonicalRoot, 'package.json'),
-      JSON.stringify({ name: `@talex-touch/${pluginName}-plugin`, version })
+      JSON.stringify({ name: packageName, version })
     )
     await fs.writeFile(
       path.join(packagedSeedRoot, 'manifest.json'),
@@ -123,24 +127,26 @@ describe('verifyPackagedOfficialPluginSeeds', () => {
     }
   })
 
-  it('rejects a package whose Resources seed is missing', async () => {
+  it('rejects a new official package whose Resources seed is missing', async () => {
     const { context, resourcesDir } = await createPackagedSeedFixture()
-    await fs.rm(path.join(resourcesDir, 'bundled-plugins', 'touch-intelligence', 'manifest.json'))
+    const plugin = officialPlugins.find(({ pluginName }) => pluginName === 'touch-orca')!
+    await fs.rm(path.join(resourcesDir, 'bundled-plugins', plugin.pluginName, 'manifest.json'))
 
     expect(() => verifyPackagedOfficialPluginSeeds(context)).toThrow(
-      'Missing packaged official plugin seed: touch-intelligence'
+      `Missing packaged official plugin seed: ${plugin.pluginName}`
     )
   })
 
-  it('rejects a seed whose manifest version differs from its canonical package', async () => {
+  it('rejects a new official seed whose manifest version differs from its canonical package', async () => {
     const { context, workspaceRoot } = await createPackagedSeedFixture()
+    const plugin = officialPlugins.find(({ pluginName }) => pluginName === 'touch-ai-sessions')!
     await fs.writeFile(
-      path.join(workspaceRoot, 'plugins', 'touch-translation', 'package.json'),
-      JSON.stringify({ name: '@talex-touch/touch-translation-plugin', version: '1.0.12' })
+      path.join(workspaceRoot, 'plugins', plugin.pluginName, 'package.json'),
+      JSON.stringify({ name: plugin.packageName, version: '2.0.0' })
     )
 
     expect(() => verifyPackagedOfficialPluginSeeds(context)).toThrow(
-      'Official plugin seed mismatch for touch-translation'
+      `Official plugin seed mismatch for ${plugin.pluginName}`
     )
   })
 

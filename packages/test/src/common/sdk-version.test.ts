@@ -86,9 +86,16 @@ describe('sdk-version', () => {
       .sort()
 
     expect(unsupported).toEqual([])
-    // Clipboard History alone consumes the 260817 application-resolution facade.
-    // The other plugins stay on the 260713 localization baseline until they use a newer API.
-    expect(currentMarkerPlugins).toEqual(['clipboard-history'])
+    // The current-generation marker identifies manifests that intentionally cross its SDK boundary.
+    // Earlier supported markers remain available to plugins that do not.
+    expect(currentMarkerPlugins).toEqual([
+      'clipboard-history',
+      'touch-ai-sessions',
+      'touch-hosts',
+      'touch-image',
+      'touch-orca',
+      'touch-vscode-projects',
+    ])
     expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
   })
 })

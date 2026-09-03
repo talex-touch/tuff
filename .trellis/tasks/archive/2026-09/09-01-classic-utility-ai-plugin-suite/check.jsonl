@@ -1,0 +1,7 @@
+{"file":"plugins/AGENTS.md","reason":"核对 manifest、权限、隐私源与插件验证规则"}
+{"file":"apps/core-app/AGENTS.md","reason":"核对 CoreApp 主进程与插件 host-only 规则"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"审查 capability 身份、权限拒绝、路径和 teardown"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"审查 typed payload 与跨层调用一致性"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"审查测试、失败态和证据边界"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"复核完整数据流与边界泄漏风险"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"确认没有重复既有系统/QuickOps能力"}

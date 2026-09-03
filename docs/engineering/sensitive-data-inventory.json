@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-08-17",
+  "updatedAt": "2026-09-02",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -112,16 +112,18 @@
       "owner": "ClipboardPrivacyDataOwner",
       "storageLocations": ["auxiliary database: clipboard_history and FK children", "owned clipboard image assets"],
       "writers": ["Clipboard capture pipeline"],
-      "readers": ["Clipboard UI/search owner"],
+      "readers": ["Clipboard UI/search owner", "bounded clipboard-input resolver"],
       "exportPolicy": "ordinary bounded allowlisted export; no native paths",
       "deletionPolicy": "typed category delete or retention paging; favorites and host-protected roots survive",
       "retentionPolicy": "user policy with strict stored < cutoff boundary",
-      "rendererExposure": "product content views and bounded Privacy summary",
+      "rendererExposure": "product content views and bounded Privacy summary; original clipboard-image materialization is main-only, no-follow, identity-checked, and limited to 32 MiB before base64 expansion",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [
         "apps/core-app/src/main/modules/privacy/owners/clipboard-retention-owner.ts#symbol=createClipboardRetentionOwner",
-        "apps/core-app/src/main/modules/privacy/privacy-lifecycle-service.test.ts#test=keeps summary, retention preview, manual preview and delete counts consistent"
+        "apps/core-app/src/main/modules/privacy/privacy-lifecycle-service.test.ts#test=keeps summary, retention preview, manual preview and delete counts consistent",
+        "apps/core-app/src/main/modules/box-tool/search-engine/utils/resolve-clipboard-inputs.ts#symbol=MAX_RESOLVED_CLIPBOARD_IMAGE_BYTES",
+        "apps/core-app/src/main/modules/box-tool/search-engine/utils/resolve-clipboard-inputs.test.ts#test=does not read or base64 an oversized sparse clipboard original and preserves its preview"
       ]
     },
     {
@@ -166,18 +168,20 @@
     {
       "id": "intelligence-audit-context-memory",
       "classification": "behavioral-and-user-content",
-      "owner": "IntelligencePrivacyDataOwner/AiCliOrchestrator/AiOrchestratorStore",
+      "owner": "IntelligencePrivacyDataOwner/AiCliOrchestrator/AiOrchestratorStore/PluginAiSessionsService",
       "storageLocations": [
         "primary database: intelligence audit/context/memory tables",
         "primary database: ai_orchestrator_runs/events objective, cwd, output, usage, and allowlisted redacted metadata",
-        "process memory: volatile raw orchestrator request input and reconstructed authority"
+        "process memory: volatile raw orchestrator request input, reconstructed authority, and bounded ten-second local AI-session metadata cache"
       ],
       "writers": ["Intelligence runtime, Pi orchestrator, and stable tool-result metadata projections"],
-      "readers": ["Intelligence runtime, Pi orchestrator, typed run handlers, and audit UI"],
+      "readers": [
+        "Intelligence runtime, Pi orchestrator, typed run handlers, audit UI, and main-owned bounded local AI-session metadata reader"
+      ],
       "exportPolicy": "ordinary audit export is bounded metadata only; owner-visible typed run DTO may expose objective, cwd, and output; raw request input, tool arguments, credentials, endpoints, native errors, and stacks forbidden",
       "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has an independent explicit lifecycle; host-only typed Privacy deletion removes one terminal orchestrator run after an opaque one-shot authority/revision preview, detaches child and automation references, and cascades its events; queued, pending-approval, running, runtime-active, and in-flight-write runs are protected",
-      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected",
-      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; raw request input, stored objective/cwd/output/error/usage/metadata, event payloads, and raw tool records are excluded",
+      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected; the local AI-session projection is process-only, expires after ten seconds, and is never cached after cancellation",
+      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; plugin AI-session DTOs expose only a hashed id, platform, safe project basename, timestamp, state, and turn count; raw request input, transcripts, prompts, stored objective/cwd/output/error/usage/metadata, event payloads, credentials, paths, and raw tool records are excluded",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [
@@ -188,7 +192,10 @@
         "apps/core-app/src/main/modules/ai/ai-orchestrator-store.privacy.test.ts#test=revalidates the opaque revision, protects non-terminal runs, and detaches references before cascade delete",
         "apps/core-app/src/main/modules/ai/ai-cli-orchestrator.ts#symbol=projectPersistedRunMetadata",
         "apps/core-app/src/main/modules/ai/ai-cli-orchestrator.test.ts#test=keeps the run protected while terminal root and event persistence are in flight",
-        "apps/core-app/src/main/modules/ai/pi-agent-runtime-host.ts#symbol=sanitizeToolOutputForRuntime"
+        "apps/core-app/src/main/modules/ai/pi-agent-runtime-host.ts#symbol=sanitizeToolOutputForRuntime",
+        "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.ts#symbol=createLocalAiSessionMetadataReader",
+        "apps/core-app/src/main/modules/plugin/host/plugin-ai-sessions-capabilities.ts#symbol=createFixedPluginAiSessionsService",
+        "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.test.ts#test=rejects cancellation after the final header read without caching fallback metadata"
       ]
     },
     {
@@ -237,24 +244,40 @@
     },
     {
       "id": "plugin-ordinary-data",
-      "classification": "plugin-user-data",
-      "owner": "PluginDataDispositionProduction",
+      "classification": "plugin-user-data-and-host-projected-metadata",
+      "owner": "PluginDataDispositionProduction/PluginHostsService/PluginVscodeProjectsService/PluginImageToolsCapability",
       "storageLocations": [
         "plugin config/data roots",
         "plugin SQLite resources",
-        "plugin logs and activation-scoped temp namespaces"
+        "plugin logs and activation-scoped temp namespaces",
+        "app userData/backups/hosts: mode-0600 bounded Hosts recovery snapshots",
+        "external VS Code/Code - Insiders storage.json read-only source",
+        "process memory: activation-local VS Code and image-input opaque token maps with five-minute TTL",
+        "user-selected image output plus same-directory operation-local atomic staging file"
       ],
-      "writers": ["typed Plugin Storage SDK"],
-      "readers": ["owning plugin through authoritative activation identity"],
-      "exportPolicy": "optional ordinary export selected during typed uninstall disposition; Secrets excluded",
-      "deletionPolicy": "typed uninstall disposition after generation-bound confirmation",
-      "retentionPolicy": "plugin installation lifecycle unless owner policy states otherwise",
-      "rendererExposure": "owning plugin scoped SDK and host plugin-storage UI",
+      "writers": [
+        "typed Plugin Storage SDK",
+        "main-owned system.hosts apply after explicit confirmation and revision validation",
+        "main-owned media.image-tools conversion to the native-dialog-selected output"
+      ],
+      "readers": [
+        "owning plugin through authoritative activation identity",
+        "main-owned allowlisted VS Code project scanner, fixed launcher, Hosts backup retention, and bounded image renderer"
+      ],
+      "exportPolicy": "optional ordinary export selected during typed uninstall disposition; Secrets, Hosts backups, VS Code source metadata, image inputs/outputs, native paths, image bytes, and identity proofs excluded",
+      "deletionPolicy": "typed uninstall disposition for plugin-owned data; Hosts partial files are removed and only ten verified backups remain; VS Code/image token maps clear on permission revoke, activation close, service close, next lifecycle input, or TTL expiry; uncommitted image stage files are removed",
+      "retentionPolicy": "plugin installation lifecycle unless owner policy states otherwise; Hosts keeps at most ten recovery snapshots; VS Code recent-project metadata is not copied into a persistent index; image source identity/bytes and selected output path remain activation/operation-local",
+      "rendererExposure": "owning plugin scoped SDK and host plugin-storage UI; classic plugin facades receive bounded Hosts entries, VS Code label/kind/timestamp/token, or image basename/token/output statistics only, never backup paths, raw Hosts text, native source/output paths, image bytes, or inode identity",
       "portable": false,
-      "migrationStatus": "generation-bound-uninstall",
+      "migrationStatus": "generation-bound-uninstall-and-transient-host-projection",
       "evidence": [
         "apps/core-app/src/main/modules/plugin/plugin-data-disposition-production.ts#symbol=createProductionPluginDataDispositionCoordinator",
-        "apps/core-app/src/renderer/src/components/plugin/PluginInfo.uninstall-disposition.test.ts#test=sends an exact generation-bound export plan, disables pending controls, and dismisses on success"
+        "apps/core-app/src/renderer/src/components/plugin/PluginInfo.uninstall-disposition.test.ts#test=sends an exact generation-bound export plan, disables pending controls, and dismisses on success",
+        "apps/core-app/src/main/modules/plugin/host/plugin-hosts-capabilities.ts#symbol=createFixedPluginHostsService",
+        "apps/core-app/src/main/modules/plugin/host/plugin-vscode-projects-capabilities.ts#symbol=createFixedPluginVscodeProjectsService",
+        "apps/core-app/src/main/modules/plugin/host/plugin-image-tools-capabilities.ts#symbol=createPluginImageToolsCapabilities",
+        "apps/core-app/src/main/modules/plugin/host/plugin-image-tools-capabilities.test.ts#test=replaces one approved data-url or file input with an opaque image token and redacted metadata",
+        "apps/core-app/src/main/modules/plugin/host/plugin-hosts-capabilities.test.ts#test=removes partial backup files but preserves pre-existing backup or stage sentinels"
       ]
     },
     {

@@ -1,0 +1,1284 @@
+{
+  "dark": [
+    {
+      "title": "gallery default 62%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 223.1875,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 255.2,
+        "tipX": 255.2,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "gallery indeterminate (sweep)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-loading",
+        "transform": "matrix(1, 0, 0, 1, 252.351, 0)",
+        "left": "0px",
+        "width": "144px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate classic",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-classic",
+        "transform": "matrix(1, 0, 0, 1, 243.097, 0)",
+        "left": "0px",
+        "width": "187.188px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate bounce",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-bounce",
+        "transform": "matrix(1, 0, 0, 1, 78.2627, 0)",
+        "left": "0px",
+        "width": "100.797px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate elastic",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-elastic",
+        "transform": "matrix(0.944652, 0, 0, 1, 134.5, 0)",
+        "left": "0px",
+        "width": "79.1875px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate split",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-split",
+        "transform": "matrix(0.37411, 0, 0, 1, 0, 0)",
+        "left": "0px",
+        "width": "360px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "top text + detail (upload)",
+      "cls": "W W--mask-plain W--text-top",
+      "track": {
+        "w": 360,
+        "h": 6,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 234,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 266,
+        "tipX": 266,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": {
+        "text": "Uploading 65%1.4 MB of 2.3 MB",
+        "labelColor": "rgb(64, 158, 255)",
+        "detail": "1.4 MB of 2.3 MB",
+        "detailColor": "rgb(163, 166, 173)"
+      },
+      "aria": "Progress"
+    },
+    {
+      "title": "top text, message only, indeterminate",
+      "cls": "W W--mask-plain W--text-top",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-loading",
+        "transform": "matrix(1, 0, 0, 1, 252.351, 0)",
+        "left": "0px",
+        "width": "144px"
+      },
+      "glow": null,
+      "head": {
+        "text": "Syncing3 files",
+        "labelColor": "rgb(64, 158, 255)",
+        "detail": "3 files",
+        "detailColor": "rgb(163, 166, 173)"
+      },
+      "aria": "Syncing"
+    },
+    {
+      "title": "outside text 40% (glow must sit on the tip)",
+      "cls": "W W--mask-plain W--text-outside",
+      "track": {
+        "w": 321.9375,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 128.765625,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 160.8,
+        "tipX": 160.8,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "inside text 80% (14px)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 14,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 288,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 320,
+        "tipX": 320,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "status warning 68%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 244.796875,
+        "bg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 276.8,
+        "tipX": 276.8,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "success message",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": false,
+        "opacity": "0",
+        "cx": 392,
+        "tipX": 392,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Done"
+    },
+    {
+      "title": "error 30%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 108,
+        "bg": "linear-gradient(90deg, color(srgb 0.972549 0.443137 0.443137 / 0.58), rgb(248, 113, 113))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 140,
+        "tipX": 140,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "gradient color prop 8px (storage.vue)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 8,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 194.390625,
+        "bg": "linear-gradient(90deg, rgb(59, 130, 246), rgb(37, 99, 235))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "segments 14px glass (segments demo)",
+      "cls": "W W--mask-plain W--bg-glass",
+      "track": {
+        "w": 360,
+        "h": 14,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": true,
+      "bar": {
+        "w": 198,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "opt-in solid rim + blur mask (old default)",
+      "cls": "W W--mask-solid W--bg-blur",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "\"\"",
+        "afterBorderW": "1px"
+      },
+      "mask": true,
+      "bar": {
+        "w": 223.1875,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 255.2,
+        "tipX": 255.2,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "opt-in dashed rim 8px warning (release-policy demo)",
+      "cls": "W W--mask-dashed",
+      "track": {
+        "w": 360,
+        "h": 8,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "\"\"",
+        "afterBorderW": "1px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 180,
+        "bg": "linear-gradient(90deg, color(srgb 0.984314 0.74902 0.141176 / 0.58), rgb(251, 191, 36))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 212,
+        "tipX": 212,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "shimmer 10px success (operations demo)",
+      "cls": "W W--mask-dashed",
+      "track": {
+        "w": 360,
+        "h": 10,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "\"\"",
+        "afterBorderW": "1px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 309.59375,
+        "bg": "linear-gradient(90deg, color(srgb 0.290196 0.870588 0.501961 / 0.58), rgb(74, 222, 128))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 341.6,
+        "tipX": 341.6,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "sparkle + hover-glow 6px (core-app PluginStorage)",
+      "cls": "W W--mask-plain W--hover-glow",
+      "track": {
+        "w": 360,
+        "h": 6,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 172.796875,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 204.8,
+        "tipX": 204.8,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "0% (glow hidden)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 0,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": false,
+        "opacity": "0",
+        "cx": 32,
+        "tipX": 32,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "100% (glow hidden)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": false,
+        "opacity": "0",
+        "cx": 392,
+        "tipX": 392,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "tooltip-wrapped 40%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 0,
+        "h": 5,
+        "bg": "color(srgb 0.898039 0.917647 0.952941 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 0,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 32,
+        "tipX": 32,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    }
+  ],
+  "light": [
+    {
+      "title": "gallery default 62%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 223.1875,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 255.2,
+        "tipX": 255.2,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "gallery indeterminate (sweep)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-loading",
+        "transform": "matrix(1, 0, 0, 1, 252.368, 0)",
+        "left": "0px",
+        "width": "144px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate classic",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-classic",
+        "transform": "matrix(1, 0, 0, 1, 243.114, 0)",
+        "left": "0px",
+        "width": "187.188px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate bounce",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-bounce",
+        "transform": "matrix(1, 0, 0, 1, 78.2398, 0)",
+        "left": "0px",
+        "width": "100.797px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate elastic",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-elastic",
+        "transform": "matrix(0.944668, 0, 0, 1, 134.46, 0)",
+        "left": "0px",
+        "width": "79.1875px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "indeterminate split",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-split",
+        "transform": "matrix(0.37405, 0, 0, 1, 0, 0)",
+        "left": "0px",
+        "width": "360px"
+      },
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "top text + detail (upload)",
+      "cls": "W W--mask-plain W--text-top",
+      "track": {
+        "w": 360,
+        "h": 6,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 234,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 266,
+        "tipX": 266,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": {
+        "text": "Uploading 65%1.4 MB of 2.3 MB",
+        "labelColor": "rgb(64, 158, 255)",
+        "detail": "1.4 MB of 2.3 MB",
+        "detailColor": "rgb(144, 147, 153)"
+      },
+      "aria": "Progress"
+    },
+    {
+      "title": "top text, message only, indeterminate",
+      "cls": "W W--mask-plain W--text-top",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "rgba(0, 0, 0, 0)",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": {
+        "name": "tx-progress-loading",
+        "transform": "matrix(1, 0, 0, 1, 252.368, 0)",
+        "left": "0px",
+        "width": "144px"
+      },
+      "glow": null,
+      "head": {
+        "text": "Syncing3 files",
+        "labelColor": "rgb(64, 158, 255)",
+        "detail": "3 files",
+        "detailColor": "rgb(144, 147, 153)"
+      },
+      "aria": "Syncing"
+    },
+    {
+      "title": "outside text 40% (glow must sit on the tip)",
+      "cls": "W W--mask-plain W--text-outside",
+      "track": {
+        "w": 321.9375,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 128.765625,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 160.8,
+        "tipX": 160.8,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "inside text 80% (14px)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 14,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 288,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 320,
+        "tipX": 320,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "status warning 68%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 244.796875,
+        "bg": "linear-gradient(90deg, color(srgb 0.901961 0.635294 0.235294 / 0.58), rgb(230, 162, 60))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 276.8,
+        "tipX": 276.8,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "success message",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "linear-gradient(90deg, color(srgb 0.403922 0.760784 0.227451 / 0.58), rgb(103, 194, 58))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": false,
+        "opacity": "0",
+        "cx": 392,
+        "tipX": 392,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Done"
+    },
+    {
+      "title": "error 30%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 108,
+        "bg": "linear-gradient(90deg, color(srgb 0.960784 0.423529 0.423529 / 0.58), rgb(245, 108, 108))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 140,
+        "tipX": 140,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "gradient color prop 8px (storage.vue)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 8,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 194.390625,
+        "bg": "linear-gradient(90deg, rgb(59, 130, 246), rgb(37, 99, 235))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "segments 14px glass (segments demo)",
+      "cls": "W W--mask-plain W--bg-glass",
+      "track": {
+        "w": 360,
+        "h": 14,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": true,
+      "bar": {
+        "w": 198,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": null,
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "opt-in solid rim + blur mask (old default)",
+      "cls": "W W--mask-solid W--bg-blur",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "\"\"",
+        "afterBorderW": "1px"
+      },
+      "mask": true,
+      "bar": {
+        "w": 223.1875,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 255.2,
+        "tipX": 255.2,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "opt-in dashed rim 8px warning (release-policy demo)",
+      "cls": "W W--mask-dashed",
+      "track": {
+        "w": 360,
+        "h": 8,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "\"\"",
+        "afterBorderW": "1px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 180,
+        "bg": "linear-gradient(90deg, color(srgb 0.901961 0.635294 0.235294 / 0.58), rgb(230, 162, 60))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 212,
+        "tipX": 212,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "shimmer 10px success (operations demo)",
+      "cls": "W W--mask-dashed",
+      "track": {
+        "w": 360,
+        "h": 10,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "\"\"",
+        "afterBorderW": "1px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 309.59375,
+        "bg": "linear-gradient(90deg, color(srgb 0.403922 0.760784 0.227451 / 0.58), rgb(103, 194, 58))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 341.6,
+        "tipX": 341.6,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "sparkle + hover-glow 6px (core-app PluginStorage)",
+      "cls": "W W--mask-plain W--hover-glow",
+      "track": {
+        "w": 360,
+        "h": 6,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 172.796875,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 204.8,
+        "tipX": 204.8,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "0% (glow hidden)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 0,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": false,
+        "opacity": "0",
+        "cx": 32,
+        "tipX": 32,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "100% (glow hidden)",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 360,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 360,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": false,
+        "opacity": "0",
+        "cx": 392,
+        "tipX": 392,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    },
+    {
+      "title": "tooltip-wrapped 40%",
+      "cls": "W W--mask-plain",
+      "track": {
+        "w": 0,
+        "h": 5,
+        "bg": "color(srgb 0.188235 0.192157 0.2 / 0.1)",
+        "afterContent": "none",
+        "afterBorderW": "0px"
+      },
+      "mask": false,
+      "bar": {
+        "w": 0,
+        "bg": "linear-gradient(90deg, color(srgb 0.25098 0.619608 1 / 0.58), rgb(64, 158, 255))",
+        "shadow": "none",
+        "transition": "none"
+      },
+      "sweep": null,
+      "glow": {
+        "visible": true,
+        "opacity": "1",
+        "cx": 32,
+        "tipX": 32,
+        "parent": "tx-progress-bar__body",
+        "w": 22,
+        "h": 14
+      },
+      "head": null,
+      "aria": "Progress"
+    }
+  ],
+  "reducedMotion": {
+    "animation": "none",
+    "transform": "none",
+    "width": "360px",
+    "bg": "color(srgb 0.25098 0.619608 1 / 0.35)"
+  }
+}
