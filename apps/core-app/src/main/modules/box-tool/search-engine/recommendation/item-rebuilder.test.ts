@@ -13,6 +13,7 @@ vi.mock('../../addon/apps/search-processing-service', () => ({
 }))
 
 import type { ScoredItem } from './recommendation-engine'
+import { RECOMMENDATION_SECTION_ORDER } from '@talex-touch/utils'
 import { ItemRebuilder } from './item-rebuilder'
 
 const usageStats = {
@@ -457,8 +458,72 @@ describe('ItemRebuilder', () => {
     })
     expect(await rebuild('cold-start')).toMatchObject({
       reason: 'Suggested',
-      badge: { text: '推荐', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
+      badge: { text: '猜你要用', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
     })
+  })
+
+  it('gives every recommendation source a distinct badge and reason', async () => {
+    // A shared string is invisible in a per-source assertion but shows up here:
+    // 'time-based' and 'cold-start' both read '推荐', so the empty state showed
+    // the same word on nearly every item and explained nothing.
+    const dbUtils = {
+      getFilesByPaths: vi.fn(async () => [
+        {
+          id: 1,
+          path: '/Applications/Demo.app',
+          name: 'Demo',
+          displayName: 'Demo',
+          extension: 'app',
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          lastIndexedAt: new Date(),
+          isDir: false,
+          type: 'application',
+          content: null,
+          embeddingStatus: 'none'
+        }
+      ]),
+      getFilesByBundleIds: vi.fn(async () => []),
+      getFileExtensionsByFileIds: vi.fn(async () => [])
+    }
+
+    mapAppsToRecommendationItemsMock.mockReturnValue([
+      {
+        id: '/Applications/Demo.app',
+        source: { id: 'app-provider', type: 'application', name: 'App Provider' },
+        kind: 'app',
+        render: { mode: 'default', basic: { title: 'Demo' } },
+        actions: [],
+        meta: {}
+      }
+    ])
+
+    const rebuilder = new ItemRebuilder(dbUtils as never)
+    const badgeTexts = new Set<string>()
+    const reasons = new Set<string>()
+
+    for (const source of RECOMMENDATION_SECTION_ORDER) {
+      const [item] = await rebuilder.rebuildItems([
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Demo.app',
+          sourceType: 'app',
+          usageStats,
+          source,
+          score: 1
+        }
+      ])
+      const recommendation = (item?.meta as Record<string, unknown>).recommendation as {
+        reason: string
+        badge: { text: string }
+      }
+      badgeTexts.add(recommendation.badge.text)
+      reasons.add(recommendation.reason)
+    }
+
+    expect(badgeTexts.size).toBe(RECOMMENDATION_SECTION_ORDER.length)
+    expect(reasons.size).toBe(RECOMMENDATION_SECTION_ORDER.length)
   })
 
   it('drops an app candidate whose catalog row is gone (uninstalled)', async () => {

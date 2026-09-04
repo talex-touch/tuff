@@ -1,11 +1,19 @@
 import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
-import type { PluginRecommendCandidate, RecommendProvider } from '@talex-touch/utils/core-box'
+import type {
+  PluginRecommendCandidate,
+  RecommendProvider,
+  RecommendationSource
+} from '@talex-touch/utils/core-box'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { createHash } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
+import {
+  RECOMMENDATION_SECTION_ITEM_LIMIT,
+  RECOMMENDATION_SECTION_ORDER
+} from '@talex-touch/utils/core-box'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { and, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
@@ -1445,48 +1453,53 @@ export class RecommendationEngine {
     return true
   }
 
-  /** Build container layout: Recommend on top, Pinned at bottom (if exists) */
+  /**
+   * Groups the empty state by *why* each item is there, in
+   * `RECOMMENDATION_SECTION_ORDER`.
+   *
+   * This used to emit a single `Recommend` grid plus a `Pinned` grid at the
+   * bottom, so every item carried a badge that read the same and the panel said
+   * nothing about why anything was on it. Pinned now leads, because an explicit
+   * pin is the strongest statement of intent on the list.
+   *
+   * `title` is an i18n key, not a finished string — the main process has no
+   * business knowing the user's language, so the renderer resolves it.
+   */
   private buildContainerLayout(
     _options: RecommendationOptions,
     items: TuffItem[]
   ): TuffContainerLayout {
-    const pinnedItems = items.filter((item) => item.meta?.pinned?.isPinned)
-    const recommendItems = items.filter((item) => !item.meta?.pinned?.isPinned)
-    const totalCount = items.length
+    const buckets = new Map<RecommendationSource, string[]>()
+
+    for (const item of items) {
+      // An explicit pin outranks whatever the scorer attributed the item to:
+      // the user said so themselves. Items that somehow arrive without a source
+      // fall back to 'cold-start' ("suggested", no stronger claim) rather than
+      // being dropped, so nothing can silently vanish from the panel.
+      const source: RecommendationSource = item.meta?.pinned?.isPinned
+        ? 'pinned'
+        : (item.meta?.recommendation?.source ?? 'cold-start')
+
+      const bucket = buckets.get(source)
+      if (bucket) bucket.push(item.id)
+      else buckets.set(source, [item.id])
+    }
 
     const sections: TuffContainerLayout['sections'] = []
+    for (const source of RECOMMENDATION_SECTION_ORDER) {
+      const itemIds = buckets.get(source)
+      if (!itemIds?.length) continue
 
-    // Recommend section on top
-    if (recommendItems.length > 0) {
       sections.push({
-        id: 'recommendations',
-        title: 'Recommend',
-        layout: 'grid',
-        itemIds: recommendItems.map((item) => item.id),
-        meta: { intelligence: true }
+        id: source,
+        title: `corebox.reason.${source}`,
+        layout: 'list',
+        itemIds: itemIds.slice(0, RECOMMENDATION_SECTION_ITEM_LIMIT),
+        meta: { intelligence: source !== 'pinned', pinned: source === 'pinned', source }
       })
     }
 
-    // Pinned section at bottom (only if has pinned items)
-    if (pinnedItems.length > 0) {
-      sections.push({
-        id: 'pinned',
-        title: 'Pinned',
-        layout: 'grid',
-        itemIds: pinnedItems.map((item) => item.id),
-        meta: { pinned: true }
-      })
-    }
-
-    return {
-      mode: 'grid',
-      grid: {
-        columns: Math.min(8, totalCount || 8),
-        gap: 12,
-        itemSize: 'medium'
-      },
-      sections
-    }
+    return { mode: 'list', sections }
   }
 
   private combineRecommendedWithPinned(
