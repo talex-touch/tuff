@@ -148,6 +148,16 @@ function selfTest() {
   /** The same entry with one field changed, which is how every real mistake here has looked. */
   const withOnly = patch => ({ advisories: [{ ...entry, ...patch }] })
 
+  const retryPayload = {
+    advisories: {
+      retry: {
+        severity: 'high',
+        github_advisory_id: 'GHSA-retry',
+        module_name: 'retry-package',
+        findings: [{ version: '1.0.0' }],
+      },
+    },
+  }
   const cases = [
     {
       name: 'a matching, unexpired allowlist entry passes',
@@ -251,6 +261,37 @@ function selfTest() {
         }
       })(),
       expected: true,
+    },
+    {
+      name: 'malformed and incomplete audit attempts retry until a later valid payload is evaluated',
+      actual: (() => {
+        const responses = ['{', '{}', JSON.stringify(retryPayload)]
+        let invocations = 0
+        const result = runAuditWithRetry(() => {
+          invocations += 1
+          return responses.shift()
+        }, 3)
+        return `${invocations}:${result.attempts}:${result.payload.advisories.retry.github_advisory_id}:${result.found.get('GHSA-retry')?.module}`
+      })(),
+      expected: '3:3:GHSA-retry:retry-package',
+    },
+    {
+      name: 'exhausted incomplete audit attempts fail after the configured bound',
+      actual: (() => {
+        let invocations = 0
+        let outcome = 'returned'
+        try {
+          runAuditWithRetry(() => {
+            invocations += 1
+            return '{}'
+          }, 2)
+        }
+        catch {
+          outcome = 'threw'
+        }
+        return `${outcome}:${invocations}`
+      })(),
+      expected: 'threw:2',
     },
     {
       name: 'a real audit shape with zero advisories is a clean pass, not a throw',
