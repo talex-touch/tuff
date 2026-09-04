@@ -16,6 +16,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
+import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { setAuxDbResolver } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
@@ -1320,7 +1321,7 @@ export class DatabaseModule extends BaseModule {
       const errorInstance = error instanceof Error ? error : new Error(errorMessage)
       await this.showDatabaseErrorDialog(
         errorInstance,
-        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
+        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${path.join(resolveRuntimeRootPath(app), 'logs')}`
       )
 
       process.exit(1)
