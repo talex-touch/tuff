@@ -1658,6 +1658,44 @@ export interface ISearchProvider<C> {
   onDestroy?: () => void | Promise<void>
 }
 
+/**
+ * Optional capability: rebuilding recommendation items from stored candidate ids.
+ *
+ * The recommendation engine persists candidates as `(sourceId, itemId)` pairs rather than whole
+ * items, so something has to turn those ids back into renderable `TuffItem`s when the empty-state
+ * grid is built. Historically that lived in one hardcoded fan-out inside the engine, which meant a
+ * new source could not enter the recommendation pool without editing the rebuilder. A source now
+ * declares the capability instead, and the rebuilder just dispatches.
+ *
+ * Implemented by search providers (mixed into `ISearchProvider`) and by standalone recommendation
+ * sources that are not providers at all — clipboard history is one, since it is searched through a
+ * plugin but recommended by the host.
+ */
+export interface RecommendationRebuildCapable {
+  /**
+   * Extra `sourceId`s this source answers for, beyond its own `id`.
+   *
+   * Replaces the rebuilder's private alias table. The file sources are the reason it exists: the
+   * per-platform native providers (`everything-provider`, `macos-spotlight-provider`,
+   * `linux-native-file-provider`) and the index provider are one logical source wearing four
+   * registration ids, and only the alias list says so.
+   */
+  readonly recommendationSourceAliases?: readonly string[]
+
+  /**
+   * Rebuild items for the given candidate ids.
+   *
+   * Batched rather than per-item because the real implementations do batched lookups — the app
+   * source alone splits its ids into path and bundle-id queries and then bulk-loads extensions.
+   * A per-item signature would quietly turn each of those into an N+1.
+   *
+   * Ordering is irrelevant: the caller re-sorts by recommendation score. Ids whose backing record
+   * is gone (uninstalled app, deleted file) are omitted, not reported — disappearing from the grid
+   * is the correct outcome and is not an error.
+   */
+  rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]>
+}
+
 // ==================== 插件接口预览 ====================
 
 /**
