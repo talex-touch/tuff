@@ -20,6 +20,8 @@ import { createClipboardRecommendationSource } from './clipboard-recommendation-
 import { createFileRecommendationSource } from './file-recommendation-source'
 import { createAppRecommendationSource } from './app-recommendation-source'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
+import { HABITUAL_RECOMMENDATION_SOURCES } from './recommendation-presentation'
+import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
@@ -95,6 +97,15 @@ const PLUGIN_CANDIDATES_TOTAL_LIMIT = 15
  * rather than a catalog row) but it is host-generated, and its `source` is already `'context'`.
  */
 const BUILTIN_CLIPBOARD_URL_SOURCE_ID = '__builtin_clipboard_url__'
+/** One row. The grid tier is capped to it so the two tiers stay visually distinct. */
+const GRID_TIER_COLUMNS = 6
+
+/** The reason `mergeAndEnrichItems` recorded, or `cold-start` when an item carries none. */
+function readRecommendationSource(item: TuffItem): ScoredItem['source'] {
+  const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation
+  const source = (recommendation as { source?: ScoredItem['source'] } | undefined)?.source
+  return source ?? 'cold-start'
+}
 /**
  * A captured selection is the same privacy tier as the clipboard but a weaker
  * intent signal — it is often minutes old and was captured for another action.
@@ -1497,43 +1508,65 @@ export class RecommendationEngine {
     return true
   }
 
-  /** Build container layout: Recommend on top, Pinned at bottom (if exists) */
+  /**
+   * Two tiers: a grid of things the user reaches for out of habit, then a list of things the host
+   * is proposing.
+   *
+   * The split is by *reason*, not by pin state as before. A pinned entry and a daily-driver app
+   * both belong in the grid — bare icons, no explanation needed — while everything the host
+   * surfaced for a reason ("常在此时打开", "插件") belongs in the list, where there is room to say
+   * so. The grid is capped at one row so the tiers stay visually distinct however many candidates
+   * come back.
+   */
   private buildContainerLayout(
     _options: RecommendationOptions,
     items: TuffItem[]
   ): TuffContainerLayout {
-    const pinnedItems = items.filter((item) => item.meta?.pinned?.isPinned)
-    const recommendItems = items.filter((item) => !item.meta?.pinned?.isPinned)
-    const totalCount = items.length
+    const columns = Math.min(GRID_TIER_COLUMNS, items.length || GRID_TIER_COLUMNS)
+
+    // Pinned entries claim grid slots first. They are appended last in score order (pinning is not
+    // a score), so taking the grid in list order would push the one thing the user explicitly
+    // asked to always see down into the "here is a suggestion" tier.
+    const pinned = items.filter((item) => item.meta?.pinned?.isPinned === true)
+    const rest = items.filter((item) => item.meta?.pinned?.isPinned !== true)
+
+    const habitual = [...pinned]
+    const proposed: TuffItem[] = []
+    for (const item of rest) {
+      // Overflow past one row falls to the list rather than wrapping into a second grid row: the
+      // grid is the "no explanation needed" tier, and a half-empty second row reads as noise.
+      const fits =
+        habitual.length < columns &&
+        HABITUAL_RECOMMENDATION_SOURCES.has(readRecommendationSource(item))
+      if (fits) habitual.push(item)
+      else proposed.push(item)
+    }
 
     const sections: TuffContainerLayout['sections'] = []
 
-    // Recommend section on top
-    if (recommendItems.length > 0) {
+    if (habitual.length > 0) {
       sections.push({
-        id: 'recommendations',
-        title: 'Recommend',
+        id: 'habitual',
+        title: i18nMsg('coreBox.sections.habitual'),
         layout: 'grid',
-        itemIds: recommendItems.map((item) => item.id),
+        itemIds: habitual.map((item) => item.id),
         meta: { intelligence: true }
       })
     }
 
-    // Pinned section at bottom (only if has pinned items)
-    if (pinnedItems.length > 0) {
+    if (proposed.length > 0) {
       sections.push({
-        id: 'pinned',
-        title: 'Pinned',
-        layout: 'grid',
-        itemIds: pinnedItems.map((item) => item.id),
-        meta: { pinned: true }
+        id: 'proposed',
+        title: i18nMsg('coreBox.sections.proposed'),
+        layout: 'list',
+        itemIds: proposed.map((item) => item.id)
       })
     }
 
     return {
       mode: 'grid',
       grid: {
-        columns: Math.min(8, totalCount || 8),
+        columns,
         gap: 12,
         itemSize: 'medium'
       },

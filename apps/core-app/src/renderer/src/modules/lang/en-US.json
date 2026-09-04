@@ -2416,6 +2416,23 @@
       "presentation": "Presentation",
       "ebook": "E-book",
       "other": "Other"
+    },
+    "sections": {
+      "habitual": "Right now",
+      "proposed": "Recent picks"
+    },
+    "recommendation": {
+      "badge": {
+        "frequent": "Frequent",
+        "timeBased": "Suggested",
+        "recent": "Recent",
+        "trending": "Trending",
+        "context": "Smart match",
+        "plugin": "Plugin",
+        "newlyInstalled": "Just installed",
+        "pinned": "Pinned",
+        "suggested": "Suggested"
+      }
     }
   },
   "appConfigure": {
@@ -5063,7 +5080,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "memoryReview": {
       "title": "Memory Review",

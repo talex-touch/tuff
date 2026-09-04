@@ -2,6 +2,7 @@ import type { TuffItem, TuffRender } from '@talex-touch/utils'
 import type { ScoredItem } from './recommendation-engine'
 import { createLogger } from '../../../../utils/logger'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
+import { DEFAULT_RECOMMENDATION_BADGE, RECOMMENDATION_BADGES } from './recommendation-presentation'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
 
@@ -319,26 +320,6 @@ export class ItemRebuilder {
   }
 
   private generateBadge(scored: ScoredItem): { text: string; icon: string; variant: string } {
-    const badges: Record<string, { text: string; icon: string; variant: string }> = {
-      frequent: { text: '常用', icon: 'i-ri-fire-line', variant: 'frequent' },
-      'time-based': { text: '推荐', icon: 'i-ri-time-line', variant: 'intelligent' },
-      recent: { text: '最近', icon: 'i-ri-history-line', variant: 'recent' },
-      trending: { text: '趋势', icon: 'i-ri-line-chart-line', variant: 'trending' },
-      context: { text: '智能推荐', icon: 'i-ri-sparkling-line', variant: 'intelligent' },
-      plugin: { text: '插件', icon: 'i-ri-puzzle-line', variant: 'plugin' },
-      'newly-installed': {
-        text: '新安装',
-        icon: 'i-ri-download-2-line',
-        variant: 'newly-installed'
-      },
-      'cold-start': { text: '推荐', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
-    }
-    return (
-      badges[scored.source] || {
-        text: '推荐',
-        icon: 'i-ri-lightbulb-line',
-        variant: 'intelligent'
-      }
-    )
+    return RECOMMENDATION_BADGES[scored.source] ?? DEFAULT_RECOMMENDATION_BADGE
   }
 }

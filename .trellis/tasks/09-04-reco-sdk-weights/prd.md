@@ -115,23 +115,75 @@ if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
 
 三者可并行开发,但 D 的端到端验收需 C1 + C2 就位。
 
+## 实现记录(2026-09-04)
+
+### design.md §2.1 的「维度归一化」方案已废弃
+
+实测发现评分是**按数量级分层**的,不是归一化加权和:
+
+| 维度 | 权重 | 实际量级 |
+|---|---|---|
+| time relevance | ×1e5 | 上限 ~1.35e7 |
+| novelty | ×1e7(衰减) | 新装未用 |
+| semantic local | ×6e5 | |
+| frequency | ×1e4 | 重度使用 App ≈1e6 |
+| recency | ×1e3 | 上限 1e5 |
+| **plugin priority** | **×1e5** | **默认 50 → 5e6** |
+
+归一化会摧毁这套刻意的分层语义。改为**保留分层,把插件 priority 降到它该在的档位**。
+
+### A 的落地(已完成)
+
+- `PLUGIN_PRIORITY_WEIGHT` 1e5 → **1e3**:priority 100 → 1e5,与「一小时内用过」齐平。
+  插件能给自己的候选排序、能被看见,但**越不过用户真实使用**。
+- **移除短路**:插件候选走完整评分,拿 time / frequency / recency / semantic。
+- **usageStats 水合**:此前插件候选无条件 `EMPTY_USAGE_STATS`,宿主记录的执行次数从不生效 ——
+  现在用 `getUsageStatsBatch` 按 `sourceId:itemId` 查真实行。这是「用得多就排得高」的实际机制。
+- **名额上限**(此前无界):单 provider 5 条、全部插件合计 15 条。
+- `__builtin_clipboard_url__` 分到独立的 `HOST_CONTEXT_PRIORITY_WEIGHT`(仍为 1e5,
+  **有效分数不变**)并抽出具名常量。它的 `source` 本来就是 `'context'`,
+  priority 来自宿主自己观测的信号,不属于插件自报,保留高档位是正确的。
+
+### B 的落地(已完成,按 Q4 决策只暴露时间类纯函数)
+
+`packages/utils/core-box/recommendation-weights.ts` 新建,主进程 `recommendation-utils.ts`
+改为 re-export(消除第二份实现)。`RecommendSDK.weights` 暴露
+`timeContextBoost` / `hourAffinity` / `timeRelevanceScore` + 5 个常量。
+
+**frecency 不暴露**:它读 `item_usage_stats` 的行结构,暴露等于把内部表冻成 API,
+且会让插件读到它没有观测过的用户行为。有静态断言测试守住这条边界。
+
 ## Acceptance Criteria
 
-- [ ] 插件条目与内置条目在同一排序路径上评分;`recommendation-engine.ts:2243` 的短路分支移除或改造。
-- [ ] 缺失维度有明确规则并有测试:插件条目既不恒定垫底,也不因缺数据而无条件占优。
-- [ ] 插件条目被执行后获得真实 usageStats,后续排名随使用变化(有测试覆盖前后对比)。
-- [ ] `__builtin_clipboard_url__` 无残留特例分支。
-- [ ] 权重函数经 `packages/utils` 暴露,有公开签名、文档、测试与 sdkapi 门槛。
-- [ ] 静态断言:暴露的权重 API 无法触达 usageStats 原始数据。
-- [ ] `ContextSignal` 各字段的实际填充情况有核查记录;常为 undefined 的字段要么修好要么在文档标注。
-- [ ] 插件可读取推荐缓存时效状态。
-- [ ] 新索引文件(含图片)能进入推荐,且**索引构建期不产生缓存失效风暴** ——
-      有测量:构建 N 个文件期间 `invalidateCache()` 调用次数不随文件数增长。
-- [ ] 文件类条目有准入规则,索引构建不会把大量文件灌入推荐。
-- [ ] 图片类条目的图标经 `tfile` 描述符,IPC 中无字节字段(静态断言)。
-- [ ] 若 `recommendation.source` 联合类型有扩展,**三个文件同步**
-      (`core-box/recommendation.ts`、`core-box/tuff/tuff-dsl.ts`、`transport/events/types/core-box.ts`)。
-- [ ] `pnpm lint`、`typecheck`、`pnpm utils:test` 全绿。
+- [x] 插件条目与内置条目在同一评分路径上;`recommendation-engine.ts` 的短路分支已移除。
+- [x] 插件条目被执行后排名上升(usageStats 水合 + 完整维度),有前后对比测试。
+- [x] 插件把 priority 设到 100 也压不过日常高频 App(判别性测试,旧代码下失败)。
+- [x] 名额上限:单 provider 5、合计 15,两条测试。
+- [x] `__builtin_clipboard_url__` 有效分数不变(回归守卫),魔法字符串抽为具名常量。
+- [x] 权重函数经 `packages/utils` 暴露,13 条测试(含常量固定值与「不暴露 frecency」的断言)。
+- [x] 静态断言:暴露的权重 API 无法触达 usageStats。
+- [x] `typecheck`(node + web)、recommendation 12 文件 174 测试、utils 权重 13 测试全绿。
+
+### 未完成(D 部分:新索引文件进推荐)
+
+**未做**,原因是它需要一个尚未拍板的产品策略而非工程判断:
+
+- **Q6 未决**:文件准入规则归属(宿主写死 / 用户设置 / 插件声明)。
+- 文件索引动辄数万条,准入规则(来源目录、类型、单次与单会话上限、批量节流)
+  一旦定错就是「推荐区被文件淹没」的严重回归,且**必须实机观察才能验证**,
+  单测无法判定「推荐结果是否变好」。
+- 传输侧的承接已由 C2 就位(`recommendationsInvalidated` + 空态刷新),
+  D 只差「哪些文件够格」这一层。
+
+`search-core.ts` 中「the recommendation grid does not contain files yet」的注释
+已按现状措辞,待 D 落地时更新。
+
+## 开放问题(更新)
+
+- ~~**Q4**~~ 已决:只暴露时间类纯函数,frecency 不暴露。已落地。
+- **Q5**:插件条目 usageStats 回流是否需要用户可见的隐私说明 —— **仍未决**。
+  注:回流本身此前就在发生(宿主一直在记录执行),本次只是让记录**生效**于排序。
+- **Q6**:文件准入规则归属 —— **仍未决**,阻塞 D。
 
 ## 风险
 

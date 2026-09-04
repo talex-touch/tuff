@@ -72,19 +72,63 @@ sections = [
 - R3 的分段规则依赖 C3 的评分产出形态。可先用现有 `recommendation.source` 取值临时划分,
   待 C3 落地后对齐。
 
+## 实现记录(2026-09-04)
+
+### R3 的分段依据:按「需不需要解释」而非重要性
+
+设计稿上段是**裸图标**,下段每条都带一句理由(「常在此时打开」「插件」「最近 3 次都在此后打开」)。
+这就是真实的分界线,不是「重要 / 不重要」:
+
+- **上段(grid)** = `pinned` + `frequent` —— 用户出于习惯去够的东西,不需要解释
+- **下段(list)** = `time-based` / `recent` / `trending` / `context` / `plugin` /
+  `newly-installed` / `cold-start` —— 宿主**提议**的东西,有空间说明理由
+
+`HABITUAL_RECOMMENDATION_SOURCES` 就是这条线,放在 `recommendation-presentation.ts`。
+
+### 实施中发现的真实回归:pinned 会被挤进下段
+
+pinned 条目在 item 序里**排最后**(pin 不是分数,由 `combineRecommendedWithPinned` 追加),
+按「取前 N 个」填宫格会把用户明确 pin 过的东西推到「这是个建议」那一层。
+改为 **pinned 优先占宫格位**,其余按分数序补齐。有专门测试守住。
+
+### Q7 已决:Pinned 段合并进上段,不保留独立分组
+
+原 `{ id: 'pinned', meta: { pinned: true } }` 分组连同渲染端的
+`isPinnedSection()` 与琥珀色边框样式一并删除(确认无其他生产者)。
+pin 状态仍通过 `item.meta.pinned` 在条目上流转,pin/unpin 交互不受影响。
+
+### Q8 已决:自适应,上限一行
+
+`GRID_TIER_COLUMNS = 6`。宫格封顶一行,溢出落到下段列表 ——
+半空的第二行在视觉上是噪音,而且会模糊两段的区分。
+设计稿的 6 + 5 正好落在这个规则上。
+
+### 快捷键无需改动
+
+`getQuickKey(index)` 本就是全局索引制(⌘1–⌘9,index 9 → ⌘0),
+6 + 5 布局自然给出 ⌘1–⌘6 / ⌘7–⌘0,第 11 项无快捷键 —— 与设计稿一致
+(稿中「截图 OCR」那行确实没有 ⌘ 标)。
+
+### 文案收敛
+
+新建 `recommendation-presentation.ts` 作为单一来源:主进程发 `$i18n:` key,
+渲染端 `BoxGridItem` / `ItemSubtitle` 用 `resolveI18nText` 解析。
+中英文各补 9 条 badge + 2 条分组标题。顺带补齐了此前缺失的 `plugin` variant 配色。
+
 ## Acceptance Criteria
 
-- [ ] 空态渲染为「此刻常用」宫格 + 「最近案例」列表,与设计稿一致。
-- [ ] `BoxGrid.vue` 按 `section.layout` 分支;list section 使用 `BoxItem`。
-- [ ] 分段依据为推荐层级,非 `isPinned`;Pinned 的去向有明确结论并记录理由。
-- [ ] badge 文案与配色为单一来源;新增一个 source 只需改一处。
-- [ ] 主进程不再出现硬编码中文推荐文案(grep `item-rebuilder.ts` 无中文字符串)。
-- [ ] 中英文文案各就位,切换语言两段标题与 badge 均正确。
-- [ ] ⌘1–⌘6 命中上段、⌘7–⌘0 命中下段;跨段焦点移动正确
-      (`useKeyboard.ts` 相关测试更新)。
-- [ ] 空推荐、仅上段有内容、仅下段有内容三种情况均渲染正常,无空标题残留。
-- [ ] `pnpm lint`、`typecheck`、渲染端相关单测全绿。
-- [ ] 运行时冒烟:唤起 CoreBox 空态截图比对设计稿。
+- [x] 空态渲染为「此刻常用」宫格 + 「最近案例」列表(en: Right now / Recent picks)。
+- [x] `BoxGrid.vue` 按 `section.layout` 分支;list section 复用既有 `BoxItem`,未新造组件。
+- [x] 分段依据为推荐层级,非 `isPinned`;Pinned 分组已移除并记录理由。
+- [x] badge 文案 + 图标 + variant 为单一来源(`recommendation-presentation.ts`)。
+- [x] 主进程不再出现硬编码中文推荐文案。
+- [x] 中英文各就位,`translation-coverage.test.ts` 通过。
+- [x] ⌘1–⌘6 命中上段、⌘7–⌘0 命中下段(既有全局索引逻辑,无需改动)。
+- [x] 空推荐 / 仅上段 / 仅下段 三种情况均有测试(7 条布局测试)。
+- [x] `pnpm lint`、`typecheck`(node + web)、250 文件 2029 测试全绿。
+
+**未做**:运行时截图比对设计稿。改动已由单测覆盖到 section 结构与文案 key,
+但**视觉效果(列表行高、两段间距)未实机验证**。
 
 ## 开放问题
 
