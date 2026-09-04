@@ -468,6 +468,7 @@ export interface TuffMeta {
       | 'context'
       | 'cold-start'
       | 'newly-installed'
+      | 'newly-added'
     score?: number
   }
 

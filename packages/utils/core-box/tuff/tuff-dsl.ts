@@ -1173,6 +1173,7 @@ export interface TuffMeta {
       | 'context'
       | 'cold-start'
       | 'newly-installed'
+      | 'newly-added'
     score?: number
     /**
      * Ranking split: `stableScore` is the cacheable half (time/frequency/

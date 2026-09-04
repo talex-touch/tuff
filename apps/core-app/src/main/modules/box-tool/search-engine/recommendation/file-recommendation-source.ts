@@ -21,6 +21,37 @@ export const FILE_RECOMMENDATION_ALIASES = [
 ] as const
 
 /**
+ * `file_extensions` rows for the given files, keyed by file id.
+ *
+ * One batched read; per-file lookups here would be an N+1 on the empty-query path. A failure is
+ * swallowed because a missing thumbnail costs an icon, not the card.
+ */
+async function loadExtensionsByFileId(
+  dbUtils: DbUtils,
+  files: Array<{ id: number }>
+): Promise<Map<number, Record<string, string>>> {
+  const byFileId = new Map<number, Record<string, string>>()
+  if (files.length === 0) return byFileId
+
+  try {
+    const rows = await dbUtils.getFileExtensionsByFileIds(files.map((file) => file.id))
+    for (const row of rows) {
+      if (row.value == null) continue
+      const bucket = byFileId.get(row.fileId) ?? {}
+      bucket[row.key] = row.value
+      byFileId.set(row.fileId, bucket)
+    }
+  } catch (error) {
+    fileSourceLog.warn('Failed to load file extensions for recommendations', {
+      error,
+      meta: { fileCount: files.length }
+    })
+  }
+
+  return byFileId
+}
+
+/**
  * File rows as a recommendation source.
  *
  * Registered as a standalone source rather than as a `FileProvider` capability because the lookup
@@ -43,8 +74,19 @@ export function createFileRecommendationSource(dbUtils: DbUtils): {
         const files = await dbUtils.getFilesByPaths([...itemIds])
         if (files.length === 0) return []
 
+        // Without these the mapper receives `{}` and every image falls back to a generic glyph:
+        // a picture under ~/Pictures cannot be shown directly because `tfile` only serves
+        // allowlisted roots, so the *generated thumbnail* — recorded here and living in an
+        // allowlisted cache dir — is the only way an image card ever shows the image.
+        const extensionsByFileId = await loadExtensionsByFileId(dbUtils, files)
+
         return files.flatMap((file) => {
-          const item = mapFileToTuffItem(file, {}, FILE_RECOMMENDATION_SOURCE_ID, 'File Provider')
+          const item = mapFileToTuffItem(
+            file,
+            extensionsByFileId.get(file.id) ?? {},
+            FILE_RECOMMENDATION_SOURCE_ID,
+            'File Provider'
+          )
           const normalized = normalizeTuffItemLocalAssets(item, {
             // A recommendation for a file the user has since deleted must vanish, not render broken.
             dropMissingFile: true,

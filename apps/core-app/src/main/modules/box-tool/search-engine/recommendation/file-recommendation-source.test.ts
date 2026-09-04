@@ -22,10 +22,17 @@ const fileRow = (path: string, isDir = false): Record<string, unknown> => ({
   isDir
 })
 
-function makeDb(rows: Array<Record<string, unknown>>): {
+function makeDb(
+  rows: Array<Record<string, unknown>>,
+  extensions: Array<{ fileId: number; key: string; value: string | null }> = []
+): {
   getFilesByPaths: ReturnType<typeof vi.fn>
+  getFileExtensionsByFileIds: ReturnType<typeof vi.fn>
 } {
-  return { getFilesByPaths: vi.fn(async () => rows) }
+  return {
+    getFilesByPaths: vi.fn(async () => rows),
+    getFileExtensionsByFileIds: vi.fn(async () => extensions)
+  }
 }
 
 describe('file recommendation source', () => {
@@ -103,6 +110,74 @@ describe('file recommendation source', () => {
       'file-provider',
       'File Provider'
     )
+  })
+
+  describe('thumbnails', () => {
+    it('passes each file its own extension rows to the mapper', async () => {
+      // Without these the mapper gets `{}` and an image renders as a generic glyph: `tfile` only
+      // serves allowlisted roots, so a picture under ~/Pictures can only ever show through the
+      // generated thumbnail recorded here.
+      const db = makeDb(
+        [
+          { ...fileRow('/Users/x/Pictures/a.png'), id: 1 },
+          { ...fileRow('/Users/x/Pictures/b.png'), id: 2 }
+        ],
+        [
+          { fileId: 1, key: 'thumbnail', value: '/cache/thumbs/a.png' },
+          { fileId: 2, key: 'thumbnail', value: '/cache/thumbs/b.png' }
+        ]
+      )
+      mapFileToTuffItemMock.mockImplementation((file: { path: string }) => ({ id: file.path }))
+      normalizeTuffItemLocalAssetsMock.mockImplementation((item: unknown) => ({ item }))
+
+      await createFileRecommendationSource(db as never).rebuild([
+        '/Users/x/Pictures/a.png',
+        '/Users/x/Pictures/b.png'
+      ])
+
+      expect(db.getFileExtensionsByFileIds).toHaveBeenCalledTimes(1)
+      const passed = mapFileToTuffItemMock.mock.calls.map((call) => call[1])
+      expect(passed).toEqual([
+        { thumbnail: '/cache/thumbs/a.png' },
+        { thumbnail: '/cache/thumbs/b.png' }
+      ])
+    })
+
+    it('gives a file with no extension rows an empty map rather than a sibling’s', async () => {
+      const db = makeDb(
+        [
+          { ...fileRow('/Users/x/Pictures/a.png'), id: 1 },
+          { ...fileRow('/Users/x/docs/b.txt'), id: 2 }
+        ],
+        [{ fileId: 1, key: 'thumbnail', value: '/cache/thumbs/a.png' }]
+      )
+      mapFileToTuffItemMock.mockImplementation((file: { path: string }) => ({ id: file.path }))
+      normalizeTuffItemLocalAssetsMock.mockImplementation((item: unknown) => ({ item }))
+
+      await createFileRecommendationSource(db as never).rebuild([
+        '/Users/x/Pictures/a.png',
+        '/Users/x/docs/b.txt'
+      ])
+
+      expect(mapFileToTuffItemMock.mock.calls[1][1]).toEqual({})
+    })
+
+    it('still returns the cards when the extension lookup fails', async () => {
+      // A missing thumbnail costs an icon, not the card.
+      const db = {
+        getFilesByPaths: vi.fn(async () => [{ ...fileRow('/Users/x/Pictures/a.png'), id: 1 }]),
+        getFileExtensionsByFileIds: vi.fn(async () => {
+          throw new Error('db unavailable')
+        })
+      }
+      mapFileToTuffItemMock.mockImplementation((file: { path: string }) => ({ id: file.path }))
+      normalizeTuffItemLocalAssetsMock.mockImplementation((item: unknown) => ({ item }))
+
+      await expect(
+        createFileRecommendationSource(db as never).rebuild(['/Users/x/Pictures/a.png'])
+      ).resolves.toHaveLength(1)
+      expect(mapFileToTuffItemMock.mock.calls[0][1]).toEqual({})
+    })
   })
 
   it('degrades to [] when the lookup throws', async () => {

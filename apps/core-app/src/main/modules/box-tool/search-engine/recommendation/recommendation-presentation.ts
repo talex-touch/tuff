@@ -18,6 +18,7 @@ export type RecommendationBadgeVariant =
   | 'trending'
   | 'plugin'
   | 'newly-installed'
+  | 'newly-added'
 
 export interface RecommendationBadgeSpec {
   text: string
@@ -66,6 +67,11 @@ export const RECOMMENDATION_BADGES: Record<ScoredItem['source'], RecommendationB
     text: i18nMsg('coreBox.recommendation.badge.newlyInstalled'),
     icon: 'i-ri-download-2-line',
     variant: 'newly-installed'
+  },
+  'newly-added': {
+    text: i18nMsg('coreBox.recommendation.badge.newlyAdded'),
+    icon: 'i-ri-file-add-line',
+    variant: 'newly-added'
   },
   pinned: {
     text: i18nMsg('coreBox.recommendation.badge.pinned'),

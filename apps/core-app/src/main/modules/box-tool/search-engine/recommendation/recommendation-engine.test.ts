@@ -2532,3 +2532,127 @@ describe('RecommendationEngine empty-state tiers', () => {
     expect(layoutOf([]).sections).toEqual([])
   })
 })
+
+/**
+ * Files reach the grid through a single freshness gate: `files.ctime` is the filesystem birth
+ * time, so re-indexing an old folder cannot make its contents look new and a full scan produces
+ * nothing here. Apps need a second gate only because a self-update rebuilds the bundle and
+ * refreshes its birthtime.
+ */
+describe('RecommendationEngine newly added files', () => {
+  type CollectFn = (
+    limit: number
+  ) => Promise<Array<{ sourceId: string; itemId: string; source: string; firstSeenAt?: number }>>
+
+  const fileRow = (path: string, bornAgoMs: number, overrides: Record<string, unknown> = {}) => ({
+    id: Math.abs(path.length * 31),
+    path,
+    name: path.split('/').pop(),
+    size: 2048,
+    isDir: false,
+    ctime: new Date(Date.now() - bornAgoMs),
+    mtime: new Date(Date.now() - bornAgoMs),
+    ...overrides
+  })
+
+  function engineWith(rows: unknown[], usage: unknown[] = []) {
+    const dbUtils = createDbUtils()
+    const getRecentlyCreatedFiles = vi.fn(async () => rows)
+    Object.assign(dbUtils, {
+      getRecentlyCreatedFiles,
+      getUsageStatsBatch: vi.fn(async () => usage)
+    })
+    const engine = new RecommendationEngine(dbUtils as never)
+    const collect: CollectFn = (limit) =>
+      (engine as unknown as { getNewlyAddedFileItems: CollectFn }).getNewlyAddedFileItems.call(
+        engine,
+        limit
+      )
+    return { engine, collect, getRecentlyCreatedFiles }
+  }
+
+  it('asks the database for a bounded, time-filtered window instead of scanning the index', async () => {
+    // The file index is routinely tens of thousands of rows and this runs on the empty-query path.
+    const { collect, getRecentlyCreatedFiles } = engineWith([])
+
+    await collect(4)
+
+    expect(getRecentlyCreatedFiles).toHaveBeenCalledTimes(1)
+    const [createdAfter, limit] = getRecentlyCreatedFiles.mock.calls[0] as unknown as [Date, number]
+    expect(createdAfter).toBeInstanceOf(Date)
+    expect(Date.now() - createdAfter.getTime()).toBeCloseTo(7 * DAY_MS, -4)
+    expect(limit).toBeGreaterThan(4)
+  })
+
+  it('carries the birth time as firstSeenAt so novelty scores it like a new app', async () => {
+    const bornAgo = 2 * HOUR_MS
+    const { collect } = engineWith([fileRow('/Users/x/Downloads/report.pdf', bornAgo)])
+
+    const [candidate] = await collect(4)
+
+    expect(candidate).toMatchObject({ sourceId: 'file-provider', source: 'newly-added' })
+    expect(Date.now() - (candidate.firstSeenAt ?? 0)).toBeCloseTo(bornAgo, -4)
+  })
+
+  it('drops build output before it can consume the slot budget', async () => {
+    const { collect } = engineWith([
+      fileRow('/Users/x/code/node_modules/react/index.js', HOUR_MS),
+      fileRow('/Users/x/code/dist/bundle.js', HOUR_MS),
+      fileRow('/Users/x/code/.git/COMMIT_EDITMSG.txt', HOUR_MS),
+      fileRow('/Users/x/Downloads/keeper.pdf', HOUR_MS)
+    ])
+
+    const candidates = await collect(4)
+
+    expect(candidates.map((candidate) => candidate.itemId)).toEqual([
+      '/Users/x/Downloads/keeper.pdf'
+    ])
+  })
+
+  it('never returns more than the slot budget', async () => {
+    const { collect } = engineWith(
+      Array.from({ length: 30 }, (_unused, index) =>
+        fileRow(`/Users/x/Downloads/file-${index}.pdf`, HOUR_MS)
+      )
+    )
+
+    await expect(collect(4)).resolves.toHaveLength(4)
+  })
+
+  it('hydrates the usage row so an already-opened file stops being news', async () => {
+    // Novelty is gated on executeCount === 0; without the real row every file would look untouched.
+    const { collect } = engineWith(
+      [fileRow('/Users/x/Downloads/seen.pdf', HOUR_MS)],
+      [
+        {
+          ...createUsageStats('/Users/x/Downloads/seen.pdf', { executeCount: 3 }),
+          sourceId: 'file-provider',
+          itemId: '/Users/x/Downloads/seen.pdf'
+        }
+      ]
+    )
+
+    const [candidate] = await collect(4)
+
+    expect(
+      (candidate as unknown as { usageStats: { executeCount: number } }).usageStats.executeCount
+    ).toBe(3)
+  })
+
+  it('degrades to [] when the lookup fails', async () => {
+    const dbUtils = createDbUtils()
+    Object.assign(dbUtils, {
+      getRecentlyCreatedFiles: vi.fn(async () => {
+        throw new Error('db unavailable')
+      })
+    })
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    await expect(
+      (engine as unknown as { getNewlyAddedFileItems: CollectFn }).getNewlyAddedFileItems.call(
+        engine,
+        4
+      )
+    ).resolves.toEqual([])
+  })
+})

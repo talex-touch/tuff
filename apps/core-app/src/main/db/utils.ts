@@ -1,5 +1,5 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 import { resolveCurrentAuxDb, scheduleAuxWrite } from './db-write'
 
 /**
@@ -174,6 +174,27 @@ function createDbUtilsInternal(
     async getFilesByPaths(paths: string[]) {
       if (paths.length === 0) return []
       return readDb.select().from(schema.files).where(inArray(schema.files.path, paths))
+    },
+
+    /**
+     * Files created on disk after `createdAfter`, newest first.
+     *
+     * `files.ctime` holds the filesystem birth time (`stats.birthtime ?? stats.ctime`), not the
+     * index time — which is what makes this usable as a freshness signal: re-indexing an old
+     * folder does not make its files look new.
+     *
+     * Bounded in SQL rather than filtered in JS. The app catalog can afford `getFilesByType('app')`
+     * and a JS filter; the file index cannot — it is routinely tens of thousands of rows, and this
+     * runs on the empty-query path.
+     */
+    async getRecentlyCreatedFiles(createdAfter: Date, limit: number) {
+      if (limit <= 0) return []
+      return readDb
+        .select()
+        .from(schema.files)
+        .where(and(eq(schema.files.isDir, false), gte(schema.files.ctime, createdAfter)))
+        .orderBy(desc(schema.files.ctime))
+        .limit(limit)
     },
 
     async getFilesByBundleIds(bundleIds: string[]) {
