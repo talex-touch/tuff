@@ -92,16 +92,8 @@
 
 ## 任务地图
 
-| 子任务 | 交付物 | 独立验收 |
-|---|---|---|
-| C1 推荐来源注册表 | 以注册表替换 `item-rebuilder` 硬编码 fan-out 与 `normalizeSourceId` 别名表 | 新来源无需改 item-rebuilder 即可进推荐池 |
-| C2 传输与资源协议统一 | 空态会话支持增量追加(复用既有 `update` chunk);tfile 控制面收进 transport SDK;`stream:` scheme 建立或放弃;死信道判定 | 已打开的空态会话可追加条目;`stream:` 有带证据的结论 |
-| C3 推荐 SDK 与权重开放 | 插件 recommend 走主通道并可调用内置权重函数;缓存时效与上下文数据对插件可见 | 插件推送项与内置项同池排序,权重函数有公开签名与测试 |
-| C4 空态两段 UI 与文案收敛 | 宫格+列表两段 layout;badge/标题文案收敛并接 i18n | 空态渲染符合设计稿;文案不再散落于三个文件 |
-
-另有一项**分析交付**(不改代码,归入 C1 的 research):第一层 Provider 收敛分析 —— 文件搜索
-5 个 provider 的「快路径 vs 索引路径」职责混装,以及内置 `system-actions-provider` 与
-`plugins/touch-system-actions` 的疑似重复(**尚未实测确认**)。
+另有一项**分析交付**(不改代码,已落于 `09-04-reco-source-registry/research/`):
+第一层 Provider 收敛分析。
 
 | 子任务 | 交付物 | 状态 |
 |---|---|---|
@@ -133,20 +125,28 @@
 
 ## 开放问题
 
-- **Q1**:「最近案例」作为下段标题与内容存在语义偏差 —— 设计稿下段含
-  「剪贴板历史 · 插件」「截图 OCR · 插件 · 动作」等条目,它们并非「最近」发生的对象。
-  标题已按用户原文记录,**待复核**是否改为更贴合的措辞。
-- **Q2**:`stream:` scheme 的具体承接场景尚未界定(哪些资源是 tfile 覆盖不到、必须动态流式生成的)。
-  若最终无实际消费者,C2 中该部分应当砍掉而非空转注册一个 scheme。
-  **这是对用户已作决策的潜在修订** —— 用户在「以为 scheme 已注册」的信息下选择了启用,
-  实测发现是从零建立。门禁结论须回报用户确认。
-- **Q3**:内置 `system-actions-provider` 与 `plugins/touch-system-actions` 是否真重复,需实测确认。
-- **Q4**:开放给插件的「内置权重函数」边界 —— 仅暴露纯函数
-  (`calculateTimeContextBoost` / `calculateHourAffinity` / `calculateTimeRelevanceScore`),
-  还是连同 frecency 主评分一并暴露?后者会把排序策略变成公开 API,影响后续调参自由度。
-  **C3 的 design 建议只暴露时间类纯函数,需用户拍板。**
-- **Q5**:插件条目 usageStats 回流是否需要用户可见的隐私说明(C3)。
-- **Q6**:新索引文件进推荐的准入规则归属 —— 宿主写死 / 用户设置 / 插件声明(C3)。
-- **Q7**:空态 Pinned 段的去向 —— 合并进上段 / 保留为第三段 / 移除(C4)。
-  设计稿无 Pinned 段,但移除属行为删除,需确认。
-- **Q8**:两段条目数固定(6 + 5)还是自适应(C4)。
+### 仍未决
+
+- **Q1**:「最近案例」与内容的语义偏差 —— 下段含「剪贴板历史 · 插件」「截图 OCR · 插件 · 动作」,
+  并非「最近」发生的对象。标题按用户原文实现,**待复核**。
+- **Q5**:插件条目 usageStats 参与排序是否需要用户可见的隐私说明。
+  注:宿主一直在记录执行,本次只是让记录**生效**于排序。
+- **Q6**:文件准入规则归属 —— 宿主写死 / 用户设置 / 插件声明。**阻塞 C3-D。**
+
+### 已决
+
+- **Q2** → `stream:` 门禁**未通过,已砍**。清点全部资源场景后无一需要字节流式 scheme;
+  唯一边界案例(TTS 音频以 base64 data URL 跨 IPC)是既有违规,修法是物化 + tfile。
+- **Q3** → `system-actions-provider` 与 `touch-system-actions` **不重复**(文件/索引动作 vs 电源控制);
+  但 `main-window-provider` 与插件的 `open-main-window` **真重复**,另提任务。
+- **Q4** → 只暴露时间类纯函数,frecency 不暴露。已落地。
+- **Q7** → Pinned 段合并进上段,独立分组与其样式已删除。
+- **Q8** → 自适应,宫格封顶一行(`GRID_TIER_COLUMNS = 6`),溢出落到下段。
+
+## 遗留的另提任务
+
+1. 死信道删除:`recommendation.get` / `aggregateTimeStats` / `isPinned`(判定已落盘)。
+2. TTS 音频 data URL 跨 IPC 违规 → 物化 + tfile。
+3. `main-window-provider` 与 `touch-system-actions.open-main-window` 去重(插件侧)。
+4. clipboard 推荐项 id 形状不匹配导致被 `mergeAndEnrichItems` 丢弃(当前不可达)。
+5. `findScoredByPartialMatch` 中残留的来源分支下沉到来源自声明能力。
