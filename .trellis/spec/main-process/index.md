@@ -34,6 +34,12 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   double-gate freshness predicate, novelty→frecency handoff, the THREE
   `recommendation.source` union files, cache-invalidation read-guard vs cleanup
   deletion, exposure slice tag rules.
+- [recommendation-source-registry-contracts.md](recommendation-source-registry-contracts.md) —
+  how a source enters the empty-state grid: capability-vs-standalone registration
+  (chosen by which db handle answers), push-in-only registration because
+  `<provider> → search-core → recommendation-engine → item-rebuilder` is a real
+  cycle, batched rebuild to avoid N+1, source-declared aliases, throw-on-conflict,
+  per-source failure isolation.
 - [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached
