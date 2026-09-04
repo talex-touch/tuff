@@ -1,0 +1,30 @@
+{
+  "id": "ota-fallback-net-error-classification",
+  "name": "ota-fallback-net-error-classification",
+  "title": "修复 OTA 更新源传输层错误分类导致 GitHub 回退失效",
+  "description": "Electron session.fetch 抛出的 net::ERR_* 传输层错误无法被 release-fetch-service 的 isOfficialFallbackEligible/isRetryable 正则识别，导致官方源不可达时 GitHub 回退与重试均不触发",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-04",
+  "completedAt": null,
+  "branch": "release/ota-transport-error-classification-20260904",
+  "base_branch": "release/beta20-clean",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1864",
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "AC7/AC8 -- drive one full OTA round on this machine against an unreachable official source and capture the `Nexus update lookup failed transiently; falling back to GitHub` log line, which is the direct signal the fallback fired and does not exist before this fix. AC1-AC6 are covered automatically. Note that beta.20 has since shipped, so the version used to force an update must be re-picked; the temporary downgrade must not reach a commit.",
+    "blocker": "PR #1864 is red on `Production dependency audit` because npm's advisories endpoint is timing out -- `pnpm audit --prod --json` returns `{\"error\":{\"code\":23,\"message\":\"The operation was aborted due to timeout\"}}`, a payload with neither advisories nor metadata, which check-prod-audit.mjs fails closed on by design. Reproduced locally and unrelated to this change, which adds no dependency.",
+    "evidence": "Root cause captured live on 2026-09-04: an Electron probe against the official update host threw `net::ERR_CONNECTION_CLOSED` with `fallbackEligible(message) = false`, while the GitHub control returned 200 on the same network. After the fix: `pnpm -F @talex-touch/utils test` 190 files / 1448 tests; `npx vitest run src/main/modules/update src/renderer/src/modules/update src/main/modules/network src/main/utils/network-log-noise.test.ts` 22 files / 176 tests; `npm run typecheck` exit 0; `pnpm lint` exit 0. New tests cover all three transport dialects, both codes the old regex missed (ERR_CONNECTION_TIMED_OUT and 'Failed to fetch'), the three identity-degradation tiers, and negative cases proving HTTP-status, timeout and abort errors are not claimed."
+  }
+}
