@@ -19,6 +19,7 @@ import {
   selectLatestUpdateRelease
 } from '../../../../shared/update/version'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import { isTimeoutLikeError, isTransportFailureError } from '@talex-touch/utils/network'
 import { getNetworkService } from '../../network'
 import { shouldDowngradeRemoteFailure } from '../../../utils/network-log-noise'
 import type { LogOptions } from '../../../utils/logger'
@@ -473,12 +474,10 @@ export class ReleaseFetchService {
     if (status !== undefined) {
       return status === 429 || status >= 500
     }
-    return (
-      error instanceof Error &&
-      /NETWORK_TIMEOUT|timeout|etimedout|enotfound|econnreset|eai_again|fetch failed|socket hang up/i.test(
-        error.message
-      )
-    )
+    // Both classifiers are required: the transport marker list deliberately excludes timeout
+    // spellings, so matching only transport failures would drop the timeout path that was, until
+    // this fix, the one kind of official-source failure that still reached GitHub.
+    return isTimeoutLikeError(error) || isTransportFailureError(error)
   }
 
   private officialBaseUrl(): string {
@@ -593,12 +592,7 @@ export class ReleaseFetchService {
     if (status !== undefined) {
       return status >= 500 || status === 403 || status === 429
     }
-    return (
-      error instanceof Error &&
-      /NETWORK_TIMEOUT|timeout|etimedout|enotfound|econnreset|eai_again|fetch failed|socket hang up/i.test(
-        error.message
-      )
-    )
+    return isTimeoutLikeError(error) || isTransportFailureError(error)
   }
 
   private retryDelay(attempt: number, baseDelay: number): number {
