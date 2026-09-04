@@ -18,6 +18,8 @@
 
 // import { TalexTouch } from "packages/utils/types";
 
+import type { RecommendationEvidence, RecommendationSource } from '../recommendation'
+
 /**
  * 定义高亮范围
  * @description 右开区间 [start, end)
@@ -1164,15 +1166,7 @@ export interface TuffMeta {
 
   /** 推荐来源标记 */
   recommendation?: {
-    source:
-      | 'frequent'
-      | 'recent'
-      | 'time-based'
-      | 'trending'
-      | 'pinned'
-      | 'context'
-      | 'cold-start'
-      | 'newly-installed'
+    source: RecommendationSource
     score?: number
     /**
      * Ranking split: `stableScore` is the cacheable half (time/frequency/
@@ -1181,6 +1175,12 @@ export interface TuffMeta {
      */
     stableScore?: number
     volatileScore?: number
+    /**
+     * Why this item was recommended, in data the UI can turn into a sentence.
+     * Absent fields mean the data does not exist — render nothing, never a
+     * placeholder or a guess.
+     */
+    evidence?: RecommendationEvidence
   }
 
   /**

@@ -4,6 +4,10 @@
  */
 
 import type {
+  RecommendationEvidence,
+  RecommendationSource,
+} from '../../../core-box/recommendation'
+import type {
   IProviderActivate,
   TuffContext,
   TuffItem,
@@ -445,19 +449,14 @@ export interface TuffMeta {
   }
 
   /**
-   * Recommendation source.
+   * Recommendation source. Mirrors `TuffItemMeta['recommendation']` in tuff-dsl;
+   * both reference `RecommendationSource` so the union cannot drift across the
+   * IPC boundary.
    */
   recommendation?: {
-    source:
-      | 'frequent'
-      | 'recent'
-      | 'time-based'
-      | 'trending'
-      | 'pinned'
-      | 'context'
-      | 'cold-start'
-      | 'newly-installed'
+    source: RecommendationSource
     score?: number
+    evidence?: RecommendationEvidence
   }
 
   /**

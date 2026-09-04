@@ -20,6 +20,11 @@ interface Props {
   active: boolean
   render: TuffRender
   quickKey?: string
+  /**
+   * Why this item is being recommended, already localized. Only the CoreBox
+   * empty state passes it; search results leave it unset.
+   */
+  evidence?: string
 }
 
 interface MatchAliasRange {
@@ -207,6 +212,9 @@ const shouldShowNoticeReason = computed(
     </div>
 
     <div class="BoxItemSignals ml-auto flex items-center gap-2">
+      <span v-if="evidence && !isNoticeItem" class="RecommendationEvidence" :title="evidence">
+        {{ evidence }}
+      </span>
       <span
         v-if="resultSignal && !isNoticeItem"
         class="ResultSignal"
@@ -308,6 +316,20 @@ const shouldShowNoticeReason = computed(
   font-weight: 600;
   background: var(--tx-fill-color-dark);
   color: var(--tx-text-color-primary);
+}
+
+.RecommendationEvidence {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+  opacity: 0.75;
 }
 
 .SourceBadge {

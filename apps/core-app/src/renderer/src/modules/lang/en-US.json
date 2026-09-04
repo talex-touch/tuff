@@ -5470,6 +5470,31 @@
     "confirmAndSend": "Authorize and send"
   },
   "corebox": {
+    "reason": {
+      "pinned": "Pinned",
+      "frequent": "Frequently used",
+      "time-based": "Popular right now",
+      "recent": "Recently used",
+      "newly-installed": "Newly installed",
+      "context": "From your clipboard",
+      "plugin": "From plugins",
+      "trending": "Trending up",
+      "cold-start": "You might need"
+    },
+    "evidence": {
+      "opened": "Opened {count}×",
+      "peakHours": "Usually {start}–{end}",
+      "justUsed": "Just used",
+      "lastUsed": "Used {age} ago",
+      "justInstalled": "Just installed",
+      "installed": "Installed {age} ago",
+      "age": {
+        "hours": "{count}h",
+        "days": "{count}d",
+        "weeks": "{count}w",
+        "months": "{count}mo"
+      }
+    },
     "actionUnsupported": "This action isn't supported yet",
     "opacity": "Opacity",
     "debug": "Debug",
