@@ -36,13 +36,16 @@ autoInstallPeers: false
 publicHoistPattern:
   - '*electron*'
 
-# macOS releases are built for arm64 and x64 on an arm64 runner.
+# Release builds package Linux glibc and musl runtime closures from a glibc runner.
 supportedArchitectures:
   os:
     - current
   cpu:
     - current
     - x64
+  libc:
+    - current
+    - musl
 catalog:
   '@floating-ui/vue': ^1.1.11
   '@iconify-json/cib': ^1.2.3
