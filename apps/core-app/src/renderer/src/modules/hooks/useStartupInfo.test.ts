@@ -38,6 +38,7 @@ function createStartupContext(overrides: Partial<StartupContext> = {}): StartupC
     startupInfo: createStartupInfo(),
     windowMode: 'MainApp',
     metaOverlay: false,
+    role: { touchType: 'main', metaOverlay: false },
     ...overrides
   }
 }
