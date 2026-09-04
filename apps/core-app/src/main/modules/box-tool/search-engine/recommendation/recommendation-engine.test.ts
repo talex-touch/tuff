@@ -2236,3 +2236,196 @@ describe('recommendation app-task gate wait', () => {
     expect(appTaskGateMock.waitForIdle).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Plugin recommendation candidates used to bypass scoring entirely:
+ * `return (priority ?? 50) * 1e5`. That put a default-priority plugin item at 5e6 — above the
+ * frequency term of an app the user opens every day (~1e6) and above every recency boost (≤1e5) —
+ * from a number the plugin picks for itself and the host cannot verify. It also meant a plugin
+ * item ranked identically whether it had been used a hundred times or never.
+ */
+describe('RecommendationEngine plugin candidate ranking', () => {
+  type ScoreFn = (
+    candidate: unknown,
+    context: unknown,
+    semanticSettings: unknown,
+    semanticProfile: unknown,
+    usagePreferenceProfile: unknown,
+    usageAvoidanceProfile: unknown
+  ) => Promise<number>
+
+  const semanticOff = {
+    localVectorEnabled: false,
+    aiRerankEnabled: false,
+    aiEmbeddingEnabled: false
+  }
+
+  function scoreOf(engine: RecommendationEngine, candidate: unknown): Promise<number> {
+    const score = (engine as unknown as { calculateRecommendationScore: ScoreFn })
+      .calculateRecommendationScore
+    return score.call(engine, candidate, morningContext, semanticOff, null, null, null)
+  }
+
+  const pluginCandidate = (
+    priority: number,
+    usageStats = createUsageStats('open-project', { executeCount: 0, lastExecuted: null })
+  ): unknown => ({
+    sourceId: 'plugin-recommend:demo',
+    itemId: 'open-project',
+    sourceType: 'plugin-recommend',
+    usageStats,
+    source: 'plugin',
+    pluginCandidate: {
+      providerId: 'demo',
+      id: 'open-project',
+      title: 'Open Project',
+      action: 'open',
+      priority
+    }
+  })
+
+  const heavilyUsedApp = (): unknown => ({
+    sourceId: 'app-provider',
+    itemId: '/Applications/Daily.app',
+    sourceType: 'app',
+    usageStats: createUsageStats('/Applications/Daily.app', {
+      executeCount: 100,
+      lastExecuted: new Date()
+    }),
+    source: 'frequent'
+  })
+
+  it('does not let a plugin outrank a daily-driver app by declaring priority 100', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const appScore = await scoreOf(engine, heavilyUsedApp())
+    const pluginScore = await scoreOf(engine, pluginCandidate(100))
+
+    expect(pluginScore).toBeLessThan(appScore)
+  })
+
+  it('still orders a plugin its own candidates by priority', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const high = await scoreOf(engine, pluginCandidate(90))
+    const low = await scoreOf(engine, pluginCandidate(10))
+
+    expect(high).toBeGreaterThan(low)
+  })
+
+  it('lets a plugin item climb once the user actually uses it', async () => {
+    // The whole point of removing the short-circuit: usage, not the plugin's own number, is what
+    // moves an item up.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const unused = await scoreOf(engine, pluginCandidate(50))
+    const used = await scoreOf(
+      engine,
+      pluginCandidate(
+        50,
+        createUsageStats('open-project', { executeCount: 40, lastExecuted: new Date() })
+      )
+    )
+
+    expect(used).toBeGreaterThan(unused)
+  })
+
+  it('keeps the host-generated clipboard URL card in its own band', async () => {
+    // Not a regression the demotion may take with it: the priority on this card comes from a
+    // signal the host observed itself, so it still outranks usage.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const cardScore = await scoreOf(engine, {
+      sourceId: '__builtin_clipboard_url__',
+      itemId: 'clipboard-url-open:https://example.com',
+      sourceType: 'action',
+      usageStats: createUsageStats('clipboard-url-open', { executeCount: 0, lastExecuted: null }),
+      source: 'context',
+      pluginCandidate: {
+        id: 'clipboard-url-open:https://example.com',
+        title: '打开 URL',
+        action: 'open-url',
+        priority: 95
+      }
+    })
+
+    expect(cardScore).toBe(95 * 1e5)
+    expect(cardScore).toBeGreaterThan(await scoreOf(engine, heavilyUsedApp()))
+  })
+})
+
+describe('RecommendationEngine plugin candidate quotas', () => {
+  type CollectFn = (context: unknown) => Promise<Array<{ sourceId: string; itemId: string }>>
+
+  function collect(
+    engine: RecommendationEngine
+  ): Promise<Array<{ sourceId: string; itemId: string }>> {
+    return (engine as unknown as { getPluginCandidates: CollectFn }).getPluginCandidates.call(
+      engine,
+      morningContext
+    )
+  }
+
+  function registerProvider(engine: RecommendationEngine, id: string, count: number): void {
+    engine.registerPluginProvider('demo-plugin', {
+      id,
+      canProvide: () => true,
+      getCandidates: async () =>
+        Array.from({ length: count }, (_unused, index) => ({
+          id: `${id}-candidate-${index}`,
+          title: `Candidate ${index}`,
+          action: 'open'
+        }))
+    } as never)
+  }
+
+  it('caps how many candidates one plugin may contribute', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    registerProvider(engine, 'greedy', 40)
+
+    await expect(collect(engine)).resolves.toHaveLength(5)
+  })
+
+  it('caps the plugins collectively, so well-behaved plugins cannot crowd out built-ins', async () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    // Each is under the per-provider cap; together they are not.
+    for (let i = 0; i < 6; i += 1) registerProvider(engine, `provider-${i}`, 5)
+
+    await expect(collect(engine)).resolves.toHaveLength(15)
+  })
+
+  it('hydrates plugin candidates with the usage rows the host recorded for them', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getUsageStatsBatch = vi.fn(async () => [
+      {
+        ...createUsageStats('used-candidate-0', { executeCount: 7 }),
+        sourceId: 'plugin-recommend:used',
+        itemId: 'used-candidate-0'
+      }
+    ]) as never
+
+    const engine = new RecommendationEngine(dbUtils as never)
+    registerProvider(engine, 'used', 2)
+
+    const candidates = (await collect(engine)) as unknown as Array<{
+      itemId: string
+      usageStats: { executeCount: number }
+    }>
+
+    expect(candidates.find((c) => c.itemId === 'used-candidate-0')?.usageStats.executeCount).toBe(7)
+    // The one with no row keeps the empty placeholder rather than inheriting its sibling's.
+    expect(candidates.find((c) => c.itemId === 'used-candidate-1')?.usageStats.executeCount).toBe(0)
+  })
+
+  it('keeps the candidates when the usage lookup fails', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getUsageStatsBatch = vi.fn(async () => {
+      throw new Error('db unavailable')
+    }) as never
+
+    const engine = new RecommendationEngine(dbUtils as never)
+    registerProvider(engine, 'flaky', 3)
+
+    await expect(collect(engine)).resolves.toHaveLength(3)
+  })
+})

@@ -65,7 +65,36 @@ const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 const USAGE_IDENTITY_MIGRATION_INITIAL_DELAY_MS = 20_000
 const CONTEXT_MATCH_WEIGHT = 1e6
-const PLUGIN_PRIORITY_WEIGHT = 1e5
+/**
+ * Band for host-generated contextual candidates (currently the clipboard-URL card).
+ *
+ * These carry a priority the *host* assigned from a signal it observed itself, so they may sit
+ * above usage the way an explicit intent should. Kept at the original 1e5 so the clipboard card's
+ * effective score (95 × 1e5) is unchanged.
+ */
+const HOST_CONTEXT_PRIORITY_WEIGHT = 1e5
+/**
+ * Band for plugin-declared `priority`.
+ *
+ * Deliberately two decades below {@link HOST_CONTEXT_PRIORITY_WEIGHT}: `priority` is a number the
+ * plugin picks for itself, and at 1e5 a default of 50 scored 5e6 — above a heavily used app's
+ * frequency term (~1e6) and every recency boost (≤1e5). Any plugin could pin itself to the top of
+ * the user's grid by declaring 100, and there was nothing the host could check.
+ *
+ * At 1e3 a top priority of 100 lands at 1e5, level with "used within the hour": a plugin can order
+ * its own candidates and be visible, but it climbs past the user's habits only by being used, via
+ * the same frequency/recency terms as everything else.
+ */
+const PLUGIN_PRIORITY_WEIGHT = 1e3
+/** Candidates one plugin may contribute to a single recommendation pass. */
+const PLUGIN_CANDIDATES_PER_PROVIDER_LIMIT = 5
+/** Candidates all plugins together may contribute, so N plugins cannot crowd out the built-ins. */
+const PLUGIN_CANDIDATES_TOTAL_LIMIT = 15
+/**
+ * The clipboard-URL card. It rides the plugin-candidate carrier (it has a title/subtitle/action
+ * rather than a catalog row) but it is host-generated, and its `source` is already `'context'`.
+ */
+const BUILTIN_CLIPBOARD_URL_SOURCE_ID = '__builtin_clipboard_url__'
 /**
  * A captured selection is the same privacy tier as the clipboard but a weaker
  * intent signal — it is often minutes old and was captured for another action.
@@ -2002,7 +2031,7 @@ export class RecommendationEngine {
             })
           ])
 
-          return result.map((candidate) => ({
+          return result.slice(0, PLUGIN_CANDIDATES_PER_PROVIDER_LIMIT).map((candidate) => ({
             sourceId: `plugin-recommend:${provider.id}`,
             itemId: candidate.id,
             sourceType: 'plugin-recommend' as const,
@@ -2024,7 +2053,45 @@ export class RecommendationEngine {
       })
     )
 
-    return settled.flat()
+    // Two bounds, not one: the per-provider slice above stops a single plugin from flooding the
+    // pool, and this stops N well-behaved plugins from doing it collectively.
+    const candidates = settled.flat().slice(0, PLUGIN_CANDIDATES_TOTAL_LIMIT)
+    return this.hydratePluginUsageStats(candidates)
+  }
+
+  /**
+   * Replace the placeholder usage stats on plugin candidates with the rows the host actually
+   * recorded for them.
+   *
+   * Without this every plugin candidate scores as if it had never been used, so a plugin item the
+   * user runs daily ranks exactly like one they have never touched — the plugin's self-declared
+   * `priority` was the only thing separating them. The rows already exist: execution goes through
+   * the host, which writes `item_usage_stats` under the same `sourceId:itemId` key used here.
+   */
+  private async hydratePluginUsageStats(candidates: CandidateItem[]): Promise<CandidateItem[]> {
+    if (candidates.length === 0) return candidates
+
+    try {
+      const rows = await this.dbUtils.getUsageStatsBatch(
+        candidates.map((candidate) => ({
+          sourceId: candidate.sourceId,
+          itemId: candidate.itemId
+        }))
+      )
+      if (rows.length === 0) return candidates
+
+      const byKey = new Map(rows.map((row) => [`${row.sourceId}:${row.itemId}`, row]))
+      return candidates.map((candidate) => {
+        const usageStats = byKey.get(`${candidate.sourceId}:${candidate.itemId}`)
+        return usageStats ? { ...candidate, usageStats } : candidate
+      })
+    } catch (error) {
+      // A stats lookup failure must not drop the candidates; they simply rank as unused.
+      recommendationLog.warn('Failed to hydrate plugin candidate usage stats', {
+        meta: { candidateCount: candidates.length, ...toErrorMeta(error) }
+      })
+      return candidates
+    }
   }
 
   /**
@@ -2046,7 +2113,7 @@ export class RecommendationEngine {
 
     return [
       {
-        sourceId: '__builtin_clipboard_url__',
+        sourceId: BUILTIN_CLIPBOARD_URL_SOURCE_ID,
         itemId: `clipboard-url-open:${url}`,
         sourceType: 'action',
         usageStats: EMPTY_USAGE_STATS,
@@ -2263,14 +2330,12 @@ export class RecommendationEngine {
     usagePreferenceProfile: RecommendationSemanticProfile | null,
     usageAvoidanceProfile: RecommendationSemanticProfile | null
   ): Promise<number> {
-    // Plugin candidates: use priority directly, skip usageStats-based calculation
-    if (candidate.source === 'plugin' && candidate.pluginCandidate) {
-      return (candidate.pluginCandidate.priority ?? 50) * PLUGIN_PRIORITY_WEIGHT
-    }
-
-    // Built-in clipboard URL candidate: high priority contextual match
-    if (candidate.sourceId === '__builtin_clipboard_url__' && candidate.pluginCandidate) {
-      return (candidate.pluginCandidate.priority ?? 95) * PLUGIN_PRIORITY_WEIGHT
+    // Host-generated contextual candidates (the clipboard-URL card) keep their own band: the
+    // priority came from a signal the host observed, not from something a caller declared, so it
+    // may legitimately outrank usage. It short-circuits because it has no usage history to add —
+    // the card exists only for as long as the clipboard holds that URL.
+    if (candidate.sourceId === BUILTIN_CLIPBOARD_URL_SOURCE_ID && candidate.pluginCandidate) {
+      return (candidate.pluginCandidate.priority ?? 95) * HOST_CONTEXT_PRIORITY_WEIGHT
     }
 
     // NOTE: context match (clipboard / selection / foreground app / system
@@ -2278,6 +2343,14 @@ export class RecommendationEngine {
     // the cache in `applyVolatileContextRerank`. Only slow-moving components
     // may land in a cached score.
     let score = 0
+
+    // Plugin-declared priority orders a plugin's own candidates. It used to *replace* the whole
+    // calculation, which meant a plugin item ranked identically whether the user had run it a
+    // hundred times or never. It is now one bounded term among the rest, and the terms below —
+    // which a plugin item earns exactly like a built-in — are what move it.
+    if (candidate.source === 'plugin' && candidate.pluginCandidate) {
+      score += (candidate.pluginCandidate.priority ?? 50) * PLUGIN_PRIORITY_WEIGHT
+    }
 
     // 时间相关性
     if (candidate.timeStats) {
@@ -2520,7 +2593,7 @@ export class RecommendationEngine {
   }
 
   private isExternalPriorityCandidate(candidate: CandidateItem): boolean {
-    return candidate.source === 'plugin' || candidate.sourceId === '__builtin_clipboard_url__'
+    return candidate.source === 'plugin' || candidate.sourceId === BUILTIN_CLIPBOARD_URL_SOURCE_ID
   }
 
   private getCandidateKey(candidate: CandidateItem): string {
