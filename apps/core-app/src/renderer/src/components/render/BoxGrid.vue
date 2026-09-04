@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import { resolveBoxGridColumnCount } from './box-grid-layout'
 import BoxGridItem from './BoxGridItem.vue'
+import BoxItem from './BoxItem.vue'
 
 interface Props {
   items: TuffItem[]
@@ -17,6 +20,8 @@ interface SectionData {
 }
 
 const props = defineProps<Props>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'select', index: number, item: TuffItem): void
@@ -65,12 +70,16 @@ function getQuickKey(index: number): string {
   return `⌘${key}`
 }
 
-function isIntelligenceSection(section: TuffSection): boolean {
-  return section.meta?.intelligence === true
+/**
+ * Sections declare their own layout; `grid` is the fallback because the empty state was two grids
+ * before the tiered layout existed and `layout` is optional on TuffSection.
+ */
+function isListSection(section: TuffSection): boolean {
+  return section.layout === 'list'
 }
 
-function isPinnedSection(section: TuffSection): boolean {
-  return section.meta?.pinned === true
+function isIntelligenceSection(section: TuffSection): boolean {
+  return section.meta?.intelligence === true
 }
 
 function getSectionColumnCount(sectionData: SectionData): number {
@@ -96,15 +105,24 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
         v-for="sectionData in sectionsData"
         :key="sectionData.section.id"
         class="BoxGridWrapper"
-        :class="{
-          'is-intelligence': isIntelligenceSection(sectionData.section),
-          'is-pinned': isPinnedSection(sectionData.section)
-        }"
+        :class="{ 'is-intelligence': isIntelligenceSection(sectionData.section) }"
       >
         <div v-if="sectionData.section.title" class="BoxGridTitle">
-          {{ sectionData.section.title }}
+          {{ resolveI18nText(sectionData.section.title, t) }}
+        </div>
+        <div v-if="isListSection(sectionData.section)" class="BoxGridList">
+          <BoxItem
+            v-for="(item, localIndex) in sectionData.items"
+            :key="item.id"
+            :item="item"
+            :active="focus === sectionData.startIndex + localIndex"
+            :render="item.render"
+            :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
+            @click="emit('select', sectionData.startIndex + localIndex, item)"
+          />
         </div>
         <div
+          v-else
           class="BoxGrid p-4"
           :style="{
             '--grid-cols': getSectionColumnCount(sectionData),
@@ -191,24 +209,6 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
       opacity: 0.7;
     }
   }
-
-  &.is-pinned {
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 18px;
-      padding: 0.125rem;
-      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
-      -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-      opacity: 0.5;
-    }
-  }
 }
 
 @keyframes rainbow-border {
@@ -231,9 +231,15 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
   opacity: 0.7;
 }
 
+// A list section reuses BoxItem, which brings its own row padding, so the wrapper only stacks.
+.BoxGridList {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
 .BoxGrid {
-  display: grid;
-  // Keep result cards compact while distributing every column across the available row.
+  display: grid; // Keep result cards compact while distributing every column across the available row.
   grid-template-columns: repeat(var(--grid-cols), minmax(0, 108px));
   justify-content: space-between;
   gap: var(--grid-gap);

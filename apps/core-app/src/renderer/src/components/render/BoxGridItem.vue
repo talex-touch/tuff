@@ -42,6 +42,10 @@ const recommendationBadgeIcon = computed(() => {
   const icon = recommendationBadge.value?.icon?.trim()
   return icon?.startsWith('i-') ? icon : ''
 })
+/** Main sends an `$i18n:` key so one badge table serves both locales. */
+const recommendationBadgeText = computed(() =>
+  resolveI18nText(recommendationBadge.value?.text ?? '', t)
+)
 </script>
 
 <template>
@@ -66,7 +70,7 @@ const recommendationBadgeIcon = computed(() => {
       :class="`badge-${recommendationBadge.variant}`"
     >
       <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
-      {{ recommendationBadge.text }}
+      {{ recommendationBadgeText }}
     </span>
     <span v-if="quickKey" class="BoxGridItem-QuickKey">{{ quickKey }}</span>
   </div>
@@ -190,6 +194,11 @@ const recommendationBadgeIcon = computed(() => {
   &.badge-newly-installed {
     background: rgba(162, 155, 254, 0.15);
     color: #a29bfe;
+  }
+
+  &.badge-plugin {
+    background: rgba(153, 128, 250, 0.15);
+    color: #9980fa;
   }
 }
 </style>

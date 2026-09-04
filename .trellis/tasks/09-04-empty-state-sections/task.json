@@ -3,7 +3,7 @@
   "name": "empty-state-sections",
   "title": "空态两段 UI:此刻常用宫格 + 最近案例列表,文案收敛 i18n",
   "description": "buildContainerLayout 由两个 grid 改为宫格+列表两段(此刻常用 / 最近案例);把散落在 item-rebuilder.ts:653、ItemSubtitle.vue:92、BoxGridItem.vue:170 的 badge 文案与配色收敛到单一来源并接入 i18n。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

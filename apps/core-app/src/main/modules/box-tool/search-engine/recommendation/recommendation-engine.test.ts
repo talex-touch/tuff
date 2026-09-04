@@ -654,10 +654,14 @@ describe('RecommendationEngine', () => {
     expect(ids).toContain('pinned-app')
     expect(ids).toHaveLength(10)
     expect(ids.at(-1)).toBe('pinned-app')
-    expect(result.containerLayout?.sections?.at(-1)).toMatchObject({
-      id: 'pinned',
-      itemIds: ['pinned-app']
+    // Pinning is not a score, so a pinned entry is appended last in the item order — but it claims
+    // a grid slot first, or the one thing the user asked to always see would land in the
+    // "here is a suggestion" list below.
+    expect(result.containerLayout?.sections?.at(0)).toMatchObject({
+      id: 'habitual',
+      layout: 'grid'
     })
+    expect(result.containerLayout?.sections?.at(0)?.itemIds?.[0]).toBe('pinned-app')
   })
 
   it('drops the lowest-scored recommendation, not the highest, when pinned items take a slot', async () => {
@@ -2427,5 +2431,104 @@ describe('RecommendationEngine plugin candidate quotas', () => {
     registerProvider(engine, 'flaky', 3)
 
     await expect(collect(engine)).resolves.toHaveLength(3)
+  })
+})
+
+/**
+ * The empty state used to be two grids split by pin state (`Recommend` + `Pinned`, both titled in
+ * hardcoded English). It is now two tiers split by *reason*: a one-row grid of things reached for
+ * out of habit, then a list of things the host is proposing, where there is room for the reason
+ * line that makes them make sense.
+ */
+describe('RecommendationEngine empty-state tiers', () => {
+  type LayoutFn = (
+    options: unknown,
+    items: unknown[]
+  ) => {
+    grid?: { columns: number }
+    sections?: Array<{ id: string; title?: string; layout: string; itemIds: string[] }>
+  }
+
+  function layoutOf(items: unknown[]): ReturnType<LayoutFn> {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    return (engine as unknown as { buildContainerLayout: LayoutFn }).buildContainerLayout.call(
+      engine,
+      {},
+      items
+    )
+  }
+
+  const item = (id: string, source: string, pinned = false): unknown => ({
+    id,
+    meta: {
+      recommendation: { source },
+      ...(pinned ? { pinned: { isPinned: true } } : {})
+    }
+  })
+
+  it('puts habitual reasons in a grid and proposed ones in a list', () => {
+    const sections = layoutOf([
+      item('daily-app', 'frequent'),
+      item('at-this-hour', 'time-based'),
+      item('plugin-thing', 'plugin')
+    ]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([
+      ['habitual', 'grid'],
+      ['proposed', 'list']
+    ])
+    expect(sections?.[0]?.itemIds).toEqual(['daily-app'])
+    expect(sections?.[1]?.itemIds).toEqual(['at-this-hour', 'plugin-thing'])
+  })
+
+  it('titles both tiers with i18n keys rather than a hardcoded language', () => {
+    const sections = layoutOf([item('a', 'frequent'), item('b', 'plugin')]).sections
+
+    expect(sections?.[0]?.title).toBe('$i18n:coreBox.sections.habitual')
+    expect(sections?.[1]?.title).toBe('$i18n:coreBox.sections.proposed')
+  })
+
+  it('caps the grid at one row and spills the rest into the list', () => {
+    const many = Array.from({ length: 10 }, (_unused, index) =>
+      item(`frequent-${index}`, 'frequent')
+    )
+
+    const { grid, sections } = layoutOf(many)
+
+    expect(grid?.columns).toBe(6)
+    expect(sections?.[0]?.itemIds).toHaveLength(6)
+    // A second, half-empty grid row reads as noise; the overflow belongs in the list.
+    expect(sections?.[1]?.itemIds).toHaveLength(4)
+  })
+
+  it('gives pinned entries a grid slot even though they sort last', () => {
+    // Pinning is not a score, so pinned items are appended after the ranked ones. Taking the grid
+    // in list order would drop the one thing the user asked to always see into the tier below.
+    const items = [
+      ...Array.from({ length: 8 }, (_unused, index) => item(`frequent-${index}`, 'frequent')),
+      item('pinned-app', 'frequent', true)
+    ]
+
+    const sections = layoutOf(items).sections
+
+    expect(sections?.[0]?.itemIds?.[0]).toBe('pinned-app')
+    expect(sections?.[0]?.itemIds).toHaveLength(6)
+  })
+
+  it('emits only the grid when nothing needs explaining', () => {
+    const sections = layoutOf([item('a', 'frequent'), item('b', 'frequent')]).sections
+
+    expect(sections?.map((section) => section.id)).toEqual(['habitual'])
+  })
+
+  it('emits only the list when nothing is habitual yet', () => {
+    // Cold start: no usage history at all, so every card carries a reason.
+    const sections = layoutOf([item('a', 'cold-start'), item('b', 'cold-start')]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([['proposed', 'list']])
+  })
+
+  it('emits no sections for an empty result', () => {
+    expect(layoutOf([]).sections).toEqual([])
   })
 })

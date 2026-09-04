@@ -180,13 +180,23 @@ describe('ItemRebuilder', () => {
       return (item?.meta as Record<string, unknown>).recommendation
     }
 
+    // Badge text is an `$i18n:` key, not a literal: main has no locale, and the renderer resolves
+    // it. A hardcoded Chinese string here would pass while the English UI showed Chinese.
     expect(await badgeFor('newly-installed')).toMatchObject({
       reason: 'Just Installed',
-      badge: { text: '新安装', icon: 'i-ri-download-2-line', variant: 'newly-installed' }
+      badge: {
+        text: '$i18n:coreBox.recommendation.badge.newlyInstalled',
+        icon: 'i-ri-download-2-line',
+        variant: 'newly-installed'
+      }
     })
     expect(await badgeFor('cold-start')).toMatchObject({
       reason: 'Suggested',
-      badge: { text: '推荐', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
+      badge: {
+        text: '$i18n:coreBox.recommendation.badge.suggested',
+        icon: 'i-ri-lightbulb-line',
+        variant: 'intelligent'
+      }
     })
   })
 
@@ -325,7 +335,11 @@ describe('ItemRebuilder', () => {
       expect((result[0]?.meta as Record<string, unknown>).recommendation).toMatchObject({
         source: 'plugin',
         reason: 'Plugin',
-        badge: { text: '插件', icon: 'i-ri-puzzle-line', variant: 'plugin' }
+        badge: {
+          text: '$i18n:coreBox.recommendation.badge.plugin',
+          icon: 'i-ri-puzzle-line',
+          variant: 'plugin'
+        }
       })
     })
 

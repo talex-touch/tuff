@@ -83,6 +83,10 @@ const recommendationBadgeIcon = computed(() => {
   const icon = recommendationBadge.value?.icon?.trim()
   return icon?.startsWith('i-') ? icon : ''
 })
+/** Main sends an `$i18n:` key so one badge table serves both locales. */
+const recommendationBadgeText = computed(() =>
+  resolveI18nText(recommendationBadge.value?.text ?? '', t)
+)
 
 const resolvedSubtitle = computed(() => resolveI18nText(props.render.basic?.subtitle || '', t))
 
@@ -99,6 +103,8 @@ const badgeStyle = computed(() => {
       return 'bg-green-500/10 text-green-500'
     case 'newly-installed':
       return 'bg-violet-500/10 text-violet-500'
+    case 'plugin':
+      return 'bg-purple-500/10 text-purple-500'
     default:
       return 'bg-primary-500/10 text-primary-500'
   }
@@ -137,7 +143,7 @@ const badgeStyle = computed(() => {
           :class="badgeStyle"
         >
           <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
-          <span>{{ recommendationBadge.text }}</span>
+          <span>{{ recommendationBadgeText }}</span>
         </div>
 
         <span class="truncate">{{ resolvedSubtitle }}</span>
