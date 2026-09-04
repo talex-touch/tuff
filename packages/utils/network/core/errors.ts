@@ -18,7 +18,11 @@ export const NETWORK_ERROR_CODE = {
  *
  * Timeout and HTTP-status markers are deliberately absent — `isTimeoutLikeError` and
  * `parseHttpStatusCode` own those, and duplicating them here would make a single error match two
- * classifiers with different retry semantics.
+ * classifiers with different retry semantics. `etimedout` is the one that has to be named to be
+ * kept out: `isTimeoutLikeError` matches `/timeout|etimedout/i`, so listing it here too would put
+ * one error in both. Both update call sites already OR the two classifiers, so leaving it out
+ * changes nothing there. Chromium's `ERR_CONNECTION_TIMED_OUT` is not the same case — that spelling
+ * matches neither half of the timeout regex, which is precisely the gap this fix closes.
  *
  * There is deliberately no blanket `net::err_` entry. Chromium files user cancellation
  * (`ERR_ABORTED`), permission and policy refusals (`ERR_ACCESS_DENIED`, `ERR_BLOCKED_BY_CLIENT`)
@@ -50,7 +54,6 @@ export const TRANSPORT_FAILURE_MARKERS = [
   'econnrefused',
   'econnaborted',
   'enotfound',
-  'etimedout',
   'eai_again',
   'epipe',
   'socket hang up',
