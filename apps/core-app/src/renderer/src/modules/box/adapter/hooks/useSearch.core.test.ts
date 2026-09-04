@@ -467,6 +467,90 @@ describe('useSearch CoreBox reopen behavior', () => {
     vi.useRealTimers()
   })
 
+  it('refreshes the empty-query grid only when main flags the commit as recommendation-relevant', async () => {
+    // The empty query is the recommendation grid. Refreshing it on every commit would re-query
+    // continuously while a file index builds; never refreshing it (the behaviour before
+    // 2026-09-04) left an open CoreBox on a stale grid even after a freshly installed app had
+    // already invalidated the ranking cache in main.
+    vi.useFakeTimers()
+    try {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = ''
+      await nextTick()
+      await flushPromises()
+
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      expect(commitStream).toBeDefined()
+
+      const baseline = state.searchRequests.length
+
+      // An ordinary file commit during indexing: main did not flag it, so nothing happens.
+      commitStream?.onData({
+        revision: 1,
+        providerIds: ['file-provider'],
+        committedAt: 1,
+        recommendationsInvalidated: false
+      })
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+      expect(state.searchRequests).toHaveLength(baseline)
+
+      // A commit main flagged: the open grid re-queries.
+      commitStream?.onData({
+        revision: 2,
+        providerIds: ['app-provider'],
+        committedAt: 2,
+        recommendationsInvalidated: true
+      })
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+      expect(state.searchRequests).toHaveLength(baseline + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let an unflagged commit cancel a flagged one inside the debounce window', async () => {
+    // Both arrive within the 500ms debounce; the flagged one must win, or a busy file index would
+    // starve the grid refresh it is racing with.
+    vi.useFakeTimers()
+    try {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = ''
+      await nextTick()
+      await flushPromises()
+
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      const baseline = state.searchRequests.length
+
+      commitStream?.onData({
+        revision: 1,
+        providerIds: ['app-provider'],
+        committedAt: 1,
+        recommendationsInvalidated: true
+      })
+      await vi.advanceTimersByTimeAsync(100)
+      commitStream?.onData({
+        revision: 2,
+        providerIds: ['file-provider'],
+        committedAt: 2,
+        recommendationsInvalidated: false
+      })
+
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+      expect(state.searchRequests).toHaveLength(baseline + 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('runs one trailing committed index refresh after an in-flight search ends', async () => {
     vi.useFakeTimers()
     const queryText = 'progressive-refresh'

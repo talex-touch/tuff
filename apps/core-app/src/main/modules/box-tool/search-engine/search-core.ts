@@ -479,17 +479,28 @@ export class SearchEngineCore
     // that; its recommendation invalidation below is the part worth keeping.
     // The recommendation ranking is cached for 30 minutes, so an app installed
     // or removed just now would otherwise stay invisible (or keep showing) for
-    // that long. Only app commits matter: file commits fire continuously while
-    // the index builds, and the recommendation grid never contains files.
-    if (payload.providerIds.includes(APP_INDEXED_SOURCE_ID)) {
+    // that long. Only app commits matter today: file commits fire continuously while
+    // the index builds, and the recommendation grid does not contain files yet.
+    const recommendationsInvalidated = payload.providerIds.includes(APP_INDEXED_SOURCE_ID)
+    if (recommendationsInvalidated) {
       this.recommendationEngine?.invalidateCache()
+    }
+
+    // Dropping the cache is only half the job: a CoreBox that is already open on the empty query
+    // keeps showing the stale grid until the user closes and reopens it, because the renderer's
+    // index-commit refresh only runs for non-empty queries. Tell it explicitly when a refresh is
+    // warranted — the renderer cannot derive this from `providerIds`, and guessing would make it
+    // re-query on every file commit during an index build.
+    const enrichedPayload: CoreBoxSearchIndexCommitPayload = {
+      ...payload,
+      recommendationsInvalidated
     }
     for (const context of this.indexCommitStreams) {
       if (context.isCancelled()) {
         this.indexCommitStreams.delete(context)
         continue
       }
-      context.emit(payload)
+      context.emit(enrichedPayload)
     }
   }
 

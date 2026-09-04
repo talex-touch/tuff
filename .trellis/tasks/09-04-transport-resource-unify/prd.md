@@ -115,21 +115,71 @@ tfile 实现分散三处:`modules/file-protocol/`(scheme + session 注册 + prev
 - 不重启 `atom:`。
 - 不在本任务删除死信道。
 
+## 实现记录(2026-09-04)
+
+Step 0 的调查推翻了 A 部分的设计形态,详见 `research/step0-findings.md`。
+
+### A 的形态变了:不是「往开着的会话里追加」,而是「让空态参与 index-commit 刷新」
+
+`session.complete()` → `sink.complete` → `context.end()`(`core-box/ipc.ts:95-99`)——
+**空态会话在 snapshot 之后立即终止**,不存在可追加的会话。
+
+真正的缺口在两处,都不在传输层:
+
+1. `useSearch.shouldRefreshForIndexCommit()` 有 `Boolean(searchVal.value.trim())`,
+   **显式排除空 query** —— 即使主进程已经失效了推荐缓存,打开着的 CoreBox 也不会重查。
+2. 主进程的失效判定(`providerIds.includes(APP_INDEXED_SOURCE_ID)`)只留在自己进程内,
+   渲染端无从得知这次提交是否与推荐有关。
+
+落地方案:`CoreBoxSearchIndexCommitPayload` 增加 `recommendationsInvalidated?: boolean`,
+由主进程在做失效判定的同一处写入;渲染端空 query 仅在该标记为真时刷新。
+**复用已有的长连 `indexCommitted` 流,未新增 stream 事件、未改 port allowlist**(满足 A5)。
+
+判定留在主进程是刻意的:渲染端无法从 `providerIds` 推断相关性,而 C3 要把文件纳入推荐时,
+节流与准入规则也应该长在同一处。
+
+### `update` chunk 的排序问题不存在
+
+`design.md` §2.4 的三选一不需要选:渲染端 `mergeRenderedItems` → `rankRenderedItems`
+(`useSearch.ts:544`)**已经按 `item.scoring.final` 重排**,推荐项经
+`mergeAndEnrichItems` 已带该字段。
+
+### C 的实质是删掉重复实现
+
+tfile URL 构造原有**两份**:`packages/utils/network/file.ts#toTfileUrl`(主进程 + 渲染端
+`icon-config.ts`)与 `renderer/src/utils/tfile-url.ts#buildTfileUrl`(渲染端 6 个组件)。
+两者对本地路径一致,但后者把 `https://` / `data:` / 相对路径强转成畸形 tfile URL。
+已删除后者,6 个调用点改用共享实现,并移除 `useWallpaper` 中因此多余的手写守卫;
+`toTfileUrl` 补了 11 条测试(此前零覆盖)。
+
+### D 门禁:未通过,`stream:` 已砍
+
+清点全部资源消费场景后无一需要字节流式 scheme(证据见 research §3)。
+唯一的边界案例是 TTS 音频以 base64 data URL 跨 IPC ——
+那是既有违规,修法是物化 + tfile,不是新建 scheme,**另提任务**。
+
 ## Acceptance Criteria
 
-- [ ] 空态会话在首帧之后可追加条目;首帧延迟相对改造前**无回归**(有测量数字)。
-- [ ] 会话关闭后到达的追加被静默丢弃,无状态重建、无日志噪声。
-- [ ] Owner 绑定测试:两 sender 复用同一 streamId 互不干扰;外部 sender / lane / activation
-      无法取消他人的流;sender 销毁清理其全部流且不误伤他人。
-- [ ] 三个推荐信道的归属判定落盘于 `research/`,每个都有明确结论与依据。
-- [ ] tfile descriptor / URL 投影类型在 transport SDK 单一来源,主进程与渲染端共用;
-      allowlist 判定逻辑仍在主进程(静态断言:`packages/utils` 内不出现 `getAllowedLocalFileRoots` 实现)。
-- [ ] 静态断言:transport stream protocol 的 payload 类型不含
-      `Buffer` / `ArrayBuffer` / base64 / 图像字节字段。
-- [ ] `cache/app-icons` 图标仍能加载(`naturalWidth > 0`),`.tuff-icon__empty` 计数为 0。
-- [ ] `stream:` 有明确结论:建立(含契约文档 + 400/403/404 矩阵 + 共用 path policy)或砍掉(含理由)。
-- [ ] `native-resource-protocols.md` 的 `atom` / `stream` 描述与代码一致。
-- [ ] `pnpm lint`、`typecheck`、`pnpm utils:test` 全绿。
+- [x] 已打开的空态在 recommendation-relevant 的索引提交后自动刷新(此前必须关掉重开)。
+      形态由「追加 chunk」改为「index-commit 触发重查」,理由见上。
+- [x] 索引构建期不刷新风暴:未标记的提交不触发空态刷新;debounce 窗口内
+      未标记的提交不会取消已标记的(两条判别性测试,旧逻辑下均失败)。
+- [x] 未新增 stream 事件,未改 `port-policy.ts` allowlist。
+- [x] 三个推荐信道的归属判定落盘(`research/step0-findings.md` §1):
+      `get` / `aggregateTimeStats` / `isPinned` 均为真死;`reportExposure` 活的。**未执行删除**。
+- [x] tfile URL 构造收敛为单一实现;`toTfileUrl` 有 11 条测试覆盖
+      (本地路径 / 非本地透传 / 空输入 / Windows 盘符编码)。
+- [x] `stream:` 有带证据的结论(砍掉),spec 已改为「未注册、未实现;标识符保留」。
+- [x] `native-resource-protocols.md` 的 `atom`(已退役 410)/ `stream`(不存在)描述与代码一致。
+- [x] `pnpm lint`(core-app + utils)、`typecheck`(node + web)、
+      renderer box + search-engine 92 文件 842 测试全绿。
+
+**未做/超出范围**:
+- 死信道删除(判定已落盘,删除另提任务)
+- TTS 音频 data URL 违规(另提任务)
+- tfile descriptor 类型上移 transport SDK —— 实测发现 `toTfileUrl` 已在
+  `packages/utils/network`,收敛的实际内容是消除重复而非搬家;
+  再往 `transport/` 搬是纯粹的位置调整,收益不足以抵消改动面,**未做**。
 
 ## 风险
 

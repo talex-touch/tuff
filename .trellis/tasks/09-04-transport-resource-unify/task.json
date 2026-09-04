@@ -3,7 +3,7 @@
   "name": "transport-resource-unify",
   "title": "传输与资源协议统一:port allowlist、推荐 stream 下发、tfile 控制面收敛与 stream: scheme",
   "description": "扩展 port-policy allowlist 并把推荐结果接入已有 stream 运行时;把 tfile 的 descriptor/URL 投影/allowlist 契约收进 transport SDK;从零注册 stream: scheme 并补 owner+URL 契约;修正 native-resource-protocols.md 中过时的 atom/stream 描述。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
