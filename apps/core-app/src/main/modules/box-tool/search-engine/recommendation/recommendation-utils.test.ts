@@ -1,7 +1,12 @@
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { TimePattern } from './context-provider'
 import { describe, expect, it } from 'vitest'
-import { calculateHourAffinity, calculateTimeRelevanceScore } from './recommendation-utils'
+import {
+  calculateHourAffinity,
+  calculateTimeRelevanceScore,
+  PEAK_HOUR_MIN_SAMPLES,
+  resolvePeakHourRange
+} from './recommendation-utils'
 
 const morningNine: TimePattern = {
   hourOfDay: 9,
@@ -152,5 +157,61 @@ describe('calculateTimeRelevanceScore weekday evidence', () => {
 
     for (let index = 1; index < scores.length; index++)
       expect(scores[index]).toBeGreaterThan(scores[index - 1]!)
+  })
+})
+
+describe('resolvePeakHourRange', () => {
+  it('reports no peak when the distribution is missing or malformed', () => {
+    expect(resolvePeakHourRange(undefined)).toBeNull()
+    expect(resolvePeakHourRange([])).toBeNull()
+    expect(resolvePeakHourRange([1, 2, 3])).toBeNull()
+  })
+
+  it('needs at least PEAK_HOUR_MIN_SAMPLES executions before claiming a pattern', () => {
+    expect(resolvePeakHourRange(hourDistribution({ 9: 9 }))).toBeNull()
+    expect(resolvePeakHourRange(hourDistribution({ 9: PEAK_HOUR_MIN_SAMPLES }))).toEqual({
+      startHour: 7,
+      endHour: 9
+    })
+  })
+
+  it('reports no peak when usage is spread evenly across the day', () => {
+    // Every window holds 3/24 = 12.5%, far under the 40% bar.
+    expect(resolvePeakHourRange(Array.from({ length: 24 }, () => 5))).toBeNull()
+  })
+
+  it('returns the busiest three-hour window', () => {
+    expect(resolvePeakHourRange(hourDistribution({ 9: 8, 10: 9, 11: 7, 15: 2 }))).toEqual({
+      startHour: 9,
+      endHour: 11
+    })
+  })
+
+  it('wraps the window past midnight', () => {
+    expect(resolvePeakHourRange(hourDistribution({ 22: 5, 23: 6, 0: 4 }))).toEqual({
+      startHour: 22,
+      endHour: 0
+    })
+  })
+
+  it('accepts a window sitting exactly on the share threshold', () => {
+    // 8 of 20 executions = 0.4 exactly, which is not below the bar.
+    const distribution = hourDistribution({ 9: 4, 10: 4, 15: 4, 18: 4, 21: 4 })
+
+    expect(resolvePeakHourRange(distribution)).toEqual({ startHour: 8, endHour: 10 })
+  })
+
+  it('treats corrupt buckets as absent rather than trusting them', () => {
+    const distribution = hourDistribution({ 9: 12 })
+    distribution[3] = Number.NaN
+    distribution[4] = -50
+
+    expect(resolvePeakHourRange(distribution)).toEqual({ startHour: 7, endHour: 9 })
+  })
+
+  it('keeps the earliest start when two windows tie', () => {
+    const distribution = hourDistribution({ 6: 10, 18: 10 })
+
+    expect(resolvePeakHourRange(distribution)).toEqual({ startHour: 4, endHour: 6 })
   })
 })

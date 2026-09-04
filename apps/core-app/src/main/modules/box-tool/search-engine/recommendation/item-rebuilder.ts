@@ -1,4 +1,4 @@
-import type { TuffItem, TuffRender } from '@talex-touch/utils'
+import type { RecommendationEvidence, TuffItem, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
 import {
@@ -9,6 +9,7 @@ import {
 import { createLogger } from '../../../../utils/logger'
 import { isSelfAppIdentity } from '../../../system/self-app-identity'
 import { matchNoisySystemAppRule } from '../../addon/apps/app-noise-filter'
+import { resolvePeakHourRange } from './recommendation-utils'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
 
@@ -616,7 +617,8 @@ export class ItemRebuilder {
         source: scored.source,
         reason: this.getReasonLabel(scored),
         isIntelligent: true,
-        badge: this.generateBadge(scored)
+        badge: this.generateBadge(scored),
+        evidence: this.buildEvidence(scored)
       }
       // Store original itemId for deduplication in recommendation-engine
       meta._originalItemId = scored.itemId
@@ -636,6 +638,7 @@ export class ItemRebuilder {
 
   private getReasonLabel(scored: ScoredItem): string {
     const labels: Record<string, string> = {
+      pinned: 'Pinned',
       frequent: 'Frequent',
       'time-based': 'Popular Now',
       recent: 'Recent',
@@ -649,9 +652,13 @@ export class ItemRebuilder {
   }
 
   private generateBadge(scored: ScoredItem): { text: string; icon: string; variant: string } {
+    // Every source gets its own wording. Two sources sharing one string is what
+    // made the empty state read as "推荐" on almost every tile, which told the
+    // user nothing about why anything was there.
     const badges: Record<string, { text: string; icon: string; variant: string }> = {
+      pinned: { text: '已固定', icon: 'i-ri-pushpin-line', variant: 'pinned' },
       frequent: { text: '常用', icon: 'i-ri-fire-line', variant: 'frequent' },
-      'time-based': { text: '推荐', icon: 'i-ri-time-line', variant: 'intelligent' },
+      'time-based': { text: '此刻常用', icon: 'i-ri-time-line', variant: 'intelligent' },
       recent: { text: '最近', icon: 'i-ri-history-line', variant: 'recent' },
       trending: { text: '趋势', icon: 'i-ri-line-chart-line', variant: 'trending' },
       context: { text: '智能推荐', icon: 'i-ri-sparkling-line', variant: 'intelligent' },
@@ -661,7 +668,7 @@ export class ItemRebuilder {
         icon: 'i-ri-download-2-line',
         variant: 'newly-installed'
       },
-      'cold-start': { text: '推荐', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
+      'cold-start': { text: '猜你要用', icon: 'i-ri-lightbulb-line', variant: 'intelligent' }
     }
     return (
       badges[scored.source] || {
@@ -670,5 +677,46 @@ export class ItemRebuilder {
         variant: 'intelligent'
       }
     )
+  }
+
+  /**
+   * Collects the data behind a recommendation so the UI can show a reason the
+   * user can check ("used 23 times", "usually around 09-11").
+   *
+   * Only fields with real data are set, and the whole object is dropped when
+   * nothing is known — an absent field means "we don't know", so the renderer
+   * shows nothing rather than a zero or a guess. A zero `executeCount` is
+   * treated as unknown for the same reason: "used 0 times" is not a reason.
+   */
+  private buildEvidence(scored: ScoredItem): RecommendationEvidence | undefined {
+    const evidence: RecommendationEvidence = {}
+
+    const executeCount = scored.usageStats?.executeCount
+    if (typeof executeCount === 'number' && Number.isFinite(executeCount) && executeCount > 0) {
+      evidence.executeCount = executeCount
+    }
+
+    // Drizzle hands back a Date for `mode: 'timestamp'` columns, but synthesized
+    // rows (plugin candidates) carry a raw epoch, so accept both.
+    const lastExecuted = scored.usageStats?.lastExecuted as Date | number | null | undefined
+    const lastExecutedAt =
+      lastExecuted instanceof Date ? lastExecuted.getTime() : (lastExecuted ?? undefined)
+    if (
+      typeof lastExecutedAt === 'number' &&
+      Number.isFinite(lastExecutedAt) &&
+      lastExecutedAt > 0
+    ) {
+      evidence.lastExecutedAt = lastExecutedAt
+    }
+
+    const { installedAt } = scored
+    if (typeof installedAt === 'number' && Number.isFinite(installedAt) && installedAt > 0) {
+      evidence.installedAt = installedAt
+    }
+
+    const peakHourRange = resolvePeakHourRange(scored.timeStats?.hourDistribution)
+    if (peakHourRange) evidence.peakHourRange = peakHourRange
+
+    return Object.keys(evidence).length > 0 ? evidence : undefined
   }
 }
