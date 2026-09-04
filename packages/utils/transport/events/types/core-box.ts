@@ -272,6 +272,17 @@ export interface CoreBoxSearchIndexCommitPayload {
   providerIds: string[]
   sourceGenerations: Record<string, number>
   committedAt: number
+  /**
+   * Whether this commit changed what the empty-state recommendation grid should show.
+   *
+   * Decided by main, not inferred from `providerIds`: the renderer cannot know which sources feed
+   * recommendations, nor which commits are worth acting on. File commits in particular fire
+   * continuously while an index builds, so main coalesces them and sets this only when a refresh
+   * is actually warranted — the same judgement that guards `invalidateCache()`.
+   *
+   * Optional so an older main process (or a fixture) simply never triggers the refresh.
+   */
+  recommendationsInvalidated?: boolean
 }
 
 export interface CoreBoxSearchEndPayload {

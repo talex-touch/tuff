@@ -84,9 +84,15 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 
 | Scheme   | Contract                                                                                                                                                                                                                           |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tfile`  | Canonical allowlisted data plane for new local resource consumers. Registered as standard, secure, Fetch-capable, and streaming. The handler returns the built-in `file:` response body without reading the file into a JS Buffer. |
-| `atom`   | Legacy direct-file forwarding. No new consumer may be added; do not treat its current behavior as the security contract for new code.                                                                                              |
-| `stream` | A privileged scheme is registered, but the current source has no resource handler. It is reserved until a separate explicit owner and URL contract are approved; it must not become an undocumented blob tunnel.                   |
+| `tfile`  | Canonical allowlisted data plane, and the **only** registered custom scheme (`main/index.ts` registers it standard, secure, Fetch-capable, streaming). The handler returns the built-in `file:` response body without reading the file into a JS Buffer. |
+| `atom`   | **Retired.** `service/protocol-handler.ts` registers a handler that returns HTTP 410 for every request. It forwards nothing; do not read it as a fallback data plane. |
+| `stream` | **Does not exist.** It is neither in `registerSchemesAsPrivileged` nor given a handler. The identifier is reserved. A 2026-09-04 audit found no consumer that `tfile` cannot serve: every current resource (app icons, file thumbnails, screenshots, clipboard images, wallpapers, preview resources) is a finite blob that materializes to a file, and `voice.asrStream` carries text partials rather than bytes. Registering it without a consumer would create a ready-made bypass of the `tfile` allowlist, so it stays unregistered until a concrete case plus an owner and URL contract are approved. |
+
+There is exactly one tfile URL builder: `toTfileUrl` in `packages/utils/network/file.ts`, used by
+both main and renderer. It returns non-local input (remote URLs, `data:`, relative paths) unchanged;
+a builder that coerces everything to `tfile://` produces URLs the handler rejects with 400/403 and
+forces every call site to re-implement a remote-URL guard. A renderer-local twin existed until
+2026-09-04 and did exactly that.
 
 `packages/utils/transport/sdk/stream/protocol.ts` is a typed transport protocol, not the `stream:` resource scheme. It may carry stream IDs, cancellation, status, and bounded structured chunks. It must not carry image/audio/video/file bytes.
 
@@ -138,7 +144,8 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 - Bad: renderer/plugin/preload imports `@talex-touch/tuff-native/protocol`, loads a `.node` addon, or receives a Rust attachment Buffer through TuffTransport/MessagePort.
 - Bad: native code returns a PNG `Buffer`, a worker posts that Buffer, preload forwards it, and renderer creates a data URL.
 - Bad: `app.getFileIcon(..., { size: 'large' })` is used on macOS or a Darwin cache miss is sprayed across Chromium/libuv worker threads.
-- Bad: a new resource consumer uses `atom:` or invents `stream:` semantics instead of the allowlisted `tfile` owner.
+- Bad: a new resource consumer reaches for `atom:` (retired, 410) or registers `stream:` instead of materializing under an allowlisted root and serving it through `tfile`.
+- Bad: a second tfile URL builder is added "just for this surface"; the one that existed coerced remote and `data:` URLs into `tfile:///https%3A//…` and made callers write their own guards.
 - Bad: `IconService` writes under Electron's cache path while `getAllowedLocalFileRoots()` only
   retains application scan roots, `userData`, and temp; files exist and recommendation mapping
   emits `tfile`, but every renderer request receives 403 and all cards display the same placeholder.

@@ -14,7 +14,7 @@ import {
 import { appSetting } from '~/modules/storage/app-storage'
 import { normalizeWindowPreference, themeStyle } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
 
 const wallpaperLog = createRendererLogger('Wallpaper')
 
@@ -30,10 +30,13 @@ const FOLDER_ROTATION_TASK = 'wallpaper.folder.rotate'
 const DESKTOP_WALLPAPER_REFRESH_TASK = 'wallpaper.desktop.refresh'
 const WALLPAPER_UNAVAILABLE_LOG_INTERVAL_MS = 60 * 60_000
 
+/**
+ * A wallpaper may be a local path or a remote/data URL. `toTfileUrl` passes anything it cannot
+ * resolve to a local file through unchanged, so no separate remote-URL guard is needed here — the
+ * old one existed only because the renderer's private builder coerced every input to `tfile://`.
+ */
 function resolveWallpaperUrl(pathOrUrl: string): string {
-  if (!pathOrUrl) return ''
-  if (pathOrUrl.startsWith('http') || pathOrUrl.startsWith('data:')) return pathOrUrl
-  return buildTfileUrl(pathOrUrl)
+  return toTfileUrl(pathOrUrl)
 }
 
 function toErrorMessage(error: unknown): string {

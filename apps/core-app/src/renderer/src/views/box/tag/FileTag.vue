@@ -1,6 +1,6 @@
 <script name="FileTag" setup lang="ts">
 import { displayBasename } from '@talex-touch/utils/common/utils/safe-path'
-import { buildTfileUrl } from '~/utils/tfile-url'
+import { toTfileUrl } from '@talex-touch/utils/network'
 
 const props = defineProps<{
   iconPath?: string
@@ -10,12 +10,12 @@ const props = defineProps<{
 const image = computed(() => {
   // Use tfile:// protocol if available
   if (props.iconPath) {
-    return buildTfileUrl(props.iconPath)
+    return toTfileUrl(props.iconPath)
   }
 
   // Fallback to first path
   if (props.paths && props.paths.length > 0) {
-    return buildTfileUrl(props.paths[0])
+    return toTfileUrl(props.paths[0])
   }
 
   return ''

@@ -1010,6 +1010,42 @@ describe('SearchEngineCore facade contracts', () => {
     expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
   })
 
+  it('tells subscribed renderers which commits changed the recommendation grid', () => {
+    // Dropping the cache is invisible to an already-open CoreBox: the renderer's index-commit
+    // refresh skips the empty query unless it is told the grid actually changed. Deriving that
+    // renderer-side from providerIds would either miss it or re-query on every file commit.
+    const emit = vi.fn()
+    const abort = new AbortController()
+    core.registerIndexCommitStream({
+      emit,
+      end: vi.fn(),
+      error: vi.fn(),
+      isCancelled: () => abort.signal.aborted,
+      signal: abort.signal
+    } as never)
+
+    searchIndexCommitHub.markCommitted(['file-provider'])
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recommendationsInvalidated: false })
+    )
+
+    searchIndexCommitHub.markCommitted(['app-provider'])
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recommendationsInvalidated: true })
+    )
+
+    // The original payload fields must survive the enrichment.
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        providerIds: ['app-provider'],
+        revision: expect.any(Number),
+        committedAt: expect.any(Number)
+      })
+    )
+
+    abort.abort()
+  })
+
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
     core.registerProvider({
