@@ -159,7 +159,7 @@ function fakeGitPath(root, tags) {
 }
 
 describe('resolve-update-rollback-version CLI', () => {
-  it('uses published tags rather than a higher unpublished beta returned by the remote', () => {
+  it('uses the published tags file and ignores the remote tag set when provided', () => {
     withTempDir((root) => {
       const tagsFile = path.join(root, 'published-tags.txt')
       writeFileSync(
