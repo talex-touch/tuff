@@ -736,6 +736,11 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     return this.buildActionItem(resolved)
   }
 
+  async rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]> {
+    const rebuilt = await Promise.all(itemIds.map((itemId) => this.rebuildItem(itemId)))
+    return rebuilt.filter((item): item is TuffItem => item !== null)
+  }
+
   private buildActionItem(action: ResolvedAction): TuffItem {
     const titleKeyMap: Record<SystemActionType, string> = {
       'dev-plugin': 'corebox.systemActions.addDevPluginTitle',

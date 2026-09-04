@@ -1,19 +1,10 @@
 import type { TuffItem, TuffRender } from '@talex-touch/utils'
-import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
-import {
-  normalizeRenderableIcon,
-  normalizeRenderablePreviewImage,
-  normalizeTuffItemLocalAssets
-} from '../../../../utils/local-renderable-assets'
 import { createLogger } from '../../../../utils/logger'
-import { isSelfAppIdentity } from '../../../system/self-app-identity'
-import { matchNoisySystemAppRule } from '../../addon/apps/app-noise-filter'
+import { recommendationSourceRegistry } from './recommendation-source-registry'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
 
-type AppRow = Awaited<ReturnType<DbUtils['getFilesByPaths']>>[number]
-type AppWithExtensions = AppRow & { extensions: Record<string, string | null> }
 type TuffBasicIcon = NonNullable<NonNullable<TuffRender['basic']>['icon']>
 
 const DEFAULT_PLUGIN_RECOMMEND_ICON: TuffBasicIcon = {
@@ -80,21 +71,14 @@ function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
   return normalized
 }
 
-/** Rebuilds TuffItems from ScoredItems by querying DB and applying provider logic */
+/**
+ * Turns scored candidates back into renderable items.
+ *
+ * This class owns dispatch and enrichment only. Every source-specific lookup — which database to
+ * read, how to filter, how to map a row — belongs to the registered source, which is why there is
+ * no db handle here: adding a recommendation source must never require editing this file.
+ */
 export class ItemRebuilder {
-  /**
-   * Two read homes under the search split (issue #295): FILE rows are written
-   * by the worker into search-index.db (read via the split-aware `dbUtils`),
-   * while APP rows are the app provider's catalog on the PRIMARY db —
-   * including user-authored managed entries — and must be read from there
-   * (`appCatalogDbUtils`). With the split off both handles are the primary and
-   * behavior is byte-identical.
-   */
-  constructor(
-    private dbUtils: DbUtils,
-    private appCatalogDbUtils: DbUtils = dbUtils
-  ) {}
-
   /**
    * Rebuilding fans out per source, so the batches come back grouped by source
    * (and, inside a batch, in DB row order) — the ranking `scoreAndRank` already
@@ -104,39 +88,48 @@ export class ItemRebuilder {
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
     if (scoredItems.length === 0) return []
 
-    const grouped = this.groupByNormalizedSource(scoredItems)
+    // Plugin-recommend candidates carry their whole payload inline and are rebuilt from the flat
+    // list below, so they must not also be dispatched as a source group.
+    const sourceCandidates = scoredItems.filter((scored) => !scored.pluginCandidate)
+    const grouped = this.groupByNormalizedSource(sourceCandidates)
 
-    const results = await Promise.all([
-      this.rebuildAppItems(grouped.get('app-provider') || []),
-      this.rebuildFileItems(grouped.get('file-provider') || []),
-      this.rebuildPluginFeatureItems(grouped.get('plugin-features') || []),
-      this.rebuildClipboardItems(grouped.get('clipboard-history') || []),
-      this.rebuildMainWindowItems(grouped.get('main-window-provider') || []),
-      this.rebuildSystemActionItems(grouped.get('system-actions-provider') || []),
-      this.rebuildWindowsShellItems(grouped.get('windows-shell-file-provider') || [])
-    ])
+    const batches = await Promise.all(
+      [...grouped].map(([sourceId, items]) => this.rebuildSourceItems(sourceId, items))
+    )
 
-    // Handle plugin-recommend and builtin candidates (synchronous, no DB needed)
-    const pluginRecommendItems = this.rebuildPluginRecommendItems(scoredItems)
-    results.push(pluginRecommendItems)
+    batches.push(this.rebuildPluginRecommendItems(scoredItems))
 
-    const allItems = results.flat()
-    return this.mergeAndEnrichItems(allItems, scoredItems)
+    return this.mergeAndEnrichItems(batches.flat(), scoredItems)
   }
 
-  private normalizeSourceId(sourceId: string): string {
-    const sourceIdMap: Record<string, string> = {
-      application: 'app-provider',
-      app: 'app-provider',
-      file: 'file-provider',
-      files: 'file-provider',
-      'everything-provider': 'file-provider',
-      'macos-spotlight-provider': 'file-provider',
-      'linux-native-file-provider': 'file-provider',
-      clipboard: 'clipboard-history'
+  /**
+   * Dispatches one source group to whichever source claimed that id. This file holds no knowledge
+   * of any concrete source: adding one is a registration, not an edit here.
+   */
+  private async rebuildSourceItems(sourceId: string, items: ScoredItem[]): Promise<TuffItem[]> {
+    const entry = recommendationSourceRegistry.resolve(sourceId)
+    if (entry) {
+      try {
+        return await entry.rebuild(items.map((item) => item.itemId))
+      } catch (error) {
+        // One source failing must not empty the whole grid.
+        itemRebuilderLog.error('Recommendation source rebuild failed', {
+          error,
+          meta: { sourceId, itemCount: items.length }
+        })
+        return []
+      }
     }
 
-    return sourceIdMap[sourceId] || sourceId
+    itemRebuilderLog.warn('No recommendation source registered', {
+      meta: { sourceId, itemCount: items.length }
+    })
+    return []
+  }
+
+  /** Alias resolution is owned by the sources themselves via `recommendationSourceAliases`. */
+  private normalizeSourceId(sourceId: string): string {
+    return recommendationSourceRegistry.canonicalize(sourceId)
   }
 
   private groupByNormalizedSource(items: ScoredItem[]): Map<string, ScoredItem[]> {
@@ -153,332 +146,9 @@ export class ItemRebuilder {
     return groups
   }
 
-  private async rebuildMainWindowItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    const { mainWindowProvider } = await import('../../addon/system/main-window-provider')
-    return items.flatMap((item) => {
-      const rebuilt = mainWindowProvider.rebuildItem(item.itemId)
-      return rebuilt ? [rebuilt] : []
-    })
-  }
-
-  private async rebuildSystemActionItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    const { systemActionsProvider } = await import('../../addon/system/system-actions-provider')
-    const rebuilt = await Promise.all(
-      items.map((item) => systemActionsProvider.rebuildItem(item.itemId))
-    )
-    return rebuilt.filter((item): item is TuffItem => item !== null)
-  }
-
-  private async rebuildWindowsShellItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    const { windowsShellFileProvider } =
-      await import('../../addon/system/windows-shell-file-provider')
-    return items.flatMap((item) => {
-      const rebuilt = windowsShellFileProvider.rebuildItem(item.itemId)
-      return rebuilt ? [rebuilt] : []
-    })
-  }
-
-  private async rebuildAppItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    try {
-      const pathItems = items.filter((item) => item.itemId.startsWith('/'))
-      const bundleIdItems = items.filter((item) => !item.itemId.startsWith('/'))
-
-      const [appsByPath, appsByBundleId] = await Promise.all([
-        pathItems.length > 0
-          ? this.appCatalogDbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
-          : Promise.resolve([]),
-        bundleIdItems.length > 0
-          ? this.appCatalogDbUtils.getFilesByBundleIds(bundleIdItems.map((i) => i.itemId))
-          : Promise.resolve([])
-      ])
-
-      const apps = [...appsByPath, ...appsByBundleId]
-      if (apps.length === 0) return []
-
-      const appsWithExtensions = await this.fetchExtensionsForApps(apps)
-      const recommendationApps = appsWithExtensions.filter(
-        (app) =>
-          !isSelfAppIdentity({
-            executablePath: app.path,
-            bundleId: app.extensions.bundleId
-          }) &&
-          !matchNoisySystemAppRule({
-            path: app.path,
-            bundleId: app.extensions.bundleId,
-            name: app.displayName || app.name
-          })
-      )
-      const { mapAppsToRecommendationItems } =
-        await import('../../addon/apps/search-processing-service')
-      return mapAppsToRecommendationItems(recommendationApps)
-    } catch (error) {
-      itemRebuilderLog.error('Failed to rebuild app items', {
-        error,
-        meta: { itemCount: items.length }
-      })
-      return []
-    }
-  }
-
-  private async fetchExtensionsForApps(apps: AppRow[]): Promise<AppWithExtensions[]> {
-    const fileIds = apps.map((app) => app.id)
-    const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(fileIds)
-
-    return apps.map((app) => ({
-      ...app,
-      extensions: extensions
-        .filter((ext) => ext.fileId === app.id)
-        .reduce(
-          (acc, ext) => {
-            acc[ext.key] = ext.value
-            return acc
-          },
-          {} as Record<string, string | null>
-        )
-    }))
-  }
-
-  private async rebuildFileItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    try {
-      const paths = items.map((item) => item.itemId)
-      const files = await this.dbUtils.getFilesByPaths(paths)
-
-      if (files.length === 0) return []
-
-      const { mapFileToTuffItem } = await import('../../addon/files/utils')
-      return files.flatMap((file) => {
-        const item = mapFileToTuffItem(file, {}, 'file-provider', 'File Provider')
-        const normalized = normalizeTuffItemLocalAssets(item, {
-          dropMissingFile: true,
-          fallbackKind: file.isDir ? 'folder' : 'file'
-        })
-        return normalized.item ? [normalized.item] : []
-      })
-    } catch (error) {
-      itemRebuilderLog.error('Failed to rebuild file items', {
-        error,
-        meta: { itemCount: items.length }
-      })
-      return []
-    }
-  }
-
   /**
    * 重建插件功能项
    */
-  private async rebuildPluginFeatureItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    try {
-      const { pluginModule } = await import('../../../plugin/plugin-module')
-      const pluginManager = pluginModule.pluginManager
-      if (!pluginManager) {
-        itemRebuilderLog.warn('PluginManager not available', {
-          meta: { itemCount: items.length }
-        })
-        return []
-      }
-
-      const rebuiltItems: TuffItem[] = []
-
-      for (const item of items) {
-        // itemId 格式: "pluginName/featureId"
-        const [pluginName, featureId] = item.itemId.split('/')
-        if (!pluginName || !featureId) {
-          continue
-        }
-
-        const plugin = pluginManager.plugins.get(pluginName)
-        if (!plugin) continue
-
-        const feature = plugin.getFeature(featureId)
-        if (!feature) continue
-
-        // 使用 PluginFeaturesAdapter 的逻辑创建 TuffItem
-        const { default: adapter } =
-          await import('../../../plugin/adapters/plugin-features-adapter')
-        const tuffItem = adapter.createTuffItem(plugin, feature)
-        rebuiltItems.push(tuffItem)
-      }
-
-      return rebuiltItems
-    } catch (error) {
-      itemRebuilderLog.error('Failed to rebuild plugin feature items', {
-        error,
-        meta: { itemCount: items.length }
-      })
-      return []
-    }
-  }
-
-  private async rebuildClipboardItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    try {
-      const auxDb = this.dbUtils.getAuxDb()
-      const coreDb = this.dbUtils.getDb()
-      const { clipboardHistory } = await import('../../../../db/schema')
-      const { eq } = await import('drizzle-orm')
-      const rebuiltItems: TuffItem[] = []
-
-      for (const item of items) {
-        const clipboardId = Number.parseInt(item.itemId, 10)
-        if (Number.isNaN(clipboardId)) continue
-
-        let record = await auxDb
-          .select()
-          .from(clipboardHistory)
-          .where(eq(clipboardHistory.id, clipboardId))
-          .get()
-        if (!record && auxDb !== coreDb) {
-          record = await coreDb
-            .select()
-            .from(clipboardHistory)
-            .where(eq(clipboardHistory.id, clipboardId))
-            .get()
-        }
-
-        if (record) {
-          // 直接转换逻辑（原来在 ClipboardProvider.transformToSearchItem 中）
-          const render: TuffRender = {
-            mode: 'default',
-            basic: {
-              title: ''
-            }
-          }
-
-          let kind: TuffItem['kind'] = 'document'
-
-          if (record.type === 'text') {
-            kind = 'document'
-            if (render.basic) {
-              render.basic.title =
-                record.content.length > 100
-                  ? `${record.content.substring(0, 97)}...`
-                  : record.content
-              render.basic.subtitle = `Text from ${record.sourceApp || 'Unknown'}`
-              render.basic.icon = {
-                type: 'emoji',
-                value: '📄'
-              }
-            }
-            render.preview = {
-              type: 'panel',
-              content: record.content
-            }
-          } else if (record.type === 'image') {
-            kind = 'image'
-            if (render.basic) {
-              render.basic.title = `Image from ${record.sourceApp || 'Unknown'}`
-              const thumbnailIcon = record.thumbnail
-                ? normalizeRenderableIcon({ type: 'url', value: record.thumbnail }, 'image').icon
-                : null
-              render.basic.icon = thumbnailIcon ?? {
-                type: 'emoji',
-                value: '🖼️'
-              }
-            }
-            const previewImage = normalizeRenderablePreviewImage(record.content)
-            render.preview = {
-              type: 'panel',
-              image: previewImage.image
-            }
-          } else if (record.type === 'files') {
-            kind = 'file'
-            if (render.basic) {
-              try {
-                const files = JSON.parse(record.content)
-                if (files.length === 1) {
-                  const filePath = files[0]
-                  render.basic.title =
-                    typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
-                } else {
-                  render.basic.title = `${files.length} files`
-                }
-              } catch {
-                render.basic.title = 'Files from clipboard'
-              }
-              render.basic.icon = {
-                type: 'emoji',
-                value: '📁'
-              }
-            }
-          }
-
-          // 处理 OCR 元数据
-          let metadata: Record<string, unknown> | null = null
-          if (record.metadata) {
-            try {
-              metadata = JSON.parse(record.metadata)
-            } catch {
-              metadata = null
-            }
-          }
-
-          if (
-            metadata?.ocr_excerpt &&
-            typeof metadata.ocr_excerpt === 'string' &&
-            metadata.ocr_excerpt.trim() &&
-            render.basic
-          ) {
-            const snippet = metadata.ocr_excerpt.trim()
-            render.basic.subtitle = render.basic.subtitle
-              ? `${render.basic.subtitle} · ${snippet}`
-              : snippet
-          }
-
-          const tuffItem: TuffItem = {
-            id: `clipboard-${record.id}`,
-            source: {
-              id: 'clipboard-history',
-              type: 'history',
-              name: 'Clipboard History'
-            },
-            kind,
-            render,
-            actions: [
-              {
-                id: 'paste',
-                type: 'execute',
-                label: 'Paste',
-                shortcut: 'Enter'
-              },
-              {
-                id: 'copy',
-                type: 'copy',
-                label: 'Copy',
-                shortcut: 'CmdOrCtrl+C'
-              }
-            ],
-            meta: {
-              raw: record
-            }
-          }
-
-          rebuiltItems.push(tuffItem)
-        }
-      }
-
-      return rebuiltItems
-    } catch (error) {
-      itemRebuilderLog.error('Failed to rebuild clipboard items', {
-        error,
-        meta: { itemCount: items.length }
-      })
-      return []
-    }
-  }
-
   /**
    * 重建插件推荐候选项和内置候选项（如剪贴板 URL）
    */

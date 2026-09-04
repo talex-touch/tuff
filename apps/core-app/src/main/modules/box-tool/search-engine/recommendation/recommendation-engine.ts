@@ -16,6 +16,10 @@ import { getSentryService } from '../../../sentry'
 import { ContextProvider, hashContextContent } from './context-provider'
 import { toParsedItemTimeStats } from '../time-stats-aggregator'
 import { ItemRebuilder } from './item-rebuilder'
+import { createClipboardRecommendationSource } from './clipboard-recommendation-source'
+import { createFileRecommendationSource } from './file-recommendation-source'
+import { createAppRecommendationSource } from './app-recommendation-source'
+import { recommendationSourceRegistry } from './recommendation-source-registry'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
@@ -346,6 +350,9 @@ export class RecommendationEngine {
   /** Persisted rows older than this were invalidated and must not be read back. */
   private cacheInvalidatedAt = 0
 
+  /** Releases this engine's claim on the host-owned recommendation sources (clipboard, file). */
+  private disposeOwnedSources: Array<() => void> = []
+
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
   private readonly REFRESH_JITTER_MS = 15 * 1000
@@ -392,7 +399,21 @@ export class RecommendationEngine {
     private appCatalogDbUtils: DbUtils = dbUtils
   ) {
     this.contextProvider = new ContextProvider()
-    this.itemRebuilder = new ItemRebuilder(dbUtils, appCatalogDbUtils)
+    this.itemRebuilder = new ItemRebuilder()
+
+    // Clipboard history and file rows recommend through host-owned sources rather than through a
+    // search provider: clipboard has no provider at all, and file lookups must go through this
+    // engine's split-aware handle (#295) rather than FileProvider's own `createDbUtils`.
+    // Unregister first because both are bound to this engine's handles — a new engine legitimately
+    // takes over from a torn-down one, and nothing else writes these ids.
+    this.disposeOwnedSources = [
+      createClipboardRecommendationSource(dbUtils),
+      createFileRecommendationSource(dbUtils),
+      createAppRecommendationSource(appCatalogDbUtils)
+    ].map((source) => {
+      recommendationSourceRegistry.unregister(source.sourceId)
+      return recommendationSourceRegistry.registerSource(source)
+    })
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
@@ -1044,6 +1065,8 @@ export class RecommendationEngine {
 
   /** Stop background refresh timer */
   public stopBackgroundRefresh(): void {
+    for (const dispose of this.disposeOwnedSources) dispose()
+    this.disposeOwnedSources = []
     this.pollingService.unregister(this.refreshTaskId)
     this.pollingService.unregister(this.trendBackfillTaskId)
     this.pollingService.unregister(this.telemetryTaskId)

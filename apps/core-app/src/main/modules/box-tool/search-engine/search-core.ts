@@ -56,6 +56,7 @@ import { SearchIndexStoreAdapter } from './indexing-store-adapter'
 import { SqliteIndexingTaskStateStore } from './indexing-task-state-store'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
+import { recommendationSourceRegistry } from './recommendation/recommendation-source-registry'
 import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
@@ -493,11 +494,17 @@ export class SearchEngineCore
   }
 
   registerProvider(provider: ISearchProvider<ProviderContext>): void {
-    this.providerRegistry.register(provider)
+    if (!this.providerRegistry.register(provider)) return
+    // Providers that can rebuild recommendation items opt in by implementing the capability;
+    // the rest return null here and never appear in the empty-state grid. Registration is pushed
+    // from this side on purpose — the recommendation registry must not import providers, or the
+    // cycle that `item-rebuilder`'s dynamic imports currently absorb becomes a static one.
+    recommendationSourceRegistry.registerProviderSource(provider)
   }
 
   unregisterProvider(providerId: string): void {
-    this.providerRegistry.unregister(providerId)
+    if (!this.providerRegistry.unregister(providerId)) return
+    recommendationSourceRegistry.unregister(providerId)
   }
 
   activateProviders(activations: IProviderActivate[] | null): void {
