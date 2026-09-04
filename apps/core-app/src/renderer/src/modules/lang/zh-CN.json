@@ -5470,6 +5470,31 @@
     "confirmAndSend": "授权并发送"
   },
   "corebox": {
+    "reason": {
+      "pinned": "已固定",
+      "frequent": "常用",
+      "time-based": "此刻常用",
+      "recent": "最近使用",
+      "newly-installed": "新安装",
+      "context": "与剪贴板相关",
+      "plugin": "插件推荐",
+      "trending": "最近变多",
+      "cold-start": "猜你要用"
+    },
+    "evidence": {
+      "opened": "打开过 {count} 次",
+      "peakHours": "常在 {start}–{end} 点使用",
+      "justUsed": "刚刚用过",
+      "lastUsed": "{age}前用过",
+      "justInstalled": "刚刚安装",
+      "installed": "{age}前安装",
+      "age": {
+        "hours": "{count} 小时",
+        "days": "{count} 天",
+        "weeks": "{count} 周",
+        "months": "{count} 个月"
+      }
+    },
     "actionUnsupported": "暂不支持该操作",
     "opacity": "透明度",
     "debug": "调试",

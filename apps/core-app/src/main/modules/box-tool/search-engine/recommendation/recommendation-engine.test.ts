@@ -654,7 +654,10 @@ describe('RecommendationEngine', () => {
     expect(ids).toContain('pinned-app')
     expect(ids).toHaveLength(10)
     expect(ids.at(-1)).toBe('pinned-app')
-    expect(result.containerLayout?.sections?.at(-1)).toMatchObject({
+    // Pinned leads the reason sections now (it used to trail them): an explicit
+    // pin is the strongest statement of intent on the panel. The item order in
+    // `items` above is a separate concern and still puts it last.
+    expect(result.containerLayout?.sections?.at(0)).toMatchObject({
       id: 'pinned',
       itemIds: ['pinned-app']
     })
