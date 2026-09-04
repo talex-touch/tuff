@@ -65,6 +65,70 @@ export function collectBlockingAdvisories(payload) {
   return found
 }
 
+/** How many times an audit that produced no verdict is worth re-running before giving up. */
+const AUDIT_ATTEMPTS = 3
+
+/**
+ * Runs the audit until it yields an evaluable payload, or gives up after `maxAttempts`.
+ *
+ * A single attempt is not enough to trust. An audit that could not reach the registry and an audit
+ * that found nothing look identical downstream -- that is the failure `collectBlockingAdvisories`
+ * exists to distrust (#1586). Before this, one transient registry hiccup failed the whole build.
+ *
+ * Both failure shapes retry, because they are one event seen at two depths: the audit produced no
+ * verdict. Unparseable stdout is that event caught by `JSON.parse`; a payload with neither
+ * `advisories` nor `metadata` is the same event caught one level in, once the truncated or error
+ * output happened to still be valid JSON.
+ *
+ * There is deliberately no sleep between attempts. `pnpm audit` is a full registry round trip and
+ * takes seconds on its own, so the attempts are already spaced by the thing being retried; adding
+ * a delay to a synchronous script would mean `Atomics.wait`, and would slow the self-test to no
+ * purpose since it passes a runner that does no I/O at all.
+ *
+ * @param {() => string} runAudit Produces raw audit stdout. Called once per attempt.
+ * @param {number} maxAttempts
+ * @returns {{ attempts: number, payload: object, found: Map<string, object> }} The parsed audit,
+ * the advisories that block, and how many attempts it took to get them.
+ * @throws When every attempt failed. The message carries the last failure's reason.
+ */
+export function runAuditWithRetry(runAudit, maxAttempts = AUDIT_ATTEMPTS) {
+  let lastReason = 'no attempts were made'
+
+  for (let attempts = 1; attempts <= maxAttempts; attempts += 1) {
+    let payload
+    try {
+      payload = JSON.parse(runAudit() ?? '')
+    }
+    catch (error) {
+      lastReason = `audit output was not JSON (${error.message})`
+      continue
+    }
+
+    /*
+     * pnpm reports a failed audit as a well-formed JSON body -- `{"error":{"code":"pnpm",
+     * "message":"fetch failed"}}` -- with nothing else to distinguish it: the output parses, and
+     * the exit code is already meaningless here. Catching it by shape keeps the real reason in the
+     * final message instead of the generic "neither advisories nor metadata" that
+     * collectBlockingAdvisories would raise one line later about the same payload.
+     */
+    if (payload?.error) {
+      lastReason = `pnpm audit failed: ${payload.error.message ?? JSON.stringify(payload.error)}`
+      continue
+    }
+
+    try {
+      return { attempts, payload, found: collectBlockingAdvisories(payload) }
+    }
+    catch (error) {
+      lastReason = error.message
+    }
+  }
+
+  throw new Error(
+    `audit produced no evaluable result in ${maxAttempts} attempt(s); last failure: ${lastReason}`,
+  )
+}
+
 /** Compares the audit against the allowlist and returns every reason this run should fail. */
 export function evaluate(found, allowlist, today) {
   const problems = []
@@ -148,6 +212,16 @@ function selfTest() {
   /** The same entry with one field changed, which is how every real mistake here has looked. */
   const withOnly = patch => ({ advisories: [{ ...entry, ...patch }] })
 
+  const retryPayload = {
+    advisories: {
+      retry: {
+        severity: 'high',
+        github_advisory_id: 'GHSA-retry',
+        module_name: 'retry-package',
+        findings: [{ version: '1.0.0' }],
+      },
+    },
+  }
   const cases = [
     {
       name: 'a matching, unexpired allowlist entry passes',
@@ -253,6 +327,66 @@ function selfTest() {
       expected: true,
     },
     {
+      name: 'malformed and incomplete audit attempts retry until a later valid payload is evaluated',
+      actual: (() => {
+        const responses = ['{', '{}', JSON.stringify(retryPayload)]
+        let invocations = 0
+        const result = runAuditWithRetry(() => {
+          invocations += 1
+          return responses.shift()
+        }, 3)
+        return `${invocations}:${result.attempts}:${result.payload.advisories.retry.github_advisory_id}:${result.found.get('GHSA-retry')?.module}`
+      })(),
+      expected: '3:3:GHSA-retry:retry-package',
+    },
+    {
+      name: 'exhausted incomplete audit attempts fail after the configured bound',
+      actual: (() => {
+        let invocations = 0
+        let outcome = 'returned'
+        try {
+          runAuditWithRetry(() => {
+            invocations += 1
+            return '{}'
+          }, 2)
+        }
+        catch {
+          outcome = 'threw'
+        }
+        return `${outcome}:${invocations}`
+      })(),
+      expected: 'threw:2',
+    },
+    {
+      name: 'a transient pnpm error payload is retried past rather than evaluated',
+      actual: (() => {
+        const responses = [
+          JSON.stringify({ error: { code: 'pnpm', message: 'fetch failed' } }),
+          JSON.stringify(retryPayload),
+        ]
+        const result = runAuditWithRetry(() => responses.shift(), 2)
+        return `${result.attempts}:${result.found.get('GHSA-retry')?.module}`
+      })(),
+      expected: '2:retry-package',
+    },
+    {
+      name: 'the pnpm error reason survives into the message when every attempt fails',
+      actual: (() => {
+        let reason = 'did not throw'
+        try {
+          runAuditWithRetry(
+            () => JSON.stringify({ error: { code: 'pnpm', message: 'fetch failed' } }),
+            2,
+          )
+        }
+        catch (error) {
+          reason = error.message
+        }
+        return reason.includes('fetch failed')
+      })(),
+      expected: true,
+    },
+    {
       name: 'a real audit shape with zero advisories is a clean pass, not a throw',
       actual: collectBlockingAdvisories({ advisories: {}, metadata: { vulnerabilities: {} } }).size,
       expected: 0,
@@ -278,32 +412,31 @@ if (process.argv.includes('--self-test'))
   process.exit(selfTest() > 0 ? 1 : 0)
 
 // pnpm audit exits non-zero whenever it finds anything, so the exit code says nothing about
-// whether the run succeeded. The JSON shape is the signal, and collectBlockingAdvisories throws
-// when it is missing.
-const run = spawnSync('pnpm', ['audit', '--prod', '--json'], {
-  cwd: repoRoot,
-  encoding: 'utf8',
-  maxBuffer: 64 * 1024 * 1024,
-})
-
-let payload
+// whether the run succeeded. The JSON shape is the signal, and runAuditWithRetry throws once
+// repeated attempts have all failed to produce one.
+let lastRun
+let audit
 try {
-  payload = JSON.parse(run.stdout ?? '')
-}
-catch {
-  console.error('\x1B[31mCould not parse `pnpm audit --prod --json` output.\x1B[0m')
-  console.error((run.stderr || run.stdout || '').split('\n').slice(-15).join('\n'))
-  process.exit(1)
-}
-
-let found
-try {
-  found = collectBlockingAdvisories(payload)
+  audit = runAuditWithRetry(() => {
+    // Captured so the failure path below can still show what pnpm actually said. Only the last
+    // attempt's output is kept: earlier attempts failed for the same reason or a staler one.
+    lastRun = spawnSync('pnpm', ['audit', '--prod', '--json'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    })
+    return lastRun.stdout ?? ''
+  })
 }
 catch (error) {
   console.error(`\x1B[31m${error.message}\x1B[0m`)
+  console.error((lastRun?.stderr || lastRun?.stdout || '').split('\n').slice(-15).join('\n'))
   process.exit(1)
 }
+
+const { payload, found } = audit
+if (audit.attempts > 1)
+  console.log(`\x1B[33mAudit needed ${audit.attempts} attempts to return a usable result.\x1B[0m`)
 
 const allowlist = JSON.parse(fs.readFileSync(allowlistPath, 'utf8'))
 const today = new Date().toISOString().slice(0, 10)
