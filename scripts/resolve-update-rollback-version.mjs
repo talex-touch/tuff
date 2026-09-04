@@ -117,7 +117,7 @@ export function getTagsFromFile(tagsFile) {
 function main() {
   const argv = process.argv.slice(2)
   const tag = getArgValue(argv, '--tag')
-  const remote = getArgValue(argv, '--remote', 'origin')
+  const remote = getArgValue(argv, '--remote')
   const tagsFile = getArgValue(argv, '--tags-file')
   if (!tag || (!remote && !tagsFile)) {
     throw new Error(
