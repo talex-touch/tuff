@@ -19,15 +19,18 @@ export const NETWORK_ERROR_CODE = {
  * Timeout and HTTP-status markers are deliberately absent — `isTimeoutLikeError` and
  * `parseHttpStatusCode` own those, and duplicating them here would make a single error match two
  * classifiers with different retry semantics.
+ *
+ * There is deliberately no blanket `net::err_` entry. Chromium files user cancellation
+ * (`ERR_ABORTED`), permission and policy refusals (`ERR_ACCESS_DENIED`, `ERR_BLOCKED_BY_CLIENT`)
+ * and caller bugs (`ERR_INVALID_URL`, `ERR_UNSAFE_PORT`) under the same prefix, none of which get
+ * better by retrying or by asking a different host. Missing a novel transport code degrades to the
+ * behaviour this fix replaced, for that one code; matching a cancellation would retry work the user
+ * just cancelled. `err_connection_` and `err_cert_` stay prefixes because every member of those two
+ * families qualifies.
  */
 export const TRANSPORT_FAILURE_MARKERS = [
-  // Chromium net stack (session.fetch). The prefix covers codes not yet enumerated below.
-  'net::err_',
-  'err_connection_closed',
-  'err_connection_reset',
-  'err_connection_refused',
-  'err_connection_timed_out',
-  'err_connection_aborted',
+  // Chromium net stack (session.fetch).
+  'err_connection_',
   'err_name_not_resolved',
   'err_internet_disconnected',
   'err_network_changed',
