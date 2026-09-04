@@ -4,7 +4,7 @@
 
 改动分三层，依赖方向单向向下，无循环：
 
-```
+```text
 packages/utils/network/core/errors.ts        ← 唯一事实源：错误类型 + 分类器 + 标记表
         ↑                    ↑                     ↑
  network-service.ts   release-fetch-service.ts   GithubUpdateProvider.ts
@@ -63,18 +63,18 @@ export const TRANSPORT_FAILURE_MARKERS = [
   'failed to fetch',
   // Node / undici
   'fetch failed', 'econnreset', 'econnrefused', 'econnaborted',
-  'enotfound', 'etimedout', 'eai_again', 'epipe', 'socket hang up',
+  'enotfound', 'eai_again', 'epipe', 'socket hang up',
   'network socket disconnected',
 ]
 ```
 
 **刻意不设 `'net::err_'` 全量前缀兜底**（CodeRabbit review on PR #1864）：`isTransportFailureError` 走的是小写子串匹配，该前缀会同时命中 Chromium 归在同一前缀下的用户取消（`ERR_ABORTED`）、权限/策略拒绝（`ERR_ACCESS_DENIED`、`ERR_BLOCKED_BY_CLIENT`）与调用方 bug（`ERR_INVALID_URL`、`ERR_UNSAFE_PORT`）——这些既不该重试也不该换源。两种误判的代价不对称：漏掉一个新出现的传输错误码，只是该码退回本次修复前的行为；而命中一个取消错误，会把用户刚取消的动作重试一遍。故只保留具名项，`err_connection_` / `err_cert_` 以前缀形式保留，因为这两族的每个成员都确属传输失败。负向用例在 `network-transport-error.test.ts` 中锁定。
 
-**不纳入该表**的项（保持语义纯净）：`NETWORK_TIMEOUT`（归 `isTimeoutLikeError`）、`NETWORK_HTTP_STATUS_*`（归 `parseHttpStatusCode`）、`cloudflare` / `rate limit` / `localhost:3200`（属日志降噪范畴，非传输失败）。
+**不纳入该表**的项（保持语义纯净）：`NETWORK_TIMEOUT` 与 `etimedout`（归 `isTimeoutLikeError`，其正则为 `/timeout|etimedout/i`；若此处再列一次，同一个错误会同时落进两个语义不同的分类器）、`NETWORK_HTTP_STATUS_*`（归 `parseHttpStatusCode`）、`cloudflare` / `rate limit` / `localhost:3200`（属日志降噪范畴，非传输失败）。注意 Chromium 的 `ERR_CONNECTION_TIMED_OUT` 不属此列——该拼写两侧正则都不命中，正是本次要补的缺口。
 
 ## 数据流：一次官方源故障
 
-```
+```text
 session.fetch → 抛 Error('net::ERR_CONNECTION_CLOSED')
   ↓ network-service.ts:1214 catch
 projectNetworkRequestError(error, ctx)
@@ -96,7 +96,7 @@ fetchGitHub(channel, force, false) → 200 → 返回候选 release ✅
 
 | 位置 | 现状 | 改后 |
 |---|---|---|
-| `release-fetch-service.ts:471` `isOfficialFallbackEligible` | status 判定 + 正则 | status 判定不变；正则 → `isTransportFailureError(error)` |
+| `release-fetch-service.ts:471` `isOfficialFallbackEligible` | status 判定 + 正则 | status 判定不变；正则 → `isTimeoutLikeError(error) \|\| isTransportFailureError(error)` |
 | `release-fetch-service.ts:592` `isRetryable` | status 判定 + 正则 | status 判定不变；正则 → `isTimeoutLikeError(error) \|\| isTransportFailureError(error)` |
 | `GithubUpdateProvider.ts:540` `isRetryableError` | timeout + status + 正则 | 前两项不变；正则 → `isTransportFailureError(error)` |
 
@@ -107,8 +107,8 @@ fetchGitHub(channel, force, false) → 200 → 返回候选 release ✅
 ## 兼容性与迁移
 
 - **无数据迁移、无配置变更、无 IPC 协议变更。** 纯代码内分类逻辑修正。
-- **行为变化仅为扩大**："过去不回退/不重试"→"现在回退/重试"。不存在"过去成功现在失败"的路径，因此对现网是单向改善。
-- **`network-log-noise.ts`（R6）**：其列表改为 `[...TRANSPORT_FAILURE_MARKERS, ...本地特有标记]`，本地特有项（`cloudflare`、`rate limit`、`just a moment`、`network_http_status_403/429`、`localhost:3200`、`aborterror`、`network guard cooldown`）保留。这样补齐了它当前缺失的 `err_connection_closed` / `err_connection_reset`，且两份清单从此同源。
+- **相对 master，行为变化仅为扩大**："过去不回退/不重试"→"现在回退/重试"。master 上的原正则是 `/NETWORK_TIMEOUT|timeout|etimedout|enotfound|econnreset|eai_again|fetch failed|socket hang up/i`，`net::ERR_*` 系一个都不命中，所以本次收窄掉的 `ERR_ABORTED` / `ERR_ACCESS_DENIED` / `ERR_INVALID_URL` 等在 master 上本就不回退——收窄只相对本分支的中间提交而言，对现网没有"过去成功现在失败"的路径，是单向改善。
+- **`network-log-noise.ts`（R6）**：其列表改为 `[...TRANSPORT_FAILURE_MARKERS, ...本地特有标记]`，本地特有项（`cloudflare`、`rate limit`、`just a moment`、`network_http_status_403/429`、`localhost:3200`、`aborterror`、`network guard cooldown`）保留。`etimedout` 也留在本地：降噪没有"一个错误只归一个分类器"的约束，而 `'timed out'` 覆盖不到 errno 拼写。这样补齐了它当前缺失的 `err_connection_closed` / `err_connection_reset`，且传输部分从此与分类器同源。
 - **`packages/utils` 是发布包**：新增导出为纯增量，不改动既有导出签名，外部插件开发者无感知。
 
 ## 权衡

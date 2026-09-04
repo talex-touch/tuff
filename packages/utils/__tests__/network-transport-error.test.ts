@@ -94,6 +94,21 @@ describe('isTransportFailureError leaves other classifiers their errors', () => 
     expect(isTransportFailureError(timeout)).toBe(false)
   })
 
+  /*
+   * The mirror image of the case above, and the reason `etimedout` is not in the marker list.
+   * `isTimeoutLikeError` matches `/timeout|etimedout/i`, so a marker would put one error in two
+   * classifiers — exactly what the list's doc comment says it will not do. Both update call sites
+   * OR the two classifiers, so ETIMEDOUT stays retryable and fallback-eligible either way.
+   */
+  it.each([
+    'connect ETIMEDOUT',
+    'connect ETIMEDOUT 140.82.121.6:443',
+  ])('leaves %s to the timeout classifier alone', (message) => {
+    const error = new Error(message)
+    expect(isTimeoutLikeError(error)).toBe(true)
+    expect(isTransportFailureError(error)).toBe(false)
+  })
+
   it('returns false for non-Error values', () => {
     expect(isTransportFailureError('net::ERR_CONNECTION_CLOSED')).toBe(false)
     expect(isTransportFailureError(null)).toBe(false)

@@ -16,6 +16,10 @@ const DOWNGRADED_REMOTE_FAILURE_MARKERS = [
   'network_timeout',
   'request timeout',
   'timed out',
+  // Not spelled with a space, so 'timed out' above does not cover it. It is deliberately absent
+  // from TRANSPORT_FAILURE_MARKERS so that isTimeoutLikeError owns it alone; noise suppression has
+  // no such ownership rule and wants both.
+  'etimedout',
   'aborterror',
   'network guard cooldown',
   'network_http_status_403',
