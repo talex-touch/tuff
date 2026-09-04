@@ -158,6 +158,7 @@
   },
   "optionalDependencies": {
     "@crosscopy/clipboard": "^0.3.6",
+    "@libsql/linux-x64-musl": "0.5.29",
     "bufferutil": "^4.1.0",
     "extract-file-icon": "^0.3.2",
     "uiohook-napi": "^1.5.5",
