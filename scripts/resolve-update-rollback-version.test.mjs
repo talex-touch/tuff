@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it } from 'vitest'
 
 import {
@@ -9,6 +14,25 @@ import {
   FIRST_RELEASE_ROLLBACK_VERSION,
   resolveSameChannelRollbackVersion,
 } from './resolve-update-rollback-version.mjs'
+
+const scriptPath = fileURLToPath(new URL('./resolve-update-rollback-version.mjs', import.meta.url))
+
+function withTempDir(run) {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'resolve-update-rollback-version-'))
+  try {
+    return run(root)
+  }
+  finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+function runResolver(args, env = process.env) {
+  return spawnSync(process.execPath, [scriptPath, ...args], {
+    encoding: 'utf8',
+    env,
+  })
+}
 
 describe('resolveSameChannelRollbackVersion', () => {
   it('selects the highest lower same-channel version from unsorted tags when the current tag is absent', () => {
@@ -119,5 +143,73 @@ describe('resolveSameChannelRollbackVersion', () => {
       () => resolveSameChannelRollbackVersion({ tag: 'manual-build-20260811', tags: [] }),
       /must contain a supported semantic version/,
     )
+  })
+})
+
+function fakeGitPath(root, tags) {
+  const bin = path.join(root, 'bin')
+  const git = path.join(bin, 'git')
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(
+    git,
+    ['#!/bin/sh', ...tags.map(tag => `printf '%s\n' '0000000 refs/tags/${tag}'`)].join('\n'),
+  )
+  chmodSync(git, 0o755)
+  return bin
+}
+
+describe('resolve-update-rollback-version CLI', () => {
+  it('uses published tags rather than a higher unpublished beta returned by the remote', () => {
+    withTempDir((root) => {
+      const tagsFile = path.join(root, 'published-tags.txt')
+      writeFileSync(
+        tagsFile,
+        ['v2.4.12-beta.8', 'v2.4.13-beta.1', 'v2.4.13-beta.10'].join('\n'),
+      )
+      const gitBin = fakeGitPath(root, ['v2.4.13-beta.99'])
+
+      const result = runResolver(
+        [
+          '--tag',
+          'v2.4.13-beta.11',
+          '--tags-file',
+          tagsFile,
+          '--remote',
+          'origin',
+        ],
+        { ...process.env, PATH: `${gitBin}${path.delimiter}${process.env.PATH}` },
+      )
+
+      assert.equal(result.status, 0, result.stderr)
+      assert.deepEqual(JSON.parse(result.stdout), {
+        channel: 'BETA',
+        rollbackFromVersion: '2.4.13-beta.10',
+        rollbackTag: 'v2.4.13-beta.10',
+        targetVersion: '2.4.13-beta.11',
+        isFirstInChannel: false,
+      })
+    })
+  })
+
+  it('fails clearly when its published-tags file cannot be read', () => {
+    withTempDir((root) => {
+      const gitBin = fakeGitPath(root, ['v2.4.13-beta.99'])
+      const missingTagsFile = path.join(root, 'does-not-exist.txt')
+
+      const result = runResolver(
+        [
+          '--tag',
+          'v2.4.13-beta.11',
+          '--tags-file',
+          missingTagsFile,
+          '--remote',
+          'origin',
+        ],
+        { ...process.env, PATH: `${gitBin}${path.delimiter}${process.env.PATH}` },
+      )
+
+      assert.notEqual(result.status, 0)
+      assert.match(result.stderr, /--tags-file|tags file/i)
+    })
   })
 })
