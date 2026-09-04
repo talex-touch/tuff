@@ -31,8 +31,9 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   constraints.
 - [recommendation-freshness-contracts.md](recommendation-freshness-contracts.md) —
   `installedAt` extension (write-once via conflict-do-nothing, watch-now fallback),
-  double-gate freshness predicate, novelty→frecency handoff, the THREE
-  `recommendation.source` union files, cache-invalidation read-guard vs cleanup
+  double-gate freshness predicate, novelty→frecency handoff, the single
+  `RECOMMENDATION_SECTION_ORDER` source of truth (also the section render order),
+  verifiable-or-absent evidence rules, cache-invalidation read-guard vs cleanup
   deletion, exposure slice tag rules.
 - [search-hotpath-contracts.md](search-hotpath-contracts.md) — per-keystroke search
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app

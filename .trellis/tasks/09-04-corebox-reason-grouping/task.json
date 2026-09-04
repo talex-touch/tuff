@@ -1,0 +1,30 @@
+{
+  "id": "corebox-reason-grouping",
+  "name": "corebox-reason-grouping",
+  "title": "CoreBox 空态推荐理由分组",
+  "description": "把 CoreBox 空态从单一 Recommend 网格改为按推荐来源分组的列表，并补齐推荐证据字段",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-04",
+  "completedAt": null,
+  "branch": "release/corebox-reason-grouping-20260904",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": "https://github.com/talex-touch/tuff/pull/1865",
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Run the live empty state under `pnpm core:dev` and check the four things only a human can: pinned renders first (this reverses the previous order), no group renders empty, no group exceeds 3 items, and every evidence line is true of the item it sits under. Code and automated coverage are complete.",
+    "blocker": "None in the code. The npm advisories endpoint is timing out, so any PR touching this repo currently fails `Production dependency audit` inside PR Quality; that gate has nothing to say about this change, which adds no dependency.",
+    "evidence": "S1-S7 landed. Focused runs: recommendation/ 125 tests across 7 files, recommendation-evidence 10, recommendation-utils 19, item-rebuilder 10, translation-coverage 4. `npm run typecheck` exit 0; `pnpm lint` exit 0 after `lint:fix` cleared 9 prettier warnings (0 errors). The 4 core-app and 5 packages/test failures in the full-suite run were proved pre-existing by re-running the same files against a stashed clean HEAD -- identical files and counts failed. S1 also closed a real drift the plan only half-anticipated: the IPC-facing `recommendation.source` union in transport/events/types/core-box.ts was still a hand-maintained copy and was missing 'plugin'."
+  }
+}

@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/main-process/recommendation-freshness-contracts.md", "reason": "S3/S4 直接改推荐管线的 meta 与 layout 产出，必须遵守推荐新鲜度与缓存契约"}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "buildContainerLayout 在空态搜索热路径上，改写不得引入额外同步开销"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "主进程分层与模块边界总览"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "S1 扩展 @talex-touch/utils 的公共类型联合，需符合类型安全约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "S6 在 BoxGrid.vue 新增 list 渲染分支"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "渲染层目录与组件组织总览"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务跨 utils 契约 / 主进程 / 渲染层三层，断点分布在层间边界"}

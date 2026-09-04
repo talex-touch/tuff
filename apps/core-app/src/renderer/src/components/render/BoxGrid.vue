@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
+import type {
+  RecommendationEvidence,
+  RecommendationSource,
+  TuffContainerLayout,
+  TuffItem,
+  TuffSection
+} from '@talex-touch/utils'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { resolveBoxGridColumnCount } from './box-grid-layout'
 import BoxGridItem from './BoxGridItem.vue'
+import BoxItem from './BoxItem.vue'
+import { formatRecommendationEvidence } from './recommendation-evidence'
 
 interface Props {
   items: TuffItem[]
@@ -17,6 +26,8 @@ interface SectionData {
 }
 
 const props = defineProps<Props>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'select', index: number, item: TuffItem): void
@@ -73,6 +84,34 @@ function isPinnedSection(section: TuffSection): boolean {
   return section.meta?.pinned === true
 }
 
+function isListSection(section: TuffSection): boolean {
+  return section.layout === 'list'
+}
+
+/**
+ * Section titles arrive from the main process as i18n keys (`corebox.reason.*`)
+ * because the main process has no idea what language the user reads. Older
+ * cached layouts still carry finished English literals like `Recommend`, which
+ * have no dot and must be shown as-is rather than as a missing key.
+ */
+function getSectionTitle(section: TuffSection): string {
+  const title = section.title
+  if (!title) return ''
+  return title.includes('.') ? t(title) : title
+}
+
+function getItemEvidence(section: TuffSection, item: TuffItem): string {
+  const recommendation = item.meta?.recommendation
+  if (!recommendation) return ''
+
+  const source = (section.meta?.source ?? recommendation.source) as RecommendationSource | undefined
+  return formatRecommendationEvidence(
+    source,
+    recommendation.evidence as RecommendationEvidence | undefined,
+    t
+  )
+}
+
 function getSectionColumnCount(sectionData: SectionData): number {
   return resolveBoxGridColumnCount(
     sectionData.section,
@@ -83,6 +122,9 @@ function getSectionColumnCount(sectionData: SectionData): number {
 
 /** Intelligence tray shows at most two rows: a full first row, then the rest. */
 function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
+  // List sections are already capped to RECOMMENDATION_SECTION_ITEM_LIMIT by the
+  // main process; truncating again here would fight that budget.
+  if (isListSection(sectionData.section)) return sectionData.items
   if (!isIntelligenceSection(sectionData.section)) return sectionData.items
   return sectionData.items.slice(0, getSectionColumnCount(sectionData) * 2)
 }
@@ -97,14 +139,32 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
         :key="sectionData.section.id"
         class="BoxGridWrapper"
         :class="{
-          'is-intelligence': isIntelligenceSection(sectionData.section),
-          'is-pinned': isPinnedSection(sectionData.section)
+          'is-list': isListSection(sectionData.section),
+          'is-intelligence':
+            isIntelligenceSection(sectionData.section) && !isListSection(sectionData.section),
+          'is-pinned': isPinnedSection(sectionData.section) && !isListSection(sectionData.section)
         }"
       >
         <div v-if="sectionData.section.title" class="BoxGridTitle">
-          {{ sectionData.section.title }}
+          {{ getSectionTitle(sectionData.section) }}
         </div>
+
+        <!-- Reason-grouped list: one row per item, with the reason it is here -->
+        <div v-if="isListSection(sectionData.section)" class="BoxReasonList">
+          <BoxItem
+            v-for="(item, localIndex) in getSectionVisibleItems(sectionData)"
+            :key="item.id"
+            :item="item"
+            :active="focus === sectionData.startIndex + localIndex"
+            :render="item.render"
+            :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
+            :evidence="getItemEvidence(sectionData.section, item)"
+            @click="emit('select', sectionData.startIndex + localIndex, item)"
+          />
+        </div>
+
         <div
+          v-else
           class="BoxGrid p-4"
           :style="{
             '--grid-cols': getSectionColumnCount(sectionData),
@@ -162,6 +222,13 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
   position: relative;
 
   margin: 0.5rem;
+
+  // Reason sections stack down the panel, so the animated tray border that
+  // frames a single intelligence grid would repeat up to nine times. They carry
+  // their own heading instead.
+  &.is-list {
+    margin: 0 0.5rem;
+  }
 
   &.is-intelligence {
     &::before {
@@ -229,6 +296,19 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
   font-weight: 500;
   color: var(--tx-text-color-secondary);
   opacity: 0.7;
+}
+
+.is-list > .BoxGridTitle {
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  opacity: 0.6;
+}
+
+.BoxReasonList {
+  display: flex;
+  flex-direction: column;
 }
 
 .BoxGrid {
