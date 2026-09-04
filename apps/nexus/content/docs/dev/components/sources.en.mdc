@@ -1,7 +1,7 @@
 ---
 title: Sources
 description: A collapsible citation list whose links never navigate on their own.
-category: Data
+category: AiReasoning
 status: beta
 since: 0.3.9
 tags: [ai, sources, citation]

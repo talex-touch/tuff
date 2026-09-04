@@ -43,7 +43,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, plugins in `plugins/` (24 plugin packages), and the documentation & ecosystem site in `apps/nexus/`.
 
 ### Technology Stack
-- **Electron**: 41.10.1+ with Node.js 24.15.0+
+- **Electron**: 41.10.1+ with Node.js 26.0.0+
 - **Vue**: 3.5.39+ with Vue Router 4.6.4 and Pinia 3.0.4
 - **TypeScript**: 5.9.3
 - **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.6, Electron-Builder 26.15.3
@@ -292,7 +292,7 @@ Renderer ([modules/channel/channel-core.ts](apps/core-app/src/renderer/src/modul
 regChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): () => void
 unRegChannel<TRequest = unknown>(eventName: string, callback: (data: TRequest) => Promise<unknown> | unknown): boolean
 
-send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest): Promise<TResponse>
+send<TRequest = unknown, TResponse = unknown>(eventName: string, arg?: TRequest, options?: { timeout?: number }): Promise<TResponse>
 ```
 
 The two `regChannel` signatures are the trap: passing a `ChannelType` to the renderer's registers a handler under that value as the event name, which type-checks and then never fires.
@@ -414,7 +414,7 @@ await accountSDK.hasPrioritySupport()     // Priority support
 
 ## Development Notes
 
-- Node.js version: 24.15.0+ (enforced by the `engines` field and Volta; the `preinstall` hook only enforces pnpm as the package manager, not the Node version)
+- Node.js version: 26.0.0+ (enforced by the `engines` field and Volta; the `preinstall` hook only enforces pnpm as the package manager, not the Node version)
 - Uses Electron 40.0.0+ with Vue 3.5.27+
 - Development uses hot-reloading with process cleanup via DevProcessManager
 - Plugin development supports live reloading when Manifest (`manifest.json`) or Prelude (`index.js`) files change

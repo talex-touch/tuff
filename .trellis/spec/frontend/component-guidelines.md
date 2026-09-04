@@ -79,6 +79,55 @@ See `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`.
 - Prefer `@talex-touch/tuffex/base.css` plus component subpath styles in plugin UI; do not add a full `@talex-touch/tuffex/style.css` import unless working in an existing legacy full-style surface.
 - Avoid changing visual class contracts while fixing semantics.
 
+### Styling slot content from a wrapper
+
+A wrapper component that lays out children it did not render (`TxAvatarGroup`, any list/stack primitive) cannot style them with a plain scoped selector — slot vnodes carry the *parent's* scope id. The usual workaround is injecting inline styles via `cloneVNode`, and it is a trap: **an inline value outranks every selector, so anything injected inline can never have a `:hover`, `:focus-visible` or media-query variant.**
+
+`:deep()` from the wrapper's own root does reach slot content, because it compiles to `.wrapper[data-v-x] .child` and the root is rendered by the wrapper:
+
+```css
+.tx-avatar-group :deep(.tx-avatar-group__item) { margin-left: calc(var(--gap) * -1); }
+.tx-avatar-group.is-hover-lift :deep(.tx-avatar-group__item:hover) { transform: translateY(-4px); }
+```
+
+Rules of thumb:
+
+- Inject inline only what will never have a state variant (a static ring border). Everything positional goes in the stylesheet.
+- Per-item values that must vary (a stacking index) get injected as a **CSS custom property** inline and consumed by the rule; the rule's own properties stay overridable.
+- Group-wide state (a hover that fans the whole row) changes one variable on the wrapper root and lets inheritance carry it — do not re-derive it per item.
+- Content that gets **teleported** (a popover panel the wrapper renders) is no longer a descendant of the root, so `:deep()` from the root will not match it. Write those as standalone selectors; they still carry the scope id because the wrapper rendered them.
+
+### Floating layers around non-rectangular triggers
+
+`TxBaseAnchor` sets `inheritAttrs: false` and forwards attrs to the *teleported panel*, so `class`/`style` on `TxPopover` style the floating layer, not the trigger. Use the `referenceClass` prop to reach the trigger wrapper.
+
+That wrapper is a plain rectangle. Two consequences when the trigger itself is round:
+
+- `box-shadow` follows the wrapper's `border-radius`, so a hover shadow applied to it renders as a square halo around a circular trigger. Apply the shadow to the element inside.
+- A `transform` on the wrapper moves the anchor's reference rect out from under an already-open panel. Transform the inner element instead.
+
+### State motion: compile the spring, do not keyframe the bounce
+
+A press/drag bounce written as a multi-stop `@keyframes` where each segment carries its own overshooting bezier reverses velocity at **every** keyframe boundary. It reads as jitter at any amplitude, and shrinking the numbers does not fix it — the structure is the defect. `TxSlider` carried four such stops (scale 1 → 0.90 → 1.32 → 1.08 → 1.16, 43 % swing, four reversals) until 2026-09-02.
+
+The replacement is one transition whose easing *is* the spring:
+
+- Compile it with `resolveTransition({ stiffness, damping })` from `packages/tuffex/packages/components/src/liquid/src/spring.ts`, which emits a CSS `linear()` sample list plus a duration.
+- Paste that string **statically** into an `@supports (transition-timing-function: linear(0, 1))` block when the component never varies its stiffness; a runtime resolve costs a `CSS.supports` probe and a style write per instance for nothing. Lock the static string to the compiler with a unit test — `spring.ts` caches the probe module-wide, so stub `CSS.supports` before the first call or you silently assert against the bezier fallback.
+- The fallback outside that block must **not** overshoot. A bezier faking a bounce is worse than no bounce.
+- Target one visible reversal and 2–5 % overshoot. `spring.ts`'s own simulator gives you both; count reversals outside a ±0.1 % settle band, because the compiler pins the last sample to exactly 1 and that manufactures a sub-visible wiggle at the tail. Measured: 480/34 → +1.4 %, 560/34 → +3.0 % / 362 ms / 1 reversal, 580/34 → 2 reversals.
+- Give hover its own shorter, non-overshooting clock. Hover in and out must never bounce, so it cannot share the spring variable.
+
+### TuffEx semantic hues in dark mode
+
+`--tx-color-success | warning | danger` live in `packages/tuffex/packages/components/style/variables.scss`. Until 2026-09-02 the `.dark` block did not define them and inherited the `:root` light values — mid-saturation hues tuned for a white page. Mixed at the pill family's 12 % fill / 32 % border onto `#141414` they gave olive / ochre / maroon fills and a hard dark hairline on `TxStatusBadge`, `TxBadge`, `TxTag` and `TxAlert` at once.
+
+- When a whole family looks wrong in one theme, suspect the token block before the component recipe. Changing the recipe in one component splits the family; the two high-contrast mixins had carried their own three hues correctly all along, which is the tell.
+- Dark values sit one step lighter than the light ramp (Tailwind-400: `#4ade80` / `#fbbf24` / `#f87171`), not at the high-contrast pastels — white ink on `#fda4af` is 1.8:1.
+- **Ink and solid-fill pull in opposite directions and can have an empty intersection.** AAA 7:1 ink on `#141414` needs relative luminance ≥ 0.349; keeping white ink on a solid fill at 2.90:1 needs ≤ 0.312. No red satisfies both, so danger is held to AA as ink and the fill-side number is recorded, not gated. Print the feasible window before writing either bound into an acceptance criterion.
+- The hand-written `--tx-color-*-rgb` triplets in the same block do not derive from the hex. Update them together and assert the equality in a test; `rgb(var(--tx-color-success-rgb) / .2)` silently keeps the old hue otherwise.
+- Semantic colour as a **solid fill under white ink** is not a supported pairing in this library (`TxStep` completed icon 1.74:1, `TxTabBar` badge and `TxToolConfirmation .is-dangerous` 2.77:1). Lightening the token makes those slightly worse; the fix is dark ink on those three, not a darker token.
+
 ### Shell colour tokens
 
 The app shell has one palette, `--shell-*` in `apps/core-app/src/renderer/src/styles/shell-tokens.scss`, defined across four blocks: `:root`, `.dark`, `html.contrast`, `html.dark.contrast`. Shell surfaces read tokens only — a hex literal or `rgba()` in a renderer component is a bug, because it survives the theme swap and the high-contrast accessibility mode.
@@ -184,3 +233,19 @@ prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after res
 - Changing class names during semantic migrations without updating focused tests.
 - Reading browser-only state in Nexus SSR paths.
 - Using browser-native clipboard APIs inside plugin UI instead of plugin clipboard SDK gates.
+
+---
+
+## TuffEx Suite Taxonomy (concepts / base / pro / ai / data)
+
+Since 2026-08-30 every tuffex component belongs to exactly one docs suite; four places must stay in sync (they are test-gated, not convention-gated):
+
+- `apps/nexus/scripts/recategorize-component-docs.py` — `TAXONOMY` is the single source of truth for `category` frontmatter (20 categories; suites: concepts = Foundations, base = BaseSuite/Basic/Form/Layout/Navigation/Data/Feedback/Status, pro = ProSuite/Advanced/Effects/Primitives, ai = AiSuite/AiChat/AiAgent/AiReasoning/AiContext, data = Charts/Visualization). Rerun with `--apply`; it errors on docs missing from the table.
+- `apps/nexus/app/components/DocsSidebar.vue` — `SUITES` + `CATEGORY_SUITE_MAP` + `SECTION_ORDER['/docs/dev/components']` drive the two-level sidebar (组件/扩展 underline tabs + 理念/基础/进阶/AI/数据 suite switcher). The `misc`/其他 bucket must stay empty — it is the canary for taxonomy drift. Dark-mode rules in this file must use the `:global(.dark .selector)` whole-selector form; `:global(.dark) .selector` compiles to nothing here.
+- `COMPONENT_FAMILIES` (same file) folds same-component doc siblings (avatar + avatar-variants) into one expandable sidebar entry. Rendering-only: members keep their own `TAXONOMY` category and `SECTION_ORDER` rows, and the fold happens per category child list after `used` bookkeeping, so the misc canary is unaffected. The family row is a toggle (never navigates), collapsed by default, auto-expanded when the route is a member; member label overrides live under `docsSidebar.families.*` in both locales (the head member needs one so it doesn't repeat the family label). Members split across categories simply render flat.
+- `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts` — category entry barrels; their union must equal `components.ts` with no overlap, guarded by `packages/components/src/__tests__/suite-barrels.test.ts`. The barrels stay three-way: the `data` suite is docs-level only — Visualization components keep importing from the pro barrel, and the chart family is the standalone `@talex-touch/tuffex-charts` package.
+- Hub `content/docs/dev/components/index.{zh,en}.mdc` — one H2 section per component suite (Basics/Advanced/AI/Data); every documented slug must keep a link (coverage test).
+
+Every suite's first sidebar entry is its overview page (`standalonePages` in `SUITES`): concepts-suite (category `Foundations`), base-suite (`BaseSuite`), pro-suite (`ProSuite`), ai-suite (`AiSuite`); the data suite reuses `charts.mdc` (category `Charts` — the standalone slot consumes it before the group renders, so it never duplicates). Overview pages embed `::DocsComponentsGallery{suite="…"}` for a per-suite specimen grid.
+
+Adding a component now also means: add its slug to `TAXONOMY` (pick the suite/category), add the dir to the matching suite barrel (base/pro/ai only), and keep `SECTION_ORDER` in the same order as `TAXONOMY`. New chart components go to data/Visualization in the docs, with their import staying in the pro barrel — or into `@talex-touch/tuffex-charts` if they belong to the chart family.

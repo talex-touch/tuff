@@ -1611,6 +1611,64 @@ mod tests {
         assert!(error.starts_with("audio-too-long"), "{error}");
     }
 
+    /// Encodes already-interleaved PCM at an arbitrary channel count.
+    ///
+    /// `encode_wav_pcm16` is mono-only by construction, which is why the decode coverage above
+    /// cannot see channel order at all.
+    fn encode_wav_pcm16_interleaved(
+        interleaved: &[f32],
+        channels: u16,
+        sample_rate: u32,
+    ) -> Vec<u8> {
+        let spec = hound::WavSpec {
+            channels,
+            sample_rate,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut cursor = Cursor::new(Vec::<u8>::new());
+        {
+            let mut writer = hound::WavWriter::new(&mut cursor, spec).unwrap();
+            for &sample in interleaved {
+                let scaled = (sample.clamp(-1.0, 1.0) * i16::MAX as f32).round();
+                writer.write_sample(scaled as i16).unwrap();
+            }
+            writer.finalize().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    /// The decode path's channel order, which nothing else covers.
+    ///
+    /// `a_decode_stops_once_it_passes_the_sample_limit` is a real round trip, but it is mono and
+    /// asserts only the sample count, so a decoder that emitted frames in the wrong channel order
+    /// -- or dropped a channel and duplicated the other -- would pass it unchanged. That is the
+    /// mistake a rewrite of the interleaving is most likely to make, and it corrupts audio
+    /// silently rather than failing anything.
+    ///
+    /// Left and right carry deliberately different magnitudes *and* signs so a swap, a duplicate
+    /// and a drop each produce a different wrong answer.
+    #[test]
+    fn a_stereo_decode_preserves_interleaved_channel_order() {
+        // L = 0.5, 0.25, 0.125   R = -0.75, -0.375, -0.1875
+        let interleaved = [0.5_f32, -0.75, 0.25, -0.375, 0.125, -0.1875];
+        let wav = encode_wav_pcm16_interleaved(&interleaved, 2, 44_100);
+
+        let (samples, rate, channels) = decode_audio_limited(wav, 1_000).unwrap();
+
+        assert_eq!((rate, channels), (44_100, 2));
+        assert_eq!(samples.len(), interleaved.len(), "frame count changed");
+
+        // i16 quantisation is the only permitted difference: one LSB is 1/32767.
+        let tolerance = 2.0 / i16::MAX as f32;
+        for (index, (&actual, &expected)) in samples.iter().zip(interleaved.iter()).enumerate() {
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "sample {index}: expected {expected}, got {actual}"
+            );
+        }
+    }
+
     #[test]
     fn an_oversized_input_is_refused_before_it_is_decoded() {
         // Bounds the uncompressed case. The sample limit above bounds the

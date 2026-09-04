@@ -2,6 +2,7 @@ import path from 'node:path'
 import process from 'node:process'
 import fse from 'fs-extra'
 import { compareUpdateVersions } from '../../../shared/update/version'
+import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
 
 type PackagedPluginManifest = {
   name?: unknown
@@ -151,7 +152,14 @@ export function installBundledOfficialPluginSeeds(
     const versionComparison = compareUpdateVersions(localVersion, descriptor.version)
     const localFingerprint = localManifest ? readManifestFingerprint(localManifest) : ''
 
-    if (targetExists && localIdentityMatches && localVersion && versionComparison > 0) {
+    const privilegedRuntime = PRIVILEGED_PLUGIN_NAMES.includes(descriptor.pluginName)
+    if (
+      !privilegedRuntime &&
+      targetExists &&
+      localIdentityMatches &&
+      localVersion &&
+      versionComparison > 0
+    ) {
       results.push({
         pluginName: descriptor.pluginName,
         seedVersion: descriptor.version,
@@ -163,6 +171,7 @@ export function installBundledOfficialPluginSeeds(
     }
 
     if (
+      !privilegedRuntime &&
       targetExists &&
       localIdentityMatches &&
       localVersion &&

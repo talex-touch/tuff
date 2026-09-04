@@ -1,6 +1,6 @@
 [tools]
 actionlint = "1.7.12"
-node = "24.18.0"
+node = "26.0.0"
 pnpm = "10.34.4"
 # Pinned because actionlint silently skips all run-block analysis when shellcheck is absent:
 # without it the same command reports 0 findings locally and 32 on a GitHub runner.

@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-cli",
   "type": "module",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "description": "Tuff CLI entrypoint",
   "license": "MIT",
   "keywords": [
@@ -19,7 +19,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=24.15.0"
+    "node": ">=26.0.0"
   },
   "scripts": {
     "build": "tsup",
@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@talex-touch/utils": "workspace:^",
-    "@vue/compiler-sfc": "3.5.39",
+    "@vue/compiler-sfc": "3.5.41",
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
     "compressing": "^2.1.1",

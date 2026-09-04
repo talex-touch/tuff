@@ -4,7 +4,13 @@
 
 Land R8-F: one host-owned, fail-closed CatalogService that keeps the built-in Domain Lexicon available offline, verifies a signed whole-pack replacement, imports it atomically into the existing CoreApp SQLite database, explicitly activates/rolls back versions, and supplies the current official registry to R8-E plugin facades.
 
-The detailed EARS contract is `.spec-workflow/specs/catalog-service-mvp/requirements.md`.
+The completed/open boundary, with verification evidence, is
+[`docs/engineering/catalog-service-boundary.md`](../../../docs/engineering/catalog-service-boundary.md).
+
+> The original line here cited `.spec-workflow/specs/catalog-service-mvp/requirements.md` as the
+> detailed EARS contract. That path has never existed in this repository's git history
+> (`git log --all --diff-filter=A` returns nothing for it), so readers were being sent to a
+> specification that was never written. The shared contract source is `packages/utils/i18n/catalog.ts`.
 
 ## Requirements
 
@@ -34,7 +40,18 @@ The detailed EARS contract is `.spec-workflow/specs/catalog-service-mvp/requirem
 - [x] Plugin SDK official resolve/search/collision checks follow the active registry dynamically while existing plugin overlays remain intact and isolated.
 - [x] Diagnostics report the required low-sensitive state and degraded baseline fallback.
 - [x] Focused shared contract, SQLite lifecycle, remote flow, plugin integration, lint, and CoreApp node/web typechecks pass.
-- [ ] R8 PRD, execution plan, quality baseline, changelog, task artifacts, and developer documentation state the exact completed/open boundary.
+- [x] R8 PRD, execution plan, quality baseline, changelog, task artifacts, and developer documentation state the exact completed/open boundary.
+  Boundary written to `docs/engineering/catalog-service-boundary.md` (new) and the four documents
+  that carried stale "CatalogService not done" language: the R8 PRD §0 and §9, the R8/R9 execution
+  plan status header and both phase tables, `PRD-QUALITY-BASELINE.md` §4.10, and `CHANGES.md`.
+  The eight criteria above were re-verified against source on 2026-08-20 rather than taken on
+  trust — 86 focused tests, both typechecks and both packages' lint run clean.
+  **The boundary's substance:** the service contract is complete; the trigger surface is not wired.
+  Outside start-up seed/activate of the built-in pack, nothing in the running application calls
+  `checkUpdates` / `downloadPack` / `importPack` / `activatePack` / `rollback`, and
+  `getCatalogService()` has no caller outside the catalog module, so `CatalogStatus` is computed
+  but never surfaced. Both are consistent with the Scope Boundaries above (no Settings UI, no
+  automatic polling) and are recorded, not treated as defects.
 
 ## Risk / Approval Gate
 

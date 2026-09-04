@@ -406,19 +406,22 @@ code: |
 `prepare` 是 DivisionBox 会话的初始状态，发生在 `open()` 调用后、窗口创建前。
 
 **触发时机**：
-- 调用 `divisionBox.open(config)` 时立即进入
-- 主进程验证配置、分配 sessionId、创建 DivisionBoxSession 实例
+- 调用 `divisionBox.open(config)` 且通过下述前置检查后进入；被拒绝的 open 不会到达该状态
+- 随后主进程分配 sessionId、创建 DivisionBoxSession 实例
 
 **资源管理**：
-- 分配 sessionId（格式为 `division-box-${timestamp}-${counter}`，即时间戳加递增计数器）
-- 验证 URL 协议和权限
-- 初始化会话状态存储
-- 如果配置了 `keepAlive`，注册到 LRU 缓存管理器
+- 先检查全局会话上限，通过后才分配任何资源
+- 生成 sessionId 并登记到 session map
+- 验证配置并应用默认值；构造窗口前先解析插件归属
+- 配置了 `keepAlive` 时只是安装状态变更回调，此时**尚未**进入 LRU 缓存——缓存条目在会话首次进入 `inactive` 时加入，回到 `active` 时刷新访问时间，`destroy` 时移除
 
 **异常处理**：
-- URL 缺失或非法（配置校验失败）→ 返回 `DivisionBoxError`（`CONFIG_ERROR`）
-- 权限不足 → 返回 `DivisionBoxError`（`PERMISSION_DENIED`）
-- 资源超限（超过 `MAX_ACTIVE_SESSIONS`）→ 返回 `DivisionBoxError`（`LIMIT_EXCEEDED`）
+
+以下三种都会让 `open()` 直接失败，不会产生一个随后再发生状态转换的会话。
+
+- 超过全局会话上限 `MAX_ACTIVE_SESSIONS` → 抛出 `DivisionBoxError`（`LIMIT_EXCEEDED`），在生成 sessionId 之前
+- 请求 UI view 但缺少 `pluginId`，或 `pluginId` 找不到已加载插件 → 抛出 `DivisionBoxError`（`CONFIG_ERROR`）
+- 非 authoritative 调用方请求 UI view，或 `pluginId` 与调用插件不符 → 抛出 `DivisionBoxError`（`PERMISSION_DENIED`），在 IPC 边界拦截，不会进入 manager
 
 ### attach 阶段
 
@@ -477,7 +480,7 @@ code: |
 - `divisionBox.close(sessionId)` 与窗口 `closed` 事件都会直接进入 `destroy`，不会经过 `detach`
 
 **资源管理**：
-- 如果 `keepAlive=true`，会话进入 LRU 缓存等待恢复
+- 如果 `keepAlive=true`，会话在首次 `inactive` 时就已进入 LRU 缓存，此处从缓存中等待恢复
 - 如果 `keepAlive=false`，直接进入 `destroy` 阶段
 - 释放 WebContentsView 和关联资源
 
@@ -511,16 +514,18 @@ code: |
 ```mermaid
 stateDiagram-v2
     [*] --> prepare: open()
-    prepare --> attach: 窗口创建完成（显式 setState）
-    attach --> active: loadURL() 完成（显式 setState）
-    active --> inactive: setState（编程调用）
-    inactive --> active: setState（编程调用）
-    inactive --> detach: setState（编程调用）
-    active --> detach: setState（编程调用）
-    detach --> destroy: destroy()
-    prepare --> destroy: close() 提前销毁
-    attach --> destroy: close() / 窗口 closed
-    active --> destroy: close() / 窗口 closed
+    prepare --> attach: 窗口创建完成
+    attach --> active: 窗口获得焦点
+    active --> inactive: 窗口失去焦点
+    inactive --> active: 窗口重新获得焦点
+    inactive --> detach: close() / 资源回收
+    active --> detach: close() / 资源回收
+    attach --> detach: close() / 资源回收
+    detach --> [*]: keepAlive=false
+    detach --> prepare: keepAlive=true, 恢复
+    prepare --> destroy: 加载失败
+    attach --> destroy: 加载失败 / 崩溃
+    active --> destroy: 崩溃
     inactive --> destroy: LRU 回收 / 内存压力
     destroy --> [*]
 ```

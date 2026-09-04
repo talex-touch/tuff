@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-core",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Low-level build and publish primitives for Tuff",
   "license": "MIT",
   "keywords": [
@@ -16,7 +16,7 @@
     "src"
   ],
   "engines": {
-    "node": ">=24.15.0"
+    "node": ">=26.0.0"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --splitting --clean --target node24 --platform node",

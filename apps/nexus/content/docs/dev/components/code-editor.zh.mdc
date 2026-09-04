@@ -1,7 +1,7 @@
 ---
 title: "CodeEditor 代码编辑器"
 description: "基于 CodeMirror 的 JSON/YAML 编辑器，同时提供轻量 TOML、INI、JavaScript 编辑能力，支持格式化、校验、搜索、折叠和 toolbar 插槽。"
-category: Form
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [code, editor, json, yaml]

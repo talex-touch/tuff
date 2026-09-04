@@ -1,7 +1,7 @@
 ---
 title: Message Actions
 description: A message toolbar with built-in copy and regenerate, navigated with arrow keys.
-category: Data
+category: AiChat
 status: beta
 since: 0.3.9
 tags: [ai, message, toolbar]

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "check:demo-registry / check:mdc-fences / check:doc-parity must pass; rendered-page verification for the new demo section."}
+{"file": ".trellis/tasks/09-01-tuffex-gallery-visual-polish/research/measurements.md", "reason": "Downstream caller list to re-verify (7 sites) and the before-state to diff screenshots against."}

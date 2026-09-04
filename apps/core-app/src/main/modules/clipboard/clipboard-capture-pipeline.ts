@@ -17,7 +17,7 @@ import { clipboardHistory } from '../../db/schema'
 import { enterPerfContext } from '../../utils/perf-context'
 import { perfMonitor } from '../../utils/perf-monitor'
 import { windowManager } from '../box-tool/core-box/window'
-import { detectClipboardTags } from '../clipboard-tagging'
+import { detectClipboardTags, getClipboardTagSearchTerms } from '../clipboard-tagging'
 import {
   CLIPBOARD_HTML_FORMATS,
   CLIPBOARD_IMAGE_FORMATS,
@@ -493,6 +493,7 @@ export class ClipboardCapturePipeline {
     )
     if (tags.length > 0) {
       metaEntries.push({ key: 'tags', value: tags })
+      metaEntries.push({ key: 'tag_search_terms', value: getClipboardTagSearchTerms(tags) })
       for (const tag of tags) {
         metaEntries.push({ key: 'tag', value: tag })
       }

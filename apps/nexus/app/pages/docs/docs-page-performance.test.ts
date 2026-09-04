@@ -306,7 +306,9 @@ describe('docs page performance boundaries', () => {
     expect.soft(page).not.toContain('h(TxButton')
     expect.soft(page).not.toContain('<TxLoadingState')
     expect.soft(page).toContain("document.createElement('button')")
-    expect.soft(page).toContain('class="docs-loading-state"')
+    expect.soft(page).toContain('class="docs-surface docs-surface--skeleton"')
+    expect.soft(page).toContain("defineAsyncComponent(() => import('@talex-touch/tuffex/skeleton')")
+    expect.soft(page).not.toContain("from '@talex-touch/tuffex/skeleton'")
 
     expect.soft(docsLayout).not.toContain("import Drawer from '~/components/ui/Drawer.vue'")
     expect.soft(docsLayout).not.toContain("import BackToTop from '~/components/ui/BackToTop.vue'")
@@ -395,7 +397,7 @@ describe('docs page performance boundaries', () => {
     expect.soft(docSection).not.toContain('<TxButton')
     expect.soft(docSection).not.toContain('<TxAutoSizer')
     expect.soft(docSection).toContain('<button\n      v-else')
-    expect.soft(docSection).toContain('class="DocSection-Header bg-transparent"')
+    expect.soft(docSection).toContain('class="DocSection-Header DocSection-Header--group bg-transparent"')
     expect.soft(docSection).toContain('class="DocSection-Body"')
     expect.soft(docSection).toContain('grid-template-rows: 0fr')
     expect.soft(docSection).toContain('grid-template-rows: 1fr')
@@ -426,7 +428,6 @@ describe('docs page performance boundaries', () => {
     expect.soft(theHeader).not.toContain("import HeaderUserMenu from './HeaderUserMenu.vue'")
     expect.soft(theHeader).toContain('<HeaderUserMenu />')
 
-    expect.soft(headerControls).not.toContain('@talex-touch/tuffex/button')
     expect.soft(headerControls).not.toContain('<TxButton')
     expect.soft(headerControls).not.toContain('<TxDivider')
     expect.soft(headerControls).toContain('class="HeaderControls-Divider"')
@@ -435,8 +436,10 @@ describe('docs page performance boundaries', () => {
     // exception to this boundary: they were migrated onto TuffEx dropdowns so the
     // header stops being three hand-rolled implementations of the same control.
     // That trades docs first-paint weight for one shared implementation — the rest
-    // of the docs chrome below still has to stay off TuffEx.
-    expect.soft(headerControls).toContain('@talex-touch/tuffex/icon-button')
+    // of the docs chrome below still has to stay off TuffEx. TxIconButton now
+    // ships from the consolidated `button` entry, so the header imports that
+    // entry for the icon button while the `<TxButton` tag itself stays banned.
+    expect.soft(headerControls).toContain('@talex-touch/tuffex/button')
     expect.soft(languageToggle).toContain('@talex-touch/tuffex/dropdown-menu')
     expect.soft(languageToggle).not.toContain('@floating-ui/vue')
     expect.soft(languageToggle).not.toContain("import Icon from './icon/Icon.vue'")

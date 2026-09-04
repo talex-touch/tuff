@@ -12,7 +12,7 @@ interface WorkerData {
     filePath?: string
   }
   options: {
-    language: string
+    language?: string
     tesseditPagesegMode?: number
     config?: Record<string, string | number | boolean>
   }
@@ -61,7 +61,7 @@ async function loadImageBuffer(source: WorkerData['source']): Promise<Buffer> {
 
 async function run(): Promise<void> {
   const payload = workerData as WorkerData
-  const language = payload.options.language || 'eng'
+  const language = payload.options.language ?? ''
   const buffer = await loadImageBuffer(payload.source)
 
   const support = getNativeOcrSupport()

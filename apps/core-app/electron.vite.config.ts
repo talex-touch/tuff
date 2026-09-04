@@ -265,6 +265,7 @@ export default defineConfig({
         input: {
           index: 'src/main/index.ts',
           'plugin-host': 'src/main/modules/plugin/host/plugin-host-process.ts',
+          'plugin-image-tools-worker': 'src/main/modules/plugin/host/plugin-image-tools-worker.ts',
           'plugin-sqlite-worker': 'src/main/modules/plugin/runtime/plugin-sqlite-worker.ts',
           'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
           'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
@@ -297,6 +298,8 @@ export default defineConfig({
               return 'search-index-worker.js'
             } else if (chunkInfo.name === 'plugin-host') {
               return 'plugin-host.js'
+            } else if (chunkInfo.name === 'plugin-image-tools-worker') {
+              return 'plugin-image-tools-worker.js'
             } else if (chunkInfo.name === 'plugin-sqlite-worker') {
               return 'plugin-sqlite-worker.js'
             } else if (chunkInfo.name === 'pi-agent-runtime-worker') {

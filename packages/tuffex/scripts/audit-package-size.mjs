@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { dirname, extname, relative, resolve } from 'node:path'
+import { dirname, extname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -89,7 +89,13 @@ const LIMITS = {
   // 623.8 KiB after the full family landed (the BUI styles run well above the old 2.8 KiB
   // median — pixel-matched surfaces are style-heavy), so this is actuals plus minimal
   // headroom, same contract as the notes above: growth from here fails.
-  fullCssBytes: 640 * 1024,
+  // 640 -> 656 on 2026-08-31: the 16.2 KiB of headroom left in August was already spent —
+  // master measured 639.8 KiB against the 640 limit, so any style change at all failed the
+  // gate, not just a large one. Switch loading (breathing fill, travelling border line) and
+  // the slider's dissolve add 4.8 KiB on top, measured at 644.6 KiB. Same contract as every
+  // note above: actuals plus minimal headroom, growth from here fails, and #1555 still owns
+  // whether the total should be coming down instead.
+  fullCssBytes: 656 * 1024,
   componentCssBytes: 96 * 1024,
   componentJsBytes: 48 * 1024,
   // Per-file exceptions to `componentJsBytes`, keyed by the path under `dist/es`.
@@ -109,6 +115,23 @@ const LIMITS = {
   },
   emptyStateAliasCssBytes: 128,
 }
+
+/**
+ * A built file's path relative to `dist/es`, with `/` separators on every platform.
+ *
+ * `componentJsOverrides` keys are exact relative paths, so they have to be compared against one.
+ * A suffix test also matches `x/border-beam/src/styles.js` -- a different component that happens
+ * to end the same way -- and would hand it the 80 KiB budget without anyone noticing. `relative()`
+ * also emits `\` on Windows, which no key contains.
+ */
+function toDistRelativePath(file) {
+  return relative(distEs, file).split(sep).join('/')
+}
+
+function componentJsLimitFor(file) {
+  const limit = LIMITS.componentJsOverrides[toDistRelativePath(file)]
+  return limit === undefined ? LIMITS.componentJsBytes : limit
+}
 const emptyStateStyleAliases = [
   'blank-slate',
   'empty',
@@ -123,6 +146,14 @@ const emptyStateStyleAliases = [
 ]
 const onDemandImportBudgets = [
   {
+    // TxAvatarGroup's overflow popover is opt-in at runtime but statically imported,
+    // so `avatar` now carries the whole anchor stack. Declared rather than left
+    // implicit: this is the edge that would otherwise grow unnoticed.
+    subpath: 'avatar',
+    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
+    forbiddenStaticSpecifierPrefixes: ['gsap'],
+  },
+  {
     subpath: 'base-anchor',
     allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'glass-surface', 'spinner'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
@@ -135,7 +166,8 @@ const onDemandImportBudgets = [
     subpath: 'button',
     // `tooltip` rides in behind `popover`: TxPopover is now a TxTooltip
     // specialisation, so anything reaching the popover reaches the tooltip too.
-    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'popover', 'spinner', 'tooltip'],
+    // `icon` rides in behind TxIconButton, which renders its glyph via TxIcon.
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'button', 'card', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap', 'v-wave'],
   },
   {
@@ -405,10 +437,16 @@ async function auditDistSizes(errors) {
 
   const componentCssFiles = await collectFiles(distEs, filePath => filePath.endsWith('/style.css'))
   const componentCssSizes = toSortedEntries(await getSizedFiles(componentCssFiles))
-  const oversizedCss = componentCssSizes.filter(entry => entry.bytes > LIMITS.componentCssBytes)
+  // Category entry barrels (base/pro/ai, added in 98e5d5327) aggregate every member
+  // component's CSS by construction, so the per-component budget can never hold
+  // them; each is a subset of the full bundle, so hold it to the full-bundle limit
+  // instead. Member components stay under the per-component budget individually.
+  const suiteAggregateCss = new Set(['ai', 'base', 'pro'].map(dir => resolve(distEs, dir, 'style.css')))
+  const cssLimitFor = file => (suiteAggregateCss.has(file) ? LIMITS.fullCssBytes : LIMITS.componentCssBytes)
+  const oversizedCss = componentCssSizes.filter(entry => entry.bytes > cssLimitFor(entry.file))
   for (const entry of oversizedCss) {
     errors.push(
-      `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(LIMITS.componentCssBytes)}`,
+      `Component CSS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(cssLimitFor(entry.file))}`,
     )
   }
   for (const distDir of [distEs, distLib]) {
@@ -432,15 +470,27 @@ async function auditDistSizes(errors) {
     && !filePath.includes('/packages/utils/'),
   )
   const componentJsSizes = toSortedEntries(await getSizedFiles(componentJsFiles))
-  const componentJsLimitFor = (file) => {
-    const key = Object.keys(LIMITS.componentJsOverrides).find(name => file.endsWith(`/${name}`))
-    return key ? LIMITS.componentJsOverrides[key] : LIMITS.componentJsBytes
-  }
   const oversizedJs = componentJsSizes.filter(entry => entry.bytes > componentJsLimitFor(entry.file))
   for (const entry of oversizedJs) {
     errors.push(
       `Component JS ${relativeToRepo(entry.file)} is ${formatBytes(entry.bytes)}; limit is ${formatBytes(componentJsLimitFor(entry.file))}`,
     )
+  }
+
+  // An override that outlives its reason is an exception nobody re-reads. Fail while deleting it is
+  // still cheap: either the file came back under the shared limit, or it no longer exists at all.
+  for (const [key, limit] of Object.entries(LIMITS.componentJsOverrides)) {
+    const entry = componentJsSizes.find(candidate => toDistRelativePath(candidate.file) === key)
+    if (!entry) {
+      errors.push(`Component JS override ${key} matches no built file; remove it from componentJsOverrides`)
+      continue
+    }
+    if (entry.bytes <= LIMITS.componentJsBytes) {
+      errors.push(
+        `Component JS override ${key} (${formatBytes(limit)}) is no longer needed: the file is `
+        + `${formatBytes(entry.bytes)}, within the ${formatBytes(LIMITS.componentJsBytes)} shared limit. Remove it.`,
+      )
+    }
   }
 
   console.log(`[audit-package-size] Base CSS: ${formatBytes(baseCssBytes)}/${formatBytes(LIMITS.baseCssBytes)}`)
@@ -535,6 +585,41 @@ function selfTest() {
       name: 'a node_modules edge is not followed',
       run: () => [resolveRuntimeSpecifier(inDist('button/index.js'), './node_modules/x') ?? 'null'],
       expect: 'null',
+    },
+    // The override map decides which files may exceed the shared budget. A matcher that hit
+    // everything, or nothing, would both read as a green run.
+    {
+      name: 'a file with no override gets the shared component JS limit',
+      run: () => [String(componentJsLimitFor(inDist('button/src/TxButton.vue.js')))],
+      expect: String(LIMITS.componentJsBytes),
+    },
+    {
+      name: 'an overridden file gets its own limit',
+      run: () => [String(componentJsLimitFor(inDist('border-beam/src/styles.js')))],
+      expect: String(LIMITS.componentJsOverrides['border-beam/src/styles.js']),
+    },
+    {
+      // `endsWith('/' + key)` matched this too, so a different component nested one level down
+      // silently inherited the 80 KiB budget. `x/not-border-beam/...` does NOT exercise it -- the
+      // `-` breaks the suffix on its own, so that shape passes against the bug.
+      name: 'a deeper path that ends the same way is not the overridden file',
+      run: () => [String(componentJsLimitFor(inDist('x/border-beam/src/styles.js')))],
+      expect: String(LIMITS.componentJsBytes),
+    },
+    {
+      name: 'a same-named file in another component does not inherit the override',
+      run: () => [String(componentJsLimitFor(inDist('liquid/src/styles.js')))],
+      expect: String(LIMITS.componentJsBytes),
+    },
+    {
+      name: 'the override key is matched as a whole dist-relative path',
+      run: () => [toDistRelativePath(inDist('border-beam/src/styles.js'))],
+      expect: 'border-beam/src/styles.js',
+    },
+    {
+      name: 'every override raises its limit, so none is a silent no-op',
+      run: () => [String(Object.values(LIMITS.componentJsOverrides).every(v => v > LIMITS.componentJsBytes))],
+      expect: 'true',
     },
   ]
 

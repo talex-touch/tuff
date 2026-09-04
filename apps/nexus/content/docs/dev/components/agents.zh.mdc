@@ -1,7 +1,7 @@
 ---
 title: "Agents 智能体列表"
 description: "可选择的智能体列表，支持启用/禁用分组、loading 骨架、空态、选中态和 badge。"
-category: Data
+category: AiAgent
 status: beta
 since: 1.0.0
 tags: [agents, list, selection]

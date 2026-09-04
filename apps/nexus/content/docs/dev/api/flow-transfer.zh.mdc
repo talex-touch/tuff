@@ -310,6 +310,8 @@ code: |
 
 ## 错误处理
 
+`flow.reportError(sessionId, message)` 与失败的 dispatch 都会带上 `FlowErrorCode`。把无法识别的值一律当作 `INTERNAL_ERROR` 处理，不要假设这个列表是封闭的。
+
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
@@ -397,23 +399,28 @@ code: |
 
 ## IPC 通道（实现对齐）
 
-以下通道是当前实现中使用到的关键事件名（详见主进程 `apps/core-app/src/main/modules/flow-bus/`）：
+事件名由 `namespace:module:action` 组成，因此每个 Flow 通道都带有 module 段。以下是主进程实际注册的名称（详见 `apps/core-app/src/main/modules/flow-bus/`）：
 
 - **`flow:bus:dispatch`**：发起 flow
 - **`flow:bus:get-targets`**：获取可用 targets
 - **`flow:bus:cancel`**：取消 session
 - **`flow:bus:acknowledge`**：ack
 - **`flow:bus:report-error`**：上报错误
-- **`flow:session:update`**：广播 session 状态更新
 - **`flow:bus:select-target`**：用户在选择面板选中 target（UI → 主进程）
+- **`flow:session:update`**：广播 session 状态更新
+- **`flow:session:deliver`**：将 payload 投递给 target
 - **`flow:native:share`**：系统分享
+- **`flow:consent:check`** / **`flow:consent:grant`**：传输授权检查与授予
+- **`flow:ui:trigger-transfer`** / **`flow:ui:trigger-detach`**：主进程驱动 UI 打开/分离传输面板
 
-插件集成（主进程侧注册）：
+插件集成（插件进程侧发起）：
 
-- **`flow:plugin:register-targets`**：注册 targets（plugin → 主进程）
+- **`flow:plugin:register-targets`**：注册 targets
 - **`flow:plugin:unregister-targets`**：卸载 targets
 - **`flow:plugin:set-plugin-enabled`**：更新 plugin enabled 状态
 - **`flow:plugin:set-plugin-handler`**：声明当前插件是否已注册 `onFlowTransfer` handler
+
+优先使用 `FlowEvents` 常量而非这些字面量——SDK 用同一个 builder 生成名称，改名时只需改一处。
 
 ---
 

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+// `TabHeaderProps.node` is typed `unknown`, so the vnode has to be narrowed
+// before its props are readable.
+function tabName(node: unknown): string {
+  return (node as { props?: { name?: string } } | undefined)?.props?.name ?? ''
+}
+
 const { locale } = useI18n()
 
 const activeTop = ref('A')
@@ -56,7 +62,7 @@ watch(
         <TxTabHeader v-slot="{ props }">
           <div style="display: flex; align-items: center; width: 100%; padding: 10px 12px;">
             <div style="font-weight: 600;">
-              {{ props.node?.props?.name }}
+              {{ tabName(props.node) }}
             </div>
           </div>
         </TxTabHeader>

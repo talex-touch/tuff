@@ -1,7 +1,7 @@
 ---
 title: "SparkChart 迷你折线图"
 description: "卡片里的静态多序列折线：canvas 绘制，配 DOM 层的游标与提示框。"
-category: Data
+category: Visualization
 status: beta
 since: 0.3.9
 tags: [ai, chart, canvas, data]

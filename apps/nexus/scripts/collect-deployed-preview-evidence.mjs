@@ -2,6 +2,7 @@
 import { Buffer } from 'node:buffer'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { redactHarFile } from './redact-har.mjs'
 import { fileURLToPath } from 'node:url'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
@@ -262,6 +263,7 @@ async function collectRoute(browser, route) {
   const allRequests = [...requests, ...failed]
   const requestSummary = summarizeRouteRequests(allRequests, route)
   await context.close()
+  await redactHarFile(harPath)
   return {
     path: route.path,
     status: response?.status() ?? 0,
@@ -343,6 +345,7 @@ async function collectBfcache(browser) {
     events: window.__nexusBfcacheEvents ?? [],
   }))
   await context.close()
+  await redactHarFile(harPath)
   const pageshowPersisted = summary.events.filter(event => event.type === 'pageshow').map(event => event.persisted)
   return {
     ...summary,
@@ -363,6 +366,7 @@ async function collectAuthenticatedDashboard(browser) {
   const response = await page.goto(`${baseUrl}/dashboard/`, { waitUntil: 'networkidle', timeout: 45_000 })
   const bodyText = await page.locator('body').innerText().catch(() => '')
   await context.close()
+  await redactHarFile(harPath)
   return {
     ok: response?.ok() ?? false,
     status: response?.status() ?? 0,

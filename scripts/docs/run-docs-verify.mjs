@@ -7,7 +7,7 @@ const tempDir = mkdtempSync(path.join(os.tmpdir(), 'tuff-docs-verify-'))
 const outputFile = path.join(tempDir, 'vitest-output.txt')
 
 try {
-  const test = spawnSync('corepack', ['pnpm', 'exec', 'vitest', 'run', 'scripts/docs.test.mjs'], {
+  const test = spawnSync('pnpm', ['exec', 'vitest', 'run', 'scripts/docs.test.mjs'], {
     cwd: process.cwd(),
     encoding: 'utf8',
   })

@@ -2,7 +2,7 @@
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import type { ClipboardSection } from '~/utils/clipboard-items'
 import ClipboardGlyph from './ClipboardGlyph.vue'
-import { getClipboardSubtitle, getClipboardTitle, resolveListImageSrc } from '~/utils/clipboard-items'
+import { getClipboardSubtitle, getClipboardTagLabels, getClipboardTitle, resolveListImageSrc } from '~/utils/clipboard-items'
 
 defineProps<{
   sections: ClipboardSection[]
@@ -86,6 +86,9 @@ function onScroll(event: Event): void {
                 <p class="item-meta">
                   {{ getClipboardSubtitle(item) }}
                 </p>
+                <span v-if="getClipboardTagLabels(item).length > 0" class="item-tags">
+                  {{ getClipboardTagLabels(item).join(' · ') }}
+                </span>
               </div>
             </button>
           </li>
@@ -274,6 +277,15 @@ function onScroll(event: Event): void {
   white-space: nowrap;
   font-size: 0.72rem;
   color: var(--clipboard-text-muted);
+}
+
+.item-tags {
+  overflow: hidden;
+  color: var(--clipboard-color-accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-footnote {

@@ -1,5 +1,27 @@
 const path = require('node:path')
 
+function bundledJavascriptPlugin(pluginName) {
+  return Object.freeze({
+    pluginName,
+    packageName: `@talex-touch/${pluginName}-plugin`,
+    root: path.join('plugins', pluginName),
+    manifest: 'manifest.json',
+    bundledProjection: path.join('apps', 'core-app', 'resources', 'bundled-plugins', pluginName),
+    gates: Object.freeze({
+      build: Object.freeze({ command: 'pnpm', args: ['run', 'build'] }),
+      test: Object.freeze({ command: 'pnpm', args: ['run', 'test'] }),
+      typecheck: Object.freeze({
+        notApplicable: true,
+        reason: 'The package ships a JavaScript Prelude and declares no standalone typecheck script.',
+      }),
+      lint: Object.freeze({
+        notApplicable: true,
+        reason: 'The package declares no standalone lint script; repository plugin lint covers its maintained source.',
+      }),
+    }),
+  })
+}
+
 const PLUGIN_RELEASE_TARGETS = Object.freeze([
   Object.freeze({
     pluginName: 'clipboard-history',
@@ -13,7 +35,8 @@ const PLUGIN_RELEASE_TARGETS = Object.freeze([
       typecheck: Object.freeze({ command: 'pnpm', args: ['run', 'typecheck'] }),
       lint: Object.freeze({
         notApplicable: true,
-        reason: 'The package has an ESLint configuration but no standalone lint script; repository scoped lint covers its maintained source.',
+        reason:
+          'The package has an ESLint configuration but no standalone lint script; repository scoped lint covers its maintained source.',
       }),
     }),
   }),
@@ -78,7 +101,8 @@ const PLUGIN_RELEASE_TARGETS = Object.freeze([
       build: Object.freeze({ command: 'pnpm', args: ['run', 'build'] }),
       test: Object.freeze({
         notApplicable: true,
-        reason: 'The package currently has no test script or test files; runtime behavior is covered by CoreApp official-plugin integration tests.',
+        reason:
+          'The package currently has no test script or test files; runtime behavior is covered by CoreApp official-plugin integration tests.',
       }),
       typecheck: Object.freeze({
         notApplicable: true,
@@ -90,6 +114,11 @@ const PLUGIN_RELEASE_TARGETS = Object.freeze([
       }),
     }),
   }),
+  bundledJavascriptPlugin('touch-hosts'),
+  bundledJavascriptPlugin('touch-vscode-projects'),
+  bundledJavascriptPlugin('touch-orca'),
+  bundledJavascriptPlugin('touch-ai-sessions'),
+  bundledJavascriptPlugin('touch-image'),
 ])
 
 const PLUGIN_RELEASE_PREREQUISITES = Object.freeze([

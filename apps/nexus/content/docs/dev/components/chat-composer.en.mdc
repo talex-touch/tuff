@@ -1,7 +1,7 @@
 ---
 title: "ChatComposer"
 description: "Message composer for AI chat input, attachments, keyboard send, and custom toolbars."
-category: Form
+category: AiChat
 status: beta
 since: 1.0.0
 tags: [chat, composer, input]

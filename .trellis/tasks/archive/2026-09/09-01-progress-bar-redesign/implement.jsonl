@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Four mdc files (progress-bar + wrapper TxProgress, zh/en), a new demo with registry line, props-table placement (detail after message), gate commands."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Token-only colours for the new track and glow; reduced-motion for the indeterminate keyframes."}
+{"file": ".trellis/tasks/09-01-tuffex-gallery-visual-polish/research/measurements.md", "reason": "Current track/mask/bar computed styles in both themes; downstream callers (storage.vue gradient color, PluginStorage sparkle+glow) that must not regress."}

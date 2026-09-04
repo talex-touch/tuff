@@ -1,8 +1,8 @@
 {
   "name": "@talex-touch/tuffex",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "engines": {
-    "node": ">=24.15.0"
+    "node": ">=26.0.0"
   },
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
   "description": "TuffEx - Vue 3 UI source package for the Tuff ecosystem.",
@@ -62,7 +62,9 @@
     "audit:vocab": "node ./scripts/audit-prop-vocabularies.mjs",
     "audit:vocab:self-test": "node ./scripts/audit-prop-vocabularies.mjs --self-test",
     "audit:size": "node ./scripts/audit-package-size.mjs",
-    "audit:size:self-test": "node ./scripts/audit-package-size.mjs --self-test"
+    "audit:size:self-test": "node ./scripts/audit-package-size.mjs --self-test",
+    "audit:cursor": "node ./scripts/audit-interactive-cursor.mjs",
+    "audit:cursor:self-test": "node ./scripts/audit-interactive-cursor.mjs --self-test"
   },
   "files": [
     "dist"

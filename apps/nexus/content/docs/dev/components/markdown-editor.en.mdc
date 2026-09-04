@@ -1,7 +1,7 @@
 ---
 title: MarkdownEditor
 description: WYSIWYG/source/preview Markdown editor with sanitization and toolbar actions.
-category: Form
+category: Advanced
 status: beta
 since: 1.0.0
 tags: [markdown, editor, wysiwyg]

@@ -64,6 +64,15 @@ export interface ProgressBarProps {
   message?: string
 
   /**
+   * Secondary copy shown after the label in the top text row, e.g.
+   * "1.4 MB of 2.3 MB". Rendered only under `textPlacement: 'top'` and ignored
+   * for the other placements. It is visible text, never part of the
+   * progressbar's accessible name.
+   * @default ''
+   */
+  detail?: string
+
+  /**
    * Accessible name for the progressbar. Without it the name falls back to
    * `message` — which is *visible* in-bar text, so naming a bar used to mean
    * printing a label across it. Set this when the bar is already labelled by
@@ -105,9 +114,10 @@ export interface ProgressBarProps {
 
   /**
    * Where to render the text when `showText` or `message` is provided.
+   * `'top'` places a label row (plus optional `detail`) above the track.
    * @default 'inside'
    */
-  textPlacement?: 'inside' | 'outside'
+  textPlacement?: 'inside' | 'outside' | 'top'
 
   /**
    * Custom text formatter.
@@ -139,16 +149,19 @@ export interface ProgressBarProps {
   color?: string
 
   /**
-   * Variant of the background track (mask) under the bar.
-   * @default 'solid'
+   * Rim drawn around the track. `'plain'` (default) draws none; `'solid'` and
+   * `'dashed'` add a 1px border in that style.
+   * @default 'plain'
    */
   maskVariant?: 'solid' | 'dashed' | 'plain'
 
   /**
-   * Background effect for the mask layer.
-   * @default 'blur'
+   * Optional mask layer under the fill. `'none'` (default) renders no mask
+   * node at all and the track is a flat tint of the text colour; `'blur'`,
+   * `'glass'` and `'mask'` opt back into the layered recipes.
+   * @default 'none'
    */
-  maskBackground?: 'blur' | 'glass' | 'mask'
+  maskBackground?: 'none' | 'blur' | 'glass' | 'mask'
 
   /**
    * Whether to show tooltip on hover.
