@@ -54,8 +54,7 @@ export function isTransportFailureError(error: unknown): boolean
 ```ts
 export const TRANSPORT_FAILURE_MARKERS = [
   // Chromium net stack (session.fetch，主进程)
-  'net::err_', 'err_connection_closed', 'err_connection_reset',
-  'err_connection_refused', 'err_connection_timed_out', 'err_connection_aborted',
+  'err_connection_',
   'err_name_not_resolved', 'err_internet_disconnected', 'err_network_changed',
   'err_address_unreachable', 'err_empty_response', 'err_failed',
   // TLS/证书（D1：与连接类同等对待）
@@ -69,7 +68,7 @@ export const TRANSPORT_FAILURE_MARKERS = [
 ]
 ```
 
-`'net::err_'` 作为前缀兜底，覆盖未来新增的 Chromium 错误码；后续具名项用于表达意图与被测试锁定。
+**刻意不设 `'net::err_'` 全量前缀兜底**（CodeRabbit review on PR #1864）：`isTransportFailureError` 走的是小写子串匹配，该前缀会同时命中 Chromium 归在同一前缀下的用户取消（`ERR_ABORTED`）、权限/策略拒绝（`ERR_ACCESS_DENIED`、`ERR_BLOCKED_BY_CLIENT`）与调用方 bug（`ERR_INVALID_URL`、`ERR_UNSAFE_PORT`）——这些既不该重试也不该换源。两种误判的代价不对称：漏掉一个新出现的传输错误码，只是该码退回本次修复前的行为；而命中一个取消错误，会把用户刚取消的动作重试一遍。故只保留具名项，`err_connection_` / `err_cert_` 以前缀形式保留，因为这两族的每个成员都确属传输失败。负向用例在 `network-transport-error.test.ts` 中锁定。
 
 **不纳入该表**的项（保持语义纯净）：`NETWORK_TIMEOUT`（归 `isTimeoutLikeError`）、`NETWORK_HTTP_STATUS_*`（归 `parseHttpStatusCode`）、`cloudflare` / `rate limit` / `localhost:3200`（属日志降噪范畴，非传输失败）。
 

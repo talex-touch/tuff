@@ -49,10 +49,26 @@ describe('isTransportFailureError recognises every transport dialect', () => {
     expect(isTransportFailureError(new Error(message))).toBe(true)
   })
 
-  it('matches an unenumerated Chromium code through the net:: prefix', () => {
-    expect(isTransportFailureError(new Error('net::ERR_SOMETHING_NEW_IN_A_FUTURE_CHROMIUM'))).toBe(
-      true,
-    )
+  it('matches an unenumerated code in the connection family through its prefix', () => {
+    expect(isTransportFailureError(new Error('net::ERR_CONNECTION_SOMETHING_NEW'))).toBe(true)
+  })
+
+  /*
+   * Chromium files cancellation, permission refusals and caller bugs under the same `net::ERR_`
+   * prefix as connection failures. A blanket prefix marker matched all of them, which would have
+   * retried work the user had just cancelled — the renderer call site sees only the message string
+   * across IPC, so it has nothing else to discriminate on.
+   */
+  it.each([
+    'net::ERR_ABORTED',
+    'net::ERR_ACCESS_DENIED',
+    'net::ERR_BLOCKED_BY_CLIENT',
+    'net::ERR_BLOCKED_BY_ADMINISTRATOR',
+    'net::ERR_UNSAFE_PORT',
+    'net::ERR_INVALID_URL',
+    'net::ERR_UNKNOWN_URL_SCHEME',
+  ])('does not treat %s as a transport failure', (message) => {
+    expect(isTransportFailureError(new Error(message))).toBe(false)
   })
 })
 
