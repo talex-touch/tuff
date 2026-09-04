@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "本 bug 的教科书案例：正则匹配的是错误串拼写而非'传输失败'这一属性，换传输实现即失效。新分类器必须按属性判定并配负例测试，避免重蹈覆辙"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "改动跨 packages/utils → 主进程 → 渲染层三层，且错误需穿越 IPC 边界（原型链丢失）。分类器的三级判定设计正是为此边界服务"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "R6 要求 network-log-noise 的标记表与新分类器同源；当前两份清单已漂移（前者缺 err_connection_closed），须按复用原则收敛为单一事实源"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "渲染层更新检查经 networkSdk → IPC → 主进程 NetworkService；需确认错误跨通道传递时 message/code 的保真约定"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "主进程改动（network-service.ts、release-fetch-service.ts）需遵循的通用约定入口"}

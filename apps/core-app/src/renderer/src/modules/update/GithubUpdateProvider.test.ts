@@ -45,3 +45,32 @@ describe('GithubUpdateProvider release integrity metadata', () => {
     ])
   })
 })
+
+/**
+ * Requests here travel renderer -> networkSdk -> IPC -> main-process NetworkService ->
+ * `session.fetch`, so a connection failure arrives as a Chromium `net::ERR_*` string that the
+ * previous Node-only regex never matched, and the retry never happened.
+ */
+describe('GithubUpdateProvider retry classification', () => {
+  const isRetryableError = (error: unknown): boolean =>
+    (
+      new GithubUpdateProvider() as unknown as { isRetryableError(error: unknown): boolean }
+    ).isRetryableError(error)
+
+  it.each([
+    'net::ERR_CONNECTION_CLOSED',
+    'net::ERR_CONNECTION_RESET',
+    'net::ERR_NAME_NOT_RESOLVED',
+    'net::ERR_CONNECTION_TIMED_OUT',
+    'Failed to fetch',
+    'getaddrinfo ENOTFOUND api.github.com'
+  ])('retries after %s', (message) => {
+    // A plain Error is what the renderer actually receives: the IPC hop projects errors down to
+    // their message, so neither the class nor the code survives the trip.
+    expect(isRetryableError(new Error(message))).toBe(true)
+  })
+
+  it('does not retry a permanent failure', () => {
+    expect(isRetryableError(new Error('Repository not found'))).toBe(false)
+  })
+})

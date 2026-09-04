@@ -121,7 +121,19 @@ describe('ReleaseFetchService', () => {
   it.each([
     ['a timeout', new Error('NETWORK_TIMEOUT')],
     ['an HTTP 429', new Error('NETWORK_HTTP_STATUS_429')],
-    ['an HTTP 5xx', new Error('NETWORK_HTTP_STATUS_503')]
+    ['an HTTP 5xx', new Error('NETWORK_HTTP_STATUS_503')],
+    // Electron's session.fetch reports connection failures as `net::ERR_*`. Classifying these as
+    // permanent kept the fallback from firing at all while GitHub was reachable (2026-09-04).
+    ['a Chromium connection close', new Error('net::ERR_CONNECTION_CLOSED')],
+    ['a Chromium connection reset', new Error('net::ERR_CONNECTION_RESET')],
+    ['a Chromium DNS failure', new Error('net::ERR_NAME_NOT_RESOLVED')],
+    // Spelled TIMED_OUT, so neither the old regex nor isTimeoutLikeError ever matched it.
+    ['a Chromium connect timeout', new Error('net::ERR_CONNECTION_TIMED_OUT')],
+    // TLS failures fall back too: artifacts are signature-verified whichever source serves them.
+    ['a Chromium TLS failure', new Error('net::ERR_SSL_PROTOCOL_ERROR')],
+    ['a Chromium certificate failure', new Error('net::ERR_CERT_AUTHORITY_INVALID')],
+    // The renderer-side global fetch spells it in the opposite word order from undici.
+    ['a Chromium fetch failure', new Error('Failed to fetch')]
   ])('falls back to GitHub after Nexus reports %s', async (_name, nexusError) => {
     const { service } = createService()
     networkRequestMock
@@ -197,5 +209,37 @@ describe('ReleaseFetchService', () => {
     expect(requestUrls()).toHaveLength(2)
     expect(requestUrls()[0]).toContain('/api/releases/latest')
     expect(requestUrls()[1]).toContain('api.github.com')
+  })
+
+  it('uses a stale verified cache when both providers fail at the transport layer', async () => {
+    const { service } = createService()
+    networkRequestMock.mockResolvedValueOnce({ data: nexusRelease('v2.4.10') })
+    await service.fetch(AppPreviewChannel.RELEASE)
+
+    networkRequestMock
+      .mockReset()
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_CLOSED'))
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_CLOSED'))
+
+    const result = await service.fetch(AppPreviewChannel.RELEASE, true)
+
+    expect(result).toMatchObject({
+      usedNetwork: false,
+      result: { hasUpdate: true, release: { tag_name: 'v2.4.10', source: 'nexus' } }
+    })
+  })
+
+  it('surfaces the GitHub error when both providers fail with no cache to fall back on', async () => {
+    const { service } = createService()
+    networkRequestMock
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_CLOSED'))
+      .mockRejectedValue(new Error('net::ERR_NAME_NOT_RESOLVED'))
+
+    await expect(service.fetch(AppPreviewChannel.RELEASE)).rejects.toThrow(
+      'net::ERR_NAME_NOT_RESOLVED'
+    )
+
+    expect(requestUrls()[0]).toContain('/api/releases/latest')
+    expect(requestUrls().at(-1)).toContain('api.github.com')
   })
 })

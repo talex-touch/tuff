@@ -1,12 +1,17 @@
+import { TRANSPORT_FAILURE_MARKERS } from '@talex-touch/utils/network'
+
+/**
+ * Failures that are expected enough to log below error severity.
+ *
+ * Transport failures come from the shared classifier rather than a second hand-maintained copy:
+ * this list had drifted from it and was missing `err_connection_closed`, the code the official
+ * update host actually produces. The entries below are the ones that are noise for logging but not
+ * transport failures — challenge pages, rate limits, cooldowns, dev-server misses — so they stay
+ * local.
+ */
 const DOWNGRADED_REMOTE_FAILURE_MARKERS = [
-  'err_connection_refused',
-  'net::err_failed',
-  'err_failed',
-  'econnrefused',
+  ...TRANSPORT_FAILURE_MARKERS,
   'localhost:3200',
-  'eai_again',
-  'enotfound',
-  'etimedout',
   'network timeout',
   'network_timeout',
   'request timeout',

@@ -27,10 +27,12 @@ import {
   createNetworkGuard,
   isHttpSource,
   isTimeoutLikeError,
+  isTransportFailureError,
   NetworkAbortError,
   NetworkCooldownError,
   NetworkHttpStatusError,
   NetworkTimeoutError,
+  NetworkTransportError,
   resolveLocalFilePath,
   toTfileUrl
 } from '@talex-touch/utils/network'
@@ -425,6 +427,14 @@ function projectNetworkRequestError(error: unknown, context: NetworkAbortContext
   const abortError = context.getAbortError()
   if (abortError) return abortError
   if (isTimeoutLikeError(error)) return new NetworkTimeoutError(context.timeoutMs)
+  // Chromium reports connection failures as `net::ERR_*`, which no caller can classify by string
+  // without knowing which transport ran. Normalizing here keeps that knowledge in one place; the
+  // message is passed through untouched so callers that still match on it are unaffected.
+  if (isTransportFailureError(error)) {
+    return new NetworkTransportError(error instanceof Error ? error.message : String(error), {
+      cause: error
+    })
+  }
   return error
 }
 
