@@ -44,6 +44,51 @@ function isSystemActionType(value: string): value is SystemActionType {
   return SYSTEM_ACTION_TYPES.has(value)
 }
 
+/**
+ * Whether an action of this type still means anything when replayed from usage history — that is,
+ * without the clipboard content or dropped path that produced it in the first place.
+ *
+ * Four of the five types are contextual one-shots. Their item ids embed the path
+ * (`system-actions:file-index:/Users/x/Downloads`), so every distinct folder a user ever added
+ * became its own usage record and then its own "frequent" recommendation: three of them were
+ * holding ⌘7–⌘9 in the empty state, each titled `加入文件索引：…` and truncated to an ellipsis
+ * because the name no longer had any context to sit in. Re-running them is a no-op anyway — the
+ * folder is already indexed, the plugin is already installed.
+ *
+ * A `Record` rather than a set of the recommendable ones so that adding a `SystemActionType` is a
+ * compile error until someone decides. The implicit default that produced this bug was "everything
+ * is recommendable", which is wrong for four types out of five.
+ */
+const RECOMMENDABLE_ACTION_TYPES: Record<SystemActionType, boolean> = {
+  'dev-plugin': false,
+  'tpex-plugin': false,
+  'app-index': false,
+  'file-index': false,
+  // Carries no context: it captures whichever display the cursor is on, right now, every time.
+  'screenshot-cursor-display': true
+}
+
+interface ParsedActionItemId {
+  type: SystemActionType
+  actionPath: string
+}
+
+/** Splits `<providerId>:<type>:<path>` back apart. Returns null for anything else. */
+function parseActionItemId(providerId: string, itemId: string): ParsedActionItemId | null {
+  const prefix = `${providerId}:`
+  if (!itemId.startsWith(prefix)) return null
+
+  const encodedAction = itemId.slice(prefix.length)
+  const separatorIndex = encodedAction.indexOf(':')
+  if (separatorIndex <= 0) return null
+
+  const type = encodedAction.slice(0, separatorIndex)
+  const actionPath = encodedAction.slice(separatorIndex + 1)
+  if (!isSystemActionType(type) || !actionPath) return null
+
+  return { type, actionPath }
+}
+
 interface SystemActionMeta {
   action: SystemActionType
   path: string
@@ -710,16 +755,10 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
   }
 
   async rebuildItem(itemId: string): Promise<TuffItem | null> {
-    const prefix = `${this.id}:`
-    if (!itemId.startsWith(prefix)) return null
+    const parsed = parseActionItemId(this.id, itemId)
+    if (!parsed) return null
 
-    const encodedAction = itemId.slice(prefix.length)
-    const separatorIndex = encodedAction.indexOf(':')
-    if (separatorIndex <= 0) return null
-
-    const type = encodedAction.slice(0, separatorIndex)
-    const actionPath = encodedAction.slice(separatorIndex + 1)
-    if (!isSystemActionType(type) || !actionPath) return null
+    const { type, actionPath } = parsed
 
     if (type === 'screenshot-cursor-display') {
       if (actionPath !== SCREENSHOT_ACTION_PATH) return null
@@ -736,8 +775,22 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     return this.buildActionItem(resolved)
   }
 
+  /**
+   * The recommendation grid only ever gets the types that survive without their originating
+   * context; see {@link RECOMMENDABLE_ACTION_TYPES}.
+   *
+   * Filtering here rather than in `rebuildItem` keeps that method a plain id → item rebuild, and
+   * puts the recommendation-specific rule in the method whose name says "recommendation". It also
+   * means the historical usage rows for one-shot actions stay where they are and simply stop being
+   * honoured — no migration, and nothing to redo if the policy changes.
+   */
   async rebuildRecommendationItems(itemIds: readonly string[]): Promise<TuffItem[]> {
-    const rebuilt = await Promise.all(itemIds.map((itemId) => this.rebuildItem(itemId)))
+    const recommendable = itemIds.filter((itemId) => {
+      const parsed = parseActionItemId(this.id, itemId)
+      return parsed !== null && RECOMMENDABLE_ACTION_TYPES[parsed.type]
+    })
+
+    const rebuilt = await Promise.all(recommendable.map((itemId) => this.rebuildItem(itemId)))
     return rebuilt.filter((item): item is TuffItem => item !== null)
   }
 
