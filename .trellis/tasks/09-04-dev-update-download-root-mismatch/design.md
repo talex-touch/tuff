@@ -29,7 +29,67 @@ app.getPath('userData')          ← 可变，polyfills.ts:10-15 在 dev 下改�
 
 所以方案不能是"把所有人改成晚点求值"，而应是**让求值时机不再影响结果**。
 
-## 方案（实施 F1 期间查实后的修订，优于下方原案）
+## 最终方案（已实施，`1267e87bc`）
+
+下面两版方案都被实施期的发现推翻了，保留在后面作对照。真正的修法是**记忆化**。
+
+### 推翻它们的发现
+
+`precore.ts:170` 有一个**刻意**的 userData 覆盖，就紧挨在 `:172` 求值 root 之前：
+
+```ts
+applyStartupBenchmarkUserDataOverride()   // :170  读 TUFF_STARTUP_BENCHMARK_USER_DATA_DIR
+export const innerRootPath = getRootPath() // :172  紧接着求值——这个顺序是有意的
+```
+
+启动性能基准测试靠它拿到隔离的数据根。所以：
+
+- **原案**（与 polyfills 共享 dev userData 规则）会把 root 变成 `tuff-dev/tuff-dev` 并需要数据迁移；
+- **第一版修订**（从 `appData` + `app.getName()` 推导）会**忽略基准覆盖，破坏基准测试隔离**。
+
+两者都错在同一点：试图重新定义 root 从哪来，而 precore 的捕获点**本来就是对的**——
+它在刻意覆盖之后、在 polyfills 那个无关覆盖之前。
+
+### 真正的缺陷与修法
+
+缺陷只是 `getAllowedDownloadRoots()` 事后**重新求了一次**，而没有复用已捕获的值。
+
+```ts
+let memoizedRootPath: string | null = null
+
+export function resolveRuntimeRootPath(appLike, fallbackBasePath = process.cwd()): string {
+  if (memoizedRootPath !== null) return memoizedRootPath
+  const userDataPath = safeGetUserDataPath(appLike, fallbackBasePath)
+  const folderName = appLike.isPackaged ? APP_FOLDER_NAME : DEV_APP_FOLDER_NAME
+  memoizedRootPath = path.join(userDataPath, folderName)
+  return memoizedRootPath
+}
+
+export function resetRuntimeRootPathForTests(): void { memoizedRootPath = null }
+```
+
+首次求值即权威，其余调用方无需知道任何顺序。基准覆盖仍然生效（它先于首次求值），
+polyfills 的 Chromium profile 覆盖不再影响 app root（它晚于首次求值）。取值与今天一致，无需迁移。
+
+### 顺带修掉的同类缺陷
+
+`database/index.ts:1323` 在迁移失败对话框里手写 `${userData}/tuff/logs/`。
+dev 下该路径不存在——数据库不可用时用户看到的唯一提示指向了错误位置。改为
+`path.join(resolveRuntimeRootPath(app), 'logs')`。这是新增的静态检查扫出来的。
+
+### AC7 的静态检查
+
+`check:app-root-single-source` 只在"读 userData **且**拼接 app-root 文件夹名"时告警。
+初版对所有 `getPath('userData')` 告警，扫出 18 处——其中多数（壁纸、临时文件、hosts 备份）
+是把数据直接放在 userData 下的合法用途，与重建 root 无关。收窄后精确命中 1 处真实违规。
+
+`--self-test` 覆盖三种情形：合成违规必须被抓、owner 必须豁免、无关的 userData 读取不得误报。
+
+---
+
+## 已被推翻的方案（保留作对照）
+
+### 第一版修订：从 appData + app.getName() 推导
 
 > 下方原案「与 polyfills 共享 dev userData 规则」会把 dev app root 变成
 > `@talex-touch/tuff-dev/tuff-dev`，既难看又要迁移现有 dev 数据。实施 F1 时把路径来源查清了，
