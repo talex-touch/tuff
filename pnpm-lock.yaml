@@ -596,6 +596,9 @@ importers:
       '@crosscopy/clipboard':
         specifier: ^0.3.6
         version: 0.3.6
+      '@libsql/linux-x64-musl':
+        specifier: 0.5.29
+        version: 0.5.29
       bufferutil:
         specifier: ^4.1.0
         version: 4.1.0
